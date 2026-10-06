@@ -82,7 +82,22 @@ for role in "$APP_USER" "$ADMIN_USER"; do
     }
 done
 
-COMPOSE=(docker compose --profile maintenance -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
+# Jeder Recreate braucht dieselbe feste Dateiliste wie das Admin-Handbuch
+# (Basisdatei, dann compose.legal.yml und compose.override.yml, falls neben der
+# Basisdatei vorhanden). Sobald ein -f gesetzt ist, laedt Compose
+# compose.override.yml nicht mehr von selbst; ohne compose.legal.yml verliert
+# der neu erzeugte web-Container Impressum/Datenschutz-Mount und -Variablen.
+COMPOSE_FILES=("$COMPOSE_FILE")
+compose_extra_dir="$(dirname "$COMPOSE_FILE")"
+for compose_extra_file in "${compose_extra_dir}/compose.legal.yml" "${compose_extra_dir}/compose.override.yml"; do
+    [[ -f "$compose_extra_file" ]] && COMPOSE_FILES+=("$compose_extra_file")
+done
+compose_flags=()
+for compose_file in "${COMPOSE_FILES[@]}"; do
+    compose_flags+=(-f "$compose_file")
+done
+info "Compose-Dateien: ${COMPOSE_FILES[*]}"
+COMPOSE=(docker compose --profile maintenance "${compose_flags[@]}" --env-file "$ENV_FILE")
 services="$("${COMPOSE[@]}" config --services)"
 for required in db web maintenance; do
     grep -qx "$required" <<< "$services" || {

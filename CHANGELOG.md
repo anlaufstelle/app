@@ -38,6 +38,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Compliance-Dashboard zeigt das Ergebnis der DB-Rollenprüfung** (#2415) — `check_db_roles` hinterlegt nach jedem Lauf im Wartungsdienst sein Ergebnis ohne Rollennamen oder Zugangsdaten im Audit-Log, und die Karte „Admin-DB-Rolle“ zeigt es an: nach dem Deploy `ok` mit Prüfzeitpunkt, bei Befunden `critical`, bei unvollständiger oder über 30 Tage alter Prüfung `warning`.
 
+### Fixed
+
+- **DB-Passwortrotation erhält die vollständige Compose-Dateiliste** (#2474) — `scripts/ops/rotate-db-passwords.sh` stoppt und erzeugt `web`, `cron` und `db` jetzt mit Basisdatei, `compose.legal.yml` und `compose.override.yml` (soweit vorhanden) neu und gibt die Liste aus; zuvor verlor der neu erzeugte `web`-Container Impressums- und Datenschutz-Mount sowie lokale Anpassungen. Ops-Runbook (DE/EN) beschreibt das Verhalten.
+
 ### Docs
 
 - **Lizenztexte für ausgelieferte Drittwerke ergänzt** (#2444) — `THIRDPARTY-LICENSES.md` führt alle ausgelieferten JavaScript-Bibliotheken, die DM-Schriften und die Heroicons-Symbole mit Version, Lizenz und Lizenztext; Dexie liegt mit Apache-2.0-Text und NOTICE, die DM-Schriften mit dem SIL-OFL-1.1-Text im Repository, und `make verify-vendor-js-sync` schlägt bei fehlendem oder gegenüber dem Upstream-Text veränderten Lizenztext, nicht registrierten Dateien in beliebiger Verschachtelung und abweichenden oder verlängerten Pfad- und Lizenztextzellen der Tabelle fehl; auch der axe-core-Lizenzkopf ist per Prüfsumme gesichert; die Heroicons-Pfade sind als angepasste Ableitung beschrieben.

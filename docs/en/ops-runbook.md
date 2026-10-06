@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: § 9 (DB password rotation) describes the full Compose file list used by `rotate-db-passwords.sh` (base file, `compose.legal.yml`, `compose.override.yml`) and states that no other host script recreates containers (#2474).
 > Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188), and the same check for deleted events and anonymized persons and cases (`--target all`).
 > Synchronization update 2026-09-29: § 3.5 adds the rectification requests of anonymized persons to the check and repair (`--target rectification`, part of `--target all`, #2188).
 > Synchronization update 2026-09-29: § 6.5a uses the persistent production flag path from the host and documents the system page as the second control path (#1904).
@@ -1894,6 +1895,19 @@ COMPOSE_FILE=docker-compose.dev.yml ENV_FILE=.env.dev \
   ./scripts/ops/rotate-db-passwords.sh
 ```
 
+**Compose file list:** The script builds the file list like `scripts/initial-setup.sh`:
+the base file (`COMPOSE_FILE`), then `compose.legal.yml` and
+`compose.override.yml` if they sit next to the base file, and prints the list
+it uses at startup (`Compose-Dateien: …`). Every `stop`, `up` and `run` step,
+including the rollback, uses the same list. This is necessary because Compose
+no longer loads `compose.override.yml` by itself once a `-f` is set, and because
+`compose.legal.yml` sets the environment variables and the volume for the
+imprint and privacy notice on `web` only: a `web` container recreated from the
+base file alone would lose both, and the footer links would silently disappear.
+Other host scripts do not recreate containers: `initial-setup.sh` uses the same
+list; `backup.sh`, `restore.sh` and `restore-drill.sh` at most stop services or
+start one-shots (`run --rm maintenance`).
+
 **Prerequisites:** announce a maintenance window; make sure no
 backup/restore job is currently running; have a current, verified backup
 state; `.env` must have mode `600` (or stricter). The script needs Docker
@@ -3007,5 +3021,5 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 3a61541ab4267c90d9156eb2a03159906abed325 -->
+<!-- source-hash: e4c598784d64b73eb2a4631efd070dcc58ebf651 -->
 <!-- translation-date: 2026-09-22 -->

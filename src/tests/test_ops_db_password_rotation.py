@@ -120,8 +120,15 @@ exit 0
     return env_file, compose_file, state_dir
 
 
-def _run(tmp_path: Path, *, accept_old_login: bool = False) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+def _run(
+    tmp_path: Path,
+    *,
+    accept_old_login: bool = False,
+    extra_compose_files: tuple[str, ...] = (),
+) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
     env_file, compose_file, state_dir = _fixture(tmp_path, accept_old_login=accept_old_login)
+    for name in extra_compose_files:
+        (tmp_path / name).write_text("services: {}\n", encoding="utf-8")
     env = {
         "PATH": f"{tmp_path / 'bin'}:{os.environ.get('PATH', '')}",
         "COMPOSE_FILE": str(compose_file),
@@ -171,6 +178,50 @@ def test_rotation_is_atomic_and_exercises_every_consumer(tmp_path: Path) -> None
         assert secret not in result.stdout
         assert secret not in result.stderr
         assert secret not in log
+
+
+def _compose_calls(log: str) -> list[str]:
+    return [line for line in log.splitlines() if " --env-file " in line]
+
+
+@pytest.mark.parametrize(
+    "extra_files",
+    [
+        ("compose.legal.yml", "compose.override.yml"),
+        ("compose.legal.yml",),
+        ("compose.override.yml",),
+        (),
+    ],
+    ids=["legal+override", "legal-only", "override-only", "base-only"],
+)
+def test_every_compose_call_uses_the_full_file_list(tmp_path: Path, extra_files: tuple[str, ...]) -> None:
+    result, _env_file, log_file = _run(tmp_path, extra_compose_files=extra_files)
+    assert result.returncode == 0, result.stderr
+
+    expected = f"-f {tmp_path / 'docker-compose.prod.yml'}"
+    for name in extra_files:
+        expected += f" -f {tmp_path / name}"
+    expected += " --env-file "
+
+    calls = _compose_calls(log_file.read_text(encoding="utf-8"))
+    assert calls, "the script issued no compose calls"
+    for line in calls:
+        assert expected in line, line
+    # Every recreate/start of a consumer carries the list, otherwise web loses the legal mount.
+    recreates = [line for line in calls if " up -d " in line]
+    assert len(recreates) == 2
+    # The effective file list is printed so the operator can see what was recreated.
+    for name in ("docker-compose.prod.yml", *extra_files):
+        assert str(tmp_path / name) in result.stdout
+
+
+def test_extra_compose_files_are_ignored_when_missing_next_to_the_base_file(tmp_path: Path) -> None:
+    other = tmp_path / "elsewhere"
+    other.mkdir()
+    (other / "compose.legal.yml").write_text("services: {}\n", encoding="utf-8")
+    result, _env_file, log_file = _run(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "compose.legal.yml" not in log_file.read_text(encoding="utf-8")
 
 
 def test_login_proofs_use_scram_network_path_not_trusted_loopback() -> None:

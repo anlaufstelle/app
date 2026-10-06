@@ -1880,6 +1880,20 @@ COMPOSE_FILE=docker-compose.dev.yml ENV_FILE=.env.dev \
   ./scripts/ops/rotate-db-passwords.sh
 ```
 
+**Compose-Dateiliste:** Das Skript baut die Dateiliste wie `scripts/initial-setup.sh`
+auf: die Basisdatei (`COMPOSE_FILE`), danach `compose.legal.yml` und
+`compose.override.yml`, soweit sie neben der Basisdatei liegen, und gibt die
+verwendete Liste beim Start aus (`Compose-Dateien: …`). Jeder `stop`-, `up`-
+und `run`-Schritt einschließlich des Rollbacks nutzt dieselbe Liste. Das ist
+nötig, weil Compose `compose.override.yml` nicht mehr selbst lädt, sobald ein
+`-f` gesetzt ist, und weil `compose.legal.yml` Umgebungsvariablen und Volume für
+Impressum und Datenschutzerklärung nur an `web` setzt: Ein nur aus der
+Basisdatei neu erzeugter `web`-Container verlöre beides, und die Links im Footer
+verschwänden still. Andere Host-Skripte erzeugen keine Container neu:
+`initial-setup.sh` nutzt dieselbe Liste; `backup.sh`, `restore.sh` und
+`restore-drill.sh` stoppen höchstens Dienste oder starten One-Shots
+(`run --rm maintenance`).
+
 **Voraussetzungen:** Wartungsfenster ankündigen; sicherstellen, dass gerade kein
 Backup-/Restore-Job laeuft; einen aktuellen, verifizierten Sicherungsstand haben;
 `.env` muss mode `600` (oder strenger) besitzen. Das Skript braucht Docker-
