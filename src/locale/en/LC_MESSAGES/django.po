@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 17:19+0200\n"
+"POT-Creation-Date: 2026-10-06 18:17+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -3714,10 +3714,6 @@ msgstr "Pseudonymization by design"
 msgid "Row Level Security (RLS) pro Facility"
 msgstr "Row Level Security (RLS) per facility"
 
-#: src/core/services/compliance/vvt.py:75
-msgid "Verschluesselung at-rest (AES-GCM) sensibler Felder"
-msgstr "Encryption at rest (AES-GCM) of sensitive fields"
-
 #: src/core/services/compliance/vvt.py:76
 msgid ""
 "AuditLog auf jede Aenderung; von Lesezugriffen nur die "
@@ -3778,10 +3774,6 @@ msgstr "Structured field values (configured per document type)"
 msgid "Kontaktanlass, Themen, Vermittlungen"
 msgstr "Contact reason, topics, referrals"
 
-#: src/core/services/compliance/vvt.py:101
-msgid "Ggf. Gesundheits-/Suchtkontext (verschluesselt)"
-msgstr "Possibly health / addiction context (encrypted)"
-
 #: src/core/services/compliance/vvt.py:102
 msgid "Zeitstempel, Bearbeiter:in, Sensitivitaetsstufe"
 msgstr "Timestamp, processor, sensitivity level"
@@ -3818,11 +3810,6 @@ msgid ""
 msgstr ""
 "Sensitivity-based visibility (per document type; individual field templates "
 "can raise it)"
-
-#: src/core/services/compliance/vvt.py:118
-msgid ""
-"Verschluesselung sensibler Felder (AES-GCM, Schluessel ausserhalb der DB)"
-msgstr "Encryption of sensitive fields (AES-GCM, keys stored outside the DB)"
 
 #: src/core/services/compliance/vvt.py:119
 msgid "Optimistic Locking gegen versehentliches Ueberschreiben"
@@ -13030,3 +13017,15 @@ msgstr "backup.sh removes local backup sets in its first successful run in which
 #: src/core/services/compliance/vvt.py:340
 msgid "Sicherung vor dem Aufbewahrungslauf: Ein Sicherungsstand enthält auch die Daten, die der folgende Lauf löscht; sie verschwinden lokal erst mit der Rotation dieses Sicherungsstands, in Off-Site-Kopien erst durch die Aufbewahrungsregel am Ziel"
 msgstr "Backup before the retention run: a backup set also contains the data the following run deletes; it disappears locally only with the rotation of that backup set, and in off-site copies only through the retention rule at the target"
+
+#: src/core/services/compliance/vvt.py:102
+msgid "Verschlüsselung at-rest sensibler Felder (Fernet: AES-128-CBC mit HMAC-SHA256)"
+msgstr "Encryption at rest of sensitive fields (Fernet: AES-128-CBC with HMAC-SHA256)"
+
+#: src/core/services/compliance/vvt.py:143
+msgid "Ggf. Gesundheits-/Suchtkontext (je nach Feldkonfiguration verschlüsselt)"
+msgstr "Possibly health / addiction context (encrypted depending on field configuration)"
+
+#: src/core/services/compliance/vvt.py:160
+msgid "Verschlüsselung sensibler Felder (Fernet: AES-128-CBC mit HMAC-SHA256, Schlüssel außerhalb der DB)"
+msgstr "Encryption of sensitive fields (Fernet: AES-128-CBC with HMAC-SHA256, key outside the database)"
