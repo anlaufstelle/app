@@ -34,6 +34,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Compliance-Dashboard zeigt das Ergebnis der DB-Rollenprüfung** (#2415) — `check_db_roles` hinterlegt nach jedem Lauf im Wartungsdienst sein Ergebnis ohne Rollennamen oder Zugangsdaten im Audit-Log, und die Karte „Admin-DB-Rolle“ zeigt es an: nach dem Deploy `ok` mit Prüfzeitpunkt, bei Befunden `critical`, bei unvollständiger oder über 30 Tage alter Prüfung `warning`.
 
+### Fixed
+
+- **Demo: Karten „Letztes Backup“ und „Restore-Test“ ohne Betriebshinweis** (#2414) — Im Demo-Modus erklären beide Karten, dass Sicherung und Wiederherstellung in der stündlich neu erzeugten Demo nicht eingerichtet sind, statt auf `backup.sh` bzw. `mark_restore_verified` zu verweisen; der Status bleibt `unknown`, auch in der Systemübersicht.
+
 ### Docs
 
 - **Statistik-Unterdrückung von Backup-Aufbewahrung getrennt** (#2429) — Fachkonzept, EN-Zusammenfassung und Beratungsstellen-Paketdoku erklären k als Veröffentlichungsschwelle und unterscheiden Felddefinition, verwertbare Dauerwerte und Unterdrückung anhand eines Zwei-Kontakte-Beispiels.

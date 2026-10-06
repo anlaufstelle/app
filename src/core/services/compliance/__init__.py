@@ -27,6 +27,8 @@ from __future__ import annotations
 import logging
 from dataclasses import replace
 
+from django.conf import settings
+
 from core.services.compliance._types import (
     _CRITICAL_AUDIT_ACTIONS,
     ComplianceCheck,
@@ -209,10 +211,14 @@ def operations_job_checks() -> list[ComplianceCheck]:
 
     Nur der Status wird gehoben; Message, Detail und Action-Hint bleiben
     identisch, damit beide Ansichten denselben Text zeigen.
+
+    Refs #2414: not on the demo (``DEMO_MODE``) — there the missing backup is
+    by design, and the card says so; a warning would contradict its text.
     """
+    lift_missing_backup = not getattr(settings, "DEMO_MODE", False)
     return [
         replace(check, status=ComplianceStatus.WARNING)
-        if check.key == "backup_age" and check.status == ComplianceStatus.UNKNOWN
+        if lift_missing_backup and check.key == "backup_age" and check.status == ComplianceStatus.UNKNOWN
         else check
         for check in cron_job_checks()
     ]
