@@ -201,7 +201,7 @@ Mittlere Fits, die Anlaufstelle als Randsystem nutzen können, ohne Kernprodukt 
 
 ### Technische Zielgruppe
 
-- **Selbst-Hoster** — Träger, die das System auf eigener Infrastruktur betreiben: eine vom Betreiber gemäß [Admin-Handbuch](admin-guide.md#voraussetzungen) dimensionierte Umgebung. Anlaufstelle muss mit `docker compose up` installierbar sein.
+- **Selbst-Hoster** — Träger, die das System auf eigener Infrastruktur betreiben. Hardwarebedarf: [Admin-Handbuch § 1 — Voraussetzungen](admin-guide.md#hardware). Anlaufstelle muss mit `docker compose up` installierbar sein.
 - **Open-Source-Contributors** — Entwickler:innen, die sich für soziale Software interessieren und ein Projekt suchen, das fachlich fundiert, technisch sauber und gesellschaftlich relevant ist.
 - **Dienstleister im Sozialsektor** — IT-Unternehmen und Beratungsfirmen, die Einrichtungen bei der Digitalisierung begleiten und ein anpassbares, lizenzkostenfreies System als Grundlage nutzen wollen.
 
@@ -1069,7 +1069,7 @@ Das Fachkonzept beschreibt Domäne und Architektur konzeptionell, nennt aber den
 
 Der mitgelieferte Produktions-Stack umfasst Caddy (HTTPS), die Django-Anwendung mit Gunicorn und WhiteNoise, PostgreSQL, Redis, ClamAV, einen Cron-Dienst für Hintergrundaufgaben und einen Maintenance-Dienst für Betriebsarbeiten. ClamAV ist für Uploads in Produktion verpflichtend. Redis ist als Cache-Dienst enthalten; die Einstellungen unterstützen einen Datenbank-Cache als Fallback bei bewusst leerer Redis-Konfiguration.
 
-Hardwarebedarf und Installationsvoraussetzungen stehen im [Admin-Handbuch § 1 — Voraussetzungen](admin-guide.md#voraussetzungen).
+Hardwarebedarf: [Admin-Handbuch § 1 — Voraussetzungen](admin-guide.md#hardware). Installationsvoraussetzungen: [Admin-Handbuch § 1 — Voraussetzungen](admin-guide.md#voraussetzungen).
 
 ### Backup-Strategie
 

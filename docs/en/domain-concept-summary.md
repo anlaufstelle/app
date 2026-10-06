@@ -1,7 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Synchronization update 2026-10-06: Data subject rights and delivered functions are separated from target features; client self-service is rejected.
+> Synchronization update 2026-10-06: Hardware references point to the admin guide; installation prerequisites have a separate reference.
 
 # Domain Concept Summary
 
@@ -121,7 +121,7 @@ Event creation (`/events/new/`) saves drafts every 5 seconds in encrypted Indexe
 - **External API target:** A facility-scoped REST API for provider integrations is not implemented; current JSON endpoints are session-bound internal endpoints.
 - **Performance targets:** Page load < 1s (3G), contact save < 500ms, autocomplete < 300ms, six-month statistics query < 5s at 50,000 events.
 - **Scaling target:** 5--30 concurrent users, up to 50,000 events/year per facility.
-- **Deployment:** The production Compose stack includes Caddy, Django, PostgreSQL, Redis, mandatory ClamAV, cron and maintenance services. Hardware and installation requirements are centralized in the [admin guide](../admin-guide.md#voraussetzungen).
+- **Deployment:** The production Compose stack includes Caddy, Django, PostgreSQL, Redis, mandatory ClamAV, cron and maintenance services. Hardware requirements: [admin guide § 1 — Prerequisites](admin-guide.md#hardware). Installation prerequisites: [admin guide § 1 — Prerequisites](admin-guide.md#prerequisites).
 - **Availability:** 99% target. Health-check endpoint at `/health/` for monitoring integration.
 
 ## Version Additions
@@ -320,4 +320,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 91c5bc39719414f961281dc87c08ace15eed6bca -->
+<!-- source-hash: ef45d7a76e30c7854d51dfb09f9476807ead4066 -->
