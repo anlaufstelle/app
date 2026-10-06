@@ -1,6 +1,6 @@
 # ADR-043: Suchraum der Volltextsuche — keine Such-Protokollierung, offener Fall-Rahmen
 
-- **Status:** Accepted
+- **Status:** Teilweise abgelöst durch ADR-044 (Fall-Löschung; siehe Nachtrag 2026-10-06)
 - **Date:** 2026-08-22
 - **Deciders:** Tobias Nix
 - **Refs:** #1862 (RFC mit den Belegen am Quelltext), #1842 (Fall-Titel + Ereignis-Inhalte, offen), #1803 (Suchseite als Arbeitsplatz, Regeln L4/L6/L7), #918 (Klartext-Freitexte), #1751 (PII aus dem AuditLog entfernt), #1944 (`detail`-Allowlist), [ADR-016](016-search-postgres-only.md) (Suchbackend), [ADR-007](007-auditlog-append-only.md) (Append-Only), [ADR-019](019-custom-admin-site-sudo.md) (Admin-Gate), [ADR-026](026-rate-limiting.md) (Tarife)
@@ -114,3 +114,11 @@ Die Art.-15-Auskunft zieht mit: `_gather_audit_trail` in [`services/client/expor
 - [`src/core/services/dashboard/search.py`](../../src/core/services/dashboard/search.py) · [`src/core/views/search.py`](../../src/core/views/search.py)
 - [`src/core/services/compliance/vvt.py`](../../src/core/services/compliance/vvt.py) · [`src/core/services/audit/detail_policy.py`](../../src/core/services/audit/detail_policy.py)
 - [`docs/datenschutz.md`](../datenschutz.md) (Wegweiser) · [`docs/admin-guide.md` § 7.4](../admin-guide.md#74-audit-log) (was das Audit-Log protokolliert — und was nicht)
+
+## Nachtrag (2026-10-06): Fall-Löschpfad und Such-Sensitivität (Refs #2499)
+
+**Status:** Teilweise abgelöst durch [ADR-044](044-fall-loeschpfad.md). Abgelöst ist die Aussage zur Fall-Löschung in den Consequences; die Entscheidungen zum Suchraum und zur fehlenden Such-Protokollierung gelten unverändert.
+
+- **Ein Fall ist löschbar.** Die Consequences sagen, ein Fall könne „überhaupt nicht gelöscht werden“, und der Guard verbiete jeder TOM, eine Fall-Löschung zu nennen. Mit ADR-044 (#1818) gilt das Gegenteil: Es gibt Papierkorb, Wiederherstellung und Anonymisierung eines Falls mit den Aktionen `CASE_SOFT_DELETED`, `CASE_RESTORED` und `CASE_ANONYMIZED` ([`models/audit.py`](../../src/core/models/audit.py)). Die TOM des Verarbeitungsvorgangs `falldaten` in [`services/compliance/vvt.py`](../../src/core/services/compliance/vvt.py) zählt Löschen, Wiederherstellen und Anonymisieren von Fällen auf. Der Guard in [`test_vvt.py`](../../src/tests/test_vvt.py) ist umgedreht: `test_toms_do_not_deny_the_case_deletion_path` verbietet jetzt die **Gegenaussage** „Fälle sind nicht löschbar“ (`_CASE_UNDELETABLE_CLAIM_RE`). Wer der ursprünglichen Formulierung folgt, dreht die Art.-30-Angabe auf einen falschen Stand zurück.
+- **Such-Sensitivität:** Der Context („die Invariante, dass der Sensitivity-Filter im Schreibpfad sitzt“) übernimmt eine Formulierung aus ADR-016, die zu stark ist. Der Suchindex enthält auch Felder mit geerbter Sensitivität; den Schutz trägt zusätzlich das Typ-Gate im Lesepfad. Details: [ADR-016 Nachtrag (2026-10-06)](016-search-postgres-only.md#nachtrag-2026-10-06-der-suchindex-filtert-nicht-allein-das-lese-gate-bleibt-nötig-refs-2499).
+- **Refs:** Der Kopf nennt ADR-044 nicht; dieser Nachtrag ist der Verweis.

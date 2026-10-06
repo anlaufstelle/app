@@ -41,3 +41,14 @@ Die App soll eine schnelle Such-UX über Pseudonyme, Fall-Titel und Ereignis-Inh
 - [`src/core/services/events/fields.py`](../../src/core/services/events/fields.py) (`compute_event_search_text`)
 - [`src/core/migrations/0081_add_event_search_text.py`](../../src/core/migrations/0081_add_event_search_text.py) (TrigramExtension + GIN-Index)
 - Refs #580 (Trigram-Similarity), #827 (Suchindex-Spalte)
+
+## Nachtrag (2026-10-06): Der Suchindex filtert nicht allein, das Lese-Gate bleibt nötig (Refs #2499)
+
+Die Decision sagt, `search_text` enthalte nur Felder mit `sensitivity=NORMAL`, der Sensitivity-Filter sei damit „vom Read-Pfad in den Write-Pfad“ gewandert. Die Consequences leiten daraus ab, die Eigenschaft sei allein über `search_text` statisch prüfbar. Beides beschreibt den Schutz stärker, als der Schreibpfad allein ihn trägt.
+
+**Ist-Stand:**
+
+- **Schreibpfad** ([`compute_event_search_text`](../../src/core/services/events/fields.py), aufgerufen in `services/events/crud.py` und im `pre_save`-Signal [`signals/event_search.py`](../../src/core/signals/event_search.py)): Indexiert werden unverschlüsselte Felder mit ausdrücklich `normal` **oder mit geerbter Sensitivität** (`sensitivity == ""`). Ausgeschlossen sind verschlüsselte Felder, Felder mit eigener Stufe `elevated`/`high`, jeder unbekannte Wert und Datei-Marker. Ein Feld ohne eigene Stufe in einem Dokumentationstyp mit erhöhter oder hoher Sensitivität landet also im Klartext-Index.
+- **Lesepfad** ([`event_search_queryset`](../../src/core/services/dashboard/search.py)): Die Suche filtert zusätzlich auf Ereignis-Ebene über den Typ (`document_type__sensitivity__in=allowed_sensitivities_for_user(user)`). Erst dieses Typ-Gate verhindert, dass eine Rolle über `search_text` Inhalte eines Typs findet, den sie nicht sehen darf.
+
+Den Schutz tragen also **beide** Schichten: Der Schreibpfad hält Felder mit eigener erhöhter Stufe und verschlüsselte Felder aus dem Index, das Lese-Gate den Rest. Das Lese-Gate ist nicht verzichtbar. Wer `event_search_queryset` oder eine neue Suchfläche auf `search_text` baut, muss das Typ-Gate mitnehmen. Fortschreibung des Suchraums: [ADR-043](043-suchraum-volltextsuche.md#nachtrag-2026-10-06-fall-löschpfad-und-such-sensitivität-refs-2499).
