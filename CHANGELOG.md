@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Locust-Login und Statistikbegründung an den aktuellen Seed angepasst** (#2421) — Das Lasttestprofil nutzt vorhandene Fachkonten, erkennt fehlgeschlagene Anmeldungen und Login-Weiterleitungen, ordnet Exporte der Einrichtungsleitung zu und verlinkt das Statistik-MV-Issue korrekt.
 - **Demo-Footer und Container-Version bleiben beim Release-Deploy synchron** (#2408) — `deploy-demo.sh` übernimmt keinen alten `SOURCE_CODE_VERSION`-Wert mehr aus `.env.demo` und bricht ab, wenn der laufende Web-Container vom Release abweicht.
 - **Rollback-Beispiele nennen keinen erfundenen Image-Tag mehr** (#2308) — Admin-Guide und Ops-Runbook (DE/EN) zeigten beim Zurückwechseln auf eine frühere Version `ghcr.io/anlaufstelle/app:v1.2.3`, einen nie veröffentlichten Tag. Die Beispiele nutzen jetzt den Platzhalter `vX.Y.Z` und nennen, wie sich mit `docker manifest inspect` prüfen lässt, ob ein Tag abrufbar ist.
 
