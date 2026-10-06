@@ -2,7 +2,8 @@
 
 > This is a partial English translation of the Anlaufstelle documentation.
 > The [German documentation](../README.md) is the authoritative source.
-> Internal artifacts (`docs/archive/`, `docs/superpowers/`, `docs/ai/`) are dev-only.
+> Internal artifacts (`docs/archive/`, `docs/superpowers/`, `docs/ai/`, `docs/dev/`, and `docs/testing/` except the manual test matrix and the assertion conventions) are dev-only.
+> Synchronization update 2026-10-06: Files that are not shipped are marked dev-only instead of linked, the manual test matrix has its own row, and the template paragraph states where the templates live (#2437).
 > Synchronization update 2026-09-18: Clarified that the FAQ itself is the authoritative source for its content (#2253).
 > Synchronization update 2026-09-11: Added the accessibility audit to the German-only index (#2215).
 
@@ -42,7 +43,7 @@ The full domain concept ([fachkonzept-anlaufstelle.md](../fachkonzept-anlaufstel
 
 ### Data Protection Templates (DSGVO)
 
-Anlaufstelle includes German-language data protection templates in [`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/). These implement requirements specific to **German law** (DSGVO + BDSG + SGB X). They are **not** generic GDPR templates. For GDPR compliance in other EU jurisdictions, consult your local Data Protection Authority (DPA). Templates moved into the app package in #784 so the Docker image ships them.
+Anlaufstelle includes German-language data protection templates in [`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/). These implement requirements specific to **German law** (DSGVO + BDSG + SGB X). They are **not** generic GDPR templates. For GDPR compliance in other EU jurisdictions, consult your local Data Protection Authority (DPA). The templates live in the app package so the Docker image ships them (#784).
 
 Templates included:
 - **AV-Vertrag** — Data Processing Agreement (Art. 28 DSGVO)
@@ -71,17 +72,18 @@ Templates included:
 | [security-notes.md](../security-notes.md) | Deliberate security design decisions (2FA, Fernet, RLS, audit, lockout) |
 | [threat-model.md](../threat-model.md) | Security model, attack surface, known open gaps |
 | `audit-inventar.md` (dev-only) | Index of audit classification codes (FND-\*, S-\*, phases, sprints) |
-| dev-deployment.md | Dev/test environment deployment |
+| `dev-deployment.md` (dev-only) | Dev/test environment deployment |
 | `release-checklist.md` (dev-only) | Release process, sanitize steps, hard-exclusion list |
 | [performance-budgets.md](../performance-budgets.md) | Performance targets and budgets |
 | [sprachleitlinie.md](../sprachleitlinie.md) | Language guideline for UI and handbook — _Klientel → Person_, terminology matrix, refactor priorities (Refs #604) |
 | [adr/](../adr/) | Architecture Decision Records — why the architecture looks the way it does |
-| [testing/](../testing/) | Test matrix, mutation testing, release test profiles |
+| [testing/](../testing/) | Manual test matrix and assertion conventions |
+| [testing/manual-test-matrix.md](../testing/manual-test-matrix.md) | Manual test matrix (German): hub with front matter and appendices, sections a–d |
 | [e2e-architecture.md](../e2e-architecture.md) | E2E testing infrastructure (developer-facing) |
 | [e2e-runbook.md](../e2e-runbook.md) | E2E test execution, debugging, checklists |
 | `async-pdf-evaluation.md` (dev-only) | _Historical_ — async PDF queue evaluation, superseded by [ADR-010](../adr/010-sync-pdf-generation.md) |
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.99.5 -->
-<!-- translation-date: 2026-09-11 -->
-<!-- source-hash: 8ccd901cff27e3acf28c64f2b7e43a8d0b285042 -->
+<!-- translation-date: 2026-10-06 -->
+<!-- source-hash: 651f745351156e3a78d5e960d2ba6aba10a8e825 -->

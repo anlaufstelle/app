@@ -7,7 +7,7 @@
 
 ## Update 2026-07-13 — Dev-CI wieder deaktiviert
 
-`gh workflow list --all --repo anlaufstelle/app` zeigt am **2026-07-13** wieder **alle** Dev-Workflows auf `disabled_manually` — einzig aktiv ist `Dependabot Updates`. Die Reaktivierung vom 2026-07-11 ([Update unten](#update-2026-07-11--dev-ci-reaktiviert)) ist damit **nicht mehr wirksam**; der in dieser ADR beschriebene lokal-only-Zustand gilt wieder unverändert. Die Aktivierung bleibt reversibel (docs/dev/ci-workflows.md § Reaktivierung).
+`gh workflow list --all` im Entwicklungs-Repository zeigt am **2026-07-13** wieder **alle** Dev-Workflows auf `disabled_manually` — einzig aktiv ist `Dependabot Updates`. Die Reaktivierung vom 2026-07-11 ([Update unten](#update-2026-07-11--dev-ci-reaktiviert)) ist damit **nicht mehr wirksam**; der in dieser ADR beschriebene lokal-only-Zustand gilt wieder unverändert. Die Aktivierung bleibt reversibel (docs/dev/ci-workflows.md § Reaktivierung).
 
 Der Release-Reproduzierbarkeits-Test `test_two_cold_builds_are_byte_identical` war während der 07-11-Reaktivierung auf dem Runner nichtdeterministisch (#1514, Signaturverdacht). Der Test ist inzwischen **gehärtet**: die harte Determinismus-Garantie läuft über den *strukturellen* Snapshot (Tree + vollständige Metadaten je Boundary) statt über die signaturhaltige HEAD-SHA; die SSH-Signatur wird separat und diagnostisch geprüft. Die **Root-Cause bleibt bis zu einem echten Runner-Lauf unbestätigt** — bei allen `disabled_manually` derzeit nicht verifizierbar, daher bleibt #1514 **offen**. Bis dahin ist `make ci` lokal das verbindliche Gate.
 
@@ -23,7 +23,7 @@ Die **lokale** Durchsetzung (`make ci`, Pre-Push-Hook, `make release-gates`) ble
 
 ## Context
 
-Die Quality-Gates des Projekts (Lint, Typecheck, Unit-/Integration-Tests, Coverage-Floor 96 %, E2E, Mutation-Testing, CodeQL) sind als GitHub-Workflows definiert. Auf dem Dev-Repo `anlaufstelle/app` sind jedoch **alle** Test-/Lint-/E2E-/Mutation-/CodeQL-Workflows `disabled_manually` — `gh workflow list --all` zeigt nur Dependabot aktiv. Grund ist das **Actions-Spending-Limit** (privates Repo, kostenpflichtige Minuten); das Postmortem dazu ist #860.
+Die Quality-Gates des Projekts (Lint, Typecheck, Unit-/Integration-Tests, Coverage-Floor 96 %, E2E, Mutation-Testing, CodeQL) sind als GitHub-Workflows definiert. Im Entwicklungs-Repository sind jedoch **alle** Test-/Lint-/E2E-/Mutation-/CodeQL-Workflows `disabled_manually` — `gh workflow list --all` zeigt nur Dependabot aktiv. Grund ist das **Actions-Spending-Limit** (privates Repo, kostenpflichtige Minuten); das Postmortem dazu ist #860.
 
 Damit blocken Coverage-Floor, Mutation und CodeQL im Dev-Repo **nicht** bei Push/PR. Das ist kein Versehen, sondern eine Kostenentscheidung — aber bisher nur verteilt in Doku-Fußnoten festgehalten (`docs/dev/release-checklist.md` § 1.1, `docs/dev/ci-workflows.md`). #1150 verlangt, die Nicht-Durchsetzung als **bewusste, dokumentierte Entscheidung** festzuschreiben, damit sie kein blinder Fleck ist (sonst entsteht „falsch grün" unbemerkt).
 
@@ -31,7 +31,7 @@ Die 3-Repo-Pipeline ([ADR-011](011-three-repo-release-pipeline.md)) hat zudem ei
 
 ## Decision
 
-**Die Quality-Gates werden im Dev-Repo bewusst lokal-only durchgesetzt** — nicht über GitHub-Actions auf `anlaufstelle/app`. Die Durchsetzungskette ist:
+**Die Quality-Gates werden im Dev-Repo bewusst lokal-only durchgesetzt** — nicht über dessen GitHub-Actions. Die Durchsetzungskette ist:
 
 1. **Lokal blockierend:** `make ci` (`lint` · `check` · `deps-check` · `verify-matrix-drift` · `typecheck` · `test-parallel`) vor jedem Commit/Push; volle E2E (`make test-e2e-parallel`, sandbox seriell) vor jedem Release-Tag.
 2. **Pre-Push-Hook:** `pre-commit install --hook-type pre-push` aktiviert `make lint && make deps-check && make check` automatisch vor jedem `git push` (umgehbar nur mit `--no-verify` — verboten ohne ausdrücklichen Wunsch).

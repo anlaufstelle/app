@@ -3,7 +3,8 @@
 > **[English Documentation](en/README.md)**
 
 Dieses Verzeichnis enthält die gesamte Projektdokumentation. Interne Artefakte
-(`docs/archive/`, `docs/superpowers/`, `docs/ai/`) sind dev-only.
+(`docs/archive/`, `docs/superpowers/`, `docs/ai/`, `docs/dev/` und `docs/testing/` außer der
+manuellen Testmatrix und den Assertion-Konventionen) sind dev-only.
 
 
 ---
@@ -38,7 +39,7 @@ Die Doku beschreibt den **Ist-Stand**. Historie gehört ins [CHANGELOG.md](../CH
 | [packages-awareness.md](packages-awareness.md) | Awareness-Paket: sieben Typen, Sensitivitätsmatrix, Berichte und Betreiber-Empfehlungen (Refs #2137) | IT-Admins, Awareness-Koordination |
 | [packages-frauenhaus.md](packages-frauenhaus.md) | Frauenhaus-Paket: acht Typen, Sensitivitätsmatrix, Berichte und Betreiber-Empfehlungen für den 24/7-Betrieb (Refs #2138) | IT-Admins, Einrichtungsleitung |
 | [packages-jugendarbeit.md](packages-jugendarbeit.md) | Jugendarbeit-Paket: acht Typen, Sensitivitätsmatrix, Berichte und Betreiber-Empfehlungen (Refs #2139) | IT-Admins, Anwendungsbetreuung |
-| [ops-runbook.md](ops-runbook.md) | Betriebs-Runbook: Monitoring, Alerts, Cron-Jobs, RLS, Backup/Restore, Restore-Drill | IT-Admins, DevOps |
+| [ops-runbook.md](ops-runbook.md) | Betriebs-Runbook: Deployment, Rollback, Cron-Jobs, Log-Analyse, Troubleshooting, RLS, Backup/Restore, Restore-Drill | IT-Admins, DevOps |
 | [facility-export-schema.md](facility-export-schema.md) | Facility-Gesamtexport (JSON, Schema v1): Feldliste, Versionierungsregel, Papierkorb-/Anonymisierungs-Grenzen, Anhang-Hashes, `manage.py export_facility` (Refs #1060) | IT-Admins, Entwickler |
 | [monitoring-guide.md](monitoring-guide.md) | `/health/`-Endpoint: Felder, HTTP-Status-Codes, Liveness vs. Detail, Anbindung an Uptime-/Monitoring-Tools (Refs #1071) | IT-Admins, DevOps |
 | [disaster-recovery.md](disaster-recovery.md) | Totalverlust-Wiederherstellung: Off-Site-Backup beschaffen, Schlüssel-Eskrow, Restore auf frischem Host, RTO/RPO (Refs #1071) | IT-Admins, DevOps |
@@ -49,7 +50,7 @@ Die Doku beschreibt den **Ist-Stand**. Historie gehört ins [CHANGELOG.md](../CH
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
-| dev-deployment.md | Deployment der Dev-/Test-Umgebung | DevOps |
+| `dev-deployment.md` (dev-only) | Deployment der Dev-/Test-Umgebung | DevOps |
 | `release-checklist.md` (dev-only) | Release-Prozess, Sanitize-Schritte, Hart-Ausschluss-Liste | Release-Manager |
 
 ---
@@ -76,18 +77,19 @@ Die Doku beschreibt den **Ist-Stand**. Historie gehört ins [CHANGELOG.md](../CH
 | [e2e-architecture.md](e2e-architecture.md) | E2E-Test-Infrastruktur: gunicorn, Playwright, Wait-Strategien, Fixtures | Entwickler, QA |
 | [e2e-runbook.md](e2e-runbook.md) | E2E-Test-Ausführung: Server starten, Tests laufen lassen, Debugging | Entwickler, QA |
 | [testing/assertion-conventions.md](testing/assertion-conventions.md) | Konventionen für präzise Assertions zu Exceptions, Logs, eingeschränkten Saves und Query-Budgets | Entwickler, QA |
-| testing/test-matrix-index.md | Test-Matrix-Übersicht (manuelle Testfälle + E2E-Mapping); Detail im Hub [testing/manual-test-matrix.md](testing/manual-test-matrix.md) (Front-matter + Anhänge) mit Sektions-Dateien `manual-test-matrix-a.md`…`-d.md`, Mutation-Testing in testing/mutation-testing.md | QA, Entwickler |
-| testing/release-test-profiles.md | Release-Testprofile — manueller Rest neben dem automatisierten Gate (Refs #1081); Vorlage run-template.md → testing/runs/ | QA, Release-Manager |
-| testing/abnahme-0.98.md | Gerüst der konsolidierten Abnahmematrix für release-0.98 — Quellenabbildung, Spaltenschema, neue Prüfbereiche seit 0.96 (Refs #2170) | QA, Release-Manager |
-| testing/mutation-survivors-baseline.md | Baseline überlebender Mutanten (Mutation-Testing) | QA, Entwickler |
-| [performance-budgets.md](performance-budgets.md) | Performance-Ziele und Budget-Grenzen (perf-nightly) | Entwickler, QA |
+| [testing/manual-test-matrix.md](testing/manual-test-matrix.md) | Manuelle Testmatrix: Hub (Front-matter + Anhänge) mit den Sektions-Dateien [`manual-test-matrix-a.md`](testing/manual-test-matrix-a.md), [`-b.md`](testing/manual-test-matrix-b.md), [`-c.md`](testing/manual-test-matrix-c.md) und [`-d.md`](testing/manual-test-matrix-d.md) | QA, Entwickler |
+| `testing/test-matrix-index.md` (dev-only) | Test-Matrix-Übersicht (manuelle Testfälle + E2E-Mapping), Mutation-Testing in `testing/mutation-testing.md` (dev-only) | QA, Entwickler |
+| `testing/release-test-profiles.md` (dev-only) | Release-Testprofile — manueller Rest neben dem automatisierten Gate (Refs #1081); Vorlage `run-template.md` → `testing/runs/` | QA, Release-Manager |
+| `testing/abnahme-0.98.md` (dev-only) | Gerüst der konsolidierten Abnahmematrix für release-0.98 — Quellenabbildung, Spaltenschema, neue Prüfbereiche (Refs #2170) | QA, Release-Manager |
+| `testing/mutation-survivors-baseline.md` (dev-only) | Baseline überlebender Mutanten (Mutation-Testing) | QA, Entwickler |
+| [performance-budgets.md](performance-budgets.md) | Performance-Ziele und Budget-Grenzen | Entwickler, QA |
 | `async-pdf-evaluation.md` (dev-only) | _Historisch_ — Evaluierung asynchroner PDF-Generierung, abgelöst durch [ADR-010](adr/010-sync-pdf-generation.md) | Entwickler, Architekten |
 
 ---
 
 ## DSGVO-Vorlagen
 
-Vorlagen für den Datenschutz in [`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/). Werden von der App aktiv genutzt — seit #784 ins App-Paket verschoben, damit das Docker-Image sie enthält.
+Vorlagen für den Datenschutz in [`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/). Werden von der App aktiv genutzt und liegen im App-Paket, damit das Docker-Image sie enthält (#784).
 
 | Dokument | Beschreibung |
 |----------|-------------|
