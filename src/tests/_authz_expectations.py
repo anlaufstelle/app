@@ -599,6 +599,15 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "staff_user.pk"),),
         idor=(("pk", "foreign_staff.pk"),),
     ),
+    E(
+        "core:user_access_mfa_reset",
+        "facility-admin",
+        get=ADMIN_ONLY,
+        post=ADMIN_ONLY,
+        sudo=True,
+        url_kwargs=(("pk", "staff_user.pk"),),
+        idor=(("pk", "foreign_staff.pk"),),
+    ),
     E("core:client_trash", "facility-admin", get=ADMIN_ONLY),
     # Refs #1818: zweiter Papierkorb, gleiches Gate wie der erste.
     E("core:case_trash", "facility-admin", get=ADMIN_ONLY),
