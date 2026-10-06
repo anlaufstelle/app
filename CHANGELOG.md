@@ -48,6 +48,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Architekturübersichten am Bestand ausgerichtet** (#2451) — Wegweiser nennen aktuelle Modulorte, Offline-Ablagegrenzen und E2E-Ausführungsarten ohne unbewachte Bestandszahlen.
+
 - **Architektur- und Retention-ADRs präzisiert** (#2500) — Nachträge unterscheiden implementierte Schnittstellen, Zielbilder und begrenzte Redaktions- sowie Audit-Garantien.
 
 - **ADR-Verträge und Index abgeglichen** (#2450) — Datierte Nachträge benennen aktuelle Offline-, Betriebs- und Übersetzungsverträge sowie Teilablösungen.

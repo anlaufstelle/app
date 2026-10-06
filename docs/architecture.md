@@ -3,11 +3,11 @@
 Der Einstieg für neue Mitwirkende: **wo liegt was, welche Regel gilt wo, und wo steht die
 ausführliche Begründung?** Dieses Dokument ist ein *Wegweiser*, keine Enzyklopädie — jeder
 Abschnitt endet mit den Links, die den Gegenstand vollständig behandeln. Was hier steht, ist
-aus dem Code abgeleitet; im Zweifel gilt der Code (siehe AGENTS.md § Vor jeder
-Implementierung).
+aus dem Code abgeleitet; im Zweifel gilt der Code (siehe
+[CONTRIBUTING.md § Coding Conventions](../CONTRIBUTING.md#coding-conventions)).
 
 - **Setup, Make-Targets, Coding Conventions, PR-Prozess:** [CONTRIBUTING.md](../CONTRIBUTING.md)
-- **Warum die Architektur so aussieht:** [docs/adr/](adr/) — 49 Architecture Decision Records
+- **Warum die Architektur so aussieht:** [docs/adr/](adr/) — der aktuelle Entscheidungsindex steht in [README.md](adr/README.md)
 - **Fachliches Domänenkonzept:** [fachkonzept-anlaufstelle.md](fachkonzept-anlaufstelle.md)
 - **Betrieb:** [ops-runbook.md](ops-runbook.md) · [admin-guide.md](admin-guide.md)
 
@@ -29,7 +29,7 @@ Stack startet dabei mit einem Kommando und seedet sich selbst, der produktive **
 ## 2. Schichten — der Weg eines Requests
 
 ```
-URLconf                src/core/urls/            core: — ein Namespace, drei Submodule
+URLconf                src/core/urls/            core: — ein Namespace, _config, _help, _offline, _system
    ▼
 Middleware             src/core/middleware/      Facility-Scope → RLS-Session-Variablen,
                                                  MFA-Zwang, Passwortwechsel, Sitzungsfristen
@@ -156,7 +156,7 @@ Dieselbe Anwendung, offline lauffähig; kein zweiter Client, kein eigenes Datenm
 | Baustein | Datei | Aufgabe |
 |---|---|---|
 | Service Worker | [`static/js/sw.js`](../src/static/js/sw.js) | App-Shell cache-first, HTML/HTMX network-first. Serviert offline die **In-Place-Shells** (`/offline/…`) an den kanonischen URLs, sodass `/clients/`, `/events/new/` und der Zeitstrom offline dieselben Adressen behalten. Multipart-Uploads werden bewusst **nicht** gequeued (503 statt stillem Verlust). |
-| Verschlüsselte Ablage | [`offline-db.js`](../src/static/js/offline-db.js) + `crypto.js` | Dexie/IndexedDB, jede Zeile als `{iv, ct}` — Klartext liegt nie auf dem Gerät. Der Session-Key wird beim Login clientseitig aus dem Passwort plus einem serverseitigen Salt abgeleitet und im Leerlauf gelöscht. |
+| Verschlüsselte Ablage | [`offline-db.js`](../src/static/js/offline-db.js) + `crypto.js` | Dexie/IndexedDB; der Inhalt jeder Zeile liegt als `{iv, ct}`-Umschlag vor, Ordnungsmerkmale (`pk`, `clientPk`, `localStatus`, Zeitstempel, Queue-`url`) im Klartext daneben. Der Session-Key wird beim Login clientseitig aus dem Passwort plus einem serverseitigen Salt abgeleitet und als non-extractable `CryptoKey` in IndexedDB gespeichert. Nach Ablauf der Leerlaufzeit löscht die App beim nächsten Ausführen den Key — bei ungesendeter Arbeit nur den Key, sonst auch den Store. Schließen oder Geräteneustart löscht nichts. |
 | Verbund-Dateien (Bundles) | `api/v1/offline/bundle/client/<pk>/`, `api/v1/offline/bundle/facility/` | Was ein Gerät mitnimmt: personenbezogenes Bundle (bewusst gepinnt) und ein personenloses Facility-Bundle (Katalog für die Offline-Erfassung). Gegenrichtung: `api/v1/offline/revocations/` sagt, was gelöscht werden **muss**. |
 | Sync-Orchestrator | [`sync-orchestrator.js`](../src/static/js/sync-orchestrator.js) | Ein origin-weiter Web Lock, unter dem die gesamte Replay-Sequenz läuft — Queue, geänderte Ereignisse, dann Revalidierung. Pro Origin höchstens **eine** Sync-Sequenz, auch über mehrere Tabs; Key-Wipe-Signale gehen per BroadcastChannel. |
 | Konfliktbehandlung | `/offline/conflicts/` | Was beim Replay kollidiert, wird nie still verworfen, sondern zur Entscheidung vorgelegt; Dead-Letter statt Endlos-Retry. |
@@ -170,11 +170,14 @@ Reihenfolge-Garantien und Dead-Letter-Semantik: [ADR-030](adr/030-offline-sync-o
 
 | Schicht | Umfang | Aufruf |
 |---|---|---|
-| Unit / Service / Form / CBV | ~480 Dateien unter `src/tests/` | `make test-parallel` (bzw. `make test`) |
+| Unit / Service / Form / CBV | Testdateien unter `src/tests/`, außerhalb von `e2e/` | `make test-parallel` (bzw. `make test`) |
 | Architektur-Guards | `src/tests/test_architecture_guards_*.py` — Schichtrichtung, Audit-Allowlist, Rate-Limit-Pflicht, Template-/CSP-Regeln, RLS-Abdeckung | Teil des normalen Testlaufs |
-| End-to-End (Playwright) | ~107 Dateien unter `src/tests/e2e/`, gunicorn auf Port 8844 | `make test-e2e` — **seriell**, nie parallel zu anderen Läufen |
-| JS-Unit (Vitest) | 33 Suiten unter `tests/js/` für die sicherheitskritischen Offline-Module (jsdom + fake-indexeddb) | `make test-js` |
+| End-to-End (Playwright) | Testdateien unter `src/tests/e2e/`, gunicorn auf Port 8844 im seriellen Default | `make test-e2e-locked` — **serieller Default**; optional `make test-e2e-parallel-locked` mit eigener DB und eigenem Port je Worker |
+| JS-Unit (Vitest) | Suiten (`*.test.mjs`) unter `tests/js/` für die sicherheitskritischen Offline-Module (jsdom + fake-indexeddb) | `make test-js` |
 | Mutation-Testing | `core.services` + `core.forms`, punktuell statt PR-Pflicht | `make mutation` |
+
+Sudo-Gates liegen in `core/services/security/sudo_mode.py` (`RequireSudoModeMixin`)
+und in der AdminSite, nicht in einer Sudo-Middleware.
 
 `make ci` bündelt Lint, Django-Checks, alle Drift-Guards, i18n-Prüfung, mypy und die
 Testläufe. Die schweren Ziele gibt es zusätzlich als `-locked`-Varianten, die global
@@ -195,9 +198,10 @@ src/
     models/              ein Model je Datei; FacilityScopedManager, Slug-Immutabilität
     views/               nur CBVs; views/config/ (Formular-Konfiguration), views/system/ (/system/)
     services/            Business-Logik: audit/, compliance/, config/, events/, file_vault/,
-                         retention/, security/, system/, dynamic_data.py …
+                         security/, system/, dynamic_data.py, retention.py …
+    retention/           Retention-Strategien, Vorschläge, Legal Holds, Redaktion und Audit-Pruning
     forms/               ModelForms inkl. der dynamischen Feld-Formulare
-    middleware/          Facility-Scope/RLS, MFA, Sudo-nahe Gates, Sitzungsfristen, Wartungsmodus
+    middleware/          Facility-Scope/RLS, MFA, Sitzungsfristen, Wartungsmodus
     packages/            YAML-Loader + Standardkatalog (default.yaml)
     reporting/           base.py (Vertrag), registry.py (Discovery), backends/ (die Berichte)
     nav.py               Navigations-Registry (Sidebar, Reiter, Rücklinks)

@@ -25,7 +25,7 @@ gunicorn anlaufstelle.wsgi:application
 - gunicorn mit 2 Workers + 2 Threads = 4 parallele Request-Slots
 - WeasyPrint (CPU-intensiv) blockiert nur einen Worker, die anderen bleiben responsiv
 - `collectstatic` wird automatisch vor Server-Start ausgeführt, WhiteNoise servt die Dateien
-- stdout/stderr gehen nach `/dev/null` — bei `subprocess.PIPE` füllt sich der Pipe-Buffer nach ~25 Requests und gunicorn blockiert
+- stdout/stderr gehen nach `/dev/null` — bei `subprocess.PIPE` kann sich der nicht gelesene Pipe-Buffer füllen und gunicorn blockieren
 
 **Port:** 8844 (nicht 8000, um Konflikte mit lokalem Dev-Server zu vermeiden)
 
@@ -41,7 +41,7 @@ Jede Test-Art nutzt eine eigene Datenbank — Dev-Daten bleiben immer unberührt
 | Unit/Integration | `test_anlaufstelle` | pytest-django (automatisch) | Vollständig, transaktional |
 | E2E | `anlaufstelle_e2e` | conftest.py (flush + seed) | Eigene DB, pro Session |
 
-- `make test-e2e` erstellt `anlaufstelle_e2e` automatisch, flusht sie und lädt Seed-Daten (`--scale=small`, 7 Clients)
+- `make test-e2e-locked` erstellt `anlaufstelle_e2e` automatisch, flusht sie und lädt Seed-Daten (Default `--scale=small`; `E2E_SEED_SCALE` kann die Skala ändern)
 - `make ci` nutzt `test_anlaufstelle` (von pytest-django erstellt/gelöscht)
 - Beide Test-Arten lassen die Dev-DB `anlaufstelle` unangetastet
 
@@ -126,7 +126,7 @@ base.py → dev.py → e2e.py
 
 ### Helfer
 
-- **`login_as(browser, base_url, username)`** — Manueller Login fuer Ad-hoc-User. Verbraucht Rate-Limit-Versuch (5/min). Fuer wiederkehrende User die Session-Fixtures nutzen.
+- **`login_as(browser, base_url, username)`** — Manueller Login für Ad-hoc-User. Unter `anlaufstelle.settings.e2e` ist Rate-Limiting deaktiviert (`RATELIMIT_ENABLE = False`); der Login verbraucht dort kein Rate-Limit-Budget. Für wiederkehrende User die Session-Fixtures nutzen.
 
 ---
 
@@ -174,15 +174,15 @@ Nur fuer clientseitige Debounce-Timer noetig, nicht fuer Server-Waits.
 
 ## Bekannte Einschraenkungen
 
-1. **Serielle Ausfuehrung:** E2E-Tests laufen seriell (kein pytest-xdist). Playwright/Chromium braucht ~200-400 MB RAM pro Instanz. Auf CI-Runnern mit begrenztem RAM wuerde Parallelisierung zu OOM fuehren.
+1. **Serieller Default, optionale Parallelisierung:** `make test-e2e-locked` läuft seriell. `make test-e2e-parallel-locked` verwendet pytest-xdist; `src/tests/e2e/conftest.py`, `_get_worker_info`/`base_url`, vergibt pro Worker eine eigene Datenbank und einen eigenen gunicorn-Port. Mehrere Worker erhöhen den RAM-Bedarf; ihre Anzahl muss zur Host-Kapazität passen. Volle Läufe werden über die `-locked`-Targets serialisiert.
 
-   **RAM-Decke auch seriell (Refs #1787):** Der volle serielle Lauf (~760 Tests, ~21 min) hat auf einem 7,5-GiB-Host ohne Swap den Chromium per OOM-Killer verloren. Zwei Stufen der Abhilfe, in dieser Reihenfolge:
+   **RAM-Decke auch seriell (Refs #1787):** Auch ein serieller Voll-Lauf kann auf einem RAM-knappen Host den Chromium per OOM-Killer verlieren. Zwei Stufen der Abhilfe, in dieser Reihenfolge:
    1. **Browser-Recycling** (Default, kein Aufruf noetig): modul-scoped `browser`-Fixture, ein Chromium je Testdatei — kappt das monotone Speicherwachstum ueber die Session.
-   2. **`make test-e2e-halves`** — kanonischer Fallback, wenn der Voll-Lauf **trotz** Recycling ins OOM laeuft: zwei serielle pytest-Sessions ueber je eine Haelfte der Testdateien. Jede Haelfte startet Server + `seed --flush` neu und hat ihr eigenes Speicher-Budget; das Rezept laeuft als eine Shell mit `set -e`, ein Fehlschlag in Haelfte 1 bricht ab. Preis: doppelte Server-/Seed-Zeit und keine dateiuebergreifende Zustandskette — Tests muessen ohnehin dateiweise unabhaengig sein. Welche Datei in welche Haelfte faellt, entscheidet seit #1976 derselbe Splitter wie in der CI-Matrix (siehe [Scheiben-Schnitt](#scheiben-schnitt-ci-matrix-und-lokaler-fallback) unten) — die Liste bleibt dynamisch, kein Drift bei neuen Dateien.
+   2. **`make test-e2e-halves-locked`** — kanonischer Fallback, wenn der Voll-Lauf **trotz** Recycling ins OOM laeuft: zwei serielle pytest-Sessions ueber je eine Haelfte der Testdateien. Jede Haelfte startet Server + `seed --flush` neu und hat ihr eigenes Speicher-Budget; das Rezept laeuft als eine Shell mit `set -e`, ein Fehlschlag in Haelfte 1 bricht ab. Preis: doppelte Server-/Seed-Zeit und keine dateiuebergreifende Zustandskette — Tests muessen ohnehin dateiweise unabhaengig sein. Welche Datei in welche Haelfte faellt, entscheidet seit #1976 derselbe Splitter wie in der CI-Matrix (siehe [Scheiben-Schnitt](#scheiben-schnitt-ci-matrix-und-lokaler-fallback) unten) — die Liste bleibt dynamisch, kein Drift bei neuen Dateien.
 
-2. **Shared Database:** Alle E2E-Tests teilen sich `anlaufstelle_e2e` mit Seed-Daten. Keine Test-Isolation untereinander — Tests koennen Daten sehen, die andere Tests erstellt haben. Eindeutige Bezeichner (`uuid.uuid4().hex[:8]`) verwenden. Dev-Daten (`anlaufstelle`) sind nicht betroffen.
+2. **Shared Database je Worker:** Im seriellen Default teilen sich die Tests `anlaufstelle_e2e`; bei pytest-xdist verwendet jeder Worker eine eigene Datenbank (`anlaufstelle_e2e`, `anlaufstelle_e2e_1`, …). Innerhalb eines Workers besteht keine Isolation zwischen Tests — sie können Daten sehen, die frühere Tests erstellt haben. Eindeutige Bezeichner (`uuid.uuid4().hex[:8]`) verwenden. Dev-Daten (`anlaufstelle`) sind nicht betroffen.
 
-3. **Rate-Limiting deaktiviert:** `RATELIMIT_ENABLE = False` in e2e.py. Ausnahme: `TestZZRateLimiting` in `test_auth_roles.py` testet explizit das Rate-Limiting (muss als letzter Test laufen, ZZ-Prefix).
+3. **Rate-Limiting deaktiviert:** `RATELIMIT_ENABLE = False` in `src/anlaufstelle/settings/e2e.py`. Tests, die echte Drosselung prüfen sollen, benötigen einen gesonderten Server mit eingeschaltetem Rate-Limiting (`src/tests/e2e/conftest.py`, `enforced_base_url`). Der Name einer Testklasse allein schaltet den Schutz nicht ein.
 
 4. **WeasyPrint:** PDF-Export funktioniert nur mit gunicorn (Multi-Worker). Benoetigt System-Dependencies (Pango, Cairo, etc.) — im Dockerfile installiert, in CI ueber `apt-get`.
 
@@ -190,12 +190,12 @@ Nur fuer clientseitige Debounce-Timer noetig, nicht fuer Server-Waits.
 
 ## Scheiben-Schnitt (CI-Matrix und lokaler Fallback)
 
-Die Suite laeuft seriell (siehe oben) und waechst mit jedem Meilenstein. Bei
-v0.82.0 kam der CI-Job bis 92 % und wurde vom Job-Timeout gekappt — ohne einen
-einzigen Testfehler. Die Antwort ist **nicht** Parallelisierung innerhalb eines
-Laufs, sondern eine **Matrix mehrerer Jobs, jeder fuer sich seriell**
-(#1976):
-`.github/workflows/e2e.yml` faehrt vier Scheiben zu je rund 207 Tests.
+Der Scheiben-Schnitt verteilt Testdateien auf mehrere getrennte Jobs, jeder für
+sich seriell. Er ergänzt den seriellen Default und den optionalen parallelen
+Lauf. `scripts/e2e_slice.py` ermittelt die Gewichte statisch aus Testfunktionen
+und verteilt sie möglichst gleichmäßig; feste Testzahlen oder Laufzeiten sind
+keine Zusage. Die aktuelle Verteilung liefert `--summary`. Die CI-Matrix in
+`.github/workflows/e2e.yml` bestimmt die Scheibenanzahl.
 
 **Wer schneidet:** [`scripts/e2e_slice.py`](../scripts/e2e_slice.py), stdlib-only.
 
@@ -206,14 +206,13 @@ make test-e2e-slice-locked SLICES=4 INDEX=3             # Scheibe 3 lokal nachfa
 ```
 
 **Aufteilungsschluessel: Testzahl je Datei.** Der naheliegende Schnitt „erste
-Haelfte der sortierten Dateiliste / zweite Haelfte" ist deterministisch, aber
-schief — bei 102 Dateien und 827 Testfunktionen ergibt er 335 gegen 492 Tests
-(+47 %). Der Splitter zaehlt stattdessen per `ast` die Testfunktionen je Datei
+Hälfte der sortierten Dateiliste / zweite Hälfte“ ist deterministisch, aber
+kann die Testlast ungleich verteilen. Der Splitter zählt stattdessen per `ast`
+die Testfunktionen je Datei
 (kein Import, keine Datenbank, kein Playwright noetig) und verteilt die
-schwerste Datei zuerst in die jeweils leichteste Scheibe. Streuung in der
-Praxis: unter einem Prozent. Die Testzahl ist ein **Proxy** fuer Laufzeit —
-genau genug, um Timeouts zu vermeiden, und im Gegensatz zu gemessenen
-Laufzeiten unabhaengig vom Runner und damit reproduzierbar.
+schwerste Datei zuerst in die jeweils leichteste Scheibe. Die tatsächliche Verteilung zeigt `--summary`. Die Testzahl ist ein **Proxy**
+für Laufzeit; sie garantiert keine Timeout-Vermeidung. Im Gegensatz zu
+gemessenen Laufzeiten ist sie unabhängig vom Runner und reproduzierbar.
 
 **Warum dateiweise und nicht `pytest --splits`:** Der Chromium wird pro
 Testdatei recycelt (modul-scoped `browser`-Fixture, #1787);
@@ -278,7 +277,7 @@ Schritt-für-Schritt-Bedienung + Debugging: siehe [e2e-runbook.md](e2e-runbook.m
 ### Timeout bei einzelnen Tests
 
 - **Ursache:** Meist `networkidle`-Waits (falls noch vorhanden) oder Server unter Last
-- **Fix:** `grep -r "networkidle" src/tests/e2e/` — muss 0 Treffer liefern. Falls nicht, durch `domcontentloaded` ersetzen.
+- **Fix:** `rg -n "networkidle" src/tests/e2e/` zeigt auch Kommentare. Prüfen, ob ein Treffer einen ausführbaren Wait betrifft; solche Waits durch `domcontentloaded`, konkrete Locator-Erwartungen oder `expect_response` ersetzen. Kommentartreffer sind kein Verstoß.
 
 ### Server startet nicht (RuntimeError)
 
