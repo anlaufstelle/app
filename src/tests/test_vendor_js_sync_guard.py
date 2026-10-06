@@ -28,6 +28,7 @@ pytestmark = pytest.mark.architecture
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "verify_vendor_js_sync.py"
 VENDOR_REL = Path("src") / "static" / "js"
+FONT_REL = Path("src") / "static" / "fonts"
 
 
 def _run(root: Path) -> subprocess.CompletedProcess[str]:
@@ -55,16 +56,25 @@ def _mirror_repo(dest: Path, *, mutate: dict[str, str] | None = None) -> Path:
     (dest / "scripts").mkdir(parents=True, exist_ok=True)
     (dest / VENDOR_REL).mkdir(parents=True, exist_ok=True)
 
-    files = ["package.json", "scripts/verify_vendor_js_sync.py"]
-    files += [str(VENDOR_REL / p.name) for p in (REPO_ROOT / VENDOR_REL).glob("*.min.js")]
+    files = ["package.json", "scripts/verify_vendor_js_sync.py", "THIRDPARTY-LICENSES.md"]
+    files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / VENDOR_REL).glob("*.min.js")]
+    files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / VENDOR_REL / "vendor").glob("*.min.js")]
+    files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / VENDOR_REL / "licenses").glob("*.txt")]
+    files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / FONT_REL).glob("*.txt")]
+    files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / FONT_REL).glob("*.woff2")]
 
     for rel in files:
-        content = (REPO_ROOT / rel).read_text(encoding="utf-8")
+        (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+        content = "" if rel.endswith(".woff2") else (REPO_ROOT / rel).read_text(encoding="utf-8")
         if rel in mutate:
             old, new = mutate[rel].split("\x00")
             assert old in content, f"Marker {old!r} nicht in {rel} gefunden"
             content = content.replace(old, new, 1)
-        (dest / rel).write_text(content, encoding="utf-8")
+        target = dest / rel
+        if rel.endswith(".woff2"):
+            target.write_bytes((REPO_ROOT / rel).read_bytes())
+        else:
+            target.write_text(content, encoding="utf-8")
     return dest
 
 
@@ -172,6 +182,67 @@ def test_non_exact_pin_is_rejected(tmp_path: Path) -> None:
     result = _run(mirror)
     assert result.returncode == 1
     assert "EXAKT" in (result.stdout + result.stderr)
+
+
+def test_license_text_missing_is_detected(tmp_path: Path) -> None:
+    """Removing a shipped library's license text turns the guard red (probe in tmp_path)."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    assert _run(mirror).returncode == 0
+    (mirror / VENDOR_REL / "licenses" / "NOTICE-dexie.txt").unlink()
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "NOTICE-dexie.txt" in result.stderr
+
+
+def test_font_license_missing_is_detected(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / FONT_REL / "LICENSE-DM-fonts.txt").unlink()
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "DM Sans Project Authors" in result.stderr
+
+
+def test_unregistered_vendor_script_is_detected(tmp_path: Path) -> None:
+    """A new shipped *.min.js without a license entry cannot pass silently."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / VENDOR_REL / "vendor" / "newlib.min.js").write_text("/*! newlib 1.0.0 */", encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "vendor/newlib.min.js" in result.stderr
+
+
+def test_unknown_font_family_is_detected(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / FONT_REL / "otherfont-latin.woff2").write_bytes(b"wOF2")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "otherfont" in result.stderr
+
+
+def test_missing_thirdparty_row_is_detected(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    table = mirror / "THIRDPARTY-LICENSES.md"
+    table.write_text(
+        "\n".join(line for line in table.read_text(encoding="utf-8").splitlines() if "Chart.js" not in line),
+        encoding="utf-8",
+    )
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "row for Chart.js" in result.stderr
+
+
+def test_stale_pending_entry_is_detected(tmp_path: Path) -> None:
+    """A library listed as pending that gets a license file must leave the pending list."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    script = mirror / "scripts" / "verify_vendor_js_sync.py"
+    text = script.read_text(encoding="utf-8")
+    marker = 'license_files=(),\n        table_name="Alpine.js CSP"'
+    assert marker in text
+    script.write_text(text.replace(marker, 'license_files=("x.txt",),\n        table_name="Alpine.js CSP"', 1))
+    (mirror / VENDOR_REL / "licenses" / "x.txt").write_text("MIT", encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "remove it from LICENSE_TEXT_PENDING" in result.stderr
 
 
 def test_runs_without_node_modules(tmp_path: Path) -> None:

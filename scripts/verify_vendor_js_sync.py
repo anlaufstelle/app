@@ -33,6 +33,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_JSON = ROOT / "package.json"
 VENDOR_DIR = ROOT / "src" / "static" / "js"
+LICENSE_DIR = VENDOR_DIR / "licenses"
+FONT_DIR = ROOT / "src" / "static" / "fonts"
+FONT_LICENSE = FONT_DIR / "LICENSE-DM-fonts.txt"
+THIRDPARTY = ROOT / "THIRDPARTY-LICENSES.md"
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,8 @@ class VendorLib:
     package: str
     vendored_filename: str
     version_patterns: tuple[str, ...]
+    license_files: tuple[str, ...] = ()
+    table_name: str = ""
 
 
 # Die vier vendored Libs (Refs #1076). Die Patterns matchen den Versions-String,
@@ -59,16 +65,22 @@ VENDOR_LIBS: tuple[VendorLib, ...] = (
         package="htmx.org",
         vendored_filename="htmx.min.js",
         version_patterns=(r'version\s*:\s*"(\d+\.\d+\.\d+)"',),
+        license_files=("LICENSE-htmx.txt",),
+        table_name="htmx",
     ),
     VendorLib(
         package="@alpinejs/csp",
         vendored_filename="alpine-csp.min.js",
         version_patterns=(r'version\s*:\s*"(\d+\.\d+\.\d+)"',),
+        license_files=(),
+        table_name="Alpine.js CSP",
     ),
     VendorLib(
         package="dexie",
         vendored_filename="dexie.min.js",
         version_patterns=(r'version\s*:\s*"(\d+\.\d+\.\d+)"',),
+        license_files=("LICENSE-dexie.txt", "NOTICE-dexie.txt"),
+        table_name="Dexie.js",
     ),
     VendorLib(
         package="chart.js",
@@ -77,6 +89,8 @@ VENDOR_LIBS: tuple[VendorLib, ...] = (
             r"Chart\.js\s+v(\d+\.\d+\.\d+)",
             r"chart\.js@(\d+\.\d+\.\d+)",
         ),
+        license_files=("LICENSE-chartjs.txt",),
+        table_name="Chart.js",
     ),
 )
 
@@ -174,6 +188,80 @@ def _is_exact_version(spec: str) -> bool:
     return re.fullmatch(r"\d+\.\d+\.\d+", spec) is not None
 
 
+# Shipped third-party works whose upstream license text is not in the repo yet:
+# neither the installed npm package nor the checked-in build provides it. The
+# entry is a deliberate, visible exception; once a license file exists the guard
+# reports the entry as stale.
+LICENSE_TEXT_PENDING: dict[str, str] = {
+    "@alpinejs/csp": "alpine-csp.min.js",
+    "SortableJS": "vendor/sortable.min.js",
+}
+# Vendored builds outside package.json: (file, version regex, required header marker).
+# SortableJS is listed for its version only (marker "" = no header check).
+UNMANAGED_BUILDS: dict[str, tuple[str, str, str]] = {
+    "SortableJS": ("vendor/sortable.min.js", r"Sortable (\d+\.\d+\.\d+)", ""),
+    "axe-core": ("vendor/axe.min.js", r"axe v(\d+\.\d+\.\d+)", "Mozilla Public"),
+}
+
+
+def _nonempty(path: Path) -> bool:
+    return path.is_file() and bool(path.read_text(encoding="utf-8").strip())
+
+
+def check_licenses(pinned: dict[str, str]) -> list[str]:
+    """Every shipped third-party work has its license text in the repo and a row in THIRDPARTY-LICENSES.md."""
+    errors: list[str] = []
+    registered = {lib.vendored_filename for lib in VENDOR_LIBS} | {f for f, _, _ in UNMANAGED_BUILDS.values()}
+    shipped = {
+        p.relative_to(VENDOR_DIR).as_posix() for d in (VENDOR_DIR, VENDOR_DIR / "vendor") for p in d.glob("*.min.js")
+    }
+    for name in sorted(shipped - registered):
+        errors.append(f"{name}: shipped vendor script is not registered in the license guard")
+
+    for lib in VENDOR_LIBS:
+        if not lib.license_files and LICENSE_TEXT_PENDING.get(lib.package) != lib.vendored_filename:
+            errors.append(f"{lib.package}: no license text registered and not marked pending")
+        for fname in lib.license_files:
+            if not _nonempty(LICENSE_DIR / fname):
+                errors.append(
+                    f"{lib.package}: license text missing or empty: {(LICENSE_DIR / fname).relative_to(ROOT)}"
+                )
+            if LICENSE_TEXT_PENDING.get(lib.package):
+                errors.append(f"{lib.package}: license text present, remove it from LICENSE_TEXT_PENDING")
+    for name, fname in LICENSE_TEXT_PENDING.items():
+        if not (VENDOR_DIR / fname).is_file():
+            errors.append(f"{name}: pending entry points to missing file {fname}")
+
+    versions: dict[str, str] = {lib.table_name: pinned.get(lib.package, "") for lib in VENDOR_LIBS}
+    for name, (fname, pattern, marker) in UNMANAGED_BUILDS.items():
+        path = VENDOR_DIR / fname
+        head = path.read_text(encoding="utf-8")[:2000] if path.is_file() else ""
+        match = re.search(pattern, head)
+        versions[name] = match.group(1) if match else ""
+        if not match:
+            errors.append(f"{name}: no version header in {fname}")
+        if marker and marker not in head:
+            errors.append(f"{name}: license header ({marker}) missing in {fname}")
+
+    fonts = sorted(FONT_DIR.glob("*.woff2")) if FONT_DIR.is_dir() else []
+    families = {p.name.split("-")[0] for p in fonts}
+    if families - {"dmsans", "dmmono"}:
+        errors.append(f"font without license mapping: {', '.join(sorted(families - {'dmsans', 'dmmono'}))}")
+    if fonts:
+        text = FONT_LICENSE.read_text(encoding="utf-8") if FONT_LICENSE.is_file() else ""
+        for marker in ("SIL OPEN FONT LICENSE Version 1.1", "DM Sans Project Authors", "DM Mono Project Authors"):
+            if marker not in text:
+                errors.append(f"{FONT_LICENSE.relative_to(ROOT)}: license text incomplete ({marker!r} missing)")
+    versions |= {"DM Sans": "", "DM Mono": ""}
+
+    table = THIRDPARTY.read_text(encoding="utf-8") if THIRDPARTY.is_file() else ""
+    rows = [line for line in table.splitlines() if line.startswith("|")]
+    for name, version in versions.items():
+        if not any(name in row and version in row for row in rows):
+            errors.append(f"THIRDPARTY-LICENSES.md: row for {name} {version} missing")
+    return errors
+
+
 def main(argv: list[str] | None = None) -> int:
     if not PACKAGE_JSON.is_file():
         print(f"FEHLER: package.json nicht gefunden: {PACKAGE_JSON}", file=sys.stderr)
@@ -182,6 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     pinned = load_pinned_versions(PACKAGE_JSON)
 
     errors = [msg for lib in VENDOR_LIBS if (msg := check_lib(lib, pinned)) is not None]
+    errors += check_licenses(pinned)
 
     if errors:
         print("FEHLER: Vendored-JS-Sync-Drift erkannt:", file=sys.stderr)

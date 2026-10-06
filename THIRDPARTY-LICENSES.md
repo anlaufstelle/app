@@ -58,13 +58,27 @@ prints a summary and uploads the JSON/Markdown reports as build artefacts.
 ## Vendored JavaScript
 
 `scripts/check_licenses.py` only scans Python (pip) metadata; it does not
-cover JavaScript. Vendored JS files (checked into `src/static/js/`, not
-installed via a package manager) are documented here manually instead.
+cover JavaScript or fonts. Vendored JS files (checked into `src/static/js/`, not
+installed via a package manager) and the self-hosted fonts are documented here
+manually. `make verify-vendor-js-sync` (`scripts/verify_vendor_js_sync.py`)
+checks that every shipped build has a row in this table with the pinned
+version and that its license text is in the repository.
 
-| Package | Version | License | Upstream | Vendored Path |
-|---|---|---|---|---|
-| SortableJS | 1.15.7 | MIT | <https://github.com/SortableJS/Sortable> | `src/static/js/vendor/sortable.min.js` |
-| axe-core | 4.13.0 | MPL-2.0 | <https://github.com/dequelabs/axe-core> | `src/static/js/vendor/axe.min.js` |
+| Package | Version | License | Upstream | Vendored Path | License text |
+|---|---|---|---|---|---|
+| htmx | 2.0.11 | 0BSD | <https://github.com/bigskysoftware/htmx> | `src/static/js/htmx.min.js` | `src/static/js/licenses/LICENSE-htmx.txt` |
+| Alpine.js CSP | 3.17.4 | MIT | <https://github.com/alpinejs/alpine> | `src/static/js/alpine-csp.min.js` | pending (see below) |
+| Chart.js | 4.5.1 | MIT | <https://github.com/chartjs/Chart.js> | `src/static/js/chart.min.js` | `src/static/js/licenses/LICENSE-chartjs.txt` |
+| Dexie.js | 4.4.6 | Apache-2.0 | <https://github.com/dexie/Dexie.js> | `src/static/js/dexie.min.js` | `src/static/js/licenses/LICENSE-dexie.txt`, `src/static/js/licenses/NOTICE-dexie.txt` |
+| SortableJS | 1.15.7 | MIT | <https://github.com/SortableJS/Sortable> | `src/static/js/vendor/sortable.min.js` | pending (see below) |
+| axe-core | 4.13.0 | MPL-2.0 | <https://github.com/dequelabs/axe-core> | `src/static/js/vendor/axe.min.js` | license notice in the file header |
+| DM Sans | 4.004 | SIL OFL 1.1 | <https://github.com/googlefonts/dm-fonts> | `src/static/fonts/dmsans-*.woff2` | `src/static/fonts/LICENSE-DM-fonts.txt` |
+| DM Mono | 1.000 | SIL OFL 1.1 | <https://github.com/googlefonts/dm-mono> | `src/static/fonts/dmmono-*.woff2` | `src/static/fonts/LICENSE-DM-fonts.txt` |
+
+The Dexie `NOTICE` file is shipped unchanged next to the Apache-2.0 text. The
+axe-core build carries its MPL-2.0 notice in its header. For Alpine.js CSP and
+SortableJS the upstream license text is not part of the installed package or the
+checked-in build; the guard lists them as pending until the text is added.
 
 ## Disallowed Categories
 
