@@ -3,6 +3,7 @@
 - **Status:** Proposed | Accepted | Teilweise abgelöst durch ADR-NNN | Superseded by ADR-NNN | Deprecated
 - **Date:** YYYY-MM-DD
 - **Deciders:** <Namen>
+- **Refs:** Optional: [#N](https://github.com/anlaufstelle/app/issues/N)
 
 ## Context
 
@@ -23,3 +24,7 @@ Welche Optionen wurden in Erwägung gezogen und mit welcher Begründung verworfe
 ## References
 
 Optional: Links zu Issues, Commits, Code-Stellen, externen Standards.
+
+## Nachtrag JJJJ-MM-TT: <Titel> (Refs [#N](https://github.com/anlaufstelle/app/issues/N))
+
+Welche Aussage wird präzisiert oder teilweise abgelöst? Ist-Stand mit Beleg (Datei und Symbol/Abschnitt), ohne den ursprünglichen Entscheid umzuschreiben.

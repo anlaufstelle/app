@@ -1,6 +1,6 @@
 # ADR-022: Offline-Snapshot und Offline-Keys
 
-- **Status:** Accepted
+- **Status:** Teilweise abgelöst durch [ADR-030](030-offline-sync-orchestration-replay-contract.md)
 - **Date:** 2026-05-28
 - **Deciders:** Tobias Nix
 - **Refs:** #572, #574, #786, #1100, #1109, #1110, #1111, #1355
@@ -99,3 +99,11 @@ Art.-32/35-Bewertung der drei offline-spezifischen Trade-offs, die ueber die obe
 - [ADR-006](006-fernet-field-encryption.md) — server-seitige Feldverschluesselung
 - [ADR-014](014-encrypted-file-vault.md) — Datei-Vault (warum Datei-Inhalte nicht offline gehen)
 - Issue #572, #574, #786
+
+## Nachtrag 2026-10-06: Replay, Schema und Ablagegrenzen (Refs #2450)
+
+Die Konfliktstrategie ist durch [ADR-030](030-offline-sync-orchestration-replay-contract.md), „Decision“, teilweise abgelöst: Ein abweichendes oder fehlendes Versions-Token führt zur Konfliktantwort HTTP 409; die Änderung wird dabei nicht als Last-Write-Wins übernommen. Beleg: `src/core/views/events.py`, `EventUpdateView.post` und `_event_conflict_response`.
+
+`src/core/services/system/offline.py`, `BUNDLE_SCHEMA_VERSION` und `FACILITY_BUNDLE_SCHEMA_VERSION`, setzen beide Bundle-Schemata auf 2. Das lokale Dexie-Schema steht in `src/static/js/offline-db.js`, `db.version(5)`: `occurredAt` ist weder Index noch Klartext-Feld der Ereigniszeile; die Upgrade-Funktion entfernt das Feld. `getDecrypted`, `listDecrypted` und `_isSchemaMismatch` liegen in dieser Datei, die Bundle-/Chronik-Aggregatoren in `src/static/js/offline-bundles.js` (`listOfflineEventsAggregated`, `listOfflineWorkItemsAggregated`).
+
+Die Inhaltsumschläge sind verschlüsselt, Ordnungsmerkmale liegen daneben im Klartext (`offline-db.js`, `putEncrypted`). Der non-extractable Schlüssel bleibt in IndexedDB (`src/static/js/crypto.js`, `deriveSessionKey`). Schließen oder Neustart löscht ihn nicht. Die Leerlaufprüfung greift erst bei laufender Seite: bei ungesendeter Arbeit nur Schlüsselentzug, sonst zusätzlich Löschung des Offline-Speichers (`_enforceIdleWipeLocked`). Ein entsperrtes Gerät kann innerhalb der Leerlaufzeit offline entschlüsseln. TTL-Bereinigung läuft beim Seitenstart mit geladenem Schlüssel (`src/static/js/sw-register.js`, Bootstrap mit `purgeExpired`); bloßer Zeitablauf ist kein autonomer Löschvorgang.

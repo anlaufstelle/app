@@ -148,3 +148,7 @@ Bis dahin ist „andere Zielgruppe“ allein kein sicherer Migrationsplan.
 - Bericht: [`reporting/backends/sample_report_1.py`](../../src/core/reporting/backends/sample_report_1.py)
 - RFC/Entscheid: #1877,
   #1941
+
+## Nachtrag 2026-10-06: Ort der Erklärung zur festen Altersgliederung (Refs #2450)
+
+Der feste Katalog ist in `src/core/models/client.py`, `Client.AgeCluster`, implementiert. Die ausdrückliche Erläuterung der Konfigurationsgrenze steht im `docs/admin-guide.md`, Abschnitt zur Altersgliederung; ein entsprechender Hinweistext der Administrationsoberfläche wird durch diesen Entscheid nicht als umgesetzt zugesagt. Beleg für die Anzeige: `src/core/admin/clients.py`, `ClientAdmin`.

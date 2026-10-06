@@ -167,3 +167,7 @@ Der Stack fährt mit Konten hoch, deren Passwort dokumentiert ist. Auf
 - [`src/core/management/commands/seed.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/seed.py) — `--only-if-empty`
 - [`src/tests/test_architecture_guards_ops.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/test_architecture_guards_ops.py) — `TestLocalOneCommandBootstrap`, `TestReadmeQuickStart`
 - [docs/ops-runbook.md § 1.2](../ops-runbook.md) — getrennter Migrationspfad der Produktion
+
+## Nachtrag 2026-10-06: Start-Bootstrap und expliziter Demo-Reset (Refs #2450)
+
+Der lokale Auto-Bootstrap bleibt auf `docker-compose.yml`, Dienst `init`, beschränkt. Die Aussage über fehlendes `SEED_ALLOWED` in allen Deployments gilt jedoch nicht: `src/anlaufstelle/settings/devlive.py` setzt `SEED_ALLOWED = True`. Der explizite Demo-Reset in `dev-ops/deploy/demo-reseed.sh` (dev-only) verwendet `seed --flush --scale=demo`, nicht `medium`. Das sind bewusste Seed-/Reset-Aufrufe, kein Auto-Seed beim Start eines produktiven Webprozesses. Beleg für den getrennten Startpfad: `docker-compose.prod.yml`, Dienste `web` und `maintenance`.

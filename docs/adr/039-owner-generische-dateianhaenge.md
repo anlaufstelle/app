@@ -1,6 +1,6 @@
 # ADR-039: Owner-generische Dateianhänge (Attachment an Ereignis, Person, Fall)
 
-- **Status:** Accepted
+- **Status:** Teilweise abgelöst durch [ADR-044](044-fall-loeschpfad.md)
 - **Date:** 2026-08-04
 - **Deciders:** Tobias Nix
 - **Refs:** #1738 (Milestone 24, Planung), #1732 (Herkunft/Produktentscheid), #1733 (Typwechsel-Confirm), M4/#1060 (Export = Metadaten), [ADR-014](014-encrypted-file-vault.md) (File-Vault), [ADR-020](020-three-role-postgres-model.md) (Drei-Rollen-Postgres-Modell), [ADR-037](037-konfigurationspakete-dynamische-felder.md) §9 (E8-Sperre, hiermit abgelöst)
@@ -118,3 +118,7 @@ Lückenlosigkeit: das Rename lässt die Join-Policy aktiv; nach 0130 sind alle Z
 - Umsetzungs-Issue: #1738 (Aufgaben AP0–AP6, Gates G1–G5)
 - Vorlagen: `src/core/migrations/0127_rls_offline_client_revocation.py` (direkte Policy), `0085_rls_superadmin_bypass.py` (Join-Policy-Variante für den 0131-Reverse)
 - Sperre alt: [ADR-037](037-konfigurationspakete-dynamische-felder.md) §9 (E8)
+
+## Nachtrag 2026-10-06: Teilablösung des Fall-Löschpfads (Refs #2450)
+
+[ADR-044](044-fall-loeschpfad.md), „Decision“, ersetzt § 6 dieser ADR durch den eigenständigen Fall-Löschpfad mit Papierkorb, Antrag und Redaktion. Das Owner-Modell für Anhänge bleibt bestehen. Beleg: `src/core/services/case/deletion.py`, Fall-Löschservices, und `src/core/models/attachment.py`, `Attachment`.

@@ -63,3 +63,7 @@ Der Seed normalisiert am Ende jedes Laufs deterministisch: Gruppen kompakt 0..k-
 - Die Doppel-Bedeutung von `DocumentTypeField.sort_order` (global für freie, innen für gruppierte Felder) ist implizit und nur über die Service-Iteratoren sicher konsumierbar — dokumentiert in Modell-Docstrings; flache `order_by("sort_order")`-Queries über gemischte Felder sind ein Bug-Muster.
 - Reorder-Mutationen renumerieren mehr Zeilen als zuvor (kompakt 0..n-1 je Ereignis) — bei den realen Feld-Zahlen (≤ Dutzende) irrelevant.
 - Die `elementFromPoint`-Erkennung im Board-JS ist ein bewusster Umweg um SortableJS-Routing-Grenzen; bei einem SortableJS-Major-Update erneut prüfen.
+
+## Nachtrag 2026-10-06: Verworfene Alternative zur Blockordnung (Refs #2450)
+
+Die Alternative getrennter Sortierräume für Gruppen und ungruppierte Felder wird zugunsten einer gemeinsamen Sequenz verworfen: sie könnte keine eindeutige Reihenfolge zwischen beiden Arten abbilden. Beleg: `src/core/models/field_group.py`, `FieldGroup.order`, und `src/core/models/field_template.py`, `FieldTemplate.order`; der Entscheid und seine Sortierregeln bleiben maßgeblich.

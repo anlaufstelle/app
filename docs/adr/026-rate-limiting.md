@@ -57,3 +57,11 @@ Bulk ist am niedrigsten, weil ein Aufruf am meisten Arbeit auslöst; „frequent
 - [`Caddyfile`](../../Caddyfile) — optionales `caddy-ratelimit`-Modul (auskommentiert)
 - [ADR-008](008-lockout-scope.md) — Login-Lockout (Username + IP), komplementär zum Login-Rate-Limit
 - Issues #1071 §E, #1101; Shared-Cache #1024/#1016
+
+## Nachtrag 2026-10-06: Fenster, Sonderraten und Redis (Refs #2450)
+
+Die benannten Raten in `src/core/constants.py` umfassen neben Bulk, Mutation und Frequent auch `RATELIMIT_OFFLINE_BUNDLE = "120/h"` und `RATELIMIT_OFFLINE_REVOCATIONS = "600/h"`. Die Offline-Views verwenden diese eigenen Tarife (`src/core/views/offline.py`, Decorators der Bundle-/Revocation-Views).
+
+Die Zählung verwendet feste Fenster mit schlüsselabhängigem Jitter, kein Sliding Window; unmittelbar über einer Fenstergrenze sind bis zu zwei Fensterbudgets möglich. Beleg: `django_ratelimit.core`, `_get_window` und `get_usage` der installierten Abhängigkeit. Auch GET kann gedrosselt sein: `src/core/views/statistics.py`, `StatisticsView` und `ChartDataView`, verwenden `RATELIMIT_FREQUENT`. Die früher genannten Sonderendpunkte sind keine abschließende Liste; weitere Decorators stehen unter anderem in `src/core/admin_site.py` (`login`) sowie `src/core/views/auth.py`, `mfa.py`, `sudo_mode.py` und `lockout_recovery.py`.
+
+Produktion verwendet den gemeinsamen Redis-Cache (`src/anlaufstelle/settings/prod.py`, `CACHES`/`RATELIMIT_USE_CACHE`; `docker-compose.prod.yml`, Dienst `redis`). Die Vertagung von Redis und die Aussagen über den produktiven DatabaseCache beschreiben nicht den aktuellen Standard.

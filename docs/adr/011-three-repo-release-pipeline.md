@@ -60,3 +60,7 @@ Offen zu diesem Nachtrag: AGPL §13 für `demo.anlaufstelle.app` — läuft die 
 
 - Release-Runbook (intern, dev-Repo Issue #502)
 - `docs/dev/release-checklist.md` (dev-intern)
+
+## Nachtrag 2026-10-06: Veröffentlichungs-Ausnahme und Demo-Quelle (Refs #2450)
+
+Der Nachtrag vom 2026-08-20 ist für die Veröffentlichung von v0.99.5 eingeschränkt: Public-Snapshot und Tag werden für das Demo-Image veröffentlicht; die GitHub-Release-Seite bleibt ausgesetzt. Die damalige Aussage „app bleibt auf v0.80.0“ ist daher keine aktuelle Bestandsangabe. Die Demo darf nur einen veröffentlichten Release verwenden, dessen zugehöriger Quellstand zugänglich ist; die damalige offene Quellenfrage wird durch diese Veröffentlichung adressiert. Beleg: `docs/dev/release-checklist.md` (dev-only), Abschnitt „Stand“/Ausnahme v0.99.5; `dev-ops/release/release-verify-tags.sh` (dev-only), `RELEASE_APP_PUSH`; [ADR-028](028-demo-release-versioning.md), „Decision“. Ein tatsächlich erreichbarer Remote-Tag ist zusätzlich im Release-Gate zu prüfen.

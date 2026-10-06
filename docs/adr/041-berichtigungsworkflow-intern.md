@@ -45,3 +45,7 @@ Die App erhält einen **internen Antrags-/Review-Workflow für Berichtigungen** 
 - [ADR-007: AuditLog append-only](007-auditlog-append-only.md)
 - #1060 — M4 Datenportabilität
 - Lösch-Workflow als Vier-Augen-Präzedenz: Refs #932
+
+## Nachtrag 2026-10-06: Rollenschlüssel der Leitung (Refs #2450)
+
+Der technische Rollenschlüssel der Leitung lautet `lead`, nicht `facility_lead`. Beleg: `src/core/models/user.py`, `User.Role`; `src/core/views/mixins.py`, `LeadOrAdminRequiredMixin`. Die fachliche Vier-Augen-Regel dieses Entscheids bleibt bestehen.

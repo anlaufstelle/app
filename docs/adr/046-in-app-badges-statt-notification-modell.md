@@ -112,3 +112,7 @@ Dann wird ein eigenes, minimiertes Notification-/Delivery-Modell entworfen. Zust
 - RFC und Scoping: #1870, #1941 E1
 - Umsetzung: #1984
 - Bestehende Quellen: [`core/nav.py`](../../src/core/nav.py), [`services/dashboard/main.py`](../../src/core/services/dashboard/main.py), [`services/hubs.py`](../../src/core/services/hubs.py), [`models/user.py`](../../src/core/models/user.py)
+
+## Nachtrag 2026-10-06: Umgesetzte Navigationszähler (Refs #2450)
+
+Die In-App-Zähler sind umgesetzt. `src/core/context_processors.py`, `review_counts`, ermittelt die offenen Lösch- und Berichtigungsanträge und `datenschutz_review_count` als Summe am Datenschutz-Hub. Berichtigungen zu widerrufenen oder inaktiven Personen gehören nicht zur prüfbaren Menge und werden nicht gezählt. Das Badge bleibt eine aktuelle Anzahl, kein persistenter Gelesen-/Zustellzustand. Beleg: `src/templates/partials/_nav_sidebar_items.html`, Badge-Ausgabe, und `src/core/context_processors.py`, `review_counts`.

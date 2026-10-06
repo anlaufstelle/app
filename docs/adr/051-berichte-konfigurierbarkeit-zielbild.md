@@ -201,3 +201,7 @@ K1 ──► Testballon S ──► separater Entscheid ──► V1 … V5
   dauerhaftes Ziel: Die aktuelle Doppelung und fehlende „Warum-Null?“-Auskunft
   bleiben reale Wartungs- und Bedienprobleme. Akzeptiert ist nur der
   zeitliche Schnitt, die Umsetzung post-1.0 zu sequenzieren.
+
+## Nachtrag 2026-10-06: Zielbild ist kein vorhandener Endpunkt (Refs #2450)
+
+D1–D4 beschreiben ein angenommenes Zielbild für eine spätere Umsetzung. Insbesondere soll `/config/reports/` künftig die wirksamen Bindungen anzeigen; diese Route ist im aktuellen URLconf nicht implementiert. Beleg: `src/core/urls/_config.py`, `urlpatterns`; vorhandene Berichtsfunktionen liegen in `src/core/views/statistics.py`. Die indikative Form in D1 ist als Sollbeschreibung zu lesen.

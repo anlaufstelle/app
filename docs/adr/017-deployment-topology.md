@@ -64,3 +64,7 @@ Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbar
 - Issues: #320 (Recherche), #554 (Coolify-Pivot, geschlossen mit diesem ADR), #671 (Plain-Compose-Pivot), #862 (Plan-Issue dieses ADRs)
 - Begleitende Doku: `docs/dev-deployment.md`, `docs/coolify-deployment.md` (alternativer Pfad, entfernt, Refs #2202), [`docs/ops-runbook.md`](../ops-runbook.md)
 - Verwandte ADRs: [ADR-009](009-settings-inheritance.md) (Settings-Vererbung), [ADR-011](011-three-repo-release-pipeline.md) (3-Repo-Pipeline)
+
+## Nachtrag 2026-10-06: Adresse der Live-Demo (Refs #2450)
+
+Die Live-Demo wird unter `demo.anlaufstelle.app` betrieben. Die Domain `anlaufstelle.app` im ursprünglichen Entscheid bezeichnet nicht den aktuellen Demo-Endpunkt. Beleg: [ADR-028](028-demo-release-versioning.md), „Decision“, und `Caddyfile.demo`, Site-Adresse.

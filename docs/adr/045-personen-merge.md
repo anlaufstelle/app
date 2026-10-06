@@ -95,3 +95,9 @@ Die Auskunft ([`services/client/export.py`](../../src/core/services/client/expor
 - Service: [`services/client/merge.py`](../../src/core/services/client/merge.py); Modell/Migration: [`models/client.py`](../../src/core/models/client.py), [`models/workitem.py`](../../src/core/models/workitem.py), Migration 0160
 - Blaupausen: [ADR-044](044-fall-loeschpfad.md) (Staffelung P1c), [`services/client/main.py`](../../src/core/services/client/main.py) (`request_client_deletion` … `approve_client_deletion`)
 - Tests: `src/tests/test_client_merge_workflow.py`, `src/tests/test_client_merge_views.py`, Auskunft in `src/tests/test_client_export.py` (`TestClientExportMergeProvenance`), E2E in `src/tests/e2e/test_client_merge.py`; Guard-Pins in `src/tests/test_cases_trash_invariant.py`
+
+## Nachtrag 2026-10-06: Undo-Gate, Holds und Modellschutz (Refs #2450)
+
+Die Webaktion zum Aufheben einer Zusammenführung verlangt Anwendungsbetreuung (`facility_admin`), nicht bloß Leitung: `src/core/views/client_merge.py`, `ClientUnmergeView(FacilityAdminRequiredMixin, View)`. Der Service `src/core/services/client/merge.py` prüft aktive Legal Holds sowohl beim Merge (`_validate_merge`) als auch beim Undo (`unmerge_client`); gehaltene Personen dürfen nicht auf diese Weise verändert werden.
+
+Die frühere `_clean_client_dynamic_data` existiert nicht mehr; das Zusammenführen dynamischer Daten erfolgt in `src/core/services/client/merge.py`, `_adopt_missing_data`, und dem dort aufgerufenen Bereinigungspfad. `src/core/models/recent_client_visit.py`, `RecentClientVisit.visited_at`, verwendet einen `default`, kein `auto_now`. `src/core/models/rectification.py`, `RectificationRequest.target_client`, verwendet `PROTECT`, kein `CASCADE`; der Berichtigungsnachweis wird nicht mit der Person gelöscht.

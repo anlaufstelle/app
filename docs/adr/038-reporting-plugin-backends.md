@@ -1,6 +1,6 @@
 # ADR-038: Reporting-Backends als Plugin-System
 
-- **Status:** Accepted
+- **Status:** Teilweise abgelöst durch [ADR-042](042-report-key-berichtszuordnung.md)
 - **Date:** 2026-08-03
 - **Deciders:** Tobias Nix
 - **Refs:** #1061 (M5, Planung), [anlaufstelle/app#38](https://github.com/anlaufstelle/app/issues/38) (M5-Feature), [anlaufstelle/app#40](https://github.com/anlaufstelle/app/issues/40) (Programm), #1278 (k-Anon-Suppression im Sachbericht), [ADR-023](023-k-anonymization-statistik.md) (K-Anonymisierung), [ADR-020](020-three-role-postgres-model.md) (Drei-Rollen-Postgres-Modell, RLS beim Backfill), [ADR-034](034-config-ui-category-system-type.md) (`category` vs. `system_type`), [ADR-037](037-konfigurationspakete-dynamische-felder.md) (M2, `DocumentType.slug`)
@@ -285,3 +285,7 @@ Seit #2070 überspringt `create_or_update_snapshot` ein werfendes Backend, speic
 Das Datenloch ist damit nicht mehr leise — genau die Eigenschaft, um derentwillen Konsequenz 5 fail-loud gewählt hatte. Für die übrigen Wartungsjobs (`enforce_retention`, `verify_audit_chain`, `cleanup_orphan_storage_files`) bleibt fail-loud unverändert die Hausregel; dieser Job ist die begründete Ausnahme, kein Präzedenzfall.
 
 Dieselbe Änderung isoliert die Berichts-Pfade der Oberfläche — Übersicht, Panel, generischer Download (CSV/JSON/XML) und Sachbericht-PDF — und legt einen transaktionslokalen `statement_timeout` um deren Backend-Aufrufe. **Nicht** erfasst sind die `is_available`-Aufrufer außerhalb der Statistik (`registry.describe_type_bindings`/`describe_field_bindings` für die Konfigurationsseiten sowie das Inventar-Kommando); sie bleiben fail-loud und sind als Folgearbeit geführt. **Die k-Anon-Parität aus dem Update vom 2026-08-31 bleibt unangetastet:** `build_report_panel_context` wirft weiterhin, die Isolation sitzt in den Views, und `SuppressionContractError` wird dort **nicht** sonderbehandelt — jeder Fehler der Kette `build_dataset` → `prepare_export` → `enforce_suppression_contract` führt zu einer Fehlerkarte bzw. HTTP 502 **ohne jede Datenzeile**, nie zu einer Teilanzeige. Details je Pfad: [`docs/reporting-plugins.md` § 5 und § 9](../reporting-plugins.md).
+
+## Nachtrag 2026-10-06: Teilablösung der Berichtszuordnung (Refs #2450)
+
+[ADR-042](042-report-key-berichtszuordnung.md), „Decision“, ersetzt § 4 dieser ADR: Berichtszuordnung erfolgt über `report_key`, nicht über `system_type`. Die übrige Backend-/Plugin-Struktur gilt weiter. Beleg: `src/core/models/report_key.py`, `ReportKeyMixin`, und `src/core/reporting/backends/`, Backend-Bindungen.

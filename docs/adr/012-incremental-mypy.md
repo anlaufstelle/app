@@ -39,3 +39,7 @@ Erweiterung erfolgt **modulweise** über zusätzliche `[[tool.mypy.overrides]]`-
 
 - [`pyproject.toml`](../../pyproject.toml) (`[tool.mypy]` und `[[tool.mypy.overrides]]`)
 - Audit-Maßnahme #37 / Refs #741
+
+## Nachtrag 2026-10-06: Tatsächlicher mypy-Prüfumfang (Refs #2450)
+
+Die Baseline beschreibt Einstellungen, keinen Lauf über das gesamte Repository: `Makefile`, Target `typecheck`, prüft `src/core/services`, `src/core/forms`, `src/core/packages` und `src/core/management/commands`. `pyproject.toml`, `[[tool.mypy.overrides]]`, setzt in diesen vier Modulgruppen `strict_optional` und `warn_unused_ignores`; Forms, Packages und Commands zusätzlich `check_untyped_defs`. Das ist keine vollständige mypy-Strict-Prüfung aller Module.

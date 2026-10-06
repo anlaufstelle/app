@@ -47,3 +47,9 @@ Anlaufstelle ist deutsch-first (Zielgruppe: deutsche Träger und Beratungsstelle
 - [`scripts/check_translations.py`](../../scripts/check_translations.py) — `.po`-Fuzzy/Untranslated-Baseline-Gate
 - `docs/dev/release-checklist.md` (dev-intern) — EN-Sync-Schritt im Release-Flow
 - Issues #1071 §E, #1102; Versions-Gate #832/#1078; `.po`-Baseline #813/#814
+
+## Nachtrag 2026-10-06: Quellen-Hash und Entwicklungssprache (Refs #2450)
+
+`scripts/check_translation_versions.py`, `SOURCE_HASH_RE` und `TRANSLATED_FILES`, verlangt zusätzlich `source-hash`; der Hash muss dem aktuellen DE-Quellinhalt entsprechen. EN folgt deshalb im selben Commit einer Änderung der übersetzten Quelle, auch ohne Versions-Bump. Die Liste enthält außerdem `docs/screenshots.en.md`, `docs/en/ops-runbook.md` und `docs/en/reporting-plugins.md`; Runbooks sind nicht pauschal DE-only.
+
+Deutsch bleibt Quellsprache der Oberfläche und der Primärdokumentation. Für neuen/geänderten Code gelten englische Bezeichner, Kommentare, Docstrings und nicht übersetzte Ausgaben. Die Sprachkonvention präzisiert den damaligen Planungsstand; deutsche gettext-msgids bleiben erhalten (Beleg: `src/core/models/document_type.py`, `DocumentType.Sensitivity`; englische Codebezeichnungen in `scripts/check_translation_versions.py`, `source_path`). Der Planungsstand vom 2026-07-14 ist damit überholt.
