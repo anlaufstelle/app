@@ -6,6 +6,9 @@ Three claim families are pinned against the implementation:
   in IndexedDB (``src/static/js/crypto.js``), closing a tab or restarting the
   device is not a wipe, the idle check only locks the key while unsynced work
   exists, and index metadata stays in clear text next to the envelope.
+  Locked ciphertext only becomes readable again while password and offline
+  salt are unchanged; role change, deactivation and a correct-password login
+  against a locked account rotate the salt.
 * Encryption promises (Refs #2465): only individually configured fields are
   encrypted (``is_encrypted`` in the shipped packages), the database itself
   is not, and server-side field encryption is Fernet, not AES-GCM.
@@ -32,6 +35,7 @@ from core.models import AuditLog, DeletionRequest, DocumentType, User
 from core.services.client import render_document
 from core.services.compliance.sensitivity import ROLE_MAX_SENSITIVITY, SENSITIVITY_RANK
 from core.services.compliance.vvt import PROCESSING_ACTIVITIES
+from core.services.security.credentials import REVOCATION_EFFECTS, RevocationReason
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGES_DIR = REPO_ROOT / "src" / "core" / "packages"
@@ -338,3 +342,103 @@ class TestAdminReadAuditScopeDocs:
         assert AUDITED_ADMIN_SCOPE_EN in current
         assert "deletion requests" in current
         assert "if logging fails" in current
+
+
+# ---------------------------------------------------------------------------
+# Offline recovery after re-login (Refs #2426)
+# ---------------------------------------------------------------------------
+
+STALE_RECOVERY_CLAIMS = (
+    "sofern Passwort und Rolle unverändert sind",
+    "nach erneutem Login mit unverändertem Passwort wieder lesbar",
+)
+
+
+def _sentences(text: str) -> list[str]:
+    return [sentence for sentence in text.replace("; ", ". ").split(". ") if sentence]
+
+
+def _assert_recovery_claims_name_the_salt(name: str, text: str, phrase: str, salt: str) -> None:
+    """Every sentence promising renewed readability must tie it to the salt."""
+    hits = [sentence for sentence in _sentences(text) if phrase in sentence]
+    assert hits, (name, phrase)
+    for sentence in hits:
+        assert salt in sentence, (name, sentence)
+
+
+def _assert_salt_rotation_triggers_named(name: str, text: str) -> None:
+    for trigger in ("Rollenwechsel", "Deaktivierung", "gesperrten Konto"):
+        assert trigger in text, (name, trigger)
+
+
+@pytest.mark.django_db
+class TestOfflineRecoveryPremise:
+    def test_premise_salt_rotating_revocation_reasons(self):
+        rotating = {reason for reason, effects in REVOCATION_EFFECTS.items() if effects.rotate_offline_salt}
+        assert rotating == {
+            RevocationReason.PASSWORD_CHANGE,
+            RevocationReason.ACCOUNT_LOCKOUT,
+            RevocationReason.PRIVILEGE_REVOKED,
+        }
+
+    def test_correct_password_login_against_locked_account_rotates_salt(self, client, staff_user):
+        from core.services.security.login_lockout import LOCKOUT_THRESHOLD
+
+        salt = staff_user.ensure_offline_key_salt()
+        for _ in range(LOCKOUT_THRESHOLD):
+            AuditLog.objects.create(
+                facility=staff_user.facility,
+                user=staff_user,
+                action=AuditLog.Action.LOGIN_FAILED,
+                ip_address="127.0.0.1",
+            )
+        client.post("/login/", {"username": staff_user.username, "password": "testpass123"})
+        staff_user.refresh_from_db()
+        assert staff_user.offline_key_salt == ""
+        assert staff_user.ensure_offline_key_salt() != salt
+
+    def test_deactivation_rotates_salt_and_reactivation_keeps_it_new(self, staff_user):
+        salt = staff_user.ensure_offline_key_salt()
+        staff_user.is_active = False
+        staff_user.save()
+        staff_user.is_active = True
+        staff_user.save()
+        staff_user.refresh_from_db()
+        assert staff_user.role == User.Role.STAFF
+        assert staff_user.ensure_offline_key_salt() != salt
+
+
+@pytest.mark.django_db
+class TestOfflineRecoveryTemplates:
+    def test_toms_and_dsfa_tie_recovery_to_password_and_salt(self, toms, dsfa):
+        for name, text in (("toms", toms), ("dsfa", dsfa)):
+            for claim in STALE_RECOVERY_CLAIMS:
+                assert claim not in text, (name, claim)
+            _assert_recovery_claims_name_the_salt(name, text, "wieder lesbar", "Offline-Salt")
+            _assert_salt_rotation_triggers_named(name, text)
+
+
+@pytest.mark.architecture
+class TestOfflineRecoveryDocs:
+    def test_domain_concept_ties_recovery_to_password_and_salt(self):
+        text = _flat(DOMAIN_CONCEPT_DE.read_text(encoding="utf-8"))
+        for claim in STALE_RECOVERY_CLAIMS:
+            assert claim not in text, claim
+        _assert_recovery_claims_name_the_salt("domain concept", text, "wieder lesbar", "Offline-Salt")
+        _assert_salt_rotation_triggers_named("domain concept", text)
+
+    def test_english_summary_current_sections_describe_offline_and_rls_as_built(self):
+        text = _flat(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8"))
+        current = text[: text.index("## Version Additions")]
+        for required in (
+            "IndexedDB",
+            "does not prevent decryption",
+            "not a wipe",
+            "only the key",
+            "locked account",
+            "clear text",
+            "app.is_super_admin",
+            "the description in this section applies",
+        ):
+            assert required in current, required
+        _assert_recovery_claims_name_the_salt("en summary", current, "readable again", "offline salt")
