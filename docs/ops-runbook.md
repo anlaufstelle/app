@@ -20,7 +20,7 @@ Betriebshandbuch fuer Anlaufstelle. Ergaenzt das [Admin-Handbuch](admin-guide.md
 10. [Invite-Token-Hygiene](#10-invite-token-hygiene)
 11. [Statistics Materialized View](#11-statistics-materialized-view)
 12. [Trust-Boundary](#12-trust-boundary-refs-841)
-13. [PostgreSQL-Major-Upgrade (16 → 18)](#13-postgresql-major-upgrade-16--18)
+13. [PostgreSQL-Major-Upgrade](#13-postgresql-major-upgrade)
 
 ---
 
@@ -423,10 +423,10 @@ Spalte **Wo**: `Sidecar` = laeuft ab Werk im `cron`-Container ([§3.2](#32-cron-
 | `backup.sh` | Taeglich 02:00 | **Host** | Verschluesseltes DB- und Medien-Backup mit Rotation; optionaler Off-Site-Sync (Refs #720, #738) |
 | `enforce_retention` | Taeglich 03:00 | Sidecar | Abgelaufene Events soft-loeschen, Clients anonymisieren |
 | `verify_audit_chain` | Taeglich 03:30 (nach Retention) | Sidecar | HMAC-Integritaetskette des AuditLog verifizieren; Exit-Code != 0 bei Tamper-Verdacht (Refs #1070). Ein vollstaendig gruener Lauf schreibt den Last-Run-Marker `AUDIT_CHAIN_VERIFIED` — sichtbar als Zeile „Audit-Ketten-Pruefung" unter `/system/` und im Compliance-Dashboard (Refs #1872). Ein Tamper-Fund schreibt **keinen** Marker, die Ampel laeuft also auf ueberfaellig |
-| `create_statistics_snapshots` | Monatlich 1. Tag 04:00 | Sidecar | Monats-Aggregate sichern bevor Events geloescht werden |
+| `create_statistics_snapshots` | Monatlich 1. Tag 04:00 | Sidecar | Monats-Aggregate je Einrichtung neu berechnen; durch einen Retention-Lauf geloeschte Ereignisse bleiben als Uebertrag (`_deleted`) im Monatsaggregat erhalten |
 | `cleanup_orphan_storage_files` | Taeglich 04:30 (nach Snapshots) | Sidecar | Verwaiste `.enc`-Dateien ohne `Attachment`- **und ohne offenen `ImportJob`-Record** loeschen (owner-unabhaengig: Ereignis-, Personen- und Fall-Anhaenge; CSV-Import-Uploads unter `<facility>/imports/` sind ueber `ImportJob.storage_filename` geschuetzt und zählen bei der Kontingent-Durchsetzung mit, solange der Lauf offen ist — `commit_import`/`abort_import` leeren das Feld, finale Laeufe schuetzen nicht). Pro Lauf werden standardmaessig hoechstens 10.000 Dateien geprueft; `--budget N` setzt ein positives eigenes Limit, der gespeicherte Fortsetzungspunkt setzt den naechsten Lauf fair fort. `--dry-run` meldet nur Loeschkandidaten und veraendert weder Dateien noch Fortsetzungspunkt. Die Ausgabe nennt gepruefte und getrennt uebersprungene Dateien, Loeschkandidaten, tatsaechliche Loeschungen, Fehler, den Fortsetzungsort und den naechsten Start beziehungsweise den vollstaendigen Baumdurchlauf. MUSS als Admin-DB-Rolle (BYPASSRLS) laufen, sonst Fail-Loud — ohne Bypass saehe der Lauf zudem 0 `ImportJob`-Zeilen und loeschte die offenen Uploads aller Einrichtungen (Refs #662, #1554, #1738, #1060, #2180, #2376) |
 | `clearsessions` | Taeglich 05:00 | Sidecar | Abgelaufene Zeilen aus `django_session` entfernen (Speicherbegrenzung nach Art. 5 Abs. 1 lit. e DSGVO) |
-| `detect_breaches` | Stuendlich :30 | Sidecar | Heuristik-basierte Breach-Detection (failed-login-burst / mass-export / mass-delete) → AuditLog SECURITY_VIOLATION + optionaler Webhook (Refs #685) |
+| `detect_breaches` | Stuendlich :30 | Sidecar | Heuristik-basierte Breach-Detection (acht Arten, [§ 6.5b](#65b-dsgvo-art-3334--breach-notification-refs-685)) → AuditLog SECURITY_VIOLATION + optionaler Webhook (Refs #685) |
 | `refresh_statistics_view` | Stuendlich :15 | Sidecar | Materialized View `core_statistics_event_flat` aktualisieren (Statistik-Dashboard) |
 | Invite-Token-Audit | Woechentlich So 05:00 | Host | Verwaiste Invite-User-Konten aufspueren (siehe [10](#10-invite-token-hygiene)); reine `psql`-Abfrage, der App-Container hat keinen psql-Client |
 | Health-Check | Alle 5 Minuten | Host | Verfuegbarkeit pruefen (externes Monitoring, gehoert nicht in den ueberwachten Stack) |
@@ -1412,23 +1412,32 @@ SENTRY_TRACES_SAMPLE_RATE=0.1
 
 ### 6.5b DSGVO Art. 33/34 — Breach-Notification (Refs #685)
 
-Anlaufstelle muss Datenschutzverletzungen innerhalb **72 Stunden** an die Aufsichtsbehoerde melden (Art. 33) und betroffene Personen direkt informieren, wenn ein hohes Risiko vorliegt (Art. 34). Der Code unterstuetzt das durch:
+Die Meldepflicht nach Art. 33/34 DSGVO trifft den **Verantwortlichen**, also den Traeger der Instanz — nicht die Software und nicht das Projekt. Der Traeger meldet Datenschutzverletzungen innerhalb **72 Stunden** an die zustaendige Aufsichtsbehoerde (Art. 33) und informiert betroffene Personen direkt, wenn ein hohes Risiko vorliegt (Art. 34). Die Software unterstuetzt das durch:
 
 1. **Detection** — `python manage.py detect_breaches` laeuft stuendlich (Cron) und schreibt fuer jedes Finding einen `AuditLog.Action.SECURITY_VIOLATION`-Eintrag.
-2. **Heuristiken** (alle konfigurierbar via Settings):
-   - `failed_login_burst` — > `BREACH_FAILED_LOGIN_THRESHOLD` (Default 20) Fehlversuche pro User in `BREACH_DETECTION_WINDOW_MINUTES` (Default 60 min)
-   - `mass_export` — > `BREACH_EXPORT_THRESHOLD` (Default 10) Exports pro User im Fenster
-   - `mass_delete` — > `BREACH_DELETE_THRESHOLD` (Default 50) Deletes facility-weit im Fenster
-   - `mfa_failure_burst` (Refs #2033) — `BREACH_MFA_FAILURE_THRESHOLD` (Default 10) fehlgeschlagene Zweitfaktor-Pruefungen pro User im Fenster; `MFA_FAILED` (TOTP) und `WEBAUTHN_FAILED` (Passkey) zaehlen **gemeinsam**, sonst liesse sich die Schwelle durch Wechsel des Verfahrens unterlaufen. Langzeitfenster: `BREACH_MFA_FAILURE_THRESHOLD_LONG` (Default 30). Die Schwelle liegt bewusst unter der von `failed_login_burst`: wer am zweiten Faktor scheitert, hat den ersten bereits — die ernstere Angreifer-Position, und OTP-Fehler sind per Design selten.
+2. **Heuristiken** (alle konfigurierbar via Settings; Quelle: `src/core/services/compliance/breach_detection.py`, Defaults in `src/anlaufstelle/settings/base.py`). Je Art gilt ein **kurzes Fenster** (`BREACH_DETECTION_WINDOW_MINUTES`, Default 60 min) und, soweit unten genannt, ein **Langzeitfenster** gegen „low and slow“ (`BREACH_DETECTION_LONG_WINDOW_MINUTES`, Default 1440 min) mit hoeherer Schwelle (`*_LONG`). Je Subjekt entsteht hoechstens ein Finding je Art, das kurze Fenster hat Vorrang.
+
+   | Art (`kind`) | Zaehlt | Kurz (Default) | Lang (Default) | Subjekt |
+   |---|---|---|---|---|
+   | `failed_login_burst` | fehlgeschlagene Logins | `BREACH_FAILED_LOGIN_THRESHOLD` (20) | `…_LONG` (60) | je Benutzer |
+   | `mfa_failure_burst` (Refs #2033) | fehlgeschlagene Zweitfaktor-Pruefungen; `MFA_FAILED` (TOTP) und `WEBAUTHN_FAILED` (Passkey) zaehlen **gemeinsam**, sonst liesse sich die Schwelle durch Wechsel des Verfahrens unterlaufen | `BREACH_MFA_FAILURE_THRESHOLD` (10) | `…_LONG` (30) | je Benutzer |
+   | `mass_export` | Exports | `BREACH_EXPORT_THRESHOLD` (10) | `…_LONG` (30) | je Benutzer |
+   | `mass_delete` | Loeschungen (`DELETE`) | `BREACH_DELETE_THRESHOLD` (50) | `…_LONG` (150) | Einrichtung |
+   | `mass_client_destruction` | Personen-Vernichtung (`CLIENT_SOFT_DELETED`, `CLIENT_ANONYMIZED`, `DELETION_APPROVED`), die `mass_delete` nicht sieht | `BREACH_CLIENT_DESTRUCTION_THRESHOLD` (20) | `…_LONG` (60) | Einrichtung |
+   | `distributed_login_attack` | distinkte Quell-IPs gegen **einen** Account (Distributed-Bruteforce) | `BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD` (10) | — | je Benutzer |
+   | `anonymous_login_burst` | fehlgeschlagene Logins gegen **unbekannte** Benutzernamen, je Quell-IP | `BREACH_ANON_LOGIN_IP_THRESHOLD` (20) | — | Quell-IP |
+   | `anonymous_login_flood` | dasselbe, installationsweites Gesamtvolumen | `BREACH_ANON_LOGIN_TOTAL_THRESHOLD` (100) | — | Installation |
+
+   Die MFA-Schwelle liegt bewusst unter der von `failed_login_burst`: wer am zweiten Faktor scheitert, hat den ersten bereits — die ernstere Angreifer-Position, und OTP-Fehler sind per Design selten.
 3. **Optionaler Webhook** — `BREACH_NOTIFICATION_WEBHOOK_URL` env-Var; bekommt POST mit JSON-Payload (kind, count, threshold, audit_id) bei jedem neuen Finding.
-4. **Deduplikation** — innerhalb von 24h wird derselbe Tatbestand (kind + user) nur einmal in `AuditLog` gemeldet.
-5. **Die Detection warnt, sie sperrt nicht** — jede Heuristik ist Monitor-only: ein Treffer schreibt eine `SECURITY_VIOLATION`-Zeile und feuert ggf. den Webhook, er entzieht **keinen** Zugang und aendert kein Passwort. Deshalb sind False Positives eingeplant und tolerierbar: Eine Nutzerin mit einer Tippfehler-Serie am Authenticator oder ein Passkey, den der Browser wiederholt ablehnt, kann `mfa_failure_burst` ausloesen (die 10er-Schwelle liegt bewusst niedrig) — die Folge ist ein pruefbarer Eintrag, nie ein Aussperr-Effekt. Das harte Aussperren bleibt dem davon unabhaengigen Account-Lockout (10 Fehl-**logins** in 15 min, `manage.py unlock <username>`) und den Ratelimits vorbehalten. Praktisch heisst das bei der Triage in § „Manueller Prozess": zuerst pruefen, ob die Zeitreihe der Fehlversuche wie ein Mensch aussieht (wenige Minuten, eine Quell-IP, danach Erfolg) oder wie ein Automat (gleichmaessig ueber Stunden, kein Erfolg, ggf. mehrere IPs). Wer die Schwelle dauerhaft anhebt, verliert genau das Signal aus Szenario A7 (geduldiges Raten des zweiten Faktors mit gestohlener Passwort-Session) — Schwellen daher lieber pro Instanz nachjustieren als die Heuristik abschalten.
+4. **Deduplikation** — innerhalb von 24h wird derselbe Tatbestand nur einmal in `AuditLog` gemeldet: je Art und Benutzer, bei den anonymen Findings je Art und Quell-IP.
+5. **Die Detection warnt, sie sperrt nicht** — jede Heuristik ist Monitor-only: ein Treffer schreibt eine `SECURITY_VIOLATION`-Zeile und feuert ggf. den Webhook, er entzieht **keinen** Zugang und aendert kein Passwort. Deshalb sind False Positives eingeplant und tolerierbar: Eine Nutzerin mit einer Tippfehler-Serie am Authenticator oder ein Passkey, den der Browser wiederholt ablehnt, kann `mfa_failure_burst` ausloesen (die 10er-Schwelle liegt bewusst niedrig) — die Folge ist ein pruefbarer Eintrag, nie ein Aussperr-Effekt. Das harte Aussperren bleibt dem davon unabhaengigen Account-Lockout (10 Fehl-**logins** in 15 min, `manage.py unlock <username>`) und den Ratelimits vorbehalten. Praktisch heisst das bei der Triage in § „Manueller Prozess": zuerst die Art des Findings lesen. Bei Findings mit Benutzer (`failed_login_burst`, `mfa_failure_burst`, `mass_export`, `distributed_login_attack`) pruefen, ob die Zeitreihe der Fehlversuche je Benutzer wie ein Mensch aussieht (wenige Minuten, eine Quell-IP, danach Erfolg) oder wie ein Automat (gleichmaessig ueber Stunden, kein Erfolg, ggf. mehrere IPs). Einrichtungsweite Findings (`mass_delete`, `mass_client_destruction`) tragen keinen Benutzer: dort die `AuditLog`-Eintraege der Einrichtung im Fenster nach Benutzer und Zielobjekten aufschluesseln. Die anonymen Findings (`anonymous_login_burst`, `anonymous_login_flood`) tragen weder Benutzer noch Einrichtung, nur die Quell-IP bzw. das Gesamtvolumen: Sie zeigen Credential-Stuffing oder Benutzernamen-Raten; solange kein Login gelingt, ist kein Konto betroffen — Quell-IPs am Reverse-Proxy sperren. Wer die Schwelle dauerhaft anhebt, verliert genau das Signal aus Szenario A7 (geduldiges Raten des zweiten Faktors mit gestohlener Passwort-Session) — Schwellen daher lieber pro Instanz nachjustieren als die Heuristik abschalten.
 
 #### Manueller Prozess bei SECURITY_VIOLATION
 
-1. **T+0** — `AuditLog`-Detail pruefen, betroffene User/Daten identifizieren.
-2. **T+24h** — Vorgang an [DPO/Datenschutzbeauftragten](https://github.com/anlaufstelle/app/blob/main/SECURITY.md) eskalieren, Risiko-Einschaetzung erstellen. Faellt die verantwortliche Hauptperson aus, ruht die Eskalation: solange keine zweite Person Maintainer ist, ist keine **Vertretung** benannt ([MAINTAINERS.md](../MAINTAINERS.md), [GOVERNANCE.md § Eskalationspfad](../GOVERNANCE.md)) — ein offen ausgewiesener Bus-Faktor-1-Posten.
-3. **T+72h** — Meldung an Aufsichtsbehoerde (Bayern: BayLDA; andere Bundeslaender analog) + ggf. Betroffenenmeldung.
+1. **T+0** — `AuditLog`-Detail pruefen, betroffene Benutzer/Daten identifizieren und den Vorgang an die verantwortliche Stelle des Traegers weitergeben.
+2. **T+24h** — Vorgang an den **Datenschutzbeauftragten des Traegers** (bzw. die dafuer benannte Datenschutzstelle) eskalieren, Risiko-Einschaetzung erstellen. Das Projekt ist dafuer nicht der Adressat: Eine Datenpanne der eigenen Instanz wird beim Traeger gemeldet, nicht ueber den Schwachstellenkanal des Software-Projekts.
+3. **T+72h** — Meldung des Traegers an die zustaendige Aufsichtsbehoerde (z. B. Landesdatenschutzbeauftragte fuer oeffentliche Stellen, Landesaufsicht fuer nicht-oeffentliche Stellen; welche Behoerde zustaendig ist, haengt vom Traeger und vom Bundesland ab) + ggf. Betroffenenmeldung.
 4. **Post-Incident** — Lessons-Learned + Anpassung der Heuristik-Schwellen.
 
 Einrichtung: Der `cron`-Sidecar fuehrt `detect_breaches` ab Werk stuendlich aus ([§ 3.1](#31-uebersicht), [§ 3.2](#32-cron-sidecar-standard)); es ist **kein** zusaetzlicher Cron-Eintrag noetig, eine zweite Zeile liesse den Job doppelt laufen. Nur ohne Sidecar steht die Zeile in der Host-Crontab-Alternative aus [§ 3.3](#33-host-cron-backup--restliche-host-jobs). Einen Lauf sofort ausserhalb des Zeitplans anstossen:
@@ -1439,9 +1448,9 @@ docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breache
 
 ### 6.5c Security Advisory — Meldung, Bewertung, Veroeffentlichung (Refs #1895)
 
-Gegenstueck zu § 6.5b: dort geht es um eine **Datenschutzverletzung in einer betriebenen Instanz** (DSGVO Art. 33/34), hier um eine **Schwachstelle in der Software selbst**. Die oeffentliche Zusage dazu steht in [SECURITY.md](../SECURITY.md) (Meldewege, SLA, Support-Regel); dieser Abschnitt ist der interne Ablauf dahinter.
+Gegenstueck zu § 6.5b: dort geht es um eine **Datenschutzverletzung in einer betriebenen Instanz** (DSGVO Art. 33/34), hier um eine **Schwachstelle in der Software selbst**. Die oeffentliche Zusage dazu steht in [SECURITY.md](../SECURITY.md) (Meldewege, SLA, Support-Regel); dieser Abschnitt beschreibt den Ablauf dahinter.
 
-**Vorbedingung:** „Private vulnerability reporting" muss auf `anlaufstelle/app` aktiviert sein (Repo → *Settings* → *Advanced Security* → *Private vulnerability reporting* → *Enable*, oder `gh api -X PUT repos/anlaufstelle/app/private-vulnerability-reporting`). Die Einstellung gibt es nur fuer **oeffentliche** Repositories — die nicht-oeffentlichen Repositories der Release-Pipeline scheiden damit aus. Solange es aus ist, laeuft der GHSA-Formular-Link in `SECURITY.md` ins Leere und **nur der E-Mail-Weg traegt** — Statuspruefung:
+**Vorbedingung:** „Private vulnerability reporting" muss auf `anlaufstelle/app` aktiviert sein (Repo → *Settings* → *Advanced Security* → *Private vulnerability reporting* → *Enable*, oder `gh api -X PUT repos/anlaufstelle/app/private-vulnerability-reporting`). Die Einstellung gibt es nur fuer **oeffentliche** Repositories. Solange es aus ist, laeuft der GHSA-Formular-Link in `SECURITY.md` ins Leere und **nur der E-Mail-Weg traegt** — Statuspruefung:
 
 ```bash
 gh api repos/anlaufstelle/app/private-vulnerability-reporting   # {"enabled": true} erwartet
@@ -1449,12 +1458,14 @@ gh api repos/anlaufstelle/app/private-vulnerability-reporting   # {"enabled": tr
 
 | # | Schritt | Wer | Zielwert |
 |---|---------|-----|----------|
-| 1 | **Eingang** — Meldung per GHSA-Formular oder E-Mail; Eingang bestaetigen, Reproduktionsschritte nachfordern | Maintainer, bei Ausfall die Vertretung ([MAINTAINERS.md](../MAINTAINERS.md)) | ≤ 5 Werktage |
-| 2 | **Bewertung** — reproduzieren, CVSS-v3.1-Basis-Score, Einstufung kritisch/hoch/mittel/niedrig, Ergebnis an die meldende Person | Maintainer/Vertretung | ≤ 10 Werktage |
-| 3 | **GHSA-Entwurf** anlegen (*Security* → *Advisories* → *New draft security advisory* auf `anlaufstelle/app`), betroffene + gepatchte Versionen eintragen, Credit nach Wunsch der meldenden Person; bei kritisch/hoch CVE-ID ueber GitHub anfordern | Maintainer/Vertretung | mit Schritt 2 |
-| 4 | **Fix** — failing test first, Patch-Release der **aktuellen** Minor-Reihe (Support-Regel in `SECURITY.md`: keine Backports), Commit mit `sec:`-Prefix und Verweis aufs Advisory | Maintainer/Vertretung | kritisch/hoch: 14–30 Tage |
-| 5 | **Veroeffentlichung** — Advisory publizieren (Patch + 7 Tage Schonfrist), `Security`-Eintrag im [CHANGELOG](../CHANGELOG.md) mit GHSA-/CVE-Nummer, Hall-of-Fame-Nennung | Maintainer/Vertretung | Patch + 7 Tage |
-| 6 | **Kein Fix** — Ablehnung begruenden (Out-of-Scope-Liste in `SECURITY.md`), Vorgang gegenueber der meldenden Person sauber abschliessen | Maintainer/Vertretung | ≤ 10 Werktage |
+| 1 | **Eingang** — Meldung per GHSA-Formular oder E-Mail; Eingang bestaetigen, Reproduktionsschritte nachfordern | Maintainer ([MAINTAINERS.md](../MAINTAINERS.md)) | ≤ 5 Werktage |
+| 2 | **Bewertung** — reproduzieren, CVSS-v3.1-Basis-Score, Einstufung kritisch/hoch/mittel/niedrig, Ergebnis an die meldende Person | Maintainer | ≤ 10 Werktage |
+| 3 | **GHSA-Entwurf** anlegen (*Security* → *Advisories* → *New draft security advisory* auf `anlaufstelle/app`), betroffene + gepatchte Versionen eintragen, Credit nach Wunsch der meldenden Person; bei kritisch/hoch CVE-ID ueber GitHub anfordern | Maintainer | mit Schritt 2 |
+| 4 | **Fix** — failing test first, Patch-Release der **aktuellen** Minor-Reihe (Support-Regel in `SECURITY.md`: keine Backports), Commit mit `sec:`-Prefix und Verweis aufs Advisory | Maintainer | kritisch/hoch: 14–30 Tage |
+| 5 | **Veroeffentlichung** — Advisory publizieren (Patch + 7 Tage Schonfrist), `Security`-Eintrag im [CHANGELOG](../CHANGELOG.md) mit GHSA-/CVE-Nummer, Hall-of-Fame-Nennung | Maintainer | Patch + 7 Tage |
+| 6 | **Kein Fix** — Ablehnung begruenden (Out-of-Scope-Liste in `SECURITY.md`), Vorgang gegenueber der meldenden Person sauber abschliessen | Maintainer | ≤ 10 Werktage |
+
+**Vertretung:** Es ist keine Vertretung benannt; bei Ausfall der Hauptperson ruht der Vorgang (gleichlautend [SECURITY.md](../SECURITY.md), [MAINTAINERS.md](../MAINTAINERS.md)).
 
 **Abgrenzung:** Ein GHSA beschreibt eine Schwachstelle **im Anlaufstelle-Code**. Fuer verwundbare Abhaengigkeiten gilt § 8.3 (`pip-audit`/Dependabot) — dort existiert das Upstream-Advisory bereits, ein eigenes GHSA waere Doppelmeldung. Ein eigenes Advisory ist nur faellig, wenn die Anwendung die Upstream-Luecke exponiert und Betreiber deshalb handeln muessen.
 
@@ -1716,10 +1727,10 @@ Funde werden mit `reason=virus_detected` und der gemeldeten Signatur geloggt.
 
 ### 7.3 Healthcheck
 
-`GET /health/` liefert zusätzlich `"virus_scanner": "connected"|"unavailable"|"disabled"`
+`GET /health/` liefert Token- bzw. internen Aufrufern zusätzlich `"virus_scanner": "connected"|"unavailable"|"disabled"`
 sowie den Alias `"clamav": "ok"|"error"|"disabled"` (Refs #798).
-Bei aktivem Scanner und unerreichbarem Daemon wird der Gesamtstatus auf
-`"degraded"` gesetzt, der HTTP-Status bleibt 200 (die harte Sperre erfolgt
+Anonyme Aufrufer sehen nur `status`; bei aktivem Scanner und unerreichbarem
+Daemon wird der Gesamtstatus auf `"degraded"` gesetzt, der HTTP-Status bleibt 200 (die harte Sperre erfolgt
 beim Upload, nicht am Healthcheck). Der Container-Healthcheck im Dockerfile
 liest den JSON-`status` und meldet bei `degraded` ungesund. Der Produktions-Compose
 ersetzt diesen Image-Check: Nur `error` beziehungsweise HTTP 503 macht `web`
@@ -1730,26 +1741,31 @@ Token-Detailpfad, das Compliance-Dashboard und externes Monitoring überwacht we
 
 ### 7.4 Datenbank-Updates (Signaturen)
 
-Das benannte Volume `clamav-db` persistiert den vorhandenen Signaturstand. Im
-ausgelieferten Prod-Stack haengt `clamav` jedoch ausschliesslich am isolierten
-internen Netz und erreicht die Update-Server nicht; ein automatischer
-`freshclam`-Erfolg ist daher **nicht** gegeben. Eine im Dashboard als veraltet
-gemeldete Signatur ist kein voruebergehender Anlaufzustand. Logs und Stand
-pruefen:
+Das benannte Volume `clamav-db` persistiert den Signaturstand. `freshclam` im
+`clamav`-Container lädt Signatur-Updates per DNS/HTTPS und braucht dafür
+ausgehenden Netzzugang. `docker-compose.prod.yml` hängt `clamav` deshalb an
+zwei Netze: das interne Netz `internal` (Verbindung mit `web`; `internal: true`,
+ohne Zugang nach außen) und das separate Netz `clamav-egress` mit Zugang nach
+außen. Kein weiterer Dienst ist an `clamav-egress` angeschlossen. Läuft der
+Stack hinter einer Egress-Filterung, müssen die ClamAV-Mirror-Domains
+(`database.clamav.net`) von der Firewall des Hosts freigegeben sein; ohne
+Zugang friert der Signaturstand ein.
+
+`docker-compose.dev.yml` hängt `clamav` dagegen nur an `internal`: dort gibt
+es keinen Update-Pfad, der Signaturstand bleibt auf
+dem Stand des Images. Logs und Stand prüfen:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 
-Ist das Signaturalter waehrend des Erstlaufs noch nicht ermittelbar, bleibt der
-Compliance-Status `unknown` statt eine Warnung auszuloesen. Der Check zeigt den
+Ist das Signaturalter während des Erstlaufs noch nicht ermittelbar, bleibt der
+Compliance-Status `unknown` statt eine Warnung auszulösen. Der Check zeigt den
 ersten Befehl oben als Handlungshinweis. Bleibt `unknown` nach dem Anlauf
-bestehen, den Befehl ausfuehren und das Protokoll auf DNS-, Download- oder
-Mirror-Fehler pruefen.
-
-Bis ein ausgehender Update-Pfad oder ein interner Signatur-Mirror eingerichtet
-ist, bleibt der Signaturstand eingefroren und der Betriebszustand offen.
+bestehen, den Befehl ausführen und das Protokoll auf DNS-, Download- oder
+Mirror-Fehler prüfen; eine als veraltet gemeldete Signatur weist auf einen
+blockierten Egress hin.
 
 ### 7.5 Manueller Check
 
@@ -1776,7 +1792,7 @@ werden daraus generiert und committed.
 
 ```bash
 # 1. Abhängigkeit in requirements.in (Runtime) oder requirements-dev.in (Dev/Test)
-#    eintragen — mit offener Range, z.B. "Django>=5.1,<5.2".
+#    eintragen — mit offener Range, z.B. "Django>=6.1.1,<6.2".
 
 # 2. Lock-Files neu erzeugen (pip-tools muss installiert sein):
 make deps-lock
@@ -1829,7 +1845,12 @@ Förderung, öffentliche Beschaffung, Lieferanten-Audits) und listet alle direkt
 transitiven Python-Dependencies mit Versionen, Lizenzen und CVE-Status zum
 Build-Zeitpunkt.
 
-**Dauerhaftes Release-Artefakt (Refs #1895):** Das CI-Artefakt verfaellt nach 90 Tagen — fuer ein aelteres Release war danach nicht mehr belegbar, welche Komponenten drinstecken. Genau dieser Nachweis soll dauerhaft moeglich bleiben. Der Release-Build erzeugt deshalb zusaetzlich eine **dauerhafte** SBOM `sbom-vX.Y.Z.json` (CycloneDX 1.6) aus den Lock-Files des gebauten Trees — offline, ohne Netzabruf und byte-identisch bei Wiederholung. Umfang: alle Python-Distributionen aus `requirements.txt` (direkt **und** transitiv) plus alle npm-Pakete aus `package-lock.json`. Die vier vendorten Frontend-Libs (htmx, Alpine-CSP, Dexie, Chart.js) sind darin als `required` gefuehrt, obwohl sie im Lockfile als `dev` stehen — sie werden ausgeliefert (`src/static/js/`) und laufen im Browser der Nutzerinnen. Build-/Testwerkzeuge bleiben `optional`. Bis `1.0` verbleibt das Artefakt beim Maintainer (es gibt bis dahin keine GitHub-Release-Page) und ist ueber den Kontakt in [SECURITY.md](../SECURITY.md) erhaeltlich; ab `1.0` haengt es am GitHub-Release.
+**Dauerhaftes Release-Artefakt (Refs #1895):** Das CI-Artefakt verfaellt nach 90 Tagen; der Nachweis, welche Komponenten ein Release enthaelt, soll aber dauerhaft moeglich bleiben. Der Release-Build erzeugt deshalb zusaetzlich eine **dauerhafte** SBOM `sbom-vX.Y.Z.json` (CycloneDX 1.6) aus den Lock-Files des gebauten Trees — offline, ohne Netzabruf und byte-identisch bei Wiederholung. Umfang: alle Python-Distributionen aus `requirements.txt` (direkt **und** transitiv) plus alle npm-Pakete aus `package-lock.json`. Die vier vendorten Frontend-Libs (htmx, Alpine-CSP, Dexie, Chart.js) sind darin als `required` gefuehrt, obwohl sie im Lockfile als `dev` stehen — sie werden ausgeliefert (`src/static/js/`) und laufen im Browser der Nutzerinnen. Build-/Testwerkzeuge bleiben `optional`. Der Maintainer haengt die Datei beim Anlegen des GitHub-Release als **Release-Asset** an die Release-Page von [`anlaufstelle/app`](https://github.com/anlaufstelle/app/releases). Betreiber laden sie dort herunter; fehlt das Asset an einem Release, ist die SBOM ueber den Kontakt in [SECURITY.md](../SECURITY.md) erhaeltlich.
+
+```bash
+# Release-SBOM der installierten Version herunterladen
+gh release download vX.Y.Z -R anlaufstelle/app --pattern 'sbom-v*.json' --dir ./sbom-release
+```
 
 ```bash
 # SBOM des letzten erfolgreichen Test-Workflow-Runs herunterladen
@@ -1918,9 +1939,10 @@ Request via `set_config(..., is_local=false)` gesetzt wird.
 
 **Fail-closed:** Ist die Variable nicht gesetzt oder leer (`NULL`),
 liefern die Policies **keine Zeilen** — auch nicht fuer den Tabellen-
-eigentuemer (`FORCE ROW LEVEL SECURITY`). Bypass nur fuer Superuser-DB-
-Rollen; der Django-DB-User darf deshalb in Produktion **kein** Superuser
-sein.
+eigentuemer (`FORCE ROW LEVEL SECURITY`). Ausgenommen sind nur Superuser-
+und `BYPASSRLS`-Rollen (so ist die Admin-Rolle angelegt) sowie Sessions mit
+gesetztem `app.is_super_admin` (OR-Zweig der Policies); der Django-DB-User der
+Laufzeit darf deshalb in Produktion weder Superuser sein noch `BYPASSRLS` tragen.
 
 **Direkte statt Join-Policy auf `core_attachment` (Refs
 #1738,
@@ -1940,12 +1962,12 @@ laedt eine dedizierte Postgres-Rolle ``rls_test_role`` (``NOSUPERUSER``)
 und verifiziert per ``SET ROLE`` Cross-Tenant-0-Rows fuer Client, Event,
 AuditLog und Activity. Damit ist der RLS-Schutz funktional
 in CI getestet — nicht nur die Existenz der Policies. Wenn der
-Produktions-DB-User versehentlich Superuser wird, schlaegt der Cross-
-Tenant-Test in CI **nicht** fehl (er nutzt die explizite Test-Rolle),
-aber die Smoke-Query aus § 9.2 unten muss in Prod liefern: ``rolsuper =
-false`` fuer den Django-DB-User.
+Produktions-DB-User versehentlich Superuser wird oder `BYPASSRLS` erhaelt,
+schlaegt der Cross-Tenant-Test in CI **nicht** fehl (er nutzt die explizite
+Test-Rolle); das fangen `check_db_roles` und der Health-Endpoint (naechster
+Absatz) in Prod ab.
 
-**Daueruberwachung statt Einmal-Smoke-Query (Refs
+**Dauerueberwachung (Refs
 #793):** Der
 Health-Endpoint fuehrt genau diese Pruefung jetzt bei **jedem** Aufruf auf der
 laufenden Verbindung aus (``SELECT rolsuper, rolbypassrls … WHERE rolname =
@@ -1953,8 +1975,8 @@ current_user``). Umgeht die Runtime-Rolle RLS, faellt ``status`` dauerhaft auf
 ``degraded`` (HTTP bleibt 200) und Token-Caller sehen die Felder
 ``db_user_is_superuser``/``db_role_posture``; das Detail steht zusaetzlich als
 ``WARNING`` im Log (Logger ``core.views.health``). Damit faellt ein
-fehlkonfigurierter Cluster im Monitoring auf, ohne dass jemand die Smoke-Query
-manuell fahren muss — Feld-Referenz:
+fehlkonfigurierter Cluster im Monitoring auf, ohne dass jemand die Rollen
+manuell abfragen muss — Feld-Referenz:
 [docs/monitoring-guide.md](monitoring-guide.md). Abgrenzung: ``check_db_roles``
 prueft, dass App-/Admin-Rolle mit den richtigen Attributen im Katalog
 **existieren**; der Health-Endpoint prueft, als **wer** die Anwendung
@@ -2000,8 +2022,9 @@ Eigenschaften, die das Init-Script code-treu garantiert:
   admin … TO app` grantet jeder migrierten Tabelle/Sequenz automatisch die
   App-DML-Rechte.
 
-Operator-/Wartungs-Tasks laufen ausschliesslich im opt-in Service
-`maintenance`; nur er laedt die vollstaendige `.env` und ueberschreibt dort
+Operator-/Wartungs-Tasks laufen im opt-in Service `maintenance`; die
+vollstaendige `.env` laden `maintenance` **und** der `cron`-Sidecar
+([§ 3.2](#32-cron-sidecar-standard)), beide ueberschreiben dort
 `POSTGRES_USER`/`POSTGRES_PASSWORD` mit der Admin-Rolle. `web` erhaelt dagegen
 eine explizite Runtime-Allowlist und sieht weder Admin- noch Bootstrap-Secret
 (Refs #1962). Der
@@ -2021,10 +2044,13 @@ gespeist werden:
 | Variable | Wo gesetzt | Wer liest sie |
 |---|---|---|
 | `APP_DB_USER` | `environment:` des **`db`**-Service | [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) — legt die Rolle unter diesem Namen **an** |
-| `POSTGRES_APP_USER` | `environment:` von **`web`**, **`maintenance`**, **`cron`** | `check_db_roles` bzw. `src/core/services/compliance/db_roles.py` — **prueft** unter diesem Namen; derselbe Name ist Adressat konditionaler `GRANT`s |
+| `POSTGRES_APP_USER` | `environment:` von **`web`**, **`maintenance`**, **`cron`** | `check_db_roles` bzw. `src/core/services/compliance/db_roles.py` — **prueft** unter diesem Namen |
 
-Fehlt der zweite Name, faellt die Pruefung bzw. der `GRANT` still aus (kein
-Fehler, kein Log) — der Defekt zeigt sich erst Monate spaeter im Betrieb.
+Fehlt der zweite Name, faellt `check_db_roles` auf den Datenbank-Benutzer der
+Verbindung zurueck (`src/core/services/compliance/db_roles.py`). Im
+`maintenance`-Service ist das die Admin-Rolle: das Gate prueft dann die falsche
+Rolle als App-Rolle und meldet einen Defekt, der keiner ist, oder uebersieht
+einen echten.
 
 **Bestandscluster: der Compose-Fix wirkt nicht rueckwirkend.** Das Init-Script
 ist **INIT-ONLY** und laeuft ausschliesslich beim Anlegen eines leeren `PGDATA`.
@@ -2032,7 +2058,7 @@ Auf einem bereits existierenden Volume (z.B. `*_pgdata_staging`) legt es weder
 neue Rollen an noch gleicht es bestehende an die Env an. Zwei Wege:
 
 1. **Frisches Volume** — Dump/Restore nach
-   [§ 13.1](#131-prodstaging--daten-erhalten-wartungsfenster). Der einfachere,
+   [§ 13.1](#131-ablauf-mit-datenerhalt-wartungsfenster). Der einfachere,
    bereits durchgespielte Weg; das Init-Script baut die Zielrollen dabei selbst auf.
 2. **In-Place-Umbau** nach
    [§ 9.6](#96-rollout-der-runtime-owner-rollentrennung-auf-bestandsinstallationen-a14).
@@ -2102,18 +2128,18 @@ verschwänden still. Andere Host-Skripte erzeugen keine Container neu:
 `restore-drill.sh` stoppen höchstens Dienste oder starten One-Shots
 (`run --rm maintenance`).
 
+Die Rotation ist **kein Deployment**: alle `compose run`-/`up`-Schritte nutzen
+`--pull never` und damit exakt die bereits verifizierten lokalen Images. So kann
+weder ein bewegtes Tag den Code mitten im Wartungsfenster wechseln noch ein
+Registry-Ausfall Rotation oder Rollback blockieren. Ein neues Image immer vor
+dem Wartungsfenster separat deployen und pruefen.
+
 **Voraussetzungen:** Wartungsfenster ankündigen; sicherstellen, dass gerade kein
 Backup-/Restore-Job laeuft; einen aktuellen, verifizierten Sicherungsstand haben;
 `.env` muss mode `600` (oder strenger) besitzen. Das Skript braucht Docker-
 Zugriff und `openssl`, gibt aber **kein** Passwort auf stdout/stderr oder in
 Prozessargumenten aus. Es erzeugt drei voneinander unabhaengige Zufallswerte und
 setzt intern als Bootstrap-Superuser eine Transaktion nach diesem Muster ab:
-
-Die Rotation ist **kein Deployment**: alle `compose run`-/`up`-Schritte nutzen
-`--pull never` und damit exakt die bereits verifizierten lokalen Images. So kann
-weder ein bewegtes Tag den Code mitten im Wartungsfenster wechseln noch ein
-Registry-Ausfall Rotation oder Rollback blockieren. Ein neues Image immer vor
-dem Wartungsfenster separat deployen und pruefen.
 
 ```sql
 BEGIN;
@@ -2153,6 +2179,7 @@ Schlusszeilen (Rollennamen duerfen abweichen, Geheimnisse erscheinen nie):
 [db-password-rotation] Negativtest gruen: alter Login fuer Rolle anlaufstelle_admin wird mit Auth-Fehler abgewiesen.
 [db-password-rotation] Negativtest gruen: alter Login fuer Rolle postgres wird mit Auth-Fehler abgewiesen.
 [db-password-rotation] Rotation abgeschlossen. Backup-/Restore-Jobs lesen beim naechsten Lauf die neue Env-Datei.
+[db-password-rotation] Jetzt Passwort-Escrow und Notfallunterlagen aktualisieren (Ops-Runbook DB-Rotation).
 ```
 
 Ein blosses „Verbindung fehlgeschlagen" zaehlt nicht: Der Negativtest akzeptiert
@@ -2223,8 +2250,8 @@ nachfolgende Queries dieser Session gueltig.
 |--------|---------|-----|
 | `current_setting(...)` liefert `NULL` | Request kam ohne Auth-User durch (z.B. Management-Command, Cron) | Bewusstes Setzen via `set_config` oder `SET LOCAL` vor Query |
 | Variable ist gesetzt, aber Liste trotzdem leer | User ist auf falsche Facility gescopt | `SELECT facility_id FROM core_user WHERE id=<user_id>` pruefen |
-| Migration `0047` nicht angewandt | `showmigrations core` zeigt `[ ]` | `python manage.py migrate core 0047` |
-| Admin-Query ueber `./manage.py shell` liefert 0 Rows | Shell-Session setzt die Variable nicht | Vor Queries `connection.cursor().execute("SET app.current_facility_id = %s", [fid])` |
+| Migration `0047` nicht angewandt | `showmigrations core` zeigt `[ ]` | Migrate-Job laufen lassen (§ 1.2): `docker compose "${compose_files[@]}" run --rm --entrypoint=/app/docker-migrate.sh maintenance` |
+| Admin-Query ueber `./manage.py shell` liefert 0 Rows | Shell-Session setzt die Variable nicht | In `transaction.atomic()` vor den Queries `connection.cursor().execute("SELECT set_config('app.current_facility_id', %s, true)", [fid])` (gilt nur bis Transaktionsende) |
 
 Refs #542,
 #586.
@@ -2248,7 +2275,7 @@ Management-Commands `enforce_retention`, `backfill_audit_chain`,
 #1058 — RLS-Bypass-Guard
 bricht sonst fail-loud ab) müssen daher als **Owner-/Admin-Rolle**
 (`POSTGRES_ADMIN_USER`) laufen — das ist ueber den dedizierten
-`maintenance`-Service bereits so eingerichtet (Retention-Cron § 6). Läuft ein solcher
+`maintenance`-Service bereits so eingerichtet (Retention-Job im `cron`-Sidecar, [§ 3.2](#32-cron-sidecar-standard)). Läuft ein solcher
 Command versehentlich als App-Rolle, bricht der Bypass mit `must be owner of
 table core_eventhistory` ab (seit der Reihenfolge-Umkehr in
 #2065 steht
@@ -2362,7 +2389,7 @@ Wartungsfenster:
 
 Betriebsregeln daraus:
 
-- Die Bypass-Commands `enforce_retention` (Retention-Cron, § 6),
+- Die Bypass-Commands `enforce_retention` (Retention-Job im `cron`-Sidecar, § 3.2),
   `backfill_audit_chain` und `reencrypt_fields` in **Wartungs-/Nebenzeiten** mit
   geringer Schreiblast fahren — nicht zur Stoßzeit. Für die **interaktive**
   Art.-17-Aktion gilt das nicht: sie nimmt im Webprozess gar keine DDL-Sperre
@@ -2404,7 +2431,7 @@ separate Admin-Rolle) braucht einen **einmaligen, Maintainer-geführten** Umbau 
 kurze Downtime empfohlen (keine schreibenden Requests währenddessen).
 
 > **Die einfachere, bereits durchgespielte Alternative:** Dump → frisches Volume →
-> Restore nach [§ 13.1](#131-prodstaging--daten-erhalten-wartungsfenster). Dabei
+> Restore nach [§ 13.1](#131-ablauf-mit-datenerhalt-wartungsfenster). Dabei
 > baut das Init-Script die Zielrollen von selbst korrekt auf, und es gibt keinen
 > Sonderfall. Der In-Place-Umbau unten lohnt nur, wenn das Wartungsfenster für
 > Dump/Restore zu lang wäre. Refs
@@ -2933,8 +2960,8 @@ User.objects.filter(username='<username>').delete()
 "
 ```
 
-**Cron-Empfehlung:** Wochen-Audit als reine Report-Query (siehe Abschnitt
-[3.2](#32-cron-sidecar-standard)) — kein automatisches Loeschen, da ein nicht
+**Cron-Empfehlung:** Wochen-Audit als reine Report-Query (Host-Job, siehe
+[§ 3.3](#33-host-cron-backup--restliche-host-jobs)) — kein automatisches Loeschen, da ein nicht
 zugestellter Invite auch ein Mail-Problem sein kann.
 
 Refs #528.
@@ -2977,22 +3004,34 @@ alle 6 Stunden ausreichend. Das Dashboard toleriert leichten Staleness.
 | Artefakt | Zweck | Befehl | Frequenz |
 |----------|-------|--------|----------|
 | `core_statistics_event_flat` (MV) | Aktuelle Laufzeit-Aggregate fuer Dashboard | `refresh_statistics_view` | Stuendlich |
-| `core_statisticssnapshot` (Tabelle) | Persistente Monats-Aggregate (ueberdauert Event-Retention) | `create_statistics_snapshots` | Monatlich |
+| `core_statisticssnapshot` (Tabelle) | Persistente Monats-Aggregate; durch Retention geloeschte Ereignisse zaehlen als Uebertrag (`_deleted`) weiter mit | `create_statistics_snapshots` | Monatlich |
 
 Beide Jobs sind unabhaengig — Snapshots bleiben auch ohne MV korrekt,
 die MV kann auch ohne Snapshots refreshed werden.
 
 ### 11.4 Health-Check
 
-```sql
--- Letzten Refresh-Zeitpunkt nachsehen
-SELECT schemaname, matviewname, last_refresh
-FROM pg_stat_user_tables
-JOIN pg_matviews ON relname = matviewname
-WHERE matviewname = 'core_statistics_event_flat';
+PostgreSQL protokolliert keinen Refresh-Zeitpunkt für Materialized Views. Den
+letzten erfolgreichen Refresh belegt der Marker `MV_REFRESH_COMPLETED`, den
+`refresh_statistics_view` nach jedem Lauf in den Audit-Log schreibt. Er erscheint
+im Compliance-Dashboard als Karte „Statistik-View-Refresh“; im `/health/`-Detail
+(Token-Aufruf) listet `stale_jobs` den Schlüssel `mv_refresh_last_run`, sobald
+der letzte Lauf zu lange her ist.
+
+Direkt in der Datenbank (Rolle `postgres` im `db`-Container, siehe § 6.3; nur
+lesend):
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T db \
+  sh -c 'psql -U postgres -d "$POSTGRES_DB"' <<'SQL'
+-- Letzter Refresh laut Marker
+SELECT max("timestamp") AS letzter_refresh
+FROM core_auditlog
+WHERE action = 'mv_refresh_completed';
 
 -- Zeilenzahl pruefen (sollte ungefaehr core_event count entsprechen)
 SELECT count(*) FROM core_statistics_event_flat;
+SQL
 ```
 
 Refs #544.
@@ -3083,15 +3122,17 @@ Bei einem Domainwechsel ist `EXTERNAL_ORIGIN` mitzuziehen: bereits versendete Li
 
 ---
 
-## 13. PostgreSQL-Major-Upgrade (16 → 18)
+## 13. PostgreSQL-Major-Upgrade
 
-Refs #1039. PostgreSQL-Major-Versionen haben **inkompatible Datenverzeichnisse** — ein In-Place-Start des neuen Images auf dem alten Volume ist unmöglich. Gewählter und lokal durchgespielter Pfad: **dump → frisches PG18-Cluster → restore**. (`pg_upgrade` verworfen: das Alpine-Image enthält nur eine Binär-Major-Version, und PG18-`initdb` aktiviert Data-Checksums per Default — ein 16er-Cluster ohne Checksums wäre dafür erst zu konvertieren.)
+PostgreSQL-Major-Versionen haben **inkompatible Datenverzeichnisse** — ein In-Place-Start des neuen Images auf dem alten Volume ist unmöglich. Der Ablauf für jeden Sprung von Major N auf N+1 ist **dump → frisches Cluster → restore**. (`pg_upgrade` ist nicht vorgesehen: das Alpine-Image enthält nur eine Binär-Major-Version, und neuere `initdb`-Versionen aktivieren Data-Checksums per Default — ein Cluster ohne Checksums wäre dafür erst zu konvertieren.)
 
-**Geändertes Image-Layout ab 18:** `PGDATA` liegt unter `/var/lib/postgresql/18/docker`, das Image deklariert `VOLUME /var/lib/postgresql`. Die Compose-Dateien mounten seit #1039 deshalb das Elternverzeichnis (`…:/var/lib/postgresql` statt `…/data`). Startet man den neuen Stand versehentlich gegen ein altes 16er-Volume, bricht der Entrypoint **kontrolliert ohne Datenverlust** ab („there appears to be PostgreSQL data in: /var/lib/postgresql" + Hinweistext).
+**Image-Layout:** Das `postgres`-Image deklariert `VOLUME /var/lib/postgresql`, `PGDATA` liegt unter `/var/lib/postgresql/<N>/docker`. Die Compose-Dateien mounten deshalb das Elternverzeichnis (`…:/var/lib/postgresql` statt `…/data`). Startet man ein neues Image versehentlich gegen ein Volume der alten Major, bricht der Entrypoint **kontrolliert ohne Datenverlust** ab („there appears to be PostgreSQL data in: /var/lib/postgresql“ samt Hinweistext).
 
-### 13.1 Prod/Staging — Daten erhalten (Wartungsfenster)
+### 13.1 Ablauf mit Datenerhalt (Wartungsfenster)
 
-Staging identisch mit `docker-compose.staging.yml`, `.env.staging` und Volume `*_pgdata_staging`. Reihenfolge ist sicherheitskritisch: **Rollen vor Daten** — das Init-Script legt App-/Admin-Rolle im frischen Cluster an, bevor der Restore Ownership/Grants wiederherstellt (ADR-020). Für Staging gilt das erst ab #2086: davor mountete der Stack `deploy/postgres-init` gar nicht (§ 1.4). Jeder Schritt muss fehlerfrei enden, bevor der nächste beginnt — insbesondere Backup und Arbeits-Dump (Schritte 1–2), bevor Schritt 4 das Volume entfernt; der Block bricht bei einem Fehler nicht von selbst ab.
+Reihenfolge ist sicherheitskritisch: **Rollen vor Daten** — das Init-Script legt App- und Admin-Rolle im frischen Cluster an, bevor der Restore Ownership und Grants wiederherstellt (ADR-020). Die Befehle stehen in zwei Blöcken: **Vorbereiten** (Schritte 0–3, nichts wird gelöscht) und **Austauschen** (Schritte 4–10). Der Austausch-Block entfernt das Volume nur, wenn der Arbeits-Dump als nicht leer und lesbar bestätigt ist (`dump_ok=yes`); alle anderen Schritte beendest du bei einem Fehler selbst, bevor du den nächsten ausführst. Beide Blöcke laufen in **derselben** Shell-Sitzung (Variablen `dump`, `pg_volume`, `dump_ok`).
+
+Arbeits-Dump und Volume-Tarball enthalten **Klartext-Daten** (Art. 9 DSGVO). Sie liegen in einem Verzeichnis, das nur der ausführende Benutzer lesen darf (`0700`), nicht in `/tmp`.
 
 ```bash
 cd /opt/anlaufstelle
@@ -3101,42 +3142,85 @@ compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 
+# Arbeitsverzeichnis (nur für den ausführenden Benutzer lesbar) und Volume.
+umask 077
+install -d -m 0700 upgrade-work
+dump="$PWD/upgrade-work/pre-upgrade.dump"
+pg_volume=$(docker volume ls -q \
+    --filter label=com.docker.compose.project=anlaufstelle-prod \
+    --filter label=com.docker.compose.volume=pgdata)
+echo "Volume: ${pg_volume:-NICHT GEFUNDEN}"   # genau ein Name, z. B. anlaufstelle-prod_pgdata
+
 # 0. Maintenance-Mode aktivieren (§ 6.5a). web und cron laufen weiter: backup.sh
 #    liest die Medien über web und den Audit-Anker über cron, beide Dienste
 #    müssen für das Backup laufen.
 docker compose "${compose_files[@]}" exec -T web touch /data/anlaufstelle.maintenance
 
-# 1. Finales verschlüsseltes Backup (§ 1.1); db, web und cron müssen laufen.
+# 1. Finales verschlüsseltes Backup (§ 1.1, Restore § 6.6); db, web und cron
+#    müssen laufen.
 ./scripts/ops/backup.sh
 
-# 2. Schreibpfade stilllegen (die DB bleibt erreichbar) und danach den
-#    unverschlüsselten Arbeits-Dump ziehen. Der Dump läuft als Admin-Rolle
-#    (BYPASSRLS) über den Container-Socket — wie backup.sh; im db-Container
-#    heißt die Variable ADMIN_DB_USER. Erst weitermachen, wenn die Prüfung
-#    ein Inhaltsverzeichnis liefert.
+# 2. Schreibpfade stilllegen (die DB bleibt erreichbar) — web UND cron, denn
+#    der cron-Sidecar schreibt sonst weiter (Retention, MV-Refresh, Breach-Scan)
+#    und diese Schreibvorgänge fehlten im Dump. Danach den unverschlüsselten
+#    Arbeits-Dump ziehen. Er läuft als Admin-Rolle (BYPASSRLS) über den
+#    Container-Socket wie backup.sh; im db-Container heißt die Variable
+#    ADMIN_DB_USER. Die Prüfung setzt dump_ok=yes nur, wenn die Datei nicht
+#    leer ist und pg_restore ihr Inhaltsverzeichnis lesen kann.
 docker compose "${compose_files[@]}" stop web cron
-umask 077
 docker compose "${compose_files[@]}" exec -T db \
-    sh -c 'pg_dump -U "$ADMIN_DB_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
-docker compose "${compose_files[@]}" exec -T db pg_restore --list < /tmp/upgrade-pg16.dump | head -n 5
+    sh -c 'pg_dump -U "$ADMIN_DB_USER" -Fc -Z 6 "$POSTGRES_DB"' > "$dump"
+dump_ok=
+[[ -s "$dump" ]] \
+    && docker compose "${compose_files[@]}" exec -T db pg_restore --list < "$dump" > /dev/null \
+    && dump_ok=yes
+echo "dump_ok=${dump_ok:-nein}"   # muss "yes" sein, sonst Schritt 4 nicht ausführen
 
-# 3. DB stoppen, Volume-Tarball als byte-genauen Rollback-Anker ziehen
-#    (Volume-Name pruefen: docker volume ls | grep pgdata)
+# 3. DB stoppen, Volume-Tarball als byte-genauen Rollback-Anker ziehen.
 docker compose "${compose_files[@]}" stop db
-docker run --rm -v anlaufstelle_pgdata:/from -v "$PWD":/to alpine \
-    tar czf /to/pgdata-pg16.tar.gz -C /from .
+docker run --rm -v "$pg_volume":/from -v "$PWD/upgrade-work":/to alpine \
+    tar czf /to/pgdata-pre-upgrade.tar.gz -C /from .
+ls -l upgrade-work/
+```
 
-# 4. Alten DB-Container + Volume entfernen — erst NACH Schritt 1–3!
-docker compose "${compose_files[@]}" rm -f db
-docker volume rm anlaufstelle_pgdata
+```bash
+cd /opt/anlaufstelle
 
-# 5. Neuen Release-Stand einspielen (postgres:18-alpine + neuer Mount)
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
+# 4. Alten DB-Container + Volume entfernen — nur mit bestätigtem Dump, nur nach
+#    Schritt 1–3.
+if [[ "$dump_ok" == yes && -n "$pg_volume" ]]; then
+    docker compose "${compose_files[@]}" rm -f db
+    docker volume rm "$pg_volume"
+else
+    echo "ABBRUCH: Dump nicht bestätigt oder Volume unbekannt — nichts gelöscht." >&2
+fi
+```
+
+Weiter nur, wenn Schritt 4 kein „ABBRUCH“ meldet:
+
+```bash
+cd /opt/anlaufstelle
+
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
+dump="$PWD/upgrade-work/pre-upgrade.dump"
+
+# 5. Neuen Release-Stand einspielen (neues postgres:<N+1>-alpine-Image
+#    und passender Mount)
 git pull   # bzw. Release-Paket
 
-# 6. Nur DB hochfahren: frisches initdb (PG 18, Checksums on) + Init-Script
-#    legt App-/Admin-Rolle an. Warten, bis der endgültige Server auf TCP
-#    antwortet (während der Initialisierung läuft nur ein vorläufiger Server
-#    ohne TCP-Port); erst dann ist der Restore möglich. Log muss fehlerfrei sein.
+# 6. Nur DB hochfahren: frisches initdb (Checksums on) + Init-Script legt
+#    App-/Admin-Rolle an. Warten, bis der endgültige Server auf TCP antwortet
+#    (während der Initialisierung läuft nur ein vorläufiger Server ohne
+#    TCP-Port); erst dann ist der Restore möglich. Das Log muss fehlerfrei sein.
 docker compose "${compose_files[@]}" up -d db
 docker compose "${compose_files[@]}" exec -T db sh -c 'until pg_isready -h 127.0.0.1 -U postgres -q; do sleep 1; done'
 docker compose "${compose_files[@]}" logs db | grep -icE 'error|fatal'   # 0
@@ -3144,29 +3228,29 @@ docker compose "${compose_files[@]}" logs db | grep -icE 'error|fatal'   # 0
 # 7. Restore als Bootstrap-Superuser via Container-Socket (bypasst RLS/FORCE-RLS,
 #    wie scripts/ops/restore-drill.sh; --clean/--if-exists ist re-run-sicher)
 docker compose "${compose_files[@]}" exec -T db \
-    sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
+    sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < "$dump"
 
 # 8. Verifizieren: Rollen-Gate, RLS aktiv, Stichproben
 docker compose "${compose_files[@]}" run --rm -T maintenance check_db_roles  # Exit 0
 docker compose "${compose_files[@]}" exec -T db sh -c \
     'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"'   # > 0
 
-# 9. Migrationen als One-Shot (i. d. R. No-op) + Stack hoch + Health (§ 1.2/1.3)
+# 9. Migrationen als One-Shot (i. d. R. No-op) + Stack hoch (web UND cron) + Health (§ 1.2/1.3)
 docker compose "${compose_files[@]}" run --rm --entrypoint=/app/docker-migrate.sh maintenance
 docker compose "${compose_files[@]}" up -d web cron caddy
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
-# 10. Maintenance-Mode aus. Arbeits-Dump enthält KLARTEXT-Daten — sofort löschen;
-#     Tarball nach der Aufbewahrungsfrist (z. B. 1 Woche) entsorgen.
+# 10. Maintenance-Mode aus. Der Arbeits-Dump enthält KLARTEXT-Daten — sofort
+#     löschen; den Tarball nach der Aufbewahrungsfrist (z. B. 1 Woche) entsorgen.
 docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.maintenance
-rm /tmp/upgrade-pg16.dump
+rm -f "$dump"
 ```
 
-Meldet `pg_restore` eine Warnung bei `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, sind die Daten trotzdem vollständig — danach einmal den MV-Refresh ausführen (§ 11).
+Meldet `pg_restore` eine Warnung bei `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, sind die Daten trotzdem vollständig — danach einmal den MV-Refresh ausführen ([§ 11](#11-statistics-materialized-view)).
 
 ### 13.2 Rollback
 
-Primär über den Volume-Tarball (exakter 16er-Byte-Stand), alternativ verschlüsseltes Backup (§ 6):
+Primär über den Volume-Tarball (exakter Byte-Stand der alten Major), alternativ über das verschlüsselte Backup (§ 2.3, Restore nach § 6.6). Der Tarball liegt in `upgrade-work/` (§ 13.1, Schritt 3). Das Beispiel nimmt an, dass `pg_volume` aus § 13.1 gesetzt ist; sonst vorher neu ermitteln.
 
 ```bash
 cd /opt/anlaufstelle
@@ -3176,46 +3260,26 @@ compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 
-# 1. Compose-Stand zurueckdrehen: postgres:16-alpine + Mount …:/var/lib/postgresql/data
+# 1. Compose-Stand zurückdrehen: Image der alten Major + der damalige Mount
 git checkout <vorheriger-stand> -- docker-compose.prod.yml
 
-# 2. 18er-Volume entfernen, 16er-Bytes wiederherstellen
-docker compose "${compose_files[@]}" rm -f db
-docker volume rm anlaufstelle_pgdata && docker volume create anlaufstelle_pgdata
-docker run --rm -v anlaufstelle_pgdata:/to -v "$PWD":/from alpine \
-    tar xzf /from/pgdata-pg16.tar.gz -C /to
+# 2. Volume der neuen Major entfernen, die alten Bytes wiederherstellen
+docker compose "${compose_files[@]}" stop web cron
+docker compose "${compose_files[@]}" rm -sf db
+docker volume rm "$pg_volume" && docker volume create "$pg_volume"
+docker run --rm -v "$pg_volume":/to -v "$PWD/upgrade-work":/from alpine \
+    tar xzf /from/pgdata-pre-upgrade.tar.gz -C /to
 
 # 3. Stack hochfahren + Health
 docker compose "${compose_files[@]}" up -d
 ```
 
-### 13.3 dev.anlaufstelle.app — Daten wegwerfbar
+### 13.3 Vor dem Major-Sprung prüfen
 
-`pgdata_dev` enthält nur Demo-Seed (Refs #1039): kein Restore nötig.
-
-```bash
-cd /opt/anlaufstelle
-docker compose -f docker-compose.dev.yml --env-file .env.dev stop db web
-docker compose -f docker-compose.dev.yml --env-file .env.dev rm -f db
-docker volume rm anlaufstelle_pgdata_dev
-# Neuen Stand deployen (make deploy-dev vom Operator-Rechner): frisches
-# 18er-Cluster + Rollen via Init-Script, Migrate-Job, Stack-Start.
-# Danach Demo-Daten: make dev-seed SEED_ARGS="--flush --scale=medium"
-```
-
-Der komplette Pfad (Init-Rollen vor Daten, Superuser-Restore, `check_db_roles` Exit 0, FORCE-RLS aktiv, App-Rolle ohne Bypass, MV-Refresh, Rollback auf 16) wurde im Zuge von #1039 lokal in Docker durchgespielt.
-
-### 13.4 Künftige Major-Upgrades (18 → 19 und später) — Vorausverweis
-
-> **Platzhalter (Refs #1039).** Der oben beschriebene **dump → frisches Cluster → restore**-Pfad ist das **generische Muster für jeden** PostgreSQL-Major-Sprung, nicht nur 16→18. Künftige Upgrades (18→19 usw.) folgen denselben Schritten aus §13.1/§13.2; anzupassen sind im Wesentlichen nur die Versionsnummern, das `postgres:<N>-alpine`-Image und ggf. der `PGDATA`-Mountpfad, falls ein neues Image-Layout das Verzeichnis erneut verschiebt (wie der Wechsel auf `/var/lib/postgresql/18/docker` bei 18).
-
-Vor dem nächsten Major-Sprung prüfen:
-
-- **Release-Notes der Ziel-Major** auf inkompatible Änderungen (Datenformat, entfernte Funktionen, geänderte Defaults — bei 18 z. B. Data-Checksums per Default).
-- **Image-Layout/`VOLUME`-Pfad** des neuen `postgres:<N>-alpine` — bei Änderung die Mounts in allen Compose-Dateien (`prod`/`staging`/`dev`) nachziehen, analog #1039.
+- **Release-Notes der Ziel-Major** auf inkompatible Änderungen (Datenformat, entfernte Funktionen, geänderte Defaults — z. B. Data-Checksums per Default).
+- **Image-Layout/`VOLUME`-Pfad** des neuen `postgres:<N>-alpine`: Ändert er sich, die Mounts in allen Compose-Dateien nachziehen.
 - **Verfügbarkeit von `pg_dump`/`pg_restore` der Ziel-Major** im Image (Cross-Version-Dump-Kompatibilität).
-
-Diese Notiz ist bewusst knapp gehalten; der ausführliche, lokal durchgespielte Ablauf bleibt in §13.1–§13.3 und wird beim tatsächlichen nächsten Upgrade unter einem neuen Issue konkretisiert.
+- **Plattenplatz** für Arbeits-Dump und Volume-Tarball neben dem laufenden Volume.
 
 ---
 
@@ -3232,7 +3296,7 @@ Django Deploy-Check       docker compose -f docker-compose.prod.yml exec web pyt
 Retention Testlauf        docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run
 Snapshot Testlauf         docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics_snapshots --dry-run
 MV-Refresh                docker compose -f docker-compose.prod.yml run --rm maintenance refresh_statistics_view
-RLS-Session-Var pruefen   psql -c "SELECT current_setting('app.current_facility_id', true);"
+DB-Rollen/RLS pruefen     docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 Stack stoppen             docker compose -f docker-compose.prod.yml down
 Stack starten             docker compose "${compose_files[@]}" up -d   (Dateiliste: § 1.2)
 Lock-Files regenerieren   make deps-lock

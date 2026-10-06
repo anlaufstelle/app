@@ -444,7 +444,7 @@ Ehrliche Bestandsaufnahme — diese Teile sind **organisatorisch**, nicht im Cod
 
 - **`offen` — Off-Site nur wenn konfiguriert.** `scripts/ops/backup.sh` hat Off-Site-Sync, aber nur aktiv bei gesetztem `BACKUP_OFFSITE_TARGET`. Ist keines konfiguriert, überlebt **kein** Backup den Host-Totalverlust. → Vor Produktivbetrieb `BACKUP_OFFSITE_TARGET` setzen **und** das erste Off-Site-Retrieval einmal proben.
 
-- **`offen` — Recovery auf fabrikfrischem Host regelmäßig proben.** Der [Restore-Drill](ops-runbook.md#66-backup-restore-drill-refs-720-739) testet Restore **auf dem laufenden Host** in eine Wegwerf-DB; das PG-16→18-Upgrade ([ops-runbook §13](ops-runbook.md#13-postgresql-major-upgrade-16--18)) testet dump→frisches-Cluster→restore lokal. Der **vollständige** DR-Pfad aus [§6](#6-wiederherstellung-auf-einem-fabrikfrischen-host) (frischer Server + Off-Site-Download + Schlüssel aus dem Eskrow + Restore) wurde am 22.09.2026 als Fresh-Host-Drill samt Re-Drill durchgespielt, Ergebnis **GRÜN mit Einschränkung**. Der Drill gehört zum Betrieb: einmal jährlich auf einem Wegwerf-Server wiederholen und das Ergebnis im Protokoll nach [§8.1](#81-drill-protokoll-vorlage-und-drehbuch) festhalten.
+- **`offen` — Recovery auf fabrikfrischem Host regelmäßig proben.** Der [Restore-Drill](ops-runbook.md#66-backup-restore-drill-refs-720-739) testet Restore **auf dem laufenden Host** in eine Wegwerf-DB; das PostgreSQL-Major-Upgrade ([ops-runbook §13](ops-runbook.md#13-postgresql-major-upgrade)) testet dump→frisches-Cluster→restore lokal. Der **vollständige** DR-Pfad aus [§6](#6-wiederherstellung-auf-einem-fabrikfrischen-host) (frischer Server + Off-Site-Download + Schlüssel aus dem Eskrow + Restore) wurde am 22.09.2026 als Fresh-Host-Drill samt Re-Drill durchgespielt, Ergebnis **GRÜN mit Einschränkung**. Der Drill gehört zum Betrieb: einmal jährlich auf einem Wegwerf-Server wiederholen und das Ergebnis im Protokoll nach [§8.1](#81-drill-protokoll-vorlage-und-drehbuch) festhalten.
 
 - **RTO/RPO sind Richtwerte, kein SLA.** Die Zahlen in [§1](#1-rto--rpo--zielwerte) sind aus den Cron-Frequenzen und realistischen Restore-Dauern abgeleitet, nicht gemessen und nicht vertraglich zugesichert. Ein DR-Drill ([oben](#8-offene-punkte-nicht-im-code-verdrahtet)) würde sie validieren.
 
@@ -831,6 +831,6 @@ Rückbau abgeschlossen am / durch:
 
 - [ops-runbook.md §6.6 — Backup-Restore-Drill](ops-runbook.md#66-backup-restore-drill-refs-720-739) (Happy-Path, Kompatibilitätsmatrix der zwei Welten)
 - [ops-runbook.md §6.6a — Off-Site-Backup-Sync](ops-runbook.md#66a-off-site-backup-sync-refs-738)
-- [ops-runbook.md §13 — PostgreSQL-Major-Upgrade (16→18)](ops-runbook.md#13-postgresql-major-upgrade-16--18) (dump→frisches-Cluster→restore, derselbe Mechanismus wie DR)
+- [ops-runbook.md §13 — PostgreSQL-Major-Upgrade](ops-runbook.md#13-postgresql-major-upgrade) (dump→frisches-Cluster→restore, derselbe Mechanismus wie DR)
 - [monitoring-guide.md — `/health/`-Felder und Status-Codes](monitoring-guide.md)
 - [.env.example — kanonische Secret-Liste](../.env.example)

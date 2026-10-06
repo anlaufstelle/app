@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: §§ 6.5b–13 follow the shipped behaviour — the breach heuristics table lists all eight kinds and the notification goes to the operator and its data protection officer instead of the project (#2480); § 7.4 describes the `clamav-egress` network, § 8.4 the SBOM as release asset, § 9 the RLS exemptions and the `cron` sidecar loading the full `.env`, § 11.4 the `MV_REFRESH_COMPLETED` marker, the monthly aggregate keeps deleted events as carry-over (#2483); § 13 is a generic major-upgrade procedure with a checked, non-empty working dump outside `/tmp` (#2475).
 > Synchronization update 2026-10-06: §§ 1–6 follow the shipped behaviour — the mandatory-variable check reads `.env` entries like Compose does (quoted values with escaped quotes, single and double quotes, inline comments, `export` prefix; an empty or unterminated value counts as missing) and requires 32 characters, the migration diagnosis uses the one-shot and terminates an orphaned lock holder instead of `pg_advisory_unlock`, `up -d web` (not `restart web`) applies new `GUNICORN_*` values, attachment usage is measured inside the `media` volume, the export directory must belong to UID 1000, the maintenance-mode block runs the migration one-shot, `backup.sh` writes files without any permission for others (`umask 027`, the group may read) and `--verify` states what it checked, and the manifest is mandatory for `restore.sh` (#2482, #2440).
 > Synchronization update 2026-10-06: § 3.3 (file modes) and § 6.6 (restore drill, host cron proposal) follow `backup.sh` with `umask 027` — files `0640`, directories `0750`, the check rejects any permission for others, the group (UID/GID 1000 of `web`) may read the manifest, the weekly/monthly copies are staged and checked before they are published, and the host cron alternative names its audit-anchor limit (#2482).
 > Synchronization update 2026-10-06: the German source of § 13.1 uses proper umlauts in the step comments; no change to commands or content.
@@ -66,7 +67,7 @@ Operations manual for Anlaufstelle. Complements the [Admin Guide](admin-guide.md
 10. [Invite Token Hygiene](#10-invite-token-hygiene)
 11. [Statistics Materialized View](#11-statistics-materialized-view)
 12. [Trust Boundary](#12-trust-boundary-refs-841)
-13. [PostgreSQL Major Upgrade (16 → 18)](#13-postgresql-major-upgrade-16--18)
+13. [PostgreSQL Major Upgrade](#13-postgresql-major-upgrade)
 
 ---
 
@@ -468,10 +469,10 @@ Column **Where**: `Sidecar` = runs out of the box in the `cron` container ([§3.
 | `backup.sh` | Daily 02:00 | **Host** | Encrypted DB and media backup with rotation; optional off-site sync (Refs #720, #738) |
 | `enforce_retention` | Daily 03:00 | Sidecar | Soft-delete expired events, anonymize clients |
 | `verify_audit_chain` | Daily 03:30 (after retention) | Sidecar | Verify the AuditLog's HMAC integrity chain; exit code != 0 on suspected tampering (Refs #1070). A fully green run writes the last-run marker `AUDIT_CHAIN_VERIFIED` — visible as the "Audit chain check" row under `/system/` and in the compliance dashboard (Refs #1872). A tamper finding writes **no** marker, so the indicator runs overdue |
-| `create_statistics_snapshots` | Monthly, day 1, 04:00 | Sidecar | Save monthly aggregates before events are deleted |
+| `create_statistics_snapshots` | Monthly, day 1, 04:00 | Sidecar | Recompute the monthly aggregates per facility; events deleted by a retention run stay in the monthly aggregate as a carry-over (`_deleted`) |
 | `cleanup_orphan_storage_files` | Daily 04:30 (after snapshots) | Sidecar | Delete orphaned `.enc` files with no `Attachment` **and no open `ImportJob` record** (owner-independent: event, person, and case attachments; CSV import uploads under `<facility>/imports/` are protected via `ImportJob.storage_filename` and count during quota enforcement while the run is open — `commit_import`/`abort_import` clear the field, finished runs do not protect it any longer). By default, each run checks at most 10,000 files; `--budget N` sets a positive custom limit, and the stored continuation point fairly resumes the next run. `--dry-run` only reports deletion candidates and changes neither files nor the continuation point. Output lists checked and separately skipped files, deletion candidates, actual deletions, errors, the continuation location, and either the next start or a complete tree traversal. MUST run as the admin DB role (BYPASSRLS), otherwise fail-loud — without the bypass the run would also see 0 `ImportJob` rows and would delete the open uploads of every facility (Refs #662, #1554, #1738, #1060, #2180, #2376) |
 | `clearsessions` | Daily 05:00 | Sidecar | Delete expired rows from `django_session` (storage limitation under Art. 5(1)(e) GDPR) |
-| `detect_breaches` | Hourly at :30 | Sidecar | Heuristics-based breach detection (failed-login burst / mass export / mass delete) → AuditLog SECURITY_VIOLATION + optional webhook (Refs #685) |
+| `detect_breaches` | Hourly at :30 | Sidecar | Heuristics-based breach detection (eight kinds, [§ 6.5b](#65b-gdpr-art-3334--breach-notification-refs-685)) → AuditLog SECURITY_VIOLATION + optional webhook (Refs #685) |
 | `refresh_statistics_view` | Hourly at :15 | Sidecar | Refresh the materialized view `core_statistics_event_flat` (statistics dashboard) |
 | Invite token audit | Weekly, Sun 05:00 | Host | Track down orphaned invite user accounts (see [10](#10-invite-token-hygiene)); a plain `psql` query — the app container has no psql client |
 | Health check | Every 5 minutes | Host | Check availability (external monitoring, does not belong inside the monitored stack) |
@@ -1444,23 +1445,32 @@ SENTRY_TRACES_SAMPLE_RATE=0.1
 
 ### 6.5b GDPR Art. 33/34 — Breach Notification (Refs #685)
 
-Anlaufstelle must report data breaches to the supervisory authority within **72 hours** (Art. 33) and inform affected people directly when there is high risk (Art. 34). The code supports this through:
+The reporting duty under Art. 33/34 GDPR lies with the **controller**, i.e. the operator organization of the instance — not with the software and not with the project. The operator reports data breaches to the competent supervisory authority within **72 hours** (Art. 33) and informs affected people directly when there is high risk (Art. 34). The software supports this through:
 
 1. **Detection** — `python manage.py detect_breaches` runs hourly (cron) and writes an `AuditLog.Action.SECURITY_VIOLATION` entry for every finding.
-2. **Heuristics** (all configurable via settings):
-   - `failed_login_burst` — > `BREACH_FAILED_LOGIN_THRESHOLD` (default 20) failed attempts per user within `BREACH_DETECTION_WINDOW_MINUTES` (default 60 min)
-   - `mass_export` — > `BREACH_EXPORT_THRESHOLD` (default 10) exports per user within the window
-   - `mass_delete` — > `BREACH_DELETE_THRESHOLD` (default 50) deletes facility-wide within the window
-   - `mfa_failure_burst` (Refs #2033) — `BREACH_MFA_FAILURE_THRESHOLD` (default 10) failed second-factor verifications per user within the window; `MFA_FAILED` (TOTP) and `WEBAUTHN_FAILED` (passkey) count **together**, otherwise the threshold could be evaded by switching methods. Long window: `BREACH_MFA_FAILURE_THRESHOLD_LONG` (default 30). The threshold is deliberately lower than the one for `failed_login_burst`: whoever fails at the second factor already has the first one — the more serious attacker position, and OTP errors are rare by design.
+2. **Heuristics** (all configurable via settings; source: `src/core/services/compliance/breach_detection.py`, defaults in `src/anlaufstelle/settings/base.py`). Each kind has a **short window** (`BREACH_DETECTION_WINDOW_MINUTES`, default 60 min) and, where listed below, a **long window** against "low and slow" (`BREACH_DETECTION_LONG_WINDOW_MINUTES`, default 1440 min) with a higher threshold (`*_LONG`). At most one finding per kind and subject is created; the short window takes precedence.
+
+   | Kind (`kind`) | Counts | Short (default) | Long (default) | Subject |
+   |---|---|---|---|---|
+   | `failed_login_burst` | failed logins | `BREACH_FAILED_LOGIN_THRESHOLD` (20) | `…_LONG` (60) | per user |
+   | `mfa_failure_burst` (Refs #2033) | failed second-factor verifications; `MFA_FAILED` (TOTP) and `WEBAUTHN_FAILED` (passkey) count **together**, otherwise the threshold could be evaded by switching methods | `BREACH_MFA_FAILURE_THRESHOLD` (10) | `…_LONG` (30) | per user |
+   | `mass_export` | exports | `BREACH_EXPORT_THRESHOLD` (10) | `…_LONG` (30) | per user |
+   | `mass_delete` | deletions (`DELETE`) | `BREACH_DELETE_THRESHOLD` (50) | `…_LONG` (150) | facility |
+   | `mass_client_destruction` | destruction of persons (`CLIENT_SOFT_DELETED`, `CLIENT_ANONYMIZED`, `DELETION_APPROVED`) that `mass_delete` does not see | `BREACH_CLIENT_DESTRUCTION_THRESHOLD` (20) | `…_LONG` (60) | facility |
+   | `distributed_login_attack` | distinct source IPs against **one** account (distributed brute force) | `BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD` (10) | — | per user |
+   | `anonymous_login_burst` | failed logins against **unknown** usernames, per source IP | `BREACH_ANON_LOGIN_IP_THRESHOLD` (20) | — | source IP |
+   | `anonymous_login_flood` | the same, installation-wide total volume | `BREACH_ANON_LOGIN_TOTAL_THRESHOLD` (100) | — | installation |
+
+   The MFA threshold is deliberately lower than the one for `failed_login_burst`: whoever fails at the second factor already has the first one — the more serious attacker position, and OTP errors are rare by design.
 3. **Optional webhook** — `BREACH_NOTIFICATION_WEBHOOK_URL` env var; receives a POST with a JSON payload (kind, count, threshold, audit_id) on every new finding.
-4. **Deduplication** — within 24h, the same finding (kind + user) is only reported once in the `AuditLog`.
-5. **Detection warns, it does not lock out** — every heuristic is monitor-only: a hit writes a `SECURITY_VIOLATION` entry and optionally fires the webhook; it revokes **no** access and changes no password. False positives are therefore planned for and tolerable: a user with a series of typos on the authenticator, or a passkey the browser keeps rejecting, can trigger `mfa_failure_burst` (the threshold of 10 is deliberately low) — the consequence is a reviewable entry, never a lockout. Hard lockout remains the job of the independent account lockout (10 failed **logins** in 15 min, `manage.py unlock <username>`) and of the rate limits. In practice this means during triage in § "Manual Process": first check whether the time series of failures looks human (a few minutes, one source IP, success afterwards) or automated (evenly spread over hours, no success, possibly several IPs). Whoever permanently raises the threshold loses exactly the signal from scenario A7 (patient guessing of the second factor with a stolen password session) — so prefer tuning thresholds per instance over disabling the heuristic.
+4. **Deduplication** — within 24h, the same finding is only reported once in the `AuditLog`: per kind and user, for the anonymous findings per kind and source IP.
+5. **Detection warns, it does not lock out** — every heuristic is monitor-only: a hit writes a `SECURITY_VIOLATION` entry and optionally fires the webhook; it revokes **no** access and changes no password. False positives are therefore planned for and tolerable: a user with a series of typos on the authenticator, or a passkey the browser keeps rejecting, can trigger `mfa_failure_burst` (the threshold of 10 is deliberately low) — the consequence is a reviewable entry, never a lockout. Hard lockout remains the job of the independent account lockout (10 failed **logins** in 15 min, `manage.py unlock <username>`) and of the rate limits. In practice this means during triage in § "Manual Process": first read the kind of the finding. For findings with a user (`failed_login_burst`, `mfa_failure_burst`, `mass_export`, `distributed_login_attack`), check whether the time series of failures per user looks human (a few minutes, one source IP, success afterwards) or automated (evenly spread over hours, no success, possibly several IPs). Facility-wide findings (`mass_delete`, `mass_client_destruction`) carry no user: break down the facility's `AuditLog` entries in the window by user and target objects. The anonymous findings (`anonymous_login_burst`, `anonymous_login_flood`) carry neither user nor facility, only the source IP or the total volume: they indicate credential stuffing or username guessing; as long as no login succeeds, no account is affected — block source IPs at the reverse proxy. Whoever permanently raises the threshold loses exactly the signal from scenario A7 (patient guessing of the second factor with a stolen password session) — so prefer tuning thresholds per instance over disabling the heuristic.
 
 #### Manual Process on SECURITY_VIOLATION
 
-1. **T+0** — Check the `AuditLog` detail, identify affected users/data.
-2. **T+24h** — Escalate the matter to the [DPO/data protection officer](https://github.com/anlaufstelle/app/blob/main/SECURITY.md), produce a risk assessment. If the responsible primary person is unavailable, escalation is paused: as long as no second person is a maintainer, no **deputy** is currently designated ([MAINTAINERS.md](../../MAINTAINERS.md) (German), [GOVERNANCE.md § Escalation Path](../../GOVERNANCE.md) (German)) — an openly stated bus-factor-1 item.
-3. **T+72h** — Report to the supervisory authority (Bavaria: BayLDA; other German states analogously) + notify affected people if applicable.
+1. **T+0** — Check the `AuditLog` detail, identify affected users/data and pass the matter on to the operator's responsible body.
+2. **T+24h** — Escalate the matter to the **operator's data protection officer** (or the data protection office designated for it), produce a risk assessment. The project is not the addressee for this: a data breach of your own instance is reported to the operator, not through the vulnerability channel of the software project.
+3. **T+72h** — The operator reports to the competent supervisory authority (e.g. the state data protection commissioner for public bodies, the state supervisory authority for non-public bodies; which authority is competent depends on the operator and the German state) + notifies affected people if applicable.
 4. **Post-incident** — Lessons learned + adjust the heuristic thresholds.
 
 Setup: The `cron` sidecar runs `detect_breaches` hourly out of the box ([§ 3.1](#31-overview), [§ 3.2](#32-cron-sidecar-standard)); **no** additional cron entry is needed, a second line would run the job twice. Only without the sidecar does the line belong in the host crontab alternative from [§ 3.3](#33-host-cron-backup--remaining-host-jobs). Trigger a run immediately outside the schedule:
@@ -1471,9 +1481,9 @@ docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breache
 
 ### 6.5c Security Advisory — Report, Assessment, Publication (Refs #1895)
 
-Counterpart to § 6.5b: that section is about a **data breach in an operated instance** (GDPR Art. 33/34), this one is about a **vulnerability in the software itself**. The public commitment on this is in [SECURITY.md](../../SECURITY.md) (reporting channels, SLA, support rule); this section is the internal process behind it.
+Counterpart to § 6.5b: that section is about a **data breach in an operated instance** (GDPR Art. 33/34), this one is about a **vulnerability in the software itself**. The public commitment on this is in [SECURITY.md](../../SECURITY.md) (reporting channels, SLA, support rule); this section describes the process behind it.
 
-**Precondition:** "Private vulnerability reporting" must be enabled on `anlaufstelle/app` (Repo → *Settings* → *Advanced Security* → *Private vulnerability reporting* → *Enable*, or `gh api -X PUT repos/anlaufstelle/app/private-vulnerability-reporting`). This setting only exists for **public** repositories — the non-public repositories of the release pipeline are therefore out of scope. As long as it's off, the GHSA form link in `SECURITY.md` leads nowhere and **only the email route works** — status check:
+**Precondition:** "Private vulnerability reporting" must be enabled on `anlaufstelle/app` (Repo → *Settings* → *Advanced Security* → *Private vulnerability reporting* → *Enable*, or `gh api -X PUT repos/anlaufstelle/app/private-vulnerability-reporting`). This setting only exists for **public** repositories. As long as it's off, the GHSA form link in `SECURITY.md` leads nowhere and **only the email route works** — status check:
 
 ```bash
 gh api repos/anlaufstelle/app/private-vulnerability-reporting   # {"enabled": true} expected
@@ -1481,12 +1491,14 @@ gh api repos/anlaufstelle/app/private-vulnerability-reporting   # {"enabled": tr
 
 | # | Step | Who | Target |
 |---|---------|-----|----------|
-| 1 | **Intake** — report via GHSA form or email; confirm receipt, request reproduction steps | Maintainer, or the backup if unavailable ([MAINTAINERS.md](../../MAINTAINERS.md) (German)) | ≤ 5 business days |
-| 2 | **Assessment** — reproduce, CVSS v3.1 base score, classify critical/high/medium/low, result to the reporter | Maintainer/backup | ≤ 10 business days |
-| 3 | Create a **GHSA draft** (*Security* → *Advisories* → *New draft security advisory* on `anlaufstelle/app`), enter affected + patched versions, credit as the reporter wishes; for critical/high, request a CVE ID via GitHub | Maintainer/backup | with step 2 |
-| 4 | **Fix** — failing test first, patch release of the **current** minor series (support rule in `SECURITY.md`: no backports), commit with a `sec:` prefix and a reference to the advisory | Maintainer/backup | critical/high: 14–30 days |
-| 5 | **Publication** — publish the advisory (patch + 7-day grace period), a `Security` entry in the [CHANGELOG](../../CHANGELOG.md) with the GHSA/CVE number, hall-of-fame credit | Maintainer/backup | patch + 7 days |
-| 6 | **No fix** — justify the rejection (out-of-scope list in `SECURITY.md`), close the matter cleanly with the reporter | Maintainer/backup | ≤ 10 business days |
+| 1 | **Intake** — report via GHSA form or email; confirm receipt, request reproduction steps | Maintainer ([MAINTAINERS.md](../../MAINTAINERS.md) (German)) | ≤ 5 business days |
+| 2 | **Assessment** — reproduce, CVSS v3.1 base score, classify critical/high/medium/low, result to the reporter | Maintainer | ≤ 10 business days |
+| 3 | Create a **GHSA draft** (*Security* → *Advisories* → *New draft security advisory* on `anlaufstelle/app`), enter affected + patched versions, credit as the reporter wishes; for critical/high, request a CVE ID via GitHub | Maintainer | with step 2 |
+| 4 | **Fix** — failing test first, patch release of the **current** minor series (support rule in `SECURITY.md`: no backports), commit with a `sec:` prefix and a reference to the advisory | Maintainer | critical/high: 14–30 days |
+| 5 | **Publication** — publish the advisory (patch + 7-day grace period), a `Security` entry in the [CHANGELOG](../../CHANGELOG.md) with the GHSA/CVE number, hall-of-fame credit | Maintainer | patch + 7 days |
+| 6 | **No fix** — justify the rejection (out-of-scope list in `SECURITY.md`), close the matter cleanly with the reporter | Maintainer | ≤ 10 business days |
+
+**Deputy:** No deputy is designated; if the primary person is unavailable, the matter is paused (same wording as [SECURITY.md](../../SECURITY.md) (German) and [MAINTAINERS.md](../../MAINTAINERS.md) (German)).
 
 **Boundary:** A GHSA describes a vulnerability **in the Anlaufstelle code**. For vulnerable dependencies, § 8.3 applies (`pip-audit`/Dependabot) — there, the upstream advisory already exists, and a dedicated GHSA would be a duplicate report. A dedicated advisory is only warranted if the application exposes the upstream gap and operators therefore need to act.
 
@@ -1746,10 +1758,10 @@ Findings are logged with `reason=virus_detected` and the reported signature.
 
 ### 7.3 Health Check
 
-`GET /health/` additionally reports `"virus_scanner": "connected"|"unavailable"|"disabled"`
+`GET /health/` additionally reports to token or internal callers `"virus_scanner": "connected"|"unavailable"|"disabled"`
 as well as the alias `"clamav": "ok"|"error"|"disabled"` (Refs #798).
-With an active scanner and an unreachable daemon, the overall status is set to
-`"degraded"`, the HTTP status stays 200 (the hard block happens
+Anonymous callers see only `status`; with an active scanner and an unreachable
+daemon, the overall status is set to `"degraded"`, the HTTP status stays 200 (the hard block happens
 on upload, not on the health check). The container healthcheck in the Dockerfile
 reads the JSON `status` and reports unhealthy on `degraded`. The production Compose
 file overrides this image check: only `error` or HTTP 503 makes `web` unhealthy, so
@@ -1760,12 +1772,19 @@ token detail path, the compliance dashboard, and external monitoring (see the
 
 ### 7.4 Database Updates (Signatures)
 
-The named `clamav-db` volume persists the current signature state. In the
-shipped production stack, however, `clamav` is attached only to the isolated
-internal network and cannot reach the update servers; a successful automatic
-`freshclam` run is therefore **not** available. A signature reported as stale
-in the dashboard is not a transient startup condition. Check the logs and
-state:
+The named `clamav-db` volume persists the signature state. `freshclam` in the
+`clamav` container downloads signature updates over DNS/HTTPS and therefore
+needs outbound network access. `docker-compose.prod.yml` attaches `clamav` to
+two networks for this: the internal network `internal` (connection to `web`;
+`internal: true`, no access to the outside) and the separate network
+`clamav-egress` with outbound access. No other service is attached to
+`clamav-egress`. If the stack runs behind egress filtering, the host firewall
+must allow the ClamAV mirror domains (`database.clamav.net`); without access the
+signature state freezes.
+
+`docker-compose.dev.yml`, in contrast, attaches `clamav` only to `internal`:
+there is no update path, and the signature state stays at the state of the
+image. Check the logs and state:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log
@@ -1775,10 +1794,8 @@ docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 If the signature age cannot yet be determined during startup, the compliance
 status remains `unknown` instead of raising a warning. The check shows the first
 command above as its action hint. If `unknown` persists after startup, run the
-command and inspect the log for DNS, download, or mirror errors.
-
-Until an outbound update path or internal signature mirror is configured, the
-signature state remains frozen and the operational status remains open.
+command and inspect the log for DNS, download, or mirror errors; a signature
+reported as stale points to blocked egress.
 
 ### 7.5 Manual Check
 
@@ -1805,7 +1822,7 @@ are generated from them and committed.
 
 ```bash
 # 1. Add the dependency to requirements.in (runtime) or requirements-dev.in
-#    (dev/test) — with an open range, e.g. "Django>=5.1,<5.2".
+#    (dev/test) — with an open range, e.g. "Django>=6.1.1,<6.2".
 
 # 2. Regenerate the lock files (pip-tools must be installed):
 make deps-lock
@@ -1858,7 +1875,12 @@ funding, public procurement, supplier audits) and lists all direct and
 transitive Python dependencies with versions, licenses, and CVE status at
 build time.
 
-**Durable release artifact (Refs #1895):** The CI artifact expires after 90 days — for an older release, it was then no longer possible to prove which components it contained. That proof is meant to stay available permanently. The release build therefore additionally produces a **durable** SBOM `sbom-vX.Y.Z.json` (CycloneDX 1.6) from the lock files of the built tree — offline, without network access, and byte-identical on repetition. Scope: all Python distributions from `requirements.txt` (direct **and** transitive) plus all npm packages from `package-lock.json`. The four vendored frontend libs (htmx, Alpine CSP, Dexie, Chart.js) are listed in it as `required`, even though they are marked `dev` in the lockfile — they are shipped (`src/static/js/`) and run in users' browsers. Build/test tooling stays `optional`. Until `1.0`, the artifact stays with the maintainer (there is no GitHub release page until then) and is available via the contact in [SECURITY.md](../../SECURITY.md); from `1.0` on, it is attached to the GitHub release.
+**Durable release artifact (Refs #1895):** The CI artifact expires after 90 days; the proof of which components a release contains is meant to stay available permanently. The release build therefore additionally produces a **durable** SBOM `sbom-vX.Y.Z.json` (CycloneDX 1.6) from the lock files of the built tree — offline, without network access, and byte-identical on repetition. Scope: all Python distributions from `requirements.txt` (direct **and** transitive) plus all npm packages from `package-lock.json`. The four vendored frontend libs (htmx, Alpine CSP, Dexie, Chart.js) are listed in it as `required`, even though they are marked `dev` in the lockfile — they are shipped (`src/static/js/`) and run in users' browsers. Build/test tooling stays `optional`. When creating the GitHub release, the maintainer attaches the file as a **release asset** to the release page of [`anlaufstelle/app`](https://github.com/anlaufstelle/app/releases). Operators download it there; if the asset is missing on a release, the SBOM is available via the contact in [SECURITY.md](../../SECURITY.md).
+
+```bash
+# Download the release SBOM of the installed version
+gh release download vX.Y.Z -R anlaufstelle/app --pattern 'sbom-v*.json' --dir ./sbom-release
+```
 
 ```bash
 # Download the SBOM from the last successful test workflow run
@@ -1947,9 +1969,10 @@ request via `set_config(..., is_local=false)`.
 
 **Fail-closed:** If the variable is unset or empty (`NULL`),
 the policies return **no rows** — not even for the table
-owner (`FORCE ROW LEVEL SECURITY`). Bypass only for superuser DB
-roles; the Django DB user must therefore **not** be a superuser in
-production.
+owner (`FORCE ROW LEVEL SECURITY`). Only superuser and `BYPASSRLS`
+roles (the admin role is created that way) and sessions with `app.is_super_admin`
+set (OR branch of the policies) are exempt; the runtime Django DB user must
+therefore be neither a superuser nor carry `BYPASSRLS` in production.
 
 **Direct instead of join policy on `core_attachment` (Refs
 #1738,
@@ -1969,12 +1992,11 @@ loads a dedicated Postgres role ``rls_test_role`` (``NOSUPERUSER``)
 and verifies, via ``SET ROLE``, cross-tenant 0-rows for Client, Event,
 AuditLog, and Activity. This means the RLS protection has been functionally
 tested in CI — not just the existence of the policies. If the
-production DB user accidentally becomes a superuser, the cross-
-tenant test in CI does **not** fail (it uses the explicit test role),
-but the smoke query from § 9.2 below must return ``rolsuper =
-false`` for the Django DB user in prod.
+production DB user accidentally becomes a superuser or gains `BYPASSRLS`, the
+cross-tenant test in CI does **not** fail (it uses the explicit test role);
+`check_db_roles` and the health endpoint (next paragraph) catch this in prod.
 
-**Continuous monitoring instead of a one-off smoke query (Refs
+**Continuous monitoring (Refs
 #793):** The
 health endpoint now runs exactly this check on **every** call, on the
 live connection (``SELECT rolsuper, rolbypassrls … WHERE rolname =
@@ -1982,8 +2004,8 @@ current_user``). If the runtime role bypasses RLS, ``status`` falls permanently 
 ``degraded`` (HTTP stays 200) and token callers see the fields
 ``db_user_is_superuser``/``db_role_posture``; the detail additionally appears as a
 ``WARNING`` in the log (logger ``core.views.health``). This means a
-misconfigured cluster shows up in monitoring without anyone having to run the
-smoke query manually — field reference:
+misconfigured cluster shows up in monitoring without anyone having to query the
+roles manually — field reference:
 [docs/monitoring-guide.md](../monitoring-guide.md) (German). Boundary: ``check_db_roles``
 checks that the app/admin role **exist** in the catalog with the right
 attributes; the health endpoint checks **as whom** the application
@@ -2029,8 +2051,9 @@ Properties that the init script guarantees, verified in code:
   admin … TO app` automatically grants the app DML rights to every migrated
   table/sequence.
 
-Operator/maintenance tasks run exclusively in the opt-in `maintenance`
-service; only it loads the full `.env` and overrides
+Operator/maintenance tasks run in the opt-in `maintenance` service; the full
+`.env` is loaded by `maintenance` **and** the `cron` sidecar
+([§ 3.2](#32-cron-sidecar-standard)), and both override
 `POSTGRES_USER`/`POSTGRES_PASSWORD` with the admin role there. `web`, by contrast,
 gets an explicit runtime allowlist and sees neither the admin nor the bootstrap
 secret (Refs #1962). The
@@ -2049,10 +2072,12 @@ addressed under **two** names, and both must be fed from `${POSTGRES_USER}`:
 | Variable | Where it is set | Who reads it |
 |---|---|---|
 | `APP_DB_USER` | `environment:` of the **`db`** service | [`deploy/postgres-init/01-app-role.sh`](../../deploy/postgres-init/01-app-role.sh) — **creates** the role under this name |
-| `POSTGRES_APP_USER` | `environment:` of **`web`**, **`maintenance`**, **`cron`** | `check_db_roles` resp. `src/core/services/compliance/db_roles.py` — **checks** under this name; the same name is the addressee of conditional `GRANT`s |
+| `POSTGRES_APP_USER` | `environment:` of **`web`**, **`maintenance`**, **`cron`** | `check_db_roles` resp. `src/core/services/compliance/db_roles.py` — **checks** under this name |
 
-If the second name is missing, the check resp. the `GRANT` is skipped silently
-(no error, no log) — the defect only surfaces months later in operations.
+If the second name is missing, `check_db_roles` falls back to the database user
+of the connection (`src/core/services/compliance/db_roles.py`). In the
+`maintenance` service that is the admin role: the gate then checks the wrong
+role as the app role and reports a defect that is none, or misses a real one.
 
 **Existing clusters: the Compose fix is not retroactive.** The init script is
 **init-only** and runs solely when an empty `PGDATA` is created. On an already
@@ -2060,7 +2085,7 @@ existing volume (e.g. `*_pgdata_staging`) it neither creates new roles nor
 aligns existing ones with the env. Two ways forward:
 
 1. **Fresh volume** — dump/restore per
-   [§ 13.1](#131-prodstaging--preserving-data-maintenance-window). The simpler,
+   [§ 13.1](#131-procedure-with-data-preservation-maintenance-window). The simpler,
    already rehearsed path; the init script builds the target roles itself.
 2. **In-place rebuild** per
    [§ 9.6](#96-rolling-out-the-runtimeowner-role-split-to-existing-installations-a14).
@@ -2130,6 +2155,12 @@ Other host scripts do not recreate containers: `initial-setup.sh` uses the same
 list; `backup.sh`, `restore.sh` and `restore-drill.sh` at most stop services or
 start one-shots (`run --rm maintenance`).
 
+The rotation is **not a deployment**: all `compose run`/`up` steps use
+`--pull never` and therefore exactly the already-verified local images. This way
+neither a moved tag can switch the code mid-maintenance-window, nor can a
+registry outage block rotation or rollback. Always deploy and verify a new
+image separately before the maintenance window.
+
 **Prerequisites:** announce a maintenance window; make sure no
 backup/restore job is currently running; have a current, verified backup
 state; `.env` must have mode `600` (or stricter). The script needs Docker
@@ -2137,12 +2168,6 @@ access and `openssl`, but does **not** print any password to stdout/stderr or in
 process arguments. It generates three independent random values and
 internally, as the bootstrap superuser, issues a transaction following this
 pattern:
-
-The rotation is **not a deployment**: all `compose run`/`up` steps use
-`--pull never` and therefore exactly the already-verified local images. This way
-neither a moved tag can switch the code mid-maintenance-window, nor can a
-registry outage block rotation or rollback. Always deploy and verify a new
-image separately before the maintenance window.
 
 ```sql
 BEGIN;
@@ -2182,6 +2207,7 @@ Expected closing lines (role names may differ, secrets never appear). The script
 [db-password-rotation] Negativtest gruen: alter Login fuer Rolle anlaufstelle_admin wird mit Auth-Fehler abgewiesen.
 [db-password-rotation] Negativtest gruen: alter Login fuer Rolle postgres wird mit Auth-Fehler abgewiesen.
 [db-password-rotation] Rotation abgeschlossen. Backup-/Restore-Jobs lesen beim naechsten Lauf die neue Env-Datei.
+[db-password-rotation] Jetzt Passwort-Escrow und Notfallunterlagen aktualisieren (Ops-Runbook DB-Rotation).
 ```
 
 (English: "Negative test green: old login for role \<X> is rejected with an auth error." / "Rotation complete. Backup/restore jobs will read the new env file on their next run.")
@@ -2254,8 +2280,8 @@ subsequent queries in that session.
 |--------|---------|-----|
 | `current_setting(...)` returns `NULL` | The request came through with no auth user (e.g. a management command, cron) | Set it deliberately via `set_config` or `SET LOCAL` before the query |
 | The variable is set, but the list is empty anyway | The user is scoped to the wrong facility | Check `SELECT facility_id FROM core_user WHERE id=<user_id>` |
-| Migration `0047` not applied | `showmigrations core` shows `[ ]` | `python manage.py migrate core 0047` |
-| An admin query via `./manage.py shell` returns 0 rows | The shell session does not set the variable | Before queries: `connection.cursor().execute("SET app.current_facility_id = %s", [fid])` |
+| Migration `0047` not applied | `showmigrations core` shows `[ ]` | Run the migrate job (§ 1.2): `docker compose "${compose_files[@]}" run --rm --entrypoint=/app/docker-migrate.sh maintenance` |
+| An admin query via `./manage.py shell` returns 0 rows | The shell session does not set the variable | Inside `transaction.atomic()` before the queries: `connection.cursor().execute("SELECT set_config('app.current_facility_id', %s, true)", [fid])` (valid only until the end of the transaction) |
 
 Refs #542,
 #586.
@@ -2279,7 +2305,7 @@ management commands `enforce_retention`, `backfill_audit_chain`,
 #1058 — the RLS bypass guard
 otherwise aborts fail-loud) must therefore run as the **owner/admin role**
 (`POSTGRES_ADMIN_USER`) — this is already set up that way via the dedicated
-`maintenance` service (retention cron § 6). If such a
+`maintenance` service (retention job in the `cron` sidecar, [§ 3.2](#32-cron-sidecar-standard)). If such a
 command accidentally runs as the app role, the bypass aborts with `must be owner of
 table core_eventhistory` (since the ordering reversal in
 #2065,
@@ -2389,7 +2415,7 @@ window:
 
 Operational rules that follow from this:
 
-- Run the bypass commands `enforce_retention` (retention cron, § 6),
+- Run the bypass commands `enforce_retention` (retention job in the `cron` sidecar, § 3.2),
   `backfill_audit_chain`, and `reencrypt_fields` during **maintenance/off-peak
   hours** with low write load — not during peak time. This does not apply to the
   **interactive** Art. 17 action: it no longer takes any DDL lock in the web
@@ -2431,7 +2457,7 @@ admin role) needs a **one-off, maintainer-led** rebuild — brief downtime
 recommended (no write requests during it).
 
 > **The simpler, already rehearsed alternative:** dump → fresh volume → restore
-> per [§ 13.1](#131-prodstaging--preserving-data-maintenance-window). The init
+> per [§ 13.1](#131-procedure-with-data-preservation-maintenance-window). The init
 > script then builds the target roles correctly by itself and there is no
 > special case. The in-place rebuild below is only worth it when the maintenance
 > window for dump/restore would be too long. Refs
@@ -2954,8 +2980,8 @@ User.objects.filter(username='<username>').delete()
 "
 ```
 
-**Cron recommendation:** the weekly audit as a plain report query (see section
-[3.2](#32-cron-sidecar-standard)) — no automatic deletion, since an
+**Cron recommendation:** the weekly audit as a plain report query (host job, see
+[§ 3.3](#33-host-cron-backup--remaining-host-jobs)) — no automatic deletion, since an
 undelivered invite can also be a mail problem.
 
 Refs #528.
@@ -2998,22 +3024,34 @@ traffic, every 6 hours is also sufficient. The dashboard tolerates slight stalen
 | Artifact | Purpose | Command | Frequency |
 |----------|-------|--------|----------|
 | `core_statistics_event_flat` (MV) | Current runtime aggregates for the dashboard | `refresh_statistics_view` | Hourly |
-| `core_statisticssnapshot` (table) | Persistent monthly aggregates (outlives event retention) | `create_statistics_snapshots` | Monthly |
+| `core_statisticssnapshot` (table) | Persistent monthly aggregates; events deleted by retention keep counting as a carry-over (`_deleted`) | `create_statistics_snapshots` | Monthly |
 
 Both jobs are independent — snapshots stay correct even without the MV,
 and the MV can be refreshed even without snapshots.
 
 ### 11.4 Health Check
 
-```sql
--- Look up the last refresh time
-SELECT schemaname, matviewname, last_refresh
-FROM pg_stat_user_tables
-JOIN pg_matviews ON relname = matviewname
-WHERE matviewname = 'core_statistics_event_flat';
+PostgreSQL does not record a refresh time for materialized views. The last
+successful refresh is evidenced by the `MV_REFRESH_COMPLETED` marker that
+`refresh_statistics_view` writes to the audit log after every run. It appears in
+the compliance dashboard as the card "Statistik-View-Refresh"; in the `/health/`
+detail (token call), `stale_jobs` lists the key `mv_refresh_last_run` as soon as
+the last run is too long ago.
+
+Directly in the database (role `postgres` in the `db` container, see § 6.3;
+read-only):
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T db \
+  sh -c 'psql -U postgres -d "$POSTGRES_DB"' <<'SQL'
+-- Last refresh according to the marker
+SELECT max("timestamp") AS last_refresh
+FROM core_auditlog
+WHERE action = 'mv_refresh_completed';
 
 -- Check the row count (should roughly match the core_event count)
 SELECT count(*) FROM core_statistics_event_flat;
+SQL
 ```
 
 Refs #544.
@@ -3104,139 +3142,164 @@ On a domain change, `EXTERNAL_ORIGIN` must be updated along with it: already-sen
 
 ---
 
-## 13. PostgreSQL Major Upgrade (16 → 18)
+## 13. PostgreSQL Major Upgrade
 
-Refs #1039. PostgreSQL major versions have **incompatible data directories** — starting the new image in place on the old volume is impossible. Chosen and locally rehearsed path: **dump → fresh PG18 cluster → restore**. (`pg_upgrade` was rejected: the Alpine image only contains one binary major version, and PG18's `initdb` enables data checksums by default — a 16-series cluster without checksums would first have to be converted for that.)
+PostgreSQL major versions have **incompatible data directories** — starting the new image in place on the old volume is impossible. The procedure for every jump from major N to N+1 is **dump → fresh cluster → restore**. (`pg_upgrade` is not provided: the Alpine image contains only one binary major version, and newer `initdb` versions enable data checksums by default — a cluster without checksums would first have to be converted.)
 
-**Changed image layout from 18 on:** `PGDATA` now lives under `/var/lib/postgresql/18/docker`, and the image declares `VOLUME /var/lib/postgresql`. Since #1039, the compose files therefore mount the parent directory (`…:/var/lib/postgresql` instead of `…/data`). If the new build is accidentally started against an old 16-series volume, the entrypoint aborts **in a controlled way, with no data loss** ("there appears to be PostgreSQL data in: /var/lib/postgresql" + a hint).
+**Image layout:** The `postgres` image declares `VOLUME /var/lib/postgresql`, and `PGDATA` lives under `/var/lib/postgresql/<N>/docker`. The Compose files therefore mount the parent directory (`…:/var/lib/postgresql` instead of `…/data`). If you accidentally start a new image against a volume of the old major, the entrypoint aborts **in a controlled way without data loss** ("there appears to be PostgreSQL data in: /var/lib/postgresql" plus a hint).
 
-### 13.1 Prod/Staging — Preserving Data (Maintenance Window)
+### 13.1 Procedure with Data Preservation (Maintenance Window)
 
-Staging is identical, using `docker-compose.staging.yml`, `.env.staging`, and the volume `*_pgdata_staging`. The order is safety-critical: **roles before data** — the init script creates the app/admin role in the fresh cluster before the restore re-establishes ownership/grants (ADR-020). For staging this only holds from #2086 onwards: before that the stack did not mount `deploy/postgres-init` at all (§ 1.4). Every step must end without error before the next one starts — in particular the backup and the working dump (steps 1–2) before step 4 removes the volume; the block does not abort by itself on an error.
+The order is safety-critical: **roles before data** — the init script creates the app and admin roles in the fresh cluster before the restore re-establishes ownership and grants (ADR-020). The commands come in two blocks: **Prepare** (steps 0–3, nothing is deleted) and **Replace** (steps 4–10). The replace block removes the volume only if the working dump is confirmed as non-empty and readable (`dump_ok=yes`); for all other steps you stop yourself on an error before running the next one. Both blocks run in the **same** shell session (variables `dump`, `pg_volume`, `dump_ok`).
+
+The working dump and the volume tarball contain **plaintext data** (Art. 9 GDPR). They live in a directory only the executing user may read (`0700`), not in `/tmp`.
 
 ```bash
 cd /opt/anlaufstelle
 
-# Full Compose file list in fixed order (admin-guide § 1).
+# Complete Compose file list in a fixed order (admin-guide.md § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 
-# 0. Activate maintenance mode (§ 6.5a). web and cron keep running: backup.sh
+# Working directory (readable only by the executing user) and volume.
+umask 077
+install -d -m 0700 upgrade-work
+dump="$PWD/upgrade-work/pre-upgrade.dump"
+pg_volume=$(docker volume ls -q \
+    --filter label=com.docker.compose.project=anlaufstelle-prod \
+    --filter label=com.docker.compose.volume=pgdata)
+echo "Volume: ${pg_volume:-NICHT GEFUNDEN}"   # exactly one name, e.g. anlaufstelle-prod_pgdata
+
+# 0. Enable maintenance mode (§ 6.5a). web and cron keep running: backup.sh
 #    reads the media through web and the audit anchor through cron, so both
-#    services must be running for the backup.
+#    services must run for the backup.
 docker compose "${compose_files[@]}" exec -T web touch /data/anlaufstelle.maintenance
 
-# 1. Final encrypted backup (§ 1.1); db, web and cron must be running.
+# 1. Final encrypted backup (§ 1.1, restore § 6.6); db, web and cron must run.
 ./scripts/ops/backup.sh
 
-# 2. Quiesce the write paths (the DB stays reachable), then take the
-#    unencrypted working dump. The dump runs as the admin role (BYPASSRLS)
-#    over the container socket — like backup.sh; inside the db container the
-#    variable is called ADMIN_DB_USER. Only continue once the check prints
-#    a table of contents.
+# 2. Shut down the write paths (the DB stays reachable) — web AND cron, since
+#    the cron sidecar would otherwise keep writing (retention, MV refresh,
+#    breach scan) and those writes would be missing from the dump. Then take
+#    the unencrypted working dump. It runs as the admin role (BYPASSRLS) over
+#    the container socket like backup.sh; inside the db container the variable
+#    is called ADMIN_DB_USER. The check sets dump_ok=yes only if the file is
+#    not empty and pg_restore can read its table of contents.
 docker compose "${compose_files[@]}" stop web cron
-umask 077
 docker compose "${compose_files[@]}" exec -T db \
-    sh -c 'pg_dump -U "$ADMIN_DB_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
-docker compose "${compose_files[@]}" exec -T db pg_restore --list < /tmp/upgrade-pg16.dump | head -n 5
+    sh -c 'pg_dump -U "$ADMIN_DB_USER" -Fc -Z 6 "$POSTGRES_DB"' > "$dump"
+dump_ok=
+[[ -s "$dump" ]] \
+    && docker compose "${compose_files[@]}" exec -T db pg_restore --list < "$dump" > /dev/null \
+    && dump_ok=yes
+echo "dump_ok=${dump_ok:-nein}"   # must be "yes", otherwise do not run step 4
 
-# 3. Stop the DB, pull a volume tarball as a byte-exact rollback anchor
-#    (check the volume name: docker volume ls | grep pgdata)
+# 3. Stop the DB, take the volume tarball as a byte-exact rollback anchor.
 docker compose "${compose_files[@]}" stop db
-docker run --rm -v anlaufstelle_pgdata:/from -v "$PWD":/to alpine \
-    tar czf /to/pgdata-pg16.tar.gz -C /from .
+docker run --rm -v "$pg_volume":/from -v "$PWD/upgrade-work":/to alpine \
+    tar czf /to/pgdata-pre-upgrade.tar.gz -C /from .
+ls -l upgrade-work/
+```
 
-# 4. Remove the old DB container + volume — only AFTER steps 1–3!
-docker compose "${compose_files[@]}" rm -f db
-docker volume rm anlaufstelle_pgdata
+```bash
+cd /opt/anlaufstelle
 
-# 5. Bring in the new release state (postgres:18-alpine + new mount)
+# Complete Compose file list in a fixed order (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
+# 4. Remove the old DB container + volume — only with a confirmed dump, only
+#    after steps 1–3.
+if [[ "$dump_ok" == yes && -n "$pg_volume" ]]; then
+    docker compose "${compose_files[@]}" rm -f db
+    docker volume rm "$pg_volume"
+else
+    echo "ABBRUCH: Dump nicht bestätigt oder Volume unbekannt — nichts gelöscht." >&2
+fi
+```
+
+Continue only if step 4 does not print "ABBRUCH":
+
+```bash
+cd /opt/anlaufstelle
+
+# Complete Compose file list in a fixed order (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
+dump="$PWD/upgrade-work/pre-upgrade.dump"
+
+# 5. Roll out the new release (new postgres:<N+1>-alpine image and matching
+#    mount)
 git pull   # or the release package
 
-# 6. Bring up only the DB: a fresh initdb (PG 18, checksums on) + the init script
-#    creates the app/admin role. Wait until the final server answers on TCP
-#    (during initialization only a temporary server without a TCP port runs);
-#    only then can the restore run. The log must be error-free.
+# 6. Start only the DB: fresh initdb (checksums on) + the init script creates
+#    the app/admin role. Wait until the final server answers on TCP (during
+#    initialization only a temporary server without a TCP port runs); only then
+#    is the restore possible. The log must be free of errors.
 docker compose "${compose_files[@]}" up -d db
 docker compose "${compose_files[@]}" exec -T db sh -c 'until pg_isready -h 127.0.0.1 -U postgres -q; do sleep 1; done'
 docker compose "${compose_files[@]}" logs db | grep -icE 'error|fatal'   # 0
 
-# 7. Restore as the bootstrap superuser via the container socket (bypasses RLS/FORCE-RLS,
-#    like scripts/ops/restore-drill.sh; --clean/--if-exists is safe to rerun)
+# 7. Restore as the bootstrap superuser via the container socket (bypasses
+#    RLS/FORCE-RLS, like scripts/ops/restore-drill.sh; --clean/--if-exists is
+#    safe to re-run)
 docker compose "${compose_files[@]}" exec -T db \
-    sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
+    sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < "$dump"
 
 # 8. Verify: role gate, RLS active, spot checks
 docker compose "${compose_files[@]}" run --rm -T maintenance check_db_roles  # exit 0
 docker compose "${compose_files[@]}" exec -T db sh -c \
     'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"'   # > 0
 
-# 9. Migrations as a one-shot (usually a no-op) + bring up the stack + health (§ 1.2/1.3)
+# 9. Migrations as a one-shot (usually a no-op) + start the stack (web AND cron) + health (§ 1.2/1.3)
 docker compose "${compose_files[@]}" run --rm --entrypoint=/app/docker-migrate.sh maintenance
 docker compose "${compose_files[@]}" up -d web cron caddy
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
-# 10. Turn off maintenance mode. The working dump contains PLAINTEXT data — delete
-#     it immediately; discard the tarball after a grace period (e.g. 1 week).
+# 10. Maintenance mode off. The working dump contains PLAINTEXT data — delete it
+#     immediately; dispose of the tarball after the retention period (e.g. 1 week).
 docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.maintenance
-rm /tmp/upgrade-pg16.dump
+rm -f "$dump"
 ```
 
-If `pg_restore` reports a warning on `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, the data is still complete — afterwards, run the MV refresh once (§ 11).
+If `pg_restore` reports a warning at `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, the data is complete anyway — run the MV refresh once afterwards ([§ 11](#11-statistics-materialized-view)).
 
 ### 13.2 Rollback
 
-Primarily via the volume tarball (the exact 16-series byte state), alternatively the encrypted backup (§ 6):
+Primarily via the volume tarball (exact byte state of the old major), alternatively via the encrypted backup (§ 2.3, restore per § 6.6). The tarball lives in `upgrade-work/` (§ 13.1, step 3). The example assumes `pg_volume` from § 13.1 is set; otherwise determine it again first.
 
 ```bash
 cd /opt/anlaufstelle
 
-# Full Compose file list in fixed order (admin-guide § 1).
+# Complete Compose file list in a fixed order (admin-guide.md § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 
-# 1. Roll the compose state back: postgres:16-alpine + mount …:/var/lib/postgresql/data
+# 1. Revert the Compose state: image of the old major + the mount of that time
 git checkout <previous-state> -- docker-compose.prod.yml
 
-# 2. Remove the 18-series volume, restore the 16-series bytes
-docker compose "${compose_files[@]}" rm -f db
-docker volume rm anlaufstelle_pgdata && docker volume create anlaufstelle_pgdata
-docker run --rm -v anlaufstelle_pgdata:/to -v "$PWD":/from alpine \
-    tar xzf /from/pgdata-pg16.tar.gz -C /to
+# 2. Remove the volume of the new major, restore the old bytes
+docker compose "${compose_files[@]}" stop web cron
+docker compose "${compose_files[@]}" rm -sf db
+docker volume rm "$pg_volume" && docker volume create "$pg_volume"
+docker run --rm -v "$pg_volume":/to -v "$PWD/upgrade-work":/from alpine \
+    tar xzf /from/pgdata-pre-upgrade.tar.gz -C /to
 
-# 3. Bring up the stack + health
+# 3. Start the stack + health
 docker compose "${compose_files[@]}" up -d
 ```
 
-### 13.3 dev.anlaufstelle.app — Data Is Disposable
+### 13.3 Checks Before the Major Jump
 
-`pgdata_dev` only holds demo seed data (Refs #1039): no restore needed.
-
-```bash
-cd /opt/anlaufstelle
-docker compose -f docker-compose.dev.yml --env-file .env.dev stop db web
-docker compose -f docker-compose.dev.yml --env-file .env.dev rm -f db
-docker volume rm anlaufstelle_pgdata_dev
-# Deploy the new state (make deploy-dev from the operator machine): fresh
-# 18-series cluster + roles via the init script, migrate job, stack start.
-# Afterward, demo data: make dev-seed SEED_ARGS="--flush --scale=medium"
-```
-
-The complete path (init roles before data, superuser restore, `check_db_roles` exit 0, FORCE-RLS active, app role without bypass, MV refresh, rollback to 16) was rehearsed locally in Docker as part of #1039.
-
-### 13.4 Future Major Upgrades (18 → 19 and Beyond) — Forward Reference
-
-> **Placeholder (Refs #1039).** The **dump → fresh cluster → restore** path described above is the **generic pattern for every** PostgreSQL major jump, not just 16→18. Future upgrades (18→19 etc.) follow the same steps from §13.1/§13.2; essentially only the version numbers, the `postgres:<N>-alpine` image, and possibly the `PGDATA` mount path need adjusting, should a new image layout move the directory again (as the move to `/var/lib/postgresql/18/docker` did for 18).
-
-Before the next major jump, check:
-
-- **Release notes of the target major** for incompatible changes (data format, removed functions, changed defaults — e.g. data checksums by default for 18).
-- **Image layout/`VOLUME` path** of the new `postgres:<N>-alpine` — if it changes, update the mounts in all compose files (`prod`/`staging`/`dev`), analogous to #1039.
+- **Release notes of the target major** for incompatible changes (data format, removed functions, changed defaults — e.g. data checksums by default).
+- **Image layout/`VOLUME` path** of the new `postgres:<N>-alpine`: if it changes, adjust the mounts in all Compose files.
 - **Availability of `pg_dump`/`pg_restore` of the target major** in the image (cross-version dump compatibility).
-
-This note is deliberately kept brief; the detailed, locally rehearsed procedure stays in §13.1–§13.3 and will be made concrete under a new issue when the next actual upgrade happens.
+- **Disk space** for the working dump and the volume tarball next to the running volume.
 
 ---
 
@@ -3253,7 +3316,7 @@ Django deploy check       docker compose -f docker-compose.prod.yml exec web pyt
 Retention dry run         docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run
 Snapshot dry run          docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics_snapshots --dry-run
 MV refresh                docker compose -f docker-compose.prod.yml run --rm maintenance refresh_statistics_view
-Check RLS session var     psql -c "SELECT current_setting('app.current_facility_id', true);"
+Check DB roles/RLS        docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 Stop the stack            docker compose -f docker-compose.prod.yml down
 Start the stack           docker compose "${compose_files[@]}" up -d   (file list: § 1.2)
 Regenerate lock files     make deps-lock
@@ -3263,7 +3326,7 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 2cddf643c55c60add7f0d8d3dbb4012c01096618 -->
+<!-- source-hash: 85ac86a9ef1f928c7c93dc1e3201635d337dcbd0 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
