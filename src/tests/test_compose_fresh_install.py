@@ -131,14 +131,26 @@ def test_clamav_egress_guard_accepts_default_network() -> None:
     assert _clamav_egress_violations(compose) == []
 
 
-CLAMAV_COMPOSE_FILES = sorted(
-    str(path.relative_to(REPO_ROOT))
-    for path in [*REPO_ROOT.glob("docker-compose*.yml"), *REPO_ROOT.glob("dev-ops/deploy/*/docker-compose*.yml")]
-    if "clamav:" in path.read_text(encoding="utf-8")
-)
+def _compose_candidates() -> list[Path]:
+    candidates = list(REPO_ROOT.glob("docker-compose*.yml"))
+    if (REPO_ROOT / "dev-ops").exists():  # dev-ops/ is stripped from the public snapshot
+        candidates += REPO_ROOT.glob("dev-ops/deploy/*/docker-compose*.yml")
+    return candidates
+
+
+try:
+    CLAMAV_COMPOSE_FILES = sorted(
+        str(path.relative_to(REPO_ROOT))
+        for path in _compose_candidates()
+        if "clamav:" in path.read_text(encoding="utf-8")
+    )
+except OSError:  # compose files stripped from this tree (mutation runs)
+    CLAMAV_COMPOSE_FILES = []
 
 
 def test_every_compose_file_with_a_clamav_service_is_covered() -> None:
+    if not (REPO_ROOT / "docker-compose.demo.yml").exists():
+        pytest.skip("docker-compose.demo.yml is not in the public snapshot")
     assert {
         "docker-compose.yml",
         "docker-compose.prod.yml",

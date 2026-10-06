@@ -16,8 +16,9 @@ TRACKED_PATTERNS = [
     "scripts/*.sh",
     "scripts/ops/*.sh",
     "scripts/ops/lib/*.sh",
-    "dev-ops/deploy/*.sh",
 ]
+if (REPO_ROOT / "dev-ops").exists():  # dev-ops/ is stripped from the public snapshot
+    TRACKED_PATTERNS.append("dev-ops/deploy/*.sh")
 REFERENCE = re.compile(r"(?P<doc>docs/[\w./-]+\.md)\s+§\s*(?P<section>\d+(?:\.\d+)?[a-z]?)(?![\w.]*\d)")
 HEADING_NUMBER = re.compile(r"^#{2,4}\s+(?P<number>\d+(?:\.\d+)?[a-z]?)\.?\s")
 

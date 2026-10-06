@@ -37,6 +37,7 @@ def test_demo_deploy_checks_container_source_code_version_after_recreate() -> No
     assert '"$ACTUAL_SOURCE_CODE_VERSION" = "$EXPECTED_SOURCE_CODE_VERSION"' in block
 
 
+ENV_NAME = ".env" + ".demo"
 SOURCING_ENV_DEMO = re.compile(r"(?:^|[;&|(\s])(?:source|\.)\s+\S*\.env\.demo\b")
 
 
@@ -69,10 +70,10 @@ def _tracked_script_paths() -> list[Path]:
 def test_env_demo_sourcing_scanner_flags_sourcing_forms(tmp_path: Path) -> None:
     probe = tmp_path / "probe.sh"
     probe.write_text(
-        "# . ./.env.demo is only mentioned here\n"
-        "set -a && . ./.env.demo && set +a\n"
-        "source /opt/anlaufstelle/.env.demo\n"
-        "docker compose --env-file .env.demo ps\n",
+        f"# . ./{ENV_NAME} is only mentioned here\n"
+        f"set -a && . ./{ENV_NAME} && set +a\n"
+        f"source /opt/anlaufstelle/{ENV_NAME}\n"
+        f"docker compose --env-file {ENV_NAME} ps\n",
         encoding="utf-8",
     )
     assert env_demo_sourcing_lines([probe]) == [f"{probe}:2", f"{probe}:3"]

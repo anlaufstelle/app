@@ -29,9 +29,12 @@ def digests_by_image(files: dict[str, str]) -> dict[str, set[str]]:
 
 
 def _compose_files() -> dict[str, str]:
+    patterns = ["docker-compose*.yml"]
+    if (REPO_ROOT / "dev-ops").exists():  # dev-ops/ is stripped from the public snapshot
+        patterns.append("dev-ops/deploy/*/docker-compose*.yml")
     try:
         listed = subprocess.run(
-            ["git", "ls-files", "docker-compose*.yml", "dev-ops/deploy/*/docker-compose*.yml"],
+            ["git", "ls-files", *patterns],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
