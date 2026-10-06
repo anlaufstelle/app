@@ -536,3 +536,54 @@ class TestDeletionConceptAuditLog:
         audit_deadlines = _section(vvt, "### 3.4 Löschfristen", "---")
         assert "Historien-Redaktion" in audit_deadlines
         assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in audit_deadlines
+
+
+# ---------------------------------------------------------------------------
+# Domain concept: retention periods and RLS coverage (Refs #2425, #2445)
+# ---------------------------------------------------------------------------
+
+
+def _bullet(text: str, title: str) -> str:
+    start = text.index(f"- **{title}**")
+    end = text.find("\n- **", start + 1)
+    return _flat(text[start : end if end != -1 else len(text)])
+
+
+@pytest.mark.architecture
+class TestDomainConceptRetentionAndRls:
+    def test_premise_tables_outside_rls(self):
+        from tests.test_rls import EXPECTED_TABLES, NOT_RLS_SCOPED
+
+        assert set(NOT_RLS_SCOPED) == {"core_user"}
+        for table in ("core_user", "core_facility", "core_organization"):
+            assert table not in EXPECTED_TABLES, table
+
+    def test_rls_bullet_derives_tables_and_names_its_limits(self):
+        bullet = _bullet(DOMAIN_CONCEPT_DE.read_text(encoding="utf-8"), "Row Level Security (RLS).")
+        assert re.search(r"derzeit \d+", bullet) is None
+        assert "nicht zu Cross-Facility-Datenleaks führen" not in bullet
+        for required in (
+            "EXPECTED_TABLES",
+            "core_user",
+            "core_facility",
+            "core_organization",
+            "Materialized-View",
+            "app.is_super_admin",
+            "BYPASSRLS",
+        ):
+            assert required in bullet, required
+
+    def test_english_rls_bullet_names_its_limits(self):
+        privacy = _section(
+            _flat(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8")), "## Privacy Architecture", "## Role Model"
+        )
+        for required in ("EXPECTED_TABLES", "core_user", "core_facility", "core_organization", "BYPASSRLS"):
+            assert required in privacy, required
+
+    def test_retention_bullets_name_open_case_gap_and_hold_record(self):
+        de = _bullet(DOMAIN_CONCEPT_DE.read_text(encoding="utf-8"), "Löschfristen.")
+        for required in ("offenen Fall", "zuerst ablaufende", "ohne Freigabe", "Person oder Fall"):
+            assert required in de, required
+        en = _bullet(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8"), "Retention periods.")
+        for required in ("open case", "expires first", "without approval", "person or case"):
+            assert required in en, required
