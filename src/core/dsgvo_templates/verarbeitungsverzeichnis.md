@@ -114,3 +114,4 @@ Bestreitet eine betroffene Person die Richtigkeit ihrer Daten (Art. 18 Abs. 1 li
 - Aufbewahrung: {{ auditlog_retention_months }} Monate rollierend, danach automatische Löschung (`0` schaltet die Löschung **ab**)
 - Ebenfalls dauerhaft: der Nachweis je Charge der Historien-Redaktion (er belegt, dass die Unveränderlichkeit für bestimmte Zeilen legitim geöffnet wurde, und enthält Anzahl, Fristgrenze und Chargengrenzen — keine Inhalte)
 - Dauerhaft ausgenommen (wortgleich zur DSFA § 2.3, Frist 7): protokollierte Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs und der Nachweis herausgegebener Berichtszeiträume. Letzterer enthält Zeitraum, Format und die auslösende Person; Empfänger und Zweck sind ungeprüfter Freitext (organisatorische Vorgabe: Organisation statt Ansprechperson eintragen)
+- Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log; weitere Ausnahmen gibt es nicht

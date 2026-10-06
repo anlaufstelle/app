@@ -24,7 +24,7 @@ jeder Änderung ihrer Einstellungen oder Backup-Rotation.
 | Abweichende Frist einzelner Dokumentationstypen | {{ retention_document_type_overrides }} | `DocumentType.retention_days` | Zusätzliche Frist für Ereignisse dieses Typs (ab Zeitpunkt des Ereignisses): Es gilt die zuerst ablaufende Frist. Eine längere Typ-Frist verlängert die kontaktstufenbezogene Frist nicht |
 | Aktivitäten / Zeitstrom-Einträge | {{ retention_activities_days }} Tage | `retention_activities_days` | Harte Löschung |
 | Papierkorb für gelöschte Personen und Fälle | {{ client_trash_days }} Tage | `client_trash_days` | Automatische Anonymisierung; bis dahin Wiederherstellung möglich |
-| Audit-Log | {{ auditlog_retention_months }} Monate | `auditlog_retention_months` | Rollierende Löschung; `0` deaktiviert sie, gesetzliche und technische Ausnahmen siehe § 3.4 |
+| Audit-Log | {{ auditlog_retention_months }} Monate | `auditlog_retention_months` | Rollierende Löschung; `0` deaktiviert sie, gesetzliche und technische Ausnahmen siehe § 3.3 |
 | Inhalte früherer Fassungen eines Ereignisses | {{ eventhistory_detail_months }} Monate | `eventhistory_detail_months` | Die Werte der Fassung werden gelöscht, die Fassung selbst (Zeitpunkt, handelnde Person, Feldnamen) bleibt; `0` deaktiviert diese Frist. Bei einem **gelöschten** Ereignis geschieht dasselbe unabhängig von dieser Frist, regulär mit dem nächsten Aufbewahrungslauf (Ausnahmen § 3.1) |
 | Chronologie früherer Fassungen (nach ihrer Inhalts-Löschung) | {{ eventhistory_chronicle_months }} Monate | `eventhistory_chronicle_months` | Die inhaltsleere Fassung wird gelöscht; gemessen ab dem Zeitpunkt ihrer Inhalts-Löschung. `0` deaktiviert die Löschung — dann wird die Chronologie unbefristet aufbewahrt |
 | Monatliche Statistik-Aggregate | unbefristet | — | Bleiben bestehen: Der Aufbewahrungslauf rechnet die Zählwerte jedes gelöschten Ereignisses zusammen mit dessen Löschung dem Aggregat seines Monats hinzu, auch im laufenden Monat; spätere Neuberechnungen behalten sie (siehe § 3.5) |
@@ -111,9 +111,16 @@ organisatorisch zu behandeln.
 
 Das Audit-Log wird rollierend nach `auditlog_retention_months` bereinigt. Der
 Wert `0` schaltet die reguläre Löschung ab. Sicherheitsverstöße,
-System-Marker des Aufbewahrungslaufs und Nachweise herausgegebener
-Berichtszeiträume bleiben von der regulären Frist ausgenommen. Diese Ausnahmen
-sind bei der Festlegung und Prüfung des Löschkonzepts gesondert zu bewerten.
+System-Marker des Aufbewahrungslaufs (Laufabschluss und Kontrollpunkte der
+Audit-Bereinigung), Nachweise der Redaktion der Ereignis-Historie und
+Nachweise herausgegebener Berichtszeiträume bleiben von der regulären Frist
+ausgenommen. Weitere Ausnahmen gibt es nicht: Aufbewahrungssperren (Legal Hold)
+wirken nicht auf das Audit-Log, auch nicht auf Einträge zu einer gesperrten
+Person, einem gesperrten Fall oder Ereignis. Soll ein Audit-Eintrag länger
+erhalten bleiben, ist er vor Ablauf der Frist organisatorisch zu sichern (etwa
+über den Audit-Export der Systemadministration) oder die Frist anzuheben.
+Diese Ausnahmen sind bei der Festlegung und Prüfung des Löschkonzepts
+gesondert zu bewerten.
 
 ### 3.4 Sicherungsstände
 

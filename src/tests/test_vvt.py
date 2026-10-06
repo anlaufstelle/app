@@ -316,6 +316,26 @@ class TestProcessingActivitiesContent:
         assert not any("nicht im Backup ueberleben" in tom for tom in toms)
         assert any("Rotation" in tom and "Aufbewahrungslauf" in tom for tom in toms)
 
+    def test_case_data_retention_names_additional_type_period_and_deletion_effect(self):
+        """The type period is additional (first expiry wins); deletion empties content, no k-anonymisation."""
+        retention = str(get_activity("falldaten")["retention_period"])
+
+        assert "Pro Dokumentationstyp konfigurierbar" not in retention
+        assert "k-anonymisiert" not in retention
+        assert "zusätzlich" in retention
+        assert "zuerst ablaufende" in retention
+        assert "sofort geleert" in retention
+        assert "Aufbewahrungssperre" in retention
+
+    def test_audit_log_retention_names_exemptions_and_no_legal_hold(self):
+        """``prune_auditlog`` excludes only ``PRUNE_EXEMPT_Q``; a legal hold protects no audit entry."""
+        retention = str(get_activity("auditlog")["retention_period"])
+
+        assert "per LegalHold" not in retention
+        assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in retention
+        for exemption in ("Sicherheitsverstöße", "Ereignis-Historie", "Berichtszeiträume"):
+            assert exemption in retention, exemption
+
     def test_data_subject_rights_match_implemented_paths(self):
         purpose = str(get_activity("dsgvo_requests")["purpose"])
 
@@ -490,3 +510,50 @@ class TestVVTHelpers:
 
     def test_get_activity_unknown_returns_none(self):
         assert get_activity("does-not-exist") is None
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
+class TestAuditLogPruningIgnoresLegalHolds:
+    """Premise of the VVT and deletion concept wording: holds do not reach the audit log."""
+
+    def test_premise_prune_exemptions_are_action_based(self):
+        from core.retention.audit_pruning import PRUNE_EXEMPT_ACTIONS
+
+        assert set(PRUNE_EXEMPT_ACTIONS) == {
+            AuditLog.Action.SECURITY_VIOLATION,
+            AuditLog.Action.RETENTION_RUN_COMPLETED,
+            AuditLog.Action.AUDIT_PRUNE_CHECKPOINT,
+            AuditLog.Action.EVENT_HISTORY_REDACTED,
+        }
+
+    def test_audit_entry_about_held_event_is_pruned(self, facility, settings_obj, sample_event, lead_user):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from core.models import LegalHold
+        from core.services.retention import prune_auditlog
+
+        settings_obj.auditlog_retention_months = 24
+        settings_obj.save()
+        hold = LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=sample_event.pk,
+            reason="Open incident",
+            created_by=lead_user,
+        )
+        entry = AuditLog.objects.create(
+            facility=facility,
+            user=lead_user,
+            action=AuditLog.Action.EXPORT,
+            target_type="Event",
+            target_id=str(sample_event.pk),
+        )
+
+        prune_auditlog(facility, settings_obj, now=timezone.now() + timedelta(days=25 * 31))
+
+        assert not AuditLog.objects.filter(pk=entry.pk).exists()
+        hold.refresh_from_db()
+        assert hold.is_active

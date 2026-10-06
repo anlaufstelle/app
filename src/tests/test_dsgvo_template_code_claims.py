@@ -21,6 +21,7 @@ Three claim families are pinned against the implementation:
   promising that every administrative read is logged.
 """
 
+import re
 import time
 import uuid
 from pathlib import Path
@@ -477,3 +478,61 @@ class TestOfflineRecoveryDocs:
         ):
             assert required in current, required
         _assert_recovery_claims_name_both_inputs("en summary", current, "readable again", RECOVERY_CONDITIONS_EN)
+
+
+# ---------------------------------------------------------------------------
+# Deletion concept: cross references and audit log exemptions (Refs #2425)
+# ---------------------------------------------------------------------------
+
+_SECTION_REF_RE = re.compile(r"§ (\d+(?:\.\d+)*)")
+_HEADING_RE = re.compile(r"^#{2,4} (\d+(?:\.\d+)*)\.? (.+)$", re.MULTILINE)
+
+
+@pytest.fixture
+def deletion_concept(facility):
+    return render_document("loeschkonzept", facility)[0]
+
+
+def _headings(content: str) -> dict[str, str]:
+    return {number: title for number, title in _HEADING_RE.findall(content)}
+
+
+@pytest.mark.django_db
+class TestDeletionConceptAuditLog:
+    def test_internal_section_references_resolve(self, deletion_concept):
+        headings = _headings(deletion_concept)
+        ref_lines = [line for line in deletion_concept.splitlines() if "siehe §" in line]
+        refs = {ref for line in ref_lines for ref in _SECTION_REF_RE.findall(line)}
+        assert refs
+        for ref in refs:
+            assert ref in headings, ref
+
+    def test_audit_log_row_points_to_audit_log_section(self, deletion_concept):
+        headings = _headings(deletion_concept)
+        row = next(line for line in deletion_concept.splitlines() if line.startswith("| Audit-Log |"))
+        refs = _SECTION_REF_RE.findall(row)
+        assert refs, row
+        for ref in refs:
+            assert "Audit-Log" in headings[ref], (ref, headings.get(ref))
+
+    def test_audit_log_section_names_every_exemption_and_no_hold(self, deletion_concept):
+        section = _flat(_section(deletion_concept, "### 3.3 Audit-Log", "### 3.4"))
+        for exemption in (
+            "Sicherheitsverstöße",
+            "System-Marker des Aufbewahrungslaufs",
+            "Ereignis-Historie",
+            "herausgegebener Berichtszeiträume",
+        ):
+            assert exemption in section, exemption
+        assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in section
+
+    def test_dsfa_and_vvt_template_name_history_proof_and_no_hold(self, facility):
+        dsfa_row = next(
+            line for line in render_document("dsfa", facility)[0].splitlines() if line.startswith("| 7 | Audit-Log |")
+        )
+        assert "Historien-Redaktion" in dsfa_row
+        assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in dsfa_row
+        vvt = _flat(render_document("verarbeitungsverzeichnis", facility)[0])
+        audit_deadlines = _section(vvt, "### 3.4 Löschfristen", "---")
+        assert "Historien-Redaktion" in audit_deadlines
+        assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in audit_deadlines

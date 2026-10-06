@@ -88,12 +88,15 @@ def _retention_values(settings_obj) -> dict[str, int]:
 
 
 def _backup_retention_days() -> int:
-    """Aeussere Backup-Frist fuer das Loeschkonzept (Refs #2050).
+    """Age limit of the longest local backup tier for the deletion concept (Refs #2050, #2464).
 
-    ``backup.sh`` rotiert den laengsten (monatlichen) Sicherungsstand nach 90
-    Tagen. Der Dokumentationswert bleibt deshalb an das ausgelieferte Skript
-    gepinnt. Eine abweichende betriebliche Rotation muss die Einrichtung im
-    freigegebenen Loeschkonzept organisatorisch dokumentieren.
+    ``backup.sh`` removes monthly archives locally with ``find -mtime +90``:
+    an archive becomes eligible once it is older than 90 full days and is
+    only removed by a later successful run (rotation is skipped after an
+    off-site failure), and off-site copies are never deleted by the script.
+    The value is therefore a minimum age pinned to the shipped script, not a
+    deadline. A facility with a different rotation documents it
+    organisationally in its approved deletion concept.
     """
     return DEFAULT_BACKUP_RETENTION_DAYS
 

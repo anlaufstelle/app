@@ -150,10 +150,20 @@ PROCESSING_ACTIVITIES = [
                 "Foerdermittelgeber/Behoerden (Sachbericht-Export)"
             ),
         ],
+        # Refs #2462: the document type period is an additional strategy
+        # (``enforce_document_type_retention``), not a replacement of the
+        # stage period. ``_soft_delete_events`` empties the content at once;
+        # k-anonymity only exists in the reporting layer, not in retention.
         "retention_period": _(
-            "Pro Dokumentationstyp konfigurierbar; Default an Kontaktstufe "
-            "der zugehoerigen Person gebunden. Sensible Inhalte werden "
-            "vor Loeschung k-anonymisiert oder redigiert."
+            "Ereignisse folgen den Fristen der Kontaktstufe ihrer Person "
+            "(siehe Verarbeitung „Personen-Stammdaten“); eine Frist am "
+            "Dokumentationstyp gilt zusätzlich, es gilt die zuerst "
+            "ablaufende. Die Löschung setzt das Ereignis auf gelöscht: "
+            "Zusatzfelder und Suchtext werden sofort geleert, Dateianhänge "
+            "gelöscht; die Werte früherer Fassungen redigiert regulär der "
+            "Aufbewahrungslauf. Fälle haben keine eigene Frist, Episoden und "
+            "Wirkungsziele folgen ihrem Fall. Daten unter einer "
+            "Aufbewahrungssperre (Legal Hold) sind ausgenommen."
         ),
         "toms": [
             _("Sensitivitaets-basierte Sichtbarkeit (je Dokumentationstyp, einzelne Feldvorlagen koennen sie anheben)"),
@@ -242,12 +252,16 @@ PROCESSING_ACTIVITIES = [
                 "Aufruf)"
             ),
         ],
+        # Refs #2425: ``prune_auditlog`` only spares ``PRUNE_EXEMPT_Q``; it
+        # never consults ``LegalHold``, so no hold can extend an audit entry.
         "retention_period": _(
-            "Standardmaessig 24 Monate rollierend. Pruning durch "
-            "geplanten ``enforce_retention``-Job, Konfiguration pro "
-            "Installation. Audit-Eintraege zu offenen Vorfaellen "
-            "koennen per LegalHold ueber die Standardfrist hinaus "
-            "aufbewahrt werden."
+            "Standardmäßig 24 Monate rollierend, je Einrichtung einstellbar "
+            "(0 schaltet die Löschung ab). Bereinigung durch den täglichen "
+            "``enforce_retention``-Lauf. Ausgenommen bleiben "
+            "Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs, "
+            "Nachweise der Redaktion der Ereignis-Historie und Nachweise "
+            "herausgegebener Berichtszeiträume. Aufbewahrungssperren (Legal "
+            "Hold) wirken nicht auf das Audit-Log."
         ),
         "toms": [
             _("Append-Only durch DB-Konvention und RLS-Policies"),

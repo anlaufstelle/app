@@ -638,6 +638,15 @@ class TestRetentionDashboardView:
         assert 'id="summary-held"' in content
         assert 'id="summary-approved"' in content
 
+    def test_help_text_does_not_promise_approval_before_deletion(self, client, lead_user, facility, proposal):
+        """Refs #2425: the regular run deletes without approval; only a legal hold protects."""
+        client.force_login(lead_user)
+        content = " ".join(client.get(reverse("core:retention_dashboard")).content.decode().split())
+        assert "Erst eine berechtigte Entscheidung gibt eine Löschung frei" not in content
+        assert "löscht abgelaufene Ereignisse ohne Freigabe" in content
+        assert "Aufbewahrungssperre (Legal Hold)" in content
+        assert "enforce_retention --propose" in content
+
     def test_category_sections_have_ids(self, client, lead_user, facility, proposal):
         """Each category section gets an id so it can be linked to from elsewhere."""
         client.force_login(lead_user)

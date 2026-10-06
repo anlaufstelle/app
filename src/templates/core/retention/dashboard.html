@@ -6,7 +6,7 @@
 {% block content %}
 <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Löschfristen" %}</h1>
 {% url 'core:help_page' 'datenschutz' as retention_help_url %}
-{% trans "Löschfristen erzeugen prüfbare Vorschläge. Erst eine berechtigte Entscheidung gibt eine Löschung frei, stellt sie zurück oder verwirft sie." as retention_help_text %}
+{% trans "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus. Vorschläge erscheinen hier nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist. Zurückstellen oder Verwerfen hält die Löschung nicht auf." as retention_help_text %}
 {% trans "Wie funktionieren Löschfristen?" as retention_help_label %}
 <div class="mb-4">{% include "components/_context_help.html" with help_id="retention" help_text=retention_help_text help_url=retention_help_url summary_label=retention_help_label only %}</div>
 
