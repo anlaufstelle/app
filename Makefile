@@ -47,7 +47,7 @@ db:
 		-e POSTGRES_DB=anlaufstelle \
 		-e POSTGRES_USER=anlaufstelle \
 		-e POSTGRES_PASSWORD=anlaufstelle \
-		-p 5432:5432 \
+		-p 127.0.0.1:5432:5432 \
 		postgres:18-alpine
 
 db-stop:

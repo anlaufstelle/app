@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Keine.
 
+### Fixed
+
+- **`make db` veröffentlicht PostgreSQL nur noch auf Loopback** (#2420) — Das native Entwicklungsrezept bindet Port 5432 an `127.0.0.1`; LAN-Zugriff bleibt eine bewusste Betreiberentscheidung.
+
 ### Docs
 
 - **Demo-Footer und Container-Version bleiben beim Release-Deploy synchron** (#2408) — `deploy-demo.sh` übernimmt keinen alten `SOURCE_CODE_VERSION`-Wert mehr aus `.env.demo` und bricht ab, wenn der laufende Web-Container vom Release abweicht.

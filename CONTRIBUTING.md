@@ -134,6 +134,8 @@ make db
 
 Das startet einen PostgreSQL-18-Container mit folgenden Zugangsdaten:
 
+Der Port ist dabei ausschließlich über `127.0.0.1:5432` erreichbar. Einen Zugriff aus dem LAN musst du bewusst über ein eigenes Docker- oder Firewall-Setup freigeben.
+
 | Variable  | Wert          |
 |-----------|---------------|
 | DB-Name   | anlaufstelle  |

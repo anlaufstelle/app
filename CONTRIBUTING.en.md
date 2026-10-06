@@ -5,6 +5,7 @@
 > Synchronization update 2026-09-18: the coding conventions now link to the binding German-language guidelines (#2250).
 > Synchronization update 2026-09-21: the DCO section now documents the local pre-PR range check (#2239).
 > Synchronization update 2026-09-22: the scale profiles table now includes the `demo` profile with all six demo scenarios (#2279).
+> Synchronization update 2026-10-06: the native database setup now documents the loopback-only port binding (#2420).
 
 # Contributing to Anlaufstelle
 
@@ -136,6 +137,8 @@ make db
 ```
 
 This starts a PostgreSQL 18 container with the following credentials:
+
+The port is bound to `127.0.0.1:5432` only. To allow LAN access, configure that deliberately through your own Docker or firewall setup.
 
 | Variable  | Value         |
 |-----------|---------------|
@@ -1013,4 +1016,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: 8cb31bbf4d746323dc94b8be103116091e169827 -->
+<!-- source-hash: 1daffc3258aaea6be8a545e4654e458a4b334aeb -->
