@@ -999,6 +999,7 @@ class TestDbRoleChecksBuildsCompleteCards:
             assert isinstance(check.label, str), f"{key}: label ist Pflichtfeld (str), nicht None"
             assert check.label.strip(), f"{key}: label darf nicht leer sein"
 
+    @pytest.mark.django_db  # web runtime: marker lookup, empty log (Refs #2415)
     def test_admin_missing_card_carries_message_detail_and_hint(self, monkeypatch):
         """Pinnt Pflichtfelder + Wortlaut der "Admin-DB-Rolle"-Karte gegen
         Feld-Verlust (``label``/``message``/``action_hint`` -> ``None``,

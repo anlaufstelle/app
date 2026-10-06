@@ -17,10 +17,17 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import timedelta
 
 from django.conf import settings
-from django.db import connection
+from django.db import DatabaseError, connection, transaction
+from django.utils import timezone
+from django.utils.translation import gettext as _
 
+from core.models import AuditLog
+from core.services import ops_thresholds
+from core.services.audit import audit_event
+from core.services.compliance import _clock
 from core.services.compliance._types import ComplianceCheck, ComplianceStatus
 from core.utils.migration_guards import connection_bypasses_rls
 
@@ -256,6 +263,188 @@ def check_db_roles() -> tuple[list[RoleCheck], list[str]]:
     return checks, config_errors
 
 
+# ---------------------------------------------------------------------------
+# DB_ROLES_VERIFIED marker (Refs #2415)
+# ---------------------------------------------------------------------------
+# The web container cannot check the admin role (no credentials, Refs #1962).
+# ``manage.py check_db_roles`` runs in the maintenance service on every deploy
+# and records its outcome as a system AuditLog row; the dashboard card reads
+# the latest one. The row is append-only and HMAC-chained, so it carries only
+# the fixed vocabularies below — never a role name, a password or a DSN.
+
+DB_ROLES_RESULT_OK = "ok"
+DB_ROLES_RESULT_PROBLEMS = "problems"
+DB_ROLES_RESULT_INCOMPLETE = "incomplete"
+DB_ROLES_RESULTS = (DB_ROLES_RESULT_OK, DB_ROLES_RESULT_PROBLEMS, DB_ROLES_RESULT_INCOMPLETE)
+
+DB_ROLES_PROBLEM_CODES = (
+    "app_role_not_configured",
+    "app_role_missing",
+    "app_role_superuser",
+    "app_role_bypassrls",
+    "admin_role_not_configured",
+    "admin_role_missing",
+    "admin_role_superuser",
+    "admin_role_no_bypassrls",
+    "ownership",
+)
+
+# (RoleCheck.label, code for "not configured", "missing", "rolsuper differs", "rolbypassrls differs")
+_ROLE_CODES = (
+    ("App", "app_role_not_configured", "app_role_missing", "app_role_superuser", "app_role_bypassrls"),
+    ("Admin", "admin_role_not_configured", "admin_role_missing", "admin_role_superuser", "admin_role_no_bypassrls"),
+)
+
+_MARKER_TARGET_TYPE = "DbRoleCheck"  # pragma: no mutate
+
+
+def db_roles_result(checks: list[RoleCheck], ownership_problems: list[str]) -> tuple[str, list[str]]:
+    """Map one ``check_db_roles`` run onto ``(result, problem codes)``.
+
+    ``ok`` only when both roles were configured, found and correct and the
+    ownership check is clean. A role that could not be checked at all (its
+    name is not configured) makes the run ``incomplete`` — the command exits 0
+    in that case when the app role is fine, which must not read as verified.
+    Any wrong or missing role and any ownership finding make it ``problems``.
+    """
+    by_label = {check.label: check for check in checks}
+    findings: list[str] = []
+    unconfigured: list[str] = []
+    for label, not_configured, missing, superuser, bypassrls in _ROLE_CODES:
+        check = by_label.get(label)
+        if check is None:
+            unconfigured.append(not_configured)
+            continue
+        if not check.exists:
+            findings.append(missing)
+            continue
+        if check.actual_super != check.expected_super:
+            findings.append(superuser)
+        if check.actual_bypassrls != check.expected_bypassrls:
+            findings.append(bypassrls)
+    if ownership_problems:
+        findings.append("ownership")
+    if findings:
+        return DB_ROLES_RESULT_PROBLEMS, findings + unconfigured
+    if unconfigured:
+        return DB_ROLES_RESULT_INCOMPLETE, unconfigured
+    return DB_ROLES_RESULT_OK, []
+
+
+def record_db_roles_marker(checks: list[RoleCheck], ownership_problems: list[str]) -> str | None:
+    """Write the ``DB_ROLES_VERIFIED`` marker; return why it was skipped, or ``None``.
+
+    Never raises for the expected deployment states, because the caller is
+    the deploy gate and its exit code must stay the role result alone:
+
+    * no AuditLog table yet — ``check_db_roles`` runs before the first
+      ``migrate`` (``docker-migrate.sh``, ``scripts/initial-setup.sh``);
+    * no RLS bypass on this connection — like the other maintenance commands
+      the marker is written only by the admin role (or a super-admin GUC);
+    * the INSERT fails — the gate runs before ``migrate``, so the AuditLog
+      columns of the new code may not exist yet. The failure is reported and
+      the dashboard simply keeps the previous marker.
+    """
+    if AuditLog._meta.db_table not in connection.introspection.table_names():
+        return "DB_ROLES_VERIFIED marker skipped: the AuditLog table does not exist yet (run migrate first)."
+    # Lazy import: core.services.system imports core.services.compliance.
+    from core.services.system import has_rls_bypass_context
+
+    if not has_rls_bypass_context():
+        return (
+            "DB_ROLES_VERIFIED marker skipped: this connection cannot bypass RLS "
+            "(run check_db_roles in the maintenance service)."
+        )
+    result, problems = db_roles_result(checks, ownership_problems)
+    try:
+        with transaction.atomic():
+            audit_event(
+                AuditLog.Action.DB_ROLES_VERIFIED,
+                user=None,
+                facility=None,
+                target_type=_MARKER_TARGET_TYPE,
+                detail={"result": result, "problems": problems},
+            )
+    except DatabaseError as exc:
+        # Class name only: the driver message may echo SQL parameters.
+        return f"DB_ROLES_VERIFIED marker not written ({exc.__class__.__name__}); the role check result is unaffected."
+    return None
+
+
+def _latest_db_roles_marker() -> AuditLog | None:
+    """Latest system-wide ``DB_ROLES_VERIFIED`` row; facility-bound rows never count."""
+    return (
+        AuditLog.objects.filter(action=AuditLog.Action.DB_ROLES_VERIFIED, facility__isnull=True)
+        .order_by("-timestamp")
+        .only("timestamp", "detail")
+        .first()
+    )
+
+
+def _db_role_marker_check(entry) -> ComplianceCheck:
+    """Admin role card from the latest maintenance result (Refs #2415).
+
+    Green only for a fresh row whose result is exactly ``ok`` with no problem
+    codes. Anything this function does not recognise is critical: the row can
+    only come from ``record_db_roles_marker``, so a malformed one is itself a
+    finding, never a pass.
+    """
+    detail = entry.detail if isinstance(entry.detail, dict) else {}
+    result = detail.get("result")
+    problems = detail.get("problems")
+    codes_readable = isinstance(problems, list) and all(isinstance(code, str) for code in problems)
+    checked_at = f"{timezone.localtime(entry.timestamp):%Y-%m-%d %H:%M}"
+    checked = _("Geprüft am %(checked_at)s mit manage.py check_db_roles im Wartungsdienst.") % {
+        "checked_at": checked_at
+    }
+    findings = ", ".join(problems) if codes_readable and problems else "—"
+    rerun_hint = _("docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles erneut ausführen.")
+
+    if result == DB_ROLES_RESULT_OK and problems == []:
+        age = _clock.now() - entry.timestamp
+        if age <= timedelta(days=ops_thresholds.DB_ROLES_CHECK_WARN_DAYS):
+            return ComplianceCheck(
+                key="db_role_admin",
+                label="Admin-DB-Rolle",  # pragma: no mutate
+                category="Datenbank",  # pragma: no mutate
+                status=ComplianceStatus.OK,
+                message=_("Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS), App-Rolle und Ownership ebenfalls."),
+                detail=checked,
+            )
+        return ComplianceCheck(
+            key="db_role_admin",
+            label="Admin-DB-Rolle",  # pragma: no mutate
+            category="Datenbank",  # pragma: no mutate
+            status=ComplianceStatus.WARNING,
+            message=_("Letzte Rollenprüfung ist älter als %(days)s Tage.")
+            % {"days": ops_thresholds.DB_ROLES_CHECK_WARN_DAYS},
+            detail=checked,
+            action_hint=rerun_hint,
+        )
+    if result == DB_ROLES_RESULT_INCOMPLETE and codes_readable:
+        return ComplianceCheck(
+            key="db_role_admin",
+            label="Admin-DB-Rolle",  # pragma: no mutate
+            category="Datenbank",  # pragma: no mutate
+            status=ComplianceStatus.WARNING,
+            message=_("Rollenprüfung unvollständig: nicht jede Rolle ist konfiguriert."),
+            detail=_("%(checked)s Befunde: %(findings)s") % {"checked": checked, "findings": findings},
+            action_hint=_(
+                "POSTGRES_ADMIN_USER und POSTGRES_ADMIN_PASSWORD in der .env setzen "
+                "(Drei-Rollen-Modell, docs/ops-runbook.md § 9)."
+            ),
+        )
+    return ComplianceCheck(
+        key="db_role_admin",
+        label="Admin-DB-Rolle",  # pragma: no mutate
+        category="Datenbank",  # pragma: no mutate
+        status=ComplianceStatus.CRITICAL,
+        message=_("Letzte Rollenprüfung meldet Befunde."),
+        detail=_("%(checked)s Befunde: %(findings)s") % {"checked": checked, "findings": findings},
+        action_hint=_("Ausgabe von manage.py check_db_roles im Wartungsdienst prüfen (docs/ops-runbook.md § 9)."),
+    )
+
+
 def _db_role_checks() -> list[ComplianceCheck]:
     """Drei Checks: App-NOSUPERUSER, App-NOBYPASSRLS, Admin-Rolle vorhanden."""
     role_checks, config_errors = check_db_roles()
@@ -274,8 +463,12 @@ def _db_role_checks() -> list[ComplianceCheck]:
     # Config-Errors (z.B. POSTGRES_ADMIN_USER fehlt): ob das ein Befund oder
     # nur die dokumentierte Secret-Grenze ist, entscheidet die Prozessrolle —
     # siehe :func:`_db_role_admin_missing_check` (Refs #2310).
+    # Refs #2415: in the web runtime the latest maintenance result stands in
+    # for the check this process cannot run. The maintenance process must have
+    # the credentials itself, so there the marker is never consulted.
     if config_errors and not any(rc.label == "Admin" for rc in role_checks):
-        out.append(_db_role_admin_missing_check(config_errors))
+        marker = None if _runs_as_maintenance_process() else _latest_db_roles_marker()
+        out.append(_db_role_admin_missing_check(config_errors) if marker is None else _db_role_marker_check(marker))
 
     return out
 

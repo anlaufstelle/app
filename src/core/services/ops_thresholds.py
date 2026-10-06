@@ -64,3 +64,10 @@ RETENTION_CRITICAL_HOURS = DAILY_JOB_CRITICAL_HOURS
 
 AUDIT_CHAIN_WARN_HOURS = DAILY_JOB_WARN_HOURS
 AUDIT_CHAIN_CRITICAL_HOURS = DAILY_JOB_CRITICAL_HOURS
+
+# Refs #2415: ``check_db_roles`` is not a cron job — it runs on every deploy
+# (``docker-migrate.sh``) and during the initial setup. A green result older
+# than this is shown as a warning: the role topology has not been confirmed
+# for a month. Not derived from a run interval, so no CRITICAL step; an old
+# result is not evidence of a broken topology.
+DB_ROLES_CHECK_WARN_DAYS = 30

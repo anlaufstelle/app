@@ -76,6 +76,9 @@ def _card(checks, key: str):
     return next(c for c in checks if c.key == key)
 
 
+# Database access: in the web runtime the card looks up the latest
+# ``DB_ROLES_VERIFIED`` marker (Refs #2415); an empty log keeps it neutral.
+@pytest.mark.django_db
 class TestWebRuntimeWithoutAdminCredentials:
     """Der Bug aus Refs #2310: stehende Warnung auf korrekter Installation."""
 
@@ -183,6 +186,7 @@ class TestRealFindingsStayVisible:
 
         assert _card(checks, "db_role_admin").status == ComplianceStatus.CRITICAL
 
+    @pytest.mark.django_db  # web runtime: marker lookup (Refs #2415)
     def test_app_role_superuser_stays_critical(self, monkeypatch):
         checks = _checks(
             monkeypatch,

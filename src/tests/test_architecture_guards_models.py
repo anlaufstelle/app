@@ -986,6 +986,10 @@ class TestTenantModelScopeGuard:
             "Letzte verifizierte Wiederherstellung der INSTANZ (Backup ist nicht "
             "facility-granular) — deploymentweite Betriebskennzahl."
         ),
+        "compliance/db_roles.py:_latest_db_roles_marker:AuditLog": (
+            "Letztes Ergebnis von check_db_roles (Refs #2415) — die DB-Rollen gelten "
+            "fuer die ganze Instanz; gelesen werden nur System-Zeilen (facility IS NULL)."
+        ),
         "compliance/cron.py:_latest:AuditLog": (
             "Letzter Lauf eines Hintergrundjobs; die Jobs laufen instanzweit, ihre "
             "Audit-Zeilen tragen keine sinnvolle Facility-Einschraenkung."

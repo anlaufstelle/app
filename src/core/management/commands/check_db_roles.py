@@ -22,6 +22,12 @@ Exit-Codes:
 
 Wird vom Compliance-Dashboard (#919) ueber dieselbe Hilfsfunktion
 :func:`core.services.compliance.db_roles.check_db_roles` konsumiert.
+
+Refs #2415: every run that queried the roles also leaves a system AuditLog
+marker with its outcome (:func:`core.services.compliance.db_roles.record_db_roles_marker`)
+— the web container cannot check the admin role itself and shows that marker
+instead. Writing the marker never changes the exit code; a skipped marker is
+reported on stderr.
 """
 
 from __future__ import annotations
@@ -33,6 +39,7 @@ from core.services.compliance.db_roles import (
     check_db_ownership,
     check_db_roles,
     current_connection_bypasses_rls,  # noqa: F401 — Re-Export, siehe test_connection_bypassrls.py
+    record_db_roles_marker,
 )
 
 
@@ -66,6 +73,12 @@ class Command(BaseCommand):
         ownership_problems = check_db_ownership()
         for problem in ownership_problems:
             self.stderr.write(self.style.ERROR(f"FAIL  {problem}"))
+
+        # Refs #2415: record the outcome for the dashboard before deciding the
+        # exit code; the marker never influences it.
+        skipped = record_db_roles_marker(checks, ownership_problems)
+        if skipped:
+            self.stderr.write(self.style.WARNING(f"WARN  {skipped}"))
 
         if config_errors and not checks:
             # Nur Konfigurationsfehler, keine sinnvollen Checks moeglich.

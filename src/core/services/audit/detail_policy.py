@@ -283,6 +283,12 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "trigger": "Ausloeser eines Loesch-/Entsperr-Vorgangs — feste Slugs",
     "unlocked_by": "Art der Lockout-Aufhebung — feste Slugs",
     "kind": "Art eines Breach-Detection-Treffers — feste Slugs",
+    # Refs #2415: DB_ROLES_VERIFIED marker of ``check_db_roles``. Both values
+    # come from fixed vocabularies in ``core.services.compliance.db_roles``
+    # (DB_ROLES_RESULTS / DB_ROLES_PROBLEM_CODES); role names, passwords and
+    # DSNs are deliberately never written.
+    "result": "Ergebnis der DB-Rollenpruefung (ok/problems/incomplete) — feste Slugs",
+    "problems": "Befundcodes der DB-Rollenpruefung — feste Slugs, nie Rollennamen oder Zugangsdaten",
     "admin_view": "Django-Admin-Sicht des protokollierten Lesezugriffs (Refs #1341) — feste Slugs",
     "source": "Herkunft einer Ereignis-Loeschung — feste Slugs",
     "document": "Slug des abgerufenen DSGVO-Dokuments — feste Liste",

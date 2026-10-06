@@ -21,7 +21,11 @@ def test_missing_cron_markers_point_to_the_compose_sidecar() -> None:
 
 
 def test_missing_admin_role_points_to_the_maintenance_service() -> None:
-    with patch.object(db_roles, "check_db_roles", return_value=([], ["Admin-Rolle fehlt"])):
+    # Fresh install: no maintenance result recorded yet (Refs #2415).
+    with (
+        patch.object(db_roles, "check_db_roles", return_value=([], ["Admin-Rolle fehlt"])),
+        patch.object(db_roles, "_latest_db_roles_marker", return_value=None),
+    ):
         check = db_roles._db_role_checks()[0]
     assert check.action_hint is not None
     assert "web-Container nicht pruefbar" in check.action_hint

@@ -30,6 +30,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`make db` veröffentlicht PostgreSQL nur noch auf Loopback** (#2420) — Das native Entwicklungsrezept bindet Port 5432 an `127.0.0.1`; LAN-Zugriff bleibt eine bewusste Betreiberentscheidung.
 - **Locust-Login und Statistikbegründung an den aktuellen Seed angepasst** (#2421) — Das Lasttestprofil nutzt vorhandene Fachkonten, erkennt fehlgeschlagene Anmeldungen und Login-Weiterleitungen, ordnet Exporte der Einrichtungsleitung zu und verlinkt das Statistik-MV-Issue korrekt.
 - **Demo-Footer und Container-Version bleiben beim Release-Deploy synchron** (#2408) — `deploy-demo.sh` übernimmt keinen alten `SOURCE_CODE_VERSION`-Wert mehr aus `.env.demo` und bricht ab, wenn der laufende Web-Container vom Release abweicht.
+### Added
+
+- **Compliance-Dashboard zeigt das Ergebnis der DB-Rollenprüfung** (#2415) — `check_db_roles` hinterlegt nach jedem Lauf im Wartungsdienst sein Ergebnis ohne Rollennamen oder Zugangsdaten im Audit-Log, und die Karte „Admin-DB-Rolle“ zeigt es an: nach dem Deploy `ok` mit Prüfzeitpunkt, bei Befunden `critical`, bei unvollständiger oder über 30 Tage alter Prüfung `warning`.
 
 ### Docs
 

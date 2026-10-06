@@ -198,6 +198,14 @@ class AuditLog(models.Model):
         # wurde. Wird NUR nach vollstaendig gruenem Lauf geschrieben; ein
         # Tamper-Fund beendet den Command vorher mit Exit != 0.
         AUDIT_CHAIN_VERIFIED = "audit_chain_verified", _("Audit-Ketten-Prüfung abgeschlossen")
+        # Refs #2415: Result of ``manage.py check_db_roles``. The web container
+        # has no admin DB credentials (Refs #1962) and cannot check the admin
+        # role itself; the maintenance run records its result here and the
+        # compliance dashboard reads the latest row. Written after every run
+        # that queried the roles, so a failing run supersedes an older green
+        # one. ``detail`` carries only fixed slugs (``result``, ``problems``),
+        # never role names, passwords or a DSN.
+        DB_ROLES_VERIFIED = "db_roles_verified", _("DB-Rollen-Prüfung abgeschlossen")
         # Refs #1070: Tombstone-Marker, der beim Pruning den entry_hash der
         # juengsten geloeschten Zeile (``boundary_hash``) festhaelt. Die
         # HMAC-Kette wird nie umgeschrieben — der Checkpoint legitimiert die

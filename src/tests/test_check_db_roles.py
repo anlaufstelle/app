@@ -197,8 +197,13 @@ class TestCheckDbRolesFunction:
         assert all(not c.ok for c in checks)
 
 
+@pytest.mark.django_db
 class TestCommandExitCodes:
-    """Smoke: management-command exit-codes via SystemExit."""
+    """Smoke: management-command exit-codes via SystemExit.
+
+    Database access: every run also writes the ``DB_ROLES_VERIFIED`` marker
+    (Refs #2415).
+    """
 
     def test_exit_0_when_all_ok(self, monkeypatch, settings):
         monkeypatch.setitem(settings.DATABASES["default"], "USER", "app")
@@ -409,6 +414,7 @@ class TestCheckDbOwnership:
 
         assert cmd.check_db_ownership() == []
 
+    @pytest.mark.django_db  # the run writes the DB_ROLES_VERIFIED marker (Refs #2415)
     def test_command_exits_1_when_app_owns_appendonly_table(self, monkeypatch, settings):
         # Deploy-Gate-Verhalten: Rollen-Attribute korrekt, aber App ist noch
         # Owner (Bestands-DB) -> das Kommando MUSS mit Exit 1 abbrechen.
