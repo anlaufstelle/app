@@ -131,3 +131,15 @@ def test_lead_user_measures_the_statistics_dashboard() -> None:
     locustfile.HeavyExportUser.statistics(user)
 
     assert client.requests == [("/statistics/?zeitraum=letzte30", {"catch_response": True, "name": "/statistics"})]
+
+
+def test_authenticated_request_marks_login_redirect_as_failure() -> None:
+    response = FakeResponse("login", url="http://testserver/login/")
+    client = FakeClient(FakeResponse(""), authenticated_response=response)
+    user = object.__new__(locustfile.AuthenticatedUser)
+    user.client = client
+    user.host = "http://testserver"
+
+    user._get_authenticated("/clients/", name="/clients/")
+
+    assert response.failure_messages == ["authenticated request was redirected to login"]
