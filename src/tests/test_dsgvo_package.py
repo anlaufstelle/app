@@ -573,6 +573,11 @@ def _effect_cell(content: str, label_part: str) -> str:
     raise AssertionError(f"no table row containing {label_part!r}")
 
 
+def _flat(content: str) -> str:
+    """Rendered document with all whitespace runs collapsed, so prose checks ignore line wrapping."""
+    return " ".join(content.split())
+
+
 @pytest.mark.django_db
 class TestDocumentTypePeriodIsAdditional:
     """Refs #2462: a document-type period never extends the contact-stage period.
@@ -636,12 +641,13 @@ class TestBackupDeletionBoundary:
         offsite = _effect_cell(content, "Off-Site-Kopien der Sicherungsstände")
         assert "`backup.sh` löscht am Off-Site-Ziel nichts" in offsite
         assert "ausgesetzt" in _effect_cell(content, "Backup-Sicherungsstände")
-        assert "setzt\n`backup.sh` die lokale Rotation aus" in content
-        assert "ausgesetzte lokale Rotation" in content
-        assert "spätestens mit der planmäßigen Rotation des letzten sie enthaltenden Sicherungsstands" not in content
+        prose = _flat(content)
+        assert "setzt `backup.sh` die lokale Rotation aus" in prose
+        assert "ausgesetzte lokale Rotation" in prose
+        assert "spätestens mit der planmäßigen Rotation des letzten sie enthaltenden Sicherungsstands" not in prose
 
     def test_toms_name_local_rotation_and_offsite_policy(self, facility):
-        content, _ = render_document("toms", facility)
+        content = _flat(render_document("toms", facility)[0])
 
         assert "Lokale Rotation" in content
         assert "Off-Site-Kopien löscht `backup.sh` nicht" in content
@@ -686,7 +692,7 @@ class TestRetentionRunNeedsNoApproval:
 
     @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
     def test_templates_separate_regular_run_proposal_run_and_four_eyes(self, facility, slug):
-        content, _ = render_document(slug, facility)
+        content = _flat(render_document(slug, facility)[0])
 
         assert "ohne Freigabe" in content
         assert "enforce_retention --propose" in content
@@ -696,14 +702,14 @@ class TestRetentionRunNeedsNoApproval:
 
     @pytest.mark.parametrize("slug", ["informationspflichten", "verarbeitungsverzeichnis"])
     def test_period_start_is_named_per_stage(self, facility, slug):
-        content, _ = render_document(slug, facility)
+        content = _flat(render_document(slug, facility)[0])
 
         assert "letztem Kontakt" not in content
         assert "ab dem jeweiligen Kontakt" in content
         assert "ab Abschluss des Falls" in content
 
     def test_information_notice_names_exceptions_of_automatic_deletion(self, facility):
-        content, _ = render_document("informationspflichten", facility)
+        content = _flat(render_document("informationspflichten", facility)[0])
 
         assert "Nach Ablauf der Frist werden die Daten automatisch gelöscht." not in content
         assert "Aufbewahrungssperre" in content
@@ -714,7 +720,7 @@ class TestRetentionRunNeedsNoApproval:
 
         effect = _effect_cell(content, "Monatliche Statistik-Aggregate")
         assert "bleiben bestehen" in effect.lower()
-        assert "k-Anonymitäts" in content
+        assert "k-Anonymitäts-Schwelle" in _flat(content)
 
     def test_vvt_view_names_period_start_per_stage(self):
         from core.services.compliance import get_activity
@@ -803,7 +809,7 @@ class TestQualifiedPeriodNeedsClosedCase:
 
     @pytest.mark.parametrize("slug", ["informationspflichten", "verarbeitungsverzeichnis"])
     def test_stage_tables_name_the_gap(self, facility, slug):
-        content, _ = render_document(slug, facility)
+        content = _flat(render_document(slug, facility)[0])
 
         assert "keinem Fall zugeordnet" in content
         assert "noch offenen Fall" in content

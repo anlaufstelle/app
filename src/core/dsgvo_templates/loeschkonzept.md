@@ -121,7 +121,8 @@ Off-Site-Ziel nichts. Dort verschwinden die Inhalte erst durch eine eigene
 Aufbewahrungsregel am Ziel (etwa eine Lebenszyklus-Regel des Speicherdienstes),
 deren Frist die Einrichtung in § 2 einträgt.
 
-Der Aufbewahrungslauf läuft nach der nächtlichen Sicherung. Eine Sicherung
+In der empfohlenen Zeitplanung (Sicherung 02:00, Aufbewahrungslauf 03:00)
+läuft der Aufbewahrungslauf nach der nächtlichen Sicherung. Eine Sicherung
 enthält deshalb auch die Daten, die der Lauf kurz danach löscht; sie bleiben bis
 zur Rotation dieses Sicherungsstands erhalten. Backups dürfen nur zur
 Wiederherstellung verwendet werden, nicht als Facharchiv. Nach einem Restore

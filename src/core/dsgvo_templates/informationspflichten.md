@@ -76,10 +76,10 @@ kann die Einrichtung eine kürzere Frist festlegen.
 Für die Stufe „Mit Zusatzangaben“ gilt die Frist nur für Kontakte, die einem
 abgeschlossenen Fall zugeordnet sind. Kontakte dieser Stufe, die
 keinem Fall zugeordnet sind oder zu einem noch offenen Fall gehören, werden
-über diese Frist nicht gelöscht; eine automatische Löschung erfolgt für sie nur, wenn die
-Einrichtung für die Art des Kontakts eine eigene Frist festgelegt hat. Solange
-solche Kontakte bestehen, werden auch die Angaben zu Ihrer Person nicht
-anonymisiert.
+über diese Frist nicht gelöscht; automatisch gelöscht werden sie nur, wenn
+die Einrichtung für die Art des Kontakts eine eigene Frist festgelegt hat.
+Solange solche Kontakte bestehen, werden auch die Angaben zu Ihrer Person
+nicht anonymisiert.
 
 Nach Ablauf der Frist löscht ein täglicher automatischer Lauf die Inhalte des
 Kontakts. Sind alle Kontakte zu Ihrer Person gelöscht, werden auch die Angaben
