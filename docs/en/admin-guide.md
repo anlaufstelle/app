@@ -3,6 +3,7 @@
 > Synchronization update 2026-10-06: § 2.5 the retention period of a documentation type applies in addition to the contact-stage period -- whichever expires first applies, a longer type period extends nothing (#2462).
 > Synchronization update 2026-10-06: § 5.5 states when the “Admin DB role” card keeps showing the previous state (failed write, deploy aborted before `check_db_roles`) and that findings are recorded even without an RLS bypass, only `ok` requires one (#2415).
 > Synchronization update 2026-10-06: § 5.5 and the fresh-install note describe that the “Admin DB role” card reads the latest `check_db_roles` result recorded by the maintenance service (`DB_ROLES_VERIFIED`: `ok` with the check time, `critical` with finding codes, `warning` when incomplete or older than 30 days, `unknown` without an entry) (#2415).
+> Synchronization update 2026-10-06: the account-lock sections (§ 2.1 "Unlock an Account (CLI)" and § 2.7 "Account Lockout") state that `super_admin` is exempt from the lockout and that `unlock` has no effect and writes no audit entry for that role; the recovery paths apply to facility-bound accounts (#2423).
 > Synchronization update 2026-10-06: the checks after an update (§ 4.2) build the complete Compose file list themselves, so that the newly created `maintenance` container honors a configured `compose.override.yml` (#2424).
 > Synchronization update 2026-10-06: the host crontab examples for the breach scan, retention and view refresh are single-line entries, because crontab has no line continuation (#2423).
 > Synchronization update 2026-10-06: § 4.2 starts the update with choosing the target version, stops `cron` before the migration, recreates `web`, `cron` and `caddy`, and compares the image IDs of `web` and `cron`; § 4.4 rolls back through `APP_VERSION`/`APP_IMAGE_DIGEST` in the `.env` and recreates `web` and `cron` (#2424).
@@ -533,14 +534,14 @@ After successful completion, exactly one user with the role `super_admin` exists
 
 #### Unlock an Account (CLI)
 
-If a `super_admin` is locked out by failed login attempts (default: 10 attempts, see [§ 2.7 Account Lockout](#account-lockout)) and there is **no** second super-admin, the lock can only be lifted via CLI -- no other user has access to the bootstrap tool:
+A `super_admin` is not locked by failed logins: the role is exempt from the account lockout (see [§ 2.7 Account Lockout](#account-lockout)) so that the break-glass account cannot be locked out deliberately. Only the username rate limit (10 sign-in attempts per hour and username) protects against brute force; once it is reached, the only remedy is to wait for the time window -- `unlock` does not lift it. The following command lifts the lock of a **facility-bound** account (`facility_admin`, `lead`, `staff`, `assistant`) when nobody is left with access to the facility's administration, for example the only locked `facility_admin`:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   unlock <username>
 ```
 
-The command unlocks the specified user, writes a `LOGIN_UNLOCK` AuditLog entry, and works for all roles (`facility_admin`, `lead`, `staff`, `assistant` as well). For facility-bound users, the UI path via the facility application manager remains available in addition (see [§ 2.7 Account Lockout](#account-lockout)).
+The command unlocks the specified user and writes a `LOGIN_UNLOCK` AuditLog entry. With the username of a `super_admin` it has no effect: it still reports "Account-Sperre aufgehoben" (account lock lifted) but writes no audit entry, because there is nothing to lift. For facility-bound users, the UI path via the facility application manager remains available in addition (see [§ 2.7 Account Lockout](#account-lockout)).
 
 ### 2.2 Create a Facility and Application Manager
 
@@ -1058,7 +1059,7 @@ There are also **backup codes as a second factor** for exactly this recovery cas
 
 #### Account Lockout
 
-After **10 failed login attempts** the account is automatically locked (the login service reads the threshold from [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py)). The locked user sees an information page and can no longer sign in. There are four recovery paths:
+After **10 failed login attempts** the account is automatically locked (the login service reads the threshold from [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py)). The locked user sees an information page and can no longer sign in. The `super_admin` role is exempt: it is never locked (the break-glass account must not be lockable deliberately); the username rate limit of 10 sign-in attempts per hour protects against brute force there. The four recovery paths below therefore apply to facility-bound accounts:
 
 **Path A -- UI (for facility-bound users):** The application manager (`facility_admin`) of the facility can unlock the accounts of their own users:
 
@@ -1066,14 +1067,14 @@ After **10 failed login attempts** the account is automatically locked (the logi
 2. Under "Security actions" click **Unlock account**.
 3. The unlock is recorded in the AuditLog as `LOGIN_UNLOCK` (the `LOGIN_FAILED` log itself is immutable thanks to the `auditlog_immutable` DB trigger).
 
-**Path B -- CLI (for recovery, especially super-admins):** If no other user in the system has access (single-super-admin lockout, or a locked `facility_admin` with no second `facility_admin`), the hosting operator unlocks the account directly on the server:
+**Path B -- CLI (for recovery):** If no other user has access to Path A (a locked `facility_admin` with no second `facility_admin`), the hosting operator unlocks the account directly on the server:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   unlock <username>
 ```
 
-The command works for all roles (`super_admin`, `facility_admin`, `lead`, `staff`, `assistant`), writes a `LOGIN_UNLOCK` AuditLog entry, and is the only recovery option for locked super-admins.
+The command works for the facility-bound roles (`facility_admin`, `lead`, `staff`, `assistant`) and writes a `LOGIN_UNLOCK` AuditLog entry. For a `super_admin` it has no effect (success message without an audit entry), because that role is never locked.
 
 **Path C -- Self-service via email (Refs #869):** If the user has an email address on file, they can unlock themselves from the login page via the "Unlock account via email" or "Forgot password?" links -- both paths write a `LOGIN_UNLOCK` AuditLog entry. The dedicated unlock link at `/account/recovery/` sends a signed token valid for 30 minutes (no new model; `TimestampSigner` with salt `lockout-recovery.v1`). Anti-enumeration: the confirmation page is identical whether or not the email belongs to an account.
 
@@ -2411,5 +2412,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: dd5c884d9b31dfb63848f177759b6c41ccc5ecfa -->
+<!-- source-hash: 3bf134ed3a75c8f2dda243721c1d8e29c2ef2389 -->
 <!-- translation-date: 2026-10-05 -->

@@ -477,14 +477,14 @@ Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. M
 
 #### Account-Sperre aufheben (CLI)
 
-Wird ein `super_admin` durch fehlgeschlagene Logins gesperrt (Standard: 10 Versuche, siehe [§ 2.7 Account-Lockout](#account-lockout)) und es gibt **keinen** zweiten Super-Admin, kann die Sperre nur per CLI aufgehoben werden — kein anderer User hat Zugriff auf das Bootstrap-Tool:
+Ein `super_admin` wird durch fehlgeschlagene Logins nicht gesperrt: die Rolle ist vom Account-Lockout ausgenommen (siehe [§ 2.7 Account-Lockout](#account-lockout)), damit das Break-Glass-Konto nicht gezielt ausgesperrt werden kann. Gegen Brute-Force schützt allein das Username-Ratelimit (10 Anmeldeversuche pro Stunde und Benutzername); ist es erreicht, hilft nur, das Zeitfenster abzuwarten — `unlock` hebt es nicht auf. Der folgende Befehl hebt die Sperre eines **facility-gebundenen** Kontos auf (`facility_admin`, `lead`, `staff`, `assistant`), wenn niemand mehr Zugriff auf die Verwaltung der Einrichtung hat, etwa der einzige gesperrte `facility_admin`:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   unlock <username>
 ```
 
-Der Befehl entsperrt den angegebenen User, schreibt einen `LOGIN_UNLOCK`-AuditLog-Eintrag und ist auf alle Rollen anwendbar (auch `facility_admin`, `lead`, `staff`, `assistant`). Für facility-gebundene User bleibt zusätzlich der UI-Pfad über die Anwendungsbetreuung möglich (siehe [§ 2.7 Account-Lockout](#account-lockout)).
+Der Befehl entsperrt den angegebenen User und schreibt einen `LOGIN_UNLOCK`-AuditLog-Eintrag. Mit dem Benutzernamen eines `super_admin` bewirkt er nichts: er meldet trotzdem „Account-Sperre aufgehoben“, schreibt aber keinen Audit-Eintrag, weil es nichts aufzuheben gibt. Für facility-gebundene User bleibt zusätzlich der UI-Pfad über die Anwendungsbetreuung möglich (siehe [§ 2.7 Account-Lockout](#account-lockout)).
 
 ### 2.2 Einrichtung und Anwendungsbetreuung anlegen
 
@@ -1003,7 +1003,7 @@ Es gibt zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recove
 
 #### Account-Lockout
 
-Nach **10 fehlgeschlagenen Login-Versuchen** wird das Konto automatisch gesperrt (Login-Service liest die Schwelle aus [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py)). Der gesperrte User sieht eine Hinweis-Seite und kann sich nicht mehr anmelden. Es gibt vier Recovery-Pfade:
+Nach **10 fehlgeschlagenen Login-Versuchen** wird das Konto automatisch gesperrt (Login-Service liest die Schwelle aus [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py)). Der gesperrte User sieht eine Hinweis-Seite und kann sich nicht mehr anmelden. Ausgenommen ist die Rolle `super_admin`: sie wird nie gesperrt (das Break-Glass-Konto soll nicht gezielt ausgesperrt werden können), gegen Brute-Force schützt dort das Username-Ratelimit von 10 Anmeldeversuchen pro Stunde. Die folgenden vier Recovery-Pfade gelten deshalb für facility-gebundene Konten:
 
 **Pfad A — UI (für facility-gebundene User):** Die Anwendungsbetreuung (`facility_admin`) der Einrichtung kann den Account ihrer eigenen User entsperren:
 
@@ -1011,14 +1011,14 @@ Nach **10 fehlgeschlagenen Login-Versuchen** wird das Konto automatisch gesperrt
 2. Unter „Sicherheitsaktionen" auf **Account-Sperre aufheben** klicken.
 3. Cleanup wird im AuditLog als `LOGIN_UNLOCK` protokolliert (das `LOGIN_FAILED`-Log selbst ist dank `auditlog_immutable`-DB-Trigger unveränderbar).
 
-**Pfad B — CLI (für Recovery, insbesondere Super-Admins):** Wenn kein anderer User im System Zugriff hat (Single-Super-Admin-Sperre, oder gesperrter `facility_admin` und kein zweiter `facility_admin`), entsperrt der Hosting-Operator den Account direkt am Server:
+**Pfad B — CLI (für Recovery):** Wenn kein anderer User Zugriff auf Pfad A hat (gesperrter `facility_admin` und kein zweiter `facility_admin`), entsperrt der Hosting-Operator den Account direkt am Server:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   unlock <username>
 ```
 
-Der Befehl ist auf alle Rollen anwendbar (`super_admin`, `facility_admin`, `lead`, `staff`, `assistant`), schreibt einen `LOGIN_UNLOCK`-AuditLog-Eintrag und ist die einzige Recovery-Option für gesperrte Super-Admins.
+Der Befehl ist auf die facility-gebundenen Rollen anwendbar (`facility_admin`, `lead`, `staff`, `assistant`) und schreibt einen `LOGIN_UNLOCK`-AuditLog-Eintrag. Für einen `super_admin` ist er wirkungslos (Erfolgsmeldung ohne Audit-Eintrag), da diese Rolle nie gesperrt ist.
 
 **Pfad C — Self-Service per E-Mail (Refs #869):** Hat der User eine E-Mail-Adresse hinterlegt, kann er sich auf der Login-Seite über die Links „Konto entsperren per E-Mail" oder „Passwort vergessen?" selbst entsperren — beide Pfade schreiben einen `LOGIN_UNLOCK`-AuditLog. Der dedizierte Entsperr-Link unter `/account/recovery/` verschickt einen 30-Minuten-gültigen, signierten Token (kein neues Modell, `TimestampSigner` mit Salt `lockout-recovery.v1`). Anti-Enumeration: Die Bestätigungsseite ist identisch, ob die E-Mail einem Konto zugeordnet ist oder nicht.
 
