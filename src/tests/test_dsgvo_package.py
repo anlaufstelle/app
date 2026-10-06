@@ -969,3 +969,44 @@ class TestRetentionExceptionsAreNamed:
         ensure_snapshots_for_months(facility, Event.objects.filter(facility=facility))
 
         assert not StatisticsSnapshot.objects.filter(facility=facility, year=today.year, month=today.month).exists()
+
+    def test_templates_do_not_promise_complete_monthly_counts(self, facility):
+        deletion_concept, _ = render_document("loeschkonzept", facility)
+        prose = _flat(deletion_concept)
+        notice = _flat(render_document("informationspflichten", facility)[0])
+
+        assert "damit Auswertungen vergangener Zeiträume erhalten" not in prose
+        assert "fehlen sie in der neuen Fassung des Aggregats" in prose
+        assert "früher gelöschte Ereignisse fehlen" in _effect_cell(deletion_concept, "Monatliche Statistik-Aggregate")
+        assert "Statistische Zählwerte ohne Bezug zu Ihrer Person können erhalten bleiben." in notice
+
+    def test_recomputed_month_counts_only_events_not_yet_deleted(self, facility, client_identified, staff_user):
+        from datetime import datetime, timedelta
+
+        from django.utils import timezone
+
+        from core.models import DocumentType, Event, StatisticsSnapshot
+        from core.services.dashboard.snapshot import ensure_snapshots_for_months
+
+        previous_month = timezone.localdate().replace(day=1) - timedelta(days=10)
+        occurred_at = timezone.make_aware(datetime.combine(previous_month, datetime.min.time()))
+        doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
+        first, second = (
+            Event.objects.create(
+                facility=facility,
+                client=client_identified,
+                document_type=doc_type,
+                occurred_at=occurred_at,
+                data_json={},
+                is_anonymous=False,
+                created_by=staff_user,
+            )
+            for _ in range(2)
+        )
+
+        ensure_snapshots_for_months(facility, Event.objects.filter(pk=first.pk))
+        assert StatisticsSnapshot.objects.get(facility=facility).data["total_contacts"] == 2
+        Event.objects.filter(pk=first.pk).update(is_deleted=True)
+        ensure_snapshots_for_months(facility, Event.objects.filter(pk=second.pk))
+
+        assert StatisticsSnapshot.objects.get(facility=facility).data["total_contacts"] == 1

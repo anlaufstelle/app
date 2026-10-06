@@ -27,7 +27,7 @@ jeder Änderung ihrer Einstellungen oder Backup-Rotation.
 | Audit-Log | {{ auditlog_retention_months }} Monate | `auditlog_retention_months` | Rollierende Löschung; `0` deaktiviert sie, gesetzliche und technische Ausnahmen siehe § 3.4 |
 | Inhalte früherer Fassungen eines Ereignisses | {{ eventhistory_detail_months }} Monate | `eventhistory_detail_months` | Die Werte der Fassung werden gelöscht, die Fassung selbst (Zeitpunkt, handelnde Person, Feldnamen) bleibt; `0` deaktiviert diese Frist. Bei einem **gelöschten** Ereignis geschieht dasselbe unabhängig von dieser Frist, regulär mit dem nächsten Aufbewahrungslauf (Ausnahmen § 3.1) |
 | Chronologie früherer Fassungen (nach ihrer Inhalts-Löschung) | {{ eventhistory_chronicle_months }} Monate | `eventhistory_chronicle_months` | Die inhaltsleere Fassung wird gelöscht; gemessen ab dem Zeitpunkt ihrer Inhalts-Löschung. `0` deaktiviert die Löschung — dann wird die Chronologie unbefristet aufbewahrt |
-| Monatliche Statistik-Aggregate | unbefristet | — | Bleiben bestehen: Bevor der Aufbewahrungslauf Ereignisse löscht, sichert die Anwendung deren bereits abgeschlossene Monate als Zählwerte ohne Einzeldatensätze; der laufende Monat ist ausgenommen (siehe § 3.5) |
+| Monatliche Statistik-Aggregate | unbefristet | — | Bleiben bestehen: Bevor der Aufbewahrungslauf Ereignisse löscht, berechnet die Anwendung deren bereits abgeschlossene Monate als Zählwerte ohne Einzeldatensätze neu; der laufende Monat ist ausgenommen, und früher gelöschte Ereignisse fehlen in der Neuberechnung (siehe § 3.5) |
 | Backup-Sicherungsstände | {{ backup_retention_days }} Tage (Altersgrenze, keine Höchstfrist) | Längste lokale Rotation im ausgelieferten `backup.sh` | Die Rotation entfernt ein lokales verschlüsseltes Archiv beim ersten erfolgreichen Lauf von `backup.sh`, in dem es mindestens 8 (täglich), 29 (wöchentlich) bzw. 91 volle Tage (monatlich) alt ist; keine feste Höchstfrist. Die Rotation ist ausgesetzt, solange der Off-Site-Abgleich fehlschlägt |
 | Off-Site-Kopien der Sicherungsstände | [eintragen] | Aufbewahrungsregel am Off-Site-Ziel (von der Einrichtung festzulegen) | `backup.sh` löscht am Off-Site-Ziel nichts; Kopien bleiben bis zur Löschung durch die Regel am Ziel bestehen |
 
@@ -144,19 +144,22 @@ der erneuten Freigabe des Systems auszuführen.
 
 ### 3.5 Statistik-Aggregate
 
-Bevor der Aufbewahrungslauf Ereignisse löscht, sichert die Anwendung die
-betroffenen, bereits abgeschlossenen Monate als monatliche Statistik-Aggregate.
-Den laufenden Monat sichert dieser Schritt nicht: Löscht der Lauf wegen einer
-kurzen Frist (etwa einer Dokumentationstyp-Frist von wenigen Tagen) Ereignisse
-des laufenden Monats, sichert er deren Zählwerte vorher nicht. Löscht ein
-späterer Lauf weitere Ereignisse eines schon gesicherten Monats, berechnet er
-dessen Aggregat neu; die Aggregate sind keine unveränderliche Archivkopie.
-Sie enthalten Zählwerte,
-keine Einzeldatensätze, und haben keine Frist: Sie bleiben nach der Löschung
-der Ereignisse bestehen, damit Auswertungen vergangener Zeiträume erhalten
-bleiben. Gespeichert werden die ungekürzten Zählwerte; erst in Berichten und
-Exporten werden Werte unterhalb der k-Anonymitäts-Schwelle der Einrichtung
-unterdrückt. Die Aggregate entfallen erst mit der Einrichtung selbst.
+Bevor der Aufbewahrungslauf Ereignisse löscht, berechnet die Anwendung die
+betroffenen, bereits abgeschlossenen Monate als monatliche Statistik-Aggregate
+neu. Gezählt werden dabei nur Ereignisse, die zu diesem Zeitpunkt noch nicht
+gelöscht sind: Hat ein früherer Lauf schon Ereignisse desselben Monats
+gelöscht, fehlen sie in der neuen Fassung des Aggregats. Die Aggregate sind
+deshalb keine unveränderliche Archivkopie und bewahren die Zählwerte gelöschter
+Ereignisse nicht verlässlich auf. Den laufenden Monat sichert dieser Schritt
+nicht: Löscht der Lauf wegen einer kurzen Frist (etwa einer
+Dokumentationstyp-Frist von wenigen Tagen) Ereignisse des laufenden Monats,
+sichert er deren Zählwerte vorher nicht.
+
+Die Aggregate enthalten Zählwerte, keine Einzeldatensätze, und haben keine
+Frist; sie bleiben nach der Löschung der Ereignisse bestehen. Gespeichert
+werden die ungekürzten Zählwerte; erst in Berichten und Exporten werden Werte
+unterhalb der k-Anonymitäts-Schwelle der Einrichtung unterdrückt. Die
+Aggregate entfallen erst mit der Einrichtung selbst.
 
 ## 4. Zuständigkeiten und Nachweis
 

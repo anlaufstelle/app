@@ -88,7 +88,7 @@ Damit sind „verlangen einen `RetentionProposal` mit Lead/Admin-Freigabe" (Deci
 - `qualified` misst ab `Case.closed_at` des verknüpften, geschlossenen Falls.
 - `identified` löscht die Ereignisse (Soft-Delete), anonymisiert aber nicht unmittelbar die Person: [`anonymize_clients`](../../src/core/retention/anonymization.py) greift erst, wenn **alle** Ereignisse einer Person gelöscht sind (das Update 2026-08-03 beschreibt das in der Client-Zeile).
 - Der Soft-Delete leert Inhalte und Suchtext sofort und löscht die Anhänge; die Ereigniszeile bleibt als gelöscht markiert.
-- Vor der Löschung sichert der Lauf die betroffenen, bereits abgeschlossenen Monate als Statistik-Aggregate (`ensure_snapshots_for_months`); den laufenden Monat nimmt er aus, sodass Ereignisse, die eine kurze Frist noch im selben Monat löscht, vorher in kein Aggregat gesichert werden. Ein späterer Lauf berechnet das Aggregat eines Monats neu (`update_or_create`). Die Aggregate haben keine Frist.
+- Vor der Löschung sichert der Lauf die betroffenen, bereits abgeschlossenen Monate als Statistik-Aggregate (`ensure_snapshots_for_months`); den laufenden Monat nimmt er aus, sodass Ereignisse, die eine kurze Frist noch im selben Monat löscht, vorher in kein Aggregat gesichert werden. Ein späterer Lauf berechnet das Aggregat eines Monats neu (`update_or_create`) und zählt dabei nur noch nicht gelöschte Ereignisse; früher gelöschte Ereignisse desselben Monats fehlen danach. Die Aggregate haben keine Frist.
 
 ### Ereignisse der Stufe `qualified` ohne geschlossenen Fall (Refs #2463)
 
