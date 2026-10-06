@@ -132,7 +132,9 @@ def test_clamav_egress_guard_accepts_default_network() -> None:
 
 
 CLAMAV_COMPOSE_FILES = sorted(
-    path.name for path in REPO_ROOT.glob("docker-compose*.yml") if "clamav:" in path.read_text(encoding="utf-8")
+    str(path.relative_to(REPO_ROOT))
+    for path in [*REPO_ROOT.glob("docker-compose*.yml"), *REPO_ROOT.glob("dev-ops/deploy/*/docker-compose*.yml")]
+    if "clamav:" in path.read_text(encoding="utf-8")
 )
 
 
