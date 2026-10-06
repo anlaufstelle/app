@@ -2,7 +2,8 @@
 
 Refs #930. Sub-File aus ``test_mutation_followup_snapshot``;
 enthält die Test-Klassen für die Boundary-/Datums-Helfer:
-``TestCreateOrUpdateSnapshotBranches``, ``TestGetSnapshot`` und ``TestSplitIntoSegmentsBoundaries``.
+``TestCreateOrUpdateSnapshotBranches``,
+``TestGetSnapshot`` und ``TestSplitIntoSegmentsBoundaries``.
 
 ``TestIsMultiMonthRange`` ist mit ``is_multi_month_range`` entfallen (K4b,
 Refs #1770): der Helfer trug allein den "ca."-Approximationshinweis aus #533,

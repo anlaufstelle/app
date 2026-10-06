@@ -193,17 +193,16 @@ class ClientAnonymizeView(FacilityAdminRequiredMixin, View):
         except ValidationError as exc:
             messages.error(request, exc.messages[0] if exc.messages else str(exc))
             return redirect("core:client_trash")
-        # Refs #2085: Die Meldung darf nicht mehr behaupten, alles sei bereits
-        # getilgt. Die Person ist es — Pseudonym, Notizen, Zusatzfelder, Fall-
-        # und Live-Ereignisinhalte fallen im Request. Die frueheren Fassungen
-        # der Ereignis-Dokumentation liegen dagegen hinter dem Append-only-
-        # Trigger und brauchen Owner-Rechte, die der Webprozess unter dem
-        # Drei-Rollen-Modell bewusst nicht hat; sie holt der naechtliche
-        # Aufbewahrungslauf nach (ADR-050 M-8). Refs #2425: "as a rule", not
-        # "at the latest" — the history sweep defers rows under a legal hold
-        # and skips rows another transaction holds locked; a later run catches
-        # up. In the single-role setup (dev) the redaction already happens in
-        # the request, which the wording also covers.
+        # Refs #2085: the message must not claim that everything is erased
+        # already. The person is — pseudonym, notes, extra fields, case and
+        # live event contents go within the request. Earlier versions of the
+        # event documentation sit behind the append-only trigger and need owner
+        # rights the web process deliberately lacks under the three-role model;
+        # the nightly retention run catches them up (ADR-050 M-8). Refs #2425:
+        # "as a rule", not "at the latest" — the history sweep defers rows
+        # under a legal hold and skips rows another transaction holds locked; a
+        # later run catches up. In the single-role setup (dev) the redaction
+        # already happens in the request, which the wording also covers.
         messages.success(
             request,
             _(
