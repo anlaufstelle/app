@@ -33,19 +33,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Demo-Footer und Container-Version bleiben beim Release-Deploy synchron** (#2408) — `deploy-demo.sh` übernimmt keinen alten `SOURCE_CODE_VERSION`-Wert mehr aus `.env.demo` und bricht ab, wenn der laufende Web-Container vom Release abweicht.
 - **Demo: Compliance-Karten der Hintergrundjobs nach jedem Reset gefüllt** (#2413) — Der stündliche Demo-Reset startet nach dem Seed die Jobs, aus denen das Compliance-Dashboard liest, sodass die Karten zu Audit-Ketten-Prüfung, Statistik-Snapshots, Breach-Scan und View-Refresh auf `ok` stehen; der Löschlauf `enforce_retention` läuft dort nicht, weil er die Beispieldaten verändern würde, und die Karte „Retention-Lauf“ erklärt das ohne Betriebshinweis bei Status `unknown`.
 - **Demo: Karten „Letztes Backup“ und „Restore-Test“ ohne Betriebshinweis** (#2414) — Im Demo-Modus erklären beide Karten, dass Sicherung und Wiederherstellung in der stündlich neu erzeugten Demo nicht eingerichtet sind, statt auf `backup.sh` bzw. `mark_restore_verified` zu verweisen; der Status bleibt `unknown`, auch in der Systemübersicht.
+- **DB-Passwortrotation erhält die vollständige Compose-Dateiliste** (#2474) — `scripts/ops/rotate-db-passwords.sh` stoppt und erzeugt `web`, `cron` und `db` jetzt mit Basisdatei, `compose.legal.yml` und `compose.override.yml` (soweit vorhanden) neu und gibt die Liste aus; zuvor verlor der neu erzeugte `web`-Container Impressums- und Datenschutz-Mount sowie lokale Anpassungen. Ops-Runbook (DE/EN) beschreibt das Verhalten.
 
 ### Added
 
 - **Compliance-Dashboard zeigt das Ergebnis der DB-Rollenprüfung** (#2415) — `check_db_roles` hinterlegt nach jedem Lauf im Wartungsdienst sein Ergebnis ohne Rollennamen oder Zugangsdaten im Audit-Log, und die Karte „Admin-DB-Rolle“ zeigt es an: nach dem Deploy `ok` mit Prüfzeitpunkt, bei Befunden `critical`, bei unvollständiger oder über 30 Tage alter Prüfung `warning`.
 
-### Fixed
-
-- **DB-Passwortrotation erhält die vollständige Compose-Dateiliste** (#2474) — `scripts/ops/rotate-db-passwords.sh` stoppt und erzeugt `web`, `cron` und `db` jetzt mit Basisdatei, `compose.legal.yml` und `compose.override.yml` (soweit vorhanden) neu und gibt die Liste aus; zuvor verlor der neu erzeugte `web`-Container Impressums- und Datenschutz-Mount sowie lokale Anpassungen. Ops-Runbook (DE/EN) beschreibt das Verhalten.
-
 ### Docs
 
 - **Lizenztexte für ausgelieferte Drittwerke ergänzt** (#2444) — `THIRDPARTY-LICENSES.md` führt alle ausgelieferten JavaScript-Bibliotheken, die DM-Schriften und die Heroicons-Symbole mit Version, Lizenz und Lizenztext; Dexie liegt mit Apache-2.0-Text und NOTICE, die DM-Schriften mit dem SIL-OFL-1.1-Text im Repository, und `make verify-vendor-js-sync` schlägt bei fehlendem oder gegenüber dem Upstream-Text veränderten Lizenztext, nicht registrierten Dateien in beliebiger Verschachtelung und abweichenden oder verlängerten Pfad- und Lizenztextzellen der Tabelle fehl; auch der axe-core-Lizenzkopf ist per Prüfsumme gesichert; die Heroicons-Pfade sind als angepasste Ableitung beschrieben.
-
 - **Statistik-Unterdrückung von Backup-Aufbewahrung getrennt** (#2429) — Fachkonzept, EN-Zusammenfassung und Beratungsstellen-Paketdoku erklären k als Veröffentlichungsschwelle und unterscheiden Felddefinition, verwertbare Dauerwerte und Unterdrückung anhand eines Zwei-Kontakte-Beispiels.
 - **Sicherheitszusagen im Fachkonzept präzisiert** (#2467) — DE und EN beschreiben den Klartext-Uploadpuffer, Limits je View und Login sowie PBKDF2-SHA256 gemäß Implementierung.
 - **Ist-Stand und Zielbilder im Fachkonzept getrennt** (#2488) — Betroffenenrechte sind als interne Funktionen beschrieben, Klientel-Self-Service ist verworfen und externe API, optionale Module sowie weitere Evaluierungsziele sind ausdrücklich Zielbilder.
