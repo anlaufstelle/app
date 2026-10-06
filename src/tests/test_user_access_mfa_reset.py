@@ -483,6 +483,16 @@ class TestAdminAction:
         assert _reset_rows(staff_user).get().actor_id == super_admin_user.pk
         assert _reset_rows(foreign_staff).get().facility_id == foreign_staff.facility_id
 
+    def test_account_without_factor_is_reported_and_not_audited(self, super_admin_user, staff_user):
+        browser = _verified_client(super_admin_user)
+
+        response = _admin_action(browser, staff_user)
+
+        assert response.status_code == 302
+        shown = [str(message) for message in browser.get(response.url).context["messages"]]
+        assert f"{staff_user.username}: Kein zweiter Faktor eingerichtet." in shown
+        assert not _reset_rows(staff_user).exists()
+
     def test_own_account_is_skipped(self, super_admin_user, staff_user):
         _enroll(super_admin_user, passkey=False)
         _enroll(staff_user)
