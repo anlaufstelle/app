@@ -311,6 +311,8 @@ def test_doppelte_source_code_version_zeilen_loesen_keinen_sigpipe_abbruch_aus(t
 
 
 def test_dev_env_dokumentiert_loopback_hosts_fuer_container_healthcheck() -> None:
+    if not (REPO_ROOT / ".env.dev.example").exists():
+        pytest.skip(".env.dev.example nicht im Public-Snapshot (Refs #2478)")
     env_text = (REPO_ROOT / ".env.dev.example").read_text(encoding="utf-8")
     hosts_line = next(line for line in env_text.splitlines() if line.startswith("ALLOWED_HOSTS="))
     hosts = {host.strip() for host in hosts_line.partition("=")[2].split(",")}
@@ -319,6 +321,8 @@ def test_dev_env_dokumentiert_loopback_hosts_fuer_container_healthcheck() -> Non
 
 
 def test_health_detail_token_steht_in_dev_env_und_web_allowlist() -> None:
+    if not (REPO_ROOT / "docker-compose.dev.yml").exists():
+        pytest.skip(".env.dev.example und docker-compose.dev.yml nicht im Public-Snapshot (Refs #2478)")
     env_text = (REPO_ROOT / ".env.dev.example").read_text(encoding="utf-8")
     compose_text = (REPO_ROOT / "docker-compose.dev.yml").read_text(encoding="utf-8")
     web_block = compose_text.split("\n  web:\n", 1)[1].split("\n  maintenance:\n", 1)[0]

@@ -14,11 +14,16 @@ pytestmark = pytest.mark.architecture
 
 
 def _deployment_compose_paths() -> tuple[Path, ...]:
-    """Return public stacks plus the private demo stack when it is present."""
-    prod = Path("docker-compose.prod.yml")
-    demo = Path("docker-compose.demo.yml")
-    dev = Path("docker-compose.dev.yml")
-    return (prod, demo, dev) if demo.exists() else (prod, dev)
+    """Return the public prod stack plus the demo and dev stacks when present.
+
+    The release build strips both from the public snapshot (Refs #2478).
+    """
+    stacks = [Path("docker-compose.prod.yml")]
+    if Path("docker-compose.demo.yml").exists():
+        stacks.append(Path("docker-compose.demo.yml"))
+    if Path("docker-compose.dev.yml").exists():
+        stacks.append(Path("docker-compose.dev.yml"))
+    return tuple(stacks)
 
 
 class TestRunAsAdminPullPolicy:
@@ -424,6 +429,8 @@ class TestDeploymentDbSecretBoundary:
         template = self._ENV_TEMPLATES[compose_path]
         if template == Path(".env.demo.example") and not template.exists():
             pytest.skip(".env.demo.example nicht im Public-Snapshot — Guard nur im Dev-Repo relevant (Refs #1962)")
+        if template == Path(".env.dev.example") and not template.exists():
+            pytest.skip(".env.dev.example nicht im Public-Snapshot — Guard nur im Dev-Repo relevant (Refs #2478)")
         documented = set(re.findall(r"^([A-Z][A-Z0-9_]*)=", template.read_text(encoding="utf-8"), re.MULTILINE))
         infrastructure_only = {
             "DOMAIN",
@@ -612,6 +619,8 @@ class TestServerErrorSupportContactAcrossAllStacks:
         "docker-compose.demo.yml",  # build-release.sh:325
         ".env.demo.example",  # build-release.sh:328
         ".env.staging.example",  # build-release.sh:329
+        "docker-compose.dev.yml",  # build-release.sh (Refs #2478)
+        ".env.dev.example",  # build-release.sh (Refs #2478)
         "dev-ops",  # build-release.sh:285 (rm -rf "$RELEASE_DIR/dev-ops")
     )
 
@@ -1433,6 +1442,8 @@ class TestCaddyUploadBodyLimit:
             pytest.skip("Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1363)")
         if not Path("Caddyfile.demo").exists():
             pytest.skip("Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1363)")
+        if not Path("Caddyfile.dev").exists():
+            pytest.skip("Caddyfile.dev nicht im Public-Snapshot (Refs #2478)")
 
     def test_all_variants_cover_a_full_multi_file_field(self) -> None:
         import anlaufstelle.settings.base as base_settings

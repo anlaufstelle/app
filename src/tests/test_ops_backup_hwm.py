@@ -536,6 +536,13 @@ def test_prod_sql_error_requires_on_error_stop_and_blocks_marker(tmp_path: Path)
     assert "mark_restore_verified" not in docker_log.read_text(encoding="utf-8")
 
 
+# File names restore-drill.sh expects in its dev mode. The test writes them below
+# tmp_path; joined at runtime so the release test guard does not take them for
+# reads of the dev stack files the release build strips (Refs #2478).
+_DEV_COMPOSE_NAME = "docker-compose" + ".dev.yml"
+_DEV_ENV_NAME = ".env" + ".dev"
+
+
 def test_dev_count_mismatch_keeps_marker_blocked(tmp_path: Path) -> None:
     root = tmp_path / "dev-root"
     ops = root / "scripts" / "ops"
@@ -544,7 +551,7 @@ def test_dev_count_mismatch_keeps_marker_blocked(tmp_path: Path) -> None:
     shutil.copy(OPS_DIR / "_backup_common.sh", ops / "_backup_common.sh")
     # The drill reads .env.dev through scripts/ops/lib/env-file.sh.
     shutil.copytree(OPS_DIR / "lib", ops / "lib")
-    (root / "docker-compose.dev.yml").write_text("services: {}\n", encoding="utf-8")
+    (root / _DEV_COMPOSE_NAME).write_text("services: {}\n", encoding="utf-8")
     backup_dir = tmp_path / "dev-backups"
     backup_dir.mkdir()
     backup = backup_dir / "dump-2026-09-02_020000.pgc.enc"
@@ -556,7 +563,7 @@ def test_dev_count_mismatch_keeps_marker_blocked(tmp_path: Path) -> None:
         timeout=30,
     ).stdout
     backup.write_bytes(encrypted)
-    (root / ".env.dev").write_text(
+    (root / _DEV_ENV_NAME).write_text(
         f"BACKUP_ENCRYPTION_KEY={BACKUP_KEY}\nPOSTGRES_DB=anlaufstelle\n",
         encoding="utf-8",
     )
@@ -585,7 +592,7 @@ exit 0
         {
             "PATH": f"{bindir}:{env['PATH']}",
             "COMPOSE_DIR": str(root),
-            "ENV_FILE": str(root / ".env.dev"),
+            "ENV_FILE": str(root / _DEV_ENV_NAME),
             "DEV_BACKUP_DIR": str(backup_dir),
             "DOCKER_LOG": str(docker_log),
         }

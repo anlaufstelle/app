@@ -59,7 +59,7 @@ def test_production_mail_variable_discovery_is_not_empty() -> None:
 @pytest.mark.parametrize("compose_path", _deployment_compose_paths(), ids=lambda path: path.name)
 def test_web_environment_contains_production_mail_variables(compose_path: Path) -> None:
     if not compose_path.exists():
-        pytest.skip(f"{compose_path.name} fehlt im öffentlichen Release-Baum")
+        pytest.skip(f"{compose_path.name} fehlt im öffentlichen Release-Baum (gestrippt: docker-compose.dev.yml)")
     missing = _mail_variables_from_production_settings() - set(_compose_environment(compose_path))
     assert not missing, f"{compose_path.name}: fehlende web-Mailvariablen: {sorted(missing)}"
 

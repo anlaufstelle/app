@@ -33,7 +33,11 @@ def _tracked_compose_files() -> set[str]:
 
 
 def test_required_compose_files_are_tracked() -> None:
-    assert _tracked_compose_files() >= REQUIRED_FILES
+    required = set(REQUIRED_FILES)
+    if not (REPO_ROOT / "dev-ops").exists():
+        # The release build strips the dev stack together with dev-ops/ (Refs #2478).
+        required.discard("docker-compose.dev.yml")
+    assert _tracked_compose_files() >= required
 
 
 @pytest.mark.parametrize("filename", sorted(REQUIRED_FILES | OPTIONAL_FILES))
@@ -43,6 +47,8 @@ def test_every_service_uses_bounded_container_logs(filename: str) -> None:
         pytest.skip("docker-compose.staging.yml is excluded from this release tree")
     if filename == "docker-compose.demo.yml" and not path.exists():
         pytest.skip("docker-compose.demo.yml is excluded from this release tree")
+    if filename == "docker-compose.dev.yml" and not path.exists():
+        pytest.skip("docker-compose.dev.yml is excluded from this release tree")
     tracked_files = _tracked_compose_files()
     if filename not in tracked_files:
         pytest.skip(f"{filename} is excluded from this release tree")
