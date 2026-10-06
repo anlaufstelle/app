@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 18:31+0200\n"
+"POT-Creation-Date: 2026-10-06 20:51+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -13128,3 +13128,67 @@ msgstr "Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentati
 #, python-format
 msgid "„%(pseudonym)s“ jetzt endgültig anonymisieren? Pseudonym, Notizen, Zusatzfelder und Fall-/Ereignisinhalte dieser Person werden unwiderruflich entfernt; der Datensatz bleibt nur noch als anonymes Statistik-Aggregat bestehen. Eine Wiederherstellung ist danach nicht mehr möglich. Frühere Fassungen der Ereignis-Dokumentation folgen regulär mit dem nächtlichen Aufbewahrungslauf; was eine Aufbewahrungssperre oder eine gleichzeitige Bearbeitung zurückhält, holt ein späterer Lauf nach."
 msgstr "„%(pseudonym)s“ jetzt endgültig anonymisieren? Pseudonym, Notizen, Zusatzfelder und Fall-/Ereignisinhalte dieser Person werden unwiderruflich entfernt; der Datensatz bleibt nur noch als anonymes Statistik-Aggregat bestehen. Eine Wiederherstellung ist danach nicht mehr möglich. Frühere Fassungen der Ereignis-Dokumentation folgen regulär mit dem nächtlichen Aufbewahrungslauf; was eine Aufbewahrungssperre oder eine gleichzeitige Bearbeitung zurückhält, holt ein späterer Lauf nach."
+
+#: src/core/admin/users.py:259
+msgid "Zweiten Faktor zurücksetzen (Authenticator-App, Passkeys, Backup-Codes)"
+msgstr "Zweiten Faktor zurücksetzen (Authenticator-App, Passkeys, Backup-Codes)"
+
+#: src/core/admin/users.py:288
+#, python-format
+msgid "%(username)s: Zurücksetzen des zweiten Faktors nicht erlaubt."
+msgstr "%(username)s: Zurücksetzen des zweiten Faktors nicht erlaubt."
+
+#: src/core/admin/users.py:296
+#, python-format
+msgid "%(username)s: Zweiter Faktor nicht zurückgesetzt, die Sitzungen ließen sich nicht sicher beenden."
+msgstr "%(username)s: Zweiter Faktor nicht zurückgesetzt, die Sitzungen ließen sich nicht sicher beenden."
+
+#: src/core/admin/users.py:304
+#, python-format
+msgid "%(username)s: Zweiter Faktor zurückgesetzt, alle Sitzungen beendet."
+msgstr "%(username)s: Zweiter Faktor zurückgesetzt, alle Sitzungen beendet."
+
+#: src/core/admin/users.py:310
+#, python-format
+msgid "%(username)s: Kein zweiter Faktor eingerichtet."
+msgstr "%(username)s: Kein zweiter Faktor eingerichtet."
+
+#: src/core/models/audit.py:146
+msgid "2FA durch Administration zurückgesetzt"
+msgstr "2FA durch Administration zurückgesetzt"
+
+#: src/core/views/user_access.py:201
+msgid "Der zweite Faktor wurde nicht zurückgesetzt: die Sitzungen des Zugangs ließen sich nicht sicher beenden."
+msgstr "Der zweite Faktor wurde nicht zurückgesetzt: die Sitzungen des Zugangs ließen sich nicht sicher beenden."
+
+#: src/core/views/user_access.py:209
+msgid "Der zweite Faktor wurde zurückgesetzt und alle Sitzungen des Zugangs wurden beendet."
+msgstr "Der zweite Faktor wurde zurückgesetzt und alle Sitzungen des Zugangs wurden beendet."
+
+#: src/core/views/user_access.py:212
+#: src/templates/core/user_access/mfa_reset_confirm.html:19
+msgid "Für diesen Zugang ist kein zweiter Faktor eingerichtet."
+msgstr "Für diesen Zugang ist kein zweiter Faktor eingerichtet."
+
+#: src/templates/core/user_access/form.html:47
+#: src/templates/core/user_access/mfa_reset_confirm.html:4
+#: src/templates/core/user_access/mfa_reset_confirm.html:9
+#: src/templates/core/user_access/mfa_reset_confirm.html:27
+msgid "Zweiten Faktor zurücksetzen"
+msgstr "Zweiten Faktor zurücksetzen"
+
+#: src/templates/core/user_access/mfa_reset_confirm.html:13
+msgid "Was passiert beim Zurücksetzen?"
+msgstr "Was passiert beim Zurücksetzen?"
+
+#: src/templates/core/user_access/mfa_reset_confirm.html:15
+msgid "Alle Authenticator-Apps, Passkeys und Backup-Codes dieses Zugangs werden entfernt, und alle Sitzungen des Zugangs werden beendet."
+msgstr "Alle Authenticator-Apps, Passkeys und Backup-Codes dieses Zugangs werden entfernt, und alle Sitzungen des Zugangs werden beendet."
+
+#: src/templates/core/user_access/mfa_reset_confirm.html:16
+msgid "Ist die Zwei-Faktor-Authentifizierung für den Zugang verpflichtend, richtet die Person den zweiten Faktor bei der nächsten Anmeldung neu ein."
+msgstr "Ist die Zwei-Faktor-Authentifizierung für den Zugang verpflichtend, richtet die Person den zweiten Faktor bei der nächsten Anmeldung neu ein."
+
+#: src/templates/core/user_access/mfa_reset_confirm.html:17
+msgid "Setze den zweiten Faktor nur zurück, wenn du sicher bist, dass die Anfrage von der Person selbst stammt."
+msgstr "Setze den zweiten Faktor nur zurück, wenn du sicher bist, dass die Anfrage von der Person selbst stammt."

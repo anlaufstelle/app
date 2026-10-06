@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 18:31+0200\n"
+"POT-Creation-Date: 2026-10-06 20:51+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -13031,3 +13031,67 @@ msgstr "Person has been anonymized. Earlier versions of their event documentatio
 #, python-format
 msgid "„%(pseudonym)s“ jetzt endgültig anonymisieren? Pseudonym, Notizen, Zusatzfelder und Fall-/Ereignisinhalte dieser Person werden unwiderruflich entfernt; der Datensatz bleibt nur noch als anonymes Statistik-Aggregat bestehen. Eine Wiederherstellung ist danach nicht mehr möglich. Frühere Fassungen der Ereignis-Dokumentation folgen regulär mit dem nächtlichen Aufbewahrungslauf; was eine Aufbewahrungssperre oder eine gleichzeitige Bearbeitung zurückhält, holt ein späterer Lauf nach."
 msgstr "Permanently anonymize \"%(pseudonym)s\" now? The pseudonym, notes, additional fields and case/event contents of this person are removed irreversibly; the record remains only as an anonymous statistical aggregate. Restoring it afterwards is no longer possible. Earlier versions of the event documentation follow with the nightly retention run as a rule; anything held back by a legal hold or a concurrent edit is caught up by a later run."
+
+#: src/core/admin/users.py:259
+msgid "Zweiten Faktor zurücksetzen (Authenticator-App, Passkeys, Backup-Codes)"
+msgstr "Reset second factor (authenticator app, passkeys, backup codes)"
+
+#: src/core/admin/users.py:288
+#, python-format
+msgid "%(username)s: Zurücksetzen des zweiten Faktors nicht erlaubt."
+msgstr "%(username)s: resetting the second factor is not allowed."
+
+#: src/core/admin/users.py:296
+#, python-format
+msgid "%(username)s: Zweiter Faktor nicht zurückgesetzt, die Sitzungen ließen sich nicht sicher beenden."
+msgstr "%(username)s: Second factor not reset, the sessions could not be ended reliably."
+
+#: src/core/admin/users.py:304
+#, python-format
+msgid "%(username)s: Zweiter Faktor zurückgesetzt, alle Sitzungen beendet."
+msgstr "%(username)s: second factor reset, all sessions ended."
+
+#: src/core/admin/users.py:310
+#, python-format
+msgid "%(username)s: Kein zweiter Faktor eingerichtet."
+msgstr "%(username)s: no second factor set up."
+
+#: src/core/models/audit.py:146
+msgid "2FA durch Administration zurückgesetzt"
+msgstr "2FA reset by administrator"
+
+#: src/core/views/user_access.py:201
+msgid "Der zweite Faktor wurde nicht zurückgesetzt: die Sitzungen des Zugangs ließen sich nicht sicher beenden."
+msgstr "The second factor was not reset: the sessions of the account could not be ended reliably."
+
+#: src/core/views/user_access.py:209
+msgid "Der zweite Faktor wurde zurückgesetzt und alle Sitzungen des Zugangs wurden beendet."
+msgstr "The second factor has been reset and all sessions of the account have been ended."
+
+#: src/core/views/user_access.py:212
+#: src/templates/core/user_access/mfa_reset_confirm.html:19
+msgid "Für diesen Zugang ist kein zweiter Faktor eingerichtet."
+msgstr "No second factor is set up for this account."
+
+#: src/templates/core/user_access/form.html:47
+#: src/templates/core/user_access/mfa_reset_confirm.html:4
+#: src/templates/core/user_access/mfa_reset_confirm.html:9
+#: src/templates/core/user_access/mfa_reset_confirm.html:27
+msgid "Zweiten Faktor zurücksetzen"
+msgstr "Reset second factor"
+
+#: src/templates/core/user_access/mfa_reset_confirm.html:13
+msgid "Was passiert beim Zurücksetzen?"
+msgstr "What happens when you reset?"
+
+#: src/templates/core/user_access/mfa_reset_confirm.html:15
+msgid "Alle Authenticator-Apps, Passkeys und Backup-Codes dieses Zugangs werden entfernt, und alle Sitzungen des Zugangs werden beendet."
+msgstr "All authenticator apps, passkeys and backup codes of this account are removed, and all sessions of the account are ended."
+
+#: src/templates/core/user_access/mfa_reset_confirm.html:16
+msgid "Ist die Zwei-Faktor-Authentifizierung für den Zugang verpflichtend, richtet die Person den zweiten Faktor bei der nächsten Anmeldung neu ein."
+msgstr "If two-factor authentication is mandatory for the account, the person sets up the second factor again at the next sign-in."
+
+#: src/templates/core/user_access/mfa_reset_confirm.html:17
+msgid "Setze den zweiten Faktor nur zurück, wenn du sicher bist, dass die Anfrage von der Person selbst stammt."
+msgstr "Only reset the second factor if you are sure the request comes from the person themselves."
