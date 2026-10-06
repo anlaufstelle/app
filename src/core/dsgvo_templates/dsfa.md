@@ -51,7 +51,7 @@ Die Anwendung kennt sieben konfigurierbare Aufbewahrungsfristen. Alle sieben sin
 |---|-------|------|-------------|--------------------|
 | 1 | Kontakte anonymer Personen | {{ retention_anonymous_days }} Tage | `retention_anonymous_days` | Ereignis wird soft-gelöscht (Frist ab dem Zeitpunkt des Ereignisses) |
 | 2 | Kontakte der Stufe „Nur Pseudonym“ | {{ retention_identified_days }} Tage | `retention_identified_days` | Ereignis wird soft-gelöscht (Frist ab dem Zeitpunkt des jeweiligen Ereignisses; ein neuer Kontakt verlängert ältere Ereignisse nicht) |
-| 3 | Fälle der Stufe „Mit Zusatzangaben“ (nach Fallabschluss) | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Ereignis wird soft-gelöscht (Frist ab Abschluss des verknüpften Falls) |
+| 3 | Ereignisse der Stufe „Mit Zusatzangaben“ in abgeschlossenen Fällen | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Ereignis wird soft-gelöscht (Frist ab Abschluss des verknüpften Falls). Ereignisse ohne Fall oder in offenen Fällen verfallen nicht über diese Frist, sondern nur über eine Dokumentationstyp-Frist (Zeile 4) |
 | 4 | Abweichende Frist einzelner Dokumentationstypen | {{ retention_document_type_overrides }} | `DocumentType.retention_days` | Zusätzliche Frist für Ereignisse dieses Typs (ab Zeitpunkt des Ereignisses): Es gilt die zuerst ablaufende Frist. Eine längere Typ-Frist verlängert die Fristen 1–3 nicht |
 | 5 | Aktivitäten / Zeitstrom-Einträge | {{ retention_activities_days }} Tage | `retention_activities_days` | **Hart**-Löschung (kein Papierkorb) |
 | 6 | Papierkorb-Frist für gelöschte Personen und Fälle | {{ client_trash_days }} Tage | `client_trash_days` | Person bzw. Fall wird automatisch anonymisiert; bis dahin wiederherstellbar |

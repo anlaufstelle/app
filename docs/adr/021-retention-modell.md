@@ -90,6 +90,10 @@ Damit sind „verlangen einen `RetentionProposal` mit Lead/Admin-Freigabe" (Deci
 - Der Soft-Delete leert Inhalte und Suchtext sofort und löscht die Anhänge; die Ereigniszeile bleibt als gelöscht markiert.
 - Vor der Löschung sichert der Lauf die betroffenen Monate als Statistik-Aggregate (`ensure_snapshots_for_months`). Diese haben keine Frist.
 
+### Ereignisse der Stufe `qualified` ohne geschlossenen Fall (Refs #2463)
+
+[`enforce_qualified`](../../src/core/retention/enforcement.py) erfasst nur Ereignisse, deren Fall geschlossen ist (`Case.Status.CLOSED`) und deren `closed_at` vor dem Stichtag liegt. `Event.case` ist optional. Ein Ereignis einer Person der Stufe `qualified` **ohne Fall** oder in einem **offenen Fall** verfällt über `retention_qualified_days` deshalb nie, sondern nur über eine gesetzte `DocumentType.retention_days`. Solange ein solches Ereignis besteht, greift auch `anonymize_clients` für die Person nicht. Gelöscht werden die Ereignisse, nicht der Fall. Ob diese Lücke fachlich gewollt ist oder ein eigener Fristbeginn für solche Ereignisse nötig ist, ist offen; die Vorlagen benennen sie, ohne eine Löschung zuzusagen.
+
 ## References
 
 - [`src/core/retention/`](../../src/core/retention/) — Submodule (`anonymization`, `audit_pruning`, `enforcement`, `legal_holds`, `proposals`)

@@ -50,7 +50,10 @@ Keine.
 | Mit Zusatzangaben | {{ retention_qualified_days }} Tage | ab Abschluss des Falls, dem das Ereignis zugeordnet ist |
 
 Die Fristen gelten je Ereignis; ein neuer Kontakt verlängert ältere Ereignisse
-nicht. Eine Frist am Dokumentationstyp gilt zusätzlich (es gilt die zuerst
+nicht. Ereignisse der Stufe „Mit Zusatzangaben“, die keinem Fall zugeordnet
+sind oder zu einem noch offenen Fall gehören, verfallen nicht über diese
+Frist, sondern nur über eine Frist am Dokumentationstyp; solange sie bestehen,
+wird auch die Person nicht anonymisiert. Eine Frist am Dokumentationstyp gilt zusätzlich (es gilt die zuerst
 ablaufende). Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne
 Freigabeschritt; Personen werden anonymisiert, sobald alle ihre Ereignisse
 gelöscht sind. Ausgenommen sind Daten unter einer Aufbewahrungssperre (Legal

@@ -781,3 +781,60 @@ class TestRetentionRunNeedsNoApproval:
         recent.refresh_from_db()
         assert old.is_deleted is True
         assert recent.is_deleted is False
+
+
+@pytest.mark.django_db
+class TestQualifiedPeriodNeedsClosedCase:
+    """Refs #2463: the "Mit Zusatzangaben" period only reaches events of a closed case.
+
+    ``enforce_qualified`` selects events whose case is ``CLOSED`` with
+    ``closed_at`` past the cutoff; ``Event.case`` is nullable. Events without a
+    case or in an open case never expire through this period.
+    """
+
+    @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
+    def test_qualified_row_names_events_and_the_gap(self, facility, slug):
+        content, _ = render_document(slug, facility)
+
+        assert "Fälle der Stufe „Mit Zusatzangaben" not in content
+        effect = _effect_cell(content, "Ereignisse der Stufe „Mit Zusatzangaben")
+        assert "ohne Fall oder in offenen Fällen" in effect
+        assert "nicht über diese Frist" in effect
+
+    @pytest.mark.parametrize("slug", ["informationspflichten", "verarbeitungsverzeichnis"])
+    def test_stage_tables_name_the_gap(self, facility, slug):
+        content, _ = render_document(slug, facility)
+
+        assert "keinem Fall zugeordnet" in content
+        assert "noch offenen Fall" in content
+
+    def test_vvt_view_names_the_gap(self):
+        from core.services.compliance import get_activity
+
+        retention = str(get_activity("klienten_stammdaten")["retention_period"])
+
+        assert "ohne Fall oder in offenen Fällen" in retention
+
+    def test_qualified_event_without_case_does_not_expire(self, facility, client_qualified, staff_user):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from core.models import DocumentType, Event
+        from core.retention.enforcement import process_facility_retention
+
+        doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
+        event = Event.objects.create(
+            facility=facility,
+            client=client_qualified,
+            document_type=doc_type,
+            occurred_at=timezone.now() - timedelta(days=5000),
+            data_json={},
+            is_anonymous=False,
+            created_by=staff_user,
+        )
+
+        process_facility_retention(facility, facility.settings, timezone.now(), dry_run=False)
+
+        event.refresh_from_db()
+        assert event.is_deleted is False
