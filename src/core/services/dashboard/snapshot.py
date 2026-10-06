@@ -9,7 +9,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import DocumentType, StatisticsSnapshot
+from core.models import DocumentType, Event, StatisticsSnapshot
 from core.reporting.data_source import LIVE
 
 # Zyklusfrei: ``core.reporting.registry`` importiert nur ``core.reporting.base``
@@ -36,12 +36,16 @@ SNAPSHOT_BACKEND_ERRORS_KEY = "_errors"
 
 # Refs #2425: reserved key in ``StatisticsSnapshot.backend_data`` for the counts
 # of the month's events that retention runs have deleted:
-# ``{"_statistics": <get_statistics shape>, <slug>: <backend summary>}``. Every
-# snapshot write adds it to the live counts, so the month keeps counting deleted
-# events across later deletion runs and recomputations. Same collision argument
-# as ``_errors``; no model field, no migration.
+# ``{"_statistics": <get_statistics shape>, <slug>: <backend summary>}``. A
+# retention run adds each event to it in the transaction that deletes the event
+# (``carry_deleted_event``); every recomputation adds it to the live counts.
+# Same collision argument as ``_errors``; no model field, no migration.
 SNAPSHOT_DELETED_KEY = "_deleted"
 _DELETED_STATISTICS_KEY = "_statistics"
+
+
+class SnapshotCarryError(Exception):
+    """The counts of an event being deleted could not be carried into its monthly snapshot."""
 
 
 def _merge_person_count(current: int | None, value: int | None) -> int | None:
@@ -64,17 +68,47 @@ def _merge_person_count(current: int | None, value: int | None) -> int | None:
     return max(current, value)
 
 
-def create_or_update_snapshot(facility, year, month, deleted_events=None):
-    """Create or update a statistics snapshot for a given facility and month.
+def create_or_update_snapshot(facility, year, month):
+    """Create or update the statistics snapshot of one facility and month.
 
-    Refs #2425: the snapshot counts the month's live events plus the events
-    retention runs deleted before (``SNAPSHOT_DELETED_KEY``). ``deleted_events``
-    are events of this month the calling run has just deleted; they are added
-    to that carry-over first.
+    Refs #2425: the stored counts are the month's live events plus the
+    carry-over of events retention runs deleted (``SNAPSHOT_DELETED_KEY``).
+    The row is locked BEFORE the live events are counted. A retention run moves
+    an event from the live events into the carry-over under the same row lock,
+    so both parts always describe one state: an event is counted either live
+    or in the carry-over, never in both and never in neither.
     """
-    date_from = date(year, month, 1)
-    _, last_day = calendar.monthrange(year, month)
-    date_to = date(year, month, last_day)
+    with transaction.atomic():
+        row = _lock_snapshot_row(facility, year, month)
+        _recompute_locked_row(facility, row, dict(row.backend_data.get(SNAPSHOT_DELETED_KEY) or {}))
+    logger.info(
+        "Snapshot created/updated: facility=%s year=%d month=%d",
+        facility.name,
+        year,
+        month,
+    )
+
+
+def _lock_snapshot_row(facility, year, month):
+    """Lock the month's snapshot row; insert an empty one first if there is none.
+
+    Refs #2425: ``select_for_update`` cannot lock a row that does not exist
+    yet. ``ON CONFLICT DO NOTHING`` makes a second inserting session wait for
+    the first one's transaction; the lock then returns the committed row. Empty
+    ``data`` marks a row the calling transaction has to compute in full; it
+    never becomes visible, because the same transaction fills it.
+    """
+    StatisticsSnapshot.objects.bulk_create(
+        [StatisticsSnapshot(facility=facility, year=year, month=month)], ignore_conflicts=True
+    )
+    return StatisticsSnapshot.objects.select_for_update().get(facility=facility, year=year, month=month)
+
+
+def _recompute_locked_row(facility, row, deleted):
+    """Store live counts plus the carry-over ``deleted`` in the locked ``row``."""
+    date_from = date(row.year, row.month, 1)
+    _, last_day = calendar.monthrange(row.year, row.month)
+    date_to = date(row.year, row.month, last_day)
 
     stats = get_statistics(facility, date_from, date_to)
 
@@ -83,12 +117,12 @@ def create_or_update_snapshot(facility, year, month, deleted_events=None):
     # und NICHT ``prepare_export``: der Snapshot ist der interne Rohbestand, die
     # k-Anon-Suppression gehoert allein in den Export-/Panel-Pfad.
     #
-    # Refs #2070: je Backend isoliert und mit Query-Deckel. Bis hierher riss ein
-    # einziges werfendes Backend den kompletten Lauf ab — inklusive der bereits
-    # berechneten ``stats`` dieser Einrichtung, aller Folgemonate
-    # (``record_deleted_events``) und aller Folge-Einrichtungen im
-    # Cron-Command. Der Preis dafuer war ein Datenverlust-Fenster: der Cron
-    # laeuft monatlich, die Event-Retention laeuft weiter.
+    # Refs #2070: each backend isolated and with a query cap. A single raising
+    # backend used to abort the whole run, including the statistics already
+    # computed for this facility, all following months and all following
+    # facilities of the cron command. Nothing is lost here: the carry-over of
+    # deleted events stays in the row and the next recomputation restores the
+    # backend's payload.
     payloads = {}
     backend_errors = {}
     for backend in get_backends():
@@ -109,38 +143,23 @@ def create_or_update_snapshot(facility, year, month, deleted_events=None):
                 "create_or_update_snapshot: Backend %s uebersprungen (facility=%s year=%d month=%d)",
                 backend.slug,
                 facility.name,
-                year,
-                month,
+                row.year,
+                row.month,
             )
 
     # Remove top_clients (not snapshot-safe due to anonymization)
     stats.pop("top_clients", None)
 
-    # Refs #2425: read, extend and write the carry-over under a row lock, so a
-    # concurrent snapshot run cannot write back an older carry-over.
-    with transaction.atomic():
-        existing = (
-            StatisticsSnapshot.objects.select_for_update().filter(facility=facility, year=year, month=month).first()
-        )
-        deleted = dict(existing.backend_data.get(SNAPSHOT_DELETED_KEY) or {}) if existing else {}
-        if deleted_events is not None:
-            deleted = _add_deleted_events(deleted, deleted_events, backend_errors)
-        if deleted:
-            stats = _merge_stats([stats, deleted[_DELETED_STATISTICS_KEY]])
-            for slug, summary in payloads.items():
-                if slug in deleted:
-                    payloads[slug] = _merge_backend_summaries(slug, [summary, deleted[slug]])
-            payloads[SNAPSHOT_DELETED_KEY] = deleted
-        _write_snapshot(facility, year, month, stats, payloads, backend_errors)
-    logger.info(
-        "Snapshot created/updated: facility=%s year=%d month=%d",
-        facility.name,
-        year,
-        month,
-    )
+    if deleted:
+        stats = _merge_stats([stats, deleted[_DELETED_STATISTICS_KEY]])
+        for slug, summary in payloads.items():
+            if slug in deleted:
+                payloads[slug] = _merge_backend_summaries(slug, [summary, deleted[slug]])
+        payloads[SNAPSHOT_DELETED_KEY] = deleted
+    _write_snapshot(facility, row, stats, payloads, backend_errors)
 
 
-def _write_snapshot(facility, year, month, stats, payloads, backend_errors):
+def _write_snapshot(facility, row, stats, payloads, backend_errors):
     """Enrich, serialise and store one monthly snapshot row."""
     # Enrich by_document_type with system_type and document_type_id.
     # Bulk-Lookup statt N+1-Loop (Refs #598): eine einzige Query holt alle
@@ -159,8 +178,8 @@ def _write_snapshot(facility, year, month, stats, payloads, backend_errors):
             entry["document_type_id"] = str(dt.id) if dt else ""
 
     # Force-convert lazy translation strings to plain strings for JSON storage
-    stats = json.loads(json.dumps(stats, cls=DjangoJSONEncoder))
-    payloads = json.loads(json.dumps(payloads, cls=DjangoJSONEncoder))
+    stats = _to_json(stats)
+    payloads = _to_json(payloads)
 
     # Refs #2070: der Ausfall wird **laut** markiert, nicht verschwiegen — genau
     # das war die Sorge hinter der frueheren Fail-loud-Politik (ein leises
@@ -171,24 +190,60 @@ def _write_snapshot(facility, year, month, stats, payloads, backend_errors):
     if backend_errors:
         payloads[SNAPSHOT_BACKEND_ERRORS_KEY] = backend_errors
 
-    StatisticsSnapshot.objects.update_or_create(
-        facility=facility,
-        year=year,
-        month=month,
-        # Refs #1740: Der Dual-Write ins Altfeld des Sachberichts ist beendet —
-        # ``backend_data`` ist die einzige Quelle (Migrationen 0123/0124).
-        defaults={
-            "data": stats,
-            "backend_data": payloads,
-        },
-    )
+    # Refs #1740: the dual write into the sample report's former field has
+    # ended — ``backend_data`` is the only source (migrations 0123/0124).
+    row.data = stats
+    row.backend_data = payloads
+    row.save(update_fields=["data", "backend_data", "updated_at"])
 
 
-def _add_deleted_events(deleted, events, backend_errors):
+def _to_json(value):
+    """Plain JSON values (lazy translation strings, tuples) for a ``JSONField``."""
+    return json.loads(json.dumps(value, cls=DjangoJSONEncoder))
+
+
+def carry_deleted_event(facility, event):
+    """Carry an event a retention run is deleting into its month's snapshot.
+
+    Refs #2425: the monthly snapshot is the anonymous remainder of deleted
+    events. Call this inside the transaction that marks ``event`` deleted,
+    after the mutation: the deletion and the carry-over then commit together
+    or not at all, so an aborted run neither loses the count nor leaves it to a
+    later step. Only the session that actually flips the event to deleted gets
+    here, so every event is carried exactly once.
+
+    The month's row is locked first. An existing row keeps its stored counts
+    and only the carry-over grows: the last recomputation counted the event
+    live, or — if the event was recorded after it — the next recomputation
+    counts it from the carry-over. Either way the stored counts never drop
+    because of the deletion. A row this call has to create is computed in full
+    (live events plus carry-over).
+
+    Raises :class:`SnapshotCarryError` for any failure, including a backend
+    that cannot summarise the event; the caller rolls the deletion back.
+    """
+    try:
+        occurred = timezone.localtime(event.occurred_at)
+        row = _lock_snapshot_row(facility, occurred.year, occurred.month)
+        deleted = _add_deleted_events(
+            dict(row.backend_data.get(SNAPSHOT_DELETED_KEY) or {}),
+            Event.objects.for_facility(facility).filter(pk=event.pk),
+        )
+        if not row.data:
+            _recompute_locked_row(facility, row, deleted)
+            return
+        row.backend_data = {**row.backend_data, SNAPSHOT_DELETED_KEY: _to_json(deleted)}
+        row.save(update_fields=["backend_data", "updated_at"])
+    except Exception as exc:
+        raise SnapshotCarryError(f"monthly statistics carry-over failed for event {event.pk}") from exc
+
+
+def _add_deleted_events(deleted, events):
     """Return the carry-over ``deleted`` extended by the counts of ``events``.
 
     Persons merge by maximum like every other segment merge (K0-b): the
-    result stays a lower bound of the distinct persons, never a sum.
+    result stays a lower bound of the distinct persons, never a sum. Every
+    snapshot backend must summarise the events; a failure propagates.
     """
     statistics = [get_statistics_for_events(events)]
     if _DELETED_STATISTICS_KEY in deleted:
@@ -197,20 +252,9 @@ def _add_deleted_events(deleted, events, backend_errors):
     for backend in get_backends():
         if not backend.snapshot_enabled:
             continue
+        with reporting_statement_timeout():
+            summary = backend.summarize_events(events)
         previous = deleted.get(backend.slug)
-        try:
-            with reporting_statement_timeout():
-                summary = backend.summarize_events(events)
-        except Exception as exc:
-            # Same isolation as the live payload above: the deleted counts of
-            # this backend are lost for this run, and the snapshot says so.
-            backend_errors[backend.slug] = type(exc).__name__
-            logger.exception("create_or_update_snapshot: deleted events for backend %s skipped", backend.slug)
-            summary = None
-        if summary is None:
-            if previous is not None:
-                extended[backend.slug] = previous
-            continue
         extended[backend.slug] = (
             summary if previous is None else _merge_backend_summaries(backend.slug, [previous, summary])
         )
@@ -219,27 +263,7 @@ def _add_deleted_events(deleted, events, backend_errors):
 
 def _merge_backend_summaries(slug, summaries):
     """Merge monthly summaries of one snapshot backend (Refs #2425)."""
-    mergers = {"sample-report-1": _merge_sample_report_1_stats}
-    return mergers[slug](summaries)
-
-
-def record_deleted_events(facility, events):
-    """Carry events a retention run has just deleted into their months' snapshots.
-
-    Refs #2425: the monthly snapshot is the anonymous remainder of deleted
-    events. Recomputing it from the surviving events alone made each further
-    deletion run in the same month drop the counts of the earlier ones. The
-    caller passes the events AFTER deleting them, restricted to those really
-    deleted — a held or failed event stays live and must not count twice. The
-    running month is included: its row holds the carry-over until the
-    month-end snapshot run recomputes it.
-    """
-    # ``order_by()`` clears the model ordering; with it, DISTINCT would yield
-    # one row per timestamp and carry the same events more than once.
-    months = sorted(set(events.order_by().values_list("occurred_at__year", "occurred_at__month").distinct()))
-    for year, month in months:
-        month_events = events.filter(occurred_at__year=year, occurred_at__month=month)
-        create_or_update_snapshot(facility, year, month, deleted_events=month_events)
+    return _SUMMARY_MERGERS[slug](summaries)
 
 
 def get_snapshot(facility, year, month):
@@ -520,6 +544,11 @@ def _merge_sample_report_1_stats(stats_list):
     merged["by_age_cluster"] = _with_merged_persons(age_cluster_map, age_persons)
 
     return merged
+
+
+# Refs #2425: how the carry-over of each snapshot backend is merged; every
+# ``snapshot_enabled`` backend needs an entry, otherwise its carry-over fails.
+_SUMMARY_MERGERS = {"sample-report-1": _merge_sample_report_1_stats}
 
 
 def get_statistics_hybrid(facility, date_from, date_to):

@@ -10,6 +10,7 @@ from datetime import datetime, time, timedelta
 
 import pytest
 from django.core.management import call_command
+from django.db import transaction
 from django.utils import timezone
 
 from core.models import Event, Settings, StatisticsSnapshot
@@ -31,6 +32,15 @@ def _event(facility, doc_type, user, occurred_at, client=None):
         is_anonymous=client is None,
         created_by=user,
     )
+
+
+def _delete_and_carry(facility, event):
+    """Mark ``event`` deleted and carry it, in one transaction like a retention run."""
+    from core.services.dashboard import carry_deleted_event
+
+    with transaction.atomic():
+        Event.objects.filter(pk=event.pk).update(is_deleted=True)
+        carry_deleted_event(facility, event)
 
 
 @pytest.mark.django_db
@@ -123,13 +133,10 @@ class TestRetentionRunsKeepMonthlyCounts:
 @pytest.mark.django_db
 class TestRunningMonthRow:
     def test_deletion_in_running_month_writes_its_row(self, facility, staff_user, doc_type_contact):
-        from core.services.dashboard import record_deleted_events
-
         event = _event(facility, doc_type_contact, staff_user, timezone.now())
-        Event.objects.filter(pk=event.pk).update(is_deleted=True)
         today = timezone.localdate()
 
-        record_deleted_events(facility, Event.objects.filter(pk=event.pk))
+        _delete_and_carry(facility, event)
 
         snapshot = StatisticsSnapshot.objects.get(facility=facility, year=today.year, month=today.month)
         assert snapshot.data["total_contacts"] == 1
@@ -146,32 +153,42 @@ class TestRunningMonthRow:
 
 
 @pytest.mark.django_db
-class TestRecordDeletedEvents:
-    def test_month_with_several_timestamps_is_carried_once(self, facility, staff_user, doc_type_contact):
-        from core.services.dashboard import record_deleted_events
-
+class TestCarryDeletedEvent:
+    def test_events_of_one_month_add_up(self, facility, staff_user, doc_type_contact):
         occurred_at = _past_month_noon()
-        for hours in range(3):
-            _event(facility, doc_type_contact, staff_user, occurred_at + timedelta(hours=hours))
-        Event.objects.filter(facility=facility).update(is_deleted=True)
+        events = [_event(facility, doc_type_contact, staff_user, occurred_at + timedelta(hours=h)) for h in range(3)]
 
-        record_deleted_events(facility, Event.objects.filter(facility=facility))
+        for event in events:
+            _delete_and_carry(facility, event)
 
         snapshot = StatisticsSnapshot.objects.get(facility=facility)
         assert snapshot.data["total_contacts"] == 3
         assert snapshot.backend_data["_deleted"]["_statistics"]["total_contacts"] == 3
 
+    def test_existing_row_keeps_its_counts_and_extends_the_carry(self, facility, staff_user, doc_type_contact):
+        from core.services.dashboard import create_or_update_snapshot
+
+        occurred_at = _past_month_noon()
+        first = _event(facility, doc_type_contact, staff_user, occurred_at)
+        _event(facility, doc_type_contact, staff_user, occurred_at)
+        create_or_update_snapshot(facility, occurred_at.year, occurred_at.month)
+
+        _delete_and_carry(facility, first)
+
+        snapshot = StatisticsSnapshot.objects.get(facility=facility)
+        assert snapshot.data["total_contacts"] == 2
+        assert snapshot.backend_data["sample-report-1"]["total"] == 2
+        assert snapshot.backend_data["_deleted"]["_statistics"]["total_contacts"] == 1
+        assert snapshot.backend_data["_deleted"]["sample-report-1"]["total"] == 1
+
     def test_later_runs_add_to_carry_and_keep_persons_a_lower_bound(
         self, facility, staff_user, client_identified, doc_type_contact
     ):
-        from core.services.dashboard import record_deleted_events
-
         occurred_at = _past_month_noon()
         first = _event(facility, doc_type_contact, staff_user, occurred_at, client=client_identified)
         second = _event(facility, doc_type_contact, staff_user, occurred_at, client=client_identified)
         for event in (first, second):
-            Event.objects.filter(pk=event.pk).update(is_deleted=True)
-            record_deleted_events(facility, Event.objects.filter(pk=event.pk))
+            _delete_and_carry(facility, event)
 
         data = StatisticsSnapshot.objects.get(facility=facility).data
         assert data["total_contacts"] == 2
@@ -180,17 +197,16 @@ class TestRecordDeletedEvents:
         assert data["persons_by_contact_stage"]["identifiziert"] == 1
         assert [(row["count"], row["persons"]) for row in data["by_age_cluster"]] == [(2, 1)]
 
-    def test_failing_backend_keeps_earlier_carry_and_is_marked(
+    def test_failing_backend_rolls_back_and_keeps_earlier_carry(
         self, facility, staff_user, doc_type_contact, monkeypatch
     ):
         from core.reporting.backends.sample_report_1 import SampleReport1Backend
-        from core.services.dashboard import record_deleted_events
+        from core.services.dashboard.snapshot import SnapshotCarryError
 
         occurred_at = _past_month_noon()
         first = _event(facility, doc_type_contact, staff_user, occurred_at)
         second = _event(facility, doc_type_contact, staff_user, occurred_at)
-        Event.objects.filter(pk=first.pk).update(is_deleted=True)
-        record_deleted_events(facility, Event.objects.filter(pk=first.pk))
+        _delete_and_carry(facility, first)
 
         live_summary = SampleReport1Backend.summarize_events
 
@@ -201,27 +217,24 @@ class TestRecordDeletedEvents:
             return live_summary(self, events)
 
         monkeypatch.setattr(SampleReport1Backend, "summarize_events", broken_for_deleted)
-        Event.objects.filter(pk=second.pk).update(is_deleted=True)
-        record_deleted_events(facility, Event.objects.filter(pk=second.pk))
+        with pytest.raises(SnapshotCarryError):
+            _delete_and_carry(facility, second)
 
         backend_data = StatisticsSnapshot.objects.get(facility=facility).backend_data
-        assert backend_data["_errors"] == {"sample-report-1": "RuntimeError"}
+        assert "_errors" not in backend_data
         assert backend_data["_deleted"]["sample-report-1"]["total"] == 1
-        assert backend_data["sample-report-1"]["total"] == 1
-        assert backend_data["_deleted"]["_statistics"]["total_contacts"] == 2
+        assert backend_data["_deleted"]["_statistics"]["total_contacts"] == 1
+        assert Event.objects.get(pk=second.pk).is_deleted is False
 
-    def test_backend_without_summary_hook_keeps_earlier_carry(
-        self, facility, staff_user, doc_type_contact, monkeypatch
-    ):
+    def test_backend_without_summary_hook_fails_the_carry(self, facility, staff_user, doc_type_contact, monkeypatch):
         from core.reporting.backends.sample_report_1 import SampleReport1Backend
         from core.reporting.base import DatasetBackend
-        from core.services.dashboard import record_deleted_events
+        from core.services.dashboard.snapshot import SnapshotCarryError
 
         occurred_at = _past_month_noon()
         first = _event(facility, doc_type_contact, staff_user, occurred_at)
         second = _event(facility, doc_type_contact, staff_user, occurred_at)
-        Event.objects.filter(pk=first.pk).update(is_deleted=True)
-        record_deleted_events(facility, Event.objects.filter(pk=first.pk))
+        _delete_and_carry(facility, first)
 
         live_summary = SampleReport1Backend.summarize_events
 
@@ -231,21 +244,23 @@ class TestRecordDeletedEvents:
             return live_summary(self, events)
 
         monkeypatch.setattr(SampleReport1Backend, "summarize_events", no_summary_for_deleted)
-        Event.objects.filter(pk=second.pk).update(is_deleted=True)
-        record_deleted_events(facility, Event.objects.filter(pk=second.pk))
+        with pytest.raises(SnapshotCarryError):
+            _delete_and_carry(facility, second)
 
         backend_data = StatisticsSnapshot.objects.get(facility=facility).backend_data
         assert backend_data["_deleted"]["sample-report-1"]["total"] == 1
-        assert "_errors" not in backend_data
+        assert Event.objects.get(pk=second.pk).is_deleted is False
 
     def test_every_snapshot_backend_can_summarize_deleted_events(self):
         from core.reporting.base import DatasetBackend
         from core.reporting.registry import get_backends
+        from core.services.dashboard.snapshot import _SUMMARY_MERGERS
 
         snapshot_backends = [backend for backend in get_backends() if backend.snapshot_enabled]
         assert snapshot_backends
         for backend in snapshot_backends:
             assert type(backend).summarize_events is not DatasetBackend.summarize_events, backend.slug
+            assert backend.slug in _SUMMARY_MERGERS, backend.slug
 
 
 @pytest.mark.django_db

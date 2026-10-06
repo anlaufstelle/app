@@ -899,7 +899,7 @@ class TestRetentionExceptionsAreNamed:
 
     ``eventhistory._lock_rows`` locks with ``skip_locked`` and the run skips
     held or locked events; ``anonymize_clients`` needs at least one event and
-    no active hold; ``record_deleted_events`` adds deleted events to their
+    no active hold; ``carry_deleted_event`` adds each deleted event to its
     month's aggregate, the running month included, and later recomputations
     keep them.
     """
@@ -956,10 +956,10 @@ class TestRetentionExceptionsAreNamed:
         from django.utils import timezone
 
         from core.models import DocumentType, Event, StatisticsSnapshot
-        from core.services.dashboard.snapshot import record_deleted_events
+        from core.services.dashboard.snapshot import carry_deleted_event
 
         doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
-        Event.objects.create(
+        event = Event.objects.create(
             facility=facility,
             client=client_identified,
             document_type=doc_type,
@@ -971,7 +971,7 @@ class TestRetentionExceptionsAreNamed:
         )
         today = timezone.localdate()
 
-        record_deleted_events(facility, Event.objects.filter(facility=facility))
+        carry_deleted_event(facility, event)
 
         snapshot = StatisticsSnapshot.objects.get(facility=facility, year=today.year, month=today.month)
         assert snapshot.data["total_contacts"] == 1
@@ -996,7 +996,7 @@ class TestRetentionExceptionsAreNamed:
         from django.utils import timezone
 
         from core.models import DocumentType, Event, StatisticsSnapshot
-        from core.services.dashboard.snapshot import record_deleted_events
+        from core.services.dashboard.snapshot import carry_deleted_event
 
         previous_month = timezone.localdate().replace(day=1) - timedelta(days=10)
         occurred_at = timezone.make_aware(datetime.combine(previous_month, datetime.min.time()))
@@ -1015,9 +1015,9 @@ class TestRetentionExceptionsAreNamed:
         )
 
         Event.objects.filter(pk=first.pk).update(is_deleted=True)
-        record_deleted_events(facility, Event.objects.filter(pk=first.pk))
+        carry_deleted_event(facility, first)
         assert StatisticsSnapshot.objects.get(facility=facility).data["total_contacts"] == 2
         Event.objects.filter(pk=second.pk).update(is_deleted=True)
-        record_deleted_events(facility, Event.objects.filter(pk=second.pk))
+        carry_deleted_event(facility, second)
 
         assert StatisticsSnapshot.objects.get(facility=facility).data["total_contacts"] == 2

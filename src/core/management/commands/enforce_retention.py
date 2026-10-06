@@ -11,16 +11,14 @@ from dataclasses import dataclass
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from core.models import AuditLog, Event, Facility, Settings
+from core.models import AuditLog, Facility, Settings
 from core.retention.enforcement import enforce_handover_notes
 from core.retention.eventhistory import enforce_eventhistory_retention
 from core.services.audit import audit_event
-from core.services.dashboard import record_deleted_events
 from core.services.import_engine import cleanup_stale_import_jobs
 from core.services.retention import (
     anonymize_clients,
     cleanup_stale_proposals,
-    collect_doomed_events,
     create_proposals_for_facility,
     enforce_activities,
     process_facility_retention,
@@ -154,9 +152,9 @@ class Command(BaseCommand):
 
         Facilities without a ``Settings`` row are skipped with a warning (the
         loop's previous ``continue``). On a real (non-dry-run) pass this also
-        reactivates due deferred proposals, snapshots doomed events before
-        deletion, and cleans up stale proposals afterwards — each guarded the
-        same way as before, so the dry-run path stays read-only.
+        reactivates due deferred proposals and cleans up stale proposals
+        afterwards — each guarded the same way as before, so the dry-run path
+        stays read-only.
         """
         try:
             settings_obj = facility.settings
@@ -173,18 +171,9 @@ class Command(BaseCommand):
                     f"{auto_approved} auto-approved after defer."
                 )
 
-        # Refs #2425: the monthly statistics keep counting deleted events. Note
-        # the candidates first and carry those really deleted afterwards — a
-        # held or failed event stays live and must not count twice.
-        doomed_ids = []
-        if not dry_run:
-            doomed_ids = list(collect_doomed_events(facility, settings_obj, now).values_list("pk", flat=True))
-
+        # Refs #2425: each deleted event is carried into its monthly snapshot in
+        # the transaction that deletes it (``core.retention.enforcement``).
         totals.deleted += process_facility_retention(facility, settings_obj, now, dry_run)["count"]
-        if doomed_ids:
-            record_deleted_events(
-                facility, Event.objects.for_facility(facility).filter(pk__in=doomed_ids, is_deleted=True)
-            )
         totals.activities += enforce_activities(facility, settings_obj, now, dry_run)["count"]
         totals.handover_notes += enforce_handover_notes(facility, settings_obj, now, dry_run)["count"]
         totals.anonymized += anonymize_clients(facility, dry_run)["count"]

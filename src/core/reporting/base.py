@@ -630,16 +630,16 @@ class DatasetBackend(ABC):
         """Baue den Datensatz fuer ``facility`` im Zeitraum ``[date_from, date_to]``."""
         ...
 
-    def summarize_events(self, events) -> dict | None:
+    def summarize_events(self, events) -> dict:
         """``summary`` over an explicit event set, in the shape of ``build_dataset``.
 
         Refs #2425: the monthly snapshot keeps counting events a retention run
         deleted; it aggregates exactly those events with this hook. Every
-        ``snapshot_enabled`` backend must implement it — ``None`` means the
-        backend cannot carry deleted events, and its snapshot payload would
-        lose them.
+        ``snapshot_enabled`` backend must implement it — without it, the
+        carry-over fails and retention keeps the events instead of deleting
+        them uncounted.
         """
-        return None
+        raise NotImplementedError(f"{type(self).__name__} cannot summarise deleted events")
 
     def validate_completeness(self, facility, date_from, date_to) -> list[CompletenessIssue]:
         """Datenqualitaets-Checks vor der Anzeige/dem Export (Default: keine Checks)."""

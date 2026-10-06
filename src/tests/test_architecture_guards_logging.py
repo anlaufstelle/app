@@ -94,22 +94,33 @@ ALLOWLIST = {
         "create_or_update_snapshot",
         "name",
     ): {
-        # Genau die beiden begruendeten Aufrufe dieser Funktion. Ein dritter
-        # macht den Guard rot — die Begruendung gilt fuer diese Stellen, nicht
-        # fuer den Geltungsbereich.
-        "count": 2,
+        # Exactly the one justified call of this function. A second one turns
+        # the guard red — the reason covers this line, not the scope.
+        "count": 1,
         "reason": (
-            "``facility.name`` ist der Name der EINRICHTUNG (des Betreibers "
-            "selbst), kein Personenname: Klient*innen und Konten tauchen in "
-            "diesen beiden Zeilen nicht auf. Die Zeilen markieren einen "
-            "uebersprungenen Statistik-Backend-Lauf bzw. einen geschriebenen "
-            "Snapshot; in einer Installation mit mehreren Einrichtungen ist der "
-            "Name genau die Information, die den Ausfall zuordenbar macht. Auf "
-            "dem Weg zu einem Error-Tracker geht der Wert ohnehin nicht mit — "
-            "der Hook ersetzt die Zeile durch ihr Template (Refs #2198). "
-            "Verbesserungsmoeglichkeit (eigenes Ticket, Datei liegt ausserhalb "
-            "dieser Aenderung): ``facility_id`` im ``extra`` statt des Namens in "
-            "der Vorlage."
+            "``facility.name`` is the name of the FACILITY (the operator "
+            "itself), not a person's name: clients and accounts do not appear "
+            "in this line. It marks a written snapshot; in an installation with "
+            "several facilities the name is exactly what makes the line "
+            "attributable. It never reaches an error tracker — the hook "
+            "replaces the line with its template (Refs #2198)."
+        ),
+    },
+    (
+        "services/dashboard/snapshot.py",
+        "_recompute_locked_row",
+        "name",
+    ): {
+        # Refs #2425: the skipped-backend line moved here from
+        # ``create_or_update_snapshot`` unchanged; same single call, same reason.
+        "count": 1,
+        "reason": (
+            "``facility.name`` is the name of the FACILITY, not a person's "
+            "name; the line marks a skipped statistics backend and the name "
+            "makes it attributable in a multi-facility installation. It never "
+            "reaches an error tracker — the hook replaces the line with its "
+            "template (Refs #2198). Possible improvement: ``facility_id`` in "
+            "``extra`` instead of the name in the template."
         ),
     },
     # Refs #2321 (H-2): erst die Verfolgung der Zwischenvariablen macht diese

@@ -3,14 +3,15 @@
 from datetime import datetime
 
 import pytest
+from django.db import transaction
 from django.utils import timezone
 
 from core.models import DocumentType, Event, StatisticsSnapshot
 from core.reporting import registry
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.services.dashboard import (
+    carry_deleted_event,
     create_or_update_snapshot,
-    record_deleted_events,
 )
 from core.services.dashboard.snapshot import _merge_stats
 
@@ -113,10 +114,10 @@ class TestUniqueConstraint:
 
 
 @pytest.mark.django_db
-class TestRecordDeletedEventsMonths:
-    """record_deleted_events writes snapshots for every month of the deleted events (Refs #2425)."""
+class TestCarryDeletedEventMonths:
+    """carry_deleted_event writes the snapshot of every deleted event's month (Refs #2425)."""
 
-    def test_record_deleted_events_covers_every_month(self, facility, staff_user, client_identified, doc_type_contact):
+    def test_carry_covers_every_month(self, facility, staff_user, client_identified, doc_type_contact):
         # Events in 3 verschiedenen vergangenen Monaten
         jan = timezone.make_aware(datetime(2025, 1, 15, 10, 0))
         feb = timezone.make_aware(datetime(2025, 2, 10, 14, 0))
@@ -126,9 +127,10 @@ class TestRecordDeletedEventsMonths:
         _create_event(facility, staff_user, doc_type_contact, client=client_identified, occurred_at=feb)
         _create_event(facility, staff_user, doc_type_contact, client=client_identified, occurred_at=mar)
 
-        events = Event.objects.filter(facility=facility)
-        events.update(is_deleted=True)
-        record_deleted_events(facility, events)
+        for event in Event.objects.filter(facility=facility):
+            with transaction.atomic():
+                Event.objects.filter(pk=event.pk).update(is_deleted=True)
+                carry_deleted_event(facility, event)
 
         snapshots = StatisticsSnapshot.objects.filter(facility=facility)
         assert snapshots.count() == 3

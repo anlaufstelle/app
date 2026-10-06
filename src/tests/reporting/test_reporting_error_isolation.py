@@ -34,7 +34,7 @@ from core.models import AuditLog, DocumentType, Event, StatisticsSnapshot
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec, stamp_threshold
 from core.reporting.db_guard import reporting_statement_timeout
 from core.reporting.registry import register_backend
-from core.services.dashboard import create_or_update_snapshot, record_deleted_events
+from core.services.dashboard import create_or_update_snapshot
 
 pytestmark = pytest.mark.django_db
 
@@ -373,18 +373,34 @@ class TestSnapshotUeberspringtDefektesBackend:
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
         assert "_errors" not in snap.backend_data
 
-    def test_record_deleted_events_runs_through_all_months(
-        self, facility, staff_user, client_identified, _mit_kaputtem_snapshot_backend
+    def test_retention_goes_on_through_all_months_and_keeps_the_events(
+        self, facility, staff_user, client_identified, _mit_kaputtem_snapshot_backend, monkeypatch
     ):
-        """A broken backend used to abort the whole batch of months."""
+        """A broken backend used to abort the whole batch of months.
+
+        Refs #2425: the backend cannot summarise deleted events either, so no
+        event is deleted uncounted — each one is kept and logged, and the run
+        still tries every month instead of stopping at the first.
+        """
+        import core.retention.enforcement as enforcement
+
         for month in (1, 2, 3):
             self._event(facility, staff_user, client_identified, timezone.make_aware(datetime(2025, month, 15, 10, 0)))
-        Event.objects.filter(facility=facility).update(is_deleted=True)
+        attempted = []
+        carry = enforcement.carry_deleted_event
 
-        record_deleted_events(facility, Event.objects.filter(facility=facility))
+        def recording_carry(facility_arg, event):
+            attempted.append(timezone.localtime(event.occurred_at).month)
+            return carry(facility_arg, event)
 
-        months = set(StatisticsSnapshot.objects.filter(facility=facility).values_list("year", "month"))
-        assert {(2025, 1), (2025, 2), (2025, 3)} <= months
+        monkeypatch.setattr(enforcement, "carry_deleted_event", recording_carry)
+        count, _ = enforcement._soft_delete_events(
+            Event.objects.filter(facility=facility), facility=facility, category="identified", retention_days=1
+        )
+
+        assert count == 0
+        assert sorted(attempted) == [1, 2, 3]
+        assert Event.objects.filter(facility=facility, is_deleted=False).count() == 3
 
 
 class TestStatementTimeout:

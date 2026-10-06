@@ -9,6 +9,7 @@ Konvention: Alle ``enforce_*``-Funktionen liefern ein Result-Dict
 stdout-Formatierung, Argument-Parsing und Iteration ueber Facilities.
 """
 
+import logging
 from datetime import timedelta
 
 from django.contrib.contenttypes.models import ContentType
@@ -32,8 +33,11 @@ from core.models import (
 from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold, resolve_activity_client_id
 from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
+from core.services.dashboard.snapshot import SnapshotCarryError, carry_deleted_event
 from core.services.events import _snapshot_field_metadata, build_redacted_delete_history
 from core.services.file_vault import delete_attachments_for
+
+logger = logging.getLogger(__name__)
 
 
 def collect_doomed_events(facility, settings_obj, now):
@@ -161,6 +165,33 @@ def _lock_event_and_recheck_hold(facility, pk):
     return event, False
 
 
+class _CarryFailure:
+    """Turn a failed statistics carry-over of one event into a skipped event (Refs #2425).
+
+    Entered before the event's transaction: the transaction rolls the deletion
+    back first, then this logs the error and suppresses it, so the run goes on
+    with the next event and a later run tries this one again.
+    """
+
+    def __init__(self, pk):
+        self.pk = pk
+        self.failed = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        if exc_type is None or not issubclass(exc_type, SnapshotCarryError):
+            return False
+        logger.error(
+            "enforce_retention: event %s kept, its statistics carry-over failed",
+            self.pk,
+            exc_info=(exc_type, exc, traceback),
+        )
+        self.failed = True
+        return True
+
+
 def _soft_delete_events(qs, facility, category, retention_days, extra_detail=None):
     """Soft-delete every event in ``qs``, write ``EventHistory`` + ``AuditLog``,
     and clean up approved proposals. Returns ``(count, deleted_ids)``.
@@ -185,6 +216,11 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
     erscheint aber als ``deferred`` im ``detail`` — „nicht geloescht" und
     „nicht angeschaut" muessen fuer die Spoliationsfrage unterscheidbar
     bleiben.
+
+    Refs #2425: each event is carried into its monthly statistics snapshot
+    inside the same transaction (:func:`carry_deleted_event`). If that fails,
+    the deletion is rolled back and logged as an error; the event stays live,
+    does not count in ``count`` and the next run tries again.
     """
 
     # Refs #1344: DSGVO-Nachweiskette — jedes Event MUSS atomar mit seiner
@@ -199,7 +235,8 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
     deleted_event_ids = []
     deferred_count = 0
     for pk in event_pks:
-        with transaction.atomic():
+        carry = _CarryFailure(pk)
+        with carry, transaction.atomic():
             # Refs #2107: Sperre und Hold-Lesung liegen INNERHALB derselben
             # Transaktion wie die Mutation — eine Pruefung davor waere wieder
             # nur eine Momentaufnahme.
@@ -255,7 +292,13 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
             # Event-Commit und Datei-Unlink eine ``.enc``-Datei MIT Record
             # hinterlassen; ``cleanup_orphan_storage_files`` ueberspringt Dateien
             # MIT Record -> PII-Residue bliebe dauerhaft (DSGVO-Blocker).
+            # Refs #2425: the monthly statistics keep counting the event. The
+            # carry-over commits with the deletion or not at all; it runs before
+            # the attachment cleanup, whose file unlink cannot be rolled back.
+            carry_deleted_event(facility, event)
             delete_attachments_for(event)
+        if carry.failed:
+            continue
         deleted_event_ids.append(pk)
 
     extra = dict(extra_detail) if extra_detail else {}
