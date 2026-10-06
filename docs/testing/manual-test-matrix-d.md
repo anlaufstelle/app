@@ -112,25 +112,29 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| DeletionRequests | leitung + fachkraft | — | — | `test_deletion_approval_audit.py` |
+| DeletionRequests | leitung + fachkraft + admin | — | — | `test_deletion_approval_audit.py` |
 
-**Voraussetzung:** DEL-01 + DEL-03 + DEL-04 durchgeführt.
+**Voraussetzung:** ENT-DEL-01 (Antrag auf ein Ereignis) + ENT-DEL-03 (Genehmigung) + ENT-DEL-04 (Ablehnung eines zweiten Antrags) durchgeführt; PKs der beiden `DeletionRequest`s (`dr_ok`, `dr_rej`) notiert.
 
 **Schritte:**
-1. `/audit/?action=delete` aufrufen (AuditLogListView).
-2. Suchen nach den Lifecycle-Events:
-   - DEL-01 (Antrag): Aktuell schreibt `request_deletion` KEINEN dedizierten `deletion_requested`-AuditLog — der Code legt nur einen `DeletionRequest`-DB-Record an. Audit-Trail entsteht erst bei Approve/Reject.
-   - DEL-03 (Approve → Soft-Delete): AuditLog `delete` mit `target_type=Event`, `detail={document_type, client_pseudonym, occurred_at}` (via `soft_delete_event`).
-   - DEL-04 (Reject): KEIN AuditLog im Reject-Pfad — der Status-Change am DeletionRequest ist selbst der Audit-Trail (DeletionRequest-Tabelle ist append-only-artig).
+1. Als `admin` (Einrichtungsadmin; `AuditLogListView` verlangt `FacilityAdminRequiredMixin`) `/audit/?action=deletion_requested`, `/audit/?action=deletion_approved` und `/audit/?action=deletion_rejected` aufrufen.
+2. Gegenprüfung in der Shell: `AuditLog.objects.filter(target_type="DeletionRequest", target_id__in=[str(dr_ok.pk), str(dr_rej.pk)]).values_list("action", "user__username", "target_id", "detail")`.
+3. Lösch-Eintrag des genehmigten Ereignisses: `AuditLog.objects.filter(action="delete", target_type="Event", target_id=str(dr_ok.target_id))`.
+4. Idempotenz in der Shell: `request_deletion(event, fachkraft, "x")` (`core.services.events.deletion`) zweimal hintereinander auf ein Ereignis ohne offenen Antrag; `deletion_requested`-Einträge für dieses Ereignis zählen.
 
 **Erwartetes Ergebnis:**
-- AuditLog für Approve = action `delete` (von `soft_delete_event`).
-- AuditLog für Reject = nicht in `AuditLog`-Tabelle, sondern im `DeletionRequest.status`/`reviewed_*`-Feld.
-- Die im Plan-Beschreib genannten Action-Namen `DELETION_REQUESTED`/`DELETION_APPROVED`/`DELETION_REJECTED` existieren NICHT im aktuellen `AuditLog.Action`-Enum. Realer Stand: Lifecycle wird über `DeletionRequest`-Records + `delete`-AuditLog rekonstruiert.
-- **Lücke (zu klären):** Falls explizite Audit-Einträge gewünscht sind, ist eine Code-Erweiterung in `request_deletion` / `approve_deletion` / `reject_deletion` nötig.
+- Jede Workflow-Stufe hat **einen eigenen** Eintrag mit `target_type="DeletionRequest"`, `target_id=str(<dr>.pk)`, `detail={"target_event": "<event_pk>"}`:
+  - `deletion_requested` (`DELETION_REQUESTED`) je Antrag, `user` = antragstellende Fachkraft — **fehlt er, ist der Testfall rot**;
+  - `deletion_approved` (`DELETION_APPROVED`) für `dr_ok`, `user` = genehmigende Leitung — **fehlt er, ist der Testfall rot**;
+  - `deletion_rejected` (`DELETION_REJECTED`) für `dr_rej`, `user` = ablehnende Leitung — **fehlt er, ist der Testfall rot**.
+- `detail` enthält keine Begründung (`reason` lebt nur in `DeletionRequest.reason`, Refs #1093).
+- Schritt 3: zusätzlich genau ein `delete`-Eintrag (`target_type="Event"`, `detail={document_type, client_id, occurred_at}`) aus `soft_delete_event` — nur für den genehmigten Antrag, keiner für `dr_rej`.
+- Schritt 4: ein laufender Antrag wird zurückgegeben, kein zweiter `deletion_requested`-Eintrag.
+
+**Code-Beleg:** `create_or_get_event_deletion_request`, `approve_deletion`, `reject_deletion` (`src/core/services/events/deletion.py`), `soft_delete_event` (`src/core/services/events/crud.py`), `AuditLog.Action.DELETION_*` (`src/core/models/audit.py`); Unit-Tests `test_deletion_request_creation_writes_audit`, `test_request_deletion_is_idempotent_no_duplicate_audit`, `test_approve_deletion_writes_audit`, `test_reject_deletion_writes_audit` (`src/tests/test_deletion_approval_audit.py`).
 
 **DSGVO/Security-Note:**
-- Aktueller Audit-Trail genügt Art. 5 (Rechenschaftspflicht), weil `DeletionRequest`-Tabelle die Antragshistorie abbildet (Antragsteller, Reviewer, Zeitpunkte, Reason).
+- Art. 5 Abs. 2 (Rechenschaftspflicht, Refs #932): Antrag, Genehmigung und Ablehnung stehen je als eigener, hash-verketteter AuditLog-Eintrag im Audit-Trail; die `DeletionRequest`-Tabelle allein genügt dafür nicht.
 
 **Status:** ☐ Offen
 
@@ -845,26 +849,34 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | leitung (F1) + leitung_2 (F2) | C | — | `test_rls.py` |
+| Security | fachkraft `miriam` + leitung `emma` (F1) + leitung `emma_1` (F2) | C | — | `test_rls.py` |
 
-**Voraussetzung:** zwei Facilities mit jeweils mindestens einem offenen `DeletionRequest`.
+**Voraussetzung:** Seed mit zwei Einrichtungen (`--scale=medium`: F1 „Hauptstelle" mit `miriam`/`emma`, F2 „Zweigstelle Nord" mit `emma_1`); `emma` und `emma_1` haben das Recht „Löschbestätigung" (`can_confirm_deletion`, Seed-Default für Leitung).
 
 **Code-Referenz:**
-- `src/core/views/deletion.py` — Listen/Genehmigen-Views.
-- `src/core/services/deletion.py` — `DeletionRequest.objects.for_facility(...)`.
-- `src/core/middleware/facility_scope.py` — `request.current_facility`.
+- `src/core/views/client_deletion.py` — `ClientDeleteRequestView` (Route `/clients/<uuid>/delete/`, `core:client_delete_request`).
+- `src/core/views/event_deletion.py` — `DeletionRequestListView` (`/deletion-requests/`, `DeletionRequest.objects.for_facility(...)`) und `DeletionRequestReviewView` (`/deletion-requests/<uuid>/review/`, `core:deletion_review`, Objekt über `get_scoped_object`).
+- `src/core/services/scoping.py` — `get_scoped_object` (Einrichtungsfilter auf `request.current_facility`).
+- `src/core/middleware/facility_scope.py` — `request.current_facility` und `app.current_facility_id` für RLS.
 
 **Schritte:**
-1. F1: als `leitung` einloggen, in F1 ein neues `DeletionRequest` für einen F1-Klienten anlegen (`/clients/<uuid>/request-deletion/`).
-2. F2: als `leitung_2` einloggen.
-3. `/deletion-requests/` aufrufen → Liste prüfen.
-4. Direkt-URL des F1-Antrags aufrufen (`/deletion-requests/<F1-uuid>/`) — versuchen zu genehmigen.
-5. Optional in PostgreSQL: ohne `app.current_facility_id` `SELECT count(*) FROM core_deletionrequest;` → 0.
+1. F1: als `miriam` eine F1-Person öffnen → „Löschen beantragen" (`/clients/<uuid>/delete/`) → Begründung eingeben, absenden. UUID des neuen Antrags (`<F1-dr>`) notieren (Shell: `DeletionRequest.objects.latest("created_at").pk` oder Link in der Liste).
+2. Positivkontrolle F1: als `emma` `/deletion-requests/` aufrufen → der Antrag steht in der Liste; `/deletion-requests/<F1-dr>/review/` liefert HTTP 200 mit Genehmigen/Ablehnen. **Nicht** entscheiden.
+3. F2: als `emma_1` einloggen, `/deletion-requests/` aufrufen → Liste prüfen.
+4. Als `emma_1` `/deletion-requests/<F1-dr>/review/` direkt aufrufen (GET), dann per POST Genehmigen versuchen (z. B. das Formular aus Schritt 2 mit `emma_1`-Session und deren CSRF-Token absenden).
+5. Als `emma_1` `/clients/<F1-Person-uuid>/delete/` direkt aufrufen.
+6. Nach Schritt 4: Status des Antrags und AuditLog prüfen (`DeletionRequest.objects.get(pk=<F1-dr>).status`, `AuditLog.objects.filter(target_type="DeletionRequest", target_id="<F1-dr>")`).
+7. Optional in PostgreSQL mit der Laufzeitrolle der App (nicht der Admin-/BYPASSRLS-Rolle): `SET app.current_facility_id = '<F2-uuid>'; SELECT count(*) FROM core_deletionrequest WHERE id = '<F1-dr>';` → `0`; Gegenprobe mit `'<F1-uuid>'` → `1`.
 
 **Erwartetes Ergebnis:**
-- Liste zeigt nur F2-Anträge, kein F1-Eintrag.
-- Direkt-URL liefert 404 (oder leere QuerySet-Antwort), niemals 200 mit fremden Daten.
-- AuditLog protokolliert keinen Zugriff auf F1-Datensatz durch F2-User.
+- Schritt 2 (Positivkontrolle): HTTP 200 auf genau derselben Route. **Liefert schon `emma` 404, ist der Testfall ungültig** (Route oder Antrag falsch) — der 404 aus Schritt 4 belegt dann keine Mandantentrennung.
+- Schritt 3: Liste zeigt nur F2-Anträge, kein F1-Eintrag.
+- Schritt 4: GET und POST liefern HTTP 404, niemals 200 mit fremden Daten. Liefert die Route für `emma_1` 200 oder zeigt Inhalte des F1-Antrags, ist der Testfall rot.
+- Schritt 5: HTTP 404 (`get_scoped_object(Client, …)`), kein Antragsformular für eine fremde Person.
+- Schritt 6: Status bleibt `pending`; kein `deletion_approved`- oder `deletion_rejected`-Eintrag von `emma_1`.
+- Schritt 7: F2-Kontext sieht die F1-Zeile nicht, F1-Kontext sieht sie. Sieht der F2-Kontext die Zeile, ist der Testfall rot (RLS-Policy fehlt oder die Rolle umgeht RLS).
+
+**Code-Beleg:** Unit-Tests `TestDeletionEdgeCases::test_facility_scoping_prevents_cross_facility_review` (`src/tests/test_deletion_requests.py`, 404 auf `core:deletion_review` für eine Leitung der zweiten Einrichtung), `TestDeletionRequestRLSIsolation::test_deletion_request_invisible_across_facility` (`src/tests/test_rls.py`, RLS unter `rls_test_role`), `test_cross_facility_is_404` (`src/tests/test_deletion_request_withdraw.py`).
 
 **DSGVO/Security-Note:**
 - Art. 5 Abs. 1 lit. f (Integrität & Vertraulichkeit) + Art. 32 (TOM). RLS-Layer auf `core_deletionrequest` muss FORCE-aktiv sein, App-Filter zusätzlich.

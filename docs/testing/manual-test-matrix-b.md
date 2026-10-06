@@ -908,13 +908,15 @@
 
 **Routen:** `/sudo/`  
 **Views:** `src/core/views/sudo_mode.py` (`SudoModeView`)  
-**Services:** `src/core/services/sudo_mode.py` (`enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`)  
-**Settings:** `SUDO_MODE_ENABLED=True` (Prod/Dev), `SUDO_MODE_TTL_SECONDS=900` (15 Min)  
+**Services:** `src/core/services/security/sudo_mode.py` (`enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`), `src/core/services/security/mfa.py` (`verify_totp_or_backup`)  
+**Settings:** `SUDO_MODE_ENABLED=True` (Prod/Dev), `SUDO_MODE_TTL_SECONDS=900` (15 Min, `env_int` in `settings/base.py`)  
 **Genutzt von:** `MFADisableView` (LoginRequired+RequireSudoMode); ggf. DSGVO-Export, Pseudonym-Daten-Download (Refs #683)  
 **E2E-Coverage:** `test_security_hardening.py` (indirekt über MFA-Disable-Flow), Unit-Tests in `src/tests/test_sudo_mode.py`  
 **Spezial-Setup:**
 - In Tests deaktiviert: `settings/test.py` setzt `SUDO_MODE_ENABLED=False`. Für E2E-Tests bleibt es aktiv.
-- AuditAction `SUDO_MODE_ENTERED` existiert; `SUDO_MODE_EXIT` existiert **nicht** im Code (kein expliziter Exit-Audit beim Logout — `clear_sudo` ist still). Entsprechend testen wir nur `SUDO_MODE_ENTERED`.
+- AuditActions `SUDO_MODE_ENTERED` (Erfolg) und `SUDO_MODE_FAILED` (jeder Fehlversuch, `detail.factor` = `"password"` oder `"otp"`) existieren; `SUDO_MODE_EXIT` existiert **nicht** im Code (kein expliziter Exit-Audit beim Logout — `clear_sudo` ist still).
+- Hat die Person ein bestätigtes TOTP-Gerät, verlangt `SudoModeView.post` neben dem Passwort einen frischen zweiten Faktor (OTP oder Backup-Code, `verify_totp_or_backup`). Das Passwort prüft die View per `request.user.check_password` — **kein** `authenticate()`, damit Sudo-Fehlversuche weder `LOGIN_FAILED` schreiben noch in den Login-Lockout zählen.
+- Der Seed legt keine TOTP-Geräte an: für die Fälle mit zweitem Faktor richtet `miriam` vorher unter `/mfa/setup/` 2FA ein.
 
 ---
 
@@ -924,28 +926,36 @@
 |---------|-------|---------|--------|-----|
 | Sudo | fachkraft (`miriam`) | C/F/S | ⚪ | `test_security_hardening.py` |
 
-**Voraussetzung:** eingeloggt mit MFA-Verify.
+**Voraussetzung:** eingeloggt mit MFA-Verify; `miriam` hat ein bestätigtes TOTP-Gerät (vorher unter `/mfa/setup/` eingerichtet).
 
 **Vorbereitung:**
 - Login als `miriam`, MFA verifiziert.
 - DB: `request.session.get("sudo_until")` ist `None` (frische Session).
-- Sudo-pflichtige Aktion vorbereitet (z.B. „2FA deaktivieren" auf `/mfa/settings/`).
+- Sudo-pflichtige Aktion vorbereitet: „2FA deaktivieren" auf `/mfa/settings/`. Der Button erscheint nur ohne MFA-Zwang (`can_disable`; lokal mit `settings/dev.py`, `MFA_ENFORCE_PRIVILEGED_ROLES=False`). Auf Umgebungen mit Rollen-Zwang stattdessen `/mfa/setup/` aufrufen: bei bestehendem Faktor leitet `MFASetupView.dispatch` über `sudo_redirect_if_required` ebenfalls auf `/sudo/`.
+- AuditLog-Stand notieren: `AuditLog.objects.filter(user=miriam, action__in=["sudo_mode_entered", "sudo_mode_failed"]).count()`.
 
 **Schritte:**
 1. Auf `/mfa/settings/` „2FA deaktivieren" klicken → POST `/mfa/disable/`.
-2. `RequireSudoModeMixin.dispatch` greift, da `is_in_sudo(request)==False` → 302 auf `/sudo/?next=/mfa/disable/`.
-3. Auf `/sudo/`-Form Pwd `anlaufstelle2026` eingeben → Submit (POST).
-4. Session-State und Redirect prüfen.
+2. `RequireSudoModeMixin.dispatch` greift, da `is_in_sudo(request)==False` → 302 auf `/sudo/?next=%2Fmfa%2Fdisable%2F` (`sudo_url` kodiert `next`).
+3. Formular prüfen: Felder „Passwort" **und** „Bestätigungscode (2FA)".
+4. Negativprobe A: Passwort `anlaufstelle2026`, Feld „Bestätigungscode (2FA)" leer lassen bzw. Browser-Pflichtfeldprüfung umgehen (z. B. `000000`) → Submit.
+5. Negativprobe B: falsches Passwort + gültiger OTP → Submit.
+6. Positivkontrolle: Passwort `anlaufstelle2026` + aktueller OTP-Code der Authenticator-App → Submit.
+7. Session-State, Redirect und AuditLog prüfen.
 
 **Erwartetes Ergebnis:**
-- Schritt 3: `authenticate(request, username="miriam", password="anlaufstelle2026")` returnt User; `enter_sudo(request)` setzt `session["sudo_until"] = int(time.time()) + 900`.
-- AuditLog: `SUDO_MODE_ENTERED` mit `user=miriam`, `target_type="User"`, `target_id=miriam.pk`, `detail.next="/mfa/disable/"`.
-- HTTP 302 Redirect auf `safe_redirect_path("/mfa/disable/")`.
-- Folge-POST auf `/mfa/disable/` ist jetzt erlaubt (`is_in_sudo==True`).
-- Falsches Pwd → HTTP 403 mit gerendertem `auth/sudo_mode.html` und Error-Message „Passwort ist nicht korrekt.", **kein** `enter_sudo`-Aufruf.
+- Schritt 3: Das Feld „Bestätigungscode (2FA)" (`name="otp_token"`) ist sichtbar, weil `needs_otp = request.user.has_confirmed_totp_device`. **Fehlt das Feld, ist der Testfall rot.**
+- Schritt 4: HTTP 403, Meldung „Der Bestätigungscode (2FA) ist nicht korrekt.", `session["sudo_until"]` bleibt ungesetzt; neuer AuditLog-Eintrag `SUDO_MODE_FAILED` mit `detail={"factor": "otp"}`. **Öffnet das Passwort allein das Sudo-Fenster (302 auf `next`), ist der Testfall rot.**
+- Schritt 5: HTTP 403, Meldung „Passwort ist nicht korrekt.", kein `enter_sudo`; neuer AuditLog-Eintrag `SUDO_MODE_FAILED` mit `detail={"factor": "password"}`. Der Fehlversuch schreibt **keinen** `LOGIN_FAILED`-Eintrag (Passwortprüfung per `check_password`, nicht `authenticate()`). Fehlt `SUDO_MODE_FAILED` oder entsteht `LOGIN_FAILED`, ist der Testfall rot.
+- Schritt 6: `enter_sudo(request)` rotiert die Session-ID und setzt `session["sudo_until"] = int(time.time()) + 900`; HTTP 302 Redirect auf `safe_redirect_path("/mfa/disable/")`.
+- AuditLog nach Schritt 6: `SUDO_MODE_ENTERED` mit `user=miriam`, `target_type="User"`, `target_id=miriam.pk`, `detail.next="/mfa/disable/"`; insgesamt zwei neue `SUDO_MODE_FAILED` und ein neuer `SUDO_MODE_ENTERED` gegenüber dem notierten Stand.
+- Der Redirect landet per GET auf `/mfa/disable/`; die View kennt nur POST. Ein erneuter Klick auf „2FA deaktivieren" läuft jetzt ohne Umweg über `/sudo/` (`is_in_sudo==True`).
+
+**Code-Beleg:** `SudoModeView.post` (`src/core/views/sudo_mode.py`), `verify_totp_or_backup` (`src/core/services/security/mfa.py`), `enter_sudo` (`src/core/services/security/sudo_mode.py`); Unit-Tests `TestSudoModeTwoFactor::test_totp_user_without_otp_is_rejected`, `::test_wrong_otp_writes_sudo_mode_failed_audit`, `TestSudoModeViewPOST::test_wrong_password_writes_sudo_mode_failed_audit`, `::test_wrong_password_does_not_write_login_failed` in `src/tests/test_sudo_mode.py`.
 
 **DSGVO/Security-Note:**
-- Schutz gegen Session-Hijack (Refs #683): gestohlenes Cookie reicht nicht ohne aktuelles Pwd.
+- Schutz gegen Session-Hijack (Refs #683, #1024): gestohlenes Cookie reicht nicht ohne aktuelles Passwort und — bei aktivem TOTP — frischen zweiten Faktor.
+- Sudo-Fehlversuche sind im Audit-Trail sichtbar (`SUDO_MODE_FAILED`, Refs #1084), zählen aber nicht in den Login-Lockout (Refs #1444).
 - `safe_redirect_path` blockiert offene Redirects auf externe URLs.
 - Rate-Limit `5/m/User` auf `SudoModeView.post` (Brute-Force-Schutz).
 
@@ -973,9 +983,9 @@
 **Erwartetes Ergebnis:**
 - Schritt 1: erfolgreich (Sudo-Window noch offen).
 - Schritt 3: `is_in_sudo(request)` returnt `False`, da `time.time() >= session["sudo_until"]`.
-- 302 Redirect auf `/sudo/?next=<originalpfad>` — User muss erneut sein Pwd eingeben.
+- 302 Redirect auf `/sudo/?next=<originalpfad, URL-kodiert>` — die Re-Auth verlangt erneut Passwort **und** (bei bestätigtem TOTP-Gerät) einen frischen OTP-/Backup-Code. Akzeptiert das Formular nach Ablauf das Passwort allein, ist der Testfall rot.
 - Nach erneuter Re-Auth: AuditLog hat einen ZWEITEN `SUDO_MODE_ENTERED`-Eintrag.
-- Setting `SUDO_MODE_TTL_SECONDS` aus `os.environ.get("SUDO_MODE_TTL_SECONDS", "900")`.
+- Setting `SUDO_MODE_TTL_SECONDS` aus `env_int("SUDO_MODE_TTL_SECONDS", 900)` (`settings/base.py`).
 
 **DSGVO/Security-Note:**
 - 15-Min-Fenster begrenzt Angriffsfläche bei kurzzeitiger Pwd-Kompromittierung.
@@ -1002,10 +1012,10 @@
 3. Auf `/sudo/?next=/mfa/disable/` landen, Form sehen.
 
 **Erwartetes Ergebnis:**
-- HTTP 302 Redirect: `Location: /sudo/?next=/mfa/disable/`.
+- HTTP 302 Redirect: `Location: /sudo/?next=%2Fmfa%2Fdisable%2F` (`sudo_url` kodiert `next` per `urlencode`).
 - Hinweis: laut Code-Kommentar zur Aufgabe „403 + Redirect zu /sudo/" — der Code im `RequireSudoModeMixin.dispatch` macht **`return redirect(sudo_url)`** (302), keinen 403. Dieser Test-Case erwartet **302**, nicht 403 — damit bestätigen wir das tatsächliche Verhalten.
-- `auth/sudo_mode.html` rendert mit Pwd-Form.
-- Erst nach erfolgreicher Re-Auth (siehe ENT-SUDO-01) ist `/mfa/disable/` erreichbar.
+- `auth/sudo_mode.html` rendert mit Passwortfeld und — bei bestätigtem TOTP-Gerät — dem Feld „Bestätigungscode (2FA)" (`test_get_shows_otp_field_for_totp_user`).
+- Erst nach erfolgreicher Re-Auth mit Passwort und zweitem Faktor (siehe ENT-SUDO-01) ist `/mfa/disable/` erreichbar. Wirkt der POST ohne Sudo-Fenster direkt (2FA weg, `MFA_DISABLED` im AuditLog), ist der Testfall rot.
 
 **DSGVO/Security-Note:**
 - Verhalten stimmt mit Service-Doc überein (`src/core/services/sudo_mode.py`): „Mixin RequireSudoModeMixin redirected zu /sudo/ mit ?next=".
@@ -1014,21 +1024,22 @@
 
 ---
 
-### TC-ID: ENT-SUDO-04 — AuditLog SUDO_MODE_ENTERED nach Re-Auth
+### TC-ID: ENT-SUDO-04 — AuditLog SUDO_MODE_ENTERED und SUDO_MODE_FAILED nach Re-Auth
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Sudo | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
 
-**Voraussetzung:** ENT-SUDO-01 lief.
+**Voraussetzung:** ENT-SUDO-01 lief (inklusive der Negativproben in Schritt 4 und 5).
 
 **Vorbereitung:**
-- AuditLog-Filter `action=SUDO_MODE_ENTERED` für `miriam` vor und nach Test bereitstellen.
+- AuditLog-Filter `action__in=["sudo_mode_entered", "sudo_mode_failed"]` für `miriam` vor und nach Test bereitstellen.
 
 **Schritte:**
-1. Nach erfolgreicher Re-Auth (Schritt 3 in ENT-SUDO-01) AuditLog inspizieren.
+1. Nach erfolgreicher Re-Auth (Schritt 6 in ENT-SUDO-01) AuditLog inspizieren.
 2. Abfrage: `AuditLog.objects.filter(user=miriam, action="sudo_mode_entered").latest("timestamp")`.
-3. (Negativ-Test) Logout durchführen — prüfen, dass **kein** SUDO_MODE_EXIT-Audit-Action existiert (die Action ist im Code nicht definiert).
+3. Abfrage: `AuditLog.objects.filter(user=miriam, action="sudo_mode_failed").order_by("-timestamp")[:2]` — die beiden Fehlversuche aus ENT-SUDO-01.
+4. (Negativ-Test) Logout durchführen — prüfen, dass **kein** SUDO_MODE_EXIT-Audit-Action existiert (die Action ist im Code nicht definiert).
 
 **Erwartetes Ergebnis:**
 - Schritt 2: ein neuer Eintrag mit:
@@ -1038,10 +1049,11 @@
   - `target_type="User"`, `target_id=str(miriam.pk)`
   - `detail={"next": "<safe redirect path>"}`
   - `timestamp` ~ jetzt
-- Schritt 3: `AuditLog.Action`-TextChoices enthält `SUDO_MODE_ENTERED`, **NICHT** `SUDO_MODE_EXIT`. Das ist eine bewusste Aktualisierung der Aufgabenstellung — der Code-Status ist Truth Source. `clear_sudo(request)` läuft still (z.B. beim Logout via Session-Pop), erzeugt **keinen** dedizierten Audit-Eintrag.
+- Schritt 3: zwei Einträge `action="sudo_mode_failed"`, `target_type="User"`, `target_id=str(miriam.pk)`, einer mit `detail={"factor": "otp"}`, einer mit `detail={"factor": "password"}`. Fehlt einer der beiden Einträge, ist der Testfall rot — ein Brute-Force über eine gestohlene Session bliebe sonst im Audit-Trail unsichtbar (Refs #1084).
+- Schritt 4: `AuditLog.Action`-TextChoices enthält `SUDO_MODE_ENTERED`, **NICHT** `SUDO_MODE_EXIT`. Das ist eine bewusste Aktualisierung der Aufgabenstellung — der Code-Status ist Truth Source. `clear_sudo(request)` läuft still (z.B. beim Logout via Session-Pop), erzeugt **keinen** dedizierten Audit-Eintrag.
 
 **DSGVO/Security-Note:**
-- AuditLog-Eintrag ermöglicht Forensik bei kompromittierten Sessions: wann hat der User Sudo-Fenster geöffnet?
+- AuditLog-Einträge ermöglichen Forensik bei kompromittierten Sessions: wann hat der User das Sudo-Fenster geöffnet, wann ist eine Re-Auth gescheitert?
 - Kein Exit-Audit ist OK — Sudo-Fenster ist zeitbeschränkt; Logout/Session-End räumt implizit auf.
 
 **Status:** ☐ Offen
@@ -2412,20 +2424,28 @@
 
 **Vorbereitung:**
 - Mit `fachkraft` einloggen.
+- AuditLog-Stand notieren: `AuditLog.objects.filter(action="goal_update", target_id=str(goal.pk)).count()`.
 
 **Schritte:**
 1. Sektion `goals-section` öffnen.
 2. Ziel-Bearbeiten-Toggle klicken (Edit-Inline-Form).
 3. Titel und Beschreibung anpassen.
 4. „Speichern" — POST `/cases/<case_pk>/goals/<pk>/edit/`.
+5. AuditLog prüfen.
+6. Gegenprobe: Bearbeiten erneut öffnen und ohne Änderung „Speichern" klicken; AuditLog erneut zählen.
 
 **Erwartetes Ergebnis:**
 - HTMX-Swap rendert Sektion neu.
 - Aktualisierte Felder sichtbar.
 - `update_goal` setzt nur explizit übergebene Felder (None → unchanged).
+- Schritt 5: genau **ein** neuer Eintrag `action="goal_update"` (`GOAL_UPDATE`) mit `user=<fachkraft>`, `facility=<Einrichtung des Falls>`, `target_type="OutcomeGoal"`, `target_id=str(goal.pk)` und `detail={"case_id": "<case_pk>", "changed_fields": ["title", "description"]}`. **Fehlt der Eintrag, ist der Testfall rot.**
+- `detail` enthält nur Feldnamen, **keinen** Titel- oder Beschreibungstext. Steht Freitext im `detail`, ist der Testfall rot.
+- Schritt 6: kein weiterer `GOAL_UPDATE`-Eintrag (Audit nur bei echtem Diff, `changed_fields_vs_db`).
+
+**Code-Beleg:** `update_goal` (`src/core/services/case/goals.py`), `GoalUpdateView` (`src/core/views/case_goals.py`, Route `core:goal_update`); Unit-Tests `TestUpdateRouteAuditEnrollment::test_goal_update_route_writes_audit`, `::test_goal_update_route_no_audit_on_identical_post` (`src/tests/test_audit_coverage.py`), `test_goal_detail_traegt_nur_feldnamen` (`src/tests/test_audit_detail_pii_minimization.py`).
 
 **DSGVO/Security-Note:**
-- Kein dediziertes AuditLog für Goal-Updates (Code prüfen: `services/goals.py::update_goal` schreibt kein AuditLog). Empfehlung als Verbesserung ab `services/goals.py:29`.
+- Bearbeitungen des Wirkungsziels sind Änderungen an Falldaten und stehen im Audit-Trail (`GOAL_UPDATE`, Refs #1959); `detail` führt nur Feldnamen, weil Titel und Beschreibung klientenbezogener Freitext sind (Refs #1751).
 
 **Status:** ☐ Offen
 
@@ -5970,71 +5990,74 @@
 **Routen:** `/health/`, `/csp-report/`, `/robots.txt`, `/manifest.json`, `/?lang=de`  
 **Views:** `src/core/views/health.py`, `src/core/views/csp_report.py`, `src/core/views/robots.py`, `src/core/views/pwa.py`  
 **E2E-Coverage:** `test_security_hardening.py`  
-**Spezial-Setup:** Health prüft externe Dienste (ClamAV, Redis, Backup-Status). CSP-Report-Endpoint mit Rate-Limit.
+**Spezial-Setup:** Health prüft externe Dienste (ClamAV, Cache/Redis, Backup-Status). Anonyme Aufrufer erhalten nur `{"status": …}`; Detailfelder gibt es nur mit Header `X-Health-Token` (= `DJANGO_HEALTH_DETAIL_TOKEN`) oder in einer vollständig angemeldeten Session (`_detail_authorized`). CSP-Report-Endpoint mit Rate-Limit.
 
 ---
 
-### TC-ID: ENT-SYS-01 — Health-Endpoint liefert JSON
+### TC-ID: ENT-SYS-01 — Health-Endpoint liefert anonym nur den Status
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Sys | öffentlich (Monitoring) | C/F/S | ⚪ | `test_security_hardening.py` |
 
-**Voraussetzung:** alle Container laufen (Postgres, Redis, ClamAV).
+**Voraussetzung:** alle Container laufen (Postgres, Redis, ClamAV); `DJANGO_HEALTH_DETAIL_TOKEN` ist gesetzt (für die Positivkontrolle).
 
 **Vorbereitung:**
 - Backup-Job mindestens 1x ausgeführt (Cron oder manuell).
+- Token-Wert aus der Umgebung bereithalten (`<token>`).
 
 **Schritte:**
-1. `/health/` ohne Auth aufrufen.
-2. Response-Code `200`.
-3. `Content-Type: application/json`.
-4. JSON-Struktur prüfen:
-   - `status: "healthy"`
-   - `db: "ok"`
-   - `redis: "ok"` oder `redis_status: "connected"`
-   - `clamav: "ok"` oder `clamav_status: "running"`
-   - `last_backup_age_hours: <number>` (z.B. 6)
-   - `version: "0.9.1"`
-   - `timestamp: ISO-8601`
-5. `SECURE_REDIRECT_EXEMPT` prüfen — Endpoint erreichbar ohne HTTPS-Redirect.
+1. `curl -s -i https://<host>/health/` — ohne Session, ohne Token.
+2. Response-Code und `Content-Type` prüfen.
+3. JSON-Schlüssel prüfen.
+4. Gegenprobe mit falschem Token: `curl -s -H 'X-Health-Token: falsch' https://<host>/health/`.
+5. Positivkontrolle: `curl -s -H 'X-Health-Token: <token>' https://<host>/health/`.
+6. Gegenprobe mit Session: im Browser nur Passwort eingeben, die 2FA-Abfrage offen lassen (Konto mit bestätigtem TOTP-Gerät), dann `/health/` im selben Tab aufrufen.
+7. Prod/devlive: `SECURE_REDIRECT_EXEMPT = [r"^health/$"]` — `/health/` per HTTP liefert keinen HTTPS-Redirect.
 
 **Erwartetes Ergebnis:**
-- Endpoint öffentlich, ohne Login.
-- JSON für Monitoring-Tools (Uptime-Robot, Prometheus-Probe).
-- Antwort < 500 ms.
+- Schritt 2: HTTP `200`, `Content-Type: application/json`.
+- Schritt 3: Der Body enthält **genau einen** Schlüssel: `{"status": "ok"}`. `status` nimmt nur `ok`, `degraded` oder `error` an. **Enthält die anonyme Antwort zusätzlich `database`, `clamav`, `virus_scanner`, `encryption_key`, `version`, `cache`, `smtp`, `last_backup_age_hours`, `disk_free_pct` oder `stale_jobs`, ist der Testfall rot** (Recon-Leak, Refs #1375).
+- Schritt 4: wie Schritt 3 — nur `status`.
+- Schritt 5: Detailpayload mit u. a. `database: "connected"`, `virus_scanner: "connected"`, `clamav: "ok"`, `encryption_key: "ok"`, `db_role_posture: "ok"`, `version` (`APP_VERSION`, Fallback `"dev"`), `cache: {"backend": …, "status": "ok"}`, `smtp`, `last_backup_age_hours: <Zahl>`, `backup`, `disk_free_pct`, `stale_jobs`.
+- Schritt 6: nur `status` — eine Sitzung mit Passwort, aber ohne zweiten Faktor, bekommt keine Details (`session_fully_authenticated`, Refs #2286). Sieht sie Details, ist der Testfall rot.
+- Rate-Limit: `120/m` je IP auf GET (`HealthView`).
+
+**Code-Beleg:** `HealthView.get`, `_detail_authorized` (`src/core/views/health.py`); Unit-Tests `TestHealthLiveness::test_anonymous_payload_is_status_only`, `::test_anonymous_payload_omits_recon_detail_fields`, `TestHealthDetail::test_wrong_token_stays_lean`, `::test_detail_token_unlocks_version` (`src/tests/test_health.py`), `TestHealthDetailGate::test_state_b_gets_lean_payload` (`src/tests/test_session_fully_authenticated.py`).
 
 **DSGVO/Security-Note:**
-- **Bewusst öffentlich** für Monitoring (kein Auth-Wall).
+- **Bewusst öffentlich** für Monitoring (kein Auth-Wall) — Uptime-Monitore werten HTTP-Code und `status`.
 - Antwort enthält keine personenbezogenen Daten, keine User-Counts.
-- Verhindert Information-Leak: keine Stack-Traces, keine internen Hostnames.
+- Verhindert Information-Leak: anonym keine Subsystem-Zustände, keine Version, keine Stack-Traces, keine internen Hostnames.
 
 **Status:** ☐ Offen
 
 ---
 
-### TC-ID: ENT-SYS-02 — ClamAV-Down → Health zeigt unhealthy
+### TC-ID: ENT-SYS-02 — ClamAV-Down → Health zeigt degraded
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Sys | öffentlich | C/F/S | ⚪ | `test_security_hardening.py` |
 
 
+**Voraussetzung:** `CLAMAV_ENABLED=True` (Prod-Default; `settings/base.py` defaultet auf `False` — ohne ClamAV-Prüfung meldet die Detailantwort `clamav: "disabled"`); `DJANGO_HEALTH_DETAIL_TOKEN` gesetzt.
+
 **Vorbereitung:**
-- ClamAV-Container stoppen: `sudo docker compose stop clamav`.
+- ClamAV-Container stoppen: `sudo docker compose stop clamav`. Lokal ist `clamav` ein Profil-Dienst und `CLAMAV_ENABLED` im `web`-Dienst ungesetzt (`docker-compose.yml`): erst mit `CLAMAV_ENABLED=True` und `docker compose --profile clamav up -d clamav` starten, dann stoppen.
 
 **Schritte:**
-1. `/health/` aufrufen.
-2. Response-Code: `503` (Service Unavailable) oder `200` mit `status: "degraded"`.
-3. JSON-Body: `clamav: "unreachable"` oder `clamav_status: "down"`.
-4. Andere Felder bleiben grün (DB, Redis).
-5. ClamAV wieder starten: `sudo docker compose start clamav`.
-6. Nach 30s Reload — wieder `healthy`.
+1. `/health/` anonym aufrufen.
+2. `/health/` mit Header `X-Health-Token: <token>` aufrufen.
+3. ClamAV wieder starten: `sudo docker compose start clamav`.
+4. Sobald der Daemon antwortet, beide Aufrufe wiederholen.
 
 **Erwartetes Ergebnis:**
-- Health-Check erkennt ClamAV-Ausfall korrekt.
-- Status-Code-Differenzierung (503 vs. 200) je nach Konfiguration.
-- Recovery automatisch nach Container-Restart (kein App-Reload nötig).
+- Schritt 1: HTTP `200`, Body **nur** `{"status": "degraded"}` — der Gesamtstatus degradet auch anonym, das Detailfeld bleibt verborgen. Steht `virus_scanner` oder `clamav` in der anonymen Antwort, ist der Testfall rot.
+- Schritt 2: HTTP `200`, `status: "degraded"`, `virus_scanner: "unavailable"`, `clamav: "error"`; `database: "connected"` bleibt. Ein ClamAV-Ausfall setzt den Status nie auf `error` und den HTTP-Code nicht auf 503 (503 nur bei DB- oder Encryption-Key-Fehler).
+- Schritt 4: wieder `status: "ok"`, `clamav: "ok"` — ohne App-Neustart (`clamav_ping` je Request).
+
+**Code-Beleg:** ClamAV-Zweig in `HealthView.get` (`src/core/views/health.py`); Unit-Tests `TestHealthLiveness::test_virus_scanner_unavailable_degrades_anonymous_status`, `::test_virus_scanner_unavailable_degrades_status`, `::test_clamav_alias_error_when_unavailable` (`src/tests/test_health.py`).
 
 **DSGVO/Security-Note:**
 - **Virus-Scan ist DSGVO-relevant (Art. 32):** Kein Upload ohne aktiven Scanner.
