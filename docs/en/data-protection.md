@@ -4,6 +4,8 @@
 >
 > **Maintenance:** When a new data-protection-relevant ADR is added, add a line here.
 
+> Synchronization update 2026-10-06: the Art. 15, Art. 17 and handover rows describe the current state without version or issue history wording (#2447).
+
 **Audience tags:** **[Auditor]** proof/decision · **[Dev]** code/architecture · **[Operator]** operation/usage. Tags appear only where they genuinely apply.
 
 ## A. Principles of processing (Art. 5 GDPR)
@@ -22,9 +24,9 @@
 | Right | Reference | For |
 |---|---|---|
 | Art. 13/14 Information duties | [Information duties](../../src/core/dsgvo_templates/informationspflichten.md) | [Operator] [Auditor] |
-| Art. 15 Access | Per-person data export JSON/PDF ([`ClientDataExportJSONView`/`ClientDataExportPDFView`](../../src/core/views/clients.py)) · **authoritative for scope and the deliberate exclusions: [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)** · since #1738 it also contains **attachment metadata** for all three owners (filename, size, type, version chain; **no** binary contents) and since #1796 also **rectification requests** (Art. 16, [ADR-041](../adr/041-berichtigungsworkflow-intern.md)) in all states · [FAQ §C](../faq.md#c-rollen--datenschutz) | [Operator] [Dev] |
+| Art. 15 Access | Per-person data export JSON/PDF ([`ClientDataExportJSONView`/`ClientDataExportPDFView`](../../src/core/views/clients.py)) · **authoritative for scope and the deliberate exclusions: [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)** · it also contains (#1738) **attachment metadata** for all three owners (filename, size, type, version chain; **no** binary contents) and (#1796) also **rectification requests** (Art. 16, [ADR-041](../adr/041-berichtigungsworkflow-intern.md)) in all states · [FAQ §C](../faq.md#c-rollen--datenschutz) | [Operator] [Dev] |
 | Art. 16 Rectification | [ADR-013](../adr/013-dsgvo-art16-no-selfservice.md) — deliberately no self-service | [Auditor] [Dev] |
-| Art. 17 Erasure | [ADR-021](../adr/021-retention-modell.md) (soft-delete strategies, actual scope of the retention periods, k-anon retention incl. free-text cascade #1094) · [`core/retention/`](../../src/core/retention/) · **Attachments:** **three** physical deletion paths — (1) owner lifecycle: client- and case-owned files fall with the client anonymization (trash period `client_trash_days`), including the `.enc` file on **both** anonymization paths (`anonymize_client` and the k-anon bridge, parity guard); (2) event deletion/retention (`delete_attachments_for`); (3) since #1874 the **user-triggered permanent deletion** of a single version chain by managers/administration (`purge_attachment_chain`: rows + markers + `.enc`, blocked by an active legal hold) — the only path that removes a single mistakenly uploaded file at once, without taking the whole record with it. [ADR-039](../adr/039-owner-generische-dateianhaenge.md) · **residual risks:** the append-only audit log is not redacted — [security-notes.md § Audit-Log-Restdaten](../security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753); media backups survive the permanent deletion — [security-notes.md § Medien-Backups](../security-notes.md#medien-backups-überleben-das-ersatzlose-löschen-einer-datei-issue-1874) | [Auditor] [Dev] [Operator] |
+| Art. 17 Erasure | [ADR-021](../adr/021-retention-modell.md) (soft-delete strategies, actual scope of the retention periods, k-anon retention incl. free-text cascade #1094) · [`core/retention/`](../../src/core/retention/) · **Attachments:** **three** physical deletion paths — (1) owner lifecycle: client- and case-owned files fall with the client anonymization (trash period `client_trash_days`), including the `.enc` file on **both** anonymization paths (`anonymize_client` and the k-anon bridge, parity guard); (2) event deletion/retention (`delete_attachments_for`); (3) #1874: the **user-triggered permanent deletion** of a single version chain by managers/administration (`purge_attachment_chain`: rows + markers + `.enc`, blocked by an active legal hold) — the only path that removes a single mistakenly uploaded file at once, without taking the whole record with it. [ADR-039](../adr/039-owner-generische-dateianhaenge.md) · **residual risks:** the append-only audit log is not redacted — [security-notes.md § Audit-Log-Restdaten](../security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753); media backups survive the permanent deletion — [security-notes.md § Medien-Backups](../security-notes.md#medien-backups-überleben-das-ersatzlose-löschen-einer-datei-issue-1874) | [Auditor] [Dev] [Operator] |
 | Art. 18 Restriction | **Restriction marker on the client record** (#2045): flag `processing_restricted` + legal ground (Art. 18(1)(a)–(d)) + set by/at · write gate in [`services/client/restriction.py`](../../src/core/services/client/restriction.py), mirroring `resolve_writable_client` — storage remains permitted (Art. 18(2)), substantive use or modification is blocked, **except** the rectification workflow ([ADR-041](../adr/041-berichtigungsworkflow-intern.md)) · lifting requires a second authorised person or a manager and is audited (`PROCESSING_RESTRICTED`/`PROCESSING_RESTRICTION_LIFTED`) · **Not to be confused with the legal hold** ([`legal_holds.py`](../../src/core/retention/legal_holds.py)): that one blocks *erasure* (Art. 17(3)), this marker blocks *use*. The duty to inform before lifting (Art. 18(3)) remains organisational. | [Auditor] [Dev] [Operator] |
 | Art. 20 Portability | via the machine-readable per-person JSON export — **same data basis as Art. 15** (same export, same exclusions, [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)); no dedicated portability workflow | [Operator] |
 
@@ -66,7 +68,7 @@
 
 ## D3. Handover note (manual shift note, Refs #2042)
 
-Since 0.97 the handover shows one free-text field per shift -- what the outgoing worker wants the incoming one to know. The data-protection assessment is given here in full because it deliberately deviates from the rest of the data model in several places.
+The handover shows one free-text field per shift -- what the outgoing worker wants the incoming one to know. The data-protection assessment is given here in full because it deliberately deviates from the rest of the data model in several places.
 
 | Aspect | Rule | For |
 |---|---|---|
@@ -87,5 +89,5 @@ Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, s
 
 <!-- translation-source: docs/datenschutz.md -->
 <!-- translation-version: v0.99.5 -->
-<!-- translation-date: 2026-09-10 -->
-<!-- source-hash: 6163acf2c90a7e0824210be8f4ae9e637275444a -->
+<!-- translation-date: 2026-10-06 -->
+<!-- source-hash: d317e78a0978b8ee14717a01872a60033cb7209d -->

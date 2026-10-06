@@ -43,6 +43,36 @@ _PATTERNS: dict[str, re.Pattern[str]] = {
 }
 
 
+# Second pattern list (Refs #2447): phrases that narrate a change history or a
+# pre-existing data stock ("since 0.97", "since #1751", "Bestandsmigration",
+# "an earlier version of this text was wrong"). Public docs describe the
+# current state; history lives in CHANGELOG.md and dated ADR addenda.
+# These patterns are enforced on the real tree only for HISTORY_SCOPE (the
+# documents whose owners have been swept); other files are reported, not failed.
+_HISTORY_PATTERNS: dict[str, re.Pattern[str]] = {
+    "seit/bis/vor 0.x": re.compile(r"\b(?:[Ss]eit|[Bb]is|[Vv]or|[Ss]ince|[Uu]ntil|[Bb]efore) (?:[Vv]ersion )?v?0\.\d"),
+    "Stand v0.": re.compile(r"\bStand:? v?0\.\d"),
+    "release-0.": re.compile(r"\brelease-0\.\d"),
+    "ab v0.": re.compile(r"\b(?:[Aa]b|[Ff]rom) v0\.\d"),
+    "seit #": re.compile(r"\b(?:[Ss]eit|[Bb]is|[Nn]ach|[Ss]ince|[Uu]ntil) \[?#\d"),
+    "Bestandsmigration": re.compile(r"Bestandsmigration|\bBestands-"),
+    "Alt-Bestand": re.compile(r"\bAlt-(?:Bestand|[Zz]eilen|[Dd]aten|Snapshot)|\bAlt(?:bestand|zeilen|daten)\b"),
+    "Welle": re.compile(r"\b(?:dieser|seit|nach|vor) Welle\b|\b(?:since|this) [Ww]ave\b"),
+    "frühere Fassung": re.compile(r"\b[Ff]rühere[n]? Fassung|\b[Dd]ie frühere\b|\b[Ee]ine frühere\b"),
+    "Verhaltenswechsel": re.compile(r"Verhaltenswechsel"),
+    "seit Milestone": re.compile(r"\b(?:[Ss]eit|[Vv]or|[Bb]is|[Mm]it) (?:Milestone|M)\s?\d"),
+}
+
+# Documents swept for the history patterns (Refs #2447).
+HISTORY_SCOPE: tuple[str, ...] = (
+    "SECURITY.md",
+    "docs/security-notes.md",
+    "docs/threat-model.md",
+    "docs/datenschutz.md",
+    "docs/en/data-protection.md",
+)
+
+
 @dataclass(frozen=True)
 class Hit:
     relpath: str
@@ -76,6 +106,23 @@ def scan_markers(root: Path) -> list[Hit]:
         text = path.read_text(encoding="utf-8")
         for lineno, line in enumerate(text.splitlines(), start=1):
             for name, pattern in _PATTERNS.items():
+                if pattern.search(line):
+                    hits.append(Hit(relpath=relpath, lineno=lineno, pattern=name, line=line.strip()))
+    return hits
+
+
+def scan_history_markers(root: Path, relpaths: tuple[str, ...] | None = None) -> list[Hit]:
+    """History-pattern hits under ``root``: in ``relpaths`` if given, else in
+    all public core documents (same file set as :func:`scan_markers`)."""
+    if relpaths is None:
+        paths = _scanned_files(root)
+    else:
+        paths = [root / rel for rel in relpaths if (root / rel).is_file()]
+    hits: list[Hit] = []
+    for path in paths:
+        relpath = str(path.relative_to(root))
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            for name, pattern in _HISTORY_PATTERNS.items():
                 if pattern.search(line):
                     hits.append(Hit(relpath=relpath, lineno=lineno, pattern=name, line=line.strip()))
     return hits
@@ -246,3 +293,68 @@ class TestRealDocsTreeIsClean:
                 if not any(needle in hit.line for hit in by_file.get(relpath, [])):
                     stale.append(f"{relpath}: {needle!r}")
         assert stale == [], f"verwaiste Allowlist-Eintraege (nichts trifft mehr zu): {stale}"
+
+
+class TestHistoryScanAgainstFixtures:
+    """History patterns (Refs #2447) — probes only in ``tmp_path``."""
+
+    def test_finds_each_history_pattern(self, tmp_path: Path) -> None:
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "sample.md").write_text(
+            "\n".join(
+                [
+                    "Das gilt seit 0.97 für alle Exporte.",
+                    "Stand: v0.15 der Doku.",
+                    "Eingeplant für `release-0.85`.",
+                    "**Status:** Aktiv ab v0.11.",
+                    "Seit [#1751](https://example.org/1751) schreibt der Pfad nichts mehr.",
+                    "Die Bestandsmigration läuft einmalig.",
+                    "Der Alt-Bestand bleibt lesbar.",
+                    "Das gilt seit dieser Welle.",
+                    "Eine frühere Fassung dieses Abschnitts war falsch.",
+                    "Verhaltenswechsel (2026-08):",
+                    "Umgesetzt seit Milestone 24.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        hits = scan_history_markers(tmp_path)
+        assert {h.pattern for h in hits} == set(_HISTORY_PATTERNS), _format_hits(hits)
+
+    def test_current_state_wording_is_not_flagged(self, tmp_path: Path) -> None:
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "sample.md").write_text(
+            "\n".join(
+                [
+                    "Die Prüfung erkennt drei Fälle ([#1070](https://example.org/1070)).",
+                    "Erneute Einrichtung verlangt den Bestandsfaktor.",
+                    "Der Wert liegt bei 0.5 Sekunden.",
+                    "Die Version steht im Kopf der Datei.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        assert scan_history_markers(tmp_path) == []
+
+    def test_relpaths_limit_the_scan(self, tmp_path: Path) -> None:
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "mine.md").write_text("Seit 0.90 gilt das.", encoding="utf-8")
+        (tmp_path / "docs" / "other.md").write_text("Seit 0.90 gilt das.", encoding="utf-8")
+        hits = scan_history_markers(tmp_path, ("docs/mine.md", "docs/missing.md"))
+        assert [h.relpath for h in hits] == ["docs/mine.md"]
+
+
+class TestHistoryScopeIsClean:
+    """The swept documents (HISTORY_SCOPE) carry no history phrasing (Refs #2447)."""
+
+    def test_scope_files_exist(self) -> None:
+        missing = [rel for rel in HISTORY_SCOPE if not (REPO_ROOT / rel).is_file()]
+        assert missing == [], f"HISTORY_SCOPE names missing files: {missing}"
+
+    def test_no_history_markers_in_scope(self) -> None:
+        hits = scan_history_markers(REPO_ROOT, HISTORY_SCOPE)
+        assert hits == [], (
+            "Verlaufs-/Altbestandsformulierungen in der oeffentlichen Doku (Refs #2447):\n"
+            f"{_format_hits(hits)}\n"
+            "Den Ist-Stand beschreiben; Historie gehoert ins CHANGELOG oder in einen datierten ADR-Nachtrag."
+        )

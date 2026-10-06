@@ -260,7 +260,7 @@ Ausschlaggebend war nicht die fälschbare GUC an sich (RLS nutzt dieselbe),
 sondern dass die App-Rolle die **append-only**-Historie überhaupt hätte
 zerstören können — genau das verhindert die Ownership-Trennung sonst
 vollständig. Der Sofortpfad tilgt deshalb im Request nur, was gewöhnliches DML
-ist, und überlässt die früheren Fassungen dem owner-seitigen Sweep
+ist, und überlässt die älteren Historien-Versionen dem owner-seitigen Sweep
 ([ADR-050](adr/050-eventhistory-retention.md), Menge
 `_anonymized_client_rows`). **Restrisiko, ausdrücklich benannt:** zwischen
 Aktion und nächtlichem Lauf stehen diese Fassungen noch mit ihren Werten in der

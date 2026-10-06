@@ -122,11 +122,11 @@ Wer kann von der CSP-Lockerung profitieren?
 
 ## CSP `style-src` ohne `'unsafe-inline'` (Issue #1660)
 
-**Status:** umgesetzt. `style-src` ist seit #1660 strikt — `'unsafe-inline'` ist entfernt, drei Sonderseiten laufen über sha256-Hashes, `/admin-mgmt/` behält eine eng gescopte Ausnahme.
+**Status:** umgesetzt. `style-src` ist strikt (#1660) — `'unsafe-inline'` ist entfernt, drei Sonderseiten laufen über sha256-Hashes, `/admin-mgmt/` behält eine eng gescopte Ausnahme.
 
 ### Ausgangslage
 
-`'unsafe-inline'` in `style-src` war historisch gewachsen (Django-typisch, im Bestands-Audit als L10 „low-risk" eingestuft). Ein realer Style-Injection-Sink existierte nicht — die Erlaubnis schwächte aber die Defense-in-Depth: gelänge irgendwo eine HTML-/Attribut-Injektion, wären Inline-Styles ein zusätzlicher Hebel (UI-Redressing, Exfiltration über CSS-Attribut-Selektoren).
+`'unsafe-inline'` in `style-src` war historisch gewachsen (Django-typisch, im internen Code-Audit als L10 „low-risk" eingestuft). Ein realer Style-Injection-Sink existierte nicht — die Erlaubnis schwächte aber die Defense-in-Depth: gelänge irgendwo eine HTML-/Attribut-Injektion, wären Inline-Styles ein zusätzlicher Hebel (UI-Redressing, Exfiltration über CSS-Attribut-Selektoren).
 
 ### Umsetzung
 
@@ -173,7 +173,7 @@ Diese Freitext-Felder folgen **nicht** dem Sensitivity/Encryption/Retention-Mode
 | [`Case.description`](../src/core/models/case.py) | `Case` | Fall-Beschreibung | mittel |
 | [`Episode.description`](../src/core/models/episode.py) | `Episode` | Episoden-Verlauf | mittel |
 | [`WorkItem.description`](../src/core/models/workitem.py) | `WorkItem` | Aufgaben-Beschreibung | mittel |
-| [`AuditLog.detail`](../src/core/models/audit.py) | `AuditLog` | JSON mit `changed_fields` (nur Feldnamen), technischen Metadaten und `username` bei Login-/Rechte-Vorgängen | mittel (Beschäftigten-`username`); seit #1751 **keine** Klienten-PII mehr in neuen Einträgen |
+| [`AuditLog.detail`](../src/core/models/audit.py) | `AuditLog` | JSON mit `changed_fields` (nur Feldnamen), technischen Metadaten und `username` bei Login-/Rechte-Vorgängen | mittel (Beschäftigten-`username`); **keine** Klienten-PII in Einträgen (#1751) |
 
 ### Was bereits umgesetzt ist (Audit-Item 16)
 
@@ -192,7 +192,7 @@ Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Fel
 **Aktueller Schutz:**
 - Backup-Encryption AES-256-CBC + PBKDF2 mit `BACKUP_ENCRYPTION_KEY`
 - RLS + Role-Mixin verhindern Cross-Facility-Reads
-- DSGVO-Anonymize-Cascade (#715) säubert die **vier Fach-Freitexte** (`Client.notes`, `Case.description`, `Episode.description`, `WorkItem.description`) — **nicht** `AuditLog.detail`: das Audit-Log ist append-only (DB-Trigger aus Migration `0024` + HMAC-Kette), eine nachträgliche Redaktion ist dort strukturell unmöglich. Der einzige Hebel ist Minimierung **beim Schreiben**; seit #1751 enthalten neue Einträge deshalb keine Klienten-PII mehr (Dateiname → HMAC + Endung, kein Meilenstein-Titel, kein Pseudonym im Export-Eintrag). Alt-Zeilen bleiben unverändert stehen — siehe [§ Audit-Log-Restdaten überleben die Art.-17-Löschung](#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753)
+- DSGVO-Anonymize-Cascade (#715) säubert die **vier Fach-Freitexte** (`Client.notes`, `Case.description`, `Episode.description`, `WorkItem.description`) — **nicht** `AuditLog.detail`: das Audit-Log ist append-only (DB-Trigger aus Migration `0024` + HMAC-Kette), eine nachträgliche Redaktion ist dort strukturell unmöglich. Der einzige Hebel ist Minimierung **beim Schreiben**; Einträge enthalten deshalb (#1751) keine Klienten-PII mehr (Dateiname → HMAC + Endung, kein Meilenstein-Titel, kein Pseudonym im Export-Eintrag). Bereits geschriebene Zeilen bleiben unverändert stehen — siehe [§ Audit-Log-Restdaten überleben die Art.-17-Löschung](#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753)
 
 **Wenn jetzt durchgezogen:** ~1–2 Tage Arbeit + Risiko in Search/Export, ohne Live-Feedback aus Pilot zu haben.
 
@@ -212,7 +212,7 @@ Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Fel
 
 ## Audit-Log-Restdaten überleben die Art.-17-Löschung (Issue #1753)
 
-**Status:** Akzeptiertes Restrisiko, seit #1751 für **neue** Einträge abgemildert. Betriebliche Gegenmaßnahme: Aufbewahrungsfrist nicht abschalten.
+**Status:** Akzeptiertes Restrisiko, durch Minimierung beim Schreiben abgemildert (#1751). Betriebliche Gegenmaßnahme: Aufbewahrungsfrist nicht abschalten.
 
 ### Beobachtung
 
@@ -222,7 +222,7 @@ Daraus folgen drei Fälle, in denen personenbeziehbare Restdaten die Löschung �
 
 1. **Bis zum Pruning** — Regelfall: bis zu `Settings.auditlog_retention_months` (Default 24 Monate) nach dem Eintrag.
 2. **Dauerhaft bei `auditlog_retention_months = 0`** — der Wert schaltet das Pruning ab ([`audit_pruning.py`](../src/core/retention/audit_pruning.py): `months <= 0` → No-op). Dann überlebt **jede** Audit-Zeile jede Löschung, unbegrenzt.
-3. **Dauerhaft bei `SECURITY_VIOLATION`** — die Aktion steht in `PRUNE_EXEMPT_ACTIONS` und wird nie gepruned, unabhängig von der Frist. Dasselbe gilt für `RETENTION_RUN_COMPLETED`, `AUDIT_PRUNE_CHECKPOINT` und `EVENT_HISTORY_REDACTED` (alle drei in `PRUNE_EXEMPT_ACTIONS`, sie tragen nur System-Metadaten) sowie — seit #1770 — für `EXPORT`-Einträge, die eine **Berichts-Freigabe** sind (`RELEASE_EXPORT_Q`: Berichtszeitraum **und** herausgegebenes Artefakt; Datenbasis der Freigabe-Übersicht, siehe § Disclosure-Analyse K4a). Die Grenze hängt bewusst **nicht** an der Aktion: `EXPORT` ist eine Sammelklasse, unter der auch die Art.-15-Datenauskunft einer Person, die DSGVO-Dokument-Downloads (beide ohne Zeitraum) und jeder **Bildschirm-Aufruf** des externen Berichts (Zeitraum, aber kein Artefakt) laufen — die alle bleiben der Frist unterworfen. Was in der Berichts-Teilmenge dauerhaft stehen bleibt, sind Zeitraum, Format, die Empfänger-/Zweck-**Freitexte** und die handelnde Person; Klientenbezug ist dort nicht vorgesehen, aber die Freitextfelder sind Freitext — ihre Datenminimierung ist eine Betreiber-Obliegenheit (Empfehlung im Admin-Handbuch), keine technische Zusicherung.
+3. **Dauerhaft bei `SECURITY_VIOLATION`** — die Aktion steht in `PRUNE_EXEMPT_ACTIONS` und wird nie gepruned, unabhängig von der Frist. Dasselbe gilt für `RETENTION_RUN_COMPLETED`, `AUDIT_PRUNE_CHECKPOINT` und `EVENT_HISTORY_REDACTED` (alle drei in `PRUNE_EXEMPT_ACTIONS`, sie tragen nur System-Metadaten) sowie (#1770) für `EXPORT`-Einträge, die eine **Berichts-Freigabe** sind (`RELEASE_EXPORT_Q`: Berichtszeitraum **und** herausgegebenes Artefakt; Datenbasis der Freigabe-Übersicht, siehe § Disclosure-Analyse K4a). Die Grenze hängt bewusst **nicht** an der Aktion: `EXPORT` ist eine Sammelklasse, unter der auch die Art.-15-Datenauskunft einer Person, die DSGVO-Dokument-Downloads (beide ohne Zeitraum) und jeder **Bildschirm-Aufruf** des externen Berichts (Zeitraum, aber kein Artefakt) laufen — die alle bleiben der Frist unterworfen. Was in der Berichts-Teilmenge dauerhaft stehen bleibt, sind Zeitraum, Format, die Empfänger-/Zweck-**Freitexte** und die handelnde Person; Klientenbezug ist dort nicht vorgesehen, aber die Freitextfelder sind Freitext — ihre Datenminimierung ist eine Betreiber-Obliegenheit (Empfehlung im Admin-Handbuch), keine technische Zusicherung.
 
 ### Was bereits umgesetzt ist (#1751, Punkt 5)
 
@@ -251,7 +251,7 @@ Seither gilt eine **Schlüssel-Allowlist**: [`src/core/services/audit/detail_pol
 
 ### Restfläche (akzeptiert)
 
-- **Alt-Zeilen bleiben unverändert.** Vor #1751 geschriebene Einträge tragen die Klartextwerte weiter; sie zu redigieren hieße, die HMAC-Kette zu brechen (und damit genau die Integritätszusicherung aufzugeben, wegen der das Log existiert). Sie verschwinden mit dem regulären Pruning.
+- **Geschriebene Zeilen bleiben unverändert.** Was einmal in einem `detail` steht, bleibt dort; es zu redigieren hieße, die HMAC-Kette zu brechen (und damit genau die Integritätszusicherung aufzugeben, wegen der das Log existiert). Sie verschwinden mit dem regulären Pruning.
 - **`changed_fields`, `target_id` und Zeitstempel bleiben personenbeziehbar** — solange die Ziel-Zeile noch existiert, ist die Zuordnung auflösbar. Das ist gewollt: ohne sie wäre das Log als Rechenschaftsnachweis (Art. 5 Abs. 2) wertlos.
 - **Abwägung:** Art. 17 Abs. 3 lit. b/e deckt die Aufbewahrung zur Erfüllung rechtlicher Nachweispflichten und zur Rechtsverteidigung; der Nachweis *dass* verarbeitet wurde ist der Zweck des Logs. Die Grenze ist die Verhältnismäßigkeit der Frist — deshalb ist sie konfigurierbar und im Regelfall endlich.
 
@@ -310,13 +310,13 @@ Ein Backup ist per Konstruktion ein Stand **von vorher**. Nachträglich einzelne
 
 ### Beobachtung
 
-`Event.idempotency_payload_hash` (`CharField(max_length=64)`; bis #1942 ein nackter SHA-256-Hexdigest, seither ein gepfeffertes HMAC-SHA-256 im Format `h1:<pepper-id>:<base64url>`) ist der seit #1909/N14 persistente DB-Backstop des Offline-Replay-Idempotenz-Schutzes (Review R5/R6, #1424): [`payload_fingerprint()`](../src/core/services/events/idempotency.py) hasht die kanonische Form des Request-Payloads (alle `POST`-Feldpaare außer CSRF-Token und Idempotenz-Schlüsselfeld, sortiert, plus Datei-Tripel), damit ein Replay mit demselben `X-Idempotency-Key`, aber abweichendem Body als Kollision erkannt wird (`has_idempotency_payload_mismatch()`) statt still den falschen gecachten Erfolg zurückzugeben.
+`Event.idempotency_payload_hash` (`CharField(max_length=64)`; ein gepfeffertes HMAC-SHA-256 im Format `h1:<pepper-id>:<base64url>`) ist der persistente DB-Backstop (#1909) des Offline-Replay-Idempotenz-Schutzes (Review R5/R6, #1424): [`payload_fingerprint()`](../src/core/services/events/idempotency.py) hasht die kanonische Form des Request-Payloads (alle `POST`-Feldpaare außer CSRF-Token und Idempotenz-Schlüsselfeld, sortiert, plus Datei-Tripel), damit ein Replay mit demselben `X-Idempotency-Key`, aber abweichendem Body als Kollision erkannt wird (`has_idempotency_payload_mismatch()`) statt still den falschen gecachten Erfolg zurückzugeben.
 
 Bei der Klienten-Anonymisierung (`anonymize_client()`, [`client/main.py`](../src/core/services/client/main.py)) leert `_redact_live_events()` `Event.data_json`/`search_text` — `idempotency_key`/`idempotency_payload_hash` stehen bewusst **nicht** in deren `update_fields` und bleiben unverändert. Derselbe Befund gilt für den K-Anon-Bridge-Pfad ([`retention/anonymization.py`](../src/core/retention/anonymization.py)): der ruft `_redact_live_events` gar nicht auf (Eintrittsbedingung `active_events == 0`), und der vorgelagerte Soft-Delete (`soft_delete_event`) fasst die Spalte ebenfalls nicht an.
 
 ### Zweck (warum der Hash überhaupt existiert)
 
-Der Cache-Eintrag (72 h TTL, `IDEMPOTENCY_TTL_SECONDS`; in Produktion Redis oder, ohne `REDIS_URL`, `DatabaseCache` laut `CACHES` in `prod.py`) ist der Fast-Path; die Spalte ist die Ausfallsicherung dafür — sie greift genau dann, wenn der Cache nicht mehr da ist (Worker-Neustart, Eviction, R5) oder zwei parallele Replays das Get-then-Set-Fenster gleichzeitig passieren (R6). Ohne den persistierten Hash würde ein Cache-Verlust nach #1909 wieder in genau die Lücke zurückfallen, die N14/#1424 geschlossen hat: ein Replay mit demselben (client-frei wählbaren) Schlüssel, aber anderem Payload, würde still den falschen gecachten Treffer zurückliefern, statt als Kollision erkannt zu werden.
+Der Cache-Eintrag (72 h TTL, `IDEMPOTENCY_TTL_SECONDS`; in Produktion Redis oder, ohne `REDIS_URL`, `DatabaseCache` laut `CACHES` in `prod.py`) ist der Fast-Path; die Spalte ist die Ausfallsicherung dafür — sie greift genau dann, wenn der Cache nicht mehr da ist (Worker-Neustart, Eviction, R5) oder zwei parallele Replays das Get-then-Set-Fenster gleichzeitig passieren (R6). Ohne den persistierten Hash fiele ein Cache-Verlust in genau die Lücke zurück, die #1424 schließt: ein Replay mit demselben (client-frei wählbaren) Schlüssel, aber anderem Payload, würde still den falschen gecachten Treffer zurückliefern, statt als Kollision erkannt zu werden.
 
 ### Unlinkability-Bewertung
 
@@ -348,7 +348,7 @@ Die getroffenen Entscheidungen:
 - **Format `h1:<pepper-id>:<base64url>`.** Das Schema-Präfix ist das einzige Unterscheidungsmerkmal gegenüber einem Legacy-Wert (beide wären sonst 64 Zeichen). Die Pepper-Kennung (8 Hex-Zeichen aus `sha256(pepper)`, kein Schlüsselmaterial) macht eine Schlüssel-Rotation als solche erkennbar. `base64url` ohne Padding hält die vollen 256 Bit in `CharField(max_length=64)` (55 statt 76 Zeichen in Hex) — die Spalte bleibt unverändert, es braucht keine Migration.
 - **Schlüsselrotation erhält den Kollisionsschutz vollständig.** `has_idempotency_payload_mismatch()` bekommt den **Request**, nicht einen vorberechneten Hash, und rechnet einen gespeicherten Fingerprint unter genau der Generation nach, unter der er entstand — dafür durchsucht sie alle in `ENCRYPTION_KEYS` konfigurierten Schlüssel (`_get_keys()`, dieselbe Quelle wie `MultiFernet`). Während einer Rotation stehen Alt- und Neuschlüssel dort ohnehin nebeneinander; der N14-Schutz bleibt über die gesamte Rotation hinweg wirksam. Neue Fingerprints entstehen dabei immer unter dem **ersten** Schlüssel.
 - **Zwei Fälle ohne Vergleichsgrundlage — graceful, kein 422.** Ein Legacy-Wert (nackter SHA-256 ohne Präfix) und ein Wert, dessen Schlüssel **nicht mehr** in `ENCRYPTION_KEYS` steht, sind keine Kollisions-*Beweise*, sondern fehlende Vergleichsgrundlage. Sie gelten deshalb wie das seit N14 dokumentierte `NULL` als **Treffer ohne Payload-Prüfung** — andernfalls liefe jeder solche Replay in einen falschen Kollisions-422 und landete als Dead Letter in der Offline-UI. Eine nachträgliche Datenmigration ist in beiden Fällen unmöglich: der Fingerprint deckt den ursprünglichen **Request-Payload** ab (inklusive Datei-Tripel), und der existiert nach der Anlage nirgends mehr — anders als bei `reencrypt_fields`, das gespeicherte Chiffrate umschlüsselt, gibt es hier kein Original zum Neuberechnen.
-- **Restrisiko — ehrlich: dauerhaft, nicht zeitlich begrenzt.** Für Zeilen einer Generation, deren Schlüssel entfernt wurde, entfällt die Payload-Kollisionsprüfung **für immer**. `Event`-Zeilen werden von der Retention nie hart gelöscht (siehe § Retention-Begründung oben), sie laufen also **nicht** aus; nur der 72-h-Cache-Eintrag tut das. Eine frühere Fassung dieses Abschnitts sprach von „zeitlich eng begrenzt" — das war falsch und steht im Widerspruch zur Retention-Begründung. Der Ausgang bleibt der Zustand *vor* N14 (Treffer statt 422), also kein Rückschritt hinter den historischen Stand, und er betrifft ausschließlich denselben `(scope, user, idempotency_key)`-Strang derselben Nutzerin.
+- **Restrisiko — ehrlich: dauerhaft, nicht zeitlich begrenzt.** Für Zeilen einer Generation, deren Schlüssel entfernt wurde, entfällt die Payload-Kollisionsprüfung **für immer**. `Event`-Zeilen werden von der Retention nie hart gelöscht (siehe § Retention-Begründung oben), sie laufen also **nicht** aus; nur der 72-h-Cache-Eintrag tut das. Der Ausgang bleibt der Zustand *vor* N14 (Treffer statt 422), also kein Rückschritt hinter den historischen Stand, und er betrifft ausschließlich denselben `(scope, user, idempotency_key)`-Strang derselben Nutzerin.
   **Handlungsempfehlung für Betreiber:** Alt-Schlüssel nach einer Rotation in `ENCRYPTION_KEYS` **behalten** — er wird für Alt-Chiffrate ohnehin gebraucht, bis `reencrypt_fields` durchgelaufen ist. Wer ihn danach entfernt (der dokumentierte, richtige Weg für die Verschlüsselung), nimmt für die bis dahin angelegten Ereignisse bewusst diesen Prüfverlust in Kauf. Ein zusätzlicher Aufbewahrungsgrund für den Altschlüssel entsteht dadurch nicht: der Idempotenz-Schutz ist ein Duplikat-Guard, kein Schutzziel der Betroffenen.
 
 ### Exportausschluss (verifiziert)
@@ -380,11 +380,11 @@ Alle Event-Serialisierer arbeiten als **Allowlist** (explizites Feld-Dict, keine
 
 ## Restidentifizierbarkeit der Tombstone-Timeline: Monatsbucket statt exakter Zeitpunkte (Issue #2047)
 
-**Status:** Befund **mitigiert** — die Zeitachse anonymisierter Personen wird seit #2047 auf den Monatsersten 00:00 Uhr generalisiert. Ein Restrisiko bleibt und ist unten benannt.
+**Status:** Befund **mitigiert** — die Zeitachse anonymisierter Personen wird (#2047) auf den Monatsersten 00:00 Uhr generalisiert. Ein Restrisiko bleibt und ist unten benannt.
 
 ### Beobachtung
 
-Nach der Anonymisierung (`anonymize_client()` wie K-Anon-Bridge) bleibt die `Event`-Zeile bewusst stehen — sie ist das Statistik-Aggregat, das die Löschung überlebt. Bis #2047 behielt sie dabei ihren **exakten** `occurred_at`. Je Tombstone stand damit die vollständige, personenverknüpfte Timeline aus Zeitpunkt × `document_type` × Fallstruktur weiter in der Datenbank und im Art.-15-Export.
+Nach der Anonymisierung (`anonymize_client()` wie K-Anon-Bridge) bleibt die `Event`-Zeile bewusst stehen — sie ist das Statistik-Aggregat, das die Löschung überlebt. Mit ihrem **exakten** `occurred_at` stünde je Tombstone die vollständige, personenverknüpfte Timeline aus Zeitpunkt × `document_type` × Fallstruktur weiter in der Datenbank und im Art.-15-Export (#2047).
 
 Die k-Anonymitäts-Zusicherung deckte das nicht ab: `is_k_anonymous` attestiert die Äquivalenzklasse `(age_cluster, contact_stage)` — zwei niedrigdimensionale Merkmale. Die Timeline ist hochdimensional und wurde von *k* nie erfasst. Mit Außenwissen („Krisenintake am 3. Mai gegen halb drei") war ein Single-out bei realistischen Einrichtungsgrößen plausibel; der Datensatz war damit **pseudonymisiert, nicht anonym** — im Widerspruch zu der Zusage, die die Anwendung mit „anonymisiert" selbst gibt.
 
@@ -424,11 +424,11 @@ Diese Bewertung ist an die heutige Auswertungs-Granularität gebunden und **neu 
 
 ## Offline-Bundles nach Anonymisierung: Revoke-Liste + 48-h-TTL als letzte Linie (Issue #1760)
 
-**Status:** Aktiver Widerrufskanal seit #1760, Reichweite erweitert in #1774 (gequeute Event-Edit-POSTs + Autosave-Entwurf); das Restrisiko „dauerhaft offline gebliebenes Gerät" bleibt akzeptiert und ist durch die Bundle-TTL begrenzt.
+**Status:** Aktiver Widerrufskanal (#1760), Reichweite erweitert in #1774 (gequeute Event-Edit-POSTs + Autosave-Entwurf); das Restrisiko „dauerhaft offline gebliebenes Gerät" bleibt akzeptiert und ist durch die Bundle-TTL begrenzt.
 
 ### Beobachtung
 
-Ein offline mitgenommener Personendatensatz liegt als AES-GCM-verschlüsseltes Bundle in der IndexedDB des Geräts ([ADR-022](adr/022-offline-snapshot-keys.md), [`offline.py`](../src/core/services/system/offline.py)) — mit Pseudonym, Notizen, Fall-Titeln und Ereignisdaten im entschlüsselbaren Klartext, solange die Session lebt. Wird die Person serverseitig anonymisiert, räumte das bis #1760 **nur den Server** ab. Kein Signal erreichte das Gerät:
+Ein offline mitgenommener Personendatensatz liegt als AES-GCM-verschlüsseltes Bundle in der IndexedDB des Geräts ([ADR-022](adr/022-offline-snapshot-keys.md), [`offline.py`](../src/core/services/system/offline.py)) — mit Pseudonym, Notizen, Fall-Titeln und Ereignisdaten im entschlüsselbaren Klartext, solange die Session lebt. Wird die Person serverseitig anonymisiert, räumt das zunächst **nur den Server** ab; ohne eigenen Kanal erreicht kein Signal das Gerät:
 
 - Die Revalidierung beim nächsten Online-Kontakt (`revalidateCachedClient` in [`offline-store.js`](../src/static/js/offline-store.js)) purgt lokal nur bei **401/404/410**. Eine anonymisierte Person existiert aber weiter (die Zeile bleibt für Statistik-Aggregate stehen) und liefert **200**.
 - Und selbst dieses 200 wird bewusst **nicht** über den lokalen Stand geschrieben, solange zu der Person ungesyncte Änderungen offen sind (`"skipped"`-Zweig — sonst überschriebe ein Refresh nicht replizierte Arbeit). Genau dort überlebte der Klartext.
@@ -437,14 +437,14 @@ Damit blieb der gelöschte Datenbestand bis zu 48 h (`BUNDLE_TTL_SECONDS`) auf d
 
 ### Maßnahme: personen-genaue Revoke-Liste
 
-Der Server führt seit #1760 eine Widerrufsliste ([`OfflineClientRevocation`](../src/core/models/offline_revocation.py), Migrationen `0126`/`0127`). Beide Anonymisierungs-Einstiege — der harte Pfad in `anonymize_client()` und die K-Anon-Bridge — schreiben in derselben Transaktion wie die Redaktions-Kaskade einen Eintrag. Der Eintrag ist **klartextfrei**: nur Einrichtung, die (ehemalige) Personen-UUID und der Zeitstempel; `client_pk` ist bewusst kein Fremdschlüssel, damit der Widerruf die Zeile überdauern kann.
+Der Server führt eine Widerrufsliste ([`OfflineClientRevocation`](../src/core/models/offline_revocation.py), Migrationen `0126`/`0127`). Beide Anonymisierungs-Einstiege — der harte Pfad in `anonymize_client()` und die K-Anon-Bridge — schreiben in derselben Transaktion wie die Redaktions-Kaskade einen Eintrag. Der Eintrag ist **klartextfrei**: nur Einrichtung, die (ehemalige) Personen-UUID und der Zeitstempel; `client_pk` ist bewusst kein Fremdschlüssel, damit der Widerruf die Zeile überdauern kann.
 
 Der Client holt die Liste unter `GET /api/v1/offline/revocations/` (Rolle Assistenz+, RLS-gescoped, `no-store`, eigenes großzügiges Rate-Limit `RATELIMIT_OFFLINE_REVOCATIONS`) und wendet sie an — **bei jedem Sync** als *erstem* Schritt der Sync-Orchestrator-Sequenz und **beim Start** — dort als eigener, minimaler Lauf unter demselben Web Lock und **höchstens einmal pro Minute**. Der Boot-Check ist notwendig, weil die Sync-Sequenz sonst nur ein `online`-Event oder replaybare Arbeit als Auslöser hätte — ein Gerät, das schlicht wieder benutzt wird, träfe nie auf die Liste. Sein Gate zählt alle vier Bestände, die der Purge tatsächlich anfasst (`clients`, `queue`, `drafts`, `events`); Entwürfe und ungesyncte Ereignisse können ohne gecachte Person existieren, und `conflict`/`dead`-Ereignisse lösen auch den Startup-Drain nicht aus. Der Boot-Poll ist client-seitig auf einen Lauf pro Minute gedrosselt (Zeitstempel in der `meta`-Tabelle), der Sync-Pfad bleibt ungedrosselt.
 
 Drei Design-Entscheidungen mit Sicherheitsbezug:
 
 1. **Widerruf läuft vor dem Replay — als *best effort*, nicht als Sperre.** Er steht als erster Schritt der Sync-Sequenz *vor* `replayQueue`/`replayAllModifiedEvents`; läge er danach, spielte der Replay die gequeuten Schreibzugriffe zu der gerade anonymisierten Person garantiert noch aus. **Er ist aber keine Vorbedingung:** schlägt der Abruf fehl (kein Netz, `429`, Login-Redirect), wird der Fehler geschluckt und der Replay läuft trotzdem — sonst blockierte ein Netzproblem die gesamte Offline-Synchronisation. Die Reihenfolge verkleinert das Fenster, sie schließt es nicht. **Harte Grenze bleiben die serverseitige Anonymisierung und die Bundle-TTL**, nicht dieser Kanal (siehe Restrisiko unten).
-2. **Ungesyncte Arbeit wird verworfen, nicht als Dead-Letter erhalten** (fail-safe). Ein Dead-Letter behielte den entschlüsselbaren Klartext genau dort liegen, wo der Widerruf ihn entfernen soll; ein Replay träfe serverseitig ohnehin auf einen anonymisierten Datensatz. Es ist derselbe Löschgrund wie der Sicherheits-Purge bei Rechteentzug (F-10, #1110) und nutzt dieselbe Primitive (`removeOfflineClient(pk, {force: true})`) — kein zweiter Purge-Pfad. Betroffen sind Bundle-Spiegel, ungesyncte Ereignisse, Queue-Einträge und Entwürfe, **die die Personen-UUID in URL oder Payload tragen — oder die lokal einer widerrufenen Person zugeordnet werden können** (#1774). Das ist die Reichweite von `_mentionsRevoked`; sie ist keine Zusicherung über jeden Bestand mit Personenbezug, deckt seit #1774 aber die beiden zuvor hier ausgewiesenen realen Lücken ab:
+2. **Ungesyncte Arbeit wird verworfen, nicht als Dead-Letter erhalten** (fail-safe). Ein Dead-Letter behielte den entschlüsselbaren Klartext genau dort liegen, wo der Widerruf ihn entfernen soll; ein Replay träfe serverseitig ohnehin auf einen anonymisierten Datensatz. Es ist derselbe Löschgrund wie der Sicherheits-Purge bei Rechteentzug (F-10, #1110) und nutzt dieselbe Primitive (`removeOfflineClient(pk, {force: true})`) — kein zweiter Purge-Pfad. Betroffen sind Bundle-Spiegel, ungesyncte Ereignisse, Queue-Einträge und Entwürfe, **die die Personen-UUID in URL oder Payload tragen — oder die lokal einer widerrufenen Person zugeordnet werden können** (#1774). Das ist die Reichweite von `_mentionsRevoked`; sie ist keine Zusicherung über jeden Bestand mit Personenbezug, deckt aber zwei reale Lücken ab (#1774):
 
    - **Gequeuter `POST /events/<event-uuid>/edit/`** (analog `/workitems/<uuid>/edit/`): Die URL trägt die Ereignis-/Aufgaben-, nicht die Personen-UUID, und der Body enthält nur CSRF, `expected_updated_at` und Feld-Slugs. `applyClientRevocations` löst die Zuordnung deshalb über die lokale `events`-Tabelle auf (`pk`/`clientPk` liegen dort als Plaintext-Indexfelder — kein Session-Key nötig) und nimmt die so gefundenen Record-UUIDs als zweiten Suchbegriff-Satz in den Queue-/Entwurfs-Purge auf. **Reihenfolge ist hier sicherheitskritisch:** die Auflösung läuft *vor* dem Bundle-Purge, denn `removeOfflineClient(pk, {force: true})` löscht genau die `events`-Zeilen, die die Zuordnung tragen. Ein gequeuter `POST /partials/workitems/<uuid>/status/` trägt in URL und Body ebenfalls keine Personen-UUID und wird über denselben Kanal **nur** erfasst, wenn die Aufgabe bereits einen `events`-Eintrag hat (`data.kind === "workitem"`) — also bereits einmal offline voll editiert wurde. Eine reine Bundle-Aufgabe, die nie offline editiert, sondern nur im Status umgeschaltet wurde, hat keine solche Zeile; für sie greift die Rest-Grenze unten.
    - **Autosave-Entwurf von `/events/new/`:** Der Storage-Key bildet weiterhin nur `user` + `pathname` — der Personenbezug steckt jetzt im *verschlüsselten Umschlag*: ein Formularfeld weist sich per `data-autosave-person` aus (das versteckte, Alpine-gebundene `client`-Feld), und `autosave.js` schreibt dessen Wert unter dem reservierten Schlüssel `__personPk` mit. Bewusst nicht als Plaintext-Row-Feld — das wären unverschlüsselte PII-Verknüpfungsmetadaten (dieselbe Begründung wie der `occurredAt`-Ausbau in #1476/R9). Der Bezug ist monoton: eine neue Auswahl überschreibt ihn, ein Wiederherstellen (bei dem die Alpine-Auswahl zurückgesetzt ist) verliert ihn nicht. Ein Entwurf **ohne** gewählte Person bleibt stehen — er hat keinen Personenbezug, den der Widerruf treffen könnte.
@@ -470,7 +470,7 @@ Wer diese Grenze verschieben will, braucht einen fall-genauen Widerrufskanal —
 
 **Der Widerruf ist ein Best-Effort-Kanal, keine Garantie.** Er ist eine Verbesserung gegenüber „gar kein Signal", ersetzt aber weder die serverseitige Löschung noch die TTL:
 
-- **Fail-open bei Transportfehlern.** Netzfehler, `429` oder ein Login-Redirect liefern `error`/`ratelimited`; es wird nichts gelöscht (ohne verlässliche Liste *darf* nichts gelöscht werden) — und der nachfolgende Replay läuft trotzdem. Ein gequeuter Schreibzugriff zu einer inzwischen anonymisierten Person kann in diesem Fenster also serverseitig ankommen. **Seit #1771 weist der Server ihn ab** — die serverseitige zweite Verteidigungslinie ist umgesetzt: `resolve_writable_client` (`services/client/main.py`) prüft an allen drei Formularen mit Personen-Auflösung (`EventMetaForm`, `CaseForm`, `WorkItemForm`) sowohl `is_deleted` (Papierkorb) als auch `is_active` (anonymisiert); `ClientUpdateView` und das Personen-Feld-Partial ziehen `is_active=True` nach. `EventUpdateView` löst den Personenbezug nicht über ein Formular auf (der Client ist am Ereignis fixiert) und zieht die Grenze deshalb direkt in `dispatch` — der PII-schwerste offline-queuebare Schreibpfad (`data_json`, `search_text`, neue `.enc`-Anhänge) ist damit ebenfalls dicht (#1771/#1774). Über den bestehenden 422-Contract landet der Replay damit als `localStatus: "dead"` in der Dead-Letter-UI und wird **nicht** erneut ausgespielt. Das schließt zugleich die Lücke, die bis dahin **unbefristet** stehenblieb — insbesondere Klartext-Titel und -Beschreibung eines WorkItems: `anonymize_clients` schließt Klienten mit `k_anonymized=True` bzw. dem `Gelöscht-`-Pseudonym dauerhaft aus dem Kandidatenfilter aus und verlangt zusätzlich `active_events = 0` — nach einem Replay nie wieder erfüllt. `_redact_workitems` läuft ausschließlich aus den beiden Anonymisierungs-Kaskaden, und die Retention-Pipeline kennt keinen WorkItem-Prune (`dsfa.md` § 2.3: „kein eigener Löschhorizont“). Es gibt also **keinen** nachgelagerten Lauf, der so etwas aufräumen würde — genau deshalb muss der Schreibzugriff schon an der Tür scheitern.
+- **Fail-open bei Transportfehlern.** Netzfehler, `429` oder ein Login-Redirect liefern `error`/`ratelimited`; es wird nichts gelöscht (ohne verlässliche Liste *darf* nichts gelöscht werden) — und der nachfolgende Replay läuft trotzdem. Ein gequeuter Schreibzugriff zu einer inzwischen anonymisierten Person kann in diesem Fenster also serverseitig ankommen. **Der Server weist ihn ab** (#1771) — die serverseitige zweite Verteidigungslinie ist umgesetzt: `resolve_writable_client` (`services/client/main.py`) prüft an allen drei Formularen mit Personen-Auflösung (`EventMetaForm`, `CaseForm`, `WorkItemForm`) sowohl `is_deleted` (Papierkorb) als auch `is_active` (anonymisiert); `ClientUpdateView` und das Personen-Feld-Partial ziehen `is_active=True` nach. `EventUpdateView` löst den Personenbezug nicht über ein Formular auf (der Client ist am Ereignis fixiert) und zieht die Grenze deshalb direkt in `dispatch` — der PII-schwerste offline-queuebare Schreibpfad (`data_json`, `search_text`, neue `.enc`-Anhänge) ist damit ebenfalls dicht (#1771/#1774). Über den bestehenden 422-Contract landet der Replay damit als `localStatus: "dead"` in der Dead-Letter-UI und wird **nicht** erneut ausgespielt. Das schließt zugleich die Lücke, die bis dahin **unbefristet** stehenblieb — insbesondere Klartext-Titel und -Beschreibung eines WorkItems: `anonymize_clients` schließt Klienten mit `k_anonymized=True` bzw. dem `Gelöscht-`-Pseudonym dauerhaft aus dem Kandidatenfilter aus und verlangt zusätzlich `active_events = 0` — nach einem Replay nie wieder erfüllt. `_redact_workitems` läuft ausschließlich aus den beiden Anonymisierungs-Kaskaden, und die Retention-Pipeline kennt keinen WorkItem-Prune (`dsfa.md` § 2.3: „kein eigener Löschhorizont“). Es gibt also **keinen** nachgelagerten Lauf, der so etwas aufräumen würde — genau deshalb muss der Schreibzugriff schon an der Tür scheitern.
 - **Der Boot-Poll ist gedrosselt** (1×/Minute). Innerhalb dieses Fensters wirkt nur der Sync-Pfad.
 
 Zwei weitere, bewusst nicht geschlossene Kanten:
@@ -586,7 +586,7 @@ nach v1.0 ein (Item 51):
 
 ## CSP-Reporting (Issue #684)
 
-**Status:** Aktiv ab v0.11. Detection-Lücke L2 aus einem internen Sicherheitsbericht 2026-04-26 (dev-only) geschlossen.
+**Status:** Aktiv. Detection-Lücke L2 aus einem internen Sicherheitsbericht 2026-04-26 (dev-only) geschlossen.
 
 Die globale CSP enthält jetzt `report-uri /csp-report/` ([`base.py`](../src/anlaufstelle/settings/base.py), `CONTENT_SECURITY_POLICY`). Browser POSTen Verstöße als `application/csp-report` (CSP Level 2) oder `application/reports+json` (CSP Level 3) — die View [`CSPReportView`](../src/core/views/csp_report.py) parsed beide Formate, loggt strukturiert als WARNING auf dem `security.csp`-Logger und antwortet `204 No Content`.
 
@@ -598,9 +598,9 @@ Die globale CSP enthält jetzt `report-uri /csp-report/` ([`base.py`](../src/anl
 
 **Detection-Pfad:** Primär landen CSP-Violations in der lokalen Log-Datei (Logger `security.csp`, Level `WARNING`, mit allen Feldern `blocked-uri`, `violated-directive`, `source-file`, ...) und werden von dort per Caddy/Filebeat/Loki ausgewertet. Ist `SENTRY_DSN` gesetzt ([`prod.py`](../src/anlaufstelle/settings/prod.py)), erzeugen diese WARNINGs **keine eigenen Sentry-Events:** Die Sentry-`LoggingIntegration` ist bewusst nicht mit einem eigenen `event_level` konfiguriert, sodass ihr Default `event_level=ERROR` gilt — WARNINGs erscheinen daher nur als **Breadcrumb** an einem später erfassten Error-Event, nicht als eigenständige Violation-Meldung im Dashboard. Diese Breadcrumbs durchlaufen den `before_send`/`before_send_transaction`-Scrubber ([`_sentry.py`](../src/anlaufstelle/settings/_sentry.py)), bevor sie das Programm verlassen.
 
-**Bewusste Entscheidung (Noise-/PII-Abwägung):** Kein explizites `event_level`-Capture für `security.csp`. CSP-Reports sind hochvolumig und teils browser-/angreifer-kontrolliert (`blocked-uri`/`source-file` können URLs mit Query-Strings tragen); sie als eigene Sentry-Events zu erfassen, würde Rauschen erzeugen und die Scrub-Grenze für frei befüllbare Report-Felder unnötig ausreizen. Wer CSP-Violations aktiv im Tracker auswerten will, richtet die Alarmierung stattdessen auf den `security.csp`-Log-Stream ein. In #1949 erneut geprüft und bestätigt — mit einem zusätzlichen technischen Argument: Die `LoggingIntegration` patcht `logging.Logger.callHandlers` **global**, ein `event_level` lässt sich also gar nicht auf `security.*` beschränken, und der SDK-Handler hebt sämtliche `extra`-Felder eines Records ins Event — für `security.csp` also `remote_addr` (Client-IP) und `user_agent` in jedes Event. Der Sink ist seit #1949 auch im [Threat-Model](threat-model.md#tb1--browser--caddydjango) (TB1, CSP-Zeile) benannt.
+**Bewusste Entscheidung (Noise-/PII-Abwägung):** Kein explizites `event_level`-Capture für `security.csp`. CSP-Reports sind hochvolumig und teils browser-/angreifer-kontrolliert (`blocked-uri`/`source-file` können URLs mit Query-Strings tragen); sie als eigene Sentry-Events zu erfassen, würde Rauschen erzeugen und die Scrub-Grenze für frei befüllbare Report-Felder unnötig ausreizen. Wer CSP-Violations aktiv im Tracker auswerten will, richtet die Alarmierung stattdessen auf den `security.csp`-Log-Stream ein. In #1949 erneut geprüft und bestätigt — mit einem zusätzlichen technischen Argument: Die `LoggingIntegration` patcht `logging.Logger.callHandlers` **global**, ein `event_level` lässt sich also gar nicht auf `security.*` beschränken, und der SDK-Handler hebt sämtliche `extra`-Felder eines Records ins Event — für `security.csp` also `remote_addr` (Client-IP) und `user_agent` in jedes Event. Der Sink ist auch im [Threat-Model](threat-model.md#tb1--browser--caddydjango) (TB1, CSP-Zeile) benannt.
 
-**Verifikation:** [`tests/test_csp_report.py`](../src/tests/test_csp_report.py) — Report-Parsing beider Formate, Feld-Whitelist, Steuerzeichen-Filter, Violation-Cap sowie seit #1949 das Rate-Limit selbst (10 Reports/min/IP → 204, der elfte → 429, neues Zählfenster lässt wieder durch, und der Zähler läuft pro Client-IP statt global).
+**Verifikation:** [`tests/test_csp_report.py`](../src/tests/test_csp_report.py) — Report-Parsing beider Formate, Feld-Whitelist, Steuerzeichen-Filter, Violation-Cap sowie das Rate-Limit selbst (#1949) (10 Reports/min/IP → 204, der elfte → 429, neues Zählfenster lässt wieder durch, und der Zähler läuft pro Client-IP statt global).
 
 **Bewusste Trade-off-Entscheidung:** `report-to` (Reporting API + `Reporting-Endpoints`-Header) ist nicht konfiguriert — `report-uri` deckt alle relevanten Browser ab und wurde in #684 bewusst als ausreichende Implementierung gewählt. Falls die Browser-Spezifikation `report-uri` deprecaten sollte, muss `report-to` ergänzt werden.
 
@@ -692,7 +692,7 @@ Drei Netze kompensieren dieses Risiko:
 PyPI-Spiegel können deshalb fehlen. So meldete es für `django-otp-webauthn==0.10.0`
 keinen Befund, obwohl
 [GHSA-8r76-c459-ww98](https://github.com/Stormbase/django-otp-webauthn/security/advisories/GHSA-8r76-c459-ww98)
-Versionen vor 0.10.3 betraf. Eine zweite Werkzeugkette im Release-Gate wird dafür nicht
+Versionen unter 0.10.3 betraf. Eine zweite Werkzeugkette im Release-Gate wird dafür nicht
 eingeführt: Die Dependabot-Alerts des Entwicklungs-Repositories dienen als Zweitquelle,
 ergänzt durch den monatlichen manuellen Check aus Punkt 2.
 
@@ -727,7 +727,7 @@ pro Einrichtung über [`Settings.k_anonymity_threshold`](../src/core/models/sett
 >   `by_contact_stage.qualifiziert` und `unique_clients` — werden gegen die **DISTINCT-Personenzahl**
 >   des Buckets im Berichtszeitraum geprüft, zusätzlich zur Ereigniszahl, und es gilt die strengere der
 >   beiden. Eine sichtbare Zelle „Unter 18: 7" bedeutet seither 7 *Kontakte* von **mindestens *k*
->   Personen**; ist die Personenzahl unbekannt (Alt-Snapshot, retention-bereinigter Monat), wird
+>   Personen**; ist die Personenzahl unbekannt (Snapshot ohne Personenzahl, retention-bereinigter Monat), wird
 >   unterdrückt.
 > * **Ausnahme `by_contact_stage.anonym`** — hier ist die Prüfgröße **keine** Personenzahl, sondern
 >   „DISTINCT *verknüpfte* Personen **+** Anzahl der *unverknüpften* Ereignisse". Die Stufe ist als
@@ -747,8 +747,7 @@ pro Einrichtung über [`Settings.k_anonymity_threshold`](../src/core/models/sett
 >   zählen weiterhin **Ereignisse** (`Count("id")`). Ihre Buckets sind Dokumenttypen, keine
 >   Personenmengen — eine Personenschwelle hätte dort keine Äquivalenzklasse, auf die sie sich bezöge.
 >
-> Frühere Fassungen dieses Abschnitts sprachen pauschal von „weniger als *k* **Personen**"; das galt
-> bis #1770 für **keine** Zelle und gilt jetzt
+> „Weniger als *k* **Personen**" gilt (#1770)
 > für `by_age_cluster` und `unique_clients` (sowie die beiden nicht-anonymen Kontaktstufen) — **nicht**
 > für `by_contact_stage.anonym`, siehe die Ausnahme oben. Die verbleibende Ungleichung zwischen
 > Personen- und Ereigniszählung ist als akzeptierte Definitionsgrenze (2) unten dokumentiert.
@@ -824,7 +823,7 @@ begründet ausgenommen wird. Genau diese Drift hatte den Befund erzeugt: die Bri
 Eintrittsbedingung garantiert `active_events == 0`; `_redact_client_identity` — würde
 `age_cluster` löschen und damit den Quasi-Identifikator zerstören, auf dem die k-Anonymität
 beruht). Aufbewahrungssperren (Legal Hold — nicht zu verwechseln mit dem Art.-18-Sperrvermerk,
-siehe § Restidentifizierbarkeit der Tombstone-Timeline) blockieren seit #1756
+siehe § Restidentifizierbarkeit der Tombstone-Timeline) blockieren (#1756)
 **beide** Bulk-Einstiege; Begründung und Bucket-Entscheid in
 [ADR-023 Update 2026-08-03](adr/023-k-anonymization-statistik.md).
 
@@ -967,7 +966,7 @@ bestehen — sie ist in Sonderfällen die schärfere Bedingung. Vier Eigenschaft
 * **Die Personenzahl verlässt die Suppression nie.** `_suppress_small` entfernt `persons` aus **jeder**
   Ausgabezeile — sichtbar wie unterdrückt. Bliebe sie stehen, wäre eine Zelle „27+: 30 Ereignisse,
   6 Personen" selbst eine publizierte Kleinstfallzahl, die nie durch eine Regel gelaufen ist.
-* **Unbekannt ⇒ unterdrückt.** Alt-Snapshots ohne `persons` und Monate, deren historische Personenzahl
+* **Unbekannt ⇒ unterdrückt.** Snapshots ohne `persons` und Monate, deren historische Personenzahl
   nach Ablauf der Löschfristen nicht mehr rekonstruierbar ist, tragen `None`. `require_person_counts`
   normalisiert jede `by_age_cluster`-Liste auf diesen Zustand, damit keine Zeile still auf das alte,
   ereignisbasierte Kriterium zurückfällt; die Backfill-Migration `0128` rät nicht, sondern markiert.
@@ -982,8 +981,8 @@ Test-gepinnt in `test_external_report_service.py::TestPersonenbasiertesZellkrite
 `test_statistics_hybrid.py::TestMergeSummiertPersonenzahlenNie` sowie
 `src/tests/migrations/test_0128_backfill_snapshot_person_counts.py`.
 
-**Damit korrigiert:** die frühere Zusicherung, Merkmalskombinationen mit weniger als *k* **Personen**
-würden unterdrückt, gilt für die personenabgeleiteten Aufschlüsselungen wieder — jetzt auf Tabellen-
+**Damit gilt:** die Zusicherung, Merkmalskombinationen mit weniger als *k* **Personen**
+würden unterdrückt, gilt für die personenabgeleiteten Aufschlüsselungen — auf Tabellen-
 **und** Zellebene.
 
 **Restrisiko, ehrlich ausgewiesen — und eine neue Identität.** Fallen durch (b) *alle* Zellen einer
@@ -1000,8 +999,7 @@ unterdrückte Zelle zusätzlich `persons` ≤ *k*−1 verrät und jede gelistete
 kollabiert die Partition an den Rändern auf eine Welt. *Konstruktion bei k = 5:* `unique_clients` = 5
 sichtbar, vier gelistete Altersgruppen, sämtlich unterdrückt ⇒ die einzige mit
 1 ≤ `persons` ≤ 4 konsistente Partition von 5 auf vier Zeilen ist (2, 1, 1, 1) ⇒ **drei Altersgruppen
-mit exakt einer Person** sind zeilenscharf bestimmt. Die frühere Fassung dieses Absatzes nannte nur die
-„Existenz der Zeilen" und übersah die Kopplung an `unique_clients`.
+mit exakt einer Person** sind zeilenscharf bestimmt.
 
 **Verbindliche Auflage — GESCHLOSSEN** (#1770,
 in derselben Umsetzungswelle wie K1/K2):
@@ -1069,8 +1067,8 @@ Reihenfolge, unterdrückte folgen als Block in kanonischer Ordnung (Altersgruppe
 seit [ADR-040](adr/040-documenttype-category-entfernt.md) entfallen); Templates, JSON und XML erben
 das ohne eigene Anpassung. Die Ordnung benennt seit
 #1770 die **Aufrufstelle** über das
-Pflicht-Keyword `order` (die frühere Formheuristik war fail-open) —
-`by_category` fällt seit #1770 unter
+Pflicht-Keyword `order` —
+`by_category` fällt (#1770) unter
 `ORDER_CATEGORY` (Namensordnung): die Einfügereihenfolge der Konsolidierung ist **datenabhängig** —
 eine Kategorie steht dort, wo ihr alphabetisch erster im Zeitraum vorhandener `report_key` steht (bis
 #1849 war die Ordnungsquelle der
@@ -1079,12 +1077,12 @@ einer unterdrückten Kleinstzelle steckt (zwei Welten mit identischen publiziert
 „Vermittlung" aus `accompaniment` bzw. aus `referral`, ergaben verschiedene Positionen). `ORDER_INPUT`
 gilt danach nur noch für Tabellen mit **fester Schlüsselordnung**: `by_contact_stage` (feste
 Stufenfolge aus dem Modell) und die `records`-/`records_<feld>`-Tabellen der Beispiel-Backends
-(Eingabeordnung des jeweiligen Backends, seit #1754).
+(Eingabeordnung des jeweiligen Backends, #1754).
 Test-gepinnt in
 `test_external_report_service.py::TestKanonischeOrdnungUnterdrueckterZeilen` (inkl. des geforderten
 Ordnungstests „zwei Welten mit vertauschten Zellwerten erzeugen dieselbe Ausgabe") und
 `::TestKanonischeOrdnungInDenWrappern`. K5 senkt für sich genommen nur die Pin-Rate; die Restfälle
-deckt der Fixpunkt-Guard (K1, seit #1770
+deckt der Fixpunkt-Guard (K1, #1770
 mitigiert).
 
 *Nachtrag (#1772, Punkt 1): sichtbare
@@ -1361,13 +1359,12 @@ Stufenvektor um **+89 %**; über 15 728 distinkte Publikationen ist W fast durch
 **8 820** davon mit 0 < W < k, also als echte Kleinstfallzahl, **ohne dass eine Suppressionsregel
 angesprochen hätte**. Der M5-Schutz `_close_identity_leak` verhinderte im Export-Pfad das exakte
 Pinning, die Differenz blieb aber invariant; im PDF-Pfad läuft `prepare_export` überhaupt nicht.
-*(Seit #1769 ist `_close_identity_leak`
-entfallen — der Schutz ist stärker geworden, nicht schwächer: die Meldungs-Terme sind jetzt
+*(#1769) Ein eigenes `_close_identity_leak` gibt es nicht: die Meldungs-Terme sind
 **grundsätzlich** verborgen statt nur situativ.)*
 
 *Severity-Korrektur (geprüft, nicht tragfähig):* Die Lesart „ungemappte Ereignisse ⇒ mindestens ein
 Hausverbot" ist **falsch** — `_UNMAPPED_Q` wird aus `TYP_BINDUNG.unmapped_q()` abgeleitet und umfasst
-seit #1849 genau die Ereignisse, deren
+(#1849) genau die Ereignisse, deren
 Dokumenttyp **keinen** Berichtsschlüssel trägt (`report_key` leer/`NULL`): jeder einrichtungseigene
 Typ ohne Schlüssel fällt hinein, ein Hausverbots-Typ mit `report_key = excluded` dagegen gar nicht.
 Korrekt ist nur „mindestens ein Ereignis eines Typs ohne Berichts-Mapping".
@@ -1376,7 +1373,7 @@ Korrekt ist nur „mindestens ein Ereignis eines Typs ohne Berichts-Mapping".
 Personenbezug" ergänzen, sodass Σ = `total_contacts`; W wird damit eine reguläre, suppressionsfähige
 Zelle (gemessen: exaktes W mit 0 < W < k von 8 820 auf **0**). **Drei Auflagen:** die Restzeile muss
 **unbedingt** emittiert werden, auch bei W = 0 (sonst ist ihre bloße Existenz die Aussage W ≥ 1); die
-Snapshot-Merges müssen sie für Alt-Snapshots **synthetisieren**, nicht bloß tolerieren; und die
+Snapshot-Merges müssen sie für Snapshots ohne diese Werte **synthetisieren**, nicht bloß tolerieren; und die
 Alterstabelle fällt damit **neu** unter K1/K2 — der Guard muss sie mit abdecken. **(A2)** Im
 Beispiel-Sachbericht dieselbe Idee **nicht** naiv umsetzen: eine Zeile „ohne Berichts-Mapping" bei
 unveränderter Randsumme erzeugt einen **neuen** exakten Kanal (485 von 840 durchgerechneten
@@ -1558,7 +1555,7 @@ der Analyse sind erfüllt:
   bestehende `EXPORT`-Audit-`detail` (JSON, **keine** Schema-Migration auf dem append-only,
   hash-verketteten Log). Sie sind bewusst optional — ein Pflichtfeld erzwänge eine Angabe auch dort, wo
   der Export gar keine Herausgabe ist (Probelauf), und Pflichtfelder ohne Anlass werden mit „x"
-  gefüllt. Freitext auf 200 Zeichen gekappt: der Log überlebt seit dieser Welle die Löschfristen und
+  gefüllt. Freitext auf 200 Zeichen gekappt: der Log überlebt die Löschfristen und
   ist nachträglich nicht redigierbar.
 * **Historie nicht von `auditlog_retention_months` gekappt.** Die Ausnahme hängt **nicht** an der
   Aktion `EXPORT` — die ist eine Sammelklasse — sondern an `RELEASE_EXPORT_Q` in
@@ -1585,11 +1582,11 @@ der Analyse sind erfüllt:
   Datensatz als Datei herausgibt, nimmt den generischen Berichts-Download — der trägt die
   Freigabe-Felder und bleibt Freigabe, obwohl er ebenfalls JSON liefert.
 
-  **Alt-Zeilen ehrlich behandelt.** Zeilen aus der Zeit vor der Abwertung tragen den Marker; entfernen
+  **Abwertung am Lesepfad.** Ansichts-Zeilen mit Freigabe-Gestalt können den Marker tragen; entfernen
   lässt er sich so wenig wie nachtragen (`detail` geht in den Ketten-Hash ein). Die Abwertung greift
   deshalb am **Lesepfad**: `_LEGACY_VIEW_Q` schließt die eindeutig erkennbare Gestalt dieser Zeilen aus
   (`target_type="ExternalReport"` **und** `detail.format="json"`), sodass die Übersicht künftig nur
-  echte Freigaben zeigt und die Alt-Zeilen zugleich die Retention-Ausnahme verlieren — sie laufen wie
+  echte Freigaben zeigt und diese Zeilen zugleich die Retention-Ausnahme verlieren — sie laufen wie
   jede andere Ansicht nach `auditlog_retention_months` aus, nichts wird vorzeitig gelöscht. Die
   Ausnahme hängt an **beidem**, Ziel und Format, sonst nähme sie die echten JSON-Downloads mit;
   `has_key` steht wieder vor dem Wertvergleich (dieselbe NULL-Falle wie oben). Test-gepinnt in
@@ -1612,11 +1609,9 @@ der Analyse sind erfüllt:
   keine technische Zusicherung. Unter dieser Maßgabe folgt die Aufbewahrung derselben
   Rechenschaftslogik wie `SECURITY_VIOLATION`.
 
-**Rollout-Grenze, ehrlich ausgewiesen — und kein Backfill möglich.** Der Marker
-„herausgegebenes Artefakt" ist mit dieser Welle neu; **keine** vor dem Deploy geschriebene Zeile trägt
-ihn. Bestands-Freigaben sind deshalb weder prune-exempt noch in der Übersicht sichtbar, und eine
-Überlappungswarnung kann gegen sie nicht feuern — für bis zu `auditlog_retention_months` bleibt die
-Übersicht damit unvollständig. **Nachtragen ist ausgeschlossen, nicht bloß unbequem:** `detail` geht in
+**Grenze — kein Backfill möglich.** Als Freigabe zählt nur eine Zeile mit dem Marker
+„herausgegebenes Artefakt". Zeilen ohne Marker sind weder prune-exempt noch in der Übersicht sichtbar, und eine
+Überlappungswarnung kann gegen sie nicht feuern. **Nachtragen ist ausgeschlossen, nicht bloß unbequem:** `detail` geht in
 den Ketten-Hash ein (`chain._canonical_payload`), eine nachträgliche Markierung bräche also die
 HMAC-Kette ab der geänderten Zeile — genau das, was
 `test_audit_chain.py::TestTamperDetection::test_inplace_detail_mutation_breaks_chain` als Manipulation
@@ -1738,7 +1733,7 @@ zweiten Wrapper, dem Beispiel-Sachbericht). Präzisierungen, die die Umsetzung n
   empirische Beleg der Kopplungs-Warnung.
 
 **(2) Ordnungstest** (zwei Welten mit vertauschten Zellwerten müssen dieselbe Ausgabe erzeugen) — auf
-Service-Ebene seit #1767
+Service-Ebene (#1767)
 (`TestKanonischeOrdnungUnterdrueckterZeilen`), **zusätzlich an der Artefaktgrenze** in
 `test_reporting_disclosure_regression.py::TestOrdnungAnDerArtefaktgrenze`: externer Bericht (HTML),
 beide PDF-Datenpfade sowie JSON- und XML-Renderer. Der Service-Test allein hätte ein künftiges
@@ -2057,7 +2052,7 @@ Pro FK besteht die Migration aus einem DROP-RunSQL (löscht den ursprünglichen 
 Passkeys werden über [`django-otp-webauthn`](https://github.com/Stormbase/django-otp-webauthn) als **zusätzlicher** zweiter Faktor neben TOTP angeboten (siehe [ADR-032](adr/032-webauthn-passkeys-2fa.md)). Drei bewusst gesetzte Härtungen:
 
 - **Nur zweiter Faktor, kein passwordless:** `OTP_WEBAUTHN_ALLOW_PASSWORDLESS_LOGIN = False`, `WebAuthnBackend` **nicht** in `AUTHENTICATION_BACKENDS`. Die Ceremonies laufen ausschließlich in einer bereits per Passwort authentifizierten Session — ein Passkey allein loggt niemanden ein.
-- **`mfa_verified`-Glue ist der kritische Punkt:** Unser `MFAEnforcementMiddleware` gated über das Session-Flag `mfa_verified`; die Bibliothek markiert nur über django-otps `otp_login`. Die Subklassen in [`src/core/views/mfa_webauthn.py`](../src/core/views/mfa_webauthn.py) setzen das Flag **ausschließlich** nach erfolgreicher **Assertion** (`complete_auth`) — dem Besitznachweis eines bereits eingerichteten Faktors. Die **Registrierung** setzt es ausdrücklich **nicht**: sie *verlangt* es bereits vorher (`check_can_register`, 403 ohne verifizierte Session) und auditiert bei 2xx nur (`WEBAUTHN_REGISTERED`). Ein Fehlschlag lässt das Flag unberührt — sonst entstünde ein Verify-Bypass. Positiv- **und** Negativpfad sind getestet ([`src/tests/test_mfa_webauthn.py`](../src/tests/test_mfa_webauthn.py) `TestMfaVerifiedGlue`). Seit #2034 rotiert `complete_auth` zusätzlich die **Django-Session-ID** (`cycle_key()`, [`session_rotation.py`](../src/core/services/security/session_rotation.py)) — nach `super().complete_auth(device)` und **vor** dem Setzen des Flags, damit der von `otp_login` gestempelte `otp_device_id` mitwandert und ein vor der Assertion entwendetes `sessionid`-Cookie die verifizierte Sitzung nicht erbt. Gemeint ist Djangos Session-ID, nicht der Offline-Krypto-„Session-Key“.
+- **`mfa_verified`-Glue ist der kritische Punkt:** Unser `MFAEnforcementMiddleware` gated über das Session-Flag `mfa_verified`; die Bibliothek markiert nur über django-otps `otp_login`. Die Subklassen in [`src/core/views/mfa_webauthn.py`](../src/core/views/mfa_webauthn.py) setzen das Flag **ausschließlich** nach erfolgreicher **Assertion** (`complete_auth`) — dem Besitznachweis eines bereits eingerichteten Faktors. Die **Registrierung** setzt es ausdrücklich **nicht**: sie *verlangt* es bereits vorher (`check_can_register`, 403 ohne verifizierte Session) und auditiert bei 2xx nur (`WEBAUTHN_REGISTERED`). Ein Fehlschlag lässt das Flag unberührt — sonst entstünde ein Verify-Bypass. Positiv- **und** Negativpfad sind getestet ([`src/tests/test_mfa_webauthn.py`](../src/tests/test_mfa_webauthn.py) `TestMfaVerifiedGlue`). `complete_auth` rotiert (#2034) zusätzlich die **Django-Session-ID** (`cycle_key()`, [`session_rotation.py`](../src/core/services/security/session_rotation.py)) — nach `super().complete_auth(device)` und **vor** dem Setzen des Flags, damit der von `otp_login` gestempelte `otp_device_id` mitwandert und ein vor der Assertion entwendetes `sessionid`-Cookie die verifizierte Sitzung nicht erbt. Gemeint ist Djangos Session-ID, nicht der Offline-Krypto-„Session-Key“.
 - **Passkey nur NEBEN TOTP (Downgrade-Schutz + Recovery-Anker):** Die Registrierung verlangt ein bestätigtes TOTP-Gerät (`check_can_register`). Damit existieren immer Backup-Codes (an der TOTP-Einrichtung provisioniert), kein „passkey-only"-Lockout ist möglich, und das Entfernen eines Passkeys (sudo-pflichtig, `MFAPasskeyDeleteView`) lässt stets TOTP + Backup-Codes zurück.
 
 **Umgebungsbindung:** Passkeys sind an die RP-ID (Registrable Domain) gebunden. RP-ID/Origins werden pro Umgebung gesetzt (dev/test/e2e → `localhost`; prod/devlive/demo → aus `ALLOWED_HOSTS` abgeleitet). Eine spätere RP-ID-Änderung entwertet bestehende Credentials — Nutzer müssten neu registrieren.
@@ -2072,26 +2067,22 @@ Passkeys werden über [`django-otp-webauthn`](https://github.com/Stormbase/djang
 
 ## MFA-Backup-Codes: Speicher- und Migrationsvertrag (Issues #2294, #2287, #2327)
 
-**Status:** umgesetzt. Der Abschnitt hält fest, was in der Datenbank wirklich steht, welche Eingaben überhaupt als Geheimnis in Frage kommen und wie der Alt-Bestand ohne Hash abgebaut wurde.
+**Status:** umgesetzt. Der Abschnitt hält fest, was in der Datenbank wirklich steht, welche Eingaben überhaupt als Geheimnis in Frage kommen und warum kein Wert aus der Datenbank als Code gilt.
 
 ### Was gespeichert wird
 
 `generate_backup_codes` ([`src/core/services/security/mfa.py`](../src/core/services/security/mfa.py)) erzeugt je Konto zehn Codes aus `secrets.token_urlsafe(16)` — 22 Zeichen, 128 Bit Entropie — und legt in `StaticToken.token` **nur** deren SHA-256-Hex-Digest ab, auf 16 Zeichen gekürzt (die Spalte von django-otp ist `CharField(max_length=16)`; 64 Bit Bild-Entropie bei 128-Bit-Eingabe sind für Pre-Image-Angriffe infeasibel). Der Klartext existiert genau einmal: in der Antwort an die einrichtende Person, zwischengelagert Fernet-verschlüsselt in der Sitzung (#1375).
 
-### Der Alt-Bestand — und warum der Direktvergleich fiel
+### Warum es keinen Direktvergleich gibt
 
-Die Hash-Speicherung kam mit #790. Eine **Migration, die bestehende Token-Zeilen nachträglich gehasht hätte, wurde bei der Umstellung nicht angelegt** — möglich war sie: die Verifikation bildet den Hash der Eingabe ohnehin immer, ein nachträglich gehashter Alt-Code verifiziert also unverändert weiter, und der Digest passt mit 16 Zeichen genau in die Spaltenbreite von `StaticToken.token`. Konten, die ihre Codes vor #790 erhalten und seither nicht neu erzeugt hatten, trugen deshalb weiterhin Klartext-Zeilen im Erzeugungsformat von damals: `f"{secrets.token_hex(2)}-{secrets.token_hex(2)}"`, also genau zweimal vier Kleinbuchstaben-Hex mit Bindestrich.
+`verify_backup_code` sucht ausschließlich den Hash der Eingabe (#2327). Ein Vergleich der Eingabe mit dem gespeicherten Wert selbst würde einen aus der Datenbank gelesenen Token-Wert zum gültigen Geheimnis machen: wer eine noch unbenutzte Zeile lesen kann, käme mit ihr durch den zweiten Faktor — über die Zwei-Faktor-Abfrage, die Sudo-Re-Authentifizierung und die Lockout-Selbsthilfe gleichermaßen. Der Schutz der gehashten Speicherung (#790) wäre damit aufgehoben, auch wenn der Einmalverbrauch weiter griffe. Zusätzlich gelten der atomare Einmalverbrauch aus #2110 und der eine Throttle-Schritt je Fehlversuch aus #790.
 
-`verify_backup_code` suchte den Eingabewert dafür unverändert **neben** seinem Hash in derselben Spalte. Damit galt ein aus der Datenbank gelesener Token-Wert selbst als gültiges Geheimnis: wer eine noch unbenutzte Zeile lesen konnte, kam mit ihr durch den zweiten Faktor — über die Zwei-Faktor-Abfrage, die Sudo-Re-Authentifizierung und die Lockout-Selbsthilfe gleichermaßen. Der zugesagte Schutz der gehashten Speicherung war damit aufgehoben, obwohl der Einmalverbrauch weiter griff.
+### Klartext-Zeilen im Backup-Gerät
 
-Mit #2294 prüfte der Fallback das Format zunächst **explizit** gegen genau dieses Erzeugungsmuster (`^[0-9a-f]{4}-[0-9a-f]{4}$`) und nahm nur eine Eingabe dieser Form in den Direktvergleich auf; ein gespeicherter Digest — 16 Hex-Zeichen, ohne Bindestrich — lief damit ins Leere. Seit #2327 gibt es den Direktvergleich nicht mehr (nächster Abschnitt): `verify_backup_code` sucht ausschließlich den Hash der Eingabe. Der atomare Einmalverbrauch aus #2110 und der eine Throttle-Schritt je Fehlversuch aus #790 bleiben unverändert.
+Klartext-Backup-Codes hatten das Erzeugungsformat `f"{secrets.token_hex(2)}-{secrets.token_hex(2)}"`, also genau zweimal vier Kleinbuchstaben-Hex mit Bindestrich. Für sie gilt:
 
-### Abschaltung — erledigt
-
-Der Direktvergleich auf das Klartext-Format war eine **Übergangsregel ohne Dauerzusage**; der Abbau allein über Nutzung („Codes neu erzeugen", erneute Einrichtung) war nicht nachhaltbar, weil niemand den Rest-Bestand gemessen hat. Mit #2327 ist er abgeschaltet:
-
-- Die Datenmigration `0181_hash_cleartext_backup_codes` ersetzt jede Zeile des Backup-Geräts (`StaticDevice.name == "backup"`) im Format `^[0-9a-f]{4}-[0-9a-f]{4}$` durch den SHA-256-Präfix des Klartexts. Sie ist idempotent (ein Hash erfüllt das Altformat nie) und schreibt die Zahl der gehashten Zeilen in den `migrate`-Output (`[0181_hash_cleartext_backup_codes] <n> Klartext-Backup-Code(s) gehasht.`) — damit ist der Rest-Bestand je Instanz einmal gemessen. Tokens anderer statischer Geräte fasst sie nicht an: die vergleicht django-otp selbst im Klartext.
-- Ein alter Code verifiziert danach unverändert über den Hash-Kandidaten; betroffene Konten merken von der Umstellung nichts. Die Eingabe ohne Bindestrich normalisiert die Zwei-Faktor-Abfrage weiterhin auf `xxxx-xxxx`.
+- Die Datenmigration `0181_hash_cleartext_backup_codes` ersetzt jede Zeile des Backup-Geräts (`StaticDevice.name == "backup"`) im Format `^[0-9a-f]{4}-[0-9a-f]{4}$` durch den SHA-256-Präfix des Klartexts. Sie ist idempotent (ein Hash erfüllt das Altformat nie) und schreibt die Zahl der gehashten Zeilen in den `migrate`-Output (`[0181_hash_cleartext_backup_codes] <n> Klartext-Backup-Code(s) gehasht.`). Tokens anderer statischer Geräte fasst sie nicht an: die vergleicht django-otp selbst im Klartext.
+- Ein alter Code verifiziert danach unverändert über den Hash-Kandidaten; für betroffene Konten ändert sich nichts. Die Eingabe ohne Bindestrich normalisiert die Zwei-Faktor-Abfrage weiterhin auf `xxxx-xxxx`.
 - Formatprüfung und Direktvergleich sind in `verify_backup_code` **ersatzlos entfallen**. Die Zusage „kein Wert aus der Datenbank ist ein Anmeldecode" gilt damit uneingeschränkt: auch eine Klartext-Zeile, die am Migrationsweg vorbei in die Tabelle gelangt, ist kein gültiger Code (sie wird abgelehnt, bleibt liegen und zählt als Fehlversuch).
 - Ein Restore aus einem Dump von vor `0181` durchläuft die Migration beim nächsten `migrate` erneut. Die Migration hat keinen Rückweg (ein Hash ist nicht umkehrbar); ein älterer Anwendungsstand verifiziert die gehashten Zeilen trotzdem, weil er den Hash-Kandidaten immer mitsucht.
 
@@ -2111,18 +2102,18 @@ Zum selben Schutzgut gehört #2287: Die Einrichtungsseite gatete den erneuten Ei
 
 ## Attachment-Pipeline owner-generisch: direkte RLS-Policy statt Join (Issue #1738)
 
-**Status:** umgesetzt mit Milestone 24 ([ADR-039](adr/039-owner-generische-dateianhaenge.md), Migrationen `0129`–`0131`). Die Facility einer Anhang-Zeile sichert zusätzlich ein zusammengesetzter Fremdschlüssel aus Migration `0133` (#1780, siehe Restrisiko).
+**Status:** umgesetzt ([ADR-039](adr/039-owner-generische-dateianhaenge.md), Migrationen `0129`–`0131`). Die Facility einer Anhang-Zeile sichert zusätzlich ein zusammengesetzter Fremdschlüssel aus Migration `0133` (#1780, siehe Restrisiko).
 
 ### Beobachtung
 
-Bis Milestone 24 hing die gesamte Attachment-Pipeline am Ereignis: `EventAttachment` hatte einen NOT-NULL-FK auf `Event`, **keine eigene `facility_id`**, und seine RLS-Policy lief als Join über `core_event`. Zwei Konsequenzen:
+Ausgangspunkt war ein Modell, in dem die gesamte Attachment-Pipeline am Ereignis hing: `EventAttachment` hatte einen NOT-NULL-FK auf `Event`, **keine eigene `facility_id`**, und seine RLS-Policy lief als Join über `core_event`. Zwei Konsequenzen:
 
 - **Policy-lose Zeilen waren strukturell möglich.** Eine Anhang-Zeile ohne (oder mit einem für die Session unsichtbaren) Ereignis fiel unter der Join-Policy durch *kein* `USING`-Prädikat — sie war nicht etwa gesperrt, sondern schlicht ungeschützt gegenüber der Frage, zu welcher Einrichtung sie gehört.
 - **Datei-Felder an Personen- und Fall-Typen waren gesperrt** ([ADR-037](adr/037-konfigurationspakete-dynamische-felder.md) §9 „E8"), weil ein Upload dort keinen Speicherort gehabt hätte.
 
 ### Maßnahme
 
-`EventAttachment` → `Attachment` mit **eigener `facility_id`** (NOT NULL) und **genau einem** Owner (`event`/`client`/`case`, `CheckConstraint attachment_exactly_one_owner`). Die Policy auf `core_attachment` vergleicht seit Migration `0131` **direkt** `facility_id = current_setting('app.current_facility_id', true)` — inklusive `is_super_admin`-OR-Branch, wie alle direkten Policies seit #867. Das Rename (`0129`) fasst Policies/RLS-Flags/GRANTs nicht an: sie hängen an der Tabellen-OID und überleben es.
+`EventAttachment` → `Attachment` mit **eigener `facility_id`** (NOT NULL) und **genau einem** Owner (`event`/`client`/`case`, `CheckConstraint attachment_exactly_one_owner`). Die Policy auf `core_attachment` vergleicht seit Migration `0131` **direkt** `facility_id = current_setting('app.current_facility_id', true)` — inklusive `is_super_admin`-OR-Branch, wie alle direkten Policies (#867). Das Rename (`0129`) fasst Policies/RLS-Flags/GRANTs nicht an: sie hängen an der Tabellen-OID und überleben es.
 
 Zwei Sicherheitsflächen kommen dazu:
 
@@ -2135,7 +2126,7 @@ Zwei Sicherheitsflächen kommen dazu:
 
 **Geschlossen seit Migration `0133`** (#1780): `core_event`/`core_client`/`core_case` tragen einen UNIQUE-Begleitindex `(id, facility_id)`, `core_attachment` je Owner-Sorte einen zusammengesetzten FK `(owner_fk, facility_id)` → Zieltabelle `(id, facility_id)`. Die divergente Kombination ist damit auf DB-Ebene unmöglich — unabhängig vom Aufrufweg (ORM, `objects.update()`, Roh-SQL). Zwei Eigenschaften sind tragend: `MATCH SIMPLE` (Postgres-Default) lässt die beiden ungenutzten Owner-Spalten je Zeile passieren, und `DEFERRABLE INITIALLY DEFERRED` (Schema-Konvention) verschiebt die Prüfung ans Transaktionsende — eine Verletzung schlägt beim COMMIT zu, nicht schon beim einzelnen `UPDATE`. Der roher-INSERT-Pfad war schon vorher abgedeckt (die `USING`-Klausel wirkt als implizites `WITH CHECK`); der Composite-FK deckt zusätzlich das nachträgliche Umhängen einer bestehenden Zeile ab.
 
-**Audit-Alt-Zeilen tragen `target_type="EventAttachment"`.** Das Log ist HMAC-verkettet und append-only — es wird **nie** migriert. Künftige Writes tragen `"Attachment"` und ein einheitliches Detail-Schema (`owner_type`/`owner_id`). Betreiberauswertungen müssen deshalb **beide** Strings und beide Detail-Schemata kennen; der Hinweis steht im [Admin-Guide § 7.4](admin-guide.md#74-audit-log).
+**Audit-Zeilen mit `target_type="EventAttachment"`.** Das Log ist HMAC-verkettet und append-only — es wird **nie** migriert. Der Schreibpfad trägt `"Attachment"` und ein einheitliches Detail-Schema (`owner_type`/`owner_id`). Betreiberauswertungen müssen deshalb **beide** Strings und beide Detail-Schemata kennen; der Hinweis steht im [Admin-Guide § 7.4](admin-guide.md#74-audit-log).
 
 **Der Rollback der Migrationskette wird mit dem ersten personen-/fall-eigenen Anhang unmöglich** (Reverse-Guards in `0130` und `0131`, bewusst fail-loud statt policy-verdeckter Zeilen). Betriebsseite: [Ops-Runbook § 2.2](ops-runbook.md#22-migration-zurueckrollen).
 
@@ -2152,7 +2143,7 @@ Zwei Sicherheitsflächen kommen dazu:
 
 ## Session-Timeout: Inaktivitäts-Fenster statt Absolut-Limit (Issue #1858)
 
-**Verhaltenswechsel (2026-08):** Bis #1858 endete jede Sitzung — unbeabsichtigt, aber faktisch — **absolut** `session_timeout_minutes` nach dem Login: mit `SESSION_SAVE_EVERY_REQUEST = False` (Refs #733) schrieb im Request-Pfad nichts die Session, Django verlängert das Fenster aber nur bei Session-Writes. `SessionIdleRefreshMiddleware` ([`src/core/middleware/session_idle.py`](../src/core/middleware/session_idle.py)) liefert seither das dokumentierte **Inaktivitäts**-Fenster: authentifizierte Aktivität stempelt einen Erneuerungs-Zeitstempel, gedrosselt auf höchstens einen Session-Write je 10 % der konfigurierten Laufzeit (kein Rückfall in die #733-Write-Amplifikation). Abgemeldet wird nach 90–100 % der konfigurierten Inaktivitätszeit.
+**Warum eine eigene Middleware:** Mit `SESSION_SAVE_EVERY_REQUEST = False` (Refs #733) schreibt im Request-Pfad nichts die Session, und Django verlängert das Fenster nur bei Session-Writes; ohne Zusatz endete jede Sitzung **absolut** `session_timeout_minutes` nach dem Login. `SessionIdleRefreshMiddleware` ([`src/core/middleware/session_idle.py`](../src/core/middleware/session_idle.py)) liefert deshalb das dokumentierte **Inaktivitäts**-Fenster: authentifizierte Aktivität stempelt einen Erneuerungs-Zeitstempel, gedrosselt auf höchstens einen Session-Write je 10 % der konfigurierten Laufzeit (kein Rückfall in die #733-Write-Amplifikation). Abgemeldet wird nach 90–100 % der konfigurierten Inaktivitätszeit.
 
 **Nicht als Aktivität zählen:** Offline-Queue-Replays (`X-Offline-Replay`) und die gesamte Offline-Sync-API (`/api/v1/offline/…` — Widerrufsliste, CSRF-Refresh, Bundle-Revalidierung). Die Sync-Sequenz feuert beim `online`-Event ohne Nutzerinteraktion; ohne den Ausschluss hielte ein Gerät mit flappender Verbindung seine Sitzung unbegrenzt offen.
 
@@ -2161,7 +2152,7 @@ Zwei Sicherheitsflächen kommen dazu:
 - **Pre-MFA-Sessions** (Passwort passiert, `mfa_verified=False`) werden mitverlängert — ein Gate auf das Flag ist nicht möglich, weil es für Nutzer ohne MFA-Gerät dauerhaft `False` bleibt. Delta gering (Passwort-Besitzer könnten sich jederzeit neu anmelden).
 - **Parallele Session-Writes:** bisher rein lesende Requests schreiben jetzt gelegentlich die Session (Last-Write-Wins-Semantik von `django_session`, winziges Race-Fenster bei parallelem Logout). Django-inhärent, durch die 10-%-Drosselung selten.
 
-Das dritte Restrisiko der ersten Fassung — **kein absolutes Sitzungs-Maximum** — ist mit #1868 aufgelöst (nächster Abschnitt). Damit ist auch der **Revocation-Scan-Rest** jenseits `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT` wieder nach oben begrenzt: eine aktiv weitergenutzte Session überdauert den Rechteentzug höchstens bis zu ihrem absoluten Ende (Kommentare in [`credentials.py`](../src/core/services/security/credentials.py) nachgezogen — bis #1965 standen sie in `signals/offline_invalidation.py`; praktisch relevant erst bei >10 000 aktiven Sessions).
+Das Restrisiko **kein absolutes Sitzungs-Maximum** ist mit #1868 aufgelöst (nächster Abschnitt). Damit ist auch der **Revocation-Scan-Rest** jenseits `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT` wieder nach oben begrenzt: eine aktiv weitergenutzte Session überdauert den Rechteentzug höchstens bis zu ihrem absoluten Ende (Kommentare in [`credentials.py`](../src/core/services/security/credentials.py); praktisch relevant erst bei >10 000 aktiven Sessions).
 
 ### Verifikation
 
@@ -2174,7 +2165,7 @@ Das dritte Restrisiko der ersten Fassung — **kein absolutes Sitzungs-Maximum**
 
 **Warum überhaupt:** Ein Inaktivitäts-Fenster hat keine Obergrenze. Eine Sitzung lebt, solange häufiger als `session_timeout_minutes` irgendein authentifizierter Request kommt — ein entwendetes oder auf einem vergessenen Gerät zurückgelassenes Session-Cookie damit potenziell unbegrenzt. Das absolute Maximum zieht eine zweite, aktivitätsunabhängige Grenze ein.
 
-**Konfiguration:** `Settings.session_absolute_hours` je Einrichtung, Default **12 Stunden**, zulässige Spanne 1–168 h (eine Woche). Die Cross-Field-Regel **Maximum > Inaktivitäts-Fenster** steht doppelt: als `Settings.clean()` (Admin-Formular, feldgenaue Meldung) und als DB-`CheckConstraint` `settings_session_absolute_cap` (Direct-Insert aus Shell, Fixture oder Datenmigration). Ohne sie wäre jede Sitzung schon absolut abgelaufen, bevor die Inaktivität greifen kann — eine stille Fehlkonfiguration, die im Betrieb wie ein Bug aussieht. Migration `0148` hebt beim Update das Maximum an, wo ein Bestands-Timeout es verletzen würde — ein Deploy soll keine vorhandene Einstellung verschärfen. **Eine getestete Ausnahme:** Liegt ein Bestands-Fenster jenseits des Feld-Maximums von 168 h, lässt sich der Constraint nur anlegen, indem die Migration `session_timeout_minutes` auf 10 079 Minuten klemmt; das protokolliert sie als `WARNING` im Deploy-Log ([`0148_session_absolute_hours.py`](../src/core/migrations/0148_session_absolute_hours.py)).
+**Konfiguration:** `Settings.session_absolute_hours` je Einrichtung, Default **12 Stunden**, zulässige Spanne 1–168 h (eine Woche). Die Cross-Field-Regel **Maximum > Inaktivitäts-Fenster** steht doppelt: als `Settings.clean()` (Admin-Formular, feldgenaue Meldung) und als DB-`CheckConstraint` `settings_session_absolute_cap` (Direct-Insert aus Shell, Fixture oder Datenmigration). Ohne sie wäre jede Sitzung schon absolut abgelaufen, bevor die Inaktivität greifen kann — eine stille Fehlkonfiguration, die im Betrieb wie ein Bug aussieht. Migration `0148` hebt das Maximum an, wo ein gespeichertes Inaktivitäts-Fenster es verletzen würde — ein Deploy soll keine vorhandene Einstellung verschärfen. **Eine getestete Ausnahme:** Liegt ein gespeichertes Fenster jenseits des Feld-Maximums von 168 h, lässt sich der Constraint nur anlegen, indem die Migration `session_timeout_minutes` auf 10 079 Minuten klemmt; das protokolliert sie als `WARNING` im Deploy-Log ([`0148_session_absolute_hours.py`](../src/core/migrations/0148_session_absolute_hours.py)).
 
 **Mechanik:** Der Login stempelt die Deadline **einmal** in die Session (`ABSOLUTE_DEADLINE_KEY = "_session_absolute_deadline"`, Unix-Zeitstempel = Login + Cap) — im View, wo `facility.settings` ohnehin geladen ist, also ohne Extra-Query. Nutzer ohne Einrichtung (`super_admin`) und Einrichtungen ohne Settings-Zeile bekommen den Default; „kein Cap" ist kein erreichbarer Zustand. `SessionIdleRefreshMiddleware` prüft die Deadline **vor** der Erneuerungs-Logik und beendet die Sitzung per `django.contrib.auth.logout()` — Session-Zeile geflusht, `LOGOUT`-AuditLog über das `user_logged_out`-Signal, dieselbe Spur wie ein Abmelde-Klick. **Die Erneuerung stempelt die Deadline nie nach**, sonst wäre das Maximum nur ein zweites Sliding Window. Eine Änderung des Settings-Werts wirkt deshalb erst ab dem nächsten Login (so auch im Hilfetext des Feldes gesagt).
 
@@ -2183,7 +2174,7 @@ Das dritte Restrisiko der ersten Fassung — **kein absolutes Sitzungs-Maximum**
 - **Das Cap kennt die Hintergrund-Sync-Ausnahmen des Inaktivitäts-Fensters nicht.** `X-Offline-Replay` und `/api/v1/offline/…` dürfen das Fenster nicht *verlängern* — aber ein abgelaufenes Maximum beendet die Sitzung auch dort. Sonst hätte ein dauersyncendes Gerät ein Schlupfloch am Cap vorbei.
 - **Die Middleware antwortet nicht selbst mit einem Redirect.** Nach dem `logout()` läuft der Request anonym weiter und die getroffene View liefert ihren eigenen `LoginRequiredMixin`-302. Nur so kommt der Standardpfad zum Zug: [`HtmxSessionMiddleware`](../src/core/middleware/htmx_session.py) übersetzt ihn für HTMX in `200 + HX-Redirect` und lässt ihn für ein Offline-Replay als rohen 302 durch — daran hält der Queue-Klassifikator an, **ohne** die Zeile zu löschen ([ADR-030](adr/030-offline-sync-orchestration-replay-contract.md) §3, Refs #1419). Ein eigener Redirect aus der Middleware würde beides umgehen und im schlimmsten Fall einen ungesyncten Write still verwerfen.
 
-**Sessions ohne den Schlüssel** bekommen beim nächsten Request einmalig den **Default**-Cap ab jetzt gestempelt, statt sofort ausgeloggt zu werden — ein Deploy soll keine Massenabmeldung auslösen, und der Facility-Wert wäre hier nur mit einem DB-Roundtrip pro Request zu haben. Betrifft zwei Fälle: **Bestands-Sessions** (angelegt vor dem Update) und Anmeldungen über das **Django-Admin-Login** (`/admin-mgmt/login/`), das an `CustomLoginView` vorbeigeht. Der zweite Fall ist keine neue Lücke: dieser Pfad setzt schon vorher `session_timeout_minutes` nicht (dort greift `SESSION_COOKIE_AGE`) — der Cap wirkt dort also mit dem Default statt mit dem Facility-Wert, aber er wirkt.
+**Sessions ohne den Schlüssel** bekommen beim nächsten Request einmalig den **Default**-Cap ab jetzt gestempelt, statt sofort ausgeloggt zu werden — ein Deploy soll keine Massenabmeldung auslösen, und der Facility-Wert wäre hier nur mit einem DB-Roundtrip pro Request zu haben. Betrifft zwei Fälle: **Sitzungen ohne Stempel** (angelegt von einem Anwendungsstand ohne Sitzungs-Maximum) und Anmeldungen über das **Django-Admin-Login** (`/admin-mgmt/login/`), das an `CustomLoginView` vorbeigeht. Der zweite Fall ist keine neue Lücke: dieser Pfad setzt schon vorher `session_timeout_minutes` nicht (dort greift `SESSION_COOKIE_AGE`) — der Cap wirkt dort also mit dem Default statt mit dem Facility-Wert, aber er wirkt.
 
 **Was das Cap nicht leistet:** Es begrenzt die Server-Session, nicht das Zeitfenster eines Angreifers *innerhalb* dieser Session. Wer ein Cookie stiehlt, hat bis zur Deadline vollen Zugriff; die Grenze verhindert nur den unbegrenzten Dauerzugriff. Kürzere absolute Fenster sind je Einrichtung konfigurierbar, gegen den Preis regelmäßiger Neuanmeldungen mitten in der Arbeit.
 
@@ -2207,7 +2198,7 @@ Der Security-RC-Lauf 2026-08-18 (Mobile/PWA, Offline-Privacy-Failure-Modes; Lauf
 
 ### Am Code widerlegt: der Wipe räumt den Stempel bereits ab
 
-Diese Maßnahme wäre ein No-op. Seit #1065 löscht `clearSessionKey()` in [`crypto.js`](../src/static/js/crypto.js) den Stempel **zusammen** mit dem Schlüssel („Drop the activity stamp with the key"), und `wipeOfflineState()` — der gemeinsame Wipe-Pfad von Logout und Idle-Timeout — beginnt mit genau diesem Aufruf. Der Logout-Hook in [`sw-register.js`](../src/static/js/sw-register.js) ruft nichts anderes auf: er hält den nativen `POST /logout/` an, lässt `crypto_session.wipeOfflineState()` durchlaufen (harter 3-s-Deckel) und schickt erst danach ab (#1476 R2).
+Diese Maßnahme wäre ein No-op (#1065): Schon jetzt löscht `clearSessionKey()` in [`crypto.js`](../src/static/js/crypto.js) den Stempel **zusammen** mit dem Schlüssel („Drop the activity stamp with the key"), und `wipeOfflineState()` — der gemeinsame Wipe-Pfad von Logout und Idle-Timeout — beginnt mit genau diesem Aufruf. Der Logout-Hook in [`sw-register.js`](../src/static/js/sw-register.js) ruft nichts anderes auf: er hält den nativen `POST /logout/` an, lässt `crypto_session.wipeOfflineState()` durchlaufen (harter 3-s-Deckel) und schickt erst danach ab (#1476 R2).
 
 ### Die tatsächliche Quelle: der Boot-Zweig des Idle-Gates
 
@@ -2253,7 +2244,7 @@ Der **Precache** (`CACHE_NAME` in `sw.js`) bleibt aus demselben Ticket-Entscheid
 
 ### Entscheidung und Freigabe
 
-Seit #1961 gilt bei der Anzeige die feste Vorrangregel `restricted > Datei-Marker > berechtigt ? Klartext : ●●●●● > Rohwert`. `may_decrypt` ist nur wahr, wenn ein Nutzerkontext vorliegt und [`user_can_see_field`](../src/core/services/compliance/sensitivity.py) das Feld für dessen Rolle freigibt. `user=None` bleibt damit fail-closed; eine fehlende Schlüsselkonfiguration wird weiterhin laut als `EncryptionKeyMissing` propagiert. Datei-Marker werden vor jedem Krypto-Aufruf erkannt und ausschließlich als `[Anhang]` angezeigt. Bei erlaubten Update-Feldern vergleicht der Service die entschlüsselten Werte, sodass reines Fernet-Rauschen keine Diff-Zeile mehr erzeugt.
+Bei der Anzeige gilt (#1961) die feste Vorrangregel `restricted > Datei-Marker > berechtigt ? Klartext : ●●●●● > Rohwert`. `may_decrypt` ist nur wahr, wenn ein Nutzerkontext vorliegt und [`user_can_see_field`](../src/core/services/compliance/sensitivity.py) das Feld für dessen Rolle freigibt. `user=None` bleibt damit fail-closed; eine fehlende Schlüsselkonfiguration wird weiterhin laut als `EncryptionKeyMissing` propagiert. Datei-Marker werden vor jedem Krypto-Aufruf erkannt und ausschließlich als `[Anhang]` angezeigt. Bei erlaubten Update-Feldern vergleicht der Service die entschlüsselten Werte, sodass reines Fernet-Rauschen keine Diff-Zeile mehr erzeugt.
 
 Die Maintainer-Freigabe vom 23.08.2026 umfasst ausdrücklich zwei Folgen: Art.-9-Klartext erscheint damit in einem Oberflächenkontext, der ihn zuvor maskierte, und die Änderung wirkt ohne Stichtag auf **alle** vorhandenen Historieneinträge. Die Begründung ist die bereits bestehende Rollenparität: Dieselben berechtigten Rollen lesen denselben Wert in Ereignis-Detail und -Formular; der Art.-15-Export entschlüsselte historische Werte schon vorher ausdrücklich, weil ein Fernet-Token keine Auskunft ist ([`client/export.py`](../src/core/services/client/export.py)). Die alte Historien-Maskierung widersprach dieser Grenze, ohne eine eigene Autorisierungsregel zu bilden.
 
@@ -2274,7 +2265,7 @@ Die Maintainer-Freigabe vom 23.08.2026 umfasst ausdrücklich zwei Folgen: Art.-9
 
 ## `Activity.summary` führt Pseudonym und Titel im Klartext (Issue #1944)
 
-**Status seit #1972: behoben.** Das Modell besitzt keine `summary`-Spalte mehr. Der Zeitstrahl zeigt Pseudonyme und Titel weiterhin, liest sie aber erst zur Anzeigezeit aus dem referenzierten Ziel.
+**Status: behoben (#1972).** Das Modell besitzt keine `summary`-Spalte mehr. Der Zeitstrahl zeigt Pseudonyme und Titel weiterhin, liest sie aber erst zur Anzeigezeit aus dem referenzierten Ziel.
 
 ### Speicher- und Rendering-Vertrag
 
@@ -2282,9 +2273,9 @@ Eine `Activity` speichert nur Einrichtung, handelnde Person, Verb, Zeitpunkt, di
 
 [`render_activity_summary`](../src/core/services/dashboard/activity.py) übersetzt den Aktionscode und liest den aktuellen Zielwert. Dadurch ändern sich sichtbare Sätze nach einer Umbenennung mit dem Ziel, ohne dass eine historische Klartextkopie zurückbleibt. Fehlt das Ziel — etwa nach dem Löschen eines Meilensteins — entsteht ein generischer Satz wie „Meilenstein gelöscht" oder „Aufgabe erledigt". Aktivitätskarte, Zeitstrom-Revision und Art.-15-Export benutzen denselben Renderer; die Sätze sind damit erstmals vollständig übersetzbar.
 
-### Bestandsmigration und Löschpfade
+### Migration `0163` und Löschpfade
 
-Migration [`0163_activity_display_context`](../src/core/migrations/0163_activity_display_context.py) redigiert **alle** alten Freitexte, markiert sie als `legacy_redacted` und entfernt anschließend die Spalte. Aus dem fertigen Altsatz ließen sich Aktionsvariante und Zielwert nicht verlässlich zurückgewinnen; eine scheinbar exakte Heuristik hätte falsch zugeordnete Historie erzeugt. Altzeilen bleiben mit Verb, Ziel und Zeitpunkt als generische Aktivität lesbar, ihr früherer Wortlaut ist bewusst nicht wiederherstellbar.
+Migration [`0163_activity_display_context`](../src/core/migrations/0163_activity_display_context.py) redigiert **alle** Freitexte der Spalte, markiert sie als `legacy_redacted` und entfernt anschließend die Spalte. Aus dem fertigen Satz ließen sich Aktionsvariante und Zielwert nicht verlässlich zurückgewinnen; eine scheinbar exakte Heuristik hätte falsch zugeordnete Historie erzeugt. Redigierte Zeilen bleiben mit Verb, Ziel und Zeitpunkt als generische Aktivität lesbar, ihr früherer Wortlaut ist bewusst nicht wiederherstellbar.
 
 `_redact_activities` bleibt in beiden Anonymisierungspfaden als Defense-in-Depth verdrahtet. Für das aktuelle Schema wäre das nicht nötig: der Kontext enthält bereits keine PII, und Pseudonym/Titel werden am Ziel selbst redigiert. Der Helfer setzt betroffene Kontexte trotzdem auf `redacted`; so kann ein künftiger Schema-Zusatz nicht unbemerkt die Löschgrenze erweitern. Dasselbe gilt für Fall- und Merge-Tombstone-Pfade.
 
@@ -2307,7 +2298,7 @@ Der Precache-Fetch läuft same-origin und damit **mit** Cookies. Installierte od
 
 ### Die zugesicherte Eigenschaft
 
-Die Shells erben seit #1966 das strikt statische [`offline_base.html`](../src/templates/offline_base.html) statt `base.html`. Zugesichert ist nicht „weniger Chrome", sondern **Byte-Gleichheit**: dieselbe Shell-URL liefert anonym und angemeldet denselben Body. Das ist die einzige Formulierung, die sich testen lässt und die nicht bei der nächsten Template-Änderung stillschweigend erodiert.
+Die Shells erben (#1966) das strikt statische [`offline_base.html`](../src/templates/offline_base.html) statt `base.html`. Zugesichert ist nicht „weniger Chrome", sondern **Byte-Gleichheit**: dieselbe Shell-URL liefert anonym und angemeldet denselben Body. Das ist die einzige Formulierung, die sich testen lässt und die nicht bei der nächsten Template-Änderung stillschweigend erodiert.
 
 Daraus folgt zwangsläufig, dass die Shells **kein** `<meta name="csrf-token">` mehr tragen: der maskierte Token unterscheidet sich schon zwischen zwei anonymen Abrufen. Die Replay-Konsumenten holen ihn zur Laufzeit vom dedizierten Endpoint (`csrfUtils.refresh()`, #1408) — der zuvor dokumentierte „eingefrorene CSRF-Token" ist damit keine Eigenschaft der Shells mehr. `crypto.js` fällt ohne `data-session-age` auf seinen dokumentierten Default zurück, und der Boot-Purge in `sw-register.js` gated seither auf den Session-Key statt auf `data-user-id`.
 
@@ -2329,7 +2320,7 @@ Die Navigation der Shells ist eine **feste** Leiste ([`partials/_offline_navigat
 
 ## Facility-Archivierung: Lifecycle des Zugriffsentzugs (Issue #2067)
 
-**Ausgangslage.** `Facility.is_active` war bis 0.89 kosmetisch — weder Login noch Middleware werteten das Flag aus. Eine archivierte Einrichtung arbeitete unverändert weiter.
+**Ausgangslage.** Werten Login und Middleware `Facility.is_active` nicht aus, ist das Flag kosmetisch: eine archivierte Einrichtung arbeitet unverändert weiter.
 
 **Serverseitige Sperre (zwei Ebenen).** Beide sind nötig, keine ersetzt die andere:
 
@@ -2340,7 +2331,7 @@ Die Navigation der Shells ist eine **feste** Leiste ([`partials/_offline_navigat
 
 **Der Offline-Pfad braucht eine eigene Zustellung.** Serverseitig dicht zu sein genügt hier nicht: bereits heruntergeladene Client-/Facility-Bundles liegen verschlüsselt in IndexedDB (`anlaufstelle-offline`), der abgeleitete Sitzungsschlüssel in `anlaufstelle-crypto`. Beides überlebt eine serverseitige Sperre — die Nutzerin könnte nach dem 403 offline gehen und weiterlesen.
 
-Ein nacktes 403 darf dafür **nicht** als Purge-Signal dienen: seit #1354 ist 403 bewusst kein Invalidierungsgrund, weil echter Rechteentzug den Client als Login-Redirect erreicht und ein 403 sonst CSRF-/Rate-Limit-/Proxy-Rauschen ist — es würde den Außendienst-Cache bei jedem Schluckauf leeren.
+Ein nacktes 403 darf dafür **nicht** als Purge-Signal dienen: 403 ist bewusst kein Invalidierungsgrund (#1354), weil echter Rechteentzug den Client als Login-Redirect erreicht und ein 403 sonst CSRF-/Rate-Limit-/Proxy-Rauschen ist — es würde den Außendienst-Cache bei jedem Schluckauf leeren.
 
 Die Archiv-403 trägt deshalb zwei Marker, ausgewertet über drei Zustellwege:
 
@@ -2372,7 +2363,7 @@ Das ist dieselbe Grenze wie bei jedem anderen Widerrufspfad — die Zustellung s
 
 **Der Zustand ist legitim, nicht verboten.** `User.facility` ist `null=True` ([`user.py`](../src/core/models/user.py)): `super_admin` trägt die Bindung **per Design** nicht (so legt sie `manage.py create_super_admin` an, so steht sie im Seed), und die Benutzerverwaltung kann sie jedem Konto entziehen. Ihn wegzudefinieren (`null=False`) wäre keine Härtung, sondern bräche die Ersteinrichtung.
 
-**Der Befund.** Für jede **andere** Rolle war der Zustand bis 0.91 ein Minenfeld. `FacilityScopeMiddleware` setzte `request.current_facility = None` und ließ den Request weiterlaufen; danach zerfiel die Anwendung in zwei Fehlerklassen:
+**Der Befund.** Ohne Wurzel-Guard wäre der Zustand für jede **andere** Rolle ein Minenfeld: `FacilityScopeMiddleware` setzt `request.current_facility = None`; liefe der Request danach weiter, zerfiele die Anwendung in zwei Fehlerklassen:
 
 - `get_scoped_object()` wirft ohne Facility-Kontext **mit Absicht** `ValueError` — der Lookup wäre sonst ein Cross-Facility-IDOR ([`scoping.py`](../src/core/services/scoping.py)). **66 Aufrufstellen in 17 View-Modulen**, jede davon ein HTTP 500.
 - Rund ein Dutzend Service-Funktionen dereferenzieren `facility.settings` bzw. `facility.pk` ungeprüft — diese Klasse ist die gefährlichere, weil sie **ohne pk in der URL** erreichbar ist: `/` (Zeitstrom), `/verwaltung/`, `/retention/`, `/events/new/`.
@@ -2389,7 +2380,7 @@ Weil `LOGIN_REDIRECT_URL = "/"` ist, sah so ein Konto den Serverfehler **direkt 
 
 Zwei Formen sind nötig: Präfixe für ganze Teilbäume (`/mfa/`, `/webauthn/`, `/account/`, …) und **exakte Pfade** für den `/offline/`-Baum. Dort teilen sich zwei Kategorien dieselbe Wurzel: neun PII-freie Shells (`public`, vom Service Worker precacht) und zwei facility-gebundene pk-Routen (`core:offline_client_detail`, `core:offline_conflict_review`, beide `offline-api`). Ein Präfix `/offline/` hätte die beiden mit durchgelassen.
 
-**Kein Purge-Signal an den Offline-Client.** Die neue 403 trägt **weder** `X-Facility-Archived` **noch** `Clear-Site-Data` — und bekommt auch keinen eigenen Marker. Seit #1354 ist ein nacktes 403 bewusst kein Invalidierungsgrund, und das ist hier genau richtig: bei der Archivierung endet der Zugriff auf Fachdaten **dauerhaft**, hier ist der Zustand typischerweise eine Fehlkonfiguration, die zurückgenommen wird. Ein Purge löschte Außendienst-Caches und die IndexedDB-Kryptoschlüssel — nicht reversibel. Ein zweiter Marker-Header wäre außerdem eine Einladung, ihn später mit derselben Purge-Semantik zu verdrahten.
+**Kein Purge-Signal an den Offline-Client.** Die neue 403 trägt **weder** `X-Facility-Archived` **noch** `Clear-Site-Data` — und bekommt auch keinen eigenen Marker. Ein nacktes 403 ist (#1354) bewusst kein Invalidierungsgrund, und das ist hier genau richtig: bei der Archivierung endet der Zugriff auf Fachdaten **dauerhaft**, hier ist der Zustand typischerweise eine Fehlkonfiguration, die zurückgenommen wird. Ein Purge löschte Außendienst-Caches und die IndexedDB-Kryptoschlüssel — nicht reversibel. Ein zweiter Marker-Header wäre außerdem eine Einladung, ihn später mit derselben Purge-Semantik zu verdrahten.
 
 **Beabsichtigte Verhaltensänderung.** Die Offline-APIs `core:offline_facility_bundle` und `core:offline_revocations` lieferten einem einrichtungslosen Konto bisher still ein **leeres** Bundle (`for_facility(None)`); jetzt antworten sie 403. Das ist die ehrlichere Antwort — ein leeres Bundle ist von „diese Einrichtung hat keine Daten" nicht unterscheidbar.
 
@@ -2403,7 +2394,7 @@ Zwei Formen sind nötig: Präfixe für ganze Teilbäume (`/mfa/`, `/webauthn/`, 
 
 ### Beobachtung
 
-`create_hold_for_target` ([`legal_holds.py`](../src/core/retention/legal_holds.py)) sperrt für `target_type="Client"` seit #2108/#2122 die Personenzeile — den gemeinsamen Koordinationspunkt mit Sofortpfad, Nacht-Batch, K-Anon-Bridge und Ereignis-Sweep. Gelesen wurde auf dieser gesperrten Zeile aber nichts: weder `merged_into_id` noch `is_deleted`. Eine Sperre auf die **Quelle** einer bereits vollzogenen Zusammenführung war damit still zulässig und wurde regulär als `LEGAL_HOLD` auditiert.
+`create_hold_for_target` ([`legal_holds.py`](../src/core/retention/legal_holds.py)) sperrt für `target_type="Client"` (#2108/#2122) die Personenzeile — den gemeinsamen Koordinationspunkt mit Sofortpfad, Nacht-Batch, K-Anon-Bridge und Ereignis-Sweep. Gelesen wurde auf dieser gesperrten Zeile aber nichts: weder `merged_into_id` noch `is_deleted`. Eine Sperre auf die **Quelle** einer bereits vollzogenen Zusammenführung war damit still zulässig und wurde regulär als `LEGAL_HOLD` auditiert.
 
 Sie deckte jedoch nichts mehr. Der Merge hängt Fälle und Ereignisse per `update(client=target)` an die Zielperson um ([`merge.py`](../src/core/services/client/merge.py)); die Zeilen behalten ihre pk, wechseln aber den Personenbezug. Die Deckungsmengen der Retention schauen ausschließlich auf den Tombstone: `collect_doomed_events`/`enforce_*` schließen `client_id__in={Quelle}` aus, `exclude_clients_with_active_holds` schließt `pk__in={Quelle}` aus ([`enforcement.py`](../src/core/retention/enforcement.py), [`legal_holds.py`](../src/core/retention/legal_holds.py)). Folge: die gewanderte Dokumentation wird am Ziel weiter redigiert, Papierkorb-Frist, Admin-Sofort-Tilgung und K-Anon-Bridge bleiben für das Ziel offen — trotz eines Holds „auf ihrer Person".
 
@@ -2436,10 +2427,10 @@ Die Reichweite ist heute gering: es gibt keinen UI-Weg für direkte Personen-/Fa
 
 ### Beobachtung
 
-Ein Hold auf einen **Fall** schützt seit #2122 die Ereignisse dieses Falls: `_lock_event_and_recheck_hold` ([`enforcement.py`](../src/core/retention/enforcement.py)) stellt sie unter der Sperre als `deferred` zurück, `exclude_cases_with_active_holds` zieht die Gegenrichtung. Zwei Ereignis-Pfade hatten diesen dritten Zweig nicht übernommen:
+Ein Hold auf einen **Fall** schützt (#2122) die Ereignisse dieses Falls: `_lock_event_and_recheck_hold` ([`enforcement.py`](../src/core/retention/enforcement.py)) stellt sie unter der Sperre als `deferred` zurück, `exclude_cases_with_active_holds` zieht die Gegenrichtung. Zwei Ereignis-Pfade hatten diesen dritten Zweig nicht übernommen:
 
 - **Der manuelle Löschpfad.** `_assert_no_active_hold` ([`crud.py`](../src/core/services/events/crud.py)) prüfte nur Ereignis- und Personen-Holds. Über ihn laufen das direkte Löschen durch die Fachkraft, die Rücknahme eines Strichlisten-Eintrags und der geprüfte Vier-Augen-Weg (`approve_deletion`). Ein Ereignis in einem gehaltenen Fall ließ sich damit per Klick leeren — und `delete_attachments_for` entfernt dabei die verschlüsselten Anhänge **physisch**, was kein Papierkorb zurückholt. Der eigene Docstring der Funktion versprach das Gegenteil: „ein manueller Klick darf nicht mehr dürfen als der Cron".
-- **Der Historien-Sweep und die Bestandsmigration.** `lock_and_partition_events` ([`eventhistory.py`](../src/core/retention/eventhistory.py)) bildete die Hold-Menge aus `"Event"` und `"Client"`. Der Sweep redigierte die Verlaufsfassungen der Ereignisse eines gehaltenen Falls, während der Aufbewahrungslauf das lebende Ereignis (korrekt) stehen ließ — der Rahmen blieb, sein Inhalt nicht (Spoliation, Muster #1066).
+- **Der Historien-Sweep und Migration `0174`.** `lock_and_partition_events` ([`eventhistory.py`](../src/core/retention/eventhistory.py)) bildete die Hold-Menge aus `"Event"` und `"Client"`. Der Sweep redigierte die Verlaufsfassungen der Ereignisse eines gehaltenen Falls, während der Aufbewahrungslauf das lebende Ereignis (korrekt) stehen ließ — der Rahmen blieb, sein Inhalt nicht (Spoliation, Muster #1066).
 
 ### Maßnahme
 
@@ -2447,7 +2438,7 @@ Ein Hold auf einen **Fall** schützt seit #2122 die Ereignisse dieses Falls: `_l
 
 Bewusst in der Revalidierung und nicht im Snapshot: ein Umhängen des Ereignisses in einen anderen Fall **derselben** Person lässt den Personenbezug unverändert; die Revalidierung aus Finding C greift dann nicht, und ein Fall-Wert von vor den Sperren wäre der falsche. Der Koordinationspunkt ist dieselbe Personenzeile, die Stufe 1 ohnehin sperrt — `_lock_case_and_check_history` nimmt sie beim Anlegen eines Fall-Holds als erste Stufe (kanonische Ordnung `core_client` → `core_case` → `core_event`).
 
-Die Bestandsmigration `0174_redact_deleted_event_history_backlog` importiert denselben Baustein und ist damit ohne eine Zeile Migrationscode mitkorrigiert (ADR-044 §3: eine Fassung, keine Drift).
+Die Datenmigration `0174_redact_deleted_event_history_backlog` importiert denselben Baustein und ist damit ohne eine Zeile Migrationscode mitkorrigiert (ADR-044 §3: eine Fassung, keine Drift).
 
 ### Grenzen
 
@@ -2460,7 +2451,7 @@ Ausdrücklich entschieden (und hier festgehalten, damit die Frage nicht erneut g
 
 ### Verifikation
 
-[`test_event_soft_delete_fields.py`](../src/tests/test_event_soft_delete_fields.py) (`TestCaseHoldBlocksTheManualDeletePath`: Nutzdaten, Audit und die verschlüsselte Datei überleben; ein erst nach dem Lesen der Instanz zugeordneter gehaltener Fall hält ebenso an; Gegenproben für einen fremden Fall, ein fallloses Ereignis und eine Zuordnung zu einem **nicht** gehaltenen Fall), [`test_event_deletion_hold.py`](../src/tests/test_event_deletion_hold.py) (Vier-Augen-Weg: der Antrag bleibt offen, kein `DELETION_APPROVED` — auch dann, wenn die Fallzuordnung erst zwischen dem Laden des Ereignisses und der Sperre entsteht), [`test_tally_undo.py`](../src/tests/test_tally_undo.py) (`TestTallyUndoAndLegalHolds`: geerbtes Hold-Gate und die Begründung, warum der Fall-Zweig dort gegenstandslos ist) sowie [`test_eventhistory_retention.py`](../src/tests/test_eventhistory_retention.py) (`TestCaseHoldsAreHardToo`: Sweep stellt zurück, ungehaltener Fall wird weiter redigiert, ein während der Sperrwartezeit in einen gehaltenen Fall umgehängtes Ereignis wird gehalten; `TestBacklogMigrationHonoursHolds`: derselbe Schutz im Altbestand über Migration 0174).
+[`test_event_soft_delete_fields.py`](../src/tests/test_event_soft_delete_fields.py) (`TestCaseHoldBlocksTheManualDeletePath`: Nutzdaten, Audit und die verschlüsselte Datei überleben; ein erst nach dem Lesen der Instanz zugeordneter gehaltener Fall hält ebenso an; Gegenproben für einen fremden Fall, ein fallloses Ereignis und eine Zuordnung zu einem **nicht** gehaltenen Fall), [`test_event_deletion_hold.py`](../src/tests/test_event_deletion_hold.py) (Vier-Augen-Weg: der Antrag bleibt offen, kein `DELETION_APPROVED` — auch dann, wenn die Fallzuordnung erst zwischen dem Laden des Ereignisses und der Sperre entsteht), [`test_tally_undo.py`](../src/tests/test_tally_undo.py) (`TestTallyUndoAndLegalHolds`: geerbtes Hold-Gate und die Begründung, warum der Fall-Zweig dort gegenstandslos ist) sowie [`test_eventhistory_retention.py`](../src/tests/test_eventhistory_retention.py) (`TestCaseHoldsAreHardToo`: Sweep stellt zurück, ungehaltener Fall wird weiter redigiert, ein während der Sperrwartezeit in einen gehaltenen Fall umgehängtes Ereignis wird gehalten; `TestBacklogMigrationHonoursHolds`: derselbe Schutz über Migration 0174).
 
 ---
 
@@ -2482,7 +2473,7 @@ Auf den beiden bereits gesperrten, frisch gelesenen Personenzeilen (`_locked_cli
 
 ### Grenzen
 
-- **Hold auf der Quelle ist über die Service-Wege nicht herstellbar.** `create_hold_for_target` weist eine Sperre auf einen Merge-Tombstone seit #2144 ab (`_assert_not_merge_tombstone`). Der Quell-Zweig ist damit Abwehr in der Tiefe für Alt- und Reparaturzustände, die nicht über die Service-Wege entstanden sind — der Guard hält sie trotzdem.
+- **Hold auf der Quelle ist über die Service-Wege nicht herstellbar.** `create_hold_for_target` weist eine Sperre auf einen Merge-Tombstone ab (#2144; `_assert_not_merge_tombstone`). Der Quell-Zweig ist damit Abwehr in der Tiefe für Alt- und Reparaturzustände, die nicht über die Service-Wege entstanden sind — der Guard hält sie trotzdem.
 - **Reichweite.** `ClientUnmergeView` ist über den Papierkorb erreichbar (Anwendungsbetreuung); Personen-Holds entstehen weiterhin nur per Service/Konsole. Geschlossen wird ein Pfad, der bei jeder künftigen Verdrahtung klickbar würde.
 
 ### Verifikation
