@@ -46,7 +46,7 @@
 **Rollenkonzept:**
 | Rolle | Lesen | Schreiben | Löschen | Export | Admin |
 |-------|-------|-----------|---------|--------|-------|
-| Systemadministration | Alle Einrichtungen, nur lesend über die Verwaltungsoberfläche (`/admin-mgmt/`, mit Sudo) und den Systembereich (`/system/`); jeder Aufruf protokolliert (`SYSTEM_VIEW`) | Keine Fachdaten | Nein | Nein | Installationsweit |
+| Systemadministration | Alle Einrichtungen, nur lesend über die Verwaltungsoberfläche (`/admin-mgmt/`, mit Sudo) und den Systembereich (`/system/`); protokolliert (`SYSTEM_VIEW`) werden jeder Aufruf im Systembereich sowie die Listen- und Detailansichten von Personen, Fällen, Ereignissen, Ereignis-Historie, Aufgaben und Anhängen, nicht die übrigen Verwaltungsansichten (z. B. Löschanträge, Benutzer, Einstellungen, Audit-Log); schlägt die Protokollierung fehl, bleibt der Zugriff möglich | Keine Fachdaten | Nein | Nein | Installationsweit |
 | Anwendungsbetreuung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | 4-Augen | Ja | Ja (eigene Einrichtung) |
 | Leitung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | 4-Augen | Ja | Nein |
 | Fachkraft | Bis Sensitivität „Erhöht“ | Alle für sie sichtbaren Ereignisse | Eigene (identifiziert) | Nein | Nein |
