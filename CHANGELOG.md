@@ -30,27 +30,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`make db` veröffentlicht PostgreSQL nur noch auf Loopback** (#2420) — Das native Entwicklungsrezept bindet Port 5432 an `127.0.0.1`; LAN-Zugriff bleibt eine bewusste Betreiberentscheidung.
 - **Locust-Login und Statistikbegründung an den aktuellen Seed angepasst** (#2421) — Das Lasttestprofil nutzt vorhandene Fachkonten, erkennt fehlgeschlagene Anmeldungen und Login-Weiterleitungen, ordnet Exporte der Einrichtungsleitung zu und verlinkt das Statistik-MV-Issue korrekt.
 - **Demo-Footer und Container-Version bleiben beim Release-Deploy synchron** (#2408) — `deploy-demo.sh` übernimmt keinen alten `SOURCE_CODE_VERSION`-Wert mehr aus `.env.demo` und bricht ab, wenn der laufende Web-Container vom Release abweicht.
+- **Demo: Compliance-Karten der Hintergrundjobs nach jedem Reset gefüllt** (#2413) — Der stündliche Demo-Reset startet nach dem Seed die Jobs, aus denen das Compliance-Dashboard liest, sodass die Karten zu Audit-Ketten-Prüfung, Statistik-Snapshots, Breach-Scan und View-Refresh auf `ok` stehen; der Löschlauf `enforce_retention` läuft dort nicht, weil er die Beispieldaten verändern würde, und die Karte „Retention-Lauf“ erklärt das ohne Betriebshinweis bei Status `unknown`.
+- **Demo: Karten „Letztes Backup“ und „Restore-Test“ ohne Betriebshinweis** (#2414) — Im Demo-Modus erklären beide Karten, dass Sicherung und Wiederherstellung in der stündlich neu erzeugten Demo nicht eingerichtet sind, statt auf `backup.sh` bzw. `mark_restore_verified` zu verweisen; der Status bleibt `unknown`, auch in der Systemübersicht.
+
 ### Added
 
 - **Compliance-Dashboard zeigt das Ergebnis der DB-Rollenprüfung** (#2415) — `check_db_roles` hinterlegt nach jedem Lauf im Wartungsdienst sein Ergebnis ohne Rollennamen oder Zugangsdaten im Audit-Log, und die Karte „Admin-DB-Rolle“ zeigt es an: nach dem Deploy `ok` mit Prüfzeitpunkt, bei Befunden `critical`, bei unvollständiger oder über 30 Tage alter Prüfung `warning`.
 
-### Fixed
-
-- **Demo: Compliance-Karten der Hintergrundjobs nach jedem Reset gefüllt** (#2413) — Der stündliche Demo-Reset startet nach dem Seed die Jobs, aus denen das Compliance-Dashboard liest, sodass die Karten zu Audit-Ketten-Prüfung, Statistik-Snapshots, Breach-Scan und View-Refresh auf `ok` stehen; der Löschlauf `enforce_retention` läuft dort nicht, weil er die Beispieldaten verändern würde, und die Karte „Retention-Lauf“ erklärt das ohne Betriebshinweis bei Status `unknown`.
-- **Demo: Karten „Letztes Backup“ und „Restore-Test“ ohne Betriebshinweis** (#2414) — Im Demo-Modus erklären beide Karten, dass Sicherung und Wiederherstellung in der stündlich neu erzeugten Demo nicht eingerichtet sind, statt auf `backup.sh` bzw. `mark_restore_verified` zu verweisen; der Status bleibt `unknown`, auch in der Systemübersicht.
-
 ### Docs
 
 - **Statistik-Unterdrückung von Backup-Aufbewahrung getrennt** (#2429) — Fachkonzept, EN-Zusammenfassung und Beratungsstellen-Paketdoku erklären k als Veröffentlichungsschwelle und unterscheiden Felddefinition, verwertbare Dauerwerte und Unterdrückung anhand eines Zwei-Kontakte-Beispiels.
-
 - **Sicherheitszusagen im Fachkonzept präzisiert** (#2467) — DE und EN beschreiben den Klartext-Uploadpuffer, Limits je View und Login sowie PBKDF2-SHA256 gemäß Implementierung.
-
 - **Ist-Stand und Zielbilder im Fachkonzept getrennt** (#2488) — Betroffenenrechte sind als interne Funktionen beschrieben, Klientel-Self-Service ist verworfen und externe API, optionale Module sowie weitere Evaluierungsziele sind ausdrücklich Zielbilder.
-
 - **Organisationsmodell und Arbeitsabläufe im Fachkonzept** (#2487) — DE und EN beschreiben mehrere Einrichtungen, Schichtnotizen, Zeitfilter, Auto-Save und Synchronisation gemäß Code; das Fachkonzept verweist zum Hardwarebedarf auf das Admin-Handbuch.
-
 - **Feldvertrag, Katalog und Fristen im Fachkonzept** (#2431) — Das Fachkonzept und seine englische Zusammenfassung beschreiben Slug-Feldschlüssel, den Standardkatalog, die konfigurierbaren Fristvorgaben und den Import-Umfang gemäß Implementierung.
-
 - **Rollback-Beispiele nennen keinen erfundenen Image-Tag mehr** (#2308) — Admin-Guide und Ops-Runbook (DE/EN) zeigten beim Zurückwechseln auf eine frühere Version `ghcr.io/anlaufstelle/app:v1.2.3`, einen nie veröffentlichten Tag. Die Beispiele nutzen jetzt den Platzhalter `vX.Y.Z` und nennen, wie sich mit `docker manifest inspect` prüfen lässt, ob ein Tag abrufbar ist.
 - **Dokumentationstyp-Frist als zusätzliche Frist beschrieben** (#2462) — DSFA, Löschkonzept, ADR-021 und Admin-Handbuch (DE/EN) sagen jetzt, dass die Typ-Frist die Kontaktstufen-Frist nicht ersetzt: Es gilt die zuerst ablaufende, eine längere Typ-Frist verlängert nichts.
 - **Löschkonzept, TOM und Verarbeitungsverzeichnis trennen lokale Backup-Rotation und Off-Site-Kopien** (#2464) — `backup.sh` rotiert nur lokal (Altersgrenzen `-mtime +7/+28/+90`, gelöscht beim nächsten erfolgreichen Lauf, also keine feste Höchstfrist), setzt die Rotation nach einem fehlgeschlagenen Off-Site-Abgleich aus und löscht am Off-Site-Ziel nichts; die Vorlagen verlangen dafür eine eigene Aufbewahrungsregel am Ziel, und die VVT-Ansicht nennt dieselben Altersgrenzen statt 30 Tage/12 Wochen/12 Monate.
