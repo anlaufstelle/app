@@ -6010,7 +6010,7 @@
 |---------|-------|---------|--------|-----|
 | Sys | öffentlich (Monitoring) | C/F/S | ⚪ | `test_security_hardening.py` |
 
-**Voraussetzung:** alle Container laufen (Postgres, Redis, ClamAV); `DJANGO_HEALTH_DETAIL_TOKEN` ist gesetzt (für die Positivkontrolle).
+**Voraussetzung:** alle Container laufen (Postgres, Redis, ClamAV); `DJANGO_HEALTH_DETAIL_TOKEN` ist gesetzt (für die Positivkontrolle); `CLAMAV_ENABLED=True` im **Webprozess** (ohne den Schalter meldet die Detailantwort `virus_scanner`/`clamav` = `disabled`, auch bei laufendem Scanner); die Laufzeitrolle der App ist weder Superuser noch BYPASSRLS (sonst ist schon der anonyme Status `degraded`, `db_role_posture: "bypasses_rls"` — der lokale Compose-Stack läuft mit der Bootstrap-Superuser-Rolle); der Encryption-Key ist lesbar.
 
 **Vorbereitung:**
 - Backup-Job mindestens 1x ausgeführt (Cron oder manuell).
@@ -6027,13 +6027,13 @@
 
 **Erwartetes Ergebnis:**
 - Schritt 2: HTTP `200`, `Content-Type: application/json`.
-- Schritt 3: Der Body enthält **genau einen** Schlüssel: `{"status": "ok"}`. `status` nimmt nur `ok`, `degraded` oder `error` an. **Enthält die anonyme Antwort zusätzlich `database`, `clamav`, `virus_scanner`, `encryption_key`, `version`, `cache`, `smtp`, `last_backup_age_hours`, `disk_free_pct` oder `stale_jobs`, ist der Testfall rot** (Recon-Leak, Refs #1375).
+- Schritt 3: Der Body enthält **genau einen** Schlüssel, `status`; er nimmt nur `ok`, `degraded` oder `error` an. Der Wert `ok` ist nur unter den Voraussetzungen oben zugesagt (anonym zählen Datenbank, ClamAV, Encryption-Key und RLS-Haltung der Rolle); ist eine davon nicht erfüllt, ist der Wert nicht bewertbar — die Schlüsselprüfung gilt trotzdem. **Enthält die anonyme Antwort zusätzlich `database`, `clamav`, `virus_scanner`, `encryption_key`, `version`, `cache`, `smtp`, `last_backup_age_hours`, `disk_free_pct` oder `stale_jobs`, ist der Testfall rot** (Recon-Leak, Refs #1375).
 - Schritt 4: wie Schritt 3 — nur `status`.
-- Schritt 5: Detailpayload mit u. a. `database: "connected"`, `virus_scanner: "connected"`, `clamav: "ok"`, `encryption_key: "ok"`, `db_role_posture: "ok"`, `version` (`APP_VERSION`, Fallback `"dev"`), `cache: {"backend": …, "status": "ok"}`, `smtp`, `last_backup_age_hours: <Zahl>`, `backup`, `disk_free_pct`, `stale_jobs`.
+- Schritt 5: Detailpayload mit u. a. `database: "connected"`, `virus_scanner: "connected"`, `clamav: "ok"`, `encryption_key: "ok"`, `db_role_posture: "ok"` (diese Werte setzen die Voraussetzungen voraus; zeigt `clamav` `disabled` oder `db_role_posture` `bypasses_rls`, ist der Fall „nicht geprüft", nicht bestanden), `version` (`APP_VERSION`, Fallback `"dev"`), `cache: {"backend": …, "status": "ok"}`, `smtp`, `last_backup_age_hours: <Zahl>`, `backup`, `disk_free_pct`, `stale_jobs`.
 - Schritt 6: nur `status` — eine Sitzung mit Passwort, aber ohne zweiten Faktor, bekommt keine Details (`session_fully_authenticated`, Refs #2286). Sieht sie Details, ist der Testfall rot.
 - Rate-Limit: `120/m` je IP auf GET (`HealthView`).
 
-**Code-Beleg:** `HealthView.get`, `_detail_authorized` (`src/core/views/health.py`); Unit-Tests `TestHealthLiveness::test_anonymous_payload_is_status_only`, `::test_anonymous_payload_omits_recon_detail_fields`, `TestHealthDetail::test_wrong_token_stays_lean`, `::test_detail_token_unlocks_version` (`src/tests/test_health.py`), `TestHealthDetailGate::test_state_b_gets_lean_payload` (`src/tests/test_session_fully_authenticated.py`).
+**Code-Beleg:** `HealthView.get`, `_detail_authorized` (`src/core/views/health.py`); Unit-Tests `TestHealthLiveness::test_anonymous_payload_is_status_only`, `::test_anonymous_payload_omits_recon_detail_fields`, `TestHealthDetail::test_wrong_token_stays_lean`, `::test_detail_token_unlocks_version` (`src/tests/test_health.py`), `TestHealthDetailGate::test_state_b_gets_lean_payload` (`src/tests/test_session_fully_authenticated.py`), `TestHealthPreconditionBehaviour::test_running_scanner_reports_disabled_without_the_switch`, `::test_rls_bypass_keeps_anonymous_status_degraded_with_scanner_up` (`src/tests/test_manual_matrix_health_probe.py`).
 
 **DSGVO/Security-Note:**
 - **Bewusst öffentlich** für Monitoring (kein Auth-Wall) — Uptime-Monitore werten HTTP-Code und `status`.
@@ -6054,7 +6054,9 @@
 **Voraussetzung:** `CLAMAV_ENABLED=True` (Prod-Default; `settings/base.py` defaultet auf `False` — ohne ClamAV-Prüfung meldet die Detailantwort `clamav: "disabled"`); `DJANGO_HEALTH_DETAIL_TOKEN` gesetzt.
 
 **Vorbereitung:**
-- ClamAV-Container stoppen: `sudo docker compose stop clamav`. Lokal ist `clamav` ein Profil-Dienst und `CLAMAV_ENABLED` im `web`-Dienst ungesetzt (`docker-compose.yml`): erst mit `CLAMAV_ENABLED=True` und `docker compose --profile clamav up -d clamav` starten, dann stoppen.
+- `CLAMAV_ENABLED=True` im **Webprozess** setzen (Neustart des `web`-Dienstes); das Starten des Scanners allein reicht nicht. Lokal ist `clamav` ein Profil-Dienst und `CLAMAV_ENABLED` im `web`-Dienst ungesetzt (`docker-compose.yml`): Schalter setzen, `docker compose --profile clamav up -d clamav` starten.
+- Ausgangszustand aufzeichnen, solange ClamAV läuft: `/health/` anonym und mit `X-Health-Token: <token>` aufrufen, beide Antworten sichern. Sollwert im Ausgangszustand: `clamav: "ok"`, `virus_scanner: "connected"`. Zeigt die Detailantwort `clamav: "disabled"`, greift der Schalter im Webprozess nicht — Fall „nicht geprüft".
+- ClamAV-Container stoppen: `sudo docker compose stop clamav`.
 
 **Schritte:**
 1. `/health/` anonym aufrufen.
@@ -6063,11 +6065,11 @@
 4. Sobald der Daemon antwortet, beide Aufrufe wiederholen.
 
 **Erwartetes Ergebnis:**
-- Schritt 1: HTTP `200`, Body **nur** `{"status": "degraded"}` — der Gesamtstatus degradet auch anonym, das Detailfeld bleibt verborgen. Steht `virus_scanner` oder `clamav` in der anonymen Antwort, ist der Testfall rot.
-- Schritt 2: HTTP `200`, `status: "degraded"`, `virus_scanner: "unavailable"`, `clamav: "error"`; `database: "connected"` bleibt. Ein ClamAV-Ausfall setzt den Status nie auf `error` und den HTTP-Code nicht auf 503 (503 nur bei DB- oder Encryption-Key-Fehler).
-- Schritt 4: wieder `status: "ok"`, `clamav: "ok"` — ohne App-Neustart (`clamav_ping` je Request).
+- Schritt 1: Body enthält **nur** `status`. Steht `virus_scanner` oder `clamav` in der anonymen Antwort, ist der Testfall rot. War der anonyme Ausgangszustand `{"status": "ok"}`, lautet die Antwort jetzt HTTP `200` mit `{"status": "degraded"}` — bleibt sie `ok`, ist der Testfall rot. War er schon `degraded` (z. B. Laufzeitrolle mit BYPASSRLS), belegt Schritt 1 den ClamAV-Ausfall nicht; maßgeblich ist dann Schritt 2.
+- Schritt 2: `virus_scanner: "unavailable"`, `clamav: "error"`, `status` ist nicht `ok` (`degraded`, sofern der Ausgangszustand nicht schon `error` war); `database` unverändert gegenüber dem Ausgangszustand. Ein ClamAV-Ausfall allein setzt den Status nie auf `error` und den HTTP-Code nicht auf 503 (503 nur bei DB- oder Encryption-Key-Fehler).
+- Schritt 4: Rückkehr zum aufgezeichneten Ausgangszustand — `clamav: "ok"`, `virus_scanner: "connected"` und für beide Antworten derselbe `status` wie vor dem Stoppen, ohne App-Neustart (`clamav_ping` je Request). `status: "ok"` ist nur zu erwarten, wenn der Ausgangszustand `ok` war; die Detailantwort degradet zusätzlich bei Cache-, SMTP-, Backup-, Plattenplatz- oder Job-Problemen, die ClamAV nicht berührt.
 
-**Code-Beleg:** ClamAV-Zweig in `HealthView.get` (`src/core/views/health.py`); Unit-Tests `TestHealthLiveness::test_virus_scanner_unavailable_degrades_anonymous_status`, `::test_virus_scanner_unavailable_degrades_status`, `::test_clamav_alias_error_when_unavailable` (`src/tests/test_health.py`).
+**Code-Beleg:** ClamAV-Zweig in `HealthView.get` (`src/core/views/health.py`); Unit-Tests `TestHealthLiveness::test_virus_scanner_unavailable_degrades_anonymous_status`, `::test_virus_scanner_unavailable_degrades_status`, `::test_clamav_alias_error_when_unavailable` (`src/tests/test_health.py`), `TestHealthPreconditionBehaviour` (`src/tests/test_manual_matrix_health_probe.py`).
 
 **DSGVO/Security-Note:**
 - **Virus-Scan ist DSGVO-relevant (Art. 32):** Kein Upload ohne aktiven Scanner.
