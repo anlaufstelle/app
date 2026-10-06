@@ -45,13 +45,13 @@ This guide and the [FAQ](../faq.md) are linked inside the application under "Hel
 
 > **Note:** If you were told to change your password on first login, you will be redirected to the password change page immediately after signing in.
 
-> **Account locked after multiple failed attempts?** After **10 failed sign-in attempts**, your account is automatically locked. You will then see a corresponding notice page and can no longer sign in. On the login page you will find three self-service options (Refs #869):
+> **Account locked after multiple failed attempts?** After **10 failed sign-in attempts within 15 minutes** from the same IP address, your account is locked for sign-ins from that address. The login page then shows the notice that your account is temporarily locked -- even if you enter the correct password. The lock ends by itself 15 minutes after the last failed attempt; every further attempt during that time extends it. Independently, sign-in accepts at most 5 attempts per minute from the same IP address and 10 per hour for the same username; beyond that the browser shows only an empty error page (HTTP 429) instead of the login page, and only waiting helps. After ten failed attempts this is often what you see first. You can lift the lock itself faster through three self-service options on the login page (Refs #869):
 >
 > - **Forgot password?** -- Classic reset by email. Setting a new password automatically unlocks your account.
 > - **Unlock account by email** -- Sends an unlock link to your registered email address, valid for 30 minutes. No new password required.
 > - **Redeem a backup code** -- If you have 2FA enabled, enter your username plus one of your backup codes. Each code is single-use.
 >
-> If none of these options works, ask an administrator to unlock the account. All actions are recorded in the audit log.
+> If none of these options works, ask the application manager of your facility to unlock the account (Administration > Access). All actions are recorded in the audit log.
 
 ### Changing Your Password
 
@@ -67,7 +67,7 @@ This guide and the [FAQ](../faq.md) are linked inside the application under "Hel
 
 ### Two-Factor Authentication (2FA)
 
-Anlaufstelle supports time-based one-time passwords (TOTP) as a second login factor. Administrators can enforce 2FA for individual users or the whole facility; independently, each user can enable 2FA voluntarily.
+Anlaufstelle supports time-based one-time passwords (TOTP) as a second login factor. In production 2FA is mandatory for all roles: immediately for the system administration and the application manager, and for lead, staff and assistant after a transition period of 30 days from the first sign-in. During that period a notice reminds you from 14 remaining days on; afterwards sign-in leads directly to setup. Operations can change this role default, and the application manager can additionally make 2FA mandatory immediately for individual accounts or the whole facility. Where there is no obligation, you can enable 2FA voluntarily.
 
 **Initial setup:**
 
@@ -94,13 +94,13 @@ After several incorrect entries, `django-otp` increasingly throttles further che
 
 **Disabling 2FA:**
 
-Under `/mfa/settings/` > **Disable 2FA**. This is **not possible** if your facility enforces 2FA or your account is individually marked as 2FA-required -- contact your administrator in that case.
+Under `/mfa/settings/` > **Disable 2FA**. This is **not possible** if 2FA is mandatory for you -- through your role, your facility or your account. In that case, contact your administrator.
 
 **Backup codes (for emergencies):**
 
 When setting up 2FA, you receive **10 single-use backup codes**. Store them safely -- e.g., printed and kept in your wallet, or in your password manager. If you lose your phone or your authenticator app has been reset, you can enter a backup code instead of a TOTP code at the 2FA login screen. Each code only works once.
 
-> **All codes used up or lost?** Contact your administrator -- they can reset your TOTP device, after which you set up 2FA and new backup codes again.
+> **All codes used up or lost?** Contact the application manager of your facility. They can reset your second factor: this removes all authenticator apps, passkeys and backup codes of your account and signs you out everywhere. Your password stays valid. If 2FA is mandatory for you, you set up 2FA and new backup codes at your next sign-in.
 
 **Passkey / security key (optional, in addition to the authenticator app):**
 
@@ -1038,4 +1038,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: e09e6a34384aa2eed8b50528427ca71d469d2b0c -->
+<!-- source-hash: 23599412481bf7bafc50987f70aba7f5209818be -->

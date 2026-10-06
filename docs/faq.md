@@ -103,35 +103,48 @@ Wenn keine der Punkte hilft, wenden Sie sich an Ihren Administrator — fehlgesc
 
 ### 4. Ich habe mein Handy verloren — wie komme ich wieder rein?
 
-**Erste Wahl: Backup-Code verwenden.** Bei der 2FA-Einrichtung haben Sie 10 einmalig nutzbare Codes erhalten (Refs Issue #588). Geben Sie am 2FA-Login statt eines TOTP-Codes einen davon ein — verbrauchte Codes sind danach ungültig und werden im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Nach dem Login richten Sie unter `/mfa/settings/` ein neues TOTP-Gerät und neue Backup-Codes ein.
+**Erste Wahl: Backup-Code verwenden.** Bei der 2FA-Einrichtung haben Sie 10 einmalig nutzbare Codes erhalten (Refs Issue #588). Geben Sie am 2FA-Login statt eines TOTP-Codes einen davon ein — verbrauchte Codes sind danach ungültig und werden im AuditLog (`BACKUP_CODES_USED`) protokolliert. Nach dem Login richten Sie unter `/mfa/settings/` ein neues TOTP-Gerät und neue Backup-Codes ein.
 
-**Wenn alle Codes verbraucht oder verloren sind:** Bitten Sie eine Administratorin, Ihr TOTP-Gerät zurückzusetzen.
+**Wenn alle Codes verbraucht oder verloren sind:** Bitten Sie die Anwendungsbetreuung Ihrer Einrichtung, Ihren zweiten Faktor zurückzusetzen (für Konten der Systemadministration: eine andere Systemadministration).
 
-1. Admin-Bereich → **OTP → TOTP-Geräte**.
-2. Gerät des betroffenen Users auswählen → löschen.
-3. Beim nächsten Login werden Sie automatisch auf die Neu-Einrichtung (`/mfa/setup/`) geleitet, sofern 2FA für Ihr Konto/Ihre Einrichtung verpflichtend ist.
+1. Die Anwendungsbetreuung öffnet **Verwaltung → Zugänge** → Ihren Zugang → unter „Sicherheitsaktionen" **Zweiten Faktor zurücksetzen** und bestätigt im Sudo-Modus. Die Systemadministration nutzt im Django-Admin unter **Core → Benutzer** die gleichnamige Aktion.
+2. Entfernt werden alle Authenticator-Apps, Passkeys und Backup-Codes Ihres Zugangs; alle Ihre Sitzungen enden. Ihr Passwort bleibt gültig. Im AuditLog entsteht ein Eintrag `MFA_RESET_BY_ADMIN`.
+3. Ist 2FA für Sie verpflichtend, werden Sie bei der nächsten Anmeldung auf die Neu-Einrichtung (`/mfa/setup/`) geleitet — bei der Rollenpflicht mit Übergangsfrist erst nach deren Ablauf. Sonst richten Sie 2FA unter `/mfa/settings/` freiwillig neu ein.
+
+Eine Anwendungsbetreuung kann nur Zugänge der eigenen Einrichtung und kein Konto der Systemadministration zurücksetzen, das eigene Konto auf diesem Weg nicht. Einzelheiten: [Admin-Guide § 2.7](admin-guide.md#2fa-für-einen-benutzer-zurücksetzen).
 
 **Relevante Dateien:**
 - [`src/core/models/user.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) — `User.is_mfa_enforced`
 - [`src/core/views/mfa.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mfa.py) — `MFADisableView`, `MFASetupView`, Backup-Code-Verifikation
+- [`src/core/services/user_access.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/user_access.py) — `reset_user_mfa` (Zurücksetzen durch die Administration)
 
 ---
 
 ### 4a. Mein Konto ist nach mehreren Login-Fehlversuchen gesperrt — was tun?
 
-Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Schwelle in [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py)). Auch korrekte Eingaben funktionieren in der Sperrphase nicht — Sie sehen eine Hinweis-Seite.
+Nach **10 fehlgeschlagenen Anmeldungen innerhalb eines gleitenden 15-Minuten-Fensters** wird das Konto gesperrt — gezählt je Paar aus Konto und Quell-IP-Adresse (Schwelle und Fenster in [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py)). Fehlversuche einer fremden IP-Adresse sperren Ihre Anmeldung von Ihrer eigenen Adresse also nicht. Auch das richtige Passwort wird in der Sperrphase abgewiesen: Die Login-Seite zeigt den Formularfehler „Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen temporär gesperrt. …", protokolliert als `LOGIN_FAILED` mit `reason: "locked"`.
 
-**Vorgehen:**
+Die Sperre **endet von selbst** 15 Minuten nach dem letzten Fehlversuch; jeder weitere Versuch in dieser Zeit verlängert sie. Davon getrennt sind die Ratelimits der Anmeldung (5 Versuche pro Minute je IP-Adresse, 10 pro Stunde je Benutzername): Darüber antwortet die Anmeldung mit HTTP 429, bis das Zeitfenster abgelaufen ist — keine Entsperrung hebt das auf. Nach zehn Fehlversuchen ist meist auch das Stundenlimit des Benutzernamens erreicht; dann erscheint zuerst die 429-Antwort (eine leere Seite) und der Formularfehler der Sperre erst nach Ablauf des Stundenfensters. Konten der Systemadministration (`super_admin`) werden nie gesperrt, für sie gelten nur die Ratelimits.
 
-1. Wenden Sie sich an eine Administratorin Ihrer Einrichtung.
-2. Sie öffnet Ihr User-Profil im Admin (Core → Benutzer → User auswählen) und klickt auf **Sperre aufheben** — die Aktion wird im AuditLog als `LOGIN_UNLOCK` protokolliert.
-3. Versuchen Sie sich danach erneut anzumelden. Falls Sie das Passwort vergessen haben, nutzen Sie unter `/password-reset/` den Reset-Link.
+**Selbst entsperren (auf der Login-Seite):**
+
+1. **Konto entsperren per E-Mail** — schickt einen 30 Minuten gültigen Entsperr-Link an die hinterlegte E-Mail-Adresse.
+2. **Backup-Code einlösen** — bei eingerichteter 2FA mit Benutzername und einem Backup-Code.
+3. **Passwort vergessen?** — ein über den Reset-Link neu gesetztes Passwort hebt die Sperre ebenfalls auf.
+
+**Entsperren durch die Administration:**
+
+1. Die Anwendungsbetreuung Ihrer Einrichtung öffnet **Verwaltung → Zugänge** → Ihren Zugang → unter „Sicherheitsaktionen" **Account-Sperre aufheben** (mit Sudo-Bestätigung) — das ist der Regelweg.
+2. Die Systemadministration entsperrt einrichtungsübergreifend unter **System → Sperrkonten**; im Django-Admin (**Core → Benutzer**) gibt es dafür nur noch eine Listenaktion als Ausweichweg.
+3. Ist niemand mit Zugang zur Verwaltung erreichbar, entsperrt der Betrieb am Server per `unlock <username>` ([Admin-Guide § 2.7](admin-guide.md#account-lockout)).
+
+Jede Entsperrung wird im AuditLog als `LOGIN_UNLOCK` protokolliert.
 
 **Hinweis für Admins:** Die `LOGIN_FAILED`-Einträge im AuditLog sind durch einen DB-Trigger (`auditlog_immutable`) unveränderbar — der Cleanup erfolgt deshalb über einen `LOGIN_UNLOCK`-Eintrag, nicht durch Löschen.
 
 **Relevante Dateien:**
 - [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py) — `is_locked()`, `unlock()`, Schwellenwert
-- [`src/core/views/account.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/account.py) — Lockout-Check beim Login
+- [`src/core/views/auth.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/auth.py) — Lockout-Check und Ratelimits beim Login (`CustomLoginView`)
 
 ---
 
@@ -433,7 +446,8 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 | **Passwort-Pflicht** | Bei gesetztem `must_change_password`-Flag wird der User vor jeder Aktion zum Passwortwechsel gezwungen |
 | **Session-Timeout** | Konfigurierbar pro Einrichtung (Standard: 30 Min.), nach Ablauf **ohne Aktivität** automatischer Logout |
 | **Maximale Sitzungsdauer** | Zweite, aktivitätsunabhängige Grenze pro Einrichtung (Standard: 12 Std. ab Anmeldung); danach ist eine neue Anmeldung nötig, auch bei durchgehender Nutzung |
-| **Account-Sperre (Lockout)** | Nach 10 fehlgeschlagenen Logins wird der Account gesperrt. Recovery: `manage.py unlock <username>` (CLI) oder `facility_admin` für User der eigenen Einrichtung |
+| **Account-Sperre (Lockout)** | 10 fehlgeschlagene Logins innerhalb von 15 Minuten von derselben IP-Adresse sperren den Account; die Sperre endet 15 Minuten nach dem letzten Fehlversuch von selbst. `super_admin` ist ausgenommen (nur Ratelimits). Entsperren: Selbsthilfe auf der Login-Seite (E-Mail-Link, Backup-Code, Passwort-Reset), `facility_admin` unter Verwaltung → Zugänge, `super_admin` unter System → Sperrkonten, als letzter Weg `manage.py unlock <username>` (CLI) — siehe [FAQ #4a](#4a-mein-konto-ist-nach-mehreren-login-fehlversuchen-gesperrt--was-tun) |
+| **Zurücksetzen des zweiten Faktors** | `facility_admin` für Zugänge der eigenen Einrichtung (ohne `super_admin`-Konten), `super_admin` für alle Konten; nie das eigene Konto, immer mit Sudo, protokolliert als `MFA_RESET_BY_ADMIN` — siehe [FAQ #4](#4-ich-habe-mein-handy-verloren--wie-komme-ich-wieder-rein) |
 
 #### Technische Steuerungsparameter
 

@@ -165,6 +165,7 @@ Die folgenden Tabellen dokumentieren App-Settings und Betriebsvariablen (siehe [
 | `SUPPORT_CONTACT` | aus `.env` an `web` durchgereicht; leer = allgemeiner Verweis auf die Anwendungsbetreuung der Einrichtung auf der Serverfehlerseite |
 | `DJANGO_SETTINGS_MODULE`, `POSTGRES_HOST`, `CLAMAV_HOST` | `DJANGO_SETTINGS_MODULE` und `POSTGRES_HOST` sind in `docker-compose.prod.yml` fest auf `anlaufstelle.settings.prod` und `db` gesetzt; `CLAMAV_HOST` ist über `.env` konfigurierbar |
 | `DJANGO_HEALTH_DETAIL_TOKEN`, `LOG_FORMAT`, `FILE_VAULT_MAX_UPLOAD_BYTES`, `FILE_VAULT_MAX_UPLOAD_FILES`, `FILE_VAULT_MAX_IMAGE_PIXELS`, `FILE_VAULT_MAX_ARCHIVE_BYTES`, `FILE_VAULT_MAX_ARCHIVE_RATIO`, `FILE_VAULT_MAX_ARCHIVE_ENTRIES`, `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB`, `MAINTENANCE_FLAG_FILE`, `MAINTENANCE_ALLOW_IPS`, `MAINTENANCE_CACHE_TTL`, `MAINTENANCE_RETRY_AFTER`, `SUDO_MODE_TTL_SECONDS`, `DJANGO_INVITE_TOKEN_TIMEOUT`, `DJANGO_PASSWORD_RESET_TIMEOUT` | aus `.env` an `web` durchgereicht |
+| `MFA_ENFORCED_ROLES_IMMEDIATE`, `MFA_ENFORCED_ROLES_GRACE`, `OTP_WEBAUTHN_RP_ID`, `OTP_WEBAUTHN_ALLOWED_ORIGINS`, `DJANGO_AUDIT_DETAIL_STRICT`, `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT`, `REPORTING_BACKEND_STATEMENT_TIMEOUT_MS` | aus `.env` an `web` durchgereicht; ohne Eintrag in `.env` gelten die Defaults der Anwendung, eine ausdrücklich leere Rollenliste bleibt leer |
 | `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` | nur `maintenance`/Initialisierung, bewusst **nicht** `web` |
 | `BREACH_*`, `TZ` | `cron`; `TZ` bestimmt außerdem die Zeitbasis der Container |
 | `BACKUP_HOST_DIR` | Host-Skripte und Volume-Mount; `BACKUP_DIR` ist das read-only Ziel in `web` |
@@ -311,6 +312,15 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 |---|---|---|
 | `BREACH_*` (Variablen-Familie) | siehe Runbook | Zeitfenster und Schwellen der heuristischen Anomalie-Erkennung (fehlgeschlagene Logins, Exporte, Löschungen, Langzeitfenster, verteilte Login-Angriffe) sowie `BREACH_NOTIFICATION_WEBHOOK_URL` (optionaler Eskalations-Webhook; leer = aus). Vollständige Liste samt Defaults: [Ops-Runbook § 6.5b](ops-runbook.md). |
 
+**Zwei-Faktor-Authentifizierung und Passkeys (siehe [§ 2.7](#27-zwei-faktor-authentifizierung-2fa))**
+
+| Name | Default | Beschreibung |
+|---|---|---|
+| `MFA_ENFORCED_ROLES_IMMEDIATE` | `super_admin,facility_admin` | Kommaliste der Rollen, für die 2FA sofort verpflichtend ist. Leer = diese Ebene aus. |
+| `MFA_ENFORCED_ROLES_GRACE` | `lead,staff,assistant` | Kommaliste der Rollen, für die 2FA nach einer Übergangsfrist von 30 Tagen ab der ersten Anmeldung verpflichtend ist. Leer = diese Ebene aus. Ein unbekannter Rollenname oder eine Rolle in beiden Listen bricht den Start mit `ImproperlyConfigured` ab. |
+| `OTP_WEBAUTHN_RP_ID` | erster konkreter Host aus `ALLOWED_HOSTS` (sonst die Basis-Domain eines Wildcard-Eintrags) | Domain, an die Passkeys gebunden sind. Eine spätere Änderung macht registrierte Passkeys unbrauchbar. |
+| `OTP_WEBAUTHN_ALLOWED_ORIGINS` | `https://<host>` für jeden konkreten Host aus `ALLOWED_HOSTS` | Kommaliste der zulässigen Ursprünge für Passkey-Prüfungen. Bei reinen Wildcard-Einträgen in `ALLOWED_HOSTS` Pflicht. |
+
 **Sonstiges**
 
 | Name | Default | Beschreibung |
@@ -320,7 +330,10 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 | `BACKUP_DIR` | `/backups` (Compose-Stack), sonst `<Repo>/backups` | Read-only Mount-Ziel im Container; Health-Endpoint und Backup-Zeile im Systembereich lesen daraus das Backup-Alter. Die Host-Skripte ignorieren diese Variable. |
 | `BACKUP_HOST_DIR` | `./backups` | Basisverzeichnis auf dem Host; relative Werte werden gegen den Repository-Root aufgelöst. `backup.sh` schreibt darunter nach `daily/`, `weekly/` und `monthly/`; `restore-drill.sh` liest aus `daily/`. Compose mountet dieses Verzeichnis read-only nach `BACKUP_DIR`, damit der Container dieselben Dateien sieht. |
 | `APP_VERSION` | `dev` | Release-Tag des von `docker-compose.prod.yml` gewählten App-Images, z. B. `latest` oder ein lokal gebauter Tag (siehe [„Image lokal aus dem Dockerfile bauen"](#1-installation-docker-compose)); ob ein Tag in der Registry veröffentlicht ist, prüft `docker manifest inspect ghcr.io/anlaufstelle/app:<tag>` (Exit-Code 0 = veröffentlicht) oder die [GHCR-Paketseite](https://github.com/anlaufstelle/app/pkgs/container/app) — Release-Kandidaten vor dem 1.0-Cut sind dort NICHT veröffentlicht. `/health/` weist den Wert im `version`-Detailfeld aus (nur für Token-/authentifizierte Caller). |
-| `SUDO_MODE_TTL_SECONDS` | `900` | Gültigkeitsdauer (Sekunden) des Re-Auth-Fensters für sensible Aktionen (MFA-Disable, erneute 2FA-Einrichtung bei bestehendem Faktor, Hinzufügen eines Passkeys, DSGVO-Export). |
+| `SUDO_MODE_TTL_SECONDS` | `900` | Gültigkeitsdauer (Sekunden) des Re-Auth-Fensters für sensible Aktionen (MFA-Disable, erneute 2FA-Einrichtung bei bestehendem Faktor, Hinzufügen eines Passkeys, DSGVO-Export, Kontoverwaltung einschließlich Entsperren und Zurücksetzen des zweiten Faktors). |
+| `DJANGO_AUDIT_DETAIL_STRICT` | `false` | `true` bricht einen Audit-Schreibvorgang ab, dessen Detailfeld einen nicht freigegebenen Schlüssel enthält; `false` schreibt den Eintrag und meldet den Verstoß im Log auf Stufe ERROR. |
+| `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT` | `10000` | Höchstzahl der Sitzungen, die beim Beenden aller Sitzungen eines Kontos (Sperre, Rollenwechsel, Zurücksetzen des zweiten Faktors) durchsucht werden; ein Überschreiten wird im Log gemeldet. |
+| `REPORTING_BACKEND_STATEMENT_TIMEOUT_MS` | `10000` | Zeitlimit (Millisekunden) je Datenbankabfrage eines Berichts-Backends; `0` schaltet das Limit ab. |
 
 ### Schritt 3: Caddyfile prüfen
 
@@ -473,7 +486,7 @@ Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. M
 
 > **Wichtig — kein Default-Passwort:** Aus DSGVO- und Sicherheits-Gründen liefert die Anwendung **kein** Default-Passwort und keinen Default-Benutzernamen aus (anders als der frühere `make seed`-Workflow für Entwicklungs-Demos). Wer den Befehl überspringt, erhält **keinen** anmeldungsfähigen Account.
 
-> **Hinweis:** Der Befehl ist idempotent in dem Sinn, dass ein bestehender `super_admin` nicht überschrieben wird. Soll ein zweiter Super-Admin angelegt werden, wird der Befehl erneut ausgeführt — bestehende Accounts bleiben unangetastet.
+> **Hinweis:** Besteht bereits ein `super_admin`, bricht der Befehl ohne Änderung ab. Ein zweiter Super-Admin entsteht nur mit `--force` (`python manage.py create_super_admin --force`); bestehende Konten bleiben dabei unangetastet, ein bereits vergebener Benutzername wird abgelehnt.
 
 #### Account-Sperre aufheben (CLI)
 
@@ -964,7 +977,7 @@ Referenzen: #536, #581.
 
 ### 2.7 Zwei-Faktor-Authentifizierung (2FA)
 
-Die Anlaufstelle unterstützt TOTP-basierte 2FA über [`django-otp`](https://django-otp-official.readthedocs.io/). Jeder Benutzer kann 2FA selbst aktivieren (`/mfa/settings/`); zusätzlich gibt es zwei Verpflichtungs-Ebenen.
+Die Anlaufstelle unterstützt TOTP-basierte 2FA über [`django-otp`](https://django-otp-official.readthedocs.io/), ergänzt um Passkeys und Backup-Codes. Jeder Benutzer kann 2FA selbst aktivieren (`/mfa/settings/`); zusätzlich gibt es drei Verpflichtungs-Ebenen.
 
 **Benutzerseitige Doku:** [User-Guide § 1 — Zwei-Faktor-Authentifizierung](user-guide.md#zwei-faktor-authentifizierung-2fa).
 
@@ -972,30 +985,40 @@ Die Anlaufstelle unterstützt TOTP-basierte 2FA über [`django-otp`](https://dja
 
 | Ebene | Feld | Ort im Admin | Wirkung |
 |---|---|---|---|
-| **Einzeluser** | `User.mfa_required` | Verwaltung → Zugänge → *Zugang* → Feld „MFA erforderlich" | 2FA verpflichtend für diesen User, Deaktivieren gesperrt |
-| **Einrichtungsweit** | `Settings.mfa_enforced_facility_wide` | Core → Einstellungen → *Einrichtung* → Feld „2FA einrichtungsweit verpflichtend" | 2FA verpflichtend für **alle** User dieser Einrichtung |
-| **Rollen-Default** | `MFA_ENFORCE_PRIVILEGED_ROLES` (+ `MFA_ENFORCED_ROLES_IMMEDIATE` / `MFA_ENFORCED_ROLES_GRACE`) | Umgebungsvariablen (Deployment) | 2FA verpflichtend allein über die Rolle — in Produktion ab Werk aktiv |
+| **Einzeluser** | `User.mfa_required` | Verwaltung → Zugänge → *Zugang* → Feld „2FA erforderlich" | 2FA sofort verpflichtend für diesen User, Deaktivieren gesperrt |
+| **Einrichtungsweit** | `Settings.mfa_enforced_facility_wide` | Verwaltung → Einstellungen (`/verwaltung/einstellungen/`) → Feld „2FA-Pflicht für alle Nutzer" | 2FA sofort verpflichtend für **alle** User dieser Einrichtung |
+| **Rollen-Default** | `MFA_ENFORCE_PRIVILEGED_ROLES` (Settings-Modul) + `MFA_ENFORCED_ROLES_IMMEDIATE` / `MFA_ENFORCED_ROLES_GRACE` (Umgebungsvariablen) | Deployment | 2FA verpflichtend allein über die Rolle — in Produktion ab Werk für alle fünf Rollen aktiv |
 
-Die Auswertung erfolgt über [`User.is_mfa_enforced`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) — User gilt als verpflichtet, wenn **eine** der Ebenen zutrifft. Die MFA-Middleware blockiert den Zugriff auf geschützte Bereiche, bis ein TOTP-Code in der Session verifiziert wurde.
+Die Auswertung erfolgt über [`User.is_mfa_enforced`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) — User gilt als verpflichtet, wenn **eine** der Ebenen zutrifft. Die MFA-Middleware blockiert den Zugriff auf geschützte Bereiche, bis der zweite Faktor (TOTP-Code, Passkey oder Backup-Code) in der Session verifiziert wurde.
 
-**Rollen-Default über Umgebungsvariablen konfigurieren** (#1639). Unabhängig von der Einzeluser- und der einrichtungsweiten Erzwingung verlangt die Anwendung 2FA in Produktion bereits **allein über die Rolle** (`MFA_ENFORCE_PRIVILEGED_ROLES=True`, Default in Produktion; in dev/test/e2e/demo bewusst aus). Welche Rollen das umfasst, steuern zwei per Env als **Kommaliste** überschreibbare Settings:
+**Rollen-Default über Umgebungsvariablen konfigurieren** (#1639). Unabhängig von der Einzeluser- und der einrichtungsweiten Erzwingung verlangt die Anwendung 2FA in Produktion bereits **allein über die Rolle**. Der Schalter `MFA_ENFORCE_PRIVILEGED_ROLES` ist keine Umgebungsvariable, sondern ein Wert des Settings-Moduls: `True` in `base.py` und damit in Produktion, `False` in den Entwicklungs- und Demo-Settings, in den E2E-Settings über `E2E_MFA_ENFORCE_ROLES` steuerbar. Welche Rollen er umfasst, steuern zwei per Env als **Kommaliste** überschreibbare Settings; `docker-compose.prod.yml` reicht beide an den `web`-Dienst durch (siehe [§ 1, Umgebungsvariablen-Referenz](#vollständige-umgebungsvariablen-referenz)):
 
 | Setting | Default | Wirkung |
 |---|---|---|
 | `MFA_ENFORCED_ROLES_IMMEDIATE` | `super_admin,facility_admin` | 2FA **sofort** verpflichtend (kein Aufschub) — ohne zweiten Faktor sofortiger Redirect auf `/mfa/setup/` |
-| `MFA_ENFORCED_ROLES_GRACE` | `lead,staff,assistant` | 2FA verpflichtend, aber erst **nach 30-tägiger Übergangsfrist** (Erinnerungsbanner ab 14 Resttagen), damit Bestandsnutzende nicht ausgesperrt werden |
+| `MFA_ENFORCED_ROLES_GRACE` | `lead,staff,assistant` | 2FA verpflichtend, aber erst **nach 30-tägiger Übergangsfrist** ab der ersten Anmeldung (Erinnerungsbanner ab 14 Resttagen); danach führt jede Anmeldung ohne zweiten Faktor auf `/mfa/setup/` |
 
 Die Rolle **Leitung** (`lead`) ist per Default pflichtig (im Grace-Set) — wer Fachkraft/Assistenz erzwingt, erst recht die hierarchisch höhere Leitung. Gültige Rollennamen sind `super_admin`, `facility_admin`, `lead`, `staff`, `assistant`; eine **leere** Liste schaltet die jeweilige Ebene bewusst ab. Ein **unbekannter Rollenname** oder eine **Überschneidung** beider Listen bricht den Start fail-closed mit `ImproperlyConfigured` ab (keine stille Fehlkonfiguration).
 
 #### 2FA für einen Benutzer zurücksetzen
 
-Wenn eine Mitarbeiterin ihr Authenticator-Gerät verliert, muss ein Administrator das TOTP-Gerät löschen, damit sie neu einrichten kann:
+Hat eine Person ihr Authenticator-Gerät verloren und keine Backup-Codes mehr, setzt die Anwendungsbetreuung oder die Systemadministration ihren zweiten Faktor in der Anwendung zurück (#2469):
 
-1. **Admin → OTP → TOTP-Geräte** aufrufen.
-2. Das Gerät des betroffenen Users auswählen und löschen.
-3. User informieren: nach dem nächsten Login wird automatisch auf `/mfa/setup/` umgeleitet (bei `is_mfa_enforced=True`) oder der User kann 2FA freiwillig neu einrichten.
+- **Anwendungsbetreuung (`facility_admin`):** **Verwaltung → Zugänge** → *Zugang* → unter „Sicherheitsaktionen" **Zweiten Faktor zurücksetzen** (`/verwaltung/zugaenge/<id>/zweiter-faktor/`). Die Bestätigungsseite nennt die Folgen; erst das Absenden setzt zurück. Die Aktion erscheint nur, wenn der Zugang noch einen Faktor hat.
+- **Systemadministration (`super_admin`):** Django-Admin (`/admin-mgmt/`) → **Core → Benutzer** → Konten auswählen → Aktion **Zweiten Faktor zurücksetzen (Authenticator-App, Passkeys, Backup-Codes)**. Jedes ausgewählte Konto wird einzeln geprüft; abgelehnte Konten meldet die Seite und überspringt sie.
 
-Es gibt zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recovery-Fall (Refs #588). Bei der 2FA-Einrichtung erhält der User 10 einmalig nutzbare Codes, die er ausgedruckt oder im Passwort-Manager hinterlegen sollte. Anschließend muss er über die Pflicht-Checkbox bestätigen, dass er die Codes sicher gespeichert hat; erst dann ist das TOTP-Gerät bestätigt und die Einrichtung abgeschlossen. Verlässt er die Seite vorher, führt der nächste Aufruf wieder zu `/mfa/setup/`. Am Login-2FA-Prompt kann er statt eines TOTP-Codes einen Backup-Code eingeben. Verbrauchte Codes werden invalidiert und im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Sind alle 10 Codes verbraucht oder verloren, bleibt der Admin-Reset oben der Fallback.
+Regeln (in [`src/core/services/user_access.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/user_access.py), `reset_user_mfa`):
+
+- **Sudo-Pflicht:** Beide Wege verlangen ein laufendes Sudo-Fenster; ohne Sudo führt der Aufruf zuerst auf die Sudo-Seite (Passwort, bei eigenem TOTP-Gerät zusätzlich ein Code) und danach zurück zur Bestätigung.
+- **Einrichtungsgrenze:** Eine Anwendungsbetreuung erreicht nur Konten der eigenen Einrichtung; ein Konto einer anderen Einrichtung ist für sie nicht auffindbar. Die Systemadministration erreicht jedes Konto.
+- **Rollen-Hierarchie:** Eine Anwendungsbetreuung setzt kein `super_admin`-Konto zurück. Das eigene Konto lässt sich auf diesem Weg nicht zurücksetzen — dafür gilt das Deaktivieren unter `/mfa/settings/` mit seinen eigenen Regeln.
+- **Wirkung:** Alle TOTP-Geräte (auch unbestätigte), alle Passkeys und alle Backup-Codes des Kontos werden entfernt, und alle Sitzungen des Kontos enden mit ihrer nächsten Anfrage. Das Passwort bleibt gültig. Lassen sich die Sitzungen nicht sicher beenden, wird nichts entfernt und nichts protokolliert.
+- **Neueinrichtung:** Ist 2FA für das Konto verpflichtend, führt die nächste Anmeldung auf `/mfa/setup/` — bei Einzel-, Einrichtungs- und Sofort-Rollenpflicht sofort, bei der Rollenpflicht mit Übergangsfrist erst nach deren Ablauf. Ohne Pflicht meldet sich die Person nur mit Passwort an, bis sie 2FA selbst wieder einrichtet.
+- **Audit:** Jeder Reset schreibt genau einen Eintrag `MFA_RESET_BY_ADMIN` („2FA durch Administration zurückgesetzt") mit Zielkonto, handelnder Person und Einrichtung; das Detail enthält nur die Anzahl der entfernten Geräte, Passkeys und Backup-Codes, kein Schlüsselmaterial. Hatte das Konto keinen Faktor mehr, entsteht kein Eintrag.
+
+Setzen Sie den zweiten Faktor nur zurück, wenn die Anfrage nachweislich von der Person selbst stammt.
+
+Es gibt zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recovery-Fall (Refs #588). Bei der 2FA-Einrichtung erhält der User 10 einmalig nutzbare Codes, die er ausgedruckt oder im Passwort-Manager hinterlegen sollte. Anschließend muss er über die Pflicht-Checkbox bestätigen, dass er die Codes sicher gespeichert hat; erst dann ist das TOTP-Gerät bestätigt und die Einrichtung abgeschlossen. Verlässt er die Seite vorher, führt der nächste Aufruf wieder zu `/mfa/setup/`. Am Login-2FA-Prompt kann er statt eines TOTP-Codes einen Backup-Code eingeben. Verbrauchte Codes werden invalidiert und im AuditLog (`BACKUP_CODES_USED`) protokolliert. Sind alle 10 Codes verbraucht oder verloren, bleibt das Zurücksetzen durch die Administration oben der Fallback.
 
 `django-otp` drosselt TOTP- und Backup-Code-Prüfungen nach mehreren Fehlversuchen zunehmend. Während der daraus folgenden Wartezeit kann auch ein korrekter Code abgewiesen werden; vor einem Reset deshalb die Sperrfrist abwarten und nicht unmittelbar weiterprobieren.
 
@@ -1003,13 +1026,23 @@ Es gibt zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recove
 
 #### Account-Lockout
 
-Nach **10 fehlgeschlagenen Login-Versuchen** wird das Konto automatisch gesperrt (Login-Service liest die Schwelle aus [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py)). Der gesperrte User sieht eine Hinweis-Seite und kann sich nicht mehr anmelden. Ausgenommen ist die Rolle `super_admin`: sie wird nie gesperrt (das Break-Glass-Konto soll nicht gezielt ausgesperrt werden können), gegen Brute-Force schützt dort das Username-Ratelimit von 10 Anmeldeversuchen pro Stunde. Die folgenden vier Recovery-Pfade gelten deshalb für facility-gebundene Konten:
+Die Sperre ([`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py)) folgt diesen Regeln:
+
+- **Schwelle und Fenster:** **10 fehlgeschlagene Anmeldungen innerhalb eines gleitenden 15-Minuten-Fensters** sperren das Konto. Gezählt wird je Paar aus Konto und Quell-IP: Fehlversuche von einer fremden IP-Adresse sperren die Anmeldung von der eigenen nicht.
+- **Ende:** Die Sperre endet von selbst, sobald im Fenster weniger als 10 Fehlversuche liegen — also 15 Minuten nach dem letzten Fehlversuch. Weitere Versuche während der Sperre zählen mit und verlängern sie. Fehlversuche vor einer Entsperrung (`LOGIN_UNLOCK`) zählen nicht mehr.
+- **Anzeige und Protokoll:** Wer während der Sperre das richtige Passwort eingibt, bleibt auf der Login-Seite und sieht den Formularfehler „Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen temporär gesperrt. …"; protokolliert wird das als `LOGIN_FAILED` mit `reason: "locked"`, und laufende Sitzungen des Kontos werden beendet. Eine eigene Sperr-Aktion im AuditLog gibt es nicht.
+- **Ratelimits (unabhängig von der Sperre):** Die Anmeldung nimmt höchstens **5 Versuche pro Minute je IP-Adresse** und **10 Versuche pro Stunde je Benutzername** an ([`src/core/views/auth.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/auth.py), `CustomLoginView`). Darüber antwortet sie mit HTTP 429, bis das Zeitfenster abgelaufen ist; keine Entsperrung hebt ein Ratelimit auf. Weil zehn Fehlversuche meist auch das Stundenlimit des Benutzernamens ausschöpfen, sieht die Person während einer Sperre oft zuerst die 429-Antwort und erst nach Ablauf des Stundenfensters den Formularfehler der Sperre.
+- **Ausnahme `super_admin`:** Diese Rolle wird nie gesperrt (das Break-Glass-Konto soll nicht gezielt ausgesperrt werden können); gegen Brute-Force schützen dort allein die Ratelimits. Eine Entsperrung ist für sie wirkungslos und schreibt keinen Audit-Eintrag.
+
+Die folgenden Recovery-Pfade gelten deshalb für facility-gebundene Konten:
 
 **Pfad A — UI (für facility-gebundene User):** Die Anwendungsbetreuung (`facility_admin`) der Einrichtung kann den Account ihrer eigenen User entsperren:
 
 1. **Verwaltung → Zugänge** → betroffenen User der eigenen Einrichtung auswählen.
 2. Unter „Sicherheitsaktionen" auf **Account-Sperre aufheben** klicken.
 3. Cleanup wird im AuditLog als `LOGIN_UNLOCK` protokolliert (das `LOGIN_FAILED`-Log selbst ist dank `auditlog_immutable`-DB-Trigger unveränderbar).
+
+Die Aktion verlangt ein laufendes Sudo-Fenster. Die Systemadministration entsperrt einrichtungsübergreifend unter **System → Sperrkonten** (`/system/lockouts/`, ebenfalls mit Sudo). Im Django-Admin (**Core → Benutzer**) steht dieselbe Entsperrung nur noch als Listenaktion „Account-Sperre aufheben (Login freigeben)" als Ausweichweg bereit.
 
 **Pfad B — CLI (für Recovery):** Wenn kein anderer User Zugriff auf Pfad A hat (gesperrter `facility_admin` und kein zweiter `facility_admin`), entsperrt der Hosting-Operator den Account direkt am Server:
 
@@ -1024,11 +1057,11 @@ Der Befehl ist auf die facility-gebundenen Rollen anwendbar (`facility_admin`, `
 
 **Pfad D — Self-Service per MFA-Backup-Code:** Hat der User 2FA aktiviert und einen seiner Backup-Codes notiert, kann er sich unter `/account/recovery/backup-code/` mit Username + Code entsperren. Audit-Trail: `LOGIN_UNLOCK` (Trigger `backup_code`) + `BACKUP_CODES_USED` (Flow `lockout_recovery`). Jeder Code ist einmalig — der nächste Recovery-Vorgang verbraucht den nächsten Code.
 
-Sperre, Entsperre und alle Versuche während der Sperrphase werden im AuditLog mitprotokolliert — nutzen Sie den Filter „Anmeldung fehlgeschlagen" / „Sperre aufgehoben" für eine retroaktive Auswertung. Der `LOGIN_UNLOCK`-Detail-Block enthält ein `trigger`-Feld: `admin` (Admin-Action), `cli` (CLI-Command), `password_reset` (Pfad C via Standard-Reset), `recovery_token` (Pfad C via dedizierter Link), `backup_code` (Pfad D); Entsperrungen per Recovery-Token oder Backup-Code tragen außerdem die Quell-IP am Audit-Eintrag.
+Sperre, Entsperre und alle Versuche während der Sperrphase werden im AuditLog mitprotokolliert — nutzen Sie den Filter „Anmeldung fehlgeschlagen" / „Sperre aufgehoben" für eine retroaktive Auswertung. Der `LOGIN_UNLOCK`-Detail-Block enthält ein `trigger`-Feld: `admin` (Pfad A, System → Sperrkonten, Django-Admin-Aktion und CLI-Befehl aus Pfad B — die CLI schreibt keinen eigenen Wert), `password_reset` (Pfad C via Standard-Reset), `invite_setup` (Ersteinrichtung über den Einladungslink), `recovery_token` (Pfad C via dedizierter Link), `backup_code` (Pfad D); Entsperrungen per Passwort-Reset, Einladungslink, Recovery-Token oder Backup-Code tragen außerdem die Quell-IP am Audit-Eintrag.
 
 #### Audit-Spur
 
-Alle 2FA-Vorgänge werden im `AuditLog` protokolliert (Actions: `MFA_ENABLED`, `MFA_DISABLED`, `MFA_FAILED`). Nutzen Sie den Filter im Admin unter **Core → Audit-Logs**, um fehlgeschlagene Verifikationsversuche oder Aktivierungs-/Deaktivierungsereignisse auszuwerten.
+Alle 2FA-Vorgänge werden im `AuditLog` protokolliert (Actions: `MFA_ENABLED`, `MFA_DISABLED`, `MFA_RESET_BY_ADMIN`, `MFA_FAILED`, `BACKUP_CODES_GENERATED`, `BACKUP_CODES_USED`, `BACKUP_CODES_REGENERATED`, `WEBAUTHN_REGISTERED`, `WEBAUTHN_REMOVED`, `WEBAUTHN_FAILED`). Nutzen Sie den Filter im Admin unter **Core → Audit-Logs**, um fehlgeschlagene Verifikationsversuche oder Aktivierungs-/Deaktivierungsereignisse auszuwerten.
 
 #### Relevante Dateien
 

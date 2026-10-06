@@ -63,6 +63,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Routen und Schutzprüfungen in Testmatrix B präzisiert** (#2495) — HTMX- und Admin-Pfade, Löschanträge, PWA-Werte, Rate-Limits und Aufbewahrungsfristen entsprechen dem Code.
 
+- **Konto-Sperre, 2FA-Pflicht und Zurücksetzen des zweiten Faktors wie umgesetzt beschrieben** (#2477) — Admin- und Benutzerhandbuch, FAQ und Glossar nennen das 15-Minuten-Fenster je Konto und IP-Adresse, das Selbstende der Sperre, die Ausnahme für die Systemadministration, die Ratelimits der Anmeldung, die 2FA-Pflicht für alle Rollen, die neuen Umgebungsvariablen des `web`-Dienstes und den Reset durch die Administration.
 - **Architekturübersichten am Bestand ausgerichtet** (#2451) — Wegweiser nennen aktuelle Modulorte, Offline-Ablagegrenzen und E2E-Ausführungsarten ohne unbewachte Bestandszahlen.
 
 - **Architektur- und Retention-ADRs präzisiert** (#2500) — Nachträge unterscheiden mit überprüfbaren Quellbelegen implementierte Schnittstellen, Zielbilder und begrenzte Redaktions- sowie Audit-Garantien.

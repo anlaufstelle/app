@@ -35,13 +35,13 @@ Dieses Handbuch und die [FAQ](faq.md) sind innerhalb der Anwendung unter „Hilf
 
 > **Hinweis:** Wenn Ihnen beim ersten Login mitgeteilt wurde, dass Sie das Passwort ändern müssen, werden Sie direkt nach der Anmeldung auf die Passwort-Änderungsseite weitergeleitet.
 
-> **Konto gesperrt nach mehreren Fehlversuchen?** Nach **10 fehlgeschlagenen Anmeldungen** wird Ihr Konto automatisch gesperrt. Sie sehen dann eine entsprechende Hinweis-Seite und können sich nicht mehr anmelden. Auf der Login-Seite finden Sie drei Selbsthilfe-Wege (Refs #869):
+> **Konto gesperrt nach mehreren Fehlversuchen?** Nach **10 fehlgeschlagenen Anmeldungen innerhalb von 15 Minuten** von derselben IP-Adresse wird Ihr Konto für Anmeldungen von dieser Adresse gesperrt. Auf der Login-Seite erscheint dann der Hinweis, dass Ihr Konto vorübergehend gesperrt ist — auch wenn Sie das richtige Passwort eingeben. Die Sperre endet von selbst 15 Minuten nach dem letzten Fehlversuch; jeder weitere Versuch in dieser Zeit verlängert sie. Unabhängig davon nimmt die Anmeldung höchstens 5 Versuche pro Minute von derselben IP-Adresse und 10 pro Stunde für denselben Benutzernamen an; darüber zeigt der Browser statt der Login-Seite nur eine leere Fehlerseite (HTTP 429), und es hilft nur Abwarten. Nach zehn Fehlversuchen ist das häufig zuerst zu sehen. Die Sperre selbst heben Sie schneller über drei Selbsthilfe-Wege auf der Login-Seite auf (Refs #869):
 >
 > - **Passwort vergessen?** — Klassischer Reset per E-Mail. Wenn Sie ein neues Passwort setzen, wird Ihr Konto automatisch entsperrt.
 > - **Konto entsperren per E-Mail** — Schickt Ihnen einen Entsperr-Link an Ihre hinterlegte E-Mail-Adresse, der 30 Minuten gültig ist. Kein neues Passwort nötig.
 > - **Backup-Code einlösen** — Wenn Sie 2FA aktiviert haben, geben Sie Username + einen Ihrer Backup-Codes ein. Jeder Code ist einmalig.
 >
-> Wenn keiner dieser Wege funktioniert, bitten Sie eine Administratorin um Entsperrung. Alle Vorgänge werden im Audit-Log protokolliert.
+> Wenn keiner dieser Wege funktioniert, bitten Sie die Anwendungsbetreuung Ihrer Einrichtung um Entsperrung (Verwaltung → Zugänge). Alle Vorgänge werden im Audit-Log protokolliert.
 
 ### Passwort ändern
 
@@ -57,7 +57,7 @@ Dieses Handbuch und die [FAQ](faq.md) sind innerhalb der Anwendung unter „Hilf
 
 ### Zwei-Faktor-Authentifizierung (2FA)
 
-Die Anlaufstelle unterstützt zeitbasierte Einmalcodes (TOTP) als zweiten Faktor beim Login. Eine Administratorin kann 2FA für einzelne Benutzer oder einrichtungsweit verpflichtend machen; unabhängig davon kann jede/r Benutzer/in 2FA freiwillig aktivieren.
+Die Anlaufstelle unterstützt zeitbasierte Einmalcodes (TOTP) als zweiten Faktor beim Login. In Produktion ist 2FA für alle Rollen verpflichtend: für Systemadministration und Anwendungsbetreuung sofort, für Leitung, Fachkraft und Assistenz nach einer Übergangsfrist von 30 Tagen ab der ersten Anmeldung. Während der Frist erinnert ab 14 verbleibenden Tagen ein Hinweis; danach führt die Anmeldung direkt zur Einrichtung. Der Betrieb kann diese Rollenvorgabe ändern, und die Anwendungsbetreuung kann 2FA zusätzlich für einzelne Zugänge oder die ganze Einrichtung sofort verpflichtend machen. Wo keine Pflicht besteht, können Sie 2FA freiwillig aktivieren.
 
 **Einrichtung (einmalig):**
 
@@ -84,13 +84,13 @@ Nach mehreren falschen Eingaben drosselt `django-otp` weitere Prüfungen zunehme
 
 **2FA deaktivieren:**
 
-Unter `/mfa/settings/` → **2FA deaktivieren**. Dies ist **nicht möglich**, wenn Ihre Einrichtung 2FA verpflichtend vorschreibt oder Ihr Konto individuell als 2FA-pflichtig markiert ist — in diesem Fall wenden Sie sich an Ihre Administration.
+Unter `/mfa/settings/` → **2FA deaktivieren**. Dies ist **nicht möglich**, wenn 2FA für Sie verpflichtend ist — über Ihre Rolle, Ihre Einrichtung oder Ihren Zugang. In diesem Fall wenden Sie sich an Ihre Administration.
 
 **Backup-Codes (für den Notfall):**
 
 Bei der 2FA-Einrichtung erhalten Sie **10 einmalig nutzbare Backup-Codes**. Bewahren Sie diese sicher auf — z. B. ausgedruckt im Geldbeutel oder im Passwort-Manager. Falls Sie Ihr Telefon verlieren oder die Authenticator-App zurückgesetzt wurde, können Sie am 2FA-Login einen Backup-Code statt eines TOTP-Codes eingeben. Jeder Code funktioniert nur einmal.
 
-> **Alle Codes verbraucht oder verloren?** Wenden Sie sich an Ihre Administration — sie kann Ihr TOTP-Gerät zurücksetzen, danach richten Sie 2FA und neue Backup-Codes ein.
+> **Alle Codes verbraucht oder verloren?** Wenden Sie sich an die Anwendungsbetreuung Ihrer Einrichtung. Sie kann Ihren zweiten Faktor zurücksetzen: Dabei werden alle Authenticator-Apps, Passkeys und Backup-Codes Ihres Zugangs entfernt, und Sie werden überall abgemeldet. Ihr Passwort bleibt gültig. Ist 2FA für Sie verpflichtend, richten Sie bei der nächsten Anmeldung 2FA und neue Backup-Codes ein.
 
 **Passkey / Sicherheitsschlüssel (optional, zusätzlich zur Authenticator-App):**
 
