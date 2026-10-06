@@ -16,8 +16,11 @@ states why it is harmless. Keys are line-independent:
 
 Templates are parsed with Django's own ``Lexer`` and ``FilterExpression``
 (string arguments such as ``default:"a|safe"`` are not mistaken for
-filters; ``{% comment %}`` blocks are skipped). Python is parsed with ``ast``;
-aliased imports (``from … import mark_safe as ms``) are followed. Dynamic
+filters; ``{% comment %}`` blocks are skipped up to the first ``endcomment``,
+as Django does). Python is parsed with ``ast``; aliased imports
+(``from … import mark_safe as ms``) are followed wherever they stand in the
+module. An allowlist entry needs a non-blank reason, otherwise it allows
+nothing. Dynamic
 lookups (``getattr(module, "mark_safe")``) are out of reach of a static guard;
 Ruff ``S308`` covers ``mark_safe`` a second time at lint level.
 
@@ -35,6 +38,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from django.template import Context, Engine
 from django.template.base import FilterExpression, Lexer, TokenType, kwarg_re
 from django.template.exceptions import TemplateSyntaxError
 
@@ -133,20 +137,22 @@ def _filter_names(expression: str) -> list[str]:
 
 def scan_template_source(source: str, relpath: str) -> list[Finding]:
     findings: list[Finding] = []
-    comment_depth = 0
+    in_comment = False
     for token in Lexer(source).tokenize():
+        if in_comment:
+            # Same rule as Django's ``Parser.skip_past("endcomment")``: the first
+            # block token whose contents are exactly ``endcomment`` ends the
+            # comment; an inner ``{% comment %}`` opens no further level.
+            if token.token_type is TokenType.BLOCK and token.contents == "endcomment":
+                in_comment = False
+            continue
         if token.token_type is TokenType.BLOCK:
             bits = token.split_contents()
             if not bits:
                 continue
             tag = bits[0]
             if tag == "comment":
-                comment_depth += 1
-                continue
-            if tag == "endcomment":
-                comment_depth = max(0, comment_depth - 1)
-                continue
-            if comment_depth:
+                in_comment = True
                 continue
             if tag == "autoescape" and bits[1:2] == ["off"]:
                 findings.append(Finding(relpath, token.lineno, AUTOESCAPE_OFF))
@@ -155,7 +161,7 @@ def scan_template_source(source: str, relpath: str) -> list[Finding]:
             for bit in bits[1:]:
                 match = kwarg_re.match(bit)
                 expressions.append(match.group(2) if match and match.group(1) else bit)
-        elif token.token_type is TokenType.VAR and not comment_depth:
+        elif token.token_type is TokenType.VAR:
             expressions = [token.contents]
         else:
             continue
@@ -210,11 +216,6 @@ class _NameUseVisitor(ast.NodeVisitor):
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self._visit_definition(node)
 
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        for alias in node.names:
-            if alias.name in self.names and alias.asname:
-                self.names.add(alias.asname)
-
     def visit_Name(self, node: ast.Name) -> None:
         if node.id in self.names:
             self.hits.append((node.lineno, self._qualname()))
@@ -226,8 +227,18 @@ class _NameUseVisitor(ast.NodeVisitor):
 
 
 def scan_python_source(source: str, relpath: str, names: frozenset[str]) -> list[Finding]:
-    visitor = _NameUseVisitor(names)
-    visitor.visit(ast.parse(source, filename=relpath))
+    tree = ast.parse(source, filename=relpath)
+    # Aliases are collected over the whole module first, so a use above its
+    # ``from … import mark_safe as ms`` is not missed.
+    aliases = {
+        alias.asname
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+        if alias.name in names and alias.asname
+    }
+    visitor = _NameUseVisitor(names | aliases)
+    visitor.visit(tree)
     return [Finding(relpath, lineno, qualname) for lineno, qualname in sorted(visitor.hits)]
 
 
@@ -244,7 +255,20 @@ def scan_python(root: Path, names: frozenset[str], files: list[Path] | None = No
 
 
 def violations(findings: list[Finding], allowlist: dict[tuple[str, str], str]) -> list[str]:
-    return [f"{f.relpath}:{f.lineno} ({f.key})" for f in findings if (f.relpath, f.key) not in allowlist]
+    """Findings without an allowlist entry; an entry without a reason does not count."""
+    result = []
+    for f in findings:
+        reason = allowlist.get((f.relpath, f.key))
+        if reason is None:
+            result.append(f"{f.relpath}:{f.lineno} ({f.key})")
+        elif not reason.strip():
+            result.append(f"{f.relpath}:{f.lineno} ({f.key}) — allowlist entry without reason")
+    return result
+
+
+def blank_reasons(allowlist: dict[tuple[str, str], str]) -> list[tuple[str, str]]:
+    """Entries whose reason is empty or whitespace — they allow nothing."""
+    return sorted(key for key, reason in allowlist.items() if not reason.strip())
 
 
 def stale_entries(findings: list[Finding], allowlist: dict[tuple[str, str], str]) -> list[tuple[str, str]]:
@@ -334,12 +358,43 @@ class TestTemplateScannerProbes:
         _write(tmp_path, "c.html", "{% comment %}{{ old|safe }}{% endcomment %}{{ new }}")
         assert scan_templates(tmp_path) == []
 
+    def test_nested_comment_tag_ends_at_first_endcomment_like_django(self, tmp_path):
+        """Django ends a comment at the first ``endcomment``; an inner ``comment`` opens nothing."""
+        source = "{% comment %}{% comment %}{% endcomment %}{{ value|safe }}"
+        rendered = Engine().from_string(source).render(Context({"value": "<b>marker</b>"}))
+        assert rendered == "<b>marker</b>"
+        _write(tmp_path, "nested.html", source)
+        assert [(f.lineno, f.key) for f in scan_templates(tmp_path)] == [(1, "filter:safe")]
+
+    def test_endcomment_with_arguments_does_not_end_the_comment(self, tmp_path):
+        source = "{% comment %}{% endcomment x %}{{ old|safe }}{% endcomment %}{{ new }}"
+        assert Engine().from_string(source).render(Context({"new": "n"})) == "n"
+        _write(tmp_path, "args.html", source)
+        assert scan_templates(tmp_path) == []
+
     def test_allowlisted_entry_passes_and_unused_entry_is_stale(self, tmp_path):
         _write(tmp_path, "a.html", "{{ x|safe }}")
         allow = {("a.html", "filter:safe"): "probe", ("gone.html", AUTOESCAPE_OFF): "probe"}
         findings = scan_templates(tmp_path)
         assert violations(findings, allow) == []
         assert stale_entries(findings, allow) == [("gone.html", AUTOESCAPE_OFF)]
+
+
+class TestAllowlistReasonIsRequired:
+    @pytest.mark.parametrize("reason", ["", "   ", "\n\t"])
+    def test_blank_reason_does_not_allow_a_finding(self, tmp_path, reason):
+        _write(tmp_path, "r.html", "{{ value|safe }}")
+        found = violations(scan_templates(tmp_path), {("r.html", "filter:safe"): reason})
+        assert found == ["r.html:1 (filter:safe) — allowlist entry without reason"]
+
+    def test_blank_reason_is_not_hidden_as_stale_either(self):
+        assert blank_reasons({("gone.html", AUTOESCAPE_OFF): " ", ("a.html", "filter:safe"): "ok"}) == [
+            ("gone.html", AUTOESCAPE_OFF)
+        ]
+
+    def test_repository_allowlists_have_reasons(self):
+        assert not blank_reasons(TEMPLATE_ALLOWLIST)
+        assert not blank_reasons(PY_SAFE_ALLOWLIST)
 
 
 class TestPythonSafeScannerProbes:
@@ -364,6 +419,16 @@ class TestPythonSafeScannerProbes:
         )
         keys = [(f.lineno, f.key) for f in scan_python(tmp_path, UNSAFE_PY_NAMES)]
         assert keys == [(5, "Widget.html"), (5, "Widget.html")]
+
+    def test_alias_imported_below_its_use_is_found(self, tmp_path):
+        _write(
+            tmp_path,
+            "late.py",
+            "def render(value):\n"
+            "    return trusted(value)\n"
+            "from django.utils.safestring import SafeString as trusted\n",
+        )
+        assert [(f.lineno, f.key) for f in scan_python(tmp_path, UNSAFE_PY_NAMES)] == [(2, "render")]
 
     def test_strings_and_comments_are_not_findings(self, tmp_path):
         _write(tmp_path, "doc.py", '# mark_safe is forbidden\nNOTE = "mark_safe"\n')

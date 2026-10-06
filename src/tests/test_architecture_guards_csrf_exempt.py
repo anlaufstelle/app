@@ -4,7 +4,8 @@ Every state-changing request passes ``CsrfViewMiddleware``. ``csrf_exempt``
 (as decorator, via ``method_decorator`` or as call around a view) and the
 request flag ``_dont_enforce_csrf_checks`` remove that check for a view.
 This guard allows both only with an allowlist entry ``(path, qualname)`` that
-states why the endpoint is safe without a token. The qualname is the class or
+states why the endpoint is safe without a token; an entry with a blank
+reason allows nothing. The qualname is the class or
 function the reference belongs to; a decorator counts for the decorated
 object, a module-level ``csrf_exempt(view)`` call is keyed ``"<module>"``.
 
@@ -22,6 +23,7 @@ from django.conf import settings
 
 from tests.test_architecture_guards_safe_markup import (
     REPO_ROOT,
+    blank_reasons,
     production_python_files,
     scan_python,
     stale_entries,
@@ -62,6 +64,9 @@ class TestCsrfExemptAllowlist:
     def test_scanner_sees_the_real_tree(self):
         """Anti-vacuity: without its allowlist the real tree must be red."""
         assert violations(_repo_findings(), {}), "csrf scan found nothing — file list empty?"
+
+    def test_allowlist_entries_have_reasons(self):
+        assert not blank_reasons(CSRF_EXEMPT_ALLOWLIST)
 
     def test_csrf_middleware_is_active(self):
         assert "django.middleware.csrf.CsrfViewMiddleware" in settings.MIDDLEWARE
@@ -119,3 +124,12 @@ class TestCsrfScannerProbes:
             "from django.views.decorators.csrf import ensure_csrf_cookie\n@ensure_csrf_cookie\ndef v(r):\n    pass\n",
         )
         assert scan_python(tmp_path, CSRF_BYPASS_NAMES) == []
+
+    def test_blank_reason_does_not_allow_an_exemption(self, tmp_path):
+        _write(
+            tmp_path,
+            "v.py",
+            "from django.views.decorators.csrf import csrf_exempt\n@csrf_exempt\ndef v(r):\n    pass\n",
+        )
+        found = violations(scan_python(tmp_path, CSRF_BYPASS_NAMES), {("v.py", "v"): "  "})
+        assert found == ["v.py:2 (v) — allowlist entry without reason"]
