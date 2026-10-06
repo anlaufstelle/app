@@ -534,7 +534,7 @@ After successful completion, exactly one user with the role `super_admin` exists
 
 #### Unlock an Account (CLI)
 
-A `super_admin` is not locked by failed logins: the role is exempt from the account lockout (see [§ 2.7 Account Lockout](#account-lockout)) so that the break-glass account cannot be locked out deliberately. Only the username rate limit (10 sign-in attempts per hour and username) protects against brute force; once it is reached, the only remedy is to wait for the time window -- `unlock` does not lift it. The following command lifts the lock of a **facility-bound** account (`facility_admin`, `lead`, `staff`, `assistant`) when nobody is left with access to the facility's administration, for example the only locked `facility_admin`:
+A `super_admin` is not locked by failed logins: the role is exempt from the account lockout (see [§ 2.7 Account Lockout](#account-lockout)) so that the break-glass account cannot be locked out deliberately. The sign-in rate limits (5 attempts per minute and IP address, 10 per hour and username) protect against brute force; once one is reached, the only remedy is to wait for the time window -- `unlock` does not lift it. The following command lifts the lock of a **facility-bound** account (`facility_admin`, `lead`, `staff`, `assistant`) when nobody is left with access to the facility's administration, for example the only locked `facility_admin`:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm maintenance \
@@ -2412,5 +2412,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 3bf134ed3a75c8f2dda243721c1d8e29c2ef2389 -->
+<!-- source-hash: 69a644bfbcd4da40d4a3f21c5e952229c08061db -->
 <!-- translation-date: 2026-10-05 -->

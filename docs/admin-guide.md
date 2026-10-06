@@ -477,7 +477,7 @@ Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. M
 
 #### Account-Sperre aufheben (CLI)
 
-Ein `super_admin` wird durch fehlgeschlagene Logins nicht gesperrt: die Rolle ist vom Account-Lockout ausgenommen (siehe [§ 2.7 Account-Lockout](#account-lockout)), damit das Break-Glass-Konto nicht gezielt ausgesperrt werden kann. Gegen Brute-Force schützt allein das Username-Ratelimit (10 Anmeldeversuche pro Stunde und Benutzername); ist es erreicht, hilft nur, das Zeitfenster abzuwarten — `unlock` hebt es nicht auf. Der folgende Befehl hebt die Sperre eines **facility-gebundenen** Kontos auf (`facility_admin`, `lead`, `staff`, `assistant`), wenn niemand mehr Zugriff auf die Verwaltung der Einrichtung hat, etwa der einzige gesperrte `facility_admin`:
+Ein `super_admin` wird durch fehlgeschlagene Logins nicht gesperrt: die Rolle ist vom Account-Lockout ausgenommen (siehe [§ 2.7 Account-Lockout](#account-lockout)), damit das Break-Glass-Konto nicht gezielt ausgesperrt werden kann. Gegen Brute-Force schützen die Ratelimits der Anmeldung (5 Versuche pro Minute und IP-Adresse, 10 pro Stunde und Benutzername); ist eines erreicht, hilft nur, das Zeitfenster abzuwarten — `unlock` hebt es nicht auf. Der folgende Befehl hebt die Sperre eines **facility-gebundenen** Kontos auf (`facility_admin`, `lead`, `staff`, `assistant`), wenn niemand mehr Zugriff auf die Verwaltung der Einrichtung hat, etwa der einzige gesperrte `facility_admin`:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm maintenance \
