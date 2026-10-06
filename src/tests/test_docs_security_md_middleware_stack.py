@@ -275,6 +275,7 @@ class TestSecurityMdMatchesSettings:
 
         rows = documented_header_rows(SECURITY_MD.read_text(encoding="utf-8"), heading)
         assert rows, f"no header table in SECURITY.md section {heading!r}"
+        assert "Strict-Transport-Security" in rows, f"SECURITY.md section {heading!r} no longer documents HSTS"
         assert "Strict-Transport-Security" not in response
         violations = exception_violations(rows, response, REDIRECT_WORD[heading])
         assert violations == [], (
