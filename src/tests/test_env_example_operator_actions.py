@@ -32,7 +32,6 @@ FORWARD_ALLOWLIST: dict[str, str] = {
     "MAINTENANCE_FLAG_FILE": "operators are told to REMOVE a host-path override; the default lives in the container",
 }
 BASELINE = "installation baseline: set at first setup per the admin guide, not a release-time action"
-PENDING = "operator action still missing in the [0.99.5] block; remove once the block names it"
 # In ``.env.example`` but not named in any operator action. Remove an entry as soon as
 # an operator action names the variable (the guard then reports it as stale).
 REVERSE_ALLOWLIST: dict[str, str] = {
@@ -45,9 +44,6 @@ REVERSE_ALLOWLIST: dict[str, str] = {
     "BACKUP_OFFSITE_TARGET": "optional backup target, documented in the runbook",
     "CLAMAV_HOST": "Compose-internal service name",
     "CLAMAV_PORT": "Compose-internal default",
-    "DJANGO_AUDIT_HWM_PATH": PENDING,
-    "EMAIL_USE_SSL": PENDING,
-    "EMAIL_USE_TLS": PENDING,
     "ALLOWED_HOSTS": BASELINE,
     "APP_VERSION": BASELINE,
     "BACKUP_DIR": BASELINE,
