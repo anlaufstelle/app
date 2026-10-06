@@ -164,7 +164,7 @@ curl -sf https://$DOMAIN/health/
 
 ### 2.2 Migration zurueckrollen
 
-Wenn eine Migration Daten oder Schema inkompatibel veraendert hat:
+Wenn eine Migration Daten oder Schema inkompatibel veraendert hat. `migrate` laeuft im Dienst `maintenance` (Schema-Owner, Admin-Rolle); unter der App-Rolle von `web` bricht der Rollback mit „must be owner of relation …“ ab:
 
 ```bash
 # 1. Migrations-Status ansehen
@@ -173,8 +173,8 @@ docker compose -f docker-compose.prod.yml exec web \
 
 # 2. Auf eine bestimmte Migration zurueckrollen
 #    Beispiel: zurueck auf Migration 0042
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py migrate core 0042
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  migrate core 0042
 
 # 3. Danach altes Image deployen (siehe 2.1)
 ```
@@ -527,12 +527,12 @@ oder Setups mit eigener Orchestrierung ohne unser Compose-File nutzen.
 | Timer | OnCalendar | Command |
 |-------|-----------|---------|
 | `anlaufstelle-backup.timer` | `*-*-* 02:00` | `dev-ops/deploy/backup.sh` |
-| `anlaufstelle-retention.timer` | `*-*-* 03:00` | `… exec -T web python manage.py enforce_retention` |
-| `anlaufstelle-audit-verify.timer` | `*-*-* 03:30` | `… exec -T web python manage.py verify_audit_chain` |
-| `anlaufstelle-snapshots.timer` | `*-*-01 04:00` | `… exec -T web python manage.py create_statistics_snapshots` |
-| `anlaufstelle-orphan-cleanup.timer` | `*-*-* 04:30` | `… exec -T web python manage.py cleanup_orphan_storage_files` |
-| `anlaufstelle-breach.timer` | `*-*-* *:30` | `… exec -T web python manage.py detect_breaches` |
-| `anlaufstelle-mv-refresh.timer` | `*-*-* *:15` | `… exec -T web python manage.py refresh_statistics_view` |
+| `anlaufstelle-retention.timer` | `*-*-* 03:00` | `… run --rm -T maintenance enforce_retention` |
+| `anlaufstelle-audit-verify.timer` | `*-*-* 03:30` | `… run --rm -T maintenance verify_audit_chain` |
+| `anlaufstelle-snapshots.timer` | `*-*-01 04:00` | `… run --rm -T maintenance create_statistics_snapshots` |
+| `anlaufstelle-orphan-cleanup.timer` | `*-*-* 04:30` | `… run --rm -T maintenance cleanup_orphan_storage_files` |
+| `anlaufstelle-breach.timer` | `*-*-* *:30` | `… run --rm -T maintenance detect_breaches` |
+| `anlaufstelle-mv-refresh.timer` | `*-*-* *:15` | `… run --rm -T maintenance refresh_statistics_view` |
 
 **Aktivierung auf bereits laufenden Servern:** Ein regulaerer `deploy-dev.sh`-Lauf
 installiert die Timer mit. Einmalig sofort nachziehen geht auch direkt:
@@ -551,30 +551,32 @@ Kategorie „Hintergrundjobs") — `unknown`/`warning`/`critical`, wenn ein Time
 
 ### 3.5 Manuelle Ausfuehrung
 
+Diese Kommandos laufen im One-Shot-Dienst `maintenance`, nicht per `exec web`: Nur `maintenance` erhält die Admin-Rolle (BYPASSRLS, Schema-Owner). Unter der App-Rolle von `web` bricht `enforce_retention` ab, `create_statistics_snapshots` überspringt jede Einrichtung („No settings … skipping“) und endet trotzdem mit Exit 0, und `refresh_statistics_view` scheitert an der fehlenden Owner-Berechtigung. In Cron-Zeilen und Skripten ohne TTY `run --rm -T maintenance …` verwenden. Harmlose Kommandos (`showmigrations`, `check --deploy`, `printenv`) bleiben in `web`.
+
 ```bash
 # Retention Testlauf (kein Loeschen)
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py enforce_retention --dry-run
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  enforce_retention --dry-run
 
 # Retention ausfuehren
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py enforce_retention
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  enforce_retention
 
 # Nur eine Einrichtung
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py enforce_retention --facility "Beratungsstelle Nord"
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  enforce_retention --facility "Beratungsstelle Nord"
 
 # Snapshots Testlauf
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py create_statistics_snapshots --dry-run
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  create_statistics_snapshots --dry-run
 
 # Snapshots fuer alle vorhandenen Monate nachholen (Ersteinrichtung)
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py create_statistics_snapshots --backfill
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  create_statistics_snapshots --backfill
 
 # Snapshot fuer bestimmten Monat
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py create_statistics_snapshots --year 2026 --month 3
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  create_statistics_snapshots --year 2026 --month 3
 
 # Teilfehler (Refs #2118): ein Fehler in einer Einrichtung oder einem Monat
 # reisst den Lauf nicht mehr ab. Jede betroffene Einrichtung/jeder Monat
@@ -1886,8 +1888,10 @@ dort nie `healthy`, und `caddy` gibt die Runtime nicht frei.
 
 **Verifikation** nach dem ersten Hochfahren — das Gate prueft beide Rollen:
 
+Der Befehl gehört in den Dienst `maintenance`: `web` bekommt kein `POSTGRES_ADMIN_USER`; in `web` aufgerufen prüft er deshalb nur die App-Rolle, warnt und endet trotzdem mit Exit 0, die Admin-Rolle und die Ownership bleiben ungeprüft.
+
 ```bash
-docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
+docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 # erwartet: App-Rolle  rolsuper=False, rolbypassrls=False
 #           Admin-Rolle rolsuper=False, rolbypassrls=True   (Exit-Code 0)
 ```
@@ -2785,12 +2789,12 @@ laufende Leser nicht blockiert werden
 
 ```bash
 # Concurrent Refresh (Default — non-blocking)
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py refresh_statistics_view
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  refresh_statistics_view
 
 # Blocking Refresh erzwingen (fallback ohne UNIQUE-Index)
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py refresh_statistics_view --no-concurrent
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  refresh_statistics_view --no-concurrent
 ```
 
 Faellt `CONCURRENTLY` fehl (z.B. weil der UNIQUE-Index nach einer
@@ -3041,9 +3045,9 @@ Container-Status          docker compose -f docker-compose.prod.yml ps
 Live-Logs                 docker compose -f docker-compose.prod.yml logs -f web
 Migrations-Status         docker compose -f docker-compose.prod.yml exec web python manage.py showmigrations
 Django Deploy-Check       docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
-Retention Testlauf        docker compose -f docker-compose.prod.yml exec web python manage.py enforce_retention --dry-run
-Snapshot Testlauf         docker compose -f docker-compose.prod.yml exec web python manage.py create_statistics_snapshots --dry-run
-MV-Refresh                docker compose -f docker-compose.prod.yml exec web python manage.py refresh_statistics_view
+Retention Testlauf        docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run
+Snapshot Testlauf         docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics_snapshots --dry-run
+MV-Refresh                docker compose -f docker-compose.prod.yml run --rm maintenance refresh_statistics_view
 RLS-Session-Var pruefen   psql -c "SELECT current_setting('app.current_facility_id', true);"
 Stack stoppen             docker compose -f docker-compose.prod.yml down
 Stack starten             docker compose "${compose_files[@]}" up -d   (Dateiliste: § 1.2)

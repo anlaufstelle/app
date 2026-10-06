@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: § 2.2, § 3.4, § 3.5, § 9 and § 11.1 run privileged maintenance commands (retention, snapshots, view refresh, `check_db_roles`, migration rollback) through `run --rm maintenance` instead of `exec web`; the dev timer table names the real `maintenance` calls (#2423).
 > Synchronization update 2026-10-06: § 6.2/§ 6.3 run the emergency dump and the emergency query as role `postgres` inside the `db` container, store the dump with `umask 077` outside `/tmp`, and warn that the app role sees 0 rows without facility context (#2472).
 > Synchronization update 2026-10-06: § 3.3 escapes the `%` in both invite token audit crontab lines (`\%`) and sets role `postgres` and database `anlaufstelle` explicitly (#2473).
 > Synchronization update 2026-10-06: § 9 (DB password rotation) describes the full Compose file list used by `rotate-db-passwords.sh` (base file, `compose.legal.yml`, `compose.override.yml`) and states that no other host script recreates containers (#2474).
@@ -199,7 +200,7 @@ curl -sf https://$DOMAIN/health/
 
 ### 2.2 Roll Back a Migration
 
-If a migration has changed data or schema in an incompatible way:
+If a migration has changed data or schema in an incompatible way. `migrate` runs in the `maintenance` service (schema owner, admin role); under the app role of `web` the rollback aborts with "must be owner of relation …":
 
 ```bash
 # 1. Look at the migration status
@@ -208,8 +209,8 @@ docker compose -f docker-compose.prod.yml exec web \
 
 # 2. Roll back to a specific migration
 #    Example: back to migration 0042
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py migrate core 0042
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  migrate core 0042
 
 # 3. Then deploy the old image (see 2.1)
 ```
@@ -558,12 +559,12 @@ or setups with custom orchestration without our compose file use.
 | Timer | OnCalendar | Command |
 |-------|-----------|---------|
 | `anlaufstelle-backup.timer` | `*-*-* 02:00` | `dev-ops/deploy/backup.sh` |
-| `anlaufstelle-retention.timer` | `*-*-* 03:00` | `… exec -T web python manage.py enforce_retention` |
-| `anlaufstelle-audit-verify.timer` | `*-*-* 03:30` | `… exec -T web python manage.py verify_audit_chain` |
-| `anlaufstelle-snapshots.timer` | `*-*-01 04:00` | `… exec -T web python manage.py create_statistics_snapshots` |
-| `anlaufstelle-orphan-cleanup.timer` | `*-*-* 04:30` | `… exec -T web python manage.py cleanup_orphan_storage_files` |
-| `anlaufstelle-breach.timer` | `*-*-* *:30` | `… exec -T web python manage.py detect_breaches` |
-| `anlaufstelle-mv-refresh.timer` | `*-*-* *:15` | `… exec -T web python manage.py refresh_statistics_view` |
+| `anlaufstelle-retention.timer` | `*-*-* 03:00` | `… run --rm -T maintenance enforce_retention` |
+| `anlaufstelle-audit-verify.timer` | `*-*-* 03:30` | `… run --rm -T maintenance verify_audit_chain` |
+| `anlaufstelle-snapshots.timer` | `*-*-01 04:00` | `… run --rm -T maintenance create_statistics_snapshots` |
+| `anlaufstelle-orphan-cleanup.timer` | `*-*-* 04:30` | `… run --rm -T maintenance cleanup_orphan_storage_files` |
+| `anlaufstelle-breach.timer` | `*-*-* *:30` | `… run --rm -T maintenance detect_breaches` |
+| `anlaufstelle-mv-refresh.timer` | `*-*-* *:15` | `… run --rm -T maintenance refresh_statistics_view` |
 
 **Activation on already-running servers:** A regular `deploy-dev.sh` run
 installs the timers along with it. A one-off, immediate catch-up also works directly:
@@ -582,30 +583,32 @@ shows the run status per job — `unknown`/`warning`/`critical` if a timer is no
 
 ### 3.5 Manual Execution
 
+These commands run in the one-shot service `maintenance`, not via `exec web`: only `maintenance` receives the admin role (BYPASSRLS, schema owner). Under the app role of `web`, `enforce_retention` aborts, `create_statistics_snapshots` skips every facility ("No settings … skipping") and still ends with exit 0, and `refresh_statistics_view` fails for lack of owner permission. In cron lines and scripts without a TTY use `run --rm -T maintenance …`. Harmless commands (`showmigrations`, `check --deploy`, `printenv`) stay in `web`.
+
 ```bash
 # Retention dry run (no deletion)
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py enforce_retention --dry-run
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  enforce_retention --dry-run
 
 # Run retention
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py enforce_retention
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  enforce_retention
 
 # Only one facility
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py enforce_retention --facility "Beratungsstelle Nord"
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  enforce_retention --facility "Beratungsstelle Nord"
 
 # Snapshots dry run
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py create_statistics_snapshots --dry-run
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  create_statistics_snapshots --dry-run
 
 # Catch up snapshots for all existing months (initial setup)
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py create_statistics_snapshots --backfill
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  create_statistics_snapshots --backfill
 
 # Snapshot for a specific month
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py create_statistics_snapshots --year 2026 --month 3
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  create_statistics_snapshots --year 2026 --month 3
 
 # Partial failures (Refs #2118): an error in one facility or one month no
 # longer aborts the run. Every affected facility/month appears as an error
@@ -1902,8 +1905,10 @@ container never turns `healthy` there, and `caddy` does not release the runtime.
 
 **Verification** after the first startup — the gate checks both roles:
 
+The command belongs in the `maintenance` service: `web` gets no `POSTGRES_ADMIN_USER`; invoked in `web` it therefore checks only the app role, prints a warning and still exits with 0, leaving the admin role and ownership unchecked.
+
 ```bash
-docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
+docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 # expected (role labels are German, from the command's own output):
 #           App-Rolle   rolsuper=False, rolbypassrls=False
 #           Admin-Rolle rolsuper=False, rolbypassrls=True   (exit code 0)
@@ -2794,12 +2799,12 @@ running readers are not blocked
 
 ```bash
 # Concurrent refresh (default — non-blocking)
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py refresh_statistics_view
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  refresh_statistics_view
 
 # Force a blocking refresh (fallback without the UNIQUE index)
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py refresh_statistics_view --no-concurrent
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  refresh_statistics_view --no-concurrent
 ```
 
 If `CONCURRENTLY` fails (e.g. because the UNIQUE index is missing after
@@ -3050,9 +3055,9 @@ Container status          docker compose -f docker-compose.prod.yml ps
 Live logs                 docker compose -f docker-compose.prod.yml logs -f web
 Migration status          docker compose -f docker-compose.prod.yml exec web python manage.py showmigrations
 Django deploy check       docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
-Retention dry run         docker compose -f docker-compose.prod.yml exec web python manage.py enforce_retention --dry-run
-Snapshot dry run          docker compose -f docker-compose.prod.yml exec web python manage.py create_statistics_snapshots --dry-run
-MV refresh                docker compose -f docker-compose.prod.yml exec web python manage.py refresh_statistics_view
+Retention dry run         docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run
+Snapshot dry run          docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics_snapshots --dry-run
+MV refresh                docker compose -f docker-compose.prod.yml run --rm maintenance refresh_statistics_view
 Check RLS session var     psql -c "SELECT current_setting('app.current_facility_id', true);"
 Stop the stack            docker compose -f docker-compose.prod.yml down
 Start the stack           docker compose "${compose_files[@]}" up -d   (file list: § 1.2)
@@ -3063,5 +3068,5 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 500ec1f8366048f0d1e4235d01fc21e163d29f63 -->
+<!-- source-hash: 5b6fd2c110489ca28059f11a1ae16a44faacc9b5 -->
 <!-- translation-date: 2026-09-22 -->

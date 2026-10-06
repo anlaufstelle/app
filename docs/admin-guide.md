@@ -209,7 +209,7 @@ Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Sup
 | `POSTGRES_HOST` | `localhost` (via Compose: `db`) | DB-Host. |
 | `POSTGRES_PORT` | `5432` | DB-Port. |
 
-> **Tipp:** `python manage.py check_db_roles` verifiziert die Rollen-Topologie zur Laufzeit (Exit `0` = ok, `1` = falsches Attributprofil, `2` = Konfiguration unvollständig). Das [Compliance-Dashboard](#55-compliance-dashboard) nutzt dieselbe Prüfung, [`scripts/initial-setup.sh`](../scripts/initial-setup.sh) führt sie bei der Erstinbetriebnahme aus. Ergänzend prüft der [Health-Endpoint](#51-health-endpoint) fortlaufend die **tatsächlich verwendete** Verbindung (`db_role_posture`) — `check_db_roles` prüft, dass die Rollen mit den richtigen Attributen *existieren*, nicht, dass die Anwendung auch als die App-Rolle verbindet (Refs #793).
+> **Tipp:** `docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles` verifiziert die Rollen-Topologie zur Laufzeit (Exit `0` = ok, `1` = falsches Attributprofil, `2` = Konfiguration unvollständig). Das [Compliance-Dashboard](#55-compliance-dashboard) nutzt dieselbe Prüfung, [`scripts/initial-setup.sh`](../scripts/initial-setup.sh) führt sie bei der Erstinbetriebnahme aus. Ergänzend prüft der [Health-Endpoint](#51-health-endpoint) fortlaufend die **tatsächlich verwendete** Verbindung (`db_role_posture`) — `check_db_roles` prüft, dass die Rollen mit den richtigen Attributen *existieren*, nicht, dass die Anwendung auch als die App-Rolle verbindet (Refs #793).
 
 **Feldverschlüsselung (MultiFernet-Rotation)**
 
@@ -480,8 +480,8 @@ Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. M
 Wird ein `super_admin` durch fehlgeschlagene Logins gesperrt (Standard: 10 Versuche, siehe [§ 2.7 Account-Lockout](#account-lockout)) und es gibt **keinen** zweiten Super-Admin, kann die Sperre nur per CLI aufgehoben werden — kein anderer User hat Zugriff auf das Bootstrap-Tool:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py unlock <username>
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  unlock <username>
 ```
 
 Der Befehl entsperrt den angegebenen User, schreibt einen `LOGIN_UNLOCK`-AuditLog-Eintrag und ist auf alle Rollen anwendbar (auch `facility_admin`, `lead`, `staff`, `assistant`). Für facility-gebundene User bleibt zusätzlich der UI-Pfad über die Anwendungsbetreuung möglich (siehe [§ 2.7 Account-Lockout](#account-lockout)).
@@ -812,10 +812,8 @@ Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein
 Die Auskunft „Erscheint in …" beantwortet die Frage für **einen** Dokumentationstyp bzw. **eine** Feldvorlage. Für den Blick über die ganze Einrichtung — welcher Typ und welche Feldvorlage erscheinen in welchem Bericht, und welche in keinem — gibt es den Wartungsbefehl **`inventory_report_bindings`**:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec \
-  -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
-  -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
-  web python manage.py inventory_report_bindings --facility <uuid-oder-name>
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  inventory_report_bindings --facility <uuid-oder-name>
 ```
 
 Mit `--format json --output <datei>` schreibt er dieselbe Auswertung maschinenlesbar. Er **ändert nichts an Ihrer Konfiguration** — er liest nur.
@@ -916,10 +914,10 @@ Wenn eine Option nicht mehr benötigt wird, setzen Sie `is_active` auf `false` s
 
 Bei Feldvorlagen vom Typ **Zahl** lassen sich an derselben Stelle (**Core → Feldvorlagen**) optionale Grenzen setzen: **Minimalwert** und **Maximalwert**. Sie wirken **ausschließlich auf künftige Schreibvorgänge** — Neuanlage, Bearbeiten und Speichern über Formular oder Dienst-Schicht. Eine Verschärfung schreibt keinen einzigen bereits gespeicherten Wert um: Bestandsdaten außerhalb der neuen Grenze bleiben unverändert in der Datenbank stehen, bis sie fachlich korrigiert werden.
 
-> **Vor jeder Verschärfung: schreibfreies Inventar ausführen.** Mit der Admin-DB-Rolle:
+> **Vor jeder Verschärfung: schreibfreies Inventar ausführen.** Im Dienst `maintenance` (Admin-DB-Rolle):
 >
 > ```bash
-> python src/manage.py inventory_number_ranges --facility <UUID-oder-Name>
+> docker compose -f docker-compose.prod.yml run --rm maintenance inventory_number_ranges --facility <UUID-oder-Name>
 > ```
 >
 > Das Kommando verändert nichts und listet je Fund nur Entitätsart (Personen/Fälle/Ereignisse), Dokumentationstyp, Feld-Slug und Anzahl — nie den gespeicherten Wert selbst. „Keine Werte außerhalb konfigurierter Zahlenbereiche gefunden" heißt: Der Bestand des betroffenen Feldes liegt bereits innerhalb der geplanten Grenze, die Verschärfung ist gefahrlos.
@@ -1016,8 +1014,8 @@ Nach **10 fehlgeschlagenen Login-Versuchen** wird das Konto automatisch gesperrt
 **Pfad B — CLI (für Recovery, insbesondere Super-Admins):** Wenn kein anderer User im System Zugriff hat (Single-Super-Admin-Sperre, oder gesperrter `facility_admin` und kein zweiter `facility_admin`), entsperrt der Hosting-Operator den Account direkt am Server:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py unlock <username>
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  unlock <username>
 ```
 
 Der Befehl ist auf alle Rollen anwendbar (`super_admin`, `facility_admin`, `lead`, `staff`, `assistant`), schreibt einen `LOGIN_UNLOCK`-AuditLog-Eintrag und ist die einzige Recovery-Option für gesperrte Super-Admins.
@@ -1554,14 +1552,14 @@ Betrieb der Tracker-Instanz (Setup, Backups, Retention, Upgrades) ist Betreiber-
 
 Das Management-Kommando `detect_breaches` wertet das Audit-Log heuristisch auf Anomalien aus (fehlgeschlagene Login-Bursts, Massen-Exporte/-Löschungen, verteilte Login-Angriffe) und schreibt Treffer als Audit-Events; optional wird ein Webhook (`BREACH_NOTIFICATION_WEBHOOK_URL`) benachrichtigt. Die Fenster/Schwellen werden über die `BREACH_*`-Variablen gesteuert (siehe [ENV-Referenz in § 1](#vollständige-umgebungsvariablen-referenz) sowie [Ops-Runbook § 6.5b](ops-runbook.md)).
 
-> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur, wenn der `cron`-Dienst nicht läuft; es startet den Job über den `maintenance`-Dienst derselben Compose-Datei, der als einziger die Admin-Rolle (BYPASSRLS) erhält (ohne Compose in der eigenen Orchestrierung nachbilden: gleiches Image, Entrypoint `python manage.py`, Admin-Rolle). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
 
 **Empfohlener Cron (stündlich, jeweils zur 30. Minute):**
 
 ```cron
 30 * * * * cd /opt/anlaufstelle && \
-  docker compose -f docker-compose.prod.yml exec -T web \
-  python manage.py detect_breaches \
+  docker compose -f docker-compose.prod.yml run --rm -T maintenance \
+  detect_breaches \
   >> /var/log/anlaufstelle-breach.log 2>&1
 ```
 
@@ -1656,17 +1654,7 @@ Häufige Ursachen:
 
 **Symptom:** Benutzer kann sich nicht anmelden.
 
-```bash
-# Audit-Log auf fehlgeschlagene Logins prüfen
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py shell -c "
-from core.models import AuditLog
-for e in AuditLog.objects.filter(action='login_failed').order_by('-timestamp')[:10]:
-    print(e.timestamp, e.user, e.ip_address)
-"
-```
-
-Oder im Admin unter **Core → Audit-Logs**, gefiltert nach Aktion „Anmeldung fehlgeschlagen".
+Fehlgeschlagene Anmeldungen zeigt die Oberfläche: als Anwendungsbetreuung **Datenschutz → Audit-Log** (`/audit/`) öffnen und nach der Aktion „Anmeldung fehlgeschlagen“ filtern, als `super_admin` den Systembereich `/system/audit/`. Eine Abfrage per `exec web … shell` taugt dafür nicht: Ohne Einrichtungskontext liefert die Zeilensicherheit der Datenbank unter der App-Rolle keine Zeile, die Diagnose bliebe immer leer.
 
 **Passwort zurücksetzen:**
 
@@ -1824,26 +1812,26 @@ Das Management-Kommando `enforce_retention` setzt die konfigurierten Fristen dur
 
 ```bash
 # Testlauf (kein Löschen)
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py enforce_retention --dry-run
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  enforce_retention --dry-run
 
 # Ausführen
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py enforce_retention
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  enforce_retention
 
 # Nur eine bestimmte Einrichtung
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py enforce_retention --facility "Beratungsstelle Nord"
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  enforce_retention --facility "Beratungsstelle Nord"
 ```
 
-> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur, wenn der `cron`-Dienst nicht läuft; es startet den Job über den `maintenance`-Dienst derselben Compose-Datei, der als einziger die Admin-Rolle (BYPASSRLS) erhält (ohne Compose in der eigenen Orchestrierung nachbilden: gleiches Image, Entrypoint `python manage.py`, Admin-Rolle). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
 
-**Als täglicher Cron einrichten (empfohlen):**
+**Als täglicher Cron einrichten (empfohlen; 03:00, nach dem Backup um 02:00):**
 
 ```cron
-0 2 * * * cd /opt/anlaufstelle && \
-  docker compose -f docker-compose.prod.yml exec -T web \
-  python manage.py enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
+0 3 * * * cd /opt/anlaufstelle && \
+  docker compose -f docker-compose.prod.yml run --rm -T maintenance \
+  enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
 ```
 
 Jede Ausführung, die Datensätze löscht, wird automatisch im Audit-Log protokolliert.
@@ -2210,25 +2198,25 @@ Die Materialized View wird **nicht live** mit jedem `INSERT` aktualisiert — si
 
 ```bash
 # Standard (non-blocking, nutzt CONCURRENTLY wenn möglich)
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py refresh_statistics_view
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  refresh_statistics_view
 
 # Blockierend (falls kein UNIQUE-Index vorhanden)
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py refresh_statistics_view --no-concurrent
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  refresh_statistics_view --no-concurrent
 ```
 
 Implementierung: [`src/core/management/commands/refresh_statistics_view.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/refresh_statistics_view.py).
 
-> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur, wenn der `cron`-Dienst nicht läuft; es startet den Job über den `maintenance`-Dienst derselben Compose-Datei, der als einziger die Admin-Rolle (BYPASSRLS) erhält (ohne Compose in der eigenen Orchestrierung nachbilden: gleiches Image, Entrypoint `python manage.py`, Admin-Rolle). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
 
 **Empfohlener Cron-Rhythmus:**
 
 ```cron
 # Stündlich (nahe-echtzeit) — für stark genutzte Statistik-Seiten
 0 * * * * cd /opt/anlaufstelle && \
-  docker compose -f docker-compose.prod.yml exec -T web \
-  python manage.py refresh_statistics_view \
+  docker compose -f docker-compose.prod.yml run --rm -T maintenance \
+  refresh_statistics_view \
   >> /var/log/anlaufstelle-statistics.log 2>&1
 
 # Alternativ: täglich nachts (für einmalige Berichte) — nur einmal umstellen
@@ -2253,11 +2241,11 @@ Snapshots werden automatisch erstellt, wenn `enforce_retention` Events löscht �
 
 Zusätzlich empfiehlt es sich, Snapshots regelmäßig per Cron zu erstellen:
 
-> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur, wenn der `cron`-Dienst nicht läuft; es startet den Job über den `maintenance`-Dienst derselben Compose-Datei, der als einziger die Admin-Rolle (BYPASSRLS) erhält (ohne Compose in der eigenen Orchestrierung nachbilden: gleiches Image, Entrypoint `python manage.py`, Admin-Rolle). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
 
-```bash
-# Monatlich am 1. um 02:00 — sichert den Vormonat
-0 2 1 * * cd /pfad/zur/app && python manage.py create_statistics_snapshots
+```cron
+# Monatlich am 1. um 04:00 (wie im Sidecar) — sichert den Vormonat
+0 4 1 * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance create_statistics_snapshots >> /var/log/anlaufstelle-snapshots.log 2>&1
 ```
 
 ### Ersteinrichtung (Backfill)
@@ -2265,22 +2253,24 @@ Zusätzlich empfiehlt es sich, Snapshots regelmäßig per Cron zu erstellen:
 Bei der Ersteinrichtung oder nachträglichen Aktivierung können Snapshots für alle vorhandenen Monate erzeugt werden:
 
 ```bash
-python manage.py create_statistics_snapshots --backfill
+docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics_snapshots --backfill
 ```
 
 **Hinweis:** Der Backfill erfasst nur noch vorhandene Events — bereits gelöschte Daten können rückwirkend nicht mehr rekonstruiert werden.
 
 ### Weitere Optionen
 
+Alle Aufrufe laufen im Dienst `maintenance`. Als App-Rolle (`exec web`) sähe der Lauf keine Einrichtungseinstellungen, übersprang jede Einrichtung („No settings … skipping“) und endete trotzdem mit Exit 0.
+
 ```bash
 # Vorschau (keine Änderungen)
-python manage.py create_statistics_snapshots --dry-run
+docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics_snapshots --dry-run
 
 # Nur eine bestimmte Einrichtung
-python manage.py create_statistics_snapshots --facility "Meine Einrichtung"
+docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics_snapshots --facility "Meine Einrichtung"
 
 # Bestimmter Monat
-python manage.py create_statistics_snapshots --year 2026 --month 2
+docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics_snapshots --year 2026 --month 2
 ```
 
 ### Einschränkungen
