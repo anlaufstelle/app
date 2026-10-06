@@ -1,6 +1,4 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Synchronization update 2026-10-06: development-, staging- and demo-host passages (staging check, Compose table rows, dev timers in § 3.4, `--dev` backup format, demo-host login) sit in `release:strip` blocks and the manual `mark_restore_verified` runs through `maintenance` in the production stack (#2481).
-> Synchronization update 2026-10-06: §§ 6.5b–13 follow the shipped behaviour — the breach heuristics table lists all eight kinds and the notification goes to the operator and its data protection officer instead of the project (#2480); § 7.4 describes the `clamav-egress` network, § 8.4 the SBOM as release asset, § 9 the RLS exemptions and the `cron` sidecar loading the full `.env`, § 11.4 the `MV_REFRESH_COMPLETED` marker, the monthly aggregate keeps deleted events as carry-over (#2483); § 13 is a generic major-upgrade procedure with a checked, non-empty working dump outside `/tmp` (#2475).
 > Synchronization update 2026-10-06: §§ 1–6 follow the shipped behaviour — the mandatory-variable check reads `.env` entries like Compose does (quoted values with escaped quotes, single and double quotes, inline comments, `export` prefix; an empty or unterminated value counts as missing) and requires 32 characters, the migration diagnosis uses the one-shot and terminates an orphaned lock holder instead of `pg_advisory_unlock`, `up -d web` (not `restart web`) applies new `GUNICORN_*` values, attachment usage is measured inside the `media` volume, the export directory must belong to UID 1000, the maintenance-mode block runs the migration one-shot, `backup.sh` writes files without any permission for others (`umask 027`, the group may read) and `--verify` states what it checked, and the manifest is mandatory for `restore.sh` (#2482, #2440).
 > Synchronization update 2026-10-06: § 3.3 (file modes) and § 6.6 (restore drill, host cron proposal) follow `backup.sh` with `umask 027` — files `0640`, directories `0750`, the check rejects any permission for others, the group (UID/GID 1000 of `web`) may read the manifest, the weekly/monthly copies are staged and checked before they are published, and the host cron alternative names its audit-anchor limit (#2482).
 > Synchronization update 2026-10-06: the German source of § 13.1 uses proper umlauts in the step comments; no change to commands or content.
@@ -1259,6 +1257,13 @@ a relay offering only port 465 can be connected that way. Both switches set to
 must also contain the public base URL so that invitation and reset links are
 valid. The sender should be authorized for SPF, DKIM, and DMARC.
 
+The dev stack passes these mail variables through to `web`. For SMTP on
+dev, set `EMAIL_HOST` (and credentials when needed) in `.env.dev`; when
+`EMAIL_HOST` is empty, `devlive` continues to write mail to the console. After
+startup, verify the handoff with
+`docker compose -f docker-compose.dev.yml --env-file .env.dev exec -T web env | grep '^EMAIL_HOST='`.
+With the detail token, `/health/` must report `smtp` as `ok` or `unreachable`,
+not `disabled`.
 
 **Deployment check `mail.E001` (Django 6.1, #2326):** `python manage.py check --deploy`
 — the web container runs it on every start, see
@@ -1270,6 +1275,9 @@ invitation and reset e-mails fail on sending: a warning in **Verwaltung → Zug�
 web log; the emergency path is the initial password via the Django admin
 (below).
 
+The live-dev and demo settings (`devlive`, `demo`) write e-mails to the
+container log when `EMAIL_HOST` is empty and silence `mail.E001` only for that
+case — this is not intended for production hosts.
 
 Before the first onboarding, replace the example address and send Django's
 standard test message from the running web container:
@@ -1960,8 +1968,7 @@ is actually connecting.
 
 **This is the canonical description of the PostgreSQL role model** — other
 deployment documents point here instead of repeating it. It applies to **all**
-deployment stacks (prod, dev, demo and — since
-#2086 — staging too);
+shipped deployment stacks (prod and dev);
 the per-stack reconciliation lives in [§ 1.4](#14-compose-stack-reconciliation).
 The source of truth is the init script
 [`deploy/postgres-init/01-app-role.sh`](../../deploy/postgres-init/01-app-role.sh)
@@ -2026,7 +2033,7 @@ role as the app role and reports a defect that is none, or misses a real one.
 
 **Existing clusters: the Compose fix is not retroactive.** The init script is
 **init-only** and runs solely when an empty `PGDATA` is created. On an already
-existing volume (e.g. `*_pgdata_staging`) it neither creates new roles nor
+existing volume (e.g. `<project>_pgdata`) it neither creates new roles nor
 aligns existing ones with the env. Two ways forward:
 
 1. **Fresh volume** — dump/restore per
@@ -2044,7 +2051,7 @@ aligns existing ones with the env. Two ways forward:
    creates **no** roles.
 
 **Until one of these two paths has been carried out, the old superuser
-situation stays live on a running staging server** — the repository fix alone
+situation stays live on a running server** — the repository fix alone
 changes nothing there. The `web` healthcheck does make it visible, though: the
 container never turns `healthy` there, and `caddy` does not release the runtime.
 
@@ -2059,7 +2066,6 @@ docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 #           Admin-Rolle rolsuper=False, rolbypassrls=True   (exit code 0)
 ```
 
-<!-- release:strip end -->
 
 ### DB Password Rotation (All Three Roles)
 
@@ -2517,7 +2523,7 @@ COMMIT;
 
 Afterwards set in the env file: `POSTGRES_PASSWORD` (new app password),
 `POSTGRES_ADMIN_USER`/`POSTGRES_ADMIN_PASSWORD` (new admin role) **and
-`POSTGRES_BOOTSTRAP_PASSWORD`** — the new staging stack requires all three
+`POSTGRES_BOOTSTRAP_PASSWORD`** — the production stack requires all three
 (`settings/prod.py` rejects a `maintenance` process without them, and the init
 script checks them). All three >= 32 characters, no `change-me` prefix. Finish
 with § 9.6.4.
@@ -2573,7 +2579,7 @@ SELECT pg_terminate_backend(pid) FROM pg_stat_activity
 \set old_role anlaufstelle
 \set app_role anlaufstelle_app
 \set admin_role anlaufstelle_admin
-\set dbname anlaufstelle_staging
+\set dbname anlaufstelle  -- adjust to the value of POSTGRES_DB
 
 -- Control output BEFORE the rebuild: exactly the four names must appear here,
 -- with nothing appended. If anything differs, abort.
@@ -2763,9 +2769,8 @@ Then switch the env file over — the part that is easy to forget:
 
 > **Why not keep the old name?** Because that very name is the bootstrap role
 > and stays `SUPERUSER` forever. If the runtime kept using it, the fix would be
-> ineffective — `FORCE ROW LEVEL SECURITY` does not apply to superusers. From
-> #2086 on, the staging
-> stack's `web` healthcheck would notice and never report the container
+> ineffective — `FORCE ROW LEVEL SECURITY` does not apply to superusers. The
+> `web` healthcheck would notice and never report the container
 > `healthy`.
 
 > **The `postgres` role is not optional after case C.** A cluster created this
@@ -2812,7 +2817,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 
 A non-zero exit means the rebuild is incomplete — do **not** start `web`, work
 through the message instead. Only then deploy; the migrate one-shot runs the
-same gate again, and on staging the `web` healthcheck additionally verifies the
+same gate again, and the `web` healthcheck additionally verifies the
 actual connection role continuously.
 
 Since #2086 the gate no
@@ -3262,7 +3267,7 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: be711a67257bdcbe73e11218390b4fd88aa49785 -->
+<!-- source-hash: 87face5a43466a810886b3f47d37cba16a97ea64 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->

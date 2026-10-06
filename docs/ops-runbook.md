@@ -1223,6 +1223,13 @@ Einladungs- und Reset-Links muss ausserdem `EXTERNAL_ORIGIN` die oeffentliche
 Basis-URL enthalten. Der Absender soll fuer SPF, DKIM und DMARC autorisiert
 sein.
 
+Der Dev-Stack reicht diese Mail-Variablen an `web` durch. Fuer SMTP auf
+dev genuegt `EMAIL_HOST` (und bei Bedarf Zugangsdaten) in `.env.dev`; bleibt
+`EMAIL_HOST` leer, schreibt `devlive` weiterhin in die Konsole. Nach dem Start
+laesst sich die Durchreichung mit
+`docker compose -f docker-compose.dev.yml --env-file .env.dev exec -T web env | grep '^EMAIL_HOST='`
+pruefen. Mit Detail-Token muss `/health/` im Feld `smtp` dann `ok` oder
+`unreachable` statt `disabled` melden.
 
 **Deploy-Check `mail.E001` (Django 6.1, #2326):** `python manage.py check --deploy`
 — der Web-Container fuehrt ihn bei jedem Start aus, siehe
@@ -1235,6 +1242,10 @@ scheitern beim Versand: Warnung in **Verwaltung → Zugaenge**, `/health/`-Feld
 `smtp` = `unreachable`, Verbindungsfehler im Web-Log; Notfall-Weg ist das
 Initialpasswort ueber den Django-Admin (unten). 
 
+Die Live-Dev- und
+Demo-Einstellungen (`devlive`, `demo`) schreiben Mails ohne `EMAIL_HOST` in
+das Container-Log und schalten nur dafuer `mail.E001` stumm — auf
+Produktivhosts ist das nicht vorgesehen.
 
 Vor dem ersten Onboarding die Beispieladresse ersetzen und Djangos
 Standard-Testmail aus dem laufenden Web-Container senden:
@@ -1929,8 +1940,7 @@ tatsaechlich verbindet.
 
 **Dies ist die kanonische Beschreibung des PostgreSQL-Rollenmodells** — andere
 Deployment-Dokumente verweisen hierher, statt sie zu wiederholen. Sie gilt fuer
-**alle** Deployment-Stacks (prod, dev, demo und — seit
-#2086 — auch staging);
+**alle** ausgelieferten Deployment-Stacks (prod und dev);
 den Ist-Abgleich je Stack fuehrt [§ 1.4](#14-compose-stack-abgleich). Quelle der
 Wahrheit ist das Init-Script
 [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh)
@@ -1997,7 +2007,7 @@ einen echten.
 
 **Bestandscluster: der Compose-Fix wirkt nicht rueckwirkend.** Das Init-Script
 ist **INIT-ONLY** und laeuft ausschliesslich beim Anlegen eines leeren `PGDATA`.
-Auf einem bereits existierenden Volume (z.B. `*_pgdata_staging`) legt es weder
+Auf einem bereits existierenden Volume (z.B. `<projekt>_pgdata`) legt es weder
 neue Rollen an noch gleicht es bestehende an die Env an. Zwei Wege:
 
 1. **Frisches Volume** — Dump/Restore nach
@@ -2015,7 +2025,7 @@ neue Rollen an noch gleicht es bestehende an die Env an. Zwei Wege:
    **keine** Rollen an.
 
 **Bis einer dieser beiden Wege gefahren ist, bleibt die alte Superuser-Situation
-auf einem laufenden Staging-Server live** — der Repo-Fix allein aendert daran
+auf einem laufenden Server live** — der Repo-Fix allein aendert daran
 nichts. Der `web`-Healthcheck macht es allerdings sichtbar: der Container wird
 dort nie `healthy`, und `caddy` gibt die Runtime nicht frei.
 
@@ -2491,7 +2501,7 @@ COMMIT;
 
 Danach in der Env-Datei setzen: `POSTGRES_PASSWORD` (neues App-Passwort),
 `POSTGRES_ADMIN_USER`/`POSTGRES_ADMIN_PASSWORD` (neue Admin-Rolle) **und
-`POSTGRES_BOOTSTRAP_PASSWORD`** — der neue Staging-Stack verlangt alle drei
+`POSTGRES_BOOTSTRAP_PASSWORD`** — der Produktiv-Stack verlangt alle drei
 (`settings/prod.py` lehnt einen `maintenance`-Prozess ohne sie ab, und das
 Init-Script prüft sie). Alle drei ≥ 32 Zeichen, kein `change-me`-Präfix.
 Abschluss mit § 9.6.4.
@@ -2549,7 +2559,7 @@ SELECT pg_terminate_backend(pid) FROM pg_stat_activity
 \set old_role anlaufstelle
 \set app_role anlaufstelle_app
 \set admin_role anlaufstelle_admin
-\set dbname anlaufstelle_staging
+\set dbname anlaufstelle  -- an den Wert von POSTGRES_DB anpassen
 
 -- Kontrollausgabe VOR dem Umbau: hier muessen exakt die vier Namen stehen,
 -- ohne angehaengten Text. Stimmt etwas nicht, abbrechen.
@@ -2741,8 +2751,7 @@ Danach die Env-Datei umstellen — das ist der Teil, den man leicht vergisst:
 > **Warum nicht einfach den alten Namen behalten?** Weil genau dieser Name die
 > Bootstrap-Rolle ist und dauerhaft `SUPERUSER` bleibt. Liefe die Runtime weiter
 > unter ihm, wäre der Fix wirkungslos — `FORCE ROW LEVEL SECURITY` greift für
-> Superuser nicht. Der `web`-Healthcheck des Staging-Stacks würde das ab
-> #2086 auch bemerken
+> Superuser nicht. Der `web`-Healthcheck würde das auch bemerken
 > und den Container nie `healthy` melden.
 
 > **Die Rolle `postgres` ist nach Fall C nicht optional.** In einem so
@@ -2789,7 +2798,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 
 Exit ≠ 0 heisst: der Umbau ist unvollständig — `web` **nicht** starten, sondern
 die Meldung abarbeiten. Erst danach deployen; der Migrate-One-Shot führt dasselbe
-Gate erneut aus, und auf staging verifiziert zusätzlich der `web`-Healthcheck
+Gate erneut aus, und zusätzlich verifiziert der `web`-Healthcheck
 laufend die tatsächliche Verbindungs-Rolle.
 
 Das Gate prüft seit #2086
