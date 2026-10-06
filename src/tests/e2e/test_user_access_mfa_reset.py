@@ -193,12 +193,13 @@ def test_facility_admin_resets_second_factor_and_next_sign_in_sets_it_up(
         "audit_in_facility": 1,
     }
 
+    # Checked before the deliberate 403 below: the browser logs that navigation as a console error.
+    assert not console_errors, console_errors
+
     # The own account is not resettable through this path.
     own_pk = _shell(e2e_env, "from core.models import User; print(User.objects.get(username='admin').pk)")
     own_response = page.goto(f"{base_url}/verwaltung/zugaenge/{own_pk}/zweiter-faktor/")
     assert own_response is not None and own_response.status == 403
-
-    assert not console_errors, console_errors
 
     # Next sign-in of the target: mandatory 2FA, no factor -> setup.
     target_context = browser.new_context(locale="de-DE", timezone_id="Europe/Berlin")
