@@ -24,7 +24,7 @@ Anlaufstelle implementiert ein **mehrstufiges Retention-Modell** mit getrennten 
   - `anonymous` — datensparsame Eintraege werden sofort nach Frist soft-geloescht;
   - `identified` — identifizierte Klient-Eintraege werden nach Frist **anonymisiert** ([`anonymize_clients`](../../src/core/retention/anonymization.py));
   - `qualified` — fachlich qualifizierte Eintraege verlangen einen `RetentionProposal` mit Lead/Admin-Freigabe vor Soft-Delete;
-  - `document_type` — pro Dokumenttyp konfigurierbare Frist, ueberschreibt die globale Event-Frist.
+  - `document_type` — pro Dokumenttyp konfigurierbare Frist, ueberschreibt die globale Event-Frist. *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
 - **Legal-Hold als Einfrier-Marker.** [`LegalHold`](../../src/core/retention/legal_holds.py) setzt einen Marker pro Entitaet; `has_active_hold(target)` haelt jede Soft-Delete- und Anonymisierungs-Pipeline auf. Hold setzen darf nur Lead/Admin, Aufheben mit AuditLog-Spur.
 - **`RetentionProposal`-Vorschlagspipeline** fuer qualifizierte Eintraege: Cron erzeugt Vorschlaege, Dashboard ([`build_retention_dashboard_context`](../../src/core/retention/proposals.py)) zeigt sie, Lead/Admin entscheidet `approve`/`defer`/`reject`. Damit bleibt das Pruning bei juristisch sensiblen Datensaetzen eine bewusste menschliche Entscheidung.
 - **AuditLog-Pruning auf eigener, laengerer Frist** ([`prune_auditlog`](../../src/core/retention/audit_pruning.py)). Die Frist ist absichtlich laenger als alle Fach-Fristen, damit Forensik nach einem Vorfall noch Spuren findet, wenn die Sachdaten bereits anonymisiert sind. Pruning ist append-only-kompatibel — keine `UPDATE`s, nur `DELETE` strikt nach Frist.
@@ -63,6 +63,14 @@ Die Entscheidung oben formuliert *„Events, Cases, Clients, WorkItems und Audit
 Konsequenz fuer Betreiber und Auditor: „loeschen" heisst fuer Faelle/Episoden/Aufgaben/Ziele **Redaktion beim Anonymisieren der Person**, nicht Ablauf einer eigenen Frist. Wer fuer diese Entitaeten eine unabhaengige Frist braucht (z. B. „abgeschlossene Faelle nach X Jahren", auch wenn die Person aktiv bleibt), braucht dafuer ein eigenes Feature — es existiert heute nicht.
 
 Beide Anonymisierungs-Pfade (hart und k-anonymisiert) fahren dieselbe Kaskade; die Paritaet ist seit #1750 durch einen ableitungsbasierten Architektur-Guard erzwungen (siehe [ADR-023 Update 2026-08-03](023-k-anonymization-statistik.md)). Legal Holds blockieren beide Bulk-Einstiege (#1756).
+
+## Update 2026-10-06: Ist-Stand der Löschwirkung
+
+Die Entscheidung oben und das Update vom 2026-08-03 beschreiben einzelne Punkte stärker, als der Aufbewahrungslauf sie umsetzt. **Reine Doku-Korrektur — keine Verhaltensänderung.** Maßgeblich ist der folgende Ist-Stand; die DSGVO-Vorlagen in [`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/) sind darauf abgeglichen.
+
+### Dokumentationstyp-Frist ist zusätzlich, kein Override (Refs #2462)
+
+`DocumentType.retention_days` ersetzt die Kontaktstufen-Frist nicht. [`process_facility_retention`](../../src/core/retention/enforcement.py) führt die Strategien `anonymous`, `identified`, `qualified` und `document_type` nacheinander aus; ein Ereignis fällt, sobald die erste greift. Es gilt also die zuerst ablaufende Frist: Eine kürzere Typ-Frist verkürzt, eine längere verlängert nichts. Die Formulierungen „ueberschreibt die globale Event-Frist" (Decision) und „Typ-Override" (Tabelle im Update 2026-08-03) sind in diesem Sinn zu lesen.
 
 ## References
 

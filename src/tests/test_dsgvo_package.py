@@ -555,3 +555,62 @@ class TestPackageVersionStamp:
         h_before = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_before).group(1)
         h_after = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_after).group(1)
         assert h_before != h_after, "Backup-Frist muss Fussnoten-Hash aendern (Refs #2050)."
+
+
+def _effect_cell(content: str, first_cell: str) -> str:
+    """Last cell ("Wirkung bei Ablauf") of the table row whose label starts with ``first_cell``.
+
+    Works for both retention tables: the numbered one in dsfa.md § 2.3 and the
+    unnumbered one in loeschkonzept.md § 2.
+    """
+    for line in content.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        labels = cells[:2]
+        if any(label.startswith(first_cell) for label in labels):
+            return cells[-1]
+    raise AssertionError(f"no table row starting with {first_cell!r}")
+
+
+@pytest.mark.django_db
+class TestDocumentTypePeriodIsAdditional:
+    """Refs #2462: a document-type period never extends the contact-stage period.
+
+    ``process_facility_retention`` runs all strategies one after another and an
+    event falls as soon as the first one matches; the templates therefore must
+    not call the document-type period an override.
+    """
+
+    @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
+    def test_effect_cell_describes_earliest_expiring_period(self, facility, slug):
+        content, _ = render_document(slug, facility)
+        effect = _effect_cell(content, "Abweichende Frist einzelner Dokumentationstypen")
+
+        assert "Überschreibt" not in effect
+        assert "zuerst ablaufende" in effect
+        assert "verlängert" in effect
+
+    def test_longer_document_type_period_does_not_protect_identified_event(
+        self, facility, client_identified, staff_user
+    ):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from core.models import DocumentType, Event
+        from core.retention.enforcement import process_facility_retention
+
+        long_type = DocumentType.objects.create(facility=facility, name="Beratungsgespräch", retention_days=3650)
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=long_type,
+            occurred_at=timezone.now() - timedelta(days=400),
+            data_json={},
+            is_anonymous=False,
+            created_by=staff_user,
+        )
+
+        process_facility_retention(facility, facility.settings, timezone.now(), dry_run=False)
+
+        event.refresh_from_db()
+        assert event.is_deleted is True
