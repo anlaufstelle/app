@@ -1,7 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Synchronization update 2026-10-06: Field values use slugs; the standard catalog, configurable retention defaults and CSV import scope match the implementation.
+> Synchronization update 2026-10-06: Multiple facilities, handover notes, time filters, autosave, synchronization and deployment match the implementation.
 
 # Domain Concept Summary
 
@@ -35,7 +35,7 @@ Contact levels govern which [documentation types](glossary.md) can be used, who 
 
 The [event](glossary.md) is the fundamental unit of documentation: a timestamped record of something that happened -- a brief visit, a crisis conversation, a needle exchange, an accompaniment to the social welfare office. Every event belongs to a documentation type and optionally to a person.
 
-The start page shows events as a chronological stream, optionally filtered by a named [time filter](glossary.md). Time filters are saved time windows with a label (e.g. "Night shift 21:30--09:00") that facilities configure to match their working hours. They are pure UI configuration -- changing the filter does not change the underlying data.
+The start page shows events as a chronological stream, optionally filtered by a named [time filter](glossary.md). Time filters are saved time windows with a label (e.g. "Night shift 21:30--09:00") used by the timeline, handover and tally views, not statistics. Events do not reference them; shift handover notes do, with deletion protection and frozen window boundaries.
 
 ### Documentation Types (Dokumentationstypen)
 
@@ -58,17 +58,19 @@ Not every contact is part of a case. Most interactions at a drop-in center are o
 
 ### Work Items (Arbeitsinfos)
 
-Separate from documentation, [work items](glossary.md) cover the operational layer: notes ("Mail for Maus is in the drawer") and tasks ("Follow up with Frau M. about the appointment"). They replace the analog handover logbook, have their own lifecycle (open, in progress, done, discarded), and appear in each staff member's inbox. Work items have no separate automatic retention period. Personal content is redacted when the linked person is anonymized.
+Separate from documentation, [work items](glossary.md) cover the operational layer: notes ("Mail for Maus is in the drawer") and tasks ("Follow up with Frau M. about the appointment"). They support everyday coordination, have their own lifecycle (open, in progress, done, discarded), and appear in each staff member's inbox. Work items have no separate automatic retention period. Personal content is redacted when the linked person is anonymized.
 
 The CSV import wizard supports persons and events (`ImportJob.TargetType`); see the [import guide](../admin-guide.md#212-import-assistent).
+
+The handover view (`/?view=uebergabe`) also includes an encrypted shift note with its own configurable retention period (default: 90 days). It belongs to a shift date and optionally to a time filter.
 
 ## Data Model Overview
 
 The data model follows a clear hierarchy with facility scoping as the primary boundary:
 
 ```
-Organization (background entity, one per installation)
-  +-- Facility (the concrete site -- primary scope for all data)
+Organization (name and creation date, visible in navigation/system overview)
+  +-- Facilities (multiple sites per installation -- primary scope for staff)
         +-- Users (staff with role assignments)
         +-- Clients (pseudonymized persons with contact levels)
         +-- Events (timestamped documentation entries, typed by DocumentType)
@@ -79,7 +81,7 @@ Organization (background entity, one per installation)
         +-- AuditLog (append-only, immutable)
 ```
 
-Every entity carries a `facility_id` foreign key. A middleware filter ensures that every database query is scoped to the current facility, preventing cross-tenant data access. The Organization layer exists in the schema but is hidden in the UI -- it is a prepared extension point for providers operating multiple sites.
+Clients, events, documentation types and work items carry a direct `facility_id`; episodes and outcome goals inherit their scope through the case, milestones through the goal. Clients have no direct organization foreign key. Middleware sets the current facility context for scoped managers. Multiple facilities can be created through Django admin or `setup_facility`; the organization name appears in navigation and the system overview. Organization logos and separate report branding are not implemented.
 
 ## Privacy Architecture
 
@@ -91,7 +93,7 @@ Anlaufstelle processes social data of highly vulnerable people. Privacy is not a
 - **Deletion requests.** Deletion of qualified data requires a four-eyes approval (two authorized users).
 - **Audit log.** An append-only, immutable log records changes to people, cases, events and work items, including edits to episodes and outcome goals, linking an event to a case, and attachment uploads and erasure (creating and closing the sub-objects still is not covered); it also records login attempts and — of read access — opening the detail page of a person at the "With additional details" level, subject access requests and exports, file downloads, offline take-out and cross-facility access. Ordinary list, detail and search requests deliberately leave no entry ([ADR-043](../adr/043-suchraum-volltextsuche.md)). Event edits deliberately leave two traces for different purposes: `EventHistory` retains before/after states for the event's local change history, while `AuditLog.EVENT_UPDATE` records only the documentation type and changed field identifiers facility-wide — never field values. Each audit row carries a per-facility HMAC chain so that later tampering or deletion of individual entries is detectable (`verify_audit_chain`, run nightly).
 - **Breach detection.** Heuristic incident detection (GDPR Art. 33/34) flags mass deletions of person data, credential-stuffing bursts against unknown usernames, and distributed victim-lockout patterns, delivering SSRF-hardened webhook alerts. Error tracking stays off by default; when enabled, a scrubber strips PII before events leave the installation.
-- **Facility scoping.** Every query filters on `facility_id`, enforced by middleware. PostgreSQL Row Level Security provides defense-in-depth on all facility-scoped tables, with session-variable-driven policies that enforce the tenant boundary at the database layer itself.
+- **Facility scoping.** Middleware supplies the current facility context; scoped managers use the direct facility key, while episodes, goals and milestones are scoped through their parent relationships. PostgreSQL Row Level Security provides defense-in-depth on all facility-scoped tables, with session-variable-driven policies that enforce the tenant boundary at the database layer itself.
 - **Two-factor authentication.** TOTP-based 2FA is available and can be enforced per user or facility-wide. Single-use backup codes and an account lockout back it up, the privileged roles (`super_admin`/`facility_admin`) are enforced into MFA by default, and the TOTP secret itself is encrypted at rest (Fernet, ADR-031); a WebAuthn passkey can additionally be registered as a phishing-resistant second factor (ADR-032, no passwordless login).
 - **GDPR compliance.** Data subject rights (access, rectification, deletion, portability) are implemented as system functions. Seven GDPR documentation templates (processing register, DPIA, DPA, TOMs, data-subject information, employee information, and a deletion concept) ship with the app ([`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/), since #784).
 
@@ -109,14 +111,16 @@ Anlaufstelle uses five roles with increasing privileges (Refs #867, [ADR-018](..
 
 Access is not purely role-based but context-dependent: what a user can see also depends on the contact level of the person, the sensitivity of the documentation type, and field-level sensitivity overrides.
 
+Event creation (`/events/new/`) saves drafts every 5 seconds in encrypted IndexedDB when a session key and the offline store are available; other forms do not share a general autosave feature. Synchronization runs in the open document, not through Service Worker Background Sync.
+
 ## Non-Functional Requirements
 
 - **Accessibility:** WCAG 2.1 Level AA for all core and operations interfaces. Keyboard navigation, screen reader support, minimum 4.5:1 contrast ratio.
 - **Mobile / PWA:** Progressive Web App, installable on home screens. Optimized quick-capture for smartphones with large touch targets and autocomplete. Field-ready offline mode: staff take selected persons offline into an encrypted local cache, read and edit their records, and create new contacts and tasks without connectivity; the timeline and task list also render offline in-place at their canonical URLs from the local snapshot. Offline work syncs on reconnect with explicit, resolvable conflicts rather than silent overwrites, and permanently undeliverable entries surface in a dead-letter view instead of disappearing.
-- **Internationalization:** Fully internationalized via Django's `gettext` system. German (primary) and English are active. Language switcher in the UI. Domain libraries carry a language tag for future multilingual seeds.
+- **Internationalization:** Fully internationalized via Django's `gettext` system. German (primary) and English are active. Language switcher in the UI. The package schema has no language key; multilingual package names remain a target feature.
 - **Performance targets:** Page load < 1s (3G), contact save < 500ms, autocomplete < 300ms, six-month statistics query < 5s at 50,000 events.
 - **Scaling target:** 5--30 concurrent users, up to 50,000 events/year per facility.
-- **Deployment:** Single `docker compose up` on a VPS, local server, or Raspberry Pi. Minimum: 1 vCPU, 1 GB RAM, 10 GB storage.
+- **Deployment:** The production Compose stack includes Caddy, Django, PostgreSQL, Redis, mandatory ClamAV, cron and maintenance services. Hardware and installation requirements are centralized in the [admin guide](../admin-guide.md#voraussetzungen).
 - **Availability:** 99% target. Health-check endpoint at `/health/` for monitoring integration.
 
 ## Version Additions
@@ -315,4 +319,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 1ce7986ea989b483da0d8031e8287dab44172969 -->
+<!-- source-hash: 9c382443a9e53879608b0d8ee5980ccea1d0d9f2 -->

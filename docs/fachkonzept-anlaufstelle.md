@@ -201,7 +201,7 @@ Mittlere Fits, die Anlaufstelle als Randsystem nutzen können, ohne Kernprodukt 
 
 ### Technische Zielgruppe
 
-- **Selbst-Hoster** — Träger, die das System auf eigener Infrastruktur betreiben: ein kleiner Server, ein Raspberry Pi, ein günstiger VPS. Anlaufstelle muss mit `docker compose up` installierbar sein.
+- **Selbst-Hoster** — Träger, die das System auf eigener Infrastruktur betreiben: eine vom Betreiber gemäß [Admin-Handbuch](admin-guide.md#voraussetzungen) dimensionierte Umgebung. Anlaufstelle muss mit `docker compose up` installierbar sein.
 - **Open-Source-Contributors** — Entwickler:innen, die sich für soziale Software interessieren und ein Projekt suchen, das fachlich fundiert, technisch sauber und gesellschaftlich relevant ist.
 - **Dienstleister im Sozialsektor** — IT-Unternehmen und Beratungsfirmen, die Einrichtungen bei der Digitalisierung begleiten und ein anpassbares, lizenzkostenfreies System als Grundlage nutzen wollen.
 
@@ -215,13 +215,13 @@ Anlaufstelle folgt acht Leitprinzipien, die als Entscheidungsregeln bei Zielkonf
 
 Die primäre Organisationseinheit der Dokumentation ist die Chronik einer Person — der zeitliche Verlauf aller Kontakte, Leistungen und Ereignisse, zugeordnet über das Pseudonym. Zeitliche Gruppierungen (benannte Zeitfilter wie „Nachtdienst" oder „Vormittag") sind Sichten auf diese Chronik, nicht deren Container.
 
-*Das bedeutet konkret:* Jedes dokumentierte Ereignis gehört zu einer Person (oder ist anonym). Die Startseite zeigt den aktuellen Zeitstrom — gefiltert nach dem aktiven Zeitfilter der Einrichtung oder einem frei wählbaren Zeitraum. Zeitfilter sind Konfiguration, nicht Datenstruktur. Eine Änderung der Arbeitszeiten verändert nicht die zugrunde liegenden Daten.
+*Das bedeutet konkret:* Jedes dokumentierte Ereignis gehört zu einer Person (oder ist anonym). Die Startseite zeigt den aktuellen Zeitstrom — gefiltert nach dem aktiven Zeitfilter der Einrichtung oder einem frei wählbaren Zeitraum. Zeitfilter sind gespeicherte Konfiguration; Ereignisse bleiben zeitgestempelte Einzelobjekte. Schichtnotizen sind an ein Schichtdatum und optional an einen Zeitfilter gebunden; ihre Fenstergrenzen werden bei der Anlage eingefroren.
 
 ### Prinzip 2: Einrichtung als Ausgangspunkt
 
-Anlaufstelle denkt von der Einrichtung her: ein konkreter Standort mit eigenem Team, eigenen Dokumentationstypen und eigenen Berechtigungen. Das Datenmodell ist so angelegt, dass eine spätere Erweiterung auf Träger mit mehreren Standorten möglich ist, ohne die bestehende Datenstruktur grundlegend umzubauen.
+Anlaufstelle denkt von der Einrichtung her: ein konkreter Standort mit eigenem Team, eigenen Dokumentationstypen und eigenen Berechtigungen. Eine Installation unterstützt mehrere Einrichtungen unter einer Organisation.
 
-*Das bedeutet konkret:* Das Datenmodell enthält von Anfang an einen Fremdschlüssel auf Einrichtungsebene für alle relevanten Entitäten (Personen, Ereignisse, Dokumentationstypen). Für eine einzelne Einrichtung ist das transparent — es gibt nur eine Einrichtung, und die Organisationsebene ist in der UI ausgeblendet. Wenn ein Träger später weitere Standorte anbindet, ist die Grundlage gelegt, ohne bestehende Tabellen umbauen zu müssen. Personen (Clients) haben zusätzlich einen vorbereiteten Fremdschlüssel auf Organisationsebene, um eine spätere einrichtungsübergreifende Sichtbarkeit zu ermöglichen — dieser FK ist im aktuellen Stand ungenutzt.
+*Das bedeutet konkret:* Personen, Ereignisse und Dokumentationstypen gehören jeweils zu einer Einrichtung. Mitarbeitende sind an ihre Einrichtung gebunden. Weitere Einrichtungen werden über den Django-Admin oder `setup_facility` angelegt. Der Organisationsname erscheint in der Navigation; `/system/organization/` zeigt der Systemadministration Organisation und Einrichtungen. Client hat ausschließlich den Einrichtungsbezug, keinen zusätzlichen Organisations-Fremdschlüssel.
 
 ### Prinzip 3: Semantik vor freiem Feldchaos
 
@@ -233,7 +233,7 @@ Dokumentationsfelder haben eine Bedeutung. Sie sind nicht einfach benannte Textf
 
 Nicht alles, was Mitarbeitende festhalten, ist Dokumentation. Hinweise wie „Bitte bei Frau M. nachhaken, ob der Termin beim Sozialamt stattgefunden hat" oder „Herr K. hat seine Jacke hier vergessen" sind operative Informationen mit eigenem Lebenszyklus: offen, erledigt, verworfen. Sie gehören nicht in die Chronik der Person, sondern in ein eigenes operatives System.
 
-*Das bedeutet konkret:* Arbeitsinfos (Hinweise und Aufgaben) sind ein eigener Bereich mit eigenem Status und eigener Sichtbarkeit. Sie können mit Personen verknüpft sein, sind aber keine Dokumentation im fachlichen Sinn. Eine eigene automatische Löschfrist für WorkItems ist nicht implementiert; personenbezogene Inhalte werden bei der Anonymisierung der Person redigiert. Die Informationsweitergabe zwischen Diensten (früher: „Übergabe") wird durch Hinweise mit Priorität abgedeckt — ein eigenes Übergabe-Konzept ist nicht nötig.
+*Das bedeutet konkret:* Arbeitsinfos (Hinweise und Aufgaben) sind ein eigener Bereich mit eigenem Status und eigener Sichtbarkeit. Sie können mit Personen verknüpft sein, sind aber keine Dokumentation im fachlichen Sinn. Eine eigene automatische Löschfrist für WorkItems ist nicht implementiert; personenbezogene Inhalte werden bei der Anonymisierung der Person redigiert. Für die Informationsweitergabe zwischen Diensten gibt es außerdem die Übergabe-Ansicht (`/?view=uebergabe`) mit Kennzahlen, dringenden Aufgaben und verschlüsselter Schichtnotiz. Die Schichtnotiz hat eine eigene konfigurierbare Aufbewahrungsfrist (Vorgabe: 90 Tage).
 
 ### Prinzip 5: Fälle vor losem Eintragshaufen
 
@@ -366,7 +366,7 @@ Die Einstiegshürde wird niedrig gehalten durch:
 
 - **Zeitsrombasierte Startseite** — beim Login sieht man sofort, was relevant ist: die Ereignisse des aktuellen Zeitraums, offene Hinweise und Aufgaben, aktive Hausverbote. Kein Dashboard mit 20 Kacheln.
 - **Ein-Formular-Erfassung** — der häufigste Vorgang (Kontakt dokumentieren) braucht maximal drei Klicks und zwei Eingabefelder.
-- **Kontexthilfe** — auf jeder Seite ein Hilfe-Symbol, das den relevanten Abschnitt im Benutzerhandbuch öffnet.
+- **Kontexthilfe** — an ausgewählten Stellen (Kontaktstufe, Feldbedingungen, 4-Augen-Löschung, Löschfristen und Offline-Modus) mit Erläuterung und gegebenenfalls Link zur In-App-Hilfe; die Hilfe-Übersicht verlinkt das Benutzerhandbuch.
 - **Domänenbibliothek** — vorkonfigurierte Dokumentationstypen für typische Einrichtungstypen. Keine leere Datenbank, sondern ein sinnvoller Startzustand.
 
 ---
@@ -393,7 +393,7 @@ Anlaufstelle bildet diese Vielfalt durch benannte Zeitfilter ab. Ein Zeitfilter 
 | Frühdienst | 08:00 | 14:00 |
 | Nachmittag | 13:00 | 17:00 |
 
-Zeitfilter sind optional. Eine Einrichtung kann beliebig viele definieren oder gar keine — dann arbeitet die Startseite mit einem Standardzeitraum (z.B. „Heute" oder „Letzte 24 Stunden"). Zeitfilter sind reine UI-Konfiguration: Sie beeinflussen die Anzeige, nicht die Datenstruktur. Wenn eine Einrichtung ihre Arbeitszeiten ändert, ändert sie den Filter — die zugrunde liegenden Ereignisse bleiben unverändert.
+Zeitfilter sind optional. Eine Einrichtung kann beliebig viele definieren oder gar keine — dann arbeitet die Startseite mit einem Standardzeitraum (z.B. „Heute" oder „Letzte 24 Stunden"). Zeitfilter werden in Zeitstrom, Übergabe und Strichliste verwendet, nicht in der Statistik. Sie ändern keine Ereigniszeitpunkte. Schichtnotizen referenzieren ihren Zeitfilter mit Löschschutz (`PROTECT`); die bei der Anlage gespeicherten Schicht- und Bearbeitungsgrenzen bleiben bei späteren Filteränderungen unverändert.
 
 ### Kontaktstufen und Pseudonymisierung
 
@@ -416,7 +416,7 @@ Neben der fachlichen Dokumentation gibt es eine operative Ebene: Hinweise und Au
 - **Hinweise:** „Für Maus liegt Post in der Schublade." — eine Information, die beim nächsten Kontakt relevant ist. Oder: „Herr S. war heute sehr aufgelöst — bitte ansprechen." — eine Information für die Kolleg:innen, die als nächstes Dienst haben. Hinweise mit hoher Priorität werden in der Inbox hervorgehoben.
 - **Aufgaben:** „Nachhaken bei Frau M.: Termin Sozialamt." — eine konkrete Handlungsaufforderung mit Zuständigkeit.
 
-Die Informationsweitergabe zwischen Diensten — das, was in der analogen Welt das Übergabebuch leistet — wird durch Hinweise mit Priorität abgedeckt. Ein separates Übergabe-Konzept ist nicht nötig: Was die Kolleg:innen wissen müssen, steht als Hinweis in der Inbox. Der Vorteil gegenüber einem dedizierten Übergabe-Objekt: Hinweise funktionieren unabhängig davon, ob die Einrichtung im Schichtbetrieb arbeitet, feste Bürozeiten hat oder flexible Dienstzeiten nutzt.
+Hinweise und Aufgaben funktionieren unabhängig von festen Dienstzeiten. Für die Schichtübergabe bietet die Startseite zusätzlich eine Übergabe-Ansicht (`/?view=uebergabe`) mit Kennzahlen, Krisen, Hausverboten, dringenden Aufgaben und einer verschlüsselten Schichtnotiz. Die Notiz gehört zum Schichtdatum und optional zum Zeitfilter; ohne Zeitfilter gilt der Kalendertag. Ihre eigene Frist ist in Tagen konfigurierbar (Vorgabe: 90 Tage).
 
 Arbeitsinfos haben einen eigenen Lebenszyklus: Sie werden erstellt (offen), bearbeitet (in Arbeit), abgeschlossen (erledigt) oder verworfen. Sie können mit einer Person verknüpft sein, müssen es aber nicht. Eine eigene automatische Löschfrist für WorkItems ist nicht implementiert. Personenbezogene Inhalte werden bei der Anonymisierung der verknüpften Person redigiert.
 
@@ -428,7 +428,7 @@ Nicht jeder Kontakt ist Teil eines Falles. In vielen Einrichtungen sind die meis
 
 Aber wenn die Arbeit mit einer Person zusammenhängend wird — ein Beratungsprozess beginnt, eine Krisenbegleitung erstreckt sich über Wochen, eine Vermittlung in Wohnraum zieht sich über Monate — dann entsteht ein Fall. Der Fall ist eine Klammer, die zusammengehörige Ereignisse verbindet und den Blick von der einzelnen Leistung auf den Verlauf lenkt.
 
-Innerhalb eines Falles gibt es Episoden: abgrenzbare Phasen der Zusammenarbeit. Eine Klientel, die dreimal im Jahr eine Krisenphase durchläuft, hat drei Episoden im selben Fall. Jede Episode hat einen Anfang und ein Ende, eigene Ziele und eigene Zuständigkeiten.
+Innerhalb eines Falles gibt es Episoden: abgrenzbare Phasen der Zusammenarbeit. Eine Klientel, die dreimal im Jahr eine Krisenphase durchläuft, hat drei Episoden im selben Fall. Jede Episode hat einen Anfang und ein Ende, eine Beschreibung; Wirkungsziele und die fallführende Zuständigkeit gehören zum Fall.
 
 Fallführung ist kein Pflichtkonzept in Anlaufstelle. Eine Einrichtung, die nur Kurzbesuche dokumentiert, braucht keine Fälle. Aber das System legt von Anfang an die technische Grundlage, damit Fälle nachträglich eröffnet und bestehende Ereignisse zugeordnet werden können.
 
@@ -491,9 +491,9 @@ Anlaufstelle ist in vier Ebenen gegliedert, die aufeinander aufbauen. Die Reihen
 
 Der Kern enthält alles, was für die grundlegende Dokumentation notwendig ist:
 
-- **Einrichtungsstruktur:** Facility als primärer Scope, Organization als Hintergrund-Entität. Alle Entitäten haben `facility_id` als FK. Scope-Filter als Middleware.
+- **Einrichtungsstruktur:** Facility als primärer Scope, Organization als übergeordnete Verwaltungsentität. Personen, Ereignisse, Dokumentationstypen und Arbeitsinfos tragen einen Facility-FK; Episoden und Wirkungsziele sind über den Fall, Meilensteine über das Ziel gescopet. Middleware setzt den aktuellen Einrichtungs-Kontext.
 - **Nutzer und Rollen:** Authentifizierung, Autorisierung, Rollenzuweisung.
-- **Person (Client):** Das Klientel-Register mit Pseudonym, Kontaktstufe und Alterscluster. FK auf Facility (primär) und Organization (vorbereitet).
+- **Person (Client):** Das Klientel-Register mit Pseudonym, Kontaktstufe und Alterscluster. FK auf Facility, kein direkter Organization-FK.
 - **Ereignis:** Der zentrale Baustein — ein dokumentiertes Vorkommnis, zugeordnet zu einer Person und einem Dokumentationstyp. Feldwerte als JSONB.
 - **Dokumentationstypen und Felder:** Das konfigurierbare Typ-Feld-System mit Semantik (Datentyp, Sensitivität, Statistik-Zuordnung). Die Löschfrist liegt am Dokumentationstyp, nicht am Feld.
 - **Benannte Zeitfilter:** Konfigurierbare Arbeitszeiträume als gespeicherte Sichten.
@@ -505,7 +505,7 @@ Der Kern enthält alles, was für die grundlegende Dokumentation notwendig ist:
 
 Die operative Ebene macht Anlaufstelle von einer Dokumentationsdatenbank zu einem Arbeitswerkzeug:
 
-- **Hinweise und Aufgaben:** Operative Informationen mit Lebenszyklus (offen → erledigt → verworfen), verknüpfbar mit Personen. Hinweise mit Priorität ersetzen die analoge Übergabe zwischen Diensten.
+- **Hinweise und Aufgaben:** Operative Informationen mit Lebenszyklus (offen → erledigt → verworfen), verknüpfbar mit Personen. Eine zusätzliche Übergabe-Ansicht bündelt Schichtinformationen und eine verschlüsselte Schichtnotiz mit eigener Frist.
 - **Inbox:** Sammlung aller offenen Hinweise und fälligen Aufgaben für die angemeldete Mitarbeitende.
 - **Arbeitsübersicht:** Was steht an, was ist offen, was ist überfällig?
 - **Mobile-first-Erfassung:** Schnellerfassung optimiert für Smartphone — minimale Felder, große Touch-Targets, Autocomplete.
@@ -577,17 +577,15 @@ Das Domänenmodell beschreibt die zentralen Entitäten, ihre Beziehungen und die
 
 ### Organisationshierarchie
 
-Das System wird primär für einzelne Einrichtungen gebaut, ist aber so strukturiert, dass eine spätere Erweiterung auf Träger mit mehreren Standorten möglich ist. Dazu existiert im Datenmodell eine dreistufige Hierarchie:
+Eine Installation unterstützt mehrere Einrichtungen. Die Hierarchie lautet **Organization → Facility**; eine zusätzliche Ebene „Unit“ ist nicht implementiert. Jede Einrichtung hat eigene Mitarbeitende, Personen, Dokumentationstypen und Zeitfilter. Weitere Einrichtungen lassen sich über den Django-Admin oder `setup_facility` anlegen.
 
-**Organization → Facility → (optional: Unit)**
-
-Beim Setup einer einzelnen Einrichtung wird automatisch eine Organization angelegt. Die UI zeigt sie nicht — es gibt keinen Facility-Switcher, kein Org-Dashboard, keine einrichtungsübergreifenden Statistiken. Für die Mitarbeitenden fühlt sich das System an wie eine Einzelinstallation. Aber im Datenmodell hat jede Entität (Client, Event, DocumentType) einen Fremdschlüssel auf `facility_id`. Das ist die Versicherung: Wenn ein Träger später weitere Standorte anbindet, muss keine Tabelle umgebaut werden.
+Der Organisationsname steht in der Navigation. Die Systemadministration sieht Organisation und Einrichtungen unter `/system/organization/`; Mitarbeitende arbeiten innerhalb ihrer zugeordneten Einrichtung.
 
 ### Kernentitäten
 
 #### Organization — Der Träger (Hintergrund-Entität)
 
-Die Organisation repräsentiert einen Träger — einen Verband, eine gemeinnützige GmbH, einen Verein. Aktuell existiert genau eine Organisation, automatisch angelegt, unsichtbar in der UI. Sie dient als vorbereiteter Scope für eine spätere Träger-Erweiterung.
+Die Organisation repräsentiert den Träger einer oder mehrerer Einrichtungen. Das Modell speichert neben der ID den Namen und das Anlagedatum; ein Logo oder gesondertes Träger-Branding in Berichten ist nicht implementiert. Der Name ist in der Navigation und der Systemübersicht sichtbar.
 
 #### Facility — Die Einrichtung
 
@@ -615,7 +613,7 @@ Rollen definieren, welche Aktionen ein User ausführen darf. Anlaufstelle kennt 
 
 Der Client repräsentiert eine Person im System. Der primäre Identifikator ist das Pseudonym — ein vom Team vergebener Name. Der Client hat eine Kontaktstufe (anonym, identifiziert, qualifiziert), die seinen Lebenszyklus im System bestimmt.
 
-Ein Client gehört primär zu einer Facility (dort wird dokumentiert, dort gelten die Scope-Regeln). Zusätzlich hat der Client einen vorbereiteten Fremdschlüssel auf Organization-Ebene — im aktuellen Stand redundant (es gibt nur eine Organization), aber bereit für eine spätere einrichtungsübergreifende Sichtbarkeit, falls ein Träger mit dem Use-Case „gleiche Klientel in mehreren Einrichtungen" kommt.
+Ein Client gehört zu genau einer Facility; dort wird dokumentiert und dort gelten die Scope-Regeln. Das Modell hat keinen direkten Fremdschlüssel auf Organization. Die gemeinsame Organisation erzeugt keine einrichtungsübergreifende Personenakte.
 
 Anonyme Kontakte haben keinen Client-Eintrag — sie werden als Ereignisse ohne Personenbezug gezählt. Ein Client entsteht erst, wenn eine Person identifiziert wird und ein Pseudonym erhält.
 
@@ -643,7 +641,7 @@ DocumentTypeField verbindet FieldTemplates mit DocumentTypes und legt die Reihen
 
 #### TimeFilter — Der benannte Zeitfilter
 
-Ein TimeFilter ist ein gespeicherter Arbeitszeitraum mit einem Label. Er gehört zu einer Einrichtung und definiert ein Zeitfenster (Startzeit, Endzeit), das als Schnellfilter auf der Startseite und in der Statistik verwendet wird. TimeFilter haben keine Beziehung zu Events — sie sind reine Sichtsteuerung.
+Ein TimeFilter ist ein gespeicherter Arbeitszeitraum mit einem Label. Er gehört zu einer Einrichtung und wird für Zeitstrom, Übergabe und Strichliste verwendet, nicht für die Statistik. Ereignisse referenzieren ihn nicht; Schichtnotizen dagegen haben einen optionalen, löschgeschützten Fremdschlüssel auf den Zeitfilter.
 
 #### WorkItem — Die Arbeitsinfo
 
@@ -678,8 +676,6 @@ erDiagram
     Facility ||--o{ DocumentType : "konfiguriert"
     Facility ||--o{ Client : "betreut"
 
-    Organization ||--o{ Client : "org-FK (vorbereitet)"
-
     User }o--|| Facility : "gehört zu"
     User }o--|| Role : "hat Rolle"
 
@@ -711,9 +707,9 @@ erDiagram
 
 Scope-Regeln bestimmen, welche Daten für wen sichtbar sind:
 
-**Einrichtungsebene (aktueller Stand):** Mitarbeitende sehen nur die Daten der Einrichtung, der sie zugeordnet sind. Da es aktuell nur eine Einrichtung gibt, ist der Scope-Filter technisch vorhanden (`WHERE facility_id = :current`), aber für den Nutzer unsichtbar. Jede Datenbankabfrage filtert auf `facility_id` — das ist die Vorbereitung für eine spätere Mehrmandantenfähigkeit.
+**Einrichtungsebene:** Eine Installation kann mehrere Einrichtungen tragen. Mitarbeitende arbeiten im Kontext ihrer zugeordneten Einrichtung. Direkt gescopte Modelle tragen einen Facility-FK; Episoden, Wirkungsziele und Meilensteine erhalten den Scope über ihre Beziehungen zum Fall beziehungsweise Ziel.
 
-**Organisationsebene (Branding-Hülse):** Die Organisation existiert als reine Verwaltungs-Hülse für Träger-Branding (Logo, Trägername in Berichten). Es gibt **keinen** Org-Admin und **keine** Cross-Facility-Sichtbarkeit über die Organisation — die einzige facility-übergreifende Rolle ist die Systemadministration (`super_admin`), und auch sie sieht nur den `/system/`-Bereich, nicht das normale Fach-UI mehrerer Einrichtungen gleichzeitig. Diese Architektur-Entscheidung ist bewusst gewählt (Variante b1: Org als Branding-Hülse) und in [ADR-018](adr/018-rollenmodell-superadmin.md) festgehalten.
+**Organisationsebene:** Die Organisation speichert Trägername und Anlagedatum und verbindet die Einrichtungen. Logo und gesondertes Träger-Branding in Berichten sind ein Zielbild, kein implementierter Funktionsumfang. Es gibt **keinen** Org-Admin und **keine** Cross-Facility-Sichtbarkeit über die Organisation — die einzige facility-übergreifende Rolle ist die Systemadministration (`super_admin`), und auch sie sieht nur den `/system/`-Bereich, nicht das normale Fach-UI mehrerer Einrichtungen gleichzeitig. Diese Architektur-Entscheidung ist bewusst gewählt (Variante b1: Org als Branding-Hülse) und in [ADR-018](adr/018-rollenmodell-superadmin.md) festgehalten.
 
 **Kontaktstufe:** Innerhalb einer Einrichtung regelt die Kontaktstufe den Detailgrad:
 - Anonyme Kontakte: Für alle Rollen sichtbar (nur Zählung, kein Personenbezug).
@@ -732,34 +728,27 @@ Jede Architekturentscheidung wird als strukturierter Block dokumentiert. Offene 
 
 **Kontext:** Die Diplomarbeit und der Prototyp organisieren die Dokumentation primär nach Zeitfenstern (Schichten): „Was ist in dieser Schicht passiert?" Das ist intuitiv für Einrichtungen im Schichtbetrieb, aber es macht das Zeitfenster zum Datencontainer — und damit zum Problem, wenn Arbeitszeiten sich ändern, Ereignisse zeitfensterübergreifend sind oder eine Einrichtung gar nicht im Schichtbetrieb arbeitet.
 
-**Entscheidung:** Das Ereignis ist die Grundeinheit. Jedes Ereignis hat einen Zeitstempel (`occurred_at`). Zeitliche Gruppierungen werden durch benannte Zeitfilter realisiert — gespeicherte Abfragen mit einem Label (z.B. „Nachtdienst 21:30–09:00"), die als Schnellfilter auf der Startseite und in der Statistik dienen. Zeitfilter sind reine UI-Konfiguration, keine Datenstruktur.
+**Entscheidung:** Das Ereignis ist die Grundeinheit. Jedes Ereignis hat einen Zeitstempel (`occurred_at`). Zeitliche Gruppierungen werden durch benannte Zeitfilter realisiert — gespeicherte Abfragen mit einem Label (z.B. „Nachtdienst 21:30–09:00"), die in Zeitstrom, Übergabe und Strichliste verwendet werden. Zeitfilter sind gespeicherte Konfiguration, keine Container für Ereignisse; Schichtnotizen referenzieren sie jedoch mit `PROTECT`.
 
 **Begründung:** Wenn die Arbeitszeiten geändert werden (z.B. von 22:00–09:00 auf 21:30–08:30), wird der Zeitfilter angepasst — die Ereignisse bleiben unverändert. Wenn eine Einrichtung kein festes Zeitschema hat (z.B. ein Beratungsangebot mit flexiblen Terminen), definiert sie keine Zeitfilter und arbeitet mit dem Standardzeitraum „Heute". Die Chronik einer Person ist zeitfilterunabhängig. Alle Einrichtungstypen — ob Nachtcafé, Streetwork oder Beratungsstelle — verwenden dasselbe Datenmodell.
 
-**Alternativen:** Zeitfenster (Schicht) als Primärcontainer (wie im Prototyp). Verworfen, weil es die Flexibilität einschränkt, Nicht-Schicht-Einrichtungen ausschließt und eine nachträgliche Umstellung aufwendig wäre. Zeitfenster als optionales Datenmodell-Konzept. Verworfen, weil die gleiche Funktion mit einem einfachen Zeitfilter auf UI-Ebene erreichbar ist — ohne zusätzliche Datenstruktur.
+**Alternativen:** Zeitfenster (Schicht) als Primärcontainer (wie im Prototyp). Verworfen, weil es die Flexibilität einschränkt, Nicht-Schicht-Einrichtungen ausschließt und eine nachträgliche Umstellung aufwendig wäre. Ein Schichtcontainer für Ereignisse ist verworfen. Die gesonderte Schichtnotiz bindet sich an einen Zeitfilter, ohne die Ereignisse selbst zu einem Schichtobjekt zu machen.
 
 **Offene Punkte:** Keine — die Entscheidung ist final.
 
-### Entscheidung 2: Klein bauen, Erweiterbarkeit vorbereiten
+### Entscheidung 2: Einrichtungen als primärer Scope
 
-**Kontext:** Das System muss sowohl für eine einzelne kleine Einrichtung als auch — perspektivisch — für einen Träger mit mehreren Standorten funktionieren. Eine flache Struktur (nur Einrichtung, kein Fremdschlüssel) skaliert nicht für Träger ohne Architekturumbau. Eine volle Hierarchie (Organization → Facility → Unit mit vollständigen Scope-Regeln, Facility-Switcher und Cross-Facility-Statistiken) ist für einen Einzelentwickler überdimensioniert und verzögert den Weg zum ersten nutzbaren Produkt erheblich.
+**Kontext:** Eine Installation soll sowohl einen einzelnen Standort als auch mehrere Einrichtungen eines Trägers bedienen.
 
-**Entscheidung:** Das System wird für eine einzelne Einrichtung gebaut. Im Datenmodell existieren aber von Anfang an die Fremdschlüssel für eine spätere Erweiterung:
+**Entscheidung:** Die Hierarchie ist Organization → Facility. Client, Event, DocumentType und WorkItem tragen einen Pflicht-Fremdschlüssel auf Facility. Client besitzt keinen direkten Organization-FK. Episode und OutcomeGoal gehören zum Fall, Milestone zum Wirkungsziel; ihr Scope folgt diesen Beziehungen.
 
-- Jede Entität (Client, Event, DocumentType, WorkItem) hat `facility_id` als Pflicht-FK.
-- Client hat zusätzlich `organization_id` als vorbereiteten FK (aktuell redundant, da es nur eine Organization gibt).
-- Beim Setup wird automatisch eine Organization + eine Facility angelegt. Die UI zeigt die Organisationsebene nicht.
-- Jede Datenbankabfrage filtert auf `facility_id = :current_facility`. Da es nur eine Facility gibt, ist das ein transparenter Filter.
+Weitere Einrichtungen werden über Django-Admin oder `setup_facility` angelegt. Der Organisationsname ist in der Navigation sichtbar; `/system/organization/` bietet der Systemadministration die Übersicht. Mitarbeitende bleiben an ihre Einrichtung gebunden. Eine Unit-Ebene, ein Organisations-Admin und eine gemeinsame Personenakte über Einrichtungen sind nicht implementiert.
 
-**Begründung:** Der Mehraufwand gegenüber einer Struktur ohne Fremdschlüssel ist gering (ca. 10–15%): ein FK pro Model, ein Scope-Filter als Middleware. Aber die Migrationsfähigkeit ist real: Wenn ein Träger als Nutzer dazukommt, werden eine zweite Facility, ein Facility-Switcher und Scope-Regeln ergänzt — ohne jede Tabelle umbauen zu müssen. Das ist dieselbe Logik wie Entscheidung 5 (Case-FK von Anfang an).
+**Begründung:** Der Einrichtungsbezug trennt die fachlichen Daten und Zuständigkeiten. Eine gemeinsame Organisation hebt diese Grenze nicht auf; das Organisationsmodell speichert nur Name und Anlagedatum neben seiner ID.
 
-Für die Frage, ob Client auf Facility- oder Organization-Ebene angesiedelt wird: Client gehört primär zur Facility. Der zusätzliche FK auf Organization ist eine Versicherung für den Fall, dass ein Träger einrichtungsübergreifende Sichtbarkeit braucht (z.B. „Maus ist auch in der Notschlafstelle bekannt"). Dieses Feature wird erst gebaut, wenn es einen konkreten Bedarf gibt — inklusive Einwilligungsmanagement und datenschutzkonformer Scope-Regeln.
+**Alternativen:** Eine feinere Organisationshierarchie und gemeinsame Personenakten sind mögliche Zielbilder, die vor einer Umsetzung eigene Scope- und Datenschutzentscheidungen benötigen.
 
-**Alternativen:**
-- Nur Facility, kein Organization-Modell. Verworfen: Wenn später ein Träger kommt, muss jede Tabelle um einen FK erweitert werden — das ist eine grundlegende Architekturänderung.
-- Volle Hierarchie von Anfang an. Verworfen: Scope-Logik, Membership-Modell, Admin-Views und Cross-Facility-Statistiken kosten 50–80% mehr Aufwand. Als Einzelentwickler mit dem Ziel „zeigbarer Prototyp in 6 Wochen" ist das nicht tragbar.
-
-**Offene Punkte:** Keine — die Entscheidung ist final. Der Ausbau auf Träger-Ebene ist ein Feature für die Falllogik (siehe Roadmap), wenn ein konkreter Bedarf vorliegt.
+**Offene Punkte:** Kein weitergehender Trägerausbau ist in der Roadmap zugesagt.
 
 ### Entscheidung 3: Semantische Feldschicht — JSONB (Hybrid)
 
@@ -886,7 +875,7 @@ Die Domänenbibliothek ist ein Startvorschlag, kein Korsett:
 
 - Einrichtungen können jeden Typ umbenennen, anpassen oder deaktivieren.
 - Einrichtungen können eigene Typen definieren, die in keiner Bibliothek vorkommen.
-- Typen werden nie gelöscht, sondern deaktiviert — damit historische Daten ihre Typzuordnung behalten.
+- Referenzierte Typen bleiben durch Löschschutz erhalten und können deaktiviert werden. Unreferenzierte Typen lassen sich in der Konfiguration endgültig löschen.
 - Verschiedene Bibliotheken können parallel existieren. Eine Notschlafstelle braucht einen Typ „Übernachtung", den ein Streetwork-Projekt nicht hat.
 - Die Community kann neue Bibliotheken beitragen: „Wohnungslosenhilfe", „Frauenhaus", „Jugendnotdienst" — jeweils mit domänenspezifischen Typen und Feldern. Die mitgelieferten Domänen-Pakete (Beratungsstelle, Awareness, Frauenhaus, Jugendarbeit) sind in [docs/packages.md](packages.md) und den Paket-Dokus `docs/packages-<domain>.md` dokumentiert.
 
@@ -900,7 +889,7 @@ Die Entscheidung für Open Source ist nicht primär technisch, sondern strategis
 
 **Vertrauen.** Anlaufstelle verarbeitet hochsensible Daten vulnerabler Menschen. Einrichtungen und ihre Datenschutzbeauftragten müssen nachvollziehen können, was mit den Daten passiert. Open-Source-Code ist auditierbar. Proprietäre Software verlangt Vertrauen in einen Anbieter, den die Einrichtung nicht kennt und nicht kontrolliert.
 
-**Selbsthosting.** Die Zielgruppe hat wenig Budget und hohe Datenschutzanforderungen. Selbsthosting — auf einem eigenen Server, einem Raspberry Pi, einem günstigen VPS — gibt Einrichtungen die volle Kontrolle über ihre Daten. Open Source ist die Voraussetzung dafür, dass Selbsthosting nicht von einem einzelnen Anbieter abhängt.
+**Selbsthosting.** Die Zielgruppe hat wenig Budget und hohe Datenschutzanforderungen. Selbsthosting gibt Einrichtungen die Kontrolle über ihre Infrastruktur und Daten; die Betriebsanforderungen stehen im [Admin-Handbuch](admin-guide.md#voraussetzungen). Open Source ist die Voraussetzung dafür, dass Selbsthosting nicht von einem einzelnen Anbieter abhängt.
 
 **Erweiterbarkeit.** Jede Einrichtung hat eigene Anforderungen. Ein Frauenhaus dokumentiert anders als ein Kontaktladen. Open Source ermöglicht es Einrichtungen (oder ihren IT-Dienstleistern), das System an ihre Bedürfnisse anzupassen — ohne auf den Goodwill eines Anbieters angewiesen zu sein.
 
@@ -1017,7 +1006,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 | **Arbeitsinfo** | Sammelbegriff für Hinweise und Aufgaben — operative Einträge, die nicht zur fachlichen Dokumentation gehören. Siehe: WorkItem. |
 | **Audit-Trail** | Unveränderliches Protokoll aller sicherheitsrelevanten Aktionen im System: Zugriffe, Änderungen, Löschungen, Login-Versuche. Dient der DSGVO-Compliance und der Nachvollziehbarkeit. Siehe: AuditLog. |
 | **AuditLog** | Technischer Begriff für den Audit-Trail. Eine eigene Entität, getrennt von der fachlichen Dokumentation gespeichert. Unveränderlich (Append-Only). |
-| **Benannter Zeitfilter** | Ein gespeicherter Arbeitszeitraum mit Label (z.B. „Nachtdienst 21:30–09:00"). Dient als Schnellfilter auf der Startseite und in der Statistik. Reine UI-Konfiguration, keine Datenstruktur. Siehe: TimeFilter. |
+| **Benannter Zeitfilter** | Ein gespeicherter Arbeitszeitraum mit Label (z.B. „Nachtdienst 21:30–09:00"). Wird für Zeitstrom, Übergabe und Strichliste verwendet; Schichtnotizen referenzieren ihn mit Löschschutz. Kein Container für Ereignisse. Siehe: TimeFilter. |
 | **Betreiber-Empfehlung** | Empfehlung für den Betrieb einer Einrichtung, die nicht paketfähig ist (z.B. Aufbewahrungsfristen, k-Schwelle, Zeitfenster, QuickTemplates, Rollen). Steht in der jeweiligen Paket-Doku (`docs/packages-<domain>.md`) statt im Paket selbst. |
 | **Case** | Fall — eine Klammer um zusammenhängende Arbeit mit einer Person. Enthält Episoden, Zuständigkeiten und optional Wirkungsziele. |
 | **Chronik** | Der zeitliche Verlauf aller Ereignisse, die zu einer Person dokumentiert wurden. Die Chronik ist die primäre Sicht auf eine Person in Anlaufstelle. |
@@ -1030,14 +1019,14 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 | **Episode** | Eine abgrenzbare Phase innerhalb eines Falls: z.B. eine Krisenphase, ein Vermittlungsprozess. |
 | **Ereignis** | Der zentrale Baustein der Dokumentation. Ein zeitgestempelter Eintrag, der ein Vorkommnis festhält. Gehört zu einem Dokumentationstyp und optional zu einer Person. Siehe: Event. |
 | **Event** | Technischer Begriff für ein Ereignis. Siehe: Ereignis. |
-| **Facility** | Einrichtung — ein konkreter Standort. Die primäre Scope-Grenze für Mitarbeitende. Alle Entitäten haben einen FK auf Facility. |
+| **Facility** | Einrichtung — ein konkreter Standort. Die primäre Scope-Grenze für Mitarbeitende. Direkter Scope für Personen, Ereignisse und weitere Modelle; Episoden, Ziele und Meilensteine erhalten ihn über ihre Beziehungen. |
 | **FieldTemplate** | Feldvorlage — definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp, Pflichtfeld, Optionen, Verschlüsselung, Statistik-Zuordnung. |
 | **Hausverbot** | Betretungsverbot für eine Person in einer Einrichtung, mit Begründung, Gültigkeitszeitraum und Erteilender. In Anlaufstelle als Dokumentationstyp mit `system_type=ban` abgebildet. |
 | **Inbox** | Persönliche Übersicht aller offenen Hinweise und fälligen Aufgaben für die angemeldete Mitarbeitende. Teil der Operations-Ebene. |
 | **JSONB** | PostgreSQL-Datentyp für binäres JSON. Wird in Anlaufstelle verwendet, um die Feldwerte eines Ereignisses zusammen mit dem Ereignis zu speichern. Indexierbar (GIN-Index), abfragbar, performant. |
 | **Kontaktstufe** | Dreistufiges Modell, das den Identifizierungsgrad einer Person im System beschreibt: anonym (nur Zählung), identifiziert (Pseudonym), qualifiziert (Beratungsprozess). Bestimmt Zugriffsrechte, zulässige Dokumentationstypen und Löschfristen. |
 | **Milestone** | Meilenstein — ein konkreter Schritt auf dem Weg zu einem Wirkungsziel. |
-| **Organization** | Träger — eine reine Verwaltungs-Hülse für Branding (Logo, Trägername in Berichten). Keine Cross-Facility-Sichtbarkeit über die Organisation. Facility-übergreifender Zugriff ausschließlich über die Rolle `super_admin` und den `/system/`-Bereich. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md), Variante b1 („Branding-Hülse"). |
+| **Organization** | Träger — Verwaltungsentität mit Name und Anlagedatum; Logo und gesondertes Berichts-Branding sind nicht implementiert. Keine Cross-Facility-Sichtbarkeit über die Organisation. Facility-übergreifender Zugriff ausschließlich über die Rolle `super_admin` und den `/system/`-Bereich. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md), Variante b1 („Branding-Hülse"). |
 | **Outcome** | Wirkung — das Ergebnis der Arbeit mit einer Person. Nicht die Aktivität („347 Kontakte"), sondern die Veränderung („stabile Wohnsituation erreicht"). |
 | **OutcomeGoal** | Wirkungsziel — was durch die Arbeit erreicht werden soll. Zugeordnet zu einem Fall. |
 | **Pseudonym** | Vom Team vergebener Name für eine Person im System. Primärer Identifikator in Anlaufstelle. Die Zuordnung zum realen Namen existiert nur im Wissen der Mitarbeitenden, nicht im System. |
@@ -1076,27 +1065,9 @@ Das Fachkonzept beschreibt Domäne und Architektur konzeptionell, nennt aber den
 
 ### Deployment-Architektur
 
-```
-┌─────────────────────────────────────────────┐
-│  Docker Host (VPS / lokaler Server / RPi)   │
-│                                             │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐ │
-│  │  Caddy /  │  │  Django   │  │ PostgreSQL│ │
-│  │  Nginx    │──│  (Gunicorn│──│           │ │
-│  │  (HTTPS)  │  │  + HTMX) │  │           │ │
-│  └──────────┘  └──────────┘  └───────────┘ │
-│                     │                       │
-│              ┌──────┴──────┐                │
-│              │ Static Files│                │
-│              │ (WhiteNoise)│                │
-│              └─────────────┘                │
-└─────────────────────────────────────────────┘
-```
+Der mitgelieferte Produktions-Stack umfasst Caddy (HTTPS), die Django-Anwendung mit Gunicorn und WhiteNoise, PostgreSQL, Redis, ClamAV, einen Cron-Dienst für Hintergrundaufgaben und einen Maintenance-Dienst für Betriebsarbeiten. ClamAV ist für Uploads in Produktion verpflichtend. Redis ist als Cache-Dienst enthalten; die Einstellungen unterstützen einen Datenbank-Cache als Fallback bei bewusst leerer Redis-Konfiguration.
 
-**Mindestanforderungen für Self-Hosting:**
-- 1 vCPU, 1 GB RAM, 10 GB Speicher (ausreichend für Einrichtungen mit < 30 Nutzern)
-- Docker Engine ≥ 24.0
-- HTTPS-fähige Domain (Caddy mit automatischem Let's Encrypt empfohlen)
+Hardwarebedarf und Installationsvoraussetzungen stehen im [Admin-Handbuch § 1 — Voraussetzungen](admin-guide.md#voraussetzungen).
 
 ### Backup-Strategie
 
@@ -1129,7 +1100,7 @@ Volle Offline-Synchronisation (wie bei CouchDB-basierten Systemen) ist mit Djang
 
 **Stufe 1 — Write-Queue für offline erfasste Ereignisse (implementiert).**
 - Schnellerfassung und Ereigniserfassung schreiben bei Netzausfall in eine lokale Write-Queue im Browser (IndexedDB, verschlüsselt).
-- Ein Service Worker synchronisiert die Queue beim nächsten erfolgreichen Request transparent mit dem Server. Die Reihenfolge der Einträge bleibt erhalten; der Nutzer sieht einen Synchronisations­indikator.
+- Der Sync-Orchestrator im geöffneten Dokument koordiniert den Abgleich beim Wiederverbinden mit dem Server. Der Service Worker synchronisiert die Queue nicht im Hintergrund; Background Sync ist verworfen ([ADR-030](adr/030-offline-sync-orchestration-replay-contract.md)). Der Nutzer sieht den Synchronisationsindikator.
 - Scope: Erfassung neuer Kontakte und Ereignisse. Suche und Chronik erfordern in dieser Stufe Netz.
 
 **Stufe 2 — Read-Cache mitgenommener Klientel (implementiert).**
@@ -1160,7 +1131,7 @@ Akzeptierte Restrisiken (F-01 kein Offline-spezifisches Auto-Lock, F-02 Passwort
 
 ### Auto-Save
 
-Jedes Formular mit mehr als zwei Feldern speichert den Entwurfszustand automatisch alle 10 Sekunden im lokalen Speicher des Browsers. Beim erneuten Öffnen wird der Entwurf wiederhergestellt. Das schützt vor Datenverlust durch Akkuprobleme, versehentliches Schließen oder Browserabstürze — alles häufige Szenarien auf privaten Smartphones im Nachtdienst.
+Die Ereigniserfassung (`/events/new/`) speichert ihren Entwurf alle 5 Sekunden verschlüsselt in IndexedDB und bietet beim erneuten Öffnen die Wiederherstellung an. Auto-Save setzt einen verfügbaren Sitzungsschlüssel und den Offline-Store voraus; ohne diese Voraussetzungen bleibt es deaktiviert. Andere Formulare haben kein allgemeines Auto-Save. Datei-Inhalte werden nicht als Entwurf gespeichert.
 
 ---
 
@@ -1183,7 +1154,7 @@ Das Fachkonzept definiert funktionale Anforderungen detailliert, aber keine nich
 Anlaufstelle ist für Einrichtungen mit 5–30 gleichzeitigen Nutzern konzipiert. Das ist eine bewusste Designentscheidung, kein Mangel. Konkret bedeutet das:
 
 - **Zieldatenmenge pro Einrichtung:** Bis zu 50.000 Ereignisse/Jahr (≈ 140/Tag bei einer mittelgroßen Einrichtung). Bei 5 Jahren Betrieb: 250.000 Ereignisse.
-- **Skalierung über 30 Nutzer:** Für Träger mit mehreren Standorten oder höherem Volumen sind Anpassungen möglich: Zeitstrom-Pagination, Redis-Caching, PostgreSQL-Tuning und dedizierte Instanzen pro Standort. Bei Interesse an einer skalierten Lösung: [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app).
+- **Skalierung über 30 Nutzer:** Für Träger mit mehreren Standorten oder höherem Volumen sind Anpassungen möglich: zusätzliches PostgreSQL-Tuning und dedizierte Instanzen pro Standort. Redis-Caching ist implementiert; eine weitergehende Zeitstrom-Pagination ist ein Zielbild. Bei Interesse an einer skalierten Lösung: [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app).
 
 ### Verfügbarkeit
 
@@ -1295,7 +1266,7 @@ Die Anwendung ist vollständig internationalisiert:
 - **Zwei Sprachen aktiv:** Deutsch (primär) und Englisch. Locale-Verzeichnisse (`src/locale/de/`, `src/locale/en/`) sind vorhanden.
 - **Language-Switcher in der Oberfläche.** Benutzer können die Sprache im laufenden Betrieb umschalten.
 - **Datums- und Zahlenformate über `django.utils.formats`.** Nicht manuell formatiert.
-- **Domänenbibliotheken mit Sprachkennung.** Die Seed-Daten tragen ein Sprachfeld (`de`), damit zukünftige Bibliotheken in anderen Sprachen parallel existieren können.
+- **Domänenbibliotheken ohne Sprachkennung.** Das Paket-Schema kennt keinen `language`-Schlüssel. Mehrsprachige Paketbezeichnungen sind ein Zielbild; eine Spracheinstellung je Paket ist nicht implementiert.
 
 ### Erweiterbarkeit
 
@@ -1387,7 +1358,7 @@ Der aktuelle Stand setzt auf Django-eigene Authentifizierung (Benutzername + Pas
 
 ### Scope-Filter als Middleware
 
-Da das Datenmodell von Anfang an `facility_id` auf allen Entitäten hat (Entscheidung 2), wird der Scope-Filter als Django-Middleware implementiert: Jede Datenbankabfrage filtert automatisch auf `facility_id = :current_facility`. Aktuell gibt es nur eine Facility, also ist der Filter transparent. Wenn ein Träger dazukommt, wird ein Facility-Switcher ergänzt — der Scope-Filter funktioniert bereits.
+Die Middleware setzt `request.current_facility` und den Einrichtungs-Kontext für direkt gescopte Modelle. FacilityScopedManager begrenzt deren Abfragen; Episoden, Wirkungsziele und Meilensteine werden über Fall beziehungsweise Ziel gescopet. Eine Installation unterstützt mehrere Einrichtungen, die fachlichen Nutzer bleiben ihrer Einrichtung zugeordnet.
 
 ### Monitoring und Betrieb
 
@@ -1407,8 +1378,8 @@ Alle Architektur- und Strategieentscheidungen im Fachkonzept v1.7:
 | # | Entscheidung | Status | Ergebnis |
 |---|---|---|---|
 | 1 | Zeitstrom statt Zeitfenster-Modell | **Final** | Ereignis als Grundeinheit, benannte Zeitfilter als UI-Konfiguration |
-| 2 | Organisationshierarchie | **Final** | Klein bauen + vorbereiten. Facility als Primärscope, FKs auf Organization angelegt, UI zeigt nur Facility |
-| 2a | Client-Scope | **Final** | Client gehört zur Facility. Organization-FK vorbereitet (nullable, ungenutzt im aktuellen Stand) |
+| 2 | Organisationshierarchie | **Final** | Organization → mehrere Facilities; Facility als Primärscope, Organisationsname in Navigation und Systemübersicht |
+| 2a | Client-Scope | **Final** | Client gehört zur Facility; kein direkter Organization-FK |
 | 3 | Semantische Feldschicht | **Bedingt entschieden** | JSONB im aktuellen Stand. Performance-Evaluierung feldbezogener Abfragen vor Auswertung (Roadmap) |
 | 4 | WorkItems als eigenes Modul | **Final** | Eigene Entität, getrennt von Events |
 | 5 | Case-FK auf Event von Anfang an | **Final** | Nullable FK, vorbereitet für Falllogik (Roadmap) |
