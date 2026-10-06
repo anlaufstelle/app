@@ -138,14 +138,14 @@ make db
 
 This starts a PostgreSQL 18 container with the following credentials:
 
-The port is bound to `127.0.0.1:5432` only. To allow LAN access, configure that deliberately through your own Docker or firewall setup.
-
 | Variable  | Value         |
 |-----------|---------------|
 | DB name   | anlaufstelle  |
 | User      | anlaufstelle  |
 | Password  | anlaufstelle  |
 | Port      | 5432          |
+
+The port is bound to `127.0.0.1:5432` only. To allow LAN access, configure that deliberately through your own Docker or firewall setup.
 
 Alternatively, a locally installed PostgreSQL instance can be used. The connection URL must then be set in the `DATABASE_URL` environment variable.
 
@@ -1016,4 +1016,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: 1daffc3258aaea6be8a545e4654e458a4b334aeb -->
+<!-- source-hash: a36a4ec7dcfeff4386c3c89b9c9a04e944ee688e -->

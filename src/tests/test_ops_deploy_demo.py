@@ -11,7 +11,7 @@ SCRIPT = Path("dev-ops/deploy/deploy-demo.sh")
 
 def _remote_block() -> str:
     if not SCRIPT.exists():
-        pytest.skip("dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #2408)")
+        pytest.skip("dev-ops/deploy/deploy-demo.sh is not in the public snapshot (Refs #2408)")
     text = SCRIPT.read_text(encoding="utf-8")
     start = text.index("bash -se <<'EOF'\n") + len("bash -se <<'EOF'\n")
     end = text.index("\nEOF\n", start)
