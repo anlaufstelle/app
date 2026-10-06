@@ -24,6 +24,7 @@ Refs #1076.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -50,7 +51,6 @@ class VendorLib:
     package: str
     vendored_filename: str
     version_patterns: tuple[str, ...]
-    license_files: tuple[str, ...] = ()
     table_name: str = ""
 
 
@@ -65,21 +65,18 @@ VENDOR_LIBS: tuple[VendorLib, ...] = (
         package="htmx.org",
         vendored_filename="htmx.min.js",
         version_patterns=(r'version\s*:\s*"(\d+\.\d+\.\d+)"',),
-        license_files=("LICENSE-htmx.txt",),
         table_name="htmx",
     ),
     VendorLib(
         package="@alpinejs/csp",
         vendored_filename="alpine-csp.min.js",
         version_patterns=(r'version\s*:\s*"(\d+\.\d+\.\d+)"',),
-        license_files=("LICENSE-alpine.txt",),
         table_name="Alpine.js CSP",
     ),
     VendorLib(
         package="dexie",
         vendored_filename="dexie.min.js",
         version_patterns=(r'version\s*:\s*"(\d+\.\d+\.\d+)"',),
-        license_files=("LICENSE-dexie.txt", "NOTICE-dexie.txt"),
         table_name="Dexie.js",
     ),
     VendorLib(
@@ -89,7 +86,6 @@ VENDOR_LIBS: tuple[VendorLib, ...] = (
             r"Chart\.js\s+v(\d+\.\d+\.\d+)",
             r"chart\.js@(\d+\.\d+\.\d+)",
         ),
-        license_files=("LICENSE-chartjs.txt",),
         table_name="Chart.js",
     ),
 )
@@ -188,42 +184,198 @@ def _is_exact_version(spec: str) -> bool:
     return re.fullmatch(r"\d+\.\d+\.\d+", spec) is not None
 
 
-# Vendored builds outside package.json: (file, version regex, required header marker,
-# license texts under src/static/js/licenses/). An empty marker skips the header check.
-UNMANAGED_BUILDS: dict[str, tuple[str, str, str, tuple[str, ...]]] = {
-    "SortableJS": ("vendor/sortable.min.js", r"Sortable (\d+\.\d+\.\d+)", "", ("LICENSE-sortablejs.txt",)),
-    "axe-core": ("vendor/axe.min.js", r"axe v(\d+\.\d+\.\d+)", "Mozilla Public", ()),
+# Vendored builds outside package.json: (file, version regex, required header marker).
+# An empty marker skips the header check.
+UNMANAGED_BUILDS: dict[str, tuple[str, str, str]] = {
+    "SortableJS": ("vendor/sortable.min.js", r"Sortable (\d+\.\d+\.\d+)", ""),
+    "axe-core": ("vendor/axe.min.js", r"axe v(\d+\.\d+\.\d+)", "Mozilla Public"),
 }
+
+# Self-hosted fonts: sha256 per file. A replaced font changes the hash, which forces
+# a review of the version and license rows below.
+FONT_HASHES: dict[str, str] = {
+    "dmmono-400-latin-ext.woff2": "a52e19ebe0398c9c0f8fa28a0c5e9a6bc324f35d9f0881c9aa407d10af447175",
+    "dmmono-400-latin.woff2": "e1896b13b2b1bb112fac2f9571bd6c40e118746e77a4511edbf43fbb41bf3e1e",
+    "dmmono-500-latin-ext.woff2": "8711f938c3f04f91e35ae64ebc7f2eecd800d2ae1c3542f6c837c758a50422f5",
+    "dmmono-500-latin.woff2": "9964608a849396bd00c4bfd7034afe03486469dcf20b4f6b8cbdfdd310369951",
+    "dmsans-latin-ext.woff2": "a5d38fe99f930275684999b462c7123faa063d9e44e73b4b241723d884aa0f49",
+    "dmsans-latin.woff2": "9fea608a947e67020c33cad9a6fe3d60c54119dfb8cff87768a8117a15ed7543",
+}
+FONT_VERSIONS = {"DM Sans": "4.004", "DM Mono": "1.000"}
+ICON_DIR = ROOT / "src" / "static" / "icons"
+ICON_FILES = ("favicon.svg", "icon-192.svg", "icon-512.svg")
+ICON_LICENSE = ICON_DIR / "LICENSE-heroicons.txt"
+HEROICONS_VERSION = "2.0.18"
+
+TABLE_HEADER = ["Package", "Version", "License", "Upstream", "Vendored Path", "License text"]
+JS_LICENSES = "src/static/js/licenses/"
+# Per work: (license id, upstream URL, path-cell substrings, license-text-cell substrings).
+TABLE_EXPECTED: dict[str, tuple[str, str, tuple[str, ...], tuple[str, ...]]] = {
+    "htmx": (
+        "0BSD",
+        "https://github.com/bigskysoftware/htmx",
+        ("src/static/js/htmx.min.js",),
+        (JS_LICENSES + "LICENSE-htmx.txt",),
+    ),
+    "Alpine.js CSP": (
+        "MIT",
+        "https://github.com/alpinejs/alpine",
+        ("src/static/js/alpine-csp.min.js",),
+        (JS_LICENSES + "LICENSE-alpine.txt",),
+    ),
+    "Chart.js": (
+        "MIT",
+        "https://github.com/chartjs/Chart.js",
+        ("src/static/js/chart.min.js",),
+        (JS_LICENSES + "LICENSE-chartjs.txt",),
+    ),
+    "Dexie.js": (
+        "Apache-2.0",
+        "https://github.com/dexie/Dexie.js",
+        ("src/static/js/dexie.min.js",),
+        (JS_LICENSES + "LICENSE-dexie.txt", JS_LICENSES + "NOTICE-dexie.txt"),
+    ),
+    "SortableJS": (
+        "MIT",
+        "https://github.com/SortableJS/Sortable",
+        ("src/static/js/vendor/sortable.min.js",),
+        (JS_LICENSES + "LICENSE-sortablejs.txt",),
+    ),
+    "axe-core": ("MPL-2.0", "https://github.com/dequelabs/axe-core", ("src/static/js/vendor/axe.min.js",), ("header",)),
+    "DM Sans": (
+        "SIL OFL 1.1",
+        "https://github.com/googlefonts/dm-fonts",
+        ("src/static/fonts/dmsans-",),
+        ("src/static/fonts/LICENSE-DM-fonts.txt",),
+    ),
+    "DM Mono": (
+        "SIL OFL 1.1",
+        "https://github.com/googlefonts/dm-mono",
+        ("src/static/fonts/dmmono-",),
+        ("src/static/fonts/LICENSE-DM-fonts.txt",),
+    ),
+    "Heroicons": (
+        "MIT",
+        "https://github.com/tailwindlabs/heroicons",
+        ("src/static/icons/", "src/templates/auth/login.html"),
+        ("src/static/icons/LICENSE-heroicons.txt",),
+    ),
+}
+# License texts must carry their obligatory parts: a placeholder or a truncated
+# text fails even though the file is non-empty. (markers, minimum size in bytes)
+LICENSE_TEXT_RULES: dict[str, tuple[tuple[str, ...], int]] = {
+    "src/static/js/licenses/LICENSE-htmx.txt": (("Zero-Clause BSD", "Permission to use, copy, modify"), 400),
+    "src/static/js/licenses/LICENSE-alpine.txt": (
+        ("Caleb Porzio", "Permission is hereby granted", "THE SOFTWARE IS PROVIDED"),
+        800,
+    ),
+    "src/static/js/licenses/LICENSE-chartjs.txt": (
+        ("Chart.js Contributors", "Permission is hereby granted", "THE SOFTWARE IS PROVIDED"),
+        800,
+    ),
+    "src/static/js/licenses/LICENSE-sortablejs.txt": (
+        ("All contributors to Sortable", "Permission is hereby granted", "THE SOFTWARE IS PROVIDED"),
+        800,
+    ),
+    "src/static/js/licenses/LICENSE-dexie.txt": (
+        ("Apache License", "Version 2.0", "TERMS AND CONDITIONS", "END OF TERMS AND CONDITIONS"),
+        8000,
+    ),
+    "src/static/js/licenses/NOTICE-dexie.txt": (
+        ("David Fahlander", "Apache License, Version 2.0", "limitations under the License"),
+        400,
+    ),
+    "src/static/fonts/LICENSE-DM-fonts.txt": (
+        (
+            "SIL OPEN FONT LICENSE Version 1.1",
+            "DM Sans Project Authors",
+            "DM Mono Project Authors",
+            "PREAMBLE",
+            "DEFINITIONS",
+            "OTHER DEALINGS IN THE FONT SOFTWARE",
+        ),
+        3000,
+    ),
+    "src/static/icons/LICENSE-heroicons.txt": (
+        ("Refactoring UI Inc", "Permission is hereby granted", "THE SOFTWARE IS PROVIDED"),
+        800,
+    ),
+}
+
+
+def parse_table(text: str) -> tuple[list[str], dict[str, list[str]]]:
+    """Header cells and rows (first cell -> all cells) of the vendored-works table."""
+    header: list[str] = []
+    rows: dict[str, list[str]] = {}
+    for line in text.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if cells[0] == "Package":
+            header = cells
+        elif header and not set(cells[0]) <= {"-"}:
+            rows[cells[0]] = cells
+    return header, rows
 
 
 def _nonempty(path: Path) -> bool:
     return path.is_file() and bool(path.read_text(encoding="utf-8").strip())
 
 
-def check_licenses(pinned: dict[str, str]) -> list[str]:
-    """Every shipped third-party work has its license text in the repo and a row in THIRDPARTY-LICENSES.md."""
+def _check_license_texts() -> list[str]:
+    errors: list[str] = []
+    for rel, (markers, min_size) in LICENSE_TEXT_RULES.items():
+        path = ROOT / rel
+        if not _nonempty(path):
+            errors.append(f"license text missing or empty: {rel}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        if len(text.encode("utf-8")) < min_size:
+            errors.append(f"{rel}: license text truncated or a placeholder (< {min_size} bytes)")
+        errors += [f"{rel}: license text incomplete ({m!r} missing)" for m in markers if m not in text]
+        if "Source: " not in text.splitlines()[0] and rel.endswith(("alpine.txt", "sortablejs.txt", "heroicons.txt")):
+            errors.append(f"{rel}: source line missing in the first line")
+    return errors
+
+
+def _discover_shipped() -> list[str]:
+    """Shipped third-party files that are not registered."""
     errors: list[str] = []
     registered = {lib.vendored_filename for lib in VENDOR_LIBS} | {entry[0] for entry in UNMANAGED_BUILDS.values()}
-    shipped = {
-        p.relative_to(VENDOR_DIR).as_posix() for d in (VENDOR_DIR, VENDOR_DIR / "vendor") for p in d.glob("*.min.js")
-    }
-    for name in sorted(shipped - registered):
-        errors.append(f"{name}: shipped vendor script is not registered in the license guard")
+    shipped = {p.relative_to(VENDOR_DIR).as_posix() for p in VENDOR_DIR.glob("*.min.js")}
+    vendor_subdir = VENDOR_DIR / "vendor"
+    if vendor_subdir.is_dir():
+        shipped |= {p.relative_to(VENDOR_DIR).as_posix() for p in vendor_subdir.rglob("*") if p.is_file()}
+    errors += [f"{n}: shipped vendor file is not registered in the license guard" for n in sorted(shipped - registered)]
 
-    for lib in VENDOR_LIBS:
-        if not lib.license_files:
-            errors.append(f"{lib.package}: no license text registered")
-        for fname in lib.license_files:
-            if not _nonempty(LICENSE_DIR / fname):
+    if FONT_DIR.is_dir():
+        fonts = {p.name: p for p in FONT_DIR.rglob("*") if p.is_file() and p != FONT_LICENSE}
+        for name in sorted(set(fonts) - set(FONT_HASHES)):
+            errors.append(f"font without license mapping: {name}")
+        for name, digest in FONT_HASHES.items():
+            if name not in fonts:
+                errors.append(f"registered font missing: {name}")
+            elif hashlib.sha256(fonts[name].read_bytes()).hexdigest() != digest:
                 errors.append(
-                    f"{lib.package}: license text missing or empty: {(LICENSE_DIR / fname).relative_to(ROOT)}"
+                    f"font changed: {name} — review version and license, then update FONT_HASHES/FONT_VERSIONS"
                 )
+    if ICON_DIR.is_dir():
+        icons = {p.name for p in ICON_DIR.iterdir() if p.is_file()}
+        known = set(ICON_FILES) | {ICON_LICENSE.name} | {n.replace(".svg", ".png") for n in ICON_FILES}
+        errors += [f"icon without license mapping: {n}" for n in sorted(icons - known)]
+        for name in ICON_FILES:
+            path = ICON_DIR / name
+            if not path.is_file() or "Heroicons" not in path.read_text(encoding="utf-8"):
+                errors.append(f"icon {name}: Heroicons attribution missing")
+    return errors
+
+
+def check_licenses(pinned: dict[str, str]) -> list[str]:
+    """Every shipped third-party work has its license text in the repo and a complete row in THIRDPARTY-LICENSES.md."""
+    errors = _discover_shipped() + _check_license_texts()
 
     versions: dict[str, str] = {lib.table_name: pinned.get(lib.package, "") for lib in VENDOR_LIBS}
-    for name, (fname, pattern, marker, license_files) in UNMANAGED_BUILDS.items():
-        for lf in license_files:
-            if not _nonempty(LICENSE_DIR / lf):
-                errors.append(f"{name}: license text missing or empty: {(LICENSE_DIR / lf).relative_to(ROOT)}")
+    for name, (fname, pattern, marker) in UNMANAGED_BUILDS.items():
         path = VENDOR_DIR / fname
         head = path.read_text(encoding="utf-8")[:2000] if path.is_file() else ""
         match = re.search(pattern, head)
@@ -232,23 +384,30 @@ def check_licenses(pinned: dict[str, str]) -> list[str]:
             errors.append(f"{name}: no version header in {fname}")
         if marker and marker not in head:
             errors.append(f"{name}: license header ({marker}) missing in {fname}")
-
-    fonts = sorted(FONT_DIR.glob("*.woff2")) if FONT_DIR.is_dir() else []
-    families = {p.name.split("-")[0] for p in fonts}
-    if families - {"dmsans", "dmmono"}:
-        errors.append(f"font without license mapping: {', '.join(sorted(families - {'dmsans', 'dmmono'}))}")
-    if fonts:
-        text = FONT_LICENSE.read_text(encoding="utf-8") if FONT_LICENSE.is_file() else ""
-        for marker in ("SIL OPEN FONT LICENSE Version 1.1", "DM Sans Project Authors", "DM Mono Project Authors"):
-            if marker not in text:
-                errors.append(f"{FONT_LICENSE.relative_to(ROOT)}: license text incomplete ({marker!r} missing)")
-    versions |= {"DM Sans": "", "DM Mono": ""}
+    versions |= FONT_VERSIONS | {"Heroicons": HEROICONS_VERSION}
 
     table = THIRDPARTY.read_text(encoding="utf-8") if THIRDPARTY.is_file() else ""
-    rows = [line for line in table.splitlines() if line.startswith("|")]
-    for name, version in versions.items():
-        if not any(name in row and version in row for row in rows):
-            errors.append(f"THIRDPARTY-LICENSES.md: row for {name} {version} missing")
+    header, rows = parse_table(table)
+    if header != TABLE_HEADER:
+        errors.append(f"THIRDPARTY-LICENSES.md: table header must be {' | '.join(TABLE_HEADER)}")
+        return errors
+    for name, (spdx, upstream, paths, texts) in TABLE_EXPECTED.items():
+        row = rows.get(name)
+        if row is None or len(row) != len(TABLE_HEADER):
+            errors.append(f"THIRDPARTY-LICENSES.md: row for {name} missing or malformed")
+            continue
+        if row[1] != versions.get(name):
+            errors.append(f"THIRDPARTY-LICENSES.md: {name} version is {row[1]!r}, expected {versions.get(name)!r}")
+        if row[2] != spdx:
+            errors.append(f"THIRDPARTY-LICENSES.md: {name} license is {row[2]!r}, expected {spdx!r}")
+        if f"<{upstream}>" not in row[3]:
+            errors.append(f"THIRDPARTY-LICENSES.md: {name} upstream <{upstream}> missing")
+        errors += [f"THIRDPARTY-LICENSES.md: {name} path {p!r} missing" for p in paths if p not in row[4]]
+        errors += [f"THIRDPARTY-LICENSES.md: {name} license text {t!r} missing" for t in texts if t not in row[5]]
+    errors += [
+        f"THIRDPARTY-LICENSES.md: row for {n} is not registered in the guard"
+        for n in sorted(set(rows) - set(TABLE_EXPECTED))
+    ]
     return errors
 
 

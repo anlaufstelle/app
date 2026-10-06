@@ -29,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "verify_vendor_js_sync.py"
 VENDOR_REL = Path("src") / "static" / "js"
 FONT_REL = Path("src") / "static" / "fonts"
+ICON_REL = Path("src") / "static" / "icons"
 
 
 def _run(root: Path) -> subprocess.CompletedProcess[str]:
@@ -58,20 +59,18 @@ def _mirror_repo(dest: Path, *, mutate: dict[str, str] | None = None) -> Path:
 
     files = ["package.json", "scripts/verify_vendor_js_sync.py", "THIRDPARTY-LICENSES.md"]
     files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / VENDOR_REL).glob("*.min.js")]
-    files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / VENDOR_REL / "vendor").glob("*.min.js")]
-    files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / VENDOR_REL / "licenses").glob("*.txt")]
-    files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / FONT_REL).glob("*.txt")]
-    files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / FONT_REL).glob("*.woff2")]
+    for sub in (VENDOR_REL / "vendor", VENDOR_REL / "licenses", FONT_REL, ICON_REL):
+        files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / sub).rglob("*") if p.is_file()]
 
     for rel in files:
         (dest / rel).parent.mkdir(parents=True, exist_ok=True)
-        content = "" if rel.endswith(".woff2") else (REPO_ROOT / rel).read_text(encoding="utf-8")
+        content = "" if rel.endswith((".woff2", ".png")) else (REPO_ROOT / rel).read_text(encoding="utf-8")
         if rel in mutate:
             old, new = mutate[rel].split("\x00")
             assert old in content, f"Marker {old!r} nicht in {rel} gefunden"
             content = content.replace(old, new, 1)
         target = dest / rel
-        if rel.endswith(".woff2"):
+        if rel.endswith((".woff2", ".png")):
             target.write_bytes((REPO_ROOT / rel).read_bytes())
         else:
             target.write_text(content, encoding="utf-8")
@@ -199,7 +198,7 @@ def test_font_license_missing_is_detected(tmp_path: Path) -> None:
     (mirror / FONT_REL / "LICENSE-DM-fonts.txt").unlink()
     result = _run(mirror)
     assert result.returncode == 1
-    assert "DM Sans Project Authors" in result.stderr
+    assert "license text missing or empty: src/static/fonts/LICENSE-DM-fonts.txt" in result.stderr
 
 
 def test_unregistered_vendor_script_is_detected(tmp_path: Path) -> None:
@@ -239,6 +238,93 @@ def test_mit_license_text_missing_is_detected(tmp_path: Path, name: str) -> None
     result = _run(mirror)
     assert result.returncode == 1
     assert name in result.stderr
+
+
+def _edit_table(mirror: Path, old: str, new: str) -> None:
+    table = mirror / "THIRDPARTY-LICENSES.md"
+    text = table.read_text(encoding="utf-8")
+    assert old in text, old
+    table.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+def test_heroicons_license_text_missing_is_detected(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / ICON_REL / "LICENSE-heroicons.txt").unlink()
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "LICENSE-heroicons.txt" in result.stderr
+
+
+def test_unregistered_icon_is_detected(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / ICON_REL / "other.svg").write_text("<svg/>", encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "icon without license mapping: other.svg" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        ("| DM Sans | 4.004 |", "| DM Sans | 999.999 |", "DM Sans version is '999.999'"),
+        ("| MIT | <https://github.com/chartjs/Chart.js> |", "| MIT | |", "Chart.js upstream"),
+        ("| Apache-2.0 | <https://github.com/dexie", "| MIT | <https://github.com/dexie", "Dexie.js license is 'MIT'"),
+        ("`src/static/js/chart.min.js`", "`elsewhere.js`", "Chart.js path 'src/static/js/chart.min.js' missing"),
+        ("`src/static/js/licenses/LICENSE-htmx.txt`", "none", "htmx license text"),
+        ("| Heroicons | 2.0.18 |", "| Heroicons | 1.0.0 |", "Heroicons version is '1.0.0'"),
+    ],
+)
+def test_incomplete_inventory_cell_is_detected(tmp_path: Path, old: str, new: str, message: str) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    _edit_table(mirror, old, new)
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert message in result.stderr
+
+
+def test_changed_font_requires_review(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / FONT_REL / "dmsans-latin.woff2").write_bytes(b"replaced")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "font changed: dmsans-latin.woff2" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "src/static/js/licenses/LICENSE-alpine.txt",
+        "src/static/js/licenses/NOTICE-dexie.txt",
+        "src/static/icons/LICENSE-heroicons.txt",
+        "src/static/fonts/LICENSE-DM-fonts.txt",
+    ],
+)
+def test_placeholder_license_text_is_detected(tmp_path: Path, name: str) -> None:
+    """A non-empty placeholder or truncated text must not pass as license text."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / name).write_text("Source: https://example.invalid\nMIT\n", encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert name in result.stderr
+
+
+@pytest.mark.parametrize("name", ["newlib.js", "nested/deep/newlib.js", "newlib.css", "newlib.map"])
+def test_unminified_or_nested_vendor_file_is_detected(tmp_path: Path, name: str) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    target = mirror / VENDOR_REL / "vendor" / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("/* newlib */", encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert f"vendor/{name}: shipped vendor file is not registered" in result.stderr
+
+
+def test_unknown_font_format_is_detected(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / FONT_REL / "extra.ttf").write_bytes(b"x")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "font without license mapping: extra.ttf" in result.stderr
 
 
 def test_runs_without_node_modules(tmp_path: Path) -> None:
