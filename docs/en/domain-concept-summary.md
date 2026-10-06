@@ -1,7 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Synchronization update 2026-10-06: Optional calendar, wiki, KDS export and third-party interfaces are marked as target features; hardware references point to the admin guide.
+> Synchronization update 2026-10-06: Upload plaintext buffers, per-view and login rate limits, and PBKDF2-SHA256 password hashing match the implementation.
 
 # Domain Concept Summary
 
@@ -96,6 +96,10 @@ Anlaufstelle processes social data of highly vulnerable people. Privacy is not a
 - **Facility scoping.** Middleware supplies the current facility context; scoped managers use the direct facility key, while episodes, goals and milestones are scoped through their parent relationships. PostgreSQL Row Level Security provides defense-in-depth on all facility-scoped tables, with session-variable-driven policies that enforce the tenant boundary at the database layer itself.
 - **Two-factor authentication.** TOTP-based 2FA is available and can be enforced per user or facility-wide. Single-use backup codes and an account lockout back it up, the privileged roles (`super_admin`/`facility_admin`) are enforced into MFA by default, and the TOTP secret itself is encrypted at rest (Fernet, ADR-031); a WebAuthn passkey can additionally be registered as a phishing-resistant second factor (ADR-032, no passwordless login).
 - **Data subject rights.** Authorized staff handle access (PDF), portability (JSON), internal rectification requests, deletion requests (`DeletionRequest`, separate from retention proposals) and processing restrictions. Client self-service and self-registration are rejected ([ADR-013](../adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](../adr/041-berichtigungsworkflow-intern.md)). Seven GDPR documentation templates (processing register, DPIA, DPA, TOMs, data-subject information, employee information, and a deletion concept) ship with the app ([`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/)).
+
+- **Upload buffers.** Attachments are encrypted at rest with Fernet/AES-128 after a fail-closed ClamAV scan. Uploads exceeding 2.5 MiB are temporarily buffered in plaintext before scanning and encryption. The supplied Compose configurations place this buffer on RAM-backed tmpfs via `FILE_UPLOAD_TEMP_DIR=/tmp`; without an explicit directory, Django uses `tempfile.gettempdir()`, whose storage depends on the deployment. See [Ops Runbook § 5.7a](../ops-runbook.md#57a-upload-temp-verzeichnis-klartext-zwischenpuffer-refs-1661).
+- **Rate limits.** Login attempts are limited to 5/minute per IP and 10/hour per username. Authenticated actions have per-view, per-user limits: mutations 60/hour, frequent actions and offline bundle requests 120/hour each, offline revocation queries 600/hour. There is no global API user limit; the external API remains a target feature ([ADR-026](../adr/026-rate-limiting.md)).
+- **Password hashing.** Username/password authentication uses Django’s default PBKDF2-SHA256 password hasher.
 
 ## Role Model
 
@@ -321,4 +325,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: b5bc658ad803fdcef7ab830c21c0241470d1194a -->
+<!-- source-hash: d813606de78e85c01d4fb1b92e312309bf5c2026 -->
