@@ -21,6 +21,7 @@ Contract:
 
 from __future__ import annotations
 
+import logging
 import time
 from urllib.parse import urlsplit
 
@@ -43,6 +44,7 @@ from tests.test_rls_functional import (  # noqa: F401
 pytestmark = pytest.mark.django_db
 
 USER_ADMIN_CHANGELIST = "/admin-mgmt/core/user/"
+CREDENTIALS_LOGGER = "core.services.security.credentials"
 # The admin action runs through the real changelist, including the sudo gate of
 # the admin site. unfold's ``ModelAdmin.get_action_choices`` still lacks the
 # ``action_location`` parameter, which Django 6.1 reports as a deprecation on
@@ -60,6 +62,10 @@ DETAIL_KEYS = {
     "passkeys_removed",
     "backup_codes_removed",
 }
+
+
+def _credential_log_lines(caplog) -> list[tuple[int, str]]:
+    return [(record.levelno, record.getMessage()) for record in caplog.records if record.name == CREDENTIALS_LOGGER]
 
 
 def _reset_url(user) -> str:
@@ -189,6 +195,35 @@ class TestResetService:
         assert response.status_code == 302
         assert urlsplit(response.url).path == "/login/"
         assert actor_browser.get(reverse("core:user_access_list")).status_code == 200
+
+    def test_session_flush_log_names_no_salt_rotation(self, admin_user, staff_user, caplog):
+        """The reset rotates no offline salt; its flush log line must not claim one."""
+        _enroll(staff_user)
+        _verified_client(staff_user)
+
+        with caplog.at_level(logging.INFO, logger=CREDENTIALS_LOGGER):
+            reset_user_mfa(staff_user, actor=admin_user)
+
+        assert _credential_log_lines(caplog) == [
+            (logging.INFO, f"Session flush without salt rotation: 1 session(s) of user {staff_user.pk} deleted.")
+        ]
+
+    def test_session_scan_cap_log_names_no_salt_rotation(self, admin_user, staff_user, settings, caplog):
+        settings.OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = 0
+        _enroll(staff_user)
+        _verified_client(staff_user)
+
+        with caplog.at_level(logging.INFO, logger=CREDENTIALS_LOGGER):
+            reset_user_mfa(staff_user, actor=admin_user)
+
+        assert _credential_log_lines(caplog) == [
+            (
+                logging.ERROR,
+                f"Session flush without salt rotation: session scan cap (0) reached for user {staff_user.pk} - "
+                "remaining sessions not flushed (they expire on inactivity, at the latest at the absolute "
+                "session maximum, Refs #1858/#1868).",
+            )
+        ]
 
     def test_own_account_is_refused(self, admin_user, super_admin_user):
         _enroll(admin_user)

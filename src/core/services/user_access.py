@@ -392,7 +392,7 @@ def reset_user_mfa(target: User, *, actor, ip_address: str | None = None) -> MFA
             ip_address=ip_address,
         )
 
-    flush_user_sessions(locked)
+    flush_user_sessions(locked, salt_rotated=False)
     return result
 
 
