@@ -1,5 +1,6 @@
 > This is the English translation of [reporting-plugins.md](../reporting-plugins.md).
 > The German version is the authoritative source.
+> Synchronization update 2026-10-06: the import header and `prepare_export` follow `example.py`, snapshot backends must implement `summarize_events`, and the CSV metadata line shows the unconditional k-anonymity note (#2503).
 
 # Reporting Plugins (Report Backends)
 
@@ -76,7 +77,7 @@ class DatasetBackend(ABC):
 |---|---|---|
 | `slug` | — | Set by the decorator. Do **not** assign it yourself. Format `^[a-z0-9]+(?:[-_][a-z0-9]+)*$` (lowercase letters/digits, single `-`/`_` as separators, never at the edges). It appears in query parameters, file names and `backend_data` keys, which makes it effectively immutable — changing it afterwards requires a data migration (pattern: [`0123`](../../src/core/migrations/0123_rename_backend_data_key_sample_report_1.py)). |
 | `name` | **yes** | Visible name on the report card and in the JSON payload. Declare it as `gettext_lazy`; the export pipeline casts to `str` at the payload boundary itself. |
-| `snapshot_enabled` | no | Defaults to `False`. Set it to `True` only if `summary` is **purely aggregated** — see [§ 5](#5-snapshot-integration). |
+| `snapshot_enabled` | no | Defaults to `False`. Set it to `True` only if `summary` is **purely aggregated** and `summarize_events` is implemented — see [§ 5](#5-snapshot-integration). |
 | `is_available(facility)` | no | Defaults to `True`. Hook for facility-dependent reports. `False` — like any other falsy return value, for instance the `None` of a nullable `BooleanField` — hides the backend from the report list **and** makes panel and export respond with HTTP 404. The list filter and the access guard check the same truthiness. |
 | `description` | no | One sentence "what this report counts", shown directly below the name on the card (Refs #1804). Declare it as `gettext_lazy`. Empty = the card omits the line — leaving only the name, which turns the choice back into guesswork. |
 | `get_field_specs()` | **yes** | Column definition of the tabular projection. The order is the column order in the CSV. |
@@ -166,13 +167,7 @@ from django.utils.translation import gettext_lazy as _
 from core.models import Event
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
-from core.services.dashboard.external_report import (
-    ORDER_INPUT,
-    _Breakdown,
-    _get_threshold,
-    _suppress_small,
-    apply_residual_guard,
-)
+from core.services.dashboard.external_report import ORDER_INPUT, _Breakdown, suppress_single_margin
 
 
 @register_backend("example")
@@ -208,8 +203,8 @@ Imports as in step 1 (`Event`, `Count`):
 ```python
 def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
     rows = (
-        Event.objects.filter(
-            facility=facility,
+        Event.objects.for_facility(facility)
+        .filter(
             is_deleted=False,
             occurred_at__date__gte=date_from,
             occurred_at__date__lte=date_to,
@@ -238,7 +233,7 @@ def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
 
 Three points that are easy to miss:
 
-- **Always filter by `facility`.** Backends run in the request context with RLS, but also inside the snapshot command; do not rely on the database layer alone.
+- **Always filter by `facility`** (`for_facility`). Backends run in the request context with RLS, but also inside the snapshot command; do not rely on the database layer alone.
 - **`is_deleted=False`**, otherwise soft-deleted events are counted.
 - **Aggregate instead of iterating.** `.values(...).annotate(Count(...))` returns one row per group in **one** query; a Python loop over events becomes unusably slow for year-long periods.
 
@@ -302,7 +297,7 @@ Consumers that want to answer "does this type/field template appear in a report?
 
 ### Step 4 — Guarantee k-anonymity
 
-As soon as the report can be downloaded, `prepare_export` is **required reading**, not an optional extra. Details in [§ 6](#6-k-anonymity--the-prepare_export-hook); the minimal case from `example.py` (imports as in step 1):
+As soon as the report can be downloaded, `prepare_export` is **required reading**, not an optional extra. Details in [§ 6](#6-k-anonymity--the-prepare_export-hook); the minimal case from `example.py` (imports as in step 1, `dataclasses` included):
 
 ```python
 # Declaration for the central residual guard: ``total`` is the sum of all
@@ -313,30 +308,19 @@ _EXPORT_BREAKDOWN = _Breakdown("records", "total", ORDER_INPUT)
 
 
 def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-    threshold = _get_threshold(facility)
-    total = result.summary["total"]
-    # R14: a marginal total < k is itself a small cell.
-    published_total = None if total < threshold else total
-    view = {
-        "total": published_total,
-        "records": _suppress_small(result.records, threshold, margin=published_total, order=ORDER_INPUT),
-    }
-    apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
-
-    field_keys = [spec.key for spec in self.get_field_specs()]
-    records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
-
-    summary = dict(result.summary)
-    summary["total"] = view["total"]
-    summary["k_anonymity_threshold"] = threshold
+    records, summary = suppress_single_margin(
+        facility, result, breakdown=self._EXPORT_BREAKDOWN, field_specs=self.get_field_specs()
+    )
     return dataclasses.replace(result, records=records, summary=summary)
 ```
 
-`margin` and `order` are **keyword-only and have no default** — a call without them raises `TypeError` (fail-closed): `margin` states whether a published marginal total exists for the feasibility audit to work against, `order` names the canonical output order of suppressed rows.
+For backends with **exactly one** marginal total (`summary["total"]`) and **one** breakdown that partitions it exactly, `suppress_single_margin` encapsulates all k-anonymity steps: determine the threshold, check the marginal total against R14 (a marginal total < k is itself a small cell), suppress the rows via `_suppress_small`, run `apply_residual_guard` as the **final** step, and project back onto the declared `FieldSpec` keys. The function sets `summary["k_anonymity_threshold"]`; the caller sets `completeness` itself. Backends with several related metrics or with no marginal total at all build the suppression themselves, following `SampleReport1Backend.prepare_export` — there is deliberately no second base class for this.
 
-`apply_residual_guard` is the **final** step and is mandatory for every `prepare_export` with a published marginal total (the architecture guard in `test_architecture_guards_services.py` enforces it): it runs the recipient inference and, if necessary, drops the marginal total or the whole breakdown. The former home-grown rule "if a cell is dropped, drop `total` too" is therefore **gone** (#1770) — it was a second, blunter suppression logic beside the central one, exactly what the architecture guard now forbids.
+What happens behind it matters for understanding:
 
-Projecting back onto the declared `FieldSpec` keys is not cosmetic: `_suppress_small` attaches an internal `suppressed` flag to every row, which would otherwise end up unfiltered in CSV, JSON and XML.
+- `_suppress_small` takes `margin` and `order` as **keyword-only parameters without a default** — a call without them raises `TypeError` (fail-closed): `margin` states whether a published marginal total exists for the feasibility audit to work against, `order` names the canonical output order of suppressed rows.
+- `apply_residual_guard` is the **final** step and is mandatory for every `prepare_export` with a published marginal total (the architecture guard in `test_architecture_guards_services.py` enforces it): it runs the recipient inference and, if necessary, drops the marginal total or the whole breakdown. A home-grown rule "if a cell is dropped, drop `total` too" would be a second, blunter suppression logic beside the central one, exactly what the architecture guard forbids (#1770).
+- Projecting back onto the declared `FieldSpec` keys is not cosmetic: `_suppress_small` attaches an internal `suppressed` flag to every row, which would otherwise end up unfiltered in CSV, JSON and XML.
 
 ### Step 5 — Write tests
 
@@ -392,6 +376,8 @@ The loop iterates over `get_backends()`, **not** over `get_available_backends(fa
 **`backend_data` is the only source.** Until M5 the sample activity report's aggregate lived in a dedicated model field that was written in parallel during a transition period (dual write). That phase is over: migration [`0122`](../../src/core/migrations/0122_backfill_backend_data.py) moved existing snapshots over additively, [`0123`](../../src/core/migrations/0123_rename_backend_data_key_sample_report_1.py) renamed the key to today's slug and [`0124`](../../src/core/migrations/0124_drop_jugendamt_residue.py) dropped the dedicated field (#1740). Write and read paths only know `backend_data` — which was always the case for **new** backends anyway.
 
 **Merge boundary.** The hybrid read path assembles periods from monthly snapshots and therefore has to merge the monthly aggregates. That merge is **specific to the activity report** (`_merge_sample_report_1_stats`) and knows exactly its structure. For a second snapshot-capable backend there is **no** generic merge today: without per-field merge semantics (sum? maximum? set union?) it cannot be defined. Anyone who wants to make a second aggregate backend snapshot-capable must plan the merge as work of its own — until then it reads live via `build_dataset`.
+
+**Mandatory hook `summarize_events` for deleted events.** The retention run (`enforce_retention`) deletes events and carries their counts into the monthly aggregate in the same transaction, so that the numbers of past months stay stable. Every backend with `snapshot_enabled = True` must therefore implement `summarize_events(self, events) -> dict`: it returns the `summary` over an **explicit** event set, in the same shape as `build_dataset(...).summary`. The backend additionally needs an entry in `_SUMMARY_MERGERS` in [`snapshot.py`](../../src/core/services/dashboard/snapshot.py) that merges monthly summaries. If either is missing (the base class raises `NotImplementedError`) or the summarising raises, **the carry-over fails**: the deletion of that event is rolled back, the error is logged, and the next run retries — until then the event is kept instead of vanishing uncounted. A snapshot-capable backend without this hook therefore blocks the retention deadlines of its facilities; a backend without a snapshot (`snapshot_enabled = False`) is not affected.
 
 **A broken backend is skipped — and loudly marked** (#2070). The snapshot run isolates every backend call: if a backend raises, its slug lands together with the name of the exception class in the reserved key `backend_data["_errors"]` (`{slug: "OperationalError"}`), the error is logged with a full traceback (and thereby reported to error tracking), and the remaining backends plus the already computed dashboard aggregates are stored normally. The key only appears in the error case and cannot collide with any slug — `registry._SLUG_RE` forbids a leading underscore. No model field, no migration: `backend_data` is a free `JSONField`.
 
@@ -523,12 +509,12 @@ All three formats go through `safe_download_response` (RFC 5987 file name, `X-Co
 ### CSV
 
 ```
-# Report: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | data_source: live | Data source: Live query at the time of creation | population: all_events | Population: all events in the period [| k-anonymity: cells < k suppressed]
+# Report: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | data_source: live | Data source: Live query at the time of creation | population: all_events | Population: all events in the period | k-anonymity: cells < k suppressed
 Category,Count
 Kontakte,42
 ```
 
-- The metadata line **always** carries the k-anonymity note: since #2069 `summary["k_anonymity_threshold"]` is a precondition for exporting at all, and the former `is not None` branch is gone. Without it the recipient would see empty cells with no explanation — unlike JSON, XML and the panel, the CSV carries no completeness notices.
+- The metadata line **always** carries the k-anonymity note: `summary["k_anonymity_threshold"]` is a precondition for exporting at all (#2069), and `export.py` appends the note unconditionally. Without it the recipient would see empty cells with no explanation — unlike JSON, XML and the panel, the CSV carries no completeness notices.
 - Refs #1765: the `data_source: live` segment is the stable, language-independent code (parity with JSON/XML) — a parser should match on it, never on the translated label `Datenquelle: …`. Under the EN locale that reads `data_source: live | Data source: Live query at the time of creation`.
 - Refs #1770 (K3-A3): the same pattern for the **population** — `population: <code>` is the stable code from `DatasetBackend.population`, `Grundgesamtheit: …` the translated label. A report that does not say *what* it counts is not only leaky but misleading: several tables over different base sets add up to different numbers.
 - **Every** cell, including metadata and header, passes through `_sanitize_csv_cell`, the existing formula-injection guard from `core.services.system.export` (OWASP CSV injection, #719). Deliberate reuse instead of a second implementation.
@@ -688,5 +674,5 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.99.5 -->
-<!-- translation-date: 2026-09-07 -->
-<!-- source-hash: 325e2bebfe5e600763fdb1e94c05c539477524a2 -->
+<!-- translation-date: 2026-10-06 -->
+<!-- source-hash: b7d85c81cb79c6399a19870eeec481561e4c920e -->

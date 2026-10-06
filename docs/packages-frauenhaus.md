@@ -99,7 +99,7 @@ Diese Einstellungen sind nicht Teil des Paketformats und werden nicht automatisc
 - Die vorbereiteten Zeitfenster „Frühdienst“, „Spätdienst“ und „Nachtdienst“ an den tatsächlichen 24/7-Schichtbetrieb anpassen.
 - Die Schnellvorlagen „Telefonische Anfrage Unterbringung“ und „Belegstand vermerkt“ fachlich prüfen. Nur die erste Vorlage setzt `kontaktweg: telefon` und `anliegen: unterbringung` vorab; Vorbelegungen sind ausschließlich an Typen mit Sensitivität `normal` zulässig.
 - Empfang als `assistant`, Fachkräfte als `staff` und die für Gefährdungslagen zuständigen Personen als `lead` oder `facility_admin` einrichten.
-- Bestehende Einrichtungen erhalten den Feldhinweis beim erneuten Einspielen des Pakets: zuerst `python src/manage.py load_package --package frauenhaus --facility <uuid> --dry-run` prüfen, danach denselben Befehl ohne `--dry-run` ausführen.
+- Bestehende Einrichtungen erhalten den Feldhinweis beim erneuten Einspielen des Pakets: zuerst `python manage.py load_package --package frauenhaus --facility <uuid> --dry-run` prüfen, danach denselben Befehl ohne `--dry-run` ausführen.
 
 Es gibt keine Seed-Automatik für Betreiber-Settings oder Rollen. Retention, erlaubte Dateitypen, k-Anonymität, Mitschauen-Schutz und Benutzerrollen werden nach dem Einspielen bewusst durch die Anwendungsbetreuung festgelegt.
 

@@ -42,7 +42,7 @@ Unbekannte Schlüssel sind auf **jeder** Ebene ein Fehler — ein Tippfehler wie
 
 ### Vollständiges Beispiel
 
-Gekürzter Ausschnitt aus [`default.yaml`](../src/core/packages/default.yaml); er zeigt jeden Formularbestandteil mindestens einmal.
+Illustratives Beispiel im Format von [`default.yaml`](../src/core/packages/default.yaml) — kein wörtlicher Auszug: Werte und Umfang weichen vom Standardkatalog ab. Es zeigt jeden Formularbestandteil mindestens einmal.
 
 ```yaml
 schema_version: 1
@@ -176,7 +176,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 >
 > **Kein `schema_version`-Bump:** die Lockerung ist **abwärtskompatibel** — jedes bisher gültige Paket bleibt unverändert gültig, es wird lediglich etwas erlaubt, was vorher abgewiesen wurde. Pakete bleiben bei `schema_version: 1`. Umgekehrt gilt das nicht: ein Paket mit `file` an einem Personen-/Fall-Typ lässt sich auf einem Stand vor Milestone 24 **nicht** einspielen.
 
-> **Reservierte Slugs (#1726):** Ein `slug`, der einen festen Formularfeld-Namen trifft, wird als **Schema-Fehler** abgelehnt — das dynamische Feld würde sonst nackt unter seinem Slug im selben `<form>` das gleichnamige feste Feld überschreiben (stiller Datenverlust). Betroffen sind u. a. `pseudonym`, `notes`, `client`, `title`, `description`, `case`, `document_type`, `lead_user`, `contact_stage`, `age_cluster`, `occurred_at`; die vollständige, an allen Schichten (Paket-Schema, Config-Formular, Modell) geteilte Liste steht als `_RESERVED_SLUGS` in `core/models/document_type.py`. Dieselbe Regel gilt für das nachträgliche **Zuordnen** einer bestehenden Feldvorlage mit reserviertem Slug über die Config-UI.
+> **Reservierte Slugs (#1726):** Ein `slug`, der einen festen Formularfeld-Namen trifft, wird als **Schema-Fehler** abgelehnt — das dynamische Feld würde sonst nackt unter seinem Slug im selben `<form>` das gleichnamige feste Feld überschreiben (stiller Datenverlust). Betroffen sind u. a. `pseudonym`, `notes`, `client`, `title`, `description`, `case`, `document_type`, `lead_user`, `contact_stage`, `age_cluster`, `occurred_at`; die vollständige, an allen Schichten (Paket-Schema, Config-Formular, Modell) geteilte Liste steht als `_RESERVED_SLUGS` in `core/models/slug.py`. Dieselbe Regel gilt für das nachträgliche **Zuordnen** einer bestehenden Feldvorlage mit reserviertem Slug über die Config-UI.
 
 ### `document_types[]`
 

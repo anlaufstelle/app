@@ -11,7 +11,7 @@ Dieses Dokument ist der Nachweis der Barrierefreiheit. § 1 (Scope/Methodik), §
 
 ### 1.1 Prüfgegenstand
 
-Geprüft wurde die Weboberfläche der Anlaufstelle im Zustand des Hauptzweigs vom 2026-09-06 — alle Rollen (Assistenz, Fachkraft, Einrichtungsleitung, Betreiber-Administration) und alle Endgeräte-Breiten, wie sie das gemeinsame Layout (Sidebar für große Bildschirme, Bottom-Navigation für kleine) bedient.
+Geprüft wurde die Weboberfläche der Anlaufstelle im Zustand des Hauptzweigs vom 2026-09-06 — alle Rollen (Assistenz, Fachkraft, Anwendungsbetreuung, Betreiber-Administration) und alle Endgeräte-Breiten, wie sie das gemeinsame Layout (Sidebar für große Bildschirme, Bottom-Navigation für kleine) bedient.
 Prüfmaßstab ist **WCAG 2.1 Stufe AA**. Die Prüfung fand in zwei Schritten statt:
 
 1. **Automatisierter Gate-Lauf** mit axe-core in der bestehenden End-to-End-Test-Umgebung (Chromium, deutsche Oberfläche, angemeldete Testkonten).
@@ -42,7 +42,7 @@ Gescannt wurden 25 Seiten-Zustände (inklusive zweier Sonderzustände des Kontak
 | 2 | `password_reset` | `/password-reset/` | anonym |
 | 3 | `start_staff` | `/ (Startseite Fachkraft)` | Fachkraft |
 | 4 | `zeitstrom_assistant` | `/ (Startseite Assistenz)` | Assistenz |
-| 5 | `start_facility_admin` | `/verwaltung/` | Einrichtungsleitung |
+| 5 | `start_facility_admin` | `/verwaltung/` | Anwendungsbetreuung |
 | 6 | `client_list` | `/clients/` | angemeldet |
 | 7 | `client_detail` | `/clients/<id>/` | angemeldet |
 | 8 | `client_create` | `/clients/new/` | angemeldet |
@@ -114,13 +114,7 @@ Die automatisierte Prüfung fand **11** dieser Befunde; die übrigen **36** stam
 
 **axe-Baseline (Gate, axe-Erstlauf 2026-09-05 (Gate-Einführung), gepinnt):** 23 Seiten · 38 Regel-Einträge · **75 Knoten**. Gegenüber der Rohmessung oben (34 Einträge/70 Knoten/22 Seiten) kam nach Korrektur des zunächst fehlgeschlagenen `zeitstrom`-Laufs ein abgeleiteter, nicht selbst gemessener Eintrag hinzu (+4 Regel-Einträge/+5 Knoten: `aria-allowed-attr`, `color-contrast`, `link-name`×2, `select-name`) — die beiden Zahlenpaare beschreiben also denselben automatisierten Lauf vor und nach dieser Ergänzung, keinen Widerspruch. Drei gescannte Seiten sind bereits sauber und stehen bewusst nicht in der Baseline: `login`, `password_reset`, `offline_conflicts`.
 
-**Nachher (axe-Endstand 2026-09-06 auf main):** 26 Seiten-Zustände · **1 Verstoß-Knoten** (`serious`). Die Baseline ist von 38 Regel-Einträgen/75 Knoten auf **1 Regel-Eintrag/1 Knoten** abgebaut. Verbleibender, bewusst offener Eintrag:
-
-| Seite | Regel | Impact | Knoten | Status |
-|---|---|---|---|---|
-| `event_create_errors` | `listitem` (`<li>` außerhalb `<ul>`/`<ol>`) | serious | 1 | offen — Ursache nicht verortbar, Folge-Ticket #2154 |
-
-Der verbleibende Befund stammt aus der Fehlerausgabe „Dieses Feld ist zwingend erforderlich.“ auf dem Kontaktformular mit ausgelöstem Pflichtfeld-Fehler; siehe § 2.5.
+**Nachher (axe-Endstand):** **0 Verstoß-Knoten.** Die Baseline ist von 38 Regel-Einträgen/75 Knoten auf **0** abgebaut; `src/tests/e2e/a11y_baseline.json` ist leer (`{}`). Der zuletzt verbliebene Eintrag (`event_create_errors`, Regel `listitem`) stammte aus der Fehlerausgabe „Dieses Feld ist zwingend erforderlich.“ auf dem Kontaktformular mit ausgelöstem Pflichtfeld-Fehler und ist in § 2.5 gelöst.
 
 ### 2.2 Befundliste
 
@@ -224,7 +218,7 @@ Zählweise: je Welle alle Commits auf dem Hauptzweig (main), einschließlich der
 
 ### 2.5 Gelöst in #2154: `role="alert"` überschrieb die Listenrolle
 
-Auf dem Kontaktformular mit ausgelöstem Pflichtfeld-Fehler meldete die automatisierte Prüfung ein Listenelement außerhalb einer Liste (`listitem`, erheblich, ein Element, Text „Dieses Feld ist zwingend erforderlich.“). Sämtliche Fehlerausgaben der beteiligten Vorlagen verwendeten nachweislich einen Listen-Container — die Stelle ließ sich weder im Vorlagen-Audit noch im Rahmen der Korrektur-Wellen im Quelltext bestimmen, weil ein reines Markup-Grep sie nicht sieht: `role="alert"` direkt am `<ul id="id_occurred_at-error" ...>` überschrieb dessen implizite `list`-Rolle; die Kind-`<li>` behielten ihre implizite `listitem`-Rolle, standen dadurch aber ohne Listen-Elternteil im Accessibility-Tree — nur eine Live-DOM-Prüfung wie axe deckt das auf. Gelöst in #2154: Die Rolle `alert` sitzt jetzt auf einem umschließenden `<div>`, das `<ul>` bekommt seine Listenrolle über `role="list"` explizit zurück; `id`/`aria-describedby` bleiben unverändert auf dem `<ul>` gerichtet. Dieselbe Fehlerklasse (`<ul ... role="alert">`) fand sich repo-weit an über einem Dutzend weiteren Stellen (Formularfeld-Partial, dynamische Zusatzfelder, Personen-Autocomplete, Aufgaben-/Fall-Formular, mehrere Konfigurations-Partials, Passwort-Formulare) und wurde im selben Zug behoben — Einzelheiten im Umsetzungsbericht zu release-0.96.
+Auf dem Kontaktformular mit ausgelöstem Pflichtfeld-Fehler meldete die automatisierte Prüfung ein Listenelement außerhalb einer Liste (`listitem`, erheblich, ein Element, Text „Dieses Feld ist zwingend erforderlich.“). Sämtliche Fehlerausgaben der beteiligten Vorlagen verwendeten nachweislich einen Listen-Container — die Stelle ließ sich weder im Vorlagen-Audit noch im Rahmen der Korrektur-Wellen im Quelltext bestimmen, weil ein reines Markup-Grep sie nicht sieht: `role="alert"` direkt am `<ul id="id_occurred_at-error" ...>` überschrieb dessen implizite `list`-Rolle; die Kind-`<li>` behielten ihre implizite `listitem`-Rolle, standen dadurch aber ohne Listen-Elternteil im Accessibility-Tree — nur eine Live-DOM-Prüfung wie axe deckt das auf. Gelöst in #2154: Die Rolle `alert` sitzt jetzt auf einem umschließenden `<div>`, das `<ul>` bekommt seine Listenrolle über `role="list"` explizit zurück; `id`/`aria-describedby` bleiben unverändert auf dem `<ul>` gerichtet. Dieselbe Fehlerklasse (`<ul ... role="alert">`) fand sich repo-weit an über einem Dutzend weiteren Stellen (Formularfeld-Partial, dynamische Zusatzfelder, Personen-Autocomplete, Aufgaben-/Fall-Formular, mehrere Konfigurations-Partials, Passwort-Formulare) und wurde im selben Zug behoben.
 
 ---
 

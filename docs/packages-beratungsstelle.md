@@ -43,7 +43,7 @@ Die Auswahlwerte sind auf die Beratungs-Domäne zugeschnitten:
 |---|---|
 | Empfang (`assistant`) | Kontakt, Kurzberatung, Vermittlung, Notiz, Begleitung — ohne hochsensible Felder |
 | Fachkraft (`staff`) | alle Typen bis `elevated` — hochsensible Felder bleiben verborgen |
-| Leitung (`lead`) und Einrichtungsleitung (`facility_admin`) | alle Typen und Felder |
+| Leitung (`lead`) und Anwendungsbetreuung (`facility_admin`) | alle Typen und Felder |
 
 Konkret bedeuten die Ebenen:
 
