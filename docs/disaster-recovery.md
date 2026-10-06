@@ -264,15 +264,18 @@ openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_
       set -eu
       verify_dir="$1"; media_root="$2"
       trap '\''rm -rf "$verify_dir"'\'' EXIT
-      rm -rf "$verify_dir" && mkdir -p "$verify_dir"
-      tar -C "$verify_dir" --strip-components=1 -xf -
-      (cd "$verify_dir" && find . -type f -exec sha256sum {} + | sort -k2) > /tmp/media-archive.sha256
-      (cd "$media_root" && find . -type f -exec sha256sum {} + | sort -k2) > /tmp/media-live.sha256
-      cmp /tmp/media-archive.sha256 /tmp/media-live.sha256
+      rm -rf "$verify_dir" && mkdir -p "$verify_dir/tree"
+      tar -C "$verify_dir/tree" --strip-components=1 -xf -
+      # Summen zuerst in eine Datei, dann sortieren: so bricht jeder Lesefehler von
+      # find/sha256sum den Block ab (eine Pipeline würde ihn verschlucken).
+      sums() { (cd "$1" && find . -type f -exec sha256sum {} + > "$2.raw") && sort -k2 "$2.raw" > "$2"; }
+      sums "$verify_dir/tree" "$verify_dir/archive.sha256"
+      sums "$media_root" "$verify_dir/live.sha256"
+      cmp "$verify_dir/archive.sha256" "$verify_dir/live.sha256"
     ' sh "/data/media-verify-$RESTORE_TIMESTAMP" "${MEDIA_ROOT_CONTAINER:-/data/media}"
 ```
 
-Exit 0 bedeutet: Archiv und aktivierter `MEDIA_ROOT` enthalten dieselben Dateien mit denselben SHA-256-Summen. Eine Abweichung (fehlende, zusätzliche oder veränderte `.enc`-Datei) beendet den Block mit `cmp: … differ` und Exit != 0.
+Exit 0 bedeutet: Archiv und aktivierter `MEDIA_ROOT` enthalten dieselben Dateien mit denselben SHA-256-Summen. Eine Abweichung (fehlende, zusätzliche oder veränderte `.enc`-Datei) beendet den Block mit `cmp: … differ` und Exit != 0. Ein Lesefehler im Archiv oder im Bestand (etwa `find: … Permission denied`) beendet ihn ebenfalls mit Exit != 0 — nie mit Erfolg.
 
 Der Block darf zwischen Probe und der bereits erfolgten Aktivierung (siehe oben) keinen neuen Upload oder Job zulassen (siehe „Archivtreue" oben); weil der Vergleich ausschließlich im Einweg-`maintenance`-Container läuft, bleibt `web` dabei ohne Widerspruch zum vorherigen Absatz gestoppt.
 
