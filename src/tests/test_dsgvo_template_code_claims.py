@@ -361,18 +361,28 @@ def _sentences(text: str) -> list[str]:
 
 #: Both key derivation inputs must stay unchanged for locked ciphertext to
 #: become readable again (``deriveSessionKey(password, saltB64Url)`` in ``crypto.js``); a
-#: recovery promise naming only one of them overstates what survives.
+#: recovery promise naming only one of them overstates what survives. The last
+#: item is the "unchanged" marker that closes the condition.
 RECOVERY_CONDITIONS_DE = ("Passwort", "Offline-Salt", "unverändert")
 RECOVERY_CONDITIONS_EN = ("password", "offline salt", "unchanged")
 
 
 def _assert_recovery_claims_name_both_inputs(name: str, text: str, phrase: str, conditions: tuple[str, ...]) -> None:
-    """Every sentence promising renewed readability names both unchanged derivation inputs."""
+    """Every promise of renewed readability names both inputs in its own unchanged condition.
+
+    Only the clause from the promise up to the first "unchanged" marker counts:
+    a later mention elsewhere in the sentence (e.g. the salt rotation's
+    "correct-password login") must not stand in for a dropped input.
+    """
+    *inputs, unchanged = conditions
     hits = [sentence for sentence in _sentences(text) if phrase in sentence]
     assert hits, (name, phrase)
     for sentence in hits:
-        for condition in conditions:
-            assert condition in sentence, (name, condition, sentence)
+        after_promise = sentence[sentence.index(phrase) :]
+        assert unchanged in after_promise, (name, unchanged, sentence)
+        condition = after_promise[: after_promise.index(unchanged)]
+        for required in inputs:
+            assert required in condition, (name, required, sentence)
 
 
 class TestRecoveryClaimHelper:
@@ -478,6 +488,19 @@ class TestOfflineRecoveryDocs:
         ):
             assert required in current, required
         _assert_recovery_claims_name_both_inputs("en summary", current, "readable again", RECOVERY_CONDITIONS_EN)
+
+    def test_later_password_mention_does_not_stand_in_for_the_recovery_condition(self):
+        current = _section(
+            _flat(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8")), "## Privacy Architecture", "## Role Model"
+        )
+        complete = "only if password and offline salt are unchanged"
+        assert current.count(complete) == 1
+        incomplete = current.replace(complete, "only if offline salt is unchanged")
+        # The salt rotation explanation later in the same sentence still says
+        # "correct-password login"; it must not satisfy the password condition.
+        assert "correct-password login" in incomplete
+        with pytest.raises(AssertionError):
+            _assert_recovery_claims_name_both_inputs("en summary", incomplete, "readable again", RECOVERY_CONDITIONS_EN)
 
 
 # ---------------------------------------------------------------------------
