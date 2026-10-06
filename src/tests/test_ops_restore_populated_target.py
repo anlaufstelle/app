@@ -153,14 +153,20 @@ def _sandbox(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     return root, bindir, action_log, db_backup, media_backup
 
 
-def _run(root: Path, bindir: Path, action_log: Path, db_backup: Path, media_backup: Path | None, **overrides):
+def _run(
+    root: Path,
+    bindir: Path,
+    action_log: Path,
+    db_backup: Path,
+    media_backup: Path | None,
+    extra_args: tuple[str, ...] = (),
+    **overrides,
+):
     env = dict(os.environ)
     env.pop("DJANGO_AUDIT_HWM_PATH", None)
     env.update({"PATH": f"{bindir}:{env['PATH']}", "ACTION_LOG": str(action_log), "RESTORE_CONFIRM": "ja"})
     env.update(overrides)
-    args = ["bash", str(root / "scripts" / "ops" / "restore.sh")]
-    if env.pop("TEST_LEGACY_SWITCH", "0") == "1":
-        args.append("--allow-missing-manifest")
+    args = ["bash", str(root / "scripts" / "ops" / "restore.sh"), *extra_args]
     args.append(str(db_backup))
     if media_backup is not None:
         args.append(str(media_backup))
@@ -248,49 +254,53 @@ def test_fresh_target_without_existing_database_needs_no_backup_copy(tmp_path: P
     assert [line for line in lines if f'RENAME TO "{TARGET_DB}";' in line]
 
 
-def _legacy_set(daily: Path) -> None:
-    """Satz ohne Manifest — wie vor 0.99.2 erzeugte Weekly-/Monthly-Sätze."""
+def _remove_manifest(daily: Path) -> None:
+    """A set without a signed manifest, e.g. an artefact copied without it."""
     (daily / f"anlaufstelle_{TIMESTAMP}.manifest").unlink()
     (daily / f"anlaufstelle_{TIMESTAMP}.manifest.hmac").unlink()
 
 
-def test_legacy_set_without_manifest_is_refused_and_names_the_switch(tmp_path: Path) -> None:
+def test_set_without_manifest_is_refused_with_a_clear_message(tmp_path: Path) -> None:
     root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
-    _legacy_set(db_backup.parent)
+    _remove_manifest(db_backup.parent)
 
     result = _run(root, bindir, action_log, db_backup, media_backup)
 
     assert result.returncode != 0
-    assert "--allow-missing-manifest" in result.stderr
+    assert "the mandatory manifest of the backup set is missing" in result.stderr
+    assert "--allow-missing-manifest" not in result.stdout + result.stderr
     assert _lines(action_log) == []
 
 
-def test_legacy_set_restores_with_the_emergency_switch_and_says_what_is_missing(tmp_path: Path) -> None:
+def test_the_manifest_bypass_option_no_longer_exists(tmp_path: Path) -> None:
     root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
-    _legacy_set(db_backup.parent)
 
-    result = _run(root, bindir, action_log, db_backup, media_backup, TEST_LEGACY_SWITCH="1")
+    with_manifest = _run(root, bindir, action_log, db_backup, media_backup, ("--allow-missing-manifest",))
+    _remove_manifest(db_backup.parent)
+    without_manifest = _run(root, bindir, action_log, db_backup, media_backup, ("--allow-missing-manifest",))
 
-    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert "ACHTUNG" in result.stdout
-    assert "KEIN signiertes Manifest" in result.stdout
-    assert "RESTORE-SATZ WIEDERHERGESTELLT" in result.stdout
-    # Kein stiller Erfolg: der Lauf nennt die fehlende Satzbindung noch einmal.
-    assert result.stdout.rstrip().splitlines()[-1].startswith("HINWEIS: Altsatz-Modus")
+    for result in (with_manifest, without_manifest):
+        assert result.returncode != 0
+        assert "unknown option: --allow-missing-manifest" in result.stderr
+        assert "allowed: --yes" in result.stderr
+    assert _lines(action_log) == []
 
 
-def test_legacy_media_of_another_set_is_refused(tmp_path: Path) -> None:
+def test_usage_does_not_advertise_a_manifest_bypass(tmp_path: Path) -> None:
     root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
-    _legacy_set(db_backup.parent)
-    foreign = media_backup.with_name("anlaufstelle_2026-09-01_020000_media.tar.gz.enc")
-    media_backup.rename(foreign)
-    media_backup.with_name(f"{media_backup.name}.hmac").rename(foreign.with_name(f"{foreign.name}.hmac"))
 
-    result = _run(root, bindir, action_log, db_backup, foreign, TEST_LEGACY_SWITCH="1")
+    result = subprocess.run(
+        ["bash", str(root / "scripts" / "ops" / "restore.sh")],
+        capture_output=True,
+        text=True,
+        cwd=root,
+        timeout=30,
+        stdin=subprocess.DEVNULL,
+    )
 
     assert result.returncode != 0
-    assert "Zeitstempel" in result.stderr
-    assert _lines(action_log) == []
+    assert "Usage:" in result.stdout
+    assert "manifest" not in result.stdout.lower()
 
 
 def test_media_archive_without_manifest_binding_is_refused(tmp_path: Path) -> None:
@@ -330,57 +340,8 @@ def test_abort_between_the_two_renames_keeps_the_verified_state(tmp_path: Path) 
 ANCHOR_PATH = "/data/audit_hwm.json"
 
 
-def _anchor_beside_dump(db_backup: Path) -> Path:
-    anchor = db_backup.with_name(f"audit_hwm-{TIMESTAMP}.json")
-    anchor.write_text('{"version":1,"chains":{},"sig":"x"}', encoding="utf-8")
-    return anchor
-
-
-def test_legacy_set_with_configured_anchor_path_and_matching_anchor(tmp_path: Path) -> None:
-    """Altsatz + konfigurierter Ankerpfad: Zuordnung nur ueber den Dateinamen."""
-    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
-    _legacy_set(db_backup.parent)
-    _anchor_beside_dump(db_backup)
-
-    result = _run(
-        root,
-        bindir,
-        action_log,
-        db_backup,
-        media_backup,
-        TEST_LEGACY_SWITCH="1",
-        DJANGO_AUDIT_HWM_PATH=ANCHOR_PATH,
-    )
-
-    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert "Zeitstempel im Dateinamen" in result.stderr
-    assert "RESTORE-SATZ WIEDERHERGESTELLT" in result.stdout
-    assert "HINWEIS: Audit-Anker nur ueber den Dateinamen" in result.stdout
-
-
-def test_legacy_set_without_anchor_file_warns_instead_of_aborting(tmp_path: Path) -> None:
-    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
-    _legacy_set(db_backup.parent)
-
-    result = _run(
-        root,
-        bindir,
-        action_log,
-        db_backup,
-        media_backup,
-        TEST_LEGACY_SWITCH="1",
-        DJANGO_AUDIT_HWM_PATH=ANCHOR_PATH,
-    )
-
-    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert "kein zum Dump gehoerender Audit-Anker" in result.stderr
-    assert "Schritt 4b" in result.stderr
-    # Kein stiller Erfolg: der fehlende Anker steht auch in der Abschlussausgabe.
-    assert "HINWEIS: Kein zugehoeriger Audit-Anker" in result.stdout
-
-
 def test_set_with_manifest_still_requires_its_anchor(tmp_path: Path) -> None:
-    """Regelfall bleibt fail-closed: mit Manifest und Ankerpfad ist der Anker Pflicht."""
+    """With a manifest and a configured anchor path the anchor is mandatory (fail-closed)."""
     root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
 
     result = _run(root, bindir, action_log, db_backup, media_backup, DJANGO_AUDIT_HWM_PATH=ANCHOR_PATH)
@@ -400,3 +361,41 @@ def test_failed_media_activation_cleans_up_the_staging(tmp_path: Path) -> None:
     swap = _index(lines, 'mv "$stage" "$live"')
     cleanup = [line for line in lines[swap + 1 :] if "--entrypoint rm -T maintenance" in line and ".restore." in line]
     assert cleanup, lines[swap:]
+
+
+def _docker_calls(action_log: Path) -> list[str]:
+    """First line of every logged call (embedded ``sh -c`` scripts span several lines)."""
+    return [line for line in _lines(action_log) if line.startswith("docker ")]
+
+
+def _compose_flags(root: Path, *names: str) -> str:
+    return " ".join(f"-f {root.resolve() / name}" for name in names)
+
+
+def test_every_compose_call_uses_the_full_file_list(tmp_path: Path) -> None:
+    """Once any -f is given Compose skips compose.override.yml, so the list must be complete."""
+    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+    (root / "compose.legal.yml").write_text("services: {}\n", encoding="utf-8")
+    (root / "compose.override.yml").write_text("services: {}\n", encoding="utf-8")
+    expected = _compose_flags(root, "docker-compose.prod.yml", "compose.legal.yml", "compose.override.yml")
+
+    result = _run(root, bindir, action_log, db_backup, media_backup)
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    calls = _docker_calls(action_log)
+    assert calls
+    for line in calls:
+        assert line.startswith(f"docker compose {expected} "), line
+
+
+def test_compose_calls_use_only_the_base_file_when_no_extra_file_exists(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+    expected = _compose_flags(root, "docker-compose.prod.yml")
+
+    result = _run(root, bindir, action_log, db_backup, media_backup)
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    calls = _docker_calls(action_log)
+    assert calls
+    for line in calls:
+        assert line.startswith(f"docker compose {expected} "), line
