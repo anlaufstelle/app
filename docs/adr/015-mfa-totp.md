@@ -38,6 +38,30 @@ Sozialarbeit verarbeitet besonders schutzbedürftige Personendaten (DSGVO Art. 9
 - **E-Mail-OTP:** Verworfen als alleiniger Faktor — die Mailbox ist oft mit demselben Passwort geschützt; effektiv kein zweiter Faktor.
 - **Passkeys (WebAuthn-Profil):** Wie WebAuthn — interessant, aber nicht für den Default. Spätere ADR.
 
+## Nachtrag 2026-10-06: Backup-Codes, Recovery und Sudo im geltenden Vertrag (Refs #2422)
+
+Die Entscheidung oben bleibt als historischer Stand erhalten. Mehrere ihrer Aussagen beschreiben den implementierten Vertrag nicht mehr zutreffend; maßgeblich ist der folgende Ist-Stand.
+
+**Backup-Codes (ersetzt den zweiten Punkt unter „Decision" und die Hash-Aussage unter „Consequences"):**
+
+- **Format:** Ein Code ist `secrets.token_urlsafe(16)` — 22 Zeichen aus dem URL-sicheren Base64-Alphabet, keine Base32-Kodierung ([`src/core/services/security/mfa.py`](../../src/core/services/security/mfa.py), `_generate_code`). Codes im älteren Format `xxxx-xxxx` werden weiter angenommen.
+- **Entropie und Speicherung:** Der Code trägt 128 Bit Zufall. Gespeichert wird nur `sha256(code).hexdigest()[:16]` in `StaticToken.token`, ungesalzen und ohne Arbeitsfaktor (`_hash_code`); eine bcrypt-äquivalente Speicherung gibt es nicht. Der gespeicherte Wert ist ein 64-Bit-Digest: Wer einen Datenbank-Dump besitzt, muss gegen den gespeicherten Wert rund 2^64 Versuche aufwenden, nicht 2^128. Für einmalig nutzbare, bei Verdacht neu erzeugbare Codes ist das weiterhin nicht praktikabel; die Aussage „128 Bit Brute-Force gegen den Hash" gilt aber nicht.
+- **Verbrauch:** Ein verwendeter Code wird gelöscht. Ab drei verbleibenden Codes weisen die 2FA-Einstellungen auf das Neuerzeugen hin.
+
+**Backup-Code-Anmeldung und Gerätewechsel (ersetzt den Punkt „Recovery-Flow"):**
+
+- Ein Backup-Code am 2FA-Prompt verbraucht den Code, erneuert die Sitzungskennung und meldet mit dem **bestehenden** TOTP-Gerät an ([`src/core/views/mfa.py`](../../src/core/views/mfa.py), `MFAVerifyView`; Audit `BACKUP_CODES_USED`). Er invalidiert kein Gerät und startet keine Neueinrichtung.
+- Der Wechsel des TOTP-Geräts ist ein eigener Schritt unter `/mfa/setup/`: Bei bestehendem Faktor verlangt er zuerst den Sudo-Modus, legt ein neues Gerät an und ersetzt den Backup-Code-Satz; nach der Quittung der neuen Codes gilt nur noch das neue Gerät.
+- Ein Backup-Code hebt außerdem eine Konto-Sperre auf (`/account/recovery/backup-code/`, `LOGIN_UNLOCK` mit Trigger `backup_code`).
+
+**Recovery durch die Administration (ergänzt die Anforderung „Recovery ohne Klartext-Speicher"):** Sind alle Backup-Codes verbraucht oder verloren, setzt die Anwendungsbetreuung (`facility_admin`, nur Konten der eigenen Einrichtung, keine `super_admin`-Konten) oder die Systemadministration (`super_admin`) den zweiten Faktor zurück — nie für das eigene Konto und immer im Sudo-Modus ([`src/core/services/user_access.py`](../../src/core/services/user_access.py), `reset_user_mfa`). Der Reset entfernt alle TOTP-Geräte, Passkeys und Backup-Codes, beendet alle Sitzungen des Kontos und schreibt einen Audit-Eintrag `MFA_RESET_BY_ADMIN` ohne Schlüsselmaterial. Ist 2FA für das Konto verpflichtend, folgt die Neueinrichtung bei der nächsten Anmeldung. Die Administration sieht dabei weder Secret noch Codes.
+
+**Rollenbasierte Pflicht (ersetzt den Punkt „Rollenbasierte Pflicht"):** In Produktion ist 2FA per Rollen-Default für alle fünf Rollen verpflichtend: sofort für `super_admin` und `facility_admin` (`MFA_ENFORCED_ROLES_IMMEDIATE`), nach einer Übergangsfrist von 30 Tagen ab der ersten Anmeldung für `lead`, `staff` und `assistant` (`MFA_ENFORCED_ROLES_GRACE`). Beide Listen sind Umgebungsvariablen; der übergeordnete Schalter `MFA_ENFORCE_PRIVILEGED_ROLES` ist ein Wert des Settings-Moduls. Pro Nutzer (`User.mfa_required`) und einrichtungsweit (`Settings.mfa_enforced_facility_wide`) lässt sich die Pflicht zusätzlich sofort erzwingen. Betrieb und Einstellung: [Admin-Handbuch § 2.7](../admin-guide.md#27-zwei-faktor-authentifizierung-2fa).
+
+**Sudo-Modus (ersetzt den Punkt „Sudo-Mode"):** Sudo ist eine erneute Anmeldung, keine „MFA-Verifizierung in den letzten 15 Minuten". Verlangt werden das Passwort und, wenn das handelnde Konto ein bestätigtes TOTP-Gerät hat, zusätzlich ein aktueller TOTP- oder Backup-Code ([`src/core/views/sudo_mode.py`](../../src/core/views/sudo_mode.py)). Das Fenster gilt `SUDO_MODE_TTL_SECONDS` (Default 900 Sekunden). Sudo schützt unter anderem das Deaktivieren und die erneute Einrichtung der 2FA bei bestehendem Faktor, das Hinzufügen und Entfernen von Passkeys, die Kontoverwaltung einschließlich Entsperren und Zurücksetzen des zweiten Faktors, DSGVO-Exporte sowie die Django-Adminoberfläche.
+
+**Passkeys (ersetzt die Aussage „Keine Hardware-Token-Unterstützung"):** Passkeys und FIDO2-Sicherheitsschlüssel sind als zusätzlicher zweiter Faktor neben TOTP umgesetzt ([ADR-032](032-webauthn-passkeys-2fa.md)); TOTP bleibt der primäre Faktor, eine passwortlose Anmeldung gibt es nicht.
+
 ## References
 
 - [`src/core/services/security/mfa.py`](../../src/core/services/security/mfa.py)
