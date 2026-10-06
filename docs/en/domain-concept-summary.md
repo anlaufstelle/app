@@ -1,7 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Synchronization update 2026-10-06: The listed per-view rate limits are explicitly non-exhaustive; statistical suppression remains distinct from backup retention.
+> Synchronization update 2026-10-06: German section 16 now states that the offline key persists in IndexedDB, that the idle check only locks the key while unsent work exists, and that index metadata stays unencrypted; this summary has no current-state offline text to change.
 
 # Domain Concept Summary
 
@@ -327,4 +327,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: bc1305c54f9fa81e619acb5c15edcb57b915ae6a -->
+<!-- source-hash: 8420488b21c52fd4fd46eadaa66efbd55e521135 -->

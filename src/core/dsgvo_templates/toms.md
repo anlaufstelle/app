@@ -92,7 +92,10 @@ berücksichtigen.
 - [x] File-Vault: Anhänge werden vor der Ablage in Fernet-Chunks verschlüsselt; Originaldateinamen liegen ebenfalls Fernet-verschlüsselt vor
 - [x] Schlüssel getrennt von Datenbank (Umgebungsvariable)
 - [x] Schlüsselrotation ohne Datenverlust (MultiFernet)
-- [x] Browser-seitige Verschlüsselung offline erfasster Daten mit AES-GCM-256; Schlüsselableitung per PBKDF2 (600 000 Iterationen, SHA-256) aus Passwort und User-Salt; Schlüssel ist non-extractable und existiert ausschließlich in-memory. Logout, Passwortwechsel oder Schließen des Tabs machen alle offline gehaltenen Daten unlesbar (Ref. #573)
+- [x] Browser-seitige Verschlüsselung offline gehaltener Inhalte mit AES-GCM-256; Schlüsselableitung per PBKDF2 (600 000 Iterationen, SHA-256) aus Passwort und User-Salt (Ref. #573)
+- [x] Der Schlüssel ist non-extractable und liegt als `CryptoKey` in einer eigenen IndexedDB des Browsers (`anlaufstelle-crypto`), damit Neuladen sowie Tab-, Browser- und Geräteneustart die Offline-Daten nicht unbrauchbar machen. „Non-extractable“ verhindert das Auslesen der Schlüsselbytes, nicht das Entschlüsseln mit dem gespeicherten Schlüssel im Browser dieses Geräts
+- [x] Verschlüsselt sind die Inhalte; Ordnungsmerkmale (Datensatz- und Personen-IDs, Bearbeitungsstatus, Zeitstempel, Ziel-Adressen der Sende-Warteschlange) liegen unverschlüsselt daneben
+- [x] Abmelden löscht Schlüssel und Offline-Speicher, auch ungesendete Arbeit; ein Passwortwechsel ebenso (bei ungesendeter Arbeit fragt die Anwendung vorher nach). Nach Ablauf der Leerlaufzeit löscht die Anwendung beim nächsten Ausführen den Schlüssel; ungesendete Arbeit bleibt verschlüsselt erhalten und wird nach erneuter Anmeldung wieder lesbar, sofern Passwort und Rolle unverändert sind (beide Änderungen erneuern die Schlüsselableitung), ohne ungesendete Arbeit wird auch der Offline-Speicher gelöscht. Schließen des Tabs oder Browsers und ein Geräteneustart sind kein Löschweg (Einzelheiten: DSFA § 4.1)
 
 ### 2.2 Eingabekontrolle
 *Nachvollziehbarkeit von Dateneingaben*
