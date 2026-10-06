@@ -192,8 +192,8 @@ def section_for(tcid: str) -> str:
 
 
 def split_meta_row(row: str) -> list[str]:
-    cells = [c.strip() for c in row.strip().strip("|").split("|")]
-    return cells
+    """Remove one table border per side, preserving empty data cells."""
+    return [cell.strip() for cell in row.strip().removeprefix("|").removesuffix("|").split("|")]
 
 
 _GH_STRIP = re.compile(r"[\0-\x1f!-,\./:-@\[-\^`\{-\xa0\xa8\xad]+")
@@ -513,8 +513,8 @@ def render_extras(tests: list[Test], e2e_files: set[str] | None = None) -> list[
     return lines
 
 
-def render_anhang_c(tests: list[Test]) -> str:
-    """Refs #909: Per-Bereich-Coverage-Tabelle für Matrix-Anhang C."""
+def render_anhang_c(tests: list[Test], *, public: bool = False) -> str:
+    """Render per-area coverage for appendix C, with public issue references."""
     by_section_bereich: dict[tuple[str, str], list[Test]] = {}
     for t in tests:
         by_section_bereich.setdefault((t.section, t.bereich), []).append(t)
@@ -550,7 +550,8 @@ def render_anhang_c(tests: list[Test]) -> str:
     total_quote = f"{(total_e2e / total * 100):.0f} %" if total else "—"
     lines.append(f"| **Gesamt** | **{total}** | **{total_e2e}** | **{total_manuell}** | **{total_quote}** |")
     lines.append("")
-    lines.append(f"> Auto-generiert per `python scripts/build_test_matrix_index.py` ({issue_link(909)}).")
+    reference = "#909" if public else issue_link(909)
+    lines.append(f"> Auto-generiert per `python scripts/build_test_matrix_index.py` ({reference}).")
 
     return "\n".join(lines) + "\n"
 
@@ -602,27 +603,27 @@ def patch_anhang_c(content: str, source: Path) -> tuple[bool, str | None]:
     return True, None
 
 
-def check_stale(tests: list[Test], e2e_files: set[str] | None = None) -> bool:
-    """Refs #916: True wenn Index bzw. Anhang C nicht zur Matrix passen."""
-    if e2e_files is None:
-        e2e_files = discover_e2e_files()
-    expected_index = render_index(tests, e2e_files)
-    if not TARGET.exists():
-        return True
-    existing_index = TARGET.read_text(encoding="utf-8")
-    if AUTOGEN_START not in existing_index or AUTOGEN_END not in existing_index:
-        return True
-    _, _, rest = existing_index.partition(AUTOGEN_START)
-    block, _, _ = rest.partition(AUTOGEN_END)
-    if block.strip() != expected_index.strip():
-        return True
+def check_stale(tests: list[Test], e2e_files: set[str] | None = None, *, public: bool = False) -> bool:
+    """Check appendix C and, in development checkouts, the generated index."""
+    if not public:
+        if e2e_files is None:
+            e2e_files = discover_e2e_files()
+        expected_index = render_index(tests, e2e_files)
+        if not TARGET.exists():
+            return True
+        existing_index = TARGET.read_text(encoding="utf-8")
+        if AUTOGEN_START not in existing_index or AUTOGEN_END not in existing_index:
+            return True
+        _, _, rest = existing_index.partition(AUTOGEN_START)
+        block, _, _ = rest.partition(AUTOGEN_END)
+        if block.strip() != expected_index.strip():
+            return True
 
-    expected_anhang = render_anhang_c(tests)
+    expected_anhang = render_anhang_c(tests, public=public)
     matrix_text = SOURCE.read_text(encoding="utf-8")
     if ANHANG_C_START in matrix_text and ANHANG_C_END in matrix_text:
         _, _, rest = matrix_text.partition(ANHANG_C_START)
         block, _, _ = rest.partition(ANHANG_C_END)
-        # block ist normalisiert ohne Marker; expected_anhang endet auf "\n".
         if block.strip("\n") != expected_anhang.strip("\n"):
             return True
     return False
@@ -635,7 +636,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Exit 1 if generated output differs from on-disk files (CI-Mode).",
     )
+    parser.add_argument(
+        "--public",
+        action="store_true",
+        help="Check/generate only appendix C; the index is excluded from public releases. "
+        "Enabled automatically in release trees without dev-ops/.",
+    )
     args = parser.parse_args(argv)
+    public = args.public or not (ROOT / "dev-ops").is_dir()
 
     if not SOURCE.exists():
         print(f"ERROR: matrix hub not found: {SOURCE}", file=sys.stderr)
@@ -647,24 +655,26 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.check:
-        if check_stale(tests, e2e_files):
+        if check_stale(tests, e2e_files, public=public):
             print(
-                "STALE: test-matrix-index.md oder Anhang C in manual-test-matrix.md sind nicht aktuell. "
-                "Bitte `python scripts/build_test_matrix_index.py` ausführen und committen.",
+                "STALE: generated index or appendix C differs from the matrix. "
+                "Run `python scripts/build_test_matrix_index.py` and commit the result.",
                 file=sys.stderr,
             )
             return 1
-        print("OK: Index und Anhang C sind aktuell.")
+        print("OK: appendix C is current (public mode)." if public else "OK: index and appendix C are current.")
         return 0
 
-    content = render_index(tests, e2e_files)
-    write_index(content, TARGET)
-    anhang_content = render_anhang_c(tests)
+    if not public:
+        content = render_index(tests, e2e_files)
+        write_index(content, TARGET)
+    anhang_content = render_anhang_c(tests, public=public)
     changed, err = patch_anhang_c(anhang_content, SOURCE)
     if err:
         print(f"WARN: patch_anhang_c: {err}", file=sys.stderr)
-    suffix = f"; Anhang C {'aktualisiert' if changed else 'unverändert / keine Marker'}"
-    print(f"Wrote {TARGET.relative_to(ROOT)} ({len(tests)} tests){suffix}")
+    status = "updated" if changed else "unchanged / no markers"
+    output = SOURCE if public else TARGET
+    print(f"Wrote {output.relative_to(ROOT)} ({len(tests)} tests); appendix C {status}")
     return 0
 
 
