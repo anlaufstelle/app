@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-01 10:07+0200\n"
+"POT-Creation-Date: 2026-10-06 17:19+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -3707,11 +3707,6 @@ msgid "Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"
 msgstr "Application support of the facility (audit, GDPR package)"
 
 #: src/core/services/compliance/vvt.py:73
-#, python-brace-format
-msgid "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Erzwungene Standardfristen: Anonyme Kontakte: {anonymous_days} Tage; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage nach letztem Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage nach Falllauf-Ende."
-msgstr "Configurable by contact level and documentation type. Enforced default retention periods: Anonymous contacts: {anonymous_days} days; contacts at level “Pseudonym only”: {identified_days} days after the last contact; contacts at level “With additional details”: {qualified_days} days after the end of the case."
-
-#: src/core/services/compliance/vvt.py:73
 msgid "Pseudonymisierung by Design"
 msgstr "Pseudonymization by design"
 
@@ -4058,16 +4053,6 @@ msgstr ""
 "Backup storage location per hosting contract (processor, data processing "
 "agreement required)"
 
-#: src/core/services/compliance/vvt.py:233
-msgid ""
-"Taegliche Backups, rollierend ueblicherweise 30 Tage; wochenweise "
-"Aufbewahrung bis 12 Wochen, monatlich bis 12 Monate. Konkrete Frist gemaess "
-"Hosting-Setup der jeweiligen Installation."
-msgstr ""
-"Daily backups, rolling typically 30 days; weekly retention up to 12 weeks, "
-"monthly up to 12 months. Specific period per the hosting setup of the "
-"respective installation."
-
 #: src/core/services/compliance/vvt.py:239
 msgid "Backup-Verschluesselung at-rest"
 msgstr "Backup encryption at rest"
@@ -4075,14 +4060,6 @@ msgstr "Backup encryption at rest"
 #: src/core/services/compliance/vvt.py:240
 msgid "Getrennter Speicherort (offsite oder anderer Verfuegbarkeitsbereich)"
 msgstr "Separate storage location (offsite or different availability zone)"
-
-#: src/core/services/compliance/vvt.py:241
-msgid ""
-"Reihenfolge Backup -> Retention -> Snapshots, sodass Loeschvorgaenge nicht "
-"im Backup ueberleben"
-msgstr ""
-"Order backup -> retention -> snapshots, so that deletions do not survive in "
-"the backup"
 
 #: src/core/services/compliance/vvt.py:242
 msgid "Regelmaessige Restore-Tests"
@@ -12988,3 +12965,68 @@ msgstr "Please sign out first"
 #: src/templates/auth/signed_in_link_notice.html:33
 msgid "Sie sind derzeit angemeldet. Melden Sie sich ab und öffnen Sie den Link danach erneut."
 msgstr "You are currently signed in. Sign out and then open the link again."
+
+#: src/core/models/audit.py:208
+msgid "DB-Rollen-Prüfung abgeschlossen"
+msgstr "DB role check completed"
+
+#: src/core/services/compliance/backup.py:40
+msgid "In der Demo nicht eingerichtet: die Daten werden stündlich neu erzeugt."
+msgstr "Not set up in the demo: the data is regenerated every hour."
+
+#: src/core/services/compliance/db_roles.py:403
+#, python-format
+msgid "Geprüft am %(checked_at)s mit manage.py check_db_roles im Wartungsdienst."
+msgstr "Checked on %(checked_at)s with manage.py check_db_roles in the maintenance service."
+
+#: src/core/services/compliance/db_roles.py:407
+msgid "docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles erneut ausführen."
+msgstr "Run docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles again."
+
+#: src/core/services/compliance/db_roles.py:417
+msgid "Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS), App-Rolle und Ownership ebenfalls."
+msgstr "Admin role correct (NOSUPERUSER, BYPASSRLS), app role and ownership as well."
+
+#: src/core/services/compliance/db_roles.py:425
+#, python-format
+msgid "Letzte Rollenprüfung ist älter als %(days)s Tage."
+msgstr "The last role check is older than %(days)s days."
+
+#: src/core/services/compliance/db_roles.py:436
+msgid "Rollenprüfung unvollständig: nicht jede Rolle ist konfiguriert."
+msgstr "Role check incomplete: not every role is configured."
+
+#: src/core/services/compliance/db_roles.py:437
+#: src/core/services/compliance/db_roles.py:449
+#, python-format
+msgid "%(checked)s Befunde: %(findings)s"
+msgstr "%(checked)s Findings: %(findings)s"
+
+#: src/core/services/compliance/db_roles.py:439
+msgid "POSTGRES_ADMIN_USER und POSTGRES_ADMIN_PASSWORD in der .env setzen (Drei-Rollen-Modell, docs/ops-runbook.md § 9)."
+msgstr "Set POSTGRES_ADMIN_USER and POSTGRES_ADMIN_PASSWORD in .env (three-role model, docs/ops-runbook.md § 9)."
+
+#: src/core/services/compliance/db_roles.py:448
+msgid "Letzte Rollenprüfung meldet Befunde."
+msgstr "The last role check reported findings."
+
+#: src/core/services/compliance/db_roles.py:450
+msgid "Ausgabe von manage.py check_db_roles im Wartungsdienst prüfen (docs/ops-runbook.md § 9)."
+msgstr "Check the output of manage.py check_db_roles in the maintenance service (docs/ops-runbook.md § 9)."
+
+#: src/core/services/compliance/retention.py:74
+msgid "In der Demo nicht eingerichtet: der Löschlauf würde die stündlich neu erzeugten Beispieldaten löschen."
+msgstr "Not set up in the demo: the retention run would delete the sample data that is regenerated every hour."
+
+#: src/core/services/compliance/vvt.py:80
+#, python-brace-format
+msgid "Konfigurierbar pro Kontaktstufe; eine Frist am Dokumentationstyp gilt zusätzlich (es gilt die zuerst ablaufende). Standardfristen je Ereignis: Anonyme Kontakte: {anonymous_days} Tage ab dem jeweiligen Kontakt; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage ab dem jeweiligen Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage ab Abschluss des zugeordneten Falls; Ereignisse dieser Stufe ohne Fall oder in offenen Fällen verfallen nicht über diese Frist, nur über eine Frist am Dokumentationstyp. Der tägliche Aufbewahrungslauf löscht ohne Freigabeschritt; eine Person mit mindestens einem Ereignis anonymisiert er, sobald alle ihre Ereignisse gelöscht sind und keine Aufbewahrungssperre (Legal Hold) auf der Person, einem ihrer Fälle oder Ereignisse besteht."
+msgstr "Configurable per contact stage; a period set on the documentation type applies in addition (whichever expires first applies). Default periods per event: anonymous contacts: {anonymous_days} days from the respective contact; contacts at the “Pseudonym only” stage: {identified_days} days from the respective contact; contacts at the “With additional details” stage: {qualified_days} days from the close of the linked case; events at this stage without a case or in open cases do not expire through this period, only through a period set on the documentation type. The daily retention run deletes without an approval step; it anonymizes a person with at least one event once all of their events are deleted and no legal hold exists on the person, one of their cases or events."
+
+#: src/core/services/compliance/vvt.py:327
+msgid "Lokale Sicherungsstände entfernt backup.sh bei seinem ersten erfolgreichen Lauf, in dem sie mindestens 8 (täglich), 29 (wöchentlich) bzw. 91 volle Tage (monatlich) alt sind. Das ist eine Altersgrenze, keine feste Höchstfrist. Nach einem fehlgeschlagenen Off-Site-Abgleich ist die lokale Rotation ausgesetzt, bis ein Abgleich wieder gelingt. Off-Site-Kopien löscht backup.sh nicht; ihre Frist legt die Einrichtung über eine Aufbewahrungsregel am Speicherort fest."
+msgstr "backup.sh removes local backup sets in its first successful run in which they are at least 8 (daily), 29 (weekly) or 91 full days (monthly) old. This is an age limit, not a fixed maximum period. After a failed off-site sync the local rotation is suspended until a sync succeeds again. backup.sh does not delete off-site copies; the facility sets their retention through a retention rule at the storage location."
+
+#: src/core/services/compliance/vvt.py:340
+msgid "Sicherung vor dem Aufbewahrungslauf: Ein Sicherungsstand enthält auch die Daten, die der folgende Lauf löscht; sie verschwinden lokal erst mit der Rotation dieses Sicherungsstands, in Off-Site-Kopien erst durch die Aufbewahrungsregel am Ziel"
+msgstr "Backup before the retention run: a backup set also contains the data the following run deletes; it disappears locally only with the rotation of that backup set, and in off-site copies only through the retention rule at the target"

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-01 10:07+0200\n"
+"POT-Creation-Date: 2026-10-06 17:19+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -3743,11 +3743,6 @@ msgid "Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"
 msgstr "Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"
 
 #: src/core/services/compliance/vvt.py:73
-#, python-brace-format
-msgid "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Erzwungene Standardfristen: Anonyme Kontakte: {anonymous_days} Tage; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage nach letztem Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage nach Falllauf-Ende."
-msgstr "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Erzwungene Standardfristen: Anonyme Kontakte: {anonymous_days} Tage; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage nach letztem Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage nach Falllauf-Ende."
-
-#: src/core/services/compliance/vvt.py:73
 msgid "Pseudonymisierung by Design"
 msgstr "Pseudonymisierung by Design"
 
@@ -4099,16 +4094,6 @@ msgstr ""
 "Backup-Speicherort gemaess Hosting-Vertrag (Auftragsverarbeiter, AV-Vertrag "
 "erforderlich)"
 
-#: src/core/services/compliance/vvt.py:233
-msgid ""
-"Taegliche Backups, rollierend ueblicherweise 30 Tage; wochenweise "
-"Aufbewahrung bis 12 Wochen, monatlich bis 12 Monate. Konkrete Frist gemaess "
-"Hosting-Setup der jeweiligen Installation."
-msgstr ""
-"Taegliche Backups, rollierend ueblicherweise 30 Tage; wochenweise "
-"Aufbewahrung bis 12 Wochen, monatlich bis 12 Monate. Konkrete Frist gemaess "
-"Hosting-Setup der jeweiligen Installation."
-
 #: src/core/services/compliance/vvt.py:239
 msgid "Backup-Verschluesselung at-rest"
 msgstr "Backup-Verschluesselung at-rest"
@@ -4116,14 +4101,6 @@ msgstr "Backup-Verschluesselung at-rest"
 #: src/core/services/compliance/vvt.py:240
 msgid "Getrennter Speicherort (offsite oder anderer Verfuegbarkeitsbereich)"
 msgstr "Getrennter Speicherort (offsite oder anderer Verfuegbarkeitsbereich)"
-
-#: src/core/services/compliance/vvt.py:241
-msgid ""
-"Reihenfolge Backup -> Retention -> Snapshots, sodass Loeschvorgaenge nicht "
-"im Backup ueberleben"
-msgstr ""
-"Reihenfolge Backup -> Retention -> Snapshots, sodass Loeschvorgaenge nicht "
-"im Backup ueberleben"
 
 #: src/core/services/compliance/vvt.py:242
 msgid "Regelmaessige Restore-Tests"
@@ -13086,3 +13063,68 @@ msgstr "Bitte zuerst abmelden"
 #: src/templates/auth/signed_in_link_notice.html:33
 msgid "Sie sind derzeit angemeldet. Melden Sie sich ab und öffnen Sie den Link danach erneut."
 msgstr "Sie sind derzeit angemeldet. Melden Sie sich ab und öffnen Sie den Link danach erneut."
+
+#: src/core/models/audit.py:208
+msgid "DB-Rollen-Prüfung abgeschlossen"
+msgstr "DB-Rollen-Prüfung abgeschlossen"
+
+#: src/core/services/compliance/backup.py:40
+msgid "In der Demo nicht eingerichtet: die Daten werden stündlich neu erzeugt."
+msgstr "In der Demo nicht eingerichtet: die Daten werden stündlich neu erzeugt."
+
+#: src/core/services/compliance/db_roles.py:403
+#, python-format
+msgid "Geprüft am %(checked_at)s mit manage.py check_db_roles im Wartungsdienst."
+msgstr "Geprüft am %(checked_at)s mit manage.py check_db_roles im Wartungsdienst."
+
+#: src/core/services/compliance/db_roles.py:407
+msgid "docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles erneut ausführen."
+msgstr "docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles erneut ausführen."
+
+#: src/core/services/compliance/db_roles.py:417
+msgid "Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS), App-Rolle und Ownership ebenfalls."
+msgstr "Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS), App-Rolle und Ownership ebenfalls."
+
+#: src/core/services/compliance/db_roles.py:425
+#, python-format
+msgid "Letzte Rollenprüfung ist älter als %(days)s Tage."
+msgstr "Letzte Rollenprüfung ist älter als %(days)s Tage."
+
+#: src/core/services/compliance/db_roles.py:436
+msgid "Rollenprüfung unvollständig: nicht jede Rolle ist konfiguriert."
+msgstr "Rollenprüfung unvollständig: nicht jede Rolle ist konfiguriert."
+
+#: src/core/services/compliance/db_roles.py:437
+#: src/core/services/compliance/db_roles.py:449
+#, python-format
+msgid "%(checked)s Befunde: %(findings)s"
+msgstr "%(checked)s Befunde: %(findings)s"
+
+#: src/core/services/compliance/db_roles.py:439
+msgid "POSTGRES_ADMIN_USER und POSTGRES_ADMIN_PASSWORD in der .env setzen (Drei-Rollen-Modell, docs/ops-runbook.md § 9)."
+msgstr "POSTGRES_ADMIN_USER und POSTGRES_ADMIN_PASSWORD in der .env setzen (Drei-Rollen-Modell, docs/ops-runbook.md § 9)."
+
+#: src/core/services/compliance/db_roles.py:448
+msgid "Letzte Rollenprüfung meldet Befunde."
+msgstr "Letzte Rollenprüfung meldet Befunde."
+
+#: src/core/services/compliance/db_roles.py:450
+msgid "Ausgabe von manage.py check_db_roles im Wartungsdienst prüfen (docs/ops-runbook.md § 9)."
+msgstr "Ausgabe von manage.py check_db_roles im Wartungsdienst prüfen (docs/ops-runbook.md § 9)."
+
+#: src/core/services/compliance/retention.py:74
+msgid "In der Demo nicht eingerichtet: der Löschlauf würde die stündlich neu erzeugten Beispieldaten löschen."
+msgstr "In der Demo nicht eingerichtet: der Löschlauf würde die stündlich neu erzeugten Beispieldaten löschen."
+
+#: src/core/services/compliance/vvt.py:80
+#, python-brace-format
+msgid "Konfigurierbar pro Kontaktstufe; eine Frist am Dokumentationstyp gilt zusätzlich (es gilt die zuerst ablaufende). Standardfristen je Ereignis: Anonyme Kontakte: {anonymous_days} Tage ab dem jeweiligen Kontakt; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage ab dem jeweiligen Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage ab Abschluss des zugeordneten Falls; Ereignisse dieser Stufe ohne Fall oder in offenen Fällen verfallen nicht über diese Frist, nur über eine Frist am Dokumentationstyp. Der tägliche Aufbewahrungslauf löscht ohne Freigabeschritt; eine Person mit mindestens einem Ereignis anonymisiert er, sobald alle ihre Ereignisse gelöscht sind und keine Aufbewahrungssperre (Legal Hold) auf der Person, einem ihrer Fälle oder Ereignisse besteht."
+msgstr "Konfigurierbar pro Kontaktstufe; eine Frist am Dokumentationstyp gilt zusätzlich (es gilt die zuerst ablaufende). Standardfristen je Ereignis: Anonyme Kontakte: {anonymous_days} Tage ab dem jeweiligen Kontakt; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage ab dem jeweiligen Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage ab Abschluss des zugeordneten Falls; Ereignisse dieser Stufe ohne Fall oder in offenen Fällen verfallen nicht über diese Frist, nur über eine Frist am Dokumentationstyp. Der tägliche Aufbewahrungslauf löscht ohne Freigabeschritt; eine Person mit mindestens einem Ereignis anonymisiert er, sobald alle ihre Ereignisse gelöscht sind und keine Aufbewahrungssperre (Legal Hold) auf der Person, einem ihrer Fälle oder Ereignisse besteht."
+
+#: src/core/services/compliance/vvt.py:327
+msgid "Lokale Sicherungsstände entfernt backup.sh bei seinem ersten erfolgreichen Lauf, in dem sie mindestens 8 (täglich), 29 (wöchentlich) bzw. 91 volle Tage (monatlich) alt sind. Das ist eine Altersgrenze, keine feste Höchstfrist. Nach einem fehlgeschlagenen Off-Site-Abgleich ist die lokale Rotation ausgesetzt, bis ein Abgleich wieder gelingt. Off-Site-Kopien löscht backup.sh nicht; ihre Frist legt die Einrichtung über eine Aufbewahrungsregel am Speicherort fest."
+msgstr "Lokale Sicherungsstände entfernt backup.sh bei seinem ersten erfolgreichen Lauf, in dem sie mindestens 8 (täglich), 29 (wöchentlich) bzw. 91 volle Tage (monatlich) alt sind. Das ist eine Altersgrenze, keine feste Höchstfrist. Nach einem fehlgeschlagenen Off-Site-Abgleich ist die lokale Rotation ausgesetzt, bis ein Abgleich wieder gelingt. Off-Site-Kopien löscht backup.sh nicht; ihre Frist legt die Einrichtung über eine Aufbewahrungsregel am Speicherort fest."
+
+#: src/core/services/compliance/vvt.py:340
+msgid "Sicherung vor dem Aufbewahrungslauf: Ein Sicherungsstand enthält auch die Daten, die der folgende Lauf löscht; sie verschwinden lokal erst mit der Rotation dieses Sicherungsstands, in Off-Site-Kopien erst durch die Aufbewahrungsregel am Ziel"
+msgstr "Sicherung vor dem Aufbewahrungslauf: Ein Sicherungsstand enthält auch die Daten, die der folgende Lauf löscht; sie verschwinden lokal erst mit der Rotation dieses Sicherungsstands, in Off-Site-Kopien erst durch die Aufbewahrungsregel am Ziel"
