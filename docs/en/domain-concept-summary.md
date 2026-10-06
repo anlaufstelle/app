@@ -1,7 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Synchronization update 2026-10-06: Hardware references point to the admin guide; installation prerequisites have a separate reference.
+> Synchronization update 2026-10-06: The German version history has a grammatical correction; hardware references point to the admin guide.
 
 # Domain Concept Summary
 
@@ -320,4 +320,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: ef45d7a76e30c7854d51dfb09f9476807ead4066 -->
+<!-- source-hash: e9aa9bf2edc83cf92b86c25323db75a9044f3ed7 -->
