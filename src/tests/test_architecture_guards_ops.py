@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from markdown_it import MarkdownIt
 
 pytestmark = pytest.mark.architecture
 
@@ -500,19 +501,50 @@ class TestDeploymentDbSecretBoundary:
         assert result.returncode != 0
         assert "POSTGRES_PASSWORD" in result.stderr and "placeholder" in result.stderr
 
+    @staticmethod
+    def _web_secret_examples(text: str) -> list[str]:
+        """Code examples that hand privileged DB secrets or the migrate one-shot to ``web``."""
+        # Blocks as CommonMark renders them (Refs #2411): pairing every three
+        # backticks with the next ones read prose as code and skipped quoted,
+        # indented, tilde and longer fences.
+        tokens = MarkdownIt("commonmark").enable("table").parse(text)
+        findings = []
+        for block in (token.content for token in tokens if token.type in ("fence", "code_block")):
+            injects_privileged = "POSTGRES_ADMIN_PASSWORD" in block or "POSTGRES_BOOTSTRAP_PASSWORD" in block
+            if injects_privileged and re.search(r"(?:exec|run)[^\n]*\bweb\b", block):
+                findings.append("privileged DB secrets injected into web")
+            if re.search(r"docker-migrate\.sh\s+web\b", block):
+                findings.append("migrate one-shot runs in web instead of maintenance")
+        return findings
+
     @pytest.mark.parametrize("doc_path", _OPERATOR_DOCS)
     def test_operator_docs_never_inject_admin_secrets_into_web(self, doc_path: Path) -> None:
-        text = doc_path.read_text(encoding="utf-8")
-        code_blocks = re.findall(r"```[^\n]*\n(.*?)\n```", text, re.DOTALL)
-        for block in code_blocks:
-            injects_privileged = "POSTGRES_ADMIN_PASSWORD" in block or "POSTGRES_BOOTSTRAP_PASSWORD" in block
-            targets_web = bool(re.search(r"(?:exec|run)[^\n]*\bweb\b", block))
-            assert not (injects_privileged and targets_web), (
-                f"{doc_path}: Codebeispiel injiziert privilegierte DB-Secrets in web (Refs #1962)."
-            )
-            assert not re.search(r"docker-migrate\.sh\s+web\b", block), (
-                f"{doc_path}: Migrate-One-Shot muss maintenance statt web nutzen (Refs #1962)."
-            )
+        findings = self._web_secret_examples(doc_path.read_text(encoding="utf-8"))
+        assert not findings, f"{doc_path}: {findings} (Refs #1962)."
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "> ```bash\n> docker compose exec -e POSTGRES_ADMIN_PASSWORD=x web migrate\n> ```\n",
+            "~~~bash\ndocker compose run -e POSTGRES_BOOTSTRAP_PASSWORD=x web shell\n~~~\n",
+            "- Step:\n\n      ./scripts/docker-migrate.sh web\n",
+            "````md\n```bash\necho nested\n```\ndocker compose exec -e POSTGRES_ADMIN_PASSWORD=x web shell\n````\n",
+        ],
+        ids=["blockquote-fence", "tilde-fence", "indented-in-list", "longer-outer-fence"],
+    )
+    def test_secret_guard_reads_every_code_block_commonmark_renders(self, text: str) -> None:
+        """Refs #2411: pairing every three backticks with the next ones misses these blocks."""
+        assert self._web_secret_examples(text)
+
+    def test_secret_guard_ignores_prose_around_inline_fences(self) -> None:
+        """Refs #2411: three backticks inside inline code open no block, so the
+        warning between them is prose and no example command."""
+        text = (
+            "Open a block with ```` ``` ```` and close it the same way.\n"
+            "Never run `docker compose exec -e POSTGRES_ADMIN_PASSWORD=x web shell`.\n"
+            "```` ``` ```` closes it.\n"
+        )
+        assert self._web_secret_examples(text) == []
 
 
 class TestServerErrorSupportContactAcrossAllStacks:
