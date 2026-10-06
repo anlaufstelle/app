@@ -9,6 +9,7 @@
 > Synchronization update 2026-10-06: § 6.2/§ 6.3 run the emergency dump and the emergency query as role `postgres` inside the `db` container, store the dump with `umask 077` outside `/tmp`, and warn that the app role sees 0 rows without facility context (#2472).
 > Synchronization update 2026-10-06: § 3.3 escapes the `%` in both invite token audit crontab lines (`\%`) and sets role `postgres` and database `anlaufstelle` explicitly (#2473).
 > Synchronization update 2026-10-06: § 9 (DB password rotation) describes the full Compose file list used by `rotate-db-passwords.sh` (base file, `compose.legal.yml`, `compose.override.yml`) and states that no other host script recreates containers (#2474).
+> Synchronization update 2026-10-06: § 3.3 drops a surplus code fence after the cron example, so the `<details>` block and § 3.4 render as text again (#2410).
 > Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188), and the same check for deleted events and anonymized persons and cases (`--target all`).
 > Synchronization update 2026-09-29: § 3.5 adds the rectification requests of anonymized persons to the check and repair (`--target rectification`, part of `--target all`, #2188).
 > Synchronization update 2026-09-29: § 6.5a uses the persistent production flag path from the host and documents the system page as the second control path (#1904).
@@ -596,8 +597,6 @@ exclusively in `sudo crontab -e`.
 
 # Health check (every 5 minutes)
 */5 * * * * curl -sf https://DOMAIN/health/ > /dev/null || echo "Anlaufstelle health check failed at $(date)" >> /var/log/anlaufstelle-health.log
-```
-
 ```
 
 </details>
@@ -3146,5 +3145,6 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: cad09da2c3237f1bc5f644ab08cdc8c7b7d84b1e -->
+<!-- source-hash: aa6990ab1f87ac4fb0b44140df479f22d92f07f5 -->
+<!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-09-22 -->

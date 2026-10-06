@@ -560,8 +560,6 @@ voraus. Das Beispiel gehoert ausschliesslich in `sudo crontab -e`.
 */5 * * * * curl -sf https://DOMAIN/health/ > /dev/null || echo "Anlaufstelle health check failed at $(date)" >> /var/log/anlaufstelle-health.log
 ```
 
-```
-
 </details>
 
 **Reihenfolge beachten:** Backup (02:00) → Retention (03:00) → Audit-Ketten-Verifikation (03:30) → Snapshots (04:00, monatlich) → Orphan-Cleanup (04:30) → Session-Bereinigung (05:00) → Breach-Detection/MV-Refresh (stuendlich). Backup muss vor Retention laufen, damit geloeschte Daten im Backup enthalten sind. Die Audit-Ketten-Verifikation laeuft nach der Retention, damit die von `prune_auditlog` frisch geschriebenen Checkpoint-Grenzen bereits in der Kette stehen. Der MV-Refresh nutzt `CONCURRENTLY` und blockiert laufende Reader nicht. Genau diese Reihenfolge bildet der Sidecar-Zeitplan in `deploy/crontab` ab — deshalb ist die `TZ`-Einstellung aus [§3.2](#32-cron-sidecar-standard) betriebsrelevant und nicht Kosmetik.
