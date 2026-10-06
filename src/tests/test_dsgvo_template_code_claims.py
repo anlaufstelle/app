@@ -27,7 +27,7 @@ from core.services.compliance.vvt import PROCESSING_ACTIVITIES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGES_DIR = REPO_ROOT / "src" / "core" / "packages"
-FACHKONZEPT = REPO_ROOT / "docs" / "fachkonzept-anlaufstelle.md"
+DOMAIN_CONCEPT_DE = REPO_ROOT / "docs" / "fachkonzept-anlaufstelle.md"
 DOMAIN_SUMMARY_EN = REPO_ROOT / "docs" / "en" / "domain-concept-summary.md"
 
 
@@ -92,12 +92,12 @@ class TestOfflineKeyLifecycleTemplates:
 @pytest.mark.architecture
 class TestOfflineKeyLifecycleDomainConcept:
     def test_section_16_does_not_promise_devtools_protection(self):
-        text = _flat(FACHKONZEPT.read_text(encoding="utf-8"))
+        text = _flat(DOMAIN_CONCEPT_DE.read_text(encoding="utf-8"))
         assert "selbst mit DevTool-Zugriff" not in text
         assert "liefert nur Chiffretext" not in text
 
     def test_section_16_idle_check_distinguishes_lock_and_wipe(self):
-        text = _flat(FACHKONZEPT.read_text(encoding="utf-8"))
+        text = _flat(DOMAIN_CONCEPT_DE.read_text(encoding="utf-8"))
         assert "verwirft den Key und löscht den Offline-Store, sobald die Session abgelaufen ist" not in text
         assert "nur den Schlüssel" in text
 
@@ -212,7 +212,7 @@ class TestVisibilityTemplates:
 @pytest.mark.architecture
 class TestVisibilityDomainConcept:
     def test_domain_concept_does_not_tie_visibility_to_contact_stage(self):
-        text = _flat(FACHKONZEPT.read_text(encoding="utf-8"))
+        text = _flat(DOMAIN_CONCEPT_DE.read_text(encoding="utf-8"))
         for stale in (
             "Assistant sieht nur das Pseudonym und den letzten Kontakt",
             "Kontaktstufen als Zugriffssteuerung",
