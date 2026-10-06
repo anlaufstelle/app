@@ -1,17 +1,20 @@
-"""Every setting variable the app reads reaches the Compose service that needs it (Refs #2470).
+"""Every setting variable the app reads reaches the Compose service that needs it (Refs #2469, #2470).
 
-The ``web`` service of ``docker-compose.prod.yml`` deliberately does not load
-the ``.env`` (it also holds the database admin credentials, Refs #1962); it gets
-an explicit allowlist instead. ``maintenance`` and ``cron`` load the whole
-file. A variable that the settings read but the allowlist lacks therefore
-works in ``maintenance``/``cron`` and silently does nothing in the HTTP
-runtime -- that is how ``MFA_ENFORCED_ROLES_*`` and ``OTP_WEBAUTHN_*`` were
-documented as operator settings while ``web`` never saw them.
+The ``web`` service of every shipped stack deliberately does not load the env
+file (it also holds the database admin credentials, Refs #1962); it gets an
+explicit allowlist instead. ``maintenance`` and ``cron`` load the whole file.
+A variable that the settings read but the allowlist lacks therefore works in
+``maintenance``/``cron`` and silently does nothing in the HTTP runtime -- that
+is how ``MFA_ENFORCED_ROLES_*`` and ``OTP_WEBAUTHN_*`` were documented as
+operator settings while ``web`` never saw them.
 
-The guard derives the variable set from the production settings chain
-(``prod.py`` and every settings module it imports), so a new
+The guard covers every stack (production, staging, dev, demo, barbara). For
+each stack it derives the variable set from the settings module its services
+run (that module plus every settings module it imports), so a new
 ``os.environ.get``/``env_*`` read fails here until it is either passed
-through or classified below with a reason.
+through or classified below with a reason. A stack that deliberately keeps a
+variable away from ``web`` records it as an exemption whose premise is
+checked as well.
 """
 
 from __future__ import annotations
@@ -20,6 +23,8 @@ import ast
 import json
 import os
 import subprocess
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -29,13 +34,12 @@ pytestmark = pytest.mark.architecture
 
 ROOT = Path(__file__).resolve().parents[2]
 SETTINGS_DIR = ROOT / "src" / "anlaufstelle" / "settings"
-PROD_COMPOSE = ROOT / "docker-compose.prod.yml"
-ENV_EXAMPLE = ROOT / ".env.example"
+BARBARA_DIR = ROOT / "dev-ops" / "deploy" / "barbara"
 
 APP_SERVICES = frozenset({"web", "maintenance", "cron"})
 
 # Variables that only some app services need. Everything not listed here (and
-# not in ``NOT_IN_BASE_STACK``) is needed by all three app services.
+# not in ``NOT_IN_BASE_STACK``) is needed by all app services of a stack.
 SERVICE_SCOPE: dict[str, tuple[frozenset[str], str]] = {
     "POSTGRES_ADMIN_USER": (
         frozenset({"maintenance"}),
@@ -57,14 +61,17 @@ PREFIX_SCOPE: dict[str, tuple[frozenset[str], str]] = {
         "only the scheduled ``detect_breaches`` command reads the thresholds and the webhook",
     ),
 }
-# Read by the settings, but no service of the shipped stack should carry them.
+# A stack without a ``cron`` service runs the scheduled commands through
+# ``maintenance`` (host timers call ``docker compose run maintenance``).
+SCHEDULED_FALLBACK = "maintenance"
+# Read by the settings, but no service of the shipped stacks should carry them.
 NOT_IN_BASE_STACK: dict[str, str] = {
     "LEGAL_IMPRINT_FILE": "needs a file mount; the operator's compose.legal.yml adds variable and mount together",
     "LEGAL_PRIVACY_FILE": "needs a file mount; the operator's compose.legal.yml adds variable and mount together",
     "EXTRA_TEMPLATE_DIR": "template overlay of the demo stack; only meaningful together with its volume mount",
     "SUDO_MODE_ENABLED": "test switch, not an operator setting -- the production settings refuse False",
 }
-# Variables the guard must find, so that a broken discovery cannot pass silently.
+# Variables the guard must find in every stack, so that a broken discovery cannot pass silently.
 DISCOVERY_ANCHORS = frozenset(
     {
         "DJANGO_SECRET_KEY",
@@ -75,6 +82,118 @@ DISCOVERY_ANCHORS = frozenset(
         "OTP_WEBAUTHN_ALLOWED_ORIGINS",
         "BREACH_NOTIFICATION_WEBHOOK_URL",
     }
+)
+MAIL_VARIABLES = (
+    "EMAIL_HOST",
+    "EMAIL_PORT",
+    "EMAIL_HOST_USER",
+    "EMAIL_HOST_PASSWORD",
+    "EMAIL_USE_TLS",
+    "EMAIL_USE_SSL",
+    "DEFAULT_FROM_EMAIL",
+)
+MFA_ROLE_VARIABLES = ("MFA_ENFORCED_ROLES_IMMEDIATE", "MFA_ENFORCED_ROLES_GRACE")
+
+
+def _assigned_value(module: Path, name: str) -> str | None:
+    """Source of the last top-level assignment ``name = ...`` in ``module``."""
+    value = None
+    for node in ast.parse(module.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and any(ast.unparse(t) == name for t in node.targets):
+            value = ast.unparse(node.value)
+    return value
+
+
+@dataclass(frozen=True)
+class Exemption:
+    """A variable a stack keeps away from ``web`` on purpose, with a premise the guard re-checks."""
+
+    reason: str
+    premise: Callable[[Stack, dict], bool]
+
+
+@dataclass(frozen=True)
+class Stack:
+    stack_id: str
+    compose: Path
+    settings_entry: Path
+    web_exemptions: dict[str, Exemption] = field(default_factory=dict)
+    # Variables web may receive empty although the reader has a non-empty default.
+    empty_like_unset: dict[str, Exemption] = field(default_factory=dict)
+
+    @property
+    def env_example(self) -> Path:
+        name = ".env.example" if self.stack_id == "prod" else f".env.{self.stack_id}.example"
+        return self.compose.parent / name
+
+    @property
+    def env_file_name(self) -> str:
+        """The env file the services load and the deploy passes as ``--env-file``."""
+        return self.env_example.name.removesuffix(".example")
+
+
+def _has_no_redis_service(stack: Stack, services: dict) -> bool:
+    return "redis" not in services
+
+
+def _demo_switches_role_enforcement_off(stack: Stack, services: dict) -> bool:
+    return _assigned_value(stack.settings_entry, "MFA_ENFORCE_PRIVILEGED_ROLES") == "False"
+
+
+def _devlive_mails_to_the_console_without_host(stack: Stack, services: dict) -> bool:
+    source = (SETTINGS_DIR / "devlive.py").read_text(encoding="utf-8")
+    return 'if not os.environ.get("EMAIL_HOST"):' in source and "console.EmailBackend" in source
+
+
+def _settings_mail_to_the_console(stack: Stack, services: dict) -> bool:
+    return "console.EmailBackend" in (_assigned_value(stack.settings_entry, "MAILERS") or "")
+
+
+NO_REDIS = {
+    "REDIS_URL": Exemption(
+        "the stack ships no redis service; web keeps the DatabaseCache fallback of an empty REDIS_URL",
+        _has_no_redis_service,
+    )
+}
+DEMO_NO_MAIL = {
+    name: Exemption(
+        "the public demo never sends mail: devlive keeps the console mailer only while EMAIL_HOST is unset",
+        _devlive_mails_to_the_console_without_host,
+    )
+    for name in MAIL_VARIABLES
+}
+DEMO_NO_ROLE_ENFORCEMENT = {
+    name: Exemption(
+        "the demo settings set MFA_ENFORCE_PRIVILEGED_ROLES = False; the role lists have no effect there",
+        _demo_switches_role_enforcement_off,
+    )
+    for name in MFA_ROLE_VARIABLES
+}
+CONSOLE_MAIL = {
+    name: Exemption(
+        "the instance settings replace MAILERS with the console backend; mail transport settings have no effect",
+        _settings_mail_to_the_console,
+    )
+    for name in MAIL_VARIABLES
+}
+
+DEV_EMPTY_MAIL_HOST = {
+    "EMAIL_HOST": Exemption(
+        "devlive treats an empty EMAIL_HOST like an unset one and keeps the console mailer",
+        _devlive_mails_to_the_console_without_host,
+    )
+}
+
+STACK_IDS = ("barbara", "demo", "dev", "prod", "staging")
+WEB_EXEMPTIONS: dict[str, dict[str, Exemption]] = {
+    "staging": NO_REDIS,
+    "dev": NO_REDIS,
+    "demo": {**NO_REDIS, **DEMO_NO_MAIL, **DEMO_NO_ROLE_ENFORCEMENT},
+    "barbara": {**NO_REDIS, **CONSOLE_MAIL},
+}
+EMPTY_LIKE_UNSET: dict[str, dict[str, Exemption]] = {"dev": DEV_EMPTY_MAIL_HOST}
+ROLE_STACKS = sorted(
+    stack_id for stack_id in STACK_IDS if not set(MFA_ROLE_VARIABLES) & WEB_EXEMPTIONS.get(stack_id, {}).keys()
 )
 
 _DIRECT_READERS = frozenset({"os.environ.get", "os.getenv"})
@@ -87,18 +206,28 @@ def _env_helper_names() -> frozenset[str]:
     )
 
 
-def _settings_chain() -> list[Path]:
-    """``prod.py`` plus every settings module it imports, transitively (relative imports)."""
+def _settings_chain(entry: Path) -> list[Path]:
+    """``entry`` plus every settings module it imports, transitively."""
     seen: list[Path] = []
-    pending = [SETTINGS_DIR / "prod.py"]
+    pending = [entry]
     while pending:
         path = pending.pop()
         if path in seen:
             continue
         seen.append(path)
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if node.level == 1 and node.module:
                 pending.append(SETTINGS_DIR / f"{node.module}.py")
+            elif node.level == 1:
+                pending.extend(
+                    SETTINGS_DIR / f"{alias.name}.py"
+                    for alias in node.names
+                    if (SETTINGS_DIR / f"{alias.name}.py").exists()
+                )
+            elif node.level == 0 and node.module and node.module.startswith("anlaufstelle.settings."):
+                pending.append(SETTINGS_DIR / f"{node.module.rsplit('.', 1)[1]}.py")
     return seen
 
 
@@ -111,15 +240,17 @@ def _has_nonempty_default(reader: str, call: ast.Call) -> bool:
         return isinstance(default, ast.Constant) and default.value is True
     if len(call.args) > 1:
         default = call.args[1]
-        return isinstance(default, ast.Constant) and isinstance(default.value, str) and default.value != ""
+        if not isinstance(default, ast.Constant):
+            return True
+        return isinstance(default.value, str) and default.value != ""
     return False
 
 
-def _setting_variables() -> dict[str, bool]:
-    """``{variable: has_nonempty_default}`` over the production settings chain."""
+def _setting_variables(stack: Stack) -> dict[str, bool]:
+    """``{variable: has_nonempty_default}`` over the settings chain of ``stack``."""
     helpers = _env_helper_names()
     found: dict[str, bool] = {}
-    for path in _settings_chain():
+    for path in _settings_chain(stack.settings_entry):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Subscript) and ast.unparse(node.value) == "os.environ":
                 if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
@@ -136,42 +267,74 @@ def _setting_variables() -> dict[str, bool]:
     return found
 
 
-def _required_services(name: str) -> frozenset[str]:
+def _stack(stack_id: str) -> Stack:
+    """The stack's files; skips where the release tree strips them."""
+    if stack_id == "staging" and not (ROOT / "docker-compose.staging.yml").exists():
+        pytest.skip("docker-compose.staging.yml and .env.staging.example are excluded from this release tree")
+    if stack_id == "demo" and not (ROOT / "docker-compose.demo.yml").exists():
+        pytest.skip("docker-compose.demo.yml and .env.demo.example are excluded from this release tree")
+    if stack_id == "barbara" and not BARBARA_DIR.exists():
+        pytest.skip("dev-ops/ is excluded from this release tree")
+    compose, settings_entry = {
+        "prod": (ROOT / "docker-compose.prod.yml", SETTINGS_DIR / "prod.py"),
+        "staging": (ROOT / "docker-compose.staging.yml", SETTINGS_DIR / "prod.py"),
+        "dev": (ROOT / "docker-compose.dev.yml", SETTINGS_DIR / "devlive.py"),
+        "demo": (ROOT / "docker-compose.demo.yml", SETTINGS_DIR / "demo.py"),
+        "barbara": (BARBARA_DIR / "docker-compose.barbara.yml", BARBARA_DIR / "barbara_settings.py"),
+    }[stack_id]
+    return Stack(
+        stack_id,
+        compose,
+        settings_entry,
+        WEB_EXEMPTIONS.get(stack_id, {}),
+        EMPTY_LIKE_UNSET.get(stack_id, {}),
+    )
+
+
+def _services(stack: Stack) -> dict:
+    return yaml.safe_load(stack.compose.read_text(encoding="utf-8"))["services"]
+
+
+def _app_services(stack: Stack) -> dict:
+    return {name: service for name, service in _services(stack).items() if name in APP_SERVICES}
+
+
+def _required_services(stack: Stack, present: frozenset[str], name: str) -> frozenset[str]:
     if name in NOT_IN_BASE_STACK:
         return frozenset()
+    scope = APP_SERVICES
     if name in SERVICE_SCOPE:
-        return SERVICE_SCOPE[name][0]
-    for prefix, (services, _reason) in PREFIX_SCOPE.items():
-        if name.startswith(prefix):
-            return services
-    return APP_SERVICES
+        scope = SERVICE_SCOPE[name][0]
+    else:
+        for prefix, (services, _reason) in PREFIX_SCOPE.items():
+            if name.startswith(prefix):
+                scope = services
+                break
+    needed = scope & present or frozenset({SCHEDULED_FALLBACK})
+    if name in stack.web_exemptions:
+        needed -= {"web"}
+    return needed
 
 
-def _services() -> dict:
-    return yaml.safe_load(PROD_COMPOSE.read_text(encoding="utf-8"))["services"]
-
-
-def _loads_dotenv(service: dict) -> bool:
-    env_file = service.get("env_file")
-    entries = env_file if isinstance(env_file, list) else [env_file]
-    return any((entry.get("path") if isinstance(entry, dict) else entry) == ".env" for entry in entries if entry)
+def _loads_env_file(service: dict) -> bool:
+    return bool(service.get("env_file"))
 
 
 def _reaches(service: dict, name: str) -> bool:
-    return name in (service.get("environment") or {}) or _loads_dotenv(service)
+    return name in (service.get("environment") or {}) or _loads_env_file(service)
 
 
-def _resolved_web_environment(tmp_path: Path, operator_values: dict[str, str]) -> dict[str, str]:
-    """``docker compose config`` of the shipped stack with ``.env.example`` plus operator values."""
-    env_file = tmp_path / ".env"
-    env_file.write_text(ENV_EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
-    shell_env = {key: value for key, value in os.environ.items() if key not in _setting_variables()}
+def _resolved_web_environment(stack: Stack, tmp_path: Path, operator_values: dict[str, str]) -> dict[str, str]:
+    """``docker compose config`` of the stack with its env example plus operator values."""
+    env_file = tmp_path / stack.env_file_name
+    env_file.write_text(stack.env_example.read_text(encoding="utf-8"), encoding="utf-8")
+    shell_env = {key: value for key, value in os.environ.items() if key not in _setting_variables(stack)}
     result = subprocess.run(
         [
             "docker",
             "compose",
             "-f",
-            str(PROD_COMPOSE),
+            str(stack.compose),
             "--project-directory",
             str(tmp_path),
             "--env-file",
@@ -189,85 +352,118 @@ def _resolved_web_environment(tmp_path: Path, operator_values: dict[str, str]) -
     return json.loads(result.stdout)["services"]["web"]["environment"]
 
 
-def test_discovery_sees_the_production_settings_chain() -> None:
-    chain = {path.name for path in _settings_chain()}
-    assert {"prod.py", "base.py", "_env.py", "_mfa_roles.py"} <= chain
-    missing = DISCOVERY_ANCHORS - _setting_variables().keys()
+@pytest.mark.parametrize("stack_id", STACK_IDS)
+def test_discovery_follows_the_settings_module_of_the_stack(stack_id: str) -> None:
+    stack = _stack(stack_id)
+    module = stack.settings_entry.stem
+    for name, service in _app_services(stack).items():
+        configured = (service.get("environment") or {}).get("DJANGO_SETTINGS_MODULE", "")
+        assert configured.rsplit(".", 1)[-1] == module, f"{name} runs {configured}, the guard reads {module}"
+    chain = {path.name for path in _settings_chain(stack.settings_entry)}
+    assert {stack.settings_entry.name, "prod.py", "base.py", "_env.py", "_mfa_roles.py"} <= chain
+    missing = DISCOVERY_ANCHORS - _setting_variables(stack).keys()
     assert not missing, f"discovery is blind for {sorted(missing)}"
 
 
 def test_classification_has_no_stale_entries() -> None:
-    known = _setting_variables().keys()
+    known = _setting_variables(_stack("prod")).keys()
     stale = sorted((SERVICE_SCOPE.keys() | NOT_IN_BASE_STACK.keys()) - known)
     assert not stale, f"classified, but no longer read by the production settings: {stale}"
     for prefix in PREFIX_SCOPE:
         assert any(name.startswith(prefix) for name in known), f"prefix {prefix} matches nothing"
 
 
-def test_web_keeps_the_explicit_allowlist() -> None:
-    web = _services()["web"]
-    assert "env_file" not in web, "web must not load the .env (admin credentials, Refs #1962)"
+@pytest.mark.parametrize("stack_id", STACK_IDS)
+def test_web_exemptions_are_read_kept_out_of_web_and_justified(stack_id: str) -> None:
+    stack = _stack(stack_id)
+    services = _services(stack)
+    known = _setting_variables(stack).keys()
+    web_environment = services["web"].get("environment") or {}
+    for name, exemption in stack.web_exemptions.items():
+        assert name in known, f"{name} is exempted, but the settings of {stack_id} no longer read it"
+        assert name not in web_environment, f"{name} is exempted, but web receives it: drop the exemption"
+        assert exemption.premise(stack, services), f"{name}: premise no longer holds -- {exemption.reason}"
+
+
+@pytest.mark.parametrize("stack_id", STACK_IDS)
+def test_web_keeps_the_explicit_allowlist(stack_id: str) -> None:
+    web = _services(_stack(stack_id))["web"]
+    assert "env_file" not in web, "web must not load the env file (admin credentials, Refs #1962)"
     for name, (services, _reason) in SERVICE_SCOPE.items():
         if "web" not in services:
             assert name not in web["environment"], f"{name} must stay out of web"
 
 
-@pytest.mark.parametrize("service_name", sorted(APP_SERVICES))
-def test_every_setting_variable_reaches_the_services_that_need_it(service_name: str) -> None:
-    service = _services()[service_name]
-    missing = sorted(
-        name
-        for name in _setting_variables()
-        if service_name in _required_services(name) and not _reaches(service, name)
-    )
+@pytest.mark.parametrize("stack_id", STACK_IDS)
+def test_every_setting_variable_reaches_the_services_that_need_it(stack_id: str) -> None:
+    stack = _stack(stack_id)
+    app_services = _app_services(stack)
+    present = frozenset(app_services)
+    missing = {
+        service_name: sorted(
+            name
+            for name in _setting_variables(stack)
+            if service_name in _required_services(stack, present, name) and not _reaches(service, name)
+        )
+        for service_name, service in app_services.items()
+    }
+    missing = {service_name: names for service_name, names in missing.items() if names}
     assert not missing, (
-        f"{service_name}: settings read {missing}, but the service never receives them. "
-        "Pass them through in docker-compose.prod.yml or classify them in this test with a reason."
+        f"{stack.compose.name}: the settings read {missing}, but the services never receive them. "
+        "Pass them through or classify them in this test with a reason."
     )
 
 
-def test_web_does_not_replace_a_code_default_with_an_empty_value(tmp_path: Path) -> None:
+@pytest.mark.parametrize("stack_id", STACK_IDS)
+def test_web_does_not_replace_a_code_default_with_an_empty_value(stack_id: str, tmp_path: Path) -> None:
     """An unset operator variable must leave the code default in place.
 
     ``${NAME-}`` hands an empty string to the container. For a reader with a
     non-empty default that is a different value: ``MFA_ENFORCED_ROLES_IMMEDIATE=""``
     switches the immediate role enforcement off, ``env_int`` fails on ``""``.
     """
-    web_environment = _resolved_web_environment(tmp_path, {})
+    stack = _stack(stack_id)
+    web_environment = _resolved_web_environment(stack, tmp_path, {})
     emptied = sorted(
         name
-        for name, has_default in _setting_variables().items()
-        if has_default and web_environment.get(name, None) == ""
+        for name, has_default in _setting_variables(stack).items()
+        if has_default and web_environment.get(name, None) == "" and name not in stack.empty_like_unset
     )
     assert not emptied, f"web receives an empty value instead of the code default for {emptied}"
+    for name, exemption in stack.empty_like_unset.items():
+        assert exemption.premise(stack, _services(stack)), f"{name}: premise no longer holds -- {exemption.reason}"
 
 
-def test_mfa_role_defaults_in_web_match_the_settings(tmp_path: Path) -> None:
+@pytest.mark.parametrize("stack_id", ROLE_STACKS)
+def test_mfa_role_defaults_in_web_match_the_settings(stack_id: str, tmp_path: Path) -> None:
     from anlaufstelle.settings._mfa_roles import parse_enforced_role_sets
 
-    web_environment = _resolved_web_environment(tmp_path, {})
+    web_environment = _resolved_web_environment(_stack(stack_id), tmp_path, {})
 
     assert parse_enforced_role_sets(
         web_environment["MFA_ENFORCED_ROLES_IMMEDIATE"], web_environment["MFA_ENFORCED_ROLES_GRACE"]
     ) == (("super_admin", "facility_admin"), ("lead", "staff", "assistant"))
 
 
-def test_mfa_and_webauthn_operator_values_reach_web(tmp_path: Path) -> None:
+@pytest.mark.parametrize("stack_id", STACK_IDS)
+def test_mfa_and_webauthn_operator_values_reach_web(stack_id: str, tmp_path: Path) -> None:
+    stack = _stack(stack_id)
     operator_values = {
         "MFA_ENFORCED_ROLES_IMMEDIATE": "super_admin,facility_admin,lead",
         "MFA_ENFORCED_ROLES_GRACE": "staff,assistant",
         "OTP_WEBAUTHN_RP_ID": "example.org",
         "OTP_WEBAUTHN_ALLOWED_ORIGINS": "https://app.example.org,https://admin.example.org",
     }
+    expected = {name: value for name, value in operator_values.items() if name not in stack.web_exemptions}
 
-    web_environment = _resolved_web_environment(tmp_path, operator_values)
+    web_environment = _resolved_web_environment(stack, tmp_path, operator_values)
 
-    for name, value in operator_values.items():
-        assert web_environment[name] == value
+    assert {name: web_environment.get(name) for name in expected} == expected
 
 
-def test_deliberately_empty_role_list_reaches_web_as_empty(tmp_path: Path) -> None:
+@pytest.mark.parametrize("stack_id", ROLE_STACKS)
+def test_deliberately_empty_role_list_reaches_web_as_empty(stack_id: str, tmp_path: Path) -> None:
     """An empty role list is the documented way to switch a level off; web must honour it."""
-    web_environment = _resolved_web_environment(tmp_path, {"MFA_ENFORCED_ROLES_GRACE": ""})
+    web_environment = _resolved_web_environment(_stack(stack_id), tmp_path, {"MFA_ENFORCED_ROLES_GRACE": ""})
 
     assert web_environment["MFA_ENFORCED_ROLES_GRACE"] == ""
