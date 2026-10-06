@@ -256,6 +256,56 @@ class TestMarkerUnderRlsRole:
 
         assert [m.detail["result"] for m in _markers()] == ["ok"]
 
+    def test_admin_losing_bypassrls_writes_problem_marker_and_card_turns_red(
+        self,
+        monkeypatch,
+        settings,
+        rls_test_role,  # noqa: F811
+    ):
+        """The maintenance service connects as the admin role: once that role loses
+        BYPASSRLS, the connection running the check cannot bypass RLS either. The
+        finding must still supersede the previous green marker."""
+        _write_marker("ok")
+        _configure(monkeypatch, settings, {_APP_ROLE: (False, False), _ADMIN_ROLE: (False, False)})
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            _run(1)
+
+        markers = _markers()
+        assert [m.detail["result"] for m in markers] == ["ok", "problems"]
+        assert markers[-1].detail["problems"] == ["admin_role_no_bypassrls"]
+        assert markers[-1].facility_id is None
+        _web_runtime(monkeypatch)
+        assert _admin_card().status == ComplianceStatus.CRITICAL
+
+    def test_incomplete_result_is_written_without_bypass(self, monkeypatch, settings, rls_test_role):  # noqa: F811
+        _write_marker("ok")
+        _configure(monkeypatch, settings, {_APP_ROLE: (False, False)}, admin=False)
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            _run(0)
+
+        assert [m.detail["result"] for m in _markers()] == ["ok", "incomplete"]
+        _web_runtime(monkeypatch)
+        assert _admin_card().status == ComplianceStatus.WARNING
+
+    def test_ok_without_bypass_never_supersedes_a_problem_marker(
+        self,
+        monkeypatch,
+        settings,
+        rls_test_role,  # noqa: F811
+    ):
+        """Only a connection that bypasses RLS may vouch for a healthy topology."""
+        _write_marker("problems", ["admin_role_no_bypassrls"])
+        _configure(monkeypatch, settings, _HEALTHY)
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            _run(0)
+
+        assert [m.detail["result"] for m in _markers()] == ["problems"]
+        _web_runtime(monkeypatch)
+        assert _admin_card().status == ComplianceStatus.CRITICAL
+
 
 def _web_runtime(monkeypatch):
     monkeypatch.delenv("POSTGRES_ADMIN_USER", raising=False)

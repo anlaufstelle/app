@@ -339,8 +339,14 @@ def record_db_roles_marker(checks: list[RoleCheck], ownership_problems: list[str
 
     * no AuditLog table yet — ``check_db_roles`` runs before the first
       ``migrate`` (``docker-migrate.sh``, ``scripts/initial-setup.sh``);
-    * no RLS bypass on this connection — like the other maintenance commands
-      the marker is written only by the admin role (or a super-admin GUC);
+    * no RLS bypass on this connection and the result is ``ok`` — only the
+      admin role (or a super-admin GUC) may vouch for a healthy topology.
+      ``problems`` and ``incomplete`` are always written: the maintenance
+      service connects as the admin role, so once that role loses BYPASSRLS
+      the run reporting it has no bypass either, and its finding must still
+      supersede an older green marker. A system row (``facility=None``) is
+      allowed by the AuditLog insert policy without bypass, and such a row
+      can only make the card worse, never green;
     * the INSERT fails — the gate runs before ``migrate``, so the AuditLog
       columns of the new code may not exist yet. The failure is reported and
       the dashboard simply keeps the previous marker.
@@ -350,12 +356,12 @@ def record_db_roles_marker(checks: list[RoleCheck], ownership_problems: list[str
     # Lazy import: core.services.system imports core.services.compliance.
     from core.services.system import has_rls_bypass_context
 
-    if not has_rls_bypass_context():
+    result, problems = db_roles_result(checks, ownership_problems)
+    if result == DB_ROLES_RESULT_OK and not has_rls_bypass_context():
         return (
-            "DB_ROLES_VERIFIED marker skipped: this connection cannot bypass RLS "
+            "DB_ROLES_VERIFIED marker skipped: an ok result needs a connection that bypasses RLS "
             "(run check_db_roles in the maintenance service)."
         )
-    result, problems = db_roles_result(checks, ownership_problems)
     try:
         with transaction.atomic():
             audit_event(
