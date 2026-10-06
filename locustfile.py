@@ -120,6 +120,10 @@ class HeavyExportUser(AuthenticatedUser):
             name="/statistics/export/csv",
         )
 
+    @task
+    def statistics(self):
+        self._get_authenticated("/statistics/?zeitraum=letzte30", name="/statistics")
+
 
 def _read_budgets(path: str = "docs/performance-budgets.json") -> dict[str, float]:
     """Helper fuer Nightly-CI — liest die Budgets aus der JSON-Tabelle."""

@@ -20,7 +20,9 @@ except ModuleNotFoundError as error:
     fake_locust.HttpUser = FakeHttpUser
     fake_locust.between = lambda _minimum, _maximum: None
 
-    def fake_task(*_args, **_kwargs):
+    def fake_task(*args, **_kwargs):
+        if args and callable(args[0]):
+            return args[0]
         return lambda function: function
 
     fake_locust.task = fake_task
@@ -37,21 +39,42 @@ class FakeResponse:
     status_code: int = 200
     url: str = "http://testserver/login/"
     headers: dict[str, str] | None = None
+    failure_messages: list[str] | None = None
 
     def __post_init__(self) -> None:
         if self.headers is None:
             self.headers = {}
+        if self.failure_messages is None:
+            self.failure_messages = []
+
+    def __enter__(self) -> "FakeResponse":
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def failure(self, message: str) -> None:
+        self.failure_messages.append(message)
 
 
 class FakeClient:
-    def __init__(self, login_response: FakeResponse, login_page: FakeResponse | None = None) -> None:
+    def __init__(
+        self,
+        login_response: FakeResponse,
+        login_page: FakeResponse | None = None,
+        authenticated_response: FakeResponse | None = None,
+    ) -> None:
         self.login_response = login_response
         self.login_page = login_page or FakeResponse('name="csrfmiddlewaretoken" value="token"')
+        self.authenticated_response = authenticated_response or FakeResponse("", url="http://testserver/")
         self.posts: list[dict[str, object]] = []
+        self.requests: list[tuple[str, dict[str, object]]] = []
 
     def get(self, path: str, **kwargs: object) -> FakeResponse:
-        assert path == "/login/"
-        return self.login_page
+        if path == "/login/":
+            return self.login_page
+        self.requests.append((path, kwargs))
+        return self.authenticated_response
 
     def post(self, path: str, **kwargs: object) -> FakeResponse:
         self.posts.append(kwargs)
@@ -97,3 +120,14 @@ def test_staff_user_uses_a_seeded_staff_account() -> None:
 
 def test_heavy_export_user_uses_a_seeded_lead_account() -> None:
     assert locustfile.LEAD_USERNAME == "emma"
+
+
+def test_lead_user_measures_the_statistics_dashboard() -> None:
+    client = FakeClient(FakeResponse(""))
+    user = object.__new__(locustfile.HeavyExportUser)
+    user.client = client
+    user.host = "http://testserver"
+
+    locustfile.HeavyExportUser.statistics(user)
+
+    assert client.requests == [("/statistics/?zeitraum=letzte30", {"catch_response": True, "name": "/statistics"})]
