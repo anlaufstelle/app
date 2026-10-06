@@ -473,8 +473,8 @@ class TestOfflineRecoveryDocs:
 
     def test_english_summary_current_sections_describe_offline_and_rls_as_built(self):
         text = _flat(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8"))
-        # Only the privacy section itself: the synchronization note in the
-        # header paraphrases these claims and must not satisfy the guard.
+        # Only the privacy section itself: a paraphrase elsewhere (header,
+        # release notes) must not satisfy the guard.
         current = _section(text, "## Privacy Architecture", "## Role Model")
         for required in (
             "IndexedDB",
@@ -509,6 +509,11 @@ class TestOfflineRecoveryDocs:
 
 _SECTION_REF_RE = re.compile(r"§ (\d+(?:\.\d+)*)")
 _HEADING_RE = re.compile(r"^#{2,4} (\d+(?:\.\d+)*)\.? (.+)$", re.MULTILINE)
+
+
+#: Wording every audit retention text uses for the class ``prune_auditlog``
+#: never reaches (it deletes only ``facility=facility`` rows).
+AUDIT_WITHOUT_FACILITY = "Einträge ohne Einrichtung"
 
 
 @pytest.fixture
@@ -548,6 +553,11 @@ class TestDeletionConceptAuditLog:
         ):
             assert exemption in section, exemption
         assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in section
+        # ``prune_auditlog`` filters ``facility=facility``: entries without a
+        # facility are never pruned, so the list of exemptions is not closed.
+        assert "Weitere Ausnahmen gibt es nicht" not in section
+        assert AUDIT_WITHOUT_FACILITY in section
+        assert "unbefristet" in section
 
     def test_dsfa_and_vvt_template_name_history_proof_and_no_hold(self, facility):
         dsfa_row = next(
@@ -555,10 +565,20 @@ class TestDeletionConceptAuditLog:
         )
         assert "Historien-Redaktion" in dsfa_row
         assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in dsfa_row
+        assert AUDIT_WITHOUT_FACILITY in dsfa_row
         vvt = _flat(render_document("verarbeitungsverzeichnis", facility)[0])
         audit_deadlines = _section(vvt, "### 3.4 Löschfristen", "---")
         assert "Historien-Redaktion" in audit_deadlines
         assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in audit_deadlines
+        assert "weitere Ausnahmen gibt es nicht" not in audit_deadlines
+        assert AUDIT_WITHOUT_FACILITY in audit_deadlines
+
+    def test_dsfa_residual_risk_and_employee_notice_name_entries_without_facility(self, facility):
+        dsfa = _flat(render_document("dsfa", facility)[0])
+        residual = _section(dsfa, "**Restrisiko:** Das Audit-Log", "Aufbewahrungs-Job")
+        assert AUDIT_WITHOUT_FACILITY in residual
+        employees = _flat(render_document("mitarbeiter-informationspflichten", facility)[0])
+        assert AUDIT_WITHOUT_FACILITY in _section(employees, "Reguläre Audit-Log-Einträge", "Sitzungen enden")
 
 
 # ---------------------------------------------------------------------------
@@ -610,3 +630,12 @@ class TestDomainConceptRetentionAndRls:
         en = _bullet(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8"), "Retention periods.")
         for required in ("open case", "expires first", "without approval", "person or case"):
             assert required in en, required
+
+    def test_audit_trail_glossary_row_names_entries_without_facility(self):
+        row = next(
+            line
+            for line in DOMAIN_CONCEPT_DE.read_text(encoding="utf-8").splitlines()
+            if line.startswith("| Audit-Trail |")
+        )
+        assert AUDIT_WITHOUT_FACILITY in row
+        assert "unbefristet" in row

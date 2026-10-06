@@ -335,6 +335,9 @@ class TestProcessingActivitiesContent:
         assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in retention
         for exemption in ("Sicherheitsverstöße", "Ereignis-Historie", "Berichtszeiträume"):
             assert exemption in retention, exemption
+        # The run prunes per facility only; entries without one stay for good.
+        assert "Einträge ohne Einrichtung" in retention
+        assert "unbefristet" in retention
 
     def test_data_subject_rights_match_implemented_paths(self):
         purpose = str(get_activity("dsgvo_requests")["purpose"])
@@ -526,6 +529,26 @@ class TestAuditLogPruningIgnoresLegalHolds:
             AuditLog.Action.AUDIT_PRUNE_CHECKPOINT,
             AuditLog.Action.EVENT_HISTORY_REDACTED,
         }
+
+    def test_premise_daily_run_never_prunes_entries_without_facility(self, facility, settings_obj):
+        from datetime import timedelta
+        from io import StringIO
+        from unittest import mock
+
+        from django.core.management import call_command
+        from django.utils import timezone
+
+        settings_obj.auditlog_retention_months = 24
+        settings_obj.save()
+        facility_entry = AuditLog.objects.create(facility=facility, action=AuditLog.Action.SYSTEM_VIEW)
+        system_entry = AuditLog.objects.create(facility=None, action=AuditLog.Action.SYSTEM_VIEW)
+        later = timezone.now() + timedelta(days=25 * 31)
+
+        with mock.patch("core.management.commands.enforce_retention.timezone.now", return_value=later):
+            call_command("enforce_retention", stdout=StringIO())
+
+        assert not AuditLog.objects.filter(pk=facility_entry.pk).exists()
+        assert AuditLog.objects.filter(pk=system_entry.pk).exists()
 
     def test_audit_entry_about_held_event_is_pruned(self, facility, settings_obj, sample_event, lead_user):
         from datetime import timedelta

@@ -1218,7 +1218,7 @@ Betroffenenrechte werden durch berechtigte Mitarbeitende bearbeitet. Ein Kliente
 | Maßnahme / Recht | Implementierte Funktion |
 |---|---|
 | Rollen und Kontaktstufen | Kontextbezogene Berechtigungen innerhalb der Einrichtung (§ 9) |
-| Audit-Trail | Append-Only-Protokoll ausgewählter Aktionen; eigene Aufbewahrungsfrist `auditlog_retention_months` (§ 6) |
+| Audit-Trail | Append-Only-Protokoll ausgewählter Aktionen; eigene Aufbewahrungsfrist `auditlog_retention_months` je Einrichtung (§ 6), mit dauerhaften Ausnahmen; Einträge ohne Einrichtung (Systemadministration, Anmeldeversuche unter unbekanntem Benutzernamen, installationsweite Lauf-Marker) bleiben unbefristet |
 | Verschlüsselung | Feldverschlüsselung mit Schlüsselrotation |
 | Pseudonymisierung | Pseudonym als Personenidentifikator |
 | Löschfristen | Durchsetzung über `enforce_retention`, Ereignis-Soft-Delete, Vorschlagsprüfung über `RetentionProposal` und Legal Holds |

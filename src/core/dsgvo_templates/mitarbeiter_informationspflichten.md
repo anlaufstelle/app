@@ -65,7 +65,9 @@ Unterauftragsverarbeiter in ihrem AVV beziehungsweise in dessen § 6.
 - Reguläre Audit-Log-Einträge werden {{ auditlog_retention_months }} Monate
   rollierend aufbewahrt. Der Wert `0` schaltet diese Löschung ab;
   Sicherheitsverstöße und technische Nachweismarker können dauerhaft
-  ausgenommen sein.
+  ausgenommen sein. Einträge ohne Einrichtung (etwa fehlgeschlagene
+  Anmeldungen unter einem unbekannten Benutzernamen, mit dem eingegebenen
+  Namen und der IP-Adresse) löscht die Anwendung nicht.
 - Sitzungen enden nach den konfigurierten Inaktivitäts- und Absolutfristen;
   abgelaufene Datenbank-Sitzungen werden täglich bereinigt.
 - MFA-Geräte und Wiederherstellungscodes bestehen bis Widerruf, Verbrauch oder

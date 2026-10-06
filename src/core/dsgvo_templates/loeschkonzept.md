@@ -109,14 +109,23 @@ organisatorisch zu behandeln.
 
 ### 3.3 Audit-Log
 
-Das Audit-Log wird rollierend nach `auditlog_retention_months` bereinigt. Der
-Wert `0` schaltet die reguläre Löschung ab. Sicherheitsverstöße,
-System-Marker des Aufbewahrungslaufs (Laufabschluss und Kontrollpunkte der
-Audit-Bereinigung), Nachweise der Redaktion der Ereignis-Historie und
-Nachweise herausgegebener Berichtszeiträume bleiben von der regulären Frist
-ausgenommen. Weitere Ausnahmen gibt es nicht: Aufbewahrungssperren (Legal Hold)
-wirken nicht auf das Audit-Log, auch nicht auf Einträge zu einer gesperrten
-Person, einem gesperrten Fall oder Ereignis. Soll ein Audit-Eintrag länger
+Das Audit-Log wird rollierend nach `auditlog_retention_months` bereinigt; der
+Aufbewahrungslauf bereinigt dabei je Einrichtung nur deren eigene Einträge. Der
+Wert `0` schaltet die reguläre Löschung ab. Von der regulären Frist ausgenommen
+sind:
+
+- Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs (Laufabschluss und
+  Kontrollpunkte der Audit-Bereinigung), Nachweise der Redaktion der
+  Ereignis-Historie und Nachweise herausgegebener Berichtszeiträume;
+- alle Einträge ohne Einrichtung: Aufrufe und Aktionen der
+  Systemadministration (mit Benutzer und IP-Adresse), Anmelde- und
+  Sicherheitsereignisse von Konten ohne Einrichtung, fehlgeschlagene
+  Anmeldungen unter unbekanntem Benutzernamen (mit dem eingegebenen
+  Benutzernamen und der IP-Adresse) sowie installationsweite Lauf-Marker. Kein
+  Lauf löscht sie; sie bleiben unbefristet erhalten.
+
+Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log, auch nicht
+auf Einträge zu einer gesperrten Person, einem gesperrten Fall oder Ereignis. Soll ein Audit-Eintrag länger
 erhalten bleiben, ist er vor Ablauf der Frist organisatorisch zu sichern (etwa
 über den Audit-Export der Systemadministration) oder die Frist anzuheben.
 Diese Ausnahmen sind bei der Festlegung und Prüfung des Löschkonzepts

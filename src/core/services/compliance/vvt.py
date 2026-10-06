@@ -254,13 +254,19 @@ PROCESSING_ACTIVITIES = [
         ],
         # Refs #2425: ``prune_auditlog`` only spares ``PRUNE_EXEMPT_Q``; it
         # never consults ``LegalHold``, so no hold can extend an audit entry.
+        # It deletes ``facility=facility`` rows only, so system entries
+        # (``facility=None``) are never pruned.
         "retention_period": _(
             "Standardmäßig 24 Monate rollierend, je Einrichtung einstellbar "
             "(0 schaltet die Löschung ab). Bereinigung durch den täglichen "
-            "``enforce_retention``-Lauf. Ausgenommen bleiben "
-            "Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs, "
-            "Nachweise der Redaktion der Ereignis-Historie und Nachweise "
-            "herausgegebener Berichtszeiträume. Aufbewahrungssperren (Legal "
+            "``enforce_retention``-Lauf, je Einrichtung nur deren eigene "
+            "Einträge. Ausgenommen bleiben Sicherheitsverstöße, System-Marker "
+            "des Aufbewahrungslaufs, Nachweise der Redaktion der "
+            "Ereignis-Historie und Nachweise herausgegebener "
+            "Berichtszeiträume. Einträge ohne Einrichtung (Systemadministration, "
+            "Konten ohne Einrichtung, Anmeldeversuche unter unbekanntem "
+            "Benutzernamen, installationsweite Lauf-Marker) löscht kein Lauf; "
+            "sie bleiben unbefristet erhalten. Aufbewahrungssperren (Legal "
             "Hold) wirken nicht auf das Audit-Log."
         ),
         "toms": [

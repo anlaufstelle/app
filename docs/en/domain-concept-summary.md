@@ -1,7 +1,6 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Synchronization update 2026-10-06: The role model now describes visibility as sensitivity (higher of documentation type and field) times role instead of contact level, names the assistant's view of "Normal" content and the staff limit at "Elevated", and documents the system administration's read path via /system/ and /admin-mgmt/, including which of these reads are logged as SYSTEM_VIEW and which are not. The privacy architecture gains a current-state offline cache entry (persistent key, page-driven idle lock, recovery only with unchanged password and offline salt, salt rotation on role change, deactivation and locked-account login, clear-text metadata), the RLS exception for system administration sessions, and a note that this section takes precedence over differing release notes. A further synchronization the same day adds to the privacy section's retention entry the gap for qualified events without a closed case, the first-expiring rule and the separate hold records, and to the facility-scoping entry the derived table set (`EXPECTED_TABLES`) and what RLS does not cover.
 
 # Domain Concept Summary
 
@@ -328,4 +327,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 9649755402f6fc4a49f96283d684ea5c4e70b31c -->
+<!-- source-hash: 1088da6c9399ceab899592e874c4dca472de3b6d -->
