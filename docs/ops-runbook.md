@@ -53,20 +53,51 @@ docker compose -f docker-compose.prod.yml images web
 # Fuer den Staging-Stack gilt derselbe Check gegen .env.staging statt .env
 # (ENV_FILE=.env.staging, Vorlage .env.staging.example) — Refs #2086.
 ENV_FILE="${ENV_FILE:-.env}"
-# Letzter aktiver Eintrag einer Variable. Wie bei Compose gehört ein umschließendes
-# Anführungszeichenpaar (so liefert .env.example leere Werte aus: '') nicht zum Wert,
-# und alles dahinter (Kommentar) wird ignoriert; bei unzitierten Werten beginnt ein
-# Kommentar mit " #".
+# Last active entry of a variable, read like Compose reads .env: a quoted value ends at
+# the closing quote (double quotes: \" \\ \$ \n are escapes; single quotes: only \'),
+# anything after the closing quote is ignored; an unquoted value ends at the first " #".
+# An unterminated quote or a value that starts with "#" counts as empty.
 env_value() {
-    local line value
-    line=$(grep -E "^${1}=" "$ENV_FILE" | tail -n 1)
+    local line value out="" rest char next closed=0
+    line=$(grep -E "^[[:space:]]*(export[[:space:]]+)?${1}[[:space:]]*=" "$ENV_FILE" | tail -n 1)
     value=${line#*=}
+    value=${value#"${value%%[![:space:]]*}"}
     case "$value" in
-        \"*\"*) value=${value#\"}; value=${value%%\"*} ;;
-        \'*\'*) value=${value#\'}; value=${value%%\'*} ;;
-        *) value=${value%% \#*}; value=${value%"${value##*[![:space:]]}"} ;;
+        \"*)
+            rest=${value#\"}
+            while [ -n "$rest" ]; do
+                char=${rest:0:1}; rest=${rest:1}
+                if [ "$char" = '"' ]; then closed=1; break; fi
+                if [ "$char" = '\' ] && [ -n "$rest" ]; then
+                    next=${rest:0:1}; rest=${rest:1}
+                    case "$next" in
+                        '"' | '\' | '$') out+=$next ;;
+                        n) out+=$'\n' ;;
+                        *) out+=$char$next ;;
+                    esac
+                else
+                    out+=$char
+                fi
+            done
+            [ "$closed" = 1 ] || out="" ;;
+        \'*)
+            rest=${value#\'}
+            while [ -n "$rest" ]; do
+                char=${rest:0:1}; rest=${rest:1}
+                if [ "$char" = "'" ]; then closed=1; break; fi
+                if [ "$char" = '\' ] && [ "${rest:0:1}" = "'" ]; then
+                    out+="'"; rest=${rest:1}
+                else
+                    out+=$char
+                fi
+            done
+            [ "$closed" = 1 ] || out="" ;;
+        \#*) out="" ;;
+        *)
+            out=${value%% \#*}
+            out=${out%"${out##*[![:space:]]}"} ;;
     esac
-    printf '%s' "$value"
+    printf '%s' "$out"
 }
 for var in POSTGRES_PASSWORD POSTGRES_ADMIN_PASSWORD POSTGRES_BOOTSTRAP_PASSWORD; do
     val=$(env_value "$var")

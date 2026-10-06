@@ -1,5 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Synchronization update 2026-10-06: §§ 1–6 follow the shipped behaviour — the mandatory-variable check reads quoted and empty values (also with an inline comment after the value) correctly and requires 32 characters, the migration diagnosis uses the one-shot and terminates an orphaned lock holder instead of `pg_advisory_unlock`, `up -d web` (not `restart web`) applies new `GUNICORN_*` values, attachment usage is measured inside the `media` volume, the export directory must belong to UID 1000, the maintenance-mode block runs the migration one-shot, `backup.sh` writes files without any permission for others (`umask 027`, the group may read) and `--verify` states what it checked, and the manifest is mandatory for `restore.sh` (#2482, #2440).
+> Synchronization update 2026-10-06: §§ 1–6 follow the shipped behaviour — the mandatory-variable check reads `.env` entries like Compose does (quoted values with escaped quotes, single and double quotes, inline comments, `export` prefix; an empty or unterminated value counts as missing) and requires 32 characters, the migration diagnosis uses the one-shot and terminates an orphaned lock holder instead of `pg_advisory_unlock`, `up -d web` (not `restart web`) applies new `GUNICORN_*` values, attachment usage is measured inside the `media` volume, the export directory must belong to UID 1000, the maintenance-mode block runs the migration one-shot, `backup.sh` writes files without any permission for others (`umask 027`, the group may read) and `--verify` states what it checked, and the manifest is mandatory for `restore.sh` (#2482, #2440).
 > Synchronization update 2026-10-06: § 3.3 (file modes) and § 6.6 (restore drill, host cron proposal) follow `backup.sh` with `umask 027` — files `0640`, directories `0750`, the check rejects any permission for others, the group (UID/GID 1000 of `web`) may read the manifest, the weekly/monthly copies are staged and checked before they are published, and the host cron alternative names its audit-anchor limit (#2482).
 > Synchronization update 2026-10-06: the German source of § 13.1 uses proper umlauts in the step comments; no change to commands or content.
 > Synchronization update 2026-10-06: the DB password rotation section names the printed file list as `Compose files: …` (the script output is English now) (#2474).
@@ -99,19 +99,51 @@ docker compose -f docker-compose.prod.yml images web
 # The staging stack runs the same check against .env.staging instead of .env
 # (ENV_FILE=.env.staging, template .env.staging.example) — Refs #2086.
 ENV_FILE="${ENV_FILE:-.env}"
-# Last active entry of a variable. As with Compose, an enclosing pair of quotes (this
-# is how .env.example ships empty values: '') is not part of the value and anything
-# after it (a comment) is ignored; for unquoted values a comment starts with " #".
+# Last active entry of a variable, read like Compose reads .env: a quoted value ends at
+# the closing quote (double quotes: \" \\ \$ \n are escapes; single quotes: only \'),
+# anything after the closing quote is ignored; an unquoted value ends at the first " #".
+# An unterminated quote or a value that starts with "#" counts as empty.
 env_value() {
-    local line value
-    line=$(grep -E "^${1}=" "$ENV_FILE" | tail -n 1)
+    local line value out="" rest char next closed=0
+    line=$(grep -E "^[[:space:]]*(export[[:space:]]+)?${1}[[:space:]]*=" "$ENV_FILE" | tail -n 1)
     value=${line#*=}
+    value=${value#"${value%%[![:space:]]*}"}
     case "$value" in
-        \"*\"*) value=${value#\"}; value=${value%%\"*} ;;
-        \'*\'*) value=${value#\'}; value=${value%%\'*} ;;
-        *) value=${value%% \#*}; value=${value%"${value##*[![:space:]]}"} ;;
+        \"*)
+            rest=${value#\"}
+            while [ -n "$rest" ]; do
+                char=${rest:0:1}; rest=${rest:1}
+                if [ "$char" = '"' ]; then closed=1; break; fi
+                if [ "$char" = '\' ] && [ -n "$rest" ]; then
+                    next=${rest:0:1}; rest=${rest:1}
+                    case "$next" in
+                        '"' | '\' | '$') out+=$next ;;
+                        n) out+=$'\n' ;;
+                        *) out+=$char$next ;;
+                    esac
+                else
+                    out+=$char
+                fi
+            done
+            [ "$closed" = 1 ] || out="" ;;
+        \'*)
+            rest=${value#\'}
+            while [ -n "$rest" ]; do
+                char=${rest:0:1}; rest=${rest:1}
+                if [ "$char" = "'" ]; then closed=1; break; fi
+                if [ "$char" = '\' ] && [ "${rest:0:1}" = "'" ]; then
+                    out+="'"; rest=${rest:1}
+                else
+                    out+=$char
+                fi
+            done
+            [ "$closed" = 1 ] || out="" ;;
+        \#*) out="" ;;
+        *)
+            out=${value%% \#*}
+            out=${out%"${out##*[![:space:]]}"} ;;
     esac
-    printf '%s' "$value"
+    printf '%s' "$out"
 }
 for var in POSTGRES_PASSWORD POSTGRES_ADMIN_PASSWORD POSTGRES_BOOTSTRAP_PASSWORD; do
     val=$(env_value "$var")
@@ -3231,7 +3263,8 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 3d8340dcc23c9b773039ba80be32a0fef8531c75 -->
+<!-- source-hash: 2cddf643c55c60add7f0d8d3dbb4012c01096618 -->
+<!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->

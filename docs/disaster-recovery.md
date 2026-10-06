@@ -266,8 +266,8 @@ openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_
       trap '\''rm -rf "$verify_dir"'\'' EXIT
       rm -rf "$verify_dir" && mkdir -p "$verify_dir/tree"
       tar -C "$verify_dir/tree" --strip-components=1 -xf -
-      # Summen zuerst in eine Datei, dann sortieren: so bricht jeder Lesefehler von
-      # find/sha256sum den Block ab (eine Pipeline würde ihn verschlucken).
+      # Write the sums to a file first, then sort: any read error of find/sha256sum
+      # aborts the block (a pipeline would swallow it).
       sums() { (cd "$1" && find . -type f -exec sha256sum {} + > "$2.raw") && sort -k2 "$2.raw" > "$2"; }
       sums "$verify_dir/tree" "$verify_dir/archive.sha256"
       sums "$media_root" "$verify_dir/live.sha256"
