@@ -22,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Fehlerberichterstattung aktualisiert** (#2403) — sentry-sdk 2.71.0 ist mit den Initialisierungs- und Datenschutzprüfungen verifiziert.
 - **PostgreSQL-Treiber aktualisiert** (#2404) — Psycopg und sein Binärpaket sind auf 3.3.6 angehoben und mit den Datenbankprüfungen verifiziert.
 - **Python-Lintwerkzeug aktualisiert** (#2406) — Ruff 0.16.10 besteht die Lint- und Formatprüfungen ohne Formatänderungen am Bestand.
-- **Mutationstestwerkzeug aktualisiert** (#2407) — Der Versionspin von mutmut ist auf 3.8.0 angehoben.
+- **Mutationstestwerkzeug bei 3.7.0 gehalten** (#2407) — mutmut bleibt auf 3.7.0 gepinnt, da der Fork-Server in 3.8.0 die Test-DB-Zuteilung je Mutant bricht.
 - **JavaScript-Testwerkzeuge aktualisiert** (#2405) — Vitest 5.0.3 mit den erforderlichen Begleitpaketen ist unter Node 20.19.2 geprüft; jsdom bleibt wegen inkompatibler Laufzeitanforderungen auf 29.1.1.
 
 ### Fixed
