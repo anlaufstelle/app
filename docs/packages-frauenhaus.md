@@ -7,10 +7,12 @@ Das Paket richtet eine Schutzwohnung oder Fachberatungsstelle gegen Gewalt mit a
 Eine neue Einrichtung erhält das Paket beim interaktiven Einrichten:
 
 ```console
-python manage.py setup_facility --package frauenhaus
+docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility --package frauenhaus
 ```
 
-Das Frauenhaus-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalogfreie Einrichtung eingespielt und nicht auf den Standardkatalog aufgesetzt. Ein bewusstes erneutes Laden erfolgt mit `python manage.py load_package --package frauenhaus --facility <UUID>`; `--dry-run` zeigt die Änderungen vorab.
+Die Befehle laufen im Dienst `maintenance` (Admin-Rolle, [Ops-Runbook § 9](ops-runbook.md#db-rollenmodell-goldstandard)); unter der App-Rolle von `web` bricht `setup_facility` vor der ersten Eingabe ab.
+
+Das Frauenhaus-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalogfreie Einrichtung eingespielt und nicht auf den Standardkatalog aufgesetzt. Ein bewusstes erneutes Laden erfolgt mit `docker compose -f docker-compose.prod.yml run --rm maintenance load_package --package frauenhaus --facility <UUID>`; `--dry-run` zeigt die Änderungen vorab.
 
 ## Dokumentationstypen
 
@@ -99,7 +101,7 @@ Diese Einstellungen sind nicht Teil des Paketformats und werden nicht automatisc
 - Die vorbereiteten Zeitfenster „Frühdienst“, „Spätdienst“ und „Nachtdienst“ an den tatsächlichen 24/7-Schichtbetrieb anpassen.
 - Die Schnellvorlagen „Telefonische Anfrage Unterbringung“ und „Belegstand vermerkt“ fachlich prüfen. Nur die erste Vorlage setzt `kontaktweg: telefon` und `anliegen: unterbringung` vorab; Vorbelegungen sind ausschließlich an Typen mit Sensitivität `normal` zulässig.
 - Empfang als `assistant`, Fachkräfte als `staff` und die für Gefährdungslagen zuständigen Personen als `lead` oder `facility_admin` einrichten.
-- Bestehende Einrichtungen erhalten den Feldhinweis beim erneuten Einspielen des Pakets: zuerst `python manage.py load_package --package frauenhaus --facility <uuid> --dry-run` prüfen, danach denselben Befehl ohne `--dry-run` ausführen.
+- Bestehende Einrichtungen erhalten den Feldhinweis beim erneuten Einspielen des Pakets: zuerst `docker compose -f docker-compose.prod.yml run --rm maintenance load_package --package frauenhaus --facility <uuid> --dry-run` prüfen, danach denselben Befehl ohne `--dry-run` ausführen.
 
 Es gibt keine Seed-Automatik für Betreiber-Settings oder Rollen. Retention, erlaubte Dateitypen, k-Anonymität, Mitschauen-Schutz und Benutzerrollen werden nach dem Einspielen bewusst durch die Anwendungsbetreuung festgelegt.
 

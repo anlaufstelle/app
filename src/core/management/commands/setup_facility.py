@@ -89,9 +89,9 @@ class Command(BaseCommand):
                 "Ersteinrichtung laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — "
                 "sonst scheiterte schon das Anlegen der Einstellungen an der Row-Level-Security. "
-                "Command mit der Admin-Rolle aufrufen: docker compose exec "
-                "-e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD "
-                "web python manage.py setup_facility (siehe docs/ops-runbook.md § 9)."
+                "Command im Dienst maintenance (Admin-Rolle) aufrufen: "
+                "docker compose run --rm maintenance setup_facility "
+                "(siehe docs/ops-runbook.md § 9)."
             )
 
         requested_package = options.get("package")

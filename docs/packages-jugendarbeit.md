@@ -7,10 +7,12 @@ Das Paket richtet eine neue Einrichtung für mobile und offene Jugendarbeit ein,
 Eine neue Einrichtung erhält das Paket beim interaktiven Einrichten:
 
 ```console
-python manage.py setup_facility --package jugendarbeit
+docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility --package jugendarbeit
 ```
 
-Das Jugendarbeit-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalogfreie Einrichtung eingespielt und nicht auf den Standardkatalog aufgesetzt. Ein bewusstes erneutes Laden erfolgt mit `python manage.py load_package --package jugendarbeit --facility <UUID>`; `--dry-run` zeigt die Änderungen vorab.
+Die Befehle laufen im Dienst `maintenance` (Admin-Rolle, [Ops-Runbook § 9](ops-runbook.md#db-rollenmodell-goldstandard)); unter der App-Rolle von `web` bricht `setup_facility` vor der ersten Eingabe ab.
+
+Das Jugendarbeit-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalogfreie Einrichtung eingespielt und nicht auf den Standardkatalog aufgesetzt. Ein bewusstes erneutes Laden erfolgt mit `docker compose -f docker-compose.prod.yml run --rm maintenance load_package --package jugendarbeit --facility <UUID>`; `--dry-run` zeigt die Änderungen vorab.
 
 Das ist besonders beim wiederverwendeten Feld `leistungen` wichtig: Die Jugend-Optionen würden die Optionen des Standardkatalogs vollständig ersetzen, nicht ergänzen.
 

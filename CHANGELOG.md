@@ -30,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Einrichtungsassistent nennt die Wartungsrolle** (#2423) — bricht `setup_facility` unter der App-Rolle ab, verweist die Meldung auf `docker compose run --rm maintenance setup_facility` statt auf `exec web`; die Paketbeschreibungen unter `docs/packages-*.md` nennen dieselben Befehle.
 - **Testmatrix-Links springen zur richtigen GitHub-Überschrift** (#2417) — Der Index verwendet GitHub-konforme Anker mit erhaltenen Umlauten, entfernten Satzzeichen und eindeutigen Suffixen für doppelte Überschriften.
 - **Testmatrix-Prüfung im öffentlichen Quellbaum** (#2416) — Der Parser erhält leere Metadatenzellen; der Public-Modus prüft Matrix und Anhang C auch ohne das ausgeschlossene Indexdokument.
 - **`make db` veröffentlicht PostgreSQL nur noch auf Loopback** (#2420) — Das native Entwicklungsrezept bindet Port 5432 an `127.0.0.1`; LAN-Zugriff bleibt eine bewusste Betreiberentscheidung.

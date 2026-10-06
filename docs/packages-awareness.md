@@ -7,10 +7,12 @@ Das Paket richtet eine dauerhafte Facility für ein Awareness-Team ein, das bei 
 Eine neue Einrichtung erhält das Paket beim interaktiven Einrichten:
 
 ```console
-python manage.py setup_facility --package awareness
+docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility --package awareness
 ```
 
-Das Awareness-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalogfreie Einrichtung eingespielt und nicht auf den Standardkatalog aufgesetzt. Ein bewusstes erneutes Laden erfolgt mit `python manage.py load_package --package awareness --facility <UUID>`; `--dry-run` zeigt die Änderungen vorab.
+Die Befehle laufen im Dienst `maintenance` (Admin-Rolle, [Ops-Runbook § 9](ops-runbook.md#db-rollenmodell-goldstandard)); unter der App-Rolle von `web` bricht `setup_facility` vor der ersten Eingabe ab.
+
+Das Awareness-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalogfreie Einrichtung eingespielt und nicht auf den Standardkatalog aufgesetzt. Ein bewusstes erneutes Laden erfolgt mit `docker compose -f docker-compose.prod.yml run --rm maintenance load_package --package awareness --facility <UUID>`; `--dry-run` zeigt die Änderungen vorab.
 
 ## Dokumentationstypen
 

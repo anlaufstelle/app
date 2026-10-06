@@ -77,13 +77,15 @@ Konkret bedeuten die Ebenen:
 Für eine neue Einrichtung:
 
 ```bash
-python manage.py setup_facility --package beratungsstelle
+docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility --package beratungsstelle
 ```
+
+Die Befehle laufen im Dienst `maintenance` (Admin-Rolle, [Ops-Runbook § 9](ops-runbook.md#db-rollenmodell-goldstandard)); unter der App-Rolle von `web` bricht `setup_facility` vor der ersten Eingabe ab.
 
 Für eine bestehende, noch leere oder vollständig vorbereitete Einrichtung:
 
 ```bash
-python manage.py load_package --package beratungsstelle --facility <uuid>
+docker compose -f docker-compose.prod.yml run --rm maintenance load_package --package beratungsstelle --facility <uuid>
 ```
 
 Pakete sind **Ersatz, kein Zusatz**: `beratungsstelle.yaml` ersetzt den Standardkatalog und wird nicht zusätzlich zu `default.yaml` eingespielt. Der Seed nutzt dieses Paket für die Zweigstelle Nord — ab `--scale=medium` (#2148).

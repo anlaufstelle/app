@@ -391,8 +391,13 @@ class TestSetupFacilityRlsGuard:
 
         monkeypatch.setattr("builtins.input", _fail)
 
-        with pytest.raises(CommandError, match="POSTGRES_ADMIN_USER"):
+        with pytest.raises(CommandError) as excinfo:
             call_command("setup_facility")
+
+        # The hint names the maintenance role, not an ``exec web`` call that runs as the app role.
+        message = str(excinfo.value)
+        assert "docker compose run --rm maintenance setup_facility" in message
+        assert "exec" not in message
 
         assert Organization.objects.count() == 0
         assert Facility.objects.count() == 0
