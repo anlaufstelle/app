@@ -10,7 +10,9 @@ Derived from the manual check on the local E2E server:
 2. The card "Admin-DB-Rolle" reads the latest ``DB_ROLES_VERIFIED`` marker of
    ``check_db_roles``: ``ok`` with the check time, ``critical`` with the codes.
 3. With ``DEMO_MODE`` the backup and restore cards explain that backup and
-   restore are not set up on the demo, without an operator hint.
+   restore are not set up on the demo, without an operator hint; the
+   retention card explains that the retention run is not set up there
+   either, without pointing at the cron job.
 
 Preconditions: classes 1/2 run against the standard E2E server (no
 ``DEMO_MODE``); class 3 skips itself unless the server runs with
@@ -110,7 +112,7 @@ class TestAdminRoleCardReadsMaintenanceResult:
         expect(card).to_contain_text("admin_role_no_bypassrls")
 
 
-class TestDemoBackupCards:
+class TestDemoCards:
     def test_backup_and_restore_cards_explain_the_demo(self, super_admin_page, base_url, browser):
         if not _demo_enabled(base_url, browser):
             pytest.skip("demo precondition missing (E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo)")
@@ -124,3 +126,18 @@ class TestDemoBackupCards:
             expect(card).to_contain_text("In der Demo nicht eingerichtet")
             expect(card).not_to_contain_text("backup.sh")
             expect(card).not_to_contain_text("mark_restore_verified")
+
+    def test_retention_card_explains_the_demo(self, super_admin_page, base_url, browser):
+        if not _demo_enabled(base_url, browser):
+            pytest.skip("demo precondition missing (E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo)")
+        page = super_admin_page
+
+        _open_dashboard(page, base_url)
+
+        card = _card(page, "retention_last_run")
+        expect(card).to_have_attribute("data-status", "unknown")
+        expect(card).to_contain_text(
+            "In der Demo nicht eingerichtet: der Löschlauf würde die stündlich neu erzeugten Beispieldaten löschen."
+        )
+        expect(card).not_to_contain_text("enforce_retention")
+        expect(card).not_to_contain_text("Runbook")

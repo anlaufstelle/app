@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Demo: Compliance-Karten der Hintergrundjobs nach jedem Reset gefüllt** (#2413) — Der stündliche Demo-Reset startet nach dem Seed die Jobs, aus denen das Compliance-Dashboard liest, sodass die Karten zu Audit-Ketten-Prüfung, Statistik-Snapshots, Breach-Scan und View-Refresh auf `ok` stehen; der Löschlauf `enforce_retention` läuft dort nicht, weil er die Beispieldaten verändern würde, und die Karte „Retention-Lauf“ erklärt das ohne Betriebshinweis bei Status `unknown`.
 - **Demo: Karten „Letztes Backup“ und „Restore-Test“ ohne Betriebshinweis** (#2414) — Im Demo-Modus erklären beide Karten, dass Sicherung und Wiederherstellung in der stündlich neu erzeugten Demo nicht eingerichtet sind, statt auf `backup.sh` bzw. `mark_restore_verified` zu verweisen; der Status bleibt `unknown`, auch in der Systemübersicht.
 
 ### Docs

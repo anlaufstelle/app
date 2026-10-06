@@ -2,9 +2,15 @@
 
 Letzter ``RETENTION_RUN_COMPLETED``-Audit-Log-Eintrag, geschrieben vom
 ``enforce_retention``-Command nach jedem Lauf.
+
+Refs #2413: on the public demo (``DEMO_MODE``) the retention card explains that
+the job does not run there instead of pointing at the cron job.
 """
 
 from __future__ import annotations
+
+from django.conf import settings
+from django.utils.translation import gettext as _
 
 from core.models import AuditLog, Facility
 from core.services import ops_thresholds
@@ -50,8 +56,30 @@ def _retention_config_checks() -> list[ComplianceCheck]:
     ]
 
 
+def _demo_retention_card() -> ComplianceCheck:
+    """Card text on the demo (Refs #2413).
+
+    The demo reset never runs ``enforce_retention``: on a fresh demo seed it
+    would soft-delete the seeded anonymous events beyond the retention period
+    and change the demo areas every hour. Status stays ``unknown`` whatever the
+    log contains: without a real run there is no green, and there is no
+    operator hint because there is nothing a visitor could set up.
+    """
+    return ComplianceCheck(
+        key="retention_last_run",
+        label="Retention-Lauf",  # pragma: no mutate
+        category="Retention",  # pragma: no mutate
+        status=ComplianceStatus.UNKNOWN,
+        message=_(
+            "In der Demo nicht eingerichtet: der Löschlauf würde die stündlich neu erzeugten Beispieldaten löschen."
+        ),
+    )
+
+
 def _retention_checks() -> list[ComplianceCheck]:
     """Retention-Cron LastRun aus AuditLog ``RETENTION_RUN_COMPLETED``."""
+    if getattr(settings, "DEMO_MODE", False):
+        return [_demo_retention_card()]
     entry = (
         AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED)
         .order_by("-timestamp")
