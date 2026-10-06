@@ -70,7 +70,7 @@ services:
     logging: *default-logging
     # Shared Cache fuer django-ratelimit + Health-Detail-Caching (Refs #795,
     # C-27). Ersetzt den DatabaseCache-Default; der bleibt als Fallback
-    # bestehen (leeres REDIS_URL, siehe web-Service oben und
+    # bestehen (leeres REDIS_URL, siehe web-Service weiter unten und
     # docs/ops-runbook.md § 5.4a) — Bestands-Deployments ohne Redis brechen
     # dadurch nicht.
     #

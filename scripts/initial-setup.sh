@@ -2,14 +2,14 @@
 set -euo pipefail
 
 # ============================================================================
-# Anlaufstelle — Erstinbetriebnahme nach `docker compose up` (Refs #793, C-25)
+# Anlaufstelle — Erstinbetriebnahme, startet den Stack selbst (Refs #793, C-25)
 #
 # Fuehrt die in docs/admin-guide.md § 1 (Schritt 4) und § 2.1 beschriebenen
 # Erst-Schritte in einer idempotenten, fail-loud Reihenfolge aus:
 #
 #   1. Datenbank starten und auf Bereitschaft warten
 #   2. Schema anlegen/aktualisieren (One-Shot-Job `docker-migrate.sh`)
-#   3. Vollen Stack starten (web + caddy + clamav)
+#   3. Vollen Stack starten (db, redis, web, cron, caddy, clamav)
 #   4. `manage.py check --deploy`     — Deployment-Settings
 #   5. `manage.py check_db_roles`     — DB-Rollen-/Ownership-Posture
 #   6. Super-Admin anlegen, falls noch keiner existiert (interaktiv)

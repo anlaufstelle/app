@@ -13,7 +13,7 @@
 #
 # Fuer den produktiven Einsatz bitte ``docker-compose.prod.yml`` verwenden — dort
 # gibt es weder Auto-Seed noch ``SEED_ALLOWED``; die Ersteinrichtung laeuft ueber
-# ``manage.py create_super_admin`` (docs/admin-guide.md § 1).
+# ``manage.py create_super_admin`` (docs/admin-guide.md § 2.1).
 x-logging: &default-logging
   driver: json-file
   options:
@@ -174,9 +174,10 @@ services:
     # Port 3310 ist nur innerhalb des Compose-Netzwerks sichtbar — kein Host-Binding.
     # Aktivierung via CLAMAV_ENABLED=true im web-Container.
     # Refs #938: Healthcheck via clamdscan --version (Smoke-Test des Binary).
-    # Der frühere clamdcheck.sh testet TCP 3310, aber clamd lauscht im
-    # Image-Default nicht auf TCP — führte zu permanent unhealthy-Status,
-    # obwohl clamd grundsätzlich funktioniert.
+    # clamd lauscht im Image-Default auf TCP 3310 (so scannt die App); der
+    # Binary-Smoke-Test statt des Socket-Probes clamdcheck.sh bleibt robust
+    # gegen die lange Signatur-Lade-Phase, in der der Probe sonst transient
+    # unhealthy meldet.
     healthcheck:
       test: ["CMD", "clamdscan", "--version"]
       interval: 60s

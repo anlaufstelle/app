@@ -18,7 +18,7 @@
         trusted_proxies_strict
     }
 
-    # Fehler-Protokoll (Refs #1963). Der 'format filter'-Encoder oben haengt am
+    # Fehler-Protokoll (Refs #1963). Der 'format filter'-Encoder unten haengt am
     # Site-Logger und deckt nur http.log.access.* ab. Caddys FEHLER-Logger
     # http.log.error.* laeuft davon unberuehrt auf stderr — im Container also in
     # den Docker-json-file-Log des Hosts: ausserhalb dieses Volumes, ausserhalb
@@ -134,7 +134,7 @@ www.{$DOMAIN} {
     #             window 1m
     #         }
     #         match {
-    #             path /login/* /accounts/* /api/*
+    #             path /login/* /password-reset/* /api/*
     #         }
     #     }
     #

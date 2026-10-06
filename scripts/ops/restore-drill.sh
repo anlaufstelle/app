@@ -3,14 +3,15 @@ set -uo pipefail
 
 # Anlaufstelle Backup-Restore-Drill (Refs #739, #720, #981)
 #
-# Verifiziert, dass das aktuellste dev-Backup vollstaendig in eine
+# Verifiziert, dass das aktuellste Backup (prod oder dev) vollstaendig in eine
 # Wegwerf-DB wiederherstellbar ist und dabei die Verteidigungslinien
 # (RLS, AuditLog-Immutability-Trigger) erhalten bleiben. Bei Erfolg wird
 # der Lauf via ``manage.py mark_restore_verified`` im AuditLog
 # dokumentiert -> Compliance-Check „Restore-Test" springt auf gruen.
 #
-# Zwei ausgelieferte Backup-Pfade -> zwei Formate; der Drill deckt BEIDE ab
-# (OPS-05, Refs #1336). Wahl per Flag ``--dev``/``--prod`` oder ``$DRILL_FORMAT``;
+# Zwei Backup-Pfade -> zwei Formate; der Drill deckt BEIDE ab (OPS-05,
+# Refs #1336). Ausgeliefert wird nur der prod-Pfad; der dev-Pfad gehoert zum
+# dev-Betrieb des Projekts. Wahl per Flag ``--dev``/``--prod`` oder ``$DRILL_FORMAT``;
 # fuer Prod zusaetzlich per ``--timestamp``/``$BACKUP_TIMESTAMP``. Ohne Satzwahl
 # wird anhand der vorhandenen Backup-Dateien auto-erkannt und der neueste Satz
 # mit einem deutlichen Banner verwendet.
@@ -29,7 +30,8 @@ set -uo pipefail
 # DATABASE (beide App-Rollen sind NOCREATEDB) und bypassed zugleich RLS/FORCE-RLS
 # beim Restore.
 #
-# Die Dump-Dateien sind 0600 und gehoeren root — daher als root ausfuehren:
+# Die Dump-Dateien gehoeren dem Konto, unter dem das Backup lief (im empfohlenen
+# Setup root; prod: Modus 0640, dev: 0600) — daher als root ausfuehren:
 #   sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh            # auto
 #   sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod     # explizit
 #

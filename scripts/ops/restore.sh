@@ -5,8 +5,11 @@ set -euo pipefail
 # Stellt verschlüsselte DB- und Medien-Backups wieder her.
 #
 # Verwendung:
-#   $0 <db-backup.sql.gz.enc>                       # Nur DB
-#   $0 <db-backup.sql.gz.enc> <media.tar.gz.enc>    # DB + Medien (Refs #720)
+#   $0 [--yes] <db-backup.sql.gz.enc>                       # Nur DB
+#   $0 [--yes] <db-backup.sql.gz.enc> <media.tar.gz.enc>    # DB + Medien (Refs #720)
+#
+# --yes (oder RESTORE_CONFIRM=ja) bestaetigt die zerstoerende Wiederherstellung
+# ohne Rueckfrage.
 #
 # Medien-Restore entpackt neben dem existierenden /data/media-Inhalt, prueft
 # jeden DB-Anhang und ersetzt den Bestand erst danach. Erwartet die im backup.sh
