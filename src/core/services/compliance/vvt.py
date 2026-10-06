@@ -315,11 +315,15 @@ PROCESSING_ACTIVITIES = [
             _("Intern: Systemadministration (Restore-Berechtigung)"),
             _("Backup-Speicherort gemaess Hosting-Vertrag (Auftragsverarbeiter, AV-Vertrag erforderlich)"),
         ],
-        # Refs #2464: the rotation ages mirror the ``-mtime`` values in
-        # ``scripts/ops/backup.sh``; the off-site target is only ever added to.
+        # Refs #2464: the minimum ages mirror the ``-mtime +7/+28/+90`` values
+        # in ``scripts/ops/backup.sh`` (``find`` counts full days only, and the
+        # rotation only runs in a successful run); the off-site target is only
+        # ever added to.
         "retention_period": _(
-            "Lokale Sicherungsstände rotiert backup.sh: tägliche nach 7 Tagen, "
-            "wöchentliche nach 28 Tagen, monatliche nach 90 Tagen. Nach einem "
+            "Lokale Sicherungsstände entfernt backup.sh bei seinem ersten "
+            "erfolgreichen Lauf, in dem sie mindestens 8 (täglich), 29 "
+            "(wöchentlich) bzw. 91 volle Tage (monatlich) alt sind. Das ist "
+            "eine Altersgrenze, keine feste Höchstfrist. Nach einem "
             "fehlgeschlagenen Off-Site-Abgleich ist die lokale Rotation "
             "ausgesetzt, bis ein Abgleich wieder gelingt. Off-Site-Kopien "
             "löscht backup.sh nicht; ihre Frist legt die Einrichtung über "

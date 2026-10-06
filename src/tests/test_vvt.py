@@ -291,12 +291,18 @@ class TestProcessingActivitiesContent:
         assert "36 Monate" not in retention
 
     def test_backup_retention_names_local_rotation_and_offsite_gap(self):
-        """Refs #2464: ``backup.sh`` rotates locally (7/28/90 days) and never deletes off-site."""
+        """Refs #2464: ``backup.sh`` rotates locally (``-mtime +7/+28/+90``) and never deletes off-site."""
         backup = get_activity("backup")
         retention = str(backup["retention_period"])
 
-        for days in ("7 Tage", "28 Tage", "90 Tage"):
+        # ``-mtime +N`` selects archives of at least N + 1 full days, and only
+        # in a later successful run: a minimum age, not a deadline.
+        for days in ("8 (täglich)", "29 (wöchentlich)", "91 volle Tage (monatlich)"):
             assert days in retention
+        assert "keine feste Höchstfrist" in retention
+        assert "erfolgreichen Lauf" in retention
+        for days in ("nach 7 Tagen", "nach 28 Tagen", "nach 90 Tagen"):
+            assert days not in retention
         assert "30 Tage" not in retention
         assert "12 Wochen" not in retention
         assert "12 Monate" not in retention

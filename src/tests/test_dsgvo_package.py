@@ -658,17 +658,64 @@ class TestBackupDeletionBoundary:
 
         days = _backup_rotation_days()
         assert days == [7, 28, 90], days
-        expected = "/".join(str(day) for day in days)
+        # ``find -mtime +N`` drops the fractional day, so it only selects
+        # archives that are at least N + 1 full days old.
+        minimum_ages = [day + 1 for day in days]
+        expected = "/".join(str(age) for age in minimum_ages)
 
-        toms, _ = render_document("toms", facility)
-        loeschkonzept, _ = render_document("loeschkonzept", facility)
-        vvt_backup = str(get_activity("backup")["retention_period"])
+        toms = _flat(render_document("toms", facility)[0])
+        deletion_concept, _ = render_document("loeschkonzept", facility)
+        vvt_backup = _flat(str(get_activity("backup")["retention_period"]))
 
-        assert f"{expected} Tage" in toms
-        local_effect = _effect_cell(loeschkonzept, "Backup-Sicherungsstände")
+        assert f"mindestens {expected} vollen Tagen" in toms
+        local_effect = _effect_cell(deletion_concept, "Backup-Sicherungsstände")
+        for age, label in zip(minimum_ages, ("täglich", "wöchentlich", "monatlich"), strict=True):
+            assert f"{age} ({label})" in local_effect.replace(" volle Tage", "")
+            assert f"{age} ({label})" in vvt_backup.replace(" volle Tage", "")
         for day in days:
-            assert f"nach {day}" in local_effect
-            assert f"nach {day} Tagen" in vvt_backup
+            assert f"nach {day} Tagen" not in vvt_backup
+
+    @pytest.mark.architecture
+    def test_find_mtime_selects_only_after_full_days(self, tmp_path):
+        """The documented minimum age is what ``find -mtime +N`` really selects."""
+        import os
+        import shutil
+        import subprocess
+        import time
+
+        find = shutil.which("find")
+        if find is None:
+            pytest.skip("find not available")
+        day = 24 * 3600
+        now = time.time()
+        for limit in _backup_rotation_days():
+            probe = tmp_path / str(limit)
+            probe.mkdir()
+            kept = probe / "kept"
+            removed = probe / "removed"
+            kept.touch()
+            removed.touch()
+            os.utime(kept, (now - limit * day - day / 2,) * 2)
+            os.utime(removed, (now - (limit + 1) * day - 3600,) * 2)
+            selected = subprocess.run(
+                [find, str(probe), "-type", "f", "-mtime", f"+{limit}", "-print"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            ).stdout.split()
+            assert selected == [str(removed)], (limit, selected)
+
+    def test_backup_rotation_promises_no_hard_deadline(self, facility):
+        content, _ = render_document("loeschkonzept", facility)
+        deletion_concept = _flat(content)
+        toms = _flat(render_document("toms", facility)[0])
+
+        assert "spätestens nach" not in deletion_concept
+        assert "keine feste Höchstfrist" in _effect_cell(content, "Backup-Sicherungsstände")
+        assert "nächsten erfolgreichen Lauf" in deletion_concept
+        assert "Altersgrenze" in deletion_concept
+        assert "keine feste Höchstfrist" in toms
 
 
 @pytest.mark.django_db

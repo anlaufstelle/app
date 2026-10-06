@@ -28,14 +28,17 @@ jeder Änderung ihrer Einstellungen oder Backup-Rotation.
 | Inhalte früherer Fassungen eines Ereignisses | {{ eventhistory_detail_months }} Monate | `eventhistory_detail_months` | Die Werte der Fassung werden gelöscht, die Fassung selbst (Zeitpunkt, handelnde Person, Feldnamen) bleibt; `0` deaktiviert diese Frist. Bei einem **gelöschten** Ereignis geschieht dasselbe unabhängig von dieser Frist, mit dem nächsten Aufbewahrungslauf |
 | Chronologie früherer Fassungen (nach ihrer Inhalts-Löschung) | {{ eventhistory_chronicle_months }} Monate | `eventhistory_chronicle_months` | Die inhaltsleere Fassung wird gelöscht; gemessen ab dem Zeitpunkt ihrer Inhalts-Löschung. `0` deaktiviert die Löschung — dann wird die Chronologie unbefristet aufbewahrt |
 | Monatliche Statistik-Aggregate | unbefristet | — | Bleiben bestehen: Vor jeder Löschung durch den Aufbewahrungslauf sichert die Anwendung die betroffenen Monate als Zählwerte ohne Einzeldatensätze (siehe § 3.5) |
-| Backup-Sicherungsstände | {{ backup_retention_days }} Tage | Längste lokale Rotation im ausgelieferten `backup.sh` | Lokales verschlüsseltes Archiv wird durch die Rotation entfernt (täglich nach 7, wöchentlich nach 28, monatlich nach 90 Tagen); ausgesetzt, solange der Off-Site-Abgleich fehlschlägt |
+| Backup-Sicherungsstände | {{ backup_retention_days }} Tage (Altersgrenze, keine Höchstfrist) | Längste lokale Rotation im ausgelieferten `backup.sh` | Die Rotation entfernt ein lokales verschlüsseltes Archiv beim ersten erfolgreichen Lauf von `backup.sh`, in dem es mindestens 8 (täglich), 29 (wöchentlich) bzw. 91 volle Tage (monatlich) alt ist; keine feste Höchstfrist. Die Rotation ist ausgesetzt, solange der Off-Site-Abgleich fehlschlägt |
 | Off-Site-Kopien der Sicherungsstände | [eintragen] | Aufbewahrungsregel am Off-Site-Ziel (von der Einrichtung festzulegen) | `backup.sh` löscht am Off-Site-Ziel nichts; Kopien bleiben bis zur Löschung durch die Regel am Ziel bestehen |
 
 Die Werte stammen beim Erzeugen dieses Dokuments aus den Einstellungen der
-Einrichtung. Die Backup-Frist entspricht der längsten lokalen Rotation des
-ausgelieferten `backup.sh`; der Wert dokumentiert die Rotation, er steuert das
-Skript nicht. Weicht die betriebliche Rotation davon ab, muss die Einrichtung
-den Wert im freigegebenen Löschkonzept organisatorisch anpassen. Die Frist der
+Einrichtung. Der Backup-Wert ist die Altersgrenze der längsten lokalen
+Rotation des ausgelieferten `backup.sh` (`find -mtime +90`); er dokumentiert
+die Rotation, er steuert das Skript nicht. Er ist keine Höchstfrist: `find`
+zählt nur volle Tage, und gelöscht wird erst beim nächsten erfolgreichen Lauf
+von `backup.sh`, nachdem ein Sicherungsstand die Grenze überschritten hat.
+Weicht die betriebliche Rotation davon ab, muss die Einrichtung den Wert im
+freigegebenen Löschkonzept organisatorisch anpassen. Die Frist der
 Off-Site-Kopien trägt die Einrichtung selbst ein: `backup.sh` überträgt
 Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
 älteren Stände.
@@ -113,8 +116,11 @@ Backup-Archive. Es gilt: **„unverzüglich ≠ Zerstörung integritätsgesicher
 die Wiederherstellbarkeit und den Integritätsnachweis der Sicherung aufheben.
 
 Die betroffenen Inhalte verschwinden aus den lokalen Sicherungsständen mit
-deren Rotation (spätestens nach {{ backup_retention_days }} Tagen). Das gilt nur,
-solange die Rotation läuft: Schlägt der Off-Site-Abgleich fehl, setzt
+deren Rotation. Eine feste Höchstfrist ergibt sich daraus nicht: `backup.sh`
+entfernt einen Sicherungsstand erst bei seinem nächsten erfolgreichen Lauf,
+nachdem der Stand seine Altersgrenze überschritten hat — monatliche Stände
+also frühestens, wenn sie 91 volle Tage alt sind. Wann das geschieht, hängt
+davon ab, wann `backup.sh` läuft. Schlägt der Off-Site-Abgleich fehl, setzt
 `backup.sh` die lokale Rotation aus, bis ein Abgleich wieder gelingt.
 Off-Site-Kopien erreicht diese Rotation nicht — `backup.sh` löscht am
 Off-Site-Ziel nichts. Dort verschwinden die Inhalte erst durch eine eigene
@@ -151,6 +157,6 @@ unterdrückt. Die Aggregate entfallen erst mit der Einrichtung selbst.
   zeitnah behoben. Als Abweichung gilt auch eine ausgesetzte lokale Rotation
   nach einem fehlgeschlagenen Off-Site-Abgleich (Meldung „Rotation ausgesetzt“
   im Protokoll von `backup.sh`): Bis zum nächsten erfolgreichen Abgleich bleiben
-  ältere Sicherungsstände über ihre Frist hinaus bestehen.
+  ältere Sicherungsstände über ihre Altersgrenze hinaus bestehen.
 - Dieses Konzept wird mindestens jährlich sowie nach Änderungen an Fristen,
   Datenkategorien oder Backup-Verfahren überprüft.
