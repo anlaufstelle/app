@@ -1,7 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Synchronization update 2026-10-06: Statistical k thresholds are separated from backup retention; counseling-hour suppression and a two-contact example match the implementation.
+> Synchronization update 2026-10-06: The listed per-view rate limits are explicitly non-exhaustive; statistical suppression remains distinct from backup retention.
 
 # Domain Concept Summary
 
@@ -98,7 +98,7 @@ Anlaufstelle processes social data of highly vulnerable people. Privacy is not a
 - **Data subject rights.** Authorized staff handle access (PDF), portability (JSON), internal rectification requests, deletion requests (`DeletionRequest`, separate from retention proposals) and processing restrictions. Client self-service and self-registration are rejected ([ADR-013](../adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](../adr/041-berichtigungsworkflow-intern.md)). Seven GDPR documentation templates (processing register, DPIA, DPA, TOMs, data-subject information, employee information, and a deletion concept) ship with the app ([`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/)).
 
 - **Upload buffers.** Attachments are encrypted at rest with Fernet/AES-128 after a fail-closed ClamAV scan. Uploads exceeding 2.5 MiB are temporarily buffered in plaintext before scanning and encryption. The supplied Compose configurations place this buffer on RAM-backed tmpfs via `FILE_UPLOAD_TEMP_DIR=/tmp`; without an explicit directory, Django uses `tempfile.gettempdir()`, whose storage depends on the deployment. See [Ops Runbook § 5.7a](../ops-runbook.md#57a-upload-temp-verzeichnis-klartext-zwischenpuffer-refs-1661).
-- **Rate limits.** Login attempts are limited to 5/minute per IP and 10/hour per username. Authenticated actions have per-view, per-user limits: mutations 60/hour, frequent actions and offline bundle requests 120/hour each, offline revocation queries 600/hour. There is no global API user limit; the external API remains a target feature ([ADR-026](../adr/026-rate-limiting.md)).
+- **Rate limits.** Login attempts are limited to 5/minute per IP and 10/hour per username. Authenticated actions have per-view, per-user limits, among others: mutations 60/hour, frequent actions and offline bundle requests 120/hour each, offline revocation queries 600/hour. There is no global API user limit; the external API remains a target feature ([ADR-026](../adr/026-rate-limiting.md)).
 - **Password hashing.** Username/password authentication uses Django’s default PBKDF2-SHA256 password hasher.
 
 - **Statistics suppression and backups.** The configurable k-anonymity threshold is the minimum group size for statistical publication (default `k=5`), not the number of retained backups. Backup rotation uses separate time periods; see [Admin Guide § 3 — Backup and Recovery](admin-guide.md#3-backup-and-recovery). In the counseling-hours report, a duration field must be defined for minute contributions, but recorded values may still be absent or unusable. Defined fields do not guarantee published minutes: a row’s minutes are suppressed if its event count is suppressed or fewer than k events contribute usable durations. Secondary suppression can also hide larger event cells to prevent reconstruction of small groups from totals. If any row’s minutes are withheld, the overall minute total is withheld too. For example, two contacts with defined duration fields and 30 minutes each yield 60 internal minutes; at `k=5`, the published event count, minutes and overall minute total are suppressed.
@@ -327,4 +327,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 3b4cdbfcb95b3f41a58f5af06f60ce0bb2823767 -->
+<!-- source-hash: bc1305c54f9fa81e619acb5c15edcb57b915ae6a -->
