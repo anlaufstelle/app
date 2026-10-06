@@ -49,3 +49,7 @@ Anlaufstelle verwendet eine **Custom-AdminSite-Subklasse** [`AnlaufstelleAdminSi
 - Issue #683 — Sudo-Mode fuer Admin
 - Issue #785 — Rollen-Gate fuer Admin
 - Issue #958 — Konsolidierung Admin-Mixins
+
+## Nachtrag 2026-10-06: Öffentlicher Sudo-Beleg (Refs #2500)
+
+Die interne Notiz `feedback_e2e-sudo-mode-pre-785` ist kein öffentlicher Beleg. Der Sudo-Vertrag ist direkt prüfbar in `src/core/admin_site.py`, `AnlaufstelleAdminSite.has_permission`/`login`, und `src/core/services/security/sudo_mode.py`, `is_in_sudo`; der E2E-Helfer `enter_sudo_mode` steht in `src/tests/e2e/conftest.py`. Das Wort „geleehrten“ im Alternativentext ist ein Schreibfehler; gemeint ist der vorhandene Admin-CRUD-Rahmen, keine zusätzliche Architekturvariante.

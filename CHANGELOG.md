@@ -48,6 +48,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Architektur- und Retention-ADRs präzisiert** (#2500) — Nachträge unterscheiden implementierte Schnittstellen, Zielbilder und begrenzte Redaktions- sowie Audit-Garantien.
+
 - **ADR-Verträge und Index abgeglichen** (#2450) — Datierte Nachträge benennen aktuelle Offline-, Betriebs- und Übersetzungsverträge sowie Teilablösungen.
 
 - **Handtest-Erwartungen zu Sudo, Health, Audit und Löschanträgen werten Schutzlücken als Fehler** (#2476) — Matrix B und D verlangen beim Sudo-Schritt den zweiten Faktor, auch gegen einen POST ganz ohne Code, und `SUDO_MODE_FAILED`, für anonyme `/health/`-Aufrufe nur `status` und nennen die Vorbedingungen ihrer Statuswerte, beim Bearbeiten von Wirkungszielen `GOAL_UPDATE`, je Löschantrag-Stufe einen `DELETION_*`-Eintrag und prüfen die Mandantentrennung der Löschanträge auf existierenden Routen mit Positivkontrolle und verpflichtender RLS-Probe in PostgreSQL.

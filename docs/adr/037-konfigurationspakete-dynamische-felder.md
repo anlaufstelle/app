@@ -1,6 +1,6 @@
 # ADR-037: Konfigurationspakete (YAML) und entitätsübergreifende dynamische Felder
 
-- **Status:** Accepted; die Consequences-Punkte 1 und 3 (unten) sind teilweise superseded durch [ADR-040](040-documenttype-category-entfernt.md) (2026-08-04) — `category` ist als Paket-Property entfernt, die zugehörige Unique-Constraint ist seither `(facility, name)`.
+- **Status:** Teilweise abgelöst durch [ADR-040](040-documenttype-category-entfernt.md) und [ADR-042](042-report-key-berichtszuordnung.md)
 - **Date:** 2026-08-03
 - **Deciders:** Tobias Nix
 - **Refs:** #1058 (M2, Planung), [anlaufstelle/app#35](https://github.com/anlaufstelle/app/issues/35) (M2-Feature), [anlaufstelle/app#40](https://github.com/anlaufstelle/app/issues/40) (Programm), #1713 (globale Block-Sequenz), [ADR-024](024-slug-based-identifiers.md) (Slug-basierte Identifikatoren), [ADR-035](035-evaluator-semantik-bedingte-feldlogik.md) (Evaluator-Semantik), [ADR-036](036-globale-block-sequenz-feldordnung.md) (globale Block-Sequenz), [ADR-006](006-fernet-field-encryption.md) (Feldverschlüsselung)
@@ -204,3 +204,9 @@ Der Loader ist **update-sicher**, und genau das ist eine sichtbare Verhaltensän
 - [ADR-014](014-encrypted-file-vault.md) — Encrypted File Vault (warum Datei-Felder ereignisgebunden bleiben)
 - [ADR-006](006-fernet-field-encryption.md) — Fernet/MultiFernet-Feldverschlüsselung (Grundlage der Rotation)
 - Issue #1058 — M2-Planung (Entscheide E3–E21)
+
+## Nachtrag 2026-10-06: Aktuelle Paket- und Validierungsschnittstellen (Refs #2500)
+
+`DocumentType.Category` ist entfernt ([ADR-040](040-documenttype-category-entfernt.md)); `system_type` steuert nur `ban`/`crisis`, die Berichtszuordnung liegt bei `report_key` ([ADR-042](042-report-key-berichtszuordnung.md)). Die gemeinsamen Typ-/Payload-Prüfungen heißen `check_document_type` und `clean_dynamic_data` (`src/core/services/dynamic_data.py`). `exclude_file_fields` ist keine aktuelle Option des Formularbauers (`src/core/forms/dynamic.py`, `DynamicDataForm`).
+
+Der Loader läuft auch im Webrequest bei der Einrichtungserstellung: `src/core/admin/organization.py`, `FacilityAdmin.save_model`, ruft `ensure_facility_baseline` in `src/core/services/facility_bootstrap.py` auf; `ensure_catalog_package` verwendet `src/core/packages/loader.py`, `load_package`. Der Admin-Zugang ist auf Systemadministration beschränkt; `src/core/middleware/facility_scope.py` setzt dafür `app.is_super_admin`. Der Loader selbst schreibt kein AuditLog. Er ist daher weder ausschließlich ein Betriebswerkzeug ohne Request-Kontext noch ein für sich auditierter Importpfad. YAML wird in `src/core/packages/yaml_io.py` und `src/core/management/commands/setup_facility.py` importiert; `src/core/packages/loader.py` verarbeitet bereits validierte Pakete. Die Aussage „einzige Stelle, die yaml importiert“ gilt nicht.

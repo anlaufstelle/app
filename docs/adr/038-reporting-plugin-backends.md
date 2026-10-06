@@ -289,3 +289,7 @@ Dieselbe Änderung isoliert die Berichts-Pfade der Oberfläche — Übersicht, P
 ## Nachtrag 2026-10-06: Teilablösung der Berichtszuordnung (Refs #2450)
 
 [ADR-042](042-report-key-berichtszuordnung.md), „Decision“, ersetzt § 4 dieser ADR: Berichtszuordnung erfolgt über `report_key`, nicht über `system_type`. Die übrige Backend-/Plugin-Struktur gilt weiter. Beleg: `src/core/models/report_key.py`, `ReportKeyMixin`, und `src/core/reporting/backends/`, Backend-Bindungen.
+
+## Nachtrag 2026-10-06: Suppression und Testorte (Refs #2500)
+
+Die Vier-Term-Identitäts-Schließung ist entfallen; Vollständigkeitsmeldungen sind datenunabhängig. Eine vollständige Suppressionsgarantie folgt nicht allein aus dem generischen Runtime-Gate: es prüft den Vertrag, nicht jede fachliche Kleinzahl des Backend-Payloads. Beleg: `src/core/reporting/backends/`, Backend-Implementierungen, und `src/tests/reporting/test_reporting_suppression_contract.py`. Die aktuellen Backend-/Disclosure-Tests liegen unter `src/tests/reporting/`, nicht unter den früheren `tests/test_reporting_…`-Pfaden. Die Folgeentscheidung zu konfigurierbaren Berichten ist [ADR-051](051-berichte-konfigurierbarkeit-zielbild.md), ein Zielbild.

@@ -140,3 +140,7 @@ Primärschlüssel um, sodass ein ausrangierter Schlüssel entfernt werden kann.
 - [ADR-015](015-mfa-totp.md) (MFA-Verfahren), [ADR-014](014-encrypted-file-vault.md) (Fernet-Feldverschlüsselung)
 - [`docs/threat-model.md`](../threat-model.md) (Asset „MFA-Secrets"), [`docs/security-notes.md`](../security-notes.md)
 - Refs #1362, #790
+
+## Nachtrag 2026-10-06: Feldverschlüsselung und File-Vault unterscheiden (Refs #2500)
+
+Die Fernet-Feldverschlüsselung ist in [ADR-006](006-fernet-field-encryption.md) beschrieben, nicht in ADR-014. [ADR-014](014-encrypted-file-vault.md) beschreibt das Datei-Vault. Beleg für das verschlüsselte TOTP-Feld: `src/core/models/mfa.py`, Proxy-Modell/Feld für das Secret; die Rolle des File-Vault ist davon getrennt.

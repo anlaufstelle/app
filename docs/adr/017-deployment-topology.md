@@ -68,3 +68,7 @@ Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbar
 ## Nachtrag 2026-10-06: Adresse der Live-Demo (Refs #2450)
 
 Die Live-Demo wird unter `demo.anlaufstelle.app` betrieben. Die Domain `anlaufstelle.app` im ursprünglichen Entscheid bezeichnet nicht den aktuellen Demo-Endpunkt. Beleg: [ADR-028](028-demo-release-versioning.md), „Decision“, und `Caddyfile.demo`, Site-Adresse.
+
+## Nachtrag 2026-10-06: Abschnittsbezüge und interne Deployment-Dokumentation (Refs #2500)
+
+Die Nummern §163/§247/§928/§1009 des ursprünglichen Texts sind keine stabilen Abschnittsbezüge. Maßgeblich sind `docs/fachkonzept-anlaufstelle.md`, „Produktvision & Positionierung“, „Zielgruppen“ und die Deployment-/Selfhosting-Anforderungen; die konkrete Implementierung steht in `docker-compose.prod.yml` und den Caddy-Dateien. Die begleitende Deployment-Dokumentation heißt `docs/dev/dev-deployment.md` (dev-only) und wird nicht mit dem öffentlichen Release ausgeliefert. Öffentlich gelten [docs/ops-runbook.md](../ops-runbook.md), „Deployment“, und [docs/admin-guide.md](../admin-guide.md), „Erstinstallation“.

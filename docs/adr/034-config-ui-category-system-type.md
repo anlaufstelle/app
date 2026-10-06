@@ -1,6 +1,6 @@
 # ADR-034: category vs. system_type in der Konfigurations-UI
 
-- **Status:** Teilweise superseded durch [ADR-040](040-documenttype-category-entfernt.md) (2026-08-04) — `category` ist entfernt; die Aussagen zu `system_type` gelten unverändert.
+- **Status:** Teilweise abgelöst durch [ADR-040](040-documenttype-category-entfernt.md) und [ADR-042](042-report-key-berichtszuordnung.md)
 - **Date:** 2026-08-02
 - **Deciders:** Tobias Nix
 - **Refs:** #1056 (M0, Entscheidung E11), #1058 (M2, `DocumentType.slug`), [anlaufstelle/app#38](https://github.com/anlaufstelle/app/issues/38) (M5, Reporting-Entscheid), [ADR-024](024-slug-based-identifiers.md) (Slug-basierte Identifikatoren)
@@ -46,3 +46,7 @@ Die Read-only-Regel für `system_type` ist keine reine UI-Konvention, sondern au
 - Issue #1056 — M0, Entscheidung E11 (diese ADR)
 - Issue #1058 — M2, `DocumentType.slug` (echte Lösung des Natural-Key-Risikos)
 - anlaufstelle/app#38 — M5-Reporting-Entscheid (`system_type` → `slug` → `category` ungenutzt); Grundlage, dass hier nur noch die UI-Darstellung offen war
+
+## Nachtrag 2026-10-06: Berichtsachse und Immutabilitätsprüfung (Refs #2500)
+
+Neben der Entfernung von `category` durch [ADR-040](040-documenttype-category-entfernt.md) ersetzt [ADR-042](042-report-key-berichtszuordnung.md) die frühere Berichtsrolle von `system_type`: Nur `ban`/`crisis` bleiben als Verhaltensschlüssel; Berichtstypen werden über `report_key` zugeordnet. Beleg: `src/core/models/document_type.py`, `DocumentType.SystemType` und `_check_immutable_fields`; `src/core/models/report_key.py`, `ReportKeyMixin`. Die alten Zeilennummern sind keine gültige Schnittstellenreferenz; maßgeblich ist die genannte Methode, die `save()` aufruft.

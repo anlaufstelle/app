@@ -72,10 +72,10 @@ Die Index-Titel entsprechen der Titelzeile der Datei ohne `ADR-NNN:`. Erläutern
 | [ADR-031](031-totp-secret-at-rest.md) | TOTP-Secret at rest verschlüsseln (MultiFernet) | Accepted |
 | [ADR-032](032-webauthn-passkeys-2fa.md) | Passkeys/WebAuthn als zusätzlicher zweiter Faktor | Accepted |
 | [ADR-033](033-runtime-owner-role-separation.md) | Runtime-DB-Rolle von der DB-Ownership trennen (A1.4) | Accepted |
-| [ADR-034](034-config-ui-category-system-type.md) | category vs. system_type in der Konfigurations-UI | Teilweise abgelöst durch ADR-040 |
+| [ADR-034](034-config-ui-category-system-type.md) | category vs. system_type in der Konfigurations-UI | Teilweise abgelöst durch ADR-040, ADR-042 |
 | [ADR-035](035-evaluator-semantik-bedingte-feldlogik.md) | Evaluator-Semantik der bedingten Feldlogik | Accepted |
 | [ADR-036](036-globale-block-sequenz-feldordnung.md) | Globale Block-Sequenz für Feldgruppen und ungruppierte Felder | Accepted |
-| [ADR-037](037-konfigurationspakete-dynamische-felder.md) | Konfigurationspakete (YAML) und entitätsübergreifende dynamische Felder | Accepted; die Consequences-Punkte 1 und 3 (unten) sind teilweise superseded durch [ADR-040](040-documenttype-category-entfernt.md) (2026-08-04) — `category` ist als Paket-Property entfernt, die zugehörige Unique-Constraint ist seither `(facility, name)`. |
+| [ADR-037](037-konfigurationspakete-dynamische-felder.md) | Konfigurationspakete (YAML) und entitätsübergreifende dynamische Felder | Teilweise abgelöst durch ADR-040, ADR-042 |
 | [ADR-038](038-reporting-plugin-backends.md) | Reporting-Backends als Plugin-System | Teilweise abgelöst durch ADR-042 |
 | [ADR-039](039-owner-generische-dateianhaenge.md) | Owner-generische Dateianhänge (Attachment an Ereignis, Person, Fall) | Teilweise abgelöst durch ADR-044 |
 | [ADR-040](040-documenttype-category-entfernt.md) | `DocumentType.category` wird entfernt | Accepted |

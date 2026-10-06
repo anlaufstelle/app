@@ -39,3 +39,7 @@ Gleichzeitig braucht das UI durchaus Interaktivität (Inline-Editing, Filter, Mo
 ## References
 
 - [`src/templates/`](../../src/templates), [`pyproject.toml`](../../pyproject.toml) (django-htmx, django-template-partials)
+
+## Nachtrag 2026-10-06: Abhängigkeitsquelle und Partial-Rendering (Refs #2500)
+
+Die direkten Python-Abhängigkeiten werden in `requirements.in` deklariert und in `requirements.txt` gepinnt. Dort steht `django-htmx`; `django-template-partials` ist keine verwendete Abhängigkeit. Partials werden mit Django-Templates und Includes gerendert (`src/templates/core/`, Unterverzeichnisse `partials/`); `pyproject.toml` ist hierfür nicht die Abhängigkeitsquelle.

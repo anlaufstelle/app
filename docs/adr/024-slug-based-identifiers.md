@@ -65,3 +65,7 @@ Für dieses ADR gilt damit:
 - [`src/core/models/document_type.py`](../../src/core/models/document_type.py) — `DocumentType.system_type` (immutabler Enum), `FieldTemplate.slug`, `_generate_unique_slug`, `save()`-Immutabilität, `choices`-Property (`{slug, label}`)
 - [`src/core/services/system/bans.py`](../../src/core/services/system/bans.py), [`src/core/services/system/export.py`](../../src/core/services/system/export.py), [`src/core/forms/events.py`](../../src/core/forms/events.py) — `system_type`-/Slug-basierte Lookups und `data_json`-Keys (`system_type`-Selektion in `bans.py`, Options-Slug→Label-Auflösung in `system/export.py`)
 - Issues #210, #175, #212; Migration im Rahmen von #1071
+
+## Nachtrag 2026-10-06: Reduktion auf Verhaltensschlüssel umgesetzt (Refs #2500)
+
+Die zuvor nur beschlossene Reduktion ist umgesetzt: `src/core/models/document_type.py`, `DocumentType.SystemType`, enthält nur `ban` und `crisis`. Die Berichtszuordnung erfolgt über `report_key` nach [ADR-042](042-report-key-berichtszuordnung.md). `FieldTemplate.slug` steht in `src/core/models/field_template.py`; `_generate_unique_slug` wird aus `src/core/models/mixins.py`, `SluggedModel`, geerbt. Die Zuordnung beider Symbole zu `document_type.py` ist daher falsch. Der Meta-Archiv-Pfad im Kopf dokumentiert nur die historische Herkunft; die maßgeblichen Schnittstellen liegen im aktuellen Repository.

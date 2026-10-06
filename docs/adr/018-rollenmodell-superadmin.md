@@ -103,3 +103,7 @@ Für alle anderen Rollen gibt es heute neben der CLI auch Entsperrwege in der An
 ## Nachtrag (2026-10-06): Reset-Wert der RLS-Variablen (Refs #2499)
 
 Decision 2 sagt, `app.is_super_admin` werde vor jedem Request „explizit auf `'false'`“ zurückgesetzt. Die Middleware setzt den Wert für jeden Request ohne `super_admin` auf `''` (leer), ebenso `app.current_facility_id` ohne Einrichtungskontext ([`FacilityScopeMiddleware.__call__`](../../src/core/middleware/facility_scope.py), `set_config(…, false)` = session-gebunden). Die Wirkung ist dieselbe, weil die Policies auf `= 'true'` prüfen. Siehe [ADR-005 Nachtrag (2026-10-06)](005-facility-scoping-and-rls.md#nachtrag-2026-10-06-checkliste-guc-semantik-testdatenbank-und-owner-trennung-refs-2499).
+
+## Nachtrag 2026-10-06: Öffentliche Bootstrap-Anleitung (Refs #2500)
+
+Der Referenztext „docs/dev-deployment.md § Production-Bootstrap“ meint `docs/dev/dev-deployment.md` (dev-only); diese Datei wird nicht ausgeliefert. Die öffentliche Anleitung steht in [docs/admin-guide.md](../admin-guide.md), „Erstinstallation“. Beleg für den Bootstrap ohne Default-Konto: `src/core/management/commands/create_super_admin.py`, `Command`; automatisierte Erstinstallation: `scripts/initial-setup.sh`.

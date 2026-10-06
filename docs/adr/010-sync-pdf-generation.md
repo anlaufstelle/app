@@ -46,3 +46,7 @@ Ein Wechsel auf Async-Queue ist eine spätere Option, falls Lastprofil oder Feat
 
 - `docs/async-pdf-evaluation.md` (dev-intern)
 - [`src/core/services/client/export.py`](../../src/core/services/client/export.py), [`src/core/services/system/export.py`](../../src/core/services/system/export.py)
+
+## Nachtrag 2026-10-06: Synchroner PDF-Pfad im aktuellen Stack (Refs #2500)
+
+Die interne Evaluation liegt unter `docs/dev/async-pdf-evaluation.md` (dev-only). Die PDF-Erstellung bleibt synchron: `src/core/services/client/export.py` und `src/core/services/system/export.py`, Exportfunktionen, erzeugen die Antwort im aufrufenden Prozess. `iter_records` ist keine vorhandene Schnittstelle mehr; diese Mitigation ist keine Zusage des aktuellen Codes. Zum produktiven Compose-Stack gehören auch Redis und ClamAV (`docker-compose.prod.yml`, Dienste `redis` und `clamav`); „PostgreSQL + Webserver“ beschreibt nicht seinen vollständigen Umfang. Die Entscheidung gegen einen zusätzlichen PDF-Task-Worker bleibt bestehen.

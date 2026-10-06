@@ -63,3 +63,9 @@ Die 3-Repo-Pipeline ([ADR-011](011-three-repo-release-pipeline.md)) hat zudem ei
 - `docs/dev/release-checklist.md` § 1.1 — Workflow-Sichtbarkeit dev/stage/app, Schutzkette
 - `docs/dev/ci-workflows.md` — Status der deaktivierten Dev-Workflows + Reaktivierungs-Routine
 - `docs/testing/mutation-testing.md` — Mutation-Schwellen, Triage-Kategorien (inkl. `bug` = „falsch grün")
+
+## Nachtrag 2026-10-06: Lokale Gates und Grenzen der Workflow-Angaben (Refs #2500)
+
+Der aktuelle Umfang von `make ci` ist die vollständige Abhängigkeitsliste des Targets `ci` in `Makefile`, einschließlich des variablen `CI_TEST_TARGET`; die ältere Aufzählung ist nicht vollständig. Eine feste Zielanzahl wird hier nicht zugesagt. Mutation-Testing folgt der Delta-Policy je Meilenstein-Checkpoint (`docs/testing/mutation-testing.md`, „Delta-Policy je Meilenstein-Checkpoint“; `Makefile`, `mutation-delta`).
+
+Die lokale Reproduzierbarkeitsprüfung bewertet den strukturellen Snapshot statt die signaturabhängige HEAD-SHA (`dev-ops/release/tests/`, `test_two_cold_builds_are_byte_identical`, dev-only). Der damalige offene Status von #1514 ist eine datierte Prozessangabe, keine Aussage zum heutigen Ticketstatus. Ebenso sind die Aktivzustände von GitHub-Workflows und Dependency Graph serverseitige Einstellungen, die sich nicht aus der lokalen YAML-Konfiguration beweisen lassen; für eine aktuelle Betriebsbestandsaufnahme müssen sie separat geprüft werden. Die im Prüfauftrag gemeldete zusätzliche Aktivierung des Dependency Graph ändert die lokale Gate-Entscheidung nicht.
