@@ -73,7 +73,9 @@ PROCESSING_ACTIVITIES = [
             # ``core.retention.enforcement``; a newer contact extends nothing.
             # Refs #2463: ``enforce_qualified`` only reaches events of a closed
             # case, so events without a case or in an open case never expire
-            # through the stage period.
+            # through the stage period. ``anonymize_clients`` only takes a
+            # person with at least one event and without an active hold on the
+            # person, one of their cases or events.
             _(
                 "Konfigurierbar pro Kontaktstufe; eine Frist am "
                 "Dokumentationstyp gilt zusätzlich (es gilt die zuerst "
@@ -84,9 +86,11 @@ PROCESSING_ACTIVITIES = [
                 "{qualified_days} Tage ab Abschluss des zugeordneten Falls; "
                 "Ereignisse dieser Stufe ohne Fall oder in offenen Fällen "
                 "verfallen nicht über diese Frist, nur über eine Frist am "
-                "Dokumentationstyp. Der tägliche Aufbewahrungslauf löscht ohne Freigabeschritt; "
-                "die Person wird anonymisiert, sobald alle ihre Ereignisse "
-                "gelöscht sind."
+                "Dokumentationstyp. Der tägliche Aufbewahrungslauf löscht ohne "
+                "Freigabeschritt; eine Person mit mindestens einem Ereignis "
+                "anonymisiert er, sobald alle ihre Ereignisse gelöscht sind und "
+                "keine Aufbewahrungssperre (Legal Hold) auf der Person, einem "
+                "ihrer Fälle oder Ereignisse besteht."
             ),
             anonymous_days=DEFAULT_RETENTION_ANONYMOUS_DAYS,
             identified_days=DEFAULT_RETENTION_IDENTIFIED_DAYS,

@@ -135,8 +135,10 @@ Ereignis: `anonymous` und `identified` (Frist ab dem Zeitpunkt des Ereignisses),
 `qualified` (Frist ab Abschluss des verknüpften Falls), `document_type` (zusätzliche
 Frist pro Dokumenttyp; es gilt die zuerst ablaufende). Der tägliche Lauf löscht
 ohne Freigabeschritt; Löschvorschläge (`RetentionProposal`) entstehen nur in einem
-gesonderten Vorschlagslauf. Die Person wird anonymisiert, sobald alle ihre
-Ereignisse gelöscht sind. Details: [ADR-021](adr/021-retention-modell.md).
+gesonderten Vorschlagslauf. Eine Person mit mindestens einem Ereignis wird
+anonymisiert, sobald alle ihre Ereignisse gelöscht sind und kein aktiver Legal
+Hold auf ihr, einem ihrer Fälle oder Ereignisse liegt. Details:
+[ADR-021](adr/021-retention-modell.md).
 
 **Legal Hold** — Einfrier-Marker pro Entität (eigener Eintrag auf Ereignis, Person
 oder Fall, kein Flag am Datensatz): hält jede Soft-Delete- und

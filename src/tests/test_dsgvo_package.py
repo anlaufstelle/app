@@ -891,3 +891,81 @@ class TestQualifiedPeriodNeedsClosedCase:
 
         event.refresh_from_db()
         assert event.is_deleted is False
+
+
+@pytest.mark.django_db
+class TestRetentionExceptionsAreNamed:
+    """Refs #2425: the templates name the exceptions the retention run really has.
+
+    ``eventhistory._lock_rows`` locks with ``skip_locked`` and the run skips
+    held or locked events; ``anonymize_clients`` needs at least one event and
+    no active hold; ``ensure_snapshots_for_months`` leaves out the current
+    month and ``update_or_create`` recomputes a month on a later run.
+    """
+
+    @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
+    def test_history_redaction_names_skipped_events(self, facility, slug):
+        content = _flat(render_document(slug, facility)[0])
+
+        assert "spätestens mit dem nächsten Aufbewahrungslauf" not in content
+        assert "regulär der nächste Aufbewahrungslauf" in content
+        assert "von einer anderen Bearbeitung gesperrt" in content
+        assert "ein späterer Lauf holt sie nach" in content
+
+    def test_history_row_points_to_the_exceptions(self, facility):
+        content, _ = render_document("loeschkonzept", facility)
+
+        effect = _effect_cell(content, "Inhalte früherer Fassungen")
+        assert "regulär mit dem nächsten Aufbewahrungslauf (Ausnahmen § 3.1)" in effect
+
+    def test_vvt_view_names_conditions_of_client_anonymization(self):
+        from core.services.compliance import get_activity
+
+        retention = _flat(str(get_activity("klienten_stammdaten")["retention_period"]))
+
+        assert "die Person wird anonymisiert, sobald alle ihre Ereignisse gelöscht sind." not in retention
+        assert "eine Person mit mindestens einem Ereignis" in retention
+        assert "keine Aufbewahrungssperre (Legal Hold)" in retention
+
+    def test_processing_register_template_requires_at_least_one_event(self, facility):
+        content = _flat(render_document("verarbeitungsverzeichnis", facility)[0])
+
+        assert "Personen mit mindestens einem Ereignis werden anonymisiert" in content
+
+    def test_deletion_concept_does_not_wait_for_trash_period(self, facility):
+        content = _flat(render_document("loeschkonzept", facility)[0])
+
+        old_claim = "Für manuell gelöschte Personen und Fälle gilt zuvor die oben ausgewiesene Papierkorb-Frist."
+        assert old_claim not in content
+        assert "wartet nicht auf die Papierkorb-Frist" in content
+
+    def test_snapshots_leave_out_the_current_month(self, facility):
+        content, _ = render_document("loeschkonzept", facility)
+        prose = _flat(content)
+
+        assert "Vor jeder Löschung" not in prose
+        assert "der laufende Monat ist ausgenommen" in _effect_cell(content, "Monatliche Statistik-Aggregate")
+        assert "Den laufenden Monat sichert dieser Schritt nicht" in prose
+        assert "keine unveränderliche Archivkopie" in prose
+
+    def test_snapshot_skips_current_month(self, facility, client_identified, staff_user):
+        from django.utils import timezone
+
+        from core.models import DocumentType, Event, StatisticsSnapshot
+        from core.services.dashboard.snapshot import ensure_snapshots_for_months
+
+        doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_anonymous=False,
+            created_by=staff_user,
+        )
+        today = timezone.localdate()
+
+        ensure_snapshots_for_months(facility, Event.objects.filter(facility=facility))
+
+        assert not StatisticsSnapshot.objects.filter(facility=facility, year=today.year, month=today.month).exists()

@@ -25,9 +25,9 @@ jeder Änderung ihrer Einstellungen oder Backup-Rotation.
 | Aktivitäten / Zeitstrom-Einträge | {{ retention_activities_days }} Tage | `retention_activities_days` | Harte Löschung |
 | Papierkorb für gelöschte Personen und Fälle | {{ client_trash_days }} Tage | `client_trash_days` | Automatische Anonymisierung; bis dahin Wiederherstellung möglich |
 | Audit-Log | {{ auditlog_retention_months }} Monate | `auditlog_retention_months` | Rollierende Löschung; `0` deaktiviert sie, gesetzliche und technische Ausnahmen siehe § 3.4 |
-| Inhalte früherer Fassungen eines Ereignisses | {{ eventhistory_detail_months }} Monate | `eventhistory_detail_months` | Die Werte der Fassung werden gelöscht, die Fassung selbst (Zeitpunkt, handelnde Person, Feldnamen) bleibt; `0` deaktiviert diese Frist. Bei einem **gelöschten** Ereignis geschieht dasselbe unabhängig von dieser Frist, mit dem nächsten Aufbewahrungslauf |
+| Inhalte früherer Fassungen eines Ereignisses | {{ eventhistory_detail_months }} Monate | `eventhistory_detail_months` | Die Werte der Fassung werden gelöscht, die Fassung selbst (Zeitpunkt, handelnde Person, Feldnamen) bleibt; `0` deaktiviert diese Frist. Bei einem **gelöschten** Ereignis geschieht dasselbe unabhängig von dieser Frist, regulär mit dem nächsten Aufbewahrungslauf (Ausnahmen § 3.1) |
 | Chronologie früherer Fassungen (nach ihrer Inhalts-Löschung) | {{ eventhistory_chronicle_months }} Monate | `eventhistory_chronicle_months` | Die inhaltsleere Fassung wird gelöscht; gemessen ab dem Zeitpunkt ihrer Inhalts-Löschung. `0` deaktiviert die Löschung — dann wird die Chronologie unbefristet aufbewahrt |
-| Monatliche Statistik-Aggregate | unbefristet | — | Bleiben bestehen: Vor jeder Löschung durch den Aufbewahrungslauf sichert die Anwendung die betroffenen Monate als Zählwerte ohne Einzeldatensätze (siehe § 3.5) |
+| Monatliche Statistik-Aggregate | unbefristet | — | Bleiben bestehen: Bevor der Aufbewahrungslauf Ereignisse löscht, sichert die Anwendung deren bereits abgeschlossene Monate als Zählwerte ohne Einzeldatensätze; der laufende Monat ist ausgenommen (siehe § 3.5) |
 | Backup-Sicherungsstände | {{ backup_retention_days }} Tage (Altersgrenze, keine Höchstfrist) | Längste lokale Rotation im ausgelieferten `backup.sh` | Die Rotation entfernt ein lokales verschlüsseltes Archiv beim ersten erfolgreichen Lauf von `backup.sh`, in dem es mindestens 8 (täglich), 29 (wöchentlich) bzw. 91 volle Tage (monatlich) alt ist; keine feste Höchstfrist. Die Rotation ist ausgesetzt, solange der Off-Site-Abgleich fehlschlägt |
 | Off-Site-Kopien der Sicherungsstände | [eintragen] | Aufbewahrungsregel am Off-Site-Ziel (von der Einrichtung festzulegen) | `backup.sh` löscht am Off-Site-Ziel nichts; Kopien bleiben bis zur Löschung durch die Regel am Ziel bestehen |
 
@@ -54,8 +54,11 @@ Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
   aktiven Legal Hold.
 - Mit der Löschung werden die Inhalte des Ereignisses (Zusatzfelder, Suchtext)
   sofort geleert und seine Dateianhänge gelöscht. Die Ereigniszeile bleibt als
-  gelöscht markiert bestehen; die Werte früherer Fassungen fallen spätestens
-  mit dem nächsten Aufbewahrungslauf weg.
+  gelöscht markiert bestehen; die Werte früherer Fassungen löscht regulär der
+  nächste Aufbewahrungslauf. Ereignisse unter einem aktiven Legal Hold und
+  Ereignisse, deren Datensatz oder Person in diesem Moment von einer anderen
+  Bearbeitung gesperrt ist, überspringt er; ein späterer Lauf holt sie nach,
+  sobald Sperre bzw. Bearbeitung beendet sind.
 - Optional legt ein gesonderter Vorschlagslauf (`enforce_retention --propose`)
   für abgelaufene Ereignisse Löschvorschläge im Löschfristen-Dashboard an; die
   ausgelieferte Zeitplanung ruft ihn nicht auf. Leitung und
@@ -68,9 +71,13 @@ Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
   braucht immer die Bestätigung einer zweiten berechtigten Person, die eines
   Ereignisses oder Falls nur bei Personen der Stufe „Mit Zusatzangaben".
 - Sind alle Ereignisse einer Person gelöscht, anonymisiert ein nachfolgender
-  Lauf ihre identifizierenden Inhalte. Eine Person, zu der nie ein Ereignis
-  dokumentiert wurde, erfasst dieser Weg nicht. Für manuell gelöschte Personen
-  und Fälle gilt zuvor die oben ausgewiesene Papierkorb-Frist.
+  Lauf ihre identifizierenden Inhalte, sofern kein aktiver Legal Hold auf der
+  Person, einem ihrer Fälle oder Ereignisse liegt. Eine Person, zu der nie ein
+  Ereignis dokumentiert wurde, erfasst dieser Weg nicht. Er wartet nicht auf
+  die Papierkorb-Frist: Auch eine Person im Papierkorb, deren Ereignisse alle
+  gelöscht sind, anonymisiert der nächste Lauf. Andere manuell gelöschte
+  Personen sowie Fälle im Papierkorb anonymisiert der Lauf nach Ablauf der oben
+  ausgewiesenen Papierkorb-Frist.
 - Fälle haben keine zusätzliche eigene Aufbewahrungsfrist. Episoden,
   Wirkungsziele, Meilensteine und Aufgaben folgen dem Lebenszyklus ihres Falls
   beziehungsweise ihrer Person.
@@ -138,7 +145,13 @@ der erneuten Freigabe des Systems auszuführen.
 ### 3.5 Statistik-Aggregate
 
 Bevor der Aufbewahrungslauf Ereignisse löscht, sichert die Anwendung die
-betroffenen Monate als monatliche Statistik-Aggregate. Sie enthalten Zählwerte,
+betroffenen, bereits abgeschlossenen Monate als monatliche Statistik-Aggregate.
+Den laufenden Monat sichert dieser Schritt nicht: Löscht der Lauf wegen einer
+kurzen Frist (etwa einer Dokumentationstyp-Frist von wenigen Tagen) Ereignisse
+des laufenden Monats, sichert er deren Zählwerte vorher nicht. Löscht ein
+späterer Lauf weitere Ereignisse eines schon gesicherten Monats, berechnet er
+dessen Aggregat neu; die Aggregate sind keine unveränderliche Archivkopie.
+Sie enthalten Zählwerte,
 keine Einzeldatensätze, und haben keine Frist: Sie bleiben nach der Löschung
 der Ereignisse bestehen, damit Auswertungen vergangener Zeiträume erhalten
 bleiben. Gespeichert werden die ungekürzten Zählwerte; erst in Berichten und

@@ -56,7 +56,8 @@ zugeordnet sind oder zu einem noch offenen Fall gehören, verfallen nicht über
 diese Frist, sondern nur über eine Frist am Dokumentationstyp; solange sie
 bestehen, wird auch die Person nicht anonymisiert. Der tägliche
 Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabeschritt; Personen
-werden anonymisiert, sobald alle ihre Ereignisse gelöscht sind. Ausgenommen sind Daten unter einer Aufbewahrungssperre (Legal
+mit mindestens einem Ereignis werden anonymisiert, sobald alle ihre Ereignisse
+gelöscht sind. Ausgenommen sind Daten unter einer Aufbewahrungssperre (Legal
 Hold). Weitere Fristen (Aktivitäten, Papierkorb, Audit-Log, Ereignis-Historie,
 Sicherungsstände) und die Statistik-Aggregate nennt das Löschkonzept.
 

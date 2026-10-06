@@ -3,7 +3,7 @@
 > Bilingual glossary of domain-specific terms used in Anlaufstelle.
 > German terms appear in the codebase, database, and German documentation.
 > English terms are used in the UI (when set to English) and English documentation.
-> Synchronization update 2026-10-06: the soft-delete strategy and legal hold entries state the period start per strategy, the daily run without an approval step, and the legal hold as a separate entry (#2425).
+> Synchronization update 2026-10-06: the soft-delete strategy and legal hold entries state the period start per strategy, the daily run without an approval step, the legal hold as a separate entry, and the conditions of client anonymization (at least one event, all deleted, no active legal hold) (#2425).
 
 ---
 
@@ -69,7 +69,7 @@
 | Scope | Scope | Visibility boundary. Determines which data is accessible to a user — based on facility, role, and contact level. |
 | Sensitivität | Sensitivity | Classification of a document type or field regarding its protection level. Controls which roles may access field values. Configurable per document type and per field (`FieldTemplate.sensitivity`). Independent of field encryption (`is_encrypted`). |
 | Service Worker | Service worker | Browser script coordinating offline caching, queue replay, and PWA behavior. See `src/static/js/sw.js`. |
-| Soft-Delete-Strategie | Soft-delete strategy | One of the four retention strategies used instead of hard delete, applied per event: `anonymous` and `identified` (period from the event's time), `qualified` (period from the close of the linked case), `document_type` (additional period per documentation type; whichever expires first applies). The daily run deletes without an approval step; deletion proposals (`RetentionProposal`) only come from a separate proposal run ([ADR-021](../adr/021-retention-modell.md)). |
+| Soft-Delete-Strategie | Soft-delete strategy | One of the four retention strategies used instead of hard delete, applied per event: `anonymous` and `identified` (period from the event's time), `qualified` (period from the close of the linked case), `document_type` (additional period per documentation type; whichever expires first applies). The daily run deletes without an approval step; deletion proposals (`RetentionProposal`) only come from a separate proposal run. A client with at least one event is anonymized once all of their events are deleted and no active legal hold exists on the client, one of their cases, or events ([ADR-021](../adr/021-retention-modell.md)). |
 | Speicherbegrenzung | Storage limitation | GDPR Art. 5(1)(e) principle: do not keep personal data longer than necessary for the purpose. Implemented via the retention model ([ADR-021](../adr/021-retention-modell.md)). |
 | TimeFilter | Time filter | Technical term for a named time filter. Belongs to a facility and defines a time window (start time, end time) with a label. |
 | Token-Einladung | Token invite | Token-based invitation flow that replaces the former plaintext initial password. Admin creates a user, the user receives an email with a one-time link (valid 7 days) and sets their own password. |
@@ -82,4 +82,4 @@
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: ee79fa4502e5e9c698d9a352440f4ff9fdf91d15 -->
+<!-- source-hash: 67b68634e1b8b8ec2b475d9bfc4ed3b9ade98f37 -->
