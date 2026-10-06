@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> Synchronization update 2026-10-06: § 7.5 "Trash: Anonymize permanently now" quotes the success message without a fixed deadline for earlier versions (legal hold and concurrently locked records are caught up by a later run); § 8 describes how a deletion run adds deleted events to the monthly aggregate of their month, including the current month, and the lead card names the latest completed month (#2425).
+> Synchronization update 2026-10-06: § 7.5 "Trash: Anonymize permanently now" quotes the success message without a fixed deadline for earlier versions (legal hold and concurrently locked records are caught up by a later run); § 8 describes how a deletion run adds each deleted event to the monthly aggregate of its month in the same transaction, including the current month, keeps an event whose carry-over fails, leaves the counts of an existing aggregate unchanged, and that the lead card names the latest completed month (#2425).
 > Synchronization update 2026-10-06: § 7.3 "Retention Dashboard" and "Legal Hold" separate the regular run (deletes without approval, only holds protect), the proposal run (`--propose`) and manual deletion; Approve/Defer/Reject (including the deferred proposal that stays deferred when the auto-approval is blocked) and the way to set a legal hold are described as the code implements them; at most one active proposal per event (#2425).
 > Synchronization update 2026-10-06: § 2.5 the retention period of a documentation type applies in addition to the contact-stage period -- whichever expires first applies, a longer type period extends nothing (#2462).
 > Synchronization update 2026-10-06: § 5.5 states when the “Admin DB role” card keeps showing the previous state (failed write, deploy aborted before `check_db_roles`) and that findings are recorded even without an RLS bypass, only `ok` requires one (#2415).
@@ -2284,7 +2284,7 @@ Without the variable set, the protected tables visibly return **no rows** in `ps
 Statistics reporting in Anlaufstelle uses **two different acceleration layers**:
 
 1. **Materialized view** (`core_statistics_event_flat`) -- pre-aggregates current event data so the statistics page does not have to scan all events on every request. Refs #544.
-2. **Statistics snapshots** -- monthly, persisted aggregates that keep counting the events removed by automatic deletion. Historical reports stay correct even after GDPR-mandated deletion.
+2. **Statistics snapshots** -- monthly, persisted aggregates that keep counting the events removed by automatic deletion. Historical reports therefore also count events the retention run has deleted.
 
 ### Refresh the Materialized View
 
@@ -2320,13 +2320,13 @@ Implementation: [`src/core/management/commands/refresh_statistics_view.py`](http
 
 Anlaufstelle computes statistics (dashboard, half-year reports, example activity report PDFs) from the event table by default (aggregated via the materialized view). When automatic data deletion (`enforce_retention`) removes old events, those events would disappear from the statistics.
 
-**Statistics snapshots** persist monthly aggregates that keep counting deleted events. Reports use hybrid logic: stored snapshots for past months, live data (from the materialized view) for the current month.
+**Statistics snapshots** persist monthly aggregates that keep counting events deleted by the retention run. Reports use hybrid logic: stored snapshots for past months, live data (from the materialized view) for the current month.
 
 > **Important: snapshot protection does not cover every report.** It preserves the **monthly aggregates** that feed the statistics overview (key figures, tables and timeline), its PDF export and the activity-report PDFs. Of the reports on the **"Dataset reports"** tab, only the **example activity report** is snapshot-enabled, and even there only its **PDF**: its CSV/JSON/XML files -- like every other report on that tab -- recalculate from the current data on **every** request. Once `enforce_retention` has cleaned up a past period, their figures for that period will be lower than on the first download -- potentially zero, without an error message, because that is not a defect. The extent depends on the report: it evaluates events, cases or people and changes only when records in **its** population are deleted or anonymized; the population is stated above each preview. **If you give such a file to a funding body or other recipient, retain the generated file yourself** -- it cannot be reproduced identically later. Each report states where it reads from ("Data source: …"); the other considerations for external release are explained below under ["Releasing Reports"](#releasing-reports-what-you-need-to-know).
 
 ### Automatic Capture
 
-Snapshots are created automatically whenever `enforce_retention` deletes events: right after the deletion, the run adds the deleted events to the aggregate of their month, including the current month. Every later calculation of a month -- another deletion run or `create_statistics_snapshots` -- counts the remaining events and adds the previously deleted ones, so a deletion run never makes an aggregate smaller. The "Statistics" card on the lead's dashboard shows the latest completed month as "last snapshot".
+Snapshots are created automatically whenever `enforce_retention` deletes events: in the same transaction in which the run deletes an event, it adds the event to the aggregate of its month, including the current month -- if the run aborts, no event already deleted is missing from the aggregate, and if two runs overlap, every event counts exactly once. A deletion run does not change the counts of an existing aggregate; it only extends its carry-over of deleted events. If the month has no aggregate yet, the run creates it from the remaining events plus the carry-over. Every recalculation of a month with `create_statistics_snapshots` counts the remaining events and adds the deleted ones. If the run cannot add an event to the aggregate (for example because a report module raises an error), it does not delete the event, writes the error as `ERROR` with the event id to the application log and tries again on the next run -- until the cause is fixed, the deletion is delayed. Events deleted manually no longer count in an aggregate after its next recalculation. The "Statistics" card on the lead's dashboard shows the latest completed month as "last snapshot".
 
 ### Periodic Cron Job (Recommended)
 
@@ -2413,5 +2413,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 33a7e4a3b9771bd41cc31b775633d7d485b3b4f3 -->
+<!-- source-hash: f77ffbfd045dd39404c4ab2d85b8285d3b482e52 -->
 <!-- translation-date: 2026-10-05 -->

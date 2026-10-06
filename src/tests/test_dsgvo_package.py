@@ -983,7 +983,10 @@ class TestRetentionExceptionsAreNamed:
 
         assert "damit Auswertungen vergangener Zeiträume erhalten" not in prose
         assert "fehlen sie in der neuen Fassung des Aggregats" not in prose
-        assert "ein Löschlauf verkleinert ein Aggregat dadurch nicht" in prose
+        assert "ein Löschlauf verkleinert ein Aggregat dadurch nicht" not in prose
+        assert "Die Zählwerte eines bestehenden Aggregats ändert ein Löschlauf nicht" in prose
+        assert "Löschung und Übertrag werden nur gemeinsam gespeichert" in prose
+        assert "löscht der Lauf dieses Ereignis nicht" in prose
         effect = _effect_cell(deletion_concept, "Monatliche Statistik-Aggregate")
         assert "früher gelöschte Ereignisse fehlen" not in effect
         assert "spätere Neuberechnungen behalten sie" in effect

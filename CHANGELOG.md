@@ -39,7 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Compliance-Dashboard zeigt das Ergebnis der DB-Rollenprüfung** (#2415) — `check_db_roles` hinterlegt nach jedem Lauf im Wartungsdienst sein Ergebnis ohne Rollennamen oder Zugangsdaten im Audit-Log, und die Karte „Admin-DB-Rolle“ zeigt es an: nach dem Deploy `ok` mit Prüfzeitpunkt, bei Befunden `critical`, bei unvollständiger oder über 30 Tage alter Prüfung `warning`.
-- **Monats-Statistik zählt gelöschte Ereignisse weiter** (#2425) — Der Aufbewahrungslauf rechnet gelöschte Ereignisse dem Aggregat ihres Monats hinzu, auch im laufenden Monat, sodass weitere Löschläufe und Neuberechnungen das Aggregat nicht mehr verkleinern; die Papierkorb-Aktion „Jetzt endgültig anonymisieren“ sagt für frühere Fassungen keine feste Frist mehr zu.
+- **Monats-Statistik zählt gelöschte Ereignisse weiter** (#2425) — Der Aufbewahrungslauf rechnet jedes gelöschte Ereignis in derselben Transaktion wie die Löschung dem Aggregat seines Monats hinzu, auch im laufenden Monat, sodass weder ein abgebrochener Lauf noch überlappende Läufe oder Neuberechnungen gelöschte Ereignisse aus dem Aggregat verlieren oder doppelt zählen; scheitert der Übertrag, bleibt das Ereignis bestehen und der nächste Lauf versucht es erneut; die Papierkorb-Aktion „Jetzt endgültig anonymisieren“ sagt für frühere Fassungen keine feste Frist mehr zu.
 
 ### Docs
 
