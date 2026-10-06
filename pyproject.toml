@@ -221,6 +221,7 @@ also_copy = [
     "src/locale/",
     "src/static/",
     "pyproject.toml",
+    "locustfile.py",
 ]
 
 [tool.coverage.report]
