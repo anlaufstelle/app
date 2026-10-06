@@ -1,6 +1,6 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Synchronization update 2026-10-06: §§ 1–6 follow the shipped behaviour — the mandatory-variable check reads quoted and empty values correctly and requires 32 characters, the migration diagnosis uses the one-shot and terminates an orphaned lock holder instead of `pg_advisory_unlock`, `up -d web` (not `restart web`) applies new `GUNICORN_*` values, attachment usage is measured inside the `media` volume, the export directory must belong to UID 1000, the maintenance-mode block runs the migration one-shot, `backup.sh` writes owner-only files (`umask 077`) and `--verify` states what it checked, and the manifest is mandatory for `restore.sh` (#2482, #2440).
-> Synchronization update 2026-10-06: § 3.3 (file modes) and § 6.6 (restore drill, host cron proposal) follow `backup.sh` with `umask 027` — files `0640`, directories `0750`, the check rejects any permission for others, the group (UID/GID 1000 of `web`) may read the manifest (#2482).
+> Synchronization update 2026-10-06: §§ 1–6 follow the shipped behaviour — the mandatory-variable check reads quoted and empty values (also with an inline comment after the value) correctly and requires 32 characters, the migration diagnosis uses the one-shot and terminates an orphaned lock holder instead of `pg_advisory_unlock`, `up -d web` (not `restart web`) applies new `GUNICORN_*` values, attachment usage is measured inside the `media` volume, the export directory must belong to UID 1000, the maintenance-mode block runs the migration one-shot, `backup.sh` writes files without any permission for others (`umask 027`, the group may read) and `--verify` states what it checked, and the manifest is mandatory for `restore.sh` (#2482, #2440).
+> Synchronization update 2026-10-06: § 3.3 (file modes) and § 6.6 (restore drill, host cron proposal) follow `backup.sh` with `umask 027` — files `0640`, directories `0750`, the check rejects any permission for others, the group (UID/GID 1000 of `web`) may read the manifest, the weekly/monthly copies are staged and checked before they are published, and the host cron alternative names its audit-anchor limit (#2482).
 > Synchronization update 2026-10-06: the German source of § 13.1 uses proper umlauts in the step comments; no change to commands or content.
 > Synchronization update 2026-10-06: the DB password rotation section names the printed file list as `Compose files: …` (the script output is English now) (#2474).
 > Synchronization update 2026-10-06: the PostgreSQL migration path (§ 13.1/§ 13.2) activates maintenance mode and takes the backup while `web` and `cron` are running (`backup.sh` needs both), stops them only afterwards, takes the working dump with the variable `ADMIN_DB_USER` that exists in the `db` container and checks it, waits for the final database server before the restore, and uses the full Compose file list (#2424).
@@ -99,13 +99,18 @@ docker compose -f docker-compose.prod.yml images web
 # The staging stack runs the same check against .env.staging instead of .env
 # (ENV_FILE=.env.staging, template .env.staging.example) — Refs #2086.
 ENV_FILE="${ENV_FILE:-.env}"
-# Last active entry of a variable; one enclosing pair of quotes (this is how
-# .env.example ships empty values: '') is not part of the value.
+# Last active entry of a variable. As with Compose, an enclosing pair of quotes (this
+# is how .env.example ships empty values: '') is not part of the value and anything
+# after it (a comment) is ignored; for unquoted values a comment starts with " #".
 env_value() {
-    local value
-    value=$(grep -E "^${1}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2-)
-    value=${value#[\"\']}
-    value=${value%[\"\']}
+    local line value
+    line=$(grep -E "^${1}=" "$ENV_FILE" | tail -n 1)
+    value=${line#*=}
+    case "$value" in
+        \"*\"*) value=${value#\"}; value=${value%%\"*} ;;
+        \'*\'*) value=${value#\'}; value=${value%%\'*} ;;
+        *) value=${value%% \#*}; value=${value%"${value##*[![:space:]]}"} ;;
+    esac
     printf '%s' "$value"
 }
 for var in POSTGRES_PASSWORD POSTGRES_ADMIN_PASSWORD POSTGRES_BOOTSTRAP_PASSWORD; do
@@ -541,7 +546,10 @@ is the account the script runs as (recommended: root). Others (neither owner nor
 group) never get a permission. Before publication it checks that no file of the set
 carries a permission for others (message `File modes checked (backup set): … none
 accessible to others.`); otherwise it aborts with exit 1 and does not publish the
-set. The same applies to the weekly/monthly copies. The group may read so that the
+set. The weekly/monthly copies are created in a staging directory, checked there
+with the same check, and only then moved (manifest last) into `weekly/` or
+`monthly/`; if the check fails, nothing of the copy is published and earlier
+copies stay untouched (the already published daily set remains). The group may read so that the
 `web` container (UID/GID 1000) reads the manifest for the backup indicator in
 `/health/`, the system overview and compliance. This relies on the directory setup
 from the admin guide: `BACKUP_HOST_DIR` with `root:1000` and mode `2750` (new
@@ -601,6 +609,13 @@ started; if it runs, these lines execute every job twice. The lines require the
 Compose stack and the `maintenance` service. Anyone orchestrating without Compose
 (e.g. k8s) transfers the same commands, with the admin role, to their own
 environment.
+**Limit (audit anchor):** `backup.sh` reads the audit anchor (`DJANGO_AUDIT_HWM_PATH`)
+only through `docker compose exec -T cron cat`. If the `cron` sidecar is not
+running, the run ends with the "no audit anchor" warning and a set without
+`audit_hwm-<timestamp>.json`; `restore.sh` rejects such a set while
+`DJANGO_AUDIT_HWM_PATH` is set. The backup example of this alternative therefore
+secures the anchor only if the `cron` service runs at least for the duration of
+the backup; the other jobs of the alternative are not affected.
 This alternative also requires a running cron service, the correct host time
 zone, pre-created writable log files, and a logrotate rule. The example belongs
 exclusively in `sudo crontab -e`.
@@ -3216,7 +3231,8 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 3c3ac1693352912e4b2c318a9d075675eac596be -->
+<!-- source-hash: 3d8340dcc23c9b773039ba80be32a0fef8531c75 -->
+<!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->

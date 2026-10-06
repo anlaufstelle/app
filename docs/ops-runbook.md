@@ -53,13 +53,19 @@ docker compose -f docker-compose.prod.yml images web
 # Fuer den Staging-Stack gilt derselbe Check gegen .env.staging statt .env
 # (ENV_FILE=.env.staging, Vorlage .env.staging.example) — Refs #2086.
 ENV_FILE="${ENV_FILE:-.env}"
-# Letzter aktiver Eintrag einer Variable; ein umschließendes Anführungszeichenpaar
-# (so liefert .env.example leere Werte aus: '') gehört nicht zum Wert.
+# Letzter aktiver Eintrag einer Variable. Wie bei Compose gehört ein umschließendes
+# Anführungszeichenpaar (so liefert .env.example leere Werte aus: '') nicht zum Wert,
+# und alles dahinter (Kommentar) wird ignoriert; bei unzitierten Werten beginnt ein
+# Kommentar mit " #".
 env_value() {
-    local value
-    value=$(grep -E "^${1}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2-)
-    value=${value#[\"\']}
-    value=${value%[\"\']}
+    local line value
+    line=$(grep -E "^${1}=" "$ENV_FILE" | tail -n 1)
+    value=${line#*=}
+    case "$value" in
+        \"*\"*) value=${value#\"}; value=${value%%\"*} ;;
+        \'*\'*) value=${value#\'}; value=${value%%\'*} ;;
+        *) value=${value%% \#*}; value=${value%"${value##*[![:space:]]}"} ;;
+    esac
     printf '%s' "$value"
 }
 for var in POSTGRES_PASSWORD POSTGRES_ADMIN_PASSWORD POSTGRES_BOOTSTRAP_PASSWORD; do
@@ -500,7 +506,11 @@ Verzeichnisse `0750`, Eigentümer ist das Konto, unter dem das Skript läuft
 Vor der Veröffentlichung prüft es, dass keine Datei des Satzes ein Recht für
 Andere trägt (Meldung `File modes checked (backup set): … none accessible to
 others.`); sonst bricht es mit Exit 1 ab und veröffentlicht den Satz nicht.
-Dasselbe gilt für die Weekly-/Monthly-Kopien. Die Gruppe darf lesen, damit der
+Die Weekly-/Monthly-Kopien entstehen in einem Zwischenverzeichnis, werden dort
+mit derselben Prüfung kontrolliert und erst danach (Manifest zuletzt) in
+`weekly/` bzw. `monthly/` verschoben; scheitert die Prüfung, wird von der Kopie
+nichts veröffentlicht, frühere Kopien bleiben unberührt (der bereits
+veröffentlichte Daily-Satz bleibt bestehen). Die Gruppe darf lesen, damit der
 `web`-Container (UID/GID 1000) das Manifest für die Backup-Anzeige in `/health/`,
 Systemübersicht und Compliance liest. Das setzt das Verzeichnis-Setup aus dem
 Admin-Handbuch voraus: `BACKUP_HOST_DIR` mit `root:1000` und Modus `2750` (die
@@ -561,6 +571,13 @@ wird; laeuft er, fuehren diese Zeilen jeden Job doppelt aus. Die Zeilen setzen
 den Compose-Stack und den Dienst `maintenance` voraus. Wer ohne Compose
 orchestriert (z. B. k8s), uebertraegt dieselben Kommandos mit der Admin-Rolle
 in die eigene Umgebung.
+**Grenze (Audit-Anker):** `backup.sh` liest den Audit-Anker (`DJANGO_AUDIT_HWM_PATH`)
+ausschließlich per `docker compose exec -T cron cat`. Läuft der `cron`-Sidecar
+nicht, endet der Lauf mit der Warnung „kein Audit-Anker“ und einem Satz ohne
+`audit_hwm-<Zeitstempel>.json`; `restore.sh` lehnt einen solchen Satz ab, solange
+`DJANGO_AUDIT_HWM_PATH` gesetzt ist. Das Backup-Beispiel dieser Alternative sichert
+den Anker also nur, wenn der Dienst `cron` zumindest für die Dauer des Backups
+läuft; die übrigen Jobs der Alternative sind davon nicht betroffen.
 Auch diese Alternative setzt den laufenden Cron-Dienst, die richtige
 Host-Zeitzone, vorab angelegte beschreibbare Logdateien und eine Logrotate-Regel
 voraus. Das Beispiel gehoert ausschliesslich in `sudo crontab -e`.
