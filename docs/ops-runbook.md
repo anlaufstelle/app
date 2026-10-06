@@ -47,19 +47,37 @@ docker compose -f docker-compose.prod.yml images web
 # Pflicht-Env-Vars des 3-Rollen-PostgreSQL-Modells pruefen (Refs #902, ADR-005/017):
 # Der Bootstrap-Superuser ``postgres`` legt damit die App-Rolle (NOSUPERUSER,
 # NOBYPASSRLS) und die Admin-Rolle (NOSUPERUSER, BYPASSRLS) an
-# (deploy/postgres-init/01-app-role.sh). Fehlen sie oder stehen noch auf
-# change-me-*, schlagen DB-Init bzw. der Migrate-Job fehl.
-# Quelle: .env.example.
+# (deploy/postgres-init/01-app-role.sh). Fehlt ein Passwort, steht es noch auf
+# change-me-* oder hat es weniger als 32 Zeichen, bricht das Init-Skript beim
+# Anlegen des Clusters ab. Quelle: .env.example (liefert die Passwörter leer aus).
 # Fuer den Staging-Stack gilt derselbe Check gegen .env.staging statt .env
 # (ENV_FILE=.env.staging, Vorlage .env.staging.example) — Refs #2086.
 ENV_FILE="${ENV_FILE:-.env}"
-for var in POSTGRES_BOOTSTRAP_PASSWORD POSTGRES_ADMIN_USER POSTGRES_ADMIN_PASSWORD; do
-    val=$(grep -E "^${var}=" "$ENV_FILE" | cut -d= -f2-)
+# Letzter aktiver Eintrag einer Variable; ein umschließendes Anführungszeichenpaar
+# (so liefert .env.example leere Werte aus: '') gehört nicht zum Wert.
+env_value() {
+    local value
+    value=$(grep -E "^${1}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2-)
+    value=${value#[\"\']}
+    value=${value%[\"\']}
+    printf '%s' "$value"
+}
+for var in POSTGRES_PASSWORD POSTGRES_ADMIN_PASSWORD POSTGRES_BOOTSTRAP_PASSWORD; do
+    val=$(env_value "$var")
     case "$val" in
-        ""|change-me*) echo "✗ $var fehlt oder steht noch auf Default"; ;;
-        *)             echo "✓ $var gesetzt"; ;;
+        change-me*) echo "✗ $var steht noch auf dem Platzhalter" ;;
+        *) if [ "${#val}" -ge 32 ]; then
+               echo "✓ $var gesetzt (${#val} Zeichen)"
+           else
+               echo "✗ $var fehlt oder hat weniger als 32 Zeichen"
+           fi ;;
     esac
 done
+if [ -n "$(env_value POSTGRES_ADMIN_USER)" ]; then
+    echo "✓ POSTGRES_ADMIN_USER gesetzt"
+else
+    echo "✗ POSTGRES_ADMIN_USER fehlt"
+fi
 ```
 
 > **Einzelschlüssel abgekündigt (#2240):** Meldet `python manage.py check --deploy` die Warnung `core.W005`, läuft die Instanz noch mit `ENCRYPTION_KEY` statt mit dem Schlüsselring `ENCRYPTION_KEYS`. Das Update ist davon nicht betroffen; vor der Entfernung nach Version 1.0 den Wert unverändert nach `ENCRYPTION_KEYS` übernehmen und `ENCRYPTION_KEY` entfernen — Anleitung im [Admin-Guide, Abschnitt „Einzelschlüssel → Schlüsselring migrieren“](admin-guide.md#vollständige-umgebungsvariablen-referenz).
@@ -122,7 +140,10 @@ compose_files=(-f docker-compose.prod.yml)
 # Container-Status
 docker compose "${compose_files[@]}" ps
 
-# Migrations-Log pruefen
+# Start-Log des Web-Containers (collectstatic, check --deploy, gunicorn). Hier steht
+# keine Migrationsausgabe: der Web-Entrypoint migriert nicht (§ 1.2). Die Ausgabe des
+# One-Shots aus § 1.2 Schritt 3 erscheint nur im Terminal (der Container wird mit
+# --rm entfernt); den Stand belegt die Prüfung der Migrationen weiter unten.
 docker compose "${compose_files[@]}" logs web --tail=50
 
 # Health-Check
@@ -284,19 +305,24 @@ klaeren.
 Letzter Ausweg, wenn Migration-Rollback nicht moeglich:
 
 ```bash
-# 1. Hintergrundjobs anhalten; db und web bleiben fuer Restore und Medien noetig
-docker compose -f docker-compose.prod.yml stop cron
+cd /opt/anlaufstelle
+
 # Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
+# 1. Hintergrundjobs anhalten; db und web bleiben fuer Restore und Medien noetig
+docker compose "${compose_files[@]}" stop cron
 docker compose "${compose_files[@]}" up -d db web
 
 # 2. Backup wiederherstellen — DB plus optional Medien.
 #    restore.sh fuellt eine frische Wiederherstellungs-Datenbank, verifiziert sie
 #    gegen das signierte Manifest und schaltet erst danach unter Schreibruhe um;
 #    der bisherige Stand bleibt als <POSTGRES_DB>_vor_restore_<Zeitstempel> liegen.
-#    Ohne --yes (oder RESTORE_CONFIRM=ja) bricht der Lauf vor jeder Aenderung ab.
+#    Ohne --yes (oder RESTORE_CONFIRM=ja) fragt das Skript interaktiv nach "ja";
+#    nicht-interaktiv (Cron, Pipe, kein Terminal) bricht es vor jeder Aenderung ab.
+#    Ein Satz ohne signiertes Manifest wird nicht eingespielt.
 ./scripts/ops/restore.sh --yes \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
@@ -304,14 +330,20 @@ docker compose "${compose_files[@]}" up -d db web
 # 3. Vorherige Version in der .env setzen (APP_VERSION, bei Digest-Pinning auch
 #    APP_IMAGE_DIGEST; siehe 2.1) — nicht in docker-compose.prod.yml editieren
 
-# 4. Stack starten (restore.sh laesst web und cron gestoppt)
+# 4. Migrationen der gewählten Version als One-Shot ausführen (restore.sh startet
+#    weder web noch cron und migriert nicht; stammt der Stand aus einer anderen
+#    Schema-Version als das Image, holt dieser Schritt ihn nach)
+docker compose "${compose_files[@]}" run --rm \
+    --entrypoint=/app/docker-migrate.sh maintenance
+
+# 5. Stack starten (restore.sh laesst web und cron gestoppt)
 docker compose "${compose_files[@]}" up -d
 
-# 5. Verifizieren
+# 6. Verifizieren
 curl -sf https://$DOMAIN/health/
 
-# 6. Erst nach erfolgreicher Abnahme den gesicherten Vorstand entfernen
-docker compose -f docker-compose.prod.yml exec -T db \
+# 7. Erst nach erfolgreicher Abnahme den gesicherten Vorstand entfernen
+docker compose "${compose_files[@]}" exec -T db \
     psql -U "${POSTGRES_SUPERUSER:-postgres}" -d postgres \
     -c 'DROP DATABASE "anlaufstelle_vor_restore_<Zeitstempel>";'
 ```
@@ -411,12 +443,15 @@ docker compose -f docker-compose.prod.yml exec cron python manage.py refresh_sta
 
 **Ueberwachung:** supercronic hat keinen Health-Endpunkt — ein laufender
 Container beweist nicht, dass die Jobs *wirken*. Die instrumentierten
-Anwendungskommandos schreiben nach erfolgreichem Lauf einen
-`*_RUN_COMPLETED`-Marker ins AuditLog, den das Compliance-Dashboard
-(`/system/compliance/`, Kategorie „Hintergrundjobs") und `stale_jobs` im
-[`/health/`-Payload](monitoring-guide.md) auswerten. Djangos Standardkommando
-`clearsessions` schreibt keinen solchen Marker; sein Start und Exit-Code stehen
-nur im supercronic-Log. Das Host-Monitoring sollte deshalb auf Fehlschlaege in
+Anwendungskommandos schreiben nach erfolgreichem Lauf einen Marker ins
+AuditLog, den das Compliance-Dashboard (`/system/compliance/`, Kategorie
+„Hintergrundjobs") und `stale_jobs` im [`/health/`-Payload](monitoring-guide.md)
+auswerten: `RETENTION_RUN_COMPLETED` (`enforce_retention`),
+`AUDIT_CHAIN_VERIFIED` (`verify_audit_chain`), `SNAPSHOT_RUN_COMPLETED`
+(`create_statistics_snapshots`), `BREACH_SCAN_COMPLETED` (`detect_breaches`) und
+`MV_REFRESH_COMPLETED` (`refresh_statistics_view`). Djangos Standardkommando
+`clearsessions` und `cleanup_orphan_storage_files` schreiben keinen Marker; ihr
+Start und Exit-Code stehen nur im supercronic-Log. Das Host-Monitoring sollte deshalb auf Fehlschlaege in
 den `cron`-Logs alarmieren — insbesondere auf `verify_audit_chain`, das bei
 Tamper-Verdacht mit Exit-Code != 0 endet.
 
@@ -457,6 +492,18 @@ Audit-Anker) vorliegt. Ein abgebrochener Lauf laesst den Zustand auf
 „fehlt/unbekannt" stehen statt auf „aktuell". Ein liegengebliebenes
 `.in-progress-*`-Verzeichnis stammt von einem hart abgebrochenen Lauf und
 kann geloescht werden.
+
+**Dateirechte:** `backup.sh` setzt `umask 077`, unabhängig von der umask des
+Aufrufers (Cron, `sudo`): Dateien sind `0600`, vom Skript angelegte
+Verzeichnisse `0700`, Eigentümer ist das Konto, unter dem das Skript läuft
+(empfohlen: root). Vor der Veröffentlichung prüft es, dass jede Datei des Satzes
+`0600` hat (Meldung `File modes checked (backup set): … all 600.`); sonst bricht
+es mit Exit 1 ab und veröffentlicht den Satz nicht. Dasselbe gilt für die
+Weekly-/Monthly-Kopien. Ein bereits vorhandenes `BACKUP_HOST_DIR` behält seinen
+Modus. Nur das ausführende Konto kann die Dateien lesen: Der `web`-Container
+(UID 1000) liest sie nicht, solange das Backup-Verzeichnis ihm nicht lesbar ist,
+und die Backup-Anzeige in `/health/`, Systemübersicht und Compliance steht dann
+auf „fehlt/unbekannt“.
 
 **Voraussetzungen fuer den Cron-Eintrag:** Die folgenden Beispiele sind
 ausdruecklich fuer `sudo crontab -e`, also die fuenf Zeitfelder der
@@ -504,10 +551,13 @@ Retention (03:00)" kippt oder wird zum Gleichstand; Host-TZ auf `Europe/Berlin`
 setzen oder die Host-Cron-Zeit entsprechend vorziehen.
 
 <details>
-<summary>Vollstaendige Host-Crontab — Alternative fuer Setups OHNE Sidecar</summary>
+<summary>Vollstaendige Host-Crontab — Alternative, wenn der `cron`-Sidecar nicht laeuft</summary>
 
-Relevant, wenn der Stack ohne `docker-compose.prod.yml` betrieben wird (z. B.
-k8s, eigene Orchestrierung) und deshalb kein `cron`-Service existiert.
+Relevant nur, wenn im Compose-Stack der `cron`-Dienst bewusst nicht gestartet
+wird; laeuft er, fuehren diese Zeilen jeden Job doppelt aus. Die Zeilen setzen
+den Compose-Stack und den Dienst `maintenance` voraus. Wer ohne Compose
+orchestriert (z. B. k8s), uebertraegt dieselben Kommandos mit der Admin-Rolle
+in die eigene Umgebung.
 Auch diese Alternative setzt den laufenden Cron-Dienst, die richtige
 Host-Zeitzone, vorab angelegte beschreibbare Logdateien und eine Logrotate-Regel
 voraus. Das Beispiel gehoert ausschliesslich in `sudo crontab -e`.
@@ -708,7 +758,14 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 # sicher loeschen. Laufzeit skaliert mit der Anhangsmenge (SHA-256 wird
 # ueber die entschluesselten Inhalte gestreamt); --no-file-hashes
 # ueberspringt das Hashing (sha256: null).
-mkdir -p ./exports && chmod 700 ./exports
+#
+# Zielverzeichnis: der Export laeuft im Container als appuser (UID 1000). Das
+# Verzeichnis muss UID 1000 gehoeren, sonst endet der Lauf nach der bestandenen
+# Rollenpruefung mit "Permission denied". Legt Docker ein fehlendes Host-
+# Verzeichnis selbst an, gehoert es root und ist ebenfalls nicht beschreibbar.
+# Die Datei gehoert danach UID 1000 (Modus 0644 im Verzeichnis 0700): Lesen und
+# Entfernen als anderes Konto mit sudo.
+sudo install -d -m 0700 -o 1000 -g 1000 ./exports
 docker compose -f docker-compose.prod.yml run --rm \
   -v "$PWD/exports:/exports" maintenance export_facility \
   --facility "Beratungsstelle Nord" --output /exports/facility-export.json --indent 2
@@ -859,9 +916,9 @@ docker compose -f docker-compose.prod.yml logs web --no-log-prefix 2>&1 \
 
 | Log-Muster | Bedeutung | Aktion |
 |------------|-----------|--------|
-| `OperationalError: could not connect to server` | DB nicht erreichbar | DB-Container pruefen, siehe [5.1](#51-db-verbindung-fehlgeschlagen) |
-| `ENCRYPTION_KEY must be set` | Env-Var fehlt | `.env` pruefen |
-| `relation "core_*" does not exist` | Migrationen nicht gelaufen | `python manage.py migrate` |
+| `django.db.utils.OperationalError: failed to resolve host 'db'` bzw. `connection failed: connection to server at … failed: Connection refused` | DB-Container gestoppt bzw. noch nicht bereit | DB-Container pruefen, siehe [5.1](#51-db-verbindung-fehlgeschlagen) |
+| `ImproperlyConfigured: ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein` | Schluessel fehlt in der `.env` | `.env` pruefen |
+| `relation "core_*" does not exist` | Migrationen nicht gelaufen | Migrations-One-Shot aus [1.2](#12-deploy-schritte) Schritt 3 ausfuehren (nicht `migrate` im `web`-Container: dort fehlt die Owner-Rolle) |
 | `OSError: write error` | Festplatte voll | Speicherplatz freigeben, siehe [5.5](#55-speicherplatz-voll) |
 | `[CRITICAL] WORKER TIMEOUT` | Gunicorn-Worker-Timeout | Siehe [5.4](#54-gunicorn-timeout) |
 
@@ -871,7 +928,7 @@ docker compose -f docker-compose.prod.yml logs web --no-log-prefix 2>&1 \
 
 ### 5.1 DB-Verbindung fehlgeschlagen
 
-**Symptom:** `OperationalError: could not connect to server` oder Health-Check meldet `"database": "unavailable"`.
+**Symptom:** Der Web-Log zeigt `django.db.utils.OperationalError` — `failed to resolve host 'db'` bei gestopptem DB-Container, `connection failed: connection to server at … Connection refused`, solange PostgreSQL keine Verbindungen annimmt. Seiten und `/health/` antworten dann mit HTTP 500 (HTML-Fehlerseite, kein JSON), und der `web`-Container wird `unhealthy`.
 
 ```bash
 # 1. DB-Container-Status
@@ -880,9 +937,8 @@ docker compose -f docker-compose.prod.yml ps db
 # 2. DB-Healthcheck
 docker inspect $(docker compose -f docker-compose.prod.yml ps -q db) | grep -A5 Health
 
-# 3. Direkte Verbindung testen
-docker compose -f docker-compose.prod.yml exec db \
-  pg_isready -U $POSTGRES_USER
+# 3. Nimmt PostgreSQL Verbindungen an? (Exit 0 = ja; braucht keinen Rollennamen)
+docker compose -f docker-compose.prod.yml exec -T db pg_isready
 
 # 4. DB-Logs pruefen
 docker compose -f docker-compose.prod.yml logs db --tail=50
@@ -896,24 +952,36 @@ docker compose -f docker-compose.prod.yml restart web
 
 ### 5.2 Migration-Lock
 
-**Symptom:** Deploy haengt bei `migrate`, kein Fortschritt in den Logs.
+**Symptom:** Der Migrations-One-Shot aus [1.2](#12-deploy-schritte) Schritt 3 haengt nach der Rollenpruefung, kein Fortschritt in der Ausgabe.
 
-Der Entrypoint nutzt `pg_advisory_lock(1)` um parallele Migrationen zu verhindern. Ein Lock bleibt haengen, wenn ein vorheriger Migrate-Prozess abgestuerzt ist.
+`docker-migrate.sh` nimmt vor `migrate` einen Session-Advisory-Lock (`pg_advisory_lock(1)`), damit nie zwei Migrationen parallel laufen. Der Lock gehoert der Datenbank-Sitzung des Jobs und faellt mit ihr weg. Ein zweiter Job wartet, bis der Halter fertig ist oder seine Sitzung endet. Der Entrypoint von `web` migriert nicht und nimmt den Lock nicht.
 
 ```bash
-# 1. Haengende Locks anzeigen
-docker compose -f docker-compose.prod.yml exec db \
-  psql -U $POSTGRES_USER -d $POSTGRES_DB \
-  -c "SELECT pid, granted, objid FROM pg_locks WHERE locktype = 'advisory';"
+cd /opt/anlaufstelle
 
-# 2. Lock manuell freigeben
-docker compose -f docker-compose.prod.yml exec db \
-  psql -U $POSTGRES_USER -d $POSTGRES_DB \
-  -c "SELECT pg_advisory_unlock(1);"
+# 1. Laeuft der Halter noch? Ein laufender Migrations-One-Shot ist kein Defekt:
+#    abwarten (lange RunPython-Schritte sind normal). Die Liste muss leer sein,
+#    bevor irgendetwas beendet wird.
+docker compose -f docker-compose.prod.yml ps --all --format '{{.Name}} {{.Status}}' maintenance
 
-# 3. Web-Container neu starten
-docker compose -f docker-compose.prod.yml restart web
+# 2. Halter und Wartende anzeigen (Rolle postgres ueber den lokalen Socket;
+#    granted = t ist der Halter, f ein Wartender)
+docker compose -f docker-compose.prod.yml exec -T db sh -c 'psql -U postgres -d "$POSTGRES_DB"' <<'SQL'
+SELECT l.pid, l.granted, a.usename, a.state, left(a.query, 50) AS query
+FROM pg_locks l JOIN pg_stat_activity a USING (pid)
+WHERE l.locktype = 'advisory'
+ORDER BY l.granted DESC, a.query_start;
+SQL
+
+# 3. Nur wenn kein Migrations-One-Shot mehr laeuft (Schritt 1 leer), die
+#    verwaiste Halter-Sitzung beenden; <pid> ist die pid der Zeile mit granted = t.
+#    pg_advisory_unlock(1) aus einer anderen Sitzung hilft nicht: es meldet
+#    "you don't own a lock" und gibt nichts frei.
+docker compose -f docker-compose.prod.yml exec -T db \
+  sh -c 'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT pg_terminate_backend(<pid>);"'
 ```
+
+Ein wartender Job laeuft danach von selbst weiter. Ist keiner mehr uebrig, den Migrations-One-Shot aus [1.2](#12-deploy-schritte) Schritt 3 erneut starten; ein Neustart von `web` loest keine Migration aus.
 
 ### 5.3 TLS-Zertifikat
 
@@ -933,7 +1001,9 @@ curl -v http://$DOMAIN 2>&1 | head -20
 #    - Let's Encrypt Rate Limit (max 5/Woche/Domain):
 #      → 1 Woche warten oder Staging-CA nutzen
 
-# 3. Caddy TLS-Daten zuruecksetzen (erzwingt Neubeantragung)
+# 3. Konfiguration neu laden. Das liest nur das Caddyfile neu ein; ein Zertifikat
+#    erneuert oder beantragt dieser Befehl nicht. Zertifikate und ACME-Konto
+#    liegen im Volume caddy_data; Caddy beantragt und erneuert sie selbst.
 docker compose -f docker-compose.prod.yml exec caddy \
   caddy reload --config /etc/caddy/Caddyfile
 ```
@@ -955,8 +1025,13 @@ docker compose -f docker-compose.prod.yml exec web \
 # 3. Worker-Anzahl anpassen (Faustregel: 2 * CPU-Kerne + 1)
 #    GUNICORN_WORKERS=5
 
-# 4. Neustart
-docker compose -f docker-compose.prod.yml restart web
+# 4. web mit der neuen Umgebung neu erzeugen. `restart web` startet den vorhandenen
+#    Container mit seiner alten Umgebung neu; neue GUNICORN_*-Werte aus der .env
+#    wirken erst nach `up -d`, mit der vollstaendigen Dateiliste.
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d web
 ```
 
 **Root Cause suchen:** Lang laufende Requests deuten auf langsame DB-Queries. Django Debug Toolbar (nur Dev) oder `EXPLAIN ANALYZE` nutzen.
@@ -1024,17 +1099,18 @@ Das ist kein Kosmetik-Feld: Ist `REDIS_URL` gesetzt, im Image aber kein `redis`-
 # Docker-Speicherverbrauch
 docker system df
 
-# Groesste Volumes
-docker system df -v | grep -E 'VOLUME|pgdata|caddy'
+# Groesste Volumes (Namen tragen den Projektpräfix, z. B. anlaufstelle_media)
+docker system df -v | grep -E 'VOLUME|pgdata|media|clamav-db|caddy'
 
 # Alte Images und Build-Cache bereinigen
 docker system prune -f
 
-# Alte Backup-Dateien pruefen
-du -sh /opt/anlaufstelle/backups/*/
+# Alte Backup-Dateien pruefen (Backup-Verzeichnis ist nur fuer das Backup-Konto lesbar)
+sudo du -sh /opt/anlaufstelle/backups/*/
 
-# Belegung der Anhaenge je Einrichtung (Groesse des MEDIA_ROOT-Unterordners)
-du -sh /opt/anlaufstelle/media/*/
+# Belegung der Anhaenge je Einrichtung: MEDIA_ROOT liegt im benannten Volume media
+# (/data/media im Container), nicht im Host-Dateisystem
+docker compose -f docker-compose.prod.yml exec -T web sh -c 'du -sh /data/media/*/'
 ```
 
 > **Monitoring ersetzt kein Kontingent** (#2129). Der Disk-Check in `/health/` (`HEALTH_DISK_REQUIRED`) meldet, **dass** der Datenträger volläuft — er verhindert es nicht und kennt keine Einrichtung. Im Mehr-Mandanten-Betrieb reicht das nicht: Eine einzige Einrichtung kann den gemeinsamen `MEDIA_ROOT` mit lauter legitimen Uploads füllen, und die Folge (Upload- und Backup-Fehler) trifft dann alle. Setzen Sie deshalb ein Speicherkontingent je Einrichtung:
@@ -1052,9 +1128,11 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs web --tail=100
 
 # 2. Haeufige Fehler
-#    "ImproperlyConfigured" → Fehlende Env-Vars in .env
-#    "ENCRYPTION_KEY must be set" → ENCRYPTION_KEY in .env fehlt
-#    "connection refused" → DB noch nicht ready
+#    "ImproperlyConfigured" → Fehlende oder ungueltige Env-Vars in .env
+#    "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein"
+#                         → Schluessel in .env fehlt
+#    "OperationalError … Connection refused" bzw. "failed to resolve host 'db'"
+#                         → DB noch nicht bereit bzw. gestoppt (siehe 5.1)
 
 # 3. Env-Vars verifizieren
 docker compose -f docker-compose.prod.yml exec web printenv | sort
@@ -1302,10 +1380,10 @@ Anlaufstelle muss Datenschutzverletzungen innerhalb **72 Stunden** an die Aufsic
 3. **T+72h** — Meldung an Aufsichtsbehoerde (Bayern: BayLDA; andere Bundeslaender analog) + ggf. Betroffenenmeldung.
 4. **Post-Incident** — Lessons-Learned + Anpassung der Heuristik-Schwellen.
 
-Cron-Eintrag (siehe § 3 Cron-Jobs):
+Einrichtung: Der `cron`-Sidecar fuehrt `detect_breaches` ab Werk stuendlich aus ([§ 3.1](#31-uebersicht), [§ 3.2](#32-cron-sidecar-standard)); es ist **kein** zusaetzlicher Cron-Eintrag noetig, eine zweite Zeile liesse den Job doppelt laufen. Nur ohne Sidecar steht die Zeile in der Host-Crontab-Alternative aus [§ 3.3](#33-host-cron-backup--restliche-host-jobs). Einen Lauf sofort ausserhalb des Zeitplans anstossen:
 
-```cron
-30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach-detection.log 2>&1
+```bash
+docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches
 ```
 
 ### 6.5c Security Advisory — Meldung, Bewertung, Veroeffentlichung (Refs #1895)
@@ -1331,8 +1409,10 @@ gh api repos/anlaufstelle/app/private-vulnerability-reporting   # {"enabled": tr
 
 ### 6.5a Maintenance-Mode (Refs #700)
 
-Vor und waehrend Migrations/Deploys den Stack auf 503 schalten, damit
-User eine konsistente Custom-Page sehen statt Connection-Errors.
+Vor und waehrend Migrationen/Deploys den Stack auf 503 schalten, damit
+User eine konsistente Custom-Page sehen statt Connection-Errors. Der Block
+zeigt nur den Rahmen; die Update-Schritte (Zielstand waehlen, `cron` anhalten,
+Migrations-One-Shot) stehen in [§ 1.2](#12-deploy-schritte).
 
 ```bash
 # Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
@@ -1343,9 +1423,14 @@ compose_files=(-f docker-compose.prod.yml)
 # Aktivieren (File-Flag im persistenten Web-Volume anlegen)
 docker compose "${compose_files[@]}" exec -T web touch /data/anlaufstelle.maintenance
 
-# Deploy / Migration ausfuehren
-docker compose "${compose_files[@]}" pull
-docker compose "${compose_files[@]}" up -d
+# Update ausfuehren (Schritte 0 bis 4 aus § 1.2): cron anhalten, Images ziehen,
+# Migrations-One-Shot, Stack neu erzeugen. Ohne den One-Shot laeuft der neue Code
+# gegen das alte Schema.
+docker compose "${compose_files[@]}" stop cron
+docker compose "${compose_files[@]}" pull web cron maintenance
+docker compose "${compose_files[@]}" run --rm \
+    --entrypoint=/app/docker-migrate.sh maintenance
+docker compose "${compose_files[@]}" up -d web cron caddy
 
 # Deaktivieren (dieselbe File-Flag im neu angelegten Web-Container entfernen)
 docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.maintenance
@@ -1412,39 +1497,17 @@ Beide Formate spielen als Postgres-Superuser (`postgres`, via Local-Socket-Trust
 | `dev-ops/deploy/backup.sh` (laeuft auf `dev.anlaufstelle.app`) | `pg_dump -Fc` (custom) | AES-256-CBC (kein HMAC) | `dump-*.pgc.enc` | `pg_restore` | ✓ `restore-drill.sh --dev` (Glob `dump-*.pgc.enc`) |
 | `scripts/ops/backup.sh` (Prod-Schema) | plain SQL + gzip | AES-256-CBC **+ HMAC-SHA256**-Sidecars (Refs #1024) | DB + Medien samt Sidecars, `*.manifest` samt Sidecar, optional zeitgleicher HWM | `psql` (`scripts/ops/restore.sh`) | ✓ `restore-drill.sh --prod --timestamp <Zeitstempel>` (Manifest-/HMAC-Check vor Decrypt); `backup.sh --verify` bleibt leichtgewichtige Alternative |
 
-Warum kein Cross-Restore: Der `--dev`-Zweig sucht per Glob `dump-*.pgc.enc` und pipet in `pg_restore` — ein plain-SQL-Backup (`*.sql.gz.enc`) wird so gar nicht gefunden und ist auch kein gueltiges `pg_restore`-Archiv. Der `--prod`-Zweig sucht `anlaufstelle_*.sql.gz.enc`, prueft den `.hmac`-Sidecar und spielt via `gunzip | psql` ein — ein `dump-*.pgc.enc` traegt keinen Sidecar (`backup_verify_hmac` bricht ab) und ist Binaerformat. Ein Lauf gegen das jeweils fremde Format schlaegt also fehl. Wer keinen vollen Drill fahren will, nutzt fuer den Prod-Pfad `scripts/ops/backup.sh --verify` (Satzauswahl ueber das signierte Manifest, Satzbindung wie beim Restore, HMAC + Probe-Decrypt + Zeilenabgleich gegen die Live-DB). Fehlt das Manifest oder gehoert das Medienarchiv zu einem anderen Satz, endet der Lauf mit Exit != 0.
+Warum kein Cross-Restore: Der `--dev`-Zweig sucht per Glob `dump-*.pgc.enc` und pipet in `pg_restore` — ein plain-SQL-Backup (`*.sql.gz.enc`) wird so gar nicht gefunden und ist auch kein gueltiges `pg_restore`-Archiv. Der `--prod`-Zweig sucht `anlaufstelle_*.sql.gz.enc`, prueft den `.hmac`-Sidecar und spielt via `gunzip | psql` ein — ein `dump-*.pgc.enc` traegt keinen Sidecar (`backup_verify_hmac` bricht ab) und ist Binaerformat. Ein Lauf gegen das jeweils fremde Format schlaegt also fehl. Wer keinen vollen Drill fahren will, nutzt fuer den Prod-Pfad `scripts/ops/backup.sh --verify` (Satzauswahl ueber das signierte Manifest, Satzbindung wie beim Restore, HMAC, Probe-Restore des Dumps in eine temporaere Datenbank und ein Leer-Guard ueber vier RLS-Tabellen: `core_client`, `core_event`, `core_workitem` und `core_auditlog` duerfen im Restore nicht leer sein, wenn die Live-DB Zeilen hat). Das ist **kein** Zeilenabgleich gegen Manifest oder Live-DB; die Ausgabe „Verification summary“ nennt am Ende, was geprueft wurde und was nicht. Den exakten Abgleich der sechs Manifesttabellen liefert nur der Drill. Fehlt das Manifest oder gehoert das Medienarchiv zu einem anderen Satz, endet der Lauf mit Exit != 0.
 
-**Versionsgrenze (geaendert in 0.99.2):** Das signierte Manifest ist fuer
-`restore.sh` jetzt **Pflicht** — ohne Manifest gibt es keine Satzbindung
-(Zeitstempel, Dump-/Medien-Hashes) und keinen Zeilenzahl-Abgleich, und der Lauf
-bricht ab. Saetze aus Versionen vor 0.99.1 tragen kein Manifest; Weekly- und
-Monthly-Saetze werden 28 bzw. 90 Tage gehalten, solche Altsaetze koennen also
-noch in der Ablage liegen. Fuer sie gibt es den ausdruecklichen Notfall-Schalter
-`./scripts/ops/restore.sh --allow-missing-manifest <dump> [medien]`: Er wirkt nur,
-wenn gar kein Manifest existiert (ein vorhandenes Manifest wird immer erzwungen),
-verlangt dieselbe Bestaetigung wie jeder Restore, prueft weiterhin die
-HMAC-Sidecars von Dump und Medien, bindet das Medienarchiv ueber den Zeitstempel
-im Dateinamen an den Dump und ersetzt den Manifest-Abgleich durch eine deutliche
-Warnung vor der Bestaetigung sowie eine `HINWEIS: Altsatz-Modus`-Zeile am Ende.
-Nach so einem Restore die Vollstaendigkeit von Hand pruefen
-([Disaster-Recovery §7](disaster-recovery.md#7-smoke-verifikation-nach-restore)).
-Ist ein Ankerpfad konfiguriert (`DJANGO_AUDIT_HWM_PATH`), ordnet der Altsatz-Modus
-eine daneben liegende `audit_hwm-<Zeitstempel>.json` nur ueber den Dateinamen zu
-und sagt das auch; fehlt sie, bricht der Lauf **nicht** ab, sondern warnt und
-nennt den unverankerten Zustand am Ende noch einmal — Schritt 4b der
-Disaster-Recovery-Anleitung ist dann von Hand nachzuziehen.
-`backup.sh --verify` und `restore-drill.sh --prod` verlangen das Manifest
-unveraendert zwingend; ein Altsatz kann den Vollstaendigkeitsnachweis daher
-nicht erbringen.
+**Manifest ist Pflicht:** Ohne das signierte Manifest gibt es keine Satzbindung
+(Zeitstempel, Dump-/Medien-Hashes) und keinen Zeilenzahl-Abgleich; `restore.sh`
+bricht dann vor jeder Aenderung ab („the mandatory manifest of the backup set is
+missing“). Es gibt keine Option, diese Pruefung zu umgehen. `backup.sh --verify`
+und `restore-drill.sh --prod` verlangen das Manifest ebenso. Fehlt es, den
+vollstaendigen Satz beschaffen (Dump, Medienarchiv und Manifest, jeweils mit
+`.hmac`-Sidecar; [Disaster-Recovery §5](disaster-recovery.md#5-off-site-backup-beschaffen)).
 
-**Restore eines ankerlosen Altsatzes bei konfiguriertem Ankerpfad:** In der
-`.env` `DJANGO_AUDIT_HWM_PATH` fuer genau den Lauf voruebergehend leeren,
-`restore.sh --allow-missing-manifest …` ausfuehren und den urspruenglichen Wert
-wieder einsetzen, bevor der Stack neu startet. Der Lauf stellt keinen
-Audit-Anker wieder her; deshalb entfaellt sein Compliance-Nachweis und darf
-nicht nachtraeglich mit `mark_restore_verified` als erbracht markiert werden.
-
-Die Backup-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`). Der Prod-Zweig liest `BACKUP_HOST_DIR` ausschließlich aus der `.env` im Compose-Verzeichnis; ein gleichnamiger Wert im `sudo env`-Praefix wird beim Laden der Datei ueberschrieben und ist daher kein Override. Liegt die Installation nicht unter dem Default `/opt/anlaufstelle`, muss `COMPOSE_DIR` auf das Verzeichnis mit `.env` und `docker-compose.prod.yml` zeigen:
+`backup.sh` legt die Dateien mit `0600` an (Verzeichnisse `0700`); sie gehoeren dem Konto, unter dem es laeuft, im empfohlenen Setup root — der Drill liest sie daher **als root**. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`). Der Prod-Zweig liest `BACKUP_HOST_DIR` ausschließlich aus der `.env` im Compose-Verzeichnis; ein gleichnamiger Wert im `sudo env`-Praefix wird beim Laden der Datei ueberschrieben und ist daher kein Override. Liegt die Installation nicht unter dem Default `/opt/anlaufstelle`, muss `COMPOSE_DIR` auf das Verzeichnis mit `.env` und `docker-compose.prod.yml` zeigen:
 
 ```bash
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh           # Format auto-erkennen
@@ -1487,8 +1550,8 @@ docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
 ```
 
 **Host-Cron-Vorschlag (keine automatische Installation):** Die Backup-Dateien
-sind `0600` und gehoeren root; den Einzeiler deshalb in der **Root-Crontab des
-Hosts** eintragen, nicht im `cron`-Sidecar und nicht in einer unprivilegierten
+sind `0600` und gehoeren dem Backup-Konto (empfohlen: root); den Einzeiler
+deshalb in der **Root-Crontab des Hosts** eintragen, nicht im `cron`-Sidecar und nicht in einer unprivilegierten
 Benutzer-Crontab. Er laeuft am ersten Tag jedes Quartals um 03:30 Uhr nach dem
 02:00-Uhr-Backup. Das Flag `--prod` bleibt gesetzt: ohne Angabe erkennt das
 Skript das Format automatisch und fiele bei fehlendem Prod-Backup still auf
@@ -1534,7 +1597,7 @@ Die Audit-Kettenpruefung kann Tail-Truncation und eine komplett geleerte Kette n
 DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json
 ```
 
-Der Pfad liegt bewusst neben `MEDIA_ROOT=/data/media`: Er ist damit fuer `cron`/`maintenance` unter dem schreibgeschuetzten Container-Dateisystem persistent beschreibbar, wird aber nicht mit Nutzer-Uploads vermischt. Der `web`-Dienst liest die Datei nicht und braucht die Variable nicht in seiner expliziten Env-Allowlist.
+Der Pfad liegt bewusst neben `MEDIA_ROOT=/data/media`: Er ist damit fuer `cron`/`maintenance` unter dem schreibgeschuetzten Container-Dateisystem persistent beschreibbar, wird aber nicht mit Nutzer-Uploads vermischt. Geschrieben wird die Datei von `cron` und `maintenance` (`verify_audit_chain`). Der `web`-Dienst fuehrt die Variable in seiner expliziten Env-Allowlist (`docker-compose.prod.yml`) und sieht dasselbe `/data`-Volume.
 
 Den ersten Anker sofort nach der Einrichtung und **vor dem ersten Backup**
 erzeugen; nicht bis zum naechsten Sidecar-Termin warten:
