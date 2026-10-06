@@ -639,3 +639,12 @@ class TestDomainConceptRetentionAndRls:
         )
         assert AUDIT_WITHOUT_FACILITY in row
         assert "unbefristet" in row
+
+    def test_retention_bullets_name_the_monthly_aggregate_remainder(self):
+        """``carry_deleted_event`` adds every deleted event to its month's snapshot."""
+        de = _bullet(DOMAIN_CONCEPT_DE.read_text(encoding="utf-8"), "Löschfristen.")
+        assert "nicht zu einer verbleibenden Zählung" not in de
+        assert "Statistik-Aggregat ihres Monats" in de
+        en = _bullet(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8"), "Retention periods.")
+        assert "not aggregation that preserves anonymous counts" not in en
+        assert "monthly statistics aggregate" in en
