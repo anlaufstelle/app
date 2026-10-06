@@ -10,7 +10,7 @@ from core.reporting import registry
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.services.dashboard import (
     create_or_update_snapshot,
-    ensure_snapshots_for_months,
+    record_deleted_events,
 )
 from core.services.dashboard.snapshot import _merge_stats
 
@@ -113,10 +113,10 @@ class TestUniqueConstraint:
 
 
 @pytest.mark.django_db
-class TestEnsureSnapshotsForMonths:
-    """ensure_snapshots_for_months erstellt Snapshots fuer alle betroffenen Monate."""
+class TestRecordDeletedEventsMonths:
+    """record_deleted_events writes snapshots for every month of the deleted events (Refs #2425)."""
 
-    def test_ensure_snapshots_for_months(self, facility, staff_user, client_identified, doc_type_contact):
+    def test_record_deleted_events_covers_every_month(self, facility, staff_user, client_identified, doc_type_contact):
         # Events in 3 verschiedenen vergangenen Monaten
         jan = timezone.make_aware(datetime(2025, 1, 15, 10, 0))
         feb = timezone.make_aware(datetime(2025, 2, 10, 14, 0))
@@ -127,7 +127,8 @@ class TestEnsureSnapshotsForMonths:
         _create_event(facility, staff_user, doc_type_contact, client=client_identified, occurred_at=mar)
 
         events = Event.objects.filter(facility=facility)
-        ensure_snapshots_for_months(facility, events)
+        events.update(is_deleted=True)
+        record_deleted_events(facility, events)
 
         snapshots = StatisticsSnapshot.objects.filter(facility=facility)
         assert snapshots.count() == 3

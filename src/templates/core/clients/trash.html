@@ -73,7 +73,7 @@
                         {# data-confirm (confirm-action.js, CSP-konform). #}
                         <span class="text-subtle mx-1">·</span>
                         <form method="post" action="{% url 'core:client_anonymize' pk=client.pk %}" class="inline"
-                              data-confirm="{% blocktrans with pseudonym=client.pseudonym %}„{{ pseudonym }}“ jetzt endgültig anonymisieren? Pseudonym, Notizen, Zusatzfelder und Fall-/Ereignisinhalte dieser Person werden unwiderruflich entfernt; der Datensatz bleibt nur noch als anonymes Statistik-Aggregat bestehen. Eine Wiederherstellung ist danach nicht mehr möglich. Frühere Fassungen der Ereignis-Dokumentation folgen spätestens mit dem nächtlichen Aufbewahrungslauf.{% endblocktrans %}">
+                              data-confirm="{% blocktrans with pseudonym=client.pseudonym %}„{{ pseudonym }}“ jetzt endgültig anonymisieren? Pseudonym, Notizen, Zusatzfelder und Fall-/Ereignisinhalte dieser Person werden unwiderruflich entfernt; der Datensatz bleibt nur noch als anonymes Statistik-Aggregat bestehen. Eine Wiederherstellung ist danach nicht mehr möglich. Frühere Fassungen der Ereignis-Dokumentation folgen regulär mit dem nächtlichen Aufbewahrungslauf; was eine Aufbewahrungssperre oder eine gleichzeitige Bearbeitung zurückhält, holt ein späterer Lauf nach.{% endblocktrans %}">
                             {% csrf_token %}
                             <button type="submit" class="text-red-700 text-sm font-medium hover:underline" data-testid="client-anonymize-now-btn">
                                 {% trans "Jetzt endgültig anonymisieren" %}

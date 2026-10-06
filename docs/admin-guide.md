@@ -2051,7 +2051,7 @@ Neben „Wiederherstellen" steht dort die Aktion **„Jetzt endgültig anonymisi
 | **Grenze: nur im Papierkorb** | Die Aktion wirkt ausschließlich auf bereits soft-gelöschte Personen. Der Vier-Augen-Antragsweg bleibt der einzige Weg **in** den Papierkorb — es gibt keinen Direktpfad an der Genehmigung vorbei. |
 | **Spur** | Audit-Eintrag `CLIENT_ANONYMIZED` mit `trigger="manual"`, unterscheidbar vom automatischen Lauf. |
 
-Der Datensatz bleibt danach soft-gelöscht (anonymisiert, nicht wiederhergestellt) und verschwindet aus dem Papierkorb-Bestand nicht — er trägt nur keine Personendaten mehr. **„Wiederherstellen“ steht für diese Zeile danach nicht mehr zur Verfügung** — die Zusage des Bestätigungsdialogs gilt wörtlich: Der Knopf verschwindet, und ein Direktaufruf der Wiederherstellungs-URL wird mit einer Meldung abgewiesen (Refs #2085). Damit verhält sich die Personen-Aktion wie die Fall-Aktion, die diesen Schutz seit [ADR-044](adr/044-fall-loeschpfad.md) hat. Die Erfolgsmeldung lautet deshalb „Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation werden spätestens mit dem nächtlichen Aufbewahrungslauf getilgt.“ — sie behauptet bewusst nicht, dass in diesem Moment bereits alles fort ist. Personen im Papierkorb lassen sich seit #1737 auch nicht mehr per Direkt-URL bearbeiten (`/clients/<id>/edit/` antwortet 404, wie die Detailansicht).
+Der Datensatz bleibt danach soft-gelöscht (anonymisiert, nicht wiederhergestellt) und verschwindet aus dem Papierkorb-Bestand nicht — er trägt nur keine Personendaten mehr. **„Wiederherstellen“ steht für diese Zeile danach nicht mehr zur Verfügung** — die Zusage des Bestätigungsdialogs gilt wörtlich: Der Knopf verschwindet, und ein Direktaufruf der Wiederherstellungs-URL wird mit einer Meldung abgewiesen (Refs #2085). Damit verhält sich die Personen-Aktion wie die Fall-Aktion, die diesen Schutz seit [ADR-044](adr/044-fall-loeschpfad.md) hat. Die Erfolgsmeldung lautet deshalb „Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation tilgt regulär der nächtliche Aufbewahrungslauf; was eine Aufbewahrungssperre oder eine gleichzeitige Bearbeitung zurückhält, holt ein späterer Lauf nach.“ — sie behauptet bewusst nicht, dass in diesem Moment bereits alles fort ist, und sagt auch keine feste Frist zu: Der Lauf stellt Fassungen unter einem aktiven Legal Hold zurück und überspringt Datensätze, die gerade eine andere Bearbeitung sperrt (Refs #2425). Personen im Papierkorb lassen sich seit #1737 auch nicht mehr per Direkt-URL bearbeiten (`/clients/<id>/edit/` antwortet 404, wie die Detailansicht).
 
 #### Fall-Papierkorb und die beiden Löschwege (Refs #1818)
 
@@ -2225,7 +2225,7 @@ Ohne gesetzte Variable liefern die geschützten Tabellen in `psql` sichtbar **ke
 Statistik-Auswertungen in der Anlaufstelle nutzen **zwei unterschiedliche Beschleunigungs-Ebenen**:
 
 1. **Materialized View** (`core_statistics_event_flat`) — aggregiert die aktuellen Event-Daten vor, damit die Statistik-Seite nicht bei jedem Aufruf alle Events neu scannen muss. Refs #544.
-2. **Statistik-Snapshots** — monatliche, persistierte Aggregate, die **vor** der automatischen Löschung alter Events gesichert werden. Dadurch bleiben historische Auswertungen auch nach DSGVO-Löschung korrekt.
+2. **Statistik-Snapshots** — monatliche, persistierte Aggregate, die die von der automatischen Löschung erfassten Events weiter mitzählen. Dadurch bleiben historische Auswertungen auch nach DSGVO-Löschung korrekt.
 
 ### Materialized View aktualisieren
 
@@ -2261,13 +2261,13 @@ Implementierung: [`src/core/management/commands/refresh_statistics_view.py`](htt
 
 Anlaufstelle berechnet Statistiken (Dashboard, Halbjahresberichte, Beispiel-Sachbericht-PDFs) standardmäßig aus der Event-Tabelle (über die Materialized View aggregiert). Wenn die automatische Datenlöschung (`enforce_retention`) alte Events entfernt, würden diese aus den Statistiken verschwinden.
 
-**Statistik-Snapshots** sichern monatliche Aggregate, bevor Events gelöscht werden. Die Auswertungen nutzen eine Hybrid-Logik: gespeicherte Snapshots für vergangene Monate, Live-Daten (aus der Materialized View) für den aktuellen Monat.
+**Statistik-Snapshots** halten monatliche Aggregate fest, die auch gelöschte Events weiter zählen. Die Auswertungen nutzen eine Hybrid-Logik: gespeicherte Snapshots für vergangene Monate, Live-Daten (aus der Materialized View) für den aktuellen Monat.
 
 > **Wichtig: Der Snapshot-Schutz gilt nicht für jeden Bericht.** Gesichert werden die **Monats-Aggregate** — aus ihnen speisen sich die Statistik-Übersicht (Kennzahlen, Tabellen, Zeitverlauf), ihr PDF-Export und die Sachbericht-PDFs. Von den Berichten des Reiters **„Datensatz-Berichte"** ist dagegen allein der **Beispiel-Sachbericht** snapshot-fähig, und auch bei ihm nur das **PDF**: seine CSV-/JSON-/XML-Dateien rechnen — wie die aller übrigen Berichte dieses Reiters — bei **jedem** Aufruf neu aus dem aktuellen Datenbestand. Sobald `enforce_retention` einen vergangenen Zeitraum bereinigt hat, fallen deren Zahlen für diesen Zeitraum niedriger aus als beim ersten Abruf — bis auf null, und ohne Fehlermeldung, weil das kein Fehler ist. Wie stark, hängt am einzelnen Bericht: Er wertet Ereignisse, Fälle oder Personen aus und ändert sich erst, wenn die Datensätze **seiner** Grundgesamtheit gelöscht bzw. anonymisiert werden; welche das ist, benennt er über der Vorschau selbst. **Wer solche Dateien an Träger oder Kostenträger weitergibt, bewahrt die erzeugte Datei selbst auf** — identisch reproduzieren lässt sie sich später nicht. Woher ein Bericht liest, steht jeweils am Bericht selbst („Datenquelle: …"); was bei der Weitergabe sonst zu beachten ist, steht unten unter [„Herausgabe von Berichten"](#herausgabe-von-berichten-was-sie-wissen-müssen).
 
 ### Automatische Sicherung
 
-Snapshots werden automatisch erstellt, wenn `enforce_retention` Events löscht — die betroffenen Monate werden unmittelbar vor der Löschung gesichert.
+Snapshots werden automatisch erstellt, wenn `enforce_retention` Events löscht: Unmittelbar nach der Löschung rechnet der Lauf die gelöschten Events dem Aggregat ihres Monats hinzu, auch dem laufenden Monat. Jede spätere Berechnung eines Monats — ein weiterer Löschlauf oder `create_statistics_snapshots` — zählt die noch vorhandenen Events und addiert die früher gelöschten; ein Löschlauf verkleinert ein Aggregat daher nicht. Die Kachel „Statistik“ in der Arbeitszentrale der Leitung nennt als „letzter Snapshot“ den jüngsten abgeschlossenen Monat.
 
 ### Periodischer Cron-Job (empfohlen)
 

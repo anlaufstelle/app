@@ -393,6 +393,26 @@ def get_statistics(facility, date_from, date_to, document_type=None):
     }
 
 
+def get_statistics_for_events(events):
+    """Snapshot-shaped statistics over an explicit event set (Refs #2425).
+
+    Counts the events a retention run has just deleted, for the monthly
+    snapshot's carry-over. They no longer pass ``event_queryset_for_period``
+    (``is_deleted=False``), so the caller hands them over directly; the
+    aggregates only read document type, person and date, which the retention
+    run leaves in place. No ``top_clients`` (never stored in a snapshot) and no
+    ``unique_clients`` (not additive across sets).
+    """
+    by_contact_stage, persons_by_contact_stage = _aggregate_contact_stage(events)
+    return {
+        "total_contacts": events.count(),
+        "by_contact_stage": by_contact_stage,
+        "persons_by_contact_stage": persons_by_contact_stage,
+        "by_document_type": _aggregate_by_document_type(events),
+        "by_age_cluster": _aggregate_by_age_cluster(events),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Materialized View Pfad (Refs #544)
 # ---------------------------------------------------------------------------

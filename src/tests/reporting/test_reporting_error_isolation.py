@@ -34,7 +34,7 @@ from core.models import AuditLog, DocumentType, Event, StatisticsSnapshot
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec, stamp_threshold
 from core.reporting.db_guard import reporting_statement_timeout
 from core.reporting.registry import register_backend
-from core.services.dashboard import create_or_update_snapshot, ensure_snapshots_for_months
+from core.services.dashboard import create_or_update_snapshot, record_deleted_events
 
 pytestmark = pytest.mark.django_db
 
@@ -373,14 +373,15 @@ class TestSnapshotUeberspringtDefektesBackend:
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
         assert "_errors" not in snap.backend_data
 
-    def test_ensure_snapshots_for_months_laeuft_durch(
+    def test_record_deleted_events_runs_through_all_months(
         self, facility, staff_user, client_identified, _mit_kaputtem_snapshot_backend
     ):
-        """Ein defektes Backend riss bisher den kompletten Monats-Batch ab."""
+        """A broken backend used to abort the whole batch of months."""
         for month in (1, 2, 3):
             self._event(facility, staff_user, client_identified, timezone.make_aware(datetime(2025, month, 15, 10, 0)))
+        Event.objects.filter(facility=facility).update(is_deleted=True)
 
-        ensure_snapshots_for_months(facility, Event.objects.filter(facility=facility))
+        record_deleted_events(facility, Event.objects.filter(facility=facility))
 
         months = set(StatisticsSnapshot.objects.filter(facility=facility).values_list("year", "month"))
         assert {(2025, 1), (2025, 2), (2025, 3)} <= months

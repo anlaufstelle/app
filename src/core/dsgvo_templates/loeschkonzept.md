@@ -27,7 +27,7 @@ jeder Änderung ihrer Einstellungen oder Backup-Rotation.
 | Audit-Log | {{ auditlog_retention_months }} Monate | `auditlog_retention_months` | Rollierende Löschung; `0` deaktiviert sie, gesetzliche und technische Ausnahmen siehe § 3.4 |
 | Inhalte früherer Fassungen eines Ereignisses | {{ eventhistory_detail_months }} Monate | `eventhistory_detail_months` | Die Werte der Fassung werden gelöscht, die Fassung selbst (Zeitpunkt, handelnde Person, Feldnamen) bleibt; `0` deaktiviert diese Frist. Bei einem **gelöschten** Ereignis geschieht dasselbe unabhängig von dieser Frist, regulär mit dem nächsten Aufbewahrungslauf (Ausnahmen § 3.1) |
 | Chronologie früherer Fassungen (nach ihrer Inhalts-Löschung) | {{ eventhistory_chronicle_months }} Monate | `eventhistory_chronicle_months` | Die inhaltsleere Fassung wird gelöscht; gemessen ab dem Zeitpunkt ihrer Inhalts-Löschung. `0` deaktiviert die Löschung — dann wird die Chronologie unbefristet aufbewahrt |
-| Monatliche Statistik-Aggregate | unbefristet | — | Bleiben bestehen: Bevor der Aufbewahrungslauf Ereignisse löscht, berechnet die Anwendung deren bereits abgeschlossene Monate als Zählwerte ohne Einzeldatensätze neu; der laufende Monat ist ausgenommen, und früher gelöschte Ereignisse fehlen in der Neuberechnung (siehe § 3.5) |
+| Monatliche Statistik-Aggregate | unbefristet | — | Bleiben bestehen: Der Aufbewahrungslauf rechnet die Zählwerte der gelöschten Ereignisse dem Aggregat ihres Monats hinzu, auch im laufenden Monat; spätere Neuberechnungen behalten sie (siehe § 3.5) |
 | Backup-Sicherungsstände | {{ backup_retention_days }} Tage (Altersgrenze, keine Höchstfrist) | Längste lokale Rotation im ausgelieferten `backup.sh` | Die Rotation entfernt ein lokales verschlüsseltes Archiv beim ersten erfolgreichen Lauf von `backup.sh`, in dem es mindestens 8 (täglich), 29 (wöchentlich) bzw. 91 volle Tage (monatlich) alt ist; keine feste Höchstfrist. Die Rotation ist ausgesetzt, solange der Off-Site-Abgleich fehlschlägt |
 | Off-Site-Kopien der Sicherungsstände | [eintragen] | Aufbewahrungsregel am Off-Site-Ziel (von der Einrichtung festzulegen) | `backup.sh` löscht am Off-Site-Ziel nichts; Kopien bleiben bis zur Löschung durch die Regel am Ziel bestehen |
 
@@ -144,16 +144,17 @@ der erneuten Freigabe des Systems auszuführen.
 
 ### 3.5 Statistik-Aggregate
 
-Bevor der Aufbewahrungslauf Ereignisse löscht, berechnet die Anwendung die
-betroffenen, bereits abgeschlossenen Monate als monatliche Statistik-Aggregate
-neu. Gezählt werden dabei nur Ereignisse, die zu diesem Zeitpunkt noch nicht
-gelöscht sind: Hat ein früherer Lauf schon Ereignisse desselben Monats
-gelöscht, fehlen sie in der neuen Fassung des Aggregats. Die Aggregate sind
-deshalb keine unveränderliche Archivkopie und bewahren die Zählwerte gelöschter
-Ereignisse nicht verlässlich auf. Den laufenden Monat sichert dieser Schritt
-nicht: Löscht der Lauf wegen einer kurzen Frist (etwa einer
-Dokumentationstyp-Frist von wenigen Tagen) Ereignisse des laufenden Monats,
-sichert er deren Zählwerte vorher nicht.
+Im selben Lauf, in dem der Aufbewahrungslauf Ereignisse löscht, rechnet die
+Anwendung deren Zählwerte dem monatlichen Statistik-Aggregat des Monats hinzu,
+in dem die Ereignisse stattfanden — auch dem laufenden Monat, etwa wenn eine
+kurze Dokumentationstyp-Frist Ereignisse noch im selben Monat löscht. Jede
+spätere Berechnung des Aggregats (ein weiterer Löschlauf oder der monatliche
+Statistiklauf) zählt die noch vorhandenen Ereignisse und addiert die Zählwerte
+aller zuvor vom Aufbewahrungslauf gelöschten Ereignisse dieses Monats; ein
+Löschlauf verkleinert ein Aggregat dadurch nicht. Personenzahlen werden dabei
+nicht addiert, sondern als Untergrenze geführt. Die Aggregate sind dennoch
+keine unveränderliche Archivkopie: Nachgetragene Ereignisse kommen bei der
+nächsten Berechnung hinzu, manuell gelöschte Ereignisse fallen heraus.
 
 Die Aggregate enthalten Zählwerte, keine Einzeldatensätze, und haben keine
 Frist; sie bleiben nach der Löschung der Ereignisse bestehen. Gespeichert

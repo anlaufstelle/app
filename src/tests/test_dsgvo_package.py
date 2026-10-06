@@ -899,8 +899,9 @@ class TestRetentionExceptionsAreNamed:
 
     ``eventhistory._lock_rows`` locks with ``skip_locked`` and the run skips
     held or locked events; ``anonymize_clients`` needs at least one event and
-    no active hold; ``ensure_snapshots_for_months`` leaves out the current
-    month and ``update_or_create`` recomputes a month on a later run.
+    no active hold; ``record_deleted_events`` adds deleted events to their
+    month's aggregate, the running month included, and later recomputations
+    keep them.
     """
 
     @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
@@ -939,20 +940,23 @@ class TestRetentionExceptionsAreNamed:
         assert old_claim not in content
         assert "wartet nicht auf die Papierkorb-Frist" in content
 
-    def test_snapshots_leave_out_the_current_month(self, facility):
+    def test_snapshots_include_the_current_month(self, facility):
         content, _ = render_document("loeschkonzept", facility)
         prose = _flat(content)
+        effect = _effect_cell(content, "Monatliche Statistik-Aggregate")
 
         assert "Vor jeder Löschung" not in prose
-        assert "der laufende Monat ist ausgenommen" in _effect_cell(content, "Monatliche Statistik-Aggregate")
-        assert "Den laufenden Monat sichert dieser Schritt nicht" in prose
+        assert "der laufende Monat ist ausgenommen" not in effect
+        assert "auch im laufenden Monat" in effect
+        assert "Den laufenden Monat sichert dieser Schritt nicht" not in prose
+        assert "auch dem laufenden Monat" in prose
         assert "keine unveränderliche Archivkopie" in prose
 
-    def test_snapshot_skips_current_month(self, facility, client_identified, staff_user):
+    def test_snapshot_records_current_month_deletions(self, facility, client_identified, staff_user):
         from django.utils import timezone
 
         from core.models import DocumentType, Event, StatisticsSnapshot
-        from core.services.dashboard.snapshot import ensure_snapshots_for_months
+        from core.services.dashboard.snapshot import record_deleted_events
 
         doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
         Event.objects.create(
@@ -963,30 +967,36 @@ class TestRetentionExceptionsAreNamed:
             data_json={},
             is_anonymous=False,
             created_by=staff_user,
+            is_deleted=True,
         )
         today = timezone.localdate()
 
-        ensure_snapshots_for_months(facility, Event.objects.filter(facility=facility))
+        record_deleted_events(facility, Event.objects.filter(facility=facility))
 
-        assert not StatisticsSnapshot.objects.filter(facility=facility, year=today.year, month=today.month).exists()
+        snapshot = StatisticsSnapshot.objects.get(facility=facility, year=today.year, month=today.month)
+        assert snapshot.data["total_contacts"] == 1
 
-    def test_templates_do_not_promise_complete_monthly_counts(self, facility):
+    def test_templates_promise_counts_of_deleted_events(self, facility):
         deletion_concept, _ = render_document("loeschkonzept", facility)
         prose = _flat(deletion_concept)
         notice = _flat(render_document("informationspflichten", facility)[0])
 
         assert "damit Auswertungen vergangener Zeiträume erhalten" not in prose
-        assert "fehlen sie in der neuen Fassung des Aggregats" in prose
-        assert "früher gelöschte Ereignisse fehlen" in _effect_cell(deletion_concept, "Monatliche Statistik-Aggregate")
-        assert "Statistische Zählwerte ohne Bezug zu Ihrer Person können erhalten bleiben." in notice
+        assert "fehlen sie in der neuen Fassung des Aggregats" not in prose
+        assert "ein Löschlauf verkleinert ein Aggregat dadurch nicht" in prose
+        effect = _effect_cell(deletion_concept, "Monatliche Statistik-Aggregate")
+        assert "früher gelöschte Ereignisse fehlen" not in effect
+        assert "spätere Neuberechnungen behalten sie" in effect
+        assert "Statistische Zählwerte ohne Bezug zu Ihrer Person bleiben erhalten." in notice
+        assert "können erhalten bleiben" not in notice
 
-    def test_recomputed_month_counts_only_events_not_yet_deleted(self, facility, client_identified, staff_user):
+    def test_recomputed_month_keeps_events_deleted_earlier(self, facility, client_identified, staff_user):
         from datetime import datetime, timedelta
 
         from django.utils import timezone
 
         from core.models import DocumentType, Event, StatisticsSnapshot
-        from core.services.dashboard.snapshot import ensure_snapshots_for_months
+        from core.services.dashboard.snapshot import record_deleted_events
 
         previous_month = timezone.localdate().replace(day=1) - timedelta(days=10)
         occurred_at = timezone.make_aware(datetime.combine(previous_month, datetime.min.time()))
@@ -1004,9 +1014,10 @@ class TestRetentionExceptionsAreNamed:
             for _ in range(2)
         )
 
-        ensure_snapshots_for_months(facility, Event.objects.filter(pk=first.pk))
-        assert StatisticsSnapshot.objects.get(facility=facility).data["total_contacts"] == 2
         Event.objects.filter(pk=first.pk).update(is_deleted=True)
-        ensure_snapshots_for_months(facility, Event.objects.filter(pk=second.pk))
+        record_deleted_events(facility, Event.objects.filter(pk=first.pk))
+        assert StatisticsSnapshot.objects.get(facility=facility).data["total_contacts"] == 2
+        Event.objects.filter(pk=second.pk).update(is_deleted=True)
+        record_deleted_events(facility, Event.objects.filter(pk=second.pk))
 
-        assert StatisticsSnapshot.objects.get(facility=facility).data["total_contacts"] == 1
+        assert StatisticsSnapshot.objects.get(facility=facility).data["total_contacts"] == 2

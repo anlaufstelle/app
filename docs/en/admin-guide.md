@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-10-06: § 7.5 "Trash: Anonymize permanently now" quotes the success message without a fixed deadline for earlier versions (legal hold and concurrently locked records are caught up by a later run); § 8 describes how a deletion run adds deleted events to the monthly aggregate of their month, including the current month, and the lead card names the latest completed month (#2425).
 > Synchronization update 2026-10-06: § 7.3 "Retention Dashboard" and "Legal Hold" separate the regular run (deletes without approval, only holds protect), the proposal run (`--propose`) and manual deletion; Approve/Defer/Reject (including the deferred proposal that stays deferred when the auto-approval is blocked) and the way to set a legal hold are described as the code implements them; at most one active proposal per event (#2425).
 > Synchronization update 2026-10-06: § 2.5 the retention period of a documentation type applies in addition to the contact-stage period -- whichever expires first applies, a longer type period extends nothing (#2462).
 > Synchronization update 2026-10-06: § 5.5 states when the “Admin DB role” card keeps showing the previous state (failed write, deploy aborted before `check_db_roles`) and that findings are recorded even without an RLS bypass, only `ok` requires one (#2415).
@@ -2109,7 +2110,7 @@ Next to "Restore", that page offers the action **"Anonymize permanently now"**, 
 | **Limit: trash only** | The action applies exclusively to records that are already soft-deleted. The four-eyes request path remains the only way **into** the trash — there is no shortcut around approval. |
 | **Trail** | Audit entry `CLIENT_ANONYMIZED` with `trigger="manual"`, distinguishable from the automatic run. |
 
-The record stays soft-deleted afterwards (anonymized, not restored) and does not vanish from the trash listing — it simply no longer carries personal data. **"Restore" is no longer offered for that row afterwards** — the confirmation dialog's promise holds literally: the button disappears, and calling the restore URL directly is rejected with a message (Refs #2085). The person action now behaves like the case action, which has had this guard since [ADR-044](../adr/044-fall-loeschpfad.md). The success message therefore reads "Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation werden spätestens mit dem nächtlichen Aufbewahrungslauf getilgt." — it deliberately does not claim that everything is already gone at that moment. Since #1737, people in the trash can also no longer be edited via a direct URL (`/clients/<id>/edit/` returns 404, like the detail view).
+The record stays soft-deleted afterwards (anonymized, not restored) and does not vanish from the trash listing — it simply no longer carries personal data. **"Restore" is no longer offered for that row afterwards** — the confirmation dialog's promise holds literally: the button disappears, and calling the restore URL directly is rejected with a message (Refs #2085). The person action now behaves like the case action, which has had this guard since [ADR-044](../adr/044-fall-loeschpfad.md). The success message therefore reads "Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation tilgt regulär der nächtliche Aufbewahrungslauf; was eine Aufbewahrungssperre oder eine gleichzeitige Bearbeitung zurückhält, holt ein späterer Lauf nach." — it deliberately does not claim that everything is already gone at that moment, nor does it promise a fixed deadline: the run defers versions under an active legal hold and skips records that another operation currently holds locked (Refs #2425). Since #1737, people in the trash can also no longer be edited via a direct URL (`/clients/<id>/edit/` returns 404, like the detail view).
 
 #### Case trash and the two deletion paths (Refs #1818)
 
@@ -2283,7 +2284,7 @@ Without the variable set, the protected tables visibly return **no rows** in `ps
 Statistics reporting in Anlaufstelle uses **two different acceleration layers**:
 
 1. **Materialized view** (`core_statistics_event_flat`) -- pre-aggregates current event data so the statistics page does not have to scan all events on every request. Refs #544.
-2. **Statistics snapshots** -- monthly, persisted aggregates that are captured **before** automatic deletion of old events. Historical reports stay correct even after GDPR-mandated deletion.
+2. **Statistics snapshots** -- monthly, persisted aggregates that keep counting the events removed by automatic deletion. Historical reports stay correct even after GDPR-mandated deletion.
 
 ### Refresh the Materialized View
 
@@ -2319,13 +2320,13 @@ Implementation: [`src/core/management/commands/refresh_statistics_view.py`](http
 
 Anlaufstelle computes statistics (dashboard, half-year reports, example activity report PDFs) from the event table by default (aggregated via the materialized view). When automatic data deletion (`enforce_retention`) removes old events, those events would disappear from the statistics.
 
-**Statistics snapshots** persist monthly aggregates before events are deleted. Reports use hybrid logic: stored snapshots for past months, live data (from the materialized view) for the current month.
+**Statistics snapshots** persist monthly aggregates that keep counting deleted events. Reports use hybrid logic: stored snapshots for past months, live data (from the materialized view) for the current month.
 
 > **Important: snapshot protection does not cover every report.** It preserves the **monthly aggregates** that feed the statistics overview (key figures, tables and timeline), its PDF export and the activity-report PDFs. Of the reports on the **"Dataset reports"** tab, only the **example activity report** is snapshot-enabled, and even there only its **PDF**: its CSV/JSON/XML files -- like every other report on that tab -- recalculate from the current data on **every** request. Once `enforce_retention` has cleaned up a past period, their figures for that period will be lower than on the first download -- potentially zero, without an error message, because that is not a defect. The extent depends on the report: it evaluates events, cases or people and changes only when records in **its** population are deleted or anonymized; the population is stated above each preview. **If you give such a file to a funding body or other recipient, retain the generated file yourself** -- it cannot be reproduced identically later. Each report states where it reads from ("Data source: …"); the other considerations for external release are explained below under ["Releasing Reports"](#releasing-reports-what-you-need-to-know).
 
 ### Automatic Capture
 
-Snapshots are created automatically whenever `enforce_retention` deletes events -- the affected months are captured right before the deletion.
+Snapshots are created automatically whenever `enforce_retention` deletes events: right after the deletion, the run adds the deleted events to the aggregate of their month, including the current month. Every later calculation of a month -- another deletion run or `create_statistics_snapshots` -- counts the remaining events and adds the previously deleted ones, so a deletion run never makes an aggregate smaller. The "Statistics" card on the lead's dashboard shows the latest completed month as "last snapshot".
 
 ### Periodic Cron Job (Recommended)
 
@@ -2412,5 +2413,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 69a644bfbcd4da40d4a3f21c5e952229c08061db -->
+<!-- source-hash: 33a7e4a3b9771bd41cc31b775633d7d485b3b4f3 -->
 <!-- translation-date: 2026-10-05 -->

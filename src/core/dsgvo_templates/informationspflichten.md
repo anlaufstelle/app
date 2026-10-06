@@ -85,7 +85,7 @@ Nach Ablauf der Frist löscht ein täglicher automatischer Lauf die Inhalte des
 Kontakts. Sind alle Kontakte zu Ihrer Person gelöscht, werden auch die Angaben
 zu Ihrer Person anonymisiert. Solange eine Aufbewahrungssperre besteht (etwa
 wegen eines laufenden Verfahrens), werden die betroffenen Daten nicht
-gelöscht. Statistische Zählwerte ohne Bezug zu Ihrer Person können erhalten bleiben.
+gelöscht. Statistische Zählwerte ohne Bezug zu Ihrer Person bleiben erhalten.
 In Sicherungskopien bleiben Daten bis zu deren Ablauf erhalten; die Fristen
 dafür regelt das Löschkonzept der Einrichtung.
 

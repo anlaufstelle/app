@@ -2,8 +2,7 @@
 
 Refs #930. Sub-File aus ``test_mutation_followup_snapshot``;
 enthält die Test-Klassen für die Boundary-/Datums-Helfer:
-``TestCreateOrUpdateSnapshotBranches``, ``TestEnsureSnapshotsForMonthsBranches``,
-``TestGetSnapshot`` und ``TestSplitIntoSegmentsBoundaries``.
+``TestCreateOrUpdateSnapshotBranches``, ``TestGetSnapshot`` und ``TestSplitIntoSegmentsBoundaries``.
 
 ``TestIsMultiMonthRange`` ist mit ``is_multi_month_range`` entfallen (K4b,
 Refs #1770): der Helfer trug allein den "ca."-Approximationshinweis aus #533,
@@ -20,17 +19,14 @@ from datetime import date, datetime
 from unittest.mock import patch
 
 import pytest
-from django.utils import timezone
 
 from core.models import (
     DocumentType,
-    Event,
     StatisticsSnapshot,
 )
 from core.services.dashboard import (
     _split_into_segments,
     create_or_update_snapshot,
-    ensure_snapshots_for_months,
     get_snapshot,
 )
 from tests._mutation_followup_snapshot_helpers import _make_event
@@ -217,69 +213,6 @@ class TestCreateOrUpdateSnapshotBranches:
         assert entry["system_type"] == ""
         # document_type_id wird trotzdem gesetzt, weil dt gefunden wurde
         assert entry["document_type_id"] == str(doc_type_contact.id)
-
-
-# ---------------------------------------------------------------------------
-# ensure_snapshots_for_months — current/future month wird ausgelassen
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestEnsureSnapshotsForMonthsBranches:
-    """Refs ``ensure_snapshots_for_months`` (Line 82).
-
-    Adressierte Mutationen:
-    - ``(year, month) < current`` → ``<=`` würde current_month Snapshot
-      anlegen (Doku verbietet das).
-    - ``< current`` → ``> current`` würde nur future_months snapshotten.
-    """
-
-    def test_current_month_skipped(self, facility, staff_user, client_identified, doc_type_contact):
-        """Current-month-Event darf KEINEN Snapshot triggern."""
-        today = timezone.localdate()
-        current_dt = timezone.make_aware(datetime(today.year, today.month, max(1, min(today.day, 28)), 10, 0))
-        _make_event(
-            facility,
-            client_identified,
-            doc_type_contact,
-            staff_user,
-            current_dt,
-        )
-        events = Event.objects.filter(facility=facility)
-        ensure_snapshots_for_months(facility, events)
-        assert not StatisticsSnapshot.objects.filter(facility=facility, year=today.year, month=today.month).exists(), (
-            "Current month darf NICHT gesnapshottet werden"
-        )
-
-    def test_past_month_creates_snapshot(self, facility, staff_user, client_identified, doc_type_contact):
-        """Past-month-Event MUSS Snapshot triggern."""
-        past_dt = datetime(2024, 6, 15, 10, 0)
-        _make_event(facility, client_identified, doc_type_contact, staff_user, past_dt)
-        events = Event.objects.filter(facility=facility)
-        ensure_snapshots_for_months(facility, events)
-        assert StatisticsSnapshot.objects.filter(facility=facility, year=2024, month=6).exists()
-
-    def test_mixed_past_and_current_only_past_snapshotted(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
-        """Zwei Events, einer past einer current → nur past wird snapshottet."""
-        today = timezone.localdate()
-        past_dt = datetime(2024, 6, 15, 10, 0)
-        current_dt = timezone.make_aware(datetime(today.year, today.month, max(1, min(today.day, 28)), 10, 0))
-        _make_event(facility, client_identified, doc_type_contact, staff_user, past_dt)
-        _make_event(
-            facility,
-            client_identified,
-            doc_type_contact,
-            staff_user,
-            current_dt,
-        )
-        events = Event.objects.filter(facility=facility)
-        ensure_snapshots_for_months(facility, events)
-        snapshots = StatisticsSnapshot.objects.filter(facility=facility)
-        snap_months = set(snapshots.values_list("year", "month"))
-        assert (2024, 6) in snap_months
-        assert (today.year, today.month) not in snap_months
 
 
 # ---------------------------------------------------------------------------

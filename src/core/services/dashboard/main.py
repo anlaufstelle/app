@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 
-from django.db.models import Exists, F, OuterRef
+from django.db.models import Exists, F, OuterRef, Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -81,7 +81,16 @@ def lead_dashboard_context(user, facility) -> dict:
         RetentionProposal.objects.for_facility(facility).filter(status=RetentionProposal.Status.PENDING).count()
     )
 
-    last_snapshot = StatisticsSnapshot.objects.for_facility(facility).order_by("-year", "-month").first()
+    # Refs #2425: a deletion run also writes the running month's row (it holds
+    # the counts of deleted events until the month-end snapshot run); the card
+    # names the latest completed month.
+    today = timezone.localdate()
+    last_snapshot = (
+        StatisticsSnapshot.objects.for_facility(facility)
+        .filter(Q(year__lt=today.year) | Q(year=today.year, month__lt=today.month))
+        .order_by("-year", "-month")
+        .first()
+    )
 
     # Refs #2129: Die Leitung hat eine eigene Arbeitszentrale — der
     # Verwaltungs-Hub mit derselben Zahl ist ``FacilityAdminRequiredMixin`` und

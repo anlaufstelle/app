@@ -199,14 +199,17 @@ class ClientAnonymizeView(FacilityAdminRequiredMixin, View):
         # der Ereignis-Dokumentation liegen dagegen hinter dem Append-only-
         # Trigger und brauchen Owner-Rechte, die der Webprozess unter dem
         # Drei-Rollen-Modell bewusst nicht hat; sie holt der naechtliche
-        # Aufbewahrungslauf nach (ADR-050 M-8). „Spaetestens", weil im
-        # Einzelrollen-Modell (Dev) dieselbe Verbindung Owner ist und die
-        # Redaktion schon im Request passiert — die Meldung stimmt dann auch.
+        # Aufbewahrungslauf nach (ADR-050 M-8). Refs #2425: "as a rule", not
+        # "at the latest" — the history sweep defers rows under a legal hold
+        # and skips rows another transaction holds locked; a later run catches
+        # up. In the single-role setup (dev) the redaction already happens in
+        # the request, which the wording also covers.
         messages.success(
             request,
             _(
                 "Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation "
-                "werden spätestens mit dem nächtlichen Aufbewahrungslauf getilgt."
+                "tilgt regulär der nächtliche Aufbewahrungslauf; was eine Aufbewahrungssperre "
+                "oder eine gleichzeitige Bearbeitung zurückhält, holt ein späterer Lauf nach."
             ),
         )
         return redirect("core:client_trash")

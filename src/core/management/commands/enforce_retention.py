@@ -11,11 +11,11 @@ from dataclasses import dataclass
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from core.models import AuditLog, Facility, Settings
+from core.models import AuditLog, Event, Facility, Settings
 from core.retention.enforcement import enforce_handover_notes
 from core.retention.eventhistory import enforce_eventhistory_retention
 from core.services.audit import audit_event
-from core.services.dashboard import ensure_snapshots_for_months
+from core.services.dashboard import record_deleted_events
 from core.services.import_engine import cleanup_stale_import_jobs
 from core.services.retention import (
     anonymize_clients,
@@ -173,13 +173,18 @@ class Command(BaseCommand):
                     f"{auto_approved} auto-approved after defer."
                 )
 
-        # Snapshots vor Löschung sichern
+        # Refs #2425: the monthly statistics keep counting deleted events. Note
+        # the candidates first and carry those really deleted afterwards — a
+        # held or failed event stays live and must not count twice.
+        doomed_ids = []
         if not dry_run:
-            doomed_qs = collect_doomed_events(facility, settings_obj, now)
-            if doomed_qs.exists():
-                ensure_snapshots_for_months(facility, doomed_qs)
+            doomed_ids = list(collect_doomed_events(facility, settings_obj, now).values_list("pk", flat=True))
 
         totals.deleted += process_facility_retention(facility, settings_obj, now, dry_run)["count"]
+        if doomed_ids:
+            record_deleted_events(
+                facility, Event.objects.for_facility(facility).filter(pk__in=doomed_ids, is_deleted=True)
+            )
         totals.activities += enforce_activities(facility, settings_obj, now, dry_run)["count"]
         totals.handover_notes += enforce_handover_notes(facility, settings_obj, now, dry_run)["count"]
         totals.anonymized += anonymize_clients(facility, dry_run)["count"]

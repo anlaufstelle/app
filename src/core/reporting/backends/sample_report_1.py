@@ -289,7 +289,21 @@ class SampleReport1Backend(DatasetBackend):
 
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
         """Aggregiert Ereignisse zu Berichtskategorien und Altersgruppen."""
-        base_qs = _base_queryset(facility, date_from, date_to)
+        summary = self.summarize_events(_base_queryset(facility, date_from, date_to))
+        return DatasetResult(
+            mode="aggregate",
+            records=[{"category": name, "count": count} for name, count in summary["by_category"]],
+            summary=summary,
+            completeness=self.validate_completeness(facility, date_from, date_to),
+        )
+
+    def summarize_events(self, events) -> dict:
+        """Categories, age groups and persons over ``events`` (the ``build_dataset`` summary).
+
+        Refs #2425: also called directly with the events a retention run has
+        just deleted, so the monthly snapshot keeps counting them.
+        """
+        base_qs = events
 
         # Aggregation ueber das von der Bindung deklarierte Schluesselfeld.
         # Welche Felder das sind, sagt ``values_fields()`` — seit E3 genau
@@ -339,17 +353,12 @@ class SampleReport1Backend(DatasetBackend):
 
         unique_clients = base_qs.exclude(client__isnull=True).values("client").distinct().count()
 
-        return DatasetResult(
-            mode="aggregate",
-            records=[{"category": name, "count": count} for name, count in by_category],
-            summary={
-                "total": total,
-                "by_category": by_category,
-                "by_age_cluster": by_age_cluster,
-                "unique_clients": unique_clients,
-            },
-            completeness=self.validate_completeness(facility, date_from, date_to),
-        )
+        return {
+            "total": total,
+            "by_category": by_category,
+            "by_age_cluster": by_age_cluster,
+            "unique_clients": unique_clients,
+        }
 
     def validate_completeness(self, facility, date_from, date_to) -> list[CompletenessIssue]:
         """Beziffert, was der Bericht **nicht** zeigt.
