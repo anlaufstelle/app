@@ -569,6 +569,7 @@ ZUGAENGE = NavItem(
             "user_access_update",
             "user_access_invite",
             "user_access_unlock",
+            "user_access_mfa_reset",
         }
     ),
     gates=("is_facility_admin",),

@@ -135,6 +135,7 @@ from core.views.user_access import (
     UserAccessCreateView,
     UserAccessInviteView,
     UserAccessListView,
+    UserAccessMFAResetView,
     UserAccessUnlockView,
     UserAccessUpdateView,
 )
@@ -188,6 +189,11 @@ urlpatterns = [
         "verwaltung/zugaenge/<int:pk>/entsperren/",
         UserAccessUnlockView.as_view(),
         name="user_access_unlock",
+    ),
+    path(
+        "verwaltung/zugaenge/<int:pk>/zweiter-faktor/",
+        UserAccessMFAResetView.as_view(),
+        name="user_access_mfa_reset",
     ),
     # Übergabe → in den Zeitstrom gefaltet (?view=uebergabe). Refs #1124.
     path("uebergabe/", RedirectView.as_view(url="/?view=uebergabe", permanent=True), name="handover"),

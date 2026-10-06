@@ -43,8 +43,11 @@
                 <button type="submit" class="w-full sm:w-auto px-4 py-2 btn-secondary" data-testid="user-access-unlock">{% trans "Account-Sperre aufheben" %}</button>
             </form>
             {% endif %}
+            {% if can_reset_mfa %}
+            <a href="{% url 'core:user_access_mfa_reset' target_user.pk %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary" data-testid="user-access-mfa-reset">{% trans "Zweiten Faktor zurücksetzen" %}</a>
+            {% endif %}
         </div>
-        {% if not can_resend_invite and not account_is_locked %}
+        {% if not can_resend_invite and not account_is_locked and not can_reset_mfa %}
         <p class="mt-2 text-[13px] text-ink-muted">{% trans "Für diesen Zugang ist derzeit keine Sicherheitsaktion erforderlich." %}</p>
         {% endif %}
     </section>

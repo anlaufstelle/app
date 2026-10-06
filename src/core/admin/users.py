@@ -8,6 +8,8 @@ from django.contrib.admin.utils import unquote
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.utils.translation import gettext
+from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
@@ -19,7 +21,7 @@ from core.services.audit.chain import advisory_lock_id
 from core.services.security import is_locked as user_is_locked
 from core.services.security import send_invite_email
 from core.services.security import unlock as unlock_user
-from core.services.user_access import resend_invitation_for_any_user, resend_user_invitation
+from core.services.user_access import resend_invitation_for_any_user, resend_user_invitation, reset_user_mfa
 
 _INITIAL_PASSWORD_ALPHABET = string.ascii_letters + string.digits
 _INITIAL_PASSWORD_LENGTH = 12
@@ -253,6 +255,52 @@ def resend_invitation_for_selected_users(modeladmin, request, queryset):
             messages.error(request, f"Einladung an {target.email or target.username} konnte nicht versendet werden.")
 
 
+@admin.action(description=_("Zweiten Faktor zurücksetzen (Authenticator-App, Passkeys, Backup-Codes)"))
+def reset_mfa_for_selected_users(modeladmin, request, queryset):
+    """Second-factor reset for the selected accounts (Refs #2469).
+
+    The installation-wide entry for ``super_admin``, who has no facility and
+    therefore no access hub; ``facility_admin`` reaches the same service under
+    Verwaltung -> Zugaenge. Sudo is enforced by the admin site gate
+    (``AnlaufstelleAdminSite.has_permission``) before any action runs.
+
+    ``reset_user_mfa`` repeats the whole permission check per account (own
+    account, foreign facility, ``super_admin`` target for a ``facility_admin``)
+    -- the changelist queryset is only a pre-filter. Refused accounts are
+    reported and skipped.
+
+    Every account runs in its own transaction and writes at most one audit
+    row, so each transaction holds at most one facility advisory lock
+    (``services/audit/chain.py``) -- no lock cycle with parallel bulk runs is
+    possible, unlike a single transaction across several facilities.
+    """
+    from core.signals.audit import get_client_ip
+
+    actor = request.user
+    ip_address = get_client_ip(request)
+    for target in queryset.order_by("pk"):
+        try:
+            result = reset_user_mfa(target, actor=actor, ip_address=ip_address)
+        except PermissionDenied:
+            messages.warning(
+                request,
+                gettext("%(username)s: Zurücksetzen des zweiten Faktors nicht erlaubt.")
+                % {"username": target.username},
+            )
+            continue
+        if result.removed_anything:
+            messages.success(
+                request,
+                gettext("%(username)s: Zweiter Faktor zurückgesetzt, alle Sitzungen beendet.")
+                % {"username": target.username},
+            )
+        else:
+            messages.info(
+                request,
+                gettext("%(username)s: Kein zweiter Faktor eingerichtet.") % {"username": target.username},
+            )
+
+
 @admin.register(User, site=anlaufstelle_admin_site)
 class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
     form = UserChangeForm
@@ -260,7 +308,12 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
     change_password_form = AdminPasswordChangeForm
     list_display = ("username", "display_name", "role", "facility", "is_active")
     list_filter = ("role", "facility", "is_active", "is_staff")
-    actions = [unlock_selected_users, enforce_mfa_for_selected_users, resend_invitation_for_selected_users]
+    actions = [
+        unlock_selected_users,
+        enforce_mfa_for_selected_users,
+        resend_invitation_for_selected_users,
+        reset_mfa_for_selected_users,
+    ]
     fieldsets = BaseUserAdmin.fieldsets + (
         (
             "Anlaufstelle",

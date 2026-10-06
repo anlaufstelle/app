@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+
+{% block title %}{% trans "Zweiten Faktor zurücksetzen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    {% back_link %}
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Zweiten Faktor zurücksetzen" %}</h1>
+    <p class="mt-1 mb-5 text-[13px] text-ink-muted">{{ target_user.display_name|default:target_user.username }} · {{ target_user.username }}</p>
+
+    <section class="card p-5 space-y-3" data-testid="user-access-mfa-reset-confirm" aria-labelledby="mfa-reset-heading">
+        <h2 id="mfa-reset-heading" class="text-[15px] font-semibold text-ink">{% trans "Was passiert beim Zurücksetzen?" %}</h2>
+        {% if has_second_factor %}
+        <p class="text-[14px] text-ink">{% trans "Alle Authenticator-Apps, Passkeys und Backup-Codes dieses Zugangs werden entfernt, und alle Sitzungen des Zugangs werden beendet." %}</p>
+        <p class="text-[14px] text-ink">{% trans "Ist die Zwei-Faktor-Authentifizierung für den Zugang verpflichtend, richtet die Person den zweiten Faktor bei der nächsten Anmeldung neu ein." %}</p>
+        <p class="text-[14px] text-ink">{% trans "Setze den zweiten Faktor nur zurück, wenn du sicher bist, dass die Anfrage von der Person selbst stammt." %}</p>
+        {% else %}
+        <p class="text-[14px] text-ink">{% trans "Für diesen Zugang ist kein zweiter Faktor eingerichtet." %}</p>
+        {% endif %}
+    </section>
+
+    <div class="mt-4 flex flex-col sm:flex-row gap-2.5">
+        {% if has_second_factor %}
+        <form method="post" action="{% url 'core:user_access_mfa_reset' target_user.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700" data-testid="user-access-mfa-reset-submit">{% trans "Zweiten Faktor zurücksetzen" %}</button>
+        </form>
+        {% endif %}
+        <a href="{% url 'core:user_access_update' target_user.pk %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary" data-testid="user-access-mfa-reset-cancel">{% trans "Abbrechen" %}</a>
+    </div>
+</div>
+{% endblock %}

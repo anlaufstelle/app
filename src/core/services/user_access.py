@@ -5,6 +5,11 @@ einrichtungsgebundenen Einstiege dieses Moduls mit einem expliziten
 Facility-Filter und schliessen ``super_admin`` aus; Views greifen nie direkt
 per PK auf ``User`` zu. Einzige Ausnahme ist der installationsweite
 Einladungs-Resend fuer aktive, authentifizierte ``super_admin``-Actors.
+
+The second-factor reset (Refs #2469) follows the same split:
+``reset_managed_user_mfa`` is the facility-scoped entry of the access hub,
+``reset_user_mfa`` the core that the user admin action calls for
+``super_admin``. The core repeats the full permission check itself.
 """
 
 from __future__ import annotations
@@ -19,11 +24,13 @@ from django.db.models import Max
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 
 from core.models import AuditLog, User
+from core.models import EncryptedTOTPDevice as TOTPDevice
 from core.services.audit import audit_event
 from core.services.security import LOCKOUT_THRESHOLD, LOCKOUT_WINDOW, is_locked, send_invite_email, unlock
-from core.services.security.credentials import RevocationReason, revoke_credentials
+from core.services.security.credentials import RevocationReason, flush_user_sessions, revoke_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +60,20 @@ class UserAccessRow:
 class UserInvitationResult:
     user: User
     sent: bool
+
+
+@dataclass(frozen=True)
+class MFAResetResult:
+    """Rows removed by a second-factor reset (Refs #2469)."""
+
+    totp_devices: int
+    passkeys: int
+    backup_codes: int
+    backup_devices: int
+
+    @property
+    def removed_anything(self) -> bool:
+        return bool(self.totp_devices or self.passkeys or self.backup_devices)
 
 
 def _assert_actor(facility, actor) -> None:
@@ -264,3 +285,119 @@ def unlock_managed_user(user: User, *, facility, actor, ip_address: str | None =
         return False
     unlock(target, unlocked_by=actor, ip_address=ip_address)
     return True
+
+
+def _webauthn_credentials():
+    # Imported lazily like in ``core.views.mfa``: the third-party model is only
+    # needed on this path.
+    from django_otp_webauthn.models import WebAuthnCredential
+
+    return WebAuthnCredential.objects
+
+
+def has_second_factor(user: User) -> bool:
+    """True if the account holds any second-factor row a reset would remove.
+
+    Counts unconfirmed TOTP devices and a backup-code device as well: the reset
+    removes them, so the action must stay reachable while one is left.
+    """
+    return (
+        TOTPDevice.objects.filter(user=user).exists()
+        or _webauthn_credentials().filter(user=user).exists()
+        or StaticDevice.objects.filter(user=user).exists()
+    )
+
+
+def _assert_can_reset_mfa(target: User, actor) -> None:
+    """Who may reset whose second factor (Refs #2469).
+
+    Mirrors the account-management rules: ``super_admin`` reaches every
+    account, ``facility_admin`` only accounts of the own facility and never a
+    ``super_admin`` account (``manageable_users``). Nobody resets the own
+    account here -- that is ``MFADisableView`` with its own rules.
+    """
+    if not getattr(actor, "is_authenticated", False) or not getattr(actor, "is_active", False):
+        raise PermissionDenied("Second-factor reset requires an active, signed-in administrator.")
+    if actor.pk == target.pk:
+        raise PermissionDenied("The own second factor cannot be reset through account management.")
+    if getattr(actor, "is_super_admin", False):
+        return
+    if (
+        getattr(actor, "is_facility_admin", False)
+        and actor.facility_id is not None
+        and target.facility_id == actor.facility_id
+        and not target.is_super_admin
+    ):
+        return
+    raise PermissionDenied("Second-factor reset is not allowed for this account.")
+
+
+def reset_user_mfa(target: User, *, actor, ip_address: str | None = None) -> MFAResetResult:
+    """Remove every TOTP device, passkey and backup code of ``target`` (Refs #2469).
+
+    Recovery path for a person who lost the authenticator and used up the
+    backup codes. Afterwards the existing enforcement switch
+    (``MFAEnforcementMiddleware``) sends the next sign-in of an account with
+    mandatory 2FA to ``/mfa/setup/``.
+
+    The target row is locked for the removal so that two parallel resets
+    produce one audit row: the second one finds nothing left and writes
+    nothing. The audit row (``MFA_RESET_BY_ADMIN``) carries target, actor and
+    the target's facility; the detail holds counters only, never key material.
+
+    The target's sessions end as well. A session that already passed the
+    second factor would otherwise keep running, possibly on the very device
+    that got lost. The flush runs after the commit, so a failed audit write
+    leaves the account untouched.
+    """
+    _assert_can_reset_mfa(target, actor)
+
+    with transaction.atomic():
+        # Lock the row under the facility the check above saw: an account moved
+        # to another facility in the meantime is not found instead of being
+        # reset by an administrator who no longer manages it. The check then
+        # runs again on the locked row (e.g. a concurrent role change).
+        locked = User.objects.select_for_update().filter(facility=target.facility, pk=target.pk).first()
+        if locked is None:
+            raise PermissionDenied("Second-factor reset is not allowed for this account.")
+        _assert_can_reset_mfa(locked, actor)
+        totp_devices = TOTPDevice.objects.filter(user=locked)
+        passkeys = _webauthn_credentials().filter(user=locked)
+        backup_devices = StaticDevice.objects.filter(user=locked)
+        result = MFAResetResult(
+            totp_devices=totp_devices.count(),
+            passkeys=passkeys.count(),
+            backup_codes=StaticToken.objects.filter(device__user=locked).count(),
+            backup_devices=backup_devices.count(),
+        )
+        if not result.removed_anything:
+            return result
+        totp_devices.delete()
+        passkeys.delete()
+        backup_devices.delete()
+        audit_event(
+            AuditLog.Action.MFA_RESET_BY_ADMIN,
+            user=locked,
+            actor=actor,
+            facility=locked.facility,
+            target_obj=locked,
+            detail={
+                "username": locked.username,
+                "actor_id": actor.pk,
+                "actor_username": actor.get_username(),
+                "totp_devices_removed": result.totp_devices,
+                "passkeys_removed": result.passkeys,
+                "backup_codes_removed": result.backup_codes,
+            },
+            ip_address=ip_address,
+        )
+
+    flush_user_sessions(locked)
+    return result
+
+
+def reset_managed_user_mfa(user: User, *, facility, actor, ip_address: str | None = None) -> MFAResetResult:
+    """Facility-scoped entry of the access hub (Refs #2469)."""
+    _assert_actor(facility, actor)
+    target = get_manageable_user(facility, user.pk)
+    return reset_user_mfa(target, actor=actor, ip_address=ip_address)

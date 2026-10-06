@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -17,8 +17,10 @@ from core.services.security import RequireSudoModeMixin, is_locked
 from core.services.user_access import (
     create_invited_user,
     get_manageable_user,
+    has_second_factor,
     list_user_access,
     resend_user_invitation,
+    reset_managed_user_mfa,
     unlock_managed_user,
     update_user_access,
 )
@@ -86,6 +88,7 @@ class UserAccessUpdateView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
             "is_create": False,
             "account_is_locked": is_locked(target),
             "can_resend_invite": bool(target.email and target.must_change_password),
+            "can_reset_mfa": target.pk != self.request.user.pk and has_second_factor(target),
         }
 
     def get(self, request, pk):
@@ -152,4 +155,48 @@ class UserAccessUnlockView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
             messages.success(request, _("Account-Sperre wurde aufgehoben."))
         else:
             messages.info(request, _("Der Zugang war nicht gesperrt."))
+        return redirect("core:user_access_update", pk=target.pk)
+
+
+@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
+class UserAccessMFAResetView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _NoStoreMixin, View):
+    """Reset the second factor of another account of the facility (Refs #2469).
+
+    GET shows a confirmation page -- it is also where the sudo step returns
+    to. POST removes TOTP devices, passkeys and backup codes via
+    ``reset_managed_user_mfa``. The own account is refused with 403 before
+    anything renders; the service repeats that check.
+    """
+
+    template_name = "core/user_access/mfa_reset_confirm.html"
+
+    def _target(self, request, pk):
+        target = get_manageable_user(request.current_facility, pk)
+        if target.pk == request.user.pk:
+            raise PermissionDenied("The own second factor cannot be reset through account management.")
+        return target
+
+    def get(self, request, pk):
+        target = self._target(request, pk)
+        return render(
+            request,
+            self.template_name,
+            {"target_user": target, "has_second_factor": has_second_factor(target)},
+        )
+
+    def post(self, request, pk):
+        target = self._target(request, pk)
+        result = reset_managed_user_mfa(
+            target,
+            facility=request.current_facility,
+            actor=request.user,
+            ip_address=get_client_ip(request),
+        )
+        if result.removed_anything:
+            messages.success(
+                request,
+                _("Der zweite Faktor wurde zurückgesetzt und alle Sitzungen des Zugangs wurden beendet."),
+            )
+        else:
+            messages.info(request, _("Für diesen Zugang ist kein zweiter Faktor eingerichtet."))
         return redirect("core:user_access_update", pk=target.pk)

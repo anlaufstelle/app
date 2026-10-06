@@ -130,6 +130,9 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "threshold": "Schwellwert der Breach-Detection-Regel",
     "k_threshold": "k-Anonymitaets-Schwelle des Berichts",
     "passkeys_removed": "Zahl der beim MFA-Reset entfernten Passkeys",
+    # Refs #2469: counters of the second-factor reset by facility administration.
+    "totp_devices_removed": "number of TOTP devices removed by a second-factor reset",
+    "backup_codes_removed": "number of unused backup codes removed by a second-factor reset",
     "facilities": "Zahl der in einem Cron-Lauf verarbeiteten Einrichtungen",
     # Refs #1872: Ergebniszahlen des verify_audit_chain-Laufs. Beides sind reine
     # Mengenangaben ueber die Kette selbst — keine Zeileninhalte, kein Bezug auf

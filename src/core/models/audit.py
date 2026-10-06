@@ -140,6 +140,10 @@ class AuditLog(models.Model):
         SECURITY_VIOLATION = "security_violation", _("Sicherheitsverletzung")
         MFA_ENABLED = "mfa_enabled", _("2FA aktiviert")
         MFA_DISABLED = "mfa_disabled", _("2FA deaktiviert")
+        # Refs #2469: facility administration removed every second factor
+        # (TOTP, passkeys, backup codes) of ANOTHER account. ``user`` is the
+        # target, ``actor`` the administrator; the detail only carries counters.
+        MFA_RESET_BY_ADMIN = "mfa_reset_by_admin", _("2FA durch Administration zurückgesetzt")
         MFA_FAILED = "mfa_failed", _("2FA-Verifikation fehlgeschlagen")
         BACKUP_CODES_GENERATED = "backup_codes_generated", _("2FA Backup-Codes generiert")
         BACKUP_CODES_USED = "backup_codes_used", _("2FA Backup-Code verwendet")
