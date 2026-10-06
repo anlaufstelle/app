@@ -635,7 +635,7 @@ def _backup_rotation_days() -> list[int]:
 class TestBackupDeletionBoundary:
     """Refs #2464: templates promise only the local rotation ``backup.sh`` performs."""
 
-    def test_loeschkonzept_separates_local_rotation_from_offsite_copies(self, facility):
+    def test_deletion_concept_separates_local_rotation_from_offsite_copies(self, facility):
         content, _ = render_document("loeschkonzept", facility)
 
         offsite = _effect_cell(content, "Off-Site-Kopien der Sicherungsstände")
@@ -715,7 +715,7 @@ class TestRetentionRunNeedsNoApproval:
         assert "Aufbewahrungssperre" in content
         assert "Sicherungskopien" in content
 
-    def test_loeschkonzept_names_monthly_snapshots_as_residue(self, facility):
+    def test_deletion_concept_names_monthly_snapshots_as_residue(self, facility):
         content, _ = render_document("loeschkonzept", facility)
 
         effect = _effect_cell(content, "Monatliche Statistik-Aggregate")
