@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 18:17+0200\n"
+"POT-Creation-Date: 2026-10-06 18:31+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12346,13 +12346,6 @@ msgstr "How does the four-eyes principle work?"
 msgid "Wie funktioniert die Offline-Arbeit?"
 msgstr "How does offline work?"
 
-msgid "Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation werden spätestens mit dem nächtlichen Aufbewahrungslauf getilgt."
-msgstr "Person has been anonymized. Earlier versions of their event documentation will be erased with the nightly retention run at the latest."
-
-#, python-format
-msgid "„%(pseudonym)s“ jetzt endgültig anonymisieren? Pseudonym, Notizen, Zusatzfelder und Fall-/Ereignisinhalte dieser Person werden unwiderruflich entfernt; der Datensatz bleibt nur noch als anonymes Statistik-Aggregat bestehen. Eine Wiederherstellung ist danach nicht mehr möglich. Frühere Fassungen der Ereignis-Dokumentation folgen spätestens mit dem nächtlichen Aufbewahrungslauf."
-msgstr "Permanently anonymize \"%(pseudonym)s\" now? The pseudonym, notes, additional fields and case/event contents of this person are removed irreversibly; the record remains only as an anonymous statistical aggregate. Restoring it afterwards is no longer possible. Earlier versions of the event documentation follow with the nightly retention run at the latest."
-
 msgid "Diese Person wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."
 msgstr "This person has been permanently anonymized and cannot be restored."
 
@@ -13029,3 +13022,12 @@ msgstr "Possibly health / addiction context (encrypted depending on field config
 #: src/core/services/compliance/vvt.py:160
 msgid "Verschlüsselung sensibler Felder (Fernet: AES-128-CBC mit HMAC-SHA256, Schlüssel außerhalb der DB)"
 msgstr "Encryption of sensitive fields (Fernet: AES-128-CBC with HMAC-SHA256, key outside the database)"
+
+#: src/core/views/client_deletion.py:209
+msgid "Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation tilgt regulär der nächtliche Aufbewahrungslauf; was eine Aufbewahrungssperre oder eine gleichzeitige Bearbeitung zurückhält, holt ein späterer Lauf nach."
+msgstr "Person has been anonymized. Earlier versions of their event documentation are erased by the nightly retention run as a rule; anything held back by a legal hold or a concurrent edit is caught up by a later run."
+
+#: src/templates/core/clients/trash.html:78
+#, python-format
+msgid "„%(pseudonym)s“ jetzt endgültig anonymisieren? Pseudonym, Notizen, Zusatzfelder und Fall-/Ereignisinhalte dieser Person werden unwiderruflich entfernt; der Datensatz bleibt nur noch als anonymes Statistik-Aggregat bestehen. Eine Wiederherstellung ist danach nicht mehr möglich. Frühere Fassungen der Ereignis-Dokumentation folgen regulär mit dem nächtlichen Aufbewahrungslauf; was eine Aufbewahrungssperre oder eine gleichzeitige Bearbeitung zurückhält, holt ein späterer Lauf nach."
+msgstr "Permanently anonymize \"%(pseudonym)s\" now? The pseudonym, notes, additional fields and case/event contents of this person are removed irreversibly; the record remains only as an anonymous statistical aggregate. Restoring it afterwards is no longer possible. Earlier versions of the event documentation follow with the nightly retention run as a rule; anything held back by a legal hold or a concurrent edit is caught up by a later run."
