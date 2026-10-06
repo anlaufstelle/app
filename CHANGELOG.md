@@ -69,6 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Befehle im Betriebshandbuch des öffentlichen Release wieder korrekt** (#2409) — Der Release-Sanitizer erkennt Codeblöcke jetzt nach CommonMark und bereinigt Leerraum und Satzzeichen nur noch dort, wo er ein internes Kürzel entfernt hat; bisher waren im öffentlichen Betriebshandbuch, auch in v0.99.5, die Befehle für Passwortrotation, Backup, Restore und Exporte zusammengezogen.
 - **Tabellenplatzhalter und Gedankenstriche bleiben im öffentlichen Release erhalten** (#2416) — Der Sanitizer entfernte „—“ als Tabellenwert sowie Gedankenstriche am Zeilenende oder vor einem Komma, auch wenn dort kein Kürzel entfernt wurde.
+- **Verweise auf Tickets und Pull-Requests im öffentlichen Release führen nicht mehr ins Leere** (#2437) — Der Release-Sanitizer macht aus jedem Link auf ein Ticket oder einen Pull-Request des Entwicklungs-Repositorys Klartext mit Linktext und Nummer, auch bei Links mit Anker, bloßen Adressen und Pull-Request-Links; bisher zeigten sie auf nicht vorhandene Tickets im öffentlichen Repository. Der Link auf die ausgelieferten Assertion-Konventionen bleibt erhalten, und Bereichsangaben wie „Phase 1–3“ verlieren ihren Anfang nicht mehr.
 
 ## [0.99.5] - 2026-10-01
 
