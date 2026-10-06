@@ -17,21 +17,29 @@ Contract:
   (target, actor, target facility; counters only, no secrets).
 * The existing enforcement switch then sends the next sign-in of a person with
   mandatory 2FA to ``/mfa/setup/``.
+* The password keeps working; the rehash on sign-in never overwrites a
+  password set meanwhile by a reset or change.
 """
 
 from __future__ import annotations
 
+import threading
 import time
 from urllib.parse import urlsplit
 
 import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth import authenticate
+from django.contrib.auth.hashers import MD5PasswordHasher, PBKDF2PasswordHasher, make_password
+from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
+from django.db import connections
 from django.db.models import QuerySet
 from django.http import Http404
 from django.test import Client, override_settings
 from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 
 from core.models import AuditLog, User
@@ -705,6 +713,149 @@ class TestSessionRevocation:
         assert _reset_rows(lead_user).count() == 1
 
 
+PBKDF2 = "django.contrib.auth.hashers.PBKDF2PasswordHasher"
+MD5 = "django.contrib.auth.hashers.MD5PasswordHasher"
+RECOVERED_PASSWORD = "Fresh-recovery-passphrase-763!"
+
+
+def _on_another_connection(work):
+    """Run ``work`` in a second thread with its own, committing connection."""
+    outcome = {}
+
+    def _run():
+        try:
+            outcome["result"] = work()
+        except Exception as exc:  # noqa: BLE001 -- reported by the assertion below
+            outcome["error"] = exc
+        finally:
+            connections.close_all()
+
+    thread = threading.Thread(target=_run, name="second-connection")
+    thread.start()
+    thread.join(timeout=60)
+    assert not thread.is_alive(), "the second connection did not finish"
+    assert "error" not in outcome, outcome
+    return outcome["result"]
+
+
+def _reset_password(user, new_password) -> str:
+    """The real reset-confirm flow; returns the path it redirects to."""
+    browser = Client()
+    token = default_token_generator.make_token(User.objects.get(pk=user.pk))
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    landing = browser.get(reverse("password_reset_confirm", kwargs={"uidb64": uid, "token": token}))
+    response = browser.post(landing.url, {"new_password1": new_password, "new_password2": new_password})
+    return urlsplit(response.url).path
+
+
+@pytest.mark.django_db(transaction=True)
+class TestRehashRace:
+    """A rehash on sign-in never overwrites a password set meanwhile.
+
+    Both rehash triggers -- the revoked hash of a second-factor reset and
+    Django's upgrade to the preferred hasher -- verify the password first and
+    store a fresh hash afterwards. A password reset completed in between on
+    another connection must stand: the new password works, the old one no
+    longer does, and the sign-in that raced it is refused.
+    """
+
+    @pytest.fixture
+    def stored_hash(self, request, settings, admin_user, staff_user):
+        trigger = request.param
+        if trigger == "revoked":
+            settings.PASSWORD_HASHERS = [PBKDF2]
+            staff_user.set_password("testpass123")
+            staff_user.save(update_fields=["password"])
+            _enroll(staff_user)
+            reset_user_mfa(staff_user, actor=admin_user)
+            assert User.objects.get(pk=staff_user.pk).password.startswith(User.SESSION_REVOCATION_PREFIX)
+            return PBKDF2PasswordHasher
+        settings.PASSWORD_HASHERS = [PBKDF2, MD5]
+        User.objects.filter(pk=staff_user.pk).update(password=make_password("testpass123", hasher="md5"))
+        return MD5PasswordHasher
+
+    def _after_first_verification(self, monkeypatch, hasher_class, work) -> list:
+        """Run ``work`` on another connection right after the first successful verification."""
+        original = hasher_class.verify
+        completed = []
+
+        def verify_then_work(hasher, password, encoded):
+            valid = original(hasher, password, encoded)
+            if valid and not completed:
+                completed.append(None)
+                completed[0] = _on_another_connection(work)
+            return valid
+
+        monkeypatch.setattr(hasher_class, "verify", verify_then_work)
+        return completed
+
+    def _reset_after_verification(self, monkeypatch, hasher_class, user) -> list:
+        return self._after_first_verification(
+            monkeypatch, hasher_class, lambda: _reset_password(user, RECOVERED_PASSWORD)
+        )
+
+    def _assert_reset_stands(self, user) -> None:
+        stored = User.objects.get(pk=user.pk)
+        assert {
+            "new_password_valid": stored.check_password(RECOVERED_PASSWORD),
+            "old_password_valid": stored.check_password("testpass123"),
+        } == {"new_password_valid": True, "old_password_valid": False}
+
+    @pytest.mark.parametrize("stored_hash", ["revoked", "outdated-hasher"], indirect=True)
+    def test_sign_in_does_not_undo_a_concurrent_password_reset(self, stored_hash, monkeypatch, staff_user):
+        completed = self._reset_after_verification(monkeypatch, stored_hash, staff_user)
+        browser = Client()
+
+        response = browser.post("/login/", {"username": staff_user.username, "password": "testpass123"})
+
+        monkeypatch.undo()
+        assert completed == [reverse("password_reset_complete")]
+        self._assert_reset_stands(staff_user)
+        assert response.status_code == 200
+        assert urlsplit(browser.get("/").url).path == "/login/"
+
+    @pytest.mark.parametrize("stored_hash", ["revoked", "outdated-hasher"], indirect=True)
+    def test_async_check_does_not_undo_a_concurrent_password_reset(self, stored_hash, monkeypatch, staff_user):
+        user = User.objects.get(pk=staff_user.pk)
+        completed = self._reset_after_verification(monkeypatch, stored_hash, staff_user)
+
+        valid = async_to_sync(user.acheck_password)("testpass123")
+
+        monkeypatch.undo()
+        assert completed == [reverse("password_reset_complete")]
+        self._assert_reset_stands(staff_user)
+        assert valid is False
+
+    @pytest.mark.parametrize("stored_hash", ["revoked", "outdated-hasher"], indirect=True)
+    def test_concurrent_sign_ins_with_the_same_password_both_succeed(self, stored_hash, monkeypatch, staff_user):
+        user = User.objects.get(pk=staff_user.pk)
+        completed = self._after_first_verification(
+            monkeypatch, stored_hash, lambda: User.objects.get(pk=staff_user.pk).check_password("testpass123")
+        )
+
+        valid = user.check_password("testpass123")
+
+        monkeypatch.undo()
+        assert completed == [True]
+        assert valid is True
+        stored = User.objects.get(pk=staff_user.pk)
+        assert user.password == stored.password
+        assert not stored.password.startswith(User.SESSION_REVOCATION_PREFIX)
+        assert stored.check_password("testpass123")
+
+    @pytest.mark.parametrize("stored_hash", ["revoked", "outdated-hasher"], indirect=True)
+    def test_a_rehash_that_keeps_conflicting_fails_closed(self, stored_hash, monkeypatch, staff_user):
+        user = User.objects.get(pk=staff_user.pk)
+        hash_before = user.password
+        monkeypatch.setattr(QuerySet, "update", lambda queryset, **values: 0)
+
+        valid = user.check_password("testpass123")
+
+        monkeypatch.undo()
+        assert valid is False
+        assert User.objects.get(pk=staff_user.pk).password == hash_before
+
+
 @IGNORE_UNFOLD_ACTION_CHOICES
 @pytest.mark.usefixtures("rls_test_role")
 class TestResetUnderRlsRole:
@@ -725,6 +876,22 @@ class TestResetUnderRlsRole:
         assert response.status_code == 302
         assert _factor_rows(staff_user) == (0, 0, 0, 0)
         assert _reset_rows(staff_user).get().facility_id == staff_user.facility_id
+
+    def test_sign_in_after_the_reset_stores_a_fresh_hash(
+        self,
+        admin_user,
+        staff_user,
+        rls_test_role,  # noqa: F811
+    ):
+        _enroll(staff_user)
+        reset_user_mfa(staff_user, actor=admin_user)
+        browser = Client()
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            response = browser.post("/login/", {"username": staff_user.username, "password": "testpass123"})
+
+        assert response.status_code == 302
+        assert not User.objects.get(pk=staff_user.pk).password.startswith(User.SESSION_REVOCATION_PREFIX)
 
     def test_super_admin_action_writes_audit_in_target_facility(
         self,

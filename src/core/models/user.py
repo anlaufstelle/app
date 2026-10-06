@@ -5,12 +5,15 @@ import secrets
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
-from django.contrib.auth.hashers import check_password
+from django.contrib.auth import hashers
 from django.contrib.auth.models import AbstractUser
 from django.db import DatabaseError, models
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
+
+# Sign-in attempts against a hash replaced concurrently before failing closed.
+REHASH_ATTEMPTS = 3
 
 
 class SessionRevocationError(Exception):
@@ -158,22 +161,39 @@ class User(AbstractUser):
         self.password = wrapped
 
     def check_password(self, raw_password):
-        inner = self._revoked_password_hash()
-        if inner is None:
-            return super().check_password(raw_password)
-        if not check_password(raw_password, inner):
-            return False
-        # A fresh hash (new salt) instead of restoring the inner one, which
-        # would revive the revoked sessions. Like Django's hash upgrade, this
-        # is no password change.
-        self.set_password(raw_password)
-        self._password = None
-        self.save(update_fields=["password"])
-        return True
+        """Verify ``raw_password``; a rehash only replaces the verified hash.
+
+        A revoked hash (``revoke_sessions``) and an outdated one (Django's
+        upgrade to the preferred hasher or work factor) are replaced by a fresh
+        hash of the same password. A fresh hash, not the inner one: restoring
+        that would revive the revoked sessions. Like Django's upgrade this is
+        no password change.
+
+        The write is a compare-and-swap on the verified hash: a password set
+        meanwhile by a reset or change is never overwritten. Then the check
+        runs again against the stored hash; a sign-in with the replaced
+        password fails, a repeated conflict fails closed.
+        """
+        for _attempt in range(REHASH_ATTEMPTS):
+            verified = self.password
+            inner = self._revoked_password_hash()
+            valid, outdated = hashers.verify_password(raw_password, verified if inner is None else inner)
+            if not valid or self.pk is None:
+                return valid
+            if inner is None and not outdated:
+                return True
+            fresh = hashers.make_password(raw_password)
+            accounts = type(self)._base_manager.using(self._state.db)
+            if accounts.filter(pk=self.pk, password=verified).update(password=fresh) == 1:
+                self.password = fresh
+                return True
+            stored = accounts.filter(pk=self.pk).values_list("password", flat=True).first()
+            if stored is None:
+                return False
+            self.password = stored
+        return False
 
     async def acheck_password(self, raw_password):
-        if self._revoked_password_hash() is None:
-            return await super().acheck_password(raw_password)
         return await sync_to_async(self.check_password)(raw_password)
 
     @property
