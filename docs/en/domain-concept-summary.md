@@ -1,8 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Synchronization update 2026-09-18: the German source now names Django 6.1 as the backend stack version; this summary carries no stack section, and the release-history entry on the Django 6.0 migration stays as it is (#1662).
-> Most recently synchronized on 2026-09-11 (release-history wording: no deputy is currently designated, and the two entries framed around the EU regulation now name the actual governance state and the support/SBOM/advisory work, #2207).
+> Synchronization update 2026-10-06: Field values use slugs; the standard catalog, configurable retention defaults and CSV import scope match the implementation.
 
 # Domain Concept Summary
 
@@ -45,12 +44,13 @@ Each facility configures its own set of documentation types (e.g. "Contact", "Cr
 | Attribute | Purpose |
 |---|---|
 | Data type | Text, number, date, single/multi select, boolean |
-| Sensitivity level | Low / medium / high |
+| Sensitivity level | Normal / elevated / high (on the type, optionally overridden per field) |
 | Encryption flag | Field-level Fernet/AES-128 encryption |
-| Retention period | Automated deletion after N months |
 | Report key | Mapping for reports and aggregations (`report_key`) |
 
-Field values are stored as JSONB in PostgreSQL, keyed by field UUID. A pre-configured [domain library](glossary.md) ships with the system so facilities do not start from an empty database.
+Retention is configured on documentation types and in facility settings, not on individual fields.
+
+Field values are stored as JSONB in PostgreSQL, keyed by stable `FieldTemplate.slug` values ([ADR-024](../adr/024-slug-based-identifiers.md)). A pre-configured [domain library](glossary.md) ships with the system so facilities do not start from an empty database.
 
 ### Cases and Outcome Goals
 
@@ -58,7 +58,9 @@ Not every contact is part of a case. Most interactions at a drop-in center are o
 
 ### Work Items (Arbeitsinfos)
 
-Separate from documentation, [work items](glossary.md) cover the operational layer: notes ("Mail for Maus is in the drawer") and tasks ("Follow up with Frau M. about the appointment"). They replace the analog handover logbook, have their own lifecycle (open, in progress, done, discarded), and appear in each staff member's inbox. Their retention periods are shorter than those of documentation records.
+Separate from documentation, [work items](glossary.md) cover the operational layer: notes ("Mail for Maus is in the drawer") and tasks ("Follow up with Frau M. about the appointment"). They replace the analog handover logbook, have their own lifecycle (open, in progress, done, discarded), and appear in each staff member's inbox. Work items have no separate automatic retention period. Personal content is redacted when the linked person is anonymized.
+
+The CSV import wizard supports persons and events (`ImportJob.TargetType`); see the [import guide](../admin-guide.md#212-import-assistent).
 
 ## Data Model Overview
 
@@ -85,7 +87,7 @@ Anlaufstelle processes social data of highly vulnerable people. Privacy is not a
 
 - **Pseudonymization by design.** There is no real-name field. The pseudonym is the primary identifier. The mapping to a real person exists only in staff knowledge.
 - **Field-level encryption.** Sensitive fields (health data, counseling notes) are encrypted with Fernet/AES-128 before storage. The encryption key is not stored in the database. Key rotation is supported.
-- **Retention periods.** Configurable per contact level and documentation type. Anonymous contacts are aggregated after 12 months (counts kept, individual records deleted). Identified contacts are deleted after a configurable period (e.g. 36 months after last contact).
+- **Retention periods.** Configurable defaults are 90 days for anonymous events, 365 days for events of identified persons, and 3650 days for events of qualified persons. Anonymous and identified events are soft-deleted based on each event’s `occurred_at`; qualified events use `closed_at` of the linked closed case. This is not aggregation that preserves anonymous counts. Event types may carry an additional period; legal holds protect held records.
 - **Deletion requests.** Deletion of qualified data requires a four-eyes approval (two authorized users).
 - **Audit log.** An append-only, immutable log records changes to people, cases, events and work items, including edits to episodes and outcome goals, linking an event to a case, and attachment uploads and erasure (creating and closing the sub-objects still is not covered); it also records login attempts and — of read access — opening the detail page of a person at the "With additional details" level, subject access requests and exports, file downloads, offline take-out and cross-facility access. Ordinary list, detail and search requests deliberately leave no entry ([ADR-043](../adr/043-suchraum-volltextsuche.md)). Event edits deliberately leave two traces for different purposes: `EventHistory` retains before/after states for the event's local change history, while `AuditLog.EVENT_UPDATE` records only the documentation type and changed field identifiers facility-wide — never field values. Each audit row carries a per-facility HMAC chain so that later tampering or deletion of individual entries is detectable (`verify_audit_chain`, run nightly).
 - **Breach detection.** Heuristic incident detection (GDPR Art. 33/34) flags mass deletions of person data, credential-stuffing bursts against unknown usernames, and distributed victim-lockout patterns, delivering SSRF-hardened webhook alerts. Error tracking stays off by default; when enabled, a scrubber strips PII before events leave the installation.
@@ -312,5 +314,5 @@ The largest collective pre-release to date — the configurability milestones M0
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.5 -->
-<!-- translation-date: 2026-10-01 -->
-<!-- source-hash: e6558d27c07b424169f4cca3b84cde137735e53f -->
+<!-- translation-date: 2026-10-06 -->
+<!-- source-hash: 1ce7986ea989b483da0d8031e8287dab44172969 -->

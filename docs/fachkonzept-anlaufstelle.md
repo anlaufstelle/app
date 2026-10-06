@@ -225,15 +225,15 @@ Anlaufstelle denkt von der Einrichtung her: ein konkreter Standort mit eigenem T
 
 ### Prinzip 3: Semantik vor freiem Feldchaos
 
-Dokumentationsfelder haben eine Bedeutung. Sie sind nicht einfach benannte Textfelder, sondern tragen Metadaten: Datentyp, Zuordnung zu einem Dokumentationstyp, Sensitivitätsstufe, Löschfrist, Berichtsschlüssel. Diese Semantik ermöglicht automatische Auswertung, Datenschutzsteuerung und typenübergreifende Suche.
+Dokumentationsfelder haben eine Bedeutung. Sie sind nicht einfach benannte Textfelder, sondern tragen Metadaten: Datentyp, Zuordnung zu einem Dokumentationstyp, Sensitivitätsstufe und Berichtsschlüssel. Aufbewahrungsfristen werden am Dokumentationstyp und in den Einrichtungseinstellungen konfiguriert, nicht am einzelnen Feld. Diese Semantik ermöglicht automatische Auswertung, Datenschutzsteuerung und typenübergreifende Suche.
 
-*Das bedeutet konkret:* Wenn eine Einrichtung ein Feld „Dauer" definiert und ihm den Berichtsschlüssel „Minuten" gibt, weiß das System, dass dessen Werte in die Minutensummen des Beratungsberichts gehören — unabhängig davon, wie die Einrichtung das Feld nennt. Es ist nicht einfach Spalte 7 in einer Excel-Tabelle.
+*Das bedeutet konkret:* Wenn eine Einrichtung ein Feld „Dauer" definiert und ihm den Berichtsschlüssel `dauer_minuten` gibt, weiß das System, dass dessen Werte in die Minutensummen des Beratungsberichts gehören — unabhängig davon, wie die Einrichtung das Feld nennt. Es ist nicht einfach Spalte 7 in einer Excel-Tabelle.
 
 ### Prinzip 4: Arbeitsinfo neben Dokumentation
 
 Nicht alles, was Mitarbeitende festhalten, ist Dokumentation. Hinweise wie „Bitte bei Frau M. nachhaken, ob der Termin beim Sozialamt stattgefunden hat" oder „Herr K. hat seine Jacke hier vergessen" sind operative Informationen mit eigenem Lebenszyklus: offen, erledigt, verworfen. Sie gehören nicht in die Chronik der Person, sondern in ein eigenes operatives System.
 
-*Das bedeutet konkret:* Arbeitsinfos (Hinweise und Aufgaben) sind ein eigener Bereich mit eigenem Status und eigener Sichtbarkeit. Sie können mit Personen verknüpft sein, sind aber keine Dokumentation im fachlichen Sinn und unterliegen anderen Löschfristen. Die Informationsweitergabe zwischen Diensten (früher: „Übergabe") wird durch Hinweise mit Priorität abgedeckt — ein eigenes Übergabe-Konzept ist nicht nötig.
+*Das bedeutet konkret:* Arbeitsinfos (Hinweise und Aufgaben) sind ein eigener Bereich mit eigenem Status und eigener Sichtbarkeit. Sie können mit Personen verknüpft sein, sind aber keine Dokumentation im fachlichen Sinn. Eine eigene automatische Löschfrist für WorkItems ist nicht implementiert; personenbezogene Inhalte werden bei der Anonymisierung der Person redigiert. Die Informationsweitergabe zwischen Diensten (früher: „Übergabe") wird durch Hinweise mit Priorität abgedeckt — ein eigenes Übergabe-Konzept ist nicht nötig.
 
 ### Prinzip 5: Fälle vor losem Eintragshaufen
 
@@ -418,7 +418,7 @@ Neben der fachlichen Dokumentation gibt es eine operative Ebene: Hinweise und Au
 
 Die Informationsweitergabe zwischen Diensten — das, was in der analogen Welt das Übergabebuch leistet — wird durch Hinweise mit Priorität abgedeckt. Ein separates Übergabe-Konzept ist nicht nötig: Was die Kolleg:innen wissen müssen, steht als Hinweis in der Inbox. Der Vorteil gegenüber einem dedizierten Übergabe-Objekt: Hinweise funktionieren unabhängig davon, ob die Einrichtung im Schichtbetrieb arbeitet, feste Bürozeiten hat oder flexible Dienstzeiten nutzt.
 
-Arbeitsinfos haben einen eigenen Lebenszyklus: Sie werden erstellt (offen), bearbeitet (in Arbeit), abgeschlossen (erledigt) oder verworfen. Sie können mit einer Person verknüpft sein, müssen es aber nicht. Sie haben eigene Löschfristen, die kürzer sind als die der Dokumentation — eine erledigte Aufgabe muss nicht jahrelang aufbewahrt werden.
+Arbeitsinfos haben einen eigenen Lebenszyklus: Sie werden erstellt (offen), bearbeitet (in Arbeit), abgeschlossen (erledigt) oder verworfen. Sie können mit einer Person verknüpft sein, müssen es aber nicht. Eine eigene automatische Löschfrist für WorkItems ist nicht implementiert. Personenbezogene Inhalte werden bei der Anonymisierung der verknüpften Person redigiert.
 
 Der entscheidende Unterschied: Dokumentation beschreibt, was war. Arbeitsinfos beschreiben, was zu tun ist. Beides ist notwendig, aber es sind verschiedene Dinge mit verschiedenen Regeln.
 
@@ -455,7 +455,7 @@ Datenschutz ist kein nachträgliches Feature, sondern strukturgebendes Element d
 - **Pseudonymisierung by Design.** Kein Klarname-Feld im System. Das Pseudonym ist der primäre Identifikator.
 - **Kontaktstufen als Zugriffssteuerung.** Wer welche Daten sehen darf, hängt von der Kontaktstufe der Person und der Rolle der Mitarbeitenden ab.
 - **Audit-Trail.** Jede Änderung an Person, Fall, Ereignis und Aufgabe wird protokolliert — wer hat wann was geändert oder gelöscht; dazu gehören auch das Bearbeiten von Episoden und Wirkungszielen, das Zuordnen eines Ereignisses zu einem Fall sowie Upload und Löschung von Anhängen (Anlegen und Abschließen der Unterobjekte weiterhin nicht). Von Lesezugriffen protokolliert sind das Öffnen der Detailseite einer Person der Stufe „Mit Zusatzangaben", Auskunft und Export, Datei-Downloads, die Offline-Mitnahme und einrichtungsübergreifende Zugriffe; gewöhnliche Listen-, Detail- und Suchaufrufe erzeugen bewusst keinen Eintrag ([ADR-043](adr/043-suchraum-volltextsuche.md)).
-- **Löschfristen.** Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Anonyme Kontakte werden nach 12 Monaten aggregiert (nur Zählung behalten, Einzeleinträge löschen). Identifizierte Kontakte nach konfigurierter Frist (z.B. 36 Monate nach letztem Kontakt). Qualifizierte Kontakte nach Beendigung plus Aufbewahrungsfrist.
+- **Löschfristen.** Die konfigurierbaren Vorgabewerte betragen 90 Tage für anonyme Ereignisse, 365 Tage für Ereignisse identifizierter Personen und 3650 Tage für Ereignisse qualifizierter Personen. Bei anonymen und identifizierten Ereignissen zählt jeweils `occurred_at`, bei qualifizierten Ereignissen der Abschlusszeitpunkt `closed_at` des zugeordneten geschlossenen Falls. Die Durchsetzung setzt Ereignisse auf Soft-Delete; sie aggregiert anonyme Kontakte nicht zu einer verbleibenden Zählung. Ereignistypen können zusätzlich eine eigene Frist tragen. Legal Holds nehmen geschützte Daten von der Durchsetzung aus.
 - **Verschlüsselung.** Besonders sensible Felder (Gesundheitsdaten, Beratungsinhalte) werden verschlüsselt gespeichert. Der Schlüssel liegt nicht in der Datenbank.
 - **Berechtigungsmodell.** Fünf Rollen (Systemadministration, Anwendungsbetreuung, Leitung, Fachkraft, Assistenz) mit kontextabhängigen Zugriffsrechten. Nur die Systemadministration arbeitet facility-übergreifend; alle anderen Rollen bleiben strikt auf ihre Einrichtung beschränkt. Löschung qualifizierter Daten nur mit 4-Augen-Prinzip.
 - **DSGVO-Konformität.** Betroffenenrechte (Auskunft, Berichtigung, Löschung, Portabilität) sind als Funktionen im System umgesetzt. DSGVO-Dokumentation (Verarbeitungsverzeichnis, Datenschutz-Folgenabschätzung, AV-Vertrag-Vorlage, TOMs) wird mitgeliefert.
@@ -495,7 +495,7 @@ Der Kern enthält alles, was für die grundlegende Dokumentation notwendig ist:
 - **Nutzer und Rollen:** Authentifizierung, Autorisierung, Rollenzuweisung.
 - **Person (Client):** Das Klientel-Register mit Pseudonym, Kontaktstufe und Alterscluster. FK auf Facility (primär) und Organization (vorbereitet).
 - **Ereignis:** Der zentrale Baustein — ein dokumentiertes Vorkommnis, zugeordnet zu einer Person und einem Dokumentationstyp. Feldwerte als JSONB.
-- **Dokumentationstypen und Felder:** Das konfigurierbare Typ-Feld-System mit Semantik (Datentyp, Sensitivität, Statistik-Zuordnung, Löschfrist).
+- **Dokumentationstypen und Felder:** Das konfigurierbare Typ-Feld-System mit Semantik (Datentyp, Sensitivität, Statistik-Zuordnung). Die Löschfrist liegt am Dokumentationstyp, nicht am Feld.
 - **Benannte Zeitfilter:** Konfigurierbare Arbeitszeiträume als gespeicherte Sichten.
 - **Suche:** Volltextsuche über Pseudonyme und Ereignisse.
 - **Audit:** Unveränderliches Protokoll aller Zugriffe und Änderungen.
@@ -545,6 +545,7 @@ Der aktuelle Stand von Anlaufstelle umfasst:
 - Konfigurierbare Dokumentationstypen mit JSONB-Feldsystem
 - Zeitstrombasierte Dokumentation mit benannten Zeitfiltern
 - Hinweise und Aufgaben (WorkItems) mit Inbox
+- CSV-Import-Assistent für Personen und Ereignisse
 - Volltextsuche, Statistik-Dashboard, CSV/PDF-Export
 - Feldverschlüsselung (Fernet/AES) mit Key-Rotation
 - Audit-Trail, Löschfristen, 4-Augen-Löschprinzip
@@ -563,7 +564,6 @@ Für den vollständigen Implementierungsstand siehe [CHANGELOG](../CHANGELOG.md)
 | KDS-Export | Aggregat-Export gemäß KDS 3.0 für Suchthilfestatistik | Hoch |
 | Betroffenenrechte | Self-Service für Auskunft, Berichtigung, Löschung, Portabilität | Hoch |
 | REST-API | Authentifizierte API mit Facility-Scoping | Mittel |
-| Import-Werkzeuge | CSV-Import für Datenmigration | Mittel |
 
 ---
 
@@ -627,7 +627,7 @@ Die Daten eines Ereignisses sind strukturiert nach den Feldern seines Dokumentat
 
 #### DocumentType — Der Dokumentationstyp
 
-Ein Dokumentationstyp definiert eine Kategorie von Ereignissen: „Kontakt", „Krisengespräch", „Spritzentausch", „Begleitung". Jeder Typ hat einen Namen, eine Beschreibung, eine Kategorie, eine Mindestkontaktstufe (ab welcher Stufe dieser Typ zugeordnet werden kann), eine Aufbewahrungsfrist und eine Sensitivitätsstufe.
+Ein Dokumentationstyp definiert eine Kategorie von Ereignissen: „Kontakt", „Krisengespräch", „Spritzentausch", „Begleitung". Jeder Typ hat einen Namen, eine Beschreibung, eine optionale Mindestkontaktstufe (ab welcher Stufe dieser Typ zugeordnet werden kann), eine Aufbewahrungsfrist und eine Sensitivitätsstufe.
 
 Dokumentationstypen sind konfigurierbar. Eine Einrichtung kann eigene Typen definieren und bestehende Typen deaktivieren. Anlaufstelle liefert vorkonfigurierte Typen als Domänenbibliothek mit (siehe Kapitel 11).
 
@@ -635,7 +635,7 @@ Dokumentationstypen sind konfigurierbar. Eine Einrichtung kann eigene Typen defi
 
 Ein FieldTemplate definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp (Text, Zahl, Datum, Auswahl, Mehrfachauswahl, Boolean, ...), ob es ein Pflichtfeld ist, welche Optionen zur Auswahl stehen, ob es verschlüsselt gespeichert wird (`is_encrypted`), welche Sichtbarkeitsstufe es hat (`sensitivity`), welchen Berichtsschlüssel es trägt (`report_key`).
 
-FieldTemplates sind die Bausteine des semantischen Feldsystems. Sie tragen Bedeutung: Das System weiß, dass das Feld „Dauer" ein Zahlenfeld mit dem Berichtsschlüssel „Minuten" ist und als nicht-sensibel eingestuft gilt — der Bericht liest es deshalb, auch wenn die Einrichtung es „Gesprächsdauer" nennt.
+FieldTemplates sind die Bausteine des semantischen Feldsystems. Sie tragen Bedeutung: Das System weiß, dass das Feld „Dauer" ein Zahlenfeld mit dem Berichtsschlüssel `dauer_minuten` ist und als nicht-sensibel eingestuft gilt — der Bericht liest es deshalb, auch wenn die Einrichtung es „Gesprächsdauer" nennt.
 
 #### DocumentTypeField — Die Zuordnung
 
@@ -767,21 +767,21 @@ Für die Frage, ob Client auf Facility- oder Organization-Ebene angesiedelt wird
 
 **Kontext:** Anlaufstelle braucht konfigurierbare Dokumentationstypen mit eigenen Feldern. Die Frage ist, wie die Feldwerte gespeichert werden. Zwei grundsätzliche Ansätze standen zur Wahl: JSONB (Hybrid) und volles EAV (Entity-Attribute-Value).
 
-**Entscheidung:** Feldwerte werden als JSONB-Objekt zusammen mit dem Ereignis gespeichert. Die Feldstruktur (Name, Typ, Optionen, Validierung, Verschlüsselung) ist in einer separaten Metadaten-Tabelle definiert. Die Schlüssel im JSON sind Feld-UUIDs, nicht Feldnamen — das entkoppelt Anzeige von Speicherung.
+**Entscheidung:** Feldwerte werden als JSONB-Objekt zusammen mit dem Ereignis gespeichert. Die Feldstruktur (Name, Typ, Optionen, Validierung, Verschlüsselung) ist in einer separaten Metadaten-Tabelle definiert. Die Schlüssel im JSON sind stabile Slugs (`FieldTemplate.slug`), nicht Anzeigenamen — das entkoppelt Anzeige von Speicherung.
 
 **Begründung:** Der Prototyp hat den JSONB-Ansatz implementiert und validiert — inklusive Verschlüsselung einzelner Felder innerhalb des JSON. Für die häufigsten Operationen ist JSONB die performantere und einfachere Lösung:
 
 - **Kontakt erfassen:** Ein INSERT mit einem JSON-Feld. Kein Batch-INSERT in eine Wertetabelle.
 - **Chronik laden:** Ein Query liefert 20 Ereignisse mit allen Feldwerten. Keine Pivot-Logik, keine JOINs.
 - **Typ-Statistik:** Aggregation auf Ereignis-Ebene, kein Zugriff auf Feldwerte nötig. Identisch bei beiden Ansätzen.
-- **Verschlüsselung:** Felder mit `encrypted=True` werden vor dem Speichern per Fernet (AES) verschlüsselt. Die Sonderlogik ist im Prototyp implementiert und funktioniert.
-- **Schema-Flexibilität:** Neue Felder werden als FieldDef angelegt. Bestehende Ereignisse haben das Feld nicht im JSON — `data_json.get('neues_feld_id')` gibt `None`. Kein Migrationsbedarf.
+- **Verschlüsselung:** Felder mit `is_encrypted=True` werden vor dem Speichern per Fernet (AES) verschlüsselt. Die Sonderlogik ist im Prototyp implementiert und funktioniert.
+- **Schema-Flexibilität:** Neue Felder werden als FieldTemplate angelegt. Bestehende Ereignisse haben das Feld nicht im JSON — `data_json.get('neues-feld')` gibt `None`. Kein Migrationsbedarf.
 
-**Wo EAV besser wäre:** Feldbezogene Abfragen (z.B. „alle Vermittlungen an die Wohnhilfe") sind mit JSONB möglich (`data_json->>'field_id' = 'Wohnhilfe'`), aber langsamer als ein B-Tree-Lookup in einer EAV-Wertetabelle. Dieser Use-Case wird mit der Auswertung (siehe Roadmap) relevant.
+**Wo EAV besser wäre:** Feldbezogene Abfragen (z.B. „alle Vermittlungen an die Wohnhilfe") sind mit JSONB möglich (`data_json->>'ziel' = 'Wohnhilfe'`), aber langsamer als ein B-Tree-Lookup in einer EAV-Wertetabelle. Dieser Use-Case wird mit der Auswertung (siehe Roadmap) relevant.
 
 **Evaluierungskriterium vor der Auswertungs-Roadmap:** Wenn feldbezogene Statistik-Abfragen bei realen Datenmengen (50.000+ Ereignisse) unter 5 Sekunden bleiben, bleibt JSONB. Falls nicht, wird als Zwischenlösung eine denormalisierte Statistik-Tabelle evaluiert (PostgreSQL Materialized View oder Trigger-basierte Spiegelung der Feldwerte) — bevor ein vollständiger EAV-Umbau in Betracht gezogen wird.
 
-**Migrationsgarantie:** Die Metadaten-Struktur (DocumentType, FieldTemplate/FieldDef) ist in beiden Ansätzen identisch. Eine spätere Migration auf EAV betrifft nur die Speicherschicht der Feldwerte, nicht die Konfigurationsebene.
+**Migrationsgarantie:** Die Metadaten-Struktur (DocumentType, FieldTemplate) ist in beiden Ansätzen identisch. Eine spätere Migration auf EAV betrifft nur die Speicherschicht der Feldwerte, nicht die Konfigurationsebene.
 
 | Kriterium | JSONB (gewählt) | EAV (Alternative) |
 |---|---|---|
@@ -804,11 +804,11 @@ Für die Frage, ob Client auf Facility- oder Organization-Ebene angesiedelt wird
 
 - Eigener Lebenszyklus: offen → in Arbeit → erledigt → verworfen. Ereignisse haben keinen Status.
 - Eigene Sichtbarkeit: Eine offene Aufgabe erscheint in der Inbox. Ein dokumentiertes Ereignis nicht.
-- Eigene Löschfristen: Eine erledigte Aufgabe kann nach kurzer Frist gelöscht werden. Ein Kontakt muss jahrelang aufbewahrt werden.
+- Keine eigene automatische Löschfrist: Personenbezogene Inhalte der Arbeitsinfos werden bei der Anonymisierung der verknüpften Person redigiert.
 - Eigene Zuordnung: WorkItems können einem User zugewiesen sein. Ereignisse gehören zu einer Person.
 - Priorität: Hinweise können als „wichtig" markiert werden, um die Informationsweitergabe zwischen Diensten zu unterstützen — das ersetzt die analoge Übergabe.
 
-Würde man WorkItems als DocumentType abbilden, müsste man Status, Zuweisung, Inbox-Logik und separate Löschfristen in das generische Typ-System einbauen — das würde die Einfachheit des Systems untergraben und die Semantik verwässern.
+Würde man WorkItems als DocumentType abbilden, müsste man Status, Zuweisung und Inbox-Logik in das generische Typ-System einbauen — das würde die Einfachheit des Systems untergraben und die Semantik verwässern.
 
 **Alternativen:** WorkItems als spezielle DocumentTypes. Verworfen aus den genannten Gründen.
 
@@ -852,30 +852,33 @@ Die Domänenbibliothek löst dieses Problem: Sie liefert vorkonfigurierte Dokume
 
 Domänenbibliotheken sind keine fest eingebauten Typen. Sie sind Seed-Daten — Startvorschläge, die bei der Ersteinrichtung eingespielt werden. Einrichtungen können alles verändern. Technisch sind sie als **Domänen-Pakete** realisiert: versionierbare YAML-Kataloge, die über `setup_facility --package <name>` bzw. `manage.py load_package` eingespielt werden (Mechanik: [docs/packages.md](packages.md)). Mitgeliefert werden neben dem Standardkatalog die Pakete `beratungsstelle`, `awareness`, `frauenhaus` und `jugendarbeit` (siehe § 3 „Weitere Einsatzzwecke"). Weitere Bibliotheken können von der Community beigesteuert werden, z.B. für Wohnungslosenhilfe, Streetwork oder weitere Domänen.
 
-### Beispielbibliothek: Niedrigschwellige Suchthilfe / Kontaktladen
+### Standardkatalog — niedrigschwellige Hilfe
 
-| Dokumentationstyp | Kategorie | Mindestkontaktstufe | Sensitivität | Statistik-Zuordnung | Aufbewahrung |
-|---|---|---|---|---|---|
-| **Kontakt** (Kurzbesuch) | Kontakt | Anonym | Niedrig | Kontakte gesamt | 12 Monate (anonym), 36 Monate (identifiziert) |
-| **Krisengespräch** | Leistung | Identifiziert | Mittel | Krisenintervention | 36 Monate |
-| **Medizinische Versorgung** | Leistung | Identifiziert | Hoch (verschlüsselt) | Med. Versorgungen | 60 Monate |
-| **Spritzentausch** | Leistung | Anonym | Niedrig | Harm Reduction | 12 Monate (anonym) |
-| **Begleitung** | Leistung | Identifiziert | Mittel | Begleitungen | 36 Monate |
-| **Beratungsgespräch** | Leistung | Qualifiziert | Hoch (verschlüsselt) | Beratungsgespräche | 60 Monate |
-| **Vermittlung** | Leistung | Identifiziert | Mittel | Vermittlungen | 36 Monate |
-| **Hausverbot** | Administration | Identifiziert | Niedrig | — | 36 Monate |
+Der mitgelieferte Katalog (`default`) definiert folgende Ereignistypen. „Keine“ Mindestkontaktstufe erlaubt auch anonyme Ereignisse ohne Personenzuordnung. Keiner dieser Typen setzt eine eigene `retention_days`-Frist; es gelten die konfigurierbaren Einrichtungseinstellungen.
+
+| Dokumentationstyp | Mindestkontaktstufe | Sensitivität | Berichtsschlüssel (`report_key`) |
+|---|---|---|---|
+| **Kontakt** | Keine | Normal | `contact` |
+| **Krisengespräch** | Keine | Erhöht | `crisis` |
+| **Medizinische Versorgung** | Keine | Hoch | `medical` |
+| **Spritzentausch** | Keine | Normal | `needle_exchange` |
+| **Begleitung** | Keine | Normal | `accompaniment` |
+| **Beratungsgespräch** | Qualifiziert | Erhöht | `counseling` |
+| **Vermittlung** | Keine | Normal | `referral` |
+| **Notiz** | Keine | Normal | `excluded` |
+| **Hausverbot** | Keine | Erhöht | `excluded` |
 
 ### Erläuterung der Zuordnungen
 
-**Kategorie** gruppiert die Typen in der Benutzeroberfläche: Kontakt (Basisleistung), Leistung (qualifizierte Leistung), Administration (interne Verwaltung).
+Eine Kategorie-Spalte am Dokumentationstyp gibt es nicht. Die Berichtszuordnung trägt `report_key`; besondere Fachlogik für Hausverbote und Krisengespräche wird über `system_type` gesteuert.
 
 **Mindestkontaktstufe** bestimmt, ab welcher Stufe der Typ zugeordnet werden kann. Ein Spritzentausch kann anonym dokumentiert werden (nur Zählung). Ein Beratungsgespräch erfordert einen qualifizierten Kontakt mit Pseudonym und Beratungshistorie.
 
-**Sensitivität** steuert, welche Rollen die Feldwerte des Typs sehen dürfen. Verschlüsselung (`is_encrypted`) ist unabhängig davon konfigurierbar. Medizinische Versorgung und Beratungsgespräche enthalten potenziell Gesundheitsdaten (Art. 9 DSGVO) und werden verschlüsselt.
+**Sensitivität** steuert, welche Rollen die Feldwerte des Typs sehen dürfen. Verschlüsselung (`is_encrypted`) ist unabhängig davon konfigurierbar. Im Standardkatalog sind beispielsweise „Notiz (Medizin)“, „Thema“ und „Vereinbarungen“ als verschlüsselte Felder markiert. Das bedeutet nicht, dass jedes Feld eines sensiblen Typs verschlüsselt ist.
 
 **Statistik-Zuordnung** definiert, unter welcher Kategorie der Typ in Statistiken und Behördenberichten erscheint. Das ermöglicht automatische Aggregation ohne manuelle Zuordnung.
 
-**Aufbewahrung** definiert die Löschfrist. Anonyme Kontakte werden nach 12 Monaten aggregiert (Einzeleinträge gelöscht, Zählung behalten). Identifizierte Kontakte nach 36 Monaten ab letztem Kontakt. Qualifizierte Kontakte nach Beendigung plus 60 Monaten (orientiert an § 45 SGB VIII Überprüfungsfrist, konfigurierbar).
+**Aufbewahrung** wird in Tagen konfiguriert: Vorgaben 90/365/3650 für anonym/identifiziert/qualifiziert. Anonyme und identifizierte Ereignisse werden nach ihrem Ereigniszeitpunkt (`occurred_at`) soft-gelöscht, qualifizierte Ereignisse nach Ablauf der Frist ab `closed_at` des zugeordneten geschlossenen Falls. Eine zusätzliche Typfrist gilt für Ereignisse nach `occurred_at`; Legal Holds werden berücksichtigt. Die Fristen sind keine Feld-Metadaten.
 
 ### Abgrenzung: Bibliothek ≠ fest eingebaute Typen
 
@@ -985,7 +988,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 
 **Kein Ersatz für klinische Dokumentation.** Anlaufstelle dokumentiert niedrigschwellige soziale Arbeit, nicht medizinische Behandlung. Für Substitutionsambulanzen, Therapieeinrichtungen oder psychiatrische Dienste gibt es spezialisierte Systeme mit eigenen regulatorischen Anforderungen (z.B. § 630f BGB für Patientendokumentation).
 
-**Kein starres Formular-Framework.** Das Typ-Feld-System ist konfigurierbar, aber es ist kein allgemeiner Formular-Builder wie Google Forms oder Typeform. Die Felder haben Semantik — Sensitivität, Statistik-Zuordnung, Löschfrist —, die über reine Formularerfassung hinausgeht. Anlaufstelle baut auf fachlichen Konzepten auf, nicht auf generischer Datensammlung.
+**Kein starres Formular-Framework.** Das Typ-Feld-System ist konfigurierbar, aber es ist kein allgemeiner Formular-Builder wie Google Forms oder Typeform. Die Felder haben Semantik — Sensitivität und Statistik-Zuordnung —, die über reine Formularerfassung hinausgeht. Anlaufstelle baut auf fachlichen Konzepten auf, nicht auf generischer Datensammlung.
 
 ### Was bewusst nicht im Kern ist
 
@@ -1029,7 +1032,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 | **Event** | Technischer Begriff für ein Ereignis. Siehe: Ereignis. |
 | **Facility** | Einrichtung — ein konkreter Standort. Die primäre Scope-Grenze für Mitarbeitende. Alle Entitäten haben einen FK auf Facility. |
 | **FieldTemplate** | Feldvorlage — definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp, Pflichtfeld, Optionen, Verschlüsselung, Statistik-Zuordnung. |
-| **Hausverbot** | Betretungsverbot für eine Person in einer Einrichtung, mit Begründung, Gültigkeitszeitraum und Erteilender. In Anlaufstelle als Dokumentationstyp der Kategorie „Administration" abgebildet. |
+| **Hausverbot** | Betretungsverbot für eine Person in einer Einrichtung, mit Begründung, Gültigkeitszeitraum und Erteilender. In Anlaufstelle als Dokumentationstyp mit `system_type=ban` abgebildet. |
 | **Inbox** | Persönliche Übersicht aller offenen Hinweise und fälligen Aufgaben für die angemeldete Mitarbeitende. Teil der Operations-Ebene. |
 | **JSONB** | PostgreSQL-Datentyp für binäres JSON. Wird in Anlaufstelle verwendet, um die Feldwerte eines Ereignisses zusammen mit dem Ereignis zu speichern. Indexierbar (GIN-Index), abfragbar, performant. |
 | **Kontaktstufe** | Dreistufiges Modell, das den Identifizierungsgrad einer Person im System beschreibt: anonym (nur Zählung), identifiziert (Pseudonym), qualifiziert (Beratungsprozess). Bestimmt Zugriffsrechte, zulässige Dokumentationstypen und Löschfristen. |
@@ -1101,7 +1104,7 @@ Jonas (Systemadministration, `super_admin`) bzw. die Einrichtungsleitung braucht
 
 - **Automatisches tägliches Backup:** Ein mitgeliefertes Skript (`backup.sh`) erstellt einen PostgreSQL-Dump, verschlüsselt ihn mit einem konfigurierbaren Schlüssel und speichert ihn lokal. Rotation: 7 tägliche, 4 wöchentliche, 3 monatliche Backups.
 - **Externes Backup (optional):** Dokumentierte Integration mit rclone für die Ablage auf einem S3-kompatiblen Speicher oder einem zweiten Server.
-- **Restore-Test:** Das Backup-Skript enthält eine Verify-Funktion, die den Dump testweise in einen temporären Container lädt.
+- **Restore-Test:** Das Backup-Skript enthält eine Verify-Funktion, die den Dump testweise in eine temporäre Datenbank wiederherstellt.
 - **Disaster Recovery:** Dokumentiertes Vorgehen für Komplettwiederherstellung aus einem Backup — Schritt für Schritt, für Nicht-Entwickler geschrieben.
 
 ---
@@ -1209,7 +1212,7 @@ Das Fachkonzept entscheidet sich für JSONB als Speicherschicht für Feldwerte (
 
 ### Hintergrund
 
-JSONB ist für die häufigsten Operationen (Erfassung, Chronik, Suche) die performantere und einfachere Lösung. Der potenzielle Engpass liegt bei feldbezogenen Abfragen: „Zeig mir alle Vermittlungen an die Wohnhilfe im letzten Halbjahr." Diese Abfragen erfordern, dass PostgreSQL das JSON jedes Datensatzes parst (`data_json->>'field_id' = 'Wohnhilfe'`), was langsamer ist als ein B-Tree-Lookup in einer normalisierten Tabelle.
+JSONB ist für die häufigsten Operationen (Erfassung, Chronik, Suche) die performantere und einfachere Lösung. Der potenzielle Engpass liegt bei feldbezogenen Abfragen: „Zeig mir alle Vermittlungen an die Wohnhilfe im letzten Halbjahr." Diese Abfragen erfordern, dass PostgreSQL das JSON jedes Datensatzes parst (`data_json->>'ziel' = 'Wohnhilfe'`), was langsamer ist als ein B-Tree-Lookup in einer normalisierten Tabelle.
 
 ### Evaluierungsszenario
 
@@ -1225,7 +1228,7 @@ Falls die Zielzeiten überschritten werden:
 
 **Zwischenlösung (bevorzugt):** Denormalisierte Statistik-Tabelle. Ein PostgreSQL-Trigger oder Cronjob spiegelt die Feldwerte aus `data_json` in eine flache `field_value`-Tabelle, die für Statistik-Abfragen optimiert ist. Der Schreibpfad (Erfassung) bleibt JSONB. Der Lesepfad (Statistik) nutzt die denormalisierte Tabelle.
 
-**Fallback:** Migration auf EAV. Die Metadaten-Struktur (DocumentType, FieldDef) ist identisch — nur die Speicherschicht der Feldwerte ändert sich.
+**Fallback:** Migration auf EAV. Die Metadaten-Struktur (DocumentType, FieldTemplate) ist identisch — nur die Speicherschicht der Feldwerte ändert sich.
 
 ### Zeitpunkt
 
