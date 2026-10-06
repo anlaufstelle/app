@@ -8,10 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Kryptografiebibliothek aktualisiert** (#2402) — Cryptography 50.0.2 aktualisiert den Sicherheitsstack; Verschlüsselungsprüfungen und Python-Abhängigkeits-Audit sind grün.
 - **Source-Map-Verarbeitung gegen blockierende Abschnitts-Offsets gehärtet** ([GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)) — Ein npm-Override hebt source-map-js auf die korrigierte Version 1.2.2.
 
 ### Changed
 
+- **Fehlerberichterstattung aktualisiert** (#2403) — sentry-sdk 2.71.0 ist mit den Initialisierungs- und Datenschutzprüfungen verifiziert.
+- **PostgreSQL-Treiber aktualisiert** (#2404) — Psycopg und sein Binärpaket sind auf 3.3.6 angehoben und mit den Datenbankprüfungen verifiziert.
+- **Python-Lintwerkzeug aktualisiert** (#2406) — Ruff 0.16.10 besteht die Lint- und Formatprüfungen ohne Formatänderungen am Bestand.
+- **Mutationstestwerkzeug aktualisiert** (#2407) — Der Versionspin von mutmut ist auf 3.8.0 angehoben.
 - **JavaScript-Testwerkzeuge aktualisiert** (#2405) — Vitest 5.0.3 mit den erforderlichen Begleitpaketen ist unter Node 20.19.2 geprüft; jsdom bleibt wegen inkompatibler Laufzeitanforderungen auf 29.1.1.
 
 ### Fixed

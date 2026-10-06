@@ -1,5 +1,5 @@
 -r requirements.in
-ruff>=0.16.9
+ruff>=0.16.10
 pip-tools>=7.6.1
 # Abhaengigkeits-Audit im schlanken CI-Audit-Job (Refs #2063).
 pip-audit>=2.10.1
@@ -26,4 +26,4 @@ filelock>=4.0.3
 mypy>=2.3.1
 django-stubs[compatible-mypy]>=6.1.1
 # Mutation-Testing fuer core/services + core/forms (nightly, Refs #922/#923).
-mutmut>=3.7.0,<4.0
+mutmut>=3.8.0,<4.0

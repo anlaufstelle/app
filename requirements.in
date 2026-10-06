@@ -6,7 +6,7 @@
 # zurueckfaellt. Obergrenze <6.2: der Sprung auf 6.2 LTS ist Etappe 2 und
 # fruehestens ab Mai 2027 vorgesehen.
 Django>=6.1.1,<6.2
-psycopg[binary]>=3.3.5
+psycopg[binary]>=3.3.6
 gunicorn>=26.2.0
 whitenoise>=6.5
 django-htmx>=1.29.0
@@ -19,7 +19,7 @@ django-ratelimit>=4.1
 redis>=6.0
 # Major-Bump auf 50.0.0 wegen PYSEC-2026-3552 (pip-audit-Gate, v0.80.0-Schnitt);
 # 49.0.0 war mit #1129 verifiziert, der GHSA-537c-gmf6-5ccf-Fix kam mit 48.0.1.
-cryptography>=50.0.0,<51
+cryptography>=50.0.2,<51
 python-dotenv>=1.2.3
 # Obergrenze <71, damit ein Major-Bump (Dependabot) den PDF-Export nicht
 # ueberraschend bricht — insb. den SSRF-url_fetcher (Refs #1610, #1596).
@@ -28,7 +28,7 @@ python-dotenv>=1.2.3
 weasyprint>=70.0,<71
 django-unfold>=0.108.0
 django-csp>=4.0
-sentry-sdk[django]>=2.70.0
+sentry-sdk[django]>=2.71.0
 pyclamd>=0.4.0
 django-otp>=1.7.3
 # Passkeys/WebAuthn als zweiter Faktor (ADR-032, Refs #1492). Zieht
