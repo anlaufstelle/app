@@ -57,10 +57,23 @@ _HISTORY_PATTERNS: dict[str, re.Pattern[str]] = {
     "seit #": re.compile(r"\b(?:[Ss]eit|[Bb]is|[Nn]ach|[Ss]ince|[Uu]ntil) \[?#\d"),
     "Bestandsmigration": re.compile(r"Bestandsmigration|\bBestands-"),
     "Alt-Bestand": re.compile(r"\bAlt-(?:Bestand|[Zz]eilen|[Dd]aten|Snapshot)|\bAlt(?:bestand|zeilen|daten)\b"),
-    "Welle": re.compile(r"\b(?:dieser|seit|nach|vor) Welle\b|\b(?:since|this) [Ww]ave\b"),
+    "Welle": re.compile(r"\b(?:[Dd]ieser|[Ss]eit|[Nn]ach|[Vv]or) Welle\b|\b(?:[Ss]ince|[Tt]his) [Ww]ave\b"),
     "frühere Fassung": re.compile(r"\b[Ff]rühere[n]? Fassung|\b[Dd]ie frühere\b|\b[Ee]ine frühere\b"),
     "Verhaltenswechsel": re.compile(r"Verhaltenswechsel"),
     "seit Milestone": re.compile(r"\b(?:[Ss]eit|[Vv]or|[Bb]is|[Mm]it) (?:Milestone|M)\s?\d"),
+    "Bis zum Update": re.compile(
+        r"\b(?:[Bb]is zum|[Vv]or dem|[Ss]eit dem) Update\b|\b(?:[Uu]ntil|[Bb]efore) the update\b"
+    ),
+    "Vor dieser Version": re.compile(
+        r"\b(?:[Vv]or|[Ss]eit|[Bb]is zu) dieser Version\b|\b(?:[Bb]efore|[Ss]ince|[Uu]ntil) this version\b"
+    ),
+    "wie bisher": re.compile(r"\b[Ww]ie bisher\b"),
+    # Narrowed to wording about an earlier text/state; "der ursprüngliche
+    # Request-Payload" (the original input) is current-state wording.
+    "ursprünglich": re.compile(
+        r"\b[Uu]rsprünglich(?:e[nmrs]?)? (?:Fassung|Version|Formulierung|Text|Zusage|enthalten)"
+    ),
+    "Synchronization update": re.compile(r"\bSynchroni[sz]ation update\b", re.IGNORECASE),
 }
 
 # Documents swept for the history patterns (Refs #2447).
@@ -314,6 +327,11 @@ class TestHistoryScanAgainstFixtures:
                     "Eine frühere Fassung dieses Abschnitts war falsch.",
                     "Verhaltenswechsel (2026-08):",
                     "Umgesetzt seit Milestone 24.",
+                    "Bis zum Update war der Schutz unvollständig.",
+                    "Vor dieser Version gab es keinen Guard.",
+                    "Der Export funktioniert wie bisher.",
+                    "Die ursprüngliche Fassung gilt.",
+                    "Synchronization update 2026-10-06: current wording.",
                 ]
             ),
             encoding="utf-8",
@@ -344,6 +362,50 @@ class TestHistoryScanAgainstFixtures:
         assert [h.relpath for h in hits] == ["docs/mine.md"]
 
 
+# Wording examples named in issue #2447, written independently of
+# _HISTORY_PATTERNS so that a pattern left out of the list makes this red.
+TICKET_HISTORY_EXAMPLES: tuple[str, ...] = (
+    "Das gilt seit 0.97 für alle Exporte.",
+    "Der Alt-Bestand bleibt lesbar.",
+    "Stand: v0.15 der Doku.",
+    "Das galt vor 0.99 nicht.",
+    "Seit #1751 schreibt der Pfad nichts mehr.",
+    "Bis #1200 fehlte die Prüfung.",
+    "Das blieb bis 0.89 so.",
+    "Seit 0.90 gilt das.",
+    "Das galt bis v0.95.0.",
+    "Bestands-Sessions laufen weiter.",
+    "Die Bestandsmigration läuft einmalig.",
+    "Die Alt-Zeilen bleiben stehen.",
+    "Das gilt seit dieser Welle.",
+    "Seit prüft der Guard das.",
+    "Since Wave 3 the guard checks this.",
+    "since wave 3 the guard checks this.",
+    "Eine frühere Fassung dieses Abschnitts war falsch.",
+    "Die frühere Prüfung fehlte.",
+    "Bis zum Update war der Schutz unvollständig.",
+    "Vor dieser Version gab es keinen Guard.",
+    "Before this version there was no guard.",
+    "Der Export funktioniert wie bisher.",
+    "Die ursprüngliche Fassung gilt.",
+    "Stand v0.15 der Doku.",
+    "Eingeplant für release-0.85.",
+    "Umgesetzt seit M24.",
+    "Geplant vor Milestone 25.",
+    "Synchronization update 2026-10-06: current wording.",
+)
+
+
+class TestTicketHistoryExamples:
+    """Every example from issue #2447 is flagged (Refs #2447)."""
+
+    @pytest.mark.parametrize("sentence", TICKET_HISTORY_EXAMPLES)
+    def test_ticket_example_is_flagged(self, sentence: str, tmp_path: Path) -> None:
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "sample.md").write_text(sentence, encoding="utf-8")
+        assert scan_history_markers(tmp_path), f"history wording not flagged: {sentence!r}"
+
+
 class TestHistoryScopeIsClean:
     """The swept documents (HISTORY_SCOPE) carry no history phrasing (Refs #2447)."""
 
@@ -354,7 +416,7 @@ class TestHistoryScopeIsClean:
     def test_no_history_markers_in_scope(self) -> None:
         hits = scan_history_markers(REPO_ROOT, HISTORY_SCOPE)
         assert hits == [], (
-            "Verlaufs-/Altbestandsformulierungen in der oeffentlichen Doku (Refs #2447):\n"
+            "History or legacy-data wording in public docs (Refs #2447):\n"
             f"{_format_hits(hits)}\n"
-            "Den Ist-Stand beschreiben; Historie gehoert ins CHANGELOG oder in einen datierten ADR-Nachtrag."
+            "Describe the current state; history belongs in CHANGELOG.md or a dated ADR addendum."
         )
