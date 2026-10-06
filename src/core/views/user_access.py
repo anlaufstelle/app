@@ -13,6 +13,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.user_access import UserAccessCreateForm, UserAccessUpdateForm
+from core.models.user import SessionRevocationError
 from core.services.security import RequireSudoModeMixin, is_locked
 from core.services.user_access import (
     create_invited_user,
@@ -186,12 +187,22 @@ class UserAccessMFAResetView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _
 
     def post(self, request, pk):
         target = self._target(request, pk)
-        result = reset_managed_user_mfa(
-            target,
-            facility=request.current_facility,
-            actor=request.user,
-            ip_address=get_client_ip(request),
-        )
+        try:
+            result = reset_managed_user_mfa(
+                target,
+                facility=request.current_facility,
+                actor=request.user,
+                ip_address=get_client_ip(request),
+            )
+        except SessionRevocationError:
+            messages.error(
+                request,
+                _(
+                    "Der zweite Faktor wurde nicht zurückgesetzt: "
+                    "die Sitzungen des Zugangs ließen sich nicht sicher beenden."
+                ),
+            )
+            return redirect("core:user_access_update", pk=target.pk)
         if result.removed_anything:
             messages.success(
                 request,

@@ -28,9 +28,10 @@ from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 
 from core.models import AuditLog, User
 from core.models import EncryptedTOTPDevice as TOTPDevice
+from core.models.user import SessionRevocationError
 from core.services.audit import audit_event
 from core.services.security import LOCKOUT_THRESHOLD, LOCKOUT_WINDOW, is_locked, send_invite_email, unlock
-from core.services.security.credentials import RevocationReason, flush_user_sessions, revoke_credentials
+from core.services.security.credentials import RevocationReason, revoke_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -345,10 +346,14 @@ def reset_user_mfa(target: User, *, actor, ip_address: str | None = None) -> MFA
     nothing. The audit row (``MFA_RESET_BY_ADMIN``) carries target, actor and
     the target's facility; the detail holds counters only, never key material.
 
-    The target's sessions end as well. A session that already passed the
-    second factor would otherwise keep running, possibly on the very device
-    that got lost. The flush runs after the commit, so a failed audit write
-    leaves the account untouched.
+    Every session of the target ends as well: a session that already passed
+    the second factor would otherwise keep running, possibly on the very
+    device that got lost. ``User.revoke_sessions`` changes the stored password
+    hash in the same transaction, so Django signs each of them out at its
+    next request -- independent of the bounded session scan of
+    ``flush_user_sessions``. If that cannot be stored
+    (``SessionRevocationError``), nothing is removed and nothing is audited;
+    a failed audit write likewise rolls the revocation back.
     """
     _assert_can_reset_mfa(target, actor)
 
@@ -372,6 +377,9 @@ def reset_user_mfa(target: User, *, actor, ip_address: str | None = None) -> MFA
         )
         if not result.removed_anything:
             return result
+        locked.revoke_sessions()
+        if User.objects.filter(facility=locked.facility, pk=locked.pk).update(password=locked.password) != 1:
+            raise SessionRevocationError("The revoked password hash of the target was not stored.")
         totp_devices.delete()
         passkeys.delete()
         backup_devices.delete()
@@ -392,7 +400,6 @@ def reset_user_mfa(target: User, *, actor, ip_address: str | None = None) -> MFA
             ip_address=ip_address,
         )
 
-    flush_user_sessions(locked, salt_rotated=False)
     return result
 
 

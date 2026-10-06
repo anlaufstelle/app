@@ -21,12 +21,14 @@ Contract:
 
 from __future__ import annotations
 
-import logging
 import time
 from urllib.parse import urlsplit
 
 import pytest
+from asgiref.sync import async_to_sync
+from django.contrib.auth import authenticate
 from django.core.exceptions import PermissionDenied
+from django.db.models import QuerySet
 from django.http import Http404
 from django.test import Client, override_settings
 from django.urls import reverse
@@ -34,6 +36,7 @@ from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 
 from core.models import AuditLog, User
 from core.models import EncryptedTOTPDevice as TOTPDevice
+from core.models.user import SessionRevocationError
 from core.services.security import generate_backup_codes
 from core.services.user_access import has_second_factor, reset_managed_user_mfa, reset_user_mfa
 from tests.test_rls_functional import (  # noqa: F401
@@ -44,7 +47,6 @@ from tests.test_rls_functional import (  # noqa: F401
 pytestmark = pytest.mark.django_db
 
 USER_ADMIN_CHANGELIST = "/admin-mgmt/core/user/"
-CREDENTIALS_LOGGER = "core.services.security.credentials"
 # The admin action runs through the real changelist, including the sudo gate of
 # the admin site. unfold's ``ModelAdmin.get_action_choices`` still lacks the
 # ``action_location`` parameter, which Django 6.1 reports as a deprecation on
@@ -62,10 +64,6 @@ DETAIL_KEYS = {
     "passkeys_removed",
     "backup_codes_removed",
 }
-
-
-def _credential_log_lines(caplog) -> list[tuple[int, str]]:
-    return [(record.levelno, record.getMessage()) for record in caplog.records if record.name == CREDENTIALS_LOGGER]
 
 
 def _reset_url(user) -> str:
@@ -195,35 +193,6 @@ class TestResetService:
         assert response.status_code == 302
         assert urlsplit(response.url).path == "/login/"
         assert actor_browser.get(reverse("core:user_access_list")).status_code == 200
-
-    def test_session_flush_log_names_no_salt_rotation(self, admin_user, staff_user, caplog):
-        """The reset rotates no offline salt; its flush log line must not claim one."""
-        _enroll(staff_user)
-        _verified_client(staff_user)
-
-        with caplog.at_level(logging.INFO, logger=CREDENTIALS_LOGGER):
-            reset_user_mfa(staff_user, actor=admin_user)
-
-        assert _credential_log_lines(caplog) == [
-            (logging.INFO, f"Session flush without salt rotation: 1 session(s) of user {staff_user.pk} deleted.")
-        ]
-
-    def test_session_scan_cap_log_names_no_salt_rotation(self, admin_user, staff_user, settings, caplog):
-        settings.OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = 0
-        _enroll(staff_user)
-        _verified_client(staff_user)
-
-        with caplog.at_level(logging.INFO, logger=CREDENTIALS_LOGGER):
-            reset_user_mfa(staff_user, actor=admin_user)
-
-        assert _credential_log_lines(caplog) == [
-            (
-                logging.ERROR,
-                f"Session flush without salt rotation: session scan cap (0) reached for user {staff_user.pk} - "
-                "remaining sessions not flushed (they expire on inactivity, at the latest at the absolute "
-                "session maximum, Refs #1858/#1868).",
-            )
-        ]
 
     def test_own_account_is_refused(self, admin_user, super_admin_user):
         _enroll(admin_user)
@@ -573,6 +542,167 @@ class TestAdminAction:
         assert urlsplit(follow_up.url).path == reverse("sudo_mode")
         assert _factor_rows(staff_user) == (2, 1, 1, 10)
         assert not _reset_rows(staff_user).exists()
+
+
+class TestSessionRevocation:
+    """Every session of the target ends, independent of the bounded session scan.
+
+    ``flush_user_sessions`` stops at ``OFFLINE_REVOCATION_SESSION_SCAN_LIMIT``;
+    the reset must not depend on it. It changes the stored password hash, so
+    Django's session-auth-hash check signs every older session out at its next
+    request, while the password itself keeps working.
+    """
+
+    @IGNORE_UNFOLD_ACTION_CHOICES
+    @pytest.mark.parametrize("scan_cap", [0, 1])
+    @pytest.mark.parametrize("entry", ["view", "admin"])
+    def test_every_target_session_signs_out_even_at_the_scan_cap(
+        self, settings, entry, scan_cap, admin_user, super_admin_user, staff_user
+    ):
+        # Both through the ``settings`` fixture: an ``override_settings``
+        # decorator around it would leak sudo into later tests on teardown.
+        settings.SUDO_MODE_ENABLED = True
+        settings.OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = scan_cap
+        _enroll(staff_user)
+        target_browsers = [_verified_client(staff_user) for _ in range(3)]
+        assert [browser.get("/").status_code for browser in target_browsers] == [200, 200, 200]
+        actor_browser = _verified_client(admin_user if entry == "view" else super_admin_user)
+        _in_sudo(actor_browser)
+
+        response = (
+            actor_browser.post(_reset_url(staff_user)) if entry == "view" else _admin_action(actor_browser, staff_user)
+        )
+
+        assert response.status_code == 302
+        assert _factor_rows(staff_user) == (0, 0, 0, 0)
+        assert _reset_rows(staff_user).count() == 1
+        for browser in target_browsers:
+            signed_out = browser.get("/")
+            assert signed_out.status_code == 302
+            assert urlsplit(signed_out.url).path == "/login/"
+        actor_page = reverse("core:user_access_list") if entry == "view" else USER_ADMIN_CHANGELIST
+        assert actor_browser.get(actor_page).status_code == 200
+
+    def test_password_keeps_working_and_gets_a_fresh_hash(self, admin_user, staff_user):
+        _enroll(staff_user)
+        old_browser = _verified_client(staff_user)
+        hash_before = User.objects.get(pk=staff_user.pk).password
+
+        reset_user_mfa(staff_user, actor=admin_user)
+
+        assert User.objects.get(pk=staff_user.pk).password != hash_before
+        assert authenticate(username=staff_user.username, password="wrong-password") is None
+        assert authenticate(username=staff_user.username, password="testpass123") == staff_user
+        rehashed = User.objects.get(pk=staff_user.pk)
+        # The sign-in stores a new hash with a fresh salt: the pre-reset hash --
+        # and with it the sessions bound to it -- never comes back.
+        assert rehashed.password not in (hash_before, "")
+        assert not rehashed.password.startswith(User.SESSION_REVOCATION_PREFIX)
+        assert rehashed.check_password("testpass123")
+        assert old_browser.get("/").status_code == 302
+
+    def test_a_second_reset_ends_sessions_opened_without_a_password_check(self, admin_user, staff_user):
+        _enroll(staff_user)
+        reset_user_mfa(staff_user, actor=admin_user)
+        # ``force_login`` binds the session to the still-revoked hash, as a
+        # sign-in path without a password check would.
+        browser = _verified_client(User.objects.get(pk=staff_user.pk))
+        assert browser.get("/").status_code == 200
+        _enroll(staff_user)
+
+        reset_user_mfa(staff_user, actor=admin_user)
+
+        assert browser.get("/").status_code == 302
+
+    def test_account_without_usable_password_signs_out_too(self, admin_user, staff_user):
+        staff_user.set_unusable_password()
+        staff_user.save(update_fields=["password"])
+        _enroll(staff_user)
+        browser = _verified_client(staff_user)
+
+        reset_user_mfa(staff_user, actor=admin_user)
+
+        assert not User.objects.get(pk=staff_user.pk).has_usable_password()
+        assert browser.get("/").status_code == 302
+
+    def test_async_password_check_follows_the_revoked_hash(self, admin_user, staff_user):
+        _enroll(staff_user)
+        reset_user_mfa(staff_user, actor=admin_user)
+        revoked = User.objects.get(pk=staff_user.pk)
+
+        assert async_to_sync(revoked.acheck_password)("wrong-password") is False
+        assert async_to_sync(revoked.acheck_password)("testpass123") is True
+        assert not User.objects.get(pk=staff_user.pk).password.startswith(User.SESSION_REVOCATION_PREFIX)
+
+    def test_admin_change_page_renders_while_the_hash_is_revoked(self, super_admin_user, admin_user, staff_user):
+        _enroll(staff_user)
+        reset_user_mfa(staff_user, actor=admin_user)
+        browser = _verified_client(super_admin_user)
+
+        response = browser.get(f"{USER_ADMIN_CHANGELIST}{staff_user.pk}/change/")
+
+        assert response.status_code == 200
+        assert User.objects.get(pk=staff_user.pk).password.startswith(User.SESSION_REVOCATION_PREFIX)
+
+    def test_reset_fails_closed_when_the_revocation_cannot_be_stored(self, admin_user, staff_user):
+        _enroll(staff_user)
+        User.objects.filter(pk=staff_user.pk).update(password="x" * 128)
+        browser = _verified_client(User.objects.get(pk=staff_user.pk))
+
+        with pytest.raises(SessionRevocationError):
+            reset_user_mfa(staff_user, actor=admin_user)
+
+        assert _factor_rows(staff_user) == (2, 1, 1, 10)
+        assert not _reset_rows(staff_user).exists()
+        assert User.objects.get(pk=staff_user.pk).password == "x" * 128
+        assert browser.get("/").status_code == 200
+
+    def test_reset_fails_closed_when_the_hash_update_hits_no_row(self, admin_user, staff_user, monkeypatch):
+        _enroll(staff_user)
+        browser = _verified_client(staff_user)
+        monkeypatch.setattr(QuerySet, "update", lambda queryset, **values: 0)
+
+        with pytest.raises(SessionRevocationError):
+            reset_user_mfa(staff_user, actor=admin_user)
+
+        monkeypatch.undo()
+        assert _factor_rows(staff_user) == (2, 1, 1, 10)
+        assert not _reset_rows(staff_user).exists()
+        assert browser.get("/").status_code == 200
+
+    def test_view_reports_the_failed_revocation(self, client, admin_user, staff_user):
+        _enroll(staff_user)
+        User.objects.filter(pk=staff_user.pk).update(password="x" * 128)
+        client.force_login(admin_user)
+
+        response = client.post(_reset_url(staff_user))
+
+        assert response.status_code == 302
+        assert [str(message) for message in client.get(response.url).context["messages"]] == [
+            "Der zweite Faktor wurde nicht zurückgesetzt: die Sitzungen des Zugangs ließen sich nicht sicher beenden."
+        ]
+        assert _factor_rows(staff_user) == (2, 1, 1, 10)
+        assert not _reset_rows(staff_user).exists()
+
+    @IGNORE_UNFOLD_ACTION_CHOICES
+    def test_admin_action_reports_the_failed_revocation_and_goes_on(self, super_admin_user, staff_user, lead_user):
+        _enroll(staff_user)
+        _enroll(lead_user)
+        User.objects.filter(pk=staff_user.pk).update(password="x" * 128)
+        browser = _verified_client(super_admin_user)
+
+        response = _admin_action(browser, staff_user, lead_user)
+
+        assert response.status_code == 302
+        texts = [str(message) for message in browser.get(response.url).context["messages"]]
+        assert (
+            f"{staff_user.username}: Zweiter Faktor nicht zurückgesetzt, "
+            "die Sitzungen ließen sich nicht sicher beenden."
+        ) in texts
+        assert _factor_rows(staff_user) == (2, 1, 1, 10)
+        assert not _reset_rows(staff_user).exists()
+        assert _factor_rows(lead_user) == (0, 0, 0, 0)
+        assert _reset_rows(lead_user).count() == 1
 
 
 @IGNORE_UNFOLD_ACTION_CHOICES

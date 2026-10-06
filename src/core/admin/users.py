@@ -16,6 +16,7 @@ from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationFo
 from core.admin.mixins import FacilityScopedAdminMixin
 from core.admin_site import anlaufstelle_admin_site
 from core.models import AuditLog, User
+from core.models.user import SessionRevocationError
 from core.services.audit import audit_event
 from core.services.audit.chain import advisory_lock_id
 from core.services.security import is_locked as user_is_locked
@@ -285,6 +286,15 @@ def reset_mfa_for_selected_users(modeladmin, request, queryset):
             messages.warning(
                 request,
                 gettext("%(username)s: Zurücksetzen des zweiten Faktors nicht erlaubt.")
+                % {"username": target.username},
+            )
+            continue
+        except SessionRevocationError:
+            messages.error(
+                request,
+                gettext(
+                    "%(username)s: Zweiter Faktor nicht zurückgesetzt, die Sitzungen ließen sich nicht sicher beenden."
+                )
                 % {"username": target.username},
             )
             continue

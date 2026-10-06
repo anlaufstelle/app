@@ -312,7 +312,7 @@ def rotate_offline_salt(user) -> None:
     user.offline_key_salt = ""
 
 
-def flush_user_sessions(user, *, salt_rotated: bool = True) -> None:
+def flush_user_sessions(user) -> None:
     """Loesche alle (noch gueltigen) DB-Sessions, die auf diesen User zeigen.
 
     Django-Default-Session-Backend ist DB-backed; eine Session bindet den User
@@ -329,10 +329,6 @@ def flush_user_sessions(user, *, salt_rotated: bool = True) -> None:
     Session-Rest laeuft seit #1858 bei Inaktivitaet ab — aktiv genutzte
     Sessions erneuern sich, enden aber spaetestens am absoluten
     Sitzungs-Maximum (#1868, Default 12 h ab Login).
-
-    ``salt_rotated=False`` is for callers that rotate no offline salt (the
-    second-factor reset, Refs #2469): the log lines then describe a plain
-    session flush instead of an offline revocation.
     """
     user_id = str(user.pk)
     cap = getattr(settings, "OFFLINE_REVOCATION_SESSION_SCAN_LIMIT", _SESSION_SCAN_CAP_DEFAULT)
@@ -351,25 +347,12 @@ def flush_user_sessions(user, *, salt_rotated: bool = True) -> None:
             stale_keys.append(session.session_key)
     if stale_keys:
         Session.objects.filter(session_key__in=stale_keys).delete()
-        if not salt_rotated:
-            logger.info(
-                "Session flush without salt rotation: %d session(s) of user %s deleted.", len(stale_keys), user.pk
-            )
-        else:
-            logger.info(
-                "Offline-Invalidierung: %d Session(s) für User %s geflusht.",
-                len(stale_keys),
-                user.pk,
-            )
-    if capped and not salt_rotated:
-        logger.error(
-            "Session flush without salt rotation: session scan cap (%d) reached for user %s - "
-            "remaining sessions not flushed (they expire on inactivity, at the latest at the absolute "
-            "session maximum, Refs #1858/#1868).",
-            cap,
+        logger.info(
+            "Offline-Invalidierung: %d Session(s) für User %s geflusht.",
+            len(stale_keys),
             user.pk,
         )
-    elif capped:
+    if capped:
         logger.error(
             "Offline-Invalidierung: Session-Scan-Obergrenze (%d) für User %s erreicht — "
             "Rest nicht geflusht (Salt ist rotiert; Rest läuft bei Inaktivität ab, spätestens am "

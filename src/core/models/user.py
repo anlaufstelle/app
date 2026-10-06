@@ -3,15 +3,25 @@
 import base64
 import secrets
 
+from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.contrib.auth.hashers import check_password
 from django.contrib.auth.models import AbstractUser
 from django.db import DatabaseError, models
+from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 
 
+class SessionRevocationError(Exception):
+    """The account's sessions could not be revoked; nothing was changed."""
+
+
 class User(AbstractUser):
     """Custom User for Anlaufstelle with role and facility assignment."""
+
+    # Marks a password hash wrapped by ``revoke_sessions``; no hasher uses it.
+    SESSION_REVOCATION_PREFIX = "revoked$"
 
     class Role(models.TextChoices):
         # Refs #867: super_admin operiert installation-weit (Persona Jonas);
@@ -108,6 +118,63 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.display_name or self.get_full_name() or self.username
+
+    def _revoked_password_hash(self) -> str | None:
+        """The original hash inside a ``revoke_sessions`` wrapper, else None."""
+        if not (self.password or "").startswith(self.SESSION_REVOCATION_PREFIX):
+            return None
+        return self.password.split("$", 2)[-1]
+
+    def revoke_sessions(self) -> None:
+        """Make every existing session of this account invalid (Refs #2469).
+
+        Django signs a session out at its next request once the session-auth
+        hash stored in it no longer matches ``get_session_auth_hash()``, an
+        HMAC over the password field. Changing that field therefore ends every
+        session of the account at once -- unlike ``flush_user_sessions``, which
+        has to decode the session table (no user index) and stops at
+        ``OFFLINE_REVOCATION_SESSION_SCAN_LIMIT``.
+
+        The password itself stays valid: the current hash is wrapped as
+        ``revoked$<nonce>$<hash>``, ``check_password`` verifies against the
+        inner hash and then stores a fresh hash of the same password, so the
+        old hash -- and every session bound to it -- never comes back. The
+        nonce makes a repeated revocation change the field again. An unusable
+        password gets a new unusable value.
+
+        Only the instance changes; the caller persists ``password``. Raises
+        ``SessionRevocationError`` when the wrapped hash does not fit the
+        column, so a caller can refuse instead of leaving sessions alive.
+        """
+        if not self.has_usable_password():
+            self.set_unusable_password()
+            return
+        inner = self._revoked_password_hash()
+        if inner is None:
+            inner = self.password or ""
+        wrapped = f"{self.SESSION_REVOCATION_PREFIX}{get_random_string(12)}${inner}"
+        if len(wrapped) > (getattr(self._meta.get_field("password"), "max_length", None) or 0):
+            raise SessionRevocationError("The password hash is too long to revoke the sessions of this account.")
+        self.password = wrapped
+
+    def check_password(self, raw_password):
+        inner = self._revoked_password_hash()
+        if inner is None:
+            return super().check_password(raw_password)
+        if not check_password(raw_password, inner):
+            return False
+        # A fresh hash (new salt) instead of restoring the inner one, which
+        # would revive the revoked sessions. Like Django's hash upgrade, this
+        # is no password change.
+        self.set_password(raw_password)
+        self._password = None
+        self.save(update_fields=["password"])
+        return True
+
+    async def acheck_password(self, raw_password):
+        if self._revoked_password_hash() is None:
+            return await super().acheck_password(raw_password)
+        return await sync_to_async(self.check_password)(raw_password)
 
     @property
     def is_super_admin(self):
