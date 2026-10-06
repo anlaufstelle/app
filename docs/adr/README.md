@@ -6,7 +6,8 @@ Dieser Ordner dokumentiert die wesentlichen Architektur- und Plattformentscheidu
 
 Schlankes [MADR](https://adr.github.io/madr/)-Light. Jede ADR-Datei hat:
 
-- **Status:** `Proposed` · `Accepted` · `Superseded by ADR-NNN` · `Deprecated`
+- **Status:** `Proposed` · `Accepted` · `Teilweise abgelöst durch ADR-NNN` · `Superseded by ADR-NNN` · `Deprecated`
+  - `Teilweise abgelöst durch ADR-NNN`: Eine spätere ADR ersetzt einen abgegrenzten Teil der Entscheidung; der Rest gilt weiter. Ein datierter Nachtrag in der betroffenen ADR nennt den abgelösten Teil und verweist auf die neue ADR. Die ältere Schreibweise „Teilweise superseded durch“ (ADR-034, ADR-037) meint denselben Status.
 - **Date:** Datum der Entscheidung (ISO).
 - **Context:** Was war die Ausgangslage / Problem.
 - **Decision:** Was wurde entschieden.
@@ -27,6 +28,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 
 - ADRs sind fortlaufend nummeriert (`ADR-001`, `ADR-002`, …) und werden **nie umnummeriert**.
 - Eine überholte ADR wird auf `Superseded by ADR-NNN` gesetzt, **nicht gelöscht**. Die Historie bleibt nachvollziehbar.
+- **Nachtrag statt Umschreiben:** Weicht der Code von einer angenommenen ADR ab, wird die ADR nicht umgeschrieben. Die Abweichung kommt als datierter Abschnitt `## Nachtrag (JJJJ-MM-TT): …` mit Ticket-Referenz ans Ende; Context und Decision bleiben stehen. Ältere Abschnitte heißen `## Update JJJJ-MM-TT: …` und haben dieselbe Funktion.
 
 ## Index
 
@@ -51,7 +53,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-017](017-deployment-topology.md) | Deployment-Topologie — Plain Docker Compose primär, Multi-Stage als parallele Stacks | Accepted |
 | [ADR-018](018-rollenmodell-superadmin.md) | 5-Rollen-Modell mit Super-Admin (Systemadministration / Anwendungsbetreuung / Leitung / Fachkraft / Assistenz) | Accepted |
 | [ADR-019](019-custom-admin-site-sudo.md) | Custom AdminSite mit Rollen-Gate und Sudo-Mode | Accepted |
-| [ADR-020](020-three-role-postgres-model.md) | Drei-Rollen-Postgres-Modell (Bootstrap / App / Admin) | Accepted |
+| [ADR-020](020-three-role-postgres-model.md) | Drei-Rollen-Postgres-Modell (Bootstrap / App / Admin) | Teilweise abgelöst durch ADR-033 |
 | [ADR-021](021-retention-modell.md) | Retention-Modell (Fristen, Legal-Hold, AuditLog-Pruning) | Accepted |
 | [ADR-022](022-offline-snapshot-keys.md) | Offline-Snapshot und Offline-Keys | Accepted |
 | [ADR-023](023-k-anonymization-statistik.md) | K-Anonymisierung für externe Statistik | Accepted |
@@ -65,10 +67,10 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-031](031-totp-secret-at-rest.md) | TOTP-Secret at rest verschlüsselt (Proxy-Modell) | Accepted |
 | [ADR-032](032-webauthn-passkeys-2fa.md) | Passkeys/WebAuthn als zusätzlicher zweiter Faktor (neben TOTP) | Accepted |
 | [ADR-033](033-runtime-owner-role-separation.md) | Runtime-DB-Rolle von der DB-Ownership trennen (A1.4) | Accepted |
-| [ADR-034](034-config-ui-category-system-type.md) | category vs. system_type in der Konfigurations-UI | Teilweise superseded by ADR-040 |
+| [ADR-034](034-config-ui-category-system-type.md) | category vs. system_type in der Konfigurations-UI | Teilweise abgelöst durch ADR-040 |
 | [ADR-035](035-evaluator-semantik-bedingte-feldlogik.md) | Evaluator-Semantik der bedingten Feldlogik (gemeinsame FE/BE-Regeln + Testvektoren) | Accepted |
 | [ADR-036](036-globale-block-sequenz-feldordnung.md) | Globale Block-Sequenz für Feldgruppen und ungruppierte Felder | Accepted |
-| [ADR-037](037-konfigurationspakete-dynamische-felder.md) | Konfigurationspakete (YAML) und entitätsübergreifende dynamische Felder | Teilweise superseded by ADR-040 |
+| [ADR-037](037-konfigurationspakete-dynamische-felder.md) | Konfigurationspakete (YAML) und entitätsübergreifende dynamische Felder | Teilweise abgelöst durch ADR-040 |
 | [ADR-038](038-reporting-plugin-backends.md) | Reporting-Backends als Plugin-System | Accepted |
 | [ADR-039](039-owner-generische-dateianhaenge.md) | Owner-generische Dateianhänge (Attachment an Ereignis, Person, Fall) | Accepted |
 | [ADR-040](040-documenttype-category-entfernt.md) | `DocumentType.category` wird entfernt (Natural Key `(facility, name)`) | Accepted |

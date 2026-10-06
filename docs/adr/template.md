@@ -1,6 +1,6 @@
 # ADR-NNN: <Titel der Entscheidung>
 
-- **Status:** Proposed | Accepted | Superseded by ADR-NNN | Deprecated
+- **Status:** Proposed | Accepted | Teilweise abgelöst durch ADR-NNN | Superseded by ADR-NNN | Deprecated
 - **Date:** YYYY-MM-DD
 - **Deciders:** <Namen>
 

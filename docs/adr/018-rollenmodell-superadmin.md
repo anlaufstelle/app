@@ -89,3 +89,13 @@ Die [`FacilityScopeMiddleware`](../../src/core/middleware/facility_scope.py) set
 - [docs/admin-guide.md § 2.1 Erstinstallation](../admin-guide.md) — Bootstrap-Anleitung
 - docs/dev-deployment.md § Production-Bootstrap — Server-Setup mit `create_super_admin`
 - [docs/faq.md § C.13](../faq.md) — User-facing Rollendokumentation
+
+## Nachtrag (2026-10-06): Lockout-Ausnahme und Entsperrpfade (Refs #2449)
+
+Drei Aussagen oben gelten in dieser Form nicht mehr, weil `super_admin` seit #1375 vom Account-Lockout ausgenommen ist:
+
+- **Decision 3, „Lockout-Recovery für den letzten verbleibenden `super_admin`: `manage.py unlock <username>`“:** gegenstandslos. `login_lockout.is_locked` liefert für die Rolle immer `False`, `login_lockout.unlock` ist für sie ein No-op ([`login_lockout.py`](../../src/core/services/security/login_lockout.py)). `manage.py unlock` meldet zwar Erfolg, schreibt für `super_admin` aber keinen `LOGIN_UNLOCK` ([`unlock.py`](../../src/core/management/commands/unlock.py)). Es gibt für die Rolle nichts zu entsperren.
+- **Pro, „Lockout-Recovery für den letzten Super-Admin per CLI definiert — kein Bricked-Installation-Risiko“:** Das Risiko ist weiterhin ausgeschlossen, aber aus einem anderen Grund. Es trägt die Ausnahme selbst: Ein Angreifer kann das Konto nicht aussperren, weil es nie gesperrt wird.
+- **Contra, Mitigation „Lockout (10 Versuche)“:** trifft auf `super_admin` nicht zu. Gegen Raten wirkt für die Rolle allein die Drosselung am Login-POST: `5/m` je IP und `10/h` je Benutzername unabhängig von der IP (#598, `CustomLoginView.post` in [`auth.py`](../../src/core/views/auth.py)). Sie liefert HTTP 429 und endet mit dem Zeitfenster. Dazu kommen MFA, in Produktion sofort erzwungen (`MFA_ENFORCED_ROLES_IMMEDIATE` mit Standard `super_admin,facility_admin` in [`base.py`](../../src/anlaufstelle/settings/base.py)), und die `SYSTEM_VIEW`-Spur.
+
+Für alle anderen Rollen gibt es heute neben der CLI auch Entsperrwege in der Anwendung: `/system/lockouts/unlock/` (`super_admin`, Sudo), `/verwaltung/zugaenge/<pk>/entsperren/` (Einrichtungsverwaltung, Sudo) und den Self-Service per Mail-Token oder MFA-Backup-Code (#869). Gesamtbild: [ADR-008 Nachtrag (2026-10-06)](008-lockout-scope.md#nachtrag-2026-10-06-ist-stand-von-schwelle-achse-audit-und-ausnahmen-refs-2449).

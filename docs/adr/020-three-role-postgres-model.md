@@ -1,6 +1,6 @@
 # ADR-020: Drei-Rollen-Postgres-Modell (Bootstrap / App / Admin)
 
-- **Status:** Accepted
+- **Status:** Teilweise abgelöst durch ADR-033 (Ownership; siehe Nachtrag 2026-10-06)
 - **Date:** 2026-05-28
 - **Deciders:** Tobias Nix
 - **Refs:** #902
@@ -62,3 +62,10 @@ Konkrete Folge-Festlegungen:
 - [ADR-018](018-rollenmodell-superadmin.md) — App-Ebene Super-Admin (nicht DB-Ebene)
 - Issue #902 — Drei-Rollen-Modell
 - Issue #1085 — Fresh-Install-Ownership: Normalisierung nach Migrate-als-Admin
+
+## Nachtrag (2026-10-06): Ownership seit ADR-033, Rotation und Entsperrung (Refs #2449)
+
+**Status:** Teilweise abgelöst durch [ADR-033](033-runtime-owner-role-separation.md). Das Drei-Rollen-Modell (Bootstrap / App / Admin), die Attributprofile und `check_db_roles` gelten unverändert. Abgelöst ist die Ownership-Festlegung in der Decision.
+
+- **Ownership:** Die Decision sagt, `normalize_db_ownership` übertrage alle Objekte auf den DB-Owner „(App-Rolle, gesetzt per `ALTER DATABASE OWNER`)“. Seit der Runtime-/Owner-Trennung aus ADR-033 ist die **Admin-Rolle** DB-Owner (`ALTER DATABASE … OWNER TO admin_user` in [`deploy/postgres-init/01-app-role.sh`](../../deploy/postgres-init/01-app-role.sh)) und besitzt damit alle Tabellen. Die App-Rolle hat nur DML-Rechte (`ALTER DEFAULT PRIVILEGES FOR ROLE admin_user … GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user`) und kann deshalb keine Trigger abschalten. Weil `migrate` als eben diese Admin-Rolle läuft, ist `current_user == db_owner` und [`normalize_db_ownership`](../../src/core/management/commands/normalize_db_ownership.py) ein No-op. Es bleibt als idempotentes Sicherheitsnetz für einen versehentlichen Migrate-Lauf unter einer anderen Rolle (Docstring des Commands).
+- **Lockout-Recovery und Rollen-Rotation** (Consequences: „laufen über den Bootstrap-Superuser“): Das trifft nur auf die Rotation zu. Die Passwortrotation aller drei Rollen läuft als eine Transaktion über die Bootstrap-Rolle ([`ops-runbook.md` § DB-Passwortrotation](../ops-runbook.md#db-passwortrotation-alle-drei-rollen)). Eine Account-Entsperrung ist dagegen ein Vorgang in der Anwendung über die App-Verbindung (`LOGIN_UNLOCK`-Eintrag im AuditLog). Sie braucht weder Bootstrap- noch Admin-Rechte; Wege siehe [ADR-008 Nachtrag (2026-10-06)](008-lockout-scope.md#nachtrag-2026-10-06-ist-stand-von-schwelle-achse-audit-und-ausnahmen-refs-2449).
