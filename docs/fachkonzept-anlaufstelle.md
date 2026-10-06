@@ -16,10 +16,10 @@ Version: 1.9
 | 1.1 | Februar 2026 | Schichtkonzept durch benannte Zeitfilter ersetzt. Übergabe-Konzept aufgelöst — abgedeckt durch Arbeitsinfos (Hinweise, Aufgaben). Organisationshierarchie als offene Entscheidung markiert. |
 | 1.2 | März 2026 | Alle offenen Entscheidungen geschlossen: Organisationshierarchie (Option 2: Klein + vorbereitet), JSONB (bedingt entschieden für Phase 1–3), Lizenz (AGPL v3). Phasenplan: gesplittet in 1a (zeigbarer Kern) und 1b (Fundament komplett). |
 | 1.3 | April 2026 | Feld-Level-Sensitivität: Verschlüsselung und Sichtbarkeit entkoppelt (`FieldTemplate.sensitivity`). |
-| 1.4 | April 2026 (2026-04-19) | Mobile-/Offline-Strategie (§ 16) auf Ist-Stand v0.10 aktualisiert; Sicherheitskonzept um 2FA, File Vault, RLS erweitert. |
+| 1.4 | April 2026 (2026-04-19) | Mobile-/Offline-Strategie (§ 16) auf Funktionsumfang aktualisiert; Sicherheitskonzept um 2FA, File Vault, RLS erweitert. |
 | 1.5 | Mai 2026 (2026-05-10) | 5-Rollen-Modell mit `super_admin` als oberster, facility-übergreifender Rolle (Persona Jonas). Bisherige `admin`-Rolle in `facility_admin` umbenannt (UI-Label „Anwendungsbetreuung"). § 5 (Persona Jonas), § 6 (Berechtigungsmodell), § 9 (Role + Organization), § 14 (Glossar), § 18 (DSGVO-Tabelle), § 25 (Monitoring/Backup) entsprechend aktualisiert. Organisation explizit als reine Branding-Hülse formuliert (Variante b1, [ADR-018](adr/018-rollenmodell-superadmin.md)). DSGVO-Rechenschaftspflicht: jeder Cross-Facility-Lese-Zugriff erzeugt `SYSTEM_VIEW`-AuditLog. Refs #867, löst #866. |
-| 1.6 | Juni 2026 (2026-06-20) | Doku-Audit-Nachzug (#1071 Block A): § 16 Offline-Krypto code-treu (non-extractable `CryptoKey` in IndexedDB statt „nur in-memory"; Offline-Edit-Einstieg als deferred #1111 statt „implementiert"; Idle-Key-Wipe + Bundle-Caps, [ADR-022](adr/022-offline-snapshot-keys.md)). § 19 Datenschutz-Reife auf Stand v0.15 (Retention-Automatisierung [ADR-021](adr/021-retention-modell.md), K-Anonymisierung [ADR-023](adr/023-k-anonymization-statistik.md), 4-Augen-Löschung, DSGVO-Vorlagen als umgesetzt; Portabilität/Berichtigung weiter offen). § 14 Querverweis auf das Datenschutz-Glossar (`docs/glossar.md`). |
-| 1.7 | Juli 2026 (2026-07-07) | Doku-Drift-Korrektur (#1417): § 16 Stufe 3 auf ADR-022-Re-Evaluationsstand (2026-06-29) gehoben — Offline-Edit-Einstieg ist seit #1111 verdrahtet und produktiv (nicht mehr deferred), inkl. Dead-Letter-Ansicht (`/offline/conflicts/`, seit #1396 auch offline erreichbar) und Fallaufgaben-Editieren (#1398). |
+| 1.6 | Juni 2026 (2026-06-20) | Doku-Audit-Nachzug (#1071 Block A): § 16 Offline-Krypto code-treu (non-extractable `CryptoKey` in IndexedDB statt „nur in-memory"; Offline-Edit-Einstieg als deferred #1111 statt „implementiert"; Idle-Key-Wipe + Bundle-Caps, [ADR-022](adr/022-offline-snapshot-keys.md)). § 19 Datenschutzfunktionen (Retention-Automatisierung [ADR-021](adr/021-retention-modell.md), K-Anonymisierung [ADR-023](adr/023-k-anonymization-statistik.md), 4-Augen-Löschung, DSGVO-Vorlagen als umgesetzt; Portabilität/Berichtigung weiter offen). § 14 Querverweis auf das Datenschutz-Glossar (`docs/glossar.md`). |
+| 1.7 | Juli 2026 (2026-07-07) | Doku-Drift-Korrektur (#1417): § 16 Stufe 3 auf ADR-022-Re-Evaluationsstand (2026-06-29) gehoben — Offline-Edit-Einstieg ist #1111 verdrahtet und produktiv , inkl. Dead-Letter-Ansicht (`/offline/conflicts/`, #1396 auch offline erreichbar) und Fallaufgaben-Editieren (#1398). |
 | 1.8 | September 2026 (2026-09-07) | Einsatzzwecke & Domänen-Pakete (#2140): § 1 Positionierung um die Öffnung über die Ursprungsdomäne ergänzt; § 3 als Arbeitsmodus neu gefasst (offene Sozial-/Lebensberatung und niedrigschwellige Beratungsstellen zuerst, Fit-/Anti-Fit-Tabellen, kuratierte Domänen Awareness/Frauenhaus/Jugendarbeit + generische Beratungsstelle); § 8 Roadmap-Zeile „Domänenbibliotheken" als umgesetzt markiert; § 11 verweist auf die YAML-Paket-Mechanik (`docs/packages.md`) und die vier mitgelieferten Pakete; § 14 Glossar um „Domänen-Paket", „Betreiber-Empfehlung" und „Quick-Exit" ergänzt. |
 | 1.9 | September 2026 (2026-09-10) | § 5 um die Persona der Beratungsstellen-Domäne ergänzt (#2190). |
 
@@ -52,8 +52,8 @@ Version: 1.9
 15. [Technologie-Referenzarchitektur](#15-technologie-referenzarchitektur)
 16. [Mobile- und Offline-Strategie](#16-mobile--und-offline-strategie)
 17. [Nicht-funktionale Anforderungen](#17-nicht-funktionale-anforderungen)
-18. [JSONB-Performance-Monitoring (vor Auswertungs-Roadmap)](#18-jsonb-performance-monitoring-vor-auswertungs-roadmap)
-19. [Datenschutz: Phasenabgrenzung](#19-datenschutz-phasenabgrenzung)
+18. [JSONB-Performance-Monitoring](#18-jsonb-performance-monitoring)
+19. [Datenschutz: Implementierte Funktionen](#19-datenschutz-implementierte-funktionen)
 20. [Barrierefreiheit](#20-barrierefreiheit)
 21. [Internationalisierung und Sprache](#21-internationalisierung-und-sprache)
 22. [Regulatorische Landschaft](#22-regulatorische-landschaft)
@@ -190,7 +190,7 @@ Mittlere Fits, die Anlaufstelle als Randsystem nutzen können, ohne Kernprodukt 
 | Klarnamen-Behördenkorrespondenz / Aktenführung | Das Datenmodell ist pseudonym; die Dokumentation ist keine Akte im Rechtssinne. Wer Klarnamen-Akten und Behördenkorrespondenz als Kern braucht, ist mit einem Aktensystem besser bedient. |
 | Kanal-zentrierte Dienste (Krisenchat, Telefonie) | Kommunikationskanäle sind bewusst ausgegrenzt (Prinzip 8, § 13 „Klientelportal"); die Dokumentation geschieht hinterher, nicht im Kontakt. |
 | Terminplanung / Dienstplanung | Anlaufstelle ersetzt nicht die Dienstplanung (Prinzip 8); Zeitfenster sind Sichten, keine Schicht-Container (§ 13 „Zeitfenster als Datenmodell"). |
-| Klientelportal / Self-Service | Kein Klientel-Login und kein Self-Service, auch nicht für Berichtigung ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)). |
+| Klientelportal / Self-Service | Klientel-Login, Selbstregistrierung und Self-Service sind verworfen, auch für Berichtigung ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)). |
 | Hinweisgebersystem (HinSchG) | Braucht einen anonymen Inbound-Kanal für Fremde und einen Rückfrage-Kanal — strukturell ein anderer Anwendungstyp. |
 
 ### Sekundäre Zielgruppe: Kleine und mittlere Träger
@@ -231,7 +231,7 @@ Dokumentationsfelder haben eine Bedeutung. Sie sind nicht einfach benannte Textf
 
 ### Prinzip 4: Arbeitsinfo neben Dokumentation
 
-Nicht alles, was Mitarbeitende festhalten, ist Dokumentation. Hinweise wie „Bitte bei Frau M. nachhaken, ob der Termin beim Sozialamt stattgefunden hat" oder „Herr K. hat seine Jacke hier vergessen" sind operative Informationen mit eigenem Lebenszyklus: offen, erledigt, verworfen. Sie gehören nicht in die Chronik der Person, sondern in ein eigenes operatives System.
+Nicht alles, was Mitarbeitende festhalten, ist Dokumentation. Hinweise wie „Bitte bei Frau M. nachhaken, ob der Termin beim Sozialamt stattgefunden hat" oder „Herr K. hat seine Jacke hier vergessen" sind operative Informationen mit eigenem Lebenszyklus: offen, in Bearbeitung, erledigt, verworfen. Sie gehören nicht in die Chronik der Person, sondern in ein eigenes operatives System.
 
 *Das bedeutet konkret:* Arbeitsinfos (Hinweise und Aufgaben) sind ein eigener Bereich mit eigenem Status und eigener Sichtbarkeit. Sie können mit Personen verknüpft sein, sind aber keine Dokumentation im fachlichen Sinn. Eine eigene automatische Löschfrist für WorkItems ist nicht implementiert; personenbezogene Inhalte werden bei der Anonymisierung der Person redigiert. Für die Informationsweitergabe zwischen Diensten gibt es außerdem die Übergabe-Ansicht (`/?view=uebergabe`) mit Kennzahlen, dringenden Aufgaben und verschlüsselter Schichtnotiz. Die Schichtnotiz hat eine eigene konfigurierbare Aufbewahrungsfrist (Vorgabe: 90 Tage).
 
@@ -243,21 +243,21 @@ Zusammenhängende Arbeit an oder mit einer Person — ein Beratungsprozess, eine
 
 ### Prinzip 6: Wirkung vor reiner Aktivitätszählung
 
-„347 Kontakte im letzten Halbjahr" beantwortet die Frage, was getan wurde — nicht, was bewirkt wurde. Anlaufstelle soll perspektivisch nicht nur Aktivitäten zählen, sondern Wirkung dokumentierbar machen: Ziele formulieren, Meilensteine festhalten, Veränderungen sichtbar machen.
+„347 Kontakte im letzten Halbjahr" beantwortet die Frage, was getan wurde — nicht, was bewirkt wurde. Anlaufstelle macht neben Aktivitätszählungen auch Wirkung dokumentierbar: Ziele formulieren, Meilensteine festhalten, Veränderungen sichtbar machen.
 
 *Das bedeutet konkret:* Neben der quantitativen Statistik (Kontakte, Leistungen, Alterscluster) gibt es die Möglichkeit, Outcomes zu erfassen: „Frau M. hat eine Wohnung gefunden", „Herr K. hat den Substitutionsplatz angetreten". Das ist keine Pflicht, aber eine Option für Einrichtungen, die über Aktivitätszählung hinausgehen wollen.
 
 ### Prinzip 7: Kontextbezogener Zugriff vor statischen Rollen
 
-Wer welche Daten sehen darf, hängt nicht nur von der Rolle ab, sondern vom Kontext: der Kontaktstufe der Person, der Sensitivität des Dokumentationstyps, der Zugehörigkeit zur Einrichtung. Ein statisches Vier-Rollen-Modell ist der Ausgangspunkt, aber die Steuerung erfolgt kontextbezogen.
+Wer welche Daten sehen darf, hängt nicht nur von der Rolle ab, sondern vom Kontext: der Kontaktstufe der Person, der Sensitivität des Dokumentationstyps, der Zugehörigkeit zur Einrichtung. Ein Fünf-Rollen-Modell ist der Ausgangspunkt, aber die Steuerung erfolgt kontextbezogen.
 
 *Das bedeutet konkret:* Eine nebenamtliche Mitarbeiterin sieht die Kontaktliste und kann Kurzbesuche dokumentieren. Sie sieht aber nicht die Beratungsnotizen einer qualifizierten Klientel — dafür braucht es die Rolle „Fachkraft" und die Zugehörigkeit zur richtigen Einrichtung.
 
 ### Prinzip 8: Offene Architektur vor Einzwecklösung
 
-Anlaufstelle ist kein geschlossenes System. Es bietet Schnittstellen für Export (CSV, PDF, API), für domänenspezifische Erweiterungen (eigene Dokumentationstypen, Typbibliotheken) und für die Integration in bestehende Trägerinfrastruktur. Das Ziel ist nicht, alles selbst zu können, sondern sich gut in ein Ökosystem einzufügen.
+Anlaufstelle ist kein geschlossenes System. Es bietet CSV-, PDF- und JSON-Exporte sowie konfigurierbare Dokumentationstypen und Domänen-Pakete. Eine externe REST-API zur Integration mit Trägersystemen ist ein Zielbild (§ 8); die vorhandenen JSON-Endpunkte dienen der sitzungsgebundenen internen Oberfläche und dem Offline-Modus. Das Ziel ist nicht, alles selbst zu können, sondern sich gut in ein Ökosystem einzufügen.
 
-*Das bedeutet konkret:* Anlaufstelle ersetzt nicht die Personalverwaltung, nicht die Buchhaltung und nicht die Dienstplanung. Aber es exportiert Statistiken in Formaten, die der Fördermittelgeber versteht, und bietet eine API, über die ein Trägersystem Daten abfragen kann.
+*Das bedeutet konkret:* Anlaufstelle ersetzt nicht die Personalverwaltung, nicht die Buchhaltung und nicht die Dienstplanung. Aber es exportiert Statistiken in Formaten, die der Fördermittelgeber versteht. Eine externe API, über die ein Trägersystem Daten abfragen könnte, bleibt ein Zielbild.
 
 ---
 
@@ -306,13 +306,13 @@ Jonas ist 41, zuständig für die IT bei einem Trägerverband, der fünf niedrig
 Selin sitzt am PC im Büro. Eine Besucherin kommt herein, nimmt einen Kaffee und setzt sich in den Aufenthaltsraum.
 
 1. Selin öffnet die Startseite — sie sieht den aktuellen Zeitstrom (gefiltert auf den Zeitraum „Nachtdienst 21:30–09:00", den die Einrichtung als benannten Zeitfilter konfiguriert hat).
-2. Sie klickt „Neuer Kontakt".
-3. Sie tippt das Pseudonym: „Maus". Autocomplete schlägt vor: „Maus (identifiziert, 27+)".
-4. Sie wählt den Dokumentationstyp „Kontakt" — die Felder erscheinen: Dauer (Kurz/Mittel/Lang), Leistungen (Mehrfachauswahl: Aufenthalt, Verpflegung, Gespräch, ...).
-5. Sie wählt „Kurz" und „Aufenthalt, Verpflegung". Klick auf Speichern.
+2. Sie öffnet „Neu erstellen“ → „Kontakt dokumentieren“.
+3. Sie sucht im Personenfeld das vorhandene Pseudonym „Maus“ und wählt den Treffer.
+4. Sie wählt den Dokumentationstyp „Kontakt“ — der Standardkatalog bietet unter anderem „Dauer“ (Zahl in Minuten) und „Leistungen“ (Mehrfachauswahl, etwa Essen, Kleidung, Duschen oder Beratung).
+5. Sie trägt beispielsweise 10 Minuten ein, wählt „Essen“ und klickt „Speichern“.
 6. Der Eintrag erscheint sofort in der Übersicht.
 
-Für einen unbekannten Kontakt: Schritt 3 entfällt — sie wählt „Anonymer Kontakt" und das System zählt einen NN-Kontakt.
+Für einen anonymen Kontakt bleibt die Personenzuordnung leer; die Dokumentation wird als anonymes Ereignis gespeichert.
 
 #### Informationen an das Team weitergeben
 
@@ -364,7 +364,7 @@ Das Versprechen „Erlernbar in 2–3 Stunden" ist bewusst ambitioniert. Es bezi
 
 Die Einstiegshürde wird niedrig gehalten durch:
 
-- **Zeitsrombasierte Startseite** — beim Login sieht man sofort, was relevant ist: die Ereignisse des aktuellen Zeitraums, offene Hinweise und Aufgaben, aktive Hausverbote. Kein Dashboard mit 20 Kacheln.
+- **Zeitstrombasierte Startseite** — beim Login sieht man sofort, was relevant ist: die Ereignisse des aktuellen Zeitraums, offene Hinweise und Aufgaben, aktive Hausverbote. Kein Dashboard mit 20 Kacheln.
 - **Ein-Formular-Erfassung** — der häufigste Vorgang (Kontakt dokumentieren) braucht maximal drei Klicks und zwei Eingabefelder.
 - **Kontexthilfe** — an ausgewählten Stellen (Kontaktstufe, Feldbedingungen, 4-Augen-Löschung, Löschfristen und Offline-Modus) mit Erläuterung und gegebenenfalls Link zur In-App-Hilfe; die Hilfe-Übersicht verlinkt das Benutzerhandbuch.
 - **Domänenbibliothek** — vorkonfigurierte Dokumentationstypen für typische Einrichtungstypen. Keine leere Datenbank, sondern ein sinnvoller Startzustand.
@@ -436,7 +436,7 @@ Fallführung ist kein Pflichtkonzept in Anlaufstelle. Eine Einrichtung, die nur 
 
 Die klassische Nachweispflicht fragt nach Aktivitäten: Wie viele Kontakte? Welche Leistungen? Welche Zielgruppen? Das beantwortet die Frage, was getan wurde — nicht, was sich dadurch verändert hat.
 
-Anlaufstelle soll perspektivisch auch Wirkung dokumentierbar machen:
+Anlaufstelle unterstützt Wirkungsmessung über Fälle und Wirkungsziele:
 
 - **Ziele** definieren: „Frau M. soll eine stabile Wohnsituation erreichen."
 - **Meilensteine** festhalten: „Erstgespräch Wohnhilfe stattgefunden", „Antrag gestellt", „Wohnung gefunden".
@@ -498,14 +498,14 @@ Der Kern enthält alles, was für die grundlegende Dokumentation notwendig ist:
 - **Dokumentationstypen und Felder:** Das konfigurierbare Typ-Feld-System mit Semantik (Datentyp, Sensitivität, Statistik-Zuordnung). Die Löschfrist liegt am Dokumentationstyp, nicht am Feld.
 - **Benannte Zeitfilter:** Konfigurierbare Arbeitszeiträume als gespeicherte Sichten.
 - **Suche:** Volltextsuche über Pseudonyme und Ereignisse.
-- **Audit:** Unveränderliches Protokoll aller Zugriffe und Änderungen.
+- **Audit:** Unveränderliches Protokoll ausgewählter sicherheitsrelevanter Aktionen und Änderungen; der Umfang der protokollierten Lesezugriffe ist in § 6 beschrieben.
 - **Basisstatistik:** Zählung nach Kontaktstufe, Dokumentationstyp, Alterscluster, Zeitraum.
 
 ### Operations — Der Arbeitsalltag
 
 Die operative Ebene macht Anlaufstelle von einer Dokumentationsdatenbank zu einem Arbeitswerkzeug:
 
-- **Hinweise und Aufgaben:** Operative Informationen mit Lebenszyklus (offen → erledigt → verworfen), verknüpfbar mit Personen. Eine zusätzliche Übergabe-Ansicht bündelt Schichtinformationen und eine verschlüsselte Schichtnotiz mit eigener Frist.
+- **Hinweise und Aufgaben:** Operative Informationen mit Lebenszyklus (offen, in Bearbeitung, erledigt, verworfen), verknüpfbar mit Personen. Eine zusätzliche Übergabe-Ansicht bündelt Schichtinformationen und eine verschlüsselte Schichtnotiz mit eigener Frist.
 - **Inbox:** Sammlung aller offenen Hinweise und fälligen Aufgaben für die angemeldete Mitarbeitende.
 - **Arbeitsübersicht:** Was steht an, was ist offen, was ist überfällig?
 - **Mobile-first-Erfassung:** Schnellerfassung optimiert für Smartphone — minimale Felder, große Touch-Targets, Autocomplete.
@@ -523,7 +523,7 @@ Die Fallebene strukturiert zusammenhängende Arbeit und ermöglicht Wirkungsmess
 
 Die Ökosystem-Ebene öffnet Anlaufstelle nach außen:
 
-- **API:** REST-Schnittstelle für programmatischen Zugriff, Integration mit Trägersystemen.
+- **API (Zielbild):** Externe REST-Schnittstelle für programmatischen Zugriff und Trägersysteme. Die implementierten JSON-Endpunkte sind intern und sitzungsgebunden.
 - **Export/Import:** CSV, PDF, JSON — für die Weiterverarbeitung in Excel, für Berichte, für Datenmigration.
 - **Behördenreports:** Formatierte Berichte für Jugendämter und Fördermittelgeber, auf Knopfdruck.
 - **Dokumentenbibliotheken:** Vorkonfigurierte Dokumentationstypen für verschiedene Einrichtungstypen (siehe Kapitel 11).
@@ -549,21 +549,23 @@ Der aktuelle Stand von Anlaufstelle umfasst:
 - Volltextsuche, Statistik-Dashboard, CSV/PDF-Export
 - Feldverschlüsselung (Fernet/AES) mit Key-Rotation
 - Audit-Trail, Löschfristen, 4-Augen-Löschprinzip
+- Interne Auskunfts-, Berichtigungs-, Lösch- und Portabilitätsfunktionen sowie Einschränkung der Verarbeitung
 - PWA, Mobile-first, Docker-Deployment
 - Falllogik: Fälle eröffnen/schließen, Episoden, Zuständigkeiten
 - Wirkungsmessung: Ziele, Meilensteine und Outcomes pro Fall
 - DSGVO-Dokumentationspaket: Verarbeitungsverzeichnis, DSFA, AV-Vertrag, TOMs, Informationspflichten, Beschäftigten-Information und Löschkonzept als Vorlagen ([`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/))
-- Domänen-Pakete: mitgelieferter Katalog für Beratungsstelle, Awareness, Frauenhaus und Jugendarbeit (release-0.96, siehe [docs/packages.md](packages.md))
+- Domänen-Pakete: mitgelieferter Katalog für Beratungsstelle, Awareness, Frauenhaus und Jugendarbeit (siehe [docs/packages.md](packages.md))
 
 Für den vollständigen Implementierungsstand siehe [CHANGELOG](../CHANGELOG.md).
 
 ### Roadmap
 
+Die folgenden Themen sind Zielbilder, keine implementierten Funktionen. Klientel-Self-Service (einschließlich Selbstregistrierung und eigener Portale für Auskunft, Berichtigung oder Löschung) ist verworfen, nicht geplant ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)). Betroffenenrechte werden intern durch berechtigte Mitarbeitende bearbeitet (§ 19).
+
 | Thema | Beschreibung | Priorität |
 |-------|-------------|-----------|
 | KDS-Export | Aggregat-Export gemäß KDS 3.0 für Suchthilfestatistik | Hoch |
-| Betroffenenrechte | Self-Service für Auskunft, Berichtigung, Löschung, Portabilität | Hoch |
-| REST-API | Authentifizierte API mit Facility-Scoping | Mittel |
+| REST-API (Zielbild) | Externe authentifizierte API mit Facility-Scoping für Trägersysteme | Mittel |
 
 ---
 
@@ -602,7 +604,7 @@ Ein User ist eine Person, die mit dem System arbeitet. User haben eine Identitä
 Rollen definieren, welche Aktionen ein User ausführen darf. Anlaufstelle kennt fünf Rollen — vier davon sind strikt facility-gebunden, die fünfte (Systemadministration) wirkt facility-übergreifend:
 
 - **Super-Admin (`super_admin`, „Systemadministration"):** Facility-übergreifend. Hostet und betreibt die Installation. Sieht den `/system/`-Bereich (alle Einrichtungen, Bootstrap-Tools, Pre-Auth-AuditLogs ohne Facility-Bezug). Wird nicht über Seed-Daten oder das Admin-UI angelegt, sondern über den Bootstrap-Befehl `manage.py create_super_admin`. Jeder Aufruf einer `/system/`-View wird im Audit-Log mit der Action `SYSTEM_VIEW` protokolliert; das System-UI zeigt einen permanenten Banner über die facility-übergreifende Sicht.
-- **Facility-Admin (`facility_admin`, „Anwendungsbetreuung"):** Pro Einrichtung. Volle administrative Kontrolle über genau eine Facility — Benutzerverwaltung in der Einrichtung, Typ-Konfiguration, Sensitivitätsprofile, Audit-Log und DSGVO-Paket der eigenen Einrichtung. Kann **nicht** in andere Einrichtungen schauen, kein Bootstrap-Recht.
+- **Facility-Admin (`facility_admin`, „Anwendungsbetreuung"):** Pro Einrichtung. Volle administrative Kontrolle über genau eine Facility — Benutzerverwaltung in der Einrichtung, Typ- und Feld-Konfiguration einschließlich Sensitivitätsstufen, Audit-Log und DSGVO-Paket der eigenen Einrichtung. Kann **nicht** in andere Einrichtungen schauen, kein Bootstrap-Recht.
 - **Lead (`lead`, „Leitung"):** Fachliche Leitung — alles, was Fachkräfte können, plus Pseudonym-Verwaltung, Kontaktstufen-Änderung, Statistiken, Export, Genehmigung von Löschanträgen. Facility-gebunden.
 - **Staff (`staff`, „Fachkraft"):** Kontakterfassung, Hinweise und Aufgaben, Suche, Zugriff auf qualifizierte Daten eigener Einrichtung. Facility-gebunden.
 - **Assistant (`assistant`, „Assistenz"):** Wie Staff, aber kein Zugriff auf qualifizierte Kontakt-Details und keine Bearbeitung fremder Einträge. Facility-gebunden.
@@ -752,7 +754,7 @@ Weitere Einrichtungen werden über Django-Admin oder `setup_facility` angelegt. 
 
 ### Entscheidung 3: Semantische Feldschicht — JSONB (Hybrid)
 
-**Status: Bedingt entschieden.** JSONB im aktuellen Stand. Evaluierung der Performance feldbezogener Abfragen vor Auswertung (siehe Roadmap).
+**Status: Implementiert.** Feldwerte liegen in JSONB. Statistik und Berichts-Backends sind ausgeliefert; eine weitere Evaluierung der Performance mit realen Betriebsdaten ist ein Zielbild (§ 18).
 
 **Kontext:** Anlaufstelle braucht konfigurierbare Dokumentationstypen mit eigenen Feldern. Die Frage ist, wie die Feldwerte gespeichert werden. Zwei grundsätzliche Ansätze standen zur Wahl: JSONB (Hybrid) und volles EAV (Entity-Attribute-Value).
 
@@ -766,9 +768,9 @@ Weitere Einrichtungen werden über Django-Admin oder `setup_facility` angelegt. 
 - **Verschlüsselung:** Felder mit `is_encrypted=True` werden vor dem Speichern per Fernet (AES) verschlüsselt. Die Sonderlogik ist im Prototyp implementiert und funktioniert.
 - **Schema-Flexibilität:** Neue Felder werden als FieldTemplate angelegt. Bestehende Ereignisse haben das Feld nicht im JSON — `data_json.get('neues-feld')` gibt `None`. Kein Migrationsbedarf.
 
-**Wo EAV besser wäre:** Feldbezogene Abfragen (z.B. „alle Vermittlungen an die Wohnhilfe") sind mit JSONB möglich (`data_json->>'ziel' = 'Wohnhilfe'`), aber langsamer als ein B-Tree-Lookup in einer EAV-Wertetabelle. Dieser Use-Case wird mit der Auswertung (siehe Roadmap) relevant.
+**Wo EAV besser wäre:** Feldbezogene Abfragen (z.B. „alle Vermittlungen an die Wohnhilfe") sind mit JSONB möglich (`data_json->>'ziel' = 'Wohnhilfe'`), aber langsamer als ein B-Tree-Lookup in einer EAV-Wertetabelle. Feldbezogene Auswertung ist in den Berichts-Backends implementiert; deren Bindungen lösen Berichtsschlüssel auf Feld-Slugs auf.
 
-**Evaluierungskriterium vor der Auswertungs-Roadmap:** Wenn feldbezogene Statistik-Abfragen bei realen Datenmengen (50.000+ Ereignisse) unter 5 Sekunden bleiben, bleibt JSONB. Falls nicht, wird als Zwischenlösung eine denormalisierte Statistik-Tabelle evaluiert (PostgreSQL Materialized View oder Trigger-basierte Spiegelung der Feldwerte) — bevor ein vollständiger EAV-Umbau in Betracht gezogen wird.
+**Zielbild für weitere Performance-Evaluierung:** Wenn feldbezogene Statistik-Abfragen bei realen Datenmengen (50.000+ Ereignisse) unter 5 Sekunden bleiben, bleibt JSONB. Falls nicht, können zusätzliche denormalisierte Feldwert-Projektionen evaluiert werden; die vorhandene Materialized View `core_statistics_event_flat` bildet bereits Ereignis-Metadaten ab — bevor ein vollständiger EAV-Umbau in Betracht gezogen wird.
 
 **Migrationsgarantie:** Die Metadaten-Struktur (DocumentType, FieldTemplate) ist in beiden Ansätzen identisch. Eine spätere Migration auf EAV betrifft nur die Speicherschicht der Feldwerte, nicht die Konfigurationsebene.
 
@@ -781,7 +783,7 @@ Weitere Einrichtungen werden über Django-Admin oder `setup_facility` angelegt. 
 | Implementierungskomplexität | Niedriger | Höher |
 | Prototyp-Status | Implementiert und lauffähig | Nicht implementiert |
 
-**Offene Punkte:** Performance-Evaluierung feldbezogener Abfragen vor Auswertung (siehe Roadmap).
+**Offene Punkte (Zielbild):** Weitere Messung feldbezogener Abfragen mit realen Betriebsdaten (§ 18), ohne eine bereits umgesetzte Statistik als Zukunftsfunktion darzustellen.
 
 ### Entscheidung 4: WorkItems als eigenes Modul statt als DocumentType
 
@@ -803,23 +805,23 @@ Würde man WorkItems als DocumentType abbilden, müsste man Status, Zuweisung un
 
 **Offene Punkte:** Keine — die Entscheidung ist final.
 
-### Entscheidung 5: Case-Fremdschlüssel auf Event von Anfang an
+### Entscheidung 5: Optionaler Case-Fremdschlüssel auf Event
 
-**Kontext:** Fallführung (Case, Episode) kommt erst mit der Falllogik (siehe Roadmap). Die Frage ist, ob der Fremdschlüssel von Event zu Case bereits jetzt angelegt wird — nullable, ungenutzt, aber vorhanden.
+**Kontext:** Nicht jedes Ereignis gehört zu einem Fall. Zusammenhängende Arbeit soll sich aber einem Fall und gegebenenfalls einer Episode zuordnen lassen.
 
-**Entscheidung:** Ja. Events haben von Anfang an einen optionalen Verweis auf einen Case.
+**Entscheidung:** Events haben optionale Verweise auf Case und Episode. Fallführung und die Zuordnung von Ereignissen sind implementiert; anonyme oder einzelne Kontakte können ohne Fallbezug dokumentiert werden.
 
-**Begründung:** Wenn der Fremdschlüssel erst mit der Falllogik hinzugefügt wird, müssen alle bestehenden Events migriert werden. Das ist bei einer leeren Entwicklungsdatenbank trivial, aber bei einer Einrichtung, die bereits produktiv arbeitet, ein Risiko. Durch die frühe Anlage (nullable, kein Pflichtfeld) ist der Fremdschlüssel da, ohne dass er stört — und mit der Falllogik können bestehende Events nachträglich einem Fall zugeordnet werden, ohne Schema-Änderung.
+**Begründung:** Der optionale Bezug verbindet Dokumentation und Fallarbeit, ohne alle Kontakte in eine Fallstruktur zu zwingen.
 
-**Alternativen:** Fremdschlüssel erst mit der Falllogik einführen. Verworfen wegen Migrations-Risiko. Verknüpfung über Zwischentabelle statt Fremdschlüssel. Möglich, aber überflüssige Indirektion für eine 1:n-Beziehung.
+**Alternativen:** Ein verpflichtender Fallbezug würde die niedrigschwellige Einzelkontakterfassung erschweren. Eine Zwischentabelle ist für die Zuordnung eines Ereignisses zu einem Fall nicht erforderlich.
 
-**Offene Punkte:** Keine — die Entscheidung ist final.
+**Offene Punkte:** Keine.
 
 ### Entscheidung 6: Datenschutz-Basisarchitektur von Anfang an
 
 **Kontext:** Datenschutz könnte als eigene Phase spät im Projekt umgesetzt werden — wenn die Kernfunktionalität steht. Das ist der übliche Ansatz, bei dem Sicherheit und Datenschutz nachgerüstet werden.
 
-**Entscheidung:** Die Datenschutz-Grundlagen (Audit-Trail, Verschlüsselung sensibler Felder, rollenbasierter Zugriff, Kontaktstufen-abhängige Sichtbarkeit) werden von Anfang an implementiert. Die Verfeinerung (automatisierte Löschfristen, Betroffenenrechte, DSGVO-Dokumentation) erfolgt mit der Datenschutz-Reife (siehe Roadmap).
+**Entscheidung:** Audit-Trail, Feldverschlüsselung, rollenbasierter Zugriff, kontaktstufenabhängige Sichtbarkeit, automatisierte Löschfristen, interne Betroffenenrechts-Workflows und DSGVO-Vorlagen sind implementiert. § 19 beschreibt die Funktionen; die organisatorische Prüfung und Anpassung der Vorlagen bleibt Aufgabe der Einrichtung.
 
 **Begründung:** Bei einem System, das hochsensible Sozialdaten verarbeitet, ist Datenschutz kein Feature, sondern eine Grundvoraussetzung. Wenn eine Einrichtung produktiv arbeitet, müssen die Daten von Anfang an geschützt sein. Nachträgliches Einbauen von Audit-Trail und Verschlüsselung erfordert Datenmigration und birgt das Risiko, dass in der Übergangszeit ungeschützte Daten in der Datenbank liegen.
 
@@ -827,7 +829,7 @@ Darüber hinaus: Datenschutz by Design (Art. 25 DSGVO) ist keine Empfehlung, son
 
 **Alternativen:** Datenschutz als eigene, spätere Phase. Verworfen wegen rechtlicher und ethischer Bedenken.
 
-**Offene Punkte:** Die Balance zwischen „genug Datenschutz von Anfang an" und „nicht zu viel Aufwand vor der Kernfunktionalität" muss pragmatisch gefunden werden. Der Audit-Trail und die rollenbasierte Zugriffskontrolle sind Pflicht von Anfang an. Automatisierte Löschfristen und das vollständige DSGVO-Dokumentationspaket können mit der Datenschutz-Reife (siehe Roadmap) folgen.
+**Offene Punkte:** Die Einrichtung muss Rechtsgrundlagen, Fristen, Berechtigungen und Vorlagen für ihren Einsatz prüfen. Klientel-Self-Service ist verworfen ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)).
 
 ---
 
@@ -987,11 +989,11 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 
 **Personalverwaltung.** Arbeitszeiten, Urlaubsplanung, Gehaltsabrechnung — das gehört in HR-Software. Anlaufstelle verwaltet Benutzer und Rollen, aber keine Personalstammdaten.
 
-**Einrichtungsübergreifender Datenaustausch.** Die Vision eines vernetzten Systems, in dem Einrichtungen desselben Trägers Klientel-Daten teilen können, existiert seit der Diplomarbeit. Sie ist fachlich sinnvoll, aber datenschutzrechtlich und technisch komplex. Anlaufstelle legt die Grundlage, aber der tatsächliche Datenaustausch zwischen Einrichtungen ist kein Scope der ersten Version.
+**Einrichtungsübergreifender Datenaustausch (Zielbild).** Gemeinsame Personenakten zwischen Einrichtungen sind nicht implementiert. Ein solches Zielbild erfordert eine eigene fachliche und datenschutzrechtliche Entscheidung; eine gemeinsame Organisation hebt die Einrichtungsgrenze nicht auf.
 
 **KI-gestützte Auswertung.** Textanalyse, Mustererkennung, prädiktive Modelle — das sind interessante Möglichkeiten, aber kein klarer Nutzen für die Zielgruppe im aktuellen Stadium. Die Qualität der Daten in niedrigschwelligen Einrichtungen (viele anonyme Kontakte, kurze Texte, unstrukturierte Notizen) macht KI-Anwendungen zum jetzigen Zeitpunkt nicht sinnvoll.
 
-**Klientelportal.** Ein Self-Service-Zugang für Klientel (eigene Daten einsehen, Termine buchen) passt nicht zur Zielgruppe. Viele Klientel haben kein Smartphone, keine stabile Adresse, keinen Internetzugang. Das System ist für die Mitarbeitenden gebaut, nicht für die Klientel.
+**Klientelportal.** Ein Self-Service-Zugang für Klientel (eigene Daten einsehen, Termine buchen) und Selbstregistrierung sind verworfen ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)). Viele Klientel haben kein Smartphone, keine stabile Adresse, keinen Internetzugang. Das System ist für die Mitarbeitenden gebaut, nicht für die Klientel.
 
 ---
 
@@ -1110,7 +1112,7 @@ Volle Offline-Synchronisation (wie bei CouchDB-basierten Systemen) ist mit Djang
 
 **Stufe 3 — Offline-Edit mit Side-by-Side-Konfliktauflösung (verdrahtet und produktiv).**
 - Für die in Stufe 2 gecachten Datensätze ist die Konfliktauflösungs-Maschinerie serverseitig vorhanden und gehärtet: Konflikt-Token, Replay- und Resolver-Schicht. Beim Wiederverbinden vergleicht das System den serverseitigen Stand mit der lokalen Änderung; im Konfliktfall entscheidet die Fachkraft feldweise (Last-Write-Wins mit Konflikt-Markierung). Optimistic Locking (§ Sicherheit) schützt vor stillem Überschreiben.
-- **Stand ([ADR-022](adr/022-offline-snapshot-keys.md)-Re-Evaluation, 2026-06-29, #1111):** Der Bearbeiten-**Einstieg** im Offline-Viewer ist **verdrahtet und erprobt** (nicht mehr deferred). Das Bundle trägt pro Ereignis die editierbaren Feld-Definitionen (sensitivity-gefiltert wie die Werte) plus ein `can_edit`-Flag; offline entstandene Edits sind damit produktiver Funktionsumfang, ebenso Fallaufgaben (WorkItems, #1398). Dauerhaft nicht übertragbare Einträge landen — statt endlos zu retryen — in einer Dead-Letter-Ansicht (`/offline/conflicts/`, mit Grund, Retry/Verwerfen/Export), seit #1396 auch offline erreichbar.
+- **Offline-Bearbeitung** ([ADR-022](adr/022-offline-snapshot-keys.md)): Der Bearbeiten-**Einstieg** im Offline-Viewer ist **verdrahtet**. Das Bundle trägt pro Ereignis die editierbaren Feld-Definitionen (sensitivity-gefiltert wie die Werte) plus ein `can_edit`-Flag; offline entstandene Edits sind damit produktiver Funktionsumfang, ebenso Fallaufgaben (WorkItems, #1398). Dauerhaft nicht übertragbare Einträge landen — statt endlos zu retryen — in einer Dead-Letter-Ansicht (`/offline/conflicts/`, mit Grund, Retry/Verwerfen/Export), die auch offline erreichbar ist.
 - Datei-Anhänge sind offline nicht möglich und bleiben an eine bestehende Netzverbindung gebunden.
 
 ### Kryptografie des lokalen Speichers
@@ -1177,9 +1179,9 @@ Ergänzend zur Datenschutz-Architektur im Hauptdokument:
 
 ---
 
-## 18. JSONB-Performance-Monitoring (vor Auswertungs-Roadmap)
+## 18. JSONB-Performance-Monitoring
 
-Das Fachkonzept entscheidet sich für JSONB als Speicherschicht für Feldwerte (Entscheidung 3: bedingt entschieden). Vor der Auswertung (siehe Roadmap) wird die Performance feldbezogener Abfragen evaluiert. Hier sind die Kriterien.
+Feldwerte liegen in JSONB; Statistik und Berichts-Backends sind implementiert. Die Materialized View `core_statistics_event_flat` projiziert Ereignis-Metadaten für Aggregationen, keine beliebigen dynamischen Feldwerte. **Zielbild:** Weitere Messungen mit realen Betriebsdaten sollen prüfen, ob zusätzliche Feldwert-Projektionen sinnvoll sind. Die folgenden Kriterien und Alternativen sind Evaluierungsziele, keine Funktionszusagen.
 
 ### Hintergrund
 
@@ -1197,36 +1199,36 @@ Der Test wird mit realen Daten durchgeführt — nicht mit synthetischen. Zum Ze
 
 Falls die Zielzeiten überschritten werden:
 
-**Zwischenlösung (bevorzugt):** Denormalisierte Statistik-Tabelle. Ein PostgreSQL-Trigger oder Cronjob spiegelt die Feldwerte aus `data_json` in eine flache `field_value`-Tabelle, die für Statistik-Abfragen optimiert ist. Der Schreibpfad (Erfassung) bleibt JSONB. Der Lesepfad (Statistik) nutzt die denormalisierte Tabelle.
+**Mögliche Zwischenlösung (Zielbild):** Zusätzliche denormalisierte Feldwert-Tabelle. Ein PostgreSQL-Trigger oder Cronjob spiegelt die Feldwerte aus `data_json` in eine flache `field_value`-Tabelle, die für Statistik-Abfragen optimiert ist. Der Schreibpfad (Erfassung) bleibt JSONB. Der Lesepfad (Statistik) nutzt die denormalisierte Tabelle.
 
-**Fallback:** Migration auf EAV. Die Metadaten-Struktur (DocumentType, FieldTemplate) ist identisch — nur die Speicherschicht der Feldwerte ändert sich.
+**Mögliche Alternative (Zielbild):** EAV-Speicherung. Die Metadaten-Struktur (DocumentType, FieldTemplate) ist identisch — nur die Speicherschicht der Feldwerte ändert sich.
 
 ### Zeitpunkt
 
-Die Evaluierung findet vor Beginn der Auswertungs-Entwicklung (siehe Roadmap) statt. Sie basiert auf realen Daten, nicht auf synthetischen Benchmarks.
+**Zielbild:** Die weitere Evaluierung soll anhand realer Betriebsdaten erfolgen. Sie ist keine Voraussetzung für den bereits implementierten Statistik- und Berichtsumfang; ein Termin ist nicht zugesagt.
 
 ---
 
-## 19. Datenschutz: Phasenabgrenzung
+## 19. Datenschutz: Implementierte Funktionen
 
-Das Hauptdokument beschreibt Datenschutz-Grundlagen im aktuellen Stand (Fundament) und Datenschutz-Reife als Roadmap-Thema. Die Abgrenzung ist implizit klar, aber nicht explizit dokumentiert. Diese Tabelle schafft Klarheit:
+Betroffenenrechte werden durch berechtigte Mitarbeitende bearbeitet. Ein Klientel-Login, Selbstregistrierung und Self-Service-Portale sind verworfen ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)). Die technischen Funktionen ersetzen nicht die organisatorische Bearbeitung eines Verlangens durch die Einrichtung.
 
-| Maßnahme | Aktueller Stand (Fundament) | Datenschutz-Reife (Stand v0.15) |
-|---|---|---|
-| Rollenbasierte Zugriffskontrolle | ✓ implementiert | — |
-| Kontaktstufen-abhängige Sichtbarkeit | ✓ implementiert | — |
-| Audit-Trail (Append-Only-Log) | ✓ implementiert | ✓ + eigene AuditLog-Aufbewahrungsfrist ([ADR-021](adr/021-retention-modell.md), `auditlog_retention_months`) |
-| Verschlüsselung sensibler Felder | ✓ implementiert | ✓ Key-Rotation unterstützt |
-| Pseudonymisierung by Design | ✓ implementiert | — |
-| Löschfristen | Konfigurierbar, aber manuelle Ausführung | ✓ Automatisierte Durchsetzung per Cron ([ADR-021](adr/021-retention-modell.md), `enforce_retention`); 4 Soft-Delete-Strategien + Legal Hold |
-| K-Anonymisierung | — | ✓ Bucket-Suppression im externen Bericht + optionaler K-Anon-Löschpfad ([ADR-023](adr/023-k-anonymization-statistik.md), Freitext-Kaskade #1094) |
-| Betroffenenrechte (Auskunft) | Manuelle Abfrage durch Anwendungsbetreuung (`facility_admin`) | Self-Service-Funktion für Lead-Rolle |
-| Betroffenenrechte (Löschung) | Manuell durch Anwendungsbetreuung (`facility_admin`) | ✓ 4-Augen-Freigabe via RetentionProposal ([ADR-021](adr/021-retention-modell.md)) |
-| Betroffenenrechte (Portabilität) | Nicht verfügbar | JSON/CSV-Export der personenbezogenen Daten (dedizierter Workflow offen) |
-| DSGVO-Dokumentation | Nicht mitgeliefert | ✓ Vorlagen mitgeliefert ([`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/): VVT, DSFA, AV-Vertrag, TOMs, Informationspflichten, Beschäftigten-Information, Löschkonzept) |
-| Datenschutz-Folgenabschätzung | Nicht durchgeführt | ✓ Vorlage mitgeliefert (`dsfa.md`), auf Anlaufstelle zugeschnitten |
+| Maßnahme / Recht | Implementierte Funktion |
+|---|---|
+| Rollen und Kontaktstufen | Kontextbezogene Berechtigungen innerhalb der Einrichtung (§ 9) |
+| Audit-Trail | Append-Only-Protokoll ausgewählter Aktionen; eigene Aufbewahrungsfrist `auditlog_retention_months` (§ 6) |
+| Verschlüsselung | Feldverschlüsselung mit Schlüsselrotation |
+| Pseudonymisierung | Pseudonym als Personenidentifikator |
+| Löschfristen | Durchsetzung über `enforce_retention`, Ereignis-Soft-Delete, Vorschlagsprüfung über `RetentionProposal` und Legal Holds |
+| K-Anonymisierung | Unterdrückung kleiner Gruppen im externen Bericht und optionaler Anonymisierungspfad für Personen |
+| Auskunft (Art. 15) | Personenbezogener PDF-Export durch Leitung oder Anwendungsbetreuung nach erneuter Authentifizierung |
+| Berichtigung (Art. 16) | Interner Antrag und Prüfung über `RectificationRequest`; Antrag durch Fachkraft, Entscheidung durch Leitung oder Anwendungsbetreuung |
+| Löschung (Art. 17) | Interner Löschantrag über `DeletionRequest` mit 4-Augen-Entscheidung; von fristbedingten `RetentionProposal`-Vorschlägen getrennt |
+| Einschränkung (Art. 18) | Verarbeitungseinschränkung an der Person setzen und aufheben; betroffene Schreibpfade prüfen die Sperre |
+| Portabilität (Art. 20) | Personenbezogener JSON-Export durch Leitung oder Anwendungsbetreuung nach erneuter Authentifizierung |
+| DSGVO-Dokumentation | Sieben Vorlagen: VVT, DSFA, AV-Vertrag, TOMs, Betroffeneninformation, Beschäftigteninformation und Löschkonzept ([Vorlagen](../src/core/dsgvo_templates/)) |
 
-Die Logik: Das Fundament stellt sicher, dass keine ungeschützten Daten im System liegen. Die Datenschutz-Reife stellt sicher, dass die Organisation ihre Compliance-Pflichten erfüllen kann, ohne externen Rechtsberater zu brauchen. **Stand v0.15:** Diese Reife-Maßnahmen sind weitgehend umgesetzt — Retention-Automatisierung ([ADR-021](adr/021-retention-modell.md)), K-Anonymisierung ([ADR-023](adr/023-k-anonymization-statistik.md)), 4-Augen-Löschung und die DSGVO-Vorlagen sind produktiv; offen bleiben v.a. dedizierte Portabilitäts-/Berichtigungs-Workflows (Art. 16/20).
+Eine DSFA-Vorlage ist keine durchgeführte Datenschutz-Folgenabschätzung. Die Einrichtung prüft und vervollständigt die Vorlagen und ihre organisatorischen Abläufe für den konkreten Einsatz.
 
 ---
 
@@ -1260,9 +1262,9 @@ Barrierefreiheit wird nicht als eigenes Roadmap-Thema behandelt, sondern als Que
 
 Anlaufstelle ist ein System für den deutschen Sozialsektor. Die Primärsprache der Oberfläche, Dokumentation, Domänenbibliothek und DSGVO-Vorlagen ist Deutsch — die Fachsprache der Zielgruppe und der regulatorische Kontext sind deutsch. Das ist richtig und kein Mangel.
 
-Die Anwendung ist vollständig internationalisiert:
+Die Anwendung verwendet Djangos Internationalisierung:
 
-- **Alle UI-Strings über Djangos `gettext`-System.** 31 Dateien (Models, Views, Forms, Services, Templates) verwenden `gettext_lazy` bzw. `{% trans %}`. Keine hart codierten deutschen Strings.
+- **Internationalisierung über Djangos `gettext`-System.** Models, Views, Forms, Services und Templates nutzen übersetzbare Texte (`gettext_lazy`, `{% trans %}` und `{% blocktrans %}`). Eine vollständige Abdeckung aller Texte ist ein Prüfziel, keine aus einer Dateizahl ableitbare Zusage.
 - **Zwei Sprachen aktiv:** Deutsch (primär) und Englisch. Locale-Verzeichnisse (`src/locale/de/`, `src/locale/en/`) sind vorhanden.
 - **Language-Switcher in der Oberfläche.** Benutzer können die Sprache im laufenden Betrieb umschalten.
 - **Datums- und Zahlenformate über `django.utils.formats`.** Nicht manuell formatiert.
@@ -1280,20 +1282,20 @@ Das Hauptdokument nennt DSGVO und Sozialdatenschutz (SGB X) als rechtlichen Rahm
 
 ### Relevante Standards und Berichtspflichten
 
-| Standard / Pflicht | Relevanz für Anlaufstelle | Phase |
+| Standard / Pflicht | Relevanz für Anlaufstelle | Einordnung |
 |---|---|---|
-| **DSGVO** (Art. 9, 25, 30, 35) | Kernrelevant. Bereits adressiert. | Fundament + Datenschutz-Reife (Roadmap) |
-| **SGB X** (§§ 67–85a) | Sozialdatenschutz. Pseudonymisierung und Löschfristen adressieren die Kernanforderungen. | Fundament |
-| **SGB VIII** (§§ 61–65) | Relevant bei Jugendhilfe-Einrichtungen. Besondere Schweigepflicht. | Datenschutz-Reife (Roadmap) |
+| **DSGVO** (Art. 9, 25, 30, 35) | Kernrelevant. Bereits adressiert. | Technische Funktionen und Vorlagen implementiert (§ 19); organisatorische Prüfung erforderlich |
+| **SGB X** (§§ 67–85a) | Sozialdatenschutz. Pseudonymisierung und Löschfristen adressieren die Kernanforderungen. | Pseudonymisierung und Fristfunktionen implementiert; Einsatzprüfung durch Einrichtung |
+| **SGB VIII** (§§ 61–65) | Relevant bei Jugendhilfe-Einrichtungen. Besondere Schweigepflicht. | Einsatzprüfung durch Einrichtung; Datenschutzfunktionen siehe § 19 |
 | **§ 203 StGB** | Schweigepflicht. Betrifft die organisatorische Ebene, nicht direkt das System. | Dokumentation |
-| **KDS (Kerndatensatz Suchthilfe)** | Export-Format für die Deutsche Suchthilfestatistik. Relevant für Einrichtungen, die an die DBDD/EBDD berichten. | Schnittstellen (Roadmap) |
-| **BASiS (Bundesarbeitsgemeinschaft)** | Standardisierte Leistungsdokumentation in der Suchthilfe. Überlappung mit der Statistik-Zuordnung in der Domänenbibliothek. | Schnittstellen (Roadmap) |
+| **KDS (Kerndatensatz Suchthilfe)** | Export-Format für die Deutsche Suchthilfestatistik. Relevant für Einrichtungen, die an die DBDD/EBDD berichten. | Zielbild: domänenspezifischer Export, kein zugesagter Behördennachweis |
+| **BASiS (Bundesarbeitsgemeinschaft)** | Standardisierte Leistungsdokumentation in der Suchthilfe. Überlappung mit der Statistik-Zuordnung in der Domänenbibliothek. | Zielbild: domänenspezifischer Export, kein zugesagter Behördennachweis |
 | **BFSG** (Barrierefreiheitsstärkungsgesetz) | Ab Juni 2025 relevant für digitale Produkte. Siehe Kapitel 20. | Querschnitt |
 | **NIS2-Umsetzungsgesetz** | Potenziell relevant für Träger im Gesundheits-/Sozialsektor ab bestimmter Größe. Betrifft IT-Sicherheitsmaßnahmen. | Monitoring |
 
 ### Empfehlung
 
-KDS-Export und BASiS-Kompatibilität sind für die Schnittstellen (siehe Roadmap) vorgesehen. Sie sollten dort als explizite User Stories aufgenommen werden, weil sie für viele Einrichtungen der Suchthilfe nicht optional, sondern Pflicht sind.
+**Zielbild:** KDS-Export ist in § 8 genannt. BASiS-Kompatibilität ist ein fachlicher Prüfbedarf, keine zugesagte implementierte Schnittstelle. Einrichtungen müssen prüfen, welche Nachweise ihre konkreten Förder- und Berichtsverhältnisse verlangen.
 
 ---
 
@@ -1338,7 +1340,7 @@ Für einen unbekannten Kontakt (anonym, kein Pseudonym): Das Ziel reduziert sich
 
 Bevor das 30-Sekunden-Ziel zur harten Anforderung wird, sollte es empirisch geprüft werden:
 
-**Testaufbau:** 3 Mitarbeitende aus verschiedenen Einrichtungen (idealerweise Early Adopters) führen jeweils 10 Kontakterfassungen durch — 5 mit bekanntem Pseudonym, 5 anonym. Gemessen wird die Zeit vom Klick auf „Neuer Kontakt" bis zum Klick auf „Speichern".
+**Testaufbau:** 3 Mitarbeitende aus verschiedenen Einrichtungen (idealerweise Early Adopters) führen jeweils 10 Kontakterfassungen durch — 5 mit bekanntem Pseudonym, 5 anonym. Gemessen wird die Zeit vom Klick auf „Kontakt dokumentieren“ bis zum Klick auf „Speichern".
 
 **Erfolgskriterium:** Median ≤ 30 Sekunden für bekannte Kontakte, Median ≤ 15 Sekunden für anonyme Kontakte. Die Zeit wird ohne Schulung gemessen (nach einmaliger Erklärung der Oberfläche, ≤ 5 Minuten).
 
@@ -1373,23 +1375,23 @@ Für die Einrichtungsleitung, die Anwendungsbetreuung (`facility_admin`) oder di
 
 ## 26. Entscheidungsübersicht
 
-Alle Architektur- und Strategieentscheidungen im Fachkonzept v1.7:
+Die Architektur- und Strategieentscheidungen dieses Fachkonzepts:
 
 | # | Entscheidung | Status | Ergebnis |
 |---|---|---|---|
 | 1 | Zeitstrom statt Zeitfenster-Modell | **Final** | Ereignis als Grundeinheit, benannte Zeitfilter als UI-Konfiguration |
 | 2 | Organisationshierarchie | **Final** | Organization → mehrere Facilities; Facility als Primärscope, Organisationsname in Navigation und Systemübersicht |
 | 2a | Client-Scope | **Final** | Client gehört zur Facility; kein direkter Organization-FK |
-| 3 | Semantische Feldschicht | **Bedingt entschieden** | JSONB im aktuellen Stand. Performance-Evaluierung feldbezogener Abfragen vor Auswertung (Roadmap) |
+| 3 | Semantische Feldschicht | **Implementiert** | JSONB und Statistik implementiert; weitere Performance-Evaluierung als Zielbild (§ 18) |
 | 4 | WorkItems als eigenes Modul | **Final** | Eigene Entität, getrennt von Events |
-| 5 | Case-FK auf Event von Anfang an | **Final** | Nullable FK, vorbereitet für Falllogik (Roadmap) |
+| 5 | Optionaler Case-FK auf Event | **Implementiert** | Ereignisse können Fall und Episode zugeordnet werden |
 | 6 | Datenschutz-Basisarchitektur von Anfang an | **Final** | Audit-Trail, Verschlüsselung, rollenbasierter Zugriff ab Tag 1 |
 | 7 | Lizenz | **Final** | AGPL v3 |
 | 8 | Roadmap | **Final** | Phasenplan durch Roadmap ersetzt (siehe Kapitel 8) |
 
 ### Einziger offener Monitoring-Punkt
 
-**JSONB-Performance vor Auswertung (Roadmap):** Feldbezogene Statistik-Abfragen werden mit realen Datenmengen evaluiert. Falls die Zielzeiten überschritten werden, wird eine denormalisierte Statistik-Tabelle als Zwischenlösung eingeführt. Siehe Ergänzung Kapitel 18.
+**Zielbild — weitere JSONB-Performance-Evaluierung:** Feldbezogene Statistik-Abfragen sollen mit realen Betriebsdaten gemessen werden. Zusätzliche Feldwert-Projektionen sind eine zu prüfende Option; die ereignisbezogene Materialized View ist bereits implementiert. Siehe Kapitel 18.
 
 ---
 

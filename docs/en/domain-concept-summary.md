@@ -1,7 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Synchronization update 2026-10-06: Multiple facilities, handover notes, time filters, autosave, synchronization and deployment match the implementation.
+> Synchronization update 2026-10-06: Data subject rights and delivered functions are separated from target features; client self-service is rejected.
 
 # Domain Concept Summary
 
@@ -95,7 +95,7 @@ Anlaufstelle processes social data of highly vulnerable people. Privacy is not a
 - **Breach detection.** Heuristic incident detection (GDPR Art. 33/34) flags mass deletions of person data, credential-stuffing bursts against unknown usernames, and distributed victim-lockout patterns, delivering SSRF-hardened webhook alerts. Error tracking stays off by default; when enabled, a scrubber strips PII before events leave the installation.
 - **Facility scoping.** Middleware supplies the current facility context; scoped managers use the direct facility key, while episodes, goals and milestones are scoped through their parent relationships. PostgreSQL Row Level Security provides defense-in-depth on all facility-scoped tables, with session-variable-driven policies that enforce the tenant boundary at the database layer itself.
 - **Two-factor authentication.** TOTP-based 2FA is available and can be enforced per user or facility-wide. Single-use backup codes and an account lockout back it up, the privileged roles (`super_admin`/`facility_admin`) are enforced into MFA by default, and the TOTP secret itself is encrypted at rest (Fernet, ADR-031); a WebAuthn passkey can additionally be registered as a phishing-resistant second factor (ADR-032, no passwordless login).
-- **GDPR compliance.** Data subject rights (access, rectification, deletion, portability) are implemented as system functions. Seven GDPR documentation templates (processing register, DPIA, DPA, TOMs, data-subject information, employee information, and a deletion concept) ship with the app ([`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/), since #784).
+- **Data subject rights.** Authorized staff handle access (PDF), portability (JSON), internal rectification requests, deletion requests (`DeletionRequest`, separate from retention proposals) and processing restrictions. Client self-service and self-registration are rejected ([ADR-013](../adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](../adr/041-berichtigungsworkflow-intern.md)). Seven GDPR documentation templates (processing register, DPIA, DPA, TOMs, data-subject information, employee information, and a deletion concept) ship with the app ([`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/)).
 
 ## Role Model
 
@@ -115,9 +115,10 @@ Event creation (`/events/new/`) saves drafts every 5 seconds in encrypted Indexe
 
 ## Non-Functional Requirements
 
-- **Accessibility:** WCAG 2.1 Level AA for all core and operations interfaces. Keyboard navigation, screen reader support, minimum 4.5:1 contrast ratio.
+- **Accessibility target:** WCAG 2.1 Level AA for all core and operations interfaces. Keyboard navigation, screen reader support, minimum 4.5:1 contrast ratio.
 - **Mobile / PWA:** Progressive Web App, installable on home screens. Optimized quick-capture for smartphones with large touch targets and autocomplete. Field-ready offline mode: staff take selected persons offline into an encrypted local cache, read and edit their records, and create new contacts and tasks without connectivity; the timeline and task list also render offline in-place at their canonical URLs from the local snapshot. Offline work syncs on reconnect with explicit, resolvable conflicts rather than silent overwrites, and permanently undeliverable entries surface in a dead-letter view instead of disappearing.
-- **Internationalization:** Fully internationalized via Django's `gettext` system. German (primary) and English are active. Language switcher in the UI. The package schema has no language key; multilingual package names remain a target feature.
+- **Internationalization:** Uses Django's `gettext` system; complete text coverage is a verification target. German (primary) and English are active. Language switcher in the UI. The package schema has no language key; multilingual package names remain a target feature.
+- **External API target:** A facility-scoped REST API for provider integrations is not implemented; current JSON endpoints are session-bound internal endpoints.
 - **Performance targets:** Page load < 1s (3G), contact save < 500ms, autocomplete < 300ms, six-month statistics query < 5s at 50,000 events.
 - **Scaling target:** 5--30 concurrent users, up to 50,000 events/year per facility.
 - **Deployment:** The production Compose stack includes Caddy, Django, PostgreSQL, Redis, mandatory ClamAV, cron and maintenance services. Hardware and installation requirements are centralized in the [admin guide](../admin-guide.md#voraussetzungen).
@@ -319,4 +320,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 9c382443a9e53879608b0d8ee5980ccea1d0d9f2 -->
+<!-- source-hash: 91c5bc39719414f961281dc87c08ace15eed6bca -->

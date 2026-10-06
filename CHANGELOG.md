@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Ist-Stand und Zielbilder im Fachkonzept getrennt** (#2488) — Betroffenenrechte sind als interne Funktionen beschrieben, Klientel-Self-Service ist verworfen und externe API sowie weitere Evaluierungsziele sind ausdrücklich Zielbilder.
+
 - **Organisationsmodell und Arbeitsabläufe im Fachkonzept** (#2487) — DE und EN beschreiben mehrere Einrichtungen, Schichtnotizen, Zeitfilter, Auto-Save und Synchronisation gemäß Code; Betriebsanforderungen verweisen auf das Admin-Handbuch.
 
 - **Feldvertrag, Katalog und Fristen im Fachkonzept** (#2431) — Das Fachkonzept und seine englische Zusammenfassung beschreiben Slug-Feldschlüssel, den Standardkatalog, die konfigurierbaren Fristvorgaben und den Import-Umfang gemäß Implementierung.
