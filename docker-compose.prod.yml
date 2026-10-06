@@ -235,6 +235,20 @@ services:
       # cron/maintenance (verify_audit_chain); web sieht dasselbe /data-Volume.
       DJANGO_AUDIT_HWM_PATH: ${DJANGO_AUDIT_HWM_PATH-}
       SUDO_MODE_TTL_SECONDS: ${SUDO_MODE_TTL_SECONDS:-900}
+      # Refs #2470: the MFA role enforcement and the passkey relying party act
+      # in the HTTP runtime. ``-`` instead of ``:-``: unset keeps the code
+      # default, a deliberately empty role list stays empty (switches that
+      # level off, see settings/_mfa_roles.py).
+      MFA_ENFORCED_ROLES_IMMEDIATE: ${MFA_ENFORCED_ROLES_IMMEDIATE-super_admin,facility_admin}
+      MFA_ENFORCED_ROLES_GRACE: ${MFA_ENFORCED_ROLES_GRACE-lead,staff,assistant}
+      OTP_WEBAUTHN_RP_ID: ${OTP_WEBAUTHN_RP_ID-}
+      OTP_WEBAUTHN_ALLOWED_ORIGINS: ${OTP_WEBAUTHN_ALLOWED_ORIGINS-}
+      # Refs #2470: further settings the HTTP runtime reads (audit detail
+      # strictness, session scan cap of a credential revocation, statement
+      # timeout of report queries); defaults equal the code defaults.
+      DJANGO_AUDIT_DETAIL_STRICT: ${DJANGO_AUDIT_DETAIL_STRICT:-false}
+      OFFLINE_REVOCATION_SESSION_SCAN_LIMIT: ${OFFLINE_REVOCATION_SESSION_SCAN_LIMIT:-10000}
+      REPORTING_BACKEND_STATEMENT_TIMEOUT_MS: ${REPORTING_BACKEND_STATEMENT_TIMEOUT_MS:-10000}
       MAINTENANCE_FLAG_FILE: ${MAINTENANCE_FLAG_FILE:-/data/anlaufstelle.maintenance}
       MAINTENANCE_ALLOW_IPS: ${MAINTENANCE_ALLOW_IPS-}
       MAINTENANCE_CACHE_TTL: ${MAINTENANCE_CACHE_TTL:-5}
