@@ -77,6 +77,79 @@ def test_clamav_has_a_dedicated_egress_network() -> None:
     ] == ["clamav"]
 
 
+def _clamav_egress_violations(compose: dict) -> list[str]:
+    """Return why the clamav service of a compose document cannot reach the update servers."""
+    service = compose.get("services", {}).get("clamav")
+    if service is None:
+        return []
+    problems: list[str] = []
+    attached = service.get("networks")
+    # No ``networks`` key means the project default network, which has egress.
+    if attached is not None:
+        attached = list(attached)
+        networks = compose.get("networks") or {}
+        egress = [name for name in attached if not (networks.get(name) or {}).get("internal", False)]
+        if not egress:
+            problems.append("clamav is attached to internal networks only (freshclam cannot resolve hosts)")
+        for name in egress:
+            peers = [
+                other
+                for other, definition in compose["services"].items()
+                if other != "clamav" and name in (definition.get("networks") or [])
+            ]
+            if peers:
+                problems.append(f"egress network {name} is shared with {peers}")
+    mounts = [str(volume) for volume in service.get("volumes", [])]
+    if not any(mount.endswith(":/var/lib/clamav") for mount in mounts):
+        problems.append("/var/lib/clamav is not on a named volume (signatures age with the image digest)")
+    return problems
+
+
+def test_clamav_egress_guard_flags_internal_only_service() -> None:
+    compose = {
+        "services": {"clamav": {"networks": ["internal"], "volumes": ["sigs:/var/lib/clamav"]}},
+        "networks": {"internal": {"internal": True}},
+    }
+    assert any("internal networks only" in problem for problem in _clamav_egress_violations(compose))
+
+
+def test_clamav_egress_guard_flags_shared_egress_network_and_missing_volume() -> None:
+    compose = {
+        "services": {
+            "clamav": {"networks": ["internal", "egress"]},
+            "web": {"networks": ["egress"]},
+        },
+        "networks": {"internal": {"internal": True}, "egress": {}},
+    }
+    problems = _clamav_egress_violations(compose)
+    assert any("shared with ['web']" in problem for problem in problems)
+    assert any("/var/lib/clamav" in problem for problem in problems)
+
+
+def test_clamav_egress_guard_accepts_default_network() -> None:
+    compose = {"services": {"clamav": {"volumes": ["sigs:/var/lib/clamav"]}}}
+    assert _clamav_egress_violations(compose) == []
+
+
+CLAMAV_COMPOSE_FILES = sorted(
+    path.name for path in REPO_ROOT.glob("docker-compose*.yml") if "clamav:" in path.read_text(encoding="utf-8")
+)
+
+
+def test_every_compose_file_with_a_clamav_service_is_covered() -> None:
+    assert {
+        "docker-compose.yml",
+        "docker-compose.prod.yml",
+        "docker-compose.dev.yml",
+        "docker-compose.demo.yml",
+    } <= set(CLAMAV_COMPOSE_FILES)
+
+
+@pytest.mark.parametrize("name", CLAMAV_COMPOSE_FILES)
+def test_clamav_service_reaches_update_servers_in_every_compose_file(name: str) -> None:
+    assert _clamav_egress_violations(_load(REPO_ROOT / name)) == []
+
+
 def test_web_runtime_allowlist_contains_documented_non_secrets() -> None:
     environment = _load(PROD_PATH)["services"]["web"]["environment"]
     expected = {
