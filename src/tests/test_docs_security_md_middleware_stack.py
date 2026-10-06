@@ -34,12 +34,20 @@ _ROW_RE = re.compile(r"^\|\s*`([^`:]+)[^`]*`\s*\|")
 
 # Wording that promises a header on every response without condition.
 UNIVERSAL_CLAIMS = ("auf jeder Antwort", "on every response")
-# Per heading: the word a table row must use to name the HTTPS redirect as an
-# exception when its header is missing there.
+# Responses that SecurityMiddleware produces or aborts itself, keyed by the
+# word a table row uses for them. A header such a response lacks must be named
+# as an exception for it in the "When" column (see ``exception_violations``).
 REDIRECT_WORD = {
     "## Sicherheits-Header und Middleware-Stack": "HTTPS-Umleitung",
     "## Security headers and middleware stack": "HTTPS redirect",
 }
+HOST_REJECTION_WORD = {
+    "## Sicherheits-Header und Middleware-Stack": "Host-Ablehnung",
+    "## Security headers and middleware stack": "host rejection",
+}
+# A clause of the "When" column (split at ";") that starts with one of these
+# words states where the header is NOT set.
+NEGATIONS = ("nicht", "nie", "weder", "not", "never", "neither")
 # Header settings of settings/prod.py that decide what the redirect carries.
 PROD_HEADER_SETTINGS = (
     "SECURE_SSL_REDIRECT",
@@ -110,6 +118,46 @@ def prod_header_settings() -> dict[str, object]:
     return values
 
 
+def when_clauses(row: str) -> list[str]:
+    """Split the last cell ("When") of a table row into its ``;`` clauses."""
+    cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
+    return [clause.strip() for clause in cells[-1].split(";") if clause.strip()]
+
+
+def is_negative(clause: str) -> bool:
+    first = clause.split(maxsplit=1)[0].lower() if clause else ""
+    return first in NEGATIONS
+
+
+def exception_violations(rows: dict[str, str], response, word: str) -> list[str]:
+    """Headers whose row contradicts ``response`` for the response class ``word``.
+
+    A header the response lacks must name ``word`` in a negative clause and in
+    no other clause; a header the response carries must not name ``word`` in a
+    negative clause. Merely mentioning the response class is not enough.
+    """
+    violations: list[str] = []
+    for name, row in rows.items():
+        clauses = [clause for clause in when_clauses(row) if word in clause]
+        negative = [clause for clause in clauses if is_negative(clause)]
+        positive = [clause for clause in clauses if not is_negative(clause)]
+        if name not in response and (not negative or positive):
+            violations.append(name)
+        if name in response and negative:
+            violations.append(name)
+    return violations
+
+
+def host_rejection_response(tmp_path: Path):
+    """Plaintext request with a host outside ALLOWED_HOSTS under the
+    production header settings: SecurityMiddleware raises DisallowedHost
+    while building the redirect, Django answers 400 outside of it."""
+    with override_settings(
+        DEBUG=False, ALLOWED_HOSTS=["testserver"], STATIC_ROOT=str(tmp_path), **prod_header_settings()
+    ):
+        return Client().get("/login/", HTTP_HOST="unlisted.invalid")
+
+
 class TestExtraction:
     def test_reads_only_the_numbered_list_of_the_section(self) -> None:
         text = "\n".join(
@@ -148,6 +196,52 @@ class TestExtraction:
         assert sorted(rows) == ["Cache-Control", "X-Frame-Options"]
         assert "HTTPS redirect" in rows["X-Frame-Options"]
 
+    def test_when_clauses_are_split_at_semicolons_of_the_last_cell(self) -> None:
+        row = "| `X-Frame-Options` | `A; B` | every response; not the HTTPS redirect |"
+        assert when_clauses(row) == ["every response", "not the HTTPS redirect"]
+
+
+class TestExceptionCheck:
+    """``exception_violations`` requires the exception, not a mere mention."""
+
+    RESPONSE = {"Content-Security-Policy": "default-src 'self'"}
+
+    @pytest.mark.parametrize(
+        "when",
+        [
+            "every response that passes it; not the HTTPS redirect",
+            "only over HTTPS; never on plaintext, so neither on the HTTPS redirect nor elsewhere",
+        ],
+    )
+    def test_missing_header_named_as_exception_passes(self, when: str) -> None:
+        rows = {"X-Frame-Options": f"| `X-Frame-Options` | x | y | {when} |"}
+        assert exception_violations(rows, self.RESPONSE, "HTTPS redirect") == []
+
+    @pytest.mark.parametrize(
+        "when",
+        [
+            "every response, including the HTTPS redirect",
+            "every response; also the HTTPS redirect",
+            "every response",
+            "every response, including the HTTPS redirect; not the HTTPS redirect",
+            "jede Antwort, auch die Host-Ablehnung",
+        ],
+    )
+    def test_missing_header_without_exception_fails(self, when: str) -> None:
+        rows = {"X-Frame-Options": f"| `X-Frame-Options` | x | y | {when} |"}
+        word = "Host-Ablehnung" if "Host" in when else "HTTPS redirect"
+        assert exception_violations(rows, self.RESPONSE, word) == ["X-Frame-Options"]
+
+    def test_present_header_named_as_exception_fails(self) -> None:
+        row = "| `Content-Security-Policy` | x | y | every response; not the host rejection |"
+        rows = {"Content-Security-Policy": row}
+        assert exception_violations(rows, self.RESPONSE, "host rejection") == ["Content-Security-Policy"]
+
+    def test_present_header_named_positively_passes(self) -> None:
+        row = "| `Content-Security-Policy` | x | y | every response, including the host rejection |"
+        rows = {"Content-Security-Policy": row}
+        assert exception_violations(rows, self.RESPONSE, "host rejection") == []
+
 
 class TestSecurityMdMatchesSettings:
     @pytest.mark.parametrize("heading", SECTION_HEADINGS)
@@ -181,12 +275,29 @@ class TestSecurityMdMatchesSettings:
 
         rows = documented_header_rows(SECURITY_MD.read_text(encoding="utf-8"), heading)
         assert rows, f"no header table in SECURITY.md section {heading!r}"
-        missing_on_redirect = sorted(name for name in rows if name not in response)
-        assert "Strict-Transport-Security" in missing_on_redirect
-        undocumented = [name for name in missing_on_redirect if REDIRECT_WORD[heading] not in rows[name]]
-        assert undocumented == [], (
-            f"SECURITY.md section {heading!r}: headers absent on the HTTPS redirect without "
-            f"naming it ({REDIRECT_WORD[heading]!r}): {undocumented}"
+        assert "Strict-Transport-Security" not in response
+        violations = exception_violations(rows, response, REDIRECT_WORD[heading])
+        assert violations == [], (
+            f"SECURITY.md section {heading!r}: rows contradict the HTTPS redirect "
+            f"(missing headers must name {REDIRECT_WORD[heading]!r} as exception): {violations}"
+        )
+
+    @pytest.mark.parametrize("heading", SECTION_HEADINGS)
+    def test_headers_missing_on_host_rejection_are_documented_as_such(self, heading: str, tmp_path: Path) -> None:
+        """The 400 for an unlisted host on a plaintext request is produced
+        outside SecurityMiddleware; every documented header it lacks must
+        name the host rejection as exception."""
+        response = host_rejection_response(tmp_path)
+        assert response.status_code == 400
+        assert response["Content-Security-Policy"]
+
+        rows = documented_header_rows(SECURITY_MD.read_text(encoding="utf-8"), heading)
+        assert rows, f"no header table in SECURITY.md section {heading!r}"
+        assert "X-Content-Type-Options" not in response
+        violations = exception_violations(rows, response, HOST_REJECTION_WORD[heading])
+        assert violations == [], (
+            f"SECURITY.md section {heading!r}: rows contradict the host rejection (HTTP 400) "
+            f"(missing headers must name {HOST_REJECTION_WORD[heading]!r} as exception): {violations}"
         )
 
     def test_prod_settings_do_not_change_the_stack(self) -> None:
