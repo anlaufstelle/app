@@ -173,3 +173,148 @@ def test_dev_generation_and_stale_index_detection(index_module, matrix_tree):
     original = index_module.TARGET.read_text(encoding="utf-8")
     index_module.TARGET.write_text(original.replace("ENT-OFFL-14", "ENT-OFFL-99"), encoding="utf-8")
     assert index_module.main(["--check"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("heading", "expected"),
+    [
+        ("SMK-A-VORM-01 — Tagesstart", "smk-a-vorm-01--tagesstart"),
+        (
+            "TC-ID: ENT-AUTH-01 — Erfolgreicher Login mit korrektem Passwort",
+            "tc-id-ent-auth-01--erfolgreicher-login-mit-korrektem-passwort",
+        ),
+        (
+            "TC-ID: ENT-MFA-01 — TOTP-Setup: QR scannen, Test-Code bestätigen, Aktivierung",
+            "tc-id-ent-mfa-01--totp-setup-qr-scannen-test-code-bestätigen-aktivierung",
+        ),
+        (
+            "TC-ID: ENT-MFA-08 — `mfa_required=True` erzwingen (Setup-Redirect)",
+            "tc-id-ent-mfa-08--mfa_requiredtrue-erzwingen-setup-redirect",
+        ),
+        (
+            "TC-ID: ENT-CLIENT-15 — Laufender Löschantrag ist am Datensatz sichtbar (Badge, Banner, Zweitantrag)",
+            "tc-id-ent-client-15--laufender-löschantrag-ist-am-datensatz-sichtbar-badge-banner-zweitantrag",
+        ),
+        (
+            "TC-ID: ENT-CASE-12 — Mobile-Detail mit Tab-Navigation Episoden/Goals/Events",
+            "tc-id-ent-case-12--mobile-detail-mit-tab-navigation-episodengoalsevents",
+        ),
+        ("Ä Ö Ü ß – — / : `a_b-c`", "ä-ö-ü-ß-----a_b-c"),
+        ("  Two  spaces\tand\ncontrols  ", "two--spacesandcontrols"),
+    ],
+)
+def test_github_slug_matches_confirmed_heading_anchors(index_module, heading, expected):
+    """Expected matrix anchors come from GitHub's rendered v0.99.5 outline."""
+    assert index_module.github_slug(heading) == expected
+
+
+def test_github_slug_numbers_duplicates_and_suffix_collisions(index_module):
+    seen = {}
+    headings = ["Status-Legende", "Status-Legende", "Status-Legende-1", "Status-Legende", "Status-Legende-1"]
+    assert [index_module.github_slug(heading, seen) for heading in headings] == [
+        "status-legende",
+        "status-legende-1",
+        "status-legende-1-1",
+        "status-legende-2",
+        "status-legende-1-2",
+    ]
+    assert index_module.github_slug("Status-Legende", {}) == "status-legende"
+
+
+@pytest.mark.parametrize("separator", ["—", "-"])
+def test_case_links_use_actual_heading_and_document_duplicate_order(index_module, tmp_path, separator):
+    heading = f"SMK-A-VORM-01 {separator} Tagesstart"
+    matrix = tmp_path / "matrix.md"
+    metadata = "\n| Bereich | Rolle | Browser | Mobile | E2E |\n|---|---|---|---|---|\n| Smoke | staff | C | — | — |\n"
+    matrix.write_text(
+        f"```markdown\n## {heading}\n```\n"
+        f"~~~markdown\n## {heading}\n~~~\n"
+        f"## {heading}\n"
+        f"#### {heading}{metadata}"
+        f"#### {heading}{metadata}",
+        encoding="utf-8",
+    )
+    tests = index_module.parse_matrix(matrix, {"test_offline.py"})
+    assert len(tests) == 2
+    base = "smk-a-vorm-01--tagesstart" if separator == "—" else "smk-a-vorm-01---tagesstart"
+    assert [index_module.tc_link(case) for case in tests] == [
+        f"[`SMK-A-VORM-01`](manual-test-matrix-a.md#{base}-1)",
+        f"[`SMK-A-VORM-01`](manual-test-matrix-a.md#{base}-2)",
+    ]
+
+
+def test_real_matrix_generation_and_case_links_are_current(index_module):
+    assert index_module.main(["--check"]) == 0
+    tests = index_module.parse_all_sections()
+    rendered = index_module.render_index(tests)
+    assert all(index_module.tc_link(case) in rendered for case in tests)
+    assert index_module.check_stale(tests, public=not (index_module.ROOT / "dev-ops").is_dir()) is False
+
+
+@pytest.mark.parametrize("suffix", ["", "\n# Preserved after\n"])
+def test_index_regeneration_preserves_manual_content(index_module, tmp_path, suffix):
+    target = tmp_path / "index.md"
+    prefix = "# Preserved before\n\n"
+    target.write_text(
+        f"{prefix}{index_module.AUTOGEN_START}\nold\n{index_module.AUTOGEN_END}\n{suffix}",
+        encoding="utf-8",
+    )
+    result = index_module.write_index("new\n", target)
+    assert result.startswith(prefix)
+    assert "\nold\n" not in result
+    assert f"{index_module.AUTOGEN_START}\nnew\n{index_module.AUTOGEN_END}" in result
+    assert result.endswith(suffix) if suffix else result.endswith(f"{index_module.AUTOGEN_END}\n")
+    assert index_module.write_index("new\n", target) == result
+
+
+@pytest.mark.parametrize("problem", ["no_header", "truncated", "too_few_cells"])
+def test_invalid_metadata_cannot_create_case_links(index_module, tmp_path, problem):
+    source = tmp_path / "matrix.md"
+    heading = "#### SMK-A-TEST-01 — Example\n"
+    table_header = "| Bereich | Rolle | Browser | Mobile | E2E |\n"
+    content = {
+        "no_header": heading,
+        "truncated": heading + table_header,
+        "too_few_cells": heading + table_header + "|---|---|---|---|---|\n| Smoke | staff | C |\n",
+    }[problem]
+    source.write_text(content, encoding="utf-8")
+    if problem == "no_header":
+        assert index_module.parse_matrix(source, {"test_offline.py"}) == []
+    else:
+        with pytest.raises(SystemExit) as error:
+            index_module.parse_matrix(source, {"test_offline.py"})
+        assert error.value.code == 1
+
+
+@pytest.mark.parametrize("problem", ["missing_hub", "empty_sections", "wrong_section"])
+def test_invalid_matrix_tree_fails_before_generating_links(index_module, matrix_tree, problem):
+    if problem == "missing_hub":
+        index_module.SOURCE.unlink()
+    elif problem == "empty_sections":
+        for filename in index_module.SECTION_FILES.values():
+            (index_module.MATRIX_DIR / filename).write_text("# Empty\n", encoding="utf-8")
+    else:
+        source = index_module.MATRIX_DIR / index_module.SECTION_FILES["A"]
+        source.write_text(source.read_text(encoding="utf-8").replace("SMK-A-VORM-01", "DEV-01"), encoding="utf-8")
+    if problem == "wrong_section":
+        with pytest.raises(SystemExit) as error:
+            index_module.main([])
+        assert error.value.code == 1
+    else:
+        assert index_module.main([]) == 1
+    assert not index_module.TARGET.exists()
+
+
+def test_empty_coverage_inventory_does_not_invent_case_links(index_module):
+    assert "manual-test-matrix-a.md#" not in index_module.render_index([], set())
+    assert "manual-test-matrix-b.md#" not in "\n".join(index_module.render_extras([]))
+
+
+def test_missing_index_markers_are_stale_and_unmarked_appendix_is_preserved(index_module, matrix_tree):
+    index_module.TARGET.write_text("# Missing markers\n", encoding="utf-8")
+    tests = index_module.parse_all_sections()
+    assert index_module.check_stale(tests) is True
+    original = "# Unmarked appendix\n"
+    index_module.SOURCE.write_text(original, encoding="utf-8")
+    assert index_module.patch_anhang_c("generated\n", index_module.SOURCE) == (False, None)
+    assert index_module.SOURCE.read_text(encoding="utf-8") == original

@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -173,6 +174,7 @@ class Test:
     setup: str
     line: int
     has_e2e: bool = False  # gesetzt in parse_matrix(): echte E2E-Datei referenziert
+    anchor: str = ""
 
     @property
     def is_local_ssh(self) -> bool:
@@ -196,20 +198,48 @@ def split_meta_row(row: str) -> list[str]:
     return [cell.strip() for cell in row.strip().removeprefix("|").removesuffix("|").split("|")]
 
 
-_GH_STRIP = re.compile(r"[\0-\x1f!-,\./:-@\[-\^`\{-\xa0\xa8\xad]+")
+def github_slug(text: str, seen: dict[str, int] | None = None) -> str:
+    """Generate a GitHub heading anchor, optionally unique within a document.
 
-
-def github_slug(text: str) -> str:
-    """Mimic GitHub's heading anchor generation (Flet/github-slugger regex).
-
-    Keeps word chars, hyphens, underscores, and Unicode punctuation like
-    em-dashes/en-dashes. Removes ASCII punctuation (except `-`/`_`) and
-    control characters, then replaces whitespace runs with single hyphens.
+    Preserve Unicode letters, marks and numbers, plus hyphens/underscores.
+    Remove punctuation, symbols and controls; replace each space separately.
+    ``seen`` belongs to one target document and includes all its headings.
     """
-    s = text.strip().lower()
-    s = _GH_STRIP.sub("", s)
-    s = re.sub(r"\s+", "-", s)
-    return s
+    slug = "".join(
+        char for char in text.strip().lower() if char in "-_ " or unicodedata.category(char)[0] in "LMN"
+    ).replace(" ", "-")
+    if seen is None:
+        return slug
+    base = slug
+    while slug in seen:
+        seen[base] += 1
+        slug = f"{base}-{seen[base]}"
+    seen[slug] = 0
+    return slug
+
+
+def heading_anchors(lines: list[str]) -> dict[int, str]:
+    """Index ATX headings by line, ignoring fenced code and counting duplicates."""
+    anchors: dict[int, str] = {}
+    seen: dict[str, int] = {}
+    fence_char = ""
+    fence_length = 0
+    for number, line in enumerate(lines, 1):
+        fence = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+        if fence:
+            marker, rest = fence.groups()
+            if not fence_char:
+                fence_char, fence_length = marker[0], len(marker)
+            elif marker[0] == fence_char and len(marker) >= fence_length and not rest.strip():
+                fence_char = ""
+            continue
+        if fence_char:
+            continue
+        heading = re.match(r"^ {0,3}#{1,6}[ \t]+(.+?)\s*$", line)
+        if heading:
+            text = re.sub(r"[ \t]+#+[ \t]*$", "", heading.group(1))
+            anchors[number] = github_slug(text, seen)
+    return anchors
 
 
 def parse_matrix(src: Path, e2e_files: set[str] | None = None) -> list[Test]:
@@ -227,12 +257,13 @@ def parse_matrix(src: Path, e2e_files: set[str] | None = None) -> list[Test]:
             file=sys.stderr,
         )
     lines = src.read_text(encoding="utf-8").splitlines()
+    anchors = heading_anchors(lines)
     tests: list[Test] = []
     i = 0
     while i < len(lines):
         line = lines[i]
         m = HEADING_A_C_D.match(line) or HEADING_B.match(line)
-        if not m:
+        if not m or i + 1 not in anchors:
             i += 1
             continue
         tcid = m.group("tcid")
@@ -286,6 +317,7 @@ def parse_matrix(src: Path, e2e_files: set[str] | None = None) -> list[Test]:
                 setup=setup,
                 line=heading_line,
                 has_e2e=has_e2e,
+                anchor=anchors[heading_line],
             )
         )
         i = data_idx + 1
@@ -339,13 +371,9 @@ def parse_all_sections(e2e_files: set[str] | None = None) -> list[Test]:
 
 
 def tc_link(t: Test) -> str:
-    """Klickbarer Link auf den TC in seiner Sektions-Datei.
-
-    Refs #1071 Block B: zeigt auf ``manual-test-matrix-<a|b|c|d>.md#<anchor>``
-    statt auf den (nicht mehr existenten) gleichseitigen Hub-Anker.
-    """
+    """Link to the actual case heading, including its document duplicate suffix."""
     anchor_text = f"{t.tcid} — {t.title}" if t.section in {"A", "C", "D"} else f"TC-ID: {t.tcid} — {t.title}"
-    anchor = github_slug(anchor_text)
+    anchor = t.anchor or github_slug(anchor_text)
     return f"[`{t.tcid}`]({section_filename(t.section)}#{anchor})"
 
 

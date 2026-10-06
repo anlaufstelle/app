@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Testmatrix-Links springen zur richtigen GitHub-Überschrift** (#2417) — Der Index verwendet GitHub-konforme Anker mit erhaltenen Umlauten, entfernten Satzzeichen und eindeutigen Suffixen für doppelte Überschriften.
+
 - **Testmatrix-Prüfung im öffentlichen Quellbaum** (#2416) — Der Parser erhält leere Metadatenzellen; der Public-Modus prüft Matrix und Anhang C auch ohne das ausgeschlossene Indexdokument.
 
 ### Erforderliche Betreiber-Aktionen
