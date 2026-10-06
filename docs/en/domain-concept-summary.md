@@ -1,7 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Synchronization update 2026-10-06: The German version history has a grammatical correction; hardware references point to the admin guide.
+> Synchronization update 2026-10-06: Optional calendar, wiki, KDS export and third-party interfaces are marked as target features; hardware references point to the admin guide.
 
 # Domain Concept Summary
 
@@ -119,6 +119,7 @@ Event creation (`/events/new/`) saves drafts every 5 seconds in encrypted Indexe
 - **Mobile / PWA:** Progressive Web App, installable on home screens. Optimized quick-capture for smartphones with large touch targets and autocomplete. Field-ready offline mode: staff take selected persons offline into an encrypted local cache, read and edit their records, and create new contacts and tasks without connectivity; the timeline and task list also render offline in-place at their canonical URLs from the local snapshot. Offline work syncs on reconnect with explicit, resolvable conflicts rather than silent overwrites, and permanently undeliverable entries surface in a dead-letter view instead of disappearing.
 - **Internationalization:** Uses Django's `gettext` system; complete text coverage is a verification target. German (primary) and English are active. Language switcher in the UI. The package schema has no language key; multilingual package names remain a target feature.
 - **External API target:** A facility-scoped REST API for provider integrations is not implemented; current JSON endpoints are session-bound internal endpoints.
+- **Optional module targets:** Possible additions outside the core include a calendar, wiki, KDS export and interfaces to third-party systems.
 - **Performance targets:** Page load < 1s (3G), contact save < 500ms, autocomplete < 300ms, six-month statistics query < 5s at 50,000 events.
 - **Scaling target:** 5--30 concurrent users, up to 50,000 events/year per facility.
 - **Deployment:** The production Compose stack includes Caddy, Django, PostgreSQL, Redis, mandatory ClamAV, cron and maintenance services. Hardware requirements: [admin guide § 1 — Prerequisites](admin-guide.md#hardware). Installation prerequisites: [admin guide § 1 — Prerequisites](admin-guide.md#prerequisites).
@@ -320,4 +321,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: e9aa9bf2edc83cf92b86c25323db75a9044f3ed7 -->
+<!-- source-hash: b5bc658ad803fdcef7ab830c21c0241470d1194a -->

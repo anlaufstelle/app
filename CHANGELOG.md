@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
-- **Ist-Stand und Zielbilder im Fachkonzept getrennt** (#2488) — Betroffenenrechte sind als interne Funktionen beschrieben, Klientel-Self-Service ist verworfen und externe API sowie weitere Evaluierungsziele sind ausdrücklich Zielbilder.
+- **Ist-Stand und Zielbilder im Fachkonzept getrennt** (#2488) — Betroffenenrechte sind als interne Funktionen beschrieben, Klientel-Self-Service ist verworfen und externe API, optionale Module sowie weitere Evaluierungsziele sind ausdrücklich Zielbilder.
 
 - **Organisationsmodell und Arbeitsabläufe im Fachkonzept** (#2487) — DE und EN beschreiben mehrere Einrichtungen, Schichtnotizen, Zeitfilter, Auto-Save und Synchronisation gemäß Code; das Fachkonzept verweist zum Hardwarebedarf auf das Admin-Handbuch.
 

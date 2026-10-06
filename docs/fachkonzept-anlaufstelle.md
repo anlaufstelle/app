@@ -527,7 +527,7 @@ Die Ökosystem-Ebene öffnet Anlaufstelle nach außen:
 - **Export/Import:** CSV, PDF, JSON — für die Weiterverarbeitung in Excel, für Berichte, für Datenmigration.
 - **Behördenreports:** Formatierte Berichte für Jugendämter und Fördermittelgeber, auf Knopfdruck.
 - **Dokumentenbibliotheken:** Vorkonfigurierte Dokumentationstypen für verschiedene Einrichtungstypen (siehe Kapitel 11).
-- **Optionale Module:** Erweiterungspunkte für Funktionen, die nicht zum Kern gehören: Kalender, Wiki, KDS-Export, Schnittstellen zu Drittsystemen.
+- **Optionale Module (Zielbild):** Mögliche Erweiterungen außerhalb des Kerns: Kalender, Wiki, KDS-Export und Schnittstellen zu Drittsystemen.
 
 ---
 
