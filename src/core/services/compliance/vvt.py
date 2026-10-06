@@ -7,9 +7,9 @@ werden.
 
 Quellen:
 
-* `docs/fachkonzept-anlaufstelle.md` — Abschnitt "Datenschutz als Grund-
-  prinzip" (§ 6) und "Sicherheit" (§ 17): nennt die TOMs (RLS, AES-GCM,
-  Audit-Trail, MFA, ClamAV, Pseudonymisierung).
+* `docs/fachkonzept-anlaufstelle.md` — sections "Datenschutz als Grund-
+  prinzip" (§ 6) and "Sicherheit" (§ 17): name the TOMs (RLS, Fernet field
+  encryption, audit trail, MFA, ClamAV, pseudonymisation).
 * `docs/faq.md` — Abschnitte zu Aufbewahrungsfristen, DSGVO-Paket und
   Rollenmodell.
 
@@ -99,7 +99,7 @@ PROCESSING_ACTIVITIES = [
         "toms": [
             _("Pseudonymisierung by Design"),
             _("Row Level Security (RLS) pro Facility"),
-            _("Verschluesselung at-rest (AES-GCM) sensibler Felder"),
+            _("Verschlüsselung at-rest sensibler Felder (Fernet: AES-128-CBC mit HMAC-SHA256)"),
             # Refs #1862: Hier stand "AuditLog auf Lese- und Schreibzugriffe"
             # — eine unzutreffende Angabe nach Art. 30 Abs. 1 lit. g DSGVO.
             # Protokolliert wird jede Aenderung, von Lesezugriffen aber nur
@@ -140,7 +140,7 @@ PROCESSING_ACTIVITIES = [
             _("Ereignisbeschreibungen / Beratungsnotizen"),
             _("Strukturierte Feldwerte (je Dokumentationstyp konfiguriert)"),
             _("Kontaktanlass, Themen, Vermittlungen"),
-            _("Ggf. Gesundheits-/Suchtkontext (verschluesselt)"),
+            _("Ggf. Gesundheits-/Suchtkontext (je nach Feldkonfiguration verschlüsselt)"),
             _("Zeitstempel, Bearbeiter:in, Sensitivitaetsstufe"),
         ],
         "recipients": [
@@ -157,7 +157,7 @@ PROCESSING_ACTIVITIES = [
         ),
         "toms": [
             _("Sensitivitaets-basierte Sichtbarkeit (je Dokumentationstyp, einzelne Feldvorlagen koennen sie anheben)"),
-            _("Verschluesselung sensibler Felder (AES-GCM, Schluessel ausserhalb der DB)"),
+            _("Verschlüsselung sensibler Felder (Fernet: AES-128-CBC mit HMAC-SHA256, Schlüssel außerhalb der DB)"),
             _("Optimistic Locking gegen versehentliches Ueberschreiben"),
             # Refs #1862: Hier stand "AuditLog jeder Lese- und Schreibaktion".
             # Der Ersatz muss drei Dinge genau treffen, sonst ersetzt er eine

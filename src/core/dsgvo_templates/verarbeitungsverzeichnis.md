@@ -26,7 +26,7 @@
 | Altersgruppe | Unter 18, 18–26, 27+, Unbekannt | Nein |
 | Kontaktstufe | Nur Pseudonym, Mit Zusatzangaben | Nein |
 | Kontaktdaten | Dokumentation einzelner Kontakte | Teilweise |
-| Sensible Notizen | Freitextnotizen mit sensiblen Inhalten | Ja (AES/Fernet) |
+| Sensible Felder | Felder, die die Einrichtung als verschlüsselt konfiguriert (z. B. Krisen- oder Gesundheitsnotizen) | Ja (Fernet) |
 | Sperrvermerk (Art. 18) | Kennzeichen, Rechtsgrund (Art. 18 Abs. 1 lit. a–d), Zeitpunkt, setzende Person | Nein |
 
 ### 1.4 Rechtsgrundlage

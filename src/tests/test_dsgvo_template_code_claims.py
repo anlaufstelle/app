@@ -18,10 +18,13 @@ Three claim families are pinned against the implementation:
 from pathlib import Path
 
 import pytest
+import yaml
 
 from core.services.client import render_document
+from core.services.compliance.vvt import PROCESSING_ACTIVITIES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+PACKAGES_DIR = REPO_ROOT / "src" / "core" / "packages"
 FACHKONZEPT = REPO_ROOT / "docs" / "fachkonzept-anlaufstelle.md"
 
 
@@ -94,3 +97,62 @@ class TestOfflineKeyLifecycleDomainConcept:
         text = _flat(FACHKONZEPT.read_text(encoding="utf-8"))
         assert "verwirft den Key und löscht den Offline-Store, sobald die Session abgelaufen ist" not in text
         assert "nur den Schlüssel" in text
+
+
+# ---------------------------------------------------------------------------
+# Encryption promises (Refs #2465)
+# ---------------------------------------------------------------------------
+
+
+def _shipped_field_encryption() -> dict[str, dict[str, bool]]:
+    """``{package: {field slug: is_encrypted}}`` across all shipped packages."""
+    result: dict[str, dict[str, bool]] = {}
+
+    def walk(node, fields):
+        if isinstance(node, dict):
+            if "slug" in node and "is_encrypted" in node:
+                fields[node["slug"]] = bool(node["is_encrypted"])
+            for value in node.values():
+                walk(value, fields)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value, fields)
+
+    for path in sorted(PACKAGES_DIR.glob("*.yaml")):
+        fields: dict[str, bool] = {}
+        walk(yaml.safe_load(path.read_text(encoding="utf-8")), fields)
+        result[path.stem] = fields
+    return result
+
+
+@pytest.mark.django_db
+class TestEncryptionPromises:
+    def test_general_note_field_is_not_encrypted_in_any_package(self):
+        """Premise of the template wording: ``notiz`` is plain text everywhere."""
+        packages = _shipped_field_encryption()
+        assert packages
+        for name, fields in packages.items():
+            assert fields.get("notiz") is False, name
+
+    def test_information_duties_do_not_promise_encrypted_contact_notes(self, facility):
+        content = _flat(render_document("informationspflichten", facility)[0])
+        assert "Dokumentation der Beratungsinhalte (verschlüsselt)" not in content
+        assert "je nach Konfiguration" in content
+
+    def test_dpa_does_not_promise_encrypted_database_or_notes(self, facility):
+        content = _flat(render_document("av-vertrag", facility)[0])
+        assert "Speicherung verschlüsselter Datenbankinhalte" not in content
+        assert "Verschlüsselte Kontaktnotizen" not in content
+        assert "je nach Konfiguration" in content
+
+    def test_dpa_lists_missing_data_categories(self, facility):
+        content = _flat(render_document("av-vertrag", facility)[0])
+        section = _section(content, "§ 3 Art der personenbezogenen Daten", "§ 4 ")
+        categories = ("Dateianhänge", "Fall", "Wirkungsziel", "Art. 9", "Protokolldaten", "IP-Adresse", "Sicherungen")
+        for category in categories:
+            assert category in section, category
+
+    def test_vvt_names_fernet_for_server_side_fields(self):
+        toms = [str(tom) for activity in PROCESSING_ACTIVITIES for tom in activity["toms"]]
+        assert not [tom for tom in toms if "AES-GCM" in tom]
+        assert [tom for tom in toms if "Fernet" in tom]

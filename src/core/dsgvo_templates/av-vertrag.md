@@ -39,7 +39,7 @@ wird folgende Vereinbarung zur Auftragsverarbeitung geschlossen:
 ## § 2 Art und Zweck der Verarbeitung
 
 Die Verarbeitung umfasst:
-- Speicherung verschlüsselter Datenbankinhalte
+- Speicherung der Datenbankinhalte (die Datenbank selbst ist nicht verschlüsselt; Dateianhänge und einzelne sensible Felder werden je nach Konfiguration verschlüsselt gespeichert)
 - Bereitstellung der Webanwendung über HTTPS
 - Erstellung und Speicherung von Backups
 - Technischer Support (ohne Zugriff auf Inhalte)
@@ -52,7 +52,12 @@ Folgende Datenkategorien werden verarbeitet:
 - Pseudonyme (keine Klarnamen)
 - Altersgruppe
 - Kontaktstufen
-- Verschlüsselte Kontaktnotizen
+- Kontaktdokumentation und Notizen (einzelne sensible Felder je nach Konfiguration verschlüsselt)
+- Fall- und Wirkungsziel-Freitexte (Titel, Beschreibungen, Episoden, Meilensteine)
+- Dateianhänge an Ereignissen, Personen und Fällen (z. B. Ausweiskopie, Bescheid; verschlüsselt gespeichert)
+- Besondere Kategorien personenbezogener Daten nach Art. 9 DSGVO (z. B. Gesundheitsdaten), soweit die Einrichtung sie dokumentiert
+- Protokolldaten (Audit-Log mit Benutzer, Zeitpunkt, Aktion und IP-Adresse)
+- Sicherungen (Backups) der genannten Daten
 - Mitarbeiter-Zugangsdaten
 
 ---

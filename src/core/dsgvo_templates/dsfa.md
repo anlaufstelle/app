@@ -13,7 +13,7 @@ Die Software „Anlaufstelle" dient der Dokumentation von Kontakten mit Jugendli
 
 ### 1.2 Umfang der Verarbeitung
 - Pseudonymisierte Kontaktdokumentation
-- Verschlüsselte Speicherung sensibler Daten
+- Verschlüsselte Speicherung von Dateianhängen und einzelner sensibler Felder (je nach Konfiguration)
 - Statistische Auswertung für Fördergeber
 
 ### 1.3 Kontext der Verarbeitung
@@ -41,7 +41,7 @@ Die Software „Anlaufstelle" dient der Dokumentation von Kontakten mit Jugendli
 ### 2.2 Datensparsamkeit
 - Keine Klarnamen erforderlich
 - Altersangabe nur in Clustern (nicht exakt)
-- Sensible Daten verschlüsselt
+- Sensible Felder je nach Konfiguration verschlüsselt (Dateianhänge stets); die Datenbank selbst ist nicht verschlüsselt
 
 ### 2.3 Speicherbegrenzung
 

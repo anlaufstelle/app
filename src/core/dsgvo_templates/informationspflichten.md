@@ -47,7 +47,7 @@ Wir verarbeiten Ihre Daten zu folgenden Zwecken:
 | Pseudonym | Selbstgewählter Name (kein Klarname erforderlich) |
 | Altersgruppe | Grobe Einordnung (Unter 18, 18–26, 27+) |
 | Kontaktstufe | Nur Pseudonym oder Mit Zusatzangaben |
-| Kontaktnotizen | Dokumentation der Beratungsinhalte (verschlüsselt) |
+| Kontaktdokumentation | Dokumentation von Kontakten und Beratungsinhalten; einzelne sensible Felder werden je nach Konfiguration der Einrichtung verschlüsselt gespeichert, die übrigen Angaben nicht |
 
 ---
 
