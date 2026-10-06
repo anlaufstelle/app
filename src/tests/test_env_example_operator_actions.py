@@ -1,9 +1,11 @@
 """Guard: ``.env.example`` and the changelog's operator actions name the same variables.
 
 Forward: every environment variable an "Erforderliche Betreiber-Aktionen" section
-asks the operator to handle must exist in ``.env.example`` (active or commented).
-Reverse: every variable in ``.env.example`` must be mentioned in the changelog at
-least once, so a newly added line cannot reach operators unannounced.
+names (as ``NAME``, ``NAME=value`` or a bare assignment) must exist in
+``.env.example`` (active or commented).
+Reverse: every variable in ``.env.example`` must be named in an operator-actions
+section, so a newly added line cannot reach operators unannounced. A mention
+elsewhere in the changelog does not count.
 
 Both directions have an allowlist for justified exceptions; stale allowlist
 entries fail as well, so the lists cannot silently outlive their reason.
@@ -21,15 +23,18 @@ pytestmark = pytest.mark.architecture
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OPERATOR_SECTION = "Erforderliche Betreiber-Aktionen"
 RELEASE_HEADING = re.compile(r"^## \[[^]]+\]")
-ENV_NAME = re.compile(r"`([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)`")
+ENV_NAME = re.compile(r"`([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)(?:=[^`]*)?`")
+ENV_ASSIGNMENT = re.compile(r"(?<![A-Z0-9_])([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)=")
 ENV_LINE = re.compile(r"^#?\s*([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)=", re.MULTILINE)
 
 # Named in an operator action, but deliberately absent from ``.env.example``.
 FORWARD_ALLOWLIST: dict[str, str] = {
     "MAINTENANCE_FLAG_FILE": "operators are told to REMOVE a host-path override; the default lives in the container",
 }
-# In ``.env.example`` without any changelog mention: Compose/runtime defaults that
-# were never an operator action.
+BASELINE = "installation baseline: set at first setup per the admin guide, not a release-time action"
+PENDING = "operator action still missing in the [0.99.5] block; remove once the block names it"
+# In ``.env.example`` but not named in any operator action. Remove an entry as soon as
+# an operator action names the variable (the guard then reports it as stale).
 REVERSE_ALLOWLIST: dict[str, str] = {
     "DJANGO_SETTINGS_MODULE": "fixed by the image and the Compose files",
     "POSTGRES_HOST": "Compose-internal service name",
@@ -40,6 +45,48 @@ REVERSE_ALLOWLIST: dict[str, str] = {
     "BACKUP_OFFSITE_TARGET": "optional backup target, documented in the runbook",
     "CLAMAV_HOST": "Compose-internal service name",
     "CLAMAV_PORT": "Compose-internal default",
+    "DJANGO_AUDIT_HWM_PATH": PENDING,
+    "EMAIL_USE_SSL": PENDING,
+    "EMAIL_USE_TLS": PENDING,
+    "ALLOWED_HOSTS": BASELINE,
+    "APP_VERSION": BASELINE,
+    "BACKUP_DIR": BASELINE,
+    "BACKUP_ENCRYPTION_KEY": BASELINE,
+    "BACKUP_HOST_DIR": BASELINE,
+    "CLAMAV_ENABLED": BASELINE,
+    "CLAMAV_TIMEOUT": BASELINE,
+    "COMPOSE_PROJECT_NAME": BASELINE,
+    "DEFAULT_FROM_EMAIL": BASELINE,
+    "DJANGO_AUDIT_HASH_KEY": BASELINE,
+    "DJANGO_HEALTH_DETAIL_TOKEN": BASELINE,
+    "DJANGO_HEALTH_DISK_REQUIRED": BASELINE,
+    "DJANGO_SECRET_KEY": BASELINE,
+    "EMAIL_HOST": BASELINE,
+    "EMAIL_HOST_PASSWORD": BASELINE,
+    "EMAIL_HOST_USER": BASELINE,
+    "EMAIL_PORT": BASELINE,
+    "ENCRYPTION_KEY": BASELINE,
+    "ENCRYPTION_KEYS": BASELINE,
+    "EXTERNAL_ORIGIN": BASELINE,
+    "LEGAL_IMPRINT_FILE": BASELINE,
+    "LEGAL_PRIVACY_FILE": BASELINE,
+    "LOG_FORMAT": BASELINE,
+    "MEDIA_ROOT": BASELINE,
+    "MEDIA_ROOT_CONTAINER": BASELINE,
+    "POSTGRES_ADMIN_PASSWORD": BASELINE,
+    "POSTGRES_ADMIN_USER": BASELINE,
+    "POSTGRES_BOOTSTRAP_PASSWORD": BASELINE,
+    "POSTGRES_DB": BASELINE,
+    "POSTGRES_PASSWORD": BASELINE,
+    "POSTGRES_USER": BASELINE,
+    "REDIS_URL": BASELINE,
+    "SENTRY_DSN": BASELINE,
+    "SENTRY_TRACES_SAMPLE_RATE": BASELINE,
+    "SOURCE_CODE_URL": BASELINE,
+    "SOURCE_CODE_VERSION": BASELINE,
+    "SUPPORT_CONTACT": BASELINE,
+    "TRUSTED_PROXY_CIDRS": BASELINE,
+    "TRUSTED_PROXY_HOPS": BASELINE,
 }
 
 
@@ -49,7 +96,7 @@ def env_example_variables(text: str) -> set[str]:
 
 
 def operator_action_variables(changelog: str) -> set[str]:
-    """Backticked variable names inside any operator-actions section."""
+    """Variable names (``NAME``, ``NAME=value``, bare assignments) inside operator-actions sections."""
     names: set[str] = set()
     in_section = False
     for line in changelog.splitlines():
@@ -59,6 +106,7 @@ def operator_action_variables(changelog: str) -> set[str]:
             in_section = line == f"### {OPERATOR_SECTION}"
         elif in_section:
             names.update(ENV_NAME.findall(line))
+            names.update(ENV_ASSIGNMENT.findall(line))
     return names
 
 
@@ -70,14 +118,13 @@ def check(
 ) -> list[str]:
     declared = env_example_variables(env_example)
     announced = operator_action_variables(changelog)
-    mentioned = {name for name in declared if re.search(rf"\b{name}\b", changelog)}
     errors = [
         f"{name}: named as operator action but missing in .env.example"
         for name in sorted(announced - declared - set(forward_allowlist))
     ]
     errors += [
-        f"{name}: in .env.example but never mentioned in the changelog"
-        for name in sorted(declared - mentioned - set(reverse_allowlist))
+        f"{name}: in .env.example but not named in any operator action"
+        for name in sorted(declared - announced - set(reverse_allowlist))
     ]
     errors += [
         f"{name}: stale forward allowlist entry"
@@ -87,7 +134,7 @@ def check(
     errors += [
         f"{name}: stale reverse allowlist entry"
         for name in sorted(reverse_allowlist)
-        if name in mentioned or name not in declared
+        if name in announced or name not in declared
     ]
     return errors
 
@@ -124,8 +171,8 @@ def test_variable_outside_operator_section_is_not_an_action() -> None:
 def test_undocumented_env_example_variable_is_reported() -> None:
     errors = check(CHANGELOG_PROBE, "NEW_SETTING_PATH=1\nUNANNOUNCED_VALUE=2\n# COMMENTED_VALUE=3\n", {}, {})
     assert errors == [
-        "COMMENTED_VALUE: in .env.example but never mentioned in the changelog",
-        "UNANNOUNCED_VALUE: in .env.example but never mentioned in the changelog",
+        "COMMENTED_VALUE: in .env.example but not named in any operator action",
+        "UNANNOUNCED_VALUE: in .env.example but not named in any operator action",
     ]
 
 
@@ -147,3 +194,24 @@ def test_check_runs_on_files_in_tmp_path(tmp_path: Path) -> None:
         {},
     )
     assert errors == []
+
+
+def test_variable_mentioned_only_outside_operator_actions_is_reported() -> None:
+    changelog = CHANGELOG_PROBE + "- Weitere Variable `ELSEWHERE_SETTING` im Fließtext.\n"
+    errors = check(changelog, "NEW_SETTING_PATH=1\nELSEWHERE_SETTING=2\n", {}, {})
+    assert errors == ["ELSEWHERE_SETTING: in .env.example but not named in any operator action"]
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "- Setze `ASSIGNED_SETTING=/data/value` in der `.env`.",
+        "- Trage ASSIGNED_SETTING='wert' in die `.env` ein.",
+    ],
+)
+def test_assignment_in_operator_action_names_the_variable(action: str) -> None:
+    changelog = f"## [Unreleased]\n\n### Erforderliche Betreiber-Aktionen\n\n{action}\n"
+    assert operator_action_variables(changelog) == {"ASSIGNED_SETTING"}
+    assert check(changelog, "OTHER_VALUE=1\n", {}, {"OTHER_VALUE": "probe"}) == [
+        "ASSIGNED_SETTING: named as operator action but missing in .env.example"
+    ]
