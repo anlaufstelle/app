@@ -396,11 +396,31 @@ class TestSetupFacilityRlsGuard:
 
         # The hint names the maintenance role, not an ``exec web`` call that runs as the app role.
         message = str(excinfo.value)
-        assert "docker compose run --rm maintenance setup_facility" in message
+        assert "docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility" in message
         assert "exec" not in message
 
         assert Organization.objects.count() == 0
         assert Facility.objects.count() == 0
+
+    def test_hint_command_selects_a_stack_that_defines_the_service(self, monkeypatch):
+        import re
+        import shlex
+
+        from core.management.commands import setup_facility as command_module
+
+        monkeypatch.setattr(command_module, "_has_rls_bypass_context", lambda: False)
+        with pytest.raises(CommandError) as excinfo:
+            call_command("setup_facility")
+
+        command = re.search(r"docker compose .*? setup_facility", str(excinfo.value)).group()
+        tokens = shlex.split(command)
+        files = [tokens[i + 1] for i, token in enumerate(tokens) if token == "-f"] or ["docker-compose.yml"]
+        service = next(t for t in tokens[tokens.index("run") + 1 :] if not t.startswith("-"))
+        root = Path(__file__).resolve().parents[2]
+        services = set()
+        for name in files:
+            services |= set(yaml.safe_load((root / name).read_text())["services"])
+        assert service in services, (command, files)
 
 
 @pytest.mark.django_db

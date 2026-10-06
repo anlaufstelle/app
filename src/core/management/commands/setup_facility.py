@@ -90,7 +90,7 @@ class Command(BaseCommand):
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — "
                 "sonst scheiterte schon das Anlegen der Einstellungen an der Row-Level-Security. "
                 "Command im Dienst maintenance (Admin-Rolle) aufrufen: "
-                "docker compose run --rm maintenance setup_facility "
+                "docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility "
                 "(siehe docs/ops-runbook.md § 9)."
             )
 
