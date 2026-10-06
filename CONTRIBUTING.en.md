@@ -363,7 +363,7 @@ pre-commit run --all-files               # run all commit-stage hooks against th
 
 > **Activate the venv before EVERY push** (lesson from the v0.89.0 handoff): the `pre-push` hook invokes `pre-commit`. Without an activated venv **every** push aborts with `pre-commit not found. Did you forget to activate your virtualenv?`. On a **tag** push this is particularly treacherous — git then only reports `failed to push some refs`, the tag stays behind locally without a word, and it may not surface until several steps later at the tag-push gate (`release-verify-tags.sh`). So run `. .venv/bin/activate` (or a one-off `PATH="$PWD/.venv/bin:$PATH" git push …`) — **not** `--no-verify`, which bypasses the quick CI.
 
-Where the GitHub Actions workflows run, their result is the definitive source of truth: contributors get them on their pull request in the public repository. In the internal development branch the workflows are deliberately disabled ([ADR-029](docs/adr/029-local-only-ci.md)); there `make ci` is the binding gate. The pre-push hook only reduces the likelihood of red CI after the push.
+Where the GitHub Actions workflows run, their result is the definitive source of truth: contributors get them on their pull request in the public repository. Whether the workflows run in the internal development branch is a maintainer setting and not fixed in the repository; there `make ci` is the binding gate ([ADR-029](docs/adr/029-local-only-ci.md)). The pre-push hook only reduces the likelihood of red CI after the push.
 
 ### Port Overview and Process Hygiene
 
@@ -757,7 +757,7 @@ pytest src/tests/test_hash_value_example.py -x
 - Pure Markdown/documentation changes.
 - One-shot hygiene scripts without reuse.
 
-Cross-references: `AGENTS.md § Tests & Verifikation` (dev-only) and skill `superpowers:test-driven-development`.
+Cross-reference: the test conventions in the following section [Unit and Integration Tests](#unit-and-integration-tests).
 
 ### Unit and Integration Tests
 
@@ -820,7 +820,7 @@ This pipeline must pass locally before every pull request.
 
 **JS gate (`make test-js`, Refs #1932):** runs `npm test` (= `vitest run`, non-watch, deterministic) against the offline/queue/watcher suite under [`tests/js/`](tests/js/) and is a fail-fast part of `make ci`/`make ci-locked`. If `node_modules/` (no prior `npm ci`) or `package-lock.json` is missing, the target fails with a clear error message instead of a cryptic `vitest: not found`.
 
-**JS advisory gate (`make audit-js`, Refs #1968):** runs `npm audit --audit-level=$(AUDIT_LEVEL)` against `package-lock.json` — the counterpart to `pip-audit` on the Python side, which JavaScript previously lacked entirely. It deliberately hangs in `make ci` and not only in the GitHub workflow: in the internal development branch the workflows are disabled ([ADR-029](docs/adr/029-local-only-ci.md)), so `make ci` is the binding gate there; on the public repository the test workflow additionally runs `npm audit` on the pull request.
+**JS advisory gate (`make audit-js`, Refs #1968):** runs `npm audit --audit-level=$(AUDIT_LEVEL)` against `package-lock.json` — the counterpart to `pip-audit` on the Python side, which JavaScript previously lacked entirely. It deliberately hangs in `make ci` and not only in the GitHub workflow: whether the workflows run in the internal development branch is a maintainer setting, and `make ci` is the binding gate there ([ADR-029](docs/adr/029-local-only-ci.md)); on the public repository the test workflow additionally runs `npm audit` on the pull request.
 
 **This means the gate chain now needs network access.** `npm audit` does read the lockfile only (no `npm ci`, no `node_modules/` required), but it queries the advisory data from the npm registry. On a host without registry access `make ci` aborts in `audit-js` — right after `deps-check`, i.e. before a single test runs. Individual gates can still be run selectively in that case (`make lint`, `make typecheck`, `make test-parallel`).
 
@@ -1039,4 +1039,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 114af0f780c2469332521b06ec11619f5a706f11 -->
+<!-- source-hash: 33c76d9ffb028d5f69786b9c383f8195d798ac67 -->

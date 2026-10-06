@@ -358,7 +358,7 @@ pre-commit run --all-files               # alle commit-stage Hooks gegen das Rep
 
 > **venv vor JEDEM Push aktivieren** (Lehre aus dem v0.89.0-Handoff): Der `pre-push`-Hook ruft `pre-commit` auf. Ohne aktiviertes venv bricht **jeder** Push mit `pre-commit not found. Did you forget to activate your virtualenv?` ab. Bei einem **Tag**-Push ist das besonders tückisch — git meldet danach nur `failed to push some refs`, der Tag bleibt still lokal, und auffallen kann das erst Schritte später am Tag-Push-Gate (`release-verify-tags.sh`). Also `. .venv/bin/activate` (oder einmalig `PATH="$PWD/.venv/bin:$PATH" git push …`) — **nicht** `--no-verify`, das umgeht die Schnell-CI.
 
-Wo die GitHub-Actions-Workflows laufen, ist ihr Ergebnis die letztgültige Quelle der Wahrheit: Beitragende erhalten sie an ihrem Pull Request im öffentlichen Repository. Im internen Entwicklungszweig sind die Workflows bewusst deaktiviert ([ADR-029](docs/adr/029-local-only-ci.md)); dort ist `make ci` das verbindliche Tor. Der pre-push-Hook reduziert nur die Wahrscheinlichkeit roter CI nach dem Push.
+Wo die GitHub-Actions-Workflows laufen, ist ihr Ergebnis die letztgültige Quelle der Wahrheit: Beitragende erhalten sie an ihrem Pull Request im öffentlichen Repository. Ob die Workflows im internen Entwicklungszweig laufen, ist eine Einstellung der Maintainer und nicht im Repository festgelegt; dort gilt `make ci` als verbindliches Tor ([ADR-029](docs/adr/029-local-only-ci.md)). Der pre-push-Hook reduziert nur die Wahrscheinlichkeit roter CI nach dem Push.
 
 ### Port-Übersicht und Prozess-Hygiene
 
@@ -756,7 +756,7 @@ pytest src/tests/test_hash_value_example.py -x
 - Reine Markdown-/Doku-Änderungen.
 - One-Shot-Hygiene-Skripte ohne Wiederverwendung.
 
-Querverweise: `AGENTS.md § Tests & Verifikation` (dev-only) und Skill `superpowers:test-driven-development`.
+Querverweis: die Testkonventionen im folgenden Abschnitt [Unit- und Integrationstests](#unit--und-integrationstests).
 
 ### Unit- und Integrationstests
 
@@ -819,7 +819,7 @@ Diese Pipeline muss vor jedem Pull Request lokal grün sein.
 
 **JS-Gate (`make test-js`, Refs #1932):** führt `npm test` (= `vitest run`, non-watch, deterministisch) gegen die Offline-/Queue-/Watcher-Suite unter [`tests/js/`](tests/js/) aus und ist fail-fast Teil von `make ci`/`make ci-locked`. Fehlt `node_modules/` (kein vorheriges `npm ci`) oder `package-lock.json`, scheitert das Target mit einer klaren Fehlermeldung statt eines kryptischen `vitest: not found`.
 
-**JS-Advisory-Gate (`make audit-js`, Refs #1968):** führt `npm audit --audit-level=$(AUDIT_LEVEL)` gegen `package-lock.json` aus — das Gegenstück zu `pip-audit` auf der Python-Seite, das es für JavaScript vorher nicht gab. Es hängt bewusst in `make ci` und nicht nur im GitHub-Workflow: Im internen Entwicklungszweig sind die Workflows deaktiviert ([ADR-029](docs/adr/029-local-only-ci.md)); dort ist `make ci` das verbindliche Tor, am öffentlichen Repository führt der Test-Workflow `npm audit` zusätzlich am Pull Request aus.
+**JS-Advisory-Gate (`make audit-js`, Refs #1968):** führt `npm audit --audit-level=$(AUDIT_LEVEL)` gegen `package-lock.json` aus — das Gegenstück zu `pip-audit` auf der Python-Seite, das es für JavaScript vorher nicht gab. Es hängt bewusst in `make ci` und nicht nur im GitHub-Workflow: Ob die Workflows im internen Entwicklungszweig laufen, ist eine Einstellung der Maintainer; dort gilt `make ci` als verbindliches Tor ([ADR-029](docs/adr/029-local-only-ci.md)), am öffentlichen Repository führt der Test-Workflow `npm audit` zusätzlich am Pull Request aus.
 
 **Damit braucht die Gate-Kette Netzzugang.** `npm audit` liest zwar nur das Lockfile (kein `npm ci`, kein `node_modules/` nötig), fragt die Advisory-Daten aber bei der npm-Registry ab. Auf einem Host ohne Registry-Zugang bricht `make ci` in `audit-js` ab — und zwar direkt nach `deps-check`, also bevor ein einziger Test läuft. Einzelne Gates lassen sich in dem Fall weiter gezielt fahren (`make lint`, `make typecheck`, `make test-parallel`).
 

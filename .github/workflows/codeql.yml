@@ -12,10 +12,10 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     # CodeQL ist auf privaten Repos nur mit GitHub Advanced Security verfügbar.
-    # Im Entwicklungs-Repository (privat) und im Stage-Repository
-    # (anlaufstelle/stage, privat) wird der Job geskippt; im öffentlichen
-    # Repository (anlaufstelle/app) läuft er kostenfrei und meldet Findings
-    # ans Security-Tab. Refs Issue #687.
+    # In the development repository (private) and the stage repository
+    # (anlaufstelle/stage, private) the job is skipped; in the public
+    # repository (anlaufstelle/app) it runs free of charge and reports findings
+    # to the Security tab. Refs Issue #687.
     if: github.event.repository.private == false
     runs-on: ubuntu-latest
     # Ohne Limit laeuft ein Haenger bis in GitHubs 6-Stunden-Default (Refs #1606);

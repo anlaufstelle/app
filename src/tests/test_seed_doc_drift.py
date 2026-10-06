@@ -32,9 +32,9 @@ CONTRIBUTING = REPO_ROOT / "CONTRIBUTING.md"
 SEED_USERS_SRC = REPO_ROOT / "src" / "core" / "seed" / "users.py"
 
 # Profile, die bewusst NICHT in der oeffentlichen CONTRIBUTING-Tabelle stehen
-# (``demo_solo`` ist KEIN CLI-Wert von ``--scale`` — nur eine interne
-# Volumen-Variante, die ``--scale demo`` fuer die Solo-Facility verwendet,
-# Refs #2279). ``solo`` ist ein CLI-Wert und steht in der Tabelle; sie zeigt
+# (``demo_solo`` is NOT a CLI value of ``--scale`` — only an internal volume
+# variant that ``--scale demo`` uses for the solo facility, Refs #2279).
+# ``solo`` is a CLI value and appears in the table, which shows
 # small/medium/large/solo/demo.
 UNDOCUMENTED_PROFILES = frozenset({"demo_solo"})
 

@@ -74,7 +74,7 @@
 # Audit-Integrität: Hash-Kette, Diff, High-Water-Mark, Detail-Policy
 # /src/core/services/audit/        @tobiasnix @<vertretung>
 
-# Verschlüsselung: Feldverschlüsselung (Fernet/MultiFernet), Schlüsselrotation
+# Encryption: field encryption (Fernet/MultiFernet), key rotation
 # /src/core/services/file_vault/encryption.py  @tobiasnix @<vertretung>
 
 # Migrationen — hier liegen die Row-Level-Security-Policies; eine fehlerhafte
