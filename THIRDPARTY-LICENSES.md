@@ -63,10 +63,10 @@ installed via a package manager) and the self-hosted fonts and icons are documen
 manually. `make verify-vendor-js-sync` (`scripts/verify_vendor_js_sync.py`)
 checks, per shipped work, that the table row exists with the exact version,
 license identifier, upstream URL, and exactly the expected vendored path and
-license text path tokens (a suffixed or additional path fails), that every
-license text matches its SHA-256 (taken from the verified upstream text, so a
-removed clause or a placeholder fails), and that no unregistered file ships
-anywhere below `src/static/js/vendor/`, `src/static/fonts/` or
+license text cells (extra text, links, suffixes or additional paths fail),
+that every license text file and the axe-core header comment match their
+SHA-256 (taken from the verified upstream text, so a removed clause or a
+placeholder fails), and that no unregistered file ships anywhere below `src/static/js/vendor/`, `src/static/fonts/` or
 `src/static/icons/`. Font files are pinned by SHA-256, so a replaced font forces
 a review of its version and license row.
 

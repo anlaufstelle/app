@@ -369,6 +369,43 @@ def test_additional_inventory_path_token_is_detected(tmp_path: Path) -> None:
     assert "Chart.js path 'src/static/js/extra.js' unexpected" in result.stderr
 
 
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("`src/static/js/chart.min.js`", "`src/static/js/chart.min.js`.absent"),
+        ("`src/static/js/chart.min.js`", "`src/static/js/chart.min.js`, [extra](src/static/js/extra.js)"),
+        (
+            "`src/static/js/licenses/LICENSE-chartjs.txt`",
+            "`src/static/js/licenses/LICENSE-chartjs.txt`, src/static/js/licenses/extra.txt",
+        ),
+        ("license notice in the file header", "license notice in the file header, see LICENSE-other.txt"),
+    ],
+)
+def test_text_outside_the_expected_tokens_of_a_cell_is_detected(tmp_path: Path, old: str, new: str) -> None:
+    """The whole cell is the contract, not only its backticked contents."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    _edit_table(mirror, old, new)
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "has unexpected text" in result.stderr
+
+
+def test_axe_license_clause_removed_is_detected(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    path = mirror / VENDOR_REL / "vendor" / "axe.min.js"
+    text = path.read_text(encoding="utf-8")
+    clause = (
+        " * This entire copyright notice must appear in every copy of this file you\n"
+        " * distribute or in any file that contains substantial portions of this source\n"
+        " * code.\n"
+    )
+    assert clause in text
+    path.write_text(text.replace(clause, "", 1), encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "axe-core: license header differs from the verified upstream header" in result.stderr
+
+
 MIT_CONDITION = (
     "The above copyright notice and this permission notice shall be included in all\n"
     "copies or substantial portions of the Software."

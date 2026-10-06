@@ -306,6 +306,9 @@ LICENSE_TEXT_RULES: dict[str, tuple[tuple[str, ...], int]] = {
 # are hashed after that line and the blank line below it; all others as a whole. Every text
 # was compared byte for byte with the upstream file at the vendored tag or the installed
 # package, so removing a clause (e.g. the MIT condition to keep the notice) changes the hash.
+# axe-core carries its license in the header comment of the build; the header below the
+# version line (which changes with every release) is pinned the same way as the texts above.
+AXE_HEADER_SHA256 = "c1304ffd978b3f38c4fb7a5225b83f35d6aefd484b1f9a159e4e82a68e744d7b"
 SOURCE_LINE_TEXTS = ("alpine.txt", "sortablejs.txt", "heroicons.txt")
 LICENSE_TEXT_SHA256: dict[str, str] = {
     "src/static/js/licenses/LICENSE-htmx.txt": "d3d2456f76414f2456104660ebd65aff1c04cd7966b942bdabd63f3cdb316a38",
@@ -334,11 +337,21 @@ def parse_table(text: str) -> tuple[list[str], dict[str, list[str]]]:
     return header, rows
 
 
+# The only prose a path or license-text cell may carry besides its backticked tokens
+# (and separators); anything else, such as links or suffixes, fails.
+ALLOWED_CELL_PROSE = ("(and the PNG renderings)", "license notice in the file header")
+
+
 def _compare_tokens(name: str, label: str, expected: tuple[str, ...], cell: str) -> list[str]:
     """Backticked tokens of ``cell`` must equal ``expected`` exactly (no substring match)."""
     found = re.findall(r"`([^`]+)`", cell)
     errors = [f"THIRDPARTY-LICENSES.md: {name} {label} {t!r} missing" for t in expected if t not in found]
     errors += [f"THIRDPARTY-LICENSES.md: {name} {label} {t!r} unexpected" for t in found if t not in expected]
+    rest = re.sub(r"`[^`]+`", "", cell)
+    for phrase in ALLOWED_CELL_PROSE:
+        rest = rest.replace(phrase, "")
+    if rest.strip(" ,") != "":
+        errors.append(f"THIRDPARTY-LICENSES.md: {name} {label} cell has unexpected text {rest.strip(' ,')!r}")
     return errors
 
 
@@ -413,6 +426,11 @@ def check_licenses(pinned: dict[str, str]) -> list[str]:
             errors.append(f"{name}: no version header in {fname}")
         if marker and marker not in head:
             errors.append(f"{name}: license header ({marker}) missing in {fname}")
+        if name == "axe-core":
+            comment = head[: head.index("*/") + 2] if "*/" in head else head
+            header = comment.split("\n", 1)[-1]
+            if hashlib.sha256(header.encode("utf-8")).hexdigest() != AXE_HEADER_SHA256:
+                errors.append(f"{name}: license header differs from the verified upstream header in {fname}")
     versions |= FONT_VERSIONS | {"Heroicons": HEROICONS_VERSION}
 
     table = THIRDPARTY.read_text(encoding="utf-8") if THIRDPARTY.is_file() else ""
@@ -433,8 +451,8 @@ def check_licenses(pinned: dict[str, str]) -> list[str]:
             errors.append(f"THIRDPARTY-LICENSES.md: {name} upstream <{upstream}> missing")
         errors += _compare_tokens(name, "path", paths, row[4])
         errors += _compare_tokens(name, "license text", texts, row[5])
-        if not texts and "file header" not in row[5]:
-            errors.append(f"THIRDPARTY-LICENSES.md: {name} license text must say 'file header'")
+        if not texts and "license notice in the file header" not in row[5]:
+            errors.append(f"THIRDPARTY-LICENSES.md: {name} license text must say 'license notice in the file header'")
     errors += [
         f"THIRDPARTY-LICENSES.md: row for {n} is not registered in the guard"
         for n in sorted(set(rows) - set(TABLE_EXPECTED))
