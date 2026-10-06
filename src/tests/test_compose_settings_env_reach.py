@@ -22,6 +22,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -184,6 +185,28 @@ DEV_EMPTY_MAIL_HOST = {
     )
 }
 
+
+def _prod_compose_empties_the_mail_host(stack: Stack, services: dict) -> bool:
+    compose = stack.compose.read_text(encoding="utf-8")
+    settings_source = stack.settings_entry.read_text(encoding="utf-8")
+    return (
+        "EMAIL_HOST: ${EMAIL_HOST-}" in compose
+        and '"host": os.environ.get("EMAIL_HOST", "localhost")' in settings_source
+    )
+
+
+# Known gap, not a design decision: compose hands an unset EMAIL_HOST to web as
+# "", the production settings fall back to "localhost" only when it is missing.
+# Changing it alters the mail transport of installations without EMAIL_HOST and
+# belongs to the mail configuration. The premise fails -- and this entry must
+# go -- as soon as either side changes.
+PROD_MAIL_HOST_GAP = {
+    "EMAIL_HOST": Exemption(
+        "known gap: an unset EMAIL_HOST reaches web as an empty host instead of the localhost default of prod.py",
+        _prod_compose_empties_the_mail_host,
+    )
+}
+
 STACK_IDS = ("barbara", "demo", "dev", "prod", "staging")
 WEB_EXEMPTIONS: dict[str, dict[str, Exemption]] = {
     "staging": NO_REDIS,
@@ -191,7 +214,7 @@ WEB_EXEMPTIONS: dict[str, dict[str, Exemption]] = {
     "demo": {**NO_REDIS, **DEMO_NO_MAIL, **DEMO_NO_ROLE_ENFORCEMENT},
     "barbara": {**NO_REDIS, **CONSOLE_MAIL},
 }
-EMPTY_LIKE_UNSET: dict[str, dict[str, Exemption]] = {"dev": DEV_EMPTY_MAIL_HOST}
+EMPTY_LIKE_UNSET: dict[str, dict[str, Exemption]] = {"dev": DEV_EMPTY_MAIL_HOST, "prod": PROD_MAIL_HOST_GAP}
 ROLE_STACKS = sorted(
     stack_id for stack_id in STACK_IDS if not set(MFA_ROLE_VARIABLES) & WEB_EXEMPTIONS.get(stack_id, {}).keys()
 )
@@ -324,10 +347,42 @@ def _reaches(service: dict, name: str) -> bool:
     return name in (service.get("environment") or {}) or _loads_env_file(service)
 
 
-def _resolved_web_environment(stack: Stack, tmp_path: Path, operator_values: dict[str, str]) -> dict[str, str]:
-    """``docker compose config`` of the stack with its env example plus operator values."""
+def _compose_required_variables(stack: Stack) -> frozenset[str]:
+    """Start values the compose file has no fallback for: ``${NAME}``, ``${NAME?...}``, ``${NAME:?...}``."""
+    return frozenset(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?:\}|:?\?)", stack.compose.read_text(encoding="utf-8")))
+
+
+def _env_example_without_optional_settings(stack: Stack) -> str:
+    """The env example minus every setting variable compose does not require.
+
+    The example fills in most optional values; a compose fallback that differs
+    from the code default would stay invisible behind them.
+    """
+    optional = _setting_variables(stack).keys() - _compose_required_variables(stack)
+    kept = []
+    for line in stack.env_example.read_text(encoding="utf-8").splitlines():
+        name = line.split("=", 1)[0].strip()
+        if "=" in line and not line.lstrip().startswith("#") and name in optional:
+            continue
+        kept.append(line)
+    return "\n".join(kept) + "\n"
+
+
+def _resolved_web_environment(
+    stack: Stack, tmp_path: Path, operator_values: dict[str, str], *, optional_unset: bool = False
+) -> dict[str, str]:
+    """``docker compose config`` of the stack with its env example plus operator values.
+
+    ``optional_unset`` drops the optional setting variables from the example,
+    so that only compose's own fallbacks remain.
+    """
     env_file = tmp_path / stack.env_file_name
-    env_file.write_text(stack.env_example.read_text(encoding="utf-8"), encoding="utf-8")
+    example = (
+        _env_example_without_optional_settings(stack)
+        if optional_unset
+        else stack.env_example.read_text(encoding="utf-8")
+    )
+    env_file.write_text(example, encoding="utf-8")
     shell_env = {key: value for key, value in os.environ.items() if key not in _setting_variables(stack)}
     result = subprocess.run(
         [
@@ -423,7 +478,7 @@ def test_web_does_not_replace_a_code_default_with_an_empty_value(stack_id: str, 
     switches the immediate role enforcement off, ``env_int`` fails on ``""``.
     """
     stack = _stack(stack_id)
-    web_environment = _resolved_web_environment(stack, tmp_path, {})
+    web_environment = _resolved_web_environment(stack, tmp_path, {}, optional_unset=True)
     emptied = sorted(
         name
         for name, has_default in _setting_variables(stack).items()
