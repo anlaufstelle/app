@@ -152,12 +152,14 @@ services:
     # den zuletzt gepinnten Release-Tag — Operator-Setups ohne explizite
     # .env bleiben reproduzierbar. APP_IMAGE_DIGEST bindet optional zusaetzlich
     # an den unveraenderlichen Digest (Refs #2061).
-    # Vor dem 1.0-Cut werden Release-Kandidaten NICHT in die Registry
-    # veroeffentlicht; ob ein Tag pullbar ist, zeigt
+    # Release-Tags liegen als Image in der Registry (auch als Pre-Release
+    # gekennzeichnete); ob ein Tag pullbar ist, zeigt
     # ``docker manifest inspect ghcr.io/anlaufstelle/app:<tag>`` (Exit-Code
-    # 0 = veroeffentlicht). Bis dahin ist der lokale Image-Build der
-    # tragende Pfad, siehe Admin-Guide § 1 "Image lokal aus dem Dockerfile
-    # bauen" (Refs #2308).
+    # 0 = veroeffentlicht). Ausweichweg ohne Registry-Zugriff ist der lokale
+    # Image-Build, siehe Admin-Guide § 1 "Image lokal aus dem Dockerfile
+    # bauen" (Refs #2308). ``web`` erhaelt APP_VERSION nicht aus der .env:
+    # der Wert dieser Variable waehlt nur das Image, /health/ zeigt den beim
+    # Build eingebackenen Wert.
     image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.99.5}${APP_IMAGE_DIGEST:-}
     # Container-Runtime-Hardening (Refs #1374): kein Privilege-Escalation,
     # cap_drop ALL (web laeuft als non-root appuser auf :8000, braucht keine
