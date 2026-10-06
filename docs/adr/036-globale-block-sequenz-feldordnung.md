@@ -66,4 +66,4 @@ Der Seed normalisiert am Ende jedes Laufs deterministisch: Gruppen kompakt 0..k-
 
 ## Nachtrag 2026-10-06: Verworfene Alternative zur Blockordnung (Refs #2450)
 
-Die Alternative getrennter Sortierräume für Gruppen und ungruppierte Felder wird zugunsten einer gemeinsamen Sequenz verworfen: sie könnte keine eindeutige Reihenfolge zwischen beiden Arten abbilden. Beleg: `src/core/models/field_group.py`, `FieldGroup.order`, und `src/core/models/field_template.py`, `FieldTemplate.order`; der Entscheid und seine Sortierregeln bleiben maßgeblich.
+Die Alternative getrennter Sortierräume für Gruppen und ungruppierte Felder wird zugunsten einer gemeinsamen Sequenz verworfen: sie könnte keine eindeutige Reihenfolge zwischen beiden Arten abbilden. Beleg: [FieldGroup.sort_order](../../src/core/models/field_group.py) und [DocumentTypeField.sort_order](../../src/core/models/document_type_field.py); der Entscheid und seine Sortierregeln bleiben maßgeblich.

@@ -67,7 +67,7 @@ Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbar
 
 ## Nachtrag 2026-10-06: Adresse der Live-Demo (Refs #2450)
 
-Die Live-Demo wird unter `demo.anlaufstelle.app` betrieben. Die Domain `anlaufstelle.app` im ursprünglichen Entscheid bezeichnet nicht den aktuellen Demo-Endpunkt. Beleg: [ADR-028](028-demo-release-versioning.md), „Decision“, und `Caddyfile.demo`, Site-Adresse.
+Die Live-Demo wird unter `demo.anlaufstelle.app` betrieben. Die Domain `anlaufstelle.app` im ursprünglichen Entscheid bezeichnet nicht den aktuellen Demo-Endpunkt. Beleg: [ADR-028](028-demo-release-versioning.md), „Decision“, und `Caddyfile.demo`, Kopfkommentar und Site-Block `{$DOMAIN}`. Die Domain wird über die Demo-Umgebung gesetzt (`.env.demo.example`, `DOMAIN=demo.anlaufstelle.app`; `docker-compose.demo.yml`, Umgebungsvariable `DOMAIN` des Caddy-Dienstes).
 
 ## Nachtrag 2026-10-06: Abschnittsbezüge und interne Deployment-Dokumentation (Refs #2500)
 

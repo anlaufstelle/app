@@ -50,9 +50,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Architekturübersichten am Bestand ausgerichtet** (#2451) — Wegweiser nennen aktuelle Modulorte, Offline-Ablagegrenzen und E2E-Ausführungsarten ohne unbewachte Bestandszahlen.
 
-- **Architektur- und Retention-ADRs präzisiert** (#2500) — Nachträge unterscheiden implementierte Schnittstellen, Zielbilder und begrenzte Redaktions- sowie Audit-Garantien.
+- **Architektur- und Retention-ADRs präzisiert** (#2500) — Nachträge unterscheiden mit überprüfbaren Quellbelegen implementierte Schnittstellen, Zielbilder und begrenzte Redaktions- sowie Audit-Garantien.
 
-- **ADR-Verträge und Index abgeglichen** (#2450) — Datierte Nachträge benennen aktuelle Offline-, Betriebs- und Übersetzungsverträge sowie Teilablösungen.
+- **ADR-Verträge und Index abgeglichen** (#2450) — Datierte Nachträge benennen aktuelle Offline-, Betriebs- und Übersetzungsverträge einschließlich Cache-Fallback und Teilablösungen.
 
 - **Handtest-Erwartungen zu Sudo, Health, Audit und Löschanträgen werten Schutzlücken als Fehler** (#2476) — Matrix B und D verlangen beim Sudo-Schritt den zweiten Faktor, auch gegen einen POST ganz ohne Code, und `SUDO_MODE_FAILED`, für anonyme `/health/`-Aufrufe nur `status` und nennen die Vorbedingungen ihrer Statuswerte, beim Bearbeiten von Wirkungszielen `GOAL_UPDATE`, je Löschantrag-Stufe einen `DELETION_*`-Eintrag und prüfen die Mandantentrennung der Löschanträge auf existierenden Routen mit Positivkontrolle und verpflichtender RLS-Probe in PostgreSQL.
 - **Disaster-Recovery: Archivtreue-Prüfung läuft in einem Container** (#2436) — der Prüfblock in Schritt 4 entpackt und vergleicht in einem einzigen `maintenance`-Lauf auf dem Volume `/data`; die bisher drei getrennten Einweg-Container teilten kein `/tmp` und brachen genau im Ernstfall ab. Ein Lesefehler im Archiv oder im Bestand beendet den Block mit Fehler statt mit Erfolg. Ein Guard prüft, dass kopierbare Blöcke keine Daten zwischen getrennten `run --rm`-Containern über `/tmp` austauschen, und führt den Block gegen Test-Bäume aus.
