@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Backups hold Art. 9 data: every file and directory this script creates is
+# owner-only, whatever umask the caller (cron, sudo) has.
+umask 077
+
 # Anlaufstelle Backup-Skript
 # Erstellt verschlüsselte Backups (PostgreSQL + MEDIA_ROOT) mit Rotation
 #
 # Verwendung:
 #   ./backup.sh            Backup erstellen mit Rotation (DB + Medien)
-#   ./backup.sh --verify   Letztes DB-Backup in temporaere DB wiederherstellen
-#                          und das letzte Medien-Backup auf Integritaet pruefen
+#   ./backup.sh --verify   Restore the latest DB dump into a temporary database and
+#                          list the latest media archive. This is a sample, not a
+#                          row-by-row comparison; the output states what was and
+#                          what was not checked.
 #
 # Medien-Backup (Refs #720): MEDIA_ROOT (=/data/media im Container) wird via
 # `tar` aus dem web-Container heraus gelesen, gzippt und mit demselben
@@ -37,6 +43,26 @@ source "${SCRIPT_DIR}/_backup_common.sh"
 # Satz-/Manifestpruefung, geteilt mit restore.sh (Refs #2290, #2292).
 # shellcheck source=scripts/ops/lib/backup-set.sh
 source "${SCRIPT_DIR}/lib/backup-set.sh"
+
+# check_file_modes <label> <file>...: every file must be mode 600 (owner only).
+# Reports each violation on stderr and returns 1 if there is any. A file system
+# with a default ACL can ignore the umask, so the result is checked, not assumed.
+check_file_modes() {
+    local label="$1" file mode checked=0 failed=0
+    shift
+    for file in "$@"; do
+        mode="$(stat -c '%a' "$file")"
+        if [[ "$mode" != "600" ]]; then
+            echo "ERROR: unexpected file mode ${mode} (expected 600): ${file}" >&2
+            failed=1
+        fi
+        checked=$((checked + 1))
+    done
+    if [[ "$failed" -ne 0 ]]; then
+        return 1
+    fi
+    echo "File modes checked (${label}): ${checked} files, all 600."
+}
 
 # .env laden falls vorhanden
 if [[ -f "${PROJECT_DIR}/.env" ]]; then
@@ -148,13 +174,12 @@ if [[ "${1:-}" == "--verify" ]]; then
         | docker compose -f "$COMPOSE_FILE" exec -T db \
             psql -U "$SU_USER" "$VERIFY_DB" > /dev/null
 
-    # Vollstaendigkeits-Guard (Refs #1336, DOC-P1): Zeilenzahl-Abgleich
-    # kritischer RLS-Tabellen zwischen Restore und Live-DB. Der stille
-    # Fehlerfall ist ein Dump unter einer NOBYPASSRLS-Rolle — er ist syntaktisch
-    # valide, enthaelt aber 0 Zeilen der FORCE-RLS-Tabellen. core_facility (ohne
-    # RLS) wuerde das NICHT erkennen (Review N4), daher werden mehrere
-    # RLS-gebundene Nutzdaten-Tabellen geprueft. Signal: Live>0 aber Restore=0.
-    echo "Vollstaendigkeits-Guard: RLS-Tabellen Restore vs. Live abgleichen..."
+    # RLS guard (Refs #1336): a dump taken under a NOBYPASSRLS role is valid
+    # SQL but holds 0 rows of the FORCE-RLS tables. core_facility has no RLS and
+    # would not reveal that, so four RLS-bound data tables are checked. The only
+    # signal is "restore is empty while the live database has rows"; this is not
+    # a row-count comparison, and the summary at the end says so.
+    echo "RLS guard: checking that no RLS table is empty in the restore while the live database has rows..."
     RLS_VERIFY_TABLES=(core_client core_event core_workitem core_auditlog)
     VERIFY_FAILED=0
     for tbl in "${RLS_VERIFY_TABLES[@]}"; do
@@ -180,13 +205,14 @@ if [[ "${1:-}" == "--verify" ]]; then
         echo "FEHLER: Vollstaendigkeits-Guard fehlgeschlagen — Backup unvollstaendig oder nicht wiederherstellbar."
         exit 1
     fi
-    echo "Vollstaendigkeits-Guard bestanden: gepruefte RLS-Tabellen konsistent."
+    echo "RLS guard passed: none of the ${#RLS_VERIFY_TABLES[@]} tables is empty in the restore while the live database has rows."
     echo "DB-Backup ist gueltig: ${LATEST_BACKUP}"
 
     # Medien-Backup integritaetspruefen — kein Restore noetig, nur tar-listen.
     # Existenz, Sidecar und Hash des Archivs hat die Satzpruefung oben bereits
     # erzwungen; hier bleibt der Inhaltstest. Bindet das Manifest keine Medien,
     # beschreibt es einen DB-only-Satz (Refs #2292).
+    MEDIA_SUMMARY="no media archive bound by the manifest (database-only set), so no media were checked"
     if [[ -z "$BACKUP_SET_MEDIA_SHA256" ]]; then
         echo "INFO: Der Satz bindet kein Medien-Archiv (DB-only-Satz) — nichts zu pruefen."
     else
@@ -201,7 +227,20 @@ if [[ "${1:-}" == "--verify" ]]; then
             exit 1
         fi
         echo "Medien-Backup ist gueltig: ${FILE_COUNT} Eintrag/Eintraege im Archiv."
+        MEDIA_SUMMARY="media archive: HMAC and readable tar listing (${FILE_COUNT} entries)"
     fi
+    echo
+    echo "Verification summary (a sample, not a row-by-row comparison)"
+    echo "  Checked:"
+    echo "    - signed manifest and set binding (set id, dump hash, bound media archive and audit anchor)"
+    echo "    - HMAC of the dump; the dump decrypts and restores into a temporary database"
+    echo "    - RLS guard: ${RLS_VERIFY_TABLES[*]} are not empty in the restore while the live database has rows"
+    echo "    - ${MEDIA_SUMMARY}"
+    echo "  Not checked:"
+    echo "    - row counts against the manifest or against the live database (only the RLS guard above)"
+    echo "    - attachment rows against the files on disk, and the content of the media files"
+    echo "    - audit chain and audit anchor"
+    echo "  Exact comparison against the manifest (six tables): restore-drill.sh --prod"
     exit 0
 fi
 
@@ -332,6 +371,17 @@ fi
 } >> "$MANIFEST_FILE"
 backup_write_hmac "$MANIFEST_FILE"
 
+# Nothing is published unless every artefact of the set is owner-only (mode 600).
+# The work directory itself must not be traversable by group or others.
+WORK_DIR_MODE="$(stat -c '%a' "$WORK_DIR")"
+# The last three digits are the permission bits; a leading digit is setgid inherited from the parent.
+if [[ "${WORK_DIR_MODE: -3}" != "700" ]]; then
+    echo "ERROR: unexpected directory mode ${WORK_DIR_MODE} (expected 700): ${WORK_DIR}" >&2
+    exit 1
+fi
+mapfile -t SET_ARTIFACTS < <(find "$WORK_DIR" -mindepth 1 -maxdepth 1 -type f | sort)
+check_file_modes "backup set" "${SET_ARTIFACTS[@]}"
+
 # Veroeffentlichung: erst die Nutzartefakte, das signierte Manifest zuletzt.
 # Es ist der Marker fuer "Satz vollstaendig" — solange es fehlt, gilt der Satz
 # als nicht erfolgreich (Refs #2291).
@@ -353,6 +403,16 @@ echo "Zeilenzahl-Manifest mit Satzbindung erstellt: ${MANIFEST_FILE}"
 
 # Weekly-/Monthly-Snapshots werden vor dem Off-Site-Abgleich angelegt, damit
 # alle drei Retention-Stufen im selben Lauf uebertragen werden koennen.
+# check_copy_modes <label> <dir>: the retention copies of the published set are owner-only too.
+check_copy_modes() {
+    local label="$1" dir="$2" artifact copies=()
+    for artifact in "$BACKUP_FILE" "$BACKUP_FILE_HMAC" "$MEDIA_FILE" "$MEDIA_FILE_HMAC" \
+        "$MANIFEST_FILE" "$MANIFEST_FILE_HMAC" ${HWM_FILE:+"$HWM_FILE"}; do
+        copies+=("${dir}/${artifact##*/}")
+    done
+    check_file_modes "$label" "${copies[@]}"
+}
+
 DOW=$(date +%u)  # 1=Montag, 7=Sonntag
 DOM=$(date +%d)  # Tag des Monats
 
@@ -364,6 +424,7 @@ if [[ "$DOW" -eq 7 ]]; then
         cp "$HWM_FILE" "$WEEKLY_DIR/"
     fi
     echo "Weekly-Backup kopiert."
+    check_copy_modes "weekly copy" "$WEEKLY_DIR"
 fi
 
 # Am 1. des Monats → Monthly kopieren (DB + Medien + Manifest + HMAC-Sidecars)
@@ -374,6 +435,7 @@ if [[ "$DOM" -eq "01" ]]; then
         cp "$HWM_FILE" "$MONTHLY_DIR/"
     fi
     echo "Monthly-Backup kopiert."
+    check_copy_modes "monthly copy" "$MONTHLY_DIR"
 fi
 
 # Off-Site-Sync (Refs #738; State-File + Sentry: Refs #797).
