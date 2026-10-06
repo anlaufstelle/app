@@ -249,9 +249,9 @@ Zusammenhängende Arbeit an oder mit einer Person — ein Beratungsprozess, eine
 
 ### Prinzip 7: Kontextbezogener Zugriff vor statischen Rollen
 
-Wer welche Daten sehen darf, hängt nicht nur von der Rolle ab, sondern vom Kontext: der Kontaktstufe der Person, der Sensitivität des Dokumentationstyps, der Zugehörigkeit zur Einrichtung. Ein Fünf-Rollen-Modell ist der Ausgangspunkt, aber die Steuerung erfolgt kontextbezogen.
+Wer welche Daten sehen darf, hängt nicht nur von der Rolle ab, sondern vom Kontext: der Sensitivität von Dokumentationstyp und Feld und der Zugehörigkeit zur Einrichtung. Ein Fünf-Rollen-Modell ist der Ausgangspunkt, aber die Steuerung erfolgt kontextbezogen. Die Kontaktstufe der Person steuert die Sichtbarkeit nicht; sie bestimmt, welche Dokumentationstypen zugeordnet werden können, ob eine Löschung eine zweite Person braucht, ob das Öffnen der Person protokolliert wird und welche Fristen gelten.
 
-*Das bedeutet konkret:* Eine nebenamtliche Mitarbeiterin sieht die Kontaktliste und kann Kurzbesuche dokumentieren. Sie sieht aber nicht die Beratungsnotizen einer qualifizierten Klientel — dafür braucht es die Rolle „Fachkraft" und die Zugehörigkeit zur richtigen Einrichtung.
+*Das bedeutet konkret:* Eine nebenamtliche Mitarbeiterin (Rolle „Assistenz") sieht die Kontaktliste und kann Kurzbesuche dokumentieren. Sie sieht alle Einträge und Felder der Sensitivität „Normal" — auch bei Personen der Stufe „Mit Zusatzangaben", etwa einen Kontakt samt Notiz —, aber keine Einträge oder Felder der Stufen „Erhöht" und „Hoch", etwa ein Krisengespräch. Eine Fachkraft sieht bis „Erhöht"; Inhalte der Stufe „Hoch" (etwa medizinische Versorgung oder die Inhalte eines Beratungsgesprächs) sehen nur Leitung und Anwendungsbetreuung.
 
 ### Prinzip 8: Offene Architektur vor Einzwecklösung
 
@@ -346,7 +346,7 @@ Selin möchte nachschauen, wann „Maus" zuletzt da war und was dokumentiert wur
 - 08.03.2026: Kontakt (Aufenthalt)
 - ...
 
-Ein Klick auf einen Eintrag zeigt die Details. Verschlüsselte Felder (z.B. Gesprächsinhalte) sind nur für berechtigte Rollen sichtbar.
+Ein Klick auf einen Eintrag zeigt die Details. Felder mit höherer Sensitivität (z. B. Gesprächsinhalte) sieht nur, wessen Rolle diese Stufe abdeckt; ob ein Feld verschlüsselt gespeichert wird, ist davon unabhängig.
 
 #### Monatsstatistik für den Fördermittelgeber
 
@@ -453,7 +453,7 @@ Datenschutz ist kein nachträgliches Feature, sondern strukturgebendes Element d
 **Umsetzung im System:**
 
 - **Pseudonymisierung by Design.** Kein Klarname-Feld im System. Das Pseudonym ist der primäre Identifikator.
-- **Kontaktstufen als Zugriffssteuerung.** Wer welche Daten sehen darf, hängt von der Kontaktstufe der Person und der Rolle der Mitarbeitenden ab.
+- **Sensitivität und Rolle als Zugriffssteuerung.** Wer welche Daten sehen darf, hängt von der Sensitivität ab — der höheren Stufe aus Dokumentationstyp und Feld — und von der Rolle: Assistenz sieht „Normal", Fachkraft bis „Erhöht", Leitung und Anwendungsbetreuung alle Stufen. Die Kontaktstufe der Person wirkt auf zulässige Dokumentationstypen, Vier-Augen-Löschung, Protokollierung und Fristen, nicht auf die Sichtbarkeit.
 - **Audit-Trail.** Jede Änderung an Person, Fall, Ereignis und Aufgabe wird protokolliert — wer hat wann was geändert oder gelöscht; dazu gehören auch das Bearbeiten von Episoden und Wirkungszielen, das Zuordnen eines Ereignisses zu einem Fall sowie Upload und Löschung von Anhängen (Anlegen und Abschließen der Unterobjekte weiterhin nicht). Von Lesezugriffen protokolliert sind das Öffnen der Detailseite einer Person der Stufe „Mit Zusatzangaben", Auskunft und Export, Datei-Downloads, die Offline-Mitnahme und einrichtungsübergreifende Zugriffe; gewöhnliche Listen-, Detail- und Suchaufrufe erzeugen bewusst keinen Eintrag ([ADR-043](adr/043-suchraum-volltextsuche.md)).
 - **Löschfristen.** Die konfigurierbaren Vorgabewerte betragen 90 Tage für anonyme Ereignisse, 365 Tage für Ereignisse identifizierter Personen und 3650 Tage für Ereignisse qualifizierter Personen. Bei anonymen und identifizierten Ereignissen zählt jeweils `occurred_at`, bei qualifizierten Ereignissen der Abschlusszeitpunkt `closed_at` des zugeordneten geschlossenen Falls. Die Durchsetzung setzt Ereignisse auf Soft-Delete; sie aggregiert anonyme Kontakte nicht zu einer verbleibenden Zählung. Ereignistypen können zusätzlich eine eigene Frist tragen. Legal Holds nehmen geschützte Daten von der Durchsetzung aus.
 - **Verschlüsselung.** Besonders sensible Felder (Gesundheitsdaten, Beratungsinhalte) werden verschlüsselt gespeichert. Der Schlüssel liegt nicht in der Datenbank.
@@ -603,11 +603,11 @@ Ein User ist eine Person, die mit dem System arbeitet. User haben eine Identitä
 
 Rollen definieren, welche Aktionen ein User ausführen darf. Anlaufstelle kennt fünf Rollen — vier davon sind strikt facility-gebunden, die fünfte (Systemadministration) wirkt facility-übergreifend:
 
-- **Super-Admin (`super_admin`, „Systemadministration"):** Facility-übergreifend. Hostet und betreibt die Installation. Sieht den `/system/`-Bereich (alle Einrichtungen, Bootstrap-Tools, Pre-Auth-AuditLogs ohne Facility-Bezug). Wird nicht über Seed-Daten oder das Admin-UI angelegt, sondern über den Bootstrap-Befehl `manage.py create_super_admin`. Jeder Aufruf einer `/system/`-View wird im Audit-Log mit der Action `SYSTEM_VIEW` protokolliert; das System-UI zeigt einen permanenten Banner über die facility-übergreifende Sicht.
+- **Super-Admin (`super_admin`, „Systemadministration"):** Facility-übergreifend. Hostet und betreibt die Installation. Sieht den `/system/`-Bereich (alle Einrichtungen, Bootstrap-Tools, Pre-Auth-AuditLogs ohne Facility-Bezug) und liest über die Verwaltungsoberfläche (`/admin-mgmt/`, nur mit Sudo) Personen, Fälle, Ereignisse, Aufgaben und Anhänge aller Einrichtungen; die Datenbank-Policies (RLS) lassen diese Sitzungen über `app.is_super_admin` einrichtungsübergreifend zu. Wird nicht über Seed-Daten oder das Admin-UI angelegt, sondern über den Bootstrap-Befehl `manage.py create_super_admin`. Jeder Aufruf einer `/system/`-View und jeder Lesezugriff der Systemadministration in der Verwaltungsoberfläche wird im Audit-Log mit der Action `SYSTEM_VIEW` protokolliert; das System-UI zeigt einen permanenten Banner über die facility-übergreifende Sicht.
 - **Facility-Admin (`facility_admin`, „Anwendungsbetreuung"):** Pro Einrichtung. Volle administrative Kontrolle über genau eine Facility — Benutzerverwaltung in der Einrichtung, Typ- und Feld-Konfiguration einschließlich Sensitivitätsstufen, Audit-Log und DSGVO-Paket der eigenen Einrichtung. Kann **nicht** in andere Einrichtungen schauen, kein Bootstrap-Recht.
 - **Lead (`lead`, „Leitung"):** Fachliche Leitung — alles, was Fachkräfte können, plus Pseudonym-Verwaltung, Kontaktstufen-Änderung, Statistiken, Export, Genehmigung von Löschanträgen. Facility-gebunden.
-- **Staff (`staff`, „Fachkraft"):** Kontakterfassung, Hinweise und Aufgaben, Suche, Zugriff auf qualifizierte Daten eigener Einrichtung. Facility-gebunden.
-- **Assistant (`assistant`, „Assistenz"):** Wie Staff, aber kein Zugriff auf qualifizierte Kontakt-Details und keine Bearbeitung fremder Einträge. Facility-gebunden.
+- **Staff (`staff`, „Fachkraft"):** Kontakterfassung, Hinweise und Aufgaben, Suche. Sieht Einträge und Felder bis zur Sensitivität „Erhöht", Inhalte der Stufe „Hoch" nicht; darf jedes für sie sichtbare Ereignis bearbeiten, löschen nur eigene. Facility-gebunden.
+- **Assistant (`assistant`, „Assistenz"):** Wie Staff, aber nur Sensitivität „Normal" — unabhängig von der Kontaktstufe, also auch bei Personen der Stufe „Mit Zusatzangaben" —, keine Bearbeitung fremder Einträge und kein Löschen von Ereignissen. Facility-gebunden.
 
 > **Trennung Systemadministration ↔ Anwendungsbetreuung:** Die Systemadministration kümmert sich um Hosting, Updates und Bootstrap; die Anwendungsbetreuung kümmert sich um Konfiguration und Nutzerverwaltung **innerhalb** einer Einrichtung. Diese Trennung schützt das DSGVO-Zweckbindungsprinzip: Auch der Super-Admin sieht keine fachlichen Inhalte einer Einrichtung, ohne dass dieser Zugriff im AuditLog (`SYSTEM_VIEW`) auftaucht.
 
@@ -711,14 +711,15 @@ Scope-Regeln bestimmen, welche Daten für wen sichtbar sind:
 
 **Einrichtungsebene:** Eine Installation kann mehrere Einrichtungen tragen. Mitarbeitende arbeiten im Kontext ihrer zugeordneten Einrichtung. Direkt gescopte Modelle tragen einen Facility-FK; Episoden, Wirkungsziele und Meilensteine erhalten den Scope über ihre Beziehungen zum Fall beziehungsweise Ziel.
 
-**Organisationsebene:** Die Organisation speichert Trägername und Anlagedatum und verbindet die Einrichtungen. Logo und gesondertes Träger-Branding in Berichten sind ein Zielbild, kein implementierter Funktionsumfang. Es gibt **keinen** Org-Admin und **keine** Cross-Facility-Sichtbarkeit über die Organisation — die einzige facility-übergreifende Rolle ist die Systemadministration (`super_admin`), und auch sie sieht nur den `/system/`-Bereich, nicht das normale Fach-UI mehrerer Einrichtungen gleichzeitig. Diese Architektur-Entscheidung ist bewusst gewählt (Variante b1: Org als Branding-Hülse) und in [ADR-018](adr/018-rollenmodell-superadmin.md) festgehalten.
+**Organisationsebene:** Die Organisation speichert Trägername und Anlagedatum und verbindet die Einrichtungen. Logo und gesondertes Träger-Branding in Berichten sind ein Zielbild, kein implementierter Funktionsumfang. Es gibt **keinen** Org-Admin und **keine** Cross-Facility-Sichtbarkeit über die Organisation — die einzige facility-übergreifende Rolle ist die Systemadministration (`super_admin`), und auch sie arbeitet nicht im normalen Fach-UI, sondern liest über den `/system/`-Bereich und die Verwaltungsoberfläche (`/admin-mgmt/`), jeweils mit `SYSTEM_VIEW`-Protokoll. Diese Architektur-Entscheidung ist bewusst gewählt (Variante b1: Org als Branding-Hülse) und in [ADR-018](adr/018-rollenmodell-superadmin.md) festgehalten.
 
-**Kontaktstufe:** Innerhalb einer Einrichtung regelt die Kontaktstufe den Detailgrad:
-- Anonyme Kontakte: Für alle Rollen sichtbar (nur Zählung, kein Personenbezug).
-- Identifizierte Kontakte: Für alle Rollen sichtbar (Pseudonym, Kontaktliste, Basisinformationen).
-- Qualifizierte Kontakte: Details (Beratungsnotizen, Gesundheitsdaten, verschlüsselte Felder) nur für Staff, Lead und Facility-Admin sichtbar. Assistant sieht nur das Pseudonym und den letzten Kontakt. Der Super-Admin sieht qualifizierte Kontakte ausschließlich über den `/system/`-Bereich; jeder solche Aufruf wird im AuditLog (`SYSTEM_VIEW`) protokolliert.
+**Sensitivität:** Innerhalb einer Einrichtung steuert die Sensitivität die Sichtbarkeit. Maßgeblich ist die höhere Stufe aus Dokumentationstyp und Feld (`FieldTemplate.sensitivity` kann den Typ-Level nur anheben), verglichen mit der Rolle: Assistant sieht „Normal", Staff bis „Erhöht", Lead und Facility-Admin alle Stufen. Ereignislisten (Zeitstrom, Personen- und Fallchronik) filtern nach der Sensitivität des Dokumentationstyps, die Anzeige eines Ereignisses zusätzlich feldweise.
 
-**Sensitivität:** Einzelne Felder können über `FieldTemplate.sensitivity` eine eigene Sichtbarkeitsstufe erhalten, die den Dokumentationstyp-Level nach oben überschreibt. Unabhängig davon steuert `is_encrypted`, ob Feldwerte verschlüsselt gespeichert werden.
+**Kontaktstufe:** Sie wirkt nicht auf die Sichtbarkeit, sondern auf die zulässigen Dokumentationstypen (Mindeststufe eines Typs), die Vier-Augen-Löschung, das Protokoll beim Öffnen einer Person der Stufe „Mit Zusatzangaben" (`VIEW_QUALIFIED`) und die Aufbewahrungsfristen. Die Personen-Detailseite ist ab der Rolle Assistant erreichbar, auch bei „Mit Zusatzangaben".
+
+**Systemadministration:** Der Super-Admin ist keiner Einrichtung zugeordnet und arbeitet nicht im Fach-UI; er liest einrichtungsübergreifend über `/system/` und die Verwaltungsoberfläche (`/admin-mgmt/`), jeder solche Aufruf wird im AuditLog (`SYSTEM_VIEW`) protokolliert.
+
+Unabhängig von Sensitivität und Kontaktstufe steuert `is_encrypted`, ob Feldwerte verschlüsselt gespeichert werden.
 
 ---
 
@@ -1026,15 +1027,15 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 | **Hausverbot** | Betretungsverbot für eine Person in einer Einrichtung, mit Begründung, Gültigkeitszeitraum und Erteilender. In Anlaufstelle als Dokumentationstyp mit `system_type=ban` abgebildet. |
 | **Inbox** | Persönliche Übersicht aller offenen Hinweise und fälligen Aufgaben für die angemeldete Mitarbeitende. Teil der Operations-Ebene. |
 | **JSONB** | PostgreSQL-Datentyp für binäres JSON. Wird in Anlaufstelle verwendet, um die Feldwerte eines Ereignisses zusammen mit dem Ereignis zu speichern. Indexierbar (GIN-Index), abfragbar, performant. |
-| **Kontaktstufe** | Dreistufiges Modell, das den Identifizierungsgrad einer Person im System beschreibt: anonym (nur Zählung), identifiziert (Pseudonym), qualifiziert (Beratungsprozess). Bestimmt Zugriffsrechte, zulässige Dokumentationstypen und Löschfristen. |
+| **Kontaktstufe** | Dreistufiges Modell, das den Identifizierungsgrad einer Person im System beschreibt: anonym (nur Zählung), identifiziert (Pseudonym), qualifiziert (Beratungsprozess). Bestimmt zulässige Dokumentationstypen, Vier-Augen-Löschung, Protokollierung beim Öffnen der Person und Löschfristen — nicht die Sichtbarkeit, die über die Sensitivität geregelt ist. |
 | **Milestone** | Meilenstein — ein konkreter Schritt auf dem Weg zu einem Wirkungsziel. |
-| **Organization** | Träger — Verwaltungsentität mit Name und Anlagedatum; Logo und gesondertes Berichts-Branding sind nicht implementiert. Keine Cross-Facility-Sichtbarkeit über die Organisation. Facility-übergreifender Zugriff ausschließlich über die Rolle `super_admin` und den `/system/`-Bereich. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md), Variante b1 („Branding-Hülse"). |
+| **Organization** | Träger — Verwaltungsentität mit Name und Anlagedatum; Logo und gesondertes Berichts-Branding sind nicht implementiert. Keine Cross-Facility-Sichtbarkeit über die Organisation. Facility-übergreifender Zugriff ausschließlich über die Rolle `super_admin` (`/system/`-Bereich und Verwaltungsoberfläche `/admin-mgmt/`, jeweils protokolliert). Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md), Variante b1 („Branding-Hülse"). |
 | **Outcome** | Wirkung — das Ergebnis der Arbeit mit einer Person. Nicht die Aktivität („347 Kontakte"), sondern die Veränderung („stabile Wohnsituation erreicht"). |
 | **OutcomeGoal** | Wirkungsziel — was durch die Arbeit erreicht werden soll. Zugeordnet zu einem Fall. |
 | **Pseudonym** | Vom Team vergebener Name für eine Person im System. Primärer Identifikator in Anlaufstelle. Die Zuordnung zum realen Namen existiert nur im Wissen der Mitarbeitenden, nicht im System. |
 | **Quick-Exit** | Schnell-verlassen-Aktion in der Kopfleiste jeder eingeloggten Seite (Knopf + Tastenkürzel `Strg+Umschalt+X` / `Umschalt+Esc`): verdeckt den Inhalt sofort, beendet die Sitzung und öffnet eine neutrale, von der Einrichtung konfigurierte Seite. Davon getrennt: der optionale Sichtschutz (Facility-Einstellung) — verbirgt den Inhalt bei Fenster- oder Tab-Wechsel hinter einer neutralen Fläche, bis eine Taste oder ein Klick sie freigibt. Kein Tarnmodus, keine Umbenennung der Oberfläche. Datenschutz-Begriff, siehe [docs/datenschutz.md](datenschutz.md). |
-| **Role** | Rolle — bestimmt, welche Aktionen ein User ausführen darf. Fünf Rollen: `super_admin` (Systemadministration, facility-übergreifend, `/system/`-Bereich), `facility_admin` (Anwendungsbetreuung, Vollkontrolle einer Einrichtung), `lead` (fachliche Leitung), `staff` (Fachkraft), `assistant` (Assistenz). Nur `super_admin` arbeitet facility-übergreifend; alle anderen sind strikt facility-gebunden. Details: [ADR-018](adr/018-rollenmodell-superadmin.md). |
-| **Scope** | Sichtbarkeitsbereich. Bestimmt, welche Daten für einen User zugänglich sind — abhängig von Einrichtung, Rolle und Kontaktstufe. |
+| **Role** | Rolle — bestimmt, welche Aktionen ein User ausführen darf. Fünf Rollen: `super_admin` (Systemadministration, facility-übergreifend, `/system/`-Bereich und Verwaltungsoberfläche `/admin-mgmt/`), `facility_admin` (Anwendungsbetreuung, Vollkontrolle einer Einrichtung), `lead` (fachliche Leitung), `staff` (Fachkraft), `assistant` (Assistenz). Nur `super_admin` arbeitet facility-übergreifend; alle anderen sind strikt facility-gebunden. Details: [ADR-018](adr/018-rollenmodell-superadmin.md). |
+| **Scope** | Sichtbarkeitsbereich. Bestimmt, welche Daten für einen User zugänglich sind — abhängig von Einrichtung, Rolle und Sensitivität (höhere Stufe aus Dokumentationstyp und Feld). |
 | **Sensitivität** | Einstufung eines Dokumentationstyps oder Feldes hinsichtlich des Schutzbedarfs. Steuert, welche Rollen auf Feldwerte zugreifen dürfen. Konfigurierbar pro Dokumentationstyp und pro Feld (`FieldTemplate.sensitivity`). Unabhängig von der Feldverschlüsselung (`is_encrypted`). |
 | **TimeFilter** | Technischer Begriff für einen benannten Zeitfilter. Gehört zu einer Einrichtung und definiert ein Zeitfenster (Startzeit, Endzeit) mit einem Label. |
 | **User** | Mitarbeitende — eine Person, die mit dem System arbeitet. Hat Zugangsdaten und eine Rollenzuweisung in einer Einrichtung. |

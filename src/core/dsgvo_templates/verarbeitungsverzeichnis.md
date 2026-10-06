@@ -85,7 +85,7 @@ Bestreitet eine betroffene Person die Richtigkeit ihrer Daten (Art. 18 Abs. 1 li
 
 ### 2.2 Kategorien personenbezogener Daten
 - Benutzername, Anzeigename
-- Rolle (Admin, Leitung, Fachkraft, Assistenz)
+- Rolle (Systemadministration, Anwendungsbetreuung, Leitung, Fachkraft, Assistenz)
 - Anmeldezeitpunkte (Audit-Log)
 
 ### 2.3 Rechtsgrundlage

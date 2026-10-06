@@ -20,12 +20,15 @@ from pathlib import Path
 import pytest
 import yaml
 
+from core.models import DocumentType, User
 from core.services.client import render_document
+from core.services.compliance.sensitivity import ROLE_MAX_SENSITIVITY, SENSITIVITY_RANK
 from core.services.compliance.vvt import PROCESSING_ACTIVITIES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGES_DIR = REPO_ROOT / "src" / "core" / "packages"
 FACHKONZEPT = REPO_ROOT / "docs" / "fachkonzept-anlaufstelle.md"
+DOMAIN_SUMMARY_EN = REPO_ROOT / "docs" / "en" / "domain-concept-summary.md"
 
 
 def _flat(text: str) -> str:
@@ -156,3 +159,74 @@ class TestEncryptionPromises:
         toms = [str(tom) for activity in PROCESSING_ACTIVITIES for tom in activity["toms"]]
         assert not [tom for tom in toms if "AES-GCM" in tom]
         assert [tom for tom in toms if "Fernet" in tom]
+
+
+# ---------------------------------------------------------------------------
+# Visibility = sensitivity x role (Refs #2466)
+# ---------------------------------------------------------------------------
+
+
+def _role_table_rows(content: str) -> dict[str, list[str]]:
+    section = _section(content, "**Rollenkonzept:**", "**Technische Umsetzung:**")
+    rows: dict[str, list[str]] = {}
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) == 6 and cells[0] not in ("Rolle",) and not set(cells[0]) <= {"-"}:
+            rows[cells[0]] = cells[1:]
+    return rows
+
+
+@pytest.mark.django_db
+class TestVisibilityTemplates:
+    def test_premise_staff_sees_up_to_elevated_and_super_admin_has_no_rank(self):
+        elevated = SENSITIVITY_RANK[DocumentType.Sensitivity.ELEVATED]
+        assert ROLE_MAX_SENSITIVITY[User.Role.STAFF] == elevated
+        assert ROLE_MAX_SENSITIVITY[User.Role.ASSISTANT] == SENSITIVITY_RANK[DocumentType.Sensitivity.NORMAL]
+        assert User.Role.SUPER_ADMIN not in ROLE_MAX_SENSITIVITY
+
+    def test_toms_role_table_lists_all_five_roles_by_ui_label(self, facility):
+        rows = _role_table_rows(render_document("toms", facility)[0])
+        assert sorted(rows) == sorted(str(label) for _value, label in User.Role.choices)
+
+    def test_toms_role_table_reads_follow_sensitivity(self, facility):
+        rows = _role_table_rows(render_document("toms", facility)[0])
+        assert str(DocumentType.Sensitivity.ELEVATED.label) in rows["Fachkraft"][0]
+        assert str(DocumentType.Sensitivity.NORMAL.label) in rows["Assistenz"][0]
+        assert rows["Fachkraft"][1] != "Eigene"
+        assert "SYSTEM_VIEW" in rows["Systemadministration"][0]
+
+    def test_toms_and_dsfa_name_the_rls_exception(self, toms, dsfa):
+        assert "app.is_super_admin" in toms
+        assert "Auch bei Fehlern im ORM-Layer verhindert RLS einen Cross-Tenant-Zugriff" not in dsfa
+        assert "app.is_super_admin" in dsfa
+
+    def test_dsfa_and_vvt_template_count_five_roles(self, dsfa, facility):
+        assert "Rollenbasierte Zugriffskontrolle (4 Stufen)" not in dsfa
+        assert "fünf Rollen" in dsfa
+        vvt = _flat(render_document("verarbeitungsverzeichnis", facility)[0])
+        assert "Rolle (Admin, Leitung, Fachkraft, Assistenz)" not in vvt
+        for _value, label in User.Role.choices:
+            assert str(label) in vvt, label
+
+
+@pytest.mark.architecture
+class TestVisibilityDomainConcept:
+    def test_domain_concept_does_not_tie_visibility_to_contact_stage(self):
+        text = _flat(FACHKONZEPT.read_text(encoding="utf-8"))
+        for stale in (
+            "Assistant sieht nur das Pseudonym und den letzten Kontakt",
+            "Kontaktstufen als Zugriffssteuerung",
+            "auch sie sieht nur den `/system/`-Bereich",
+            "kein Zugriff auf qualifizierte Kontakt-Details",
+            "Verschlüsselte Felder (z.B. Gesprächsinhalte) sind nur für berechtigte Rollen sichtbar",
+        ):
+            assert stale not in text, stale
+        assert "/admin-mgmt/" in text
+
+    def test_english_summary_role_model_matches_code(self):
+        text = _flat(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8"))
+        role_model = _section(text, "## Role Model", "## Non-Functional Requirements")
+        assert "Cannot view qualified contact details" not in role_model
+        assert "system area (`/system/`) only" not in role_model
+        assert "depends on the contact level of the person" not in role_model
+        assert "/admin-mgmt/" in role_model

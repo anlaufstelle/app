@@ -1,7 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Synchronization update 2026-10-06: German section 16 now states that the offline key persists in IndexedDB, that the idle check only locks the key while unsent work exists, and that index metadata stays unencrypted; this summary has no current-state offline text to change.
+> Synchronization update 2026-10-06: The role model now describes visibility as sensitivity (higher of documentation type and field) times role instead of contact level, names the assistant's view of "Normal" content and the staff limit at "Elevated", and documents the system administration's logged read path via /system/ and /admin-mgmt/.
 
 # Domain Concept Summary
 
@@ -109,13 +109,13 @@ Anlaufstelle uses five roles with increasing privileges (Refs #867, [ADR-018](..
 
 | Role | German | Description |
 |---|---|---|
-| **Assistant** | Assistenz | Read access with limited documentation rights. Cannot view qualified contact details or edit other users' entries. |
-| **Staff** | Fachkraft | Core documentation role. Can capture contacts, manage work items, search, and access qualified data within their facility. |
+| **Assistant** | Assistenz | Read access with limited documentation rights. Sees entries and fields of sensitivity "Normal" only -- regardless of the person's contact level, so also for persons at "With additional details". Cannot edit other users' entries or delete events. |
+| **Staff** | Fachkraft | Core documentation role. Can capture contacts, manage work items and search within their facility. Sees entries and fields up to sensitivity "Elevated" (not "High"), may edit every event visible to them and delete their own. |
 | **Lead** | Leitung | Supervisory role. Everything Staff can do, plus pseudonym management, contact level changes, statistics, exports, and deletion approvals. |
 | **Application manager** | Anwendungsbetreuung (`facility_admin`) | Full control within one facility: user management, document-type configuration, settings, audit log, GDPR package. |
-| **Super-Admin** | Super-Admin (`super_admin`) | Installation-wide system administration across all facilities; not bound to a single facility, system area (`/system/`) only. |
+| **Super-Admin** | Systemadministration (`super_admin`) | Installation-wide system administration across all facilities; not bound to a single facility and no access to the regular application UI. Reads across facilities through the system area (`/system/`) and the admin interface (`/admin-mgmt/`, sudo required); Row Level Security lets these sessions through via `app.is_super_admin`, and every such read is logged as `SYSTEM_VIEW`. |
 
-Access is not purely role-based but context-dependent: what a user can see also depends on the contact level of the person, the sensitivity of the documentation type, and field-level sensitivity overrides.
+Access is not purely role-based but context-dependent: what a user can see depends on the facility and on sensitivity -- the higher level of the documentation type and the field, compared with the role (Assistant: Normal; Staff: up to Elevated; Lead and Application manager: all levels). The contact level of the person does not control visibility; it governs which documentation types may be used, four-eyes deletion, the audit entry when a person at "With additional details" is opened, and retention periods.
 
 Event creation (`/events/new/`) saves drafts every 5 seconds in encrypted IndexedDB when a session key and the offline store are available; other forms do not share a general autosave feature. Synchronization runs in the open document, not through Service Worker Background Sync.
 
@@ -327,4 +327,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 8420488b21c52fd4fd46eadaa66efbd55e521135 -->
+<!-- source-hash: 60eb01c4daac09df7aa6d5040285e92ddff78881 -->

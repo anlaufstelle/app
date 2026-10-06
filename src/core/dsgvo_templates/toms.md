@@ -46,17 +46,20 @@
 **Rollenkonzept:**
 | Rolle | Lesen | Schreiben | Löschen | Export | Admin |
 |-------|-------|-----------|---------|--------|-------|
-| Admin | Alle | Alle | 4-Augen | Ja | Ja |
-| Leitung | Alle | Alle | 4-Augen | Ja | Nein |
-| Fachkraft | Alle | Eigene | Eigene (identifiziert) | Nein | Nein |
-| Assistenz | Nicht-sensibel | Eigene | Nein | Nein | Nein |
+| Systemadministration | Alle Einrichtungen, nur lesend über die Verwaltungsoberfläche (`/admin-mgmt/`, mit Sudo) und den Systembereich (`/system/`); jeder Aufruf protokolliert (`SYSTEM_VIEW`) | Keine Fachdaten | Nein | Nein | Installationsweit |
+| Anwendungsbetreuung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | 4-Augen | Ja | Ja (eigene Einrichtung) |
+| Leitung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | 4-Augen | Ja | Nein |
+| Fachkraft | Bis Sensitivität „Erhöht“ | Alle für sie sichtbaren Ereignisse | Eigene (identifiziert) | Nein | Nein |
+| Assistenz | Nur Sensitivität „Normal“, auch bei Personen der Stufe „Mit Zusatzangaben“ | Eigene | Nein | Nein | Nein |
+
+Maßgeblich für das Lesen ist die höhere Sensitivität aus Dokumentationstyp und Feld, verglichen mit der Rolle. Die Kontaktstufe einer Person steuert die Sichtbarkeit nicht; sie wirkt auf die zulässigen Dokumentationstypen, die Vier-Augen-Löschung, die Protokollierung beim Öffnen einer Person der Stufe „Mit Zusatzangaben“ und die Aufbewahrungsfristen.
 
 **Technische Umsetzung:**
 - [x] Serverseitige Berechtigungsprüfung
 - [x] Template-seitige Sichtbarkeitssteuerung
 - [x] 4-Augen-Prinzip für manuelle Löschungen von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“ (der automatische Aufbewahrungslauf löscht ohne Freigabe)
-- [x] Sensitivitätsstufen pro Dokumentationstyp und Feld
-- [x] PostgreSQL Row Level Security (RLS) als Defense-in-Depth für alle direkt oder über Beziehungen einrichtungsbezogenen Tabellen; Policies verwenden `app.current_facility_id` und arbeiten ohne gesetzten Kontext fail-closed
+- [x] Sensitivitätsstufen pro Dokumentationstyp und Feld; ein Feld kann die Stufe seines Dokumentationstyps nur anheben
+- [x] PostgreSQL Row Level Security (RLS) als Defense-in-Depth für alle direkt oder über Beziehungen einrichtungsbezogenen Tabellen; Policies verwenden `app.current_facility_id` und arbeiten ohne gesetzten Kontext fail-closed. Ausnahme: In Sitzungen der Systemadministration setzt die Anwendung zusätzlich `app.is_super_admin`; die Policies lassen dann einrichtungsübergreifende Zugriffe zu
 
 ### 1.4 Trennungskontrolle
 *Maßnahmen zur getrennten Verarbeitung verschiedener Zwecke*
