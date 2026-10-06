@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Backups hold Art. 9 data: every file and directory this script creates is
-# owner-only, whatever umask the caller (cron, sudo) has.
-umask 077
+# Backups hold Art. 9 data: files and directories this script creates carry no
+# permission for others, whatever umask the caller (cron, sudo) has. The group
+# may read (files 0640, directories 0750) so the web service can read the
+# manifest for the "last backup" status.
+umask 027
 
 # Anlaufstelle Backup-Skript
 # Erstellt verschlüsselte Backups (PostgreSQL + MEDIA_ROOT) mit Rotation
@@ -44,7 +46,7 @@ source "${SCRIPT_DIR}/_backup_common.sh"
 # shellcheck source=scripts/ops/lib/backup-set.sh
 source "${SCRIPT_DIR}/lib/backup-set.sh"
 
-# check_file_modes <label> <file>...: every file must be mode 600 (owner only).
+# check_file_modes <label> <file>...: no file may carry a permission for others.
 # Reports each violation on stderr and returns 1 if there is any. A file system
 # with a default ACL can ignore the umask, so the result is checked, not assumed.
 check_file_modes() {
@@ -52,8 +54,8 @@ check_file_modes() {
     shift
     for file in "$@"; do
         mode="$(stat -c '%a' "$file")"
-        if [[ "$mode" != "600" ]]; then
-            echo "ERROR: unexpected file mode ${mode} (expected 600): ${file}" >&2
+        if (( 8#${mode} & 8#007 )); then
+            echo "ERROR: unexpected file mode ${mode} (no permission for others allowed): ${file}" >&2
             failed=1
         fi
         checked=$((checked + 1))
@@ -61,7 +63,7 @@ check_file_modes() {
     if [[ "$failed" -ne 0 ]]; then
         return 1
     fi
-    echo "File modes checked (${label}): ${checked} files, all 600."
+    echo "File modes checked (${label}): ${checked} files, none accessible to others."
 }
 
 # .env laden falls vorhanden
@@ -371,12 +373,12 @@ fi
 } >> "$MANIFEST_FILE"
 backup_write_hmac "$MANIFEST_FILE"
 
-# Nothing is published unless every artefact of the set is owner-only (mode 600).
-# The work directory itself must not be traversable by group or others.
+# Nothing is published unless no artefact of the set carries a permission for others.
+# The work directory itself must not be accessible to others either.
 WORK_DIR_MODE="$(stat -c '%a' "$WORK_DIR")"
 # The last three digits are the permission bits; a leading digit is setgid inherited from the parent.
-if [[ "${WORK_DIR_MODE: -3}" != "700" ]]; then
-    echo "ERROR: unexpected directory mode ${WORK_DIR_MODE} (expected 700): ${WORK_DIR}" >&2
+if (( 8#${WORK_DIR_MODE: -3} & 8#007 )); then
+    echo "ERROR: unexpected directory mode ${WORK_DIR_MODE} (no permission for others allowed): ${WORK_DIR}" >&2
     exit 1
 fi
 mapfile -t SET_ARTIFACTS < <(find "$WORK_DIR" -mindepth 1 -maxdepth 1 -type f | sort)
@@ -403,7 +405,7 @@ echo "Zeilenzahl-Manifest mit Satzbindung erstellt: ${MANIFEST_FILE}"
 
 # Weekly-/Monthly-Snapshots werden vor dem Off-Site-Abgleich angelegt, damit
 # alle drei Retention-Stufen im selben Lauf uebertragen werden koennen.
-# check_copy_modes <label> <dir>: the retention copies of the published set are owner-only too.
+# check_copy_modes <label> <dir>: the retention copies of the published set carry nothing for others either.
 check_copy_modes() {
     local label="$1" dir="$2" artifact copies=()
     for artifact in "$BACKUP_FILE" "$BACKUP_FILE_HMAC" "$MEDIA_FILE" "$MEDIA_FILE_HMAC" \

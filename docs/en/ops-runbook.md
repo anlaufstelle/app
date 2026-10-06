@@ -1,5 +1,6 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
 > Synchronization update 2026-10-06: §§ 1–6 follow the shipped behaviour — the mandatory-variable check reads quoted and empty values correctly and requires 32 characters, the migration diagnosis uses the one-shot and terminates an orphaned lock holder instead of `pg_advisory_unlock`, `up -d web` (not `restart web`) applies new `GUNICORN_*` values, attachment usage is measured inside the `media` volume, the export directory must belong to UID 1000, the maintenance-mode block runs the migration one-shot, `backup.sh` writes owner-only files (`umask 077`) and `--verify` states what it checked, and the manifest is mandatory for `restore.sh` (#2482, #2440).
+> Synchronization update 2026-10-06: § 3.3 (file modes) and § 6.6 (restore drill, host cron proposal) follow `backup.sh` with `umask 027` — files `0640`, directories `0750`, the check rejects any permission for others, the group (UID/GID 1000 of `web`) may read the manifest (#2482).
 > Synchronization update 2026-10-06: the German source of § 13.1 uses proper umlauts in the step comments; no change to commands or content.
 > Synchronization update 2026-10-06: the DB password rotation section names the printed file list as `Compose files: …` (the script output is English now) (#2474).
 > Synchronization update 2026-10-06: the PostgreSQL migration path (§ 13.1/§ 13.2) activates maintenance mode and takes the backup while `web` and `cron` are running (`backup.sh` needs both), stops them only afterwards, takes the working dump with the variable `ADMIN_DB_USER` that exists in the `db` container and checks it, waits for the final database server before the restore, and uses the full Compose file list (#2424).
@@ -534,16 +535,19 @@ is bound) are present. An aborted run leaves the state at "missing/unknown"
 instead of "current". A leftover `.in-progress-*` directory comes from a hard
 abort and can be deleted.
 
-**File modes:** `backup.sh` sets `umask 077`, regardless of the caller's umask
-(cron, `sudo`): files are `0600`, directories it creates are `0700`, and the owner
-is the account the script runs as (recommended: root). Before publication it checks
-that every file of the set is `0600` (message `File modes checked (backup set): …
-all 600.`); otherwise it aborts with exit 1 and does not publish the set. The same
-applies to the weekly/monthly copies. An existing `BACKUP_HOST_DIR` keeps its mode.
-Only the executing account can read the files: the `web` container (UID 1000)
-does not read them while the backup directory is not readable for it, and the
-backup indicator in `/health/`, the system overview and compliance then shows
-"missing/unknown".
+**File modes:** `backup.sh` sets `umask 027`, regardless of the caller's umask
+(cron, `sudo`): files are `0640`, directories it creates are `0750`, and the owner
+is the account the script runs as (recommended: root). Others (neither owner nor
+group) never get a permission. Before publication it checks that no file of the set
+carries a permission for others (message `File modes checked (backup set): … none
+accessible to others.`); otherwise it aborts with exit 1 and does not publish the
+set. The same applies to the weekly/monthly copies. The group may read so that the
+`web` container (UID/GID 1000) reads the manifest for the backup indicator in
+`/health/`, the system overview and compliance. This relies on the directory setup
+from the admin guide: `BACKUP_HOST_DIR` with `root:1000` and mode `2750` (new
+subdirectories and files then inherit group 1000). Without group 1000 on the
+directory, the indicator stays at "missing/unknown". An existing `BACKUP_HOST_DIR`
+keeps its mode.
 
 **Prerequisites for the cron entry:** The following examples are explicitly
 for `sudo crontab -e`, i.e. the five time fields of the **root crontab**. Root
@@ -1538,7 +1542,7 @@ the manifest just the same. If it is missing, obtain the complete set (dump, med
 archive and manifest, each with its `.hmac` sidecar;
 [Disaster Recovery §5](../disaster-recovery.md#5-off-site-backup-beschaffen)) (German).
 
-`backup.sh` creates the files with `0600` (directories `0700`); they belong to the account it runs as, in the recommended setup root — the drill therefore reads them **as root**. Without a flag, the script auto-detects the format; explicitly via `--dev`/`--prod` (or `DRILL_FORMAT=dev|prod`). The prod branch reads `BACKUP_HOST_DIR` exclusively from the `.env` file in the Compose directory; a value of the same name in the `sudo env` prefix is overwritten when that file is loaded and is therefore not an override. If the installation is not under the default `/opt/anlaufstelle`, `COMPOSE_DIR` must point to the directory containing `.env` and `docker-compose.prod.yml`:
+`backup.sh` creates the files with `0640` (directories `0750`, no permission for others); they belong to the account it runs as, in the recommended setup root — the drill therefore reads them **as root**. Without a flag, the script auto-detects the format; explicitly via `--dev`/`--prod` (or `DRILL_FORMAT=dev|prod`). The prod branch reads `BACKUP_HOST_DIR` exclusively from the `.env` file in the Compose directory; a value of the same name in the `sudo env` prefix is overwritten when that file is loaded and is therefore not an override. If the installation is not under the default `/opt/anlaufstelle`, `COMPOSE_DIR` must point to the directory containing `.env` and `docker-compose.prod.yml`:
 
 ```bash
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh           # auto-detect the format
@@ -1581,7 +1585,7 @@ docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
 ```
 
 **Host cron suggestion (not installed automatically):** The backup files are
-mode `0600` and owned by the backup account (recommended: root). Therefore, put this one-liner in the **host's
+mode `0640` (no permission for others) and owned by the backup account (recommended: root). Therefore, put this one-liner in the **host's
 root crontab**, not in the `cron` sidecar or an unprivileged user's crontab. It
 runs at 03:30 on the first day of each quarter, after the 02:00 backup. Keep
 the `--prod` flag: without it the script auto-detects the format and would
@@ -3212,7 +3216,8 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: ab29a4b9aee27f3b6bf7ba7871c210e040ab2b47 -->
+<!-- source-hash: 3c3ac1693352912e4b2c318a9d075675eac596be -->
+<!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-09-22 -->

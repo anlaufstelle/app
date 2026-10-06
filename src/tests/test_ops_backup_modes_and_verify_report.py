@@ -1,7 +1,8 @@
-"""``backup.sh`` writes owner-only files and ``--verify`` reports what it did and did not check.
+"""``backup.sh`` never writes files for "others" and ``--verify`` reports what it did and did not check.
 
-Backups hold Art. 9 data, so every file and directory a run creates must be
-unreadable for group and others, whatever umask the caller (cron, sudo) has.
+Backups hold Art. 9 data, so every file and directory a run creates must carry no
+permission for others, whatever umask the caller (cron, sudo) has. The group may
+read: the ``web`` service reads the manifest through the group to show the last backup.
 ``--verify`` is a sample, not a row-by-row comparison; its output must say so.
 """
 
@@ -39,9 +40,9 @@ elif [[ "$*" == *" pg_dump "* ]]; then
 elif [[ "$*" == *" tar -C "* ]]; then
     tar -C "$MEDIA_SOURCE" -cf - media
 elif [[ "$*" == *" exec -T cron cat "* ]]; then
-    if [[ "${TEST_WIDEN_ANCHOR_MODE:-0}" == "1" ]]; then
+    if [[ -n "${TEST_ANCHOR_MODE:-}" ]]; then
         # Simulates a file system that ignores the umask (for example a default ACL).
-        chmod 644 /dev/stdout
+        chmod "$TEST_ANCHOR_MODE" /dev/stdout
     fi
     printf '{"version": 1}\\n'
 fi
@@ -138,16 +139,17 @@ def _mode(path: Path) -> int:
     return stat.S_IMODE(path.stat().st_mode)
 
 
-def test_backup_creates_only_owner_readable_files_and_directories(tmp_path: Path) -> None:
+def test_backup_gives_group_read_but_nothing_to_others(tmp_path: Path) -> None:
     result, backups = _run_backup(tmp_path)
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     files = [path for path in backups.rglob("*") if path.is_file()]
     assert files, "the run must have published a backup set"
-    wide_files = {str(path.relative_to(backups)): oct(_mode(path)) for path in files if _mode(path) != 0o600}
-    assert wide_files == {}
+    # Group read is deliberate (the web service reads the manifest); nobody else gets anything.
+    odd_files = {str(path.relative_to(backups)): oct(_mode(path)) for path in files if _mode(path) != 0o640}
+    assert odd_files == {}
     directories = [backups, *[path for path in backups.rglob("*") if path.is_dir()]]
-    wide_dirs = {str(path.relative_to(backups)): oct(_mode(path)) for path in directories if _mode(path) & 0o077}
+    wide_dirs = {str(path.relative_to(backups)): oct(_mode(path)) for path in directories if _mode(path) & 0o007}
     assert wide_dirs == {}
 
 
@@ -155,32 +157,46 @@ def test_backup_reports_the_file_mode_check(tmp_path: Path) -> None:
     result, _ = _run_backup(tmp_path)
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert "File modes checked" in result.stdout
-    assert "all 600" in result.stdout
+    assert "File modes checked (backup set)" in result.stdout
+    assert "none accessible to others" in result.stdout
 
 
-def test_weekly_and_monthly_copies_are_owner_only_and_checked(tmp_path: Path) -> None:
+def test_weekly_and_monthly_copies_have_nothing_for_others_and_are_checked(tmp_path: Path) -> None:
     result, backups = _run_backup(tmp_path, retention_day=True)
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     for stage in ("weekly", "monthly"):
         copies = [path for path in (backups / stage).iterdir() if path.is_file()]
         assert len(copies) == 6, f"{stage}: {[path.name for path in copies]}"
-        assert {oct(_mode(path)) for path in copies} == {"0o600"}
-        assert f"File modes checked ({stage} copy): 6 files, all 600." in result.stdout
+        assert {oct(_mode(path)) for path in copies} == {"0o640"}
+        assert f"File modes checked ({stage} copy): 6 files, none accessible to others." in result.stdout
 
 
-def test_published_set_with_a_wider_mode_fails_the_run_before_publication(tmp_path: Path) -> None:
+@pytest.mark.parametrize("mode", ["640", "660", "600"])
+def test_a_published_set_without_rights_for_others_passes_the_check(tmp_path: Path, mode: str) -> None:
     result, backups = _run_backup(
         tmp_path,
         DJANGO_AUDIT_HWM_PATH="/data/audit_hwm.json",
-        TEST_WIDEN_ANCHOR_MODE="1",
+        TEST_ANCHOR_MODE=mode,
+    )
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "none accessible to others" in result.stdout
+    assert any((backups / "daily").iterdir())
+
+
+@pytest.mark.parametrize("mode", ["644", "604", "641"])
+def test_a_published_set_with_any_right_for_others_fails_the_run_before_publication(tmp_path: Path, mode: str) -> None:
+    result, backups = _run_backup(
+        tmp_path,
+        DJANGO_AUDIT_HWM_PATH="/data/audit_hwm.json",
+        TEST_ANCHOR_MODE=mode,
     )
 
     assert result.returncode != 0
-    assert "unexpected file mode 644" in result.stderr
+    assert f"unexpected file mode {mode}" in result.stderr
     published = [path.name for path in (backups / "daily").iterdir() if path.is_file()]
-    assert published == [], "a set with wide permissions must not be published"
+    assert published == [], "a set with rights for others must not be published"
 
 
 def _sign(path: Path) -> None:

@@ -493,17 +493,20 @@ Audit-Anker) vorliegt. Ein abgebrochener Lauf laesst den Zustand auf
 `.in-progress-*`-Verzeichnis stammt von einem hart abgebrochenen Lauf und
 kann geloescht werden.
 
-**Dateirechte:** `backup.sh` setzt `umask 077`, unabhängig von der umask des
-Aufrufers (Cron, `sudo`): Dateien sind `0600`, vom Skript angelegte
-Verzeichnisse `0700`, Eigentümer ist das Konto, unter dem das Skript läuft
-(empfohlen: root). Vor der Veröffentlichung prüft es, dass jede Datei des Satzes
-`0600` hat (Meldung `File modes checked (backup set): … all 600.`); sonst bricht
-es mit Exit 1 ab und veröffentlicht den Satz nicht. Dasselbe gilt für die
-Weekly-/Monthly-Kopien. Ein bereits vorhandenes `BACKUP_HOST_DIR` behält seinen
-Modus. Nur das ausführende Konto kann die Dateien lesen: Der `web`-Container
-(UID 1000) liest sie nicht, solange das Backup-Verzeichnis ihm nicht lesbar ist,
-und die Backup-Anzeige in `/health/`, Systemübersicht und Compliance steht dann
-auf „fehlt/unbekannt“.
+**Dateirechte:** `backup.sh` setzt `umask 027`, unabhängig von der umask des
+Aufrufers (Cron, `sudo`): Dateien sind `0640`, vom Skript angelegte
+Verzeichnisse `0750`, Eigentümer ist das Konto, unter dem das Skript läuft
+(empfohlen: root). Andere (weder Eigentümer noch Gruppe) bekommen nie ein Recht.
+Vor der Veröffentlichung prüft es, dass keine Datei des Satzes ein Recht für
+Andere trägt (Meldung `File modes checked (backup set): … none accessible to
+others.`); sonst bricht es mit Exit 1 ab und veröffentlicht den Satz nicht.
+Dasselbe gilt für die Weekly-/Monthly-Kopien. Die Gruppe darf lesen, damit der
+`web`-Container (UID/GID 1000) das Manifest für die Backup-Anzeige in `/health/`,
+Systemübersicht und Compliance liest. Das setzt das Verzeichnis-Setup aus dem
+Admin-Handbuch voraus: `BACKUP_HOST_DIR` mit `root:1000` und Modus `2750` (die
+Gruppe 1000 erben dann die neuen Unterverzeichnisse und Dateien). Fehlt die
+Gruppe 1000 am Verzeichnis, bleibt die Anzeige auf „fehlt/unbekannt“. Ein bereits
+vorhandenes `BACKUP_HOST_DIR` behält seinen Modus.
 
 **Voraussetzungen fuer den Cron-Eintrag:** Die folgenden Beispiele sind
 ausdruecklich fuer `sudo crontab -e`, also die fuenf Zeitfelder der
@@ -1507,7 +1510,7 @@ und `restore-drill.sh --prod` verlangen das Manifest ebenso. Fehlt es, den
 vollstaendigen Satz beschaffen (Dump, Medienarchiv und Manifest, jeweils mit
 `.hmac`-Sidecar; [Disaster-Recovery §5](disaster-recovery.md#5-off-site-backup-beschaffen)).
 
-`backup.sh` legt die Dateien mit `0600` an (Verzeichnisse `0700`); sie gehoeren dem Konto, unter dem es laeuft, im empfohlenen Setup root — der Drill liest sie daher **als root**. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`). Der Prod-Zweig liest `BACKUP_HOST_DIR` ausschließlich aus der `.env` im Compose-Verzeichnis; ein gleichnamiger Wert im `sudo env`-Praefix wird beim Laden der Datei ueberschrieben und ist daher kein Override. Liegt die Installation nicht unter dem Default `/opt/anlaufstelle`, muss `COMPOSE_DIR` auf das Verzeichnis mit `.env` und `docker-compose.prod.yml` zeigen:
+`backup.sh` legt die Dateien mit `0640` an (Verzeichnisse `0750`, kein Recht fuer Andere); sie gehoeren dem Konto, unter dem es laeuft, im empfohlenen Setup root — der Drill liest sie daher **als root**. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`). Der Prod-Zweig liest `BACKUP_HOST_DIR` ausschließlich aus der `.env` im Compose-Verzeichnis; ein gleichnamiger Wert im `sudo env`-Praefix wird beim Laden der Datei ueberschrieben und ist daher kein Override. Liegt die Installation nicht unter dem Default `/opt/anlaufstelle`, muss `COMPOSE_DIR` auf das Verzeichnis mit `.env` und `docker-compose.prod.yml` zeigen:
 
 ```bash
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh           # Format auto-erkennen
@@ -1550,7 +1553,7 @@ docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
 ```
 
 **Host-Cron-Vorschlag (keine automatische Installation):** Die Backup-Dateien
-sind `0600` und gehoeren dem Backup-Konto (empfohlen: root); den Einzeiler
+sind `0640` (kein Recht fuer Andere) und gehoeren dem Backup-Konto (empfohlen: root); den Einzeiler
 deshalb in der **Root-Crontab des Hosts** eintragen, nicht im `cron`-Sidecar und nicht in einer unprivilegierten
 Benutzer-Crontab. Er laeuft am ersten Tag jedes Quartals um 03:30 Uhr nach dem
 02:00-Uhr-Backup. Das Flag `--prod` bleibt gesetzt: ohne Angabe erkennt das
