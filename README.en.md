@@ -2,6 +2,7 @@
 > Synchronization update 2026-09-22: § Production installation names the mandatory-information step (imprint, privacy policy) with a link to the admin guide and notes the 404 until it is set up (#2311).
 > Synchronization update 2026-09-18: the stack table now names Django 6.1 (#1662).
 > Synchronization update 2026-09-22 (§ Production installation: the audit anchor must be created before the first backup, #2315). Most recently synchronized on 2026-09-11 (§ Production installation: complete source acquisition, initial setup sequence, production prerequisites, and explicit Compose file for backup operations, #2218). Previously synchronized on 2026-09-11 (§ Contributing: contributions are explicitly welcome and the path into the maintainer team is described in GOVERNANCE.md, #2207).
+> Synchronization update 2026-10-06: contact levels use the interface terms ("Pseudonym only", "With additional details") and the development paragraph names the maintainer as responsible (#2490, #2458).
 
 # Anlaufstelle
 
@@ -13,13 +14,13 @@
 
 ## What Anlaufstelle looks like
 
-| Timeline — your digital logbook | Client list |
+| Timeline — your digital logbook | People list |
 |:---:|:---:|
-| ![Timeline](docs/screenshots/zeitstrom-en.webp) | ![Client list](docs/screenshots/personenliste-en.webp) |
+| ![Timeline](docs/screenshots/zeitstrom-en.webp) | ![People list](docs/screenshots/personenliste-en.webp) |
 
-| Statistics at the push of a button | Client history |
+| Statistics at the push of a button | Person history |
 |:---:|:---:|
-| ![Statistics](docs/screenshots/statistiken-en.webp) | ![Client history](docs/screenshots/personendetail-en.webp) |
+| ![Statistics](docs/screenshots/statistiken-en.webp) | ![Person history](docs/screenshots/personendetail-en.webp) |
 
 | Work hub — role-based landing | Log an event |
 |:---:|:---:|
@@ -56,7 +57,7 @@ Typical team size: 5–30 staff. Typical situation: documentation with logbooks,
 
 ## What is Anlaufstelle?
 
-Anlaufstelle is software for the daily work in low-threshold social services. It supports your team with documentation, information sharing between shifts, and the creation of reports and statistics — without requiring clients to provide their legal name.
+Anlaufstelle is software for the daily work in low-threshold social services. It supports your team with documentation, information sharing between shifts, and the creation of reports and statistics — without requiring the people you support to provide their legal name.
 
 Established commercial social-sector software targets large organizations, is prohibitively expensive for small facilities, and requires every person to be registered with their full name and address. Anlaufstelle fills this gap: low-threshold, affordable, and privacy-compliant.
 
@@ -66,11 +67,12 @@ Established commercial social-sector software targets large organizations, is pr
 
 ### 1. No real names — by design
 
-There is no name field. Your clients are recorded under a pseudonym assigned by your team. The system supports three contact levels:
+There is no name field. People are recorded under a pseudonym assigned by your team. For people, the system supports two contact levels:
 
-- **Anonymous** — no pseudonym, no re-identification (e.g. brief visits, needle exchange)
-- **Identified** — pseudonym assigned, person is recognizable on return
-- **Qualified** — additional details recorded (e.g. age group, district)
+- **Pseudonym only** — pseudonym assigned, person is recognizable on return
+- **With additional details** — additional details recorded (e.g. age group, district)
+
+Anonymous is not a status of a person but an event without a person (e.g. brief visits, needle exchange): no person is created and nothing is recognized.
 
 No real name ever enters the database — neither accidentally nor intentionally.
 
@@ -84,7 +86,7 @@ You can define time periods to match your operations — e.g. "Night shift 21:30
 
 Every facility works differently. Anlaufstelle adapts to your documentation practice: What types of contacts do you have? What services are recorded? What fields does an entry need?
 
-This works without programming, directly in the interface — for events as well as for client and case forms. Fields can be grouped into sections, sorted, and given conditions ("show this field only when …"). A configuration can be captured as a YAML package, versioned, and applied to another facility. Four domain packages ship alongside the standard catalog (`beratungsstelle`, `awareness`, `frauenhaus`, `jugendarbeit`) — see [docs/packages.md](docs/packages.md).
+This works without programming, directly in the interface — for events as well as for person and case forms. Fields can be grouped into sections, sorted, and given conditions ("show this field only when …"). A configuration can be captured as a YAML package, versioned, and applied to another facility. Four domain packages ship alongside the standard catalog (`beratungsstelle`, `awareness`, `frauenhaus`, `jugendarbeit`) — see [docs/packages.md](docs/packages.md).
 
 The configuration also governs data protection:
 
@@ -101,9 +103,9 @@ The configuration also governs data protection:
 
 - **Document contacts** — in 30 seconds, including from a smartphone
 - **Notes and tasks** — share information between shifts, track follow-ups
-- **Client registry** — pseudonyms, contact levels, history timeline
+- **People** — pseudonyms, contact levels, history timeline
 - **Cases and trajectories** — document longer engagements with episodes, goals and milestones
-- **File attachments** — documents and photos on an event, client or case; stored encrypted and virus-scanned before storage
+- **File attachments** — documents and photos on an event, person or case; stored encrypted and virus-scanned before storage
 - **Typo-tolerant search** — quickly find what you need
 - **Offline mode for streetwork** — capture entries without network, encrypted on-device
 - **German and English** — language switcher built in
@@ -129,7 +131,7 @@ Anlaufstelle is designed from the ground up for handling particularly sensitive 
 - **Retention periods** — automatic deletion after configurable period (Art. 17 GDPR)
 - **Deletion requests with four-eyes principle** — deletion only after approval by management/admin
 - **Audit trail** — immutable log of all security-relevant actions
-- **Data subject rights** — data access and export for clients (Art. 15, 20 GDPR)
+- **Data subject rights** — data access and export for people (Art. 15, 20 GDPR)
 - **Rectifications (Art. 16 GDPR)** — as an internal request reviewed by management/admin, not as self-service
 - **K-anonymity in analyses** — small cell counts are suppressed before any figures leave the facility
 - **GDPR templates** — sample documents for DPA, DPIA, TOMs, records of processing, and privacy notices included
@@ -180,7 +182,7 @@ Anlaufstelle is provided "as is", without warranty of any kind (see [LICENSE](LI
 
 ## Development
 
-This project uses generative AI as an integral part of the development process — as a pair programming partner, research assistant, and architecture sparring partner. The AI works under human direction. The team is responsible for concept, architecture, and outcome.
+This project uses generative AI as an integral part of the development process — as a pair programming partner, research assistant, and architecture sparring partner. The AI works under human direction. The maintainer is responsible for concept, architecture, and outcome.
 
 The domain foundation is based on a diploma thesis on documentation in low-threshold addiction care and years of hands-on experience in social work — not on AI generation.
 
@@ -232,5 +234,5 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.99.5 -->
-<!-- translation-date: 2026-10-01 -->
-<!-- source-hash: 4302d3887edee8a794d6ae51c3fbfba47e037d6c -->
+<!-- translation-date: 2026-10-06 -->
+<!-- source-hash: cc03127a414132c7f7e6ef09d5fd632919d26bbb -->

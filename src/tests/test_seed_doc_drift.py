@@ -32,11 +32,11 @@ CONTRIBUTING = REPO_ROOT / "CONTRIBUTING.md"
 SEED_USERS_SRC = REPO_ROOT / "src" / "core" / "seed" / "users.py"
 
 # Profile, die bewusst NICHT in der oeffentlichen CONTRIBUTING-Tabelle stehen
-# (``solo`` ist ein internes Profil; ``demo_solo`` ist KEIN CLI-Wert von
-# ``--scale`` — nur eine interne Volumen-Variante, die ``--scale demo``
-# fuer die Solo-Facility verwendet, Refs #2279). Die Tabelle zeigt
-# small/medium/large/demo.
-UNDOCUMENTED_PROFILES = frozenset({"solo", "demo_solo"})
+# (``demo_solo`` ist KEIN CLI-Wert von ``--scale`` — nur eine interne
+# Volumen-Variante, die ``--scale demo`` fuer die Solo-Facility verwendet,
+# Refs #2279). ``solo`` ist ein CLI-Wert und steht in der Tabelle; sie zeigt
+# small/medium/large/solo/demo.
+UNDOCUMENTED_PROFILES = frozenset({"demo_solo"})
 
 # Jeder Metrik-Key aus ``SCALE_CONFIG`` wird einer Zeilenbeschriftung der
 # CONTRIBUTING-Tabelle zugeordnet. Fehlt ein Mapping fuer einen neuen Key, failt

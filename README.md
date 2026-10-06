@@ -63,11 +63,12 @@ Etablierte kommerzielle Sozialbereichssoftware richtet sich an große Träger, i
 
 ### 1. Ohne Klarnamen — von Anfang an
 
-Es gibt kein Namensfeld. Personen werden unter einem Pseudonym geführt, das Ihr Team vergibt. Das System kennt drei Kontaktstufen:
+Es gibt kein Namensfeld. Personen werden unter einem Pseudonym geführt, das Ihr Team vergibt. Für Personen kennt das System zwei Kontaktstufen:
 
-- **Anonym** — kein Pseudonym, keine Wiedererkennung (z. B. Kurzbesuche, Spritzentausch)
-- **Identifiziert** — Pseudonym vergeben, Person ist wiedererkennbar
-- **Qualifiziert** — weitergehende Angaben (z. B. Altersgruppe, Bezirk)
+- **Nur Pseudonym** — Pseudonym vergeben, Person ist wiedererkennbar
+- **Mit Zusatzangaben** — weitergehende Angaben (z. B. Altersgruppe, Bezirk)
+
+Anonym ist kein Personenstatus, sondern ein Ereignis ohne Person (z. B. Kurzbesuche, Spritzentausch): Dort wird keine Person angelegt und nichts wiedererkannt.
 
 Kein Klartextname gelangt in die Datenbank — weder versehentlich noch absichtlich.
 
@@ -177,7 +178,7 @@ Anlaufstelle wird ohne Mängelgewähr bereitgestellt, ohne Gewährleistung jegli
 
 ## Entwicklung
 
-Dieses Projekt nutzt generative AI als integralen Bestandteil des Entwicklungsprozesses — als Pair-Programming-Partner, Research-Assistent und Architektur-Sparringspartner. Die AI arbeitet unter menschlicher Anleitung. Das Team verantwortet Konzept, Architektur und Ergebnis.
+Dieses Projekt nutzt generative AI als integralen Bestandteil des Entwicklungsprozesses — als Pair-Programming-Partner, Research-Assistent und Architektur-Sparringspartner. Die AI arbeitet unter menschlicher Anleitung. Der Maintainer verantwortet Konzept, Architektur und Ergebnis.
 
 Das fachliche Fundament basiert auf einer Diplomarbeit zur Dokumentation in der niedrigschwelligen Suchthilfe und jahrelanger Praxiserfahrung in der Sozialen Arbeit — nicht auf AI-Generierung.
 

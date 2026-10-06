@@ -143,18 +143,25 @@ Das startet einen PostgreSQL-18-Container mit folgenden Zugangsdaten:
 
 Der Port ist dabei ausschließlich über `127.0.0.1:5432` erreichbar. Einen Zugriff aus dem LAN musst du bewusst über ein eigenes Docker- oder Firewall-Setup freigeben.
 
-Alternativ kann eine lokal installierte PostgreSQL-Instanz verwendet werden. Die Verbindungs-URL muss dann in der Umgebungsvariable `DATABASE_URL` gesetzt werden.
+Alternativ kann eine lokal installierte PostgreSQL-Instanz verwendet werden. Die Verbindung wird dann über die Variablen `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` und `POSTGRES_PORT` gesetzt (Defaults: `anlaufstelle`, `anlaufstelle`, leer, `localhost`, `5432`; unter den Entwicklungs-Settings fällt ein leeres Passwort auf `anlaufstelle` zurück). Eine Verbindungs-URL (`DATABASE_URL`) liest die Anwendung nicht.
 
 **4. Umgebungsvariablen konfigurieren**
 
-Lege eine `.env`-Datei im Projektverzeichnis an (oder exportiere die Variablen):
+Lege eine `.env`-Datei im Projektverzeichnis an (oder exportiere die Variablen). Mit dem Docker-Container aus Schritt 3 genügen die beiden Schlüssel; die Datenbank-Variablen brauchst du nur für eine abweichende Instanz:
 
 ```bash
-SECRET_KEY=dev-secret-key-bitte-aendern
-DATABASE_URL=postgres://anlaufstelle:anlaufstelle@localhost:5432/anlaufstelle
-DEBUG=true
-ENCRYPTION_KEY=<32-Byte-Base64-Schlüssel>
+DJANGO_SECRET_KEY=dev-secret-key-bitte-aendern
+ENCRYPTION_KEY=<Fernet-Schlüssel, siehe unten>
+
+# Nur für eine eigene PostgreSQL-Instanz (Beispiel mit abweichenden Werten):
+POSTGRES_HOST=db.example.org
+POSTGRES_PORT=5433
+POSTGRES_DB=meine_db
+POSTGRES_USER=mein_nutzer
+POSTGRES_PASSWORD=mein-passwort
 ```
+
+`DEBUG` gibt es nicht als Umgebungsvariable: Das Settings-Profil entscheidet. `manage.py` startet mit `anlaufstelle.settings.dev` (`DEBUG = True`); die Produktions-Settings setzen `DEBUG = False`. Ohne `DJANGO_SECRET_KEY` setzen die Entwicklungs-Settings einen unsicheren Dev-Wert, die Produktions-Settings verlangen ihn. Ohne `ENCRYPTION_KEY` laufen die Entwicklungs-Settings mit lauter Warnung im Klartextmodus (sensible Felder werden unverschlüsselt gespeichert).
 
 Einen `ENCRYPTION_KEY` erzeugen:
 
@@ -174,6 +181,7 @@ make migrate
 make seed                              # Standard: small
 python src/manage.py seed --scale medium   # mehr Daten inkl. Fallmanagement
 python src/manage.py seed --scale large    # Lasttest-Volumen
+python src/manage.py seed --scale solo     # eine Einrichtung, 500 Ereignisse über 1000 Tage
 python src/manage.py seed --flush          # vorhandene Daten vorher löschen
 ```
 
@@ -205,55 +213,68 @@ Der Standardkatalog bietet `Kontakt`, `Spritzentausch`, `Vermittlung` und `Notiz
 > die Felder aus der Gruppe herausnehmen (`group_slug` streichen), die leere Gruppe
 > aber stehen lassen.
 
-#### Was der Loader-Seed einer Bestands-Einrichtung antut
+#### Was der Loader-Seed einer bestehenden Einrichtung bewirkt
 
-Der Seed ist ab M2 kein reines „anlegen, falls nicht vorhanden" mehr, sondern ein
+Der Seed ist kein reines „anlegen, falls nicht vorhanden", sondern ein
 Rücksync gegen `default.yaml`. Was das im Betrieb bedeutet:
 
 | Betroffen | Wirkung beim nächsten Seed-Lauf |
 |---|---|
-| `name`, `category`, `sensitivity`, `icon`, `color`, `sort_order`, `min_contact_stage` eines Katalog-Typs | wird auf den Katalogwert **zurückgesetzt** (früher nur beim Anlegen gesetzt) |
-| `sort_order` von Gruppen **und** Feldzuordnungen — auch bei Typen ohne Gruppen | wird auf die Katalogposition zurückgesetzt (früher blieb eine per UI umsortierte, gruppenlose Feldliste stehen) |
+| `name`, `sensitivity`, `min_contact_stage` eines Katalog-Typs | wird auf den Katalogwert **zurückgesetzt** |
+| `icon`, `color`, `sort_order` eines Katalog-Typs | wird auf den Katalogwert **zurückgesetzt** — aber nur, wenn das Paket den Schlüssel nennt; fehlt er, bleibt der Wert der Einrichtung stehen |
+| `system_type` eines Katalog-Typs | wird auf den Paketwert gesetzt; ein Typ ohne Systemtyp darf einen bekommen, ein gesetzter Systemtyp kann weder wechseln noch entfallen (Konflikt, s. u.) |
+| `report_key` eines Katalog-Typs | wird nur angewendet, wenn das Paket den Schlüssel nennt; fehlt er, bleibt der Bestand unangetastet. Leer → gesetzt ist erlaubt, gesetzt → anders ist ein Konflikt. |
+| `entity_type` eines Katalog-Typs | unveränderlich: weicht der vorhandene Typ ab, bricht der Lauf ab (Konflikt, s. u.) |
+| `sort_order` von Gruppen **und** Feldzuordnungen — auch bei Typen ohne Gruppen | wird auf die Katalogposition zurückgesetzt; eine per Oberfläche umsortierte Feldliste bleibt also nicht stehen |
 | `default_value` einer Katalog-Feldvorlage | wird auf den Paketwert (im Katalog durchgehend leer) **zurückgesetzt** — ein per Config-UI gepflegter Vorbelegungswert überlebt den Seed **nicht**. Paketformat v1 kann „nicht anfassen" für dieses Feld nicht ausdrücken (anders als `conditions`). |
 | `min_value`, `max_value` einer Katalog-Zahlenfeldvorlage | werden auf die optionalen Paketwerte zurückgesetzt. Die Migration ergänzt nur die Konfigurationsspalten; vorhandene `data_json`-Werte in Ereignissen, Personen und Fällen bleiben unverändert. Vor einer Bereichsverschärfung das schreibfreie Inventar `python src/manage.py inventory_number_ranges --facility <UUID-oder-Name>` mit Admin-DB-Rolle ausführen. |
 | `tally_enabled` eines Katalog-Typs | Ein explizites `true`/`false` wird auf den Paketwert zurückgesetzt. Fehlt der Schlüssel, bleibt ein in der Admin-Oberfläche gepflegtes Opt-in am Bestandstyp erhalten; beim Anlegen gilt `false`. |
 | Felder, die eine Einrichtung einem Katalog-Typ **zusätzlich** zugeordnet hat | bleiben unangetastet (der Loader fasst nur an, was im Paket steht) |
 | `retention_days`, `description`, `is_active` (Typ) bzw. `is_active` (Vorlage) | nicht Teil von Schema v1 — werden weder gesetzt noch zurückgesetzt |
 
-Zwei Konfliktfälle brechen den **gesamten** Seed-Lauf ab (fail-loud, Alles-oder-nichts —
+Der Schlüssel `category` am Typ wird nicht mehr angewendet: Das Feld gibt es seit
+[ADR-040](docs/adr/040-documenttype-category-entfernt.md) nicht mehr; der Loader ignoriert den
+Schlüssel und meldet eine Warnung im Report. Maßgeblich ist `_apply_document_type` in
+[`src/core/packages/loader.py`](src/core/packages/loader.py); die Schlüssel des Pakets
+beschreibt [docs/packages.md](docs/packages.md).
+
+Drei Konfliktfälle brechen den **gesamten** Seed-Lauf ab (fail-loud, Alles-oder-nichts —
 es wird nichts angewendet, auch nicht für die übrigen Typen):
 
 * **Eigene Feldvorlage auf einem Katalog-Slug.** Hat eine Einrichtung z. B. `dauer` selbst
   als Textfeld angelegt, kollidiert das mit `field_type`/`is_encrypted` aus dem Paket —
   beide sind nach dem Anlegen unveränderlich. Auflösung: die eigene Vorlage auf einen
   anderen Slug bringen (neu anlegen + Daten migrieren) oder den Katalog-Slug ändern.
+* **Abweichender unveränderlicher Wert.** `entity_type`, ein gesetzter `system_type` und ein
+  gesetzter `report_key` eines vorhandenen Typs lassen sich nicht ändern; weicht das Paket
+  ab (oder lässt es den `system_type` weg), meldet der Loader einen Konflikt.
 * **Namens-Kollision nach einer Umbenennung.** Wurde „Kontakt" per UI in „Erstkontakt"
   umbenannt und danach ein *neuer* Typ „Kontakt" angelegt (der bekommt den Slug
   `kontakt-2`), will der Seed den Typ mit dem Slug `kontakt` wieder in „Kontakt"
-  zurückbenennen — das verletzt `UniqueConstraint(facility, name, category)`. Ab da
+  zurückbenennen — das verletzt `UniqueConstraint(facility, name)`. Ab da
   scheitert **jeder** weitere Seed-Lauf, bis manuell aufgeräumt ist. Auflösung: den
   betreiber-eigenen Typ umbenennen oder den Namen im Katalog anpassen.
 
 **Scale-Profile im Überblick:**
 
-| Daten | `small` (Default) | `medium` | `large` | `demo` |
-|---|---|---|---|---|
-| Einrichtungen | 1 | 2 | 5 | 6 (Szenario-Katalog, Refs #2279) |
-| Pakete je Einrichtung (Refs #2148) | Hauptstelle: `default` | + Zweigstelle Nord: `beratungsstelle` | + Zweigstelle Süd: `awareness`, Außenstelle Ost: `jugendarbeit`, Außenstelle West: `frauenhaus` | `core.seed.scenarios.SCENARIOS`: Kontaktladen Wärmestube `default`, Beratungsstelle Falkenweg `beratungsstelle`, Beratungspraxis Lindenhof (Solo) `beratungsstelle`, Awareness-Team Nachtfalter `awareness`, Jugendtreff Wilhelmshöhe `jugendarbeit`, Frauenhaus Amalie `frauenhaus` |
-| Users (gesamt) | 7 (1 super_admin + 6 facility-User) | 13 (1 super_admin + 2×6) | 31 (1 super_admin + 5×6) | 33 (1 super_admin + 5×6 Team + 2 Solo) |
-| Users / Einrichtung | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 | 6 (Solo-Facility: 2 — Fachkraft + Vertretung) |
-| Clients / Einrichtung | 7 | 40 | 500 | 18 (Solo: 9) |
-| Events / Einrichtung | 25 | 750 | 10.000 | 120 (Solo: 60) |
-| Cases | 3 | 12 | 50 | 6 (Solo: 4) |
-| Episoden | — | 20 | 80 | 8 (Solo: 4) |
-| Wirkungsziele | — | 15 | 60 | 6 (Solo: 3) |
-| Meilensteine / Ziel | — | 3 | 4 | 3 (Solo: 2) |
-| WorkItems | 5 | 25 | 100 | 12 (Solo: 8) |
-| Quick-Vorlagen / Einrichtung | 6 | 6 | 6 | 6 |
-| DeletionRequests | — | 5 | 15 | 2 (Solo: 1) |
-| RetentionProposals | 4 | 6 | 12 | 3 (Solo: 2) |
-| Dateianhänge (ca.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | ~5 (30 %) (Solo: ~3) |
-| Zeitraum | 80 Tage | 365 Tage | 3 Jahre | 270 Tage |
+| Daten | `small` (Default) | `medium` | `large` | `solo` | `demo` |
+|---|---|---|---|---|---|
+| Einrichtungen | 1 | 2 | 5 | 1 | 6 (Szenario-Katalog, Refs #2279) |
+| Pakete je Einrichtung (Refs #2148) | Hauptstelle: `default` | + Zweigstelle Nord: `beratungsstelle` | + Zweigstelle Süd: `awareness`, Außenstelle Ost: `jugendarbeit`, Außenstelle West: `frauenhaus` | Hauptstelle: `default` | `core.seed.scenarios.SCENARIOS`: Kontaktladen Wärmestube `default`, Beratungsstelle Falkenweg `beratungsstelle`, Beratungspraxis Lindenhof (Solo) `beratungsstelle`, Awareness-Team Nachtfalter `awareness`, Jugendtreff Wilhelmshöhe `jugendarbeit`, Frauenhaus Amalie `frauenhaus` |
+| Users (gesamt) | 7 (1 super_admin + 6 facility-User) | 13 (1 super_admin + 2×6) | 31 (1 super_admin + 5×6) | 7 (1 super_admin + 6 facility-User) | 33 (1 super_admin + 5×6 Team + 2 Solo) |
+| Users / Einrichtung | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 | 6 | 6 (Solo-Facility: 2 — Fachkraft + Vertretung) |
+| Clients / Einrichtung | 7 | 40 | 500 | 30 | 18 (Solo: 9) |
+| Events / Einrichtung | 25 | 750 | 10.000 | 500 | 120 (Solo: 60) |
+| Cases | 3 | 12 | 50 | 10 | 6 (Solo: 4) |
+| Episoden | — | 20 | 80 | 15 | 8 (Solo: 4) |
+| Wirkungsziele | — | 15 | 60 | 10 | 6 (Solo: 3) |
+| Meilensteine / Ziel | — | 3 | 4 | 3 | 3 (Solo: 2) |
+| WorkItems | 5 | 25 | 100 | 20 | 12 (Solo: 8) |
+| Quick-Vorlagen / Einrichtung | 6 | 6 | 6 | 6 | 6 |
+| DeletionRequests | — | 5 | 15 | 4 | 2 (Solo: 1) |
+| RetentionProposals | 4 | 6 | 12 | 6 | 3 (Solo: 2) |
+| Dateianhänge (ca.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | Anteil 25 % (Beratungs-Ereignisse) | ~5 (30 %) (Solo: ~3) |
+| Zeitraum | 80 Tage | 365 Tage | 3 Jahre | 1000 Tage | 270 Tage |
 
 > **Hinweis:** `small` enthält kein Fallmanagement (keine Episoden, Ziele). Für die Entwicklung am Fallmanagement `medium` verwenden.
 >
@@ -337,7 +358,7 @@ pre-commit run --all-files               # alle commit-stage Hooks gegen das Rep
 
 > **venv vor JEDEM Push aktivieren** (Lehre aus dem v0.89.0-Handoff): Der `pre-push`-Hook ruft `pre-commit` auf. Ohne aktiviertes venv bricht **jeder** Push mit `pre-commit not found. Did you forget to activate your virtualenv?` ab. Bei einem **Tag**-Push ist das besonders tückisch — git meldet danach nur `failed to push some refs`, der Tag bleibt still lokal, und auffallen kann das erst Schritte später am Tag-Push-Gate (`release-verify-tags.sh`). Also `. .venv/bin/activate` (oder einmalig `PATH="$PWD/.venv/bin:$PATH" git push …`) — **nicht** `--no-verify`, das umgeht die Schnell-CI.
 
-CI auf [`anlaufstelle/app`](https://github.com/anlaufstelle/app/actions) ist die letztgültige Quelle der Wahrheit; der pre-push-Hook reduziert nur die Wahrscheinlichkeit roter CI nach Push.
+Wo die GitHub-Actions-Workflows laufen, ist ihr Ergebnis die letztgültige Quelle der Wahrheit: Beitragende erhalten sie an ihrem Pull Request im öffentlichen Repository. Im internen Entwicklungszweig sind die Workflows bewusst deaktiviert ([ADR-029](docs/adr/029-local-only-ci.md)); dort ist `make ci` das verbindliche Tor. Der pre-push-Hook reduziert nur die Wahrscheinlichkeit roter CI nach dem Push.
 
 ### Port-Übersicht und Prozess-Hygiene
 
@@ -686,43 +707,43 @@ Seit 2026-05-20 ist Test-Driven Development für die Unit-/Service-Schicht verpf
 
 **Kein „falsch grün" — Assertion-Stärke schützen** (Refs #1150): Ein roter Test bedeutet im Default, dass die **Root Cause im Code** zu fixen ist — nicht der Test. Eine **bestehende Assertion abzuschwächen** (lockern, entfernen, ans tatsächliche kaputte Verhalten nachziehen) ist ein **harter Review-Stopp**: zulässig nur, wenn sich die *Anforderung* geändert hat (nicht der Code), und dann mit expliziter Begründung im Commit-Body. Bei **Bugfixes** zuerst einen **failing-test-first** schreiben, der den Bug reproduziert, *bevor* der Code angefasst wird (Skill `superpowers:systematic-debugging`). Hintergrund: 96 % Coverage misst *ausgeführte*, nicht *geprüfte* Zeilen — eine abgeschwächte Assertion bleibt grün und fällt erst im Mutation-Run auf.
 
-Beispiel (Service-Schicht, Pseudonym-Hashing aus Issue #844):
+Beispiel (Service-Schicht, Hash-Helfer in `core/services/audit/hash.py`, vereinfacht dargestellt; der echte Helfer `hmac_hash_value` löst den Schlüssel zusätzlich über einen Fallback auf):
 
 ```python
-# Red — src/tests/test_pseudonym_hashing.py
-def test_client_pseudonym_hash_is_stable():
-    from django.conf import settings
+# Red — src/tests/test_hash_value_example.py
+def test_hash_value_is_stable(settings):
+    settings.AUDIT_HASH_KEY = "test-key"
 
-    settings.PSEUDONYM_HMAC_KEY = "test-key"
+    from core.services.audit.hash import hmac_hash_value
 
-    from core.services.audit_hash import hmac_pseudonym
-
-    assert hmac_pseudonym("anlauf-2026-0001") == hmac_pseudonym("anlauf-2026-0001")
-    assert hmac_pseudonym("anlauf-2026-0001") != hmac_pseudonym("anlauf-2026-0002")
+    assert hmac_hash_value("anlauf-2026-0001") == hmac_hash_value("anlauf-2026-0001")
+    assert hmac_hash_value("anlauf-2026-0001") != hmac_hash_value("anlauf-2026-0002")
 ```
 
 ```bash
-pytest src/tests/test_pseudonym_hashing.py -x
-# → ModuleNotFoundError / ImportError → erwartetes Red.
+pytest src/tests/test_hash_value_example.py -x
+# → ImportError, solange der Helfer fehlt → erwartetes Red.
 ```
 
 ```python
-# Green — src/core/services/audit_hash.py
-import hmac, hashlib
+# Green — src/core/services/audit/hash.py (vereinfacht)
+import hashlib
+import hmac
+
 from django.conf import settings
 
 
-def hmac_pseudonym(pseudonym: str) -> str:
-    key = settings.PSEUDONYM_HMAC_KEY.encode()
-    return hmac.new(key, pseudonym.encode(), hashlib.sha256).hexdigest()
+def hmac_hash_value(value: str) -> str:
+    key = settings.AUDIT_HASH_KEY.encode()
+    return hmac.new(key, value.encode(), hashlib.sha256).hexdigest()
 ```
 
 ```bash
-pytest src/tests/test_pseudonym_hashing.py -x
+pytest src/tests/test_hash_value_example.py -x
 # → 1 passed → Green.
 ```
 
-**Refactor:** etwa Auslagerung der Key-Auflösung in Helper, sobald ein zweiter Hash-Anwendungsfall existiert — Test bleibt grün.
+**Refactor:** etwa Auslagerung der Key-Auflösung in einen Helper, sobald ein zweiter Hash-Anwendungsfall existiert — Test bleibt grün.
 
 **Geltungsbereich** (TDD-Pflicht):
 
@@ -735,7 +756,7 @@ pytest src/tests/test_pseudonym_hashing.py -x
 - Reine Markdown-/Doku-Änderungen.
 - One-Shot-Hygiene-Skripte ohne Wiederverwendung.
 
-Querverweise: `CLAUDE.md § Tests & Verifikation` (dev-only) und Skill `superpowers:test-driven-development`.
+Querverweise: `AGENTS.md § Tests & Verifikation` (dev-only) und Skill `superpowers:test-driven-development`.
 
 ### Unit- und Integrationstests
 
@@ -798,7 +819,7 @@ Diese Pipeline muss vor jedem Pull Request lokal grün sein.
 
 **JS-Gate (`make test-js`, Refs #1932):** führt `npm test` (= `vitest run`, non-watch, deterministisch) gegen die Offline-/Queue-/Watcher-Suite unter [`tests/js/`](tests/js/) aus und ist fail-fast Teil von `make ci`/`make ci-locked`. Fehlt `node_modules/` (kein vorheriges `npm ci`) oder `package-lock.json`, scheitert das Target mit einer klaren Fehlermeldung statt eines kryptischen `vitest: not found`.
 
-**JS-Advisory-Gate (`make audit-js`, Refs #1968):** führt `npm audit --audit-level=$(AUDIT_LEVEL)` gegen `package-lock.json` aus — das Gegenstück zu `pip-audit` auf der Python-Seite, das es für JavaScript vorher nicht gab. Es hängt bewusst in `make ci` und nicht nur im GitHub-Workflow: der Workflow ruht ohne Actions-Guthaben, `make ci` ist das reale Tor.
+**JS-Advisory-Gate (`make audit-js`, Refs #1968):** führt `npm audit --audit-level=$(AUDIT_LEVEL)` gegen `package-lock.json` aus — das Gegenstück zu `pip-audit` auf der Python-Seite, das es für JavaScript vorher nicht gab. Es hängt bewusst in `make ci` und nicht nur im GitHub-Workflow: Im internen Entwicklungszweig sind die Workflows deaktiviert ([ADR-029](docs/adr/029-local-only-ci.md)); dort ist `make ci` das verbindliche Tor, am öffentlichen Repository führt der Test-Workflow `npm audit` zusätzlich am Pull Request aus.
 
 **Damit braucht die Gate-Kette Netzzugang.** `npm audit` liest zwar nur das Lockfile (kein `npm ci`, kein `node_modules/` nötig), fragt die Advisory-Daten aber bei der npm-Registry ab. Auf einem Host ohne Registry-Zugang bricht `make ci` in `audit-js` ab — und zwar direkt nach `deps-check`, also bevor ein einziger Test läuft. Einzelne Gates lassen sich in dem Fall weiter gezielt fahren (`make lint`, `make typecheck`, `make test-parallel`).
 
@@ -856,13 +877,13 @@ Der Watchdog erkennt stillstehende oder gestorbene Master-Prozesse und startet `
    - Screenshot oder Demo, wenn UI-Änderungen enthalten sind
    - Verlinkung des zugehörigen GitHub-Issues
 
+5. **Review:** Mindestens ein Approval erforderlich. Feedback sachlich und konstruktiv.
+
+6. **Übernahme:** Sobald CI grün ist und ein Approval vorliegt, übernimmt der Maintainer deine Commits. Externe Pull Requests werden nicht direkt auf `main` gemergt, sondern über den Release-Spiegel übernommen (siehe unten).
+
 ### Code of Conduct
 
 Alle Mitwirkenden verpflichten sich auf den [Contributor Covenant 2.1](CODE_OF_CONDUCT.md). Belästigungsfälle melden Mitwirkende vertraulich an `kontakt@anlaufstelle.app` (Refs #836).
-
-5. **Review:** Mindestens ein Approval erforderlich. Feedback sachlich und konstruktiv.
-
-6. **Mergen:** Squash-Merge auf `main`, sobald CI grün und Approval vorhanden. Externe Pull Requests werden nicht direkt gemergt, sondern über den Release-Spiegel übernommen (siehe unten).
 
 ### Wie dein PR gemergt wird (Release-Spiegel)
 
@@ -965,7 +986,9 @@ src/
       organization.py    # Organization, Facility
       user.py            # User (erweitert AbstractUser)
       client.py          # Client
-      document_type.py   # DocumentType, FieldTemplate, DocumentTypeField
+      document_type.py   # DocumentType
+      field_template.py  # FieldTemplate
+      document_type_field.py  # DocumentTypeField
       event.py           # Event
       event_history.py   # EventHistory
       workitem.py        # WorkItem, DeletionRequest
@@ -976,8 +999,7 @@ src/
       audit.py           # AuditLog
       settings.py        # Settings
     views/               # Class-based Views, aufgeteilt nach Funktionsbereich
-      aktivitaetslog.py  # AktivitaetslogView (Startseite)
-      timeline.py        # TimelineView (Event-Timeline)
+      zeitstrom.py       # ZeitstromView (Startseite) und seine Teilansichten
       clients.py         # Client CRUD
       events.py          # Event CRUD + Löschworkflow
       workitems.py       # WorkItem CRUD

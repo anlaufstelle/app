@@ -6,6 +6,7 @@
 > Synchronization update 2026-09-21: the DCO section now documents the local pre-PR range check (#2239).
 > Synchronization update 2026-09-22: the scale profiles table now includes the `demo` profile with all six demo scenarios (#2279).
 > Synchronization update 2026-10-06: the native database setup now documents the loopback-only port binding (#2420).
+> Synchronization update 2026-10-06: the environment-variable example now names only variables the settings read, the loader table, project tree, seed profiles (`solo`) and pull-request/CI flow match the code (#2419, #2490).
 
 # Contributing to Anlaufstelle
 
@@ -147,18 +148,25 @@ This starts a PostgreSQL 18 container with the following credentials:
 
 The port is bound to `127.0.0.1:5432` only. To allow LAN access, configure that deliberately through your own Docker or firewall setup.
 
-Alternatively, a locally installed PostgreSQL instance can be used. The connection URL must then be set in the `DATABASE_URL` environment variable.
+Alternatively, a locally installed PostgreSQL instance can be used. The connection is then set through the variables `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` and `POSTGRES_PORT` (defaults: `anlaufstelle`, `anlaufstelle`, empty, `localhost`, `5432`; under the development settings an empty password falls back to `anlaufstelle`). The application does not read a connection URL (`DATABASE_URL`).
 
 **4. Configure environment variables**
 
-Create a `.env` file in the project directory (or export the variables):
+Create a `.env` file in the project directory (or export the variables). With the Docker container from step 3 the two keys are enough; you only need the database variables for a different instance:
 
 ```bash
-SECRET_KEY=dev-secret-key-bitte-aendern
-DATABASE_URL=postgres://anlaufstelle:anlaufstelle@localhost:5432/anlaufstelle
-DEBUG=true
-ENCRYPTION_KEY=<32-byte-base64-key>
+DJANGO_SECRET_KEY=dev-secret-key-bitte-aendern
+ENCRYPTION_KEY=<Fernet key, see below>
+
+# Only for your own PostgreSQL instance (example with different values):
+POSTGRES_HOST=db.example.org
+POSTGRES_PORT=5433
+POSTGRES_DB=my_db
+POSTGRES_USER=my_user
+POSTGRES_PASSWORD=my-password
 ```
+
+`DEBUG` is not an environment variable: the settings profile decides. `manage.py` starts with `anlaufstelle.settings.dev` (`DEBUG = True`); the production settings set `DEBUG = False`. Without `DJANGO_SECRET_KEY` the development settings use an insecure dev value, the production settings require it. Without `ENCRYPTION_KEY` the development settings run in plaintext mode with a loud warning (sensitive fields are stored unencrypted).
 
 Generate an `ENCRYPTION_KEY`:
 
@@ -178,6 +186,7 @@ make migrate
 make seed                              # Default: small
 python src/manage.py seed --scale medium   # more data including case management
 python src/manage.py seed --scale large    # load-testing volume
+python src/manage.py seed --scale solo     # one facility, 500 events over 1000 days
 python src/manage.py seed --flush          # flush existing data first
 ```
 
@@ -210,20 +219,30 @@ The standard catalogue offers `Contact`, `Needle Exchange`, `Referral`, and `Not
 
 #### What the loader-based seed does to an existing facility
 
-Since M2 the seed is no longer a plain "create if missing" but a re-sync against
+The seed is not a plain "create if missing" but a re-sync against
 `default.yaml`. What that means in operation:
 
 | Affected | Effect on the next seed run |
 |---|---|
-| `name`, `category`, `sensitivity`, `icon`, `color`, `sort_order`, `min_contact_stage` of a catalogue type | **reset** to the catalogue value (previously only set on creation) |
-| `sort_order` of groups **and** field assignments — including types without groups | reset to the catalogue position (previously a manually reordered, group-less field list survived) |
+| `name`, `sensitivity`, `min_contact_stage` of a catalogue type | **reset** to the catalogue value |
+| `icon`, `color`, `sort_order` of a catalogue type | **reset** to the catalogue value — but only if the package names the key; if absent, the facility's value stays |
+| `system_type` of a catalogue type | set to the package value; a type without a system type may receive one, a set system type can neither change nor be removed (conflict, see below) |
+| `report_key` of a catalogue type | applied only if the package names the key; if absent, the existing value is left untouched. Empty → set is allowed, set → different is a conflict. |
+| `entity_type` of a catalogue type | immutable: if the existing type differs, the run aborts (conflict, see below) |
+| `sort_order` of groups **and** field assignments — including types without groups | reset to the catalogue position; a field list reordered in the UI does not survive |
 | `default_value` of a catalogue field template | **reset** to the package value (empty throughout the catalogue) — a default maintained through the config UI does **not** survive the seed. Package format v1 cannot express "do not touch" for this field (unlike `conditions`). |
 | `min_value`, `max_value` of a catalogue numeric field template | reset to the optional package values. The migration only adds configuration columns; existing `data_json` values in events, clients and cases remain unchanged. Before tightening a range, run the read-only inventory `python src/manage.py inventory_number_ranges --facility <UUID-or-name>` with the admin DB role. |
 | `tally_enabled` of a catalogue type | An explicit `true`/`false` is reset to the package value. If the key is absent, a tally opt-in maintained in the admin UI remains on an existing type; a new type defaults to `false`. |
 | Fields a facility has **additionally** assigned to a catalogue type | left untouched (the loader only touches what the package declares) |
 | `retention_days`, `description`, `is_active` (type) and `is_active` (template) | not part of schema v1 — neither set nor reset |
 
-Two conflicts abort the **entire** seed run (fail-loud, all-or-nothing — nothing is
+The `category` key on a type is no longer applied: the field no longer exists since
+[ADR-040](docs/adr/040-documenttype-category-entfernt.md); the loader ignores the key and
+reports a warning in the load report. The authoritative code is `_apply_document_type` in
+[`src/core/packages/loader.py`](src/core/packages/loader.py); the package keys are described in
+[docs/packages.md](docs/packages.md).
+
+Three conflicts abort the **entire** seed run (fail-loud, all-or-nothing — nothing is
 applied, not even for the remaining types):
 
 * **A facility-owned field template on a catalogue slug.** If a facility created
@@ -231,33 +250,36 @@ applied, not even for the remaining types):
   from the package — both are immutable after creation. Resolution: move the
   facility's own template to a different slug (create anew + migrate data) or change
   the catalogue slug.
+* **A differing immutable value.** `entity_type`, a set `system_type` and a set `report_key`
+  of an existing type cannot be changed; if the package differs (or omits the `system_type`),
+  the loader reports a conflict.
 * **A name collision after a rename.** If "Kontakt" was renamed to "Erstkontakt"
   through the UI and a *new* type "Kontakt" was created afterwards (which gets the
   slug `kontakt-2`), the seed wants to rename the type with slug `kontakt` back to
-  "Kontakt" — violating `UniqueConstraint(facility, name, category)`. From then on
+  "Kontakt" — violating `UniqueConstraint(facility, name)`. From then on
   **every** further seed run fails until this is cleaned up manually. Resolution:
   rename the facility's own type or adjust the name in the catalogue.
 
 **Scale profiles overview:**
 
-| Data | `small` (default) | `medium` | `large` | `demo` |
-|---|---|---|---|---|
-| Facilities | 1 | 2 | 5 | 6 (scenario catalogue, Refs #2279) |
-| Packages per facility (Refs #2148) | Main facility: `default` | + Zweigstelle Nord: `beratungsstelle` | + Zweigstelle Süd: `awareness`, Außenstelle Ost: `jugendarbeit`, Außenstelle West: `frauenhaus` | `core.seed.scenarios.SCENARIOS`: Kontaktladen Wärmestube `default`, Beratungsstelle Falkenweg `beratungsstelle`, Beratungspraxis Lindenhof (solo) `beratungsstelle`, Awareness-Team Nachtfalter `awareness`, Jugendtreff Wilhelmshöhe `jugendarbeit`, Frauenhaus Amalie `frauenhaus` |
-| Users (total) | 7 (1 super_admin + 6 facility users) | 13 (1 super_admin + 2×6) | 31 (1 super_admin + 5×6) | 33 (1 super_admin + 5×6 team + 2 solo) |
-| Users / facility | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 | 6 (solo facility: 2 — case worker + backup) |
-| Clients / facility | 7 | 40 | 500 | 18 (solo: 9) |
-| Events / facility | 25 | 750 | 10,000 | 120 (solo: 60) |
-| Cases | 3 | 12 | 50 | 6 (solo: 4) |
-| Episodes | — | 20 | 80 | 8 (solo: 4) |
-| Impact goals | — | 15 | 60 | 6 (solo: 3) |
-| Milestones / goal | — | 3 | 4 | 3 (solo: 2) |
-| WorkItems | 5 | 25 | 100 | 12 (solo: 8) |
-| Quick Templates / facility | 6 | 6 | 6 | 6 |
-| DeletionRequests | — | 5 | 15 | 2 (solo: 1) |
-| RetentionProposals | 4 | 6 | 12 | 3 (solo: 2) |
-| Attachments (approx.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | ~5 (30 %) (solo: ~3) |
-| Time span | 80 days | 365 days | 3 years | 270 days |
+| Data | `small` (default) | `medium` | `large` | `solo` | `demo` |
+|---|---|---|---|---|---|
+| Facilities | 1 | 2 | 5 | 1 | 6 (scenario catalogue, Refs #2279) |
+| Packages per facility (Refs #2148) | Main facility: `default` | + Zweigstelle Nord: `beratungsstelle` | + Zweigstelle Süd: `awareness`, Außenstelle Ost: `jugendarbeit`, Außenstelle West: `frauenhaus` | Main facility: `default` | `core.seed.scenarios.SCENARIOS`: Kontaktladen Wärmestube `default`, Beratungsstelle Falkenweg `beratungsstelle`, Beratungspraxis Lindenhof (solo) `beratungsstelle`, Awareness-Team Nachtfalter `awareness`, Jugendtreff Wilhelmshöhe `jugendarbeit`, Frauenhaus Amalie `frauenhaus` |
+| Users (total) | 7 (1 super_admin + 6 facility users) | 13 (1 super_admin + 2×6) | 31 (1 super_admin + 5×6) | 7 (1 super_admin + 6 facility users) | 33 (1 super_admin + 5×6 team + 2 solo) |
+| Users / facility | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 | 6 | 6 (solo facility: 2 — case worker + backup) |
+| Clients / facility | 7 | 40 | 500 | 30 | 18 (solo: 9) |
+| Events / facility | 25 | 750 | 10,000 | 500 | 120 (solo: 60) |
+| Cases | 3 | 12 | 50 | 10 | 6 (solo: 4) |
+| Episodes | — | 20 | 80 | 15 | 8 (solo: 4) |
+| Impact goals | — | 15 | 60 | 10 | 6 (solo: 3) |
+| Milestones / goal | — | 3 | 4 | 3 | 3 (solo: 2) |
+| WorkItems | 5 | 25 | 100 | 20 | 12 (solo: 8) |
+| Quick Templates / facility | 6 | 6 | 6 | 6 | 6 |
+| DeletionRequests | — | 5 | 15 | 4 | 2 (solo: 1) |
+| RetentionProposals | 4 | 6 | 12 | 6 | 3 (solo: 2) |
+| Attachments (approx.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | share 25 % (counseling events) | ~5 (30 %) (solo: ~3) |
+| Time span | 80 days | 365 days | 3 years | 1000 days | 270 days |
 
 > **Note:** `small` does not include case management (no episodes, goals). Use `medium` when developing case management features.
 >
@@ -341,7 +363,7 @@ pre-commit run --all-files               # run all commit-stage hooks against th
 
 > **Activate the venv before EVERY push** (lesson from the v0.89.0 handoff): the `pre-push` hook invokes `pre-commit`. Without an activated venv **every** push aborts with `pre-commit not found. Did you forget to activate your virtualenv?`. On a **tag** push this is particularly treacherous — git then only reports `failed to push some refs`, the tag stays behind locally without a word, and it may not surface until several steps later at the tag-push gate (`release-verify-tags.sh`). So run `. .venv/bin/activate` (or a one-off `PATH="$PWD/.venv/bin:$PATH" git push …`) — **not** `--no-verify`, which bypasses the quick CI.
 
-CI on [`anlaufstelle/app`](https://github.com/anlaufstelle/app/actions) is the definitive source of truth; the pre-push hook only reduces the likelihood of red CI after a push.
+Where the GitHub Actions workflows run, their result is the definitive source of truth: contributors get them on their pull request in the public repository. In the internal development branch the workflows are deliberately disabled ([ADR-029](docs/adr/029-local-only-ci.md)); there `make ci` is the binding gate. The pre-push hook only reduces the likelihood of red CI after the push.
 
 ### Port Overview and Process Hygiene
 
@@ -686,39 +708,39 @@ As of 2026-05-20, test-driven development is mandatory for the unit/service laye
 
 **No "false green" — protect assertion strength** (Refs #1150): By default, a red test means the **root cause is in the code** and must be fixed there — not the test. **Weakening an existing assertion** (loosening it, removing it, or bending it to the actually broken behavior) is a **hard review stop**: permissible only if the *requirement* has changed (not the code), and then only with an explicit justification in the commit body. For **bugfixes**, write a **failing test first** that reproduces the bug *before* touching the code (skill `superpowers:systematic-debugging`). Background: 96 % coverage measures *executed*, not *asserted* lines — a weakened assertion stays green and only surfaces in the mutation run.
 
-Example (service layer, pseudonym hashing from Issue #844):
+Example (service layer, hash helper in `core/services/audit/hash.py`, simplified; the real helper `hmac_hash_value` additionally resolves the key through a fallback):
 
 ```python
-# Red — src/tests/test_pseudonym_hashing.py
-def test_client_pseudonym_hash_is_stable():
-    from django.conf import settings
+# Red — src/tests/test_hash_value_example.py
+def test_hash_value_is_stable(settings):
+    settings.AUDIT_HASH_KEY = "test-key"
 
-    settings.PSEUDONYM_HMAC_KEY = "test-key"
+    from core.services.audit.hash import hmac_hash_value
 
-    from core.services.audit_hash import hmac_pseudonym
-
-    assert hmac_pseudonym("anlauf-2026-0001") == hmac_pseudonym("anlauf-2026-0001")
-    assert hmac_pseudonym("anlauf-2026-0001") != hmac_pseudonym("anlauf-2026-0002")
+    assert hmac_hash_value("anlauf-2026-0001") == hmac_hash_value("anlauf-2026-0001")
+    assert hmac_hash_value("anlauf-2026-0001") != hmac_hash_value("anlauf-2026-0002")
 ```
 
 ```bash
-pytest src/tests/test_pseudonym_hashing.py -x
-# → ModuleNotFoundError / ImportError → expected Red.
+pytest src/tests/test_hash_value_example.py -x
+# → ImportError while the helper is missing → expected Red.
 ```
 
 ```python
-# Green — src/core/services/audit_hash.py
-import hmac, hashlib
+# Green — src/core/services/audit/hash.py (simplified)
+import hashlib
+import hmac
+
 from django.conf import settings
 
 
-def hmac_pseudonym(pseudonym: str) -> str:
-    key = settings.PSEUDONYM_HMAC_KEY.encode()
-    return hmac.new(key, pseudonym.encode(), hashlib.sha256).hexdigest()
+def hmac_hash_value(value: str) -> str:
+    key = settings.AUDIT_HASH_KEY.encode()
+    return hmac.new(key, value.encode(), hashlib.sha256).hexdigest()
 ```
 
 ```bash
-pytest src/tests/test_pseudonym_hashing.py -x
+pytest src/tests/test_hash_value_example.py -x
 # → 1 passed → Green.
 ```
 
@@ -735,7 +757,7 @@ pytest src/tests/test_pseudonym_hashing.py -x
 - Pure Markdown/documentation changes.
 - One-shot hygiene scripts without reuse.
 
-Cross-references: `CLAUDE.md § Tests & Verifikation` (dev-only) and skill `superpowers:test-driven-development`.
+Cross-references: `AGENTS.md § Tests & Verifikation` (dev-only) and skill `superpowers:test-driven-development`.
 
 ### Unit and Integration Tests
 
@@ -798,7 +820,7 @@ This pipeline must pass locally before every pull request.
 
 **JS gate (`make test-js`, Refs #1932):** runs `npm test` (= `vitest run`, non-watch, deterministic) against the offline/queue/watcher suite under [`tests/js/`](tests/js/) and is a fail-fast part of `make ci`/`make ci-locked`. If `node_modules/` (no prior `npm ci`) or `package-lock.json` is missing, the target fails with a clear error message instead of a cryptic `vitest: not found`.
 
-**JS advisory gate (`make audit-js`, Refs #1968):** runs `npm audit --audit-level=$(AUDIT_LEVEL)` against `package-lock.json` — the counterpart to `pip-audit` on the Python side, which JavaScript previously lacked entirely. It deliberately hangs in `make ci` and not only in the GitHub workflow: the workflow is dormant without Actions credit, `make ci` is the real gate.
+**JS advisory gate (`make audit-js`, Refs #1968):** runs `npm audit --audit-level=$(AUDIT_LEVEL)` against `package-lock.json` — the counterpart to `pip-audit` on the Python side, which JavaScript previously lacked entirely. It deliberately hangs in `make ci` and not only in the GitHub workflow: in the internal development branch the workflows are disabled ([ADR-029](docs/adr/029-local-only-ci.md)), so `make ci` is the binding gate there; on the public repository the test workflow additionally runs `npm audit` on the pull request.
 
 **This means the gate chain now needs network access.** `npm audit` does read the lockfile only (no `npm ci`, no `node_modules/` required), but it queries the advisory data from the npm registry. On a host without registry access `make ci` aborts in `audit-js` — right after `deps-check`, i.e. before a single test runs. Individual gates can still be run selectively in that case (`make lint`, `make typecheck`, `make test-parallel`).
 
@@ -856,13 +878,13 @@ The watchdog detects stalled or dead master processes and restarts `make mutatio
    - Screenshot or demo if UI changes are included
    - Link to the associated GitHub issue
 
+5. **Review:** At least one approval required. Feedback should be objective and constructive.
+
+6. **Takeover:** Once CI is green and approval is given, the maintainer takes over your commits. External pull requests are not merged directly into `main` but taken over via the release mirror (see below).
+
 ### Code of Conduct
 
 All contributors are bound by the [Contributor Covenant 2.1](CODE_OF_CONDUCT.md). Harassment incidents should be reported confidentially to `kontakt@anlaufstelle.app` (Refs #836).
-
-5. **Review:** At least one approval required. Feedback should be objective and constructive.
-
-6. **Merge:** Squash-merge to `main` once CI is green and approval is given. External pull requests are not merged directly but taken over via the release mirror (see below).
 
 ### How your PR gets merged (release mirror)
 
@@ -963,7 +985,9 @@ src/
       organization.py    # Organization, Facility
       user.py            # User (extends AbstractUser)
       client.py          # Client
-      document_type.py   # DocumentType, FieldTemplate, DocumentTypeField
+      document_type.py   # DocumentType
+      field_template.py  # FieldTemplate
+      document_type_field.py  # DocumentTypeField
       event.py           # Event
       event_history.py   # EventHistory
       workitem.py        # WorkItem, DeletionRequest
@@ -974,8 +998,7 @@ src/
       audit.py           # AuditLog
       settings.py        # Settings
     views/               # Class-based views, split by feature area
-      aktivitaetslog.py  # AktivitaetslogView (home page)
-      timeline.py        # TimelineView (event timeline)
+      zeitstrom.py       # ZeitstromView (home page) and its partial views
       clients.py         # Client CRUD
       events.py          # Event CRUD + deletion workflow
       workitems.py       # WorkItem CRUD
@@ -1015,5 +1038,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.5 -->
-<!-- translation-date: 2026-09-22 -->
-<!-- source-hash: a36a4ec7dcfeff4386c3c89b9c9a04e944ee688e -->
+<!-- translation-date: 2026-10-06 -->
+<!-- source-hash: 114af0f780c2469332521b06ec11619f5a706f11 -->
