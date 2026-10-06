@@ -290,6 +290,26 @@ class TestProcessingActivitiesContent:
         assert "12 Monate" not in retention
         assert "36 Monate" not in retention
 
+    def test_backup_retention_names_local_rotation_and_offsite_gap(self):
+        """Refs #2464: ``backup.sh`` rotates locally (7/28/90 days) and never deletes off-site."""
+        backup = get_activity("backup")
+        retention = str(backup["retention_period"])
+
+        for days in ("7 Tage", "28 Tage", "90 Tage"):
+            assert days in retention
+        assert "30 Tage" not in retention
+        assert "12 Wochen" not in retention
+        assert "12 Monate" not in retention
+        assert "Off-Site" in retention
+        assert "ausgesetzt" in retention
+
+    def test_backup_toms_do_not_promise_deletions_vanish_from_backups(self):
+        """Refs #2464: the 02:00 backup holds exactly what the 03:00 retention run deletes."""
+        toms = [str(tom) for tom in get_activity("backup")["toms"]]
+
+        assert not any("nicht im Backup ueberleben" in tom for tom in toms)
+        assert any("Rotation" in tom and "Aufbewahrungslauf" in tom for tom in toms)
+
     def test_data_subject_rights_match_implemented_paths(self):
         purpose = str(get_activity("dsgvo_requests")["purpose"])
 

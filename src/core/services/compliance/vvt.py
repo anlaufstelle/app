@@ -13,11 +13,10 @@ Quellen:
 * `docs/faq.md` — Abschnitte zu Aufbewahrungsfristen, DSGVO-Paket und
   Rollenmodell.
 
-Wenn fachliche Details unklar sind, ist die Formulierung bewusst
-konservativ. Einzelne Punkte (z.B. konkrete Zahlen zu Speicherfristen
-fuer Backups oder Logs) sind als gemeinhin uebliche Werte angesetzt;
-die Einrichtung muss bei Bedarf eine eigene, an ihrem Hosting-Setup
-ausgerichtete Fassung pflegen.
+Where domain details are unclear, the wording is deliberately
+conservative. The backup retention mirrors the rotation of the shipped
+``scripts/ops/backup.sh``; the facility must maintain its own version
+aligned with its hosting setup (off-site retention in particular).
 
 Die Liste umfasst mindestens die sechs Pflicht-Verarbeitungs-
 taetigkeiten aus dem Auftrag (Refs #876).
@@ -304,16 +303,25 @@ PROCESSING_ACTIVITIES = [
             _("Intern: Systemadministration (Restore-Berechtigung)"),
             _("Backup-Speicherort gemaess Hosting-Vertrag (Auftragsverarbeiter, AV-Vertrag erforderlich)"),
         ],
+        # Refs #2464: the rotation ages mirror the ``-mtime`` values in
+        # ``scripts/ops/backup.sh``; the off-site target is only ever added to.
         "retention_period": _(
-            "Taegliche Backups, rollierend ueblicherweise 30 Tage; "
-            "wochenweise Aufbewahrung bis 12 Wochen, monatlich bis "
-            "12 Monate. Konkrete Frist gemaess Hosting-Setup der "
-            "jeweiligen Installation."
+            "Lokale Sicherungsstände rotiert backup.sh: tägliche nach 7 Tagen, "
+            "wöchentliche nach 28 Tagen, monatliche nach 90 Tagen. Nach einem "
+            "fehlgeschlagenen Off-Site-Abgleich ist die lokale Rotation "
+            "ausgesetzt, bis ein Abgleich wieder gelingt. Off-Site-Kopien "
+            "löscht backup.sh nicht; ihre Frist legt die Einrichtung über "
+            "eine Aufbewahrungsregel am Speicherort fest."
         ),
         "toms": [
             _("Backup-Verschluesselung at-rest"),
             _("Getrennter Speicherort (offsite oder anderer Verfuegbarkeitsbereich)"),
-            _("Reihenfolge Backup -> Retention -> Snapshots, sodass Loeschvorgaenge nicht im Backup ueberleben"),
+            _(
+                "Sicherung vor dem Aufbewahrungslauf: Ein Sicherungsstand enthält "
+                "auch die Daten, die der folgende Lauf löscht; sie verschwinden "
+                "lokal erst mit der Rotation dieses Sicherungsstands, in "
+                "Off-Site-Kopien erst durch die Aufbewahrungsregel am Ziel"
+            ),
             _("Regelmaessige Restore-Tests"),
             _("Zugriff nur fuer Systemadministration (4-Augen empfohlen bei Restore)"),
         ],

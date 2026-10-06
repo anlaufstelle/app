@@ -614,3 +614,50 @@ class TestDocumentTypePeriodIsAdditional:
 
         event.refresh_from_db()
         assert event.is_deleted is True
+
+
+def _backup_rotation_days() -> list[int]:
+    """Distinct ``-mtime +N`` rotation ages of the shipped ``backup.sh`` (ascending)."""
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "ops" / "backup.sh"
+    return sorted({int(days) for days in re.findall(r"-mtime \+(\d+) -delete", script.read_text(encoding="utf-8"))})
+
+
+@pytest.mark.django_db
+class TestBackupDeletionBoundary:
+    """Refs #2464: templates promise only the local rotation ``backup.sh`` performs."""
+
+    def test_loeschkonzept_separates_local_rotation_from_offsite_copies(self, facility):
+        content, _ = render_document("loeschkonzept", facility)
+
+        offsite = _effect_cell(content, "Off-Site-Kopien der Sicherungsstände")
+        assert "`backup.sh` löscht am Off-Site-Ziel nichts" in offsite
+        assert "ausgesetzt" in _effect_cell(content, "Backup-Sicherungsstände")
+        assert "setzt\n`backup.sh` die lokale Rotation aus" in content
+        assert "ausgesetzte lokale Rotation" in content
+        assert "spätestens mit der planmäßigen Rotation des letzten sie enthaltenden Sicherungsstands" not in content
+
+    def test_toms_name_local_rotation_and_offsite_policy(self, facility):
+        content, _ = render_document("toms", facility)
+
+        assert "Lokale Rotation" in content
+        assert "Off-Site-Kopien löscht `backup.sh` nicht" in content
+
+    @pytest.mark.architecture
+    def test_documented_rotation_matches_backup_script(self, facility):
+        from core.services.compliance import get_activity
+
+        days = _backup_rotation_days()
+        assert days == [7, 28, 90], days
+        expected = "/".join(str(day) for day in days)
+
+        toms, _ = render_document("toms", facility)
+        loeschkonzept, _ = render_document("loeschkonzept", facility)
+        vvt_backup = str(get_activity("backup")["retention_period"])
+
+        assert f"{expected} Tage" in toms
+        local_effect = _effect_cell(loeschkonzept, "Backup-Sicherungsstände")
+        for day in days:
+            assert f"nach {day}" in local_effect
+            assert f"nach {day} Tagen" in vvt_backup

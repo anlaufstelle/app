@@ -45,6 +45,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Rollback-Beispiele nennen keinen erfundenen Image-Tag mehr** (#2308) — Admin-Guide und Ops-Runbook (DE/EN) zeigten beim Zurückwechseln auf eine frühere Version `ghcr.io/anlaufstelle/app:v1.2.3`, einen nie veröffentlichten Tag. Die Beispiele nutzen jetzt den Platzhalter `vX.Y.Z` und nennen, wie sich mit `docker manifest inspect` prüfen lässt, ob ein Tag abrufbar ist.
 - **Dokumentationstyp-Frist als zusätzliche Frist beschrieben** (#2462) — DSFA, Löschkonzept, ADR-021 und Admin-Handbuch (DE/EN) sagen jetzt, dass die Typ-Frist die Kontaktstufen-Frist nicht ersetzt: Es gilt die zuerst ablaufende, eine längere Typ-Frist verlängert nichts.
+- **Löschkonzept, TOM und Verarbeitungsverzeichnis trennen lokale Backup-Rotation und Off-Site-Kopien** (#2464) — `backup.sh` rotiert nur lokal (7/28/90 Tage), setzt die Rotation nach einem fehlgeschlagenen Off-Site-Abgleich aus und löscht am Off-Site-Ziel nichts; die Vorlagen verlangen dafür eine eigene Aufbewahrungsregel am Ziel, und die VVT-Ansicht nennt dieselben Fristen statt 30 Tage/12 Wochen/12 Monate.
 
 ## [0.99.5] - 2026-10-01
 
