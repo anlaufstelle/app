@@ -675,7 +675,6 @@ deploy-demo:
 # Demo-Daten (idempotent). SEED_ARGS, z.B. SEED_ARGS="--flush --scale=medium".
 demo-seed:
 	ssh $(DEMO_HOST) 'cd /opt/anlaufstelle && \
-	  set -a && . ./.env.demo && set +a && \
 	  docker compose -f docker-compose.demo.yml --env-file .env.demo run --rm -T \
 	    maintenance seed $(SEED_ARGS) </dev/null'
 
