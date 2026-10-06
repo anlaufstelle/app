@@ -9,18 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Testmatrix-Links springen zur richtigen GitHub-Überschrift** (#2417) — Der Index verwendet GitHub-konforme Anker mit erhaltenen Umlauten, entfernten Satzzeichen und eindeutigen Suffixen für doppelte Überschriften.
-
 - **Testmatrix-Prüfung im öffentlichen Quellbaum** (#2416) — Der Parser erhält leere Metadatenzellen; der Public-Modus prüft Matrix und Anhang C auch ohne das ausgeschlossene Indexdokument.
+- **`make db` veröffentlicht PostgreSQL nur noch auf Loopback** (#2420) — Das native Entwicklungsrezept bindet Port 5432 an `127.0.0.1`; LAN-Zugriff bleibt eine bewusste Betreiberentscheidung.
+- **Locust-Login und Statistikbegründung an den aktuellen Seed angepasst** (#2421) — Das Lasttestprofil nutzt vorhandene Fachkonten, erkennt fehlgeschlagene Anmeldungen und Login-Weiterleitungen, ordnet Exporte der Einrichtungsleitung zu und verlinkt das Statistik-MV-Issue korrekt.
+- **Demo-Footer und Container-Version bleiben beim Release-Deploy synchron** (#2408) — `deploy-demo.sh` übernimmt keinen alten `SOURCE_CODE_VERSION`-Wert mehr aus `.env.demo` und bricht ab, wenn der laufende Web-Container vom Release abweicht.
 
 ### Erforderliche Betreiber-Aktionen
 
 - Keine.
-
-### Fixed
-
-- **`make db` veröffentlicht PostgreSQL nur noch auf Loopback** (#2420) — Das native Entwicklungsrezept bindet Port 5432 an `127.0.0.1`; LAN-Zugriff bleibt eine bewusste Betreiberentscheidung.
-- **Locust-Login und Statistikbegründung an den aktuellen Seed angepasst** (#2421) — Das Lasttestprofil nutzt vorhandene Fachkonten, erkennt fehlgeschlagene Anmeldungen und Login-Weiterleitungen, ordnet Exporte der Einrichtungsleitung zu und verlinkt das Statistik-MV-Issue korrekt.
-- **Demo-Footer und Container-Version bleiben beim Release-Deploy synchron** (#2408) — `deploy-demo.sh` übernimmt keinen alten `SOURCE_CODE_VERSION`-Wert mehr aus `.env.demo` und bricht ab, wenn der laufende Web-Container vom Release abweicht.
 
 ### Docs
 
