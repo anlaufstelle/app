@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Statistik-Unterdrückung von Backup-Aufbewahrung getrennt** (#2429) — DE und EN erklären k als Veröffentlichungsschwelle und unterscheiden Felddefinition, verwertbare Dauerwerte und Unterdrückung anhand eines Zwei-Kontakte-Beispiels.
+
 - **Sicherheitszusagen im Fachkonzept präzisiert** (#2467) — DE und EN beschreiben den Klartext-Uploadpuffer, Limits je View und Login sowie PBKDF2-SHA256 gemäß Implementierung.
 
 - **Ist-Stand und Zielbilder im Fachkonzept getrennt** (#2488) — Betroffenenrechte sind als interne Funktionen beschrieben, Klientel-Self-Service ist verworfen und externe API, optionale Module sowie weitere Evaluierungsziele sind ausdrücklich Zielbilder.

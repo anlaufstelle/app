@@ -1230,6 +1230,14 @@ Betroffenenrechte werden durch berechtigte Mitarbeitende bearbeitet. Ein Kliente
 
 Eine DSFA-Vorlage ist keine durchgeführte Datenschutz-Folgenabschätzung. Die Einrichtung prüft und vervollständigt die Vorlagen und ihre organisatorischen Abläufe für den konkreten Einsatz.
 
+### Statistik-Unterdrückung und Backup-Aufbewahrung
+
+Die konfigurierbare k-Anonymitäts-Schwelle ist die Mindestgruppengröße für statistische Veröffentlichung (Vorgabe: `k=5`). Sie steuert die Unterdrückung kleiner Gruppen, nicht die Zahl aufbewahrter Backups. Backup-Rotation verwendet eigene Zeitfristen; siehe [Admin-Handbuch § 3 — Backup und Wiederherstellung](admin-guide.md#3-backup-und-wiederherstellung).
+
+Im Bericht „Beratungsstunden“ sind Felddefinition, Datenvollständigkeit und Unterdrückung zu unterscheiden: Für Minutenbeiträge ist ein passendes Dauerfeld nötig; auch bei vorhandener Definition können gespeicherte Werte fehlen oder unbrauchbar sein. Das Vorhandensein eines Minutenfeldes garantiert deshalb keinen veröffentlichten Minutenwert. Minuten einer Zeile werden unterdrückt, wenn ihre Ereigniszahl unterdrückt ist oder weniger als k Ereignisse verwertbare Dauerwerte beitragen. Auch größere Ereigniszellen können durch Sekundärunterdrückung entfallen, damit kleine Gruppen nicht aus Summen zurückgerechnet werden können. Sobald ein Zeilen-Minutenwert nicht veröffentlicht wird, entfällt auch die Minuten-Gesamtsumme.
+
+**Beispiel:** Zwei Kontakte mit je 30 Minuten und vollständig definierten Dauerfeldern ergeben intern 60 Minuten. Bei `k=5` werden die Ereigniszahl und die Minutenwerte in der Veröffentlichung unterdrückt; die Minuten-Gesamtsumme wird ebenfalls nicht veröffentlicht.
+
 ---
 
 ## 20. Barrierefreiheit
