@@ -38,4 +38,4 @@ Django bietet zwei View-Stile (FBV/CBV) und keine vorgegebene Stelle für Busine
 
 ## Nachtrag 2026-10-06: Service-Pakete und Rollen-Mixins (Refs #2500)
 
-Die Services sind heute nach Fachgebieten in Unterpakete gegliedert, unter anderem `src/core/services/client/`, `case/` und `audit/`; eine Datei je Feature ist keine Bestandsregel mehr. Das Einrichtungsadmin-Gate heißt `FacilityAdminRequiredMixin` (`src/core/views/mixins.py`). Der Architekturabschnitt der internen Arbeitskonvention steht in `AGENTS.md`, „Projekt & Architektur“ (dev-only), nicht in `CLAUDE.md`. Der öffentliche Wegweiser ist [docs/architecture.md](../architecture.md).
+Die Services sind heute nach Fachgebieten in Unterpakete gegliedert, unter anderem `src/core/services/client/`, `case/` und `audit/`; eine Datei je Feature ist keine Bestandsregel mehr. Das Einrichtungsadmin-Gate heißt `FacilityAdminRequiredMixin` (`src/core/views/mixins.py`). Der Architekturabschnitt der internen Arbeitskonvention steht heute in `AGENTS.md`, „Projekt & Architektur“ (dev-only); der Verweis in der Liste oben ist entsprechend zu lesen. Der öffentliche Wegweiser ist [docs/architecture.md](../architecture.md).
