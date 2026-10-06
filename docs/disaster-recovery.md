@@ -2,7 +2,7 @@
 
 > **Abgrenzung zum Restore-Drill:** Der quartalsweise [Restore-Drill](ops-runbook.md#66-backup-restore-drill-refs-720-739) beweist den *Happy Path* — „lässt sich das neueste Backup in eine Wegwerf-DB **auf demselben, laufenden Host** zurückspielen?". Dieses Dokument deckt den **Totalverlust** ab: Der Prod-Host ist weg (Hardware-Defekt, Ransomware, Provider-Ausfall, versehentliches `docker volume rm` ohne Tarball). Es beschreibt das Beschaffen eines Off-Site-Backups, die Wiederbeschaffung der Schlüssel, den Aufbau auf einem **fabrikfrischen Server** und konkrete RTO/RPO-Ziele.
 >
-> **Code ist die Wahrheitsquelle.** Jede Operation hier ist gegen die ausgelieferten Dateien verifiziert: [`scripts/ops/backup.sh`](../scripts/ops/backup.sh), [`scripts/ops/restore.sh`](../scripts/ops/restore.sh), [`scripts/ops/restore-drill.sh`](../scripts/ops/restore-drill.sh), [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh), [`Dockerfile`](../Dockerfile) und [`docker-compose.prod.yml`](../docker-compose.prod.yml). Stand: v0.14.0-Roadmap (Refs #1071 Block D).
+> **Code ist die Wahrheitsquelle.** Jede Operation hier ist gegen die ausgelieferten Dateien verifiziert: [`scripts/ops/backup.sh`](../scripts/ops/backup.sh), [`scripts/ops/restore.sh`](../scripts/ops/restore.sh), [`scripts/ops/restore-drill.sh`](../scripts/ops/restore-drill.sh), [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh), [`Dockerfile`](../Dockerfile) und [`docker-compose.prod.yml`](../docker-compose.prod.yml).
 
 ---
 
@@ -15,7 +15,7 @@
 5. [Off-Site-Backup beschaffen](#5-off-site-backup-beschaffen)
 6. [Wiederherstellung auf einem fabrikfrischen Host](#6-wiederherstellung-auf-einem-fabrikfrischen-host)
 7. [Smoke-Verifikation nach Restore](#7-smoke-verifikation-nach-restore)
-8. [Offene Punkte (noch nicht verdrahtet)](#8-offene-punkte-noch-nicht-verdrahtet)
+8. [Offene Punkte (nicht im Code verdrahtet)](#8-offene-punkte-nicht-im-code-verdrahtet)
 
 ---
 
@@ -24,7 +24,7 @@
 | Kennzahl | Zielwert | Begründung / Verankerung im Code |
 |---|---|---|
 | **RPO** (max. tolerierter Datenverlust) | **≤ 24 h** | Der einzurichtende Host-Cron aus [ops-runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs) läuft täglich um **02:00**. Zwischen zwei Läufen entstandene Daten sind bei Totalverlust verloren. Wer engere Ziele braucht, erhöht die Backup-Frequenz **und** die Off-Site-Sync-Frequenz. |
-| **RPO Off-Site** (Datenverlust bei Host-Totalverlust) | **≤ 24 h**, sofern Off-Site-Sync aktiv | `scripts/ops/backup.sh` synct die Retention-Stufen **vor der Rotation** in `BACKUP_OFFSITE_TARGET`. Ohne konfiguriertes Off-Site-Ziel ist der RPO bei Host-Totalverlust **unendlich** (lokale Backups gehen mit dem Host verloren) — siehe [§8](#8-offene-punkte-noch-nicht-verdrahtet). |
+| **RPO Off-Site** (Datenverlust bei Host-Totalverlust) | **≤ 24 h**, sofern Off-Site-Sync aktiv | `scripts/ops/backup.sh` synct die Retention-Stufen **vor der Rotation** in `BACKUP_OFFSITE_TARGET`. Ohne konfiguriertes Off-Site-Ziel ist der RPO bei Host-Totalverlust **unendlich** (lokale Backups gehen mit dem Host verloren) — siehe [§8](#8-offene-punkte-nicht-im-code-verdrahtet). |
 | **RTO** (Zeit bis Service wieder online auf frischem Host) | **Richtwert 2–4 h** | Setzt sich zusammen aus: Betriebssystem härten und Docker installieren (installationsabhängig) · Off-Site-Backup herunterladen (datenmengenabhängig) · DB- + Medien-Restore (~10–30 min bei mittlerer Datenmenge) · Smoke-Verifikation (~15 min). **Kein vertraglich zugesichertes SLA** — Richtwert für einen geübten Operator mit verfügbaren Schlüsseln. |
 | **RTO ohne Schlüssel** | **∞ (nicht wiederherstellbar)** | Ohne `ENCRYPTION_KEY`/`ENCRYPTION_KEYS` sind die verschlüsselten Feld-/Datei-Inhalte **dauerhaft unlesbar**; ohne `BACKUP_ENCRYPTION_KEY` ist das Backup selbst nicht entschlüsselbar. Die Schlüssel-Eskrow-Strategie ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) ist damit der kritischste RTO-Faktor. |
 
@@ -118,7 +118,7 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 
 ### 4.4 Wo die Schlüssel liegen sollten — Eskrow
 
-> **Stand: noch nicht verdrahtet — siehe [§8](#8-offene-punkte-noch-nicht-verdrahtet).** Es gibt **kein** automatisches Key-Escrow im Code. Organisatorisch **müssen** mindestens `BACKUP_ENCRYPTION_KEY`, die vollständige `ENCRYPTION_KEYS`-Historie, `DJANGO_AUDIT_HASH_KEY`, `DJANGO_SECRET_KEY` und der **aktuelle** Satz `POSTGRES_PASSWORD`/`POSTGRES_ADMIN_PASSWORD`/`POSTGRES_BOOTSTRAP_PASSWORD` an einem vom Prod-Host **physisch/logisch getrennten** Ort liegen (Passwort-Manager des Trägers, versiegelter Umschlag im Safe, o. Ä.). `DJANGO_SECRET_KEY` ist im Gegensatz zu den Verschlüsselungs- und Audit-Schlüsseln ersetzbar, beendet dann aber bestehende Sessions und macht alte Signaturen ungültig. Ein Schlüssel, der nur in der `.env` desselben Hosts liegt, der verloren geht, schützt nicht vor Totalverlust — er **garantiert** den Datenverlust. Die DB-Passwörter sind auf einem fabrikfrischen Cluster zwar technisch neu wählbar; für Diagnose, Rotation und Recovery am vorhandenen Cluster muss der Eskrow aber dem aktuellen Login-Stand entsprechen.
+> **Betreiberaufgabe, nicht im Code verdrahtet — siehe [§8](#8-offene-punkte-nicht-im-code-verdrahtet).** Es gibt **kein** automatisches Key-Escrow im Code. Organisatorisch **müssen** mindestens `BACKUP_ENCRYPTION_KEY`, die vollständige `ENCRYPTION_KEYS`-Historie, `DJANGO_AUDIT_HASH_KEY`, `DJANGO_SECRET_KEY` und der **aktuelle** Satz `POSTGRES_PASSWORD`/`POSTGRES_ADMIN_PASSWORD`/`POSTGRES_BOOTSTRAP_PASSWORD` an einem vom Prod-Host **physisch/logisch getrennten** Ort liegen (Passwort-Manager des Trägers, versiegelter Umschlag im Safe, o. Ä.). `DJANGO_SECRET_KEY` ist im Gegensatz zu den Verschlüsselungs- und Audit-Schlüsseln ersetzbar, beendet dann aber bestehende Sessions und macht alte Signaturen ungültig. Ein Schlüssel, der nur in der `.env` desselben Hosts liegt, der verloren geht, schützt nicht vor Totalverlust — er **garantiert** den Datenverlust. Die DB-Passwörter sind auf einem fabrikfrischen Cluster zwar technisch neu wählbar; für Diagnose, Rotation und Recovery am vorhandenen Cluster muss der Eskrow aber dem aktuellen Login-Stand entsprechen.
 >
 > Zum getrennt gesicherten Recovery-Material gehört außerdem der **Zugang zum Off-Site-Ziel**: bei scp die SSH-Identität des ausführenden Kontos samt `known_hosts`, bei rclone die passende `rclone.conf`, bei S3 die benötigten AWS-Credentials. Die Rückholung muss ohne den verlorenen Prod-Host möglich sein.
 >
@@ -128,7 +128,7 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 
 ## 5. Off-Site-Backup beschaffen
 
-Off-Site-Sync ist mit `scripts/ops/backup.sh` implementiert und **nur aktiv, wenn `BACKUP_OFFSITE_TARGET` gesetzt war** (siehe [ops-runbook §6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738) und [§8](#8-offene-punkte-noch-nicht-verdrahtet)). Das Zugangsmaterial muss dem Konto zur Verfügung stehen, unter dem `backup.sh` tatsächlich läuft; bei scp umfasst das insbesondere SSH-Schlüssel bzw. Agent und `known_hosts`.
+Off-Site-Sync ist mit `scripts/ops/backup.sh` implementiert und **nur aktiv, wenn `BACKUP_OFFSITE_TARGET` gesetzt war** (siehe [ops-runbook §6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738) und [§8](#8-offene-punkte-nicht-im-code-verdrahtet)). Das Zugangsmaterial muss dem Konto zur Verfügung stehen, unter dem `backup.sh` tatsächlich läuft; bei scp umfasst das insbesondere SSH-Schlüssel bzw. Agent und `known_hosts`.
 
 Vor dem Backup gilt eine definierte **Schreibruhe**: keine fachlichen Schreibzugriffe, Uploads, Importe, Retention oder sonstigen Hintergrundjobs, bis DB-Dump, Medienarchiv und HWM erzeugt sind. Ein gemeinsamer Dateizeitstempel beweist keine inhaltliche Konsistenz dieser nacheinander erstellten Artefakte.
 
@@ -160,11 +160,9 @@ ls -1 "$RESTORE_SET_DIR" | wc -l   # erwartet: 7
 ls -1 "$RESTORE_SET_DIR"
 ```
 
-Weicht die Zahl ab, fehlt mindestens eine Datei oder der Übertrag ist unvollständig — vor dem Restore-Lauf ergänzen, nicht mit `--allow-missing-manifest` überspielen. Zusätzlich `backup.sh --verify` gegen genau diesen Zeitstempel als Pflichtschritt **vor** dem eigentlichen Restore fahren — die leichtere Prüfung aus der Tabelle oben (Satzauswahl über das signierte Manifest, Probe-Restore, Live-DB-Vergleich) deckt Inhaltsfehler ab, die eine reine Dateizählung nicht findet.
+Weicht die Zahl ab, fehlt mindestens eine Datei oder der Übertrag ist unvollständig — vor dem Restore-Lauf ergänzen, nicht überspielen: Ohne Manifest bricht `restore.sh` ab. Zusätzlich `backup.sh --verify` gegen genau diesen Zeitstempel als Pflichtschritt **vor** dem eigentlichen Restore fahren — die leichtere Prüfung aus der Tabelle oben (Satzauswahl über das signierte Manifest, Probe-Restore, Live-DB-Vergleich) deckt Inhaltsfehler ab, die eine reine Dateizählung nicht findet.
 
-**Immer den vollständigen Sieben-Dateien-Satz holen.** Ohne einen benötigten Sidecar verweigern Restore bzw. Drill die Prüfung. Backups aus Versionen vor 0.99.1 liegen noch ohne Manifest vor. Seit 0.99.2 ist das Manifest für `restore.sh` **Pflicht**; ohne Manifest bricht der Restore ab und nennt den Notfall-Schalter `--allow-missing-manifest`, der einen solchen Altsatz ohne Satzbindung und ohne Zeilenzahl-Abgleich einspielt (Warnung vor der Bestätigung, Hinweiszeile am Ende, Medienarchiv nur mit passendem Zeitstempel). `backup.sh --verify` und `restore-drill.sh --prod` verlangen das Manifest weiterhin zwingend und brechen in Schritt 0 mit `Zeilenzahl-Manifest fehlt` ab. Ein solches Altbackup kann deshalb nicht den heutigen Vollständigkeitsnachweis liefern und bleibt im Drill **OFFEN**.
-
-**Restore eines ankerlosen Altsatzes auf einem Host mit gesetztem `DJANGO_AUDIT_HWM_PATH`:** Den Wert für genau diesen Restore-Lauf in der `.env` vorübergehend leeren (`DJANGO_AUDIT_HWM_PATH=`), dann `restore.sh --allow-missing-manifest …` ausführen und den ursprünglichen Ankerpfad wieder einsetzen, bevor der Stack neu startet. Andernfalls erwartet `restore.sh` auf diesem Host eine zum Satz gehörende Ankerdatei. Dieser Notfallweg stellt keinen Audit-Anker wieder her; der Compliance-Nachweis für diesen Lauf entfällt und darf weder über Schritt 4b noch über `mark_restore_verified` als erbracht dokumentiert werden.
+**Immer den vollständigen Sieben-Dateien-Satz holen.** Ohne einen benötigten Sidecar verweigern Restore bzw. Drill die Prüfung. Das signierte Manifest ist Pflicht: Ohne Manifest bricht `restore.sh` vor jeder Änderung ab („the mandatory manifest of the backup set is missing“), und es gibt keine Option, diese Prüfung zu umgehen. `backup.sh --verify` und `restore-drill.sh --prod` verlangen das Manifest ebenso und brechen in Schritt 0 mit `Zeilenzahl-Manifest fehlt` ab. Fehlt es im Off-Site-Bestand, den vollständigen Satz eines anderen Zeitstempels wählen.
 
 Nach jedem Backup den **Off-Site-Bestand selbst** abgleichen: alle sieben Dateien des gewählten Zeitstempels müssen am erwarteten Zielpfad vorhanden sein. Der Exit-Code allein genügt nicht; insbesondere endet der erste Off-Site-Fehler bewusst noch mit Exit-Code 0. Regelmäßig zusätzlich prüfen, dass Ziel-Retention und Object Lock die vereinbarte Aufbewahrung tatsächlich abbilden.
 
@@ -198,19 +196,23 @@ cp .env.example .env && chmod 600 .env
 ### Schritt 3 — Frisches DB-Cluster mit korrekten Rollen hochfahren
 
 ```bash
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # Zunächst nur die DB starten. Das Init-Script 01-app-role.sh legt im frischen Cluster
 # die App-Rolle (NOSUPERUSER NOBYPASSRLS) + Admin-Rolle (NOSUPERUSER BYPASSRLS)
 # an — KRITISCH: Rollen müssen existieren, BEVOR der Dump Ownership/Grants
 # wiederherstellt (ADR-020, ADR-005).
-docker compose -f docker-compose.prod.yml up -d db
-docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # erwartet: 0
+docker compose "${compose_files[@]}" up -d db
+docker compose "${compose_files[@]}" logs db | grep -icE 'error|fatal'   # erwartet: 0
 ```
 
 > Das Init-Script läuft **nur bei einem leeren Datenverzeichnis** (`/docker-entrypoint-initdb.d`). Auf einem fabrikfrischen Host ist das Volume leer — die Rollen werden also angelegt. (Wer auf ein nicht-leeres Volume restored, muss die Rollen von Hand anlegen.)
 
 ### Schritt 4 — DB-Backup entschlüsseln + wiederherstellen
 
-`restore.sh` bereitet das Ziel selbst vor — aber **erst nach der Bestätigung**. Nicht-interaktiv wird sie mit `--yes` (gleichwertig: `RESTORE_CONFIRM=ja`) gegeben; ohne sie bricht das Skript ab, bevor irgendein Bestand verändert wird. Der Dump wird **nie direkt in die Ziel-Datenbank** eingespielt: Das Skript legt eine frische Wiederherstellungs-Datenbank `<POSTGRES_DB>_restore_<PID>` an, spielt den Dump dort ein, gleicht die sechs Manifesttabellen dort gegen das signierte Manifest ab und schaltet erst danach um. Dieser Weg funktioniert deshalb auch gegen eine **bereits migrierte oder befüllte** Zielinstallation, in der ein Direktimport an den vorhandenen Objekten scheitern würde. Das Stoppen der schreibenden Dienste, der Start des für den Medientransport benötigten `web`-Containers und der Restore sind als eine Fehlerkette verbunden; scheitert ein Glied, wird nicht fortgesetzt:
+`restore.sh` bereitet das Ziel selbst vor — aber **erst nach der Bestätigung**. Nicht-interaktiv wird sie mit `--yes` (gleichwertig: `RESTORE_CONFIRM=ja`) gegeben; ohne sie bricht das Skript ab, bevor irgendein Bestand verändert wird. Der Dump wird **nie direkt in die Ziel-Datenbank** eingespielt: Das Skript legt eine frische Wiederherstellungs-Datenbank `<POSTGRES_DB>_restore_<PID>` an, spielt den Dump dort ein, gleicht die sechs Manifesttabellen dort gegen das signierte Manifest ab und schaltet erst danach um. Dieser Weg funktioniert deshalb auch gegen eine **bereits migrierte oder befüllte** Zielinstallation, in der ein Direktimport an den vorhandenen Objekten scheitern würde. Das Stoppen der schreibenden Dienste, der Start des für den Medientransport benötigten `web`-Containers und der Restore sind als eine Fehlerkette verbunden; scheitert ein Glied, wird nicht fortgesetzt. `restore.sh` nutzt dieselbe vollständige Compose-Dateiliste (Basisdatei, dann `compose.legal.yml` und `compose.override.yml`, soweit neben der Basisdatei vorhanden):
 
 ```bash
 cd /opt/anlaufstelle
@@ -226,7 +228,7 @@ set -o pipefail
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
-docker compose -f docker-compose.prod.yml stop web cron && \
+docker compose "${compose_files[@]}" stop web cron && \
 docker compose "${compose_files[@]}" up -d web && \
 ./scripts/ops/restore.sh --yes "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" \
                                "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" \
@@ -245,33 +247,44 @@ Die Medienprüfungen haben getrennte Aussagen:
 2. **Archivtreue:** Größe und Inhalt der verschlüsselten `.enc`-Dateien werden gegen das zuvor per HMAC authentifizierte Archiv geprüft. Weil der aktivierte Bestand durch atomaren `mv` unmittelbar aus genau diesem Staging stammt, darf zwischen Probe und Aktivierung kein neuer Upload oder Job laufen.
 3. **Klartextmetadaten:** Originalname und `core_attachment.file_size` gehören zum entschlüsselten Download, nicht zur verschlüsselten `.enc`-Datei auf Disk. Dieser Abgleich erfolgt erst in der Downloadprobe aus §7.
 
-Für die Archivtreue das bereits authentifizierte Medienarchiv erneut HMAC-prüfen und probeentpacken, dann SHA-256 plus Größe jedes weiterhin verschlüsselten Anhangs mit dem aktivierten `MEDIA_ROOT` vergleichen. `web` und `cron` bleiben dabei durchgehend gestoppt (siehe „`web` und `cron` bleiben nach dem Lauf gestoppt" oben) — der Block startet `web` **nicht** neu, sondern nutzt denselben Einweg-`maintenance`-Container, den `restore.sh` selbst nach der Schreibruhe für Medien-Kommandos verwendet (`media_exec()` mit `MEDIA_EXEC_CTX=maintenance`, [`scripts/ops/restore.sh:206-213`](../scripts/ops/restore.sh)):
+Für die Archivtreue das bereits authentifizierte Medienarchiv erneut HMAC-prüfen und probeentpacken, dann SHA-256 plus Größe jedes weiterhin verschlüsselten Anhangs mit dem aktivierten `MEDIA_ROOT` vergleichen. `web` und `cron` bleiben dabei durchgehend gestoppt (siehe „`web` und `cron` bleiben nach dem Lauf gestoppt" oben) — der Block startet `web` **nicht** neu, sondern nutzt denselben Einweg-`maintenance`-Container, den `restore.sh` selbst nach der Schreibruhe für Medien-Kommandos verwendet (Funktion `media_exec` in [`scripts/ops/restore.sh`](../scripts/ops/restore.sh) mit `MEDIA_EXEC_CTX=maintenance`). Jeder `docker compose run --rm` startet einen neuen Container mit leerem `/tmp`; Archiv, Entpacken und Vergleich laufen deshalb in **einem** Container, das Archiv kommt per stdin. Das Arbeitsverzeichnis liegt auf dem persistenten Volume `/data` außerhalb von `MEDIA_ROOT` (nicht im RAM-gestützten `/tmp`) und wird am Ende aufgeräumt. Der Block läuft in derselben Shell wie der Restore-Block oben (er nutzt `RESTORE_TIMESTAMP`, `RESTORE_SET_DIR` und die geladene `.env`):
 
 ```bash
 MEDIA_ARCHIVE="$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc"
-MEDIA_VERIFY_DIR="/tmp/media-verify-$RESTORE_TIMESTAMP"
 set -o pipefail
 source ./scripts/ops/_backup_common.sh
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 backup_verify_hmac "$MEDIA_ARCHIVE" && \
-docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance -c 'rm -rf "$1" && mkdir -p "$1"' sh "$MEDIA_VERIFY_DIR" && \
 openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_ARCHIVE" \
   | gunzip \
-  | docker compose -f docker-compose.prod.yml run --rm --entrypoint tar -T maintenance -C "$MEDIA_VERIFY_DIR" --strip-components=1 -xf - && \
-docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance -c '
-  cd "$1" && find . -type f -exec sha256sum {} + | sort -k2 > /tmp/media-archive.sha256 &&
-  cd "$2" && find . -type f -exec sha256sum {} + | sort -k2 > /tmp/media-live.sha256 &&
-  cmp /tmp/media-archive.sha256 /tmp/media-live.sha256
-' sh "$MEDIA_VERIFY_DIR" "$MEDIA_ROOT" && \
-docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance -c 'rm -rf "$1"' sh "$MEDIA_VERIFY_DIR"
+  | docker compose "${compose_files[@]}" run --rm --entrypoint sh -T maintenance -c '
+      set -eu
+      verify_dir="$1"; media_root="$2"
+      trap '\''rm -rf "$verify_dir"'\'' EXIT
+      rm -rf "$verify_dir" && mkdir -p "$verify_dir"
+      tar -C "$verify_dir" --strip-components=1 -xf -
+      (cd "$verify_dir" && find . -type f -exec sha256sum {} + | sort -k2) > /tmp/media-archive.sha256
+      (cd "$media_root" && find . -type f -exec sha256sum {} + | sort -k2) > /tmp/media-live.sha256
+      cmp /tmp/media-archive.sha256 /tmp/media-live.sha256
+    ' sh "/data/media-verify-$RESTORE_TIMESTAMP" "${MEDIA_ROOT_CONTAINER:-/data/media}"
 ```
+
+Exit 0 bedeutet: Archiv und aktivierter `MEDIA_ROOT` enthalten dieselben Dateien mit denselben SHA-256-Summen. Eine Abweichung (fehlende, zusätzliche oder veränderte `.enc`-Datei) beendet den Block mit `cmp: … differ` und Exit != 0.
 
 Der Block darf zwischen Probe und der bereits erfolgten Aktivierung (siehe oben) keinen neuen Upload oder Job zulassen (siehe „Archivtreue" oben); weil der Vergleich ausschließlich im Einweg-`maintenance`-Container läuft, bleibt `web` dabei ohne Widerspruch zum vorherigen Absatz gestoppt.
 
 Unmittelbar nach dem Restore und **vor** Audit-Kettenprüfung, Migrationen, Jobs oder Browserzugriff die sechs Manifesttabellen mit einer RLS-umgehenden Rolle zählen. Derselbe Befehl wird auf der Quelle während der Schreibruhe ausgeführt; seine Ausgabe muss mit Ziel und authentifiziertem Manifest übereinstimmen:
 
 ```bash
+  # Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+  compose_files=(-f docker-compose.prod.yml)
+  [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+  [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 for table in core_facility core_client core_event core_workitem core_auditlog core_attachment; do
-  docker compose -f docker-compose.prod.yml exec -T db \
+  docker compose "${compose_files[@]}" exec -T db \
     psql -U "${POSTGRES_SUPERUSER:-postgres}" -d "$POSTGRES_DB" -t -A \
     -c "SELECT '${table}=' || COUNT(*) FROM ${table};"
 done
@@ -285,11 +298,15 @@ Enthält der gewählte Satz keine `audit_hwm-<Zeitstempel>.json`, ist dieser Sch
 
 ```bash
 HWM_SOURCE="$RESTORE_SET_DIR/audit_hwm-${RESTORE_TIMESTAMP}.json"
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 test -s "$HWM_SOURCE" && \
-docker compose -f docker-compose.prod.yml stop cron && \
+docker compose "${compose_files[@]}" stop cron && \
 SOURCE_HWM_SIZE="$(wc -c < "$HWM_SOURCE" | tr -d '[:space:]')" && \
 SOURCE_HWM_SHA256="$(sha256sum "$HWM_SOURCE" | awk '{print $1}')" && \
-docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T \
+docker compose "${compose_files[@]}" run --rm --entrypoint sh -T \
   -e EXPECTED_HWM_SIZE="$SOURCE_HWM_SIZE" -e EXPECTED_HWM_SHA256="$SOURCE_HWM_SHA256" maintenance \
   -c 'set -eu
       target_dir=$(dirname "$DJANGO_AUDIT_HWM_PATH")
@@ -300,10 +317,10 @@ docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T \
       test "$(wc -c < "$hwm_temp" | tr -d "[:space:]")" = "$EXPECTED_HWM_SIZE"
       test "$(sha256sum "$hwm_temp" | awk '\''{print $1}'\'')" = "$EXPECTED_HWM_SHA256"
       mv -f "$hwm_temp" "$DJANGO_AUDIT_HWM_PATH"' < "$HWM_SOURCE" && \
-INSTALLED_HWM_SHA256="$(docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance \
+INSTALLED_HWM_SHA256="$(docker compose "${compose_files[@]}" run --rm --entrypoint sh -T maintenance \
   -c 'sha256sum "$DJANGO_AUDIT_HWM_PATH"' | awk '{print $1}')" && \
 test "$SOURCE_HWM_SHA256" = "$INSTALLED_HWM_SHA256" && \
-docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain --require-anchor
+docker compose "${compose_files[@]}" run --rm -T maintenance verify_audit_chain --require-anchor
 ```
 
 Jeder Fehler in dieser Kette ist ein Abbruch. Nur ein vollständig grüner Lauf ist zulässig. Er prüft den zurückgespielten Anker und schreibt anschließend die **Betriebsdatei** fort; deshalb bleibt das zurückgeholte Original separat und unverändert erhalten. Verlangt wird ein verankerter Stand für **jede** geprüfte Kette einschließlich der System-Kette; fehlt er auch nur für eine, bricht der Lauf ab und nennt die betroffenen Einrichtungen per Kennnummer, ohne für irgendeine Kette einen Anker zu schreiben. Bricht der letzte Schritt mit `--require-anchor verlangt einen externen Audit-Anker` ab, hat der Import nicht oder nicht vollständig gewirkt (falscher Pfad, leere, unlesbare, ankerlose oder nur teilweise verankerte Datei): Schritt 4b wiederholen — das Kommando **nicht** ohne den Schalter nachziehen, weil es den Bestand dann ungeprüft neu verankert.
@@ -315,7 +332,11 @@ Jeder Fehler in dieser Kette ist ein Abbruch. Nur ein vollständig grüner Lauf 
 **Verankerte Kette ohne Einrichtung (Inventarabweichung).** Bricht der Lauf mit `verankert N Kette(n), die im aktuellen Datenbankbestand fehlen` ab, beschreibt der zurückgespielte Anker mehr Einrichtungen als die wiederhergestellte Datenbank enthält. Im Wiederherstellungsfall ist das zunächst ein **Hinweis auf einen unvollständigen Restore** — zuerst prüfen, ob DB-Dump und Anker zum selben Satz gehören (gleicher Zeitstempel, Manifest-Abgleich aus [Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)) und ob der Dump vollständig eingespielt wurde. Erst wenn die Entfernung der Einrichtung nachweislich beabsichtigt war (endgültige Schließung, Trägerwechsel), den Lauf **einmalig** mit einem ausdrücklichen Stilllegungsnachweis fahren:
 
 ```bash
-docker compose -f docker-compose.prod.yml run --rm -T maintenance \
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" run --rm -T maintenance \
   verify_audit_chain --retire-chain <Kennnummer> --retire-reason "Endgültige Schließung, Bestand übergeben"
 ```
 
@@ -324,7 +345,11 @@ Der Nachweis nennt Zeitpunkt und Begründung und wird mit demselben `DJANGO_AUDI
 **Kehrt ein stillgelegter Bestand zurück?** Taucht eine Einrichtung mit derselben Kennnummer wieder auf — etwa nach einer Wiederherstellung aus einem älteren Stand —, bricht der nächste Lauf ab, statt den signierten Stilllegungsnachweis stillschweigend zu ersetzen. Das ist zuerst ein Hinweis auf einen falschen oder unvollständigen Restore. Ist die Rückkehr gewollt, wird sie einmalig ausdrücklich quittiert:
 
 ```bash
-docker compose -f docker-compose.prod.yml run --rm -T maintenance \
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" run --rm -T maintenance \
   verify_audit_chain --reactivate-chain <Kennnummer> --reactivate-reason "Träger übernimmt den Bestand erneut"
 ```
 
@@ -333,14 +358,14 @@ Der Lauf nennt den zurückgenommenen Nachweis mit Zeitpunkt und Begründung im P
 ### Schritt 5 — Migrationen + Stack hochfahren
 
 ```bash
-# Migrate als One-Shot. docker-migrate.sh verifiziert vorab via check_db_roles,
-# dass App-Rolle = NOSUPERUSER/NOBYPASSRLS und Admin = BYPASSRLS (Refs #1002).
-docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
-
 # Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Migrate als One-Shot. docker-migrate.sh verifiziert vorab via check_db_roles,
+# dass App-Rolle = NOSUPERUSER/NOBYPASSRLS und Admin = BYPASSRLS (Refs #1002).
+docker compose "${compose_files[@]}" run --rm --entrypoint=/app/docker-migrate.sh maintenance
+
 # Vollständigen Stack samt mitgeliefertem cron-Sidecar hochfahren.
 docker compose "${compose_files[@]}" up -d
 ```
@@ -360,22 +385,26 @@ cd /opt/anlaufstelle
 set -a
 source .env
 set +a
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 
 # 1) DB-Rollen-Gate — App-Rolle ohne Superuser/BYPASSRLS, Admin mit BYPASSRLS.
-docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles   # Exit 0
+docker compose "${compose_files[@]}" run --rm maintenance check_db_roles   # Exit 0
 
 # 2) RLS aktiv? (Sicherheits-Safety-Net muss nach Restore noch greifen.)
-docker compose -f docker-compose.prod.yml exec -T db sh -c \
+docker compose "${compose_files[@]}" exec -T db sh -c \
   'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"'   # > 0
 
 # 3) Health-Liveness. Erwartet HTTP 200 + {"status":"ok"}.
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
 # 4) Migrationsstand vollständig?
-docker compose -f docker-compose.prod.yml exec web python manage.py showmigrations | grep -c '\[ \]'   # erwartet: 0
+docker compose "${compose_files[@]}" exec web python manage.py showmigrations | grep -c '\[ \]'   # erwartet: 0
 
 # 5) Daten-Stichprobe — sind Nutzdaten wirklich da?
-docker compose -f docker-compose.prod.yml exec -T db \
+docker compose "${compose_files[@]}" exec -T db \
   psql -U $POSTGRES_USER -d $POSTGRES_DB -tAc "SELECT count(*) FROM core_facility;"
 ```
 
@@ -392,7 +421,11 @@ Für jede benötigte Generation in `ENCRYPTION_KEYS` mindestens einen bereits vo
 **Restore dokumentieren (DSGVO Art. 32 Abs. 1 lit. c):** Nach erfolgreichem Recovery den Wiederherstellungs-Nachweis ins AuditLog schreiben — analog zum Restore-Drill:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec web \
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" exec web \
   python manage.py mark_restore_verified --note "Disaster-Recovery auf frischem Host $(date -u +%Y-%m-%d)"
 ```
 
@@ -400,26 +433,24 @@ Das setzt den Compliance-Check „Restore-Test" im Dashboard (`/system/complianc
 
 ---
 
-## 8. Offene Punkte (noch nicht verdrahtet)
+## 8. Offene Punkte (nicht im Code verdrahtet)
 
-Ehrliche Bestandsaufnahme — diese Teile sind **organisatorisch**, nicht im Code gelöst (Stand v0.14.0):
+Ehrliche Bestandsaufnahme — diese Teile sind **organisatorisch**, nicht im Code gelöst:
 
-- **`entschieden` — keine personelle Escrow-Trennung im Solo-Maintainer-Modell.** #1477 war ein Governance-Issue und ist geschlossen; solange keine Vertretung benannt ist, gibt es keine Übergabe an eine zweite Person. Es gibt weiterhin keinen Code-Pfad, der `BACKUP_ENCRYPTION_KEY`/`ENCRYPTION_KEYS` an einen getrennten Ort spiegelt. Für Recovery und Drill ist deshalb die vom Maintainer verwahrte, vom Prod-Host getrennte `.env`-Kopie die Schlüsselquelle. Fehlt diese Kopie nach einem Host-Totalverlust, bleiben die Backups endgültig unlesbar ([§4.4](#44-wo-die-schlüssel-liegen-sollten--eskrow)).
+- **`organisatorisch` — Schlüssel-Eskrow.** Es gibt keinen Code-Pfad, der `BACKUP_ENCRYPTION_KEY`/`ENCRYPTION_KEYS` an einen getrennten Ort spiegelt; die Trennung und die personelle Vertretung legt der Träger fest. Für Recovery und Drill ist das getrennt verwahrte Eskrow des Betreibers die Schlüsselquelle. Fehlt es nach einem Host-Totalverlust, bleiben die Backups endgültig unlesbar ([§4.4](#44-wo-die-schlüssel-liegen-sollten--eskrow)).
 
 - **`offen` — Off-Site nur wenn konfiguriert.** `scripts/ops/backup.sh` hat Off-Site-Sync, aber nur aktiv bei gesetztem `BACKUP_OFFSITE_TARGET`. Ist keines konfiguriert, überlebt **kein** Backup den Host-Totalverlust. → Vor Produktivbetrieb `BACKUP_OFFSITE_TARGET` setzen **und** das erste Off-Site-Retrieval einmal proben.
 
-- **`offen` — `restic` ist installiert, aber ungenutzt.** `dev-ops/deploy/bootstrap.sh` (dev-only) L30 installiert `restic`, doch **kein** Skript verwendet es. Off-Site läuft über rclone/aws/scp, nicht über restic. Die restic-Installation ist derzeit toter Ballast bzw. Vorbereitung für ein noch nicht gebautes restic-basiertes Off-Site/Eskrow. → Entweder einen restic-Pfad bauen oder die Installation aus dem Bootstrap entfernen.
+- **`offen` — Recovery auf fabrikfrischem Host regelmäßig proben.** Der [Restore-Drill](ops-runbook.md#66-backup-restore-drill-refs-720-739) testet Restore **auf dem laufenden Host** in eine Wegwerf-DB; das PG-16→18-Upgrade ([ops-runbook §13](ops-runbook.md#13-postgresql-major-upgrade-16--18)) testet dump→frisches-Cluster→restore lokal. Der **vollständige** DR-Pfad aus [§6](#6-wiederherstellung-auf-einem-fabrikfrischen-host) (frischer Server + Off-Site-Download + Schlüssel aus dem Eskrow + Restore) wurde am 22.09.2026 als Fresh-Host-Drill samt Re-Drill durchgespielt, Ergebnis **GRÜN mit Einschränkung**. Der Drill gehört zum Betrieb: einmal jährlich auf einem Wegwerf-Server wiederholen und das Ergebnis im Protokoll nach [§8.1](#81-drill-protokoll-vorlage-und-drehbuch) festhalten.
 
-- **`offen` — Recovery auf fabrikfrischem Host ist nicht end-to-end geprobt.** Der [Restore-Drill](ops-runbook.md#66-backup-restore-drill-refs-720-739) testet Restore **auf dem laufenden Host** in eine Wegwerf-DB; das PG-16→18-Upgrade ([ops-runbook §13](ops-runbook.md#13-postgresql-major-upgrade-16--18)) testet dump→frisches-Cluster→restore lokal. Der **vollständige** DR-Pfad aus [§6](#6-wiederherstellung-auf-einem-fabrikfrischen-host) (frischer Server + Off-Site-Download + Schlüssel aus der Maintainer-`.env`-Kopie + Restore) ist in dieser Form **noch nicht als Drill durchgespielt**. → Einmal jährlich als „echten" DR-Drill auf einem Wegwerf-Server üben und das Ergebnis hier/in einem Issue festhalten.
+- **RTO/RPO sind Richtwerte, kein SLA.** Die Zahlen in [§1](#1-rto--rpo--zielwerte) sind aus den Cron-Frequenzen und realistischen Restore-Dauern abgeleitet, nicht gemessen und nicht vertraglich zugesichert. Ein DR-Drill ([oben](#8-offene-punkte-nicht-im-code-verdrahtet)) würde sie validieren.
 
-- **RTO/RPO sind Richtwerte, kein SLA.** Die Zahlen in [§1](#1-rto--rpo--zielwerte) sind aus den Cron-Frequenzen und realistischen Restore-Dauern abgeleitet, nicht gemessen und nicht vertraglich zugesichert. Ein DR-Drill ([oben](#8-offene-punkte-noch-nicht-verdrahtet)) würde sie validieren.
+### 8.1 Drill-Protokoll (Vorlage und Drehbuch)
 
-### 8.1 Drill-Protokoll (vorbereitet, Durchführung offen)
-
-Dieses Drehbuch bereitet den einmaligen Welt-B-/Prod-Drill auf einem
-fabrikfrischen Wegwerf-Host vor. Die Durchführung ist nicht Teil dieses
-Dokumentationsstands; sie erfolgt gebündelt durch den Maintainer vor 1.0. Der
-Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
+Dieses Drehbuch beschreibt den Prod-Drill auf einem fabrikfrischen
+Wegwerf-Host, den Betreiber vor dem Produktivbetrieb und danach regelmäßig
+fahren. Der Produktivhost wird dabei weder als Restore-Ziel noch als
+Testdatenbank benutzt.
 
 #### Vorbedingungen
 
@@ -436,21 +467,18 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   Backup-Host-Cron wird erst nach dem erfolgreichen Drill eingerichtet.
 - `BACKUP_OFFSITE_TARGET` war auf der Quellinstallation gesetzt, der Zugang zum
   Off-Site-Ziel funktioniert ohne den verlorenen Prod-Host, und ein
-  zusammengehöriger Welt-B-Satz ist vorhanden: DB-`*.sql.gz.enc` samt `.hmac`,
+  zusammengehöriger Backup-Satz ist vorhanden: DB-`*.sql.gz.enc` samt `.hmac`,
   Medien-`*_media.tar.gz.enc` samt `.hmac`, Zeilenzahl-`*.manifest` samt `.hmac`
   und die zum selben Zeitstempel gehörende `audit_hwm-<timestamp>.json`.
-- Die vom Maintainer verwahrte, host-getrennte `.env`-Kopie enthält mindestens
+- Das vom Prod-Host getrennt verwahrte Eskrow des Betreibers enthält mindestens
   die in [§4](#4-schlüssel--und-secret-wiederbeschaffung) genannten Schlüssel,
   die unveränderten DB-Rollennamen und Zugangsdaten. Die rekonstruierte `.env`
   trennt außerdem die Host- und Container-Sicht wie `.env.example`:
   `BACKUP_HOST_DIR=./backups` bezeichnet auf dem Host `<Repo>/backups`,
   `BACKUP_DIR=/backups` ausschließlich das read-only Mount-Ziel im Container.
   Bei einem abweichenden Host-Pfad muss `BACKUP_HOST_DIR` den tatsächlich
-  bereitgestellten Ort nennen. Es gibt derzeit **kein** personell getrenntes
-  Escrow: #1477 ist als
-  Governance-Entscheidung für das Solo-Maintainer-Modell geschlossen. Im
-  Protokoll steht deshalb als Schlüsselquelle „Maintainer-`.env`-Kopie", nicht
-  „Escrow".
+  bereitgestellten Ort nennen. Im Protokoll steht als Schlüsselquelle das
+  getrennt verwahrte Eskrow des Betreibers (Ort und Verfahren, keine Werte).
 - Der gewählte Quellsatz enthält **mindestens einen Vault-Anhang** und
   **mindestens einen feldverschlüsselten Fachdatensatz je benötigter
   Schlüsselgeneration** aus `ENCRYPTION_KEYS`. Ohne beides sind der in
@@ -463,7 +491,11 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
 
   ```bash
   cd /opt/anlaufstelle
-  docker compose -f docker-compose.prod.yml exec -T db \
+  # Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+  compose_files=(-f docker-compose.prod.yml)
+  [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+  [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+  docker compose "${compose_files[@]}" exec -T db \
     psql -U "$POSTGRES_ADMIN_USER" -d "$POSTGRES_DB" -tAc \
     "SELECT count(*) FROM core_attachment;"
   ```
@@ -499,7 +531,7 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   protokolliert werden — für diesen Drill die Variable deshalb setzen, damit
   die Signaturprüfung wirklich läuft.
 - Falls noch kein HWM existiert, ihn **vor dem Quellbackup** bewusst erzeugen:
-  `docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain`.
+  `docker compose "${compose_files[@]}" run --rm -T maintenance verify_audit_chain` (Dateiliste wie in §6 Schritt 4).
   Der Lauf muss vollständig grün sein, erst dann ist der Anker geschrieben.
 - Ein `super_admin`-Browser-Testkonto für den Session-Zugriff auf den
   Health-Detail-Payload ist verfügbar. Secrets, Passwörter, vollständige `.env`-Inhalte und
@@ -523,8 +555,8 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    und RPO am Ende berechnet.
 2. [§6 Schritt 1 bis 3](#6-wiederherstellung-auf-einem-fabrikfrischen-host)
    in der dokumentierten Reihenfolge abarbeiten: Host härten, passenden
-   Release-Stand einspielen, `.env` mit Modus `0600` aus der
-   Maintainer-Kopie rekonstruieren und das frische DB-Cluster starten. Keine
+   Release-Stand einspielen, `.env` mit Modus `0600` aus dem
+   Eskrow rekonstruieren und das frische DB-Cluster starten. Keine
    Schlüsselwerte in die Shell-History oder das Protokoll kopieren.
 3. Für die Off-Site-Rückholung genau **eine** der drei Varianten verwenden und
    genau einen Sieben-Dateien-Satz in ein isoliertes Drill-Verzeichnis legen.
@@ -574,16 +606,18 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    `backup.sh --verify` gegen `$RESTORE_TIMESTAMP` als Pflichtschritt vor dem
    Restore-Lauf im Protokoll vermerken.
 4. [§6 Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)
-   fortsetzen: Ziel-DB frisch und leer anlegen, Pfade abgleichen und Welt-B-DB
-   sowie Medien über `restore.sh` aus dem gerade befüllten Verzeichnis
+   fortsetzen: Ziel-DB frisch und leer anlegen, Pfade abgleichen und Datenbank
+   und Medien über `restore.sh` aus dem gerade befüllten Verzeichnis
    wiederherstellen. Die dortige `&&`-Kette startet `web` vor dem Medien-Restore
    als Transportziel; `cron` bleibt gestoppt.
 
-   `web` wartet über `depends_on` auf einen gesunden `clamav`. Der Scanner läuft
-   im isolierten internen Netz; der ausgelieferte Stack stellt keinen
-   ausgehenden Update-Pfad für neue Signaturen bereit. Ein veralteter
-   Signaturstand ist daher kein bloßer Anlaufzustand und bleibt ein offener
-   Betriebsbefund.
+   `web` wartet über `depends_on` auf einen gesunden `clamav`. Der Scanner hängt
+   im Prod-Stack zusätzlich am Netz `clamav-egress` und hält seine Signaturen im
+   Volume `clamav-db`; `freshclam` aktualisiert sie ohne weiteres Zutun. Auf
+   einem frischen Host lädt der erste Start die komplette Signaturdatenbank
+   (rund drei Minuten), danach meldet `clamav` `healthy`. Bleibt `clamav` im
+   Zustand `starting`, zuerst den Ausgang prüfen (DNS, Firewall); das Vorgehen
+   steht im [Ops-Runbook § 7.4](ops-runbook.md#74-datenbank-updates-signaturen).
 
    In der rekonstruierten `.env` muss `BACKUP_HOST_DIR` genau den isolierten
    Wert aus Schritt 3 nennen. Dann die vollständige §6-Kette mit diesem
@@ -609,22 +643,19 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
 6. **Vor diesem Schritt `web` als laufend bestätigen:** `restore-drill.sh --prod`
    dokumentiert seinen Restore-Test in Schritt 7 über
    `dc exec -T web python manage.py mark_restore_verified` — läuft `web` nicht,
-   meldet Schritt 7 nur `FAIL - Schritt 7: mark_restore_verified fehlgeschlagen
-   — Compliance-Check bleibt unknown`, ohne den Grund zu nennen. `web` kann an
-   dieser Stelle aus zwei Gründen nicht laufen: Entweder wurde es seit
-   Schritt 4/§6 Schritt 5 nicht wieder gestartet, oder `docker compose up -d`
-   hat es wegen der `depends_on: clamav: condition: service_healthy`-Kopplung
-   nicht hochgefahren, weil `clamav` auf dem isolierten Drill-Host mangels
-   Update-Pfad nie „healthy" meldet (siehe [§6 Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)).
-   Mit `docker compose -f docker-compose.prod.yml ps web` prüfen und bei Bedarf
-   mit der vollständigen Compose-Dateiliste aus [§6 Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)
-   (`docker compose "${compose_files[@]}" up -d web`) erneut ausführen;
-   bleibt `web` wegen `clamav` im Zustand „created", den ClamAV-Health-Status
-   nach [ops-runbook § 7.4](ops-runbook.md#74-datenbank-updates-signaturen) klären, bevor
-   `restore-drill.sh --prod` läuft. Diese Prüfung ist ein Doku-Nachzug —
-   `restore-drill.sh` selbst nennt den Grund seines Schritt-7-`FAIL` bisher
-   nicht; eine Skriptänderung, die die Ursache in der Meldung benennt, ist ein
-   offener Folgepunkt außerhalb dieser Doku-Aktualisierung.
+   meldet Schritt 7 `FAIL - Schritt 7: mark_restore_verified fehlgeschlagen —
+   Compliance-Check bleibt unknown (wahrscheinlich weil der web-Container nicht
+   laeuft oder nicht healthy ist; siehe Runbook)`. `web` kann an dieser Stelle
+   aus zwei Gründen nicht laufen: Entweder wurde es seit Schritt 4/§6 Schritt 5
+   nicht wieder gestartet, oder `docker compose up -d` hat es wegen der
+   `depends_on: clamav: condition: service_healthy`-Kopplung nicht hochgefahren,
+   weil `clamav` noch nicht `healthy` ist (siehe Schritt 4 oben). Mit
+   `docker compose -f docker-compose.prod.yml ps web` prüfen und bei Bedarf mit
+   der vollständigen Compose-Dateiliste aus [§6 Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)
+   (`docker compose "${compose_files[@]}" up -d web`) erneut ausführen; bleibt
+   `web` wegen `clamav` im Zustand „created", den ClamAV-Health-Status nach
+   [ops-runbook § 7.4](ops-runbook.md#74-datenbank-updates-signaturen) klären,
+   bevor `restore-drill.sh --prod` läuft.
    Anschließend die vollständige [§6.6-Verifikation](ops-runbook.md#66-backup-restore-drill-refs-720-739)
    als Root gegen das Prod-Format fahren. `COMPOSE_DIR` muss dabei auf das in
    Schritt 1 vorbereitete Installationsverzeichnis mit `.env` und
@@ -708,7 +739,11 @@ Der Fresh-Host-Drill ist nur **GRÜN**, wenn alle folgenden Aussagen belegt sind
 
    ```bash
    cd /opt/anlaufstelle
-   docker compose -f docker-compose.prod.yml down
+   # Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+   compose_files=(-f docker-compose.prod.yml)
+   [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+   [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+   docker compose "${compose_files[@]}" down
    ```
 
 3. Den ausdrücklich als Wegwerf-System freigegebenen Host samt Volumes über
@@ -721,7 +756,7 @@ Der Fresh-Host-Drill ist nur **GRÜN**, wenn alle folgenden Aussagen belegt sind
 #### Protokoll-Vorlage
 
 ```text
-Issue: https://github.com/anlaufstelle/app/issues/2024
+Protokoll- oder Ticketnummer (frei auszufüllen):
 Datum / durchführende Person:
 Zielhost / Provider (keine Zugangsdaten):
 Release-Tag und Image-Digest:
@@ -740,7 +775,7 @@ backup.sh --verify vor dem Restore-Lauf: OK / FAIL
 Off-Site-Rückholung auf drittem Rechner ohne Prod-Host: OK / FAIL
 DJANGO_AUDIT_HWM_PATH war am Quellhost gesetzt: JA / NEIN
 DJANGO_AUDIT_HWM_PATH in rekonstruierter .env gesetzt: JA / NEIN
-Schlüsselquelle: Maintainer-.env-Kopie (kein Escrow)
+Schlüsselquelle: getrennt verwahrtes Eskrow des Betreibers (Ort/Verfahren, keine Werte)
 Fachkonto samt zweitem Faktor (TOTP/Backup-Codes) aus Eskrow verfügbar: JA / NEIN
 
 §6 Schritt 1 Host-Härtung: OK / FAIL — Notiz:
