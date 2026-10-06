@@ -62,9 +62,11 @@ cover JavaScript, fonts or icons. Vendored JS files (checked into `src/static/js
 installed via a package manager) and the self-hosted fonts and icons are documented here
 manually. `make verify-vendor-js-sync` (`scripts/verify_vendor_js_sync.py`)
 checks, per shipped work, that the table row exists with the exact version,
-license identifier, upstream URL, vendored path and license text path, that the
-license text carries its obligatory parts (no placeholder), and that no
-unregistered file ships under `src/static/js/vendor/`, `src/static/fonts/` or
+license identifier, upstream URL, and exactly the expected vendored path and
+license text path tokens (a suffixed or additional path fails), that every
+license text matches its SHA-256 (taken from the verified upstream text, so a
+removed clause or a placeholder fails), and that no unregistered file ships
+anywhere below `src/static/js/vendor/`, `src/static/fonts/` or
 `src/static/icons/`. Font files are pinned by SHA-256, so a replaced font forces
 a review of its version and license row.
 
@@ -84,8 +86,10 @@ The Dexie `NOTICE` file is shipped unchanged next to the Apache-2.0 text. The
 axe-core build carries its MPL-2.0 notice in its header. The Alpine.js and
 SortableJS license texts are copied unchanged from the upstream repositories at
 the vendored tags (source URL in the first line of each file). The Heroicons
-"home" path in the SVG icons equals `optimized/24/outline/home.svg` at tag
-v2.0.18; its license text is the one of that tag.
+"home" path in the SVG icons is an adapted derivation of
+`optimized/24/outline/home.svg` at tag v2.0.18: the upstream path's last
+segment (`M8.25 21h8.25`) is left out. The license text is the unchanged one
+of that tag.
 
 ## Disallowed Categories
 

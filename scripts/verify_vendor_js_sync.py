@@ -209,7 +209,8 @@ HEROICONS_VERSION = "2.0.18"
 
 TABLE_HEADER = ["Package", "Version", "License", "Upstream", "Vendored Path", "License text"]
 JS_LICENSES = "src/static/js/licenses/"
-# Per work: (license id, upstream URL, path-cell substrings, license-text-cell substrings).
+# Per work: (license id, upstream URL, path-cell tokens, license-text-cell tokens). A cell must name
+# exactly these backticked tokens; a work without text tokens must say "file header" instead.
 TABLE_EXPECTED: dict[str, tuple[str, str, tuple[str, ...], tuple[str, ...]]] = {
     "htmx": (
         "0BSD",
@@ -241,23 +242,23 @@ TABLE_EXPECTED: dict[str, tuple[str, str, tuple[str, ...], tuple[str, ...]]] = {
         ("src/static/js/vendor/sortable.min.js",),
         (JS_LICENSES + "LICENSE-sortablejs.txt",),
     ),
-    "axe-core": ("MPL-2.0", "https://github.com/dequelabs/axe-core", ("src/static/js/vendor/axe.min.js",), ("header",)),
+    "axe-core": ("MPL-2.0", "https://github.com/dequelabs/axe-core", ("src/static/js/vendor/axe.min.js",), ()),
     "DM Sans": (
         "SIL OFL 1.1",
         "https://github.com/googlefonts/dm-fonts",
-        ("src/static/fonts/dmsans-",),
+        ("src/static/fonts/dmsans-*.woff2",),
         ("src/static/fonts/LICENSE-DM-fonts.txt",),
     ),
     "DM Mono": (
         "SIL OFL 1.1",
         "https://github.com/googlefonts/dm-mono",
-        ("src/static/fonts/dmmono-",),
+        ("src/static/fonts/dmmono-*.woff2",),
         ("src/static/fonts/LICENSE-DM-fonts.txt",),
     ),
     "Heroicons": (
         "MIT",
         "https://github.com/tailwindlabs/heroicons",
-        ("src/static/icons/", "src/templates/auth/login.html"),
+        ("src/static/icons/*.svg", "src/templates/auth/login.html"),
         ("src/static/icons/LICENSE-heroicons.txt",),
     ),
 }
@@ -301,6 +302,21 @@ LICENSE_TEXT_RULES: dict[str, tuple[tuple[str, ...], int]] = {
         800,
     ),
 }
+# SHA-256 of each license text. Files with a source line (Alpine.js, SortableJS, Heroicons)
+# are hashed after that line and the blank line below it; all others as a whole. Every text
+# was compared byte for byte with the upstream file at the vendored tag or the installed
+# package, so removing a clause (e.g. the MIT condition to keep the notice) changes the hash.
+SOURCE_LINE_TEXTS = ("alpine.txt", "sortablejs.txt", "heroicons.txt")
+LICENSE_TEXT_SHA256: dict[str, str] = {
+    "src/static/js/licenses/LICENSE-htmx.txt": "d3d2456f76414f2456104660ebd65aff1c04cd7966b942bdabd63f3cdb316a38",
+    "src/static/js/licenses/LICENSE-alpine.txt": "08b7502da6e7aa1d0bbdc97d220fbf669b9366c61bd0f072238283c89bc4773a",
+    "src/static/js/licenses/LICENSE-chartjs.txt": "41a84aa2caba645f966a18d9c2056b73e6d3a81d80bc0046bc0011a2634d4cce",
+    "src/static/js/licenses/LICENSE-sortablejs.txt": "199071e94a4d6ba6f634acd6020842efc55161b9fb639a432c50da687781219d",
+    "src/static/js/licenses/LICENSE-dexie.txt": "cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14",
+    "src/static/js/licenses/NOTICE-dexie.txt": "6176d2e8a3fd8a881828a1a27bbcc5a9e03a75f437ce3c4ddbedd94fdac475c1",
+    "src/static/fonts/LICENSE-DM-fonts.txt": "51a024caa839b97cc0f85f4578f69356d043e897da8a1e3690e380a913c19f02",
+    "src/static/icons/LICENSE-heroicons.txt": "75523ddd65d9620bea09f84e89d0c373b4205a3708b8a1e9f9598a5438a3e641",
+}
 
 
 def parse_table(text: str) -> tuple[list[str], dict[str, list[str]]]:
@@ -316,6 +332,14 @@ def parse_table(text: str) -> tuple[list[str], dict[str, list[str]]]:
         elif header and not set(cells[0]) <= {"-"}:
             rows[cells[0]] = cells
     return header, rows
+
+
+def _compare_tokens(name: str, label: str, expected: tuple[str, ...], cell: str) -> list[str]:
+    """Backticked tokens of ``cell`` must equal ``expected`` exactly (no substring match)."""
+    found = re.findall(r"`([^`]+)`", cell)
+    errors = [f"THIRDPARTY-LICENSES.md: {name} {label} {t!r} missing" for t in expected if t not in found]
+    errors += [f"THIRDPARTY-LICENSES.md: {name} {label} {t!r} unexpected" for t in found if t not in expected]
+    return errors
 
 
 def _nonempty(path: Path) -> bool:
@@ -335,6 +359,9 @@ def _check_license_texts() -> list[str]:
         errors += [f"{rel}: license text incomplete ({m!r} missing)" for m in markers if m not in text]
         if "Source: " not in text.splitlines()[0] and rel.endswith(("alpine.txt", "sortablejs.txt", "heroicons.txt")):
             errors.append(f"{rel}: source line missing in the first line")
+        body = text.split("\n", 2)[2] if rel.endswith(SOURCE_LINE_TEXTS) and text.count("\n") >= 2 else text
+        if hashlib.sha256(body.encode("utf-8")).hexdigest() != LICENSE_TEXT_SHA256[rel]:
+            errors.append(f"{rel}: license text differs from the verified upstream text")
     return errors
 
 
@@ -349,7 +376,9 @@ def _discover_shipped() -> list[str]:
     errors += [f"{n}: shipped vendor file is not registered in the license guard" for n in sorted(shipped - registered)]
 
     if FONT_DIR.is_dir():
-        fonts = {p.name: p for p in FONT_DIR.rglob("*") if p.is_file() and p != FONT_LICENSE}
+        fonts = {
+            p.relative_to(FONT_DIR).as_posix(): p for p in FONT_DIR.rglob("*") if p.is_file() and p != FONT_LICENSE
+        }
         for name in sorted(set(fonts) - set(FONT_HASHES)):
             errors.append(f"font without license mapping: {name}")
         for name, digest in FONT_HASHES.items():
@@ -360,7 +389,7 @@ def _discover_shipped() -> list[str]:
                     f"font changed: {name} — review version and license, then update FONT_HASHES/FONT_VERSIONS"
                 )
     if ICON_DIR.is_dir():
-        icons = {p.name for p in ICON_DIR.iterdir() if p.is_file()}
+        icons = {p.relative_to(ICON_DIR).as_posix() for p in ICON_DIR.rglob("*") if p.is_file()}
         known = set(ICON_FILES) | {ICON_LICENSE.name} | {n.replace(".svg", ".png") for n in ICON_FILES}
         errors += [f"icon without license mapping: {n}" for n in sorted(icons - known)]
         for name in ICON_FILES:
@@ -402,8 +431,10 @@ def check_licenses(pinned: dict[str, str]) -> list[str]:
             errors.append(f"THIRDPARTY-LICENSES.md: {name} license is {row[2]!r}, expected {spdx!r}")
         if f"<{upstream}>" not in row[3]:
             errors.append(f"THIRDPARTY-LICENSES.md: {name} upstream <{upstream}> missing")
-        errors += [f"THIRDPARTY-LICENSES.md: {name} path {p!r} missing" for p in paths if p not in row[4]]
-        errors += [f"THIRDPARTY-LICENSES.md: {name} license text {t!r} missing" for t in texts if t not in row[5]]
+        errors += _compare_tokens(name, "path", paths, row[4])
+        errors += _compare_tokens(name, "license text", texts, row[5])
+        if not texts and "file header" not in row[5]:
+            errors.append(f"THIRDPARTY-LICENSES.md: {name} license text must say 'file header'")
     errors += [
         f"THIRDPARTY-LICENSES.md: row for {n} is not registered in the guard"
         for n in sorted(set(rows) - set(TABLE_EXPECTED))

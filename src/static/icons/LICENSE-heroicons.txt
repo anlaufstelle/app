@@ -1,4 +1,4 @@
-Source: https://github.com/tailwindlabs/heroicons/blob/v2.0.18/LICENSE (tag v2.0.18, copied unchanged below; the shipped "home" path equals optimized/24/outline/home.svg at this tag)
+Source: https://github.com/tailwindlabs/heroicons/blob/v2.0.18/LICENSE (tag v2.0.18, copied unchanged below; the shipped "home" path is an adapted derivation of optimized/24/outline/home.svg at this tag, without its last segment "M8.25 21h8.25")
 
 MIT License
 

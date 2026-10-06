@@ -327,6 +327,104 @@ def test_unknown_font_format_is_detected(tmp_path: Path) -> None:
     assert "font without license mapping: extra.ttf" in result.stderr
 
 
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        (
+            "`src/static/js/chart.min.js`",
+            "`src/static/js/chart.min.js.absent`",
+            "Chart.js path 'src/static/js/chart.min.js' missing",
+        ),
+        (
+            "`src/static/js/licenses/LICENSE-chartjs.txt`",
+            "`src/static/js/licenses/LICENSE-chartjs.txt.absent`",
+            "Chart.js license text 'src/static/js/licenses/LICENSE-chartjs.txt' missing",
+        ),
+        (
+            "`src/static/fonts/dmsans-*.woff2`",
+            "`src/static/fonts/dmsans-*.woff2.bak`",
+            "DM Sans path 'src/static/fonts/dmsans-*.woff2' missing",
+        ),
+        (
+            "`src/static/js/licenses/NOTICE-dexie.txt`",
+            "`src/static/js/licenses/NOTICE-dexie.txt.old`",
+            "Dexie.js license text 'src/static/js/licenses/NOTICE-dexie.txt' missing",
+        ),
+    ],
+)
+def test_suffixed_inventory_path_is_detected(tmp_path: Path, old: str, new: str, message: str) -> None:
+    """A path cell is compared as a complete token, not as a substring."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    _edit_table(mirror, old, new)
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert message in result.stderr
+
+
+def test_additional_inventory_path_token_is_detected(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    _edit_table(mirror, "`src/static/js/chart.min.js`", "`src/static/js/chart.min.js`, `src/static/js/extra.js`")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "Chart.js path 'src/static/js/extra.js' unexpected" in result.stderr
+
+
+MIT_CONDITION = (
+    "The above copyright notice and this permission notice shall be included in all\n"
+    "copies or substantial portions of the Software."
+)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "src/static/icons/LICENSE-heroicons.txt",
+        "src/static/js/licenses/LICENSE-alpine.txt",
+        "src/static/js/licenses/LICENSE-sortablejs.txt",
+        "src/static/js/licenses/LICENSE-chartjs.txt",
+    ],
+)
+def test_mit_condition_removed_is_detected(tmp_path: Path, name: str) -> None:
+    """The real text minus its obligatory condition still carries markers and size, but not the hash."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    path = mirror / name
+    text = path.read_text(encoding="utf-8")
+    condition = next(c for c in (MIT_CONDITION, MIT_CONDITION.replace("\n", " ")) if c in text)
+    path.write_text(text.replace(condition, ""), encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert f"{name}: license text differs from the verified upstream text" in result.stderr
+
+
+def test_edited_source_line_does_not_break_the_text_hash(tmp_path: Path) -> None:
+    """The source preamble is documentation; only the text after it is pinned."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    path = mirror / ICON_REL / "LICENSE-heroicons.txt"
+    first, rest = path.read_text(encoding="utf-8").split("\n", 1)
+    path.write_text(first + " (adapted wording)\n" + rest, encoding="utf-8")
+    assert _run(mirror).returncode == 0
+
+
+def test_nested_icon_is_detected(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    target = mirror / ICON_REL / "nested" / "new-work.svg"
+    target.parent.mkdir()
+    target.write_text("<svg/>", encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "icon without license mapping: nested/new-work.svg" in result.stderr
+
+
+def test_font_with_registered_basename_in_subdirectory_is_detected(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    target = mirror / FONT_REL / "nested" / "dmsans-latin.woff2"
+    target.parent.mkdir()
+    target.write_bytes((mirror / FONT_REL / "dmsans-latin.woff2").read_bytes())
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "font without license mapping: nested/dmsans-latin.woff2" in result.stderr
+
+
 def test_runs_without_node_modules(tmp_path: Path) -> None:
     """Der Guard ist reiner String-Vergleich: kein node_modules/ im Abbild noetig."""
     mirror = _mirror_repo(tmp_path / "repo")
