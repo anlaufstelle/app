@@ -931,27 +931,37 @@
 **Vorbereitung:**
 - Login als `miriam`, MFA verifiziert.
 - DB: `request.session.get("sudo_until")` ist `None` (frische Session).
-- Sudo-pflichtige Aktion vorbereitet: „2FA deaktivieren" auf `/mfa/settings/`. Der Button erscheint nur ohne MFA-Zwang (`can_disable`; lokal mit `settings/dev.py`, `MFA_ENFORCE_PRIVILEGED_ROLES=False`). Auf Umgebungen mit Rollen-Zwang stattdessen `/mfa/setup/` aufrufen: bei bestehendem Faktor leitet `MFASetupView.dispatch` über `sudo_redirect_if_required` ebenfalls auf `/sudo/`.
+- Auslöser je nach Umgebung wählen und notieren; jede Variante hat eigene Sollwerte:
+
+  | Variante | Umgebung | Auslöser (Schritt 1) | Redirect (Schritt 2) | `detail.next` | Nachlauf (Schritt 9) |
+  |---|---|---|---|---|---|
+  | A | ohne MFA-Zwang (`MFA_ENFORCE_PRIVILEGED_ROLES=False`, z. B. `settings/dev.py`; nur dort zeigt `/mfa/settings/` „2FA deaktivieren", `can_disable`) | auf `/mfa/settings/` „2FA deaktivieren" klicken → POST `/mfa/disable/` | `/sudo/?next=%2Fmfa%2Fdisable%2F` | `detail.next="/mfa/disable/"` | Weiterleitung per GET auf `/mfa/disable/` → HTTP 405 (die View kennt nur POST); ein erneuter Klick auf „2FA deaktivieren" läuft ohne Umweg über `/sudo/` und entfernt die Faktoren. |
+  | B | mit Rollen-Zwang (Produktions-Settings, `MFA_ENFORCE_PRIVILEGED_ROLES=True`; „2FA deaktivieren" fehlt) | `/mfa/setup/` aufrufen (GET); bei bestehendem Faktor leitet `MFASetupView.dispatch` über `sudo_redirect_if_required` auf Sudo | `/sudo/?next=%2Fmfa%2Fsetup%2F` | `detail.next="/mfa/setup/"` | Weiterleitung auf `/mfa/setup/` → 302 auf `/mfa/settings/` (TOTP vorhanden); ein erneuter Aufruf von `/mfa/setup/` innerhalb der 15 Minuten landet ohne `/sudo/` direkt dort. Die Deaktivierung bleibt gesperrt: ein POST auf `/mfa/disable/` leitet mit „Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend." zurück auf `/mfa/settings/`, das TOTP-Gerät bleibt. |
+
 - AuditLog-Stand notieren: `AuditLog.objects.filter(user=miriam, action__in=["sudo_mode_entered", "sudo_mode_failed"]).count()`.
 
 **Schritte:**
-1. Auf `/mfa/settings/` „2FA deaktivieren" klicken → POST `/mfa/disable/`.
-2. `RequireSudoModeMixin.dispatch` greift, da `is_in_sudo(request)==False` → 302 auf `/sudo/?next=%2Fmfa%2Fdisable%2F` (`sudo_url` kodiert `next`).
+1. Auslöser der gewählten Variante ausführen.
+2. Redirect prüfen: `RequireSudoModeMixin.dispatch` (A) bzw. `sudo_redirect_if_required` (B) greift, da `is_in_sudo(request)==False` → 302 auf die Sudo-URL der Variante (`sudo_url` kodiert `next`).
 3. Formular prüfen: Felder „Passwort" **und** „Bestätigungscode (2FA)".
-4. Negativprobe A: Passwort `anlaufstelle2026`, Feld „Bestätigungscode (2FA)" leer lassen bzw. Browser-Pflichtfeldprüfung umgehen (z. B. `000000`) → Submit.
-5. Negativprobe B: falsches Passwort + gültiger OTP → Submit.
-6. Positivkontrolle: Passwort `anlaufstelle2026` + aktueller OTP-Code der Authenticator-App → Submit.
-7. Session-State, Redirect und AuditLog prüfen.
+4. Negativprobe A (Pflicht) — POST ohne `otp_token`: In den DevTools am Feld „Bestätigungscode (2FA)" (`input[name="otp_token"]`) das Attribut `required` entfernen, das Feld leer lassen, Passwort `anlaufstelle2026` eingeben und absenden. Im Network-Tab bestätigen, dass ein POST auf `/sudo/` abging und `otp_token` darin fehlt oder leer ist.
+5. Negativprobe B (Pflicht, zusätzlich zu Schritt 4): Passwort `anlaufstelle2026` + falscher sechsstelliger Code `000000` → Submit.
+6. Negativprobe C: falsches Passwort + gültiger OTP → Submit.
+7. Positivkontrolle: Passwort `anlaufstelle2026` + aktueller OTP-Code der Authenticator-App → Submit. Nach Schritt 5 einige Sekunden warten: django-otp drosselt das Gerät nach einem falschen Code.
+8. Session-State, Redirect und AuditLog prüfen.
+9. Nachlauf der Variante ausführen.
 
 **Erwartetes Ergebnis:**
+- Schritt 2: Location exakt wie in der Tabelle der gewählten Variante.
 - Schritt 3: Das Feld „Bestätigungscode (2FA)" (`name="otp_token"`) ist sichtbar, weil `needs_otp = request.user.has_confirmed_totp_device`. **Fehlt das Feld, ist der Testfall rot.**
-- Schritt 4: HTTP 403, Meldung „Der Bestätigungscode (2FA) ist nicht korrekt.", `session["sudo_until"]` bleibt ungesetzt; neuer AuditLog-Eintrag `SUDO_MODE_FAILED` mit `detail={"factor": "otp"}`. **Öffnet das Passwort allein das Sudo-Fenster (302 auf `next`), ist der Testfall rot.**
-- Schritt 5: HTTP 403, Meldung „Passwort ist nicht korrekt.", kein `enter_sudo`; neuer AuditLog-Eintrag `SUDO_MODE_FAILED` mit `detail={"factor": "password"}`. Der Fehlversuch schreibt **keinen** `LOGIN_FAILED`-Eintrag (Passwortprüfung per `check_password`, nicht `authenticate()`). Fehlt `SUDO_MODE_FAILED` oder entsteht `LOGIN_FAILED`, ist der Testfall rot.
-- Schritt 6: `enter_sudo(request)` rotiert die Session-ID und setzt `session["sudo_until"] = int(time.time()) + 900`; HTTP 302 Redirect auf `safe_redirect_path("/mfa/disable/")`.
-- AuditLog nach Schritt 6: `SUDO_MODE_ENTERED` mit `user=miriam`, `target_type="User"`, `target_id=miriam.pk`, `detail.next="/mfa/disable/"`; insgesamt zwei neue `SUDO_MODE_FAILED` und ein neuer `SUDO_MODE_ENTERED` gegenüber dem notierten Stand.
-- Der Redirect landet per GET auf `/mfa/disable/`; die View kennt nur POST. Ein erneuter Klick auf „2FA deaktivieren" läuft jetzt ohne Umweg über `/sudo/` (`is_in_sudo==True`).
+- Schritt 4: HTTP 403, Meldung „Der Bestätigungscode (2FA) ist nicht korrekt.", `session["sudo_until"]` bleibt ungesetzt; neuer AuditLog-Eintrag `SUDO_MODE_FAILED` mit `detail={"factor": "otp"}`. **Öffnet das Passwort allein das Sudo-Fenster (302 auf `next`), ist der Testfall rot.** Zeigt der Network-Tab keinen POST oder einen POST mit ausgefülltem `otp_token`, ist Schritt 4 „nicht geprüft" — Schritt 5 ersetzt ihn nicht.
+- Schritt 5: wie Schritt 4 (403, gleiche Meldung, kein `sudo_until`, `SUDO_MODE_FAILED` mit `detail={"factor": "otp"}`); 302 auf `next` ist rot.
+- Schritt 6: HTTP 403, Meldung „Passwort ist nicht korrekt.", kein `enter_sudo`; neuer AuditLog-Eintrag `SUDO_MODE_FAILED` mit `detail={"factor": "password"}`. Der Fehlversuch schreibt **keinen** `LOGIN_FAILED`-Eintrag (Passwortprüfung per `check_password`, nicht `authenticate()`). Fehlt `SUDO_MODE_FAILED` oder entsteht `LOGIN_FAILED`, ist der Testfall rot.
+- Schritt 7: `enter_sudo(request)` rotiert die Session-ID und setzt `session["sudo_until"] = int(time.time()) + 900`; HTTP 302 Redirect auf den `next`-Pfad der Variante (`safe_redirect_path`).
+- AuditLog nach Schritt 7: `SUDO_MODE_ENTERED` mit `user=miriam`, `target_type="User"`, `target_id=miriam.pk` und dem `detail.next` der Variante; insgesamt drei neue `SUDO_MODE_FAILED` (zweimal `otp`, einmal `password`) und ein neuer `SUDO_MODE_ENTERED` gegenüber dem notierten Stand.
+- Schritt 9: wie in der Tabelle der gewählten Variante.
 
-**Code-Beleg:** `SudoModeView.post` (`src/core/views/sudo_mode.py`), `verify_totp_or_backup` (`src/core/services/security/mfa.py`), `enter_sudo` (`src/core/services/security/sudo_mode.py`); Unit-Tests `TestSudoModeTwoFactor::test_totp_user_without_otp_is_rejected`, `::test_wrong_otp_writes_sudo_mode_failed_audit`, `TestSudoModeViewPOST::test_wrong_password_writes_sudo_mode_failed_audit`, `::test_wrong_password_does_not_write_login_failed` in `src/tests/test_sudo_mode.py`.
+**Code-Beleg:** `SudoModeView.post` (`src/core/views/sudo_mode.py`), `verify_totp_or_backup` (`src/core/services/security/mfa.py`), `enter_sudo`, `sudo_redirect_if_required` (`src/core/services/security/sudo_mode.py`), `MFASetupView.dispatch`/`.get`, `MFADisableView.post` (`src/core/views/mfa.py`); Unit-Tests `TestSudoModeTwoFactor::test_totp_user_without_otp_is_rejected`, `::test_wrong_otp_writes_sudo_mode_failed_audit`, `TestSudoModeViewPOST::test_wrong_password_writes_sudo_mode_failed_audit`, `::test_wrong_password_does_not_write_login_failed` in `src/tests/test_sudo_mode.py`; `TestSudoMissingOtpBehaviour`, `TestSudoSetupVariantFlow`, `TestSudoDisableVariantFlow` in `src/tests/test_manual_matrix_sudo_probe.py`.
 
 **DSGVO/Security-Note:**
 - Schutz gegen Session-Hijack (Refs #683, #1024): gestohlenes Cookie reicht nicht ohne aktuelles Passwort und — bei aktivem TOTP — frischen zweiten Faktor.
