@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: § 3.3 escapes the `%` in both invite token audit crontab lines (`\%`) and sets role `postgres` and database `anlaufstelle` explicitly (#2473).
 > Synchronization update 2026-10-06: § 9 (DB password rotation) describes the full Compose file list used by `rotate-db-passwords.sh` (base file, `compose.legal.yml`, `compose.override.yml`) and states that no other host script recreates containers (#2474).
 > Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188), and the same check for deleted events and anonymized persons and cases (`--target all`).
 > Synchronization update 2026-09-29: § 3.5 adds the rectification requests of anonymized persons to the check and repair (`--target rectification`, part of `--target all`, #2188).
@@ -461,7 +462,10 @@ check it with `sudo logrotate --debug /etc/logrotate.conf`.
 0 2 * * * cd /opt/anlaufstelle && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
 
 # Invite token audit (weekly Sun 05:00, details see section 10)
-0 5 * * 0 cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT username, email, date_joined FROM core_user WHERE last_login IS NULL AND NOT (password LIKE 'pbkdf2_%') AND date_joined < now() - interval '7 days';" >> /var/log/anlaufstelle-invites.log 2>&1
+# Role postgres over the local socket inside the db container (no password), database
+# anlaufstelle = default value of POSTGRES_DB (replace it if yours differs: the root
+# crontab does not read .env). Every % must be written as \% in a crontab.
+0 5 * * 0 cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T db psql -U postgres -d anlaufstelle -c "SELECT username, email, date_joined FROM core_user WHERE last_login IS NULL AND NOT (password LIKE 'pbkdf2_\%') AND date_joined < now() - interval '7 days';" >> /var/log/anlaufstelle-invites.log 2>&1
 
 # Health check (every 5 minutes)
 */5 * * * * curl -sf https://DOMAIN/health/ > /dev/null || echo "Anlaufstelle health check failed at $(date)" >> /var/log/anlaufstelle-health.log
@@ -522,7 +526,10 @@ exclusively in `sudo crontab -e`.
 15 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance refresh_statistics_view >> /var/log/anlaufstelle-mv.log 2>&1
 
 # Invite token audit (weekly Sun 05:00, details see section 10)
-0 5 * * 0 cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT username, email, date_joined FROM core_user WHERE last_login IS NULL AND NOT (password LIKE 'pbkdf2_%') AND date_joined < now() - interval '7 days';" >> /var/log/anlaufstelle-invites.log 2>&1
+# Role postgres over the local socket inside the db container (no password), database
+# anlaufstelle = default value of POSTGRES_DB (replace it if yours differs: the root
+# crontab does not read .env). Every % must be written as \% in a crontab.
+0 5 * * 0 cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T db psql -U postgres -d anlaufstelle -c "SELECT username, email, date_joined FROM core_user WHERE last_login IS NULL AND NOT (password LIKE 'pbkdf2_\%') AND date_joined < now() - interval '7 days';" >> /var/log/anlaufstelle-invites.log 2>&1
 
 # Health check (every 5 minutes)
 */5 * * * * curl -sf https://DOMAIN/health/ > /dev/null || echo "Anlaufstelle health check failed at $(date)" >> /var/log/anlaufstelle-health.log
@@ -3021,5 +3028,5 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: e4c598784d64b73eb2a4631efd070dcc58ebf651 -->
+<!-- source-hash: 6dfa96911389fad99c20b8b917bcfb4b38de675d -->
 <!-- translation-date: 2026-09-22 -->

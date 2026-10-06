@@ -432,7 +432,10 @@ nach Aenderungen `sudo logrotate --debug /etc/logrotate.conf` pruefen.
 0 2 * * * cd /opt/anlaufstelle && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
 
 # Invite-Token-Audit (woechentlich So 05:00, Details siehe Abschnitt 10)
-0 5 * * 0 cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT username, email, date_joined FROM core_user WHERE last_login IS NULL AND NOT (password LIKE 'pbkdf2_%') AND date_joined < now() - interval '7 days';" >> /var/log/anlaufstelle-invites.log 2>&1
+# Rolle postgres über den lokalen Socket im db-Container (ohne Passwort), Datenbank
+# anlaufstelle = Standardwert von POSTGRES_DB (bei abweichendem Namen ersetzen: die
+# Root-Crontab liest keine .env). Jedes % muss in der Crontab als \% stehen.
+0 5 * * 0 cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T db psql -U postgres -d anlaufstelle -c "SELECT username, email, date_joined FROM core_user WHERE last_login IS NULL AND NOT (password LIKE 'pbkdf2_\%') AND date_joined < now() - interval '7 days';" >> /var/log/anlaufstelle-invites.log 2>&1
 
 # Health-Check (alle 5 Minuten)
 */5 * * * * curl -sf https://DOMAIN/health/ > /dev/null || echo "Anlaufstelle health check failed at $(date)" >> /var/log/anlaufstelle-health.log
@@ -493,7 +496,10 @@ voraus. Das Beispiel gehoert ausschliesslich in `sudo crontab -e`.
 15 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance refresh_statistics_view >> /var/log/anlaufstelle-mv.log 2>&1
 
 # Invite-Token-Audit (woechentlich So 05:00, Details siehe Abschnitt 10)
-0 5 * * 0 cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT username, email, date_joined FROM core_user WHERE last_login IS NULL AND NOT (password LIKE 'pbkdf2_%') AND date_joined < now() - interval '7 days';" >> /var/log/anlaufstelle-invites.log 2>&1
+# Rolle postgres über den lokalen Socket im db-Container (ohne Passwort), Datenbank
+# anlaufstelle = Standardwert von POSTGRES_DB (bei abweichendem Namen ersetzen: die
+# Root-Crontab liest keine .env). Jedes % muss in der Crontab als \% stehen.
+0 5 * * 0 cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T db psql -U postgres -d anlaufstelle -c "SELECT username, email, date_joined FROM core_user WHERE last_login IS NULL AND NOT (password LIKE 'pbkdf2_\%') AND date_joined < now() - interval '7 days';" >> /var/log/anlaufstelle-invites.log 2>&1
 
 # Health-Check (alle 5 Minuten)
 */5 * * * * curl -sf https://DOMAIN/health/ > /dev/null || echo "Anlaufstelle health check failed at $(date)" >> /var/log/anlaufstelle-health.log
