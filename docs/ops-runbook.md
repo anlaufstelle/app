@@ -1153,27 +1153,61 @@ docker compose -f docker-compose.prod.yml stop web caddy
 
 ### 6.2 Sofort-Backup vor kritischem Eingriff
 
-```bash
-# Schnelles Backup (unverschluesselt, fuer sofortige Wiederherstellung)
-docker compose -f docker-compose.prod.yml exec -T db \
-  pg_dump -U $POSTGRES_USER -Fc $POSTGRES_DB \
-  > /tmp/notfall_$(date +%Y%m%d_%H%M%S).dump
+Bevorzugt das Backup-Skript: Es sichert verschlüsselt mit signiertem Manifest
+und läuft mit der Admin-Rolle (BYPASSRLS), die der Dump braucht.
 
-# Verschluesseltes Backup via Skript
+```bash
+cd /opt/anlaufstelle
 ./scripts/ops/backup.sh
 ```
 
+Nur wenn das Skript nicht zur Verfügung steht, ein schneller Dump ohne
+Verschlüsselung. `pg_dump` arbeitet mit `row_security=off` und bricht unter der
+App-Rolle (`POSTGRES_USER`: NOBYPASSRLS, kein Owner) an den Tabellen mit FORCE
+ROW LEVEL SECURITY ab; gerade im Notfall gäbe es dann keinen Dump. Der Befehl
+läuft deshalb als Bootstrap-Superuser `postgres` über den lokalen Socket im
+`db`-Container (ohne Passwort, wie `backup.sh` und `restore.sh`). Der
+Datenbankname kommt aus der Umgebung des Containers (`$POSTGRES_DB`); die `.env`
+muss in der Host-Shell nicht geladen sein.
+
+```bash
+cd /opt/anlaufstelle
+install -d -m 0700 backups/emergency
+(umask 077; docker compose -f docker-compose.prod.yml exec -T db \
+  sh -c 'pg_dump -U postgres -Fc "$POSTGRES_DB"' \
+  > backups/emergency/notfall_$(date +%Y%m%d_%H%M%S).dump)
+
+# Lesbarkeit des Dumps prüfen (Inhaltsverzeichnis, kein Restore)
+docker compose -f docker-compose.prod.yml exec -T db pg_restore --list \
+  < backups/emergency/notfall_<Zeitstempel>.dump | head
+```
+
+Der Dump ist **unverschlüsselt** und enthält Daten nach Art. 9 DSGVO. Deshalb
+nicht in `/tmp` ablegen, sondern in einem nur für den ausführenden Benutzer
+lesbaren Verzeichnis (`umask 077`, Verzeichnis `0700`), und nach dem Eingriff
+verschlüsselt ablegen oder sicher löschen. `./scripts/ops/backup.sh` rotiert
+nur `daily/`, `weekly/` und `monthly/`; das Unterverzeichnis `emergency/` bleibt
+unberührt. Weicht `BACKUP_HOST_DIR` in der `.env` von `./backups` ab, das
+Verzeichnis entsprechend anpassen.
+
 ### 6.3 Datenbank-Notfall-Zugriff
+
+Rolle: Bootstrap-Superuser `postgres` über den lokalen Socket im `db`-Container
+(ohne Passwort). **Nicht** die App-Rolle verwenden: Sie unterliegt Row Level
+Security und sieht ohne gesetzten `app.current_facility_id`-Kontext in allen
+Facility-Tabellen 0 Zeilen, ein `SELECT count(*)` meldet dann still `0` statt
+des echten Bestands (Hintergrund und Diagnose: [§ 9.2](#92-diagnose-in-psql)).
+Weil `postgres` RLS umgeht, nur lesend und gezielt arbeiten; Änderungen gehören
+in die Anwendung oder in die Wartungskommandos.
 
 ```bash
 # Interaktive psql-Shell
 docker compose -f docker-compose.prod.yml exec db \
-  psql -U $POSTGRES_USER $POSTGRES_DB
+  sh -c 'psql -U postgres -d "$POSTGRES_DB"'
 
-# Einzel-Query ausfuehren
-docker compose -f docker-compose.prod.yml exec db \
-  psql -U $POSTGRES_USER -d $POSTGRES_DB \
-  -c "SELECT count(*) FROM core_event WHERE is_deleted = false;"
+# Einzel-Query ausführen
+docker compose -f docker-compose.prod.yml exec -T db \
+  sh -c 'psql -U postgres -d "$POSTGRES_DB" -c "SELECT count(*) FROM core_event WHERE is_deleted = false;"'
 ```
 
 ### 6.4 Passwort zuruecksetzen

@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: § 6.2/§ 6.3 run the emergency dump and the emergency query as role `postgres` inside the `db` container, store the dump with `umask 077` outside `/tmp`, and warn that the app role sees 0 rows without facility context (#2472).
 > Synchronization update 2026-10-06: § 3.3 escapes the `%` in both invite token audit crontab lines (`\%`) and sets role `postgres` and database `anlaufstelle` explicitly (#2473).
 > Synchronization update 2026-10-06: § 9 (DB password rotation) describes the full Compose file list used by `rotate-db-passwords.sh` (base file, `compose.legal.yml`, `compose.override.yml`) and states that no other host script recreates containers (#2474).
 > Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188), and the same check for deleted events and anonymized persons and cases (`--target all`).
@@ -1176,27 +1177,61 @@ docker compose -f docker-compose.prod.yml stop web caddy
 
 ### 6.2 Immediate Backup Before a Critical Intervention
 
-```bash
-# Quick backup (unencrypted, for immediate restore)
-docker compose -f docker-compose.prod.yml exec -T db \
-  pg_dump -U $POSTGRES_USER -Fc $POSTGRES_DB \
-  > /tmp/emergency_$(date +%Y%m%d_%H%M%S).dump
+Prefer the backup script: it writes an encrypted backup with a signed manifest
+and runs with the admin role (BYPASSRLS) that the dump needs.
 
-# Encrypted backup via script
+```bash
+cd /opt/anlaufstelle
 ./scripts/ops/backup.sh
 ```
 
+Only if the script is not available, take a quick unencrypted dump. `pg_dump`
+works with `row_security=off` and aborts under the app role (`POSTGRES_USER`:
+NOBYPASSRLS, not the owner) on tables with FORCE ROW LEVEL SECURITY; in an
+emergency there would then be no dump at all. The command therefore runs as the
+bootstrap superuser `postgres` over the local socket inside the `db` container
+(no password, like `backup.sh` and `restore.sh`). The database name comes from
+the container environment (`$POSTGRES_DB`); the `.env` does not have to be
+loaded in the host shell.
+
+```bash
+cd /opt/anlaufstelle
+install -d -m 0700 backups/emergency
+(umask 077; docker compose -f docker-compose.prod.yml exec -T db \
+  sh -c 'pg_dump -U postgres -Fc "$POSTGRES_DB"' \
+  > backups/emergency/emergency_$(date +%Y%m%d_%H%M%S).dump)
+
+# Check that the dump is readable (table of contents, no restore)
+docker compose -f docker-compose.prod.yml exec -T db pg_restore --list \
+  < backups/emergency/emergency_<timestamp>.dump | head
+```
+
+The dump is **unencrypted** and contains Art. 9 GDPR data. Therefore do not put
+it into `/tmp`, but into a directory readable only by the executing user
+(`umask 077`, directory `0700`), and store it encrypted or delete it securely
+after the intervention. `./scripts/ops/backup.sh` rotates only `daily/`,
+`weekly/` and `monthly/`; the `emergency/` subdirectory is left alone. If
+`BACKUP_HOST_DIR` in the `.env` differs from `./backups`, adjust the directory
+accordingly.
+
 ### 6.3 Emergency Database Access
+
+Role: bootstrap superuser `postgres` over the local socket inside the `db`
+container (no password). Do **not** use the app role: it is subject to Row Level
+Security and, without an `app.current_facility_id` context, sees 0 rows in all
+facility tables, so a `SELECT count(*)` silently reports `0` instead of the real
+count (background and diagnosis: [§ 9.2](#92-diagnosis-in-psql)). Because
+`postgres` bypasses RLS, work read-only and targeted; changes belong in the
+application or in the maintenance commands.
 
 ```bash
 # Interactive psql shell
 docker compose -f docker-compose.prod.yml exec db \
-  psql -U $POSTGRES_USER $POSTGRES_DB
+  sh -c 'psql -U postgres -d "$POSTGRES_DB"'
 
 # Run a single query
-docker compose -f docker-compose.prod.yml exec db \
-  psql -U $POSTGRES_USER -d $POSTGRES_DB \
-  -c "SELECT count(*) FROM core_event WHERE is_deleted = false;"
+docker compose -f docker-compose.prod.yml exec -T db \
+  sh -c 'psql -U postgres -d "$POSTGRES_DB" -c "SELECT count(*) FROM core_event WHERE is_deleted = false;"'
 ```
 
 ### 6.4 Reset Password
@@ -3028,5 +3063,5 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 6dfa96911389fad99c20b8b917bcfb4b38de675d -->
+<!-- source-hash: 500ec1f8366048f0d1e4235d01fc21e163d29f63 -->
 <!-- translation-date: 2026-09-22 -->
