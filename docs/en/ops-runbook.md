@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: development-, staging- and demo-host passages (staging check, Compose table rows, dev timers in § 3.4, `--dev` backup format, demo-host login) sit in `release:strip` blocks and the manual `mark_restore_verified` runs through `maintenance` in the production stack (#2481).
 > Synchronization update 2026-10-06: §§ 6.5b–13 follow the shipped behaviour — the breach heuristics table lists all eight kinds and the notification goes to the operator and its data protection officer instead of the project (#2480); § 7.4 describes the `clamav-egress` network, § 8.4 the SBOM as release asset, § 9 the RLS exemptions and the `cron` sidecar loading the full `.env`, § 11.4 the `MV_REFRESH_COMPLETED` marker, the monthly aggregate keeps deleted events as carry-over (#2483); § 13 is a generic major-upgrade procedure with a checked, non-empty working dump outside `/tmp` (#2475).
 > Synchronization update 2026-10-06: §§ 1–6 follow the shipped behaviour — the mandatory-variable check reads `.env` entries like Compose does (quoted values with escaped quotes, single and double quotes, inline comments, `export` prefix; an empty or unterminated value counts as missing) and requires 32 characters, the migration diagnosis uses the one-shot and terminates an orphaned lock holder instead of `pg_advisory_unlock`, `up -d web` (not `restart web`) applies new `GUNICORN_*` values, attachment usage is measured inside the `media` volume, the export directory must belong to UID 1000, the maintenance-mode block runs the migration one-shot, `backup.sh` writes files without any permission for others (`umask 027`, the group may read) and `--verify` states what it checked, and the manifest is mandatory for `restore.sh` (#2482, #2440).
 > Synchronization update 2026-10-06: § 3.3 (file modes) and § 6.6 (restore drill, host cron proposal) follow `backup.sh` with `umask 027` — files `0640`, directories `0750`, the check rejects any permission for others, the group (UID/GID 1000 of `web`) may read the manifest, the weekly/monthly copies are staged and checked before they are published, and the host cron alternative names its audit-anchor limit (#2482).
@@ -97,8 +98,6 @@ docker compose -f docker-compose.prod.yml images web
 # (deploy/postgres-init/01-app-role.sh). If a password is missing, still set to
 # change-me-*, or shorter than 32 characters, the init script aborts when the
 # cluster is created. Source: .env.example (ships the passwords empty).
-# The staging stack runs the same check against .env.staging instead of .env
-# (ENV_FILE=.env.staging, template .env.staging.example) — Refs #2086.
 ENV_FILE="${ENV_FILE:-.env}"
 # Last active entry of a variable, read like Compose reads .env: a quoted value ends at
 # the closing quote (double quotes: \" \\ \$ \n are escapes; single quotes: only \'),
@@ -163,6 +162,7 @@ else
     echo "✗ POSTGRES_ADMIN_USER missing"
 fi
 ```
+
 
 > **Single key deprecated (#2240):** If `python manage.py check --deploy` reports the warning `core.W005`, the instance still runs with `ENCRYPTION_KEY` instead of the key ring `ENCRYPTION_KEYS`. The update itself is not affected; before the removal after version 1.0, copy the value unchanged into `ENCRYPTION_KEYS` and remove `ENCRYPTION_KEY` -- see the [admin guide, "Migrating from a single key to a key ring"](admin-guide.md#full-environment-variable-reference).
 
@@ -254,14 +254,13 @@ docker compose "${compose_files[@]}" run --rm maintenance enforce_retention --dr
 
 ### 1.4 Compose Stack Reconciliation
 
-Refs #2086. All four deployment stacks run the same three-role PostgreSQL model (canonical description: [§ 9 "DB Role Model (Gold Standard)"](#db-role-model-gold-standard)). The table is target state **and** actual state — if one stack drifts, its behaviour diverges silently and no test reports it:
+Refs #2086. The shipped stacks (prod and dev) run the same three-role PostgreSQL model (canonical description: [§ 9 "DB Role Model (Gold Standard)"](#db-role-model-gold-standard)). The table is target state **and** actual state — if one stack drifts, its behaviour diverges silently and no test reports it:
 
 | Stack | `deploy/postgres-init` mounted | `db` bootstraps as | `web` connects as | `maintenance` | `cron` | Env template |
 |---|---|---|---|---|---|---|
 | `docker-compose.prod.yml` | yes | `postgres` (bootstrap superuser) | app role `${POSTGRES_USER}` (allowlist) | yes | yes | `.env.example` |
-| `docker-compose.dev.yml` | yes | `postgres` | app role (allowlist) | yes | no (systemd timers, § 3.4) | `.env.dev.example` |
-| `docker-compose.demo.yml` | yes | `postgres` | app role (allowlist) | yes | no (hourly reset) | `.env.demo.example` |
-| `docker-compose.staging.yml` | yes (since #2086) | `postgres` (since #2086) | app role (allowlist, since #2086) | yes (since #2086) | yes (since #2086) | `.env.staging.example` (since #2086) |
+| `docker-compose.dev.yml` | yes | `postgres` | app role (allowlist) | yes | no (host timers) | `.env.dev.example` |
+
 
 Invariants that hold for **every** stack:
 
@@ -269,10 +268,6 @@ Invariants that hold for **every** stack:
 - Every stack sets `REQUIRE_ADMIN_DB_ROLE: "true"`, which rules out the path without a separate admin role (where the app role becomes owner itself).
 - The app role is nowhere an owner and nowhere `SUPERUSER`/`BYPASSRLS`.
 - `web` loads **no** `env_file` but an explicit runtime allowlist (Refs #1962). Among the **application services**, only `maintenance` and `cron` see admin/bootstrap secrets; the `db` service necessarily receives them as well (`POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `ADMIN_DB_PASSWORD`) — it is the service that creates the roles. It gets only those values and no application secrets (`DJANGO_SECRET_KEY`, `ENCRYPTION_KEY*`).
-- On **staging**, the `web` healthcheck additionally verifies the **actual** connection role on every start and continuously afterwards (`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`). The plain HTTP check was not sufficient: on a bypassing role `/health/` reports `degraded` but still answers HTTP 200, and the `db_role_posture` detail field is only served in the token/session payload. Refs #2086.
-- On **staging**, the **exposure** is bound to this too, not just the display: `caddy` depends on `web` with `depends_on: {condition: service_healthy, restart: true}` (Compose >= v2.17 — without `restart: true`, Compose would leave an already running Caddy routing after a `web` update), and `Caddyfile.staging` **actively** probes the upstream for `db_role_posture`, sending `X-Health-Token` for it. `DJANGO_HEALTH_DETAIL_TOKEN` is therefore mandatory on this stack — and more strictly than "otherwise 502": the `{$…}` placeholder is substituted while **adapting** the Caddyfile, so without a value the adaptation aborts and **`caddy` does not start at all** (verified against `caddy:2-alpine` v2.11.4). The diagnosis then lives in `docker compose -f docker-compose.staging.yml logs caddy`. **Operational rule:** after any change to `web`, act on the whole stack (`docker compose -f docker-compose.staging.yml up -d`), not just `up -d web` — otherwise Caddy is not restarted and the gate does not engage.
-
-Until #2086, `docker-compose.staging.yml` was the sole exception: no init mount, `env_file` on `db` **and** `web`. The web process connected as the bootstrap superuser there, `FORCE ROW LEVEL SECURITY` was ineffective, and staging validated precisely the failure class it exists for the least. The guard `TestStagingStackRoleSeparation` in `src/tests/test_architecture_guards_ops.py` pins the new state.
 
 ---
 
@@ -705,43 +700,6 @@ exclusively in `sudo crontab -e`.
 
 **Note the order:** Backup (02:00) → retention (03:00) → audit chain verification (03:30) → snapshots (04:00, monthly) → orphan cleanup (04:30) → session cleanup (05:00) → breach detection/MV refresh (hourly). The backup must run before retention, so that deleted data is included in the backup. The audit chain verification runs after retention, so that the checkpoint boundaries freshly written by `prune_auditlog` are already in the chain. The MV refresh uses `CONCURRENTLY` and does not block running readers. The sidecar schedule in `deploy/crontab` reflects exactly this order — which is why the `TZ` setting from [§3.2](#32-cron-sidecar-standard) is operationally relevant, not cosmetic.
 
-### 3.4 Dev (systemd Timers)
-
-On `dev.anlaufstelle.app`, the jobs do **not** run via a host crontab, but as
-systemd timers, installed by `dev-ops/deploy/install-timers.sh` (dev-only) —
-invoked on **every** deploy by `dev-ops/deploy/deploy-dev.sh` (dev-only)
-(idempotent). The dev stack runs via `docker-compose.dev.yml` and deliberately
-does **not** get the `cron` sidecar from [§3.2](#32-cron-sidecar-standard):
-running both in parallel would execute every job twice, and here the timers are
-additionally the test case for the host scheduler path that k8s setups
-or setups with custom orchestration without our compose file use.
-
-> **Note (Refs #980):** Previously, `bootstrap.sh` installed the timers inline. Since `bootstrap.sh` only runs during initial provisioning, timers added later never made it onto the running host (the backup cron stayed absent). The installation now lives in `install-timers.sh` and runs on every `deploy-dev.sh`.
-
-| Timer | OnCalendar | Command |
-|-------|-----------|---------|
-| `anlaufstelle-backup.timer` | `*-*-* 02:00` | `dev-ops/deploy/backup.sh` |
-| `anlaufstelle-retention.timer` | `*-*-* 03:00` | `… run --rm -T maintenance enforce_retention` |
-| `anlaufstelle-audit-verify.timer` | `*-*-* 03:30` | `… run --rm -T maintenance verify_audit_chain` |
-| `anlaufstelle-snapshots.timer` | `*-*-01 04:00` | `… run --rm -T maintenance create_statistics_snapshots` |
-| `anlaufstelle-orphan-cleanup.timer` | `*-*-* 04:30` | `… run --rm -T maintenance cleanup_orphan_storage_files` |
-| `anlaufstelle-breach.timer` | `*-*-* *:30` | `… run --rm -T maintenance detect_breaches` |
-| `anlaufstelle-mv-refresh.timer` | `*-*-* *:15` | `… run --rm -T maintenance refresh_statistics_view` |
-
-**Activation on already-running servers:** A regular `deploy-dev.sh` run
-installs the timers along with it. A one-off, immediate catch-up also works directly:
-
-```bash
-sudo bash /opt/anlaufstelle/dev-ops/deploy/install-timers.sh  # idempotent, as root
-systemctl list-timers "anlaufstelle-*"                # 7 timers with a NEXT time
-systemctl start anlaufstelle-mv-refresh.service        # trigger once manually
-journalctl -u anlaufstelle-mv-refresh.service -n 20
-```
-
-The compliance dashboard (`/system/compliance/`, category "Background jobs") additionally
-shows the run status per job — `unknown`/`warning`/`critical` if a timer is not running.
-
-> **Note:** `install-timers.sh` installs these 7 timers. The maintenance timers run via `run-as-admin.sh` with the admin DB role (BYPASSRLS) — including `cleanup_orphan_storage_files` (Refs #662, #1554), which otherwise aborts fail-loud (§9 DB role model).
 
 ### 3.5 Manual Execution
 
@@ -1240,8 +1198,8 @@ Refs #1363 (N10 + review follow-up): Caddy already rejects request bodies above 
 **Residual risk (deliberately documented, not fixed):** A `DocumentType` — configurable only by `facility_admin`/`super_admin` — can carry **several** FILE fields; each independently carries up to `FILE_VAULT_MAX_UPLOAD_FILES` files. The theoretical worst case per request then grows by another `FILE_VAULT_MAX_UPLOAD_BYTES * FILE_VAULT_MAX_UPLOAD_FILES` for each additional FILE field. Deployments with multi-field file document types should scale the Caddy cap up accordingly (no automatic reconciliation).
 
 ```bash
-# 1. Check the current Caddy value (all four variants: Caddyfile,
-#    Caddyfile.dev, Caddyfile.demo, Caddyfile.staging)
+# 1. Check the current Caddy value (both variants: Caddyfile,
+#    Caddyfile.dev)
 grep -A2 request_body Caddyfile*
 
 # 2. Check the app-side limit (if overridden via env)
@@ -1264,7 +1222,7 @@ docker compose -f docker-compose.prod.yml exec caddy \
 
 **Background:** Django buffers uploads above `FILE_UPLOAD_MAX_MEMORY_SIZE` (default 2.5 MB) as a **plaintext temp file** on disk, before `core/services/file_vault/storage.py` scans and encrypts them. Without an explicit `FILE_UPLOAD_TEMP_DIR`, Django falls back to `tempfile.gettempdir()` (usually `/tmp`). This is only a short window, but unencrypted client content sits on disk for that moment.
 
-**Mitigation:** `docker-compose.prod.yml`/`staging.yml`/`demo.yml`/`dev.yml` already mount `/tmp` in the `web` container as **tmpfs** (RAM) — necessary because the container runs `read_only` (Refs #1374). `FILE_UPLOAD_TEMP_DIR=/tmp` is set there explicitly in the `environment:` block of the respective compose file, and demonstrably pins Django's upload buffer to this tmpfs, instead of relying on Python's `TMPDIR` resolution order (a `TMPDIR` set accidentally later would otherwise silently redirect the implicit fallback away from tmpfs to a persistent volume). The temp file's content therefore only exists volatile in RAM, and is gone on container restart — no cleanup cron job needed.
+**Mitigation:** `docker-compose.prod.yml`/`dev.yml` already mount `/tmp` in the `web` container as **tmpfs** (RAM) — necessary because the container runs `read_only` (Refs #1374). `FILE_UPLOAD_TEMP_DIR=/tmp` is set there explicitly in the `environment:` block of the respective compose file, and demonstrably pins Django's upload buffer to this tmpfs, instead of relying on Python's `TMPDIR` resolution order (a `TMPDIR` set accidentally later would otherwise silently redirect the implicit fallback away from tmpfs to a persistent volume). The temp file's content therefore only exists volatile in RAM, and is gone on container restart — no cleanup cron job needed.
 
 ```bash
 # Verify that /tmp in the web container is actually a tmpfs
@@ -1301,13 +1259,6 @@ a relay offering only port 465 can be connected that way. Both switches set to
 must also contain the public base URL so that invitation and reset links are
 valid. The sender should be authorized for SPF, DKIM, and DMARC.
 
-The dev stack now passes these mail variables through to `web`. For SMTP on
-dev, set `EMAIL_HOST` (and credentials when needed) in `.env.dev`; when
-`EMAIL_HOST` is empty, `devlive` continues to write mail to the console. After
-startup, verify the handoff with
-`docker compose -f docker-compose.dev.yml --env-file .env.dev exec -T web env | grep '^EMAIL_HOST='`.
-With the detail token, `/health/` must report `smtp` as `ok` or `unreachable`,
-not `disabled`.
 
 **Deployment check `mail.E001` (Django 6.1, #2326):** `python manage.py check --deploy`
 — the web container runs it on every start, see
@@ -1317,9 +1268,8 @@ always use the SMTP backend, so startup requires an SMTP *backend*, not a
 reachable server. Without a reachable relay the application starts, but
 invitation and reset e-mails fail on sending: a warning in **Verwaltung → Zugänge**, `/health/` field `smtp` = `unreachable`, connection errors in the
 web log; the emergency path is the initial password via the Django admin
-(below). The live-dev and demo settings (`devlive`, `demo`) write e-mails to the
-container log when `EMAIL_HOST` is empty and silence `mail.E001` only for that
-case — this is not intended for production hosts.
+(below).
+
 
 Before the first onboarding, replace the example address and send Django's
 standard test message from the running web container:
@@ -1579,7 +1529,6 @@ Verifies that the latest backup is fully restorable and that the lines of defens
 
 Since OPS-05 (Refs #1336), the script covers **both** shipped backup formats. The choice is made via the `--dev`/`--prod` flag or `$DRILL_FORMAT`; without one, the format is auto-detected from the existing backup files (default `dev`, backward-compatible — the existing dev timer runs unchanged). If **both** formats are present at the same time, the drill aborts and requires an explicit choice:
 
-- **`--dev`** — `dev-ops/deploy/backup.sh`, which actually runs on `dev.anlaufstelle.app` (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, source `$DEV_BACKUP_DIR/dump-*.pgc.enc` (default `/var/backups/anl`), stack `docker-compose.dev.yml`.
 - **`--prod`** — `scripts/ops/backup.sh`, the canonical path shipped to self-hosters: plain SQL + `gzip`, HMAC sidecars, row-count manifest, and timestamp-matched HWM → `psql`, source `$BACKUP_HOST_DIR/daily/anlaufstelle_*.sql.gz.enc` (default: `<repo>/backups/daily`), stack `docker-compose.prod.yml`. The manifest and HMAC sidecars are verified BEFORE decrypting.
 
 Both formats are restored as the Postgres superuser (`postgres`, via local socket trust in the db container) — needed for `CREATE DATABASE`, and it also bypasses RLS/FORCE-RLS during the restore.
@@ -1588,8 +1537,8 @@ Both formats are restored as the Postgres superuser (`postgres`, via local socke
 
 | Backup source | Dump format | Encryption | File(s) | Restore tool | Restore drill |
 |---|---|---|---|---|---|
-| `dev-ops/deploy/backup.sh` (runs on `dev.anlaufstelle.app`) | `pg_dump -Fc` (custom) | AES-256-CBC (no HMAC) | `dump-*.pgc.enc` | `pg_restore` | ✓ `restore-drill.sh --dev` (glob `dump-*.pgc.enc`) |
 | `scripts/ops/backup.sh` (prod schema) in self-hoster deployments | plain SQL + gzip | AES-256-CBC **+ HMAC-SHA256** sidecars (Refs #1024) | database + media with sidecars, `*.manifest` with sidecar, optional timestamp-matched HWM | `psql` (`scripts/ops/restore.sh`) | ✓ `restore-drill.sh --prod --timestamp <timestamp>` (manifest/HMAC checks before decrypt); `backup.sh --verify` remains a lightweight alternative |
+
 
 Why no cross-restore: The `--dev` branch searches by glob for `dump-*.pgc.enc` and pipes into `pg_restore` — a plain-SQL backup (`*.sql.gz.enc`) is simply not found this way and is also not a valid `pg_restore` archive. The `--prod` branch searches for `anlaufstelle_*.sql.gz.enc`, checks the `.hmac` sidecar, and restores via `gunzip | psql` — a `dump-*.pgc.enc` carries no sidecar (`backup_verify_hmac` aborts) and is binary format. A run against the wrong format therefore fails. Anyone who doesn't want to run a full drill uses `scripts/ops/backup.sh --verify` for the prod path (set selection through the signed manifest, the same set binding the restore enforces, HMAC, probe restore of the dump into a temporary database, and an emptiness guard over four RLS tables: `core_client`, `core_event`, `core_workitem` and `core_auditlog` must not be empty in the restore when the live DB has rows). This is **not** a row comparison against the manifest or the live DB; the “Verification summary” output at the end states what was checked and what was not. Only the drill performs the exact comparison of the six manifest tables. If the manifest is missing or the media archive belongs to a different set, the run exits non-zero.
 
@@ -1639,8 +1588,8 @@ Output: one `OK`, `FAIL`, `SKIP`, or `NICHT PRUEFBAR` entry per step. Exit codes
 Without a drill ever having run, the dashboard stays at `unknown`. It can still be updated manually (e.g. after a documented out-of-band restore):
 
 ```bash
-docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
-    python manage.py mark_restore_verified --note "Out-of-band restore $(date +%Y-%m-%d)"
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+    mark_restore_verified --note "Out-of-band restore $(date +%Y-%m-%d)"
 ```
 
 **Host cron suggestion (not installed automatically):** The backup files are
@@ -1939,10 +1888,6 @@ gap. On every version change, `APP_VERSION` and `APP_IMAGE_DIGEST` must be
 updated together, or the stack will continue to start the old digest despite
 the new tag.
 
-If the GHCR package is private, the demo host needs authentication using
-`docker login ghcr.io`. Docker stores these credentials persistently in
-`~/.docker/config.json` for the demo-host user; file permissions and token
-scope must therefore be restricted accordingly.
 
 ### 8.5 Troubleshooting
 
@@ -2114,13 +2059,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 #           Admin-Rolle rolsuper=False, rolbypassrls=True   (exit code 0)
 ```
 
-On the staging stack via the `maintenance` one-shot (the profile is opt-in, and
-`--env-file` is mandatory there):
-
-```bash
-docker compose -f docker-compose.staging.yml --env-file .env.staging \
-    run --rm maintenance check_db_roles
-```
+<!-- release:strip end -->
 
 ### DB Password Rotation (All Three Roles)
 
@@ -2137,7 +2076,7 @@ The canonical, tested way is:
 cd /opt/anlaufstelle
 ./scripts/ops/rotate-db-passwords.sh
 
-# dev/demo use their own compose/env file:
+# dev uses its own compose/env file:
 COMPOSE_FILE=docker-compose.dev.yml ENV_FILE=.env.dev \
   ./scripts/ops/rotate-db-passwords.sh
 ```
@@ -2540,7 +2479,7 @@ already done — and verify with § 9.5.
 
 Here the app role can be stripped of its privileges in place. As the
 **bootstrap superuser**, in the application DB (example names as in
-`.env.staging.example`):
+`.env.example`):
 
 ```sql
 -- 0. Before: stop web, cron and maintenance (no app writes).
@@ -2866,9 +2805,6 @@ The rebuild only counts as finished once the role gate is green — **before**
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
-# or staging:
-docker compose -f docker-compose.staging.yml --env-file .env.staging \
-    run --rm maintenance check_db_roles
 # expected (role labels are German, from the command's own output):
 #           App-Rolle   rolsuper=False, rolbypassrls=False
 #           Admin-Rolle rolsuper=False, rolbypassrls=True   (exit code 0)
@@ -3072,7 +3008,7 @@ This lets Django recognize HTTPS even behind the Caddy proxy. Precondition: **Ca
 
 **Important:** If the app is exposed **directly** (without a reverse proxy), this setting MUST be removed. Otherwise an attacker can set `X-Forwarded-Proto: https` themselves — `request.is_secure()` then returns `True` even though the connection is plaintext; HSTS/secure-cookie logic is defeated.
 
-In `Caddyfile` (and the variants `Caddyfile.dev`, `Caddyfile.demo`, `Caddyfile.staging`), `X-Forwarded-Proto` is **not set explicitly** — the bare directive is enough:
+In `Caddyfile` (and the variants `Caddyfile.dev`), `X-Forwarded-Proto` is **not set explicitly** — the bare directive is enough:
 
 ```
 reverse_proxy web:8000
@@ -3326,7 +3262,7 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 85ac86a9ef1f928c7c93dc1e3201635d337dcbd0 -->
+<!-- source-hash: be711a67257bdcbe73e11218390b4fd88aa49785 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
