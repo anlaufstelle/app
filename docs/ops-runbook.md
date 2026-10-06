@@ -2979,57 +2979,74 @@ Refs #1039. PostgreSQL-Major-Versionen haben **inkompatible Datenverzeichnisse**
 
 ### 13.1 Prod/Staging — Daten erhalten (Wartungsfenster)
 
-Staging identisch mit `docker-compose.staging.yml`, `.env.staging` und Volume `*_pgdata_staging`. Reihenfolge ist sicherheitskritisch: **Rollen vor Daten** — das Init-Script legt App-/Admin-Rolle im frischen Cluster an, bevor der Restore Ownership/Grants wiederherstellt (ADR-020). Fuer Staging gilt das erst ab #2086: davor mountete der Stack `deploy/postgres-init` gar nicht (§ 1.4).
+Staging identisch mit `docker-compose.staging.yml`, `.env.staging` und Volume `*_pgdata_staging`. Reihenfolge ist sicherheitskritisch: **Rollen vor Daten** — das Init-Script legt App-/Admin-Rolle im frischen Cluster an, bevor der Restore Ownership/Grants wiederherstellt (ADR-020). Fuer Staging gilt das erst ab #2086: davor mountete der Stack `deploy/postgres-init` gar nicht (§ 1.4). Jeder Schritt muss fehlerfrei enden, bevor der nächste beginnt — insbesondere Backup und Arbeits-Dump (Schritte 1–2), bevor Schritt 4 das Volume entfernt; der Block bricht bei einem Fehler nicht von selbst ab.
 
 ```bash
-# 0. Maintenance-Mode aktivieren (§ 6) + Web und Hintergrundjobs stoppen — DB bleibt für den Dump erreichbar
-docker compose -f docker-compose.prod.yml stop web cron
+cd /opt/anlaufstelle
 
-# 1. Finales verschluesseltes Backup (§ 1.1) + unverschluesselter Arbeits-Dump.
-#    Dump als Admin-Rolle (BYPASSRLS) ueber den Container-Socket — wie backup.sh.
-./scripts/ops/backup.sh
-docker compose -f docker-compose.prod.yml exec -T db \
-    sh -c 'pg_dump -U "$POSTGRES_ADMIN_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
-
-# 2. DB stoppen, Volume-Tarball als byte-genauen Rollback-Anker ziehen
-#    (Volume-Name pruefen: docker volume ls | grep pgdata)
-docker compose -f docker-compose.prod.yml stop db
-docker run --rm -v anlaufstelle_pgdata:/from -v "$PWD":/to alpine \
-    tar czf /to/pgdata-pg16.tar.gz -C /from .
-
-# 3. Alten DB-Container + Volume entfernen — erst NACH Schritt 1+2!
-docker compose -f docker-compose.prod.yml rm -f db
-docker volume rm anlaufstelle_pgdata
-
-# 4. Neuen Release-Stand einspielen (postgres:18-alpine + neuer Mount)
-git pull   # bzw. Release-Paket
-
-# 5. Nur DB hochfahren: frisches initdb (PG 18, Checksums on) + Init-Script
-#    legt App-/Admin-Rolle an. Log muss fehlerfrei sein.
-docker compose -f docker-compose.prod.yml up -d db
-docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 0
-
-# 6. Restore als Bootstrap-Superuser via Container-Socket (bypasst RLS/FORCE-RLS,
-#    wie scripts/ops/restore-drill.sh; --clean/--if-exists ist re-run-sicher)
-docker compose -f docker-compose.prod.yml exec -T db \
-    sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
-
-# 7. Verifizieren: Rollen-Gate, RLS aktiv, Stichproben
-docker compose -f docker-compose.prod.yml run --rm -T maintenance check_db_roles  # Exit 0
-docker compose -f docker-compose.prod.yml exec -T db sh -c \
-    'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"'   # > 0
-
-# 8. Migrationen als One-Shot (i. d. R. No-op) + Stack hoch + Health (§ 1.2/1.3)
-docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
 # Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
+# 0. Maintenance-Mode aktivieren (§ 6.5a). web und cron laufen weiter: backup.sh
+#    liest die Medien über web und den Audit-Anker über cron, beide Dienste
+#    müssen für das Backup laufen.
+docker compose "${compose_files[@]}" exec -T web touch /data/anlaufstelle.maintenance
+
+# 1. Finales verschluesseltes Backup (§ 1.1); db, web und cron muessen laufen.
+./scripts/ops/backup.sh
+
+# 2. Schreibpfade stilllegen (die DB bleibt erreichbar) und danach den
+#    unverschluesselten Arbeits-Dump ziehen. Der Dump laeuft als Admin-Rolle
+#    (BYPASSRLS) ueber den Container-Socket — wie backup.sh; im db-Container
+#    heisst die Variable ADMIN_DB_USER. Erst weitermachen, wenn die Pruefung
+#    ein Inhaltsverzeichnis liefert.
+docker compose "${compose_files[@]}" stop web cron
+umask 077
+docker compose "${compose_files[@]}" exec -T db \
+    sh -c 'pg_dump -U "$ADMIN_DB_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
+docker compose "${compose_files[@]}" exec -T db pg_restore --list < /tmp/upgrade-pg16.dump | head -n 5
+
+# 3. DB stoppen, Volume-Tarball als byte-genauen Rollback-Anker ziehen
+#    (Volume-Name pruefen: docker volume ls | grep pgdata)
+docker compose "${compose_files[@]}" stop db
+docker run --rm -v anlaufstelle_pgdata:/from -v "$PWD":/to alpine \
+    tar czf /to/pgdata-pg16.tar.gz -C /from .
+
+# 4. Alten DB-Container + Volume entfernen — erst NACH Schritt 1–3!
+docker compose "${compose_files[@]}" rm -f db
+docker volume rm anlaufstelle_pgdata
+
+# 5. Neuen Release-Stand einspielen (postgres:18-alpine + neuer Mount)
+git pull   # bzw. Release-Paket
+
+# 6. Nur DB hochfahren: frisches initdb (PG 18, Checksums on) + Init-Script
+#    legt App-/Admin-Rolle an. Warten, bis der endgültige Server auf TCP
+#    antwortet (während der Initialisierung läuft nur ein vorläufiger Server
+#    ohne TCP-Port); erst dann ist der Restore möglich. Log muss fehlerfrei sein.
+docker compose "${compose_files[@]}" up -d db
+docker compose "${compose_files[@]}" exec -T db sh -c 'until pg_isready -h 127.0.0.1 -U postgres -q; do sleep 1; done'
+docker compose "${compose_files[@]}" logs db | grep -icE 'error|fatal'   # 0
+
+# 7. Restore als Bootstrap-Superuser via Container-Socket (bypasst RLS/FORCE-RLS,
+#    wie scripts/ops/restore-drill.sh; --clean/--if-exists ist re-run-sicher)
+docker compose "${compose_files[@]}" exec -T db \
+    sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
+
+# 8. Verifizieren: Rollen-Gate, RLS aktiv, Stichproben
+docker compose "${compose_files[@]}" run --rm -T maintenance check_db_roles  # Exit 0
+docker compose "${compose_files[@]}" exec -T db sh -c \
+    'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"'   # > 0
+
+# 9. Migrationen als One-Shot (i. d. R. No-op) + Stack hoch + Health (§ 1.2/1.3)
+docker compose "${compose_files[@]}" run --rm --entrypoint=/app/docker-migrate.sh maintenance
 docker compose "${compose_files[@]}" up -d web cron caddy
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
-# 9. Maintenance-Mode aus. Arbeits-Dump enthaelt KLARTEXT-Daten — sofort loeschen;
-#    Tarball nach Bewaehrungsfrist (z. B. 1 Woche) entsorgen.
+# 10. Maintenance-Mode aus. Arbeits-Dump enthaelt KLARTEXT-Daten — sofort loeschen;
+#     Tarball nach Bewaehrungsfrist (z. B. 1 Woche) entsorgen.
+docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.maintenance
 rm /tmp/upgrade-pg16.dump
 ```
 
@@ -3040,19 +3057,22 @@ Meldet `pg_restore` eine Warnung bei `REFRESH MATERIALIZED VIEW core_statistics_
 Primär über den Volume-Tarball (exakter 16er-Byte-Stand), alternativ verschlüsseltes Backup (§ 6):
 
 ```bash
-# 1. Compose-Stand zurueckdrehen: postgres:16-alpine + Mount …:/var/lib/postgresql/data
-git checkout <vorheriger-stand> -- docker-compose.prod.yml
-
-# 2. 18er-Volume entfernen, 16er-Bytes wiederherstellen
-docker compose -f docker-compose.prod.yml rm -f db
-docker volume rm anlaufstelle_pgdata && docker volume create anlaufstelle_pgdata
-docker run --rm -v anlaufstelle_pgdata:/to -v "$PWD":/from alpine \
-    tar xzf /from/pgdata-pg16.tar.gz -C /to
+cd /opt/anlaufstelle
 
 # Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
+# 1. Compose-Stand zurueckdrehen: postgres:16-alpine + Mount …:/var/lib/postgresql/data
+git checkout <vorheriger-stand> -- docker-compose.prod.yml
+
+# 2. 18er-Volume entfernen, 16er-Bytes wiederherstellen
+docker compose "${compose_files[@]}" rm -f db
+docker volume rm anlaufstelle_pgdata && docker volume create anlaufstelle_pgdata
+docker run --rm -v anlaufstelle_pgdata:/to -v "$PWD":/from alpine \
+    tar xzf /from/pgdata-pg16.tar.gz -C /to
+
 # 3. Stack hochfahren + Health
 docker compose "${compose_files[@]}" up -d
 ```

@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: the PostgreSQL migration path (§ 13.1/§ 13.2) activates maintenance mode and takes the backup while `web` and `cron` are running (`backup.sh` needs both), stops them only afterwards, takes the working dump with the variable `ADMIN_DB_USER` that exists in the `db` container and checks it, waits for the final database server before the restore, and uses the full Compose file list (#2424).
 > Synchronization update 2026-10-06: the post-deploy verification (§ 1.3) and the migration rollback (§ 2.2) build the complete Compose file list themselves, so that newly created `maintenance` containers honor a configured `compose.override.yml` (#2424).
 > Synchronization update 2026-10-06: the breach scan crontab example in § 6.5b is a single-line entry (crontab has no line continuation) and starts the job through `maintenance` (#2423).
 > Synchronization update 2026-10-06: § 1.2/§ 1.3 start the update with choosing the target version, stop `cron` before the migration, pull and recreate `web`, `cron` and `caddy`, and compare the image IDs of `web` and `cron`; § 2.1–§ 2.3 roll back through `APP_VERSION`/`APP_IMAGE_DIGEST` in the `.env`, recreate `web` and `cron`, and name schema compatibility as a prerequisite; the PostgreSQL migration path stops and restarts `cron` as well (#2424).
@@ -2992,57 +2993,74 @@ Refs #1039. PostgreSQL major versions have **incompatible data directories** —
 
 ### 13.1 Prod/Staging — Preserving Data (Maintenance Window)
 
-Staging is identical, using `docker-compose.staging.yml`, `.env.staging`, and the volume `*_pgdata_staging`. The order is safety-critical: **roles before data** — the init script creates the app/admin role in the fresh cluster before the restore re-establishes ownership/grants (ADR-020). For staging this only holds from #2086 onwards: before that the stack did not mount `deploy/postgres-init` at all (§ 1.4).
+Staging is identical, using `docker-compose.staging.yml`, `.env.staging`, and the volume `*_pgdata_staging`. The order is safety-critical: **roles before data** — the init script creates the app/admin role in the fresh cluster before the restore re-establishes ownership/grants (ADR-020). For staging this only holds from #2086 onwards: before that the stack did not mount `deploy/postgres-init` at all (§ 1.4). Every step must end without error before the next one starts — in particular the backup and the working dump (steps 1–2) before step 4 removes the volume; the block does not abort by itself on an error.
 
 ```bash
-# 0. Activate maintenance mode (§ 6) + stop web and background jobs — DB stays reachable for the dump
-docker compose -f docker-compose.prod.yml stop web cron
+cd /opt/anlaufstelle
 
-# 1. Final encrypted backup (§ 1.1) + an unencrypted working dump.
-#    Dump as the admin role (BYPASSRLS) over the container socket — like backup.sh.
-./scripts/ops/backup.sh
-docker compose -f docker-compose.prod.yml exec -T db \
-    sh -c 'pg_dump -U "$POSTGRES_ADMIN_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
-
-# 2. Stop the DB, pull a volume tarball as a byte-exact rollback anchor
-#    (check the volume name: docker volume ls | grep pgdata)
-docker compose -f docker-compose.prod.yml stop db
-docker run --rm -v anlaufstelle_pgdata:/from -v "$PWD":/to alpine \
-    tar czf /to/pgdata-pg16.tar.gz -C /from .
-
-# 3. Remove the old DB container + volume — only AFTER steps 1+2!
-docker compose -f docker-compose.prod.yml rm -f db
-docker volume rm anlaufstelle_pgdata
-
-# 4. Bring in the new release state (postgres:18-alpine + new mount)
-git pull   # or the release package
-
-# 5. Bring up only the DB: a fresh initdb (PG 18, checksums on) + the init script
-#    creates the app/admin role. The log must be error-free.
-docker compose -f docker-compose.prod.yml up -d db
-docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 0
-
-# 6. Restore as the bootstrap superuser via the container socket (bypasses RLS/FORCE-RLS,
-#    like scripts/ops/restore-drill.sh; --clean/--if-exists is safe to rerun)
-docker compose -f docker-compose.prod.yml exec -T db \
-    sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
-
-# 7. Verify: role gate, RLS active, spot checks
-docker compose -f docker-compose.prod.yml run --rm -T maintenance check_db_roles  # exit 0
-docker compose -f docker-compose.prod.yml exec -T db sh -c \
-    'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"'   # > 0
-
-# 8. Migrations as a one-shot (usually a no-op) + bring up the stack + health (§ 1.2/1.3)
-docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
 # Full Compose file list in fixed order (admin-guide § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
+# 0. Activate maintenance mode (§ 6.5a). web and cron keep running: backup.sh
+#    reads the media through web and the audit anchor through cron, so both
+#    services must be running for the backup.
+docker compose "${compose_files[@]}" exec -T web touch /data/anlaufstelle.maintenance
+
+# 1. Final encrypted backup (§ 1.1); db, web and cron must be running.
+./scripts/ops/backup.sh
+
+# 2. Quiesce the write paths (the DB stays reachable), then take the
+#    unencrypted working dump. The dump runs as the admin role (BYPASSRLS)
+#    over the container socket — like backup.sh; inside the db container the
+#    variable is called ADMIN_DB_USER. Only continue once the check prints
+#    a table of contents.
+docker compose "${compose_files[@]}" stop web cron
+umask 077
+docker compose "${compose_files[@]}" exec -T db \
+    sh -c 'pg_dump -U "$ADMIN_DB_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
+docker compose "${compose_files[@]}" exec -T db pg_restore --list < /tmp/upgrade-pg16.dump | head -n 5
+
+# 3. Stop the DB, pull a volume tarball as a byte-exact rollback anchor
+#    (check the volume name: docker volume ls | grep pgdata)
+docker compose "${compose_files[@]}" stop db
+docker run --rm -v anlaufstelle_pgdata:/from -v "$PWD":/to alpine \
+    tar czf /to/pgdata-pg16.tar.gz -C /from .
+
+# 4. Remove the old DB container + volume — only AFTER steps 1–3!
+docker compose "${compose_files[@]}" rm -f db
+docker volume rm anlaufstelle_pgdata
+
+# 5. Bring in the new release state (postgres:18-alpine + new mount)
+git pull   # or the release package
+
+# 6. Bring up only the DB: a fresh initdb (PG 18, checksums on) + the init script
+#    creates the app/admin role. Wait until the final server answers on TCP
+#    (during initialization only a temporary server without a TCP port runs);
+#    only then can the restore run. The log must be error-free.
+docker compose "${compose_files[@]}" up -d db
+docker compose "${compose_files[@]}" exec -T db sh -c 'until pg_isready -h 127.0.0.1 -U postgres -q; do sleep 1; done'
+docker compose "${compose_files[@]}" logs db | grep -icE 'error|fatal'   # 0
+
+# 7. Restore as the bootstrap superuser via the container socket (bypasses RLS/FORCE-RLS,
+#    like scripts/ops/restore-drill.sh; --clean/--if-exists is safe to rerun)
+docker compose "${compose_files[@]}" exec -T db \
+    sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
+
+# 8. Verify: role gate, RLS active, spot checks
+docker compose "${compose_files[@]}" run --rm -T maintenance check_db_roles  # exit 0
+docker compose "${compose_files[@]}" exec -T db sh -c \
+    'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"'   # > 0
+
+# 9. Migrations as a one-shot (usually a no-op) + bring up the stack + health (§ 1.2/1.3)
+docker compose "${compose_files[@]}" run --rm --entrypoint=/app/docker-migrate.sh maintenance
 docker compose "${compose_files[@]}" up -d web cron caddy
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
-# 9. Turn off maintenance mode. The working dump contains PLAINTEXT data — delete
-#    it immediately; discard the tarball after a grace period (e.g. 1 week).
+# 10. Turn off maintenance mode. The working dump contains PLAINTEXT data — delete
+#     it immediately; discard the tarball after a grace period (e.g. 1 week).
+docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.maintenance
 rm /tmp/upgrade-pg16.dump
 ```
 
@@ -3053,19 +3071,22 @@ If `pg_restore` reports a warning on `REFRESH MATERIALIZED VIEW core_statistics_
 Primarily via the volume tarball (the exact 16-series byte state), alternatively the encrypted backup (§ 6):
 
 ```bash
-# 1. Roll the compose state back: postgres:16-alpine + mount …:/var/lib/postgresql/data
-git checkout <previous-state> -- docker-compose.prod.yml
-
-# 2. Remove the 18-series volume, restore the 16-series bytes
-docker compose -f docker-compose.prod.yml rm -f db
-docker volume rm anlaufstelle_pgdata && docker volume create anlaufstelle_pgdata
-docker run --rm -v anlaufstelle_pgdata:/to -v "$PWD":/from alpine \
-    tar xzf /from/pgdata-pg16.tar.gz -C /to
+cd /opt/anlaufstelle
 
 # Full Compose file list in fixed order (admin-guide § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
+# 1. Roll the compose state back: postgres:16-alpine + mount …:/var/lib/postgresql/data
+git checkout <previous-state> -- docker-compose.prod.yml
+
+# 2. Remove the 18-series volume, restore the 16-series bytes
+docker compose "${compose_files[@]}" rm -f db
+docker volume rm anlaufstelle_pgdata && docker volume create anlaufstelle_pgdata
+docker run --rm -v anlaufstelle_pgdata:/to -v "$PWD":/from alpine \
+    tar xzf /from/pgdata-pg16.tar.gz -C /to
+
 # 3. Bring up the stack + health
 docker compose "${compose_files[@]}" up -d
 ```
@@ -3123,5 +3144,5 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 273b65b479f26f2f2c9e49e902093a2da965bfd1 -->
+<!-- source-hash: d5a68a11edbebbee3a28e150bc9dcfd2e460098f -->
 <!-- translation-date: 2026-09-22 -->
