@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 19:40+0200\n"
+"POT-Creation-Date: 2026-10-07 20:21+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12985,10 +12985,6 @@ msgstr "24 months rolling by default, adjustable per facility (0 disables deleti
 msgid "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus. Vorschläge erscheinen hier nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist. Zurückstellen oder Verwerfen hält die Löschung nicht auf."
 msgstr "The daily retention run deletes expired events without approval; only a legal hold exempts them. Proposals appear here only if the proposal run (enforce_retention --propose) is set up as well. Deferring or rejecting does not stop the deletion."
 
-#: src/core/forms/config.py:306
-msgid "Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen zusätzliche Berechtigungen voraus. Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest."
-msgstr "Controls who may see the content. \"Elevated\" and \"High\" require additional permissions. Whether a field is stored encrypted is determined by the field template."
-
 #: src/core/forms/config.py:376
 msgid "In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-Kontaktstufe. Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder ohne Bedingung sein. Der Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
 msgstr "Only active event types without a minimum contact stage appear in the tally. If required fields exist, all of them must be number fields without a condition. The type and all required fields must be visible to the respective role."
@@ -13319,3 +13315,24 @@ msgstr "Open Administration → Access and give the “Deletion confirmation” 
 #: src/core/services/dashboard/external_report.py:252
 msgid "Die k-Anonymitäts-Schwelle liegt unter 3. Gruppen ab zwei Datensätzen werden veröffentlicht; Personen in kleinen Gruppen können in den Zahlen wiedererkennbar sein. Empfohlen ist k = 5."
 msgstr "The k-anonymity threshold is below 3. Groups of two or more records are published; persons in small groups can be recognisable from the figures. k = 5 is recommended."
+
+#: src/core/forms/facility_settings.py:166
+#, python-format
+msgid "Dokumentationstyp %(name)s"
+msgstr "Document type %(name)s"
+
+#: src/core/models/document_type.py:68
+msgid "Steuert, wer die Inhalte sehen darf. Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest."
+msgstr "Controls who may see the content. Whether a field is stored encrypted is set by the field template."
+
+#: src/core/services/compliance/deletion_approvers.py:59
+msgid "Genehmiger für Löschanträge"
+msgstr "Deletion request approvers"
+
+#: src/core/services/compliance/deletion_approvers.py:60
+msgid "Berechtigungen"
+msgstr "Permissions"
+
+#: src/core/services/dashboard/external_report.py:255
+msgid "Die k-Anonymitäts-Schwelle liegt unter 3. Bei k = 1 wird keine Zahl unterdrückt; auch Einzelfälle werden veröffentlicht und können Personen erkennbar machen. Empfohlen ist k = 5."
+msgstr "The k-anonymity threshold is below 3. At k = 1 no figure is suppressed; single cases are published as well and can make persons identifiable. k = 5 is recommended."

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 19:40+0200\n"
+"POT-Creation-Date: 2026-10-07 20:21+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -13081,10 +13081,6 @@ msgstr "Standardmäßig 24 Monate rollierend, je Einrichtung einstellbar (0 scha
 msgid "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus. Vorschläge erscheinen hier nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist. Zurückstellen oder Verwerfen hält die Löschung nicht auf."
 msgstr "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus. Vorschläge erscheinen hier nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist. Zurückstellen oder Verwerfen hält die Löschung nicht auf."
 
-#: src/core/forms/config.py:306
-msgid "Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen zusätzliche Berechtigungen voraus. Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest."
-msgstr "Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen zusätzliche Berechtigungen voraus. Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest."
-
 #: src/core/forms/config.py:376
 msgid "In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-Kontaktstufe. Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder ohne Bedingung sein. Der Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
 msgstr "In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-Kontaktstufe. Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder ohne Bedingung sein. Der Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
@@ -13415,3 +13411,24 @@ msgstr "Verwaltung → Zugänge öffnen und mindestens zwei aktiven Konten das R
 #: src/core/services/dashboard/external_report.py:252
 msgid "Die k-Anonymitäts-Schwelle liegt unter 3. Gruppen ab zwei Datensätzen werden veröffentlicht; Personen in kleinen Gruppen können in den Zahlen wiedererkennbar sein. Empfohlen ist k = 5."
 msgstr "Die k-Anonymitäts-Schwelle liegt unter 3. Gruppen ab zwei Datensätzen werden veröffentlicht; Personen in kleinen Gruppen können in den Zahlen wiedererkennbar sein. Empfohlen ist k = 5."
+
+#: src/core/forms/facility_settings.py:166
+#, python-format
+msgid "Dokumentationstyp %(name)s"
+msgstr "Dokumentationstyp %(name)s"
+
+#: src/core/models/document_type.py:68
+msgid "Steuert, wer die Inhalte sehen darf. Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest."
+msgstr "Steuert, wer die Inhalte sehen darf. Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest."
+
+#: src/core/services/compliance/deletion_approvers.py:59
+msgid "Genehmiger für Löschanträge"
+msgstr "Genehmiger für Löschanträge"
+
+#: src/core/services/compliance/deletion_approvers.py:60
+msgid "Berechtigungen"
+msgstr "Berechtigungen"
+
+#: src/core/services/dashboard/external_report.py:255
+msgid "Die k-Anonymitäts-Schwelle liegt unter 3. Bei k = 1 wird keine Zahl unterdrückt; auch Einzelfälle werden veröffentlicht und können Personen erkennbar machen. Empfohlen ist k = 5."
+msgstr "Die k-Anonymitäts-Schwelle liegt unter 3. Bei k = 1 wird keine Zahl unterdrückt; auch Einzelfälle werden veröffentlicht und können Personen erkennbar machen. Empfohlen ist k = 5."
