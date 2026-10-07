@@ -378,18 +378,14 @@ Aus `seed.py` werden geseedet:
 
 ### D.5 — Reset-Workflow für sauberen Test-Lauf
 
-```bash
-# DB-Reset + Re-Seed
-make reset-db
-make seed
+Nur eine eigens vorbereitete lokale Handtest-Datenbank zurücksetzen, nachdem alle sie nutzenden Prozesse beendet sind. Die Datenbank `anlaufstelle_handtest` muss bereits existieren; Verbindung und DB-Rolle vorher prüfen. `flush` entfernt die Daten, behält aber das Schema. Niemals gegen Produktion oder die gemeinsam genutzte E2E-Datenbank ausführen.
 
-# Oder manuell:
-sudo docker compose down
-sudo docker compose up -d db
-sudo docker compose exec db psql -U postgres -c 'DROP DATABASE anlaufstelle'
-sudo docker compose exec db psql -U postgres -c 'CREATE DATABASE anlaufstelle'
-make migrate
-make seed
+Aus dem Repository mit aktivierter virtueller Umgebung:
+
+```bash
+POSTGRES_DB=anlaufstelle_handtest python src/manage.py migrate
+POSTGRES_DB=anlaufstelle_handtest python src/manage.py flush --noinput
+POSTGRES_DB=anlaufstelle_handtest python src/manage.py seed
 ```
 
 ---

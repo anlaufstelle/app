@@ -697,7 +697,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 **Voraussetzung:** Einrichtungs-Admin angemeldet und aktuelle Einrichtung ausgewählt; kein Sudo-Mode erforderlich.
 
 **Schritte:**
-1. `python manage.py generate_dsgvo_package` ausführen → erzeugt Markdown-Templates.
+1. `python src/manage.py generate_dsgvo_package --facility "<Einrichtungsname>" --output-dir /tmp/dsgvo-handtest` aus dem Repository mit aktivierter virtueller Umgebung ausführen (Einrichtungsname ersetzen) → erzeugt Markdown-Dateien mit Einrichtungsdaten.
 2. Mit dem Einrichtungs-Admin einloggen, `/dsgvo/` öffnen, ohne Sudo-Mode zu betreten.
 3. **„Verarbeitungsverzeichnis"** herunterladen.
 4. Inhalt prüfen:
@@ -758,7 +758,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 **Code-Referenz:**
 - `src/anlaufstelle/settings/base.py` (`AUTH_PASSWORD_VALIDATORS`)
-- `src/core/services/login_lockout.py`
+- `src/core/services/security/login_lockout.py`
 
 
 **Schritte:**
@@ -767,7 +767,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 3. Pwd-Wechsel mit `Anlaufstelle2026!` → Erfolg.
 4. Login mit `fachkraft` + falschem Pwd 11× hintereinander.
 5. Nach 10. Versuch → AuditLog `LOGIN_LOCKED`, weitere Versuche → 429.
-6. Admin entsperrt: `python manage.py shell -c "from core.services.login_lockout import unlock; unlock('fachkraft')"`.
+6. Admin entsperrt: `python src/manage.py unlock "<Benutzername>"` (den tatsächlich gesperrten Account einsetzen).
 
 **Erwartetes Ergebnis:**
 - 12-Zeichen-Pflicht greift.
@@ -792,11 +792,11 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 - `src/core/services/compliance/breach_detection.py`
 - `src/core/management/commands/detect_breaches.py`
 
-**Voraussetzung:** mind. 11 fehlgeschlagene Logins eines Users.
+**Voraussetzung:** Fehlgeschlagene Logins in Anzahl und Zeitfenster entsprechend den Einrichtungs-Einstellungen für `detect_failed_login_burst`; keine bereits protokollierte identische Meldung.
 
 **Schritte:**
-1. 11 falsche Login-Versuche mit `fachkraft` (auslösen Lockout).
-2. `python manage.py detect_breaches --since=1h` ausführen.
+1. Mit einem lokalen Testaccount den konfigurierten Login-Burst-Schwellwert im Zeitfenster erreichen; bereits gesperrte Anfragen nicht als neue `LOGIN_FAILED` zählen.
+2. `python src/manage.py detect_breaches --facility "<Einrichtungsname>"` (Name ersetzen; DB-Rolle mit RLS-Bypass verwenden) ausführen.
 3. Output prüfen: Anomalie wird gemeldet (Login-Burst).
 4. Webhook-Konfiguration prüfen: SSRF-Whitelist greift (kein `http://localhost`-Webhook).
 
@@ -804,7 +804,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 - Anomalie erkannt und protokolliert.
 - Webhook-Notification ausgelöst (sofern konfiguriert).
 
-**Erwarteter Audit-Eintrag:** `BREACH_DETECTED` mit `category=login_burst`.
+**Erwarteter Audit-Eintrag:** `SECURITY_VIOLATION` mit `detail.kind=failed_login_burst`, sofern der konfigurierte Schwellwert erreicht ist und das Finding nicht bereits dedupliziert wurde.
 
 **Status:** ☐ Offen
 
@@ -959,19 +959,29 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin | — | — | `src/tests/test_audit_service.py` |
+| Security | admin | — | — | `src/tests/test_audit_chain.py` |
 
-**Code-Referenz:** `src/core/services/audit_hash.py`
+**Code-Referenz:** `src/core/services/audit/chain.py` (`verify_chain`, `ChainResult`); `src/tests/test_audit_chain.py` (`TestTamperDetection.test_inplace_detail_mutation_breaks_chain`).
+
+**Voraussetzung:** Lokale Testdatenbank mit mindestens einem verketteten Audit-Eintrag der ausgewählten Einrichtung; Shell-Verbindung mit passendem RLS-Kontext. Ein leerer QuerySet gilt nicht als erfolgreicher Integritätsnachweis.
 
 **Schritte:**
-1. `python manage.py shell` öffnen.
-2. `from core.services.audit_hash import verify_chain`
-3. `verify_chain()` → erwartet `True` (alle Einträge konsistent).
-4. Direkt-SQL: ein älteres `hash_self`-Feld manipulieren.
-5. `verify_chain()` erneut → erwartet `False` mit Position des Bruchs.
+1. Aus dem Repository mit aktivierter virtueller Umgebung `python src/manage.py shell` öffnen.
+2. Einrichtungsname ersetzen und in der Shell ausführen:
+   ```python
+   from core.models import Facility
+   from core.services.audit.chain import verify_chain
+
+   facility = Facility.objects.get(name="<Einrichtungsname>")
+   result = verify_chain(facility)
+   print(result.ok, result.rows_checked, result.first_break_id)
+   ```
+3. Für die unveränderte Kette: `result.ok=True`, `result.rows_checked>0`, `result.first_break_id=None` erwarten.
+4. Manipulationsprobe ausschließlich in der isolierten Testdatenbank durchführen: `.venv/bin/python -m pytest -x src/tests/test_audit_chain.py::TestTamperDetection::test_inplace_detail_mutation_breaks_chain -q`. Der Test umgeht den Immutability-Trigger gezielt im Testkontext und prüft nach der Manipulation `result.ok=False` und `result.first_break_id` gleich der manipulierten Eintrags-ID. Er benötigt PostgreSQL; ein Skip belegt den Schutz nicht.
 
 **Erwartetes Ergebnis:**
-- Hash-Kette erkennt nachträgliche Manipulationen.
+- Hash-Kette erkennt die Manipulation; in der normalen DB bleibt der Append-only-Trigger aktiv.
+- `verify_chain(facility)` liefert ein `ChainResult`, keinen booleschen Wert. Ein erster Bruch wird über `.first_break_id` gemeldet.
 
 **Status:** ☐ Offen
 

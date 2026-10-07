@@ -426,7 +426,7 @@
 - `src/anlaufstelle/settings/prod.py` (HSTS, CSRF, X-Frame, …)
 - `src/anlaufstelle/settings/base.py` (CSP)
 
-**Voraussetzung:** Prod-ähnliche Konfiguration (`make runserver-prod` oder via Caddy).
+**Voraussetzung:** Produktionskonfiguration mit vollständig gesetzter Umgebung; mit aktivierter virtueller Umgebung lokal `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.prod python -m gunicorn --chdir src --bind 127.0.0.1:8000 anlaufstelle.wsgi:application` starten, für HTTPS hinter dem konfigurierten Reverse-Proxy.
 
 **Schritte:**
 1. `curl -I https://localhost:8443/login/` (oder vergleichbar gegen Prod-Mirror).

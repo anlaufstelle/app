@@ -776,7 +776,7 @@
 
 **Vorbereitung:**
 - Login als `miriam`, `User.preferred_language="de"`.
-- Locale-Files `de` und `en` kompiliert (`make compile-messages`).
+- Locale-Files `de` und `en` kompiliert (`python src/manage.py compilemessages`).
 
 **Schritte:**
 1. Im Header/Footer Sprachumschalter klicken (Form POST `/i18n/setlang/` mit `language=en`).
@@ -1100,7 +1100,7 @@
 |---------|-------|---------|--------|-----|
 | Pwa | unauthentifiziert / beliebig | C/S | ✓ | `test_pwa_offline.py` |
 
-**Voraussetzung:** Statische Files vorhanden (`make collectstatic` für Prod, in dev/e2e direkt aus `src/static/`).
+**Voraussetzung:** Statische Files vorhanden (`python src/manage.py collectstatic --noinput --settings=anlaufstelle.settings.prod` für Prod, in dev/e2e direkt aus `src/static/`).
 
 **Vorbereitung:**
 - Server läuft auf `https://localhost:8844/`.
@@ -5891,30 +5891,17 @@
 
 ---
 
-### TC-ID: ENT-OFFL-15 — Lease-Verlust durch Server-Reset
+### TC-ID: ENT-OFFL-15 — Geräte-Lease per Server-Reset: entfällt
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Offline | fachkraft + admin | C | ✓ | — |
 
-**Voraussetzung:** Lease aktiv, IndexedDB gefüllt.
+**Status:** Entfällt — es gibt kein Modell `OfflineLease` und keinen Geräte-Lease-Status-Endpoint. Ein Server-Neustart invalidiert keine solche Lease; dieser Fall ist nicht als bestanden zu werten.
 
-**Schritte:**
-1. fachkraft: Bundle laden, in IndexedDB sichtbar.
-2. admin (per `manage.py shell` / SSH): Server-seitig `OfflineLease`-Eintrag für diesen User löschen oder revoke flag setzen.
-3. fachkraft: Seite neu laden.
-4. Bundle-Status-Endpoint meldet „Lease invalidiert".
-5. UI zeigt deutlich, dass Offline-Bundle nicht mehr nutzbar ist.
-6. Lokale Daten bleiben verschlüsselt in IndexedDB — werden aber nicht angezeigt und nicht synct.
+**Ist-Stand:** Die Offline-Funktion liefert Personen- und Einrichtungs-Bundles mit 48 Stunden Gültigkeit (`BUNDLE_TTL_SECONDS`). Der Service Worker hält die App-Shell und statische Ressourcen vor. Dexie/IndexedDB speichert verschlüsselte Nutzdaten für Personen, Fälle, Ereignisse, Aufgaben, Queue und Entwürfe sowie Metadaten. `OfflineClientRevocation` bildet personenbezogene Widerrufe nach Anonymisierung ab, keine Geräte-Leases. Die Online-Revalidierung entfernt lokale Personendaten bei Zugriffsverlust; ein reiner Server-Neustart ist dafür kein Auslöser.
 
-**Erwartetes Ergebnis:**
-- Server kann eine Lease zentral revoken (für gestohlenes/verlorenes Gerät).
-- Daten bleiben verschlüsselt; ohne gültige Lease kein Decrypt.
-- Re-Bootstrap nur nach erneutem Login.
-
-**DSGVO/Security-Note:** Defense gegen Geräte-Verlust — kritischer Sozialarbeit-Use-Case.
-
-**Status:** ☐ Offen
+**Code-Beleg:** `src/core/services/system/offline.py` (`BUNDLE_TTL_SECONDS`, Bundle-Erstellung), `src/core/models/offline_revocation.py` (`OfflineClientRevocation`), `src/core/views/offline.py` (Bundle-/Widerrufs-Views), `src/static/js/sw.js`, `src/static/js/offline-db.js` (Dexie-Schema), `src/static/js/offline-bundles.js` (`revalidateCachedClient`), `src/static/js/offline-revocations.js` (Widerrufs-Purge).
 
 ---
 
@@ -6144,7 +6131,7 @@
 **Voraussetzung:** beide Locale-Dateien (de, en) kompiliert.
 
 **Vorbereitung:**
-- Locale-Files: `make compilemessages` oder Container-Restart.
+- Locale-Files: `python src/manage.py compilemessages` aus dem Repository mit aktivierter virtueller Umgebung.
 
 **Schritte:**
 1. `/?lang=de` aufrufen → Login-Seite auf Deutsch (z.B. „Anmelden", „Passwort").
@@ -6176,7 +6163,7 @@
 **Voraussetzung:** mit `DEBUG=False` (Prod-ähnlich).
 
 **Vorbereitung:**
-- `make run-prod` oder `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.prod`.
+- Mit vollständig gesetzter Produktionsumgebung lokal starten: `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.prod python -m gunicorn --chdir src --bind 127.0.0.1:8000 anlaufstelle.wsgi:application` (virtuelle Umgebung aktiviert; für HTTPS hinter dem konfigurierten Reverse-Proxy).
 
 **Schritte:**
 1. `/this-page-does-not-exist-12345/` aufrufen → 404-Seite.
