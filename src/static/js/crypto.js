@@ -3,8 +3,11 @@
  *
  * The CryptoKey is stored as a non-extractable structured-clone object in
  * IndexedDB (table `meta`, key `sessionKey`). Persistence is required to
- * survive page navigations; non-extractability ensures that even an attacker
- * with full IndexedDB read access cannot recover the raw key bytes.
+ * survive page navigations, and the key also outlives closing the tab, the
+ * browser or a device restart. Non-extractable only means the raw key bytes
+ * cannot be read out; until the row is deleted, any code running in this
+ * origin of the browser profile (e.g. on an unlocked device) can still use
+ * the key to decrypt the offline store.
  *
  * Lifecycle:
  *   - login.html / password_change.html call deriveSessionKey() once after
