@@ -68,7 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Testnachweise über Statusmatrix statt Run-Dateipflicht führen** (#2501) — Die Dev-Testdoku verlinkt aktuelle Prüfstände und optionale Detailnachweise, archiviert historische Run-Logs und korrigiert Mutationsstatus, Testklassenreferenz und driftende Modulzahlen.
 
-- **Release-Dokumentation beschreibt gültige Werkzeuge und Rollback-Schritte** (#2456) — Checkliste und Roadmap nennen die aktuelle RC-Kadenz, die explizite App-Push-Ausnahme, die-Gates, den anonymen Image-Pull-Check und einen Rollback über veröffentlichte App-Tags; die Strip-Anzahl wird aus dem Werkzeug abgeleitet. Die Django-Prüfliste verweist auf „Python / Django“, und der Rollback benennt Compose-Servicenamen eindeutig.
+- **Release-Dokumentation beschreibt gültige Werkzeuge und Rollback-Schritte** (#2456) — Checkliste und Roadmap nennen die aktuelle RC-Kadenz, die explizite App-Push-Ausnahme, die Release-Baum-Gates (Fence-Lint, Render-Struktur, Abschnittslinks), den anonymen Image-Pull-Check und einen Rollback über veröffentlichte App-Tags; die Strip-Anzahl wird aus dem Werkzeug abgeleitet. Die Django-Prüfliste verweist auf „Python / Django“, und der Rollback benennt Compose-Servicenamen eindeutig.
 
 - **Übersetzungen zusätzlich strukturell prüfbar** (#2454) — Ein Prüfer meldet Abweichungen bei Überschriften, Codeblöcken, Tabellen und erkannten Befehlen zwischen DE/EN-Paaren; bewusste Ausnahmen sind begründet und vorhandene Unterschiede werden ohne automatische Übersetzung ausgewiesen. Er erfasst auch README, CONTRIBUTING und die Screenshot-Spiegel und damit alle elf gestempelten Paare.
 
