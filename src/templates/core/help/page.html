@@ -18,6 +18,24 @@
         </li>
         {% endfor %}
     </ul>
+    {% for section in help_page.sections %}
+    <section id="{{ section.anchor }}" aria-labelledby="{{ section.anchor }}-heading" class="mb-6" data-help-section="{{ section.anchor }}">
+        <h2 id="{{ section.anchor }}-heading" class="text-[18px] font-bold text-ink mb-2">{{ section.heading }}</h2>
+        {% for paragraph in section.paragraphs %}
+        <p class="text-sm leading-6 text-ink mb-2">{{ paragraph }}</p>
+        {% endfor %}
+        {% if section.items %}
+        <ul class="space-y-2 mt-2">
+            {% for item in section.items %}
+            <li class="flex gap-3 text-sm leading-6 text-ink">
+                <span aria-hidden="true" class="text-accent font-bold">•</span>
+                <span>{{ item }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </section>
+    {% endfor %}
     {% if show_area_link %}<a href="{% url nav_item.url_name %}" class="btn-primary inline-flex px-4 py-2 text-sm">{% blocktrans with area=nav_item.label %}Zu „{{ area }}“{% endblocktrans %}</a>{% endif %}
 </article>
 {% endblock %}

@@ -27,10 +27,12 @@ Feld-Board mutiert wird. Akzeptiert: recoverable (erneut öffnen), der Gewinn
     <p class="text-[12px] text-ink-muted">
         {% trans "Blende ein Feld nur ein, wenn ein anderes Feld eine Bedingung erfüllt. UND innerhalb einer Gruppe, ODER über Gruppen hinweg." %}
     </p>
-    {% url 'core:help_page' 'verwaltung' as conditions_help_url %}
+    {% url 'core:help_page' 'verwaltung' as conditions_help_page_url %}
+    {% with conditions_help_url=conditions_help_page_url|add:"#feldbedingungen" %}
     {% trans "Bedingungen steuern, wann ein Feld im Formular erscheint. Regeln derselben Gruppe gelten gemeinsam; mehrere Gruppen bieten alternative Wege." as conditions_help_text %}
     {% trans "Wie funktionieren Feldbedingungen?" as conditions_help_label %}
     {% include "components/_context_help.html" with help_id="document-conditions" help_text=conditions_help_text help_url=conditions_help_url summary_label=conditions_help_label only %}
+    {% endwith %}
 
     {% if condition_field_count < 2 %}
     <div class="card p-4" data-testid="condition-board-empty">

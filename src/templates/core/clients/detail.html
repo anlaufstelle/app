@@ -137,10 +137,10 @@ und Badge sagen, WAS beantragt ist (und wohin zusammengeführt würde).{% endcom
     </a>
     {% endif %}
 </div>
-{% url 'core:help_page' 'datenschutz' as four_eyes_help_url %}
+{% url 'core:help_page' 'datenschutz' as four_eyes_help_page_url %}
 {% trans "Beim Vier-Augen-Prinzip führt ein Löschwunsch zunächst zu einem Antrag. Eine zweite berechtigte Person muss ihn prüfen, bevor gelöscht wird." as four_eyes_help_text %}
 {% trans "Wie funktioniert das Vier-Augen-Prinzip?" as four_eyes_help_label %}
-<div class="mb-4">{% include "components/_context_help.html" with help_id="four-eyes" help_text=four_eyes_help_text help_url=four_eyes_help_url summary_label=four_eyes_help_label only %}</div>
+<div class="mb-4">{% with four_eyes_help_url=four_eyes_help_page_url|add:"#vier-augen-prinzip" %}{% include "components/_context_help.html" with help_id="four-eyes" help_text=four_eyes_help_text help_url=four_eyes_help_url summary_label=four_eyes_help_label only %}{% endwith %}</div>
 {% endif %}
 
 {# Berichtigungsanträge (M4, Refs #1060 / ADR-041) — Art.-16-Prüfweg am Datensatz #}

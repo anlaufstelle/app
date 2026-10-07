@@ -12,11 +12,22 @@ from core import nav
 
 
 @dataclass(frozen=True)
+class HelpSection:
+    """A deep-linkable section of a help page; ``anchor`` becomes the element id."""
+
+    anchor: str
+    heading: str | Promise
+    paragraphs: tuple[str | Promise, ...]
+    items: tuple[str | Promise, ...] = ()
+
+
+@dataclass(frozen=True)
 class HelpPage:
     slug: str
     nav_key: str
     intro: str | Promise
     topics: tuple[str | Promise, ...]
+    sections: tuple[HelpSection, ...] = ()
 
 
 HELP_PAGES = {
@@ -93,6 +104,46 @@ HELP_PAGES = {
                 _("Lösch- und Berichtigungsanträge werden nachvollziehbar geprüft."),
                 _("Löschvorschläge, Audit-Log und DSGVO-Paket unterstützen die regelmäßige Kontrolle."),
             ),
+            sections=(
+                HelpSection(
+                    anchor="vier-augen-prinzip",
+                    heading=_("Vier-Augen-Prinzip bei Löschungen"),
+                    paragraphs=(
+                        _(
+                            "Beim Vier-Augen-Prinzip führt ein Löschwunsch zunächst zu einem Antrag. "
+                            "Gelöscht wird erst, nachdem eine zweite berechtigte Person den Antrag "
+                            "geprüft und genehmigt hat."
+                        ),
+                    ),
+                    items=(
+                        _("Wer den Antrag gestellt hat, kann ihn nicht selbst genehmigen."),
+                        _("Die prüfende Person braucht das Recht „Löschbestätigung“."),
+                        _("Wer den Antrag gestellt hat, kann ihn zurückziehen, solange er aussteht."),
+                        _("Ein zurückgezogener oder abgelehnter Antrag löscht nichts; die Daten bleiben unverändert."),
+                    ),
+                ),
+                HelpSection(
+                    anchor="loeschfristen",
+                    heading=_("Löschfristen und Löschvorschläge"),
+                    paragraphs=(
+                        _(
+                            "Ereignisse haben eine Aufbewahrungsfrist. Sie ergibt sich aus der Kontaktstufe "
+                            "oder aus einer Frist am Dokumentationstyp."
+                        ),
+                        _(
+                            "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; "
+                            "nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus."
+                        ),
+                    ),
+                    items=(
+                        _(
+                            "Löschvorschläge erscheinen in den Löschfristen nur, wenn zusätzlich der Vorschlagslauf "
+                            "(enforce_retention --propose) eingerichtet ist."
+                        ),
+                        _("Zurückstellen oder Verwerfen eines Löschvorschlags hält die Löschung nicht auf."),
+                    ),
+                ),
+            ),
         ),
         HelpPage(
             slug="verwaltung",
@@ -101,6 +152,52 @@ HELP_PAGES = {
             topics=(
                 _("Hier werden Zugänge, Einstellungen, Dokumentationstypen und Feldvorlagen gepflegt."),
                 _("Bedingungen können Felder abhängig von bereits erfassten Angaben ein- oder ausblenden."),
+            ),
+            sections=(
+                HelpSection(
+                    anchor="feldbedingungen",
+                    heading=_("Feldbedingungen (bedingte Sichtbarkeit)"),
+                    paragraphs=(
+                        _(
+                            "Feldbedingungen steuern, wann ein Feld im Formular sichtbar ist. Das Zielfeld erscheint "
+                            "nur, wenn ein anderes Feld desselben Dokumentationstyps, das Quellfeld, "
+                            "die Bedingung erfüllt."
+                        ),
+                        _(
+                            "Beispiel: Das Feld „Notiz zur Weitervermittlung“ soll nur erscheinen, wenn im Feld "
+                            "„Weitervermittlung“ der Wert „Ja“ ausgewählt wurde."
+                        ),
+                    ),
+                    items=(
+                        _("Bedingungsgruppe: Die Bedingungen eines Zielfelds sind in Gruppen geordnet."),
+                        _(
+                            "UND innerhalb einer Gruppe: Mehrere Bedingungen in derselben Gruppe müssen "
+                            "gemeinsam erfüllt sein."
+                        ),
+                        _(
+                            "ODER über Gruppen hinweg: Mehrere Gruppen sind alternative Wege. "
+                            "Es reicht, wenn eine Gruppe erfüllt ist."
+                        ),
+                        _(
+                            "Operatoren: ist gleich, ist ungleich, enthält, ist größer als, ist kleiner als, "
+                            "ist leer und ist nicht leer. Welche zur Wahl stehen, hängt vom Feldtyp des Quellfelds ab; "
+                            "„ist leer“ und „ist nicht leer“ brauchen keinen Vergleichswert."
+                        ),
+                        _(
+                            "Ausgeblendete Felder erscheinen im Formular nicht. "
+                            "Ist das Quellfeld selbst ausgeblendet, gilt es als leer."
+                        ),
+                        _(
+                            "Pflichtfeld: Ein ausgeblendetes Pflichtfeld muss nicht ausgefüllt werden. "
+                            "Sobald es sichtbar ist, gilt die Pflicht wieder."
+                        ),
+                        _(
+                            "Ausprobieren: Öffnen Sie nach dem Speichern der Bedingung das Erfassungsformular "
+                            "dieses Dokumentationstyps und ändern Sie den Wert im Quellfeld — "
+                            "das Zielfeld muss erscheinen und wieder verschwinden."
+                        ),
+                    ),
+                ),
             ),
         ),
         HelpPage(
