@@ -123,6 +123,19 @@ class TestAdminFormSensitivityHelp:
         assert str(admin_form.base_fields["sensitivity"].help_text) == model_text
         assert str(DocumentTypeForm().fields["sensitivity"].help_text) == model_text
 
+    def test_help_text_has_the_agreed_wording(self, admin_form):
+        """Visibility only; the role details of each level stay in the expandable help block."""
+        from core.forms.config import DocumentTypeForm
+
+        expected = (
+            "Steuert, wer die Inhalte sehen darf. "
+            "Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest."
+        )
+
+        assert str(DocumentType._meta.get_field("sensitivity").help_text) == expected
+        assert str(admin_form.base_fields["sensitivity"].help_text) == expected
+        assert str(DocumentTypeForm().fields["sensitivity"].help_text) == expected
+
 
 class TestTallyHelpNamesEveryExclusionReason:
     def test_the_needle_table_covers_every_reason(self):

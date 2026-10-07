@@ -65,8 +65,7 @@ class DocumentType(ReportKeyMixin, SluggedModel):
         default=Sensitivity.NORMAL,
         verbose_name=_("Sensibilität"),
         help_text=_(
-            "Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen "
-            "zusätzliche Berechtigungen voraus. Ob ein Feld verschlüsselt gespeichert wird, "
+            "Steuert, wer die Inhalte sehen darf. Ob ein Feld verschlüsselt gespeichert wird, "
             "legt die Feldvorlage fest."
         ),
     )

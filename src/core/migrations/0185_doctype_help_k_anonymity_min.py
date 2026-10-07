@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='documenttype',
             name='sensitivity',
-            field=models.CharField(choices=[('normal', 'Normal'), ('elevated', 'Erhöht'), ('high', 'Hoch')], default='normal', help_text='Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen zusätzliche Berechtigungen voraus. Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest.', max_length=20, verbose_name='Sensibilität'),
+            field=models.CharField(choices=[('normal', 'Normal'), ('elevated', 'Erhöht'), ('high', 'Hoch')], default='normal', help_text='Steuert, wer die Inhalte sehen darf. Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest.', max_length=20, verbose_name='Sensibilität'),
         ),
         migrations.AlterField(
             model_name='settings',
