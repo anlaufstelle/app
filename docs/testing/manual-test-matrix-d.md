@@ -6,13 +6,15 @@
 
 ## SEKTION D — Entwickler-Probes (LOKAL/SSH)
 
-> **Zielgruppe:** Tobias / Server-Admin. Diese Tests erfordern direkten Zugriff auf den Server (`docker compose exec web python manage.py …`, `psql`, lokale `manage.py`-Befehle). Auf [`dev.anlaufstelle.app`](https://dev.anlaufstelle.app) nur durch Tobias oder per SSH durchführbar. Sie verifizieren Schema-Constraints (`on_delete`-Verhalten, RLS-Force, Encryption-at-Rest, Hash-Ketten) und Betriebsfähigkeit (DB-Rollen, Backup/Restore, Retention-Cron), die in Anwender-Tests nicht prüfbar sind. Aktuelle Fallzahl: siehe `test-matrix-index.md`.
+> **Zielgruppe:** Tobias / Server-Admin. Diese Tests erfordern direkten Zugriff auf den Server (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, lokale `manage.py`-Befehle). Auf [`dev.anlaufstelle.app`](https://dev.anlaufstelle.app) nur durch Tobias oder per SSH durchführbar. Sie verifizieren Schema-Constraints (`on_delete`-Verhalten, RLS-Force, Encryption-at-Rest, Hash-Ketten) und Betriebsfähigkeit (DB-Rollen, Backup/Restore, Retention-Cron), die in Anwender-Tests nicht prüfbar sind. Aktuelle Fallzahl: siehe `test-matrix-index.md`.
+
+Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte Entwicklungsdatenbank. Im Produktions-Stack laufen Wartungsbefehle über `docker compose -f docker-compose.prod.yml run --rm maintenance <command>` (Admin-DB-Rolle); zusätzliche Compose-Dateien des Betriebs-Runbooks bei entsprechendem Stack ergänzen. Negative Proben unter der App-Rolle werden ausdrücklich als solche beschrieben.
 
 ### D.CLIENT
 
 #### DEV-CLIENT-15 — PROTECT: Klient mit aktivem Fall lässt sich nicht direkt löschen
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -44,7 +46,7 @@
 
 #### DEV-CASE-13 — CASCADE: Fall löschen entfernt Goals und Milestones
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -77,7 +79,7 @@
 
 #### DEV-CASE-14 — SET_NULL: Fall löschen löst Events ab, behält sie aber
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -108,7 +110,7 @@
 
 #### DEV-DEL-06 — AuditLog: DELETION_REQUESTED + DELETION_APPROVED/REJECTED
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -142,7 +144,7 @@
 
 #### DEV-RET-02 — Bulk-Approve: 5 ablaufende Einträge genehmigen
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -174,7 +176,7 @@
 
 #### DEV-RET-04 — Bulk-Reject: 2 Einträge ablehnen → Hard-Delete in Sicht
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -205,7 +207,7 @@
 
 #### DEV-RET-05 — Hold auf einzelnen Eintrag setzen → Auto-Löschung blockiert
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -238,7 +240,7 @@
 
 #### DEV-RET-06 — Hold dismissen → Frist läuft normal weiter
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -268,7 +270,7 @@
 
 #### DEV-RET-07 — retention_anonymous_days = 90 → Anonyme Klient:in nach 90 Tagen
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -299,7 +301,7 @@
 
 #### DEV-RET-08 — retention_identified_days = 365 → Identifiziert nach 1 Jahr
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -331,7 +333,7 @@
 
 #### DEV-RET-09 — retention_qualified_days = 3650 → Qualifiziert (Pflicht) 10 Jahre
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -363,7 +365,7 @@
 
 #### DEV-RET-10 — `enforce_retention --dry-run` zeigt Aktionen ohne Schreiben
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -394,7 +396,7 @@
 
 #### DEV-RET-11 — Event-Sensitivity beeinflusst Aufbewahrung (HIGH vs. NORMAL)
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -426,7 +428,7 @@
 
 #### DEV-RET-12 — `enforce_retention` räumt liegengebliebene Import-Läufe ab (STALE_DAYS=7)
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -461,7 +463,7 @@
 
 #### DEV-STAT-03 — Snapshot via `python manage.py create_statistics_snapshots`
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -492,7 +494,7 @@
 
 #### DEV-STAT-10 — Mobile-Stats (responsive Charts mit Chart.js)
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -525,7 +527,7 @@
 
 #### DEV-AUDIT-04 — Append-Only-Probe (DSGVO-Beleg Art. 5)
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -560,7 +562,7 @@
 
 #### DEV-AUDIT-07 — Cross-Facility-Isolation (RLS)
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -595,7 +597,7 @@
 
 #### DEV-DSGVO-Art17-03 — Auto-Anonymisierung mit k-Anonymität
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -630,7 +632,7 @@
 
 #### DEV-DSGVO-Art18-01 — Hold-Mechanismus blockiert Auto-Löschung
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -660,7 +662,7 @@
 
 #### DEV-DSGVO-Art25-01 — RLS aktiv vor App-Logik
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -693,7 +695,7 @@
 
 #### DEV-DSGVO-Art30-01 — Verarbeitungsverzeichnis-Template
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -730,7 +732,7 @@
 
 #### DEV-DSGVO-Art32-02 — Encryption-at-Rest (Fernet)
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -759,7 +761,7 @@
 
 #### DEV-DSGVO-Art32-04 — Passwort-Policy & Login-Lockout
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -791,7 +793,7 @@
 
 #### DEV-DSGVO-Art33-34-01 — Breach-Detection-Command
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -823,7 +825,7 @@
 
 #### DEV-SEC-RLS-05 — `app.current_facility_id`-Tampering
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -845,7 +847,7 @@
 
 #### DEV-SEC-RLS-07 — Cross-Facility DeletionRequest unsichtbar (Mandantentrennung)
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -893,7 +895,7 @@
 
 #### DEV-SEC-RLS-08 — Cross-Facility RectificationRequest unsichtbar (Mandantentrennung)
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -927,7 +929,7 @@
 
 #### DEV-SEC-MFA-03 — Recovery-Flow
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -948,7 +950,7 @@
 
 #### DEV-SEC-AUDIT-01 — Append-Only-Probe
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -974,7 +976,7 @@
 
 #### DEV-SEC-AUDIT-02 — Hash-Kette intakt
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -998,7 +1000,7 @@
 
 #### DEV-SEC-ENC-01 — Re-Encrypt-Command
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -1027,7 +1029,7 @@
 
 #### DEV-SEC-HEAD-01 — Header-Smoke gegen Prod-Mirror
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -1194,8 +1196,8 @@
 | Ops | admin | — | — | `src/tests/test_migrations.py` (falls vorhanden) |
 
 **Schritte:**
-1. SSH: `docker compose exec web python manage.py migrate --check` → Exit-Code 0.
-2. `docker compose exec web python manage.py makemigrations --check --dry-run` → keine ausstehenden Migrationen.
+1. SSH: `docker compose -f docker-compose.prod.yml run --rm maintenance migrate --check` → Exit-Code 0.
+2. `docker compose -f docker-compose.prod.yml run --rm maintenance makemigrations --check --dry-run` → keine ausstehenden Migrationen.
 3. Optional `django_migrations`-Tabelle einsehen — neuestes Datum stimmt mit Code-Stand überein.
 
 **Erwartetes Ergebnis:**
@@ -1221,7 +1223,7 @@
 **Schritte:**
 1. SSH: Cron-Log einsehen — `enforce_retention` lief in den letzten 24 h.
 2. Letzter erfolgreicher Lauf: Audit-Eintrag `RETENTION_EXECUTED` in AuditLog vorhanden.
-3. `docker compose exec web python manage.py enforce_retention --dry-run` → zeigt aktuelle Pipeline.
+3. `docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run` → zeigt aktuelle Pipeline.
 4. Bei Fehlerfall: Audit-Eintrag `RETENTION_FAILED` mit Begründung.
 
 **Erwartetes Ergebnis:**
@@ -1233,13 +1235,13 @@
 
 ---
 
-#### DEV-OPS-08 — Healthcheck unterscheidet ok/degraded/critical
+#### DEV-OPS-08 — Healthcheck unterscheidet ok/degraded/error
 
 > 🔧 **LOKAL/SSH erforderlich.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | — | — | — | `src/tests/test_health_endpoint.py` (falls vorhanden) |
+| Ops | — | — | — | — (Unit: `src/tests/test_health.py`) |
 
 **Code-Referenz:** Health-View (siehe `ENT-SYS-01`, `ENT-SYS-02`).
 
@@ -1248,7 +1250,7 @@
 2. ClamAV-Container stoppen: `docker compose stop clamav`. (Lokal läuft der Dienst seit #1062 nur mit Profil — erst `docker compose --profile clamav up -d clamav`, dann stoppen. Auf dev/prod ist er unverändert profillos.)
 3. Health-Endpoint erneut → erwartet `degraded` (App läuft, aber ClamAV down).
 4. DB-Container stoppen: `docker compose stop db`.
-5. Health-Endpoint erneut → erwartet `critical` (App nicht funktionsfähig).
+5. Health-Endpoint erneut → erwartet `error` und HTTP 503 (App nicht funktionsfähig).
 6. Container wieder hochfahren, Status zurück auf `ok`.
 
 **Erwartetes Ergebnis:**
@@ -1339,7 +1341,7 @@
 
 #### DEV-PKG-01 — `load_package --dry-run` schreibt nichts und meldet die geplanten Änderungen
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -1368,7 +1370,7 @@
 
 #### DEV-PKG-02 — Zweiter Lauf ist vollständig `unverändert` (Idempotenz)
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -1398,7 +1400,7 @@
 
 #### DEV-PKG-03 — Fehlerfall: Paket wird komplett abgewiesen, nichts wird übernommen
 
-> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|

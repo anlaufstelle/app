@@ -3906,7 +3906,7 @@
 **Services:** `src/core/services/retention.py`  
 **Management-Commands:** `enforce_retention`, `reencrypt_fields`  
 **E2E-Coverage:** `test_retention_dashboard.py`  
-**Spezial-Setup:** Testereignisse nach Kategorie (anonym, Kontaktstufe „Pseudonym“/„Mit Zusatzangaben“) vorbereiten; `occurred_at` vor den jeweiligen Fristbeginn setzen. Trockenlauf über `docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run`.
+**Spezial-Setup:** Testereignisse nach Kategorie (anonym, Kontaktstufe „Pseudonym“/„Mit Zusatzangaben“) vorbereiten; Für anonyme/identifizierte Ereignisse `occurred_at` zurückdatieren; für qualifizierte Personen Ereignisse einem geschlossenen Fall zuordnen und dessen `closed_at` zurückdatieren. Trockenlauf über `docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run`.
 
 ---
 
@@ -3916,7 +3916,7 @@
 |---------|-------|---------|--------|-----|
 | Aufbewahrung | leitung | C/F/S | ⚪ | `test_retention_dashboard.py` |
 
-**Voraussetzung:** Backdate-Daten vorhanden (Ereignisse mit `occurred_at` älter als die Schwelle ihrer Kategorie)
+**Voraussetzung:** Backdate-Daten vorhanden (anonyme/identifizierte Ereignisse mit abgelaufenem `occurred_at`; qualifizierte Ereignisse mit zugeordnetem, ausreichend lange geschlossenem Fall)
 
 **Vorbereitung:**
 - Mit `leitung` einloggen.
@@ -3928,7 +3928,7 @@
 3. Spaltenüberschriften und Sortierung prüfen.
 
 **Erwartetes Ergebnis:**
-- Liste der Daten mit ablaufender Frist: standardmäßig 90 Tage für anonyme Ereignisse, 365 Tage bei Kontaktstufe „Pseudonym“ (IDENTIFIED), 3650 Tage bei „Mit Zusatzangaben“ (QUALIFIED). Maßgeblich sind die aktuellen Einrichtungs-Einstellungen und `occurred_at`.
+- Liste der Daten mit ablaufender Frist: standardmäßig 90 Tage für anonyme Ereignisse, 365 Tage bei Kontaktstufe „Pseudonym“ (IDENTIFIED), 3650 Tage bei „Mit Zusatzangaben“ (QUALIFIED). Maßgeblich sind die aktuellen Einrichtungs-Einstellungen; die Frist läuft bei anonymen/identifizierten Ereignissen ab `occurred_at`, bei qualifizierten Ereignissen ab `closed_at` des zugeordneten geschlossenen Falls. Ohne solchen Fall greift die qualifizierte Strategie nicht.
 - Holds-Tab listet aktive Sperren.
 - Historie-Tab zeigt vergangene Approvals/Rejections inkl. Akteur:in und Zeitstempel.
 
@@ -4504,6 +4504,7 @@
 
 **DSGVO/Security-Note:**
 - Statistik nur aggregiert, keine Einzelfall-Identifikation (Art. 89 Statistikprivileg).
+- Nach einem Aufbewahrungslauf bleiben gelöschte Ereignisse im Monatsaggregat gezählt: `carry_deleted_event` überträgt die anonymen Zählwerte in `_deleted`, jede Neuberechnung addiert sie zu den noch vorhandenen Ereignissen. Ein sinkender Monatswert allein wegen dieses Löschlaufs wäre ein Fehler.
 
 **Status:** ☐ Offen
 
@@ -5092,74 +5093,67 @@
 <details open>
 <summary><strong>📜 DSGVO — DSGVO-Paket (10 Cases)</strong></summary>
 
-**Routen:** `/dsgvo/`, `/dsgvo/download/<slug>/`  
+**Routen:** `/dsgvo/`, `/dsgvo/<slug>/`  
 **Views:** `src/core/views/dsgvo.py` (DSGVOPackageView, DSGVODocumentDownloadView)  
-**Services:** `src/core/services/dsgvo_package.py`  
+**Services:** `src/core/services/client/dsgvo_package.py`  
 **Command:** `src/core/management/commands/generate_dsgvo_package.py`  
 **E2E-Coverage:** `test_dsgvo_package.py`  
-**Spezial-Setup:** Sudo-Mode aktiv (Re-Auth innerhalb 15 Min). Markdown-Templates in `src/templates/dsgvo/`.
+**Spezial-Setup:** angemeldete Anwendungsbetreuung der Einrichtung; kein Sudo erforderlich. Markdown-Vorlagen in `src/core/dsgvo_templates/`. Übersicht und Download sind jeweils auf 30 GET-Aufrufe pro Stunde und Nutzer:in begrenzt (`RATELIMIT_BULK_ACTION`).
 
 ---
 
-### TC-ID: ENT-DSGVO-01 — DSGVO-Paket öffnen (Admin + Sudo)
+### TC-ID: ENT-DSGVO-01 — DSGVO-Paket öffnen (Anwendungsbetreuung)
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | DSGVO | admin | C/F/S | ⚪ | `test_dsgvo_package.py` |
 
-**Voraussetzung:** Admin eingeloggt, Sudo-Token gültig (frische Re-Auth).
+**Voraussetzung:** Anwendungsbetreuung eingeloggt, Einrichtungs-Kontext gesetzt.
 
 **Vorbereitung:**
 - Als admin einloggen.
-- `/sudo/` aufrufen, Passwort erneut eingeben → Sudo-Token gesetzt (15 Min gültig).
+- Keine zusätzliche Re-Auth für das Dokumentationspaket durchführen.
 
 **Schritte:**
 1. `/dsgvo/` aufrufen.
 2. Übersicht aller 7 Templates sichtbar: Art. 13/14, Art. 28, Art. 30, Art. 32, Art. 35, Beschäftigten-Information und Löschkonzept.
-3. Pro Template: Titel, Kurzbeschreibung, Download-Button, letzter Generierungs-Timestamp.
-4. Footer-Hinweis: „Templates rechtlich geprüft, keine Rechtsberatung".
+3. Pro Vorlage: Dokumentname, DSGVO-Artikel und Download-Link prüfen.
+4. Hinweis zur Prüfung und Ergänzung der automatisch befüllten Vorlagen lesen.
 
 **Erwartetes Ergebnis:**
 - Liste aller 7 DSGVO-Templates mit Download-Links.
-- Sudo-Indikator („Sudo aktiv, läuft ab um HH:MM") sichtbar.
-- Templates dynamisch generiert (nicht statisch im Repo, sondern aus Facility-Daten).
+- Die sieben Links verwenden die Slugs `verarbeitungsverzeichnis`, `dsfa`, `loeschkonzept`, `av-vertrag`, `toms`, `informationspflichten`, `mitarbeiter-informationspflichten`.
+- Beim Download werden die Vorlagen aus dem Repo mit Einrichtungsdaten befüllt.
 
 **DSGVO/Security-Note:**
-- **Re-Auth/Sudo (Art. 32):** Hochsensible Operation, deshalb zusätzliche Authentifizierung.
-- Audit-Log-Eintrag „DSGVO_PACKAGE_VIEWED" pro Aufruf.
+- Rollenprüfung und Rate-Limit schützen das Dokumentationspaket.
+- Das bloße Öffnen der Übersicht erzeugt keinen Audit-Eintrag; Downloads erzeugen `EXPORT`.
 
 **Status:** ☐ Offen
 
 ---
 
-### TC-ID: ENT-DSGVO-02 — Re-Auth-Loop ohne Sudo
+### TC-ID: ENT-DSGVO-02 — Zugriff ohne Sudo, Rollenprüfung bleibt wirksam
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| DSGVO | admin | C/F/S | ⚪ | `test_dsgvo_package.py` |
+| DSGVO | admin und fachkraft (`miriam`) | C/F/S | ⚪ | `test_dsgvo_package.py` |
 
-**Voraussetzung:** Admin eingeloggt, Sudo-Token abgelaufen oder nicht gesetzt.
-
-**Vorbereitung:**
-- Als admin einloggen.
-- Falls Sudo aktiv: 15 Min warten oder Cookie/Session-Sudo-Key löschen.
+**Voraussetzung:** Angemeldete Anwendungsbetreuung ohne gültigen Sudo-Token; zweite Sitzung als Fachkraft.
 
 **Schritte:**
-1. `/dsgvo/` aufrufen ohne aktiven Sudo.
-2. Erwarte 403 oder Redirect zu `/sudo/?next=/dsgvo/`.
-3. Auf `/sudo/` Passwort erneut eingeben.
-4. Nach erfolgreicher Re-Auth automatischer Redirect zurück zu `/dsgvo/`.
-5. Nach 15 Min ohne Aktivität: erneuter Aufruf → wieder Re-Auth-Loop.
+1. Als `admin` ohne Sudo `/dsgvo/` aufrufen.
+2. `/dsgvo/verarbeitungsverzeichnis/` herunterladen.
+3. Beide Pfade als Fachkraft aufrufen.
 
 **Erwartetes Ergebnis:**
-- Ohne Sudo kein Zugriff auf `/dsgvo/` und `/dsgvo/download/<slug>/`.
-- Redirect-Kette: `/dsgvo/` → `/sudo/?next=/dsgvo/` → nach Pwd-Eingabe → `/dsgvo/`.
-- Sudo-Token TTL = 15 Min (in Settings konfiguriert).
+- Übersicht und Download liefern für die Anwendungsbetreuung HTTP 200 ohne Umleitung zu `/sudo/`.
+- Die Fachkraft erhält auf beiden Pfaden HTTP 403 und keinen Dokumentinhalt.
+- Ein unbekannter Slug liefert für die Anwendungsbetreuung HTTP 404.
 
 **DSGVO/Security-Note:**
-- **Sudo schützt vor Session-Hijacking:** Selbst mit gestohlenem Session-Cookie keine DSGVO-Doku-Downloads ohne Pwd.
-- Failed-Sudo-Versuche werden in AuditLog (`SUDO_FAILED`) geloggt.
-- Brute-Force-Limit: max. 5 Versuche/IP/Stunde.
+- Das Paket enthält mit Einrichtungsdaten befüllte Vorlagen. Personen-Rohdatenexporte haben eigene Zugriffsschutzregeln.
+- Übersicht und Download tragen `FacilityAdminRequiredMixin` und das GET-Rate-Limit `RATELIMIT_BULK_ACTION` (30/h); der Download erzeugt `EXPORT`.
 
 **Status:** ☐ Offen
 
@@ -5174,11 +5168,11 @@
 **Voraussetzung:** ENT-DSGVO-01 erfolgreich.
 
 **Vorbereitung:**
-- `/dsgvo/` mit aktivem Sudo geöffnet.
+- `/dsgvo/` als Anwendungsbetreuung geöffnet.
 
 **Schritte:**
 1. Auf „Art. 30 — Verarbeitungsverzeichnis" Download klicken.
-2. Datei `verarbeitungsverzeichnis-art-30.md` (oder PDF) wird heruntergeladen.
+2. Datei `verarbeitungsverzeichnis.md` (Markdown) wird heruntergeladen.
 3. Datei öffnen — Markdown-Struktur:
    - Verantwortlicher (Facility-Name, Adresse, Email aus Facility-Settings)
    - Datenschutzbeauftragter (DPO aus Settings)
@@ -5190,7 +5184,7 @@
 **Erwartetes Ergebnis:**
 - Markdown rendert korrekt, alle Platzhalter ersetzt (kein `{{ facility_name }}` mehr).
 - Inhalt facility-spezifisch (eigene Adresse, eigener DPO).
-- Audit-Log-Eintrag `DSGVO_EXPORT` mit slug=`verarbeitungsverzeichnis-art-30`.
+- Audit-Log-Eintrag `EXPORT`, `target_type="DSGVO-Dokument"`, `target_id="verarbeitungsverzeichnis"`.
 
 **DSGVO/Security-Note:**
 - **Art. 30 ist Pflicht-Doku:** Jeder Verantwortliche muss ein Verarbeitungsverzeichnis führen.
@@ -5209,11 +5203,11 @@
 **Voraussetzung:** ENT-DSGVO-01 erfolgreich.
 
 **Vorbereitung:**
-- `/dsgvo/` mit aktivem Sudo geöffnet.
+- `/dsgvo/` als Anwendungsbetreuung geöffnet.
 
 **Schritte:**
 1. Auf „Art. 35 — DSFA (Datenschutz-Folgenabschätzung)" Download klicken.
-2. Datei `dsfa-art-35.md` herunterladen.
+2. Datei `dsfa.md` herunterladen.
 3. Inhalt prüfen:
    - Beschreibung der Verarbeitung
    - Notwendigkeit + Verhältnismäßigkeit
@@ -5225,7 +5219,7 @@
 **Erwartetes Ergebnis:**
 - DSFA-Template strukturiert nach Art. 35 Abs. 7.
 - Sozialarbeit-spezifische Risiken vorausgefüllt (besonders schutzbedürftige Personen, Gesundheitsdaten).
-- Audit-Eintrag mit slug=`dsfa-art-35`.
+- Audit-Eintrag mit slug=`dsfa`.
 
 **DSGVO/Security-Note:**
 - **Art. 35 ist Pflicht für Sozialdaten:** Hohes Risiko für Rechte und Freiheiten (Kategorie „besonders schutzbedürftige Personen").
@@ -5244,11 +5238,11 @@
 **Voraussetzung:** ENT-DSGVO-01 erfolgreich.
 
 **Vorbereitung:**
-- `/dsgvo/` mit aktivem Sudo geöffnet.
+- `/dsgvo/` als Anwendungsbetreuung geöffnet.
 
 **Schritte:**
 1. Auf „Art. 28 — AV-Vertrag (Auftragsverarbeitung)" klicken.
-2. Datei `av-vertrag-art-28.md` herunterladen.
+2. Datei `av-vertrag.md` herunterladen.
 3. Inhalt prüfen:
    - Auftraggeber (Verantwortlicher) + Auftragsverarbeiter (z.B. Hosting-Provider)
    - Gegenstand, Dauer, Art der Verarbeitung
@@ -5280,11 +5274,11 @@
 **Voraussetzung:** ENT-DSGVO-01 erfolgreich.
 
 **Vorbereitung:**
-- `/dsgvo/` mit aktivem Sudo geöffnet.
+- `/dsgvo/` als Anwendungsbetreuung geöffnet.
 
 **Schritte:**
 1. Auf „Art. 32 — Technische und organisatorische Maßnahmen (TOMs)" klicken.
-2. Datei `toms-art-32.md` herunterladen.
+2. Datei `toms.md` herunterladen.
 3. Inhalt prüfen:
    - Vertraulichkeit (Zutritts-, Zugangs-, Zugriffskontrolle)
    - Integrität (Eingabe-, Weitergabekontrolle)
@@ -5315,11 +5309,11 @@
 **Voraussetzung:** ENT-DSGVO-01 erfolgreich.
 
 **Vorbereitung:**
-- `/dsgvo/` mit aktivem Sudo geöffnet.
+- `/dsgvo/` als Anwendungsbetreuung geöffnet.
 
 **Schritte:**
 1. Auf „Art. 13/14 — Informationspflichten" klicken.
-2. Datei `informationspflichten-art-13-14.md` herunterladen.
+2. Datei `informationspflichten.md` herunterladen.
 3. Inhalt prüfen:
    - Identität + Kontakt des Verantwortlichen
    - Kontaktdaten DPO
@@ -5352,7 +5346,7 @@
 **Voraussetzung:** ENT-DSGVO-01 erfolgreich.
 
 **Vorbereitung:**
-- `/dsgvo/` mit aktivem Sudo geöffnet.
+- `/dsgvo/` als Anwendungsbetreuung geöffnet.
 
 **Schritte:**
 1. „Löschkonzept" herunterladen.
@@ -5380,7 +5374,7 @@
 **Voraussetzung:** ENT-DSGVO-01 erfolgreich.
 
 **Vorbereitung:**
-- `/dsgvo/` mit aktivem Sudo geöffnet.
+- `/dsgvo/` als Anwendungsbetreuung geöffnet.
 
 **Schritte:**
 1. „Informationspflichten für Beschäftigte" herunterladen.
@@ -5412,11 +5406,11 @@
 
 **Schritte:**
 1. `/audit/` aufrufen.
-2. Filter „Action-Type = EXPORT" oder „DSGVO_EXPORT" anwenden.
+2. Filter „Action-Type = EXPORT“ anwenden.
 3. Pro Download ein Audit-Eintrag mit:
    - User (admin-Username)
-   - Action = `DSGVO_EXPORT`
-   - Target = Slug (z.B. `verarbeitungsverzeichnis-art-30`)
+   - Action = `EXPORT`, `target_type="DSGVO-Dokument"`
+   - `target_id` = Slug (z.B. `verarbeitungsverzeichnis`); `detail.document` und `detail.name` benennen das Dokument
    - Timestamp
    - IP + User-Agent
 4. Detail-View `/audit/<uuid>/` zeigt vollständige Metadaten.
@@ -5424,7 +5418,7 @@
 **Erwartetes Ergebnis:**
 - Pro Download genau 1 Audit-Eintrag.
 - Slug eindeutig pro Template (7 verschiedene Slugs für 7 Templates).
-- Audit-Log auch für DSGVO-Doku-Aufruf selbst (Meta-Audit).
+- Das bloße Öffnen der Paketübersicht erzeugt keinen Audit-Eintrag.
 
 **DSGVO/Security-Note:**
 - **Audit-Spur fürs Audit:** Wer hat wann welche DSGVO-Doku heruntergeladen — relevant bei Aufsichts-Audit.
@@ -5438,42 +5432,40 @@
 <details open>
 <summary><strong>📡 OFFL — Offline & PWA (12 Cases)</strong></summary>
 
-**Routen:** `/offline/`, `/offline/clients/<uuid>/`, `/offline/conflicts/`, `/api/offline/bundle/client/<uuid>/`, `/auth/offline-key-salt/`, `/manifest.json`, `/sw.js`  
-**Views:** `src/core/views/offline.py` (OfflineBootstrapView, OfflineBundleView, OfflineClientDetailView, OfflineConflictListView)  
+**Routen:** `/offline/`, `/offline/clients/<uuid>/`, `/offline/conflicts/`, `/api/v1/offline/bundle/client/<uuid>/`, `/auth/offline-key-salt/`, `/manifest.json`, `/sw.js`  
+**Views:** `src/core/views/offline.py` (`OfflineClientBundleView`, `OfflineFacilityBundleView`, `OfflineClientDetailView`, `OfflineConflictListView`); `OfflineFallbackView` in `src/core/views/pwa.py`  
 **Services:** `src/core/services/system/offline.py`  
 **E2E-Coverage:** `test_offline_apis.py`, `test_offline_login_bootstrap.py`, `test_offline_store.py`, `test_pwa_offline.py`  
 **Spezial-Setup:** Service Worker im Browser, IndexedDB, DevTools → Application-Tab. Streetwork-Geräte simulieren (mobile Viewport 375x667).
 
 ---
 
-### TC-ID: ENT-OFFL-01 — Login-Bootstrap lädt Offline-Bundle in IndexedDB
+### TC-ID: ENT-OFFL-01 — Login-Bootstrap und ausdrücklich mitgenommene Personen
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Offline | fachkraft | C | ✓ | `test_offline_login_bootstrap.py` |
 
-**Voraussetzung:** fachkraft-Account, mindestens 5 Klient zugeordnet.
+**Voraussetzung:** Fachkraft-Account, mindestens eine sichtbare Testperson; HTTPS oder localhost, WebCrypto verfügbar.
 
 **Vorbereitung:**
-- Chrome DevTools öffnen, Tab „Application" → IndexedDB. Vor Login: leer.
+- Chrome DevTools → Application → IndexedDB und Network öffnen.
 
 **Schritte:**
-1. Login als fachkraft via `/login/`.
-2. Nach erfolgreichem Login: DevTools → Application → IndexedDB → Datenbank `anlaufstelle-offline` aufgeklappt.
-3. Object-Stores prüfen: `clients`, `cases`, `events`, `meta`.
-4. Daten-Anzahl prüfen — entspricht der Anzahl der zugewiesenen Klient (RLS + Caseworker-Filter).
-5. Network-Tab: Bootstrap-Call `GET /api/offline/bootstrap/` mit Status 200.
-6. Lease-Eintrag in `meta`-Store: `expires_at` in der Zukunft (z.B. +7 Tage).
+1. Als Fachkraft über `/login/` anmelden.
+2. Network: `POST /auth/offline-key-salt/` und `GET /api/v1/offline/bundle/facility/` kontrollieren (HTTP 200).
+3. IndexedDB `anlaufstelle-offline`: Stores `queue`, `drafts`, `meta`, `clients`, `cases`, `events`, `facility` prüfen. Login allein übernimmt keine Personenliste.
+4. Eine Personen-Detailseite online öffnen und „Offline mitnehmen“ wählen; `GET /api/v1/offline/bundle/client/<uuid>/` beobachten.
+5. Verschlüsselten Eintrag im `clients`-Store prüfen; `expires_at` in der Bundle-Antwort liegt 48 Stunden nach `generated_at` (`ttl=172800`).
 
 **Erwartetes Ergebnis:**
-- IndexedDB nach Login mit verschlüsselten Daten gefüllt (AES-GCM).
-- Anzahl entspricht Caseworker-Zuordnung, keine fremden Klient.
-- Bootstrap-Trigger in Login-Flow integriert (kein manueller Reload nötig).
+- Der Login leitet den Schlüssel ab und lädt den personenlosen Offline-Katalog.
+- Nur ausdrücklich mitgenommene Personen werden als verschlüsselte Bundles lokal gespeichert; die API prüft Einrichtung, Sichtbarkeit und Widerruf.
+- Im Network-Tab gibt es keinen `/api/offline/bootstrap/`-Aufruf.
 
 **DSGVO/Security-Note:**
-- **AES-GCM-Verschlüsselung in IndexedDB (Art. 32):** Bei verlorenem Gerät keine Klartext-Klientendaten lesbar.
-- Schlüssel ist password-derived (PBKDF2), nicht im Klartext gespeichert.
-- Lease-Mechanismus erzwingt regelmäßige Re-Auth.
+- AES-GCM schützt die lokalen Daten; der nicht exportierbare Schlüssel wird in `anlaufstelle-crypto` persistiert (Details ENT-OFFL-03).
+- Die Bundle-TTL beträgt 48 Stunden und ist vom Inaktivitätsfenster des Schlüssels getrennt.
 
 **Status:** ☐ Offen
 
@@ -5485,22 +5477,21 @@
 |---------|-------|---------|--------|-----|
 | Offline | fachkraft | C | ✓ | `test_offline_apis.py` |
 
-**Voraussetzung:** fachkraft eingeloggt, mindestens 1 Klient zugewiesen.
+**Voraussetzung:** Fachkraft eingeloggt, mindestens eine sichtbare Person der eigenen Einrichtung.
 
 **Vorbereitung:**
 - Klient-UUID notieren (z.B. aus `/clients/`).
 
 **Schritte:**
-1. `/api/offline/bundle/client/<uuid>/` direkt aufrufen.
+1. `/api/v1/offline/bundle/client/<uuid>/` direkt aufrufen.
 2. Response: `Content-Type: application/json`.
 3. JSON-Struktur prüfen:
-   - `client`: Stammdaten (Name, Geburtsdatum, …)
-   - `cases`: Liste der Fälle
-   - `events`: Termine
-   - `notes`: Notizen
-   - `documents_meta`: Metadaten Dokumente (ohne Binärinhalt)
-   - `_version`: Sync-Token / Timestamp
-4. Versuch mit fremder UUID (nicht zugewiesen) → 404 oder 403.
+   - `schema_version`, `generated_at`, `ttl`, `expires_at`
+   - `client`: Pseudonym, Kontaktstufe, Altersgruppe, rollenabhängige `notes`
+   - `cases`, `events`, `workitems`
+   - `document_types` (Feldschema), `assignable_users` (rollenabhängig)
+   - ETag im Response-Header für die Revalidierung
+4. Versuch mit UUID einer fremden Einrichtung → HTTP 404, kein Personeninhalt.
 
 **Erwartetes Ergebnis:**
 - JSON vollständig, alle relations vorgeladen (kein N+1).
@@ -5532,7 +5523,7 @@
 2. Seite rendert komplett aus IndexedDB (kein Netz-Call).
 3. Anzeige: Stammdaten, Fall-Liste, Notizen.
 4. Edit-Button verfügbar — Notiz hinzufügen.
-5. Notiz wird lokal gespeichert (Pending-Sync-Marker im IndexedDB-Store `pending_writes`).
+5. Notiz wird lokal gespeichert (Pending-Sync-Marker im IndexedDB-Store `queue`).
 
 **Erwartetes Ergebnis:**
 - Seite lädt offline ohne Netzfehler.
@@ -5540,8 +5531,8 @@
 - Lokaler Edit funktioniert, Pending-Marker sichtbar (z.B. „⏳ Wird beim nächsten Sync übertragen").
 
 **DSGVO/Security-Note:**
-- Daten-Decryption via password-derived Key (im Memory, nicht persistiert).
-- Bei Browser-Schließen → Key weg, beim nächsten Login Re-Decrypt.
+- Daten-Decryption via password-derived Key (non-extractable `CryptoKey`, in IndexedDB `anlaufstelle-crypto` persistiert).
+- Browser-Schließen löscht nichts: Wiederöffnen innerhalb der Leerlaufzeit entschlüsselt ohne Login; nach Ablauf entzieht die App beim nächsten Öffnen den Key, Re-Login leitet denselben Key ab und entschlüsselt erneut.
 
 **Status:** ☐ Offen
 
@@ -5719,15 +5710,15 @@
 
 **Schritte:**
 1. Login als fachkraft.
-2. Network-Tab: Call `GET /auth/offline-key-salt/` mit Status 200.
-3. Response-Body: JSON mit `salt` (Base64-String, 16+ Bytes), `iterations` (z.B. 600.000), `hash_algo` (z.B. sha256).
+2. Network-Tab: Call `POST /auth/offline-key-salt/` mit Status 200.
+3. Response-Body: JSON mit genau `salt` und `home_url`; PBKDF2-Parameter kommen aus `crypto.js`, nicht aus der Antwort.
 4. JS-Code prüfen: PBKDF2 mit Pwd + Salt + Iterations → Key-Material.
 5. Key wird via Web-Crypto-API in AES-GCM-Encrypter verwandelt (256-bit).
 6. IndexedDB-Daten manuell inspizieren: nur ciphertext + iv pro Eintrag, kein Klartext.
 
 **Erwartetes Ergebnis:**
-- Salt facility-spezifisch oder user-spezifisch (nicht global).
-- PBKDF2-Iterations ≥ OWASP-Empfehlung (600.000 für SHA-256).
+- Salt nutzerspezifisch (nicht global).
+- PBKDF2 mit 600.000 Iterationen und SHA-256 (`PBKDF2_ITERATIONS` in `crypto.js`).
 - AES-GCM mit 256-bit Key, IV pro Eintrag random.
 - Keine Klartext-Daten in IndexedDB.
 
@@ -5753,12 +5744,12 @@
 
 **Schritte:**
 1. Pwd-Wechsel via `/accounts/password_change/` durchführen.
-2. Im Backend wird `User.offline_key_salt` geleert und gespeichert (`CustomPasswordChangeView`, `src/core/views/auth.py:219-220`; Queryset-Reset bei Rollen-/Aktiv-Änderung in `src/core/signals/offline_invalidation.py:89-97`).
+2. Im Backend wird `User.offline_key_salt` geleert und gespeichert (`rotate_offline_salt` in `src/core/services/security/credentials.py`; Rollen-/Aktiv-Änderungen verwenden denselben Invalidierungspfad).
 3. Logout, dann erneuter Login mit neuem Pwd.
 4. Salt-Endpoint liefert neuen Salt → neuer abgeleiteter Key.
 5. IndexedDB-Decrypt-Versuch alter Eintrag mit neuem Key → Fehler (alte Daten nicht entschlüsselbar).
 6. Offline-Bootstrap lädt Daten neu mit neuem Key (Re-Bootstrap).
-7. Audit-Log-Eintrag `OFFLINE_KEY_FETCH` mit Detail `offline_key_salt_fetched` (`src/core/views/auth.py:240`).
+7. Audit-Log-Eintrag `OFFLINE_KEY_FETCH` mit Detail `offline_key_salt_fetched` (`OfflineKeySaltView.post` in `src/core/views/auth.py`).
 
 **Erwartetes Ergebnis:**
 - Alte lokale Daten unentschlüsselbar nach Pwd-Wechsel (gewollt: Schutz bei kompromittiertem Pwd).
@@ -5780,27 +5771,26 @@
 |---------|-------|---------|--------|-----|
 | Offline | fachkraft | C | ✓ | `test_offline_apis.py` |
 
-**Voraussetzung:** ENT-OFFL-01 erfolgreich, Lease in `meta`-Store gesetzt.
+**Voraussetzung:** ENT-OFFL-01 erfolgreich, Personen-Bundle mit `expiresAt` im verschlüsselten `clients`-Envelope vorhanden.
 
 **Vorbereitung:**
-- DevTools → IndexedDB → `meta` → `lease.expires_at` manuell auf Vergangenheit setzen (z.B. `2020-01-01`).
+- In einer isolierten Browserprobe `expires_at` der Bundle-Antwort vor dem Speichern auf einen vergangenen Zeitpunkt setzen oder die 48-Stunden-TTL abwarten. Verschlüsselten IndexedDB-Inhalt nicht als Klartext-JSON bearbeiten.
 
 **Schritte:**
 1. App neu laden / Login-Status prüfen.
 2. Code prüft beim Start: Lease abgelaufen?
-3. Bei Ablauf: Lokale Daten werden invalidiert (oder als „stale" markiert).
-4. UI-Banner: „Cache abgelaufen, bitte neu laden".
-5. Bootstrap-Call wird automatisch oder per Klick ausgelöst.
-6. Neuer Lease gesetzt mit neuem `expires_at`.
+3. Offline-Zugriff auf das abgelaufene Personen-Bundle prüfen.
+4. Online die Person erneut „Offline mitnehmen“.
+5. Neues `expires_at` und wieder verfügbare Offline-Ansicht kontrollieren.
 
 **Erwartetes Ergebnis:**
-- Abgelaufener Lease blockiert Offline-Zugriff (oder warnt prominent).
-- Re-Bootstrap lädt frische Daten.
-- Pending-Writes werden VOR Invalidation gesynct (Daten-Verlust-Schutz).
+- Abgelaufene Bundles werden nicht als gültige Offline-Daten angezeigt; ein bloßer Warnhinweis bei weiter lesbaren abgelaufenen Daten reicht nicht aus.
+- Erneutes Mitnehmen lädt frische Daten.
+- Ungesendete Arbeit wird durch TTL-Ablauf nicht automatisch verworfen; die Queue bleibt erhalten.
 
 **DSGVO/Security-Note:**
 - **Lease ist Datenminimierung-Mechanismus (Art. 5):** Daten verbleiben nicht unbegrenzt offline.
-- Default-Lease-TTL z.B. 7 Tage — Streetwork-Realismus, aber kein Lifetime-Cache.
+- Bundle-TTL: 48 Stunden (`BUNDLE_TTL_SECONDS`, `TTL_MS`); kein unbegrenzter Cache.
 
 **Status:** ☐ Offen
 
@@ -5861,8 +5851,8 @@
 1. Logout-Button klicken.
 2. DevTools → IndexedDB nach Reload prüfen:
    - `clients`-Store leer.
-   - `pending`-Store leer.
-   - `meta.lease` gelöscht.
+   - `queue`-Store leer.
+   - `meta` und `facility` leer; kein separates `meta.lease`-Objekt voraussetzen.
 3. Cookies: Session-Cookie gelöscht (Clear-Site-Data-Header ENT-AUTH-06).
 4. Erneuter Login als anderer User → vorherige Klient-Daten nicht sichtbar.
 
@@ -6000,7 +5990,7 @@
 
 **Routen:** `/health/`, `/csp-report/`, `/robots.txt`, `/manifest.json`, `/?lang=de`  
 **Views:** `src/core/views/health.py`, `src/core/views/csp_report.py`, `src/core/views/robots.py`, `src/core/views/pwa.py`  
-**E2E-Coverage:** `test_security_hardening.py`  
+**Automatisierte Abdeckung:** Unit-Tests `src/tests/test_health.py`, `src/tests/test_robots_view.py`, `src/tests/test_server_error_page.py`; keine zugeordnete System-E2E-Spec.  
 **Spezial-Setup:** Health prüft externe Dienste (ClamAV, Cache/Redis, Backup-Status). Anonyme Aufrufer erhalten nur `{"status": …}`; Detailfelder gibt es nur mit Header `X-Health-Token` (= `DJANGO_HEALTH_DETAIL_TOKEN`) oder in einer vollständig angemeldeten Session (`_detail_authorized`). CSP-Report-Endpoint mit Rate-Limit.
 
 ---
@@ -6009,7 +5999,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sys | öffentlich (Monitoring) | C/F/S | ⚪ | `test_security_hardening.py` |
+| Sys | öffentlich (Monitoring) | C/F/S | ⚪ | — (Unit: `src/tests/test_health.py`) |
 
 **Voraussetzung:** alle Container laufen (Postgres, Redis, ClamAV); `DJANGO_HEALTH_DETAIL_TOKEN` ist gesetzt (für die Positivkontrolle); `CLAMAV_ENABLED=True` im **Webprozess** (ohne den Schalter meldet die Detailantwort `virus_scanner`/`clamav` = `disabled`, auch bei laufendem Scanner); die Laufzeitrolle der App ist weder Superuser noch BYPASSRLS (sonst ist schon der anonyme Status `degraded`, `db_role_posture: "bypasses_rls"` — der lokale Compose-Stack läuft mit der Bootstrap-Superuser-Rolle); der Encryption-Key ist lesbar.
 
@@ -6049,7 +6039,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sys | öffentlich | C/F/S | ⚪ | `test_security_hardening.py` |
+| Sys | öffentlich | C/F/S | ⚪ | — (Unit: `src/tests/test_health.py`) |
 
 
 **Voraussetzung:** `CLAMAV_ENABLED=True` (Prod-Default; `settings/base.py` defaultet auf `False` — ohne ClamAV-Prüfung meldet die Detailantwort `clamav: "disabled"`); `DJANGO_HEALTH_DETAIL_TOKEN` gesetzt.
@@ -6080,11 +6070,11 @@
 
 ---
 
-### TC-ID: ENT-SYS-03 — Robots.txt mit Disallow für sensible Pfade
+### TC-ID: ENT-SYS-03 — Robots.txt sperrt alle Pfade
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sys | öffentlich | C/F/S | ⚪ | `test_security_hardening.py` |
+| Sys | öffentlich | C/F/S | ⚪ | — (Unit: `src/tests/test_robots_view.py`) |
 
 
 **Vorbereitung:**
@@ -6093,17 +6083,8 @@
 **Schritte:**
 1. `/robots.txt` aufrufen.
 2. Response-Code 200, `Content-Type: text/plain`.
-3. Inhalt prüfen — `Disallow:`-Einträge für:
-   - `/admin/`
-   - `/clients/`
-   - `/cases/`
-   - `/dsgvo/`
-   - `/audit/`
-   - `/api/`
-   - `/sudo/`
-   - `/login/` (optional)
-4. `Allow:` ggf. für `/`, `/about/`, `/impressum/`, `/datenschutzerklaerung/`.
-5. `Sitemap:`-Eintrag (falls vorhanden).
+3. Inhalt prüfen: `User-agent: *` und `Disallow: /`.
+4. Keine selektiven `Allow:`-Zeilen und kein `Sitemap:`-Eintrag.
 
 **Erwartetes Ergebnis:**
 - Robots.txt deckt alle authentifizierten Bereiche per Disallow.
@@ -6190,7 +6171,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sys | öffentlich | C/F/S | ⚪ | `test_security_hardening.py` |
+| Sys | öffentlich | C/F/S | ⚪ | — (Unit: `src/tests/test_server_error_page.py`) |
 
 **Voraussetzung:** mit `DEBUG=False` (Prod-ähnlich).
 
@@ -6323,7 +6304,7 @@
 **Voraussetzung:** `enforce_retention`-Cron muss in den letzten 7 Tagen einmal erfolgreich gelaufen sein.
 
 **Schritte:**
-1. `docker compose exec web python manage.py enforce_retention` einmal ausführen.
+1. `docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention` einmal ausführen.
 2. Dashboard neu laden → Kategorie „Retention": Status `ok`, Detail „Letzter Lauf vor 0 Tag(en)".
 3. **Warning-Pfad:** AuditLog-Eintrag älter als 7 Tage machen (LOKAL/SSH per `bypass_replication_triggers`):
    ```python
