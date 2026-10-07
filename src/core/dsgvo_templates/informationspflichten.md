@@ -57,7 +57,10 @@ Wir verarbeiten Ihre Daten zu folgenden Zwecken:
 - Öffentliche Fördermittelgeber/Behörden (nur anonymisierte Statistik)
 - IT-Dienstleister (im Rahmen der Auftragsverarbeitung)
 
-Eine Übermittlung in Drittländer findet nicht statt.
+Eine Übermittlung in Drittländer erfolgt nur, wenn die Einrichtung sie selbst
+konfiguriert, z. B. durch einen Dienst außerhalb der EU bzw. des EWR für die
+Fehlerüberwachung, den E-Mail-Versand oder die externe Datensicherung.
+Eingesetzte Dienste: [keine / Dienst, Land und geeignete Garantie eintragen].
 
 ---
 

@@ -40,7 +40,11 @@
 - IT-Dienstleister (Auftragsverarbeitung, siehe AVV)
 
 ### 1.6 Übermittlung in Drittländer
-Keine.
+Eine Übermittlung in Drittländer erfolgt nur, wenn die Einrichtung sie selbst
+konfiguriert, z. B. durch einen Dienst außerhalb der EU bzw. des EWR für die
+optionale Fehlerüberwachung, den E-Mail-Versand oder die Off-Site-Sicherung.
+Eingesetzte Dienste: [keine / Dienst, Land und geeignete Garantie eintragen];
+siehe AVV § 6.
 
 ### 1.7 Löschfristen
 | Kontaktstufe | Frist | Beginn der Frist |
@@ -59,7 +63,7 @@ Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabeschritt; Personen
 mit mindestens einem Ereignis werden anonymisiert, sobald alle ihre Ereignisse
 gelöscht sind. Ausgenommen sind Daten unter einer Aufbewahrungssperre (Legal
 Hold). Weitere Fristen (Aktivitäten, Papierkorb, Audit-Log, Ereignis-Historie,
-Sicherungsstände) und die Statistik-Aggregate nennt das Löschkonzept.
+Übergabenotizen, Sicherungsstände) und die Statistik-Aggregate nennt das Löschkonzept.
 
 ### 1.8 Technische und organisatorische Maßnahmen
 Siehe separates TOM-Dokument.

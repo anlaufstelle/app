@@ -25,8 +25,9 @@ jeder Änderung ihrer Einstellungen oder Backup-Rotation.
 | Aktivitäten / Zeitstrom-Einträge | {{ retention_activities_days }} Tage | `retention_activities_days` | Harte Löschung |
 | Papierkorb für gelöschte Personen und Fälle | {{ client_trash_days }} Tage | `client_trash_days` | Automatische Anonymisierung; bis dahin Wiederherstellung möglich |
 | Audit-Log | {{ auditlog_retention_months }} Monate | `auditlog_retention_months` | Rollierende Löschung; `0` deaktiviert sie, gesetzliche und technische Ausnahmen siehe § 3.3 |
-| Inhalte früherer Fassungen eines Ereignisses | {{ eventhistory_detail_months }} Monate | `eventhistory_detail_months` | Die Werte der Fassung werden gelöscht, die Fassung selbst (Zeitpunkt, handelnde Person, Feldnamen) bleibt; `0` deaktiviert diese Frist. Bei einem **gelöschten** Ereignis geschieht dasselbe unabhängig von dieser Frist, regulär mit dem nächsten Aufbewahrungslauf (Ausnahmen § 3.1) |
+| Inhalte früherer Fassungen eines Ereignisses | {{ eventhistory_detail_months }} Monate | `eventhistory_detail_months` | Die Werte der Fassung werden gelöscht, die Fassung selbst (Zeitpunkt, handelnde Person, Feldnamen) bleibt; die jüngste Fassung eines nicht gelöschten Ereignisses behält ihre Werte. `0` deaktiviert diese Frist. Bei einem **gelöschten** Ereignis und bei Ereignissen einer anonymisierten Person geschieht dasselbe für alle Fassungen unabhängig von dieser Frist, regulär mit dem nächsten Aufbewahrungslauf (Ausnahmen § 3.1) |
 | Chronologie früherer Fassungen (nach ihrer Inhalts-Löschung) | {{ eventhistory_chronicle_months }} Monate | `eventhistory_chronicle_months` | Die inhaltsleere Fassung wird gelöscht; gemessen ab dem Zeitpunkt ihrer Inhalts-Löschung. `0` deaktiviert die Löschung — dann wird die Chronologie unbefristet aufbewahrt |
+| Übergabenotizen (Schichtnotizen) | {{ retention_handover_notes_days }} Tage | `retention_handover_notes_days` | Die Notiz wird endgültig gelöscht (Frist ab ihrer letzten Änderung); kein Legal Hold — verfahrensrelevanter Inhalt ist vorher als Vermerk am Fall zu dokumentieren |
 | Monatliche Statistik-Aggregate | unbefristet | — | Bleiben bestehen: Der Aufbewahrungslauf rechnet die Zählwerte jedes gelöschten Ereignisses zusammen mit dessen Löschung dem Aggregat seines Monats hinzu, auch im laufenden Monat; spätere Neuberechnungen behalten sie (siehe § 3.5) |
 | Backup-Sicherungsstände | {{ backup_retention_days }} Tage (Altersgrenze, keine Höchstfrist) | Längste lokale Rotation im ausgelieferten `backup.sh` | Die Rotation entfernt ein lokales verschlüsseltes Archiv beim ersten erfolgreichen Lauf von `backup.sh`, in dem es mindestens 8 (täglich), 29 (wöchentlich) bzw. 91 volle Tage (monatlich) alt ist; keine feste Höchstfrist. Die Rotation ist ausgesetzt, solange der Off-Site-Abgleich fehlschlägt |
 | Off-Site-Kopien der Sicherungsstände | [eintragen] | Aufbewahrungsregel am Off-Site-Ziel (von der Einrichtung festzulegen) | `backup.sh` löscht am Off-Site-Ziel nichts; Kopien bleiben bis zur Löschung durch die Regel am Ziel bestehen |
@@ -70,6 +71,8 @@ Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
 - Manuelle Löschungen folgen dem Vier-Augen-Prinzip: Die Löschung einer Person
   braucht immer die Bestätigung einer zweiten berechtigten Person, die eines
   Ereignisses oder Falls nur bei Personen der Stufe „Mit Zusatzangaben".
+  Dateien vernichten Leitung und Anwendungsbetreuung über den Sofortlöschweg
+  ohne zweite Person (§ 3.2).
 - Sind alle Ereignisse einer Person gelöscht, anonymisiert ein nachfolgender
   Lauf ihre identifizierenden Inhalte, sofern kein aktiver Legal Hold auf der
   Person, einem ihrer Fälle oder Ereignisse liegt. Eine Person, zu der nie ein
@@ -95,8 +98,10 @@ Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
 Dateien an Ereignissen, Personen und Fällen liegen im File-Vault verschlüsselt.
 Ein bloßes Entfernen oder Ersetzen in der Oberfläche löscht eine Datei noch
 nicht physisch. Die endgültige Löschung folgt dem Lebenszyklus des zugehörigen
-Datensatzes; der dafür vorgesehene Sofortlöschweg beseitigt Datei und Versionen
-ersatzlos, sofern kein Legal Hold greift.
+Datensatzes. Daneben gibt es einen Sofortlöschweg: Leitung und
+Anwendungsbetreuung beseitigen eine Datei samt Versionen ersatzlos und ohne
+zweite Person, sofern kein Legal Hold greift; die Vernichtung wird im
+Audit-Log protokolliert und lässt sich nicht rückgängig machen.
 
 Bereits beim Hochladen greift die Datenminimierung nach Art. 5 Abs. 1 lit. c
 DSGVO: Bilddateien werden vor der Verschlüsselung neu kodiert und verlieren

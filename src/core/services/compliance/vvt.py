@@ -154,6 +154,11 @@ PROCESSING_ACTIVITIES = [
         # (``enforce_document_type_retention``), not a replacement of the
         # stage period. ``_soft_delete_events`` empties the content at once;
         # k-anonymity only exists in the reporting layer, not in retention.
+        # Refs #2492: ``enforce_eventhistory_retention`` keeps the newest
+        # version of a living event (``_aged_living_event_rows``) and defers
+        # held rows; ``enforce_handover_notes`` deletes hard and has no hold
+        # branch. Defaults: ``eventhistory_*_months`` 24,
+        # ``retention_handover_notes_days`` 90.
         "retention_period": _(
             "Ereignisse folgen den Fristen der Kontaktstufe ihrer Person "
             "(siehe Verarbeitung „Personen-Stammdaten“); eine Frist am "
@@ -161,9 +166,16 @@ PROCESSING_ACTIVITIES = [
             "ablaufende. Die Löschung setzt das Ereignis auf gelöscht: "
             "Zusatzfelder und Suchtext werden sofort geleert, Dateianhänge "
             "gelöscht; die Werte früherer Fassungen redigiert regulär der "
-            "Aufbewahrungslauf. Fälle haben keine eigene Frist, Episoden und "
-            "Wirkungsziele folgen ihrem Fall. Daten unter einer "
-            "Aufbewahrungssperre (Legal Hold) sind ausgenommen."
+            "nächste Aufbewahrungslauf. Bei nicht gelöschten Ereignissen "
+            "redigiert er die Werte früherer Fassungen nach 24 Monaten "
+            "(einstellbar); die jüngste Fassung behält ihre Werte, die "
+            "Fassung selbst (wer, wann, welche Felder) bleibt, bis er sie "
+            "24 Monate nach der Redaktion löscht (einstellbar). Fälle haben "
+            "keine eigene Frist, Episoden und Wirkungsziele folgen ihrem "
+            "Fall. Daten unter einer Aufbewahrungssperre (Legal Hold) sind "
+            "ausgenommen. Übergabenotizen löscht der Aufbewahrungslauf "
+            "standardmäßig 90 Tage nach ihrer letzten Änderung endgültig "
+            "(einstellbar); für sie gibt es keinen Legal Hold."
         ),
         "toms": [
             _("Sensitivitaets-basierte Sichtbarkeit (je Dokumentationstyp, einzelne Feldvorlagen koennen sie anheben)"),
@@ -218,7 +230,16 @@ PROCESSING_ACTIVITIES = [
                 "facility-uebergreifende Zugriffe — Detail-, Listen- und "
                 "Suchaufrufe werden nicht protokolliert (ADR-043)"
             ),
-            _("Soft-Delete + Vier-Augen-Prinzip vor finaler Loeschung"),
+            # Refs #2492: four eyes only where the code asks for a second
+            # person (``client_deletion``, ``case/deletion``, event deletion
+            # of qualified persons); ``AttachmentPurgeView`` is lead/admin
+            # without a request.
+            _(
+                "Soft-Delete; Vier-Augen-Prinzip für manuelle Löschungen von "
+                "Personen sowie von Ereignissen und Fällen der Stufe „Mit "
+                "Zusatzangaben“; Dateien vernichten Leitung und "
+                "Anwendungsbetreuung ohne zweite Person"
+            ),
             _("Encrypted File Vault mit ClamAV-Scan fail-closed fuer Anhaenge"),
         ],
     },
@@ -228,8 +249,10 @@ PROCESSING_ACTIVITIES = [
         "purpose": _(
             "Nachweis der Rechenschaftspflicht (DSGVO Art. 5 Abs. 2). "
             "Erkennung von Missbrauch, Beweismittel im Datenleck-Fall, "
-            "Rekonstruktion von Aenderungen. Append-Only — kein UPDATE "
-            "oder DELETE durch die Anwendung."
+            "Rekonstruktion von Änderungen. Einträge werden nur angehängt "
+            "und im laufenden Betrieb weder geändert noch gelöscht; nach "
+            "Ablauf der Audit-Frist löscht sie der tägliche "
+            "Aufbewahrungslauf (siehe Speicherfrist)."
         ),
         "legal_basis": _(
             "DSGVO Art. 32 (Sicherheit der Verarbeitung) i.V.m. Art. 5 "
@@ -270,8 +293,17 @@ PROCESSING_ACTIVITIES = [
             "Hold) wirken nicht auf das Audit-Log."
         ),
         "toms": [
-            _("Append-Only durch DB-Konvention und RLS-Policies"),
-            _("Unveraenderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert)"),
+            # Refs #2492: ``prune_auditlog`` deletes expired rows inside
+            # ``bypass_replication_triggers``; the promise names that path.
+            _(
+                "Append-Only durch DB-Konvention und RLS-Policies; Ausnahme ist "
+                "das Löschen abgelaufener Einträge durch den Aufbewahrungslauf"
+            ),
+            _(
+                "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE "
+                "blockiert); nur der Aufbewahrungslauf umgeht den Trigger "
+                "transaktional, um abgelaufene Einträge zu löschen"
+            ),
             _("Zugriff nur fuer Anwendungsbetreuung und Systemadministration"),
             _("Cross-Facility-Auswertung bedingt eigenen SYSTEM_VIEW-Audit"),
             _("Backup taeglich (siehe Verarbeitung 'Backup-Daten')"),
@@ -301,10 +333,16 @@ PROCESSING_ACTIVITIES = [
             _("Intern: Anwendungsbetreuung der Einrichtung"),
             _("Systemadministration (User-Management ueber Django-Admin)"),
         ],
+        # Refs #2492: ``login_lockout.is_locked`` derives the lockout from
+        # ``LOGIN_FAILED`` audit rows; there is no separate attempt table and
+        # no 90-day sweep.
         "retention_period": _(
             "Konto-Stammdaten: bis zur Loeschung des Accounts. "
-            "Login-Versuche und Lockouts: 90 Tage (Sicherheits-"
-            "Forensik). Recovery-Codes bis zu deren Verbrauch oder "
+            "Login-Versuche und Kontosperren: als Audit-Einträge, aus denen "
+            "die Sperre berechnet wird; sie folgen der Audit-Frist (siehe "
+            "Verarbeitung 'Audit-Log'), Fehlversuche unter unbekanntem "
+            "Benutzernamen und von Konten ohne Einrichtung bleiben "
+            "unbefristet. Recovery-Codes bis zu deren Verbrauch oder "
             "Neuerstellung."
         ),
         "toms": [
@@ -393,21 +431,36 @@ PROCESSING_ACTIVITIES = [
         ],
         "recipients": [
             _("Anwendungsbetreuung der Einrichtung (Bearbeitung)"),
-            _("Leitung der Einrichtung (4-Augen bei Loeschung qualifizierter Daten)"),
+            _(
+                "Leitung der Einrichtung (4-Augen bei der Löschung von Personen "
+                "sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“)"
+            ),
             _("Antragsteller:in (Auslieferung des Datenpakets)"),
         ],
+        # Refs #2492: no code path deletes ``DeletionRequest`` or
+        # ``RectificationRequest``; anonymisation redacts the rectification
+        # texts (``_redact_rectification_requests``) but not deletion reasons.
+        # The audit rows of these actions are not in ``PRUNE_EXEMPT_ACTIONS``.
         "retention_period": _(
-            "Bearbeitungsvorgaenge: 3 Jahre nach Abschluss "
-            "(Nachweis der Erfuellung). Erzeugte Datenpakete: nach "
-            "Abholung loeschen. Berichtigungs-/Loeschungsvorgaenge: "
-            "im AuditLog dauerhaft (siehe Verarbeitung 'AuditLog')."
+            "Bearbeitungsvorgänge: Die Anwendung löscht Lösch- und "
+            "Berichtigungsanträge nicht; die Inhalte von "
+            "Berichtigungsanträgen tilgt die Anonymisierung der Person, die "
+            "Begründungen von Löschanträgen bleiben. Eine Frist (etwa "
+            "3 Jahre nach Abschluss als Nachweis der Erfüllung) legt die "
+            "Einrichtung organisatorisch fest. Erzeugte Datenpakete: nach "
+            "Abholung löschen. Berichtigungs- und Löschvorgänge: im "
+            "AuditLog bis zum Ablauf der Audit-Frist (siehe Verarbeitung "
+            "'Audit-Log')."
         ),
         "toms": [
             _(
                 "Berichtigung organisatorisch ueber Mitarbeiter:innen / Leitung — "
                 "kein Self-Service durch die betroffene Person"
             ),
-            _("Vier-Augen-Prinzip fuer Loeschung qualifizierter Daten"),
+            _(
+                "Vier-Augen-Prinzip für die Löschung von Personen sowie von "
+                "Ereignissen und Fällen der Stufe „Mit Zusatzangaben“"
+            ),
             _("Sudo-Mode-Re-Auth vor Erstellung von Datenpaketen"),
             _("AuditLog jeder Auskunft / Berichtigung / Loeschung"),
             _("Verschluesselte Auslieferung der Datenpakete"),

@@ -221,6 +221,7 @@ def render_document(slug, facility):
         "{{ auditlog_retention_months }}": str(retention["auditlog_retention_months"]),
         "{{ eventhistory_detail_months }}": str(retention["eventhistory_detail_months"]),
         "{{ eventhistory_chronicle_months }}": str(retention["eventhistory_chronicle_months"]),
+        "{{ retention_handover_notes_days }}": str(retention["retention_handover_notes_days"]),
         "{{ retention_document_type_overrides }}": _format_document_type_overrides(document_type_overrides),
         "{{ backup_retention_days }}": str(_backup_retention_days()),
     }

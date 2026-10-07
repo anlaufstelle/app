@@ -269,6 +269,9 @@ class TestDsfaExtendedRetentionPlaceholders:
         assert rows[5] == ("Aktivitäten / Zeitstrom-Einträge", "365 Tage")
         assert rows[6] == ("Papierkorb-Frist für gelöschte Personen und Fälle", "30 Tage")
         assert rows[7] == ("Audit-Log", "24 Monate")
+        assert rows[8] == ("Inhalte früherer Fassungen eines Ereignisses", "24 Monate")
+        assert rows[9] == ("Chronologie früherer Fassungen (nach ihrer Redaktion)", "24 Monate")
+        assert rows[10] == ("Übergabenotizen (Schichtnotizen)", "90 Tage")
 
     def test_check_prosa_is_removed(self, facility):
         """Die "Standardwert, vor Freigabe zu prüfen"-Prosa entfällt, weil
@@ -282,7 +285,8 @@ class TestDsfaExtendedRetentionPlaceholders:
         content, _ = render_document("dsfa", facility)
         rows = _retention_rows(content)
 
-        assert sorted(rows) == [1, 2, 3, 4, 5, 6, 7], f"§ 2.3 hat nicht mehr sieben Fristen: {rows}"
+        # Refs #2492: plus the two history periods and the handover note period.
+        assert sorted(rows) == list(range(1, 11)), f"§ 2.3 hat nicht mehr zehn Fristen: {rows}"
         for nr, (frist, wert) in rows.items():
             assert "{{" not in wert, f"Frist {nr} ({frist}) traegt einen ungerenderten Platzhalter: {wert!r}"
             # Zeile 4 ist die einzige nicht-numerische ("keine" bzw.
@@ -293,7 +297,7 @@ class TestDsfaExtendedRetentionPlaceholders:
         # Die alte Prosa-Fassung im Einleitungssatz ("die uebrigen vier stehen
         # mit ihrem Standardwert und sind vor Freigabe zu pruefen").
         assert "Standardwert" not in content
-        assert "Alle sieben sind unten mit dem für diese Einrichtung **tatsächlich konfigurierten** Wert" in content
+        assert "Alle zehn sind unten mit dem für diese Einrichtung **tatsächlich konfigurierten** Wert" in content
 
     def test_document_type_override_placeholder_is_replaced(self, facility):
         content, _ = render_document("dsfa", facility)

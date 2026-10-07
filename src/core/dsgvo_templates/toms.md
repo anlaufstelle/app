@@ -47,8 +47,8 @@
 | Rolle | Lesen | Schreiben | Löschen | Export | Admin |
 |-------|-------|-----------|---------|--------|-------|
 | Systemadministration | Alle Einrichtungen, nur lesend über die Verwaltungsoberfläche (`/admin-mgmt/`, mit Sudo) und den Systembereich (`/system/`); protokolliert (`SYSTEM_VIEW`) werden jeder Aufruf im Systembereich sowie die Listen- und Detailansichten von Personen, Fällen, Ereignissen, Ereignis-Historie, Aufgaben und Anhängen, nicht die übrigen Verwaltungsansichten (z. B. Löschanträge, Benutzer, Einstellungen, Audit-Log); schlägt die Protokollierung fehl, bleibt der Zugriff möglich | Keine Fachdaten | Nein | Nein | Installationsweit |
-| Anwendungsbetreuung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | 4-Augen | Ja | Ja (eigene Einrichtung) |
-| Leitung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | 4-Augen | Ja | Nein |
+| Anwendungsbetreuung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | Personen: 4-Augen; Ereignisse und Fälle: 4-Augen bei „Mit Zusatzangaben“, sonst direkt; Dateien: direkt (Sofortlöschweg) | Ja | Ja (eigene Einrichtung) |
+| Leitung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | Personen: 4-Augen; Ereignisse und Fälle: 4-Augen bei „Mit Zusatzangaben“, sonst direkt; Dateien: direkt (Sofortlöschweg) | Ja | Nein |
 | Fachkraft | Bis Sensitivität „Erhöht“ | Alle für sie sichtbaren Ereignisse | Eigene (identifiziert) | Nein | Nein |
 | Assistenz | Nur Sensitivität „Normal“, auch bei Personen der Stufe „Mit Zusatzangaben“ | Eigene | Nein | Nein | Nein |
 
@@ -57,7 +57,7 @@ Maßgeblich für das Lesen ist die höhere Sensitivität aus Dokumentationstyp u
 **Technische Umsetzung:**
 - [x] Serverseitige Berechtigungsprüfung
 - [x] Template-seitige Sichtbarkeitssteuerung
-- [x] 4-Augen-Prinzip für manuelle Löschungen von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“ (der automatische Aufbewahrungslauf löscht ohne Freigabe)
+- [x] 4-Augen-Prinzip für manuelle Löschungen von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“ (der automatische Aufbewahrungslauf löscht ohne Freigabe); Dateien vernichten Leitung und Anwendungsbetreuung über den Sofortlöschweg ohne zweite Person, ein aktiver Legal Hold sperrt ihn
 - [x] Sensitivitätsstufen pro Dokumentationstyp und Feld; ein Feld kann die Stufe seines Dokumentationstyps nur anheben
 - [x] PostgreSQL Row Level Security (RLS) als Defense-in-Depth für alle direkt oder über Beziehungen einrichtungsbezogenen Tabellen; Policies verwenden `app.current_facility_id` und arbeiten ohne gesetzten Kontext fail-closed. Ausnahme: In Sitzungen der Systemadministration setzt die Anwendung zusätzlich `app.is_super_admin`; die Policies lassen dann einrichtungsübergreifende Zugriffe zu
 
@@ -72,12 +72,21 @@ Maßgeblich für das Lesen ist die höhere Sensitivität aus Dokumentationstyp u
 
 > Diese Freitext-Felder folgen **nicht** dem Sensitivity/Encryption/Retention-Modell der Event-`data_json`-Felder. Klartext liegt facility-gescoped in der DB und im Backup (Backup ist AES-256-CBC verschlüsselt; DB selbst nicht).
 
-Betroffen sind `Client.notes`, `Case.description`, `Episode.description`,
-`WorkItem.description` und `AuditLog.detail`. Die fachlichen Eingabefelder
-warnen deshalb davor, Klarnamen oder Art.-9-Daten dort einzutragen, und die
-Anonymisierungs-Kaskade säubert die vier Fach-Freitexte.
-`AuditLog.detail` bleibt als Teil des unveränderlichen, HMAC-verketteten
-Protokolls bestehen und wird beim Schreiben minimiert. Eine feldweise Verschlüsselung ist bis post-v1.0 vertagt.
+Betroffen sind die Freitexte `Client.notes`, `Case.title`, `Case.description`,
+`Episode.title`, `Episode.description`, `WorkItem.title`,
+`WorkItem.description`, `OutcomeGoal.title`, `OutcomeGoal.description` und
+`Milestone.title`, die Begründungen `DeletionRequest.reason` und
+`LegalHold.reason` sowie `AuditLog.detail`. Die Notizen der Person und die
+Beschreibungen von Fall, Episode und Aufgabe warnen davor, Klarnamen oder
+Art.-9-Daten dort einzutragen; die Titelfelder und `OutcomeGoal.description`
+stehen ohne Warnhinweis. Die Anonymisierungs-Kaskade überschreibt Notizen,
+Titel und Beschreibungen von Person, Fall, Episode, Aufgabe, Wirkungsziel und
+Meilenstein. Die Begründungen von Löschanträgen und Aufbewahrungssperren tilgt
+die Anonymisierung nicht, und keine Aufbewahrungsfrist löscht sie.
+`AuditLog.detail` bleibt als Teil des HMAC-verketteten Protokolls unverändert
+bestehen, bis die Audit-Frist abläuft (Ausnahmen: Löschkonzept § 3.3), und wird
+beim Schreiben minimiert. Eine
+feldweise Verschlüsselung ist bis post-v1.0 vertagt.
 Das verbleibende organisatorische
 Risiko ist bei Einweisung, Datenminimierung und regelmäßiger TOM-Prüfung zu
 berücksichtigen.
@@ -104,10 +113,10 @@ berücksichtigen.
 *Nachvollziehbarkeit von Dateneingaben*
 
 - [x] Audit-Log für sicherheitsrelevante Aktionen
-- [x] Event-History (append-only) für Änderungsnachverfolgung
+- [x] Ereignis-Historie für Änderungsnachverfolgung: Jede Fassung wird angehängt und im laufenden Betrieb nicht überschrieben. Der Aufbewahrungslauf redigiert die Werte früherer Fassungen nach `eventhistory_detail_months` — die jüngste Fassung eines nicht gelöschten Ereignisses behält ihre Werte, Fassungen gelöschter Ereignisse und anonymisierter Personen redigiert er ohne Frist — und löscht redigierte Fassungen nach `eventhistory_chronicle_months`; Fassungen unter einem Legal Hold überspringt er. Jede Redaktion hinterlässt einen dauerhaften Nachweis (`EVENT_HISTORY_REDACTED`) im Audit-Log. Bereits erzeugte Sicherungsstände erreicht die Redaktion nicht
 - [x] Benutzer- und Zeitstempel bei allen Datensätzen
 - [x] Malware-Scanning aller Datei-Uploads (ClamAV) vor der Verschlüsselung — fail-closed bei nicht erreichbarem Scanner (Ref. #524)
-- [x] Protokollierung aller Datei-Uploads, -Downloads und -Ersetzungen im AuditLog (Action-Codes `FILE_UPLOAD`, `FILE_DOWNLOAD`, `FILE_REPLACE`)
+- [x] Protokollierung der Datei-Vorgänge im AuditLog: Hochladen und Ersetzen (`ATTACHMENT_UPLOAD`, Modus Hinzufügen bzw. Ersetzen), Herunterladen (`DOWNLOAD`), Entfernen und Vernichten (`ATTACHMENT_DELETE`)
 - [x] Optimistic Locking für Client, Case, WorkItem, Settings und Event — verhindert stilles Überschreiben bei parallelen Bearbeitungen (Ref. #531)
 
 ---

@@ -578,3 +578,257 @@ class TestDomainConceptRetentionAndRls:
         en = _bullet(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8"), "Retention periods.")
         assert "not aggregation that preserves anonymous counts" not in en
         assert "monthly statistics aggregate" in en
+
+
+# ---------------------------------------------------------------------------
+# Refs #2492: retention inventory, four-eyes scope, audit logging, free-text
+# inventory, third-country transfers and history redaction.
+# ---------------------------------------------------------------------------
+
+_NUMBER_WORDS = {7: "sieben", 8: "acht", 9: "neun", 10: "zehn", 11: "elf", 12: "zwölf"}
+_DSFA_ROW_RE = re.compile(r"^\|\s*(\d+)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*`([^`|]+)`\s*\|", re.MULTILINE)
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.;:])\s+")
+
+
+def _retention_settings() -> list[str]:
+    from core.services.client.dsgvo_package import _retention_values
+
+    # ``DocumentType.retention_days`` is the only period that is not a
+    # ``Settings`` field (row 4 of the DSFA table).
+    return [*_retention_values(None), "DocumentType.retention_days"]
+
+
+def _sentences(text: str) -> list[str]:
+    return _SENTENCE_SPLIT_RE.split(text)
+
+
+@pytest.fixture
+def vvt_template(facility):
+    return render_document("verarbeitungsverzeichnis", facility)[0]
+
+
+def _vvt_texts(activity_id: str) -> list[str]:
+    activity = next(a for a in PROCESSING_ACTIVITIES if a["id"] == activity_id)
+    texts = []
+    for value in activity.values():
+        values = value if isinstance(value, list) else [value]
+        texts.extend(str(v) for v in values)
+    return texts
+
+
+@pytest.mark.django_db
+class TestRetentionInventory:
+    def test_premise_handover_period_is_a_retention_setting(self):
+        from core.models import Settings
+        from core.services.client.dsgvo_package import _retention_values
+
+        assert Settings._meta.get_field("retention_handover_notes_days").default == 90
+        assert _retention_values(None)["retention_handover_notes_days"] == 90
+
+    def test_dsfa_table_lists_every_retention_setting_with_its_count(self, facility):
+        content = render_document("dsfa", facility)[0]
+        rows = {setting: (nr, label, value) for nr, label, value, setting in _DSFA_ROW_RE.findall(content)}
+        expected = _retention_settings()
+
+        assert sorted(rows) == sorted(expected)
+        word = _NUMBER_WORDS[len(expected)]
+        assert f"kennt {word} konfigurierbare Aufbewahrungsfristen. Alle {word} sind" in content
+        assert f"greift **keine** der {word} Fristen" in content
+
+    def test_deletion_concept_lists_every_retention_setting(self, deletion_concept):
+        table = _section(deletion_concept, "## 2. Fristen und Löschwirkung", "## 3.")
+        for setting in _retention_settings():
+            assert f"| `{setting}` |" in table, setting
+
+    @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
+    def test_handover_period_renders_configured_value_and_hard_deletion(self, facility, slug):
+        from core.models import Settings
+
+        Settings.objects.update_or_create(facility=facility, defaults={"retention_handover_notes_days": 60})
+        facility.refresh_from_db()
+        content = render_document(slug, facility)[0]
+
+        row = next(line for line in content.splitlines() if "`retention_handover_notes_days`" in line)
+        assert "| 60 Tage |" in row
+        assert "endgültig gelöscht" in row
+        assert "kein Legal Hold" in row
+
+    def test_vvt_names_the_handover_period(self, vvt_template):
+        assert "Übergabenotizen" in _section(vvt_template, "### 1.7 Löschfristen", "### 1.8")
+        retention = str(next(a for a in PROCESSING_ACTIVITIES if a["id"] == "falldaten")["retention_period"])
+        assert "Übergabenotizen" in retention
+        assert "90 Tage" in retention
+
+
+def _four_eyes_scope_ok(text: str) -> bool:
+    """A four-eyes promise names the person and the stage limit for events and cases."""
+    return "Person" in text and "Mit Zusatzangaben" in text
+
+
+@pytest.mark.django_db
+class TestFourEyesScope:
+    def test_premise_file_purge_needs_no_second_person(self):
+        from core.views.attachments import AttachmentPurgeView
+        from core.views.mixins import DeletionConfirmerRequiredMixin, LeadOrAdminRequiredMixin
+
+        assert issubclass(AttachmentPurgeView, LeadOrAdminRequiredMixin)
+        assert not issubclass(AttachmentPurgeView, DeletionConfirmerRequiredMixin)
+
+    @pytest.mark.parametrize("slug", ["dsfa", "toms", "loeschkonzept"])
+    def test_templates_name_the_file_purge_without_second_person(self, facility, slug):
+        content = _flat(render_document(slug, facility)[0])
+        assert any("Datei" in s and "ohne zweite Person" in s for s in _sentences(content)), slug
+
+    def test_dsfa_residual_risk_names_the_purge_path(self, dsfa):
+        residual = _section(dsfa, "**Restrisiko:** Aus beidem folgt", "**Auskunftsrecht")
+        assert "Leitung und Anwendungsbetreuung" in residual
+        assert "ohne zweite Person" in residual
+
+    def test_toms_role_table_does_not_generalise_four_eyes(self, facility):
+        rows = _role_table_rows(render_document("toms", facility)[0])
+        for role in ("Anwendungsbetreuung", "Leitung"):
+            delete_cell = rows[role][2]
+            assert delete_cell != "4-Augen", role
+            assert "Dateien" in delete_cell, role
+
+    def test_vvt_four_eyes_items_name_their_scope(self):
+        for activity in PROCESSING_ACTIVITIES:
+            if activity["id"] == "backup":
+                continue  # restore recommendation, no deletion promise
+            for text in _vvt_texts(activity["id"]):
+                if "Vier-Augen" in text or "4-Augen" in text:
+                    assert _four_eyes_scope_ok(text), (activity["id"], text)
+
+
+# Upper-case identifiers in backticks inside the TOM section on input control
+# are audit action codes; each must exist in ``AuditLog.Action``.
+_BACKTICK_CODE_RE = re.compile(r"`([A-Z][A-Z_]{2,})`")
+
+
+@pytest.mark.django_db
+class TestAuditLoggingClaims:
+    def test_premise_attachment_actions(self):
+        names = set(AuditLog.Action.names)
+        assert {"ATTACHMENT_UPLOAD", "ATTACHMENT_DELETE", "DOWNLOAD"} <= names
+        assert not {"FILE_UPLOAD", "FILE_DOWNLOAD", "FILE_REPLACE"} & names
+
+    def test_toms_input_control_names_only_existing_actions(self, facility):
+        content = render_document("toms", facility)[0]
+        section = _section(content, "### 2.2 Eingabekontrolle", "## 3.")
+        codes = _BACKTICK_CODE_RE.findall(section)
+        assert codes, "input control names no action codes"
+        assert set(codes) <= set(AuditLog.Action.names), set(codes) - set(AuditLog.Action.names)
+
+    def test_toms_event_history_is_not_called_append_only(self, toms):
+        assert "Event-History (append-only)" not in toms
+        bullet = next(s for s in toms.split("- [x] ") if s.startswith("Ereignis-Historie"))
+        assert "redigiert" in bullet
+        assert "löscht" in bullet
+
+    def test_premise_audit_pruning_deletes_through_the_application(self):
+        import inspect
+
+        from core.retention import audit_pruning
+
+        source = inspect.getsource(audit_pruning.prune_auditlog)
+        assert "bypass_replication_triggers" in source
+        assert ".delete()" in source or "_raw_delete" in source
+
+    def test_vvt_audit_log_entry_names_the_pruning_exception(self):
+        for text in _vvt_texts("auditlog"):
+            assert "kein UPDATE oder DELETE durch die Anwendung" not in text
+            if "Append-Only" in text or "UPDATE/DELETE blockiert" in text:
+                assert "Aufbewahrungslauf" in text, text
+
+    def test_premise_lockout_is_derived_from_audit_entries(self):
+        import inspect
+
+        from core.services.security import login_lockout
+
+        assert "LOGIN_FAILED" in inspect.getsource(login_lockout.is_locked)
+
+    def test_vvt_does_not_promise_periods_the_code_lacks(self):
+        auth = str(next(a for a in PROCESSING_ACTIVITIES if a["id"] == "auth_login")["retention_period"])
+        assert "Lockouts: 90 Tage" not in auth
+        assert "Audit-Frist" in auth
+        requests = str(next(a for a in PROCESSING_ACTIVITIES if a["id"] == "dsgvo_requests")["retention_period"])
+        assert "im AuditLog dauerhaft" not in requests
+        assert "Audit-Frist" in requests
+
+
+# Plain-text free-text fields outside the field encryption (TOM § 1.5).
+FREE_TEXT_FIELDS = (
+    ("Client", "notes"),
+    ("Case", "title"),
+    ("Case", "description"),
+    ("Episode", "title"),
+    ("Episode", "description"),
+    ("WorkItem", "title"),
+    ("WorkItem", "description"),
+    ("OutcomeGoal", "title"),
+    ("OutcomeGoal", "description"),
+    ("Milestone", "title"),
+    ("DeletionRequest", "reason"),
+    ("LegalHold", "reason"),
+    ("AuditLog", "detail"),
+)
+
+
+@pytest.mark.django_db
+class TestFreeTextInventory:
+    def test_premise_fields_are_plain_columns(self):
+        from django.apps import apps
+        from django.db import models as dj_models
+
+        for model_name, field_name in FREE_TEXT_FIELDS:
+            field = apps.get_model("core", model_name)._meta.get_field(field_name)
+            assert type(field) in (dj_models.CharField, dj_models.TextField, dj_models.JSONField), (
+                model_name,
+                field_name,
+            )
+
+    def test_toms_name_every_plain_free_text_field(self, facility):
+        content = render_document("toms", facility)[0]
+        section = _section(content, "### 1.5 Restrisiko", "## 2.")
+        for model_name, field_name in FREE_TEXT_FIELDS:
+            assert f"`{model_name}.{field_name}`" in section, f"{model_name}.{field_name}"
+
+    def test_toms_name_what_anonymisation_does_not_clean(self, facility):
+        section = _flat(_section(render_document("toms", facility)[0], "### 1.5 Restrisiko", "## 2."))
+        assert "tilgt die Anonymisierung nicht" in section
+        assert "ohne Warnhinweis" in section
+
+
+@pytest.mark.django_db
+class TestThirdCountryTransfer:
+    STALE = ("Eine Übermittlung in Drittländer findet nicht statt.",)
+
+    def test_premise_error_tracking_is_optional(self):
+        source = (REPO_ROOT / "src" / "anlaufstelle" / "settings" / "_sentry.py").read_text(encoding="utf-8")
+        assert "SENTRY_DSN" in source
+
+    @pytest.mark.parametrize("slug", ["informationspflichten", "verarbeitungsverzeichnis"])
+    def test_templates_tie_transfers_to_facility_configuration(self, facility, slug):
+        content = _flat(render_document(slug, facility)[0])
+        for stale in self.STALE:
+            assert stale not in content
+        assert "### 1.6 Übermittlung in Drittländer Keine." not in content
+        assert "nur, wenn die Einrichtung" in content
+        assert "Fehlerüberwachung" in content
+
+
+@pytest.mark.django_db
+class TestHistoryRedactionClaims:
+    def test_dsfa_and_deletion_concept_keep_the_version_and_the_newest_values(self, facility):
+        for slug in ("dsfa", "loeschkonzept"):
+            content = render_document(slug, facility)[0]
+            row = next(line for line in content.splitlines() if "`eventhistory_detail_months`" in line)
+            assert "die Fassung selbst" in row, slug
+            assert "jüngste Fassung" in row, slug
+
+    def test_toms_and_vvt_name_redaction_and_its_limits(self, toms):
+        bullet = next(s for s in toms.split("- [x] ") if s.startswith("Ereignis-Historie"))
+        assert "jüngste Fassung" in bullet
+        assert "Sicherungsstände" in bullet
+        retention = str(next(a for a in PROCESSING_ACTIVITIES if a["id"] == "falldaten")["retention_period"])
+        assert "jüngste Fassung" in retention
