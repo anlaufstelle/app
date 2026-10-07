@@ -16,21 +16,42 @@ ALLOWLIST = {
     "docs/en/domain-concept-summary.md": dict.fromkeys(
         METRICS, "Explicitly shortened domain concept summary; see its opening notice."
     ),
-    "CONTRIBUTING.en.md": {
-        "commands": "Example values (branch names, sample file name) are translated; the commands are identical."
-    },
     "docs/en/README.md": dict.fromkeys(
         ("headings", "tables", "table_columns"),
         "The English index lists translated documents and groups German-only ones; sections differ.",
     ),
-    "docs/en/admin-guide.md": {
-        "commands": "The example facility name in the statistics command is translated; the command is identical."
-    },
-    "docs/en/ops-runbook.md": {
-        "commands": "Example commit message and test e-mail address are translated; the commands are identical."
-    },
     "docs/en/glossary.md": {
         "table_columns": "Bilingual glossary adds an English column to the German term/definition table."
+    },
+}
+# Command pairs whose only difference is a translated example value, keyed by the EN file as
+# (DE command, EN command). Any other command difference in these files is still reported.
+TRANSLATED_COMMANDS = {
+    "CONTRIBUTING.en.md": {
+        ("git checkout -b feature/kurze-beschreibung", "git checkout -b feature/short-description"),
+        ("git checkout -b fix/was-repariert-wird", "git checkout -b fix/what-is-being-fixed"),
+        (
+            "python src/manage.py load_package --file paket.yaml --facility <placeholder> --dry-run",
+            "python src/manage.py load_package --file package.yaml --facility <placeholder> --dry-run",
+        ),
+    },
+    "docs/en/admin-guide.md": {
+        (
+            "docker compose -f docker-compose.prod.yml run --rm maintenance "
+            'create_statistics_snapshots --facility "Meine Einrichtung"',
+            "docker compose -f docker-compose.prod.yml run --rm maintenance "
+            'create_statistics_snapshots --facility "My Facility"',
+        ),
+    },
+    "docs/en/ops-runbook.md": {
+        (
+            'git commit -m "chore: bump <placeholder> auf <placeholder>"',
+            'git commit -m "chore: bump <placeholder> to <placeholder>"',
+        ),
+        (
+            "python manage.py sendtestemail pruefadresse@example.org",
+            "python manage.py sendtestemail test-address@example.org",
+        ),
     },
 }
 SOURCE = re.compile(r"<!--\s*translation-source:\s*(\S+)[^\n]*?-->")
@@ -110,6 +131,16 @@ def findings(root: Path) -> tuple[list[str], list[str]]:
             if de_structure[metric] == en_structure[metric]:
                 continue
             reason = ALLOWLIST.get(relative, {}).get(metric)
+            if metric == "commands" and not reason:
+                pairs = TRANSLATED_COMMANDS.get(relative, set())
+                de_only = set(de_structure[metric]) - set(en_structure[metric])
+                en_only = set(en_structure[metric]) - set(de_structure[metric])
+                for de_command, en_command in pairs:
+                    if de_command in de_only and en_command in en_only:
+                        de_only.discard(de_command)
+                        en_only.discard(en_command)
+                if not de_only and not en_only:
+                    reason = "Example values are translated; the commands are otherwise identical."
             description = f"{relative} ↔ {match[1]}: {metric} DE={de_structure[metric]!r} EN={en_structure[metric]!r}"
             if reason:
                 exceptions.append(f"ALLOW {relative}: {metric}: {reason}")

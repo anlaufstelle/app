@@ -101,3 +101,20 @@ def test_discovery_covers_every_registered_translation():
     checker = runpy.run_path(str(ROOT / "scripts/check_translation_structure.py"))
     discovered = {path.relative_to(ROOT).as_posix() for path in checker["translation_paths"](ROOT)}
     assert set(versions["TRANSLATED_FILES"]) == discovered
+
+
+def test_translated_command_exception_covers_only_the_listed_pair(tmp_path):
+    de = '```bash\ngit commit -m "chore: bump <a> auf <b>"\ndocker compose up\n```\n'
+    en = '```bash\ngit commit -m "chore: bump <a> to <b>"\ndocker compose up\n```\n'
+    pair(tmp_path, de, en)
+    en_path = tmp_path / "docs/en/example.md"
+    en_path.rename(en_path.with_name("ops-runbook.md"))
+    result = check(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ALLOW docs/en/ops-runbook.md: commands" in result.stdout
+    # An additional, unlisted command difference is no longer hidden by the exception.
+    runbook = tmp_path / "docs/en/ops-runbook.md"
+    runbook.write_text(runbook.read_text().replace("docker compose up", "docker compose down"))
+    result = check(tmp_path)
+    assert result.returncode == 1
+    assert "commands" in result.stdout
