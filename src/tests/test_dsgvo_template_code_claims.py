@@ -1276,15 +1276,31 @@ _PRIVACY_DE = REPO_ROOT / "docs" / "datenschutz.md"
 _PRIVACY_EN = REPO_ROOT / "docs" / "en" / "data-protection.md"
 
 
-def test_premise_case_purge_deletes_files_and_handover_notes_name_staff():
-    import inspect
+@pytest.mark.django_db
+def test_premise_manual_case_purge_deletes_attachment_rows_and_files(
+    case_open, authz_case_attachment, staff_user, admin_user
+):
+    """Behaviour premise for the case purge path in the privacy overview.
 
+    The retention-driven purge is covered by
+    ``test_case_deletion_workflow.py::TestTrashExpiryRedaction::test_attachments_and_markers_are_gone``;
+    this covers the immediate purge by the application administration.
+    """
+    from core.models import Attachment
+    from core.services.case import anonymize_case_now, soft_delete_case
+    from core.services.file_vault import get_attachment_path
+
+    path = get_attachment_path(authz_case_attachment)
+    assert path.exists()
+    soft_delete_case(case_open, staff_user)
+    anonymize_case_now(case_open, admin_user)
+    assert not Attachment.objects.filter(case=case_open).exists()
+    assert not path.exists()
+
+
+def test_premise_handover_notes_name_staff():
     from core.models import ShiftHandoverNote
-    from core.services.case import deletion
 
-    assert "delete_attachments_for(case)" in inspect.getsource(deletion.anonymize_case)
-    for caller in (deletion.anonymize_case_now, deletion.anonymize_eligible_soft_deleted_cases):
-        assert "anonymize_case(" in inspect.getsource(caller), caller
     fields = {field.name for field in ShiftHandoverNote._meta.get_fields()}
     assert {"author", "updated_by"} <= fields
 
