@@ -349,7 +349,7 @@ Die getroffenen Entscheidungen:
 - **Schlüsselrotation erhält den Kollisionsschutz vollständig.** `has_idempotency_payload_mismatch()` bekommt den **Request**, nicht einen vorberechneten Hash, und rechnet einen gespeicherten Fingerprint unter genau der Generation nach, unter der er entstand — dafür durchsucht sie alle in `ENCRYPTION_KEYS` konfigurierten Schlüssel (`_get_keys()`, dieselbe Quelle wie `MultiFernet`). Während einer Rotation stehen Alt- und Neuschlüssel dort ohnehin nebeneinander; der N14-Schutz bleibt über die gesamte Rotation hinweg wirksam. Neue Fingerprints entstehen dabei immer unter dem **ersten** Schlüssel.
 - **Zwei Fälle ohne Vergleichsgrundlage — graceful, kein 422.** Ein Legacy-Wert (nackter SHA-256 ohne Präfix) und ein Wert, dessen Schlüssel **nicht mehr** in `ENCRYPTION_KEYS` steht, sind keine Kollisions-*Beweise*, sondern fehlende Vergleichsgrundlage. Sie gelten deshalb wie ein fehlender Fingerprint (`NULL`) als **Treffer ohne Payload-Prüfung** — andernfalls liefe jeder solche Replay in einen falschen Kollisions-422 und landete als Dead Letter in der Offline-UI. Eine nachträgliche Datenmigration ist in beiden Fällen unmöglich: der Fingerprint deckt den ursprünglichen **Request-Payload** ab (inklusive Datei-Tripel), und der existiert nach der Anlage nirgends mehr — anders als bei `reencrypt_fields`, das gespeicherte Chiffrate umschlüsselt, gibt es hier kein Original zum Neuberechnen.
 - **Restrisiko — ehrlich: dauerhaft, nicht zeitlich begrenzt.** Für Zeilen einer Generation, deren Schlüssel entfernt wurde, entfällt die Payload-Kollisionsprüfung **für immer**. `Event`-Zeilen werden von der Retention nie hart gelöscht (siehe § Retention-Begründung oben), sie laufen also **nicht** aus; nur der 72-h-Cache-Eintrag tut das. Der Ausgang bleibt der Zustand *vor* N14 (Treffer statt 422), also kein Rückschritt hinter den historischen Stand, und er betrifft ausschließlich denselben `(scope, user, idempotency_key)`-Strang derselben Nutzerin.
-  **Handlungsempfehlung für Betreiber:** Alt-Schlüssel nach einer Rotation in `ENCRYPTION_KEYS` **behalten** — er wird für Alt-Chiffrate ohnehin gebraucht, bis `reencrypt_fields` durchgelaufen ist. Wer ihn danach entfernt (der dokumentierte, richtige Weg für die Verschlüsselung), nimmt für die bis dahin angelegten Ereignisse bewusst diesen Prüfverlust in Kauf. Ein zusätzlicher Aufbewahrungsgrund für den Altschlüssel entsteht dadurch nicht: der Idempotenz-Schutz ist ein Duplikat-Guard, kein Schutzziel der Betroffenen.
+  **Handlungsempfehlung für Betreiber:** Alt-Schlüssel nach einer Rotation in `ENCRYPTION_KEYS` **behalten** — er bleibt ohnehin dauerhaft im Ring, weil `reencrypt_fields` nur Datenbankspalten umschlüsselt, nicht die Inhalte der Dateianhänge ([Admin-Handbuch § 2.9 „Schlüssel-Rotation“](admin-guide.md#schlüssel-rotation-encryption_keys)). Wer ihn trotzdem entfernt, macht die mit ihm verschlüsselten Dateianhänge unlesbar und verliert für die bis dahin angelegten Ereignisse zusätzlich diese Prüfung. Ein zusätzlicher Aufbewahrungsgrund für den Altschlüssel entsteht dadurch nicht: der Idempotenz-Schutz ist ein Duplikat-Guard, kein Schutzziel der Betroffenen.
 
 ### Exportausschluss (verifiziert)
 
@@ -1810,8 +1810,10 @@ verschlüsselt Bestandsgeräte in place.
 
 Neuen Primärschlüssel in `ENCRYPTION_KEYS` **voranstellen** (alten hinten
 behalten) → Alt-Tokens bleiben lesbar. `python manage.py reencrypt_fields`
-wickelt danach auch die TOTP-Secrets aktiv unter den neuen Schlüssel um; erst
-dann darf der alte Schlüssel entfernt werden.
+wickelt danach auch die TOTP-Secrets aktiv unter den neuen Schlüssel um. Der
+alte Schlüssel bleibt auch danach im Ring: `reencrypt_fields` schlüsselt nur
+Datenbankspalten um, nicht die Inhalte der Dateianhänge, die ohne ihn
+unlesbar würden ([Admin-Handbuch § 2.9 „Schlüssel-Rotation“](admin-guide.md#schlüssel-rotation-encryption_keys)).
 
 Der Rewrap ist **concurrency-sicher** gegenüber parallelen MFA-Logins: Ein
 `verify_token` schreibt intern zwar ein Voll-`save()` inkl. `key`, doch
@@ -1820,8 +1822,8 @@ eine bestehende Zeile mit bereits verschlüsseltem Secret unangetastet — ein
 Verify kann einen frischen Rewrap also nicht zurücksetzen (sonst bliebe das
 Gerät still unter dem Alt-Schlüssel → Lockout beim Entfernen des Alt-Keys).
 Meldet `reencrypt_fields` dennoch Geräte, die trotz Retries unter dem
-Alt-Schlüssel blieben, den Lauf **wiederholen** und den Alt-Schlüssel erst nach
-einem meldungsfreien Lauf entfernen (der Lauf ist idempotent).
+Alt-Schlüssel blieben, den Lauf **wiederholen**, bis er ohne diese Meldung
+endet (der Lauf ist idempotent).
 
 ### Verifikation
 
