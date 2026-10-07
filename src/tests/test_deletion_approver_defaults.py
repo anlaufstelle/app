@@ -102,6 +102,23 @@ class TestComplianceApproverCard:
 
         assert "Genehmiger für Löschanträge" in content
 
+    def test_label_and_category_are_translated(self, facility):
+        with patch("core.services.compliance.deletion_approvers._", side_effect=lambda text: f"[{text}]"):
+            card = self._card()
+
+        assert card.label == "[Genehmiger für Löschanträge]"
+        assert card.category == "[Berechtigungen]"
+
+    def test_dashboard_groups_the_card_under_the_translated_category(self, client, super_admin_user, facility):
+        client.force_login(super_admin_user)
+
+        with patch("core.services.compliance.deletion_approvers._", side_effect=lambda text: f"[{text}]"):
+            response = client.get(reverse("core:system_compliance"))
+
+        group = response.context["groups"]["[Berechtigungen]"]
+        assert [check.key for check in group] == ["deletion_approvers"]
+        assert "[Genehmiger für Löschanträge]" in response.content.decode()
+
 
 def _create_form(facility, actor, **overrides):
     data = {

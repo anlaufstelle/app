@@ -54,8 +54,10 @@ def _deletion_approver_checks() -> list[ComplianceCheck]:
     return [
         ComplianceCheck(
             key="deletion_approvers",
-            label="Genehmiger für Löschanträge",  # pragma: no mutate
-            category="Berechtigungen",  # pragma: no mutate
+            # Translated per request; the dashboard groups by this value, so every card
+            # of one request shares the same language.
+            label=_("Genehmiger für Löschanträge"),  # pragma: no mutate
+            category=_("Berechtigungen"),  # pragma: no mutate
             status=status,
             message=" ".join(parts),
             detail=detail,
