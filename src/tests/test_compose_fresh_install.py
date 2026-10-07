@@ -151,6 +151,8 @@ except OSError:  # compose files stripped from this tree (mutation runs)
 def test_every_compose_file_with_a_clamav_service_is_covered() -> None:
     if not (REPO_ROOT / "docker-compose.demo.yml").exists():
         pytest.skip("docker-compose.demo.yml is not in the public snapshot")
+    if not (REPO_ROOT / "docker-compose.dev.yml").exists():
+        pytest.skip("docker-compose.dev.yml is not in the public snapshot")
     assert {
         "docker-compose.yml",
         "docker-compose.prod.yml",

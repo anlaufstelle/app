@@ -296,6 +296,8 @@ def _stack(stack_id: str) -> Stack:
         pytest.skip("docker-compose.staging.yml and .env.staging.example are excluded from this release tree")
     if stack_id == "demo" and not (ROOT / "docker-compose.demo.yml").exists():
         pytest.skip("docker-compose.demo.yml and .env.demo.example are excluded from this release tree")
+    if stack_id == "dev" and not (ROOT / "docker-compose.dev.yml").exists():
+        pytest.skip("docker-compose.dev.yml is excluded from this release tree")
     if stack_id == "barbara" and not BARBARA_DIR.exists():
         pytest.skip("dev-ops/ is excluded from this release tree")
     compose, settings_entry = {

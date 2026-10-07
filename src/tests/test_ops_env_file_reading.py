@@ -16,7 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OPS_DIR = REPO_ROOT / "scripts" / "ops"
 ENV_FILE_LIB = OPS_DIR / "lib" / "env-file.sh"
 
-# ``source``/``.`` of a dotenv file: literal names (.env, .env.dev, ...) or the variables that hold them.
+# ``source``/``.`` of a dotenv file: literal names (.env, .env.local, ...) or the variables that hold them.
 SOURCING_ENV_FILE = re.compile(
     r"(?:^|[;&|(\s])(?:source|\.)\s+[\"']?(?:\S*\.env(?:\.\w+)?\b|\$\{?(?:ENV_FILE|env_file)\b)"
 )
@@ -52,13 +52,13 @@ def _tracked_script_paths() -> list[Path]:
 def test_env_file_sourcing_scanner_flags_sourcing_forms(tmp_path: Path) -> None:
     probe = tmp_path / "probe.sh"
     probe.write_text(
-        "# . ./.env.dev is only mentioned here\n"
-        "set -a && . ./.env.dev && set +a\n"
+        "# . ./.env.local is only mentioned here\n"
+        "set -a && . ./.env.local && set +a\n"
         'source "${PROJECT_DIR}/.env"\n'
         '    source "$ENV_FILE"\n'
         '        source "$env_file"\n'
         'source "${SCRIPT_DIR}/lib/env-file.sh"\n'
-        "docker compose --env-file .env.dev ps\n",
+        "docker compose --env-file .env.local ps\n",
         encoding="utf-8",
     )
     assert env_file_sourcing_lines([probe]) == [f"{probe}:{n}" for n in (2, 3, 4, 5)]
