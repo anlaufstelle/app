@@ -360,7 +360,10 @@ PROCESSING_ACTIVITIES = [
         "toms": [
             _("Passwort-Hashing mit aktuellem Verfahren (PBKDF2)"),
             _("Rate-Limiting auf Login-Versuche (max. 5/Minute je IP, 10/Stunde je Benutzername)"),
-            _("Kontosperre nach 10 Fehlversuchen in 15 Minuten je Konto und IP"),
+            _(
+                "Kontosperre nach 10 Fehlversuchen in 15 Minuten je Konto und IP "
+                "(Systemadministration ausgenommen, für sie gelten die Ratelimits)"
+            ),
             _("2FA per TOTP (RFC 6238), per Rollen-Default verpflichtend"),
             _("Recovery-Codes als Self-Service-Backup"),
             _("Sudo-Mode fuer destruktive Aktionen (15 Min Re-Auth)"),

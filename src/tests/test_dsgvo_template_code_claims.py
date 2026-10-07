@@ -1183,6 +1183,20 @@ class TestDocumentRedaction:
             assert "innerhalb von 15 Minuten je Konto und Quell-IP" in text, name
             assert "ausgenommen" in text, name
 
+    def test_every_lockout_claim_names_the_super_admin_exemption(self, toms, dsfa):
+        """``login_lockout.is_locked`` never locks ``super_admin`` (behaviour:
+        ``test_login_lockout_super_admin.py``), so each lockout promise must
+        carry the exemption in the same statement, not only somewhere else."""
+        claims = [("vvt", t) for t in _vvt_texts("auth_login") if "Kontosperre nach" in t]
+        for name, text in (("toms", toms), ("dsfa", dsfa)):
+            claims += [(name, line) for line in text.splitlines() if "Kontosperrung nach" in line]
+        summary = _read_flat(DOMAIN_SUMMARY_EN)
+        claims += [("summary", _section(summary, "- **Account lockout.**", "- **"))]
+        assert {name for name, _ in claims} == {"vvt", "toms", "dsfa", "summary"}
+        for name, text in claims:
+            assert "ausgenommen" in text or "exempt" in text, (name, text)
+        assert "consecutive failed login attempts" not in summary
+
 
 @pytest.mark.architecture
 class TestAwarenessMfaClaims:
