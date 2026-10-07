@@ -1874,8 +1874,8 @@ Third-Party-Ressource).
 ### Restfläche (akzeptiert)
 
 Es bleibt eine **weiche** Rest-DoS-Fläche: Ein Dritter, der den Username kennt, kann den
-`10/h`-Eimer des Opfers füllen → dessen eigener Login-POST bekommt bis zu 1h lang `429`. Gegenüber
-dem früheren Zustand deutlich entschärft:
+`10/h`-Eimer des Opfers füllen → dessen eigener Login-POST bekommt bis zu 1h lang `429`. Die Wirkung ist
+deutlich begrenzt:
 
 - **fixes 1h-Fenster**, **nicht** self-sustaining (läuft ohne weitere Angreifer-Aktion aus);
 - erzeugt **keinen** `is_locked`-Zustand (kein Account-Lockout, keine Admin-Entsperrung nötig);

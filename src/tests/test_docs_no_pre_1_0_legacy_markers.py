@@ -74,6 +74,12 @@ _HISTORY_PATTERNS: dict[str, re.Pattern[str]] = {
     "ursprünglich": re.compile(
         r"\b[Uu]rsprünglich(?:e[nmrs]?)? (?:Fassung|Version|Formulierung|Text|Zusage|enthalten)"
     ),
+    "seit A<n>.<n>": re.compile(r"\b(?:[Ss]eit|[Ss]ince|[Bb]is|[Uu]ntil) A\d\.\d"),
+    "Reihenfolge-Umkehr": re.compile(r"[Rr]eihenfolge-Umkehr|\b(?:ordering|order) reversal\b"),
+    "früherer Zustand": re.compile(
+        r"\b[Ff]rüher(?:e[nmrs]?)? (?:stillen?|Fail|Verhalten|Zustand)|"
+        r"\b(?:earlier|former|previous) (?:silent|fail-open|behaviou?r)\b"
+    ),
     "Synchronization update": re.compile(r"\bSynchroni[sz]ation update\b", re.IGNORECASE),
 }
 
@@ -136,9 +142,29 @@ def scan_markers(root: Path) -> list[Hit]:
     return hits
 
 
-def scan_history_markers(root: Path, relpaths: tuple[str, ...] | None = None) -> list[Hit]:
+# Hard-wrapped prose of the runbooks is checked across line breaks as well.
+_WRAP_SCOPE = ("docs/ops-runbook.md", "docs/en/ops-runbook.md")
+
+
+def _strip_quotes(line: str, relpath: str) -> str:
+    """``line`` without the verbatim-quoted strings allowlisted for ``relpath``;
+    other history wording on the same line stays visible to the scan."""
+    for needle, _ in _HISTORY_ALLOWLIST.get(relpath, []):
+        line = line.replace(needle, " ")
+    return line
+
+
+def scan_history_markers(
+    root: Path, relpaths: tuple[str, ...] | None = None, *, apply_allowlist: bool = True
+) -> list[Hit]:
     """History-pattern hits under ``root``: in ``relpaths`` if given, else in
-    all public core documents (same file set as :func:`scan_markers`)."""
+    all public core documents (same file set as :func:`scan_markers`).
+
+    With ``apply_allowlist`` the verbatim-quoted strings of
+    ``_HISTORY_ALLOWLIST`` are removed from the line before matching, so only
+    the quoted span is exempt. In the operations runbooks (``_WRAP_SCOPE``) a
+    phrase wrapped over a line break (the match starts on one line and ends on
+    the next) is reported on its first line."""
     if relpaths is None:
         paths = _scanned_files(root)
     else:
@@ -146,9 +172,15 @@ def scan_history_markers(root: Path, relpaths: tuple[str, ...] | None = None) ->
     hits: list[Hit] = []
     for path in paths:
         relpath = str(path.relative_to(root))
-        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for lineno, line in enumerate(lines, start=1):
+            checked = _strip_quotes(line, relpath) if apply_allowlist else line
+            following = lines[lineno].lstrip("> \t") if lineno < len(lines) and relpath in _WRAP_SCOPE else ""
+            joined = f"{checked.rstrip()} {following}"
             for name, pattern in _HISTORY_PATTERNS.items():
-                if pattern.search(line):
+                if pattern.search(checked) or any(
+                    m.start() < len(checked.rstrip()) < m.end() for m in pattern.finditer(joined)
+                ):
                     hits.append(Hit(relpath=relpath, lineno=lineno, pattern=name, line=line.strip()))
     return hits
 
@@ -323,6 +355,9 @@ class TestHistoryScanAgainstFixtures:
                     "Bis zum Update war der Schutz unvollständig.",
                     "Vor dieser Version gab es keinen Guard.",
                     "Der Export funktioniert wie bisher.",
+                    "Seit A1.4 ist der Owner die Admin-Rolle.",
+                    "Das gilt seit der Reihenfolge-Umkehr.",
+                    "Das verhindert den früheren stillen Fail-open.",
                     "Die ursprüngliche Fassung gilt.",
                     "Synchronization update 2026-10-06: current wording.",
                 ]
@@ -386,6 +421,11 @@ TICKET_HISTORY_EXAMPLES: tuple[str, ...] = (
     "Umgesetzt seit M24.",
     "Geplant vor Milestone 25.",
     "Synchronization update 2026-10-06: current wording.",
+    "Seit A1.4 ist der Owner die Admin-Rolle.",
+    "Since A1.4, the check additionally verifies ownership.",
+    "Das gilt seit der Reihenfolge-Umkehr in der Migration.",
+    "Das verhindert den früheren stillen Fail-open.",
+    "This prevents the earlier silent fail-open.",
 )
 
 
@@ -399,15 +439,54 @@ class TestTicketHistoryExamples:
         assert scan_history_markers(tmp_path), f"history wording not flagged: {sentence!r}"
 
 
+def _quote_is_needed(relpath: str, needle: str) -> bool:
+    """True if some line quotes ``needle`` and carries a history hit only
+    because of that quote (removing the quote removes the hit)."""
+    raw = scan_history_markers(REPO_ROOT, (relpath,), apply_allowlist=False)
+    kept = scan_history_markers(REPO_ROOT, (relpath,))
+    return len([h for h in raw if needle in h.line]) > len([h for h in kept if needle in h.line])
+
+
+class TestAllowlistIsLimitedToTheQuote:
+    """An allowlisted quote exempts only its own span (Refs #2447)."""
+
+    def test_other_history_wording_on_the_same_line_is_still_flagged(self, tmp_path: Path) -> None:
+        (tmp_path / "docs").mkdir()
+        quote = _HISTORY_ALLOWLIST["docs/admin-guide.md"][0][0]
+        line = f"Die Meldung lautet „{quote}“ und gilt seit 0.90 für alle Exporte."
+        (tmp_path / "docs" / "admin-guide.md").write_text(line, encoding="utf-8")
+        hits = scan_history_markers(tmp_path)
+        assert [h.pattern for h in hits] == ["seit/bis/vor 0.x"]
+
+    def test_quote_alone_is_not_flagged(self, tmp_path: Path) -> None:
+        (tmp_path / "docs").mkdir()
+        quote = _HISTORY_ALLOWLIST["docs/admin-guide.md"][0][0]
+        (tmp_path / "docs" / "admin-guide.md").write_text(f"Die Meldung lautet „{quote}“.", encoding="utf-8")
+        assert scan_history_markers(tmp_path) == []
+
+
+class TestWrappedHistoryPhrases:
+    """History wording split over two lines is found (Refs #2447)."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "are safeguarded since\n[#1746](https://example.invalid/issues/1746) by a check.",
+            "> Das gilt seit\n> [#1751](https://example.invalid/issues/1751).",
+            "The step runs since\n#1746 as the first line.",
+        ],
+    )
+    def test_wrapped_phrase_is_flagged(self, text: str, tmp_path: Path) -> None:
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "ops-runbook.md").write_text(text, encoding="utf-8")
+        assert scan_history_markers(tmp_path)
+
+
 class TestPublicDocsCarryNoHistoryWording:
     """The public core documents carry no history phrasing (Refs #2447)."""
 
     def test_no_history_markers_in_public_docs(self) -> None:
-        hits = [
-            hit
-            for hit in scan_history_markers(REPO_ROOT)
-            if not any(needle in hit.line for needle, _ in _HISTORY_ALLOWLIST.get(hit.relpath, []))
-        ]
+        hits = scan_history_markers(REPO_ROOT)
         assert hits == [], (
             "History or legacy-data wording in public docs (Refs #2447):\n"
             f"{_format_hits(hits)}\n"
@@ -419,6 +498,6 @@ class TestPublicDocsCarryNoHistoryWording:
             (relpath, needle)
             for relpath, entries in _HISTORY_ALLOWLIST.items()
             for needle, _ in entries
-            if not any(needle in hit.line for hit in scan_history_markers(REPO_ROOT, (relpath,)))
+            if not _quote_is_needed(relpath, needle)
         ]
         assert stale == [], f"_HISTORY_ALLOWLIST entries without a matching hit: {stale}"

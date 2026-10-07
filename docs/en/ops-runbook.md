@@ -164,7 +164,7 @@ docker compose "${compose_files[@]}" up -d web cron caddy
 
 **Expected downtime:** ~3-5 seconds (only the Gunicorn restart). Migrations run beforehand in the one-shot job — the web container only comes up once the schema is ready. With several web replicas, none of them wait on the migrate lock anymore.
 
-> **Ownership normalization (Refs #1085, #1026):** The one-shot job still runs `normalize_db_ownership` after `migrate`. Since A1.4, the **DB owner is the admin role** itself; since `migrate` runs as that very role, `REASSIGN OWNED BY current_user TO db_owner` is a **no-op** (`current_user == db_owner`). The app runtime no longer gets its table rights via ownership, but via a DML grant (`ALTER DEFAULT PRIVILEGES … TO app` in the init script, § 9). The step remains as an idempotent safety net; a failure aborts the deploy fail-fast before new web replicas go live.
+> **Ownership normalization (Refs #1085, #1026):** The one-shot job still runs `normalize_db_ownership` after `migrate`. The **DB owner is the admin role** itself; since `migrate` runs as that very role, `REASSIGN OWNED BY current_user TO db_owner` is a **no-op** (`current_user == db_owner`). The app runtime no longer gets its table rights via ownership, but via a DML grant (`ALTER DEFAULT PRIVILEGES … TO app` in the init script, § 9). The step remains as an idempotent safety net; a failure aborts the deploy fail-fast before new web replicas go live.
 
 ### 1.3 Post-Deploy Verification
 
@@ -1877,10 +1877,8 @@ therefore be neither a superuser nor carry `BYPASSRLS` in production.
 
 **Direct instead of join policy on `core_attachment` (Refs
 #1738,
-[ADR-039](../adr/039-owner-generische-dateianhaenge.md) (German)):** File attachments hung, until
-Milestone 24, off the event as `core_eventattachment` with no `facility_id` of their own;
-their policy was a join over `core_event`. Since migration `0131`,
-`core_attachment` carries its own `facility_id` and the usual **direct** policy
+[ADR-039](../adr/039-owner-generische-dateianhaenge.md) (German)):** Attachment rows
+carry, as `core_attachment` (migration `0131`), their own `facility_id` and the usual **direct** policy
 (including the `is_super_admin` branch). Gain: an attachment row with no event was
 policy-**less** under the join policy; now the isolation applies regardless of the
 owner (event, person, or case). The set of tables does not change
@@ -2188,10 +2186,9 @@ Refs #542,
 GDPR Art. 17 anonymization (`Client.anonymize`), audit pruning
 (`prune_auditlog`), and `backfill_audit_chain`/`reencrypt_fields` need to briefly
 bypass the append-only triggers (`auditlog_immutable`, `eventhistory_no_update`/`_no_delete`)
-for their legitimate writes. Since A1.4 (Refs
-#1026), this no longer
-goes through `session_replication_role = replica` (that no longer silently fires
-an `ENABLE ALWAYS` trigger); instead, `bypass_replication_triggers()`
+for their legitimate writes. This does **not** go through
+`session_replication_role = replica` (`ENABLE ALWAYS` triggers still fire
+then; Refs #1026); instead, `bypass_replication_triggers()`
 disables the triggers specifically via **owner DDL** `ALTER TABLE … DISABLE TRIGGER`
 and restores them via `ENABLE ALWAYS` — all inside **one**
 `transaction.atomic()` (SIGKILL-safe).
@@ -2204,9 +2201,8 @@ otherwise aborts fail-loud) must therefore run as the **owner/admin role**
 (`POSTGRES_ADMIN_USER`) — this is already set up that way via the dedicated
 `maintenance` service (retention job in the `cron` sidecar, [§ 3.2](#32-cron-sidecar-standard)). If such a
 command accidentally runs as the app role, the bypass aborts with `must be owner of
-table core_eventhistory` (since the ordering reversal in
-#2065,
-`core_eventhistory` comes first in `_APPEND_ONLY_TRIGGERS`) — fail-loud, no
+table core_eventhistory` (`core_eventhistory` comes first in
+`_APPEND_ONLY_TRIGGERS`, #2065) — fail-loud, no
 silent audit loss.
 
 **The Art. 17 immediate action is not a maintenance path** (Refs
@@ -2225,7 +2221,7 @@ privilege:
 | What | When | Who |
 |---|---|---|
 | Pseudonym, notes, custom fields, case/episode/live event content, timestamp generalization, attachments | **immediately, in the request** | app role (ordinary DML) |
-| **Older versions of the event documentation** (`core_eventhistory`) | **with the next `enforce_retention` run** (cron, 03:00) | admin/owner role in the `maintenance` service |
+| **Older versions of the event documentation** (`core_eventhistory`) | **regularly with the next `enforce_retention` run** (cron, 03:00 by default); anything held back by a legal hold or a concurrent edit is picked up by a later run | admin/owner role in the `maintenance` service |
 
 The follow-up is the fourth candidate set of the event-history sweep from
 [ADR-050](../adr/050-eventhistory-retention.md) (proof category
@@ -2238,9 +2234,12 @@ batched, and with a proof row per batch.
 
 > **Operationally relevant:** Between the action and the nightly run, the
 > **earlier versions** of that person's event documentation are still in the
-> database with their values — at most until the next run, i.e. 03:00 by
-> default. The user interface and the handbook say so explicitly. If an Art. 17
-> erasure has to be completed immediately, run once by hand afterwards:
+> database with their values. The next run (03:00 by default) erases them in
+> the regular case; it defers versions under an active legal hold and skips
+> records that another edit currently locks — a later run picks both up. The
+> user interface and the handbook say so explicitly. To speed up an Art. 17
+> erasure, run once by hand afterwards (an attempt, not a completeness
+> guarantee — the run reports what it deferred and is repeated if needed):
 >
 > ```bash
 > docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention
@@ -2255,9 +2254,9 @@ batched, and with a proof row per batch.
 > therefore remain in force unchanged.
 
 The same role prerequisite applies to **RunPython backfills on RLS tables**:
-they run under the migration role and, since
-#1746, are safeguarded as their
-first line by `assert_migration_role_bypasses_rls(schema_editor)`.
+they run under the migration role and are safeguarded as their first line by
+`assert_migration_role_bypasses_rls(schema_editor)`
+(#1746).
 The `facility_id` backfill of the attachment migration `0130`
 (#1738) uses this
 guard — if `migrate` accidentally runs as the app role, it aborts fail-loud,
@@ -2784,11 +2783,11 @@ role **is**. An object that still belongs to the old bootstrap role after a
 half-completed rebuild is therefore caught.
 
 **Fail-loud gate (Refs #1026):**
-Since A1.4, `check_db_roles` **additionally checks ownership on top of the attribute check**.
+`check_db_roles` **additionally checks ownership on top of the attribute check**.
 As long as the move above has not run yet (the app role is still the DB/table
 owner), the gate reports `FAIL … Ownership-Umzug … § 9.6` (German, from the check's own message: "ownership move … § 9.6") and aborts with **exit 1**
 — `docker-migrate.sh` stops the deploy before new web replicas go live.
-This prevents the earlier silent fail-open, where the deploy went green despite
+This prevents a silent fail-open, where the deploy would go green despite
 still-app-owned tables (the attribute profile of app/admin alone stays the
 same through the ownership move). Once the move has been carried out (admin is
 the owner), the gate is green again.
@@ -3033,7 +3032,7 @@ EXTERNAL_ORIGIN=https://anlaufstelle.example.de
 - **Format:** scheme (`http`/`https`) + host + optional port. No path, no trailing slash, no query. An invalid value aborts startup, instead of surfacing in an already-sent email.
 - **Derivation:** If `ALLOWED_HOSTS` carries exactly **one** public hostname, `https://<host>` is derived from it (the same pattern as `OTP_WEBAUTHN_RP_ID`) — the normal case of "one domain behind Caddy" does not need the variable.
 - **Loopback doesn't count:** `localhost`, `127.0.0.1`, and `::1` are in `ALLOWED_HOSTS` only so the container healthcheck (`http://localhost:8000/health/`) doesn't get a `DisallowedHost` 400 — the bundled deploy templates therefore list them alongside the domain. They are disregarded for the derivation; they would never be a candidate as the basis of a token link anyway.
-- **If `web` never becomes healthy, there are exactly two causes** (Refs #2077): either the loopback entry is missing from `ALLOWED_HOSTS` — the healthcheck then gets a `DisallowedHost` 400 — or `SECURE_REDIRECT_EXEMPT` is not in effect: otherwise `SECURE_SSL_REDIRECT=True` answers the healthcheck call `http://localhost:8000/health/` with a 301 to `https://`, and the healthcheck client cannot speak TLS locally. `web` then never turns healthy and `caddy` (`condition: service_healthy`) never starts at all. Both halves are set in `settings/prod.py` and the `.env*.example` templates (#2077); on an older, hand-maintained `.env` they must be added. Quick check inside the container: `python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health/').status)"` must return `200`, not 301 or 400.
+- **Two typical causes if `web` never becomes healthy** (Refs #2077): either the loopback entry is missing from `ALLOWED_HOSTS` — the healthcheck then gets a `DisallowedHost` 400 — or `SECURE_REDIRECT_EXEMPT` is not in effect: otherwise `SECURE_SSL_REDIRECT=True` answers the healthcheck call `http://localhost:8000/health/` with a 301 to `https://`, and the healthcheck client cannot speak TLS locally. `web` then never turns healthy and `caddy` (`condition: service_healthy`) never starts at all. Both halves are set in `settings/prod.py` and the `.env*.example` templates (#2077); on an older, hand-maintained `.env` they must be added. Other causes are a database error or a failed encryption round trip (the health endpoint then answers 503); the `web` logs give details. Quick check inside the container: `python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health/').status)"` must return `200`, not 301 or 400.
 - **Fail-closed:** With several public hosts, a pure wildcard config, or only loopback entries, there is no unambiguous answer; prod then does not start, and names `EXTERNAL_ORIGIN` in the abort message. Deliberately no guessing: a wrongly guessed origin makes every token link unusable.
 - **The `ALLOWED_HOSTS` check itself was not tightened** — subdomain patterns remain allowed, they are now simply irrelevant for link construction.
 
@@ -3225,4 +3224,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: f4df748d36e3028198f0690471becfc5619972ee -->
+<!-- source-hash: 3d64dd03ea46d79508d649888d70c7cb42ddec47 -->

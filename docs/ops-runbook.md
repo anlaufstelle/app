@@ -161,7 +161,7 @@ docker compose "${compose_files[@]}" up -d web cron caddy
 
 **Erwartete Downtime:** ~3-5 Sekunden (nur Gunicorn-Restart). Migrationen laufen vorab im One-Shot-Job — der Web-Container faehrt erst hoch, wenn das Schema bereit ist. Bei mehreren Web-Replicas wartet keine mehr auf den Migrate-Lock.
 
-> **Ownership-Normalisierung (Refs #1085, #1026):** Der One-Shot-Job fuehrt nach `migrate` weiterhin `normalize_db_ownership` aus. Seit A1.4 ist der **DB-Owner die Admin-Rolle** selbst; da `migrate` als eben diese Rolle laeuft, ist `REASSIGN OWNED BY current_user TO db_owner` ein **No-op** (`current_user == db_owner`). Die App-Runtime bekommt ihre Tabellen-Rechte nicht mehr ueber Ownership, sondern per DML-Grant (`ALTER DEFAULT PRIVILEGES … TO app` im Init-Script, § 9). Der Schritt bleibt als idempotentes Sicherheitsnetz; ein Fehler bricht den Deploy fail-fast ab, bevor neue Web-Replicas live gehen.
+> **Ownership-Normalisierung (Refs #1085, #1026):** Der One-Shot-Job fuehrt nach `migrate` weiterhin `normalize_db_ownership` aus. Der **DB-Owner ist die Admin-Rolle** selbst; da `migrate` als eben diese Rolle laeuft, ist `REASSIGN OWNED BY current_user TO db_owner` ein **No-op** (`current_user == db_owner`). Die App-Runtime bekommt ihre Tabellen-Rechte nicht mehr ueber Ownership, sondern per DML-Grant (`ALTER DEFAULT PRIVILEGES … TO app` im Init-Script, § 9). Der Schritt bleibt als idempotentes Sicherheitsnetz; ein Fehler bricht den Deploy fail-fast ab, bevor neue Web-Replicas live gehen.
 
 ### 1.3 Post-Deploy-Verifizierung
 
@@ -1891,10 +1891,9 @@ Laufzeit darf deshalb in Produktion weder Superuser sein noch `BYPASSRLS` tragen
 
 **Direkte statt Join-Policy auf `core_attachment` (Refs
 #1738,
-[ADR-039](adr/039-owner-generische-dateianhaenge.md)):** Dateianhaenge hingen bis
-Milestone 24 als `core_eventattachment` ohne eigene `facility_id` am Ereignis;
-ihre Policy war ein Join ueber `core_event`. Seit Migration `0131` traegt
-`core_attachment` eine eigene `facility_id` und die uebliche **direkte** Policy
+[ADR-039](adr/039-owner-generische-dateianhaenge.md)):** Anhang-Zeilen
+tragen als `core_attachment` (Migration `0131`) eine eigene `facility_id` und die
+uebliche **direkte** Policy
 (inkl. `is_super_admin`-Branch). Gewinn: eine Anhang-Zeile ohne Ereignis war
 unter der Join-Policy policy-**los**; jetzt greift die Isolation unabhaengig vom
 Owner (Ereignis, Person oder Fall). Die Tabellenmenge aendert sich dadurch
@@ -2202,10 +2201,10 @@ Refs #542,
 Die DSGVO-Art.-17-Anonymisierung (`Client.anonymize`), das Audit-Pruning
 (`prune_auditlog`) sowie `backfill_audit_chain`/`reencrypt_fields` müssen die
 Append-Only-Trigger (`auditlog_immutable`, `eventhistory_no_update`/`_no_delete`)
-für ihre legitimen Schreibzugriffe kurz umgehen. Seit A1.4 (Refs
-#1026) läuft das **nicht**
-mehr über `session_replication_role = replica` (das feuert einen
-`ENABLE ALWAYS`-Trigger nicht mehr still), sondern `bypass_replication_triggers()`
+für ihre legitimen Schreibzugriffe kurz umgehen. Das läuft (Refs
+#1026) **nicht**
+über `session_replication_role = replica` (`ENABLE ALWAYS`-Trigger feuern dabei
+trotzdem), sondern `bypass_replication_triggers()`
 deaktiviert die Trigger gezielt per **Owner-DDL** `ALTER TABLE … DISABLE TRIGGER`
 und stellt sie per `ENABLE ALWAYS` wieder her — alles in **einem**
 `transaction.atomic()` (SIGKILL-sicher).
@@ -2218,9 +2217,8 @@ bricht sonst fail-loud ab) müssen daher als **Owner-/Admin-Rolle**
 (`POSTGRES_ADMIN_USER`) laufen — das ist ueber den dedizierten
 `maintenance`-Service bereits so eingerichtet (Retention-Job im `cron`-Sidecar, [§ 3.2](#32-cron-sidecar-standard)). Läuft ein solcher
 Command versehentlich als App-Rolle, bricht der Bypass mit `must be owner of
-table core_eventhistory` ab (seit der Reihenfolge-Umkehr in
-#2065 steht
-`core_eventhistory` in `_APPEND_ONLY_TRIGGERS` vorn) — Fail-loud, kein stiller
+table core_eventhistory` ab (`core_eventhistory` steht in
+`_APPEND_ONLY_TRIGGERS` vorn, #2065) — Fail-loud, kein stiller
 Audit-Verlust.
 
 **Die Art.-17-Sofortaktion ist kein Wartungspfad** (Refs
@@ -2241,7 +2239,7 @@ neues Recht:
 | Was | Wann | Wer |
 |---|---|---|
 | Pseudonym, Notizen, Zusatzfelder, Fall-, Episoden- und Live-Ereignisinhalte, Zeitstempel-Generalisierung, Anhänge | **sofort im Request** | App-Rolle (gewöhnliches DML) |
-| **Ältere Fassungen der Ereignis-Dokumentation** (`core_eventhistory`) | **mit dem nächsten `enforce_retention`-Lauf** (Cron, 03:00) | Admin-/Owner-Rolle im `maintenance`-Service |
+| **Ältere Fassungen der Ereignis-Dokumentation** (`core_eventhistory`) | **regulär mit dem nächsten `enforce_retention`-Lauf** (Cron, in der Voreinstellung 03:00); was ein Legal Hold oder eine gleichzeitige Bearbeitung zurückhält, holt ein späterer Lauf nach | Admin-/Owner-Rolle im `maintenance`-Service |
 
 Der Nachlauf ist die vierte Kandidatenmenge des EventHistory-Sweeps aus
 [ADR-050](adr/050-eventhistory-retention.md) (Nachweiskategorie
@@ -2255,10 +2253,13 @@ Nachweiszeile je Charge.
 
 > **Betrieblich relevant:** Zwischen der Aktion und dem nächtlichen Lauf stehen
 > die **älteren Fassungen** der Ereignis-Dokumentation dieser Person noch mit
-> ihren Werten in der Datenbank — höchstens bis zum nächsten Lauf, in der
-> Voreinstellung also bis 03:00 Uhr. Oberfläche und Handbuch sagen das
-> ausdrücklich. Wer eine Art.-17-Tilgung sofort vollständig abschließen muss,
-> fährt danach einmal von Hand:
+> ihren Werten in der Datenbank. Der nächste Lauf (in der Voreinstellung
+> 03:00 Uhr) tilgt sie regulär; Fassungen unter einem aktiven Legal Hold stellt
+> er zurück, Datensätze, die gerade eine andere Bearbeitung sperrt, überspringt
+> er — beides holt ein späterer Lauf nach. Oberfläche und Handbuch sagen das
+> ausdrücklich. Wer eine Art.-17-Tilgung beschleunigen will, fährt danach
+> einmal von Hand (ein Versuch, keine Vollständigkeitsgarantie — der Lauf weist
+> Zurückgestelltes in seiner Ausgabe aus und ist bei Bedarf zu wiederholen):
 >
 > ```bash
 > docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention
@@ -2273,9 +2274,9 @@ Nachweiszeile je Charge.
 > und ADR-050 M-8 bleiben damit unverändert in Kraft.
 
 Dieselbe Rollen-Voraussetzung gilt fuer **RunPython-Backfills auf RLS-Tabellen**:
-sie laufen unter der Migrationsrolle und werden seit
-#1746 von
-`assert_migration_role_bypasses_rls(schema_editor)` als erster Zeile abgesichert.
+sie laufen unter der Migrationsrolle und werden von
+`assert_migration_role_bypasses_rls(schema_editor)` als erster Zeile abgesichert
+(#1746).
 Der `facility_id`-Backfill der Attachment-Migration `0130`
 (#1738) nutzt diesen
 Guard — laeuft `migrate` versehentlich als App-Rolle, bricht er fail-loud ab,
@@ -2809,12 +2810,12 @@ Admin-Rolle es **ist**. Ein Objekt, das nach einem halb gefahrenen Umbau noch de
 alten Bootstrap-Rolle gehört, fällt damit auf.
 
 **Fail-loud-Gate (Refs #1026):**
-`check_db_roles` prüft seit A1.4 **zusätzlich zur Attribut-Prüfung die Ownership**.
+`check_db_roles` prüft **zusätzlich zur Attribut-Prüfung die Ownership**.
 Solange der Umzug oben noch nicht gelaufen ist (App-Rolle ist noch DB-/Tabellen-
 Owner), meldet das Gate `FAIL … Ownership-Umzug … § 9.6` und bricht mit **Exit 1**
 ab — `docker-migrate.sh` stoppt den Deploy, bevor neue Web-Replicas live gehen.
-Das verhindert den früheren stillen Fail-open, bei dem der Deploy trotz noch
-App-owned Tabellen grün wurde (das Attributprofil App/Admin allein bleibt beim
+Das verhindert ein stilles Fail-open, bei dem der Deploy trotz noch
+App-owned Tabellen grün würde (das Attributprofil App/Admin allein bleibt beim
 Ownership-Umzug ja gleich). Nach durchgeführtem Umzug (Admin ist Owner) ist das
 Gate wieder grün.
 
@@ -3058,7 +3059,7 @@ EXTERNAL_ORIGIN=https://anlaufstelle.example.de
 - **Format:** Schema (`http`/`https`) + Host + optionaler Port. Kein Pfad, kein abschliessender Schraegstrich, keine Query. Ein fehlerhafter Wert bricht den Start ab, statt in einer bereits versendeten Mail aufzufallen.
 - **Ableitung:** Fuehrt `ALLOWED_HOSTS` genau **einen** oeffentlichen Hostnamen, wird `https://<host>` daraus abgeleitet (gleiches Muster wie `OTP_WEBAUTHN_RP_ID`) — der Regelfall „eine Domain hinter Caddy" braucht die Variable nicht.
 - **Loopback zaehlt nicht mit:** `localhost`, `127.0.0.1` und `::1` stehen in `ALLOWED_HOSTS` nur, damit der Container-Healthcheck (`http://localhost:8000/health/`) keinen `DisallowedHost`-400 bekommt — die mitgelieferten Deploy-Vorlagen fuehren sie deshalb neben der Domain. Fuer die Ableitung bleiben sie ausser Betracht; als Basis eines Token-Links kaemen sie ohnehin nie in Frage.
-- **Wenn `web` nie healthy wird, gibt es genau zwei Ursachen** (Refs #2077): entweder fehlt der Loopback in `ALLOWED_HOSTS` — dann antwortet der Healthcheck mit `DisallowedHost`-400 —, oder `SECURE_REDIRECT_EXEMPT` greift nicht: `SECURE_SSL_REDIRECT=True` beantwortet den Healthcheck-Aufruf `http://localhost:8000/health/` sonst mit einem 301 auf `https://`, und der Healthcheck-Client kann lokal kein TLS. `web` wird dann nie healthy und `caddy` (`condition: service_healthy`) startet gar nicht erst. Beide Haelften sind in `settings/prod.py` und den `.env*.example`-Vorlagen gesetzt; bei einer aelteren, von Hand gepflegten `.env` sind sie nachzutragen. Schnelltest im Container: `python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health/').status)"` muss `200` liefern, nicht 301 oder 400.
+- **Zwei typische Ursachen, wenn `web` nie healthy wird** (Refs #2077): entweder fehlt der Loopback in `ALLOWED_HOSTS` — dann antwortet der Healthcheck mit `DisallowedHost`-400 —, oder `SECURE_REDIRECT_EXEMPT` greift nicht: `SECURE_SSL_REDIRECT=True` beantwortet den Healthcheck-Aufruf `http://localhost:8000/health/` sonst mit einem 301 auf `https://`, und der Healthcheck-Client kann lokal kein TLS. `web` wird dann nie healthy und `caddy` (`condition: service_healthy`) startet gar nicht erst. Beide Haelften sind in `settings/prod.py` und den `.env*.example`-Vorlagen gesetzt; bei einer aelteren, von Hand gepflegten `.env` sind sie nachzutragen. Weitere Ursachen sind ein Datenbankfehler oder ein gescheiterter Verschlüsselungs-Roundtrip (der Health-Endpoint antwortet dann mit 503); Näheres steht in den Logs von `web`. Schnelltest im Container: `python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health/').status)"` muss `200` liefern, nicht 301 oder 400.
 - **Fail-closed:** Bei mehreren oeffentlichen Hosts, reiner Wildcard-Config oder ausschliesslich Loopback-Eintraegen gibt es keine eindeutige Antwort; Prod startet dann nicht und nennt `EXTERNAL_ORIGIN` im Abbruch. Bewusst kein Raten: eine falsch geratene Origin macht jeden Token-Link unbrauchbar.
 - **Nicht verschaerft wurde die `ALLOWED_HOSTS`-Pruefung selbst** — Subdomain-Muster bleiben erlaubt, sie sind fuer die Linkbildung jetzt schlicht ohne Bedeutung.
 
