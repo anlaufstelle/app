@@ -601,16 +601,59 @@ def _behaviour_test(module: str, qualname: str):
     The template guards below only check wording; whether the code behaves as
     worded is proven by the referenced behaviour test. Resolving it here ties
     the claim to that test: if the test is removed, renamed or parked as
-    skip/xfail, the claim guard fails instead of pinning a stale promise.
+    skip/xfail (on the test, its class or its module), the claim guard fails
+    instead of pinning a stale promise.
     """
     import importlib
 
     target = importlib.import_module(f"tests.{module}")
-    for part in qualname.split("."):
-        target = getattr(target, part)
-    marks = {mark.name for mark in getattr(target, "pytestmark", [])}
+    marks = set()
+    for part in ["", *qualname.split(".")]:
+        if part:
+            target = getattr(target, part)
+        declared = getattr(target, "pytestmark", [])
+        marks |= {mark.name for mark in (declared if isinstance(declared, list) else [declared])}
     assert not marks & {"skip", "skipif", "xfail"}, (module, qualname, marks)
     return target
+
+
+def _probe_module(monkeypatch, *, module_mark=None, class_mark=None):
+    """Register ``tests._behaviour_probe`` with one class holding one test."""
+    import sys
+    import types
+
+    module = types.ModuleType("tests._behaviour_probe")
+
+    class TestProbe:
+        def test_probe(self):
+            pass
+
+    if class_mark is not None:
+        TestProbe = class_mark(TestProbe)
+    module.TestProbe = TestProbe
+    if module_mark is not None:
+        module.pytestmark = module_mark
+    monkeypatch.setitem(sys.modules, "tests._behaviour_probe", module)
+
+
+@pytest.mark.parametrize(
+    "marks",
+    [
+        {"class_mark": pytest.mark.skip(reason="probe")},
+        {"class_mark": pytest.mark.xfail(reason="probe")},
+        {"module_mark": pytest.mark.skipif(True, reason="probe")},
+        {"module_mark": [pytest.mark.xfail(reason="probe")]},
+    ],
+)
+def test_behaviour_test_rejects_inherited_skip_marks(monkeypatch, marks):
+    _probe_module(monkeypatch, **marks)
+    with pytest.raises(AssertionError):
+        _behaviour_test("_behaviour_probe", "TestProbe.test_probe")
+
+
+def test_behaviour_test_accepts_an_unmarked_test(monkeypatch):
+    _probe_module(monkeypatch)
+    assert _behaviour_test("_behaviour_probe", "TestProbe.test_probe")
 
 
 def _settings_retention_fields() -> list[str]:
@@ -736,6 +779,28 @@ def _four_eyes_scope_ok(text: str) -> bool:
     return "Person" in text and "Mit Zusatzangaben" in text
 
 
+def _file_purge_names_both_locks(content: str) -> bool:
+    """The detailed file purge block names the legal hold and the Art. 18 lock.
+
+    Every block about the purge without a second person that names one lock
+    must name the other, and at least one block (the one that sets the purge
+    apart from the four-eyes deletion of persons) must name both.
+    """
+    blocks = [block for block in _blocks(content) if "Datei" in block and "ohne zweite Person" in block]
+
+    def has_hold(block: str) -> bool:
+        return "Legal Hold" in block or "Aufbewahrungssperre" in block
+
+    def has_restriction(block: str) -> bool:
+        return "Art. 18" in block
+
+    if not blocks:
+        return False
+    if any(has_hold(block) != has_restriction(block) for block in blocks):
+        return False
+    return any(has_hold(block) and has_restriction(block) and "Augen" in block for block in blocks)
+
+
 @pytest.mark.django_db
 class TestFourEyesScope:
     def test_premise_file_purge_needs_no_second_person(self):
@@ -760,18 +825,22 @@ class TestFourEyesScope:
             "test_mutation_pins_099_attachments_1",
             "TestPurgeAttachmentChainLegalHoldMessageIsExact.test_legal_hold_meldet_den_exakten_wortlaut",
         )
-        blocks = [
-            block
-            for block in _blocks(render_document(slug, facility)[0])
-            if "Datei" in block and "ohne zweite Person" in block
-        ]
-        assert blocks, slug
-        for block in blocks:
-            if "Legal Hold" in block or "Aufbewahrungssperre" in block:
-                assert "Art. 18" in block, (slug, block)
-        # The detailed description sets the purge apart from the four-eyes
-        # deletion of persons and names both locks.
-        assert any("Art. 18" in block and "Augen" in block for block in blocks), slug
+        assert _file_purge_names_both_locks(render_document(slug, facility)[0]), slug
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # The detailed block names the Art. 18 lock but drops the legal hold.
+            "Dateien vernichten Leitung und Anwendungsbetreuung ohne zweite Person,"
+            " außer bei einer Sperre nach Art. 18;"
+            " die Löschung von Personen verlangt vier Augen.",
+            # The legal hold is named, the Art. 18 lock is missing.
+            "Dateien vernichten Leitung und Anwendungsbetreuung ohne zweite Person, außer bei einem Legal Hold;"
+            " die Löschung von Personen verlangt vier Augen.",
+        ],
+    )
+    def test_file_purge_guard_rejects_a_missing_lock(self, text):
+        assert not _file_purge_names_both_locks(text)
 
     def test_dsfa_residual_risk_names_the_purge_path(self, dsfa):
         residual = _section(dsfa, "**Restrisiko:** Aus beidem folgt", "**Auskunftsrecht")
