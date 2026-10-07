@@ -292,3 +292,77 @@ def _event_type(facility, name, retention_days, *, entity_type=None, is_active=T
         retention_days=retention_days,
         is_active=is_active,
     )
+
+
+STORED_K_NOTE = "Die gespeicherte k-Anonymit"
+
+
+def _post_settings(client, admin_user, settings_obj, **changes):
+    settings_obj.refresh_from_db()
+    client.force_login(admin_user)
+    data = _post_data(settings_obj)
+    data.update({name: str(value) for name, value in changes.items()})
+    return client.post(reverse("core:facility_settings"), data)
+
+
+class TestRejectedValueDoesNotChangeTheWarnings:
+    """A value the form rejects is not stored; the warnings keep describing the stored state.
+
+    Model validators run after ``construct_instance`` has written the posted value to the
+    in-memory instance, so the warnings must not read a rejected value from there.
+    """
+
+    def test_rejected_one_over_a_stored_three_shows_no_stored_value_note(self, client, admin_user, settings_obj):
+        Settings.objects.filter(pk=settings_obj.pk).update(k_anonymity_threshold=3)
+
+        response = _post_settings(client, admin_user, settings_obj, k_anonymity_threshold=1)
+
+        assert response.status_code == 200
+        assert "k_anonymity_threshold" in response.context["form"].errors
+        content = response.content.decode()
+        assert STORED_K_NOTE not in content
+        assert K_WARNING not in content
+        assert K_NO_SUPPRESSION not in content
+        settings_obj.refresh_from_db()
+        assert settings_obj.k_anonymity_threshold == 3
+
+    def test_rejected_zero_over_a_stored_one_keeps_naming_the_stored_one(self, client, admin_user, settings_obj):
+        Settings.objects.filter(pk=settings_obj.pk).update(k_anonymity_threshold=1)
+
+        response = _post_settings(client, admin_user, settings_obj, k_anonymity_threshold=0)
+
+        assert response.status_code == 200
+        assert "k_anonymity_threshold" in response.context["form"].errors
+        content = response.content.decode()
+        assert "Die gespeicherte k-Anonymitäts-Schwelle 1 liegt" in content
+        assert "Die gespeicherte k-Anonymitäts-Schwelle 0 liegt" not in content
+        assert K_NO_SUPPRESSION in content
+
+    def test_rejected_negative_audit_period_keeps_the_stored_period(self, client, admin_user, settings_obj):
+        assert settings_obj.auditlog_retention_months == 24
+
+        response = _post_settings(client, admin_user, settings_obj, auditlog_retention_months=-1)
+
+        assert response.status_code == 200
+        assert "auditlog_retention_months" in response.context["form"].errors
+        content = response.content.decode()
+        assert AUDIT_WARNING in content
+        assert "(720 Tage)" in content
+
+    def test_rejected_field_period_keeps_the_stored_longest_period(self, client, admin_user, settings_obj):
+        assert settings_obj.retention_qualified_days == 3650
+
+        response = _post_settings(client, admin_user, settings_obj, retention_qualified_days=0)
+
+        assert response.status_code == 200
+        assert "retention_qualified_days" in response.context["form"].errors
+        content = response.content.decode()
+        assert "Aufbewahrung qualifiziert (Tage)" in content
+        assert "(3650 Tage)" in content
+
+    def test_valid_value_beside_a_rejected_one_still_previews(self, client, admin_user, settings_obj):
+        response = _post_settings(client, admin_user, settings_obj, k_anonymity_threshold=2, retention_qualified_days=0)
+
+        assert response.status_code == 200
+        assert "retention_qualified_days" in response.context["form"].errors
+        assert K_WARNING in response.content.decode()

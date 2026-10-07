@@ -99,10 +99,17 @@ class FacilitySettingsForm(TailwindFormMixin, forms.ModelForm):
         return tuple((title, tuple(self[name] for name in names)) for title, names in self.FIELD_GROUPS)
 
     def _current_value(self, name):
-        """Value the page is about to save (bound and valid) or the stored value."""
+        """Value the page is about to save (bound and valid) or the stored value.
+
+        A rejected value is never used: model validation runs after ``construct_instance``
+        has written the posted value to the in-memory instance, so the stored value is read
+        from ``initial``, which the form built from the instance before validation.
+        """
         cleaned = getattr(self, "cleaned_data", None)
         if self.is_bound and cleaned is not None and name in cleaned:
             return cleaned[name]
+        if name in self.initial:
+            return self.initial[name]
         return getattr(self.instance, name)
 
     @property
