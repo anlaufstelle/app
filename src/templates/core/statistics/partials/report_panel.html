@@ -63,6 +63,11 @@ Vorschau eines Reporting-Backends. Rendert das Ergebnis von
 </p>
 {% endif %}
 
+{% if k_threshold_warning %}
+<div class="bg-amber-50 border border-amber-200 rounded-[10px] px-3 py-2.5 mb-4" data-testid="k-threshold-warning">
+    <p class="text-[13px] text-amber-800">{{ k_threshold_warning }}</p>
+</div>
+{% endif %}
 {% if k_anonymity_threshold is not None %}
 <p class="text-[12px] text-ink-muted italic mb-4">
     {% blocktrans with threshold=k_anonymity_threshold %}Aggregate mit weniger als {{ threshold }} Datensätzen werden unterdrückt (k-Anonymität).{% endblocktrans %}

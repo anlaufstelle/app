@@ -10,6 +10,8 @@ from django.utils.translation import gettext_lazy as _
 
 from core.forms.mixins import TailwindFormMixin
 from core.models import DocumentType, Settings
+from core.models.settings import K_ANONYMITY_MIN
+from core.services.dashboard.external_report import effective_k_threshold, k_threshold_warning
 
 _FIELD_GROUPS = (
     (
@@ -79,3 +81,27 @@ class FacilitySettingsForm(TailwindFormMixin, forms.ModelForm):
     def grouped_fields(self):
         """Gruppen samt gebundenen Feldern fuer das semantische Fieldset-Markup."""
         return tuple((title, tuple(self[name] for name in names)) for title, names in self.FIELD_GROUPS)
+
+    def _current_value(self, name):
+        """Value the page is about to save (bound and valid) or the stored value."""
+        cleaned = getattr(self, "cleaned_data", None)
+        if self.is_bound and cleaned is not None and name in cleaned:
+            return cleaned[name]
+        return getattr(self.instance, name)
+
+    @property
+    def setting_warnings(self) -> list:
+        """Risk notes for values that are allowed but weaken data protection."""
+        warnings = []
+        k = self._current_value("k_anonymity_threshold")
+        if k is not None and k < K_ANONYMITY_MIN:
+            warnings.append(
+                _(
+                    "Die gespeicherte k-Anonymitäts-Schwelle %(k)s liegt unter dem zulässigen Minimum "
+                    "%(minimum)s. Berichte rechnen mit k = %(default)s, bis ein gültiger Wert gespeichert ist."
+                )
+                % {"k": k, "minimum": K_ANONYMITY_MIN, "default": effective_k_threshold(k)}
+            )
+        elif (low_k := k_threshold_warning(k)) is not None:
+            warnings.append(low_k)
+        return warnings

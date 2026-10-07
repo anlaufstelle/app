@@ -90,6 +90,12 @@ navigiert die Leiste die Seite.
     <p class="text-xs text-blue-700 mt-2">{{ data_source_explanation }}</p>
 </section>
 
+{% if k_threshold_warning %}
+<div class="bg-amber-50 border border-amber-200 rounded-[10px] px-3 py-2.5 mb-6" data-testid="k-threshold-warning">
+    <p class="text-[13px] text-amber-800">{{ k_threshold_warning }}</p>
+</div>
+{% endif %}
+
 <section aria-labelledby="report-totals" class="mb-6">
     <h2 id="report-totals" class="text-lg font-semibold text-ink mb-2">{% trans "Kennzahlen" %}</h2>
     <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">

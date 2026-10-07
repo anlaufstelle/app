@@ -15,6 +15,7 @@ konsistent mit der K-Anon-Strategie aus #780.
 from __future__ import annotations
 
 import dataclasses
+import logging
 from collections.abc import Callable, Sequence
 from datetime import date
 from typing import Any
@@ -23,9 +24,12 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy
 
 from core.models import Client, Settings
+from core.models.settings import K_ANONYMITY_MIN, K_ANONYMITY_WARN_BELOW
 from core.reporting.data_source import ALL_EVENTS, DATA_SOURCE_NOTES, LIVE, PERSONS
 from core.services.dashboard.disclosure import MAX_GUARD_ITERATIONS, Cell, Partition, findings
 from core.services.dashboard.statistics import PERSONS_KEY, get_statistics
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_K_THRESHOLD = 5
 
@@ -202,13 +206,52 @@ _CANONICAL_ORDERS: dict[str, Callable[[dict[str, Any]], tuple] | None] = {
 _ORDERS_CANONICAL_FOR_VISIBLE = frozenset({ORDER_CATEGORY})
 
 
+def effective_k_threshold(stored: int) -> int:
+    """Threshold the reports compute with for a stored settings value.
+
+    The model validator keeps every stored value at ``K_ANONYMITY_MIN`` or above; a
+    smaller value only comes from a write that bypassed validation. ``0`` would
+    suppress nothing at all (no count is below 0), so it falls back to the default.
+    ``1`` stays as stored: it is the boundary the suppression functions are defined
+    for, and the settings page names it as below the minimum.
+    """
+    return stored if stored >= 1 else DEFAULT_K_THRESHOLD
+
+
 def _get_threshold(facility) -> int:
-    """Holt die K-Anon-Schwelle aus den Facility-Settings, fallback auf Default."""
+    """K-anonymity threshold from the facility settings; the default without settings.
+
+    A stored value below ``K_ANONYMITY_MIN`` is logged, so it never takes effect silently.
+    """
     try:
         settings = Settings.objects.get(facility=facility)
-        return settings.k_anonymity_threshold or DEFAULT_K_THRESHOLD
     except Settings.DoesNotExist:
         return DEFAULT_K_THRESHOLD
+    stored = settings.k_anonymity_threshold
+    threshold = effective_k_threshold(stored)
+    if stored < K_ANONYMITY_MIN:
+        logger.warning(
+            "Stored k-anonymity threshold %s for facility %s is below the minimum %s; computing with %s.",
+            stored,
+            facility.pk,
+            K_ANONYMITY_MIN,
+            threshold,
+        )
+    return threshold
+
+
+def k_threshold_warning(threshold):
+    """Risk warning for a threshold below 3 (ADR-023), ``None`` otherwise.
+
+    Below 3 the reports publish groups of two; persons in small groups can be
+    recognised from the figures. Shown on the settings page and the report pages.
+    """
+    if threshold is None or not K_ANONYMITY_MIN <= threshold < K_ANONYMITY_WARN_BELOW:
+        return None
+    return gettext_lazy(
+        "Die k-Anonymitäts-Schwelle liegt unter 3. Gruppen ab zwei Datensätzen werden veröffentlicht; "
+        "Personen in kleinen Gruppen können in den Zahlen wiedererkennbar sein. Empfohlen ist k = 5."
+    )
 
 
 def _audit_feasible_span(

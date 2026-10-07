@@ -15,6 +15,11 @@
         {% csrf_token %}
         <input type="hidden" name="expected_updated_at" value="{{ expected_updated_at }}">
         {% include "core/_form_errors.html" %}
+        {% for warning in form.setting_warnings %}
+        <div class="bg-amber-50 border border-amber-200 rounded-[10px] px-3 py-2.5" data-testid="settings-warning">
+            <p class="text-[13px] text-amber-800">{{ warning }}</p>
+        </div>
+        {% endfor %}
         {% if conflict_messages %}
         <div class="bg-red-50 border border-red-200 rounded-[10px] p-3 mb-3" role="alert">
             {% for message in conflict_messages %}

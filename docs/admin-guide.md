@@ -2037,7 +2037,7 @@ Als Alternative zur Hart-Löschung kann pro Einrichtung die **K-Anonymisierung**
 | Feld in `Settings` | Default | Beschreibung |
 |---|---|---|
 | `retention_use_k_anonymization` | `False` | Aktiviert den Ersatz von Hard-Delete durch K-Anonymisierung. |
-| `k_anonymity_threshold` | `5` | Mindest-Gruppengröße pro Bucket. Höhere Werte → stärkere Anonymisierung, weniger Detail. |
+| `k_anonymity_threshold` | `5` | Mindest-Gruppengröße pro Bucket. Höhere Werte → stärkere Anonymisierung, weniger Detail. Kleinster speicherbarer Wert ist 2; unter 3 zeigen die Einstellungsseite, der externe Bericht und die Berichtsvorschau einen Risikohinweis. |
 
 Wirkung: Statt den Datensatz zu löschen, werden identifizierende Merkmale aggregiert bzw. pseudonymisiert, sodass statistische Auswertungen über den historischen Zeitraum **erhalten bleiben**, ohne dass Einzelpersonen re-identifiziert werden können. DSGVO-konforme Alternative zur endgültigen Löschung, wenn weiter ausgewertet werden soll.
 

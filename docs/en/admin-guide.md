@@ -2038,7 +2038,7 @@ As an alternative to hard deletion, **k-anonymization** can be enabled per facil
 | Field in `Settings` | Default | Description |
 |---|---|---|
 | `retention_use_k_anonymization` | `False` | Replaces hard deletion with k-anonymization. |
-| `k_anonymity_threshold` | `5` | Minimum group size per bucket. Higher values → stronger anonymization, less detail. |
+| `k_anonymity_threshold` | `5` | Minimum group size per bucket. Higher values → stronger anonymization, less detail. The smallest value that can be saved is 2; below 3 the settings page, the external report and the report preview show a risk notice. |
 
 Effect: instead of deleting the record, identifying attributes are aggregated or pseudonymized so that statistical analyses over historical periods **remain valid** without re-identifying individuals. A GDPR-compliant alternative to permanent deletion when historical reporting must continue.
 
@@ -2449,4 +2449,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 50878a841ce964f8d0cf96c453a471f623d1d015 -->
+<!-- source-hash: 52dcf13d85434603195a78698028c5579ff4b8a7 -->

@@ -8,6 +8,11 @@ from django.utils.translation import gettext_lazy as _
 from core.constants import DEFAULT_SETTINGS_ALLOWED_FILE_TYPES
 from core.models.managers import FacilityScopedManager
 
+# Smallest k-anonymity threshold that can be stored, and the value below which
+# the settings page and the report page warn about the re-identification risk.
+K_ANONYMITY_MIN = 2
+K_ANONYMITY_WARN_BELOW = 3
+
 # Default retention periods (days). Shared so tests can assert the same values
 # the model fields default to, instead of re-hardcoding the literals (#1205).
 DEFAULT_RETENTION_ANONYMOUS_DAYS = 90
@@ -232,6 +237,10 @@ class Settings(models.Model):
     )
     k_anonymity_threshold = models.PositiveIntegerField(
         default=5,
+        # k = 1 suppresses nothing (every cell from 1 up is published), so the
+        # smallest storable threshold is 2; below ``K_ANONYMITY_WARN_BELOW`` the
+        # settings page and the report page show a risk warning (ADR-023).
+        validators=[MinValueValidator(K_ANONYMITY_MIN)],
         verbose_name=_("K-Anonymitäts-Schwelle"),
         help_text=_(
             "Mindest-Gruppengröße für K-Anonymität (z.B. k=5 → mindestens 5 "

@@ -18,6 +18,7 @@ Module:
 from core.services.dashboard.activity import log_activity, render_activity_summary
 from core.services.dashboard.external_report import (
     build_external_report,
+    k_threshold_warning,
     suppress_report_stats,
     suppress_sample_report_1_stats,
 )
@@ -115,6 +116,7 @@ __all__ = [
     "build_external_report",
     "build_focus_box",
     "build_release_overview",
+    "k_threshold_warning",
     "carry_deleted_event",
     "client_search_queryset",
     "count_unique_clients",

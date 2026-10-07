@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **k-Anonymitäts-Schwelle mindestens 2, Risikohinweis unter 3** (#2499) — Verwaltung → Einstellungen weist `k = 0` und `k = 1` ab; bei `k = 2` speichert die Seite und zeigt wie der externe Bericht und die Berichtsvorschau einen Hinweis, dass Personen in kleinen Gruppen wiedererkennbar sein können; einen ohne Validierung gespeicherten Wert unter 2 nennt die Einstellungsseite samt dem Wert, mit dem die Berichte rechnen (bei 0 der Standard 5), und das Anwendungslog vermerkt ihn.
 - **Dokumentationstyp-Formular: kurze Inline-Hilfe, Vertiefung aufklappbar** (#2460) — Entitätstyp, Sensibilität, Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und „In Strichliste anbieten“ tragen unter dem Feld nur noch einen Orientierungssatz; Folgen, Änderbarkeit und ein Beispiel stehen in einem aufklappbaren „Mehr zu …“ direkt am Feld. Die Hilfe beschreibt den tatsächlichen Stand: Die Sensibilität des Typs steuert die Sichtbarkeit, verschlüsselt wird je Feldvorlage; die Strichliste nennt alle Ausschlussgründe (auch bedingte Pflichtfelder); die Mindest-Kontaktstufe prüft die Kontaktstufe der Person, nicht deren Inhalte.
 - **Fehlerberichterstattung aktualisiert** (#2403) — sentry-sdk 2.71.0 ist mit den Initialisierungs- und Datenschutzprüfungen verifiziert.
 - **PostgreSQL-Treiber aktualisiert** (#2404) — Psycopg und sein Binärpaket sind auf 3.3.6 angehoben und mit den Datenbankprüfungen verifiziert.

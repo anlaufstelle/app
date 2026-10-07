@@ -38,6 +38,7 @@ from core.services.dashboard import (
     get_statistics,
     get_statistics_hybrid,
     get_statistics_trend,
+    k_threshold_warning,
     release_detail,
 )
 from core.services.system import export_events_csv, generate_report_pdf, generate_sample_report_1_pdf
@@ -188,6 +189,7 @@ def build_report_panel_context(facility, backend, period_state) -> dict:
         "preview_rows": [[record.get(spec.key) for spec in field_specs] for record in preview_records],
         "preview_total": len(result.records),
         "k_anonymity_threshold": result.summary.get("k_anonymity_threshold"),
+        "k_threshold_warning": k_threshold_warning(result.summary.get("k_anonymity_threshold")),
         # Quellenausweis (Refs #1743): die Vorschau ruft ``build_dataset``,
         # liest also live — anders als das hybrid gespeiste Sachbericht-PDF.
         "data_source_note": DATA_SOURCE_NOTES[LIVE],
@@ -732,6 +734,7 @@ class ExternalReportView(LeadOrAdminRequiredMixin, View):
             self.template_name,
             {
                 "report": report,
+                "k_threshold_warning": k_threshold_warning(report["metadata"]["k_anonymity_threshold"]),
                 "period": period_state.period,
                 "date_from": period_state.date_from,
                 "date_to": period_state.date_to,
