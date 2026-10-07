@@ -97,6 +97,33 @@ TALLY_REASON_NEEDLES = {
 }
 
 
+class TestAdminFormSensitivityHelp:
+    """The Django admin renders the model help text; it must make the same claim as the form."""
+
+    @pytest.fixture
+    def admin_form(self, rf, super_admin_user):
+        from core.admin.documents import DocumentTypeAdmin
+        from core.admin_site import anlaufstelle_admin_site
+
+        request = rf.get("/admin-mgmt/core/documenttype/add/")
+        request.user = super_admin_user
+        return DocumentTypeAdmin(DocumentType, anlaufstelle_admin_site).get_form(request, None)
+
+    def test_admin_help_never_says_high_is_always_encrypted(self, admin_form):
+        text = str(admin_form.base_fields["sensitivity"].help_text)
+
+        assert "immer verschlüsselt" not in text
+        assert "legt die Feldvorlage fest" in text
+
+    def test_model_admin_and_form_show_the_same_text(self, admin_form):
+        from core.forms.config import DocumentTypeForm
+
+        model_text = str(DocumentType._meta.get_field("sensitivity").help_text)
+
+        assert str(admin_form.base_fields["sensitivity"].help_text) == model_text
+        assert str(DocumentTypeForm().fields["sensitivity"].help_text) == model_text
+
+
 class TestTallyHelpNamesEveryExclusionReason:
     def test_the_needle_table_covers_every_reason(self):
         assert set(TALLY_REASON_NEEDLES) == set(TallyIneligibilityReason)

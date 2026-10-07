@@ -298,15 +298,6 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         # unuebersetzten Blank-Choice-Text ("- Select an option -") faellt.
         label_blank_choice(self.fields["system_type"], _("— Kein Systemtyp —"))
         label_blank_choice(self.fields["min_contact_stage"], _("— Keine Angabe —"))
-        # The model help text promises that "Hoch" is always stored encrypted. That is
-        # wrong for the document type: only a field template encrypts (``is_encrypted``,
-        # forced by HIGH on the template). Changing the model text needs a migration, so
-        # the form states the actual behaviour.
-        self.fields["sensitivity"].help_text = _(
-            "Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen "
-            "zusätzliche Berechtigungen voraus. Ob ein Feld verschlüsselt gespeichert wird, "
-            "legt die Feldvorlage fest."
-        )
         # Neuobjekt: facility aus dem Scope an die Instanz binden, damit
         # form.save() (Service) den richtigen Mandanten schreibt.
         if facility is not None and self.instance.facility_id is None:

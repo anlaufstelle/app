@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Django-Admin verspricht bei der Sensibilität des Dokumentationstyps keine Verschlüsselung mehr** (#2460) — Die Feldhilfe „Sensibilität“ im Django-Admin unter `/admin-mgmt/` nennt wie das Konfigurationsformular die Feldvorlage als Ort der Verschlüsselung; Admin, Formular und Modell tragen denselben Text.
 - **Screenshot- und manuelle E2E-Läufe schützen gemeinsame Ressourcen** (#2439) — `make docs-screens` und `make e2e-server` halten den globalen Lock während Vorbereitung und Serverlauf und beenden ausschließlich ihren eigenen Serverprozess. Die öffentlichen Screenshot-Anleitungen nennen das gültige Target und den E2E-Seed-Reset; das E2E-Runbook führt manuelle Server über denselben Lock.
 
 - **Hilfelinks führen auf den passenden Abschnitt** (#2459) — „Mehr erfahren“ bei den Feldbedingungen, beim Vier-Augen-Prinzip und bei den Löschfristen springt jetzt auf einen eigenen Abschnitt der Hilfe (mit Beispiel, UND/ODER-Erklärung, Operatoren und Pflichtfeld-Regel bzw. Ablauf von Antrag und Prüfung); das Offline-Banner verlinkt keine online-only Hilfeseite mehr.

@@ -66,8 +66,8 @@ class DocumentType(ReportKeyMixin, SluggedModel):
         verbose_name=_("Sensibilität"),
         help_text=_(
             "Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen "
-            "zusätzliche Berechtigungen voraus; „Hoch“ wird immer "
-            "verschlüsselt gespeichert."
+            "zusätzliche Berechtigungen voraus. Ob ein Feld verschlüsselt gespeichert wird, "
+            "legt die Feldvorlage fest."
         ),
     )
     min_contact_stage = models.CharField(
