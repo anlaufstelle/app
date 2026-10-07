@@ -5,8 +5,8 @@ set -euo pipefail
 # Stellt verschlüsselte DB- und Medien-Backups wieder her.
 #
 # Verwendung:
-#   $0 [--yes] [--skip-audit-anchor] <db-backup.sql.gz.enc>                       # Nur DB
-#   $0 [--yes] [--skip-audit-anchor] <db-backup.sql.gz.enc> <media.tar.gz.enc>    # DB + Medien (Refs #720)
+#   $0 [--yes] [--skip-audit-anchor] <db-backup.sql.gz.enc>                       # DB only
+#   $0 [--yes] [--skip-audit-anchor] <db-backup.sql.gz.enc> <media.tar.gz.enc>    # DB + media (Refs #720)
 #
 # --yes (or RESTORE_CONFIRM=ja) confirms the destructive restore without a
 # prompt.
@@ -139,13 +139,13 @@ HWM_FILE=""
 # otherwise the restored audit chain would silently lose its external anchor.
 if [[ -z "${DJANGO_AUDIT_HWM_PATH:-}" && -n "$BACKUP_SET_HWM_SHA256" ]]; then
     if [[ "$SKIP_AUDIT_ANCHOR" -ne 1 ]]; then
-        echo "FEHLER: Der Satz enthaelt einen Audit-Anker, dieser Host hat aber keinen Ankerpfad konfiguriert." >&2
+        echo "FEHLER: Der Satz enthält einen Audit-Anker, dieser Host hat aber keinen Ankerpfad konfiguriert." >&2
         echo "  DJANGO_AUDIT_HWM_PATH in .env setzen (Vorgabe: /data/audit_hwm.json) und den Restore wiederholen." >&2
         echo "  Nur wer bewusst ohne Anker wiederherstellen will, startet erneut mit --skip-audit-anchor." >&2
-        echo "  Es wurde nichts veraendert." >&2
+        echo "  Es wurde nichts verändert." >&2
         exit 1
     fi
-    echo "WARNUNG: --skip-audit-anchor gesetzt: Der Satz enthaelt einen Audit-Anker, dieser Host hat keinen Ankerpfad." >&2
+    echo "WARNUNG: --skip-audit-anchor gesetzt: Der Satz enthält einen Audit-Anker, dieser Host hat keinen Ankerpfad." >&2
     echo "  Die Vorpruefung lief ohne Audit-Anker; der gebundene Anker wurde nicht geprueft." >&2
     echo "  DJANGO_AUDIT_HWM_PATH ist nicht gesetzt — der Anker wird NICHT eingespielt; die Audit-Kette gilt" >&2
     echo "  nach dem Restore als unverankert (docs/disaster-recovery.md § 6 Schritt 4b)." >&2

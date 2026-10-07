@@ -35,6 +35,8 @@ def test_bound_anchor_without_configured_path_aborts_before_any_change(tmp_path:
     assert result.returncode == 1, result.stderr
     assert "DJANGO_AUDIT_HWM_PATH" in result.stderr
     assert "--skip-audit-anchor" in result.stderr
+    assert "FEHLER: Der Satz enthält einen Audit-Anker" in result.stderr
+    assert "Es wurde nichts verändert." in result.stderr
     actions = action_log.read_text(encoding="utf-8") if action_log.exists() else ""
     assert " psql " not in actions
     assert " mv " not in actions
@@ -52,6 +54,7 @@ def test_skip_audit_anchor_switch_restores_and_says_what_is_not_checked(tmp_path
 
     assert result.returncode == 0, result.stderr
     assert "--skip-audit-anchor" in result.stderr
+    assert "WARNUNG: --skip-audit-anchor gesetzt: Der Satz enthält einen Audit-Anker" in result.stderr
     assert "Anker wurde nicht geprueft" in result.stderr
     assert "NICHT eingespielt" in result.stderr
     assert " psql " in action_log.read_text(encoding="utf-8")
