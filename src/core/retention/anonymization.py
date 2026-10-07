@@ -225,8 +225,9 @@ def anonymize_clients(facility, dry_run):
     except Settings.DoesNotExist:
         settings_obj = None
     use_k_anon = bool(settings_obj and settings_obj.retention_use_k_anonymization)
-    # Same threshold rule as the reports: a value below the minimum can only come
-    # from a write that bypassed validation, so it is logged, never used silently.
+    # Same threshold rule as the reports: a value below the minimum is either a
+    # stored value from before the validator or a write that bypassed validation,
+    # so it is logged, never used silently.
     k = DEFAULT_K_THRESHOLD
     if settings_obj:
         stored = settings_obj.k_anonymity_threshold

@@ -126,7 +126,7 @@ class TestKAnonymityOnTheReportPage:
 
 
 class TestStoredThresholdBelowMinimum:
-    """Only a write that bypasses validation can store 0 or 1; neither takes effect silently."""
+    """0 or 1 is a value stored before the validator or a write that bypassed it; neither takes effect silently."""
 
     @pytest.mark.parametrize(("stored", "effective"), [(0, DEFAULT_K_THRESHOLD), (1, 1)])
     def test_report_threshold_is_logged(self, facility, settings_obj, stored, effective, caplog):
