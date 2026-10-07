@@ -1248,10 +1248,10 @@ In production the `/health/` endpoint checks ClamAV daemon reachability in addit
 MultiFernet accepts a list of keys. To rotate:
 
 1. **Generate a new key** and add it as the **first** entry in `ENCRYPTION_KEYS`: `ENCRYPTION_KEYS=new,old`. Newly written data is encrypted with `new`; existing data stays readable via `old`.
-2. Optional: run `python manage.py reencrypt_fields` to re-encrypt existing fields with the new key (see [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). A `--dry-run` reports how many records would be affected without writing anything. **The run must use the admin/owner role** -- see the box below.
-3. After successful re-encryption, remove the old key from the list.
+2. Optional: run `python manage.py reencrypt_fields` to re-encrypt existing database fields with the new key (see [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). A `--dry-run` reports how many records would be affected without writing anything. **The run must use the admin/owner role** -- see the box below.
+3. **Keep the old key in the list.** `reencrypt_fields` re-encrypts database columns only, not the contents of the file attachments under `MEDIA_ROOT`. These remain encrypted with the key that was first at upload time and stay readable only while that key is in the `ENCRYPTION_KEYS` ring. There is no tool that re-encrypts file contents. As long as attachments written with the old key exist, which usually means permanently, it stays in the list behind the new one.
 
-> **Important:** Never **replace** the old key instead of **appending** the new one -- any still-unrotated data would become unreadable.
+> **Important:** Never **replace** the old key instead of **appending** the new one, and do not remove it even after a successful `reencrypt_fields` run. Otherwise every file attachment encrypted with it becomes unreadable, as does every database field the run skipped.
 
 > ⚠️ **Role prerequisite (Refs #1058).** `reencrypt_fields` reads and writes tables protected by row-level security. The `NOBYPASSRLS` runtime role of `web` has no facility context outside a request and would see **0 rows**. Always invoke it via the maintenance service ([ops runbook § 9.5](../ops-runbook.md)):
 >
@@ -1259,7 +1259,7 @@ MultiFernet accepts a list of keys. To rotate:
 > docker compose -f docker-compose.prod.yml run --rm maintenance reencrypt_fields --dry-run
 > ```
 >
-> Since #1058 the command aborts with a clear error message when the bypass context is missing (fail-loud instead of "0 rotated, success reported"). On older builds without that guard: **never run step 3 after a run that reports `0` everywhere** -- the old key would leave the list although nothing was rotated.
+> The command aborts with a clear error message when the bypass context is missing (fail-loud instead of "0 rotated, success reported"; #1058).
 
 **What `reencrypt_fields` covers** (Refs #1058):
 
@@ -1267,17 +1267,19 @@ MultiFernet accepts a list of keys. To rotate:
 |---|---|
 | **`Event.data_json`** | **complete -- including soft-deleted events** (#1724); per row with a row lock and compare-and-swap |
 | `EventHistory.data_before` / `data_after` | complete (append-only, updated through the replication bypass); per row with a row lock and compare-and-swap on the columns being changed (#2177) |
-| `Attachment.original_filename_encrypted` | complete -- attachments on events, clients and cases (the model was named `EventAttachment` until #1738); per row with a row lock and compare-and-swap |
+| `Attachment.original_filename_encrypted` | complete -- the encrypted file name of attachments on events, clients and cases (#1738); per row with a row lock and compare-and-swap |
+| **File contents of attachments** (files under `MEDIA_ROOT`) | **not covered** -- they stay encrypted with the key they were uploaded with; readable only while that key is in the ring (step 3) |
 | TOTP secrets (`otp_totp_totpdevice.key`) | complete, per device with a row lock and compare-and-swap |
 | **`Client.data_json`** | **complete -- including soft-deleted persons**; per row with a row lock and compare-and-swap |
 | **`Case.data_json`** | **complete -- including soft-deleted cases**; per row with a row lock and compare-and-swap |
 | `RectificationRequest.old_value` / `new_value` / `reason` / `review_note` | complete, per row with a row lock and compare-and-swap on the value columns being changed |
+| `ShiftHandoverNote.note` (handover note) | complete, per row with a row lock and compare-and-swap (#2042) |
 
-Since dynamic fields became entity-wide (ADR-037), **persons** and **cases** also carry encrypted extra fields in `data_json`. The run rotates them as well and additionally heals plaintext leftovers in fields that the document type declares as encrypted.
+**Persons** and **cases** also carry encrypted extra fields in `data_json` ([ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md)). The run rotates them as well and additionally heals plaintext leftovers in fields that the document type declares as encrypted.
 
-For events, persons and cases, **soft-deleted records are rotated too**. That is deliberate: a record waiting in the trash must not stay behind under a retired key just because it is pending deletion. The former gap for soft-deleted events (the `is_deleted=False` filter) has been closed since #1724.
+For events, persons and cases, **soft-deleted records are rotated too**. That is deliberate: a record waiting in the trash must not stay behind under a retired key just because it is pending deletion (#1724). The former gap for soft-deleted events (the `is_deleted=False` filter) has been closed since #1724.
 
-> **Operational note:** The run protects every row it changes with a row lock and compare-and-swap. If a concurrent domain edit wins, the rotation skips its stale state and warns: "N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen" (N rows skipped due to a concurrent change -- repeat the run). The rotation never overwrites an interim change, including redaction or anonymization runs that do not advance `updated_at`. Since #2177 this also covers the **event history**: if the nightly retention run or an Art. 17 GDPR anonymization redacts a history row while the rotation is running, the rotation skips that row and reports it as skipped -- the redacted state stands. Rows that are already redacted are no longer rotation candidates at all: they carry no encrypted values, only the redaction marker. Repeat it and retain the old key until a run completes without this warning. A maintenance window remains advisable to reduce database load, but it is no longer required to prevent lost updates.
+> **Operational note:** The run protects every row it changes with a row lock and compare-and-swap. If a concurrent domain edit wins, the rotation skips its stale state and warns: "N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen" (N rows skipped due to a concurrent change -- repeat the run). The rotation never overwrites an interim change, including redaction or anonymization runs that do not advance `updated_at`. This also covers the **event history** (#2177): if the nightly retention run or an Art. 17 GDPR anonymization redacts a history row while the rotation is running, the rotation skips that row and reports it as skipped -- the redacted state stands. Rows that are already redacted are no longer rotation candidates at all: they carry no encrypted values, only the redaction marker. Repeat the run until it completes without this warning; the old key stays in the ring anyway because of the file contents (step 3). A maintenance window remains advisable to reduce database load, but it is no longer required to prevent lost updates.
 
 #### Upload Limit
 
@@ -1955,7 +1957,7 @@ Sensitive fields in the database are stored encrypted using the `ENCRYPTION_KEY`
 - In production, the application refuses to start if no key is set.
 - Loss of the key means permanent loss of the encrypted data.
 
-**Key rotation:** Automatic key rotation is not currently implemented. Store the key redundantly and separately from database backups.
+**Key rotation:** There is no automatic key rotation. The manual rotation is described in [§ 2.9 "Key Rotation"](#key-rotation-encryption_keys); it re-encrypts database fields, not the contents of file attachments, so old keys stay in the ring. Store all keys of the ring redundantly and separately from database backups.
 
 **Transport encryption:** Caddy enforces HTTPS and automatically redirects HTTP to HTTPS.
 
@@ -2504,5 +2506,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: c9694909a53ec6b92735f0db4b34ce04e85db165 -->
+<!-- source-hash: fe49df497c2b06a16e78e34f7a20b7cbba29b710 -->
 <!-- translation-date: 2026-10-05 -->

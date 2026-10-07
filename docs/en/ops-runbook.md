@@ -2371,6 +2371,11 @@ Operational rules that follow from this:
   hours** with low write load — not during peak time. This does not apply to the
   **interactive** Art. 17 action: it no longer takes any DDL lock in the web
   process (see above); its history redaction rides along with the nightly run.
+- `reencrypt_fields` re-encrypts database columns only, not the contents of the
+  file attachments under `MEDIA_ROOT`. Keep the old key in the `ENCRYPTION_KEYS`
+  ring even after a successful run, as long as attachments encrypted with it
+  exist -- otherwise they become unreadable
+  ([admin guide § 2.9 "Key Rotation"](admin-guide.md#key-rotation-encryption_keys)).
 - Set a **`lock_timeout` as a role/session default** for the maintenance/owner
   role, so that a blocked `ALTER TABLE` does not wait indefinitely,
   but aborts fail-loud and stays retryable:
@@ -3275,7 +3280,7 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: f92c6df637c3ba3dcdd414477737d8f08f5ef9b5 -->
+<!-- source-hash: 386beca3e9efbbbf42139312e7c9efb835683cce -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->

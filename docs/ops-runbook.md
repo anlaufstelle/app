@@ -2346,6 +2346,11 @@ Betriebsregeln daraus:
   geringer Schreiblast fahren — nicht zur Stoßzeit. Für die **interaktive**
   Art.-17-Aktion gilt das nicht: sie nimmt im Webprozess gar keine DDL-Sperre
   mehr (s. o.), ihre Historien-Redaktion läuft im nächtlichen Lauf mit.
+- `reencrypt_fields` schlüsselt nur Datenbankspalten um, nicht die Inhalte der
+  Dateianhänge unter `MEDIA_ROOT`. Den alten Schlüssel deshalb auch nach einem
+  erfolgreichen Lauf im Ring `ENCRYPTION_KEYS` lassen, solange Anhänge existieren,
+  die mit ihm verschlüsselt wurden — sonst werden sie unlesbar
+  ([Admin-Handbuch § 2.9 „Schlüssel-Rotation“](admin-guide.md#schlüssel-rotation-encryption_keys)).
 - Einen **`lock_timeout` als Rollen-/Session-Default** für die Wartungs-/Owner-
   Rolle setzen, damit ein blockiertes `ALTER TABLE` nicht unbegrenzt wartet,
   sondern fail-loud abbricht und retry-bar bleibt:

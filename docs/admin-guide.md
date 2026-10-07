@@ -1191,10 +1191,10 @@ Der `/health/`-Endpoint prüft in Produktion zusätzlich zur Datenbank die Errei
 MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 
 1. **Neuen Schlüssel generieren** und als **ersten** Eintrag in `ENCRYPTION_KEYS` einfügen: `ENCRYPTION_KEYS=neu,alt`. Neu geschriebene Daten werden mit `neu` verschlüsselt, vorhandene mit `alt` lassen sich weiterhin lesen.
-2. Optional: `python manage.py reencrypt_fields` laufen lassen, damit bestehende Felder auf den neuen Key umgeschlüsselt werden (siehe [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). Ein `--dry-run` zeigt vorab, wie viele Datensätze betroffen wären, ohne zu schreiben. **Der Lauf muss mit der Admin-/Owner-Rolle erfolgen** — siehe Kasten unten.
-3. Nach erfolgreichem Umschlüsseln den alten Schlüssel aus der Liste entfernen.
+2. Optional: `python manage.py reencrypt_fields` laufen lassen, damit bestehende Datenbankfelder auf den neuen Key umgeschlüsselt werden (siehe [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). Ein `--dry-run` zeigt vorab, wie viele Datensätze betroffen wären, ohne zu schreiben. **Der Lauf muss mit der Admin-/Owner-Rolle erfolgen** — siehe Kasten unten.
+3. **Den alten Schlüssel in der Liste lassen.** `reencrypt_fields` schlüsselt nur Datenbankspalten um, nicht die Inhalte der Dateianhänge unter `MEDIA_ROOT`. Diese bleiben mit dem Schlüssel verschlüsselt, der beim Hochladen der erste war, und sind nur lesbar, solange dieser Schlüssel im Ring `ENCRYPTION_KEYS` steht. Ein Werkzeug, das Dateiinhalte umschlüsselt, gibt es nicht. Solange Anhänge existieren, die mit dem alten Schlüssel geschrieben wurden, also in der Regel dauerhaft, bleibt er hinter dem neuen in der Liste.
 
-> **Wichtig:** Niemals den alten Key **ersetzen** statt **ergänzen** — sonst werden alle noch nicht umgeschlüsselten Bestandsdateien unlesbar.
+> **Wichtig:** Niemals den alten Key **ersetzen** statt **ergänzen** und ihn auch nach einem erfolgreichen `reencrypt_fields`-Lauf nicht entfernen. Sonst werden alle Dateianhänge unlesbar, die mit ihm verschlüsselt wurden, und ebenso alle Datenbankfelder, die der Lauf übersprungen hat.
 
 > ⚠️ **Rollen-Voraussetzung (Refs #1058).** `reencrypt_fields` liest und schreibt Tabellen mit Row-Level-Security. Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Requests keinen Einrichtungs-Kontext — ein Aufruf dort sähe **0 Zeilen**. Deshalb immer ueber den Maintenance-Service aufrufen ([Ops-Runbook § 9.5](ops-runbook.md)):
 >
@@ -1202,7 +1202,7 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 > docker compose -f docker-compose.prod.yml run --rm maintenance reencrypt_fields --dry-run
 > ```
 >
-> Der Command bricht seit #1058 mit einer klaren Fehlermeldung ab, wenn der Bypass-Kontext fehlt (fail-loud statt „0 rotiert, Erfolg gemeldet"). Bei älteren Ständen ohne diesen Guard gilt: **Schritt 3 niemals nach einem Lauf ausführen, der überall `0` meldet** — sonst steht der Alt-Schlüssel nicht mehr in der Liste, obwohl nichts rotiert wurde.
+> Der Command bricht mit einer klaren Fehlermeldung ab, wenn der Bypass-Kontext fehlt (fail-loud statt „0 rotiert, Erfolg gemeldet"; #1058).
 
 **Was `reencrypt_fields` abdeckt** (Refs #1058):
 
@@ -1210,17 +1210,19 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 |---|---|
 | **`Event.data_json`** | **vollständig — inklusive soft-gelöschter Ereignisse** (#1724); je Zeile mit Row-Lock und Compare-and-Swap |
 | `EventHistory.data_before` / `data_after` | vollständig (append-only, Update über den Replikations-Bypass); je Zeile mit Row-Lock und Compare-and-Swap auf den geänderten Spalten (#2177) |
-| `Attachment.original_filename_encrypted` | vollständig — Anhänge an Ereignis, Person und Fall (das Modell hieß bis #1738 `EventAttachment`); je Zeile mit Row-Lock und Compare-and-Swap |
+| `Attachment.original_filename_encrypted` | vollständig — der verschlüsselte Dateiname von Anhängen an Ereignis, Person und Fall (#1738); je Zeile mit Row-Lock und Compare-and-Swap |
+| **Dateiinhalte der Anhänge** (Dateien unter `MEDIA_ROOT`) | **nicht abgedeckt** — bleiben mit dem Schlüssel verschlüsselt, mit dem sie hochgeladen wurden; lesbar nur, solange dieser im Ring steht (Schritt 3) |
 | TOTP-Secrets (`otp_totp_totpdevice.key`) | vollständig, je Gerät mit Row-Lock und Compare-and-Swap |
 | **`Client.data_json`** | **vollständig — inklusive soft-gelöschter Personen**; je Zeile mit Row-Lock und Compare-and-Swap |
 | **`Case.data_json`** | **vollständig — inklusive soft-gelöschter Fälle**; je Zeile mit Row-Lock und Compare-and-Swap |
 | `RectificationRequest.old_value` / `new_value` / `reason` / `review_note` | vollständig, je Zeile mit Row-Lock und Compare-and-Swap auf den geänderten Wertspalten |
+| `ShiftHandoverNote.note` (Übergabenotiz) | vollständig, je Zeile mit Row-Lock und Compare-and-Swap (#2042) |
 
-Seit den entitätsübergreifenden dynamischen Feldern ([ADR-037](adr/037-konfigurationspakete-dynamische-felder.md)) tragen auch **Personen** und **Fälle** verschlüsselte Zusatzfelder in `data_json`. Der Lauf rotiert sie mit und heilt dabei zusätzlich Klartext-Reste in Feldern, die laut Dokumentationstyp verschlüsselt sein müssen.
+Auch **Personen** und **Fälle** tragen verschlüsselte Zusatzfelder in `data_json` ([ADR-037](adr/037-konfigurationspakete-dynamische-felder.md)). Der Lauf rotiert sie mit und heilt dabei zusätzlich Klartext-Reste in Feldern, die laut Dokumentationstyp verschlüsselt sein müssen.
 
-Bei Ereignissen, Personen und Fällen werden **auch soft-gelöschte Datensätze** rotiert. Das ist Absicht: ein Datensatz im Papierkorb soll nicht dauerhaft unter einem ausrangierten Schlüssel liegen bleiben, nur weil er auf Löschung wartet. Die frühere Lücke bei soft-gelöschten Ereignissen (`is_deleted=False`-Filter) ist seit #1724 geschlossen.
+Bei Ereignissen, Personen und Fällen werden **auch soft-gelöschte Datensätze** rotiert. Das ist Absicht: ein Datensatz im Papierkorb soll nicht dauerhaft unter einem ausrangierten Schlüssel liegen bleiben, nur weil er auf Löschung wartet (#1724).
 
-> **Betriebshinweis:** Der Lauf schützt jede zu ändernde Zeile mit Row-Lock und Compare-and-Swap. Gewinnt eine parallele Fachänderung, überspringt die Rotation den veralteten Stand und warnt: „N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen“. Die Rotation überschreibt dabei nie eine zwischenzeitliche Änderung — auch nicht bei Redaktions- oder Anonymisierungsläufen, die `updated_at` nicht fortschreiben. Das gilt seit #2177 auch für die **Ereignis-Historie**: Redigiert der nächtliche Aufbewahrungslauf oder eine Anonymisierung nach Art. 17 DSGVO eine Historienzeile, während die Rotation läuft, überspringt die Rotation diese Zeile und meldet sie als übersprungen — der Redaktionsstand bleibt. Bereits redigierte Zeilen sind ohnehin keine Rotationskandidaten mehr: Sie tragen keine verschlüsselten Werte, sondern nur noch den Redaktionsvermerk. Den Lauf dann wiederholen und den alten Schlüssel bis zu einem Lauf ohne diese Meldung behalten. Ein Wartungsfenster bleibt wegen der zusätzlichen Datenbanklast empfehlenswert, ist aber keine Voraussetzung mehr, um verlorene Updates zu verhindern.
+> **Betriebshinweis:** Der Lauf schützt jede zu ändernde Zeile mit Row-Lock und Compare-and-Swap. Gewinnt eine parallele Fachänderung, überspringt die Rotation den veralteten Stand und warnt: „N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen“. Die Rotation überschreibt dabei nie eine zwischenzeitliche Änderung — auch nicht bei Redaktions- oder Anonymisierungsläufen, die `updated_at` nicht fortschreiben. Das gilt auch für die **Ereignis-Historie** (#2177): Redigiert der nächtliche Aufbewahrungslauf oder eine Anonymisierung nach Art. 17 DSGVO eine Historienzeile, während die Rotation läuft, überspringt die Rotation diese Zeile und meldet sie als übersprungen — der Redaktionsstand bleibt. Bereits redigierte Zeilen sind ohnehin keine Rotationskandidaten mehr: Sie tragen keine verschlüsselten Werte, sondern nur noch den Redaktionsvermerk. Den Lauf dann wiederholen, bis er ohne diese Meldung endet; der alte Schlüssel bleibt wegen der Dateiinhalte ohnehin im Ring (Schritt 3). Ein Wartungsfenster bleibt wegen der zusätzlichen Datenbanklast empfehlenswert, ist aber keine Voraussetzung mehr, um verlorene Updates zu verhindern.
 
 #### Upload-Limit
 
@@ -1895,7 +1897,7 @@ Sensible Felder in der Datenbank werden mit dem `ENCRYPTION_KEY` verschlüsselt 
 - In der Produktion verweigert die Anwendung den Start, wenn kein Schlüssel gesetzt ist.
 - Ein Schlüsselverlust bedeutet den dauerhaften Verlust der verschlüsselten Daten.
 
-**Schlüsselrotation:** Eine automatische Schlüsselrotation ist aktuell nicht implementiert. Sichern Sie den Schlüssel redundant und getrennt vom Datenbank-Backup.
+**Schlüsselrotation:** Eine automatische Schlüsselrotation gibt es nicht. Die manuelle Rotation beschreibt [§ 2.9 „Schlüssel-Rotation“](#schlüssel-rotation-encryption_keys); sie schlüsselt Datenbankfelder um, nicht die Inhalte der Dateianhänge, deshalb bleiben alte Schlüssel im Ring. Sichern Sie alle Schlüssel des Rings redundant und getrennt vom Datenbank-Backup.
 
 **Transportverschlüsselung:** Caddy erzwingt HTTPS und leitet HTTP automatisch auf HTTPS weiter.
 
