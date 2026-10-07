@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 09:26+0200\n"
+"POT-Creation-Date: 2026-10-07 10:15+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -167,16 +167,6 @@ msgstr "Wirkt nur bei Dokumentationstypen für Ereignisse."
 #: src/core/forms/config.py:296
 msgid "Nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."
 msgstr "Nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."
-
-#: src/core/forms/config.py:301
-msgid ""
-"In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-"
-"Kontaktstufe. Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder sein. Der "
-"Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
-msgstr ""
-"In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-"
-"Kontaktstufe. Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder sein. Der "
-"Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
 
 #: src/core/forms/config.py:370
 msgid ""
@@ -13179,3 +13169,221 @@ msgstr "Standardmäßig 24 Monate rollierend, je Einrichtung einstellbar (0 scha
 #: src/templates/core/retention/dashboard.html:9
 msgid "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus. Vorschläge erscheinen hier nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist. Zurückstellen oder Verwerfen hält die Löschung nicht auf."
 msgstr "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus. Vorschläge erscheinen hier nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist. Zurückstellen oder Verwerfen hält die Löschung nicht auf."
+
+#: src/core/forms/config.py:306
+msgid "Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen zusätzliche Berechtigungen voraus. Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest."
+msgstr "Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen zusätzliche Berechtigungen voraus. Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest."
+
+#: src/core/forms/config.py:376
+msgid "In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-Kontaktstufe. Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder ohne Bedingung sein. Der Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
+msgstr "In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-Kontaktstufe. Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder ohne Bedingung sein. Der Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
+
+#: src/core/views/help.py:110
+msgid "Vier-Augen-Prinzip bei Löschungen"
+msgstr "Vier-Augen-Prinzip bei Löschungen"
+
+#: src/core/views/help.py:113
+msgid "Beim Vier-Augen-Prinzip führt ein Löschwunsch zunächst zu einem Antrag. Gelöscht wird erst, nachdem eine zweite berechtigte Person den Antrag geprüft und genehmigt hat."
+msgstr "Beim Vier-Augen-Prinzip führt ein Löschwunsch zunächst zu einem Antrag. Gelöscht wird erst, nachdem eine zweite berechtigte Person den Antrag geprüft und genehmigt hat."
+
+#: src/core/views/help.py:119
+msgid "Wer den Antrag gestellt hat, kann ihn nicht selbst genehmigen."
+msgstr "Wer den Antrag gestellt hat, kann ihn nicht selbst genehmigen."
+
+#: src/core/views/help.py:120
+msgid "Die prüfende Person braucht das Recht „Löschbestätigung“."
+msgstr "Die prüfende Person braucht das Recht „Löschbestätigung“."
+
+#: src/core/views/help.py:121
+msgid "Wer den Antrag gestellt hat, kann ihn zurückziehen, solange er aussteht."
+msgstr "Wer den Antrag gestellt hat, kann ihn zurückziehen, solange er aussteht."
+
+#: src/core/views/help.py:122
+msgid "Ein zurückgezogener oder abgelehnter Antrag löscht nichts; die Daten bleiben unverändert."
+msgstr "Ein zurückgezogener oder abgelehnter Antrag löscht nichts; die Daten bleiben unverändert."
+
+#: src/core/views/help.py:127
+msgid "Löschfristen und Löschvorschläge"
+msgstr "Löschfristen und Löschvorschläge"
+
+#: src/core/views/help.py:130
+msgid "Ereignisse haben eine Aufbewahrungsfrist. Sie ergibt sich aus der Kontaktstufe oder aus einer Frist am Dokumentationstyp."
+msgstr "Ereignisse haben eine Aufbewahrungsfrist. Sie ergibt sich aus der Kontaktstufe oder aus einer Frist am Dokumentationstyp."
+
+#: src/core/views/help.py:134
+msgid "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus."
+msgstr "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus."
+
+#: src/core/views/help.py:140
+msgid "Löschvorschläge erscheinen in den Löschfristen nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist."
+msgstr "Löschvorschläge erscheinen in den Löschfristen nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist."
+
+#: src/core/views/help.py:143
+msgid "Zurückstellen oder Verwerfen eines Löschvorschlags hält die Löschung nicht auf."
+msgstr "Zurückstellen oder Verwerfen eines Löschvorschlags hält die Löschung nicht auf."
+
+#: src/core/views/help.py:159
+msgid "Feldbedingungen (bedingte Sichtbarkeit)"
+msgstr "Feldbedingungen (bedingte Sichtbarkeit)"
+
+#: src/core/views/help.py:162
+msgid "Feldbedingungen steuern, wann ein Feld im Formular sichtbar ist. Das Zielfeld erscheint nur, wenn ein anderes Feld desselben Dokumentationstyps, das Quellfeld, die Bedingung erfüllt."
+msgstr "Feldbedingungen steuern, wann ein Feld im Formular sichtbar ist. Das Zielfeld erscheint nur, wenn ein anderes Feld desselben Dokumentationstyps, das Quellfeld, die Bedingung erfüllt."
+
+#: src/core/views/help.py:167
+msgid "Beispiel: Das Feld „Notiz zur Weitervermittlung“ soll nur erscheinen, wenn im Feld „Weitervermittlung“ der Wert „Ja“ ausgewählt wurde."
+msgstr "Beispiel: Das Feld „Notiz zur Weitervermittlung“ soll nur erscheinen, wenn im Feld „Weitervermittlung“ der Wert „Ja“ ausgewählt wurde."
+
+#: src/core/views/help.py:172
+msgid "Bedingungsgruppe: Die Bedingungen eines Zielfelds sind in Gruppen geordnet."
+msgstr "Bedingungsgruppe: Die Bedingungen eines Zielfelds sind in Gruppen geordnet."
+
+#: src/core/views/help.py:174
+msgid "UND innerhalb einer Gruppe: Mehrere Bedingungen in derselben Gruppe müssen gemeinsam erfüllt sein."
+msgstr "UND innerhalb einer Gruppe: Mehrere Bedingungen in derselben Gruppe müssen gemeinsam erfüllt sein."
+
+#: src/core/views/help.py:178
+msgid "ODER über Gruppen hinweg: Mehrere Gruppen sind alternative Wege. Es reicht, wenn eine Gruppe erfüllt ist."
+msgstr "ODER über Gruppen hinweg: Mehrere Gruppen sind alternative Wege. Es reicht, wenn eine Gruppe erfüllt ist."
+
+#: src/core/views/help.py:182
+msgid "Operatoren: ist gleich, ist ungleich, enthält, ist größer als, ist kleiner als, ist leer und ist nicht leer. Welche zur Wahl stehen, hängt vom Feldtyp des Quellfelds ab; „ist leer“ und „ist nicht leer“ brauchen keinen Vergleichswert."
+msgstr "Operatoren: ist gleich, ist ungleich, enthält, ist größer als, ist kleiner als, ist leer und ist nicht leer. Welche zur Wahl stehen, hängt vom Feldtyp des Quellfelds ab; „ist leer“ und „ist nicht leer“ brauchen keinen Vergleichswert."
+
+#: src/core/views/help.py:187
+msgid "Ausgeblendete Felder erscheinen im Formular nicht. Ist das Quellfeld selbst ausgeblendet, gilt es als leer."
+msgstr "Ausgeblendete Felder erscheinen im Formular nicht. Ist das Quellfeld selbst ausgeblendet, gilt es als leer."
+
+#: src/core/views/help.py:191
+msgid "Pflichtfeld: Ein ausgeblendetes Pflichtfeld muss nicht ausgefüllt werden. Sobald es sichtbar ist, gilt die Pflicht wieder."
+msgstr "Pflichtfeld: Ein ausgeblendetes Pflichtfeld muss nicht ausgefüllt werden. Sobald es sichtbar ist, gilt die Pflicht wieder."
+
+#: src/core/views/help.py:195
+msgid "Ausprobieren: Öffnen Sie nach dem Speichern der Bedingung das Erfassungsformular dieses Dokumentationstyps und ändern Sie den Wert im Quellfeld — das Zielfeld muss erscheinen und wieder verschwinden."
+msgstr "Ausprobieren: Öffnen Sie nach dem Speichern der Bedingung das Erfassungsformular dieses Dokumentationstyps und ändern Sie den Wert im Quellfeld — das Zielfeld muss erscheinen und wieder verschwinden."
+
+#: src/templates/components/_field_deep_help.html:16
+#, python-format
+msgid "Mehr zu „%(label)s“"
+msgstr "Mehr zu „%(label)s“"
+
+#: src/templates/components/_field_deep_help.html:19
+msgid "Folgen:"
+msgstr "Folgen:"
+
+#: src/templates/components/_field_deep_help.html:20
+msgid "Änderbar:"
+msgstr "Änderbar:"
+
+#: src/templates/components/_field_deep_help.html:21
+msgid "Beispiel:"
+msgstr "Beispiel:"
+
+#: src/templates/core/config/document_types/form.html:56
+msgid "Legt fest, wofür der Typ gilt: Ereignis, Person oder Fall. Nach dem Anlegen nicht änderbar."
+msgstr "Legt fest, wofür der Typ gilt: Ereignis, Person oder Fall. Nach dem Anlegen nicht änderbar."
+
+#: src/templates/core/config/document_types/form.html:57
+msgid "Ereignis-Typen dokumentieren Kontakte im Zeitstrom; nur sie nutzen Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und Strichliste. Person-Typen ergänzen die Personenakte um eigene Felder, Fall-Typen den Fall."
+msgstr "Ereignis-Typen dokumentieren Kontakte im Zeitstrom; nur sie nutzen Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und Strichliste. Person-Typen ergänzen die Personenakte um eigene Felder, Fall-Typen den Fall."
+
+#: src/templates/core/config/document_types/form.html:58
+#: src/templates/core/config/document_types/form.html:68
+msgid "Nach dem Anlegen unveränderbar. Falsch gewählt? Den Typ deaktivieren und einen neuen anlegen."
+msgstr "Nach dem Anlegen unveränderbar. Falsch gewählt? Den Typ deaktivieren und einen neuen anlegen."
+
+#: src/templates/core/config/document_types/form.html:59
+msgid "Ein Typ „Beratungsgespräch“ hält Kontakte fest und ist ein Ereignis-Typ. Ein Typ „Zusatzangaben zur Wohnsituation“ ergänzt die Personenakte und ist ein Person-Typ."
+msgstr "Ein Typ „Beratungsgespräch“ hält Kontakte fest und ist ein Ereignis-Typ. Ein Typ „Zusatzangaben zur Wohnsituation“ ergänzt die Personenakte und ist ein Person-Typ."
+
+#: src/templates/core/config/document_types/form.html:61
+msgid "Legt fest, welche Rollen die Inhalte sehen dürfen. Verschlüsselt wird je Feldvorlage, nicht über diese Stufe."
+msgstr "Legt fest, welche Rollen die Inhalte sehen dürfen. Verschlüsselt wird je Feldvorlage, nicht über diese Stufe."
+
+#: src/templates/core/config/document_types/form.html:62
+msgid "Normal sehen alle Rollen einschließlich Assistenz, Erhöht Fachkraft, Leitung und Anwendungsbetreuung, Hoch nur Leitung und Anwendungsbetreuung. Zusätzlich hat jede Feldvorlage eine eigene Stufe; für ein einzelnes Feld gilt die höhere der beiden Stufen. Diese Stufe steuert nur die Sichtbarkeit: Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest (Option „Verschlüsselt“; bei Stufe „Hoch“ an der Feldvorlage ist sie Pflicht)."
+msgstr "Normal sehen alle Rollen einschließlich Assistenz, Erhöht Fachkraft, Leitung und Anwendungsbetreuung, Hoch nur Leitung und Anwendungsbetreuung. Zusätzlich hat jede Feldvorlage eine eigene Stufe; für ein einzelnes Feld gilt die höhere der beiden Stufen. Diese Stufe steuert nur die Sichtbarkeit: Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest (Option „Verschlüsselt“; bei Stufe „Hoch“ an der Feldvorlage ist sie Pflicht)."
+
+#: src/templates/core/config/document_types/form.html:63
+msgid "Jederzeit änderbar. Die Sichtbarkeit folgt der jeweils aktuellen Stufe."
+msgstr "Jederzeit änderbar. Die Sichtbarkeit folgt der jeweils aktuellen Stufe."
+
+#: src/templates/core/config/document_types/form.html:64
+msgid "Allgemeine Kontakte: Normal. Beratungs- und Gesundheitsgespräche: Erhöht. Krisengespräche: Hoch."
+msgstr "Allgemeine Kontakte: Normal. Beratungs- und Gesundheitsgespräche: Erhöht. Krisengespräche: Hoch."
+
+#: src/templates/core/config/document_types/form.html:66
+msgid "Steuert besondere App-Funktionen wie Hausverbot oder Krisen-Hervorhebung. Nach dem Anlegen nicht mehr änderbar."
+msgstr "Steuert besondere App-Funktionen wie Hausverbot oder Krisen-Hervorhebung. Nach dem Anlegen nicht mehr änderbar."
+
+#: src/templates/core/config/document_types/form.html:67
+msgid "Hausverbot zeigt das Banner an der Person, den Filter im Zeitstrom und die Hervorhebung in der Übergabe. Krisengespräch hebt Einträge in der Übergabe hervor. Die meisten Typen brauchen keinen Systemtyp; für die Zuordnung zu einem Bericht ist der Berichtsschlüssel zuständig."
+msgstr "Hausverbot zeigt das Banner an der Person, den Filter im Zeitstrom und die Hervorhebung in der Übergabe. Krisengespräch hebt Einträge in der Übergabe hervor. Die meisten Typen brauchen keinen Systemtyp; für die Zuordnung zu einem Bericht ist der Berichtsschlüssel zuständig."
+
+#: src/templates/core/config/document_types/form.html:69
+msgid "Ein Typ „Hausverbot“ bekommt den Systemtyp Hausverbot, damit das Banner erscheint. Ein Typ „Beratungsgespräch“ bleibt ohne Systemtyp."
+msgstr "Ein Typ „Hausverbot“ bekommt den Systemtyp Hausverbot, damit das Banner erscheint. Ein Typ „Beratungsgespräch“ bleibt ohne Systemtyp."
+
+#: src/templates/core/config/document_types/form.html:71
+msgid "Ordnet diesen Typ Berichten zu. Leer bedeutet: noch nicht zugeordnet."
+msgstr "Ordnet diesen Typ Berichten zu. Leer bedeutet: noch nicht zugeordnet."
+
+#: src/templates/core/config/document_types/form.html:72
+msgid "Der Schlüssel bestimmt die Zeile im Bericht. Leer heißt: noch keine Aussage — der Typ wird in Berichten als Lücke gemeldet. „Gehört ausdrücklich in keinen Bericht“ ist eine bewusste Entscheidung und keine Lücke. Die Übersicht in der Statistik zählt unabhängig vom Schlüssel."
+msgstr "Der Schlüssel bestimmt die Zeile im Bericht. Leer heißt: noch keine Aussage — der Typ wird in Berichten als Lücke gemeldet. „Gehört ausdrücklich in keinen Bericht“ ist eine bewusste Entscheidung und keine Lücke. Die Übersicht in der Statistik zählt unabhängig vom Schlüssel."
+
+#: src/templates/core/config/document_types/form.html:73
+msgid "Ein leerer Schlüssel kann jederzeit nachgetragen werden. Ein gesetzter Schlüssel ist danach unveränderbar."
+msgstr "Ein leerer Schlüssel kann jederzeit nachgetragen werden. Ein gesetzter Schlüssel ist danach unveränderbar."
+
+#: src/templates/core/config/document_types/form.html:74
+msgid "Ein Typ „Schuldnerberatung“ mit dem Schlüssel „Beratungsgespräch“ landet in derselben Berichtszeile wie jeder andere Typ mit diesem Schlüssel."
+msgstr "Ein Typ „Schuldnerberatung“ mit dem Schlüssel „Beratungsgespräch“ landet in derselben Berichtszeile wie jeder andere Typ mit diesem Schlüssel."
+
+#: src/templates/core/config/document_types/form.html:83
+msgid "Legt fest, ob dieser Typ anonym nutzbar ist oder eine gespeicherte Person braucht."
+msgstr "Legt fest, ob dieser Typ anonym nutzbar ist oder eine gespeicherte Person braucht."
+
+#: src/templates/core/config/document_types/form.html:84
+msgid "Die Stufe gilt bei der Anlage eines Ereignisses. Leer: auch anonyme Kontakte ohne zugeordnete Person sind möglich. „Nur Pseudonym“: Es muss eine Person zugeordnet sein. „Mit Zusatzangaben“: Die Person muss mindestens die Kontaktstufe „Mit Zusatzangaben“ haben; geprüft wird die Kontaktstufe, nicht der Inhalt der Personenakte. Ein Typ mit Mindest-Kontaktstufe erscheint nicht in der Strichliste."
+msgstr "Die Stufe gilt bei der Anlage eines Ereignisses. Leer: auch anonyme Kontakte ohne zugeordnete Person sind möglich. „Nur Pseudonym“: Es muss eine Person zugeordnet sein. „Mit Zusatzangaben“: Die Person muss mindestens die Kontaktstufe „Mit Zusatzangaben“ haben; geprüft wird die Kontaktstufe, nicht der Inhalt der Personenakte. Ein Typ mit Mindest-Kontaktstufe erscheint nicht in der Strichliste."
+
+#: src/templates/core/config/document_types/form.html:85
+msgid "Jederzeit änderbar. Bereits erfasste Ereignisse bleiben unverändert."
+msgstr "Jederzeit änderbar. Bereits erfasste Ereignisse bleiben unverändert."
+
+#: src/templates/core/config/document_types/form.html:86
+msgid "Beratungsgespräche verlangen „Mit Zusatzangaben“: Für eine Person, von der nur das Pseudonym bekannt ist, wird zuerst die Kontaktstufe angehoben."
+msgstr "Beratungsgespräche verlangen „Mit Zusatzangaben“: Für eine Person, von der nur das Pseudonym bekannt ist, wird zuerst die Kontaktstufe angehoben."
+
+#: src/templates/core/config/document_types/form.html:88
+msgid "Ereignisse dieses Typs werden nach dieser Zahl von Tagen gelöscht. Leer: nur die Frist der Kontaktstufe gilt."
+msgstr "Ereignisse dieses Typs werden nach dieser Zahl von Tagen gelöscht. Leer: nur die Frist der Kontaktstufe gilt."
+
+#: src/templates/core/config/document_types/form.html:89
+msgid "Der tägliche Aufbewahrungslauf löscht Ereignisse dieses Typs nach Ablauf der Frist. Es gilt die zuerst ablaufende Frist: eine längere Typ-Frist verlängert die Frist der Kontaktstufe nicht. Eine Aufbewahrungssperre (Legal Hold) nimmt Ereignisse aus."
+msgstr "Der tägliche Aufbewahrungslauf löscht Ereignisse dieses Typs nach Ablauf der Frist. Es gilt die zuerst ablaufende Frist: eine längere Typ-Frist verlängert die Frist der Kontaktstufe nicht. Eine Aufbewahrungssperre (Legal Hold) nimmt Ereignisse aus."
+
+#: src/templates/core/config/document_types/form.html:90
+msgid "Jederzeit änderbar. Die neue Frist gilt ab dem nächsten Aufbewahrungslauf auch für bereits erfasste Ereignisse; eine Verkürzung kann daher Ereignisse löschen."
+msgstr "Jederzeit änderbar. Die neue Frist gilt ab dem nächsten Aufbewahrungslauf auch für bereits erfasste Ereignisse; eine Verkürzung kann daher Ereignisse löschen."
+
+#: src/templates/core/config/document_types/form.html:91
+msgid "90 Tage für einen Typ „Kurzkontakt“: Ereignisse dieses Typs werden etwa drei Monate nach dem Kontakt gelöscht, auch wenn die Frist der Kontaktstufe länger wäre."
+msgstr "90 Tage für einen Typ „Kurzkontakt“: Ereignisse dieses Typs werden etwa drei Monate nach dem Kontakt gelöscht, auch wenn die Frist der Kontaktstufe länger wäre."
+
+#: src/templates/core/config/document_types/form.html:98
+msgid "Macht diesen Ereignistyp für die schnelle anonyme Zählung verfügbar, wenn er die Voraussetzungen erfüllt."
+msgstr "Macht diesen Ereignistyp für die schnelle anonyme Zählung verfügbar, wenn er die Voraussetzungen erfüllt."
+
+#: src/templates/core/config/document_types/form.html:99
+msgid "Der Typ erscheint nur, wenn er aktiv und freigegeben ist, für Ereignisse gilt, keine Mindest-Kontaktstufe hat und die Rolle ihn sowie alle Pflichtfelder sehen darf. Ohne Pflichtfelder zählt +1 direkt einen anonymen Kontakt; sind alle Pflichtfelder Zahlenfelder ohne Bedingung, öffnet +1 eine kompakte Werteingabe. Ein Pflichtfeld anderen Typs oder mit Bedingung schließt den Typ aus. Neue Typen sind nicht freigegeben."
+msgstr "Der Typ erscheint nur, wenn er aktiv und freigegeben ist, für Ereignisse gilt, keine Mindest-Kontaktstufe hat und die Rolle ihn sowie alle Pflichtfelder sehen darf. Ohne Pflichtfelder zählt +1 direkt einen anonymen Kontakt; sind alle Pflichtfelder Zahlenfelder ohne Bedingung, öffnet +1 eine kompakte Werteingabe. Ein Pflichtfeld anderen Typs oder mit Bedingung schließt den Typ aus. Neue Typen sind nicht freigegeben."
+
+#: src/templates/core/config/document_types/form.html:100
+msgid "Jederzeit änderbar. Die Freigabe hebt keine Sichtbarkeitsregeln auf: Ein Typ erscheint nur für Rollen, die ihn und alle seine Pflichtfelder sehen dürfen."
+msgstr "Jederzeit änderbar. Die Freigabe hebt keine Sichtbarkeitsregeln auf: Ein Typ erscheint nur für Rollen, die ihn und alle seine Pflichtfelder sehen dürfen."
+
+#: src/templates/core/config/document_types/form.html:101
+msgid "Ein Typ „Kurzkontakt“ ohne Pflichtfelder: Jeder Tipp auf +1 in der Strichliste hält einen anonymen Kontakt fest."
+msgstr "Ein Typ „Kurzkontakt“ ohne Pflichtfelder: Jeder Tipp auf +1 in der Strichliste hält einen anonymen Kontakt fest."

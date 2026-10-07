@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 09:26+0200\n"
+"POT-Creation-Date: 2026-10-07 10:15+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -165,16 +165,6 @@ msgstr "Only effective for document types for events."
 #: src/core/forms/config.py:296
 msgid "Nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."
 msgstr "Only allowed for document types with entity type \"Event\"."
-
-#: src/core/forms/config.py:301
-msgid ""
-"In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-"
-"Kontaktstufe. Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder sein. Der "
-"Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
-msgstr ""
-"Only active event types without a minimum contact stage appear in the tally. "
-"If required fields exist, all of them must be number fields. The type and all "
-"required fields must be visible to the respective role."
 
 #: src/core/forms/config.py:370
 msgid ""
@@ -13083,3 +13073,221 @@ msgstr "24 months rolling by default, adjustable per facility (0 disables deleti
 #: src/templates/core/retention/dashboard.html:9
 msgid "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus. Vorschläge erscheinen hier nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist. Zurückstellen oder Verwerfen hält die Löschung nicht auf."
 msgstr "The daily retention run deletes expired events without approval; only a legal hold exempts them. Proposals appear here only if the proposal run (enforce_retention --propose) is set up as well. Deferring or rejecting does not stop the deletion."
+
+#: src/core/forms/config.py:306
+msgid "Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen zusätzliche Berechtigungen voraus. Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest."
+msgstr "Controls who may see the content. \"Elevated\" and \"High\" require additional permissions. Whether a field is stored encrypted is determined by the field template."
+
+#: src/core/forms/config.py:376
+msgid "In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-Kontaktstufe. Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder ohne Bedingung sein. Der Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
+msgstr "Only active event types without a minimum contact stage appear in the tally. If required fields exist, all of them must be number fields without a condition. The type and all required fields must be visible to the respective role."
+
+#: src/core/views/help.py:110
+msgid "Vier-Augen-Prinzip bei Löschungen"
+msgstr "Four-eyes principle for deletions"
+
+#: src/core/views/help.py:113
+msgid "Beim Vier-Augen-Prinzip führt ein Löschwunsch zunächst zu einem Antrag. Gelöscht wird erst, nachdem eine zweite berechtigte Person den Antrag geprüft und genehmigt hat."
+msgstr "With the four-eyes principle, a wish for deletion first leads to a request. Nothing is deleted until a second authorized person has reviewed and approved the request."
+
+#: src/core/views/help.py:119
+msgid "Wer den Antrag gestellt hat, kann ihn nicht selbst genehmigen."
+msgstr "Whoever made the request cannot approve it themselves."
+
+#: src/core/views/help.py:120
+msgid "Die prüfende Person braucht das Recht „Löschbestätigung“."
+msgstr "The reviewing person needs the permission \"Deletion confirmation\"."
+
+#: src/core/views/help.py:121
+msgid "Wer den Antrag gestellt hat, kann ihn zurückziehen, solange er aussteht."
+msgstr "Whoever made the request can withdraw it as long as it is pending."
+
+#: src/core/views/help.py:122
+msgid "Ein zurückgezogener oder abgelehnter Antrag löscht nichts; die Daten bleiben unverändert."
+msgstr "A withdrawn or rejected request deletes nothing; the data remains unchanged."
+
+#: src/core/views/help.py:127
+msgid "Löschfristen und Löschvorschläge"
+msgstr "Retention periods and deletion proposals"
+
+#: src/core/views/help.py:130
+msgid "Ereignisse haben eine Aufbewahrungsfrist. Sie ergibt sich aus der Kontaktstufe oder aus einer Frist am Dokumentationstyp."
+msgstr "Events have a retention period. It results from the contact level or from a period set on the documentation type."
+
+#: src/core/views/help.py:134
+msgid "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus."
+msgstr "The daily retention run deletes expired events without approval; only a legal hold excludes them."
+
+#: src/core/views/help.py:140
+msgid "Löschvorschläge erscheinen in den Löschfristen nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist."
+msgstr "Deletion proposals appear in the retention periods only if the proposal run (enforce_retention --propose) is also set up."
+
+#: src/core/views/help.py:143
+msgid "Zurückstellen oder Verwerfen eines Löschvorschlags hält die Löschung nicht auf."
+msgstr "Postponing or discarding a deletion proposal does not stop the deletion."
+
+#: src/core/views/help.py:159
+msgid "Feldbedingungen (bedingte Sichtbarkeit)"
+msgstr "Field conditions (conditional visibility)"
+
+#: src/core/views/help.py:162
+msgid "Feldbedingungen steuern, wann ein Feld im Formular sichtbar ist. Das Zielfeld erscheint nur, wenn ein anderes Feld desselben Dokumentationstyps, das Quellfeld, die Bedingung erfüllt."
+msgstr "Field conditions control when a field is visible in the form. The target field only appears if another field of the same documentation type, the source field, meets the condition."
+
+#: src/core/views/help.py:167
+msgid "Beispiel: Das Feld „Notiz zur Weitervermittlung“ soll nur erscheinen, wenn im Feld „Weitervermittlung“ der Wert „Ja“ ausgewählt wurde."
+msgstr "Example: the field \"Referral note\" should only appear if the value \"Yes\" was selected in the field \"Referral\"."
+
+#: src/core/views/help.py:172
+msgid "Bedingungsgruppe: Die Bedingungen eines Zielfelds sind in Gruppen geordnet."
+msgstr "Condition group: the conditions of a target field are arranged in groups."
+
+#: src/core/views/help.py:174
+msgid "UND innerhalb einer Gruppe: Mehrere Bedingungen in derselben Gruppe müssen gemeinsam erfüllt sein."
+msgstr "AND within a group: several conditions in the same group must be met together."
+
+#: src/core/views/help.py:178
+msgid "ODER über Gruppen hinweg: Mehrere Gruppen sind alternative Wege. Es reicht, wenn eine Gruppe erfüllt ist."
+msgstr "OR across groups: several groups are alternative paths. It is enough if one group is met."
+
+#: src/core/views/help.py:182
+msgid "Operatoren: ist gleich, ist ungleich, enthält, ist größer als, ist kleiner als, ist leer und ist nicht leer. Welche zur Wahl stehen, hängt vom Feldtyp des Quellfelds ab; „ist leer“ und „ist nicht leer“ brauchen keinen Vergleichswert."
+msgstr "Operators: equals, does not equal, contains, is greater than, is less than, is empty and is not empty. Which ones are available depends on the field type of the source field; \"is empty\" and \"is not empty\" need no comparison value."
+
+#: src/core/views/help.py:187
+msgid "Ausgeblendete Felder erscheinen im Formular nicht. Ist das Quellfeld selbst ausgeblendet, gilt es als leer."
+msgstr "Hidden fields do not appear in the form. If the source field itself is hidden, it counts as empty."
+
+#: src/core/views/help.py:191
+msgid "Pflichtfeld: Ein ausgeblendetes Pflichtfeld muss nicht ausgefüllt werden. Sobald es sichtbar ist, gilt die Pflicht wieder."
+msgstr "Required field: a hidden required field does not have to be filled in. As soon as it is visible, the requirement applies again."
+
+#: src/core/views/help.py:195
+msgid "Ausprobieren: Öffnen Sie nach dem Speichern der Bedingung das Erfassungsformular dieses Dokumentationstyps und ändern Sie den Wert im Quellfeld — das Zielfeld muss erscheinen und wieder verschwinden."
+msgstr "Try it out: after saving the condition, open the entry form of this documentation type and change the value in the source field — the target field must appear and disappear again."
+
+#: src/templates/components/_field_deep_help.html:16
+#, python-format
+msgid "Mehr zu „%(label)s“"
+msgstr "More on \"%(label)s\""
+
+#: src/templates/components/_field_deep_help.html:19
+msgid "Folgen:"
+msgstr "Consequences:"
+
+#: src/templates/components/_field_deep_help.html:20
+msgid "Änderbar:"
+msgstr "Changeable:"
+
+#: src/templates/components/_field_deep_help.html:21
+msgid "Beispiel:"
+msgstr "Example:"
+
+#: src/templates/core/config/document_types/form.html:56
+msgid "Legt fest, wofür der Typ gilt: Ereignis, Person oder Fall. Nach dem Anlegen nicht änderbar."
+msgstr "Defines what the type is for: event, person or case. Cannot be changed after creation."
+
+#: src/templates/core/config/document_types/form.html:57
+msgid "Ereignis-Typen dokumentieren Kontakte im Zeitstrom; nur sie nutzen Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und Strichliste. Person-Typen ergänzen die Personenakte um eigene Felder, Fall-Typen den Fall."
+msgstr "Event types document contacts in the timeline; only they use system type, report key, minimum contact level, retention period and tally sheet. Person types add their own fields to the person file, case types to the case."
+
+#: src/templates/core/config/document_types/form.html:58
+#: src/templates/core/config/document_types/form.html:68
+msgid "Nach dem Anlegen unveränderbar. Falsch gewählt? Den Typ deaktivieren und einen neuen anlegen."
+msgstr "Cannot be changed after creation. Chosen wrongly? Deactivate the type and create a new one."
+
+#: src/templates/core/config/document_types/form.html:59
+msgid "Ein Typ „Beratungsgespräch“ hält Kontakte fest und ist ein Ereignis-Typ. Ein Typ „Zusatzangaben zur Wohnsituation“ ergänzt die Personenakte und ist ein Person-Typ."
+msgstr "A type \"Counseling conversation\" records contacts and is an event type. A type \"Additional details on housing situation\" supplements the person file and is a person type."
+
+#: src/templates/core/config/document_types/form.html:61
+msgid "Legt fest, welche Rollen die Inhalte sehen dürfen. Verschlüsselt wird je Feldvorlage, nicht über diese Stufe."
+msgstr "Defines which roles may see the content. Encryption is set per field template, not through this level."
+
+#: src/templates/core/config/document_types/form.html:62
+msgid "Normal sehen alle Rollen einschließlich Assistenz, Erhöht Fachkraft, Leitung und Anwendungsbetreuung, Hoch nur Leitung und Anwendungsbetreuung. Zusätzlich hat jede Feldvorlage eine eigene Stufe; für ein einzelnes Feld gilt die höhere der beiden Stufen. Diese Stufe steuert nur die Sichtbarkeit: Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest (Option „Verschlüsselt“; bei Stufe „Hoch“ an der Feldvorlage ist sie Pflicht)."
+msgstr "Normal is visible to all roles including assistants, Elevated to staff, leads and application administrators, High only to leads and application administrators. In addition, each field template has its own level; for a single field the higher of the two levels applies. This level only controls visibility: whether a field is stored encrypted is determined by the field template (option \"Encrypted\"; it is mandatory when the field template has level \"High\")."
+
+#: src/templates/core/config/document_types/form.html:63
+msgid "Jederzeit änderbar. Die Sichtbarkeit folgt der jeweils aktuellen Stufe."
+msgstr "Can be changed at any time. Visibility follows the current level."
+
+#: src/templates/core/config/document_types/form.html:64
+msgid "Allgemeine Kontakte: Normal. Beratungs- und Gesundheitsgespräche: Erhöht. Krisengespräche: Hoch."
+msgstr "General contacts: Normal. Counseling and health conversations: Elevated. Crisis conversations: High."
+
+#: src/templates/core/config/document_types/form.html:66
+msgid "Steuert besondere App-Funktionen wie Hausverbot oder Krisen-Hervorhebung. Nach dem Anlegen nicht mehr änderbar."
+msgstr "Controls special app functions such as ban or crisis highlighting. Can no longer be changed after creation."
+
+#: src/templates/core/config/document_types/form.html:67
+msgid "Hausverbot zeigt das Banner an der Person, den Filter im Zeitstrom und die Hervorhebung in der Übergabe. Krisengespräch hebt Einträge in der Übergabe hervor. Die meisten Typen brauchen keinen Systemtyp; für die Zuordnung zu einem Bericht ist der Berichtsschlüssel zuständig."
+msgstr "Ban shows the banner on the person, the filter in the timeline and the highlight in the handover. Crisis conversation highlights entries in the handover. Most types need no system type; the report key is responsible for assignment to a report."
+
+#: src/templates/core/config/document_types/form.html:69
+msgid "Ein Typ „Hausverbot“ bekommt den Systemtyp Hausverbot, damit das Banner erscheint. Ein Typ „Beratungsgespräch“ bleibt ohne Systemtyp."
+msgstr "A type \"Ban\" gets the system type Ban so that the banner appears. A type \"Counseling conversation\" stays without a system type."
+
+#: src/templates/core/config/document_types/form.html:71
+msgid "Ordnet diesen Typ Berichten zu. Leer bedeutet: noch nicht zugeordnet."
+msgstr "Assigns this type to reports. Empty means: not yet assigned."
+
+#: src/templates/core/config/document_types/form.html:72
+msgid "Der Schlüssel bestimmt die Zeile im Bericht. Leer heißt: noch keine Aussage — der Typ wird in Berichten als Lücke gemeldet. „Gehört ausdrücklich in keinen Bericht“ ist eine bewusste Entscheidung und keine Lücke. Die Übersicht in der Statistik zählt unabhängig vom Schlüssel."
+msgstr "The key determines the row in the report. Empty means: no statement yet — the type is reported as a gap in reports. \"Explicitly belongs in no report\" is a deliberate decision, not a gap. The overview in the statistics counts independently of the key."
+
+#: src/templates/core/config/document_types/form.html:73
+msgid "Ein leerer Schlüssel kann jederzeit nachgetragen werden. Ein gesetzter Schlüssel ist danach unveränderbar."
+msgstr "An empty key can be added at any time. A key that has been set cannot be changed afterwards."
+
+#: src/templates/core/config/document_types/form.html:74
+msgid "Ein Typ „Schuldnerberatung“ mit dem Schlüssel „Beratungsgespräch“ landet in derselben Berichtszeile wie jeder andere Typ mit diesem Schlüssel."
+msgstr "A type \"Debt counseling\" with the key \"Counseling conversation\" ends up in the same report row as any other type with this key."
+
+#: src/templates/core/config/document_types/form.html:83
+msgid "Legt fest, ob dieser Typ anonym nutzbar ist oder eine gespeicherte Person braucht."
+msgstr "Defines whether this type can be used anonymously or needs a stored person."
+
+#: src/templates/core/config/document_types/form.html:84
+msgid "Die Stufe gilt bei der Anlage eines Ereignisses. Leer: auch anonyme Kontakte ohne zugeordnete Person sind möglich. „Nur Pseudonym“: Es muss eine Person zugeordnet sein. „Mit Zusatzangaben“: Die Person muss mindestens die Kontaktstufe „Mit Zusatzangaben“ haben; geprüft wird die Kontaktstufe, nicht der Inhalt der Personenakte. Ein Typ mit Mindest-Kontaktstufe erscheint nicht in der Strichliste."
+msgstr "The level applies when an event is created. Empty: anonymous contacts without an assigned person are possible too. \"Pseudonym only\": a person must be assigned. \"With additional details\": the person must have at least the contact level \"With additional details\"; the contact level is checked, not the content of the person file. A type with a minimum contact level does not appear in the tally sheet."
+
+#: src/templates/core/config/document_types/form.html:85
+msgid "Jederzeit änderbar. Bereits erfasste Ereignisse bleiben unverändert."
+msgstr "Can be changed at any time. Events already recorded remain unchanged."
+
+#: src/templates/core/config/document_types/form.html:86
+msgid "Beratungsgespräche verlangen „Mit Zusatzangaben“: Für eine Person, von der nur das Pseudonym bekannt ist, wird zuerst die Kontaktstufe angehoben."
+msgstr "Counseling conversations require \"With additional details\": for a person of whom only the pseudonym is known, the contact level is raised first."
+
+#: src/templates/core/config/document_types/form.html:88
+msgid "Ereignisse dieses Typs werden nach dieser Zahl von Tagen gelöscht. Leer: nur die Frist der Kontaktstufe gilt."
+msgstr "Events of this type are deleted after this number of days. Empty: only the contact level's period applies."
+
+#: src/templates/core/config/document_types/form.html:89
+msgid "Der tägliche Aufbewahrungslauf löscht Ereignisse dieses Typs nach Ablauf der Frist. Es gilt die zuerst ablaufende Frist: eine längere Typ-Frist verlängert die Frist der Kontaktstufe nicht. Eine Aufbewahrungssperre (Legal Hold) nimmt Ereignisse aus."
+msgstr "The daily retention run deletes events of this type once the period has expired. The period that expires first applies: a longer type period does not extend the contact level's period. A legal hold excludes events."
+
+#: src/templates/core/config/document_types/form.html:90
+msgid "Jederzeit änderbar. Die neue Frist gilt ab dem nächsten Aufbewahrungslauf auch für bereits erfasste Ereignisse; eine Verkürzung kann daher Ereignisse löschen."
+msgstr "Can be changed at any time. The new period applies from the next retention run, including events already recorded; shortening it can therefore delete events."
+
+#: src/templates/core/config/document_types/form.html:91
+msgid "90 Tage für einen Typ „Kurzkontakt“: Ereignisse dieses Typs werden etwa drei Monate nach dem Kontakt gelöscht, auch wenn die Frist der Kontaktstufe länger wäre."
+msgstr "90 days for a type \"Short contact\": events of this type are deleted about three months after the contact, even if the contact level's period would be longer."
+
+#: src/templates/core/config/document_types/form.html:98
+msgid "Macht diesen Ereignistyp für die schnelle anonyme Zählung verfügbar, wenn er die Voraussetzungen erfüllt."
+msgstr "Makes this event type available for quick anonymous counting if it meets the requirements."
+
+#: src/templates/core/config/document_types/form.html:99
+msgid "Der Typ erscheint nur, wenn er aktiv und freigegeben ist, für Ereignisse gilt, keine Mindest-Kontaktstufe hat und die Rolle ihn sowie alle Pflichtfelder sehen darf. Ohne Pflichtfelder zählt +1 direkt einen anonymen Kontakt; sind alle Pflichtfelder Zahlenfelder ohne Bedingung, öffnet +1 eine kompakte Werteingabe. Ein Pflichtfeld anderen Typs oder mit Bedingung schließt den Typ aus. Neue Typen sind nicht freigegeben."
+msgstr "The type only appears if it is active and enabled, applies to events, has no minimum contact level, and the role may see it and all its required fields. Without required fields, +1 counts an anonymous contact directly; if all required fields are number fields without a condition, +1 opens a compact value entry. A required field of another type or with a condition excludes the type. New types are not enabled."
+
+#: src/templates/core/config/document_types/form.html:100
+msgid "Jederzeit änderbar. Die Freigabe hebt keine Sichtbarkeitsregeln auf: Ein Typ erscheint nur für Rollen, die ihn und alle seine Pflichtfelder sehen dürfen."
+msgstr "Can be changed at any time. Enabling does not override visibility rules: a type only appears for roles that may see it and all of its required fields."
+
+#: src/templates/core/config/document_types/form.html:101
+msgid "Ein Typ „Kurzkontakt“ ohne Pflichtfelder: Jeder Tipp auf +1 in der Strichliste hält einen anonymen Kontakt fest."
+msgstr "A type \"Short contact\" without required fields: every tap on +1 in the tally sheet records an anonymous contact."
