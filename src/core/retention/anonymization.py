@@ -36,6 +36,7 @@ from django.db.models import Count, Q
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
 from core.models import AuditLog, Client, Settings
+from core.models.settings import K_ANONYMITY_MIN
 from core.retention.legal_holds import client_has_active_hold, exclude_clients_with_active_holds
 from core.services.audit import audit_retention_decision
 from core.services.client import (
@@ -60,6 +61,7 @@ from core.services.client import (
 )
 from core.services.client.main import _lock_client_case_rows
 from core.services.compliance import is_k_anonymous, k_anonymize_client
+from core.services.dashboard.external_report import DEFAULT_K_THRESHOLD, effective_k_threshold
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +225,20 @@ def anonymize_clients(facility, dry_run):
     except Settings.DoesNotExist:
         settings_obj = None
     use_k_anon = bool(settings_obj and settings_obj.retention_use_k_anonymization)
-    k = (settings_obj.k_anonymity_threshold if settings_obj else 5) or 5
+    # Same threshold rule as the reports: a value below the minimum can only come
+    # from a write that bypassed validation, so it is logged, never used silently.
+    k = DEFAULT_K_THRESHOLD
+    if settings_obj:
+        stored = settings_obj.k_anonymity_threshold
+        k = effective_k_threshold(stored)
+        if stored < K_ANONYMITY_MIN:
+            logger.warning(
+                "Stored k-anonymity threshold %s for facility %s is below the minimum %s; computing with %s.",
+                stored,
+                facility.pk,
+                K_ANONYMITY_MIN,
+                k,
+            )
 
     k_count = 0
     hard_count = 0

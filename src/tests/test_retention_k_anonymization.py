@@ -17,6 +17,7 @@ Vier Cases:
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 
 import pytest
@@ -515,3 +516,42 @@ class TestLegalHoldBlocksBridge:
         assert result["count"] == 1
         assert target.k_anonymized is True, "Der gehaltene Klient muss als Bucket-Genosse zaehlen"
         assert held.k_anonymized is False
+
+
+@pytest.mark.django_db
+class TestStoredThresholdBelowMinimum:
+    """A threshold below the minimum, stored without validation, never takes effect silently."""
+
+    @pytest.mark.parametrize(("stored", "effective"), [(0, 5), (1, 1)])
+    def test_retention_logs_the_threshold_it_computes_with(
+        self, facility, staff_user, doc_type_contact, client_identified, caplog, stored, effective
+    ):
+        Settings.objects.create(facility=facility, retention_use_k_anonymization=True, k_anonymity_threshold=stored)
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 1},
+            is_deleted=True,
+            created_by=staff_user,
+        )
+
+        with caplog.at_level(logging.WARNING, logger="core.retention.anonymization"):
+            anonymize_clients(facility, dry_run=False)
+
+        messages = [record.getMessage() for record in caplog.records if record.name == "core.retention.anonymization"]
+        assert any(
+            f"threshold {stored} for facility {facility.pk} is below the minimum 2; computing with {effective}" in m
+            for m in messages
+        ), messages
+
+    def test_retention_with_a_valid_threshold_logs_nothing(
+        self, facility, staff_user, doc_type_contact, client_identified, caplog
+    ):
+        Settings.objects.create(facility=facility, retention_use_k_anonymization=True, k_anonymity_threshold=2)
+
+        with caplog.at_level(logging.WARNING, logger="core.retention.anonymization"):
+            anonymize_clients(facility, dry_run=False)
+
+        assert not [r for r in caplog.records if "below the minimum" in r.getMessage()]
