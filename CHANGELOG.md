@@ -61,7 +61,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Ausführbare Befehle in den Handtest-Matrizen** (#2452) — Matrizen B, C, D und Hub nennen vorhandene Aufrufe; der Geräte-Lease-Fall entfällt mit Code-Begründung.
 
-- **Retention-Handtests am Datenmodell ausgerichtet** (#2498) — Matrix D prüft Ereignisfristen, Fallabschlüsse, k-Schwelle, Paket-Zugriff und Audit-Schutz mit gültigen Routen und Code-Belegen.
+- **Retention-Handtests am Datenmodell ausgerichtet** (#2498) — Matrix D prüft Ereignisfristen und einrichtungsweiten Laufumfang, Fallabschlüsse, k-Schwelle, Paket-Zugriff und Audit-Schutz mit explizitem RLS-Kontext; Matrix C nennt vorhandene Testbelege.
 
 - **Seed-Referenzen der Testmatrizen vereinheitlicht** (#2493) — Aufrufe, Konten, Datenvolumen und Dokumentationstypen in den Matrizen und im E2E-Runbook folgen dem aktuellen Seed.
 

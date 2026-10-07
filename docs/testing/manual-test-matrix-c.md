@@ -418,7 +418,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | — | C | — | `src/tests/test_security_hardening.py`, `src/tests/test_csp_report.py` |
+| Compliance | — | C | — | `src/tests/test_security_headers_single_source.py`, `src/tests/test_csp_report.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 32 — Geeignete TOMs zur Gewährleistung der Sicherheit (Verschlüsselung, Vertraulichkeit, Integrität, Verfügbarkeit, Belastbarkeit).*
 
@@ -652,7 +652,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | fachkraft | C | — | `src/tests/test_security_hardening.py` |
+| Security | fachkraft | C | — | — (manuelle SQL-Injection-Probe) |
 
 **Schritte:**
 1. Suche-Query mit SQL-Pattern: `'; DROP TABLE core_client;--`.
@@ -997,7 +997,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | unauthentifiziert | C | — | `src/tests/test_security_hardening.py` |
+| Security | unauthentifiziert | C | — | `src/tests/test_csp_report.py` |
 
 **Code-Referenz:** `core.views.csp_report` (oder Pendant), CSP-Setting `CONTENT_SECURITY_POLICY_REPORT_ONLY` in `anlaufstelle.settings.base`.
 

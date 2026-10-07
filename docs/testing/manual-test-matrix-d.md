@@ -282,6 +282,8 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 **Code-Referenz:** `src/core/retention/strategies.py` (`iter_strategies`, Kategorie `anonymous`).
 
+**Laufumfang:** `--facility` verarbeitet die gesamte Einrichtung, nicht nur die vorbereiteten Ereignisse. Andere fällige Ereignisse, etwa aus Seed-Daten, zählen ebenfalls mit. Vor und nach jedem Lauf die Gesamtzahl und den Zustand der notierten Test-IDs vergleichen; den Trockenlauf nicht als reine Testdaten-Zählung werten.
+
 **Schritte:**
 1. Aus dem Repository mit aktivierter virtueller Umgebung `python src/manage.py enforce_retention --dry-run --facility "<Einrichtungsname>"` ausführen; erwartete Anzahl mit den vorbereiteten Ereignissen abgleichen.
 2. `python src/manage.py enforce_retention --facility "<Einrichtungsname>"` ausführen (DB-Rolle mit RLS-Bypass erforderlich).
@@ -310,6 +312,8 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 **Code-Referenz:** `src/core/retention/strategies.py` (`iter_strategies`), `src/core/retention/anonymization.py` (`anonymize_clients`).
 
+**Laufumfang:** `--facility` verarbeitet die gesamte Einrichtung, nicht nur die vorbereiteten Ereignisse. Andere fällige Ereignisse, etwa aus Seed-Daten, zählen ebenfalls mit. Vor und nach jedem Lauf die Gesamtzahl und den Zustand der notierten Test-IDs vergleichen; den Trockenlauf nicht als reine Testdaten-Zählung werten.
+
 **Schritte:**
 1. `python src/manage.py enforce_retention --dry-run --facility "<Einrichtungsname>"` ausführen.
 2. `python src/manage.py enforce_retention --facility "<Einrichtungsname>"` ausführen; Ereignisse und Person prüfen.
@@ -337,6 +341,8 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 **Vorbereitung:** Geschlossenen Fall mit `status=Case.Status.CLOSED` und `Case.closed_at` vor 3649 Tagen vorbereiten. Ereignisse dürfen älter als 3650 Tage sein.
 
 **Code-Referenz:** `src/core/retention/strategies.py` (`iter_strategies`, Kategorie `qualified`).
+
+**Laufumfang:** `--facility` verarbeitet die gesamte Einrichtung, nicht nur die vorbereiteten Ereignisse. Andere fällige Ereignisse, etwa aus Seed-Daten, zählen ebenfalls mit. Vor und nach jedem Lauf die Gesamtzahl und den Zustand der notierten Test-IDs vergleichen; den Trockenlauf nicht als reine Testdaten-Zählung werten.
 
 **Schritte:**
 1. `python src/manage.py enforce_retention --dry-run --facility "<Einrichtungsname>"` ausführen: keines der drei Ereignisse ist über diese Strategie fällig.
@@ -396,6 +402,8 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 **Voraussetzung:** Zwei Ereignis-Dokumentationstypen (`entity_type=EVENT`) mit gleicher `sensitivity`, aber `retention_days=30` bzw. `60`. Je ein anonymes Ereignis ohne Hold, beide mit `occurred_at` vor 31 Tagen; `retention_anonymous_days=90`.
 
 **Code-Referenz:** `src/core/retention/strategies.py` (`iter_strategies`, Kategorie `document_type`), `src/core/models/document_type.py` (`DocumentType.retention_days`).
+
+**Laufumfang:** `--facility` verarbeitet die gesamte Einrichtung, nicht nur die vorbereiteten Ereignisse. Andere fällige Ereignisse, etwa aus Seed-Daten, zählen ebenfalls mit. Vor und nach jedem Lauf die Gesamtzahl und den Zustand der notierten Test-IDs vergleichen; den Trockenlauf nicht als reine Testdaten-Zählung werten.
 
 **Schritte:**
 1. `python src/manage.py enforce_retention --dry-run --facility "<Einrichtungsname>"` ausführen.
@@ -519,23 +527,38 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 |---------|-------|---------|--------|-----|
 | Audit | admin (Shell) | — | ⚪ | `test_audit_append_only_e2e.py` |
 
-**Voraussetzung:** mindestens ein AuditLog-Eintrag in der DB.
+**Voraussetzung:** PostgreSQL-Testdatenbank, mindestens ein AuditLog-Eintrag der ausgewählten Einrichtung und eine RLS-gefilterte Laufzeitrolle mit SELECT/UPDATE/DELETE-Rechten auf `core_auditlog`. Einrichtungs-UUID ersetzen; vor jedem Zugriff den RLS-Kontext in derselben DB-Verbindung setzen.
 
 **Vorbereitung:**
-- SSH/Terminal-Zugang. `python manage.py shell` startbar.
+- Terminal-Zugang. Aus dem Repository mit aktivierter virtueller Umgebung `python src/manage.py shell` startbar.
 
 **Schritte:**
-1. `python manage.py shell` ausführen.
-2. `from core.models.audit import AuditLog`
-3. `entry = AuditLog.objects.first()`
-4. `entry.action = "TAMPERED"; entry.save()` versuchen → erwartet `ValueError`.
-5. `entry.delete()` versuchen → erwartet `ValueError`.
-6. DB-Direktzugriff: `psql` → `UPDATE core_auditlog SET action='X' WHERE id=...;` und entsprechendes `DELETE` versuchen → Trigger blockiert beide (PG-Exception).
+1. `python src/manage.py shell` ausführen.
+2. In der Shell den Kontext setzen und einen vorhandenen Eintrag auswählen:
+   ```python
+   from django.db import connection
+   from core.models.audit import AuditLog
+
+   facility_id = "<Einrichtungs-UUID>"
+   with connection.cursor() as cursor:
+       cursor.execute(
+           "SELECT set_config('app.current_facility_id', %s, false), set_config('app.is_super_admin', 'false', false)",
+           [facility_id],
+       )
+   entry = AuditLog.objects.filter(facility_id=facility_id).first()
+   assert entry is not None
+   print(entry.pk)
+   ```
+3. `entry.action = "TAMPERED"; entry.save()` versuchen → `ValueError` erwarten.
+4. `entry.delete()` versuchen → `ValueError` erwarten.
+5. In einer eigenen `psql`-Verbindung derselben Laufzeitrolle `SET app.current_facility_id = '<Einrichtungs-UUID>';` und `SET app.is_super_admin = 'false';` ausführen. `SELECT id FROM core_auditlog WHERE id='<Eintrags-UUID>';` muss genau den in Schritt 2 ausgewählten Eintrag liefern.
+6. `UPDATE core_auditlog SET action='X' WHERE id='<Eintrags-UUID>';` und `DELETE FROM core_auditlog WHERE id='<Eintrags-UUID>';` jeweils in einer eigenen Transaktion versuchen und anschließend `ROLLBACK` ausführen. Beide müssen die Trigger-Exception liefern.
 
 **Erwartetes Ergebnis:**
-- Schritt 4: ValueError mit Message wie „AuditLog ist append-only, save() nicht erlaubt".
-- Schritt 5: ValueError beim delete().
-- Schritt 6: PostgreSQL-Trigger wirft Exception, UPDATE/DELETE rollt zurück.
+- Schritt 3: `ValueError`: `AuditLog entries are append-only and cannot be updated.`
+- Schritt 4: `ValueError`: `AuditLog entries are append-only and cannot be deleted.`
+- Schritt 6: PostgreSQL-Exception: `AuditLog entries are immutable and cannot be modified or deleted.`; Änderungen werden zurückgerollt.
+- `None`, kein sichtbarer Eintrag, `UPDATE 0`/`DELETE 0` oder lediglich fehlende SQL-Rechte belegen den Append-only-Trigger nicht; die Probe gilt dann nicht als bestanden.
 
 **DSGVO/Security-Note:**
 - **DSGVO-Beleg Art. 5 (Integrität & Vertraulichkeit):** Audit-Log ist gegen UPDATE/DELETE geschützt; dieser Test belegt keine Gerichtsfestigkeit.
