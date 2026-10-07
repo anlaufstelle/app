@@ -1,10 +1,4 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> Synchronization update 2026-09-29: the intro links this guide and the FAQ to their in-app entry point (#1904).
-> Synchronization update 2026-09-29: § 7 links the facility-admin CSV import wizard guide (#1904).
-> Synchronization update 2026-09-22: § 8 now states that a sign-in, second-factor or password-change request during the transfer is not a save -- the transfer pauses, local entries stay, and it continues without duplicates after signing in; a forced password change is called out as the exception that wipes the local offline data (#2289).
-> Synchronization update 2026-09-18: the handover-note section now states the final no-hold boundary and the organizational step for procedure-relevant content (#2231).
-> Synchronization update 2026-09-15: initial 2FA setup now mirrors the mandatory backup-code acknowledgement and the increasing wait after repeated incorrect codes in the German guide (#2248).
-> Most recently synchronized on 2026-09-10 (§ 2 offline capture rejects the doubled hour with an explanatory message, #2187; § 4 merging duplicate clients: reverting a merge is not possible while a legal hold covers either record, #2200; § 2 the manual handover note above the shift statistics: who may write it, the editing window until the shift ends, the comparison of both versions when two people save at the same time, and its retention period, #2042).
 > Previously synchronized on 2026-09-08 (§ 2 capturing the doubled hour on the fall-back night -- the occurrence choice "Which of the two hours?", the timestamp being read-only when editing, and the spring-forward hour staying rejected, #2127; intro line opened to open consultation hours/advice centers, awareness teams, women's shelters, and youth work, #2140). Previously synchronized on 2026-09-07 (§ 1 quick exit and privacy screen, including the four named limits -- browser history, second window, dropped connection, and a stalled or failed deletion of the local key, #2136). Previously synchronized on 2026-09-02 (§ 2 shift filter and daylight-saving changes, #2057). Previously synchronized on 2026-09-02 (§ 7 self-withdrawal of a deletion request, #2092). Previously synchronized on 2026-08-24 (§ 3 authorized roles see decrypted before-values in event change history, #1961). Previously synchronized on 2026-08-22 (§ 10 deleting a case: the two paths, the trash, and what happens to assigned contacts, #1818). Previously synchronized on 2026-08-22 (§ 9 the System Admin creates the first facility in the Django admin -- the `/system/` area only displays it, #1894). Previously synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
 > The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805) and 2026-08-12 (§ 7 report selection: cards instead of a dropdown, "Dataset Reports" tab, PDF export moved onto the report card, #1804) and 2026-08-13 (§ 2a role landing redirects, #1813; § 6 search results page, #1803).
 
@@ -329,7 +323,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 3. Enter a reason.
 4. Confirm the deletion.
 
-> **Important:** If the contact is associated with a **client at the "With additional details" contact level**, it will not be deleted immediately. Instead, a **deletion request** is automatically created, which must be approved by a lead or administrator (four-eyes principle). You will receive a corresponding notification.
+> **Important:** If the contact is associated with a **client at the "With additional details" contact level**, it will not be deleted immediately. Instead, a **deletion request** is automatically created, which must be approved by a second person with the “Deletion confirmation” right (four-eyes principle). You will receive a corresponding notification.
 
 ---
 
@@ -443,7 +437,7 @@ From the detail page, you can use **Document contact** to record a contact for t
 3. Change the desired fields (e.g., upgrading the contact level).
 4. Click **Save**.
 
-> **Note:** A change in contact level is automatically recorded in the audit log.
+> **Note:** Social workers and above may change pseudonyms and upgrade the contact level. Only leads or facility admins may downgrade a client from “With additional details”. A change in contact level is automatically recorded in the audit log.
 
 > **Concurrent editing:** If someone else edited the same record at the same time, an error message appears. Reload the page and re-enter your changes -- this ensures that no changes are silently overwritten.
 
@@ -709,15 +703,15 @@ For sharing data with external parties (e.g., funding bodies or municipal author
 
 Via **"Export as JSON"** (or by appending `?format=json` to the URL) you receive the same data in machine-readable form. Every request is logged as an `EXPORT` event in the audit log. The external report is accessible to **leads** and **administrators** only.
 
-### Reviewing Deletion Requests (Lead / Admin)
+### Reviewing Deletion Requests (“Deletion confirmation” Right)
 
-When a social worker or assistant wants to delete a contact belonging to a client at the "With additional details" contact level, a **deletion request** is created that must be approved by a lead or administrator.
+When a social worker, lead or facility admin wants to delete a contact belonging to a client at the "With additional details" contact level, a **deletion request** is created that must be approved by a second person with the “Deletion confirmation” right.
 
 1. View open deletion requests at `/deletion-requests/`.
 2. Click on a request to see the details and the affected event.
 3. Click **Approve** or **Reject** and confirm.
 
-> **Important:** You cannot approve your own deletion request (four-eyes principle).
+> **Important:** The “Deletion confirmation” right is granted independently of the role and is disabled by default. Leads and facility admins also need it. You cannot approve or reject your own request (four-eyes principle). See [Admin Guide § 7.5](admin-guide.md#75-deletion-requests-four-eyes-principle--dual-approval) for how it is granted.
 
 Regardless of your role: As the requesting person, you can withdraw your own deletion request yourself as long as it is still **pending**. At `/deletion-requests/`, your own pending request shows the **Withdraw** link next to the four-eyes notice. The confirmation dialog explicitly says: **Nothing is deleted — the data remains unchanged.** Afterwards, a new deletion request for the same target is possible at any time. The request remains visible to the approver pool in the **Withdrawn** section, and the withdrawal is logged with the final status **Withdrawn**.
 
@@ -831,18 +825,20 @@ Table covers the four facility-bound roles only -- `super_admin` is excluded her
 | View Zeitstrom / home page | Yes | Yes | Yes | Yes |
 | Document anonymous contacts | Yes | Yes | Yes | Yes |
 | Document contacts for clients at the "Pseudonym only" level | Yes | Yes | Yes | Yes |
-| Create and search for clients | Yes | Yes | Yes | Yes |
+| View and search for clients | Yes (without additional details) | Yes | Yes | Yes |
+| Create and edit clients | No | Yes | Yes | Yes |
 | View client details at the "With additional details" level | No | Yes (own facility) | Yes | Yes |
 | Edit own events | Yes | Yes | Yes | Yes |
 | Edit other users' events | No | Yes | Yes | Yes |
-| Create and edit work items | Yes | Yes | Yes | Yes |
+| Create and edit work items | No | Yes | Yes | Yes |
 | Use search | Yes | Yes | Yes | Yes |
 | Statistics and export | No | No | Yes | Yes |
 | Export client data (Art. 15 / 20 GDPR) | No | No | Yes | Yes |
 | Download GDPR documentation package | No | No | No | Yes |
-| Submit deletion requests | Yes | Yes | Yes | Yes |
-| Approve deletion requests | No | No | Yes | Yes |
-| Manage pseudonyms / change contact level | No | No | Yes | Yes |
+| Submit deletion requests | No | Yes | Yes | Yes |
+| Approve deletion requests | Only with Deletion confirmation | Only with Deletion confirmation | Only with Deletion confirmation | Only with Deletion confirmation |
+| Change pseudonyms / upgrade contact level | No | Yes | Yes | Yes |
+| Downgrade from “With additional details” | No | No | Yes | Yes |
 | View audit log (own facility) | No | No | No | Yes |
 | Case management (cases, episodes, goals) | No | Yes | Yes | Yes |
 | Close / reopen cases | No | No | Yes | Yes |
@@ -1038,4 +1034,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 876a53f126eb45807dbefaea442ea96da5cae068 -->
+<!-- source-hash: 11aaeba5b37a43de2ee42c754f52d946af96702e -->

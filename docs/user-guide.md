@@ -319,7 +319,7 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 3. Geben Sie eine Begründung ein.
 4. Bestätigen Sie die Löschung.
 
-> **Wichtig:** Wenn der Kontakt einer **Person der Kontaktstufe „Mit Zusatzangaben"** zugeordnet ist, wird kein sofortiges Löschen durchgeführt. Stattdessen wird automatisch ein **Löschantrag** gestellt, der von einer Leitung oder Administration genehmigt werden muss (4-Augen-Prinzip). Sie erhalten eine entsprechende Rückmeldung.
+> **Wichtig:** Wenn der Kontakt einer **Person der Kontaktstufe „Mit Zusatzangaben"** zugeordnet ist, wird kein sofortiges Löschen durchgeführt. Stattdessen wird automatisch ein **Löschantrag** gestellt, der von einer zweiten Person mit dem Recht „Löschbestätigung“ genehmigt werden muss (4-Augen-Prinzip). Sie erhalten eine entsprechende Rückmeldung.
 
 ---
 
@@ -433,7 +433,7 @@ Von der Detailseite aus können Sie über **Kontakt dokumentieren** direkt einen
 3. Ändern Sie die gewünschten Felder (z. B. Kontaktstufe hochsetzen).
 4. Klicken Sie auf **Speichern**.
 
-> **Hinweis:** Eine Änderung der Kontaktstufe wird automatisch im Audit-Log protokolliert.
+> **Hinweis:** Pseudonyme ändern und die Kontaktstufe hochsetzen dürfen Sie ab Fachkraft. Eine Person der Stufe „Mit Zusatzangaben“ herabsetzen dürfen nur Leitung oder Anwendungsbetreuung. Eine Änderung der Kontaktstufe wird automatisch im Audit-Log protokolliert.
 
 > **Gleichzeitige Bearbeitung:** Wenn jemand anderes den gleichen Datensatz gleichzeitig bearbeitet hat, erscheint eine Fehlermeldung. Laden Sie die Seite neu und tragen Sie Ihre Änderung erneut ein — so wird sichergestellt, dass keine Änderungen still überschrieben werden.
 
@@ -699,15 +699,15 @@ Für die Weitergabe an externe Stellen (z. B. Fördermittelgeber oder Kommune) g
 
 Über **„Als JSON exportieren"** (bzw. `?format=json` an der URL) erhalten Sie dieselben Daten maschinenlesbar. Jeder Aufruf wird als `EXPORT` im Audit-Log protokolliert. Der externe Bericht ist nur für **Leitung** und **Administration** zugänglich.
 
-### Löschanträge prüfen (Leitung / Admin)
+### Löschanträge prüfen (Recht „Löschbestätigung“)
 
-Wenn eine Fachkraft oder Assistenz einen Kontakt einer Person der Kontaktstufe „Mit Zusatzangaben" löschen möchte, entsteht ein **Löschantrag**, der von einer Leitung oder Administration genehmigt werden muss.
+Wenn eine Fachkraft, Leitung oder Anwendungsbetreuung einen Kontakt einer Person der Kontaktstufe „Mit Zusatzangaben" löschen möchte, entsteht ein **Löschantrag**, der von einer zweiten Person mit dem Recht „Löschbestätigung“ genehmigt werden muss.
 
 1. Offene Löschanträge sehen Sie unter `/deletion-requests/`.
 2. Klicken Sie auf einen Antrag, um Details und das betroffene Ereignis einzusehen.
 3. Klicken Sie auf **Genehmigen** oder **Ablehnen** und bestätigen Sie.
 
-> **Wichtig:** Sie können Ihren eigenen Löschantrag nicht selbst genehmigen (4-Augen-Prinzip).
+> **Wichtig:** Das Recht „Löschbestätigung“ wird unabhängig von der Rolle vergeben und ist standardmäßig nicht gesetzt. Auch Leitung und Anwendungsbetreuung benötigen es. Eigene Anträge können Sie weder genehmigen noch ablehnen (4-Augen-Prinzip). Zur Vergabe siehe [Admin-Handbuch § 7.5](admin-guide.md#75-löschanträge-4-augen-prinzip).
 
 Unabhängig von Ihrer Rolle: Als antragstellende Person können Sie Ihren eigenen Löschantrag selbst zurückziehen, solange er noch **ausstehend** ist. Unter `/deletion-requests/` erscheint an Ihrem eigenen ausstehenden Antrag neben dem Vier-Augen-Hinweis der Link **Zurückziehen**. Der Bestätigungsdialog sagt ausdrücklich: **Es wird nichts gelöscht — die Daten bleiben unverändert.** Danach ist jederzeit ein neuer Löschantrag für dasselbe Ziel möglich. Der Antrag bleibt für den Genehmiger-Pool in der Sektion **Zurückgezogen** sichtbar und der Rückzug wird mit dem Endstatus **Zurückgezogen** protokolliert.
 
@@ -822,18 +822,20 @@ Tabelle nur für die vier facility-gebundenen Rollen — `super_admin` ist hier 
 | Zeitstrom / Startseite einsehen | Ja | Ja | Ja | Ja |
 | Anonyme Kontakte dokumentieren | Ja | Ja | Ja | Ja |
 | Kontakte zu Personen der Stufe „Nur Pseudonym" dokumentieren | Ja | Ja | Ja | Ja |
-| Personen anlegen und suchen | Ja | Ja | Ja | Ja |
+| Personen einsehen und suchen | Ja (ohne Zusatzangaben) | Ja | Ja | Ja |
+| Personen anlegen und bearbeiten | Nein | Ja | Ja | Ja |
 | Personendaten der Stufe „Mit Zusatzangaben" einsehen | Nein | Ja (eigene Einrichtung) | Ja | Ja |
 | Eigene Ereignisse bearbeiten | Ja | Ja | Ja | Ja |
 | Fremde Ereignisse bearbeiten | Nein | Ja | Ja | Ja |
-| WorkItems erstellen und bearbeiten | Ja | Ja | Ja | Ja |
+| WorkItems erstellen und bearbeiten | Nein | Ja | Ja | Ja |
 | Suche verwenden | Ja | Ja | Ja | Ja |
 | Statistik und Export | Nein | Nein | Ja | Ja |
 | Personendaten exportieren (Art. 15 / 20 DSGVO) | Nein | Nein | Ja | Ja |
 | DSGVO-Dokumentationspaket herunterladen | Nein | Nein | Nein | Ja |
-| Löschanträge stellen | Ja | Ja | Ja | Ja |
-| Löschanträge genehmigen | Nein | Nein | Ja | Ja |
-| Pseudonyme verwalten / Kontaktstufe ändern | Nein | Nein | Ja | Ja |
+| Löschanträge stellen | Nein | Ja | Ja | Ja |
+| Löschanträge genehmigen | Nur mit Löschbestätigung | Nur mit Löschbestätigung | Nur mit Löschbestätigung | Nur mit Löschbestätigung |
+| Pseudonyme ändern / Kontaktstufe hochsetzen | Nein | Ja | Ja | Ja |
+| Kontaktstufe „Mit Zusatzangaben“ herabsetzen | Nein | Nein | Ja | Ja |
 | Audit-Log einsehen (eigene Einrichtung) | Nein | Nein | Nein | Ja |
 | Fallmanagement (Fälle, Episoden, Ziele) | Nein | Ja | Ja | Ja |
 | Fälle schließen / wiedereröffnen | Nein | Nein | Ja | Ja |

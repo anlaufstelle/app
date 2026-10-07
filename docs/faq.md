@@ -407,12 +407,13 @@ Jeder User mit Rolle `assistant` / `staff` / `lead` / `facility_admin` gehört z
 | Kontakte (Events) | Anlegen, Anzeigen | Assistenz |
 | Kontakte | Bearbeiten | Assistenz (eigene) / Fachkraft (alle) |
 | Kontakte | Löschen | Fachkraft (eigene) / Leitung (alle) |
-| Löschanträge | Anzeigen, Genehmigen/Ablehnen | Leitung |
+| Löschanträge | Anzeigen | Leitung/Anwendungsbetreuung, Personen mit Löschbestätigung; eigene offene Anträge auch für Antragstellende |
+| Löschanträge | Genehmigen/Ablehnen | Gesondertes Recht „Löschbestätigung“, eigene Anträge ausgeschlossen |
 | Fälle, Episoden, Ziele | Anzeigen, Anlegen, Bearbeiten | Fachkraft |
 | Fälle | Schließen, Wiederöffnen | Leitung |
 | Arbeitsaufträge | Anzeigen | Assistenz |
 | Arbeitsaufträge | Anlegen, Bearbeiten | Fachkraft |
-| Arbeitsaufträge | Status ändern | Ersteller, Zugewiesener oder Leitung |
+| Arbeitsaufträge | Status ändern | Ersteller, Zugewiesener oder Leitung/Anwendungsbetreuung; nicht zugewiesene Teamaufgaben: alle ab Assistenz |
 | Statistiken & Exports | Anzeigen, CSV/PDF/Beispiel-Sachbericht-Export | Leitung |
 | Audit-Log (eigene Einrichtung, `/audit/`) | Anzeigen | Anwendungsbetreuung (`facility_admin`) |
 | DSGVO-Paket | Generieren, Herunterladen | Anwendungsbetreuung (`facility_admin`) |
@@ -427,7 +428,7 @@ Navigation und Aktions-Buttons passen sich automatisch der Rolle an:
   - „Arbeitszentrale" ausschließlich für die Leitung (siehe [Frage 5a](#5a-was-zeigt-mir-die-arbeitszentrale-startseite-start))
   - „Fälle" erscheint erst ab Fachkraft
   - „Statistik" ab Leitung
-  - Bereich „Datenschutz" (`/datenschutz/`) erscheint, sobald mindestens einer seiner Reiter sichtbar ist — „Löschanträge" ab Leitung, „Audit-Log" und „DSGVO-Paket" für die Anwendungsbetreuung
+  - Bereich „Datenschutz" (`/datenschutz/`) erscheint, sobald mindestens einer seiner Reiter sichtbar ist — „Löschanträge" für Leitung/Anwendungsbetreuung, Personen mit Löschbestätigung und Antragstellende mit eigenen offenen Anträgen, „Audit-Log" und „DSGVO-Paket" für die Anwendungsbetreuung
   - Bereich „Verwaltung" (`/verwaltung/`) für die Anwendungsbetreuung
   - „Systembereich" (`/system/`) und „Administration ↗" (Django-Admin) ausschließlich für die Systemadministration — die Anwendungsbetreuung erreicht den Django-Admin über eine eigens markierte Zeile auf der Verwaltungs-Übersicht
 - **Erstellen-Menü:** „Person anlegen", „Aufgabe erstellen" und „Fall anlegen" erst ab Fachkraft sichtbar
@@ -441,7 +442,7 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 | Regel | Beschreibung |
 |-------|-------------|
 | **Eigentümer-Berechtigung** | Assistenz darf eigene Kontakte bearbeiten, auch wenn „Bearbeiten" sonst ab Fachkraft gilt |
-| **Zuweisungs-Berechtigung** | Arbeitsauftrag-Status kann vom Ersteller, Zugewiesenen oder der Leitung geändert werden |
+| **Zuweisungs-Berechtigung** | Arbeitsauftrag-Status kann vom Ersteller, Zugewiesenen oder der Leitung/Anwendungsbetreuung geändert werden; bei nicht zugewiesenen Teamaufgaben von allen ab Assistenz |
 | **Sensitivitätsstufe** | Zusätzlich zur Rolle steuern `DocumentType.sensitivity` und `FieldTemplate.sensitivity` den Feldzugriff. `FieldTemplate.sensitivity` überschreibt den DocumentType-Level nach oben (→ [FAQ #14](#14-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)) |
 | **Passwort-Pflicht** | Bei gesetztem `must_change_password`-Flag wird der User vor jeder Aktion zum Passwortwechsel gezwungen |
 | **Session-Timeout** | Konfigurierbar pro Einrichtung (Standard: 30 Min.), nach Ablauf **ohne Aktivität** automatischer Logout |
@@ -564,7 +565,7 @@ Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt
 
 | Kontaktstufe | Löschung | Genehmigung nötig? |
 |--------------|----------|---------------------|
-| **Mit Zusatzangaben** | Löschantrag → Leitung/Admin muss genehmigen | Ja (4-Augen) |
+| **Mit Zusatzangaben** | Löschantrag → zweite Person mit Recht „Löschbestätigung“ muss genehmigen | Ja (4-Augen) |
 | **Nur Pseudonym** | Sofort Soft-Delete | Nein |
 | **Anonym** (`is_anonymous`) | Sofort Soft-Delete | Nein |
 | **Kein Client** | Sofort Soft-Delete | Nein |
@@ -572,8 +573,10 @@ Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt
 **Ablauf bei Personen der Stufe „Mit Zusatzangaben":**
 1. Staff kann nur **eigene** Events löschen, Lead/Admin kann **alle** löschen
 2. System erstellt `DeletionRequest` mit Status `pending`
-3. Lead/Admin reviewed — DB-Constraint `deletion_request_different_reviewer` erzwingt: **Reviewer ≠ Antragsteller**
+3. Eine zweite Person mit Recht „Löschbestätigung“ prüft den Antrag — DB-Constraint `deletion_request_different_reviewer` erzwingt: **Reviewer ≠ Antragsteller**
 4. Approve → Event wird soft-deleted + anonymisiert | Reject → Event bleibt
+
+Das Recht „Löschbestätigung“ ist rollenunabhängig und standardmäßig nicht gesetzt; auch Leitung und Anwendungsbetreuung brauchen es. Eigene Anträge dürfen weder genehmigt noch abgelehnt werden. Zur Vergabe siehe [Admin-Handbuch § 7.5](admin-guide.md#75-löschanträge-4-augen-prinzip).
 
 **Was passiert bei einer Löschung?**
 
