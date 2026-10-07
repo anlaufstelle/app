@@ -864,7 +864,7 @@ Maintainer-Entscheid vom 2026-08-04 **entschieden: Option A, Status quo ohne Res
 k-Anonymitäts-**Definitionsgrenze** akzeptiert. Anlass war die M5-Erweiterung der Suppression auf die
 Berichts-Exporte ([ADR-038 § 5](adr/038-reporting-plugin-backends.md)); die dort geschlossenen Kanäle
 (Bezugsgrößen in Vollständigkeitsmeldungen, Vier-Term-Identität) sind verifiziert geschlossen, die
-hier gelisteten liegen außerhalb dieses Scopes und bestehen größtenteils seit
+hier gelisteten lagen zum Analysezeitpunkt außerhalb dieses Scopes und bestanden größtenteils seit
 #1278.
 
 #### Scope, Empfängermodell, Methodik
@@ -1070,9 +1070,8 @@ das ohne eigene Anpassung. Die Ordnung benennt seit
 Pflicht-Keyword `order` —
 `by_category` fällt (#1770) unter
 `ORDER_CATEGORY` (Namensordnung): die Einfügereihenfolge der Konsolidierung ist **datenabhängig** —
-eine Kategorie steht dort, wo ihr alphabetisch erster im Zeitraum vorhandener `report_key` steht (bis
-#1849 war die Ordnungsquelle der
-`system_type`). Ohne kanonische Ordnung verriet die Zeilenposition, welcher Berichtsschlüssel hinter
+eine Kategorie steht dort, wo ihr alphabetisch erster im Zeitraum vorhandener `report_key` steht (Ordnungsquelle ist der `report_key`, nicht der
+`system_type`; #1849). Ohne kanonische Ordnung verriet die Zeilenposition, welcher Berichtsschlüssel hinter
 einer unterdrückten Kleinstzelle steckt (zwei Welten mit identischen publizierten Werten,
 „Vermittlung" aus `accompaniment` bzw. aus `referral`, ergaben verschiedene Positionen). `ORDER_INPUT`
 gilt danach nur noch für Tabellen mit **fester Schlüsselordnung**: `by_contact_stage` (feste
@@ -1333,8 +1332,8 @@ beide braucht:
   Unterdrückung bekannt und die Schranken sind entsprechend eng; hier zählt, was ein Empfänger sicher
   weiß, der Primär- und Sekundär-Unterdrückung nicht auseinanderhalten kann.
 
-**Die Kopplungs-Warnung ist eingehalten:** K5 ist seit
-#1767 ausgeliefert, der Guard kommt danach.
+**Die Kopplungs-Warnung ist eingehalten:** K5 ist mit
+#1767 ausgeliefert; der Guard läuft im Export nach der Kanonisierung.
 Der Enumerationstest belegt beides empirisch — mit voll aktivem Audit und Guard, aber wieder
 count-sortierter Ausgabe, pinnt die Aufzählung 250 Kleinstzellen; mit kanonischer Ordnung 0.
 
