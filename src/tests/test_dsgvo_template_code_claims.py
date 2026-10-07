@@ -832,3 +832,13 @@ class TestHistoryRedactionClaims:
         assert "Sicherungsstände" in bullet
         retention = str(next(a for a in PROCESSING_ACTIVITIES if a["id"] == "falldaten")["retention_period"])
         assert "jüngste Fassung" in retention
+
+
+_VERBATIM_CLAIM_RE = re.compile(r"\(wortgleich zur DSFA[^)]*\):\s*(.+)")
+
+
+@pytest.mark.django_db
+class TestVerbatimClaims:
+    def test_verbatim_claims_are_verbatim(self, vvt_template, dsfa):
+        for claim in _VERBATIM_CLAIM_RE.findall(vvt_template):
+            assert _flat(claim) in dsfa, claim
