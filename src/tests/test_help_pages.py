@@ -175,7 +175,7 @@ class TestHelpTranslations:
     def test_key_help_strings_are_available_in_english(self):
         with override("en"):
             assert gettext("Hilfe") == "Help"
-            assert gettext("Was bedeutet die Kontaktstufe?") == "What does the contact level mean?"
+            assert gettext("Was bedeutet die Kontaktstufe?") == "What does the contact stage mean?"
             assert gettext("Wie funktionieren Feldbedingungen?") == "How do field conditions work?"
             assert gettext("Wie funktionieren Löschfristen?") == "How do deletion periods work?"
             assert gettext("Wie funktioniert das Vier-Augen-Prinzip?") == "How does the four-eyes principle work?"
