@@ -16,6 +16,19 @@ ALLOWLIST = {
     "docs/en/domain-concept-summary.md": dict.fromkeys(
         METRICS, "Explicitly shortened domain concept summary; see its opening notice."
     ),
+    "CONTRIBUTING.en.md": {
+        "commands": "Example values (branch names, sample file name) are translated; the commands are identical."
+    },
+    "docs/en/README.md": dict.fromkeys(
+        ("headings", "tables", "table_columns"),
+        "The English index lists translated documents and groups German-only ones; sections differ.",
+    ),
+    "docs/en/admin-guide.md": {
+        "commands": "The example facility name in the statistics command is translated; the command is identical."
+    },
+    "docs/en/ops-runbook.md": {
+        "commands": "Example commit message and test e-mail address are translated; the commands are identical."
+    },
     "docs/en/glossary.md": {
         "table_columns": "Bilingual glossary adds an English column to the German term/definition table."
     },

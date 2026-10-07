@@ -6,6 +6,8 @@
 
 ---
 
+## Term table (A–Z)
+
 | Deutsch | English | Definition |
 |---------|---------|------------|
 | Account-Lockout | Account lockout | Automatic account lock after 10 failed login attempts within a sliding 15-minute window, counted per pair of account and source IP address. The lock state is not stored separately but derived from the `LOGIN_FAILED` AuditLog entries; the lock therefore ends by itself once fewer than 10 counted failed attempts lie within the window -- without new failed attempts at the latest 15 minutes after the last one. Requests rejected by the rate limit (HTTP 429) are not counted. A sign-in with the correct password during the lock is recorded as `LOGIN_FAILED` with `reason: "locked"` and shown as a form error. `super_admin` is exempt from this account lock; sign-in rate limits (5/min per IP address, 10/h per username, beyond that HTTP 429) and 2FA are unaffected. Unlocking via self-service on the login page or by the administration (Management > Access, System area > Locked accounts, CLI `unlock`) writes a `LOGIN_UNLOCK` entry; earlier `LOGIN_FAILED` entries no longer count afterwards. Implemented in [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py). |
