@@ -62,7 +62,7 @@ ENTITY_HINT = "Wirkt nur bei Dokumentationstypen für Ereignisse."
 SYSTEM_TYPE_HINT = "Nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."
 TALLY_HINT = (
     "In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-Kontaktstufe. "
-    "Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder sein. "
+    "Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder ohne Bedingung sein. "
     "Der Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
 )
 

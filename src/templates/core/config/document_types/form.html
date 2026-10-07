@@ -57,8 +57,8 @@
             {% trans "Nach dem Anlegen unveränderbar. Falsch gewählt? Den Typ deaktivieren und einen neuen anlegen." as help_entity_type_change %}
             {% trans "Ein Typ „Beratungsgespräch“ hält Kontakte fest und ist ein Ereignis-Typ. Ein Typ „Zusatzangaben zur Wohnsituation“ ergänzt die Personenakte und ist ein Person-Typ." as help_entity_type_example %}
             {% include "components/_form_field.html" with field=form.entity_type inline_help=help_entity_type_inline deep_help_effect=help_entity_type_effect deep_help_change=help_entity_type_change deep_help_example=help_entity_type_example %}
-            {% trans "Legt fest, welche Rollen die Inhalte sehen dürfen. „Hoch“ wird immer verschlüsselt gespeichert." as help_sensitivity_inline %}
-            {% trans "Normal sehen alle Rollen einschließlich Assistenz, Erhöht Fachkraft, Leitung und Anwendungsbetreuung, Hoch nur Leitung und Anwendungsbetreuung. Zusätzlich hat jede Feldvorlage eine eigene Stufe; für ein einzelnes Feld gilt die höhere der beiden Stufen." as help_sensitivity_effect %}
+            {% trans "Legt fest, welche Rollen die Inhalte sehen dürfen. Verschlüsselt wird je Feldvorlage, nicht über diese Stufe." as help_sensitivity_inline %}
+            {% trans "Normal sehen alle Rollen einschließlich Assistenz, Erhöht Fachkraft, Leitung und Anwendungsbetreuung, Hoch nur Leitung und Anwendungsbetreuung. Zusätzlich hat jede Feldvorlage eine eigene Stufe; für ein einzelnes Feld gilt die höhere der beiden Stufen. Diese Stufe steuert nur die Sichtbarkeit: Ob ein Feld verschlüsselt gespeichert wird, legt die Feldvorlage fest (Option „Verschlüsselt“; bei Stufe „Hoch“ an der Feldvorlage ist sie Pflicht)." as help_sensitivity_effect %}
             {% trans "Jederzeit änderbar. Die Sichtbarkeit folgt der jeweils aktuellen Stufe." as help_sensitivity_change %}
             {% trans "Allgemeine Kontakte: Normal. Beratungs- und Gesundheitsgespräche: Erhöht. Krisengespräche: Hoch." as help_sensitivity_example %}
             {% include "components/_form_field.html" with field=form.sensitivity inline_help=help_sensitivity_inline deep_help_effect=help_sensitivity_effect deep_help_change=help_sensitivity_change deep_help_example=help_sensitivity_example %}
@@ -80,7 +80,7 @@
             </div>
             {% endif %}
             {% trans "Legt fest, ob dieser Typ anonym nutzbar ist oder eine gespeicherte Person braucht." as help_min_contact_stage_inline %}
-            {% trans "Die Stufe gilt bei der Anlage eines Ereignisses. Leer: auch anonyme Kontakte ohne zugeordnete Person sind möglich. „Nur Pseudonym“: es muss eine Person zugeordnet sein. „Mit Zusatzangaben“: an der Person müssen zusätzliche Angaben gespeichert sein. Ein Typ mit Mindest-Kontaktstufe erscheint nicht in der Strichliste." as help_min_contact_stage_effect %}
+            {% trans "Die Stufe gilt bei der Anlage eines Ereignisses. Leer: auch anonyme Kontakte ohne zugeordnete Person sind möglich. „Nur Pseudonym“: Es muss eine Person zugeordnet sein. „Mit Zusatzangaben“: Die Person muss mindestens die Kontaktstufe „Mit Zusatzangaben“ haben; geprüft wird die Kontaktstufe, nicht der Inhalt der Personenakte. Ein Typ mit Mindest-Kontaktstufe erscheint nicht in der Strichliste." as help_min_contact_stage_effect %}
             {% trans "Jederzeit änderbar. Bereits erfasste Ereignisse bleiben unverändert." as help_min_contact_stage_change %}
             {% trans "Beratungsgespräche verlangen „Mit Zusatzangaben“: Für eine Person, von der nur das Pseudonym bekannt ist, wird zuerst die Kontaktstufe angehoben." as help_min_contact_stage_example %}
             {% include "components/_form_field.html" with field=form.min_contact_stage inline_help=help_min_contact_stage_inline deep_help_effect=help_min_contact_stage_effect deep_help_change=help_min_contact_stage_change deep_help_example=help_min_contact_stage_example %}
@@ -95,7 +95,7 @@
             {% include "components/_form_field.html" with field=form.sort_order %}
             {% include "components/_form_field.html" with field=form.is_active %}
             {% trans "Macht diesen Ereignistyp für die schnelle anonyme Zählung verfügbar, wenn er die Voraussetzungen erfüllt." as help_tally_enabled_inline %}
-            {% trans "Hat der Typ keine Pflichtfelder, zählt +1 direkt einen anonymen Kontakt. Bestehen alle Pflichtfelder aus Zahlen, öffnet +1 eine kompakte Werteingabe. Hat er ein Pflichtfeld eines anderen Typs, erscheint er nicht in der Strichliste. Neue Typen sind nicht freigegeben." as help_tally_enabled_effect %}
+            {% trans "Der Typ erscheint nur, wenn er aktiv und freigegeben ist, für Ereignisse gilt, keine Mindest-Kontaktstufe hat und die Rolle ihn sowie alle Pflichtfelder sehen darf. Ohne Pflichtfelder zählt +1 direkt einen anonymen Kontakt; sind alle Pflichtfelder Zahlenfelder ohne Bedingung, öffnet +1 eine kompakte Werteingabe. Ein Pflichtfeld anderen Typs oder mit Bedingung schließt den Typ aus. Neue Typen sind nicht freigegeben." as help_tally_enabled_effect %}
             {% trans "Jederzeit änderbar. Die Freigabe hebt keine Sichtbarkeitsregeln auf: Ein Typ erscheint nur für Rollen, die ihn und alle seine Pflichtfelder sehen dürfen." as help_tally_enabled_change %}
             {% trans "Ein Typ „Kurzkontakt“ ohne Pflichtfelder: Jeder Tipp auf +1 in der Strichliste hält einen anonymen Kontakt fest." as help_tally_enabled_example %}
             {% include "components/_form_field.html" with field=form.tally_enabled inline_help=help_tally_enabled_inline deep_help_effect=help_tally_enabled_effect deep_help_change=help_tally_enabled_change deep_help_example=help_tally_enabled_example %}
