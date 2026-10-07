@@ -52,12 +52,12 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
 
 #### Hardware
 
-Mindestwerte für eine Einrichtung mit weniger als 30 Nutzenden:
+Voraussetzungen:
 
-- 1 vCPU
-- 10 GB freier Speicherplatz für Images, Datenbank, Virensignaturen und Anhänge; die lokalen Sicherungen unter `BACKUP_HOST_DIR` kommen hinzu ([§ 3](#3-backup-und-wiederherstellung))
 - Docker Engine 24 oder neuer (siehe oben)
 - eine HTTPS-fähige Domain; die mitgelieferte `Caddyfile` holt das Zertifikat automatisch über Let's Encrypt ([Schritt 3](#schritt-3-caddyfile-prüfen))
+
+**Prozessor und Speicherplatz:** Für CPU, Plattenplatz und Zahl der Nutzenden gibt es keine gemessenen Mindestwerte. 1 vCPU und 10 GB freier Speicherplatz für Images, Datenbank, Virensignaturen und Anhänge sind ein ungemessener Richtwert für den Einstieg, keine Zusage für eine bestimmte Last; die lokalen Sicherungen unter `BACKUP_HOST_DIR` kommen hinzu ([§ 3](#3-backup-und-wiederherstellung)). Prüfen Sie Auslastung und Plattenbelegung im Betrieb.
 
 **Arbeitsspeicher:** `docker-compose.prod.yml` begrenzt jeden Dienst mit `mem_limit`: `clamav` 3 GB, `db` 2 GB, `web` 2 GB, `cron` 1 GB, `redis` 512 MB, `caddy` 512 MB und der nur kurz laufende Wartungsdienst `maintenance` 1 GB. Diese Werte sind Obergrenzen, keine Reservierung; der tatsächliche Bedarf hängt vor allem vom Virenscanner ab, der seine Signaturdatenbank im Arbeitsspeicher hält. Messen Sie den Verbrauch nach dem ersten Start mit `docker stats` ([§ 5.3](#53-container-status)) und planen Sie den Arbeitsspeicher des Hosts danach.
 
@@ -1194,7 +1194,7 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 2. Optional: `python manage.py reencrypt_fields` laufen lassen, damit bestehende Datenbankfelder auf den neuen Key umgeschlüsselt werden (siehe [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). Ein `--dry-run` zeigt vorab, wie viele Datensätze betroffen wären, ohne zu schreiben. **Der Lauf muss mit der Admin-/Owner-Rolle erfolgen** — siehe Kasten unten.
 3. **Den alten Schlüssel in der Liste lassen.** `reencrypt_fields` schlüsselt nur Datenbankspalten um, nicht die Inhalte der Dateianhänge unter `MEDIA_ROOT`. Diese bleiben mit dem Schlüssel verschlüsselt, der beim Hochladen der erste war, und sind nur lesbar, solange dieser Schlüssel im Ring `ENCRYPTION_KEYS` steht. Ein Werkzeug, das Dateiinhalte umschlüsselt, gibt es nicht. Solange Anhänge existieren, die mit dem alten Schlüssel geschrieben wurden, also in der Regel dauerhaft, bleibt er hinter dem neuen in der Liste.
 
-> **Wichtig:** Niemals den alten Key **ersetzen** statt **ergänzen** und ihn auch nach einem erfolgreichen `reencrypt_fields`-Lauf nicht entfernen. Sonst werden alle Dateianhänge unlesbar, die mit ihm verschlüsselt wurden, und ebenso alle Datenbankfelder, die der Lauf übersprungen hat.
+> **Wichtig:** Niemals den alten Key **ersetzen**, statt den neuen als **ersten** Eintrag zu ergänzen, und den alten auch nach einem erfolgreichen `reencrypt_fields`-Lauf nicht entfernen. Sonst werden alle Dateianhänge unlesbar, die mit ihm verschlüsselt wurden, und ebenso alle Datenbankfelder, die der Lauf übersprungen hat.
 
 > ⚠️ **Rollen-Voraussetzung (Refs #1058).** `reencrypt_fields` liest und schreibt Tabellen mit Row-Level-Security. Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Requests keinen Einrichtungs-Kontext — ein Aufruf dort sähe **0 Zeilen**. Deshalb immer ueber den Maintenance-Service aufrufen ([Ops-Runbook § 9.5](ops-runbook.md)):
 >
@@ -1625,7 +1625,7 @@ Bei CSP-Fehlern nach einem Update: Browser-Console auf **konkret blockierte URL/
 
 ### 5.5 Compliance-Dashboard
 
-Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), die Prüfung, dass die App-Rolle kein Django-Superuser ist („App-User kein Django-Superuser“), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Audit-Log-Aufbewahrung, Frische der Hintergrundjobs (Audit-Ketten-Prüfung, Statistik-Snapshot, Breach-Scan, Materialized-View-Refresh), MFA-Quote (MFA-pflichtige Rollen), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
+Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), die Prüfung, dass kein Anwendungskonto Djangos `is_superuser`-Flag trägt („App-User kein Django-Superuser“; geprüft werden Benutzerkonten, nicht die Datenbankrollen), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Audit-Log-Aufbewahrung, Frische der Hintergrundjobs (Audit-Ketten-Prüfung, Statistik-Snapshot, Breach-Scan, Materialized-View-Refresh), MFA-Quote (MFA-pflichtige Rollen), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
 
 Steht die AuditLog-Aufbewahrung in einer oder mehreren Einrichtungen auf `0` Monate, zeigt die Kategorie **Retention** eine aggregierte Warnung mit den betroffenen Einrichtungsnamen; beheben lässt sie sich unter **Core → Einstellungen → Aufbewahrung**.
 

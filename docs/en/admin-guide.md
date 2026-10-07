@@ -54,12 +54,12 @@ This guide is intended for IT administrators of social service facilities who in
 
 #### Hardware
 
-Minimum values for a facility with fewer than 30 users:
+Prerequisites:
 
-- 1 vCPU
-- 10 GB of free disk space for images, database, virus signatures and attachments; the local backups under `BACKUP_HOST_DIR` come on top ([§ 3](#3-backup-and-recovery))
 - Docker Engine 24 or newer (see above)
 - an HTTPS-capable domain; the delivered `Caddyfile` obtains the certificate automatically through Let's Encrypt ([Step 3](#step-3-review-the-caddyfile))
+
+**CPU and disk space:** There are no measured minimum values for CPU, disk space or number of users. 1 vCPU and 10 GB of free disk space for images, database, virus signatures and attachments are an unmeasured starting point, not a commitment for any particular load; the local backups under `BACKUP_HOST_DIR` come on top ([§ 3](#3-backup-and-recovery)). Check load and disk usage during operation.
 
 **Memory:** `docker-compose.prod.yml` caps every service with `mem_limit`: `clamav` 3 GB, `db` 2 GB, `web` 2 GB, `cron` 1 GB, `redis` 512 MB, `caddy` 512 MB, and the short-lived maintenance service `maintenance` 1 GB. These values are upper limits, not reservations; the actual demand depends mainly on the virus scanner, which keeps its signature database in memory. Measure the usage after the first start with `docker stats` ([§ 5.3](#53-container-status)) and size the host's memory accordingly.
 
@@ -1192,7 +1192,7 @@ MultiFernet accepts a list of keys. To rotate:
 2. Optional: run `python manage.py reencrypt_fields` to re-encrypt existing database fields with the new key (see [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). A `--dry-run` reports how many records would be affected without writing anything. **The run must use the admin/owner role** -- see the box below.
 3. **Keep the old key in the list.** `reencrypt_fields` re-encrypts database columns only, not the contents of the file attachments under `MEDIA_ROOT`. These remain encrypted with the key that was first at upload time and stay readable only while that key is in the `ENCRYPTION_KEYS` ring. There is no tool that re-encrypts file contents. As long as attachments written with the old key exist, which usually means permanently, it stays in the list behind the new one.
 
-> **Important:** Never **replace** the old key instead of **appending** the new one, and do not remove it even after a successful `reencrypt_fields` run. Otherwise every file attachment encrypted with it becomes unreadable, as does every database field the run skipped.
+> **Important:** Never **replace** the old key instead of adding the new key as the **first** entry while retaining the old keys, and do not remove it even after a successful `reencrypt_fields` run. Otherwise every file attachment encrypted with it becomes unreadable, as does every database field the run skipped.
 
 > ⚠️ **Role prerequisite (Refs #1058).** `reencrypt_fields` reads and writes tables protected by row-level security. The `NOBYPASSRLS` runtime role of `web` has no facility context outside a request and would see **0 rows**. Always invoke it via the maintenance service ([ops runbook § 9.5](ops-runbook.md#95-append-only-trigger-bypass-via-owner-ddl-a14)):
 >
@@ -1218,7 +1218,7 @@ MultiFernet accepts a list of keys. To rotate:
 
 **Persons** and **cases** also carry encrypted extra fields in `data_json` ([ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md)). The run rotates them as well and additionally heals plaintext leftovers in fields that the document type declares as encrypted.
 
-For events, persons and cases, **soft-deleted records are rotated too**. That is deliberate: a record waiting in the trash must not stay behind under a retired key just because it is pending deletion (#1724). The former gap for soft-deleted events (the `is_deleted=False` filter) has been closed since #1724.
+For events, persons and cases, **soft-deleted records are rotated too**. That is deliberate: a record waiting in the trash must not stay behind under a retired key just because it is pending deletion (#1724).
 
 > **Operational note:** The run protects every row it changes with a row lock and compare-and-swap. If a concurrent domain edit wins, the rotation skips its stale state and warns: "N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen" (N rows skipped due to a concurrent change -- repeat the run). The rotation never overwrites an interim change, including redaction or anonymization runs that do not advance `updated_at`. This also covers the **event history** (#2177): if the nightly retention run or an Art. 17 GDPR anonymization redacts a history row while the rotation is running, the rotation skips that row and reports it as skipped -- the redacted state stands. Rows that are already redacted are no longer rotation candidates at all: they carry no encrypted values, only the redaction marker. Repeat the run until it completes without this warning; the old key stays in the ring anyway because of the file contents (step 3). A maintenance window remains advisable to reduce database load, but it is no longer required to prevent lost updates.
 
@@ -1625,7 +1625,7 @@ If CSP errors appear after an update: check the browser console for the **specif
 
 ### 5.5 Compliance Dashboard
 
-The super-admin area `/system/compliance/` (#919) consolidates typed health checks in a single dashboard: the three DB role checks (via `check_db_roles`, see the database variables in [§ 1](#1-installation-docker-compose)), the check that the app role is not a Django superuser (“App-User kein Django-Superuser”), backup age, restore-verified age, ClamAV ping and signature age, retention run age, audit log retention, background job freshness (audit chain check, statistics snapshot, breach scan, materialized view refresh), MFA quota (roles requiring MFA), pending Django migrations, app/Django/Python versions, and critical audit events from the last 24 hours.
+The super-admin area `/system/compliance/` (#919) consolidates typed health checks in a single dashboard: the three DB role checks (via `check_db_roles`, see the database variables in [§ 1](#1-installation-docker-compose)), the check that no application account carries Django's `is_superuser` flag (“App-User kein Django-Superuser”; it checks user accounts, not the database roles), backup age, restore-verified age, ClamAV ping and signature age, retention run age, audit log retention, background job freshness (audit chain check, statistics snapshot, breach scan, materialized view refresh), MFA quota (roles requiring MFA), pending Django migrations, app/Django/Python versions, and critical audit events from the last 24 hours.
 
 If AuditLog retention is set to `0` months in one or more facilities, the **Retention** category shows one aggregated warning with the affected facility names; resolve it under **Core → Settings → Retention**.
 
@@ -2449,4 +2449,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: e29ec5ff6a7d7c38d263fb6341ef011ba90aeb9e -->
+<!-- source-hash: 970043f0ef746919ba8e09c3c609b2a210573c02 -->
