@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 20:51+0200\n"
+"POT-Creation-Date: 2026-10-07 09:26+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -3832,16 +3832,6 @@ msgstr ""
 "Keine Weitergabe an Dritte — pseudonymisierte Statistik ggf. an "
 "Foerdermittelgeber/Behoerden (Sachbericht-Export)"
 
-#: src/core/services/compliance/vvt.py:112
-msgid ""
-"Pro Dokumentationstyp konfigurierbar; Default an Kontaktstufe der "
-"zugehoerigen Person gebunden. Sensible Inhalte werden vor Loeschung k-"
-"anonymisiert oder redigiert."
-msgstr ""
-"Pro Dokumentationstyp konfigurierbar; Default an Kontaktstufe der "
-"zugehoerigen Person gebunden. Sensible Inhalte werden vor Loeschung k-"
-"anonymisiert oder redigiert."
-
 #: src/core/services/compliance/vvt.py:117
 msgid ""
 "Sensitivitaets-basierte Sichtbarkeit (je Dokumentationstyp, einzelne "
@@ -3911,18 +3901,6 @@ msgid ""
 msgstr ""
 "Systemadministration (Cross-Facility-Audit ueber /system/audit/, mit eigenem "
 "SYSTEM_VIEW-Eintrag pro Aufruf)"
-
-#: src/core/services/compliance/vvt.py:156
-msgid ""
-"Standardmaessig 24 Monate rollierend. Pruning durch geplanten "
-"``enforce_retention``-Job, Konfiguration pro Installation. Audit-Eintraege "
-"zu offenen Vorfaellen koennen per LegalHold ueber die Standardfrist hinaus "
-"aufbewahrt werden."
-msgstr ""
-"Standardmaessig 24 Monate rollierend. Pruning durch geplanten "
-"``enforce_retention``-Job, Konfiguration pro Installation. Audit-Eintraege "
-"zu offenen Vorfaellen koennen per LegalHold ueber die Standardfrist hinaus "
-"aufbewahrt werden."
 
 #: src/core/services/compliance/vvt.py:163
 msgid "Append-Only durch DB-Konvention und RLS-Policies"
@@ -12397,9 +12375,6 @@ msgstr "Kurze Orientierung zu den Bereichen, die für Ihre Rolle verfügbar sind
 msgid "Lösch- und Berichtigungsanträge werden nachvollziehbar geprüft."
 msgstr "Lösch- und Berichtigungsanträge werden nachvollziehbar geprüft."
 
-msgid "Löschfristen erzeugen prüfbare Vorschläge. Erst eine berechtigte Entscheidung gibt eine Löschung frei, stellt sie zurück oder verwirft sie."
-msgstr "Löschfristen erzeugen prüfbare Vorschläge. Erst eine berechtigte Entscheidung gibt eine Löschung frei, stellt sie zurück oder verwirft sie."
-
 msgid "Löschvorschläge, Audit-Log und DSGVO-Paket unterstützen die regelmäßige Kontrolle."
 msgstr "Löschvorschläge, Audit-Log und DSGVO-Paket unterstützen die regelmäßige Kontrolle."
 
@@ -13192,3 +13167,15 @@ msgstr "Ist die Zwei-Faktor-Authentifizierung für den Zugang verpflichtend, ric
 #: src/templates/core/user_access/mfa_reset_confirm.html:17
 msgid "Setze den zweiten Faktor nur zurück, wenn du sicher bist, dass die Anfrage von der Person selbst stammt."
 msgstr "Setze den zweiten Faktor nur zurück, wenn du sicher bist, dass die Anfrage von der Person selbst stammt."
+
+#: src/core/services/compliance/vvt.py:158
+msgid "Ereignisse folgen den Fristen der Kontaktstufe ihrer Person (siehe Verarbeitung „Personen-Stammdaten“); eine Frist am Dokumentationstyp gilt zusätzlich, es gilt die zuerst ablaufende. Die Löschung setzt das Ereignis auf gelöscht: Zusatzfelder und Suchtext werden sofort geleert, Dateianhänge gelöscht; die Werte früherer Fassungen redigiert regulär der Aufbewahrungslauf. Fälle haben keine eigene Frist, Episoden und Wirkungsziele folgen ihrem Fall. Daten unter einer Aufbewahrungssperre (Legal Hold) sind ausgenommen."
+msgstr "Ereignisse folgen den Fristen der Kontaktstufe ihrer Person (siehe Verarbeitung „Personen-Stammdaten“); eine Frist am Dokumentationstyp gilt zusätzlich, es gilt die zuerst ablaufende. Die Löschung setzt das Ereignis auf gelöscht: Zusatzfelder und Suchtext werden sofort geleert, Dateianhänge gelöscht; die Werte früherer Fassungen redigiert regulär der Aufbewahrungslauf. Fälle haben keine eigene Frist, Episoden und Wirkungsziele folgen ihrem Fall. Daten unter einer Aufbewahrungssperre (Legal Hold) sind ausgenommen."
+
+#: src/core/services/compliance/vvt.py:260
+msgid "Standardmäßig 24 Monate rollierend, je Einrichtung einstellbar (0 schaltet die Löschung ab). Bereinigung durch den täglichen ``enforce_retention``-Lauf, je Einrichtung nur deren eigene Einträge. Ausgenommen bleiben Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs, Nachweise der Redaktion der Ereignis-Historie und Nachweise herausgegebener Berichtszeiträume. Einträge ohne Einrichtung (Systemadministration, Konten ohne Einrichtung, Anmeldeversuche unter unbekanntem Benutzernamen, installationsweite Lauf-Marker) löscht kein Lauf; sie bleiben unbefristet erhalten. Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log."
+msgstr "Standardmäßig 24 Monate rollierend, je Einrichtung einstellbar (0 schaltet die Löschung ab). Bereinigung durch den täglichen ``enforce_retention``-Lauf, je Einrichtung nur deren eigene Einträge. Ausgenommen bleiben Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs, Nachweise der Redaktion der Ereignis-Historie und Nachweise herausgegebener Berichtszeiträume. Einträge ohne Einrichtung (Systemadministration, Konten ohne Einrichtung, Anmeldeversuche unter unbekanntem Benutzernamen, installationsweite Lauf-Marker) löscht kein Lauf; sie bleiben unbefristet erhalten. Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log."
+
+#: src/templates/core/retention/dashboard.html:9
+msgid "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus. Vorschläge erscheinen hier nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist. Zurückstellen oder Verwerfen hält die Löschung nicht auf."
+msgstr "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus. Vorschläge erscheinen hier nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist. Zurückstellen oder Verwerfen hält die Löschung nicht auf."
