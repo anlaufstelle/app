@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 10:15+0200\n"
+"POT-Creation-Date: 2026-10-07 10:31+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -3795,10 +3795,6 @@ msgstr ""
 msgid "Optimistic Locking gegen versehentliches Ueberschreiben"
 msgstr "Optimistic locking against accidental overwrite"
 
-#: src/core/services/compliance/vvt.py:121
-msgid "Soft-Delete + Vier-Augen-Prinzip vor finaler Loeschung"
-msgstr "Soft delete + four-eyes principle before final deletion"
-
 #: src/core/services/compliance/vvt.py:122
 msgid "Encrypted File Vault mit ClamAV-Scan fail-closed fuer Anhaenge"
 msgstr "Encrypted file vault with ClamAV fail-closed scan for attachments"
@@ -3806,16 +3802,6 @@ msgstr "Encrypted file vault with ClamAV fail-closed scan for attachments"
 #: src/core/services/compliance/vvt.py:127
 msgid "Audit-Log (Zugriffs- und Aenderungsprotokoll)"
 msgstr "Audit log (access and change log)"
-
-#: src/core/services/compliance/vvt.py:129
-msgid ""
-"Nachweis der Rechenschaftspflicht (DSGVO Art. 5 Abs. 2). Erkennung von "
-"Missbrauch, Beweismittel im Datenleck-Fall, Rekonstruktion von Aenderungen. "
-"Append-Only — kein UPDATE oder DELETE durch die Anwendung."
-msgstr ""
-"Demonstration of accountability (GDPR Art. 5(2)). Detection of misuse, "
-"evidence in case of a data breach, reconstruction of changes. Append-only — "
-"no UPDATE or DELETE by the application."
 
 #: src/core/services/compliance/vvt.py:135
 msgid ""
@@ -3852,14 +3838,6 @@ msgid ""
 msgstr ""
 "System administration (cross-facility audit via /system/audit/, with a "
 "dedicated SYSTEM_VIEW entry per access)"
-
-#: src/core/services/compliance/vvt.py:163
-msgid "Append-Only durch DB-Konvention und RLS-Policies"
-msgstr "Append-only by DB convention and RLS policies"
-
-#: src/core/services/compliance/vvt.py:164
-msgid "Unveraenderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert)"
-msgstr "Immutability enforced via DB trigger (UPDATE/DELETE blocked)"
 
 #: src/core/services/compliance/vvt.py:165
 msgid "Zugriff nur fuer Anwendungsbetreuung und Systemadministration"
@@ -3924,16 +3902,6 @@ msgstr "Internal: application support of the facility"
 #: src/core/services/compliance/vvt.py:192
 msgid "Systemadministration (User-Management ueber Django-Admin)"
 msgstr "System administration (user management via Django admin)"
-
-#: src/core/services/compliance/vvt.py:195
-msgid ""
-"Konto-Stammdaten: bis zur Loeschung des Accounts. Login-Versuche und "
-"Lockouts: 90 Tage (Sicherheits-Forensik). Recovery-Codes bis zu deren "
-"Verbrauch oder Neuerstellung."
-msgstr ""
-"Account master data: until the account is deleted. Login attempts and "
-"lockouts: 90 days (security forensics). Recovery codes until used or "
-"regenerated."
 
 #: src/core/services/compliance/vvt.py:201
 msgid "Passwort-Hashing mit aktuellen Verfahren (PBKDF2/Argon2)"
@@ -4080,23 +4048,9 @@ msgstr "Correspondence / file notes from application support"
 msgid "Anwendungsbetreuung der Einrichtung (Bearbeitung)"
 msgstr "Application support of the facility (processing)"
 
-#: src/core/services/compliance/vvt.py:269
-msgid "Leitung der Einrichtung (4-Augen bei Loeschung qualifizierter Daten)"
-msgstr "Facility management (four-eyes for deletion of qualified data)"
-
 #: src/core/services/compliance/vvt.py:270
 msgid "Antragsteller:in (Auslieferung des Datenpakets)"
 msgstr "Requester (delivery of the data package)"
-
-#: src/core/services/compliance/vvt.py:273
-msgid ""
-"Bearbeitungsvorgaenge: 3 Jahre nach Abschluss (Nachweis der Erfuellung). "
-"Erzeugte Datenpakete: nach Abholung loeschen. Berichtigungs-/"
-"Loeschungsvorgaenge: im AuditLog dauerhaft (siehe Verarbeitung 'AuditLog')."
-msgstr ""
-"Processing operations: 3 years after completion (proof of fulfillment). "
-"Generated data packages: delete after retrieval. Rectification/erasure "
-"operations: permanently in the AuditLog (see 'AuditLog' processing activity)."
 
 #: src/core/services/compliance/vvt.py:280
 msgid ""
@@ -4105,10 +4059,6 @@ msgid ""
 msgstr ""
 "Rectification handled organizationally via staff / lead — no self-service by "
 "the person concerned"
-
-#: src/core/services/compliance/vvt.py:283
-msgid "Vier-Augen-Prinzip fuer Loeschung qualifizierter Daten"
-msgstr "Four-eyes principle for deletion of qualified data"
 
 #: src/core/services/compliance/vvt.py:284
 msgid "Sudo-Mode-Re-Auth vor Erstellung von Datenpaketen"
@@ -13062,10 +13012,6 @@ msgstr "If two-factor authentication is mandatory for the account, the person se
 msgid "Setze den zweiten Faktor nur zurück, wenn du sicher bist, dass die Anfrage von der Person selbst stammt."
 msgstr "Only reset the second factor if you are sure the request comes from the person themselves."
 
-#: src/core/services/compliance/vvt.py:158
-msgid "Ereignisse folgen den Fristen der Kontaktstufe ihrer Person (siehe Verarbeitung „Personen-Stammdaten“); eine Frist am Dokumentationstyp gilt zusätzlich, es gilt die zuerst ablaufende. Die Löschung setzt das Ereignis auf gelöscht: Zusatzfelder und Suchtext werden sofort geleert, Dateianhänge gelöscht; die Werte früherer Fassungen redigiert regulär der Aufbewahrungslauf. Fälle haben keine eigene Frist, Episoden und Wirkungsziele folgen ihrem Fall. Daten unter einer Aufbewahrungssperre (Legal Hold) sind ausgenommen."
-msgstr "Events follow the periods of their person's contact stage (see processing activity \"Person master data\"); a period on the documentation type applies in addition, whichever expires first applies. Deletion marks the event as deleted: additional fields and search text are emptied at once, attachments deleted; the values of earlier versions are redacted by the retention run as a rule. Cases have no period of their own; episodes and outcome goals follow their case. Data under a legal hold is exempt."
-
 #: src/core/services/compliance/vvt.py:260
 msgid "Standardmäßig 24 Monate rollierend, je Einrichtung einstellbar (0 schaltet die Löschung ab). Bereinigung durch den täglichen ``enforce_retention``-Lauf, je Einrichtung nur deren eigene Einträge. Ausgenommen bleiben Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs, Nachweise der Redaktion der Ereignis-Historie und Nachweise herausgegebener Berichtszeiträume. Einträge ohne Einrichtung (Systemadministration, Konten ohne Einrichtung, Anmeldeversuche unter unbekanntem Benutzernamen, installationsweite Lauf-Marker) löscht kein Lauf; sie bleiben unbefristet erhalten. Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log."
 msgstr "24 months rolling by default, adjustable per facility (0 disables deletion). Pruned by the daily ``enforce_retention`` run, each facility only for its own entries. Security violations, system markers of the retention run, proofs of event history redaction and proofs of released reporting periods are exempt. Entries without a facility (system administration, accounts without a facility, login attempts with an unknown username, installation-wide run markers) are deleted by no run; they are kept indefinitely. Legal holds do not apply to the audit log."
@@ -13291,3 +13237,39 @@ msgstr "Can be changed at any time. Enabling does not override visibility rules:
 #: src/templates/core/config/document_types/form.html:101
 msgid "Ein Typ „Kurzkontakt“ ohne Pflichtfelder: Jeder Tipp auf +1 in der Strichliste hält einen anonymen Kontakt fest."
 msgstr "A type \"Short contact\" without required fields: every tap on +1 in the tally sheet records an anonymous contact."
+
+#: src/core/services/compliance/vvt.py:165
+msgid "Ereignisse folgen den Fristen der Kontaktstufe ihrer Person (siehe Verarbeitung „Personen-Stammdaten“); eine Frist am Dokumentationstyp gilt zusätzlich, es gilt die zuerst ablaufende. Die Löschung setzt das Ereignis auf gelöscht: Zusatzfelder und Suchtext werden sofort geleert, Dateianhänge gelöscht; die Werte früherer Fassungen redigiert regulär der nächste Aufbewahrungslauf. Bei nicht gelöschten Ereignissen redigiert er die Werte früherer Fassungen nach 24 Monaten (einstellbar, 0 schaltet die Frist ab); die jüngste Fassung behält ihre Werte, außer bei Ereignissen einer anonymisierten Person: dort redigiert er alle Fassungen unabhängig von der Frist. Die Fassung selbst (wer, wann, welche Felder) bleibt, bis er sie 24 Monate nach der Redaktion löscht (einstellbar, 0 schaltet die Frist ab). Fälle haben keine eigene Frist, Episoden und Wirkungsziele folgen ihrem Fall. Daten unter einer Aufbewahrungssperre (Legal Hold) sind ausgenommen. Übergabenotizen löscht der Aufbewahrungslauf standardmäßig 90 Tage nach ihrer letzten Änderung endgültig (einstellbar); für sie gibt es keinen Legal Hold."
+msgstr "Events follow the periods of their person's contact stage (see processing “Person master data”); a period on the document type applies in addition, whichever expires first. Deletion marks the event as deleted: additional fields and search text are emptied at once, attachments are deleted; the values of earlier versions are redacted by the next retention run as a rule. For events that are not deleted, the run redacts the values of earlier versions after 24 months (configurable, 0 switches the period off); the newest version keeps its values, except for events of an anonymised person: there it redacts all versions regardless of the period. The version itself (who, when, which fields) remains until the run deletes it 24 months after redaction (configurable, 0 switches the period off). Cases have no period of their own, episodes and outcome goals follow their case. Data under a legal hold is exempt. Handover notes are deleted permanently by the retention run 90 days after their last change by default (configurable); there is no legal hold for them."
+
+#: src/core/services/compliance/vvt.py:243
+msgid "Soft-Delete; Vier-Augen-Prinzip für manuelle Löschungen von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“; Dateien vernichten Leitung und Anwendungsbetreuung ohne zweite Person"
+msgstr "Soft delete; four-eyes principle for manual deletions of persons and of events and cases at the “With additional details” stage; managers and application support destroy files without a second person"
+
+#: src/core/services/compliance/vvt.py:255
+msgid "Nachweis der Rechenschaftspflicht (DSGVO Art. 5 Abs. 2). Erkennung von Missbrauch, Beweismittel im Datenleck-Fall, Rekonstruktion von Änderungen. Einträge werden nur angehängt und im laufenden Betrieb weder geändert noch gelöscht; nach Ablauf der Audit-Frist löscht sie der tägliche Aufbewahrungslauf (siehe Speicherfrist)."
+msgstr "Demonstration of accountability (GDPR Art. 5(2)). Detection of misuse, evidence in case of a data breach, reconstruction of changes. Entries are only appended and are neither changed nor deleted during operation; once the audit period has expired, the daily retention run deletes them (see retention period)."
+
+#: src/core/services/compliance/vvt.py:306
+msgid "Append-Only durch DB-Konvention und RLS-Policies; Ausnahme ist das Löschen abgelaufener Einträge durch den Aufbewahrungslauf"
+msgstr "Append-only through DB convention and RLS policies; the exception is the deletion of expired entries by the retention run"
+
+#: src/core/services/compliance/vvt.py:310
+msgid "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert); der Aufbewahrungslauf umgeht den Trigger transaktional, um abgelaufene Einträge zu löschen, die Wartungsfunktion für die Hash-Kette, um nur deren Prüfwerte neu zu setzen; fachliche Inhalte ändert keiner der beiden Wege"
+msgstr "Immutability enforced by DB trigger (UPDATE/DELETE blocked); the retention run bypasses the trigger within a transaction to delete expired entries, the maintenance function for the hash chain to reset only its check values; neither path changes business content"
+
+#: src/core/services/compliance/vvt.py:349
+msgid "Konto-Stammdaten: bis zur Loeschung des Accounts. Login-Versuche und Kontosperren: als Audit-Einträge, aus denen die Sperre berechnet wird; sie folgen der Audit-Frist (siehe Verarbeitung 'Audit-Log'), Fehlversuche unter unbekanntem Benutzernamen und von Konten ohne Einrichtung bleiben unbefristet. Recovery-Codes bis zu deren Verbrauch oder Neuerstellung."
+msgstr "Account master data: until the account is deleted. Login attempts and account lockouts: as audit entries from which the lockout is computed; they follow the audit period (see processing 'Audit log'), failed attempts under an unknown username and of accounts without a facility are kept indefinitely. Recovery codes until they are used or regenerated."
+
+#: src/core/services/compliance/vvt.py:444
+msgid "Leitung der Einrichtung (4-Augen bei der Löschung von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“)"
+msgstr "Facility management (four eyes when deleting persons and events and cases at the “With additional details” stage)"
+
+#: src/core/services/compliance/vvt.py:458
+msgid "Bearbeitungsvorgänge: Die Anwendung löscht Lösch- und Berichtigungsanträge nicht; Status, beteiligte Personen und Zeitpunkte bleiben als Nachweis. Die Anonymisierung einer Person tilgt die Inhalte ihrer Berichtigungsanträge und ersetzt die Begründungen der Löschanträge und Aufbewahrungssperren zu ihr, ihren Fällen und Ereignissen durch „[Anonymisiert]“. Eine Frist (etwa 3 Jahre nach Abschluss als Nachweis der Erfüllung) legt die Einrichtung organisatorisch fest. Erzeugte Datenpakete: nach Abholung löschen. Berichtigungs- und Löschvorgänge: im AuditLog bis zum Ablauf der Audit-Frist (siehe Verarbeitung 'Audit-Log')."
+msgstr "Processing records: the application does not delete deletion or rectification requests; status, persons involved and timestamps remain as evidence. Anonymising a person removes the content of their rectification requests and replaces the reasons of the deletion requests and legal holds concerning them, their cases and events with “[Anonymisiert]”. The facility sets a period organisationally (e.g. 3 years after completion as proof of fulfilment). Generated data packages: delete after collection. Rectification and deletion records: in the audit log until the audit period expires (see processing 'Audit log')."
+
+#: src/core/services/compliance/vvt.py:476
+msgid "Vier-Augen-Prinzip für die Löschung von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“"
+msgstr "Four-eyes principle for deleting persons and events and cases at the “With additional details” stage"
