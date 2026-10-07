@@ -68,11 +68,10 @@ services:
 
   redis:
     logging: *default-logging
-    # Shared Cache fuer django-ratelimit + Health-Detail-Caching (Refs #795,
-    # C-27). Ersetzt den DatabaseCache-Default; der bleibt als Fallback
-    # bestehen (leeres REDIS_URL, siehe web-Service weiter unten und
-    # docs/ops-runbook.md § 5.4a) — Bestands-Deployments ohne Redis brechen
-    # dadurch nicht.
+    # Shared cache for django-ratelimit + health-detail caching (Refs #795,
+    # C-27). Replaces the DatabaseCache default, which stays as a fallback
+    # (empty REDIS_URL, see the web service further below and
+    # docs/ops-runbook.md § 5.4a) — deployments without Redis keep working.
     #
     # Warum Redis 8 und nicht das im Issue skizzierte ``redis:7-alpine``:
     # Redis 7.4 wechselte auf RSALv2/SSPL (nicht OSI-konform); erst Redis 8
@@ -152,14 +151,14 @@ services:
     # den zuletzt gepinnten Release-Tag — Operator-Setups ohne explizite
     # .env bleiben reproduzierbar. APP_IMAGE_DIGEST bindet optional zusaetzlich
     # an den unveraenderlichen Digest (Refs #2061).
-    # Release-Tags liegen als Image in der Registry (auch als Pre-Release
-    # gekennzeichnete); ob ein Tag pullbar ist, zeigt
-    # ``docker manifest inspect ghcr.io/anlaufstelle/app:<tag>`` (Exit-Code
-    # 0 = veroeffentlicht). Ausweichweg ohne Registry-Zugriff ist der lokale
-    # Image-Build, siehe Admin-Guide § 1 "Image lokal aus dem Dockerfile
-    # bauen" (Refs #2308). ``web`` erhaelt APP_VERSION nicht aus der .env:
-    # der Wert dieser Variable waehlt nur das Image, /health/ zeigt den beim
-    # Build eingebackenen Wert.
+    # Release tags exist as images in the registry (including those marked as
+    # pre-release); whether a tag can be pulled is shown by
+    # ``docker manifest inspect ghcr.io/anlaufstelle/app:<tag>`` (exit code
+    # 0 = published). The fallback without registry access is the local image
+    # build, see Admin-Guide § 1 "Image lokal aus dem Dockerfile bauen"
+    # (Refs #2308). ``web`` does not receive APP_VERSION from the .env: the
+    # value of this variable only selects the image, /health/ shows the value
+    # baked in at build time.
     image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.99.5}${APP_IMAGE_DIGEST:-}
     # Container-Runtime-Hardening (Refs #1374): kein Privilege-Escalation,
     # cap_drop ALL (web laeuft als non-root appuser auf :8000, braucht keine

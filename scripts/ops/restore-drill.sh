@@ -3,18 +3,18 @@ set -uo pipefail
 
 # Anlaufstelle Backup-Restore-Drill (Refs #739, #720, #981)
 #
-# Verifiziert, dass das aktuellste Backup (prod oder dev) vollstaendig in eine
-# Wegwerf-DB wiederherstellbar ist und dabei die Verteidigungslinien
-# (RLS, AuditLog-Immutability-Trigger) erhalten bleiben. Bei Erfolg wird
-# der Lauf via ``manage.py mark_restore_verified`` im AuditLog
-# dokumentiert -> Compliance-Check „Restore-Test" springt auf gruen.
+# Verifies that the latest backup (prod or dev) can be restored completely into
+# a throwaway DB and that the lines of defence (RLS, AuditLog immutability
+# trigger) survive. On success the run is recorded in the AuditLog via
+# ``manage.py mark_restore_verified`` -> the compliance check "Restore-Test"
+# turns green.
 #
-# Zwei Backup-Pfade -> zwei Formate; der Drill deckt BEIDE ab (OPS-05,
-# Refs #1336). Ausgeliefert wird nur der prod-Pfad; der dev-Pfad gehoert zum
-# dev-Betrieb des Projekts. Wahl per Flag ``--dev``/``--prod`` oder ``$DRILL_FORMAT``;
-# fuer Prod zusaetzlich per ``--timestamp``/``$BACKUP_TIMESTAMP``. Ohne Satzwahl
-# wird anhand der vorhandenen Backup-Dateien auto-erkannt und der neueste Satz
-# mit einem deutlichen Banner verwendet.
+# Two backup paths -> two formats; the drill covers BOTH (OPS-05, Refs #1336).
+# Only the prod path is shipped; the dev path belongs to the project's own dev
+# operation. Choose with the flag ``--dev``/``--prod`` or ``$DRILL_FORMAT``;
+# for prod additionally with ``--timestamp``/``$BACKUP_TIMESTAMP``. Without a
+# choice the format is auto-detected from the existing backup files and the
+# newest set is used with a clear banner.
 #
 #   dev  : dev-ops/deploy/backup.sh (dev.anlaufstelle.app)
 #          - Quelle:  $DEV_BACKUP_DIR/dump-*.pgc.enc  (Default /var/backups/anl)
@@ -30,8 +30,8 @@ set -uo pipefail
 # DATABASE (beide App-Rollen sind NOCREATEDB) und bypassed zugleich RLS/FORCE-RLS
 # beim Restore.
 #
-# Die Dump-Dateien gehoeren dem Konto, unter dem das Backup lief (im empfohlenen
-# Setup root; prod: Modus 0640, dev: 0600) — daher als root ausfuehren:
+# The dump files belong to the account the backup ran under (root in the
+# recommended setup; prod: mode 0640, dev: 0600) — so run as root:
 #   sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh            # auto
 #   sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod     # explizit
 #

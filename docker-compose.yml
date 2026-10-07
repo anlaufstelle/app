@@ -11,8 +11,8 @@
 # ``docker compose up`` auf 0.0.0.0 lauschen und Datenbank wie Anwendung mit
 # bekannten Zugangsdaten aus dem Internet erreichbar machen (Refs #799/#1062).
 #
-# Fuer den produktiven Einsatz bitte ``docker-compose.prod.yml`` verwenden — dort
-# gibt es weder Auto-Seed noch ``SEED_ALLOWED``; die Ersteinrichtung laeuft ueber
+# For production use ``docker-compose.prod.yml`` — it has neither auto-seed nor
+# ``SEED_ALLOWED``; the initial setup runs through
 # ``manage.py create_super_admin`` (docs/admin-guide.md § 2.1).
 x-logging: &default-logging
   driver: json-file
@@ -174,10 +174,10 @@ services:
     # Port 3310 ist nur innerhalb des Compose-Netzwerks sichtbar — kein Host-Binding.
     # Aktivierung via CLAMAV_ENABLED=true im web-Container.
     # Refs #938: Healthcheck via clamdscan --version (Smoke-Test des Binary).
-    # clamd lauscht im Image-Default auf TCP 3310 (so scannt die App); der
-    # Binary-Smoke-Test statt des Socket-Probes clamdcheck.sh bleibt robust
-    # gegen die lange Signatur-Lade-Phase, in der der Probe sonst transient
-    # unhealthy meldet.
+    # clamd listens on TCP 3310 in the image default (that is how the app scans);
+    # the binary smoke test instead of the socket probe clamdcheck.sh stays robust
+    # during the long signature-loading phase, in which the probe would otherwise
+    # report transiently unhealthy.
     healthcheck:
       test: ["CMD", "clamdscan", "--version"]
       interval: 60s

@@ -18,19 +18,19 @@
         trusted_proxies_strict
     }
 
-    # Fehler-Protokoll (Refs #1963). Der 'format filter'-Encoder unten haengt am
-    # Site-Logger und deckt nur http.log.access.* ab. Caddys FEHLER-Logger
-    # http.log.error.* laeuft davon unberuehrt auf stderr — im Container also in
-    # den Docker-json-file-Log des Hosts: ausserhalb dieses Volumes, ausserhalb
-    # roll_keep_for und ausserhalb jeder Loeschlogik. Er traegt dieselbe
-    # request>uri samt Query wie der Access-Log und entsteht bei JEDEM
-    # Handler-Fehler: Upstream weg (502/504 im Deploy-Fenster, Worker-OOM,
-    # gunicorn-Restart) oder 413 aus request_body max_size.
-    # Dieser benannte Logger holt ihn in dasselbe Volume, unter dieselbe
-    # Aufbewahrung und durch dieselbe Redaktion. Doppelt steht dadurch nichts
-    # im Log: Der Caddyfile-Adapter traegt http.log.error selbst in
-    # logging.logs.default.exclude ein, stderr bleibt fuer alles uebrige
-    # zustaendig (Caddy-eigene Fehler wie tls.* also weiterhin in 'docker logs').
+    # Error log (Refs #1963). The 'format filter' encoder below hangs off the
+    # site logger and covers only http.log.access.*. Caddy's ERROR logger
+    # http.log.error.* is untouched by it and writes to stderr — inside the
+    # container that is the host's Docker json-file log: outside this volume,
+    # outside roll_keep_for and outside any deletion logic. It carries the same
+    # request>uri including the query as the access log and is written for EVERY
+    # handler error: upstream gone (502/504 in the deploy window, worker OOM,
+    # gunicorn restart) or 413 from request_body max_size.
+    # This named logger brings it into the same volume, under the same
+    # retention and through the same redaction. Nothing is logged twice: the
+    # Caddyfile adapter itself adds http.log.error to
+    # logging.logs.default.exclude, and stderr stays responsible for everything
+    # else (Caddy's own errors such as tls.* still go to 'docker logs').
     log errors {
         include http.log.error
         output file /var/log/caddy/error.log {

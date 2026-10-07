@@ -2,20 +2,20 @@
 set -euo pipefail
 
 # ============================================================================
-# Anlaufstelle — Erstinbetriebnahme, startet den Stack selbst (Refs #793, C-25)
+# Anlaufstelle — first-time setup, starts the stack itself (Refs #793, C-25)
 #
-# Fuehrt die in docs/admin-guide.md § 1 (Schritt 4) und § 2.1 beschriebenen
-# Erst-Schritte in einer idempotenten, fail-loud Reihenfolge aus:
+# Runs the first-time steps described in docs/admin-guide.md § 1 (step 4) and
+# § 2.1 in an idempotent, fail-loud order:
 #
-#   1. Datenbank starten und auf Bereitschaft warten
-#   2. Schema anlegen/aktualisieren (One-Shot-Job `docker-migrate.sh`)
-#   3. Vollen Stack starten (db, redis, web, cron, caddy, clamav)
-#   4. `manage.py check --deploy`     — Deployment-Settings
-#   5. `manage.py check_db_roles`     — DB-Rollen-/Ownership-Posture
-#   6. Super-Admin anlegen, falls noch keiner existiert (interaktiv)
+#   1. Start the database and wait until it is ready
+#   2. Create/update the schema (one-shot job `docker-migrate.sh`)
+#   3. Start the full stack (db, redis, web, cron, caddy, clamav)
+#   4. `manage.py check --deploy`     — deployment settings
+#   5. `manage.py check_db_roles`     — DB role/ownership posture
+#   6. Create a super admin if none exists yet (interactive)
 #
-# Idempotenz: jeder Schritt darf beliebig oft laufen. Migrationen sind dann
-# No-ops, ein vorhandener Super-Admin wird uebersprungen statt ueberschrieben.
+# Idempotency: every step may run any number of times. Migrations are then
+# no-ops, an existing super admin is skipped instead of overwritten.
 #
 # ---------------------------------------------------------------------------
 # Was dieses Skript BEWUSST NICHT tut
