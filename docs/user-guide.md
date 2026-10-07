@@ -129,7 +129,7 @@ Dieselbe Aktion lösen zwei **Tastenkürzel** aus, auch aus einem Eingabefeld he
 
 Ein **Zurück** im Browser bringt die Anwendung nicht wieder: Die Seite verdeckt sich erneut und lädt neu — Sie landen auf der Anmeldemaske.
 
-**Ohne Internetverbindung** funktioniert der Knopf ebenfalls: Der Inhalt wird verdeckt, der lokale Schlüssel für die Offline-Daten wird gelöscht und der Browser wechselt auf die neutrale Seite. Eine Abmeldung am Server ist offline nicht möglich — dafür sind die Offline-Daten ohne erneute Anmeldung nicht mehr lesbar, die Offline-Berechtigung läuft ohnehin nach 48 Stunden ab, und ein Neustart des Geräts räumt sie ab.
+**Ohne Internetverbindung** funktioniert der Knopf ebenfalls: Der Inhalt wird verdeckt, der lokale Schlüssel für die Offline-Daten wird gelöscht und der Browser wechselt auf die neutrale Seite. Eine Abmeldung am Server ist offline nicht möglich — dafür sind die Offline-Daten ohne erneute Anmeldung nicht mehr lesbar, die verschlüsselten Daten bleiben zunächst auf dem Gerät. Ein Neustart löscht sie nicht. Abgelaufene Offline-Bestände (nach 48 Stunden) räumt die App erst mit geladenem Schlüssel auf, etwa beim Öffnen nach erneuter Anmeldung; noch nicht übertragene Einträge werden durch diesen Fristablauf nicht gelöscht.
 
 #### Was der Knopf nicht leisten kann
 

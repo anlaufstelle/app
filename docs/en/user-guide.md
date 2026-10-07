@@ -132,7 +132,7 @@ Two **keyboard shortcuts** trigger the same action, including from inside a text
 
 Pressing **Back** in the browser does not bring the application back: the page covers itself again and reloads -- you end up on the sign-in form.
 
-**Without an internet connection** the button works as well: the content is covered, the local key for the offline data is deleted, and the browser navigates to the neutral page. Signing out on the server is not possible offline -- but the offline data is unreadable without signing in again, the offline authorization expires after 48 hours anyway, and restarting the device clears it.
+**Without an internet connection** the button works as well: the content is covered, the local key for the offline data is deleted, and the browser navigates to the neutral page. Signing out on the server is not possible offline -- but the offline data is unreadable without signing in again, the encrypted data initially stays on the device. Restarting does not delete it. The app removes expired offline data (after 48 hours) only with a loaded key, for example when opened after signing in again; entries that have not yet been transferred are not deleted by this expiry.
 
 #### What the button cannot do
 
@@ -1035,4 +1035,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: c5e19dd2d2182891af88ba88832ed93513bc282e -->
+<!-- source-hash: 5d899fbebd4fca93f433fd1ec48059c03f594d63 -->
