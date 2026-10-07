@@ -550,6 +550,24 @@ class TestAuditLogPruningIgnoresLegalHolds:
         assert not AuditLog.objects.filter(pk=facility_entry.pk).exists()
         assert AuditLog.objects.filter(pk=system_entry.pk).exists()
 
+    def test_prune_for_a_facility_keeps_entries_without_facility(self, facility, settings_obj):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from core.services.retention import prune_auditlog
+
+        settings_obj.auditlog_retention_months = 24
+        settings_obj.save()
+        facility_entry = AuditLog.objects.create(facility=facility, action=AuditLog.Action.SYSTEM_VIEW)
+        system_entry = AuditLog.objects.create(facility=None, action=AuditLog.Action.SYSTEM_VIEW)
+
+        result = prune_auditlog(facility, settings_obj, now=timezone.now() + timedelta(days=800))
+
+        assert result["count"] == 1
+        assert not AuditLog.objects.filter(pk=facility_entry.pk).exists()
+        assert AuditLog.objects.filter(pk=system_entry.pk).exists()
+
     def test_audit_entry_about_held_event_is_pruned(self, facility, settings_obj, sample_event, lead_user):
         from datetime import timedelta
 

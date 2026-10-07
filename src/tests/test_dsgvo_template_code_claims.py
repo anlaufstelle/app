@@ -25,6 +25,7 @@ import re
 import time
 import uuid
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 import yaml
@@ -355,34 +356,68 @@ STALE_RECOVERY_CLAIMS = (
 )
 
 
+_SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.;!?]) | -- ")
+
+
 def _sentences(text: str) -> list[str]:
-    return [sentence for sentence in text.replace("; ", ". ").split(". ") if sentence]
+    return [sentence for sentence in _SENTENCE_BOUNDARY_RE.split(text) if sentence]
+
+
+class RecoveryGrammar(NamedTuple):
+    """How a language attaches the "both inputs unchanged" condition to a promise.
+
+    ``opener`` finds where the promise's own condition (or an exception
+    such as "außer wenn"/"unless") begins; ``condition``
+    must match right there and spell out a conjunction of both inputs followed
+    directly by the unchanged predicate, so negation ("nicht", "not"), a
+    disjunction or an input qualifying something else (a "correct-password
+    login") cannot satisfy it.
+    """
+
+    opener: re.Pattern
+    condition: re.Pattern
+    inputs: frozenset[str]
 
 
 #: Both key derivation inputs must stay unchanged for locked ciphertext to
 #: become readable again (``deriveSessionKey(password, saltB64Url)`` in ``crypto.js``); a
-#: recovery promise naming only one of them overstates what survives. The last
-#: item is the "unchanged" marker that closes the condition.
-RECOVERY_CONDITIONS_DE = ("Passwort", "Offline-Salt", "unverändert")
-RECOVERY_CONDITIONS_EN = ("password", "offline salt", "unchanged")
+#: recovery promise naming only one of them overstates what survives.
+RECOVERY_CONDITIONS_DE = RecoveryGrammar(
+    opener=re.compile(r"\b(?:außer wenn|es sei denn|wenn|sofern|solange)\b"),
+    condition=re.compile(
+        r"(?:wenn|sofern|solange) (?:das |der )?(Passwort|Offline-Salt) und (?:das |der )?(Passwort|Offline-Salt)"
+        r"(?: des Kontos)? unverändert (?:sind|bleiben)\b"
+    ),
+    inputs=frozenset({"Passwort", "Offline-Salt"}),
+)
+RECOVERY_CONDITIONS_EN = RecoveryGrammar(
+    opener=re.compile(r"\b(?:except if|except when|unless|only if|if|as long as|while)\b"),
+    condition=re.compile(
+        r"(?:only if|if|as long as|while) (?:the )?(password|offline salt) and (?:the )?(password|offline salt)"
+        r" (?:are|remain|stay) unchanged\b"
+    ),
+    inputs=frozenset({"password", "offline salt"}),
+)
 
 
-def _assert_recovery_claims_name_both_inputs(name: str, text: str, phrase: str, conditions: tuple[str, ...]) -> None:
-    """Every promise of renewed readability names both inputs in its own unchanged condition.
+def _assert_recovery_claims_name_both_inputs(name: str, text: str, phrase: str, grammar: RecoveryGrammar) -> None:
+    """Every promise of renewed readability carries its own "both inputs unchanged" condition.
 
-    Only the clause from the promise up to the first "unchanged" marker counts:
-    a later mention elsewhere in the sentence (e.g. the salt rotation's
-    "correct-password login") must not stand in for a dropped input.
+    Within the promise's sentence, the first condition opener after the
+    promise must start a condition that names both inputs, joined by "and",
+    directly followed by the unchanged predicate. A mention elsewhere in the
+    sentence (e.g. the salt rotation's "correct-password login", before or
+    after the promise) cannot stand in for a dropped input.
     """
-    *inputs, unchanged = conditions
     hits = [sentence for sentence in _sentences(text) if phrase in sentence]
     assert hits, (name, phrase)
     for sentence in hits:
-        after_promise = sentence[sentence.index(phrase) :]
-        assert unchanged in after_promise, (name, unchanged, sentence)
-        condition = after_promise[: after_promise.index(unchanged)]
-        for required in inputs:
-            assert required in condition, (name, required, sentence)
+        after_promise = sentence[sentence.index(phrase) + len(phrase) :]
+        opener = grammar.opener.search(after_promise)
+        assert opener, (name, "no condition after promise", sentence)
+        condition = grammar.condition.match(after_promise, opener.start())
+        assert condition, (name, "condition does not keep both inputs unchanged", sentence)
+        assert set(condition.groups()) == grammar.inputs, (name, condition.group(0), sentence)
 
 
 class TestRecoveryClaimHelper:
@@ -401,13 +436,84 @@ class TestRecoveryClaimHelper:
         with pytest.raises(AssertionError):
             _assert_recovery_claims_name_both_inputs("probe", sentence, "wieder lesbar", RECOVERY_CONDITIONS_DE)
 
-    def test_complete_recovery_promise_passes(self):
-        _assert_recovery_claims_name_both_inputs(
-            "probe",
+    @pytest.mark.parametrize(
+        "sentence",
+        [
+            "Er wird nach einer Anmeldung mit korrektem Passwort nur wieder lesbar, "
+            "wenn der Offline-Salt unverändert ist.",
+            "Er wird nur wieder lesbar, wenn Passwort und Offline-Salt nicht unverändert sind.",
+            "Er wird nur wieder lesbar, wenn Passwort oder Offline-Salt unverändert ist.",
+            "Er wird nur wieder lesbar, wenn das Passwort unverändert ist und der Offline-Salt neu erzeugt wurde.",
+            "Er wird nur wieder lesbar, wenn der Offline-Salt unverändert ist, "
+            "und die Sitzung endet, wenn Passwort und Offline-Salt unverändert sind.",
+            "Er wird wieder lesbar. Das gilt, wenn Passwort und Offline-Salt unverändert sind.",
+            "Er wird wieder lesbar, außer wenn Passwort und Offline-Salt unverändert sind.",
+        ],
+        ids=[
+            "login-password-before-condition",
+            "negated-condition",
+            "disjunction",
+            "password-only-with-salt-changed",
+            "later-condition-in-same-sentence",
+            "condition-in-next-sentence",
+            "exception-instead-of-condition",
+        ],
+    )
+    def test_recovery_promise_without_its_own_unchanged_condition_is_rejected_de(self, sentence):
+        with pytest.raises(AssertionError):
+            _assert_recovery_claims_name_both_inputs("probe", sentence, "wieder lesbar", RECOVERY_CONDITIONS_DE)
+
+    @pytest.mark.parametrize(
+        "sentence",
+        [
+            "The ciphertext becomes readable again after the next correct-password login "
+            "only if offline salt is unchanged.",
+            "The ciphertext becomes readable again only if offline salt is unchanged.",
+            "The ciphertext becomes readable again only if password is unchanged.",
+            "The ciphertext becomes readable again only if password and offline salt are not unchanged.",
+            "The ciphertext becomes readable again only if password or offline salt is unchanged.",
+            "The ciphertext becomes readable again unless password and offline salt are unchanged.",
+            "The ciphertext becomes readable again -- logout keeps it only if password and offline salt are unchanged.",
+        ],
+        ids=[
+            "login-password-before-condition",
+            "salt-only",
+            "password-only",
+            "negated-condition",
+            "disjunction",
+            "exception-instead-of-condition",
+            "condition-after-clause-boundary",
+        ],
+    )
+    def test_recovery_promise_without_its_own_unchanged_condition_is_rejected_en(self, sentence):
+        with pytest.raises(AssertionError):
+            _assert_recovery_claims_name_both_inputs("probe", sentence, "readable again", RECOVERY_CONDITIONS_EN)
+
+    @pytest.mark.parametrize(
+        "sentence",
+        [
             "Er wird nur wieder lesbar, wenn Passwort und Offline-Salt des Kontos unverändert sind.",
-            "wieder lesbar",
-            RECOVERY_CONDITIONS_DE,
-        )
+            "Er wird nach einer Anmeldung mit korrektem Passwort nur wieder lesbar, "
+            "sofern das Passwort und der Offline-Salt unverändert bleiben.",
+            "Er wird nur wieder lesbar, wenn Offline-Salt und Passwort unverändert sind; der Salt rotiert sonst.",
+        ],
+        ids=["template-wording", "articles-and-remain", "reverse-order"],
+    )
+    def test_complete_recovery_promise_passes_de(self, sentence):
+        _assert_recovery_claims_name_both_inputs("probe", sentence, "wieder lesbar", RECOVERY_CONDITIONS_DE)
+
+    @pytest.mark.parametrize(
+        "sentence",
+        [
+            "It becomes readable again after the next login only if password and offline salt are unchanged "
+            "-- the server rotates the salt on a correct-password login against a locked account.",
+            "It becomes readable again as long as the password and the offline salt remain unchanged.",
+            "It becomes readable again only if offline salt and password are unchanged.",
+        ],
+        ids=["summary-wording", "as-long-as-remain", "reverse-order"],
+    )
+    def test_complete_recovery_promise_passes_en(self, sentence):
+        _assert_recovery_claims_name_both_inputs("probe", sentence, "readable again", RECOVERY_CONDITIONS_EN)
 
 
 def _assert_salt_rotation_triggers_named(name: str, text: str) -> None:
@@ -499,6 +605,20 @@ class TestOfflineRecoveryDocs:
         # The salt rotation explanation later in the same sentence still says
         # "correct-password login"; it must not satisfy the password condition.
         assert "correct-password login" in incomplete
+        with pytest.raises(AssertionError):
+            _assert_recovery_claims_name_both_inputs("en summary", incomplete, "readable again", RECOVERY_CONDITIONS_EN)
+
+    def test_login_password_does_not_stand_in_for_the_unchanged_password(self):
+        current = _section(
+            _flat(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8")), "## Privacy Architecture", "## Role Model"
+        )
+        complete = "after the next login only if password and offline salt are unchanged"
+        assert current.count(complete) == 1
+        # A password-qualified login right before "only if" says nothing about
+        # the password staying unchanged since encryption.
+        incomplete = current.replace(
+            complete, "after the next correct-password login only if offline salt is unchanged"
+        )
         with pytest.raises(AssertionError):
             _assert_recovery_claims_name_both_inputs("en summary", incomplete, "readable again", RECOVERY_CONDITIONS_EN)
 
