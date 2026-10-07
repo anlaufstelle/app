@@ -62,7 +62,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Ausführbare Befehle in den Handtest-Matrizen** (#2452) — Matrizen B, C, D und Hub nennen vorhandene Aufrufe; die Breach-Probe berücksichtigt Django-Schwellen, Kontosperre und HTTP-Ratelimit, der entfallene Geräte-Lease-Fall ist aus dem manuellen Pflichtprofil entfernt.
 
 - **Retention-Handtests am Datenmodell ausgerichtet** (#2498) — Matrix D prüft Ereignisfristen und einrichtungsweiten Laufumfang, Fallabschlüsse, k-Schwelle, Paket-Zugriff und Audit-Schutz mit explizitem RLS-Kontext; Matrix C nennt vorhandene Testbelege, Widerrufs- und Breach-Erwartungen berücksichtigen Scan-Grenzen und mitgezählte Sperrversuche.
-- **DSGVO-Handtests an Personenmodell und Oberfläche angepasst** (#2497) — Die Datenminimierungsprobe prüft anonyme Ereignisse ohne Person und das Mindestkontaktstufen-Gate; Export- und Löschknöpfe sowie das JSON-Feld sind wörtlich korrigiert.
+- **DSGVO-Handtests an Personenmodell und Oberfläche angepasst** (#2497) — Die Datenminimierungsprobe prüft anonyme Ereignisse ohne Person und das Mindestkontaktstufen-Gate; Export- und Löschknöpfe im ⋮-Menü der Personenakte sowie das JSON-Feld sind wörtlich beschrieben.
 
 - **Handtest-Hub und Tagesablauf korrigiert** (#2494) — Anonyme Kontakte, Personenanlage, Kontaktstufen, Offline-Mitnahme, Dateiupload und Account-Zugriff sind mit den tatsächlichen Oberflächentexten beschrieben; die E2E-Zählung berücksichtigt nur passende Tests.
 

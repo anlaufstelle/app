@@ -130,7 +130,7 @@
 **Schritte:**
 1. Mit `leitung` einloggen, Sudo-Mode betreten.
 2. Person aus Liste wählen, Detail öffnen.
-3. Auf **„JSON-Export (Art. 20)“** klicken → Download startet.
+3. Im **⋮-Menü der Personenakte** auf **„JSON-Export (Art. 20)“** klicken → Download startet.
 4. JSON öffnen und prüfen:
    - Alle Personen-Stammdaten enthalten.
    - Alle Events mit Inhalten enthalten.
@@ -161,7 +161,7 @@
 **Voraussetzung:** Sudo-Mode aktiv.
 
 **Schritte:**
-1. Wie AUD-DSGVO-Art15-01, aber **„PDF-Export (Art. 15)“** statt **„JSON-Export (Art. 20)“**.
+1. Wie AUD-DSGVO-Art15-01, aber im **⋮-Menü der Personenakte** **„PDF-Export (Art. 15)“** statt **„JSON-Export (Art. 20)“** wählen.
 2. PDF öffnen → Inhalt enthält Personen-Stammdaten + Events + Cases.
 3. Layout: Kopfzeile mit Facility-Name, Fußzeile mit Datum + „Generiert am".
 
@@ -261,7 +261,7 @@
 **Voraussetzung:** eine Person vorhanden, beide Rollen verfügbar.
 
 **Schritte (in zwei Profilen):**
-1. **Profil A — `fachkraft`:** Person öffnen → **„Löschen beantragen“** → Begründung eintragen → **„Löschantrag stellen“**.
+1. **Profil A — `fachkraft`:** Person öffnen → **⋮-Menü der Personenakte** → **„Löschen beantragen“** → Begründung eintragen → **„Löschantrag stellen“**.
 2. AuditLog: `DELETION_REQUESTED` mit `requested_by=fachkraft`.
 3. **Profil B — `leitung`:** `/deletion-requests/` öffnen → Eintrag sichtbar.
 4. Auf **„Genehmigen"** klicken → Soft-Delete erfolgt.
