@@ -100,4 +100,4 @@ def test_discovery_covers_every_registered_translation():
     versions = runpy.run_path(str(ROOT / "scripts/check_translation_versions.py"))
     checker = runpy.run_path(str(ROOT / "scripts/check_translation_structure.py"))
     discovered = {path.relative_to(ROOT).as_posix() for path in checker["translation_paths"](ROOT)}
-    assert set(versions["TRANSLATED_FILES"]) <= discovered
+    assert set(versions["TRANSLATED_FILES"]) == discovered

@@ -390,14 +390,13 @@ ps aux | grep -E 'gunicorn|runserver' | grep -v grep
 
 # Bestimmten Port freigeben
 lsof -ti :8443 | xargs kill
-
 ```
-
----
 
 Ein Server auf Port 8844 gehört zum jeweiligen E2E-Lauf. Den eigenen Lauf im
 zugehörigen Terminal beenden oder den fremden Lauf abwarten; nicht alle
 Gunicorn-Prozesse gemeinsam beenden.
+
+---
 
 ## Coding Conventions
 
@@ -858,7 +857,7 @@ Mutationsnachweis. Es gibt kein verlässliches Resume: Ein Neustart von
 Für längere Runs auf einer Sandbox, die OOM-Killer / Idle-Killer mitbringt, gibt es `scripts/dev/run_mutmut_watchdog.sh` (dev-only):
 
 ```bash
-# Default: 0 additional restarts, stall threshold 5 min, 2 mutmut workers
+# Standard: 0 zusätzliche Neustarts, Stillstandsschwelle 5 min, 2 mutmut-Worker
 scripts/dev/run_mutmut_watchdog.sh
 
 # Aggressiveres Profil

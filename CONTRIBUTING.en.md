@@ -394,13 +394,12 @@ ps aux | grep -E 'gunicorn|runserver' | grep -v grep
 
 # Free a specific port
 lsof -ti :8443 | xargs kill
-
 ```
-
----
 
 A server on port 8844 belongs to its E2E run. Stop your own run in its terminal,
 or wait for the other run to finish; do not terminate all Gunicorn processes.
+
+---
 
 ## Coding Conventions
 
@@ -1056,4 +1055,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 020ff623f78c21ba21d3402aa727055a95490d90 -->
+<!-- source-hash: 5971b979654327e0cf218b68834fe55ebd24dda6 -->

@@ -1,6 +1,7 @@
 """Make and direct mutation invocations must share one portable lock convention."""
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -72,5 +73,4 @@ def test_mutation_docs_do_not_claim_obsolete_lock_directory():
     if not doc.exists():
         pytest.skip("docs/testing/mutation-testing.md is excluded from public snapshots")
     text = doc.read_text()
-    assert "Default `/work`" not in text
-    assert "Default `/work/anlaufstelle-ci.lock`" not in text
+    assert not re.search(r"Default\s+`/[^`]+`", text), "Document portable environment-based defaults instead."
