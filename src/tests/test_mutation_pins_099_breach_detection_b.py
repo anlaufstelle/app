@@ -102,11 +102,11 @@ def _audit(*, facility, action, user=None, ip_address=None, minutes_ago=0.0):
 
 
 def _bulk_audit(n, *, facility, action, user=None, minutes_ago=0.0):
-    """Wie ``_audit``, aber ``n`` Zeilen auf einmal ueber ``bulk_create``
-    (umgeht ``AuditLog.save()``/die HMAC-Kettenzuweisung). The database only
-    accepts rows with a chain hash (#2449), so the rows carry a placeholder
-    hash. Nur fuer Zaehl-Heuristiken relevant, die ausschliesslich ``Count``
-    bilden, keine Kettenfelder lesen."""
+    """Like ``_audit``, but creates ``n`` rows at once via ``bulk_create``
+    (bypasses ``AuditLog.save()`` and the HMAC chain assignment). The database
+    only accepts rows with a chain hash (#2449), so the rows carry a
+    placeholder hash. Only for counting heuristics that build ``Count``
+    aggregates and read no chain fields."""
     ts = timezone.now() - timedelta(minutes=minutes_ago)
     AuditLog.objects.bulk_create(
         [

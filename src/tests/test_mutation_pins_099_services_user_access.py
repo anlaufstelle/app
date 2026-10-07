@@ -231,14 +231,14 @@ class TestLockedUserIdsQueryIntegritaet:
         ``LOCKOUT_THRESHOLD - 1`` weitere danach bleiben im Original unter
         der Schwelle, die Mutante erreicht sie.
 
-        Die HMAC-Kette (``assign_chain_fields``, Refs #1070) erzwingt strikt
-        monotone Zeitstempel je Einrichtung und hebt einen zweiten Eintrag mit
-        dem exakt gleichen Zeitstempel bei ``Model.save()`` automatisch um
-        1 Mikrosekunde an; ein nachtraegliches ``UPDATE`` blockt der
-        Immutability-Trigger (``prevent_auditlog_mutation``). Der Grenzfall
-        wird deshalb per ``bulk_create`` angelegt — das ruft ``save()`` nicht
-        auf und damit auch nicht die Monotonie-Anhebung. The chain fields
-        carry a placeholder hash: the database rejects rows without one (#2449)."""
+        The HMAC chain (``assign_chain_fields``, Refs #1070) enforces strictly
+        monotonic timestamps per facility and moves a second entry with the
+        exact same timestamp forward by 1 microsecond in ``Model.save()``; a
+        later ``UPDATE`` is blocked by the immutability trigger
+        (``prevent_auditlog_mutation``). The boundary case is therefore
+        created via ``bulk_create``, which skips ``save()`` and with it the
+        monotonic bump. The chain fields carry a placeholder hash: the
+        database rejects rows without one (#2449)."""
         unlock_at = timezone.now() - timedelta(minutes=5)
         _unlock_event(facility, staff_user, timestamp=unlock_at)
         AuditLog.objects.bulk_create(
