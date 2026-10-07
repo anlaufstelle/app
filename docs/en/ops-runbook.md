@@ -2047,7 +2047,7 @@ aligns existing ones with the env. Two ways forward:
 situation stays live on a running server** — the repository fix alone
 changes nothing there. `/health/` makes it visible but does not block it: with a
 SUPERUSER/BYPASSRLS runtime role the endpoint reports `status: degraded`
-(`src/core/views/health.py:430`) and stays at HTTP 200 (`:390`). The `web`
+(`HealthView` in `src/core/views/health.py`) and stays at HTTP 200. The `web`
 Compose healthcheck lets every status except `error` pass
 (`docker-compose.prod.yml:292–294`), and `caddy` only waits for `service_healthy`
 (`:526–528`). The container therefore still turns `healthy` and `caddy` routes.
@@ -3007,7 +3007,7 @@ Refs #544.
 
 ### 12.1 SECURE_PROXY_SSL_HEADER
 
-`settings/prod.py:48` sets:
+[`src/anlaufstelle/settings/prod.py`](../../src/anlaufstelle/settings/prod.py) sets `SECURE_PROXY_SSL_HEADER`:
 
 ```python
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -3272,7 +3272,7 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 07d83255ca7d90ffce6556619fe399c1577ec38f -->
+<!-- source-hash: c8c77773c95e8f95b81817ed1438385427913e09 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->

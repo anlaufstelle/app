@@ -16,7 +16,7 @@
 
 **Routen:** `/login/`, `/logout/`, `/password-change/`, `/password-reset/`, `/password-reset/done/`, `/password-reset/<uidb64>/<token>/`, `/password-reset/complete/`  
 **Views:** `src/core/views/auth.py` (`CustomLoginView`, `CustomLogoutView`, `RateLimitedPasswordResetView`, `CustomPasswordChangeView`)  
-**Services:** `src/core/services/login_lockout.py` (`is_locked`, `unlock`, Schwelle 10/15min), `src/core/services/password.py` (12-Zeichen-Initial-Generator), `src/core/services/audit_hash.py` (`hmac_hash_email`), `src/core/models/user.py` (`User.ensure_offline_key_salt`)  
+**Services:** `src/core/services/security/login_lockout.py` (`is_locked`, `unlock`, Schwelle 10/15min), `src/core/services/user_access.py` (Einladung statt Initialpasswort), `src/core/services/audit/hash.py` (`hmac_hash_email`), `src/core/models/user.py` (`User.ensure_offline_key_salt`)  
 **Middleware:** `core.middleware.password_change.ForcePasswordChangeMiddleware`  
 **Settings:** `AUTH_PASSWORD_VALIDATORS` (min_length=12, BSI/NIST), `SESSION_COOKIE_AGE=1800`, `SESSION_SAVE_EVERY_REQUEST=False`, `AUDIT_HASH_KEY`, Audit-Action-Choices in `src/core/models/audit.py`  
 **Signals:** `src/core/signals/audit.py` (LOGIN/LOGOUT/LOGIN_FAILED via Django-Auth-Signals)  
@@ -115,7 +115,7 @@
 - Admin kann via `unlock()` / `LOGIN_UNLOCK`-Audit den Cutoff setzen, danach werden die alten FAILED-Einträge ignoriert.
 
 **DSGVO/Security-Note:**
-- Lockout-Konstanten: `LOCKOUT_THRESHOLD = 10`, `LOCKOUT_WINDOW = timedelta(minutes=15)` in `src/core/services/login_lockout.py`.
+- Lockout-Konstanten: `LOCKOUT_THRESHOLD = 10`, `LOCKOUT_WINDOW = timedelta(minutes=15)` in `src/core/services/security/login_lockout.py`.
 - Concurrency-Schutz via `transaction.atomic()` + `User.objects.select_for_update()` (Refs #737).
 
 **Status:** ☐ Offen
@@ -410,7 +410,7 @@
 
 **Routen:** `/mfa/setup/`, `/mfa/verify/`, `/mfa/settings/`, `/mfa/disable/`, `/mfa/backup-codes/`, `/mfa/backup-codes/regenerate/`  
 **Views:** `src/core/views/mfa.py` (`MFASetupView`, `MFAVerifyView`, `MFASettingsView`, `MFADisableView`, `MFABackupCodesView`, `MFARegenerateBackupCodesView`)  
-**Services:** `src/core/services/mfa.py` (`generate_backup_codes`, `verify_backup_code`, `remaining_backup_codes`, SHA-256-Hash, 128-bit Entropie via `secrets.token_urlsafe(16)`)  
+**Services:** `src/core/services/security/mfa.py` (`generate_backup_codes`, `verify_backup_code`, `remaining_backup_codes`, SHA-256-Hash, 128-bit Entropie via `secrets.token_urlsafe(16)`)  
 **Middleware:** `core.middleware.mfa.MFAEnforcementMiddleware` (EXEMPT_URLS für /login/, /logout/, /mfa/, /static/, /sw.js, /manifest.json, /auth/offline-key-salt/, /health/)  
 **Settings:** `OTP_TOTP_ISSUER="Anlaufstelle"`; Apps: `django_otp`, `django_otp.plugins.otp_totp`, `django_otp.plugins.otp_static`  
 **E2E-Coverage:** `test_mfa_setup_flow.py`, `test_mfa_backup_codes.py`; Faktorwechsel: `test_mfa_factor_change_sudo.py`  
@@ -1028,7 +1028,7 @@
 - Erst nach erfolgreicher Re-Auth mit Passwort und zweitem Faktor (siehe ENT-SUDO-01) ist `/mfa/disable/` erreichbar. Wirkt der POST ohne Sudo-Fenster direkt (2FA weg, `MFA_DISABLED` im AuditLog), ist der Testfall rot.
 
 **DSGVO/Security-Note:**
-- Verhalten stimmt mit Service-Doc überein (`src/core/services/sudo_mode.py`): „Mixin RequireSudoModeMixin redirected zu /sudo/ mit ?next=".
+- Verhalten stimmt mit Service-Doc überein (`src/core/services/security/sudo_mode.py`): „Mixin RequireSudoModeMixin redirected zu /sudo/ mit ?next=".
 
 **Status:** ☐ Offen
 
@@ -1310,7 +1310,7 @@
 
 **Routen:** `/clients/`, `/clients/new/`, `/clients/<uuid>/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/export/json/`, `/clients/<uuid>/export/pdf/`, `/clients/<uuid>/delete/`, `/clients/trash/`, `/clients/<uuid>/restore/`, `/clients/<uuid>/anonymize/`, `/partials/clients/autocomplete/`  
 **Views:** `src/core/views/clients.py` (`ClientListView`, `ClientCreateView`, `ClientDetailView`, `ClientUpdateView`, `ClientAutocompleteView`, `ClientDataExportJSONView`, `ClientDataExportPDFView`) + `src/core/views/client_deletion.py` (`ClientDeleteRequestView`, `ClientTrashView`, `ClientRestoreView`, `ClientAnonymizeView`)  
-**Services:** `src/core/services/clients.py` (`create_client`, `update_client`, `request_client_deletion`, `restore_client`, `track_client_visit`, `get_pending_deletion_request`, `pending_deletion_client_ids`, `anonymize_client_now`)  
+**Services:** `src/core/services/client/main.py` (`create_client`, `update_client`, `request_client_deletion`, `restore_client`, `track_client_visit`, `get_pending_deletion_request`, `pending_deletion_client_ids`, `anonymize_client_now`)  
 **E2E-Coverage:** `test_clients_search.py`, `test_client_edit.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py`, `test_client_autocomplete_recency.py`, `test_client_export.py`, `test_min_contact_stage_anonymous.py`, `test_contact_stage.py`, `test_fuzzy_search.py`  
 **Spezial-Setup:** Cross-Facility-Tests benötigen `.venv/bin/python src/manage.py seed --flush --scale medium` und 2 parallele Browser-Profile (`admin` in Facility 1, `admin_1` in Facility 2). DSGVO-Exporte erfordern Sudo-Re-Auth (Refs #683).
 
@@ -1844,7 +1844,7 @@
 
 **Routen:** `/cases/`, `/cases/new/`, `/cases/<uuid>/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/close/`, `/cases/<uuid>/reopen/`, `/cases/<uuid>/assign-event/`, `/cases/<uuid>/remove-event/<uuid>/`, `/partials/cases/for-client/`  
 **Views:** `src/core/views/cases.py` (`CaseListView`, `CaseCreateView`, `CaseDetailView`, `CaseUpdateView`, `CaseCloseView`, `CaseReopenView`, `CaseAssignEventView`, `CaseRemoveEventView`, `CasesForClientView`)  
-**Services:** `src/core/services/cases.py` (`create_case`, `update_case`, `close_case`, `reopen_case`, `assign_event_to_case`, `remove_event_from_case`)  
+**Services:** `src/core/services/case/cases.py` (`create_case`, `update_case`, `close_case`, `reopen_case`, `assign_event_to_case`, `remove_event_from_case`)  
 **E2E-Coverage:** `test_cases.py` (TestCaseCRUD, TestCasePermissions)  
 **Spezial-Setup:** Cases sind `Pflichtfeld client` (Refs #748). Schließen/Wiedereröffnen erfordert LEAD+. Assistenz-Rolle hat 0 Zugriff (`StaffRequiredMixin`).
 
@@ -2223,7 +2223,7 @@
 
 **Routen:** `/cases/<case_pk>/episodes/new/`, `/cases/<case_pk>/episodes/<pk>/edit/`, `/cases/<case_pk>/episodes/<pk>/close/`  
 **Views:** `src/core/views/case_episodes.py` (`EpisodeCreateView`, `EpisodeUpdateView`, `EpisodeCloseView`)  
-**Services:** `src/core/services/episodes.py` (`create_episode`, `update_episode`, `close_episode`)  
+**Services:** `src/core/services/case/episodes.py` (`create_episode`, `update_episode`, `close_episode`)  
 **E2E-Coverage:** `test_cases.py::TestEpisodes`  
 **Spezial-Setup:** Episoden sind nur für `Case.Status=OPEN` anlegbar. Idempotenz beim Schließen (zweimal close → no-op).
 
@@ -2388,7 +2388,7 @@
 
 **Routen:** `/cases/<case_pk>/goals/new/`, `/cases/<case_pk>/goals/<pk>/edit/`, `/cases/<case_pk>/goals/<pk>/toggle/`, `/cases/<case_pk>/goals/<goal_pk>/milestones/new/`, `/cases/<case_pk>/milestones/<pk>/toggle/`, `/cases/<case_pk>/milestones/<pk>/delete/`  
 **Views:** `src/core/views/case_goals.py` (`GoalCreateView`, `GoalUpdateView`, `GoalToggleView`, `MilestoneCreateView`, `MilestoneToggleView`, `MilestoneDeleteView`)  
-**Services:** `src/core/services/goals.py` (`create_goal`, `update_goal`, `achieve_goal`, `unachieve_goal`, `create_milestone`, `toggle_milestone`, `delete_milestone`)  
+**Services:** `src/core/services/case/goals.py` (`create_goal`, `update_goal`, `achieve_goal`, `unachieve_goal`, `create_milestone`, `toggle_milestone`, `delete_milestone`)  
 **E2E-Coverage:** `test_cases.py::TestGoalsAndMilestones`  
 **Spezial-Setup:** Alle Endpoints sind HTMX-only und rendern `core/cases/partials/goals_section.html`. Rate-Limit `RATELIMIT_FREQUENT` (120/h/User).
 
@@ -2613,7 +2613,7 @@
 
 **Routen:** `/events/new/`, `/events/<uuid>/`, `/events/<uuid>/edit/`, `/events/<uuid>/delete/`, `/partials/events/fields/`  
 **Views:** `src/core/views/events.py` (`EventCreateView`, `EventDetailView`, `EventUpdateView`, `EventDeleteView`, `EventFieldsPartialView`)  
-**Services:** `src/core/services/events/crud.py` (`create_event`, `update_event`, `soft_delete_event`, `attach_files_to_new_event`), `src/core/services/event.py` (Re-Export-Stub Refs #777), `src/core/services/sensitivity.py` (`user_can_see_event`, `get_visible_event_or_404`, `remove_restricted_fields`), `src/core/services/quick_templates.py`  
+**Services:** `src/core/services/events/crud.py` (`create_event`, `update_event`, `soft_delete_event`, `attach_files_to_new_event`), `src/core/services/compliance/sensitivity.py` (`user_can_see_event`, `get_visible_event_or_404`, `remove_restricted_fields`), `src/core/services/dashboard/quick_templates.py`  
 **E2E-Coverage:** `test_quick_capture.py`, `test_fieldtemplate_default_value.py`, `test_min_contact_stage_anonymous.py`  
 **Spezial-Setup:** Anonyme Events benötigen DocumentType ohne `min_contact_stage`. Sensitivity-Tests benötigen DocumentTypes der Stufen `normal` / `elevated` / `high`. Optimistic-Concurrency-Test braucht zwei parallele Browser-Tabs oder Inkognito-Fenster.
 
@@ -2932,7 +2932,7 @@
 
 **Routen:** `/attachments/`, `/events/<event-uuid>/attachments/<attachment-uuid>/download/`, `/clients/<client-uuid>/attachments/<attachment-uuid>/download/`, `/cases/<case-uuid>/attachments/<attachment-uuid>/download/`  
 **Views:** `src/core/views/attachments.py` (`AttachmentListView`, `BaseAttachmentDownloadView` → `AttachmentDownloadView`, `ClientAttachmentDownloadView`, `CaseAttachmentDownloadView`)  
-**Services:** `src/core/services/file_vault/` (`store_encrypted_file`, `get_decrypted_file_stream`, `soft_delete_attachment_chain`, `_enforce_allowed_file_types`, `_enforce_magic_bytes`, `_run_virus_scan` — alle owner-generisch), `src/core/services/attachments/` (`finalize_staged_files`, `apply_attachment_changes`, `discard_type_switch_file_chains`, `build_attachment_context`, `attachment_download_url`), `src/core/services/compliance` (`get_visible_attachment_for_owner_or_404`), `src/core/services/virus_scan.py`, `src/core/services/encryption.py` (Fernet/MultiFernet)  
+**Services:** `src/core/services/file_vault/` (`store_encrypted_file`, `get_decrypted_file_stream`, `soft_delete_attachment_chain`, `_enforce_allowed_file_types`, `_enforce_magic_bytes`, `_run_virus_scan` — alle owner-generisch), `src/core/services/attachments/` (`finalize_staged_files`, `apply_attachment_changes`, `discard_type_switch_file_chains`, `build_attachment_context`, `attachment_download_url`), `src/core/services/compliance` (`get_visible_attachment_for_owner_or_404`), `src/core/services/file_vault/virus_scan.py`, `src/core/services/file_vault/encryption.py` (Fernet/MultiFernet)  
 **Modell:** `Attachment` (bis M24 `EventAttachment`, Refs #1738) — eigene `facility_id`, genau **ein** Owner (`event`/`client`/`case`, `CheckConstraint attachment_exactly_one_owner`), direkte RLS-Policy (Migrationen `0129`–`0131`, [ADR-039](../adr/039-owner-generische-dateianhaenge.md))  
 **E2E-Coverage:** `test_attachment_versioning_stage_b.py`, `test_attachments_client_case.py`, `test_file_vault.py`, `test_crypto_session.py`  
 **Spezial-Setup:** ClamAV-Daemon muss erreichbar sein (`CLAMAV_ENABLED=True`). Im **lokalen** Stack läuft der Dienst seit #1062 nur noch auf Anforderung: `docker compose --profile clamav up -d clamav` — ohne Profil zieht `docker compose up` ihn nicht mehr hoch. EICAR-String als Datei vorbereiten: `echo -n 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > eicar.txt`. DocumentType muss FILE-FieldTemplate haben — seit M24 auch an Typen mit `entity_type` **Person** oder **Fall** (der Seed liefert dort keine mit, Wegwerf-Typen anlegen; Konvention `E2E-M24-*`).
@@ -3429,7 +3429,7 @@
 
 **Routen:** `/workitems/`, `/workitems/new/`, `/workitems/<uuid>/`, `/workitems/<uuid>/edit/`, `/workitems/bulk-status/`, `/workitems/bulk-priority/`, `/workitems/bulk-assign/`, `/partials/workitems/<uuid>/status/`  
 **Views:** `src/core/views/workitems.py` (`WorkItemInboxView`, `WorkItemDetailView`), `src/core/views/workitem_actions.py` (`WorkItemCreateView`, `WorkItemUpdateView`, `WorkItemStatusUpdateView`), `src/core/views/workitem_bulk.py` (`WorkItemBulkStatusView`, `WorkItemBulkPriorityView`, `WorkItemBulkAssignView`)  
-**Services:** `src/core/services/workitems.py` (`create_workitem`, `update_workitem`, `update_workitem_status`, `duplicate_recurring_workitem`, `bulk_update_workitem_status`, `bulk_update_workitem_priority`, `bulk_assign_workitems`), `src/core/services/locking.py` (`check_version_conflict`)  
+**Services:** `src/core/services/case/workitems.py` (`create_workitem`, `update_workitem`, `update_workitem_status`, `duplicate_recurring_workitem`, `bulk_update_workitem_status`, `bulk_update_workitem_priority`, `bulk_assign_workitems`), `src/core/services/security/locking.py` (`check_version_conflict`)  
 **E2E-Coverage:** `test_workitem_ui.py`, `test_workitem_edit.py`, `test_workitem_due_filter.py`, `test_workitems_deletion.py`  
 **Spezial-Setup:** Inbox-Cap = `WORKITEM_INBOX_CAP` (Constants). Mobile-Inbox via Viewport-Resize (Playwright `iPhone 12`).
 
@@ -3719,7 +3719,7 @@
 
 **Routen:** `/deletion-requests/`, `/deletion-requests/<uuid>/review/`, `/deletion-requests/<uuid>/withdraw/`  
 **Views:** `src/core/views/event_deletion.py` (`DeletionRequestListView`, `DeletionRequestReviewView`), `src/core/views/client_deletion.py` (Verzweigung über `target_type`)  
-**Services:** `src/core/services/events/deletion.py` (`request_deletion`, `approve_deletion`, `reject_deletion`), `src/core/services/clients.py` (`approve_client_deletion`, `reject_client_deletion`), `src/core/services/events/crud.py` (`soft_delete_event`)  
+**Services:** `src/core/services/events/deletion.py` (`request_deletion`, `approve_deletion`, `reject_deletion`), `src/core/services/client/main.py` (`approve_client_deletion`, `reject_client_deletion`), `src/core/services/events/crud.py` (`soft_delete_event`)  
 **E2E-Coverage:** `test_workitems_deletion.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py`  
 **Spezial-Setup:** Vier-Augen-Test braucht 2 separate Sessions (Antragsteller + Reviewer). DeletionRequest existiert pro `target_type` (Event vs. Client).
 
@@ -3977,7 +3977,7 @@
 
 **Routen:** `/search/`, Header-Typeahead via HTMX (`/partials/search/global/`)  
 **Views:** `src/core/views/search.py`  
-**Services:** `src/core/services/search.py`  
+**Services:** `src/core/services/dashboard/search.py`  
 **E2E-Coverage:** `test_clients_search.py`, `test_filters.py`, `test_fuzzy_search.py`
 
 ---
@@ -4164,7 +4164,7 @@
 
 **Routen:** `/` (Home/Zeitstrom), `/partials/zeitstrom/feed/` (HTMX-Partial)  
 **Views:** `src/core/views/zeitstrom.py`  
-**Services:** `src/core/services/feed.py`  
+**Services:** `src/core/services/events/feed.py`  
 **E2E-Coverage:** `test_zeitstrom_enrichment.py`, `test_zeitstrom_events.py`, `test_zeitstrom_filter_bug.py`
 
 ---
@@ -4317,8 +4317,8 @@
 <summary><strong>🤝 HOV — Übergabe (5 Cases)</strong></summary>
 
 **Routen:** `/uebergabe/` (Redirect auf `/?view=uebergabe`); Druckvorschau über den Browser, kein eigener Print-Endpunkt  
-**Views:** `src/core/views/handover.py`  
-**Services:** `src/core/services/handover.py`  
+**Views:** `src/core/views/zeitstrom.py`  
+**Services:** `src/core/services/case/handover.py`  
 **E2E-Coverage:** `test_handover.py`
 
 ---
@@ -4475,7 +4475,7 @@
 
 **Routen:** `/statistics/`, `/statistics/chart-data/`, `/statistics/export/csv/`, `/statistics/export/pdf/`, `/statistics/export/sample-report-1/`, `/statistics/reports/panel/`, `/statistics/reports/export/`  
 **Views:** `src/core/views/statistics.py`  
-**Services:** `src/core/services/statistics.py`, `src/core/services/export.py`, `src/core/reporting/` (Registry + Backends)  
+**Services:** `src/core/services/dashboard/statistics.py`, `src/core/services/system/export.py`, `src/core/reporting/` (Registry + Backends)  
 **Management-Commands:** `create_statistics_snapshots`  
 **E2E-Coverage:** `test_export_statistics.py`, `test_statistics_charts.py`, `test_statistics_dashboard.py`, `test_statistics_snapshot.py`, `test_reporting_backends.py`
 
@@ -4922,7 +4922,7 @@
 
 **Routen:** `/audit/`, `/audit/<uuid>/`  
 **Views:** `src/core/views/audit.py` (AuditLogListView, AuditLogDetailView)  
-**Services:** `src/core/services/audit.py`, `src/core/services/audit_hash.py`  
+**Services:** `src/core/services/audit/helpers.py`, `src/core/services/audit/hash.py`  
 **Models:** `src/core/models/audit.py` (AuditLog, append-only, immutable)  
 **E2E-Coverage:** `test_audit.py`, `test_audit_detail.py`  
 **Spezial-Setup:** Append-Only-Probe via `python manage.py shell`. HMAC-Key aus Settings (`AUDIT_HMAC_KEY`).
@@ -5978,7 +5978,7 @@
 <summary><strong>⚙️ SYS — System & Operations (6 Cases)</strong></summary>
 
 **Routen:** `/health/`, `/csp-report/`, `/robots.txt`, `/manifest.json`, `/?lang=de`  
-**Views:** `src/core/views/health.py`, `src/core/views/csp_report.py`, `src/core/views/robots.py`, `src/core/views/pwa.py`  
+**Views:** `src/core/views/health.py`, `src/core/views/csp_report.py`, `src/core/views/misc.py`, `src/core/views/pwa.py`  
 **Automatisierte Abdeckung:** Unit-Tests `src/tests/test_health.py`, `src/tests/test_robots_view.py`, `src/tests/test_server_error_page.py`; keine zugeordnete System-E2E-Spec.  
 **Spezial-Setup:** Health prüft externe Dienste (ClamAV, Cache/Redis, Backup-Status). Anonyme Aufrufer erhalten nur `{"status": …}`; Detailfelder gibt es nur mit Header `X-Health-Token` (= `DJANGO_HEALTH_DETAIL_TOKEN`) oder in einer vollständig angemeldeten Session (`_detail_authorized`). CSP-Report-Endpoint mit Rate-Limit.
 
@@ -6728,8 +6728,8 @@
 <summary><strong>🧩 CONFIG — Formular-Konfiguration (25 Cases)</strong></summary>
 
 **Routen:** `/config/document-types/`, `/config/document-types/new/`, `/config/document-types/<uuid>/`, `/config/document-types/<uuid>/edit/`, `/config/document-types/<uuid>/delete/`, `/config/document-types/<uuid>/fields/add/`, `/config/document-types/<uuid>/fields/<uuid>/remove/`, `/config/document-types/<uuid>/groups/new/`, `/config/document-types/<uuid>/groups/<uuid>/edit/`, `/config/document-types/<uuid>/groups/<uuid>/delete/`, `/config/document-types/<uuid>/reorder/blocks/`, `/config/document-types/<uuid>/reorder/fields/`, `/config/document-types/<uuid>/reorder/move-field/`, `/config/field-templates/`, `/config/field-templates/new/`, `/config/field-templates/<uuid>/edit/`, `/config/field-templates/<uuid>/delete/`, `/config/field-templates/<uuid>/toggle-active/`  
-**Views:** `src/core/views/config/document_types.py` (`ConfigDocumentType{List,Create,Detail,Update,Delete}View`, `ConfigDocTypeField{Add,Remove}View`), `src/core/views/config/field_templates.py` (`ConfigFieldTemplate{List,Create,Update,Delete,Toggle}View`), `src/core/views/config/field_groups.py` (`ConfigFieldGroup{Create,Update,Delete}View`), `src/core/views/config/reorder.py` (`ConfigReorderGroupsView`, `ConfigReorderFieldsView`, `ConfigMoveFieldView`) — alle `FacilityAdminRequiredMixin`  
-**Services:** `src/core/services/config.py` (`save_document_type`, `delete_document_type`, `save_field_template`, `field_template_delete_blockers` + `field_template_trashed_client_count` (Papierkorb-Anteil), `delete_field_template`, `set_field_template_active`, `save_field_group`, `delete_field_group`, `add_field_to_doctype`, `remove_field_from_doctype`, `reorder_groups`, `reorder_fields`, `move_field`, Exception `ConfigDeleteBlocked`)  
+**Views:** `src/core/views/config/document_types.py` (`ConfigDocumentType{List,Create,Detail,Update,Delete}View`, `ConfigDocTypeField{Add,Remove}View`), `src/core/views/config/field_templates.py` (`ConfigFieldTemplate{List,Create,Update,Delete,Toggle}View`), `src/core/views/config/field_groups.py` (`ConfigFieldGroup{Create,Update,Delete}View`), `src/core/views/config/reorder.py` (`ConfigReorderBlocksView`, `ConfigReorderFieldsView`, `ConfigMoveFieldView`) — alle `FacilityAdminRequiredMixin`  
+**Services:** `src/core/services/config/` (Paket `mutations.py`, `delete_blockers.py`, `block_order.py`; `save_document_type`, `delete_document_type`, `save_field_template`, `field_template_delete_blockers` + `field_template_trashed_client_count` (Papierkorb-Anteil), `delete_field_template`, `set_field_template_active`, `save_field_group`, `delete_field_group`, `add_field_to_doctype`, `remove_field_from_doctype`, `reorder_blocks`, `reorder_fields`, `move_field` (in `src/core/services/config/block_order.py`), Exception `ConfigDeleteBlocked`)  
 **Models:** `DocumentType` (`system_type`, `report_key`), `FieldTemplate` (`slug`, `report_key`, `is_active`), `FieldGroup` (transitiv facility-gescoped über `document_type.facility`), `DocumentTypeField` (`sort_order`, `field_group`)  
 **E2E-Coverage:** `test_navigation_config.py`, `test_config_document_types.py`, `test_config_field_templates.py`, `test_config_field_groups.py`, `test_config_reorder.py`, `test_config_service.py`, `test_event_form_groups.py`, `test_seed.py`; Rollen-/IDOR-Vollmatrix generisch über `test_authz_idor.py`; RLS-Transitivität über `test_rls_functional.py`  
 **Spezial-Setup:**
@@ -7272,7 +7272,7 @@
 |---------|-------|---------|--------|-----|
 | Konfiguration / Retention | admin (facility_admin) | C/F | ⚪ | `test_client_deletion_status.py::TestConfigBlockerNamesTheWayOut` |
 
-**Code-Referenz:** `delete_document_type` (`_append_trash_share`) / `field_template_delete_blockers` + `field_template_trashed_client_count` in [src/core/services/config.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/config.py), Partial [`config/partials/trash_blocker_hint.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/config/partials/trash_blocker_hint.html) (Refs #1737)
+**Code-Referenz:** `delete_document_type` (`_append_trash_share`) / `field_template_delete_blockers` + `field_template_trashed_client_count` in [src/core/services/config/delete_blockers.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/config/delete_blockers.py), Partial [`config/partials/trash_blocker_hint.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/config/partials/trash_blocker_hint.html) (Refs #1737)
 
 **Voraussetzung:** Ein Personen-Dokumentationstyp (`entity_type=client`), der **ausschließlich** von einer Person benutzt wird, die inzwischen im **Papierkorb** liegt (Löschung im Vier-Augen-Prinzip bestätigt).
 
@@ -7301,7 +7301,7 @@
 
 **Routen:** `/config/document-types/<uuid>/` (Abschnitt „Bedingte Sichtbarkeit"), `/config/document-types/<uuid>/conditions/new/`, `/config/document-types/<uuid>/conditions/<uuid>/edit/`, `/config/document-types/<uuid>/conditions/<uuid>/delete/`, `/config/document-types/<uuid>/conditions/value-input/`, `/events/new/` + `/partials/events/fields/` (Live-Sichtbarkeit im Event-Formular)  
 **Views:** `src/core/views/config/conditions.py` (`ConditionCreateView`, `ConditionUpdateView`, `ConditionDeleteView`, `ConditionValueInputView`, alle `FacilityAdminRequiredMixin`); `src/core/views/events.py` (`EventFieldsPartialView`, Event-CRUD-Views mit `DynamicEventDataForm`)  
-**Services:** `src/core/services/config.py` (`create_field_condition`, `update_field_condition`, `delete_field_condition`); `src/core/services/conditions.py` (`evaluate_conditions`, `find_cycle`, `normalize_value`, `build_conditions_payload` — gemeinsamer Evaluator FE/BE, ADR-035)  
+**Services:** `src/core/services/config/conditions.py` (`create_field_condition`, `update_field_condition`, `delete_field_condition`); `src/core/services/conditions.py` (`evaluate_conditions`, `find_cycle`, `normalize_value`, `build_conditions_payload` — gemeinsamer Evaluator FE/BE, ADR-035)  
 **Models:** `FieldCondition` (`target_field`, `depends_on_field`, `operator`, `value`, `group_index`; kein eigener facility-FK, transitiv über `target_field.document_type.facility`, RLS doppelt-transitiv)  
 **Frontend:** `src/static/js/alpine/conditions.js` (`window.AnlaufstelleConditions`, `Alpine.data("conditionEvaluator"/"conditionalField")`) — CSP-safe (kein `unsafe-eval`), Payload via `json_script`  
 **E2E-Coverage:** `test_field_conditions.py`, `test_condition_parity.py`; Unit-/Modell-/Formularsuiten: `test_conditions_evaluator.py`, `test_field_condition_model.py`, `test_event_form_conditions.py`, `test_config_conditions.py`  

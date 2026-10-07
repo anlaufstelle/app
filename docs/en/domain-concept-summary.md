@@ -59,7 +59,7 @@ Not every contact is part of a case. Most interactions at a drop-in center are o
 
 Separate from documentation, [work items](glossary.md) cover the operational layer: notes ("Mail for Maus is in the drawer") and tasks ("Follow up with Frau M. about the appointment"). They support everyday coordination, have their own lifecycle (open, in progress, done, discarded), and appear in each staff member's inbox. Work items have no separate automatic retention period. Personal content is redacted when the linked person is anonymized.
 
-The CSV import wizard supports persons and events (`ImportJob.TargetType`); see the [import guide](../admin-guide.md#212-import-assistent).
+The CSV import wizard supports persons and events (`ImportJob.TargetType`); see the [import guide](admin-guide.md#212-import-wizard).
 
 The handover view (`/?view=uebergabe`) also includes an encrypted shift note with its own configurable retention period (default: 90 days). It belongs to a shift date and optionally to a time filter.
 
@@ -97,7 +97,7 @@ Anlaufstelle processes social data of highly vulnerable people. Privacy is not a
 - **Two-factor authentication.** TOTP-based 2FA is available and can be enforced per user or facility-wide. Single-use backup codes and an account lockout back it up, the privileged roles (`super_admin`/`facility_admin`) are enforced into MFA by default, and the TOTP secret itself is encrypted at rest (Fernet, ADR-031); a WebAuthn passkey can additionally be registered as a phishing-resistant second factor (ADR-032, no passwordless login).
 - **Data subject rights.** Authorized staff handle access (PDF), portability (JSON), internal rectification requests, deletion requests (`DeletionRequest`, separate from retention proposals) and processing restrictions. Client self-service and self-registration are rejected ([ADR-013](../adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](../adr/041-berichtigungsworkflow-intern.md)). Seven GDPR documentation templates (processing register, DPIA, DPA, TOMs, data-subject information, employee information, and a deletion concept) ship with the app ([`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/)).
 
-- **Upload buffers.** Attachments are encrypted at rest with Fernet/AES-128 after a fail-closed ClamAV scan. Uploads exceeding 2.5 MiB are temporarily buffered in plaintext before scanning and encryption. The supplied Compose configurations place this buffer on RAM-backed tmpfs via `FILE_UPLOAD_TEMP_DIR=/tmp`; without an explicit directory, Django uses `tempfile.gettempdir()`, whose storage depends on the deployment. See [Ops Runbook § 5.7a](../ops-runbook.md#57a-upload-temp-verzeichnis-klartext-zwischenpuffer-refs-1661).
+- **Upload buffers.** Attachments are encrypted at rest with Fernet/AES-128 after a fail-closed ClamAV scan. Uploads exceeding 2.5 MiB are temporarily buffered in plaintext before scanning and encryption. The supplied Compose configurations place this buffer on RAM-backed tmpfs via `FILE_UPLOAD_TEMP_DIR=/tmp`; without an explicit directory, Django uses `tempfile.gettempdir()`, whose storage depends on the deployment. See [Ops Runbook § 5.7a](ops-runbook.md#57a-upload-temp-directory-plaintext-staging-buffer-refs-1661).
 - **Rate limits.** Login attempts are limited to 5/minute per IP and 10/hour per username. Authenticated actions have per-view, per-user limits, among others: mutations 60/hour, frequent actions and offline bundle requests 120/hour each, offline revocation queries 600/hour. There is no global API user limit; the external API remains a target feature ([ADR-026](../adr/026-rate-limiting.md)).
 - **Password hashing.** Username/password authentication uses Django’s default PBKDF2-SHA256 password hasher.
 
@@ -133,7 +133,7 @@ Event creation (`/events/new/`) saves drafts every 5 seconds in encrypted Indexe
 
 ## Version Additions
 
-Capabilities added since the base concept, release by release. Configuration and operational details live in the [admin guide](../admin-guide.md) and the [CHANGELOG](../../CHANGELOG.md); this section summarizes the conceptual intent. Anlaufstelle is still a pre-release and **not yet cleared for production use**.
+Capabilities added since the base concept, release by release. Configuration and operational details live in the [admin guide](admin-guide.md) and the [CHANGELOG](../../CHANGELOG.md); this section summarizes the conceptual intent. Anlaufstelle is still a pre-release and **not yet cleared for production use**.
 
 ### v0.10.0 (2026-04-19)
 

@@ -984,7 +984,7 @@ Erweist sich eine Grenze als zu eng, nehmen Sie sie an derselben Stelle zurück:
 
 ### 2.6b Fuzzy-Suche (pg_trgm)
 
-Die globale Suche nach Personen (Pseudonymen) nutzt zusätzlich zur exakten Teilstring-Suche eine **Trigramm-basierte Fuzzy-Suche** — tolerant gegenüber Tippfehlern und phonetischen Varianten (z. B. „Schmidt" ↔ „Schmitt"). Implementierung: [`src/core/services/search.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/search.py), Funktion `search_similar_clients`.
+Die globale Suche nach Personen (Pseudonymen) nutzt zusätzlich zur exakten Teilstring-Suche eine **Trigramm-basierte Fuzzy-Suche** — tolerant gegenüber Tippfehlern und phonetischen Varianten (z. B. „Schmidt" ↔ „Schmitt"). Implementierung: [`src/core/services/dashboard/search.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/search.py), Funktion `search_similar_clients`.
 
 **Schwelle pro Einrichtung:** Unter **Core → Einstellungen → *Einrichtung*** → Feld **„Fuzzy-Search-Schwelle"** (`Settings.search_trigram_threshold`):
 
@@ -1130,7 +1130,7 @@ Vorlagen werden im Django-Admin unter **Core → Quick-Templates** gepflegt.
 
 #### `prefilled_data` — Filterregeln
 
-Der Service-Layer wendet vor dem Speichern und erneut beim Anwenden eine **Whitelist** an ([`src/core/services/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/quick_templates.py)). Werte bleiben nur erhalten, wenn:
+Der Service-Layer wendet vor dem Speichern und erneut beim Anwenden eine **Whitelist** an ([`src/core/services/dashboard/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/quick_templates.py)). Werte bleiben nur erhalten, wenn:
 
 - der Slug zum gewählten Dokumentationstyp gehört,
 - die **effektive Sensitivität** des Feldes `NORMAL` ist (kein Prefill für `ELEVATED`/`HIGH`),
@@ -1141,7 +1141,7 @@ Dadurch sind Vorlagen **selbstheilend**: Wird eine Auswahl-Option später deakti
 
 #### Rollen- und Sensitivitäts-Sichtbarkeit
 
-Schnell-Vorlagen werden pro User über [`user_can_see_document_type`](https://github.com/anlaufstelle/app/blob/main/src/core/services/sensitivity.py) gefiltert. Eine Assistenz, die `ELEVATED`/`HIGH`-Dokumentationstypen nicht sehen darf, sieht dafür auch keine Vorlagen. So taucht keine Vorlage in der Button-Liste auf, die der User anschließend gar nicht anwenden könnte.
+Schnell-Vorlagen werden pro User über [`user_can_see_document_type`](https://github.com/anlaufstelle/app/blob/main/src/core/services/compliance/sensitivity.py) gefiltert. Eine Assistenz, die `ELEVATED`/`HIGH`-Dokumentationstypen nicht sehen darf, sieht dafür auch keine Vorlagen. So taucht keine Vorlage in der Button-Liste auf, die der User anschließend gar nicht anwenden könnte.
 
 #### Operative Hinweise
 
@@ -1152,13 +1152,13 @@ Schnell-Vorlagen werden pro User über [`user_can_see_document_type`](https://gi
 #### Relevante Dateien
 
 - Modell: [`src/core/models/quick_template.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/quick_template.py)
-- Service: [`src/core/services/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/quick_templates.py)
+- Service: [`src/core/services/dashboard/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/quick_templates.py)
 - View-Integration: [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) (`EventCreateView`)
 - Tracking-Issue: #494
 
 ### 2.9 Encrypted File Vault & Virus-Scanning
 
-Dateianhänge (Fotos, Scans, Dokumente) an **Ereignissen, Personen und Fällen** ([ADR-039](adr/039-owner-generische-dateianhaenge.md), Refs #1738 — je Datei genau ein Owner) werden in einem **verschlüsselten Vault** abgelegt: vor dem Schreiben in `MEDIA_ROOT` auf Viren geprüft und anschließend chunk-weise per **Fernet** (AES-128-CBC mit HMAC-SHA256, [`cryptography.fernet`](https://cryptography.io/en/latest/fernet/)) mit dem `ENCRYPTION_KEYS`-Schlüsselmaterial verschlüsselt. Implementierung: [`encrypt_file()` in `src/core/services/encryption.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/encryption.py). Refs #524.
+Dateianhänge (Fotos, Scans, Dokumente) an **Ereignissen, Personen und Fällen** ([ADR-039](adr/039-owner-generische-dateianhaenge.md), Refs #1738 — je Datei genau ein Owner) werden in einem **verschlüsselten Vault** abgelegt: vor dem Schreiben in `MEDIA_ROOT` auf Viren geprüft und anschließend chunk-weise per **Fernet** (AES-128-CBC mit HMAC-SHA256, [`cryptography.fernet`](https://cryptography.io/en/latest/fernet/)) mit dem `ENCRYPTION_KEYS`-Schlüsselmaterial verschlüsselt. Implementierung: [`encrypt_file()` in `src/core/services/file_vault/encryption.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/file_vault/encryption.py). Refs #524.
 
 #### Upload-Flow
 
@@ -2273,7 +2273,7 @@ Zum Schutz vor **stillen Überschreibungen** bei parallelem Bearbeiten desselben
 
 **Betroffene Modelle:** Client, Case, WorkItem, Settings, Event.
 
-**Mechanik** ([`src/core/services/locking.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/locking.py)):
+**Mechanik** ([`src/core/services/security/locking.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/locking.py)):
 
 - Jedes Formular rendert das aktuelle `updated_at` als Hidden-Field.
 - Beim Speichern prüft der Helper `check_version_conflict(instance, expected_updated_at)`, ob der Datensatz in der Zwischenzeit verändert wurde.

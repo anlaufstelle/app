@@ -1127,7 +1127,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 |---------|-------|---------|--------|-----|
 | Ops | admin | — | — | — |
 
-**Code-Referenz:** [`deploy/restore.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/restore.sh) (falls vorhanden), Runbook „Disaster Recovery".
+**Code-Referenz:** [`scripts/ops/restore.sh`](https://github.com/anlaufstelle/app/blob/main/scripts/ops/restore.sh) (falls vorhanden), Runbook „Disaster Recovery".
 
 **Voraussetzung:** dedizierte Test-DB (z.B. `anlaufstelle_restore_test`), niemals gegen Produktiv-DB.
 

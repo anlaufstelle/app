@@ -176,7 +176,7 @@ This means: the source code is free to use, modify, and redistribute — even wh
 
 Anlaufstelle is provided "as is", without warranty of any kind (see [LICENSE](LICENSE), Sections 15-16). The software and its documentation do **not constitute legal advice**. Operators are solely responsible for compliance with data protection regulations (GDPR, SGB X) — in particular for data protection impact assessments, data processing agreements, and organizational measures.
 
-> **⚠️ After installation: set up backups.** Retention enforcement, breach detection, and the remaining background jobs are handled automatically by the `cron` sidecar started through `./scripts/initial-setup.sh`. **Backups** still require a host crontab entry (the script uses `docker compose -f docker-compose.prod.yml exec` and must not have the Docker socket inside a container) — without it nothing is ever backed up, silently and without any error message. Setup and migration of existing crontabs: [docs/ops-runbook.md § 3 "Cron jobs"](docs/ops-runbook.md#3-cron-jobs).
+> **⚠️ After installation: set up backups.** Retention enforcement, breach detection, and the remaining background jobs are handled automatically by the `cron` sidecar started through `./scripts/initial-setup.sh`. **Backups** still require a host crontab entry (the script uses `docker compose -f docker-compose.prod.yml exec` and must not have the Docker socket inside a container) — without it nothing is ever backed up, silently and without any error message. Setup and migration of existing crontabs: [docs/ops-runbook.md § 3 "Cron jobs"](docs/en/ops-runbook.md#3-cron-jobs).
 
 ---
 
@@ -190,7 +190,7 @@ The domain foundation is based on a diploma thesis on documentation in low-thres
 
 ## Contributing
 
-Contributions are welcome. Please read the [contributing guidelines](CONTRIBUTING.md) before opening a pull request.
+Contributions are welcome. Please read the [contributing guidelines](CONTRIBUTING.en.md) before opening a pull request.
 
 How decisions are made and who is responsible for the project is documented in [GOVERNANCE.md](GOVERNANCE.md) and [MAINTAINERS.md](MAINTAINERS.md).
 

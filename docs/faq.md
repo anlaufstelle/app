@@ -294,7 +294,7 @@ Die **Wiedervorlage** (Feld `remind_at`) ist ein **optionales Frühwarn-Datum**,
 - [`src/core/models/workitem.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/workitem.py) — Feld `remind_at`
 - [`src/core/utils/dates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/dates.py) — `describe_remind_at()` (Badge-Logik)
 - [`src/core/forms/workitems.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/workitems.py) — Validierung `remind_at ≤ due_date`
-- [`src/core/services/workitems.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/workitems.py) — Offset-Erhalt bei Wiederholung
+- [`src/core/services/case/workitems.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/case/workitems.py) — Offset-Erhalt bei Wiederholung
 
 ---
 
@@ -555,7 +555,7 @@ Die **Sensitivitätsstufe** steuert, welche Benutzerrolle welche Dokumentationse
 
 **Relevante Dateien:**
 - [`src/core/models/document_type.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/document_type.py) — `Sensitivity`-Choices
-- [`src/core/services/sensitivity.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/sensitivity.py) — Zentrale Logik für Rollen-/Feldprüfung
+- [`src/core/services/compliance/sensitivity.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/compliance/sensitivity.py) — Zentrale Logik für Rollen-/Feldprüfung
 
 ### 15. Wie funktioniert das Löschsystem (4-Augen-Prinzip)?
 
@@ -592,8 +592,8 @@ Das Recht „Löschbestätigung“ ist rollenunabhängig und standardmäßig nic
 
 **Relevante Dateien:**
 - [`src/core/models/workitem.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/workitem.py) — `DeletionRequest`
-- [`src/core/services/event.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/event.py) — `soft_delete_event`, `request_deletion`, `approve_deletion`, `reject_deletion`
-- [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) — `EventDeleteView`, `DeletionRequestReviewView`
+- [`src/core/services/events/crud.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/events/crud.py) — `soft_delete_event`; [`src/core/services/events/deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/events/deletion.py) — `request_deletion`, `approve_deletion`, `reject_deletion`
+- [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) — `EventDeleteView`; [`src/core/views/event_deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/event_deletion.py) — `DeletionRequestReviewView`
 - [`src/core/services/case/deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/case/deletion.py) — `soft_delete_case`, `request_case_deletion`, `approve_case_deletion`, `restore_case`, `anonymize_case`
 - [`src/core/views/case_deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/case_deletion.py) — `CaseDeleteRequestView`, `CaseTrashView`, `CaseRestoreView`, `CaseAnonymizeView`
 - [`src/core/services/client/merge.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/client/merge.py) — `merge_clients`, `request_client_merge`, `approve_client_merge`, `unmerge_client`

@@ -312,7 +312,7 @@ Methodik:
 | B | Zeitstrom | 5 | 5 | 0 | 100 % |
 | B | Übergabe | 5 | 5 | 0 | 100 % |
 | C | Compliance | 16 | 8 | 8 | 50 % |
-| C | Security | 22 | 1 | 21 | 5 % |
+| C | Security | 22 | 2 | 20 | 9 % |
 | D | Audit | 2 | 1 | 1 | 50 % |
 | D | Aufbewahrung | 10 | 8 | 2 | 80 % |
 | D | Compliance | 7 | 2 | 5 | 29 % |
@@ -330,9 +330,9 @@ Methodik:
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 11 | 1 | 92 % |
 | B | 264 | 179 | 85 | 68 % |
-| C | 38 | 9 | 29 | 24 % |
+| C | 38 | 10 | 28 | 26 % |
 | D | 46 | 14 | 32 | 30 % |
-| **Gesamt** | **360** | **213** | **147** | **59 %** |
+| **Gesamt** | **360** | **214** | **146** | **59 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->
@@ -441,7 +441,7 @@ Im Profil **Major-Release** (`release-test-profiles.md` §6) ist die volle Budge
 
 ### Rollen-Applicability-Legende (Mixin → Routengruppe)
 
-Quelle: [`src/core/views/mixins.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mixins.py) + [`src/core/urls.py`](https://github.com/anlaufstelle/app/blob/main/src/core/urls.py).
+Quelle: [`src/core/views/mixins.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mixins.py) + [`src/core/urls/`](https://github.com/anlaufstelle/app/blob/main/src/core/urls/).
 
 | Mixin | Erlaubte Rollen | Routengruppe (Beispiele) |
 |-------|-----------------|--------------------------|

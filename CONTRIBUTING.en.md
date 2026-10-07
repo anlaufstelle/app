@@ -127,7 +127,7 @@ pip install -r requirements-dev.txt   # includes runtime + test/lint tools
 > [pip-tools](https://github.com/jazzband/pip-tools)). Direct dependencies
 > live in `requirements.in` / `requirements-dev.in`. After changing those:
 > run `make deps-lock`. Details:
-> [docs/ops-runbook.md § 8](docs/ops-runbook.md#8-dependencies-aktualisieren).
+> [docs/ops-runbook.md § 8](docs/en/ops-runbook.md#8-updating-dependencies).
 
 **3. Start the database**
 
@@ -287,7 +287,7 @@ applied, not even for the remaining types):
 
 Seed credentials: password `anlaufstelle2026`, 7 logins (username → role): `superadmin` → `super_admin` (no facility assignment), `admin` → `facility_admin`, `emma` → `lead`, `miriam` → `staff`, `markus` → `staff`, `lena` → `assistant`, `felix` → `assistant`. All except `superadmin` belong to the default facility.
 
-> **Production:** In production there is **no** default password and no default `super_admin`. Initial setup runs via `manage.py create_super_admin` (interactive, no default). Details: `docs/dev/dev-deployment.md` § Production-Bootstrap (dev-only) and [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout recovery: `manage.py unlock <username>`.
+> **Production:** In production there is **no** default password and no default `super_admin`. Initial setup runs via `manage.py create_super_admin` (interactive, no default). Details: `docs/dev/dev-deployment.md` § Production-Bootstrap (dev-only) and [docs/admin-guide.md § 2.1 Erstinstallation](docs/en/admin-guide.md). Lockout recovery: `manage.py unlock <username>`.
 
 **7. Install Node dependencies** (for Tailwind CSS)
 
@@ -427,7 +427,7 @@ Every new facility-scoped model must be protected on **both** defense lines:
    - The architecture guard `TestRLSJoinScopeArchitectureGuard` (#2001) closes the previous blind spot: if a model without its own `facility` FK references a DIRECT table via FK/O2O, its table must be listed in `JOIN_SCOPED_TABLES`. Otherwise, `pytest -m architecture` fails with a reference to migration pattern `0047_postgres_rls_setup.py` — even if neither a migration nor the list knows about the new table yet. Derivation is deliberately limited to the immediate edge to a DIRECT model; for deeper chains (JOIN → JOIN → DIRECT), the manual entry based on the complete facility chain remains mandatory.
    - The RLS-free tables (`core_user`, `core_facility`, `core_organization`) lack this second backstop by definition. The architecture guard `TestTenantModelScopeGuard` in [`src/tests/test_architecture_guards_models.py`](src/tests/test_architecture_guards_models.py) (#1658) covers them instead: a `User.objects`/`Facility.objects`/`Organization.objects` access in `core/views/`, `core/forms/` or `core/services/` without a facility scope fails CI. Deliberately global accesses (pre-auth lookups, super-admin metrics) belong in the allowlist of the respective scan section, with a reason; the rationale for the guard-vs.-manager decision is in [ADR-005](docs/adr/005-facility-scoping-and-rls.md).
 
-Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see `docs/dev/dev-deployment.md` (dev-only), primary path per [ADR-017](docs/adr/017-deployment-topology.md)).
+Details: [docs/ops-runbook.md § 9](docs/en/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see `docs/dev/dev-deployment.md` (dev-only), primary path per [ADR-017](docs/adr/017-deployment-topology.md)).
 
 #### Data migrations on RLS tables (Refs #1746)
 

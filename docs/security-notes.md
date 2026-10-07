@@ -430,7 +430,7 @@ Diese Bewertung ist an die heutige Auswertungs-Granularität gebunden und **neu 
 
 Ein offline mitgenommener Personendatensatz liegt als AES-GCM-verschlüsseltes Bundle in der IndexedDB des Geräts ([ADR-022](adr/022-offline-snapshot-keys.md), [`offline.py`](../src/core/services/system/offline.py)) — mit Pseudonym, Notizen, Fall-Titeln und Ereignisdaten im entschlüsselbaren Klartext, solange die Session lebt. Wird die Person serverseitig anonymisiert, räumt das zunächst **nur den Server** ab; ohne eigenen Kanal erreicht kein Signal das Gerät:
 
-- Die Revalidierung beim nächsten Online-Kontakt (`revalidateCachedClient` in [`offline-store.js`](../src/static/js/offline-store.js)) purgt lokal nur bei **401/404/410**. Eine anonymisierte Person existiert aber weiter (die Zeile bleibt für Statistik-Aggregate stehen) und liefert **200**.
+- Die Revalidierung beim nächsten Online-Kontakt (`revalidateCachedClient` in [`offline-bundles.js`](../src/static/js/offline-bundles.js)) purgt lokal nur bei **401/404/410**. Eine anonymisierte Person existiert aber weiter (die Zeile bleibt für Statistik-Aggregate stehen) und liefert **200**.
 - Und selbst dieses 200 wird bewusst **nicht** über den lokalen Stand geschrieben, solange zu der Person ungesyncte Änderungen offen sind (`"skipped"`-Zweig — sonst überschriebe ein Refresh nicht replizierte Arbeit). Genau dort überlebte der Klartext.
 
 Damit blieb der gelöschte Datenbestand bis zu 48 h (`BUNDLE_TTL_SECONDS`) auf dem Gerät lesbar. Bezug: #1476 (R20), #1493.
@@ -1973,7 +1973,7 @@ akzeptiert, wie bei #1372.
 
 ### Beobachtung
 
-Der verschlüsselte Offline-Store exportiert seine **entschlüsselnden** Aggregatoren als globales `window.offlineStore` — u. a. `getDecrypted`, `listDecrypted`, `getOfflineClient`, `listOfflineEventsAggregated`, `listOfflineWorkItemsAggregated` ([`src/static/js/offline-store.js`](../src/static/js/offline-store.js)). Jeder JavaScript-Code, der im Origin läuft, kann diese Methoden aufrufen und damit — bei geladenem Session-Key — Klartext-Offline-Daten lesen.
+Der verschlüsselte Offline-Store exportiert seine **entschlüsselnden** Aggregatoren als globales `window.offlineStore` — u. a. `getDecrypted`, `listDecrypted`, `getOfflineClient`, `listOfflineEventsAggregated`, `listOfflineWorkItemsAggregated` ([`src/static/js/offline-db.js`](../src/static/js/offline-db.js) legt die Fassade an, [`src/static/js/offline-bundles.js`](../src/static/js/offline-bundles.js) hängt die Aggregatoren an). Jeder JavaScript-Code, der im Origin läuft, kann diese Methoden aufrufen und damit — bei geladenem Session-Key — Klartext-Offline-Daten lesen.
 
 ### Trade-off — warum keine Closure-Kapselung
 
@@ -2006,7 +2006,7 @@ Akzeptabel, weil der Offline-Bestand der Demo ausschließlich **synthetische See
 
 ### Verifikation
 
-- Export-Stelle: [`src/static/js/offline-store.js`](../src/static/js/offline-store.js) (`window.offlineStore = { … }`)
+- Export-Stelle: [`src/static/js/offline-db.js`](../src/static/js/offline-db.js) (legt `window.offlineStore` an: `getDecrypted`, `listDecrypted`) und [`src/static/js/offline-bundles.js`](../src/static/js/offline-bundles.js) (`getOfflineClient`, `listOfflineEventsAggregated`, `listOfflineWorkItemsAggregated`)
 - CSP-Erzwingung: [`src/tests/test_architecture_guards_templates.py`](../src/tests/test_architecture_guards_templates.py) und die weiteren `test_architecture_guards_*`
 - Krypto-/Wipe-Kern: [`src/static/js/crypto.js`](../src/static/js/crypto.js), [ADR-022 § Akzeptierte Restrisiken](adr/022-offline-snapshot-keys.md#akzeptierte-restrisiken)
 

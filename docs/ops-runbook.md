@@ -2021,7 +2021,7 @@ neue Rollen an noch gleicht es bestehende an die Env an. Zwei Wege:
 auf einem laufenden Server live** — der Repo-Fix allein aendert daran
 nichts. `/health/` macht es sichtbar, sperrt es aber nicht: Bei einer
 SUPERUSER-/BYPASSRLS-Runtime-Rolle meldet der Endpunkt `status: degraded`
-(`src/core/views/health.py:430`) und bleibt bei HTTP 200 (`:390`). Der
+(`HealthView` in `src/core/views/health.py`) und bleibt bei HTTP 200. Der
 Compose-Healthcheck von `web` lässt jeden Status außer `error` durch
 (`docker-compose.prod.yml:292–294`), `caddy` wartet nur auf `service_healthy`
 (`:526–528`). Der Container wird also trotzdem `healthy`, und `caddy` routet. Die
@@ -2988,7 +2988,7 @@ Refs #544.
 
 ### 12.1 SECURE_PROXY_SSL_HEADER
 
-`settings/prod.py:48` setzt:
+[`src/anlaufstelle/settings/prod.py`](../src/anlaufstelle/settings/prod.py) setzt `SECURE_PROXY_SSL_HEADER`:
 
 ```python
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

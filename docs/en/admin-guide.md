@@ -982,7 +982,7 @@ If a bound turns out too tight, retract it at the same location: loosen or clear
 
 ### 2.6b Fuzzy Search (pg_trgm)
 
-In addition to exact substring matching, the global person (pseudonym) search uses a **trigram-based fuzzy search** -- tolerant of typos and phonetic variants (e.g. "Schmidt" ↔ "Schmitt"). Implementation: [`src/core/services/search.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/search.py), function `search_similar_clients`.
+In addition to exact substring matching, the global person (pseudonym) search uses a **trigram-based fuzzy search** -- tolerant of typos and phonetic variants (e.g. "Schmidt" ↔ "Schmitt"). Implementation: [`src/core/services/dashboard/search.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/search.py), function `search_similar_clients`.
 
 **Per-facility threshold:** Under **Core > Settings > *Facility*** > field **"Fuzzy search threshold"** (`Settings.search_trigram_threshold`):
 
@@ -1128,7 +1128,7 @@ Templates are maintained in the Django admin under **Core > Quick Templates**.
 
 #### `prefilled_data` -- Filter Rules
 
-The service layer applies a **whitelist filter** before writing and again before applying a template ([`src/core/services/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/quick_templates.py)). Values are kept only if:
+The service layer applies a **whitelist filter** before writing and again before applying a template ([`src/core/services/dashboard/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/quick_templates.py)). Values are kept only if:
 
 - the slug belongs to the selected documentation type,
 - the effective sensitivity of the field is `NORMAL` (no `ELEVATED`/`HIGH` prefill),
@@ -1139,7 +1139,7 @@ This makes templates **self-healing**: if an admin later deactivates a select op
 
 #### Role and Sensitivity Visibility
 
-Quick templates are filtered per user using [`user_can_see_document_type`](https://github.com/anlaufstelle/app/blob/main/src/core/services/sensitivity.py). An assistant, who cannot see `ELEVATED`/`HIGH` documentation types, will not see templates for those types either. This guarantees the button list never exposes a template a user cannot actually apply.
+Quick templates are filtered per user using [`user_can_see_document_type`](https://github.com/anlaufstelle/app/blob/main/src/core/services/compliance/sensitivity.py). An assistant, who cannot see `ELEVATED`/`HIGH` documentation types, will not see templates for those types either. This guarantees the button list never exposes a template a user cannot actually apply.
 
 #### Operational Notes
 
@@ -1150,7 +1150,7 @@ Quick templates are filtered per user using [`user_can_see_document_type`](https
 #### Relevant Files
 
 - Model: [`src/core/models/quick_template.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/quick_template.py)
-- Service: [`src/core/services/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/quick_templates.py)
+- Service: [`src/core/services/dashboard/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/quick_templates.py)
 - View integration: [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) (`EventCreateView`)
 - Tracking issue: #494
 
@@ -2273,7 +2273,7 @@ To protect against **silent overwrites** when two users edit the same record in 
 
 **Affected models:** Client, Case, WorkItem, Settings, Event.
 
-**Mechanics** ([`src/core/services/locking.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/locking.py)):
+**Mechanics** ([`src/core/services/security/locking.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/locking.py)):
 
 - Every form renders the current `updated_at` as a hidden field.
 - On save, the helper `check_version_conflict(instance, expected_updated_at)` verifies whether the record has been modified in the meantime.
@@ -2449,4 +2449,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: a7aa495a1b56ae6ae9a0833904e6d7bfbee82edd -->
+<!-- source-hash: 6e4ffea528c2e9827282761ab978117f00e3d3ff -->

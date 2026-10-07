@@ -26,7 +26,7 @@
 
 **Code-Referenz:**
 - `src/core/models/audit.py` (`AuditLog` — append-only, 30+ Action-Types)
-- `src/core/services/audit.py` (Logging-Helfer)
+- `src/core/services/audit/helpers.py` (Logging-Helfer)
 
 
 **Schritte:**
@@ -88,7 +88,7 @@
 **DSGVO-Artikel-Zitat:** *Art. 7 — Bedingungen für die Einwilligung. Nachweis und Widerruflichkeit müssen sichergestellt sein.*
 
 **Code-Referenz:**
-- `src/core/services/dsgvo_package.py`
+- `src/core/services/client/dsgvo_package.py`
 - `src/core/management/commands/generate_dsgvo_package.py`
 
 **Hinweis:** Self-Service-Einwilligung in der App ist **nicht implementiert** (Memory: organisatorisch über Mitarbeiter:in/Leitung).
@@ -123,7 +123,7 @@
 
 **Code-Referenz:**
 - `src/core/views/clients.py` (`ClientDataExportJSONView`)
-- `src/core/services/client_export.py`
+- `src/core/services/client/export.py`
 
 **Voraussetzung:** Sudo-Mode aktiv, eine Person mit Kontaktstufe „Nur Pseudonym“ mit Events.
 
@@ -187,7 +187,7 @@
 
 **Code-Referenz:**
 - `src/core/views/clients.py` (`ClientUpdateView`)
-- `src/core/services/audit_signals.py` (Mutations-Logging)
+- `src/core/signals/audit.py` (Mutations-Logging)
 
 **Voraussetzung:** Person mit Pseudonym vorhanden.
 
@@ -255,8 +255,8 @@
 
 **Code-Referenz:**
 - `src/core/views/clients.py` (`ClientDeleteRequestView`)
-- `src/core/services/clients.py` (request_deletion)
-- `src/core/views/deletion_requests.py` (`DeletionRequestReviewView`)
+- `src/core/services/client/main.py` (request_deletion)
+- `src/core/views/event_deletion.py` (`DeletionRequestReviewView`)
 
 **Voraussetzung:** eine Person vorhanden, beide Rollen verfügbar.
 
@@ -324,7 +324,7 @@
 
 **DSGVO-Artikel-Zitat:** *Art. 20 — Daten in einem strukturierten, gängigen und maschinenlesbaren Format erhalten.*
 
-**Code-Referenz:** `src/core/services/client_export.py`
+**Code-Referenz:** `src/core/services/client/export.py`
 
 **Voraussetzung:** AUD-DSGVO-Art15-01 (JSON-Export liegt vor).
 
@@ -485,7 +485,7 @@
 
 **DSGVO-Artikel-Zitat:** *Art. 34 — Benachrichtigung der betroffenen Person bei hohem Risiko.*
 
-**Code-Referenz:** `src/core/services/breach_detection.py` (Notify-Hooks)
+**Code-Referenz:** `src/core/services/compliance/breach_detection.py` (Notify-Hooks)
 
 **Hinweis:** Tatsächliche E-Mail-Versand-Konfiguration muss organisatorisch geprüft werden (DSB benachrichtigt Aufsichtsbehörde, nicht die App).
 
@@ -512,7 +512,7 @@
 
 **DSGVO-Artikel-Zitat:** *Art. 35 — Datenschutz-Folgenabschätzung bei voraussichtlich hohem Risiko.*
 
-**Code-Referenz:** `src/core/services/dsgvo_package.py` (DSFA-Template)
+**Code-Referenz:** `src/core/services/client/dsgvo_package.py` (DSFA-Template)
 
 **Voraussetzung:** Sudo-Mode.
 
@@ -676,7 +676,7 @@
 |---------|-------|---------|--------|-----|
 | Security | fachkraft | C/F/S | — | `test_mfa_backup_codes.py` |
 
-**Code-Referenz:** `src/core/services/mfa.py` (`StaticToken`, One-Time-Use)
+**Code-Referenz:** `src/core/services/security/mfa.py` (`StaticToken`, One-Time-Use)
 
 **Voraussetzung:** Aktiviertes MFA, Backup-Codes generiert.
 
@@ -746,7 +746,7 @@
 |---------|-------|---------|--------|-----|
 | Security | facility_admin | C | — | `src/tests/test_audit_coverage.py::TestSettingsChangeAudit::test_compliance_fields_are_audited`, `src/tests/test_architecture.py::TestSettingsAuditCompletenessGuard` |
 
-**Code-Referenz:** [src/core/services/settings.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/settings.py) (`_AUDIT_FIELDS`, `_AUDIT_EXEMPT`)
+**Code-Referenz:** [src/core/services/system/settings.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/system/settings.py) (`_AUDIT_FIELDS`, `_AUDIT_EXEMPT`)
 
 **Schritte:**
 1. Als `facility_admin` in `/admin-mgmt/` einloggen.
@@ -775,7 +775,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 |---------|-------|---------|--------|-----|
 | Security | facility_admin | C/F | — | `src/tests/test_audit_coverage.py::TestSettingsChangeAudit::test_settings_audit_does_not_leak_values` |
 
-**Code-Referenz:** Helper-Familie in [src/core/services/audit.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/audit.py) (Refs #901)
+**Code-Referenz:** Helper-Familie in [src/core/services/audit/helpers.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/audit/helpers.py) (Refs #901)
 
 **Schritte:**
 1. Person bearbeiten: `notes`-Feld auf einen kompletten Satz „Frau Mustermann, Tel. 0123-456789" setzen, speichern.
@@ -798,9 +798,9 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | super_admin | C | — | `src/tests/test_system_views.py` |
+| Security | super_admin | C | — | `src/tests/test_system_views_access.py` |
 
-**Code-Referenz:** [src/core/views/system.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/system.py) `SystemAuditMixin.dispatch`; nutzt `audit_system_view` aus [src/core/services/audit.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/audit.py) (Refs #901 S6).
+**Code-Referenz:** [src/core/views/system/mixins.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/system/mixins.py) `SystemAuditMixin.dispatch`; nutzt `audit_system_view` aus [src/core/services/audit/helpers.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/audit/helpers.py) (Refs #901 S6).
 
 **Schritte:**
 1. Als `super_admin` einloggen.
@@ -826,7 +826,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 |---------|-------|---------|--------|-----|
 | Security | facility_admin | C | — | `src/tests/test_sudo_mode.py` |
 
-**Code-Referenz:** [src/core/services/sudo_mode.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/sudo_mode.py), [src/core/views/sudo_mode.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/sudo_mode.py)
+**Code-Referenz:** [src/core/services/security/sudo_mode.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/sudo_mode.py), [src/core/views/sudo_mode.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/sudo_mode.py)
 
 **Schritte:**
 1. Als `facility_admin` einloggen.
@@ -910,7 +910,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | leitung | C | — | `src/tests/test_export_statistics.py` |
+| Security | leitung | C | — | `src/tests/e2e/test_export_statistics.py` |
 
 **Schritte:**
 1. Person mit Pseudonym `=cmd|' /C calc'!A0` anlegen (Excel-Formula-Injection-Payload).
