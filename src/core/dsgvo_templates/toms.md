@@ -20,7 +20,7 @@
 - [ ] Abschließbare Räume
 - [ ] Besucherregelung
 - [ ] Sensibilisierung Mitarbeitende
-- [ ] **Pflicht:** Geräteverschlüsselung und Bildschirmsperre auf allen Geräten mit Offline-Nutzung, keine geteilten Konten
+- [ ] Geräteverschlüsselung und Bildschirmsperre auf allen Geräten mit Offline-Nutzung; keine geteilten Konten auf solchen Geräten
 
 ### 1.2 Zugangskontrolle
 *Maßnahmen, die Unbefugte an der Nutzung der Systeme hindern*

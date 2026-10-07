@@ -12,8 +12,8 @@ import pytest
 from core.services.client.dsgvo_package import render_document
 
 DEVICE_DUTY = (
-    "**Pflicht:** Geräteverschlüsselung und Bildschirmsperre auf allen Geräten mit Offline-Nutzung, "
-    "keine geteilten Konten"
+    "Geräteverschlüsselung und Bildschirmsperre auf allen Geräten mit Offline-Nutzung; "
+    "keine geteilten Konten auf solchen Geräten"
 )
 
 
@@ -31,4 +31,4 @@ def test_toms_office_section_lists_offline_device_duty(facility):
     access_control = _section(content, "### 1.1 Zutrittskontrolle", "### 1.2 ")
     office = _section(access_control, "**Büro/Einrichtung:**", "\n\n")
 
-    assert f"- [ ] {DEVICE_DUTY}" in office
+    assert f"- [ ] {DEVICE_DUTY}\n" in f"{office}\n"
