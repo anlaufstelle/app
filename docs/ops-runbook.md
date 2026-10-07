@@ -1158,13 +1158,14 @@ Refs #1363 (N10 + Review-Nachschlag): Caddy weist Request-Bodies oberhalb von `1
 **Restrisiko (bewusst dokumentiert, nicht gefixt):** Ein `DocumentType` kann — nur konfigurierbar durch `facility_admin`/`super_admin` — **mehrere** FILE-Felder tragen; jedes traegt unabhaengig bis zu `FILE_VAULT_MAX_UPLOAD_FILES` Dateien. Der theoretische Worst-Case je Request waechst dann um weitere `FILE_VAULT_MAX_UPLOAD_BYTES * FILE_VAULT_MAX_UPLOAD_FILES` pro zusaetzlichem FILE-Feld. Deployments mit vielfeldigen Datei-Dokumentationstypen sollten den Caddy-Cap entsprechend hochskalieren (kein automatischer Abgleich).
 
 ```bash
-# 1. Aktuellen Caddy-Wert pruefen
+# 1. Check the current Caddy value
 grep -A2 request_body Caddyfile*
 
 # 2. App-seitiges Limit pruefen (falls per Env ueberschrieben)
 docker compose -f docker-compose.prod.yml exec web \
   printenv | grep FILE_VAULT_MAX_UPLOAD
 ```
+
 
 Ein Test-Guard haelt beide Settings synchron zum statischen Caddy-Wert (Entwickler-Repo: `src/tests/test_architecture_guards_ops.py::TestCaddyUploadBodyLimit`) — schlaegt fehl, sobald `FILE_VAULT_MAX_UPLOAD_BYTES`/`FILE_VAULT_MAX_UPLOAD_FILES` geaendert werden, ohne den Caddy-Cap nachzuziehen.
 
@@ -1182,6 +1183,7 @@ docker compose -f docker-compose.prod.yml exec caddy \
 **Hintergrund:** Uploads oberhalb von `FILE_UPLOAD_MAX_MEMORY_SIZE` (Default 2,5 MB) puffert Django als **Klartext-Tempdatei** auf Platte, bevor sie von `core/services/file_vault/storage.py` gescannt und verschluesselt werden. Ohne explizites `FILE_UPLOAD_TEMP_DIR` faellt Django auf `tempfile.gettempdir()` zurueck (i. d. R. `/tmp`). Das ist nur ein kurzes Zeitfenster, aber unverschluesselter Klienten-Content liegt fuer diesen Moment auf Disk.
 
 **Gegenmassnahme:** `docker-compose.prod.yml` mountet `/tmp` im `web`-Container bereits als **tmpfs** (RAM) — noetig, weil der Container `read_only` laeuft (Refs #1374). `FILE_UPLOAD_TEMP_DIR=/tmp` ist dort explizit im `environment:`-Block der Compose-Datei gesetzt und pinnt Djangos Upload-Puffer nachweislich auf dieses tmpfs, statt sich auf Pythons `TMPDIR`-Ermittlungsreihenfolge zu verlassen (ein spaeter versehentlich gesetztes `TMPDIR` wuerde den impliziten Fallback sonst unbemerkt von tmpfs weg auf ein persistentes Volume umlenken). Der Tempdatei-Inhalt existiert also nur fluechtig im RAM und ist beim Container-Neustart weg — kein Aufraeum-Cronjob noetig.
+
 
 ```bash
 # Verifizieren, dass /tmp im web-Container tatsaechlich ein tmpfs ist
@@ -1449,6 +1451,7 @@ docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.mainte
 ```
 
 Der Produktions-Stack setzt `MAINTENANCE_FLAG_FILE` ohne weitere Konfiguration auf `/data/anlaufstelle.maintenance`. Der Pfad liegt im benannten `media`-Volume, ist für `appuser` beschreibbar und übersteht deshalb das Neuanlegen von `web`. Ein bereits in `.env` gesetzter Wert überschreibt den Standard weiterhin, muss aber ein beschreibbarer, persistenter **Container-Pfad** sein. Alternativ schaltet eine Systemadministration den Modus unter `/system/maintenance/` ein oder aus; die Seite schreibt dieselbe Datei.
+
 
 Whitelist:
 
@@ -2098,11 +2101,12 @@ und eine einzige Transaktion verwenden.
 | Schritt/Consumer | Rolle | Was die Rotation tut |
 |---|---|---|
 | `web` | App (`POSTGRES_PASSWORD`) | Vor der DB-Aenderung stoppen; nach Env-Tausch mit neuem Passwort starten und Health abwarten. |
-| `cron` | Admin (`POSTGRES_ADMIN_PASSWORD`) | Zusammen mit `web` stoppen/starten, damit kein Retention-/Audit-Job mit altem Login neu verbindet. |
+| `cron` | Admin (`POSTGRES_ADMIN_PASSWORD`) | Zusammen mit `web` stoppen/starten, damit kein Retention-/Audit-Job mit altem Login neu verbindet; nur, wo der Stack den Dienst enthält. |
 | `maintenance` / [`docker-migrate.sh`](../docker-migrate.sh) | Admin | Nach DB-Recreate als kurzlebiger One-Shot mit der neuen Env ausfuehren. Das prueft `check_db_roles`, Migrationen und die Ownership-Normalisierung aus #1085. |
 | `db` | Bootstrap (`POSTGRES_BOOTSTRAP_PASSWORD`) | Alle drei Rollen in einer Transaktion aendern; danach den Container mit unveraendertem Datenvolume **recreaten**, damit auch seine Container-Env nicht das alte Bootstrap-Secret behaelt. |
 | [`scripts/ops/backup.sh`](../scripts/ops/backup.sh) | Admin | Kein Daemon-Neustart: das Host-Skript liest `.env` bei jedem neuen Lauf. Deshalb waehrend der Rotation nicht parallel starten. |
 | Restore-Strecke (`restore.sh`, `restore-drill.sh`, [Disaster-Recovery](disaster-recovery.md)) | Bootstrap/Admin | Kein dauerhafter Consumer; jeder spaetere Lauf liest die neue `.env`. Eskrow/Notfallunterlagen muessen unmittelbar nachgezogen werden. |
+
 
 Das Skript schreibt zuerst eine mode-identische Env-Datei im selben Verzeichnis,
 stoppt dann die dauerhaften Consumer, rotiert die DB, testet alle **neuen**
@@ -2999,6 +3003,7 @@ In `Caddyfile` wird `X-Forwarded-Proto` **nicht explizit** gesetzt — die blank
 ```
 reverse_proxy web:8000
 ```
+
 
 Caddys `reverse_proxy` setzt `X-Forwarded-Proto` (sowie `X-Forwarded-For`/`X-Forwarded-Host`) per Default selbst. `SECURE_PROXY_SSL_HEADER` verlaesst sich also auf dieses Caddy-Default-Verhalten, **nicht** auf eine explizite `header_up`-Direktive. (Ein zusaetzliches `header_up X-Forwarded-Proto {scheme}` waere redundant.)
 

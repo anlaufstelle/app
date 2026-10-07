@@ -1203,6 +1203,7 @@ docker compose -f docker-compose.prod.yml exec web \
   printenv | grep FILE_VAULT_MAX_UPLOAD
 ```
 
+
 A test guard keeps both settings in sync with the static Caddy value (developer repo: `src/tests/test_architecture_guards_ops.py::TestCaddyUploadBodyLimit`) — it fails as soon as `FILE_VAULT_MAX_UPLOAD_BYTES`/`FILE_VAULT_MAX_UPLOAD_FILES` are changed without updating the Caddy cap to match.
 
 **IMPORTANT — maintainer handoff:** The Caddy value is statically stored in the Caddyfile and does **not** automatically follow when `FILE_VAULT_MAX_UPLOAD_BYTES` **or** `FILE_VAULT_MAX_UPLOAD_FILES` is overridden via env. When changing either of the two app limits (or for a deployment with multi-field file document types, see the residual risk above), update the value in the relevant Caddyfile manually and reload Caddy:
@@ -1219,6 +1220,7 @@ docker compose -f docker-compose.prod.yml exec caddy \
 **Background:** Django buffers uploads above `FILE_UPLOAD_MAX_MEMORY_SIZE` (default 2.5 MB) as a **plaintext temp file** on disk, before `core/services/file_vault/storage.py` scans and encrypts them. Without an explicit `FILE_UPLOAD_TEMP_DIR`, Django falls back to `tempfile.gettempdir()` (usually `/tmp`). This is only a short window, but unencrypted client content sits on disk for that moment.
 
 **Mitigation:** `docker-compose.prod.yml` already mounts `/tmp` in the `web` container as **tmpfs** (RAM) — necessary because the container runs `read_only` (Refs #1374). `FILE_UPLOAD_TEMP_DIR=/tmp` is set there explicitly in the `environment:` block of the compose file, and demonstrably pins Django's upload buffer to this tmpfs, instead of relying on Python's `TMPDIR` resolution order (a `TMPDIR` set accidentally later would otherwise silently redirect the implicit fallback away from tmpfs to a persistent volume). The temp file's content therefore only exists volatile in RAM, and is gone on container restart — no cleanup cron job needed.
+
 
 ```bash
 # Verify that /tmp in the web container is actually a tmpfs
@@ -1481,6 +1483,7 @@ docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.mainte
 ```
 
 Without additional configuration, the production stack sets `MAINTENANCE_FLAG_FILE` to `/data/anlaufstelle.maintenance`. This path is on the named `media` volume, is writable by `appuser`, and therefore survives recreation of `web`. A value already set in `.env` continues to override the default, but it must be a writable, persistent **container path**. Alternatively, a system administrator can enable or disable the mode at `/system/maintenance/`; the page writes the same file.
+
 
 Whitelist:
 
@@ -2125,11 +2128,12 @@ and a single transaction.
 | Step/consumer | Role | What the rotation does |
 |---|---|---|
 | `web` | App (`POSTGRES_PASSWORD`) | Stop before the DB change; start with the new password after the env swap and wait for health. |
-| `cron` | Admin (`POSTGRES_ADMIN_PASSWORD`) | Stop/start together with `web`, so no retention/audit job reconnects with the old login. |
+| `cron` | Admin (`POSTGRES_ADMIN_PASSWORD`) | Stop/start together with `web`, so no retention/audit job reconnects with the old login; only where the stack contains the service. |
 | `maintenance` / [`docker-migrate.sh`](../../docker-migrate.sh) | Admin | Run after the DB recreate as a short-lived one-shot with the new env. This checks `check_db_roles`, migrations, and the ownership normalization from #1085. |
 | `db` | Bootstrap (`POSTGRES_BOOTSTRAP_PASSWORD`) | Change all three roles in one transaction; then **recreate** the container with the unchanged data volume, so its container env also no longer holds the old bootstrap secret. |
 | [`scripts/ops/backup.sh`](../../scripts/ops/backup.sh) | Admin | No daemon restart: the host script reads `.env` on every new run. Therefore do not start it in parallel during the rotation. |
 | Restore path (`restore.sh`, `restore-drill.sh`, [Disaster Recovery](../disaster-recovery.md) (German)) | Bootstrap/Admin | No persistent consumer; every later run reads the new `.env`. Escrow/emergency documents must be updated immediately. |
+
 
 The script first writes a mode-identical env file in the same directory,
 then stops the persistent consumers, rotates the DB, tests all **new**
@@ -3019,6 +3023,7 @@ In `Caddyfile`, `X-Forwarded-Proto` is **not set explicitly** — the bare direc
 reverse_proxy web:8000
 ```
 
+
 Caddy's `reverse_proxy` sets `X-Forwarded-Proto` (as well as `X-Forwarded-For`/`X-Forwarded-Host`) itself by default. `SECURE_PROXY_SSL_HEADER` therefore relies on this Caddy default behavior, **not** on an explicit `header_up` directive. (An additional `header_up X-Forwarded-Proto {scheme}` would be redundant.)
 
 **What "by default" depends on (Refs #1963):** Whether Caddy adopts an incoming `X-Forwarded-*` value or discards it is decided solely by the `trusted_proxies` list (§ 12.2). If the request comes from a peer that is **not** listed there — the normal case, Caddy is the edge — Caddy discards the supplied value and sets all three headers itself; `X-Forwarded-For` then contains exactly **one** entry, namely the actual peer IP. If the peer, on the other hand, is in `trusted_proxies`, Caddy keeps the existing value: for `X-Forwarded-For`, it **appends** the peer IP on the right; for `X-Forwarded-Proto`/`-Host`, it adopts the upstream value unchanged.
@@ -3267,7 +3272,7 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 3f35a0df4cbd3c0cea1be1078d4f4943f4cf544e -->
+<!-- source-hash: 07d83255ca7d90ffce6556619fe399c1577ec38f -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
