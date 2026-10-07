@@ -66,6 +66,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Release-Dokumentation beschreibt gültige Werkzeuge und Rollback-Schritte** (#2456) — Checkliste und Roadmap nennen die aktuelle RC-Kadenz, die explizite App-Push-Ausnahme, die-Gates, den anonymen Image-Pull-Check und einen Rollback über veröffentlichte App-Tags; die Strip-Anzahl wird aus dem Werkzeug abgeleitet.
+
 - **Übersetzungen zusätzlich strukturell prüfbar** (#2454) — Ein Prüfer meldet Abweichungen bei Überschriften, Codeblöcken, Tabellen und erkannten Befehlen zwischen DE/EN-Paaren; bewusste Ausnahmen sind begründet und vorhandene Unterschiede werden ohne automatische Übersetzung ausgewiesen.
 
 - **Hand-Checks auf das aktuelle Release-Delta begrenzt** (#2457) — Die Einträge bis v0.99.5 liegen unverändert im Dev-Stichtag-Archiv; die Release-Checkliste verlangt die Archivierung und ein Guard lehnt historische Einträge im aktiven Delta ab.
