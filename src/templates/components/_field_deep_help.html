@@ -1,16 +1,16 @@
 {% load i18n %}
 {% comment %}
-Aufklappbare Vertiefung zu einem Formularfeld (Refs #2460).
+Expandable deep help for a form field (Refs #2460).
 
-Wird von ``components/_form_field.html`` eingebunden, sobald ``deep_help_effect``
-gesetzt ist. Native ``<details>``: ohne JavaScript bedienbar, kein Inline-Style.
-Die Vertiefung sitzt im Feld-Wrapper und wird mit ihm ein-/ausgeblendet.
+Included by ``components/_form_field.html`` as soon as ``deep_help_effect`` is
+set. Native ``<details>``: works without JavaScript, no inline style. The deep
+help sits inside the field wrapper and is shown/hidden together with it.
 
-Parameter:
-  field    Pflicht — das BoundField (Label und voller Hilfetext).
-  effect   Pflicht — Folgen der Einstellung.
-  change   Pflicht — was nachträglich änderbar bzw. unveränderbar ist.
-  example  Pflicht — ein kurzes Beispiel.
+Parameters:
+  field    Required — the BoundField (label and full help text).
+  effect   Required — consequences of the setting.
+  change   Required — what can or cannot be changed afterwards.
+  example  Required — one short example.
 {% endcomment %}
 <details data-field-help="{{ field.html_name }}" class="mt-2 text-[12px]">
     <summary class="cursor-pointer font-semibold text-accent underline hover:no-underline">{% blocktrans with label=field.label %}Mehr zu „{{ label }}“{% endblocktrans %}</summary>

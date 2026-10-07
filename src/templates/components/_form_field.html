@@ -8,13 +8,13 @@ Error-Markup. ``aria_field`` setzt aria-invalid/-describedby/-required; das
 aus clients/form.html übernommen (dort lief der Block bereits generisch).
 
 Parameter:
-  field            Pflicht — ein gebundenes Formularfeld (BoundField).
-  inline_help      Optional — ersetzt ``field.help_text`` unter dem Feld durch einen
-                   kurzen Orientierungssatz (Refs #2460).
-  deep_help_effect Optional — schaltet die aufklappbare Vertiefung unter dem Feld ein
-                   (``components/_field_deep_help.html``); zusammen mit
-                   ``deep_help_change`` und ``deep_help_example``. Der volle
-                   ``field.help_text`` steht dann in der Vertiefung.
+  field            Required — a bound form field (BoundField).
+  inline_help      Optional — replaces ``field.help_text`` below the field with one
+                   short orientation sentence (Refs #2460).
+  deep_help_effect Optional — enables the expandable deep help below the field
+                   (``components/_field_deep_help.html``); used together with
+                   ``deep_help_change`` and ``deep_help_example``. The full
+                   ``field.help_text`` then moves into the deep help.
 
 Nicht für Sonderfälle gedacht (Datei-Upload mit Ersetzen/Soft-Delete in
 events/edit.html, Autocomplete-/Quick-Date-Felder) — die bleiben individuell.

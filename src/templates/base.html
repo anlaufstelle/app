@@ -139,7 +139,7 @@
                  class="bg-yellow-500 text-white text-center text-sm py-2"
                  data-testid="offline-banner">
                 {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
-                {# Refs #2459: kein Link — die Hilfeseiten sind offline nicht vorgeladen (Fallback /offline/). #}
+                {# Refs #2459: no link — the help pages are not precached offline (fallback /offline/). #}
                 {% trans "Offline verfügbare Daten bleiben verschlüsselt auf diesem Gerät. Änderungen werden nach dem Wiederverbinden übertragen; Konflikte müssen geprüft werden." as offline_help_text %}
                 {% trans "Wie funktioniert die Offline-Arbeit?" as offline_help_label %}
                 {% include "components/_context_help.html" with help_id="offline" help_text=offline_help_text summary_label=offline_help_label only %}
