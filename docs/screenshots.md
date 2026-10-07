@@ -3,13 +3,26 @@
 > **[English version](screenshots.en.md)** · zurück zur [README](../README.md)
 
 Ein vollständiger Rundgang durch Anlaufstelle. Alle Bilder stammen aus der
-Demo-Umgebung (`make seed --scale=medium`) und zeigen ausschließlich
-pseudonymisierte Beispieldaten. Die Demo-Umgebung trägt zwei Einrichtungen mit
+mit `make docs-screens` vorbereiteten E2E-Umgebung und zeigen ausschließlich
+pseudonymisierte Beispieldaten. Die Seed-Umgebung trägt zwei Einrichtungen mit
 je einem eigenen Katalog: die Hauptstelle (Standardkatalog / Kontaktladen) und
 die Zweigstelle Nord (Paket `beratungsstelle`, offene Sprechstunde und
 Sozialberatung — [`docs/packages-beratungsstelle.md`](packages-beratungsstelle.md)).
 `--scale=large` fügt drei weitere Einrichtungen mit den Paketen `awareness`,
 `jugendarbeit` und `frauenhaus` hinzu.
+
+Die Bilder neu erzeugen:
+
+```bash
+make docs-screens
+```
+
+Voraussetzungen: laufende Docker-Datenbank, installierte Python-Abhängigkeiten
+und Playwright mit Chromium sowie freier Port 8844. Das Target hält den globalen
+`CI_LOCK`, führt **`seed --flush --scale=medium` (leert die E2E-Datenbank)** aus
+und schreibt DE/EN-Bilder für Desktop und Mobilgeräte nach `docs/screenshots/`.
+Einen bereits laufenden E2E-Server abwarten oder den eigenen Lauf im zugehörigen
+Terminal beenden; fremde Server werden vom Target nicht beendet.
 
 ## Alltag & Dokumentation
 

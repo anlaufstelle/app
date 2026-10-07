@@ -1,17 +1,28 @@
 # Screenshots — Anlaufstelle
 
-> Synchronization update 2026-09-18: this screenshot guide is now covered by the translation source-hash gate (#2252).
-
 > **[Deutsche Version](screenshots.md)** · back to the [README](../README.en.md)
 
-A full tour of Anlaufstelle. All images come from the demo environment
-(`make seed --scale=medium`) and show pseudonymised sample data only. The demo
+A full tour of Anlaufstelle. All images come from the E2E environment prepared
+by `make docs-screens` and show pseudonymised sample data only. The seeded
 environment carries two facilities, each with its own catalogue: the main
 facility (standard catalogue / drop-in centre) and "Zweigstelle Nord"
 (package `beratungsstelle`, an open counselling service —
 [`docs/packages-beratungsstelle.md`](packages-beratungsstelle.md), German only).
 `--scale=large` adds three more facilities with the packages `awareness`,
 `jugendarbeit` and `frauenhaus`.
+
+Regenerate the images:
+
+```bash
+make docs-screens
+```
+
+Prerequisites: a running Docker database, installed Python dependencies and
+Playwright with Chromium, and free port 8844. The target holds the global
+`CI_LOCK`, runs **`seed --flush --scale=medium` (clears the E2E database)** and
+writes DE/EN desktop and mobile images to `docs/screenshots/`.
+Wait for an existing E2E server to finish, or stop your own run in its terminal;
+the target does not terminate other servers.
 
 ## Daily work & documentation
 
@@ -83,4 +94,4 @@ accompaniment from the counselling-service package (Zweigstelle Nord).
 <!-- translation-source: docs/screenshots.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-09-18 -->
-<!-- source-hash: 0f40cb4da31edc66f42f28ca53b3dba4f5fbd109 -->
+<!-- source-hash: a0d31601483beda9cde161da29d264656acbc373 -->

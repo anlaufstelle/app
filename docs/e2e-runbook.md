@@ -14,7 +14,7 @@ Die `conftest.py` erledigt DB-Erstellung, Migration, Seed und `collectstatic` au
 |---|---------|--------|---------|
 | 1 | PostgreSQL läuft | `sudo docker compose up -d db` | `pg_isready -h localhost` → Exit 0 |
 | 2 | Port 8844 frei | `lsof -i :8844` | Keine Ausgabe |
-| 3 | Alte Prozesse beenden | `pkill -f 'gunicorn.*8844'` | `lsof -i :8844` danach leer |
+| 3 | Eigenen vorherigen Server beenden | Im zugehörigen Terminal `Strg-C` | Der eigene `make e2e-server`-Lauf endet und gibt den Lock frei; fremde Läufe abwarten |
 | 4 | Venv aktiv | `source .venv/bin/activate` | `which python` zeigt `.venv/` |
 | 5 | Playwright-Browser passend zur Version | `python -m playwright install chromium` | Kein „Executable doesn't exist at …" |
 | 6 | Tailwind gebaut | `make tailwind-build` | `src/static/css/styles.css` existiert |
@@ -24,7 +24,14 @@ Die `conftest.py` erledigt DB-Erstellung, Migration, Seed und `collectstatic` au
 
 > **Schritt 5 ist nicht einmalig.** Jeder Playwright-Bump bindet einen **neuen Browser-Build** — die Paketversion allein reicht nicht. Nach `playwright 1.61 → 1.62` verlangte der Lauf `chromium_headless_shell-1234`, installiert waren 1223 und 1228; Folge waren **312 Setup-Fehler** in einem einzigen Lauf, alle mit „Executable doesn't exist". Nach jedem Bump der Playwright-Version in `requirements-dev.in` also `python -m playwright install chromium` nachziehen. Ein Blick ins Verzeichnis `~/.cache/ms-playwright/` genügt **nicht**: dort liegen die alten Builds weiterhin und sehen aus wie ein vollständiges Setup.
 
-> **Lock nicht umgehen.** Die `-locked`-Targets serialisieren über ein globales `flock` (Refs #1840). Ein zweiter E2E-Lauf würde sonst dieselbe Datenbank `anlaufstelle_e2e` und denselben Port 8844 belegen — die Isolation über die xdist-Worker-Nummer wirkt nur **innerhalb** eines Laufs, nicht zwischen Sessions.
+> **Lock nicht umgehen.** `CI_LOCK` verwendet `XDG_RUNTIME_DIR`, ersatzweise
+> `TMPDIR`, sonst `/tmp`, jeweils mit `/anlaufstelle-ci.lock`. Alle Sitzungen mit
+> gemeinsamen Ressourcen müssen denselben absoluten Pfad verwenden; bei
+> unterschiedlichen Laufzeitverzeichnissen `CI_LOCK` einheitlich setzen. Die
+> Targets brauchen `flock` (util-linux), das auf macOS nicht standardmäßig
+> vorhanden ist.
+>
+> Die `-locked`-Targets serialisieren über ein globales `flock` (Refs #1840). Ein zweiter E2E-Lauf würde sonst dieselbe Datenbank `anlaufstelle_e2e` und denselben Port 8844 belegen — die Isolation über die xdist-Worker-Nummer wirkt nur **innerhalb** eines Laufs, nicht zwischen Sessions.
 
 ---
 
@@ -34,16 +41,16 @@ Die `conftest.py` erledigt DB-Erstellung, Migration, Seed und `collectstatic` au
 
 | Symptom | Ursache | Fix |
 |---------|---------|-----|
-| `RuntimeError: gunicorn-Server konnte nicht gestartet werden` | Port 8844 belegt | `lsof -i :8844` → `kill <PID>` oder `pkill -f 'gunicorn.*8844'` |
+| `RuntimeError: gunicorn-Server konnte nicht gestartet werden` | Port 8844 belegt | `lsof -i :8844` zur Diagnose; eigenen Lauf im zugehörigen Terminal mit `Strg-C` beenden, fremden Lauf abwarten |
 | `RuntimeError: gunicorn...` + DB-Connection-Error | PostgreSQL nicht gestartet | `sudo docker compose up -d db` → `pg_isready -h localhost` |
-| `psycopg.OperationalError: database "anlaufstelle_e2e" does not exist` | conftest-Erstellung fehlgeschlagen | `PGPASSWORD=anlaufstelle psql -h localhost -U anlaufstelle -c "CREATE DATABASE anlaufstelle_e2e;"` |
-| Login-Redirect zurück zu `/login/` | Passwörter durch MD5 korrumpiert | `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e .venv/bin/python src/manage.py seed --flush` |
+| `psycopg.OperationalError: database "anlaufstelle_e2e" does not exist` | conftest-Erstellung fehlgeschlagen | `make test-e2e-locked` lässt die conftest die E2E-Datenbank unter dem globalen Lock aufsetzen |
+| Login-Redirect zurück zu `/login/` | Passwörter durch MD5 korrumpiert | Für manuelle Prüfungen `make e2e-server`: vorbereitet unter dem globalen Lock, leert die E2E-Datenbank |
 | Login-Redirect + Rate-Limit-Meldung | Falsches Settings-Modul (Rate-Limit aktiv) | `DJANGO_SETTINGS_MODULE` muss `anlaufstelle.settings.e2e` sein |
 | `TimeoutError` bei `page.goto()` | `networkidle` als Wait-Strategie | `grep -r "networkidle" src/tests/e2e/` → ersetzen durch `domcontentloaded` |
 | `TimeoutError` nach Form-Submit | Kein `wait_for_url()` nach `.click()` | `page.wait_for_url(re.compile(r"/expected/path/"))` ergänzen |
 | `strict mode violation` | Locator matcht mehrere Elemente | Container scopen (`#main-content`) oder `.first` nutzen |
-| 404 auf CSS/JS (Seite ohne Styling) | `collectstatic` nicht gelaufen | Manuell: `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e .venv/bin/python src/manage.py collectstatic --noinput` |
-| Seed-Client nicht gefunden (Stern-42 etc.) | Alte Daten nicht geflusht, Pagination | conftest nutzt `--flush`. Manuell: `seed --flush`. In Tests: per Filter suchen statt `.is_visible()` |
+| 404 auf CSS/JS (Seite ohne Styling) | `collectstatic` nicht gelaufen | Manuell: `make e2e-server` führt auch `collectstatic` unter dem globalen Lock aus |
+| Seed-Client nicht gefunden (Stern-42 etc.) | Alte Daten nicht geflusht, Pagination | conftest nutzt `--flush`. Manuell: `make e2e-server` bereitet die E2E-Datenbank unter dem Lock neu vor. In Tests: per Filter suchen statt `.is_visible()` |
 | `button[type="submit"]` matcht mehrere | Selektor greift Navigation-Buttons mit | `#main-content button[type='submit']` verwenden |
 | HTMX-Swap nicht sichtbar nach Klick | Kein Wait nach Response | `page.wait_for_load_state("domcontentloaded")` oder `page.wait_for_timeout(500)` |
 
@@ -318,31 +325,20 @@ dateilokal kopiert in bis zu zehn Spec-Dateien. **Nicht erneut kopieren** — im
 Für Debugging oder manuelles Browser-Testing gegen die E2E-Datenbank:
 
 ```bash
-# 1. Port freimachen
-pkill -f 'gunicorn.*8844' 2>/dev/null || true
-
-# 2. Migrieren + Seeden
-DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e \
-  .venv/bin/python src/manage.py migrate --run-syncdb
-
-DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e \
-  .venv/bin/python src/manage.py seed --flush
-
-# 3. Static Files
-DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e \
-  .venv/bin/python src/manage.py collectstatic --noinput
-
-# 4. Server starten
-# ``python -m gunicorn`` wie in ``src/tests/e2e/conftest.py`` — der Konsolen-
-# Wrapper ``.venv/bin/gunicorn`` traegt einen absoluten Shebang und zeigt nach
-# einem venv-Neubau auf einen Interpreter, den es nicht mehr gibt (Refs #1787).
-DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e \
-  .venv/bin/python -m gunicorn anlaufstelle.wsgi:application \
-  --bind 127.0.0.1:8844 --workers 2 --threads 2 --chdir src --timeout 120
-
-# 5. Browser öffnen: http://127.0.0.1:8844/login/
-#    Login: admin / anlaufstelle2026
+make e2e-server
 ```
+
+Das Target hält den globalen `CI_LOCK` von der Vorbereitung bis zum Ende des
+Serverlaufs. Es prüft zuerst, ob Port 8844 frei ist, führt Migrationen,
+**`seed --flush --scale=medium` (leert die E2E-Datenbank)** und `collectstatic`
+aus und startet Gunicorn über den Venv-Interpreter (`python -m gunicorn`).
+Voraussetzungen: laufende Docker-Datenbank und installierte Python-Abhängigkeiten.
+Browser öffnen: `http://127.0.0.1:8844/login/`.
+
+Mit `Strg-C` im zugehörigen Terminal beenden: Das Target beendet nur seinen
+eigenen Server und gibt danach den Lock frei. Einen fremden E2E-Lauf abwarten;
+Port oder Datenbank nicht außerhalb des Locks verändern. Für Screenshots dient
+`make docs-screens` mit demselben Lock und derselben Vorbereitung.
 
 ---
 
