@@ -61,51 +61,51 @@
 
 **Ablauf:**
 
-1. ☐ Im Menü „Klient:innen" → **„Neue:r Klient:in"** klicken.
-2. ☐ Stage **„anonym"** wählen — Pseudonymsfeld bleibt leer/optional.
-3. ☐ Bei „Alters-Cluster" zutreffende Spanne auswählen (z.B. 25–34).
-4. ☐ Speichern → Klient:in wird mit zufälliger interner Kennung angelegt.
-5. ☐ Sofort ein **„Event"** (Beratungsgespräch) anlegen.
-6. ☐ Dokumenten-Typ **„Kontakt“** wählen — die passenden Felder erscheinen.
-7. ☐ Inhaltsfelder ausfüllen; der Seed-Dokumentationstyp „Kontakt“ hat Sensitivität **„normal“**.
-8. ☐ Speichern → Event erscheint sofort in der Klient:innen-Timeline.
+1. ☐ `/events/new/` öffnen — die Seite heißt **„Kontakt dokumentieren“**.
+2. ☐ Dokumentationstyp **„Kontakt“** wählen (im Seed ohne Mindestkontaktstufe).
+3. ☐ Feld **„Person“** leer lassen; keine Person anlegen und keinen Fall zuordnen.
+4. ☐ Hinweis **„Ohne Person wird der Kontakt als anonym gespeichert.“** prüfen.
+5. ☐ Inhaltsfelder ausfüllen; der Seed-Dokumentationstyp „Kontakt“ hat Sensitivität **„normal“**.
+6. ☐ **„Speichern“** klicken → Ereignisdetail öffnen und bei **„Person“** den Wert **„Anonym“** prüfen.
 
 **Sicherheitsregeln im Hintergrund:**
-- Pseudonyme statt Klarnamen schützen die Anonymität (Datenminimierung).
-- Sensitivitätsstufe steuert, wer das Event später im „Zeitstrom" sieht.
+- Ohne zugeordnete Person entsteht nur ein anonymes Ereignis, kein Personendatensatz.
+- Dokumentationstypen mit Mindestkontaktstufe verlangen eine zugeordnete Person mit passender Kontaktstufe.
+- Sensitivitätsstufe steuert, wer das Ereignis später im „Zeitstrom“ sieht.
 
 **Erwartung:**
-- Anonyme:r Klient:in existiert mit einem dokumentierten Beratungsgespräch.
+- Ein anonymes Ereignis ohne Personenbezug ist dokumentiert.
 
 **Status:** ☐ Offen
 
 ---
 
-#### SMK-A-VORM-03 — Klient:in identifizieren (Stage-Wechsel)
+#### SMK-A-VORM-03 — Person nach anonymem Erstkontakt anlegen
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Tagesablauf | fachkraft | C/F | ⚪ | `test_contact_stage.py` |
 
-**Voraussetzung:** SMK-A-VORM-02 (anonyme:r Klient:in existiert)
+**Voraussetzung:** SMK-A-VORM-02 (anonymes Ereignis ohne Person vorhanden)
 
 **Vorbereitung:**
-- Klient:in aus VORM-02 sucht erneut die Anlaufstelle auf und gibt nun einen Namen an.
+- Die Person sucht erneut die Anlaufstelle auf und möchte weitere Kontakte unter einem Pseudonym dokumentieren lassen.
 
 **Ablauf:**
 
-1. ☐ Über die Suche oder Klient:innen-Liste die Person aus VORM-02 öffnen.
-2. ☐ Auf **„Bearbeiten"** klicken.
-3. ☐ Pseudonym eintragen (z.B. „Vornamen-Initial + Geburts-Jahr").
-4. ☐ Stage von **„anonym"** auf **„identifiziert"** ändern.
-5. ☐ Speichern.
-6. ☐ Detail-View prüfen: Stage-Wechsel ist sichtbar.
+1. ☐ Im Menü **„Personen“** → **„Person anlegen“** klicken.
+2. ☐ Ein vereinbartes Pseudonym eintragen.
+3. ☐ **„Kontaktstufe“** auf **„Nur Pseudonym“** setzen und **„Person anlegen“** klicken.
+4. ☐ Detailseite prüfen: Pseudonym und Kontaktstufe **„Nur Pseudonym“** sind sichtbar.
+5. ☐ Einen weiteren Kontakt über `/events/new/` dokumentieren und die angelegte Person auswählen; einen Dokumentationstyp ohne höhere Mindestkontaktstufe wählen.
+6. ☐ **„Speichern“** klicken → Ereignisdetail zeigt den Personenbezug.
 
 **Sicherheitsregeln im Hintergrund:**
-- Stage-Wechsel wird im Audit-Protokoll vermerkt (Wer hat wann was geändert).
+- Die Kontaktstufen heißen **„Nur Pseudonym“** und **„Mit Zusatzangaben“**; eine Kontaktstufe „anonym“ gibt es nicht.
+- Das anonyme Ereignis aus VORM-02 bleibt ohne Personenbezug; dieser Ablauf verknüpft nur den neuen Kontakt.
 
 **Erwartung:**
-- Klient:in erscheint nun mit Pseudonym in der Liste, Stage „identifiziert".
+- Die Person erscheint mit Pseudonym und Kontaktstufe **„Nur Pseudonym“** in der Liste; der neue Kontakt ist ihr zugeordnet.
 
 **Status:** ☐ Offen
 
@@ -154,23 +154,23 @@
 **Voraussetzung:** SMK-A-VORM-01
 
 **Vorbereitung:**
-- Eine bekannte Klient:in aus dem Seed (z.B. Pseudonym mit dem Anfangsbuchstaben „M").
+- Eine bekannte Person aus dem Seed (z.B. Pseudonym mit dem Anfangsbuchstaben „M").
 
 **Ablauf:**
 
 1. ☐ In das Suchfeld oben rechts „M" tippen.
 2. ☐ Live-Vorschläge erscheinen — auf einen passenden Treffer klicken.
-3. ☐ Klient:innen-Detailansicht öffnet sich.
+3. ☐ Personen-Detailansicht öffnet sich.
 4. ☐ Timeline runterscrollen — alle Beratungs-Events sind chronologisch sichtbar.
 5. ☐ Ein Event aus dem Vormonat anklicken → Detail öffnet sich.
-6. ☐ Inhalte lesen, dann „Zurück zur Klient:in".
+6. ☐ Inhalte lesen, dann „Zur Person“.
 7. ☐ Über „Ähnliche Suche" einen Tippfehler ausprobieren („Mlle" statt „Mella") — System findet trotzdem den richtigen Treffer.
 
 **Sicherheitsregeln im Hintergrund:**
-- Suche filtert automatisch nur Klient:innen der eigenen Einrichtung.
+- Suche filtert automatisch nur Personen der eigenen Einrichtung.
 
 **Erwartung:**
-- Du hast den vollständigen Verlauf der Klient:in eingesehen, inkl. einem alten Event.
+- Du hast den vollständigen Verlauf der Person eingesehen, inkl. einem alten Event.
 
 **Status:** ☐ Offen
 
@@ -225,7 +225,7 @@
 **Ablauf:**
 
 1. ☐ Im Menü auf **„Statistik"** klicken.
-2. ☐ Dashboard mit Diagrammen lädt (Anzahl Klient:innen, Events, Trends).
+2. ☐ Dashboard mit Diagrammen lädt (Anzahl Personen, Events, Trends).
 3. ☐ Filter auf **„Aktuelles Quartal"** setzen.
 4. ☐ Diagramme aktualisieren sich (Live-Tausch).
 5. ☐ Auf **„CSV-Export"** klicken → Datei wird heruntergeladen.
@@ -250,7 +250,7 @@
 |---------|-------|---------|--------|-----|
 | Tagesablauf | fachkraft | C/F/S | ✓ | `test_attachment_versioning_stage_b.py`, `test_logout_cleanup.py` |
 
-**Voraussetzung:** SMK-A-VORM-02 (Klient:in mit Event vorhanden)
+**Voraussetzung:** SMK-A-VORM-02 (anonymes Ereignis ohne Person vorhanden)
 
 **Vorbereitung:**
 - Ein PDF (z.B. Beratungs-Notiz, max. 25 MB) und die EICAR-Datei (SETUP-07) bereithalten.
@@ -288,11 +288,11 @@
 **Voraussetzung:** SMK-A-VORM-01
 
 **Vorbereitung:**
-- Eine Klient:in in akuter Krisensituation kommt in die Einrichtung.
+- Eine Person in akuter Krisensituation kommt in die Einrichtung.
 
 **Ablauf:**
 
-1. ☐ Klient:in suchen oder neu anlegen (Stage „identifiziert").
+1. ☐ Person suchen oder neu anlegen (Kontaktstufe „Nur Pseudonym").
 2. ☐ Schnell-Erfassung **„Quick-Capture"** öffnen.
 3. ☐ Seed-Dokumentationstyp **„Medizinische Versorgung“** wählen.
 4. ☐ Sensitivitätsstufe **„hoch“** des gewählten Dokumentationstyps prüfen.
@@ -326,9 +326,9 @@
 **Ablauf:**
 
 1. ☐ Mit `fachkraft` einloggen, vollständig laden lassen.
-2. ☐ Zur eingebauten Klient:innen-Übersicht navigieren — Daten werden lokal gespeichert.
+2. ☐ Zur eingebauten Personen-Übersicht navigieren — Daten werden lokal gespeichert.
 3. ☐ Im DevTools → Network → **„Offline"** aktivieren (Netz simuliert weg).
-4. ☐ Eine bekannte Klient:in über das Offline-Menü öffnen (`/offline/clients/<id>/`).
+4. ☐ Eine zuvor über „Offline mitnehmen“ gespeicherte Person öffnen (`/clients/<uuid>/`).
 5. ☐ Detailansicht öffnet sich aus lokalem Cache.
 6. ☐ Ein neues Event lokal anlegen — wird im lokalen Speicher abgelegt.
 7. ☐ Network → **„Online"** wieder aktivieren.
@@ -336,7 +336,7 @@
 
 **Sicherheitsregeln im Hintergrund:**
 - Offline-Daten sind im lokalen Speicher verschlüsselt (mit dem Passwort der Anmeldung).
-- IndexedDB-Stores (`anlaufstelle-offline`) halten Klienten/Events als `{iv,ct}` (AES-GCM); der Schlüssel liegt non-extractable in `anlaufstelle-crypto` — kein Klartext.
+- IndexedDB-Stores (`anlaufstelle-offline`) halten Personen/Events als `{iv,ct}` (AES-GCM); der Schlüssel liegt non-extractable in `anlaufstelle-crypto` — kein Klartext.
 - Beim nächsten Passwort-Wechsel verfallen die offline-Daten automatisch.
 
 **Erwartung:**
@@ -364,7 +364,7 @@
 
 1. ☐ Komplette Sequenz aus SMK-A-VORM-01 durchspielen — Login, MFA, Übergabe, WorkItems.
 2. ☐ Achten auf: Touch-Targets ≥ 44px, kein horizontales Scrollen, Menü-Hamburger funktioniert.
-3. ☐ Die Klient:innen-Liste wird als Card-Layout (kein Tabellen-Scroll) gerendert.
+3. ☐ Die Personen-Liste wird als Card-Layout (kein Tabellen-Scroll) gerendert.
 4. ☐ Die Übergabe ist auf Mobil lesbar (Stats-Grid passt sich an).
 5. ☐ WorkItem-Inbox: Status-Toggle per Tap funktioniert, Bulk-Aktionen erreichbar.
 

@@ -37,7 +37,7 @@
 
 ## Setup-Block
 
-> **Einmalig pro Test-Tag, nicht pro Case.** Sobald du eingeloggt bist und deinen Browser/Mobile bereit hast, gehst du Cases einfach durch — ohne den Setup zu wiederholen. Cases verweisen in „Voraussetzung" nur noch auf **Daten-** oder **Workflow-Voraussetzungen** (z.B. „Klient:in mit Pseudonym X existiert"), nicht auf den Infra-Setup.
+> **Einmalig pro Test-Tag, nicht pro Case.** Sobald du eingeloggt bist und deinen Browser/Mobile bereit hast, gehst du Cases einfach durch — ohne den Setup zu wiederholen. Cases verweisen in „Voraussetzung" nur noch auf **Daten-** oder **Workflow-Voraussetzungen** (z.B. „Person mit Pseudonym X existiert"), nicht auf den Infra-Setup.
 
 ### Test-Umgebung (Standard)
 
@@ -72,8 +72,8 @@ Lokales Setup nur falls 🔧 LOKAL/SSH-Cases anstehen:
 
 Die Setup-Schritte oben gelten **implizit** und werden **nicht** pro Case wiederholt. Das Feld „Voraussetzung" enthält nur:
 
-- **Daten-Voraussetzungen** — z.B. „Klient:in mit Pseudonym X existiert", „Backdate-Daten via Tobias eingespielt"
-- **Vorhergehende Test-Cases** — z.B. „SMK-A-VORM-02 (anonyme:r Klient:in vorhanden)"
+- **Daten-Voraussetzungen** — z.B. „Person mit Pseudonym X existiert", „Backdate-Daten via Tobias eingespielt"
+- **Vorhergehende Test-Cases** — z.B. „SMK-A-VORM-02 (anonymes Ereignis ohne Person vorhanden)"
 - **Modus-Voraussetzungen** — z.B. „Sudo-Mode aktiv"
 
 ---
@@ -114,7 +114,7 @@ Status-Symbole gelten gleichermassen im Run-Log:
 | ACCT | Account & Profil | ZS | Zeitstrom |
 | SUDO | Sudo-Mode | HOV | Übergabe (Handover) |
 | PWA | Progressive Web App | STAT | Statistik & Reporting |
-| CLIENT | Klient:innen | AUDIT | Audit-Log |
+| CLIENT | Personen | AUDIT | Audit-Log |
 | CASE | Fälle | DSGVO | DSGVO-Paket |
 | EPI | Episoden | OFFL | Offline-Modus |
 | GOAL | Goals & Milestones | SYS | Sys / Health / Monitoring |
@@ -189,7 +189,7 @@ URL-Parameter-Manipulation:
 
 ### B.4 — Concurrency: zwei Sessions, gleicher Datensatz
 
-- Profile A + Profile B (zwei verschiedene Browser/Profile) öffnen denselben Klient:in-Datensatz im Edit-Modus.
+- Profile A + Profile B (zwei verschiedene Browser/Profile) öffnen denselben Personen-Datensatz im Edit-Modus.
 - Beide bearbeiten ein anderes Feld, Profile A speichert zuerst.
 - Profile B speichert: erwartet **Konflikt-Toast** mit „Datensatz wurde inzwischen geändert" und Optionen „Reload" / „Überschreiben".
 
@@ -219,7 +219,7 @@ Nach erfolgreichem Submit eines Forms: Browser-Back-Button drücken.
 
 ### B.9 — HX-Boost und Browser-History
 
-- Mehrere `hx-boost`-Navigationen durchführen (z.B. Klient → Case → Episode).
+- Mehrere `hx-boost`-Navigationen durchführen (z.B. Person → Case → Episode).
 - Browser-Back-Button durchklicken: jede vorherige Seite ist im History-Stack.
 - Forward funktioniert ebenfalls.
 
@@ -351,7 +351,7 @@ Die Konten und Rollen stehen in der Tabelle [Standard-Logins](#standard-logins-p
 
 Die Zielwerte gelten für einen frischen Seed nach `--flush`. Angaben jeweils **je Einrichtung / insgesamt**; Pakete und Zusatzdaten unterscheiden sich je Einrichtung.
 
-| Skalierung | Einrichtungen | Klient:innen | Events | Cases | WorkItems | Aufruf |
+| Skalierung | Einrichtungen | Personen | Events | Cases | WorkItems | Aufruf |
 |------------|---------------|--------------|--------|-------|-----------|--------|
 | Small (Default) | 1 | 7 / 7 | 25 / 25 | 3 / 3 | 5 / 5 | `.venv/bin/python src/manage.py seed --flush --scale small` |
 | Medium | 2 | 40 / 80 | 750 / 1.500 | 12 / 24 | 25 / 50 | `.venv/bin/python src/manage.py seed --flush --scale medium` |
@@ -399,9 +399,9 @@ POSTGRES_DB=anlaufstelle_handtest python src/manage.py seed
 | Bereich | Budget | Datenstand | Gemessen am |
 |---|---|---|---|
 | Dashboard/Home | TTI < 2 s | Medium-Seed (`.venv/bin/python src/manage.py seed --flush --scale medium`) | Chrome DevTools-Lighthouse oder DjDT Footer-Zeit |
-| Client-Detail | < 1 s Serverzeit bei ~100 Events | dev-Daten, ein typischer Klient | DjDT, Tab „Time" |
+| Client-Detail | < 1 s Serverzeit bei ~100 Events | dev-Daten, eine typische Person | DjDT, Tab „Time" |
 | Event-Edit mit 10 Attachments | keine N+1-Queries; < 500 ms Serverzeit | manuell vorbereitetes Event | DjDT, Tab „SQL" + „Time" |
-| Suche (`?q=...`) | < 500 ms bei 2.500 Klient:innen insgesamt | Large-Seed | DjDT, Tab „Time" |
+| Suche (`?q=...`) | < 500 ms bei 2.500 Personen insgesamt | Large-Seed | DjDT, Tab „Time" |
 | AuditLog-Liste | < 500 ms pro Seite bei ~10.000 Einträgen | Large-Seed plus zusätzlicher Audit-Bulk | DjDT, Tab „SQL" (Pagination-Query darf einen Index nutzen) |
 | Retention-Dashboard | < 2 s bei ~1.000 Proposals | gesonderter Setup-Script | DjDT „Time" |
 | Statistik-Dashboard | < 3 s bei Large-Seed (50.000 Events insgesamt) | Large-Seed | DjDT „Time" + Chart-Render im Browser |
@@ -449,9 +449,9 @@ Quelle: [`src/core/views/mixins.py`](https://github.com/anlaufstelle/app/blob/ma
 | `FacilityAdminRequiredMixin` | nur `facility_admin` | `/audit/`, `/audit/<pk>/` |
 | `LeadOrAdminRequiredMixin` | `facility_admin`, `lead` | Retention, Deletion-Requests, Statistik, Case-close/reopen, Client-Trash/Restore/Delete |
 | `StaffRequiredMixin` | `facility_admin`, `lead`, `staff` | Client-create/update, Case-CRUD, Event-create/update, Episoden/Goals |
-| `AssistantOrAboveRequiredMixin` | + `assistant` | Client-list/detail, Event-detail, Account, Zeitstrom/Handover, Suche, WorkItem-inbox/detail |
+| `AssistantOrAboveRequiredMixin` | + `assistant` | Client-list/detail, Event-detail, Zeitstrom/Handover, Suche, WorkItem-inbox/detail |
 
-> `super_admin` (facility=None) ist **bewusst aus dem Facility-App-Bereich ausgesperrt** (403 auf Zeitstrom/Clients/etc.) und lebt in `/system/*`. Ausnahme-Auffälligkeit: `/account/` liefert für super_admin 403 → #975.
+> `super_admin` (facility=None) ist **bewusst aus dem Facility-App-Bereich ausgesperrt** (403 auf Zeitstrom/Clients/etc.) und lebt in `/system/*`. `/account/` ist für alle angemeldeten Rollen einschließlich `super_admin` zugänglich; ohne Einrichtung bleiben die einrichtungsgebundenen Widgets leer.
 
 ### Cross-Coverage-Grid
 
@@ -460,7 +460,7 @@ Legende: ✅ erlaubt (200) · ⛔ Deny erwartet (403/redirect) · 🔒 Sudo-Redi
 | Routengruppe | sA | FA | Ld | St | As | DE/EN | Facility-2-Isolation |
 |--------------|----|----|----|----|----|-------|----------------------|
 | Auth / Login / Pwd-Reset / MFA / Sudo | ✅ | ✅ | ✅ | ✅ | ✅ | DE+EN | n/a |
-| Account `/account/` | ⛔ #975 | ✅ | ✅ | ✅ | ✅ | DE+EN | facility-scoped |
+| Account `/account/` | ✅ | ✅ | ✅ | ✅ | ✅ | DE+EN | eigenes Profil; Widgets je Einrichtung |
 | Zeitstrom / Dashboard / Handover | ⛔ | ✅ | ✅ | ✅ | ✅ | DE+EN | scoped |
 | Personen-Liste/-Detail / Suche | ⛔ | ✅ | ✅ | ✅ | ✅ | DE+EN | fac2→404 ✅ |
 | Personen create/update | ⛔ | ✅ | ✅ | ✅ | ⛔ | DE+EN | fac2→404 ✅ |
@@ -475,7 +475,7 @@ Legende: ✅ erlaubt (200) · ⛔ Deny erwartet (403/redirect) · 🔒 Sudo-Redi
 | Audit-Log `/audit/` | ⛔ | ✅ | ⛔ | ⛔ | ⛔ | DE+EN | je facility-eigene Liste ✅ |
 | System `/system/*` | ✅ | ⛔ | ⛔ | ⛔ | ⛔ | DE+EN | facility-übergreifend (geloggt) |
 
-**Befund-Zusammenfassung der Live-Probe:** Rollen-Gating entspricht durchweg den Mixins; Cross-Facility-Isolation greift (Facility-2-User erhalten 404 auf alle Facility-1-Objekte); sensible Exporte sind sudo-gated. Offene Punkte: #974 (EN-i18n), #975 (super_admin `/account/`). Vollständige Zellen-Matrix im Run-Log `runs/2026-05-25-major-release-v0.12.0.md` §3.X.
+**Befund-Zusammenfassung der Live-Probe:** Rollen-Gating entspricht durchweg den Mixins; Cross-Facility-Isolation greift (Facility-2-User erhalten 404 auf alle Facility-1-Objekte); sensible Exporte sind sudo-gated. Vollständige Zellen-Matrix im Run-Log `runs/2026-05-25-major-release-v0.12.0.md` §3.X.
 
 ---
 
