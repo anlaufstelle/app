@@ -11,6 +11,9 @@ import pytest
 
 pytestmark = pytest.mark.architecture
 ROOT = Path(__file__).resolve().parents[2]
+# Set when the suite itself runs under make (e.g. ``make ci``); a nested make would then
+# act as a sub-make, print "Entering directory" lines and inherit the outer variables.
+OUTER_MAKE_VARIABLES = {"MAKELEVEL", "MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES"}
 
 
 @pytest.mark.parametrize("directory_variable", [None, "TMPDIR", "XDG_RUNTIME_DIR"])
@@ -21,7 +24,7 @@ def test_make_and_runner_lock_defaults_match_without_ci_lock(tmp_path, directory
     env = {
         key: value
         for key, value in os.environ.items()
-        if key not in {"CI_LOCK", "CI_LOCK_TIMEOUT", "XDG_RUNTIME_DIR", "TMPDIR"}
+        if key not in {"CI_LOCK", "CI_LOCK_TIMEOUT", "XDG_RUNTIME_DIR", "TMPDIR"} | OUTER_MAKE_VARIABLES
     }
     if directory_variable:
         env[directory_variable] = str(tmp_path)
@@ -60,6 +63,7 @@ def test_command_line_lock_settings_are_exported(tmp_path):
     result = subprocess.run(
         ["make", "-s", "-f", "probe.mk", "print-lock", f"CI_LOCK={lock}", "CI_LOCK_TIMEOUT=23"],
         cwd=tmp_path,
+        env={key: value for key, value in os.environ.items() if key not in OUTER_MAKE_VARIABLES},
         text=True,
         capture_output=True,
         check=False,

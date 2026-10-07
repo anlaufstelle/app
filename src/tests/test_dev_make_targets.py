@@ -1,5 +1,6 @@
 """Portable contributor targets must survive a stripped source tree."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,6 +9,16 @@ import pytest
 
 pytestmark = pytest.mark.architecture
 ROOT = Path(__file__).resolve().parents[2]
+# Set when the suite itself runs under make (e.g. ``make ci``); a nested make would then
+# act as a sub-make, print "Entering directory" lines and inherit the outer variables.
+OUTER_MAKE_VARIABLES = {"MAKELEVEL", "MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES"}
+
+
+def _make_env(**overrides):
+    """Environment for a make subprocess that behaves like a top-level call."""
+    env = {key: value for key, value in os.environ.items() if key not in OUTER_MAKE_VARIABLES}
+    env.update(overrides)
+    return env
 
 
 @pytest.mark.parametrize("target", ["dco-check", "mutation", "mutation-report", "mutation-delta", "mutation-skipped"])
@@ -15,6 +26,7 @@ def test_stripped_dev_targets_report_unavailable(tmp_path, target):
     shutil.copyfile(ROOT / "Makefile", tmp_path / "Makefile")
     result = subprocess.run(
         ["make", target, "PYTHON=false", "BASE=HEAD"],
+        env=_make_env(),
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -27,9 +39,7 @@ def test_stripped_dev_targets_report_unavailable(tmp_path, target):
 def test_lock_default_is_shared_and_portable(tmp_path):
     shutil.copyfile(ROOT / "Makefile", tmp_path / "Makefile")
     (tmp_path / "probe.mk").write_text("include Makefile\nprint-lock:\n\t@echo $(CI_LOCK)\n")
-    import os
-
-    env = dict(os.environ, XDG_RUNTIME_DIR=str(tmp_path))
+    env = _make_env(XDG_RUNTIME_DIR=str(tmp_path))
     env.pop("CI_LOCK", None)
     result = subprocess.run(
         ["make", "-f", "probe.mk", "print-lock"],
@@ -48,6 +58,7 @@ def test_e2e_resource_targets_acquire_shared_lock(tmp_path, target):
     shutil.copyfile(ROOT / "Makefile", tmp_path / "Makefile")
     result = subprocess.run(
         ["make", "-n", target, "CI_LOCK=/shared/ci.lock"],
+        env=_make_env(),
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -70,6 +81,7 @@ def test_busy_lock_prevents_e2e_preparation(tmp_path, target):
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         result = subprocess.run(
             ["make", target, f"CI_LOCK={lock}", "CI_LOCK_TIMEOUT=0", "PYTHON=echo PREPARATION"],
+            env=_make_env(),
             cwd=tmp_path,
             capture_output=True,
             text=True,
@@ -103,6 +115,7 @@ def test_delta_requires_base_before_calling_available_runner(tmp_path):
     runner.touch()
     result = subprocess.run(
         ["make", "mutation-delta", "PYTHON=echo RUNNER_CALLED"],
+        env=_make_env(),
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -117,6 +130,7 @@ def test_public_delta_without_base_reports_unavailable(tmp_path):
     shutil.copyfile(ROOT / "Makefile", tmp_path / "Makefile")
     result = subprocess.run(
         ["make", "mutation-delta", "PYTHON=false"],
+        env=_make_env(),
         cwd=tmp_path,
         capture_output=True,
         text=True,
