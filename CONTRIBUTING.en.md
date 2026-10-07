@@ -313,6 +313,15 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 
 ## Make Targets
 
+**Shared host lock:** The locked targets require `flock` (util-linux), which is
+not installed by default on macOS. `CI_LOCK` defaults to
+`XDG_RUNTIME_DIR/anlaufstelle-ci.lock`, then `TMPDIR/anlaufstelle-ci.lock`, then
+`/tmp/anlaufstelle-ci.lock`. The directory must exist. All sessions sharing the
+E2E database or server ports must resolve the same absolute path; set `CI_LOCK`
+consistently when runtime directories differ. Make exports `CI_LOCK` and
+`CI_LOCK_TIMEOUT` (default 14400 seconds) to subprocesses, including mutation
+cleanup; direct mutation-runner calls use the same fallback chain.
+
 | Target           | Description                                                       |
 |------------------|-------------------------------------------------------------------|
 | `make db`        | Start PostgreSQL 18 container                                     |
@@ -837,12 +846,16 @@ make mutation           # mutmut run via scripts/dev/run_mutmut.py
 make mutation-report    # survivors list, non-interactive
 ```
 
-`make mutation` is resumable (mutmut stores state in `mutants/**/*.py.meta` and automatically picks up where a previous run stopped on restart).
+`make mutation`, `make mutation-report`, `make mutation-delta BASE=<ref>` and
+`make mutation-skipped` are maintainer/dev-only tools. In the public source tree
+they report `not available in the public source tree (maintainer tool)` when the
+stripped scripts are absent; that is not a mutation result. There is no reliable
+resume: restarting `mutmut run` starts a new measurement and loses progress.
 
 For longer runs on a sandbox with an OOM-killer or idle-killer, `scripts/dev/run_mutmut_watchdog.sh` (dev-only) is available:
 
 ```bash
-# Default: 3 additional restarts, stall threshold 5 min, 2 mutmut workers
+# Default: 0 additional restarts, stall threshold 5 min, 2 mutmut workers
 scripts/dev/run_mutmut_watchdog.sh
 
 # More aggressive profile
@@ -850,7 +863,7 @@ MAX_RESTARTS=5 STALL_THRESHOLD=600 MUTMUT_MAX_CHILDREN=4 \
     scripts/dev/run_mutmut_watchdog.sh
 ```
 
-The watchdog detects stalled or dead master processes and restarts `make mutation` — the resume mechanism takes over. Exits 0 as soon as `mutants/mutmut-stats.json` has been written during the watchdog session. Background: Refs #937.
+The watchdog detects stalled or dead master processes. By default it stops without restarting (`MAX_RESTARTS=0`); explicitly enabled restarts begin a new measurement and lose progress. Exits 0 as soon as `mutants/mutmut-stats.json` has been written during the watchdog session. Background: Refs #937.
 
 ---
 
@@ -931,7 +944,10 @@ We cannot accept pull requests without a sign-off; a forgotten sign-off can be a
 
     make dco-check RANGE=origin/main..HEAD
 
-The check runs locally only. There is no server-side enforcement; enabling the GitHub DCO
+The check is a local maintainer/dev-only tool. In the public source tree the
+target reports that it is unavailable; inspect the `Signed-off-by` lines with
+`git log --format=full origin/main..HEAD` instead. The unavailability message is
+not a successful DCO check. There is no server-side enforcement; enabling the GitHub DCO
 app remains a maintainer decision.
 
 **Third-party material:** Do not include code or text from sources whose license is not
@@ -1039,4 +1055,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 33c76d9ffb028d5f69786b9c383f8195d798ac67 -->
+<!-- source-hash: 1944a4aa0ca95f963208d5e2dfe682622eea67f4 -->

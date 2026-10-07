@@ -14,6 +14,7 @@ CI_LOCK ?= $(or $(XDG_RUNTIME_DIR),$(TMPDIR),/tmp)/anlaufstelle-ci.lock
 # 4 h — am laengsten bekannten Gate-Lauf ausgerichtet. Zu kurz hiesse stiller
 # Fehlschlag mitten im Lauf, zu lang hiesse haengende Sessions.
 CI_LOCK_TIMEOUT ?= 14400
+export CI_LOCK CI_LOCK_TIMEOUT
 
 # Schwelle des JS-Advisory-Gates ``audit-js`` (Refs #1968). Der Default bleibt
 # blockierend bei ``moderate``; die Variable ist die Notbremse fuer den einen
@@ -701,7 +702,7 @@ demo-logs:
 # Contributor target overview without counts that drift with the test suite.
 .PHONY: help
 help:
-	@echo "ci: lint, Django checks, changelog/dependency/audit/drift/translation/i18n/release/vendor/agent/CSS guards, mypy, JS and unit tests"
+	@echo "ci: lint, Django checks, changelog/dependency/audit/drift/test-matrix-index-check/translation/i18n/release/vendor/agent/CSS guards, mypy, JS and unit tests"
 	@echo "typecheck: mypy on services, forms, packages and management commands"
 	@echo "test-e2e-smoke: E2E flows marked smoke"
 	@echo "dco-check / mutation*: maintainer tools; availability is checked in public trees"
