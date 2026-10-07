@@ -1,8 +1,4 @@
 > **[Deutsche Version / German version](README.md)**
-> Synchronization update 2026-09-22: § Production installation names the mandatory-information step (imprint, privacy policy) with a link to the admin guide and notes the 404 until it is set up (#2311).
-> Synchronization update 2026-09-18: the stack table now names Django 6.1 (#1662).
-> Synchronization update 2026-09-22 (§ Production installation: the audit anchor must be created before the first backup, #2315). Most recently synchronized on 2026-09-11 (§ Production installation: complete source acquisition, initial setup sequence, production prerequisites, and explicit Compose file for backup operations, #2218). Previously synchronized on 2026-09-11 (§ Contributing: contributions are explicitly welcome and the path into the maintainer team is described in GOVERNANCE.md, #2207).
-> Synchronization update 2026-10-06: contact levels use the interface terms ("Pseudonym only", "With additional details") and the development paragraph names the maintainer as responsible (#2490, #2458).
 
 # Anlaufstelle
 

@@ -237,3 +237,40 @@ class TestEnglishSiblings:
     def test_english_documents_link_english_siblings(self):
         findings = find_english_sibling_findings(REPO_ROOT)
         assert not findings, "English documents link German siblings:\n" + "\n".join(findings)
+
+
+_SYNC_NOTE = re.compile(
+    r"Synchroni[sz]ation update|(?:Previously|Most recently) synchroni[sz]ed|<!--\s*translation-note",
+    re.IGNORECASE,
+)
+
+
+def find_sync_note_findings(root: Path) -> list[str]:
+    """English documents whose head or body carries a synchronisation note.
+
+    The stamp at the end of the file (``source-hash``) is the only sync record;
+    the reason for a change belongs in the commit body.
+    """
+    findings: list[str] = []
+    english = [*sorted((root / "docs" / "en").glob("*.md")), root / "README.en.md", root / "CONTRIBUTING.en.md"]
+    for doc in (p for p in english if p.is_file()):
+        for lineno, line in enumerate(doc.read_text(encoding="utf-8").splitlines(), start=1):
+            if _SYNC_NOTE.search(line):
+                findings.append(f"{doc.relative_to(root)}:{lineno}: synchronisation note")
+    return findings
+
+
+class TestNoSyncNotes:
+    def test_sync_notes_are_reported(self, tmp_path):
+        _write(tmp_path, "docs/en/a.md", "> Synchronization update 2026-10-06: x\n")
+        _write(tmp_path, "docs/en/b.md", "<!-- translation-note 2026-10-06: x -->\n> Previously synchronized on x\n")
+        _write(tmp_path, "docs/en/c.md", "# Clean\n<!-- translation-date: 2026-10-06 -->\n")
+        assert find_sync_note_findings(tmp_path) == [
+            "docs/en/a.md:1: synchronisation note",
+            "docs/en/b.md:1: synchronisation note",
+            "docs/en/b.md:2: synchronisation note",
+        ]
+
+    def test_english_documents_carry_no_sync_notes(self):
+        findings = find_sync_note_findings(REPO_ROOT)
+        assert not findings, "Synchronisation notes:\n" + "\n".join(findings)

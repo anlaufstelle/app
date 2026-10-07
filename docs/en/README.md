@@ -3,9 +3,6 @@
 > This is a partial English translation of the Anlaufstelle documentation.
 > The [German documentation](../README.md) is the authoritative source.
 > Internal artifacts (`docs/archive/`, `docs/superpowers/`, `docs/ai/`, `docs/dev/`, and `docs/testing/` except the manual test matrix and the assertion conventions) are dev-only.
-> Synchronization update 2026-10-06: Files that are not shipped are marked dev-only instead of linked, the manual test matrix has its own row, and the template paragraph states where the templates live (#2437).
-> Synchronization update 2026-09-18: Clarified that the FAQ itself is the authoritative source for its content (#2253).
-> Synchronization update 2026-09-11: Added the accessibility audit to the German-only index (#2215).
 
 
 ---

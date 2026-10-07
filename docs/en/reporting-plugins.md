@@ -1,6 +1,5 @@
 > This is the English translation of [reporting-plugins.md](../reporting-plugins.md).
 > The German version is the authoritative source.
-> Synchronization update 2026-10-06: the import header and `prepare_export` follow `example.py`, snapshot backends must implement `summarize_events`, and the CSV metadata line shows the unconditional k-anonymity note (#2503).
 
 # Reporting Plugins (Report Backends)
 

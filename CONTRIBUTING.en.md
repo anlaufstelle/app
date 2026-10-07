@@ -1,12 +1,4 @@
 > **[Deutsche Version / German version](CONTRIBUTING.md)**
-> Synchronization update 2026-09-18: the Django badge and the coding conventions now name Django 6.1 (#1662).
-> Synchronization update 2026-09-18: the testing guidance now links to the public assertion conventions (#2256).
-> Synchronization update 2026-09-18: the template conventions now link to the context-header and back-link guidance (#2255).
-> Synchronization update 2026-09-18: the coding conventions now link to the binding German-language guidelines (#2250).
-> Synchronization update 2026-09-21: the DCO section now documents the local pre-PR range check (#2239).
-> Synchronization update 2026-09-22: the scale profiles table now includes the `demo` profile with all six demo scenarios (#2279).
-> Synchronization update 2026-10-06: the native database setup now documents the loopback-only port binding (#2420).
-> Synchronization update 2026-10-06: the environment-variable example now names only variables the settings read, the loader table, project tree, seed profiles (`solo`) and pull-request/CI flow match the code (#2419, #2490).
 
 # Contributing to Anlaufstelle
 
