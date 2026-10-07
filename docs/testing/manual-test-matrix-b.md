@@ -642,7 +642,7 @@
 **Erwartetes Ergebnis:**
 - Schritt 6: `TOTPDevice.objects.filter(user=miriam).delete()` löscht alle Devices, `request.session.pop("mfa_verified")`. Redirect `/mfa/settings/`. Status zeigt „2FA nicht aktiv". Success-Message: „Zwei-Faktor-Authentifizierung deaktiviert."
 - AuditLog: `MFA_DISABLED` mit `detail.event="mfa_disabled"`.
-- Rate-Limit `RATELIMIT_MUTATION` (Default: z.B. 30/h) auf `MFADisableView.post`.
+- Rate-Limit `RATELIMIT_MUTATION` (Default: 60/h) auf `MFADisableView.post`.
 - Versuch B: Error-Message „Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend.", Redirect auf `/mfa/settings/`, Devices unverändert. Kein AuditLog `MFA_DISABLED`.
 
 **DSGVO/Security-Note:**
@@ -911,7 +911,7 @@
 **Services:** `src/core/services/security/sudo_mode.py` (`enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`), `src/core/services/security/mfa.py` (`verify_totp_or_backup`)  
 **Settings:** `SUDO_MODE_ENABLED=True` (Prod/Dev), `SUDO_MODE_TTL_SECONDS=900` (15 Min, `env_int` in `settings/base.py`)  
 **Genutzt von:** `MFADisableView` (LoginRequired+RequireSudoMode); ggf. DSGVO-Export, Pseudonym-Daten-Download (Refs #683)  
-**E2E-Coverage:** `test_security_hardening.py` (indirekt über MFA-Disable-Flow), Unit-Tests in `src/tests/test_sudo_mode.py`  
+**E2E-Coverage:** `test_mfa_factor_change_sudo.py` (MFA-Faktorwechsel); allgemeine Sudo-Prüfungen: Unit-Tests in `src/tests/test_sudo_mode.py`  
 **Spezial-Setup:**
 - In Tests deaktiviert: `settings/test.py` setzt `SUDO_MODE_ENABLED=False`. Für E2E-Tests bleibt es aktiv.
 - AuditActions `SUDO_MODE_ENTERED` (Erfolg) und `SUDO_MODE_FAILED` (jeder Fehlversuch, `detail.factor` = `"password"` oder `"otp"`) existieren; `SUDO_MODE_EXIT` existiert **nicht** im Code (kein expliziter Exit-Audit beim Logout — `clear_sudo` ist still).
@@ -924,7 +924,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sudo | fachkraft (`miriam`) | C/F/S | ⚪ | `test_security_hardening.py` |
+| Sudo | fachkraft (`miriam`) | C/F/S | ⚪ | — (Unit: `src/tests/test_sudo_mode.py`) |
 
 **Voraussetzung:** eingeloggt mit MFA-Verify; `miriam` hat ein bestätigtes TOTP-Gerät (vorher unter `/mfa/setup/` eingerichtet).
 
@@ -977,7 +977,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sudo | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
+| Sudo | fachkraft (`miriam`) | C | — | — (Unit: `src/tests/test_sudo_mode.py`) |
 
 **Voraussetzung:** ENT-SUDO-01; aktive Session mit Sudo-Mode.
 
@@ -1008,7 +1008,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sudo | fachkraft (`miriam`) | C/F/S | ⚪ | `test_security_hardening.py` |
+| Sudo | fachkraft (`miriam`) | C/F/S | ⚪ | — (Unit: `src/tests/test_sudo_mode.py`) |
 
 **Voraussetzung:** eingeloggt; `session["sudo_until"]` nicht gesetzt.
 
@@ -1038,7 +1038,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sudo | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
+| Sudo | fachkraft (`miriam`) | C | — | — (Unit: `src/tests/test_sudo_mode.py`) |
 
 **Voraussetzung:** ENT-SUDO-01 lief (inklusive der Negativproben in Schritt 4 und 5).
 
@@ -1078,7 +1078,7 @@
 **Routen:** `/sw.js`, `/manifest.json`, `/offline/`  
 **Views:** `src/core/views/pwa.py` (`ServiceWorkerView`, `ManifestView`, `OfflineFallbackView`)  
 **Statisch:** `src/static/manifest.json`, `src/static/js/sw.js`, `src/templates/offline.html`  
-**Cache-Versionierung:** `CACHE_NAME = "anlaufstelle-v9"` in `sw.js`  
+**Cache-Versionierung:** aktuelle `CACHE_NAME` in `src/static/js/sw.js`  
 **App-Shell:** `/static/css/styles.css`, Icons (192/512 PNG+SVG), `/offline/`  
 **Strategien (laut sw.js):**
 - Static-Assets: stale-while-revalidate (Refs #618)
@@ -1119,7 +1119,7 @@
   - `"name": "Anlaufstelle"`, `"short_name": "Anlaufstelle"`
   - `"id": "/"`, `"start_url": "/"`, `"scope": "/"`
   - `"display": "standalone"`
-  - `"background_color": "#f9fafb"`, `"theme_color": "#4f46e5"`
+  - `"background_color": "#f7f3ec"`, `"theme_color": "#006547"`
   - `"icons"` mit ≥ 4 Einträgen, mind. ein 192×192 und ein 512×512 PNG.
 - Datei wird mit `lru_cache(maxsize=1)` aus dem Filesystem gelesen — Performance-Test: 2. Aufruf ohne Disk-I/O.
 
@@ -1146,13 +1146,13 @@
 1. Beliebige App-Seite aufrufen (z.B. `/login/`).
 2. SW-Registrierung in Application-Tab beobachten.
 3. Direkt `https://localhost:8844/sw.js` aufrufen → Header prüfen.
-4. Application → Cache Storage → `anlaufstelle-v9` öffnen, App-Shell-URLs prüfen.
+4. Application → Cache Storage → den Cache mit der aktuellen `CACHE_NAME` aus `sw.js` öffnen, App-Shell-URLs prüfen.
 5. Reload-Test: zweimal Static-Asset (z.B. `/static/css/styles.css`) abrufen — Network-Tab beobachten (stale-while-revalidate).
 
 **Erwartetes Ergebnis:**
 - Schritt 2: SW ist `activated and is running`, Scope `/`.
 - Schritt 3: HTTP 200, `Content-Type: application/javascript`, `Service-Worker-Allowed: /`.
-- Schritt 4: Cache `anlaufstelle-v9` enthält App-Shell aus `APP_SHELL`:
+- Schritt 4: Der Cache mit der aktuellen `CACHE_NAME` aus `sw.js` enthält App-Shell aus `APP_SHELL`:
   - `/static/css/styles.css`
   - `/static/icons/icon-192.png`, `/static/icons/icon-512.png`
   - `/static/icons/icon-192.svg`, `/static/icons/icon-512.svg`
@@ -1191,7 +1191,7 @@
 **Erwartetes Ergebnis:**
 - Manifest-Validierung in DevTools zeigt keine Errors („App is installable").
 - Install-Prompt erscheint (Chromium-Heuristiken erfüllt: Manifest valid, SW registriert, HTTPS, Engagement).
-- Installierte App startet mit `display=standalone`, Theme-Color `#4f46e5`, Background `#f9fafb`.
+- Installierte App startet mit `display=standalone`, Theme-Color `#006547`, Background `#f7f3ec`.
 - Start-URL `/` wird geöffnet.
 
 **DSGVO/Security-Note:**
@@ -1241,23 +1241,23 @@
 |---------|-------|---------|--------|-----|
 | Pwa | beliebig | C/S | ⚪ | — (manuell, schwer zu automatisieren) |
 
-**Voraussetzung:** bisheriger SW mit `CACHE_NAME="anlaufstelle-v9"` aktiv; Code-Bump auf `v10` durchgeführt (oder Mock).
+**Voraussetzung:** bisheriger SW aktiv; eine freigegebene neue Fassung mit geänderter `CACHE_NAME` in `sw.js` steht bereit.
 
 **Vorbereitung:**
-- Initial-Setup: laden, SW aktivieren, App-Shell-Cache `anlaufstelle-v9` aufbauen.
-- Server auf neue Version deployen, in der `CACHE_NAME` auf `anlaufstelle-v10` erhöht ist (Pre-Test: in `sw.js` editieren, Server reloaden).
+- Initial-Setup: laden, SW aktivieren, App-Shell-Cache mit der bisherigen `CACHE_NAME` aus `sw.js` aufbauen.
+- Server auf neue Version deployen, in der `CACHE_NAME` gegenüber der bisherigen Fassung geändert ist.
 
 **Schritte:**
 1. App neu laden (Hard-Reload sind nicht nötig; Browser prüft SW automatisch).
 2. DevTools → Application → Service Workers: „waiting to activate"-Status für die neue SW-Version sehen.
 3. „skipWaiting"-Verhalten: laut Code ruft `install`-Handler `self.skipWaiting()` auf — alte SW wird sofort durch neue ersetzt.
 4. `activate`-Handler löscht alte Caches via `caches.keys() … filter(k !== CACHE_NAME).delete()`.
-5. App reloaden — beobachte Cache-Liste in DevTools (nur `anlaufstelle-v10` übrig).
+5. App reloaden — beobachte Cache-Liste in DevTools (nur der Cache mit der neuen `CACHE_NAME` übrig).
 6. Static-Assets werden bei Bedarf via stale-while-revalidate aus dem neuen Cache geliefert.
 
 **Erwartetes Ergebnis:**
 - Neue SW installiert + aktiviert sich automatisch (Refs `self.skipWaiting()` + `self.clients.claim()` im Code).
-- Alte Cache-Stores (`anlaufstelle-v9`, ältere) sind entfernt.
+- Cache-Stores mit einer anderen als der neuen `CACHE_NAME` sind entfernt.
 - Nutzer-sichtbar: keine UI-Banner-Implementierung im aktuellen Code (Update-Toast wäre Custom-JS) — Reload reicht.
 - Anmerkung: Aktuell **kein expliziter** „Update verfügbar"-Banner im Frontend — wenn die Aufgabe einen User-Hinweis fordert, ist das ein offener Punkt (manuell verifizierbar: kein Banner sichtbar, aber Update funktioniert silent).
 
@@ -1275,7 +1275,7 @@
 |---------|-------|---------|--------|-----|
 | Pwa | fachkraft (`miriam`) | C/F/S | ✓ | `test_pwa_offline.py` |
 
-**Voraussetzung:** SW registriert + aktiviert, `CACHE_NAME=anlaufstelle-v22` im App-Shell-Cache (Refs #1543); mindestens eine Person offline mitgenommen (siehe ENT-OFFL-01), davon idealerweise eine mit Aufgabe/Ereignis, plus ein personloser (anonymer) Offline-Eintrag aus vorheriger kalt-offline-Erfassung (ENT-PWA-Create-Shells, Refs #1499).
+**Voraussetzung:** SW registriert + aktiviert, App-Shell-Cache mit der aktuellen `CACHE_NAME` aus `sw.js` (Refs #1543); mindestens eine Person offline mitgenommen (siehe ENT-OFFL-01), davon idealerweise eine mit Aufgabe/Ereignis, plus ein personloser (anonymer) Offline-Eintrag aus vorheriger kalt-offline-Erfassung (ENT-PWA-Create-Shells, Refs #1499).
 
 **Vorbereitung:**
 - Login als `miriam`, mindestens eine Person „Offline mitnehmen".
@@ -1308,7 +1308,7 @@
 <details open>
 <summary><strong>👥 CLIENT — Klient:innen-Management (16 Cases)</strong></summary>
 
-**Routen:** `/clients/`, `/clients/new/`, `/clients/<uuid>/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/export/json/`, `/clients/<uuid>/export/pdf/`, `/clients/<uuid>/delete/`, `/clients/trash/`, `/clients/<uuid>/restore/`, `/clients/<uuid>/anonymize/`, `/api/clients/autocomplete/`  
+**Routen:** `/clients/`, `/clients/new/`, `/clients/<uuid>/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/export/json/`, `/clients/<uuid>/export/pdf/`, `/clients/<uuid>/delete/`, `/clients/trash/`, `/clients/<uuid>/restore/`, `/clients/<uuid>/anonymize/`, `/partials/clients/autocomplete/`  
 **Views:** `src/core/views/clients.py` (`ClientListView`, `ClientCreateView`, `ClientDetailView`, `ClientUpdateView`, `ClientAutocompleteView`, `ClientDataExportJSONView`, `ClientDataExportPDFView`) + `src/core/views/client_deletion.py` (`ClientDeleteRequestView`, `ClientTrashView`, `ClientRestoreView`, `ClientAnonymizeView`)  
 **Services:** `src/core/services/clients.py` (`create_client`, `update_client`, `request_client_deletion`, `restore_client`, `track_client_visit`, `get_pending_deletion_request`, `pending_deletion_client_ids`, `anonymize_client_now`)  
 **E2E-Coverage:** `test_clients_search.py`, `test_client_edit.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py`, `test_client_autocomplete_recency.py`, `test_client_export.py`, `test_min_contact_stage_anonymous.py`, `test_contact_stage.py`, `test_fuzzy_search.py`  
@@ -1427,7 +1427,7 @@
 3. Pseudonym leicht ändern (z.B. `TC04-edit-<random>`).
 4. Kontaktstufe von „Identifiziert" auf „Qualifiziert" wechseln.
 5. „Speichern" klicken.
-6. Im Admin-Bereich (`/admin/core/auditlog/`) den letzten Eintrag prüfen.
+6. Im Admin-Bereich (`/admin-mgmt/core/auditlog/`) den letzten Eintrag prüfen.
 
 **Erwartetes Ergebnis:**
 - Redirect auf Detail-Seite `/clients/<uuid>/`.
@@ -1519,7 +1519,7 @@
 1. `/events/new/` aufrufen.
 2. Klient:innen-Feld (`input[placeholder='Pseudonym eingeben...']`) anklicken — ohne Tippen.
 3. Dropdown (`[role='listbox']`) erscheint mit `[role='option']`-Einträgen.
-4. Reihenfolge mit `/api/clients/autocomplete/?q=` (Browser-Devtools) abgleichen.
+4. Reihenfolge mit `/partials/clients/autocomplete/?q=` (Browser-Devtools) abgleichen.
 5. `Stern` eintippen — Filter aktiv, Recency-Order bleibt.
 6. Treffer per Klick übernehmen.
 
@@ -1714,7 +1714,7 @@
 1. Profil 1: `/clients/` öffnen, Person z.B. `Stern-42` anklicken, UUID aus URL kopieren.
 2. Profil 2: `https://localhost:8844/clients/<uuid-aus-F1>/` direkt aufrufen.
 3. Profil 2: `/clients/<uuid>/edit/` direkt aufrufen.
-4. Profil 2: `/api/clients/autocomplete/?q=Stern` aufrufen.
+4. Profil 2: `/partials/clients/autocomplete/?q=Stern` aufrufen.
 
 **Erwartetes Ergebnis:**
 - Direkter Detail-Aufruf in Profil 2 → 404 (`get_object_or_404(..., facility=request.current_facility)`).
@@ -1842,7 +1842,7 @@
 <details open>
 <summary><strong>📁 CASE — Fall-Lebenszyklus (12 Cases)</strong></summary>
 
-**Routen:** `/cases/`, `/cases/new/`, `/cases/<uuid>/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/close/`, `/cases/<uuid>/reopen/`, `/cases/<uuid>/assign-event/`, `/cases/<uuid>/remove-event/<uuid>/`, `/api/cases/for-client/`  
+**Routen:** `/cases/`, `/cases/new/`, `/cases/<uuid>/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/close/`, `/cases/<uuid>/reopen/`, `/cases/<uuid>/assign-event/`, `/cases/<uuid>/remove-event/<uuid>/`, `/partials/cases/for-client/`  
 **Views:** `src/core/views/cases.py` (`CaseListView`, `CaseCreateView`, `CaseDetailView`, `CaseUpdateView`, `CaseCloseView`, `CaseReopenView`, `CaseAssignEventView`, `CaseRemoveEventView`, `CasesForClientView`)  
 **Services:** `src/core/services/cases.py` (`create_case`, `update_case`, `close_case`, `reopen_case`, `assign_event_to_case`, `remove_event_from_case`)  
 **E2E-Coverage:** `test_cases.py` (TestCaseCRUD, TestCasePermissions)  
@@ -2139,7 +2139,7 @@
 **Schritte:**
 1. `/clients/?q=Stern-42` → Detail öffnen.
 2. Sektion „Aktive Fälle" zählt offene Cases.
-3. Optional: in Devtools `/api/cases/for-client/?client=<uuid>` direkt aufrufen.
+3. Optional: in Devtools `/partials/cases/for-client/?client=<uuid>` direkt aufrufen.
 
 **Erwartetes Ergebnis:**
 - Detail listet alle offenen (`status=OPEN`) Fälle absteigend nach `created_at`.
@@ -2390,7 +2390,7 @@
 **Views:** `src/core/views/case_goals.py` (`GoalCreateView`, `GoalUpdateView`, `GoalToggleView`, `MilestoneCreateView`, `MilestoneToggleView`, `MilestoneDeleteView`)  
 **Services:** `src/core/services/goals.py` (`create_goal`, `update_goal`, `achieve_goal`, `unachieve_goal`, `create_milestone`, `toggle_milestone`, `delete_milestone`)  
 **E2E-Coverage:** `test_cases.py::TestGoalsAndMilestones`  
-**Spezial-Setup:** Alle Endpoints sind HTMX-only und rendern `core/cases/partials/goals_section.html`. Rate-Limit `RATELIMIT_FREQUENT` (60/min/User).
+**Spezial-Setup:** Alle Endpoints sind HTMX-only und rendern `core/cases/partials/goals_section.html`. Rate-Limit `RATELIMIT_FREQUENT` (120/h/User).
 
 ---
 
@@ -2541,7 +2541,7 @@
 - HTMX rendert Partial mit korrektem CSS-State.
 
 **DSGVO/Security-Note:**
-- Kein Audit-Trail (analog zu Goals — siehe Empfehlung TC-ID ENT-GOAL-02).
+- `toggle_milestone` ändert nur `is_completed` und `completed_at`; für diesen Toggle entsteht kein Audit-Eintrag.
 
 **Status:** ☐ Offen
 
@@ -2561,7 +2561,7 @@
 **Schritte:**
 1. Meilenstein-Lösch-Button klicken (POST `/cases/<case_pk>/milestones/<pk>/delete/`).
 2. HTMX-Swap beobachten — Eintrag verschwindet aus Liste.
-3. AuditLog im Admin prüfen (`/admin/core/auditlog/?action=MILESTONE_DELETE`).
+3. AuditLog im Admin prüfen (`/admin-mgmt/core/auditlog/?action=MILESTONE_DELETE`).
 
 **Erwartetes Ergebnis:**
 - Meilenstein DB-deleted (Hard-Delete, kein Soft-Delete).
@@ -2611,7 +2611,7 @@
 <details open>
 <summary><strong>📝 EVT — Events / Dokumentation (10 Cases)</strong></summary>
 
-**Routen:** `/events/new/`, `/events/<uuid>/`, `/events/<uuid>/edit/`, `/events/<uuid>/delete/`, `/api/events/fields/`  
+**Routen:** `/events/new/`, `/events/<uuid>/`, `/events/<uuid>/edit/`, `/events/<uuid>/delete/`, `/partials/events/fields/`  
 **Views:** `src/core/views/events.py` (`EventCreateView`, `EventDetailView`, `EventUpdateView`, `EventDeleteView`, `EventFieldsPartialView`)  
 **Services:** `src/core/services/events/crud.py` (`create_event`, `update_event`, `soft_delete_event`, `attach_files_to_new_event`), `src/core/services/event.py` (Re-Export-Stub Refs #777), `src/core/services/sensitivity.py` (`user_can_see_event`, `get_visible_event_or_404`, `remove_restricted_fields`), `src/core/services/quick_templates.py`  
 **E2E-Coverage:** `test_quick_capture.py`, `test_fieldtemplate_default_value.py`, `test_min_contact_stage_anonymous.py`  
@@ -2634,7 +2634,7 @@
 **Schritte:**
 1. `/events/new/` aufrufen.
 2. Klient:in via Autocomplete-Feld (Pseudonym tippen) auswählen — `?client=<uuid>` wird in URL/Hidden-Input gespiegelt.
-3. Aus Dropdown DocumentType „Beratung" wählen — HTMX-Request `GET /api/events/fields/?document_type=<id>` lädt dynamische Felder via `EventFieldsPartialView` (Status 200).
+3. Aus Dropdown DocumentType „Beratung" wählen — HTMX-Request `GET /partials/events/fields/?document_type=<id>` lädt dynamische Felder via `EventFieldsPartialView` (Status 200).
 4. Pflichtfelder ausfüllen, `occurred_at` auf jetzt setzen.
 5. Submit-Button „Speichern" klicken.
 
@@ -2668,9 +2668,9 @@
 **Schritte:**
 1. `/events/new/` öffnen, Browser-Devtools → Netzwerk-Tab.
 2. Erstes DocumentType A im Dropdown wählen.
-3. HTMX-Request `GET /api/events/fields/?document_type=<A>` beobachten → Antwort 200, Partial `dynamic_fields.html` mit 3 Inputs.
+3. HTMX-Request `GET /partials/events/fields/?document_type=<A>` beobachten → Antwort 200, Partial `dynamic_fields.html` mit 3 Inputs.
 4. DocumentType-Dropdown auf B wechseln.
-5. Zweiter HTMX-Request `GET /api/events/fields/?document_type=<B>` → 200, 5 Inputs, Default-Wert sichtbar im entsprechenden Feld (`field.initial = ft.get_default_initial()`).
+5. Zweiter HTMX-Request `GET /partials/events/fields/?document_type=<B>` → 200, 5 Inputs, Default-Wert sichtbar im entsprechenden Feld (`field.initial = ft.get_default_initial()`).
 6. Felder umschalten und prüfen, dass das `#dynamic-fields-target` durch HTMX-Swap ersetzt wird (kein voller Reload).
 
 **Erwartetes Ergebnis:**
@@ -3427,7 +3427,7 @@
 <details open>
 <summary><strong>📋 WI — WorkItems / Inbox (10 Cases)</strong></summary>
 
-**Routen:** `/workitems/`, `/workitems/new/`, `/workitems/<uuid>/`, `/workitems/<uuid>/edit/`, `/workitems/bulk-status/`, `/workitems/bulk-priority/`, `/workitems/bulk-assign/`, `/api/workitems/<uuid>/status/`  
+**Routen:** `/workitems/`, `/workitems/new/`, `/workitems/<uuid>/`, `/workitems/<uuid>/edit/`, `/workitems/bulk-status/`, `/workitems/bulk-priority/`, `/workitems/bulk-assign/`, `/partials/workitems/<uuid>/status/`  
 **Views:** `src/core/views/workitems.py` (`WorkItemInboxView`, `WorkItemDetailView`), `src/core/views/workitem_actions.py` (`WorkItemCreateView`, `WorkItemUpdateView`, `WorkItemStatusUpdateView`), `src/core/views/workitem_bulk.py` (`WorkItemBulkStatusView`, `WorkItemBulkPriorityView`, `WorkItemBulkAssignView`)  
 **Services:** `src/core/services/workitems.py` (`create_workitem`, `update_workitem`, `update_workitem_status`, `duplicate_recurring_workitem`, `bulk_update_workitem_status`, `bulk_update_workitem_priority`, `bulk_assign_workitems`), `src/core/services/locking.py` (`check_version_conflict`)  
 **E2E-Coverage:** `test_workitem_ui.py`, `test_workitem_edit.py`, `test_workitem_due_filter.py`, `test_workitems_deletion.py`  
@@ -3526,7 +3526,7 @@
 
 **Schritte:**
 1. Inbox `/workitems/` → Karte des WorkItems.
-2. Status-Button „Starten" klickt POST `/api/workitems/<uuid>/status/` mit `status=in_progress` (HTMX).
+2. Status-Button „Starten" klickt POST `/partials/workitems/<uuid>/status/` mit `status=in_progress` (HTMX).
 3. Erneut Status-Button → POST `status=done`.
 
 **Erwartetes Ergebnis:**
@@ -3717,7 +3717,7 @@
 <details open>
 <summary><strong>🗑️ DEL — Lösch-Anträge / Vier-Augen (6 Cases)</strong></summary>
 
-**Routen:** `/deletion-requests/`, `/deletion-requests/<uuid>/review/`  
+**Routen:** `/deletion-requests/`, `/deletion-requests/<uuid>/review/`, `/deletion-requests/<uuid>/withdraw/`  
 **Views:** `src/core/views/event_deletion.py` (`DeletionRequestListView`, `DeletionRequestReviewView`), `src/core/views/client_deletion.py` (Verzweigung über `target_type`)  
 **Services:** `src/core/services/events/deletion.py` (`request_deletion`, `approve_deletion`, `reject_deletion`), `src/core/services/clients.py` (`approve_client_deletion`, `reject_client_deletion`), `src/core/services/events/crud.py` (`soft_delete_event`)  
 **E2E-Coverage:** `test_workitems_deletion.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py`  
@@ -3752,7 +3752,7 @@
 
 ---
 
-### TC-ID: ENT-DEL-02 — Antrags-Liste anzeigen (LEAD+)
+### TC-ID: ENT-DEL-02 — Antrags-Liste anzeigen (Genehmiger-Pool und eigene Anträge)
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -3761,12 +3761,13 @@
 **Voraussetzung:** DEL-01 (mind. 1 PENDING-Request).
 
 **Schritte:**
-1. `/deletion-requests/` aufrufen.
+1. `/deletion-requests/` als Leitung und als Person mit eigenem offenen Antrag aufrufen.
+2. Als Antragsteller:in den eigenen offenen Antrag über „Zurückziehen“ (POST `/deletion-requests/<uuid>/withdraw/`) zurückziehen und als Leitung die Liste „Zurückgezogen“ kontrollieren.
 
 **Erwartetes Ergebnis:**
-- `LeadOrAdminRequiredMixin` — fachkraft/assistenz bekommen 403 oder Redirect.
-- Drei Listen: PENDING, APPROVED, REJECTED.
-- Pro Eintrag: Antragsteller, Datum, Reason, Target-Type (Event/Client), Link zu Review-Page.
+- `DeletionRequestListAccessMixin`: Leitung und Genehmiger-Pool sehen alle Anträge der Einrichtung; Fachkraft/Assistenz mit eigenem offenem Antrag sehen nur ihre eigenen Anträge. Ohne Zugangsrecht wird der Zugriff verweigert.
+- Vier Listen: PENDING, APPROVED, REJECTED, WITHDRAWN („Zurückgezogen“).
+- Pro Eintrag: Antragsteller, Datum, Reason, Target-Type (Event/Client); Review-Link nur für berechtigte Genehmiger:innen.
 - `select_related("requested_by", "reviewed_by")` → keine N+1.
 - Listen sind als `list(...)` evaluiert für `|length`-Tag ohne extra COUNT (Refs #640).
 
@@ -3900,12 +3901,12 @@
 <details open>
 <summary><strong>📦 RET — Aufbewahrungsrichtlinien (2 Cases)</strong></summary>
 
-**Routen:** `/retention/`, `/api/retention/<uuid>/approve/`, `/api/retention/<uuid>/hold/`, `/retention/bulk-approve/`, `/retention/bulk-defer/`, `/retention/bulk-reject/`  
+**Routen:** `/retention/`, `/partials/retention/<uuid>/approve/`, `/partials/retention/<uuid>/hold/`, `/retention/bulk-approve/`, `/retention/bulk-defer/`, `/retention/bulk-reject/`  
 **Views:** `src/core/views/retention.py`  
 **Services:** `src/core/services/retention.py`  
 **Management-Commands:** `enforce_retention`, `reencrypt_fields`  
 **E2E-Coverage:** `test_retention_dashboard.py`  
-**Spezial-Setup:** Backdate-Daten via SQL (`UPDATE core_event SET created_at = NOW() - INTERVAL '400 days'`); `enforce_retention --simulate-date=` für Trockenlauf.
+**Spezial-Setup:** Testereignisse nach Kategorie (anonym, Kontaktstufe „Pseudonym“/„Mit Zusatzangaben“) vorbereiten; `occurred_at` vor den jeweiligen Fristbeginn setzen. Trockenlauf über `docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run`.
 
 ---
 
@@ -3915,7 +3916,7 @@
 |---------|-------|---------|--------|-----|
 | Aufbewahrung | leitung | C/F/S | ⚪ | `test_retention_dashboard.py` |
 
-**Voraussetzung:** Backdate-Daten vorhanden (Events/Clients mit `created_at` älter als Retention-Schwelle)
+**Voraussetzung:** Backdate-Daten vorhanden (Ereignisse mit `occurred_at` älter als die Schwelle ihrer Kategorie)
 
 **Vorbereitung:**
 - Mit `leitung` einloggen.
@@ -3927,7 +3928,7 @@
 3. Spaltenüberschriften und Sortierung prüfen.
 
 **Erwartetes Ergebnis:**
-- Liste der Daten mit ablaufender Frist (Events > 90/365/3650 Tage je Sensitivität).
+- Liste der Daten mit ablaufender Frist: standardmäßig 90 Tage für anonyme Ereignisse, 365 Tage bei Kontaktstufe „Pseudonym“ (IDENTIFIED), 3650 Tage bei „Mit Zusatzangaben“ (QUALIFIED). Maßgeblich sind die aktuellen Einrichtungs-Einstellungen und `occurred_at`.
 - Holds-Tab listet aktive Sperren.
 - Historie-Tab zeigt vergangene Approvals/Rejections inkl. Akteur:in und Zeitstempel.
 
