@@ -216,7 +216,10 @@ def test_hand_check_builds_bad_sql_before_valid_sidecar_and_separates_control() 
     hand_checks_path = REPO_ROOT / "docs" / "dev" / "hand-checks.md"
     if not hand_checks_path.exists():
         pytest.skip("docs/dev/hand-checks.md nicht im Public-Snapshot — Guard nur im Dev-Repo relevant")
-    hand_checks = hand_checks_path.read_text(encoding="utf-8")
+    hand_checks = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [hand_checks_path, *sorted(hand_checks_path.parent.glob("hand-checks-archive-*.md"))]
+    )
     line = next(line for line in hand_checks.splitlines() if line.startswith("- [#2221]"))
     normalized = line.lower()
 

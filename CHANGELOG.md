@@ -66,6 +66,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Hand-Checks auf das aktuelle Release-Delta begrenzt** (#2457) — Die Einträge bis v0.99.5 liegen unverändert im Dev-Stichtag-Archiv; die Release-Checkliste verlangt die Archivierung und ein Guard lehnt historische Einträge im aktiven Delta ab.
+
 - **Ausführbare Befehle in den Handtest-Matrizen** (#2452) — Matrizen B, C, D und Hub nennen vorhandene Aufrufe; die Breach-Probe berücksichtigt Django-Schwellen, Kontosperre und HTTP-Ratelimit, der entfallene Geräte-Lease-Fall ist aus dem manuellen Pflichtprofil entfernt.
 
 - **Retention-Handtests am Datenmodell ausgerichtet** (#2498) — Matrix D prüft Ereignisfristen und einrichtungsweiten Laufumfang, Fallabschlüsse, k-Schwelle, Paket-Zugriff und Audit-Schutz mit explizitem RLS-Kontext; Matrix C nennt vorhandene Testbelege, Widerrufs- und Breach-Erwartungen berücksichtigen Scan-Grenzen und mitgezählte Sperrversuche.
