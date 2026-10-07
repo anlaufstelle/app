@@ -18,7 +18,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Kaskade | admin | — | — | `test_clients_protect.py` |
+| Personen / Kaskade | admin | — | — | `test_clients_protect.py` |
 
 **Voraussetzung:** Klient:in mit mindestens einem `Case` (Status egal — entscheidend ist die FK-Beziehung).
 
@@ -847,7 +847,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 **Schritte:**
 1. PostgreSQL Connect.
 2. SQL: `SET app.current_facility_id TO '<facility-2-uuid>'; SELECT count(*) FROM core_client;`
-3. Erwartung: nur Klient:innen aus Facility 2 sichtbar — gemäß RLS-Policy (basierend auf Session-Variable).
+3. Erwartung: nur Personen aus Facility 2 sichtbar — gemäß RLS-Policy (basierend auf Session-Variable).
 4. Test: Facility-1-Admin mit `SET app.current_facility_id TO '<facility-2-uuid>'` → kann er Facility-2-Daten sehen?
    - **Erwartung:** RLS-Policy sollte Owner-Check über `users.facility_id == app.current_facility_id` erzwingen — ggf. nicht direkt möglich, prüfen.
 

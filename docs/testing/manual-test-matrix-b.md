@@ -1320,7 +1320,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | fachkraft | C/F/S | ✓ | `test_clients_search.py` |
+| Personen | fachkraft | C/F/S | ✓ | `test_clients_search.py` |
 
 
 **Vorbereitung:**
@@ -1350,7 +1350,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | fachkraft | C/F/S | ✓ | `test_clients_search.py::test_client_create_pseudonym_uniqueness` |
+| Personen | fachkraft | C/F/S | ✓ | `test_clients_search.py::test_client_create_pseudonym_uniqueness` |
 
 
 **Vorbereitung:**
@@ -1383,7 +1383,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | fachkraft | C/F/S | ⚪ | `test_min_contact_stage_anonymous.py` |
+| Personen | fachkraft | C/F/S | ⚪ | `test_min_contact_stage_anonymous.py` |
 
 
 **Vorbereitung:**
@@ -1413,7 +1413,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | fachkraft | C/F/S | ✓ | `test_client_edit.py::test_edit_contact_stage_saves` |
+| Personen | fachkraft | C/F/S | ✓ | `test_client_edit.py::test_edit_contact_stage_saves` |
 
 **Voraussetzung:** vorhandene Person mit Stage `identified` (z.B. `Blitz-08`)
 
@@ -1447,7 +1447,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | fachkraft | C/F/S | ✓ | `test_clients_search.py::test_client_detail_event_timeline` |
+| Personen | fachkraft | C/F/S | ✓ | `test_clients_search.py::test_client_detail_event_timeline` |
 
 **Voraussetzung:** Seed-Person mit Events + offenen Cases (z.B. `Stern-42`)
 
@@ -1480,7 +1480,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | fachkraft | C/F/S | ⚪ | `test_clients_search.py::test_client_list_search`, `test_fuzzy_search.py::test_global_dropdown_shows_similar` |
+| Personen | fachkraft | C/F/S | ⚪ | `test_clients_search.py::test_client_list_search`, `test_fuzzy_search.py::test_global_dropdown_shows_similar` |
 
 
 **Vorbereitung:**
@@ -1509,7 +1509,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | fachkraft | C/F/S | ⚪ | `test_client_autocomplete_recency.py` |
+| Personen | fachkraft | C/F/S | ⚪ | `test_client_autocomplete_recency.py` |
 
 
 **Vorbereitung:**
@@ -1541,7 +1541,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | leitung | C/F/S | ⚪ | `test_client_export.py::TestClientExportJSON` |
+| Personen | leitung | C/F/S | ⚪ | `test_client_export.py::TestClientExportJSON` |
 
 **Voraussetzung:** Sudo-Mode aktivierbar
 
@@ -1575,7 +1575,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | leitung | C/F/S | ⚪ | `test_client_export.py::TestClientExportPDF` |
+| Personen | leitung | C/F/S | ⚪ | `test_client_export.py::TestClientExportPDF` |
 
 **Voraussetzung:** Sudo-Mode aktiv
 
@@ -1606,7 +1606,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | fachkraft | C/F/S | ⚪ | `test_client_deletion_workflow.py::test_staff_can_request_client_deletion`, `test_full_four_eyes_workflow` |
+| Personen | fachkraft | C/F/S | ⚪ | `test_client_deletion_workflow.py::test_staff_can_request_client_deletion`, `test_full_four_eyes_workflow` |
 
 
 **Vorbereitung:**
@@ -1640,7 +1640,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | admin | C/F/S | ⚪ | `test_client_deletion_workflow.py::test_full_four_eyes_workflow` |
+| Personen | admin | C/F/S | ⚪ | `test_client_deletion_workflow.py::test_full_four_eyes_workflow` |
 
 **Voraussetzung:** mind. 1 soft-deletete Person (vorher TC10 ausführen oder per Seed)
 
@@ -1671,7 +1671,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | admin | C/F/S | ⚪ | `test_client_deletion_workflow.py::test_full_four_eyes_workflow` |
+| Personen | admin | C/F/S | ⚪ | `test_client_deletion_workflow.py::test_full_four_eyes_workflow` |
 
 **Voraussetzung:** soft-deletete Person verfügbar (z.B. nach TC10)
 
@@ -1702,7 +1702,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / RLS | admin (F1) + admin_1 (F2) | C | — | `test_clients.py`, `test_rls.py` |
+| Personen / RLS | admin (F1) + admin_1 (F2) | C | — | `test_clients.py`, `test_rls.py` |
 
 **Voraussetzung:** `.venv/bin/python src/manage.py seed --flush --scale medium` — zwei parallele Facilities mit getrennten Admins.
 
@@ -1733,7 +1733,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | fachkraft | C | ✓ | `test_mobile_workflows.py` |
+| Personen | fachkraft | C | ✓ | `test_mobile_workflows.py` |
 
 
 **Vorbereitung:**
@@ -1765,7 +1765,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / DeletionRequests | fachkraft (`miriam`) | C/F | ⚪ | `test_client_deletion_status.py::TestPendingRequestIsVisible` |
+| Personen / DeletionRequests | fachkraft (`miriam`) | C/F | ⚪ | `test_client_deletion_status.py::TestPendingRequestIsVisible` |
 
 **Code-Referenz:** `get_pending_deletion_request` / `pending_deletion_client_ids` in [src/core/services/client/main.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/client/main.py), Partial [`clients/partials/delete_request_action.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/clients/partials/delete_request_action.html) (Refs #1736)
 
@@ -1795,7 +1795,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Retention | admin (facility_admin) | C/F | ⚪ | `test_client_deletion_status.py::TestTrashAnonymizeAction`, `test_rls_functional.py::TestEventHistoryRedactionDeferralUnderAppRole` |
+| Personen / Retention | admin (facility_admin) | C/F | ⚪ | `test_client_deletion_status.py::TestTrashAnonymizeAction`, `test_rls_functional.py::TestEventHistoryRedactionDeferralUnderAppRole` |
 
 **Code-Referenz:** `anonymize_client_now` in [src/core/services/client/main.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/client/main.py), `ClientAnonymizeView` in [src/core/views/client_deletion.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/client_deletion.py) (Refs #1737, #1756)
 
@@ -7470,7 +7470,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Zusatzfelder | admin + fachkraft (`miriam`) | C/F | ⚪ | `test_entity_dynamic_ui.py`, `test_client_dynamic_data.py` |
+| Personen / Zusatzfelder | admin + fachkraft (`miriam`) | C/F | ⚪ | `test_entity_dynamic_ui.py`, `test_client_dynamic_data.py` |
 
 **Vorbereitung:**
 - Als `admin` je einen Wegwerf-Typ mit `entity_type` **Person** und einen mit `entity_type` **Fall** angelegt; die Seed-Ereignistypen (Kontakt, Krisengespräch, …) existieren ohnehin.
@@ -7499,7 +7499,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Zusatzfelder | fachkraft (`miriam`) + assistenz (`lena`) | C | — | `test_entity_dynamic_ui.py`, `test_client_dynamic_data.py` |
+| Personen / Zusatzfelder | fachkraft (`miriam`) + assistenz (`lena`) | C | — | `test_entity_dynamic_ui.py`, `test_client_dynamic_data.py` |
 
 **Vorbereitung:**
 - ENT-CLIENT-DYN-01 durchgeführt; die Person trägt einen Wert im Feld mit Sensibilität **hoch**.
@@ -7527,7 +7527,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration / Klient:innen | admin (facility_admin) | C | — | `test_entity_dynamic_ui.py`, `test_forms_dynamic.py`, `test_packages_schema.py` |
+| Konfiguration / Personen | admin (facility_admin) | C | — | `test_entity_dynamic_ui.py`, `test_forms_dynamic.py`, `test_packages_schema.py` |
 
 **Vorbereitung:**
 - Eine Feldvorlage vom Typ **Datei** existiert (der Seed liefert `Anhang` mit).
@@ -7553,7 +7553,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Zusatzfelder | fachkraft (`miriam`) | C/F | ⚪ | `test_entity_dynamic_ui.py`, `test_forms_dynamic.py` |
+| Personen / Zusatzfelder | fachkraft (`miriam`) | C/F | ⚪ | `test_entity_dynamic_ui.py`, `test_forms_dynamic.py` |
 
 **Vorbereitung:**
 - Zwei Person-Typen mit **unterschiedlichen** Feldsets; die Person trägt aktuell Typ A mit ausgefüllten Feldern.

@@ -285,22 +285,22 @@ Methodik:
 | B | Fälle / Events | 2 | 2 | 0 | 100 % |
 | B | Fälle / Zusatzfelder | 1 | 0 | 1 | 0 % |
 | B | I18N | 5 | 1 | 4 | 20 % |
-| B | Klient:innen | 13 | 13 | 0 | 100 % |
-| B | Klient:innen / DeletionRequests | 1 | 1 | 0 | 100 % |
-| B | Klient:innen / RLS | 1 | 0 | 1 | 0 % |
-| B | Klient:innen / Retention | 1 | 1 | 0 | 100 % |
-| B | Klient:innen / Zusatzfelder | 3 | 0 | 3 | 0 % |
 | B | Konfiguration | 20 | 0 | 20 | 0 % |
 | B | Konfiguration / Audit | 1 | 0 | 1 | 0 % |
 | B | Konfiguration / Bedingte Feldlogik | 3 | 3 | 0 | 100 % |
 | B | Konfiguration / Events | 3 | 0 | 3 | 0 % |
 | B | Konfiguration / Fälle | 1 | 0 | 1 | 0 % |
-| B | Konfiguration / Klient:innen | 1 | 0 | 1 | 0 % |
+| B | Konfiguration / Personen | 1 | 0 | 1 | 0 % |
 | B | Konfiguration / RLS | 1 | 0 | 1 | 0 % |
 | B | Konfiguration / Retention | 1 | 1 | 0 | 100 % |
 | B | MFA | 9 | 9 | 0 | 100 % |
 | B | Meilensteine | 3 | 3 | 0 | 100 % |
 | B | Offline | 18 | 13 | 5 | 72 % |
+| B | Personen | 13 | 13 | 0 | 100 % |
+| B | Personen / DeletionRequests | 1 | 1 | 0 | 100 % |
+| B | Personen / RLS | 1 | 0 | 1 | 0 % |
+| B | Personen / Retention | 1 | 1 | 0 | 100 % |
+| B | Personen / Zusatzfelder | 3 | 0 | 3 | 0 % |
 | B | Pwa | 6 | 4 | 2 | 67 % |
 | B | Statistik | 15 | 14 | 1 | 93 % |
 | B | Suche | 6 | 6 | 0 | 100 % |
@@ -318,9 +318,9 @@ Methodik:
 | D | Compliance | 7 | 2 | 5 | 29 % |
 | D | DeletionRequests | 1 | 0 | 1 | 0 % |
 | D | Fälle / Kaskade | 2 | 0 | 2 | 0 % |
-| D | Klient:innen / Kaskade | 1 | 0 | 1 | 0 % |
 | D | Konfigurationspakete | 3 | 0 | 3 | 0 % |
 | D | Ops | 10 | 1 | 9 | 10 % |
+| D | Personen / Kaskade | 1 | 0 | 1 | 0 % |
 | D | Security | 8 | 0 | 8 | 0 % |
 | D | Statistik | 2 | 2 | 0 | 100 % |
 
