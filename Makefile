@@ -121,22 +121,36 @@ i18n-check:
 i18n-update:
 	$(PYTHON) scripts/i18n_catalog.py update
 
-# Doku-Screenshots (DE+EN, Desktop+Mobile, WebP) gegen einen frischen E2E-Server.
-# Schreibt nach docs/screenshots/. Braucht die Docker-DB (ggf. `sudo docker compose up -d`).
+# Shared preparation and owned server lifecycle for manual E2E and screenshots.
+# The lock is held by this shell until the server exits, including seed --flush.
 DSM_E2E := DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e
-docs-screens:
-	-pkill -f 'gunicorn.*8844' 2>/dev/null || true
-	$(DSM_E2E) $(PYTHON) src/manage.py migrate --run-syncdb
-	$(DSM_E2E) $(PYTHON) src/manage.py seed --flush --scale=medium
-	$(DSM_E2E) $(PYTHON) src/manage.py collectstatic --noinput
+define E2E_SERVER_SESSION
+	@set -eu; \
+	exec 9>"$(CI_LOCK)"; flock -w $(CI_LOCK_TIMEOUT) 9; \
+	$(PYTHON) -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 8844)); s.close()'; \
+	$(DSM_E2E) $(PYTHON) src/manage.py migrate --run-syncdb; \
+	$(DSM_E2E) $(PYTHON) src/manage.py seed --flush --scale=medium; \
+	$(DSM_E2E) $(PYTHON) src/manage.py collectstatic --noinput; \
 	$(DSM_E2E) $(PYTHON) -m gunicorn anlaufstelle.wsgi:application \
-		--bind 127.0.0.1:8844 --workers 2 --threads 2 --chdir src --timeout 120 & echo $$! > /tmp/docs-screens.pid
-	@sleep 5
-	status=0; \
-	$(DSM_E2E) $(PYTHON) src/manage.py screenshot --base-url http://127.0.0.1:8844 || status=$$?; \
-	kill $$(cat /tmp/docs-screens.pid) 2>/dev/null || true; \
-	exit $$status
-	@echo "✓ Screenshots in docs/screenshots/"
+		--bind 127.0.0.1:8844 --workers 2 --threads 2 --chdir src --timeout 120 & \
+	server_pid=$$!; \
+	trap 'kill "$$server_pid" 2>/dev/null || true; wait "$$server_pid" 2>/dev/null || true' EXIT; \
+	trap 'exit 130' INT; trap 'exit 143' TERM; \
+	if [ "$(1)" = "screenshots" ]; then \
+		sleep 5; kill -0 "$$server_pid"; \
+		$(DSM_E2E) $(PYTHON) src/manage.py screenshot --base-url http://127.0.0.1:8844; \
+	else wait "$$server_pid"; fi
+endef
+
+.PHONY: e2e-server
+# Foreground manual server; stop with Ctrl-C to release the global lock.
+e2e-server:
+	$(call E2E_SERVER_SESSION,manual)
+
+# Generate DE/EN desktop/mobile WebP screenshots with the same global lock.
+docs-screens:
+	$(call E2E_SERVER_SESSION,screenshots)
+	@echo "Screenshots in docs/screenshots/"
 
 # CI lokal
 # Refs #860: scripts/ mitgescannt — die check_*.py-Helfer landeten sonst nur
