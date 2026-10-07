@@ -260,7 +260,7 @@ applied, not even for the remaining types):
   **every** further seed run fails until this is cleaned up manually. Resolution:
   rename the facility's own type or adjust the name in the catalogue.
 
-**Scale profiles overview:**
+#### Scale profiles overview
 
 | Data | `small` (default) | `medium` | `large` | `solo` | `demo` |
 |---|---|---|---|---|---|
@@ -1055,4 +1055,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 5971b979654327e0cf218b68834fe55ebd24dda6 -->
+<!-- source-hash: 8d9dbf342c97c8594f458a531b5c1876a52faa92 -->

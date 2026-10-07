@@ -345,7 +345,7 @@ Aus `src/core/management/commands/seed.py` extrahiert: was wird wie geseedet, in
 
 ### D.1 — Standard-Logins
 
-Die Konten und Rollen stehen in der Tabelle [Standard-Logins](#standard-logins-pwd-anlaufstelle2026-für-alle). Für zwei Einrichtungen `.venv/bin/python src/manage.py seed --flush --scale medium` verwenden; die zweite Einrichtung heißt „Zweigstelle Nord“, ihr Admin-Konto `admin_1`.
+Die Konten und Rollen stehen in [CONTRIBUTING.md § Scale-Profile im Überblick](../../CONTRIBUTING.md#scale-profile-im-überblick). Für zwei Einrichtungen `.venv/bin/python src/manage.py seed --flush --scale medium` verwenden; die zweite Einrichtung heißt „Zweigstelle Nord“, ihr Admin-Konto `admin_1`.
 
 ### D.2 — Seed-Skalierung
 

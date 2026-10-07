@@ -440,4 +440,4 @@ E2E-Tests nutzen standardmäßig `seed --flush --scale small` (via conftest.py; 
 
 **Passwort (alle User):** `anlaufstelle2026`
 
-Scale-Profile: [CONTRIBUTING.md § Seed-Daten](../CONTRIBUTING.md#seed-daten-laden).
+Scale-Profile: [CONTRIBUTING.md § Scale-Profile im Überblick](../CONTRIBUTING.md#scale-profile-im-überblick).

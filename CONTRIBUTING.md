@@ -255,7 +255,7 @@ es wird nichts angewendet, auch nicht für die übrigen Typen):
   scheitert **jeder** weitere Seed-Lauf, bis manuell aufgeräumt ist. Auflösung: den
   betreiber-eigenen Typ umbenennen oder den Namen im Katalog anpassen.
 
-**Scale-Profile im Überblick:**
+#### Scale-Profile im Überblick
 
 | Daten | `small` (Default) | `medium` | `large` | `solo` | `demo` |
 |---|---|---|---|---|---|
@@ -690,7 +690,7 @@ Vier Regeln, die im Alltag zählen:
 3. **Der Loader ist ein Rücksync, kein „anlegen, falls nicht vorhanden".** Er schreibt
    Paketwerte auf Bestandszeilen zurück; welche Felder das betrifft und welche er nie anfasst,
    steht in der Tabelle unter
-   [Was der Loader-Seed einer Bestands-Einrichtung antut](#was-der-loader-seed-einer-bestands-einrichtung-antut).
+   [Was der Loader-Seed einer bestehenden Einrichtung bewirkt](#was-der-loader-seed-einer-bestehenden-einrichtung-bewirkt).
    Deshalb: gegen Bestand **immer** erst `--dry-run`.
 4. **Alles-oder-nichts.** Ein Konflikt bricht den gesamten Lauf ab; es wird nichts angewendet.
 

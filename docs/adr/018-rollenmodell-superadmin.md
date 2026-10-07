@@ -67,7 +67,7 @@ Die [`FacilityScopeMiddleware`](../../src/core/middleware/facility_scope.py) set
 - **−** Eine zusätzliche Rolle bedeutet zusätzlichen Mixin-Aufwand (`SuperAdminRequiredMixin`, `FacilityAdminRequiredMixin`) und einen neuen URL-Bereich `/system/`.
 - **−** Die RLS-Policies werden komplexer durch den OR-Branch (Migration 0085). Test-Coverage für `app.is_super_admin`-Reset-Verhalten ist Pflicht.
 - **−** `super_admin` ist eine Hochrisiko-Rolle: kompromittierte Credentials erlauben Einsicht in alle Einrichtungen. Mitigation: MFA-Pflicht ([ADR-015](015-mfa-totp.md)), Lockout (10 Versuche), Audit-Spur per `SYSTEM_VIEW`.
-- **−** Die Abgrenzung „User-Modell ist nicht facility-RLS-geschützt" ([security-notes.md § core_user](../security-notes.md#core_user-bleibt-rls-frei-finding-s-2)) bleibt — `super_admin` ohne `facility`-FK passt in dieses bewusst gewählte Schema.
+- **−** Die Abgrenzung „User-Modell ist nicht facility-RLS-geschützt" ([security-notes.md § `core_user` bleibt RLS-frei](../security-notes.md)) bleibt — `super_admin` ohne `facility`-FK passt in dieses bewusst gewählte Schema.
 
 ## Alternatives considered
 
