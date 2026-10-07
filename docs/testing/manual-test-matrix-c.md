@@ -49,25 +49,29 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | fachkraft | C/F/S | — | `src/tests/test_min_contact_stage_anonymous.py`, `src/tests/test_k_anonymization.py` |
+| Compliance | fachkraft | C/F/S | — | `src/tests/e2e/test_min_contact_stage_anonymous.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 5 Abs. 1 lit. c — Daten müssen dem Zweck angemessen, erheblich und auf das notwendige Maß beschränkt sein.*
 
 **Code-Referenz:**
-- `src/core/services/k_anonymization.py` (k=5 Default)
-- `src/core/models/client.py` (`Client.stage` mit `anonymous`/`identified`/`qualified`)
+- `src/core/services/events/crud.py` (`create_event`, `_validate_contact_stage`)
+- `src/core/models/client.py` (`Client.contact_stage`: `identified` = „Nur Pseudonym“, `qualified` = „Mit Zusatzangaben“)
+- `src/templates/core/events/create.html` (Hinweise für fehlende Person und Mindestkontaktstufe)
 
-**Voraussetzung:** SMK-A-VORM-02
+**Voraussetzung:** SMK-A-VORM-02 (anonymes Ereignis ohne Person vorhanden).
 
 **Schritte:**
-1. Anonyme:n Klient:in über VORM-02 anlegen (kein Pseudonym).
-2. Detail-View prüfen: keine direkt identifizierenden Felder (Name, Geb-Datum, Adresse) sichtbar/setzbar.
-3. JSON-Export der Klient:in (über Lead+ Sudo): nur Alters-Cluster, Stage, ID — keine Klarnamen.
-4. Im Quellcode `services/k_anonymization.py` prüfen: k=5 Default für Anonymisierung.
+1. SMK-A-VORM-02 ausführen: `/events/new/`, Dokumentationstyp **„Kontakt“** ohne Mindestkontaktstufe, keine Person und keinen Fall auswählen.
+2. Vor dem Speichern den Hinweis **„Ohne Person wird der Kontakt als anonym gespeichert.“** prüfen; nach **„Speichern“** zeigt das Ereignisdetail bei **„Person“** den Wert **„Anonym“**.
+3. Unter **„Personen“** prüfen: Durch diesen Kontakt wurde keine Person angelegt; es gibt keinen zugehörigen Personendatensatz für einen Personenexport.
+4. Ein weiteres Formular unter `/events/new/` öffnen, den Seed-Typ **„Beratungsgespräch“** mit Mindestkontaktstufe wählen und die Personenauswahl leer lassen.
+5. Hinweis **„Dieser Dokumentationstyp erfordert eine zugeordnete Person.“** prüfen; **„Speichern“** ohne Person darf kein Ereignis anlegen.
+6. Im Code prüfen: `create_event` setzt ohne Person und ohne Mindestkontaktstufe `is_anonymous=True`; `_validate_contact_stage` weist bei Mindestkontaktstufe fehlende Personen und unzureichende Kontaktstufen zurück.
 
 **Erwartetes Ergebnis:**
-- Im Anonym-Modus werden nur Alters-Cluster (z.B. „25-34") statt exakter Geburtsdaten gespeichert.
-- Keine Klarnamen-Felder vorhanden.
+- Beim anonymen Erstkontakt entsteht nur ein Ereignis ohne Personenbezug; Pseudonym, Geburtsdatum und andere Personenstammdaten werden dafür nicht angelegt.
+- Es gibt weder `Client.stage` noch die Kontaktstufe `anonymous`; Anonymität wird am Ereignis durch `is_anonymous` abgebildet.
+- Dokumentationstypen mit Mindestkontaktstufe lassen sich nur mit einer Person der erforderlichen oder höheren Kontaktstufe speichern.
 
 **Status:** ☐ Offen
 
@@ -94,12 +98,12 @@
 **Schritte:**
 1. Mit `admin` einloggen, Sudo-Mode betreten.
 2. `/dsgvo/` öffnen — DSGVO-Paket-View.
-3. Einwilligungs-Template (Information für Klient:innen, Art. 13/14) als Markdown herunterladen.
+3. Einwilligungs-Template (Information für Personen, Art. 13/14) als Markdown herunterladen.
 4. Inhalt prüfen: Hinweise auf Zweck, Speicherdauer, Widerruflichkeit, Empfänger:innen.
 
 **Erwartetes Ergebnis:**
 - Template ist verfügbar, Facility-spezifische Platzhalter sind ersetzt.
-- Verteilung an Klient:innen erfolgt **organisatorisch** (Mitarbeiter:in händigt aus, dokumentiert in Akte).
+- Verteilung an Personen erfolgt **organisatorisch** (Mitarbeiter:in händigt aus, dokumentiert in Akte).
 
 **Erwarteter Audit-Eintrag:** `EXPORT` mit Slug `informationspflichten`.
 
@@ -121,14 +125,14 @@
 - `src/core/views/clients.py` (`ClientDataExportJSONView`)
 - `src/core/services/client_export.py`
 
-**Voraussetzung:** Sudo-Mode aktiv, eine identifizierte Klient:in mit Events.
+**Voraussetzung:** Sudo-Mode aktiv, eine Person mit Kontaktstufe „Nur Pseudonym“ mit Events.
 
 **Schritte:**
 1. Mit `leitung` einloggen, Sudo-Mode betreten.
-2. Klient:in aus Liste wählen, Detail öffnen.
-3. Auf **„Datenauskunft (JSON)"** klicken → Download startet.
+2. Person aus Liste wählen, Detail öffnen.
+3. Auf **„JSON-Export (Art. 20)“** klicken → Download startet.
 4. JSON öffnen und prüfen:
-   - Alle Klient:innen-Stammdaten enthalten.
+   - Alle Personen-Stammdaten enthalten.
    - Alle Events mit Inhalten enthalten.
    - Alle Cases / Episoden / Goals enthalten.
    - Alle Anhänge (Metadaten, nicht Binary) enthalten.
@@ -157,12 +161,12 @@
 **Voraussetzung:** Sudo-Mode aktiv.
 
 **Schritte:**
-1. Wie AUD-DSGVO-Art15-01, aber **„PDF"** statt JSON.
-2. PDF öffnen → Inhalt enthält Klient:innen-Stammdaten + Events + Cases.
+1. Wie AUD-DSGVO-Art15-01, aber **„PDF-Export (Art. 15)“** statt **„JSON-Export (Art. 20)“**.
+2. PDF öffnen → Inhalt enthält Personen-Stammdaten + Events + Cases.
 3. Layout: Kopfzeile mit Facility-Name, Fußzeile mit Datum + „Generiert am".
 
 **Erwartetes Ergebnis:**
-- PDF ist menschenlesbar, alle Klient:innen-Daten enthalten.
+- PDF ist menschenlesbar, alle Personen-Daten enthalten.
 - AuditLog: `EXPORT` mit `format=pdf`.
 
 **Status:** ☐ Offen
@@ -185,10 +189,10 @@
 - `src/core/views/clients.py` (`ClientUpdateView`)
 - `src/core/services/audit_signals.py` (Mutations-Logging)
 
-**Voraussetzung:** Klient:in mit Pseudonym vorhanden.
+**Voraussetzung:** Person mit Pseudonym vorhanden.
 
 **Schritte:**
-1. Mit `fachkraft` einloggen, Klient:in öffnen.
+1. Mit `fachkraft` einloggen, Person öffnen.
 2. **„Bearbeiten"** klicken, Pseudonym ändern (z.B. Tippfehler korrigieren).
 3. Speichern.
 4. AuditLog filtern auf `Action=CLIENT_UPDATED` → Eintrag mit altem + neuem Wert.
@@ -211,14 +215,14 @@
 
 **DSGVO-Artikel-Zitat:** *Art. 16 — Recht auf Berichtigung. Art. 5 Abs. 2 — Rechenschaftspflicht (Nachweis des Prüfwegs).*
 
-**Hinweis:** [ADR-041](../adr/041-berichtigungsworkflow-intern.md) **ergänzt** AUD-DSGVO-Art16-01 (direktes Editieren) um einen dokumentierten Antrags-/Review-Weg — ADR-013 (kein Klientel-Self-Service) bleibt unverändert in Kraft. Antragsteller ist immer eine Fachkraft, nie die betroffene Person.
+**Hinweis:** [ADR-041](../adr/041-berichtigungsworkflow-intern.md) **ergänzt** AUD-DSGVO-Art16-01 (direktes Editieren) um einen dokumentierten Antrags-/Review-Weg — ADR-013 (kein Self-Service für Personen) bleibt unverändert in Kraft. Antragsteller ist immer eine Fachkraft, nie die betroffene Person.
 
 **Code-Referenz:**
 - `src/core/services/client/rectification.py` (`request_rectification`, `approve_rectification`, `reject_rectification`)
 - `src/core/views/rectification.py` (`RectificationCreateView`, `RectificationReviewView`)
 - `src/core/models/rectification.py` (`RectificationRequest` — verschlüsselte Wertpaare, partieller Unique-Index, Selbst-Review-Check-Constraint)
 
-**Voraussetzung:** identifizierte Klient:in mit einer korrigierbaren Stammdatenangabe (z.B. Pseudonym-Tippfehler).
+**Voraussetzung:** Person mit Kontaktstufe „Nur Pseudonym“ und einer korrigierbaren Stammdatenangabe (z.B. Pseudonym-Tippfehler).
 
 **Schritte:**
 1. Als `fachkraft` aus der Personenakte einen Berichtigungsantrag stellen (`/clients/<uuid>/rectification/new/`) — Zielfeld, neuer Wert, fachliche Begründung.
@@ -254,10 +258,10 @@
 - `src/core/services/clients.py` (request_deletion)
 - `src/core/views/deletion_requests.py` (`DeletionRequestReviewView`)
 
-**Voraussetzung:** eine Klient:in vorhanden, beide Rollen verfügbar.
+**Voraussetzung:** eine Person vorhanden, beide Rollen verfügbar.
 
 **Schritte (in zwei Profilen):**
-1. **Profil A — `fachkraft`:** Klient:in öffnen → **„Löschung beantragen"** → Begründung eintragen → Absenden.
+1. **Profil A — `fachkraft`:** Person öffnen → **„Löschen beantragen“** → Begründung eintragen → **„Löschantrag stellen“**.
 2. AuditLog: `DELETION_REQUESTED` mit `requested_by=fachkraft`.
 3. **Profil B — `leitung`:** `/deletion-requests/` öffnen → Eintrag sichtbar.
 4. Auf **„Genehmigen"** klicken → Soft-Delete erfolgt.
@@ -266,7 +270,7 @@
 
 **Erwartetes Ergebnis:**
 - Vier-Augen-Prinzip wird erzwungen.
-- Klient:in landet im Trash (`/clients/trash/`).
+- Person landet im Trash (`/clients/trash/`).
 
 **Erwarteter Audit-Eintrag:** `DELETION_REQUESTED`, `DELETION_APPROVED`.
 
@@ -286,12 +290,12 @@
 - `src/core/models/settings.py` (`client_trash_days = 30`)
 - `src/core/views/clients.py` (`ClientTrashView`, `ClientRestoreView`)
 
-**Voraussetzung:** AUD-DSGVO-Art17-01 (Klient:in im Trash).
+**Voraussetzung:** AUD-DSGVO-Art17-01 (Person im Trash).
 
 **Schritte:**
 1. Mit `admin` einloggen.
-2. `/clients/trash/` öffnen → soft-gelöschte Klient:in sichtbar.
-3. Stichprobe: Klient:in **wiederherstellen** vor Ablauf (innerhalb 30 Tage).
+2. `/clients/trash/` öffnen → soft-gelöschte Person sichtbar.
+3. Stichprobe: Person **wiederherstellen** vor Ablauf (innerhalb 30 Tage).
 4. AuditLog: `CLIENT_RESTORED` mit `restored_by=admin`.
 
 **Erwartetes Ergebnis:**
@@ -327,8 +331,8 @@
 **Schritte:**
 1. Heruntergeladenes JSON in einem JSON-Schema-Validator (z.B. `jq` oder Online-Tool) öffnen.
 2. Schema-Probe: Top-Level-Felder `client`, `events[]`, `cases[]`, `attachments[]`.
-3. Test-Skript: `jq '.events | length' export.json` → Anzahl entspricht Events der Klient:in.
-4. Test-Skript: `jq '.client.pseudonym, .client.stage' export.json` → Werte aus UI.
+3. Test-Skript: `jq '.events | length' export.json` → Anzahl entspricht Events der Person.
+4. Test-Skript: `jq '.client.pseudonym, .client.contact_stage' export.json` → Werte aus UI.
 
 **Erwartetes Ergebnis:**
 - JSON ist syntaktisch korrekt und schema-konform.
@@ -532,7 +536,7 @@
 
 ### Security: RLS-Penetration
 
-#### AUD-SEC-RLS-01 — Cross-Facility Klient:innen-Probe
+#### AUD-SEC-RLS-01 — Cross-Facility Personen-Probe
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -545,9 +549,9 @@
 **Voraussetzung:** zwei Browser-Profile.
 
 **Schritte:**
-1. **Profil A — `admin`:** Eine Klient:in aufrufen, UUID aus URL kopieren.
+1. **Profil A — `admin`:** Eine Person aufrufen, UUID aus URL kopieren.
 2. **Profil B — `admin_1`:** URL `/clients/<uuid>/` mit der UUID aus Profil A öffnen.
-3. Erwartung: 404 (Klient:in „nicht gefunden") — nicht 403.
+3. Erwartung: 404 (Person „nicht gefunden") — nicht 403.
 4. AuditLog: kein Audit-Eintrag (Datensatz existiert für Profil B nicht — RLS).
 
 **Erwartetes Ergebnis:**
@@ -774,8 +778,8 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 **Code-Referenz:** Helper-Familie in [src/core/services/audit.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/audit.py) (Refs #901)
 
 **Schritte:**
-1. Klient bearbeiten: `notes`-Feld auf einen kompletten Satz „Frau Mustermann, Tel. 0123-456789" setzen, speichern.
-2. AuditLog filtern auf `Action=CLIENT_UPDATE` für diesen Klient.
+1. Person bearbeiten: `notes`-Feld auf einen kompletten Satz „Frau Mustermann, Tel. 0123-456789" setzen, speichern.
+2. AuditLog filtern auf `Action=CLIENT_UPDATE` für diese Person.
 3. `detail`-Feld prüfen: nur `{"changed_fields": ["notes"]}`, **kein** Wert.
 4. Settings ändern: Stadtname in `facility_full_name` auf einen „echten" Namen setzen.
 5. SETTINGS_CHANGE-Eintrag prüfen: keine Werte im Detail.
@@ -871,7 +875,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 | Security | assistenz vs. leitung | C | — | `test_client_export_rbac.py` |
 
 **Schritte:**
-1. Als `assistenz` einloggen, einen Klient/Case mit `HIGH`-Sensitivity-Events anlegen oder laden.
+1. Als `assistenz` einloggen, eine Person/einen Fall mit `HIGH`-Sensitivity-Events anlegen oder laden.
 2. CSV-Export via `/clients/<uuid>/export.csv` oder Statistik-Export.
 3. Datei prüfen: keine `HIGH`-Felder enthalten.
 4. Als `leitung` selber Export erneut → `HIGH`-Felder sichtbar.
@@ -909,17 +913,17 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 | Security | leitung | C | — | `src/tests/test_export_statistics.py` |
 
 **Schritte:**
-1. Klient mit Pseudonym `=cmd|' /C calc'!A0` anlegen (Excel-Formula-Injection-Payload).
+1. Person mit Pseudonym `=cmd|' /C calc'!A0` anlegen (Excel-Formula-Injection-Payload).
 2. CSV-Statistik exportieren.
 3. Datei in LibreOffice/Excel öffnen → Zelle muss als String anzeigen, **nicht** als Formel ausgeführt.
-4. Dateinamen prüfen: enthält keinen Klient-Pseudonym oder andere PII (z.B. nur `auditlog-20260516-103000.csv`).
+4. Dateinamen prüfen: enthält kein Pseudonym der Person oder andere PII (z.B. nur `auditlog-20260516-103000.csv`).
 5. PDF-Export prüfen: Pseudonym wird escaped, kein Markup-Injection.
 
 **Erwartetes Ergebnis:**
 - Werte mit `=`, `+`, `-`, `@` werden mit führendem `'` (Apostroph) escaped oder als Text-Zelle markiert.
 - Dateinamen enthalten keine personenbezogenen Daten.
 
-**DSGVO/Security-Note:** OWASP CSV-Injection (CWE-1236). Bei Klient-Daten besonders kritisch.
+**DSGVO/Security-Note:** OWASP CSV-Injection (CWE-1236). Bei Personendaten besonders kritisch.
 
 **Status:** ☐ Offen
 
@@ -961,7 +965,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 |---------|-------|---------|--------|-----|
 | Security | facility_admin | C | — | `test_import_engine.py::TestCommitImport`, `TestAbortImport` |
 
-**DSGVO-Artikel-Zitat:** *Art. 5 Abs. 1 lit. e (Speicherbegrenzung) + Art. 32 (Verschlüsselung ruhender Daten) — die hochgeladene Rohdatei ist eine vollständige Kopie roher, teils sensibler Klientendaten und darf nicht länger als nötig unverschlüsselt oder überhaupt vorliegen.*
+**DSGVO-Artikel-Zitat:** *Art. 5 Abs. 1 lit. e (Speicherbegrenzung) + Art. 32 (Verschlüsselung ruhender Daten) — die hochgeladene Rohdatei ist eine vollständige Kopie roher, teils sensibler Personendaten und darf nicht länger als nötig unverschlüsselt oder überhaupt vorliegen.*
 
 **Code-Referenz:**
 - `src/core/services/import_engine.py` (`store_import_upload` — verschlüsselte Ablage unter `MEDIA_ROOT/<facility>/imports/`, `original_filename_encrypted`; `commit_import`/`abort_import` — `delete_import_file` + Leeren von `storage_filename`)

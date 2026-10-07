@@ -311,7 +311,7 @@ Methodik:
 | B | WorkItems | 10 | 10 | 0 | 100 % |
 | B | Zeitstrom | 5 | 5 | 0 | 100 % |
 | B | Übergabe | 5 | 5 | 0 | 100 % |
-| C | Compliance | 16 | 7 | 9 | 44 % |
+| C | Compliance | 16 | 8 | 8 | 50 % |
 | C | Security | 22 | 1 | 21 | 5 % |
 | D | Audit | 2 | 1 | 1 | 50 % |
 | D | Aufbewahrung | 10 | 8 | 2 | 80 % |
@@ -330,9 +330,9 @@ Methodik:
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
 | B | 264 | 179 | 85 | 68 % |
-| C | 38 | 8 | 30 | 21 % |
+| C | 38 | 9 | 29 | 24 % |
 | D | 46 | 14 | 32 | 30 % |
-| **Gesamt** | **360** | **213** | **147** | **59 %** |
+| **Gesamt** | **360** | **214** | **146** | **59 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->
