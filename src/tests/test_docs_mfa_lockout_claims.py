@@ -99,6 +99,64 @@ def _overpromises(*, root: Path) -> list[str]:
     return findings
 
 
+LOCKOUT_DOCUMENTS = (
+    Path("docs/user-guide.md"),
+    Path("docs/en/user-guide.md"),
+    Path("docs/faq.md"),
+    Path("docs/glossar.md"),
+    Path("docs/en/glossary.md"),
+)
+LOCKOUT_PROMISE = re.compile(
+    r"(?:10[^.\n]{0,100}(?:fehlgeschlagen|failed)[^.\n]{0,180}(?:gesperrt|sperren|locked))"
+    r"|(?:(?:Konto-Sperre|account lock)[^.\n]{0,80}10[^.\n]{0,60}(?:fehlgeschlagen|failed))",
+    re.IGNORECASE,
+)
+LOCKOUT_EXCEPTION = re.compile(r"ausgenommen|exempt|nie gesperrt|not (?:be )?locked", re.IGNORECASE)
+
+
+def _lockout_promises_without_exception(*, root: Path) -> list[str]:
+    """Require the super-admin exception next to each general lockout promise."""
+    findings = []
+    for relative_path in LOCKOUT_DOCUMENTS:
+        text = (root / relative_path).read_text(encoding="utf-8")
+        for paragraph in re.split(r"\n\s*\n", text):
+            blocks = paragraph.splitlines() if paragraph.startswith("|") else [paragraph]
+            for block in blocks:
+                if LOCKOUT_PROMISE.search(block) and not ("super_admin" in block and LOCKOUT_EXCEPTION.search(block)):
+                    findings.append(f"{relative_path}: lockout promise lacks the super_admin exception")
+    return findings
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "Nach 10 fehlgeschlagenen Anmeldungen innerhalb von 15 Minuten wird Ihr Konto gesperrt.",
+        "After 10 failed sign-in attempts within 15 minutes your account is locked.",
+        "Automatische Konto-Sperre nach 10 fehlgeschlagenen Login-Versuchen.",
+        "Automatic account lock after 10 failed login attempts.",
+    ],
+)
+def test_lockout_scanner_rejects_a_promise_without_the_role_exception(tmp_path: Path, claim: str) -> None:
+    for relative_path in LOCKOUT_DOCUMENTS:
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+    target = LOCKOUT_DOCUMENTS[0]
+    (tmp_path / target).write_text(claim, encoding="utf-8")
+
+    assert _lockout_promises_without_exception(root=tmp_path) == [
+        f"{target}: lockout promise lacks the super_admin exception"
+    ]
+
+    (tmp_path / target).write_text(claim + " `super_admin` is exempt.", encoding="utf-8")
+
+    assert _lockout_promises_without_exception(root=tmp_path) == []
+
+
+def test_shipped_lockout_promises_state_the_super_admin_exception() -> None:
+    assert _lockout_promises_without_exception(root=REPO_ROOT) == []
+
+
 def _settings_default(name: str, *, root: Path) -> int:
     source = (root / SETTINGS_SOURCE).read_text(encoding="utf-8")
     return int(re.search(rf'^{name} = env_int\("{name}", (\d+)\)', source, re.MULTILINE).group(1))
