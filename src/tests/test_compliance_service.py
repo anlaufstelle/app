@@ -509,6 +509,19 @@ class TestRetentionConfigurationChecks:
         assert "Einstellungen" in (warning.action_hint or "")
         assert "Aufbewahrung" in (warning.action_hint or "")
 
+    def test_warning_names_the_regular_settings_path(self, settings_obj):
+        """The retention hint names the visible settings group (Refs #2455)."""
+        settings_obj.auditlog_retention_months = 0
+        settings_obj.save(update_fields=["auditlog_retention_months"])
+
+        warning = self._warning()
+
+        assert warning is not None
+        assert warning.action_hint == (
+            "Verwaltung → Einstellungen öffnen und unter Datenschutz und Fristen "
+            "eine begrenzte AuditLog-Aufbewahrung festlegen."
+        )
+
     def test_24_months_adds_no_warning(self, settings_obj):
         settings_obj.auditlog_retention_months = 24
         settings_obj.save(update_fields=["auditlog_retention_months"])

@@ -152,7 +152,8 @@ class TestRetentionConfigChecksCarriesLabelAndRemedy:
         assert checks[0].status == ComplianceStatus.WARNING
         assert checks[0].label == "Audit-Log-Aufbewahrung"
         assert checks[0].action_hint == (
-            "Core → Einstellungen oeffnen und unter Aufbewahrung eine begrenzte AuditLog-Frist festlegen."
+            "Verwaltung → Einstellungen öffnen und unter Datenschutz und Fristen "
+            "eine begrenzte AuditLog-Aufbewahrung festlegen."
         )
 
 

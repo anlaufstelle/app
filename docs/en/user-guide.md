@@ -47,11 +47,11 @@ This guide and the [FAQ](../faq.md) are linked inside the application under "Hel
 
 ### Changing Your Password
 
-1. Click on your name or the user menu in the top-right corner.
+1. Click your name at the foot of the sidebar (mobile: **More → Profile**) to open **My Profile**.
 2. Select **Change Password** (URL: `/password-change/`).
 3. Enter your current password.
 4. Enter the new password twice.
-5. Click **Save**.
+5. Click **Change Password**.
 
 > **Tip:** Choose a secure password (at least 12 characters, including upper and lower case letters and digits). The system enforces minimum requirements.
 
@@ -59,11 +59,11 @@ This guide and the [FAQ](../faq.md) are linked inside the application under "Hel
 
 ### Two-Factor Authentication (2FA)
 
-Anlaufstelle supports time-based one-time passwords (TOTP) as a second login factor. In production 2FA is mandatory for all roles: immediately for the system administration and the application support, and for manager, social workers and assistant after a transition period of 30 days from the first sign-in. During that period a notice reminds you from 14 remaining days on; afterwards sign-in managers directly to setup. Operations can change this role default, and the application support can additionally make 2FA mandatory immediately for individual accounts or the whole facility. Where there is no obligation, you can enable 2FA voluntarily.
+Anlaufstelle supports time-based one-time passwords (TOTP) as a second login factor. In production 2FA is mandatory for all roles: immediately for the system administration and the application support, and for manager, social workers and assistant after a transition period of 30 days from the first sign-in. During that period a notice reminds you from 14 remaining days on; afterwards sign-in leads directly to setup. Operations can change this role default, and the application support can additionally make 2FA mandatory immediately for individual accounts or the whole facility. Where there is no obligation, you can enable 2FA voluntarily.
 
 **Initial setup:**
 
-1. Click your name in the top-right corner > **Two-Factor Authentication** (URL: `/mfa/settings/`).
+1. Name at the foot of the sidebar (mobile: **More → Profile**) → **My Profile → Manage 2FA** (URL: `/mfa/settings/`).
 2. Click **Set up 2FA** -- a QR code is displayed.
 3. Install an authenticator app and scan the QR code. Tested apps:
    - **Google Authenticator** (Android/iOS)
@@ -108,7 +108,7 @@ At login, the 2FA page then offers **Sign in with passkey** -- alternatively, yo
 
 ### Signing Out
 
-Click **Sign Out** in the top-right corner. For data protection reasons, you will be automatically signed out after a configured period of inactivity (default: 30 minutes).
+Click **Log out** at the foot of the sidebar (mobile: under **More**). For data protection reasons, you will be automatically signed out after a configured period of inactivity (default: 30 minutes).
 
 ### Quick Exit
 
@@ -218,10 +218,10 @@ Every change to a note appears in the audit log -- shift and timestamp are recor
 
 ### Filtering the feed
 
-Two dropdowns above the feed:
+Filter chips and a type selector above the feed:
 
-- **Type**: All · Events · Activities · Tasks · Entry Bans
-- **Documentation type**: only entries of a specific type (e.g., "Contact", "Crisis counseling") -- you only see types your role is allowed to view.
+- **Filter chips**: All · Contacts · Activities · Tasks · Facility bans
+- **All document types**: only entries of a specific type (e.g., "Contact", "Crisis counseling") -- you only see types your role is allowed to view.
 
 Filter changes reload only the feed (HTMX), without a full page refresh.
 
@@ -262,7 +262,7 @@ An **event** is a single documented contact -- for example, a counseling session
 3. **Fill in the fields:** After selecting the type, the corresponding input fields are loaded. Fill in all relevant fields.
 4. **Timestamp:** The "Timestamp" field is automatically set to the current time. You can adjust it if you are recording a contact retroactively.
 5. **Assign a person (optional):**
-   - For an **anonymous contact** (without a pseudonym): Enable the "Anonymous" option. No person will be linked.
+   - For an **anonymous contact** (without a pseudonym): Leave the person field empty. Without an assigned person, the contact is saved anonymously.
    - For a **person with a pseudonym**: Start typing the pseudonym in the person field. A suggestion list appears -- select the matching person.
    - If the person has not been registered yet, create them first under **People** (see [Section 4](#4-managing-people)).
 6. Click **Save**.
@@ -347,7 +347,7 @@ You only see files whose record (event, person, or case) **and** whose field rea
 
 ### "Assigned to" column
 
-Each row states **what** the file is attached to: **Event**, **Person**, or **Case**. The entry is a link and managers directly to the corresponding detail page (for cases only for roles that are allowed to see cases).
+Each row states **what** the file is attached to: **Event**, **Person**, or **Case**. The entry is a link and leads directly to the corresponding detail page (for cases only for roles that are allowed to see cases).
 
 ### Filters
 
@@ -494,9 +494,13 @@ Navigate to **Tasks** (`/workitems/`). The inbox shows:
 
 Directly on the inbox card of a work item, you can change the status with a click:
 
-- **"Take on"** -- automatically assigns the task to you
-- **"Done"** -- closes the task
-- **"Dismiss"** -- for tasks that are no longer relevant
+For an **open** task:
+
+- **"Take over"** -- automatically assigns the task to you
+- **"Mark as completed"** -- closes the task
+- **"Close as not relevant"** -- discards the task without deleting it
+
+For a task **in progress**: **"Completed"** closes it; **"Reset"** returns it to open.
 
 The list updates without a page reload.
 
@@ -650,7 +654,7 @@ The charts update automatically when the time period is changed.
 The CSV export contains all events from the selected time period. Fields whose sensitivity level exceeds the exporting user's role permissions are shown as "[Restricted]".
 
 1. Open the statistics dashboard and select the desired time period.
-2. Click **Export CSV**.
+2. Click **CSV export**.
 3. The file is downloaded immediately (filename: `export_YYYY-MM-DD_YYYY-MM-DD.csv`).
 
 > **Note:** Every export is recorded in the audit log.
@@ -779,8 +783,8 @@ For assignments without a reliable internet connection -- for example, outreach 
 
 If an event was edited online (by someone else) and offline (by you) at the same time, Anlaufstelle shows a **side-by-side diff** with three choices during sync:
 
-- **Keep mine** -- your offline edit wins.
-- **Keep server** -- the online edit wins, your offline version is discarded.
+- **Keep my version** -- your offline edit wins.
+- **Use server version** -- the online edit wins, your offline version is discarded.
 - **Merge manually** -- you decide field by field which content is kept.
 
 **Managing conflicts and undeliverable entries:**
@@ -1034,4 +1038,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 5d899fbebd4fca93f433fd1ec48059c03f594d63 -->
+<!-- source-hash: 55753a2c141d900129b20db77618c81774879169 -->

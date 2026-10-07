@@ -27,7 +27,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 **C. Rollen & Datenschutz**
 13. [Wie funktionieren Zugriffsberechtigungen?](#13-wie-funktionieren-zugriffsberechtigungen)
 13a. [Was ist Sudo-Mode (Re-Auth-Fenster)?](#13a-was-ist-sudo-mode-re-auth-fenster)
-14. [Was bedeutet die Sensitivitätsstufe?](#14-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)
+14. [Was bedeutet die Sensitivitätsstufe?](#14-was-bedeutet-die-sensitivitätsstufe-normalerhöhthoch)
 15. [Wie funktioniert das Löschsystem (4-Augen-Prinzip)?](#15-wie-funktioniert-das-löschsystem-4-augen-prinzip)
 16. [Was hat KEINEN Löschmechanismus?](#16-was-hat-keinen-löschmechanismus)
 
@@ -38,7 +38,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 18b. [Wie importiere ich Personen oder Ereignisse aus einer CSV-Datei?](#18b-wie-importiere-ich-personen-oder-ereignisse-aus-einer-csv-datei)
 
 **E. Fehlermeldungen**
-19. [Was bedeutet „Datensatz wurde zwischenzeitlich geändert"?](#19-was-bedeutet-datensatz-wurde-zwischenzeitlich-geändert)
+19. [Was bedeutet „Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."?](#19-was-bedeutet-der-datensatz-wurde-zwischenzeitlich-bearbeitet-bitte-laden-sie-die-seite-neu)
 
 ---
 
@@ -46,7 +46,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 ### 1. Wie stelle ich den Standard-Dokumentationstyp ein?
 
-**Administration → Einstellungen → Feld „Standard-Dokumentationstyp"** auswählen. Der gewählte Typ wird beim Öffnen von „Kontakt dokumentieren" automatisch vorausgewählt und die dynamischen Felder direkt geladen.
+**Verwaltung → Einstellungen → Allgemein und Komfort → Feld „Standard-Dokumentationstyp"** auswählen. Der gewählte Typ wird beim Öffnen von „Kontakt dokumentieren" automatisch vorausgewählt und die dynamischen Felder direkt geladen.
 
 **Relevante Dateien:**
 - [`src/core/models/settings.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py) — `default_document_type` ForeignKey
@@ -76,7 +76,7 @@ Ein Domänen-Paket **ersetzt** den Standardkatalog, es wird nicht zusätzlich ge
 
 ### 2. Wie richte ich 2FA ein?
 
-Kurz: **Benutzermenü → Zwei-Faktor-Authentifizierung** (`/mfa/settings/`) → **2FA einrichten**, QR-Code mit einer Authenticator-App scannen, 6-stelligen Code bestätigen.
+Kurz: **Name am Fuß der Sidebar (mobil: Mehr → Profil) → Mein Profil → 2FA verwalten** (`/mfa/settings/`) → **2FA einrichten**, QR-Code mit einer Authenticator-App scannen, 6-stelligen Code bestätigen.
 
 Die **vollständige Schritt-für-Schritt-Anleitung** (getestete Apps, manuelle Secret-Eingabe, Login-Ablauf, Backup-Codes, Deaktivieren) steht kanonisch im **[User-Guide § 1 — Zwei-Faktor-Authentifizierung](user-guide.md#zwei-faktor-authentifizierung-2fa)**. Admin-seitige Erzwingung: [Admin-Guide § 2.7](admin-guide.md#27-zwei-faktor-authentifizierung-2fa). Diese FAQ deckt darüber hinaus nur die typischen Fehlerfälle ab (siehe nächste Fragen).
 
@@ -107,7 +107,7 @@ Wenn keine der Punkte hilft, wenden Sie sich an Ihren Administrator — fehlgesc
 
 **Wenn alle Codes verbraucht oder verloren sind oder 2FA für Sie verpflichtend ist:** Bitten Sie die Anwendungsbetreuung Ihrer Einrichtung, Ihren zweiten Faktor zurückzusetzen (für Konten der Systemadministration: eine andere Systemadministration).
 
-1. Die Anwendungsbetreuung öffnet **Verwaltung → Zugänge** → Ihren Zugang → unter „Sicherheitsaktionen" **Zweiten Faktor zurücksetzen** und bestätigt im Sudo-Modus. Die Systemadministration nutzt im Django-Admin unter **Core → Benutzer** die gleichnamige Aktion.
+1. Die Anwendungsbetreuung öffnet **Verwaltung → Zugänge** → Ihren Zugang → unter „Sicherheitsaktionen" **Zweiten Faktor zurücksetzen** und bestätigt im Sudo-Modus. Die Systemadministration nutzt im Django-Admin unter **Anlaufstelle Core → Benutzer** die gleichnamige Aktion.
 2. Entfernt werden alle Authenticator-Apps, Passkeys und Backup-Codes Ihres Zugangs; alle Ihre Sitzungen enden. Ihr Passwort bleibt gültig. Im AuditLog entsteht ein Eintrag `MFA_RESET_BY_ADMIN`.
 3. Ist 2FA für Sie verpflichtend, werden Sie bei der nächsten Anmeldung auf die Neu-Einrichtung (`/mfa/setup/`) geleitet — bei der Rollenpflicht mit Übergangsfrist erst nach deren Ablauf. Sonst richten Sie 2FA unter `/mfa/settings/` freiwillig neu ein.
 
@@ -135,7 +135,7 @@ Die Sperre **endet von selbst**, sobald weniger als 10 gezählte Fehlversuche in
 **Entsperren durch die Administration:**
 
 1. Die Anwendungsbetreuung Ihrer Einrichtung öffnet **Verwaltung → Zugänge** → Ihren Zugang → unter „Sicherheitsaktionen" **Account-Sperre aufheben** (mit Sudo-Bestätigung) — das ist der Regelweg.
-2. Die Systemadministration entsperrt einrichtungsübergreifend unter **System → Sperrkonten**; im Django-Admin (**Core → Benutzer**) gibt es dafür nur noch eine Listenaktion als Ausweichweg.
+2. Die Systemadministration entsperrt einrichtungsübergreifend unter **System → Sperrkonten**; im Django-Admin (**Anlaufstelle Core → Benutzer**) gibt es dafür nur noch eine Listenaktion als Ausweichweg.
 3. Ist niemand mit Zugang zur Verwaltung erreichbar, entsperrt der Betrieb am Server per `unlock <username>` ([Admin-Guide § 2.7](admin-guide.md#account-lockout)).
 
 Jede Entsperrung wird im AuditLog als `LOGIN_UNLOCK` protokolliert.
@@ -219,7 +219,7 @@ Entsprechend erscheint auch der Sidebar-Eintrag „Arbeitszentrale" ausschließl
 
 Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das analoge A4-Übergabebuch.
 
-**Schichten** (konfigurierbar pro Einrichtung in Administration → Zeitfilter):
+**Schichten** (konfigurierbar pro Einrichtung in Verwaltung → Zeitfilter):
 
 | Schicht | Zeitraum | Besonderheit |
 |---------|----------|-------------|
@@ -442,7 +442,7 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 |-------|-------------|
 | **Eigentümer-Berechtigung** | Assistenz darf eigene Kontakte bearbeiten, auch wenn „Bearbeiten" sonst ab Fachkraft gilt |
 | **Zuweisungs-Berechtigung** | Arbeitsauftrag-Status kann vom Ersteller, Zugewiesenen oder der Leitung/Anwendungsbetreuung geändert werden; bei nicht zugewiesenen Teamaufgaben von allen ab Assistenz |
-| **Sensitivitätsstufe** | Zusätzlich zur Rolle steuern `DocumentType.sensitivity` und `FieldTemplate.sensitivity` den Feldzugriff. `FieldTemplate.sensitivity` überschreibt den DocumentType-Level nach oben (→ [FAQ #14](#14-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)) |
+| **Sensitivitätsstufe** | Zusätzlich zur Rolle steuern `DocumentType.sensitivity` und `FieldTemplate.sensitivity` den Feldzugriff. `FieldTemplate.sensitivity` überschreibt den DocumentType-Level nach oben (→ [FAQ #14](#14-was-bedeutet-die-sensitivitätsstufe-normalerhöhthoch)) |
 | **Passwort-Pflicht** | Bei gesetztem `must_change_password`-Flag wird der User vor jeder Aktion zum Passwortwechsel gezwungen |
 | **Session-Timeout** | Konfigurierbar pro Einrichtung (Standard: 30 Min.), nach Ablauf **ohne Aktivität** automatischer Logout |
 | **Maximale Sitzungsdauer** | Zweite, aktivitätsunabhängige Grenze pro Einrichtung (Standard: 12 Std. ab Anmeldung); danach ist eine neue Anmeldung nötig, auch bei durchgehender Nutzung |
@@ -536,7 +536,7 @@ Refs #683.
 
 ---
 
-### 14. Was bedeutet die Sensitivitätsstufe (niedrig/mittel/hoch)?
+### 14. Was bedeutet die Sensitivitätsstufe (Normal/Erhöht/Hoch)?
 
 Die **Sensitivitätsstufe** steuert, welche Benutzerrolle welche Dokumentationseinträge und Felder sehen darf. Konfiguration pro `DocumentType`.
 
@@ -707,7 +707,7 @@ Der CSV-Import ist ausschließlich für die Rolle **Anwendungsbetreuung** verfü
 
 ## E. Fehlermeldungen
 
-### 19. Was bedeutet „Datensatz wurde zwischenzeitlich geändert"?
+### 19. Was bedeutet „Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."?
 
 Jemand anderes (oder Sie selbst in einem anderen Tab) hat denselben Datensatz parallel bearbeitet und bereits gespeichert. Um zu verhindern, dass Änderungen stillschweigend überschrieben werden (**Optimistic Locking**), blockt das System Ihren Speicherversuch.
 

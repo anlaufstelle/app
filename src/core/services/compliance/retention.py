@@ -43,7 +43,10 @@ def _retention_config_checks() -> list[ComplianceCheck]:
     total = len(facilities)
     names = ", ".join(unlimited)
     message = f"{count} von {total} Einrichtungen speichern das Audit-Log unbegrenzt (Aufbewahrung 0 Monate): {names}"  # noqa: E501
-    action_hint = "Core → Einstellungen oeffnen und unter Aufbewahrung eine begrenzte AuditLog-Frist festlegen."  # noqa: E501
+    action_hint = _(
+        "Verwaltung → Einstellungen öffnen und unter Datenschutz und Fristen "
+        "eine begrenzte AuditLog-Aufbewahrung festlegen."
+    )
     return [
         ComplianceCheck(
             key="auditlog_retention_unlimited",

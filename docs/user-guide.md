@@ -45,11 +45,11 @@ Dieses Handbuch und die [FAQ](faq.md) sind innerhalb der Anwendung unter „Hilf
 
 ### Passwort ändern
 
-1. Klicken Sie oben rechts auf Ihren Namen oder das Benutzer-Menü.
+1. Klicken Sie auf Ihren Namen am Fuß der Sidebar (mobil: **Mehr → Profil**), um **Mein Profil** zu öffnen.
 2. Wählen Sie **Passwort ändern** (URL: `/password-change/`).
 3. Geben Sie Ihr aktuelles Passwort ein.
 4. Geben Sie das neue Passwort zweimal ein.
-5. Klicken Sie auf **Speichern**.
+5. Klicken Sie auf **Passwort ändern**.
 
 > **Tipp:** Wählen Sie ein sicheres Passwort (mindestens 12 Zeichen, Groß-/Kleinbuchstaben, Ziffern). Das System prüft die Mindestanforderungen.
 
@@ -61,7 +61,7 @@ Die Anlaufstelle unterstützt zeitbasierte Einmalcodes (TOTP) als zweiten Faktor
 
 **Einrichtung (einmalig):**
 
-1. Oben rechts auf Ihren Namen → **Zwei-Faktor-Authentifizierung** (URL: `/mfa/settings/`).
+1. Name am Fuß der Sidebar (mobil: **Mehr → Profil**) → **Mein Profil → 2FA verwalten** (URL: `/mfa/settings/`).
 2. **2FA einrichten** klicken → QR-Code wird angezeigt.
 3. Eine Authenticator-App installieren und den QR-Code scannen. Getestete Apps:
    - **Google Authenticator** (Android/iOS)
@@ -106,7 +106,7 @@ Beim Login bietet die 2FA-Seite dann **Mit Passkey anmelden** an — alternativ 
 
 ### Abmelden
 
-Klicken Sie oben rechts auf **Abmelden**. Aus Datenschutzgründen werden Sie nach einer konfigurierten Inaktivitätszeit automatisch abgemeldet (Standard: 30 Minuten).
+Klicken Sie am Fuß der Sidebar (mobil unter **Mehr**) auf **Abmelden**. Aus Datenschutzgründen werden Sie nach einer konfigurierten Inaktivitätszeit automatisch abgemeldet (Standard: 30 Minuten).
 
 ### Schnell verlassen
 
@@ -216,10 +216,10 @@ Jede Änderung an einer Notiz erscheint im Audit-Log — protokolliert werden Sc
 
 ### Feed filtern
 
-Direkt über dem Feed gibt es zwei Dropdowns:
+Direkt über dem Feed gibt es Filter-Chips und eine Typauswahl:
 
-- **Typ**: Alle · Events · Aktivitäten · Aufgaben · Hausverbote
-- **Dokumentationstyp**: nur Einträge eines bestimmten Typs (z. B. „Kontakt", „Krisengespräch") — Sie sehen nur die Typen, die Ihre Rolle einsehen darf
+- **Filter-Chips**: Alle · Kontakte · Aktivitäten · Aufgaben · Hausverbote
+- **Alle Dokumentationstypen**: nur Einträge eines bestimmten Typs (z. B. „Kontakt", „Krisengespräch") — Sie sehen nur die Typen, die Ihre Rolle einsehen darf
 
 Filteränderungen laden nur den Feed neu (HTMX), ohne die ganze Seite zu aktualisieren.
 
@@ -260,7 +260,7 @@ Ein **Event** ist ein einzelner dokumentierter Kontakt – z. B. ein Beratungsge
 3. **Felder ausfüllen:** Nach der Typauswahl werden die zugehörigen Eingabefelder geladen. Füllen Sie alle relevanten Felder aus.
 4. **Zeitpunkt:** Das Feld „Zeitpunkt" ist automatisch auf die aktuelle Uhrzeit gesetzt. Sie können es anpassen, wenn Sie einen Kontakt nachträglich erfassen.
 5. **Person zuordnen (optional):**
-   - Für einen **anonymen Kontakt** (ohne Pseudonym): Aktivieren Sie die Option „Anonym". Es wird keine Person verknüpft.
+   - Für einen **anonymen Kontakt** (ohne Pseudonym): Lassen Sie das Personen-Feld leer. Ohne zugeordnete Person wird der Kontakt anonym gespeichert.
    - Für eine **Person mit Pseudonym**: Beginnen Sie im Personen-Feld mit der Eingabe des Pseudonyms. Es erscheint eine Vorschlagsliste – wählen Sie die passende Person aus.
    - Wenn die Person noch nicht erfasst ist, legen Sie sie zuerst unter **Personen** an (siehe [Abschnitt 4](#4-personen-verwalten)).
 6. Klicken Sie auf **Speichern**.
@@ -492,9 +492,13 @@ Navigieren Sie zu **Aufgaben** (`/workitems/`). Die Inbox zeigt:
 
 Direkt in der Inbox-Karte eines WorkItems können Sie den Status per Klick ändern:
 
-- **„In Bearbeitung nehmen"** – übernimmt die Aufgabe automatisch auf Ihren Namen
-- **„Erledigt"** – schließt die Aufgabe ab
-- **„Verwerfen"** – für Aufgaben, die nicht mehr relevant sind
+Bei einer **offenen** Aufgabe:
+
+- **„Übernehmen"** – übernimmt die Aufgabe automatisch auf Ihren Namen
+- **„Als erledigt markieren"** – schließt die Aufgabe ab
+- **„Als nicht relevant schließen"** – verwirft die Aufgabe, ohne sie zu löschen
+
+Bei einer Aufgabe **in Bearbeitung**: **„Erledigt"** schließt sie ab; **„Zurücksetzen"** setzt sie wieder auf offen.
 
 Die Liste aktualisiert sich ohne Seitenneuladung.
 
@@ -648,7 +652,7 @@ Die Charts aktualisieren sich automatisch beim Wechsel des Zeitraums.
 Der CSV-Export enthält alle Ereignisse des gewählten Zeitraums. Felder, deren Sensitivitätsstufe die Berechtigung des exportierenden Benutzers übersteigt, werden als „[Eingeschränkt]" angezeigt.
 
 1. Öffnen Sie das Statistik-Dashboard und wählen Sie den gewünschten Zeitraum.
-2. Klicken Sie auf **CSV exportieren**.
+2. Klicken Sie auf **CSV-Export**.
 3. Die Datei wird sofort heruntergeladen (Dateiname: `export_YYYY-MM-DD_YYYY-MM-DD.csv`).
 
 > **Hinweis:** Jeder Export wird im Audit-Log protokolliert.
@@ -766,7 +770,6 @@ Für Einsätze ohne verlässliche Internetverbindung — etwa bei aufsuchender A
 - **Kontakte ohne Personenbezug** (anonyme Kontakte) und **Aufgaben ohne Person** (Standalone) lassen sich damit jetzt **auch offline neu beginnen** — wählen Sie im Personen-Auswahlfeld **„— ohne Person —"**. Erfordert der gewählte Dokumentationstyp eine Kontaktstufe, ist „ohne Person" deaktiviert; ordnen Sie dann eine mitgenommene Person zu (der Server prüft die Kontaktstufe beim Synchronisieren erneut). Die frühere Sackgasse mit „geht nur im Dossier"-Wegweiser (#1483/#1485) entfällt.
 - **Aufgaben-Erfassung ist Fachkräften vorbehalten.** Öffnen Sie als Assistenz offline die Aufgaben-Maske, sehen Sie statt der Felder einen Hinweis — so entsteht kein Eintrag, der beim Senden ohnehin abgelehnt würde.
 - Ist für die Offline-Erfassung **noch nichts vorbereitet** (die Einrichtung wurde nie online geöffnet, der lokale Cache ist leer, oder die installierte App ist noch nicht aktualisiert), zeigt die Maske einen kurzen Hinweis **„einmal online öffnen"** statt der Formularfelder.
-- **Datei-Anhänge** können offline weiterhin nicht erfasst werden — reichen Sie sie nach, sobald Sie online sind.
 - **`/offline/` ist seit nur noch ein technischer Fallback**, kein Einstiegspunkt mehr: Die Seite „Keine lokale Ansicht verfügbar" erscheint ausschließlich, wenn für die aufgerufene Adresse **keine** lokale Ansicht vorliegt (z. B. eine unbekannte URL, oder die App wurde noch nicht auf den aktuellen Stand aktualisiert) — mit Links zur Personenliste, den Aufgaben und zum Zeitstrom sowie „Erneut versuchen".
 - In der Oberfläche sehen Sie einen Hinweis, dass Sie offline arbeiten und wie viele Einträge noch auf die Synchronisation warten.
 
@@ -778,9 +781,9 @@ Für Einsätze ohne verlässliche Internetverbindung — etwa bei aufsuchender A
 
 Wurde ein Ereignis gleichzeitig online (durch jemand anderen) und offline (durch Sie) bearbeitet, zeigt Anlaufstelle beim Synchronisieren einen **Side-by-Side-Diff** mit drei Auswahlmöglichkeiten:
 
-- **Meine Version übernehmen** — Ihre offline erfasste Änderung gewinnt.
+- **Meine Version behalten** — Ihre offline erfasste Änderung gewinnt.
 - **Server-Version übernehmen** — die Online-Änderung gewinnt, Ihre offline-Version wird verworfen.
-- **Manuell zusammenführen** — Sie entscheiden Feld für Feld, welche Inhalte übernommen werden.
+- **Manuell mergen** — Sie entscheiden Feld für Feld, welche Inhalte übernommen werden.
 
 **Konflikte und nicht übertragbare Einträge verwalten:**
 
