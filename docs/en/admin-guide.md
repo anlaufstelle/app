@@ -384,7 +384,7 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 
 | Name | Default | Description |
 |---|---|---|
-| `BREACH_*` (variable family) | see runbook | Time windows and thresholds of the heuristic anomaly detection (failed logins, exports, deletions, long-term windows, distributed login attacks) as well as `BREACH_NOTIFICATION_WEBHOOK_URL` (optional escalation webhook; empty = off). Full list with defaults: [ops runbook § 6.5b](../ops-runbook.md). |
+| `BREACH_*` (variable family) | see runbook | Time windows and thresholds of the heuristic anomaly detection (failed logins, exports, deletions, long-term windows, distributed login attacks) as well as `BREACH_NOTIFICATION_WEBHOOK_URL` (optional escalation webhook; empty = off). Full list with defaults: [ops runbook § 6.5b](ops-runbook.md#65b-gdpr-art-3334--breach-notification-refs-685). |
 
 **Two-Factor Authentication and Passkeys (see [§ 2.7](#27-two-factor-authentication-2fa))**
 
@@ -1395,7 +1395,7 @@ Prerequisites in `.env`:
 - `POSTGRES_DB` and `POSTGRES_USER` for the database connection,
 - `POSTGRES_ADMIN_USER` and `POSTGRES_ADMIN_PASSWORD` for the complete dump,
 - a random, separately escrowed `BACKUP_ENCRYPTION_KEY`,
-- `BACKUP_HOST_DIR` as the base directory on the host; the script writes exclusively there and ignores `BACKUP_DIR`, which is used only as the container mount target (see the [environment table](#complete-environment-variable-reference)),
+- `BACKUP_HOST_DIR` as the base directory on the host; the script writes exclusively there and ignores `BACKUP_DIR`, which is used only as the container mount target (see the [environment table](#full-environment-variable-reference)),
 - `DJANGO_AUDIT_HWM_PATH` as the location of the audit anchor; `.env.example` ships `/data/audit_hwm.json` active out of the box.
 
 **Mandatory step before the first backup — create the audit anchor.** The audit anchor is the signed file outside the database that makes truncation of the most recent entries and a wiped chain detectable in the first place. `backup.sh` can only include it once it exists, and it is created by the first green run of the chain verification. After starting the stack, therefore run that verification **once** and check the result before you create the first backup:
@@ -1448,7 +1448,14 @@ The verification run selects the most recent **set** through its signed manifest
 
 ### 3.3 Recovery
 
-[`scripts/ops/restore.sh`](../../scripts/ops/restore.sh) is only for the plain-SQL archives (`*.sql.gz.enc`) created by `backup.sh`, with the `.hmac` sidecar directly beside each archive. A `pg_restore` archive from another backup path is not compatible.
+[`scripts/ops/restore.sh`](../../scripts/ops/restore.sh) is only for the backup sets created by `backup.sh`. A `pg_restore` archive from another backup path is not compatible. A set consists of files with the same timestamp, which must all be in the same directory:
+
+- `anlaufstelle_<timestamp>.manifest` with `.manifest.hmac`: the signed manifest (set ID, hashes of dump, media archive and audit anchor, row counts). **Mandatory**: if it is missing, `restore.sh` aborts before restoring anything; there is no way around the manifest.
+- `anlaufstelle_<timestamp>.sql.gz.enc` with `.sql.gz.enc.hmac`: the encrypted database dump.
+- `anlaufstelle_<timestamp>_media.tar.gz.enc` with `.hmac`: the encrypted media archive, if the manifest binds one.
+- `audit_hwm-<timestamp>.json`: the audit anchor, if `DJANGO_AUDIT_HWM_PATH` was set at backup time.
+
+Copying only the dump, the media archive and their sidecars is not enough to restore.
 
 1. Schedule a maintenance window, block public access, and prepare an empty target database with the same role names as the backed-up system. The application role (`POSTGRES_USER`, `NOBYPASSRLS`) and the admin/owner role (`POSTGRES_ADMIN_USER`, `BYPASSRLS`) must exist before data is loaded. The complete destructive procedure for a new host is in [Disaster Recovery § 6](../disaster-recovery.md#6-wiederherstellung-auf-einem-fabrikfrischen-host).
 
@@ -1466,7 +1473,7 @@ BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-./backups}"
   "$BACKUP_HOST_DIR/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc"
 ```
 
-Before even asking for confirmation, the script first verifies the database HMAC and, when the second argument was supplied, the media HMAC. Only after both preflight checks succeed and the operator enters `ja` does it restore the database; it repeats the corresponding check immediately before each archive is used, then replaces and extracts the media contents. The SQL dump is deliberately loaded through the local bootstrap superuser (`POSTGRES_SUPERUSER`, default `postgres`): only that role can reliably restore the included owner/`FORCE RLS` statements and data copies. If media extraction aborts, the media contents are incomplete and the full media restore must be repeated.
+Before even asking for confirmation, the script first verifies the manifest (HMAC), then the set binding (set ID, dump hash, media hash including an existing sidecar, audit anchor), then the database HMAC and, when the second argument was supplied, the media HMAC. It rejects a media archive the manifest does not bind. Only after all preflight checks succeed and the operator enters `ja` does it restore the database; it repeats the corresponding check immediately before each archive is used, then replaces and extracts the media contents. The SQL dump is deliberately loaded through the local bootstrap superuser (`POSTGRES_SUPERUSER`, default `postgres`): only that role can reliably restore the included owner/`FORCE RLS` statements and data copies. If media extraction aborts, the media contents are incomplete and the full media restore must be repeated.
 
 4. Run migrations with the admin role, then start the stack:
 
@@ -1489,7 +1496,7 @@ docker compose "${compose_files[@]}" up -d
 
 New published versions appear on the [GitHub Releases page](https://github.com/anlaufstelle/app/releases); its [Atom feed](https://github.com/anlaufstelle/app/releases.atom) can be subscribed to in a feed reader without a GitHub account. With a GitHub account, choose **Watch → Custom → Releases** to subscribe only to these notifications. Check the channel weekly and always before a planned update. Before every update, read the target version's CHANGELOG section, especially **“Erforderliche Betreiber-Aktionen”** (“Required operator actions”), and complete it before or during deployment.
 
-New public releases are suspended until the 1.0 cut, so the Releases page and feed show only versions that have actually been published, not every internal release candidate.
+Releases also appear on the releases page as pre-releases (marked as such); the releases page and feed show every published state, with the matching image in the registry.
 
 ### 4.2 Pull New Image and Update the Stack
 
@@ -1675,7 +1682,7 @@ If CSP errors appear after an update: check the browser console for the **specif
 
 ### 5.5 Compliance Dashboard
 
-The super-admin area `/system/compliance/` (#919) consolidates typed health checks in a single dashboard: the three DB role checks (via `check_db_roles`, see the database variables in [§ 1](#1-installation-docker-compose)), backup age, restore-verified age, ClamAV ping and signature age, retention run age, background job freshness (statistics snapshot, breach scan, materialized view refresh), MFA quota (roles requiring MFA), pending Django migrations, app/Django/Python versions, and critical audit events from the last 24 hours.
+The super-admin area `/system/compliance/` (#919) consolidates typed health checks in a single dashboard: the three DB role checks (via `check_db_roles`, see the database variables in [§ 1](#1-installation-docker-compose)), the check that the app role is not a Django superuser (“App-User kein Django-Superuser”), backup age, restore-verified age, ClamAV ping and signature age, retention run age, audit log retention, background job freshness (audit chain check, statistics snapshot, breach scan, materialized view refresh), MFA quota (roles requiring MFA), pending Django migrations, app/Django/Python versions, and critical audit events from the last 24 hours.
 
 If AuditLog retention is set to `0` months in one or more facilities, the **Retention** category shows one aggregated warning with the affected facility names; resolve it under **Core → Settings → Retention**.
 
@@ -1707,7 +1714,7 @@ Error tracking (Sentry-compatible) is **fully opt-in**: the SDK is initialized o
 
 **Logs.** Server logs are PII-scrubbed in **both** formats -- the default `LOG_FORMAT=text` and `LOG_FORMAT=json` both run messages, tracebacks and the structured extra fields through the same scrubber (email addresses, passwords and token-like values become placeholders). Two fields are deliberately **not** scrubbed, because their purpose is to make technical security events attributable: the client IP (`remote_addr`) and the browser identification string (`user_agent`) of a CSP violation report. Both can identify a person -- if you need short log retention, plan for it on their account. The purely technical identifiers (`request_id`, `user_id`, `facility_id`, `user_pk`) also pass through unchanged: they contain no free text and merely reference a record, so there is nothing for the scrubber to catch. `user_pk` appears, for example, in the invitation log lines, which deliberately carry neither user name nor email address -- without that identifier the entry could no longer be attributed to an account. For GDPR contexts with log aggregation, `LOG_FORMAT=json` is still recommended (structured, machine-readable), but data minimization is no longer tied to that format.
 
-**Self-hosted tracker (GlitchTip).** GlitchTip accepts standard Sentry DSNs, and this project uses only core SDK features (error events plus optional trace sampling). This combination was verified empirically: with `sentry-sdk[django]` `2.64.0` against GlitchTip `6.2.1` (Docker image `glitchtip/glitchtip:6`), server error events are transmitted, parsed plausibly (stack trace, tags, request context) and shown as issues; performance transactions (`SENTRY_TRACES_SAMPLE_RATE > 0`) are **accepted** as well and grouped into transaction groups -- they are neither silently dropped nor do they raise an error. The server-side `before_send`/`before_send_transaction` scrubber applies unchanged (no frame locals, stripped query strings/cookies/request bodies); the rule- and key-based limits described above still hold. Other version combinations are untested, and a third-party project naturally remains outside this project's control.
+**Self-hosted tracker (GlitchTip).** GlitchTip accepts standard Sentry DSNs, and this project uses only core SDK features (error events plus optional trace sampling). This combination was verified empirically: with `sentry-sdk[django]` `2.64.0` against GlitchTip `6.2.1` (Docker image `glitchtip/glitchtip:6`), server error events are transmitted, parsed plausibly (stack trace, tags, request context) and shown as issues; performance transactions (`SENTRY_TRACES_SAMPLE_RATE > 0`) are **accepted** as well and grouped into transaction groups -- they are neither silently dropped nor do they raise an error. The server-side `before_send`/`before_send_transaction` scrubber applies unchanged (no frame locals, stripped query strings/cookies/request bodies); the rule- and key-based limits described above still hold. The shipped version is currently `sentry-sdk[django]` `2.71.0` (`requirements.txt`); the check has not been repeated against it or other version combinations, and a third-party project naturally remains outside this project's control.
 
 **Hosted Sentry service.** Before enabling a SaaS provider instead of an EU-based or self-hosted instance, verify its data location, retention period, and any third-country transfers and safeguards, and conclude a data processing agreement. List the provider and its subprocessors in section 6 of the DPA template in the GDPR package.
 
@@ -1723,7 +1730,7 @@ Operating the tracker instance (setup, backups, retention, upgrades) is operator
 
 ### 5.7 Breach Detection Scan
 
-The `detect_breaches` management command heuristically analyzes the audit log for anomalies (failed-login bursts, mass exports/deletions, distributed login attacks) and writes hits as audit events; optionally a webhook (`BREACH_NOTIFICATION_WEBHOOK_URL`) is notified. The windows/thresholds are controlled via the `BREACH_*` variables (see the [ENV reference in § 1](#full-environment-variable-reference) as well as [ops runbook § 6.5b](../ops-runbook.md)).
+The `detect_breaches` management command heuristically analyzes the audit log for anomalies (failed-login bursts, mass exports/deletions, distributed login attacks) and writes hits as audit events; optionally a webhook (`BREACH_NOTIFICATION_WEBHOOK_URL`) is notified. The windows/thresholds are controlled via the `BREACH_*` variables (see the [ENV reference in § 1](#full-environment-variable-reference) as well as [ops runbook § 6.5b](ops-runbook.md#65b-gdpr-art-3334--breach-notification-refs-685)).
 
 > **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only if the `cron` service is not running; it starts the job through the `maintenance` service of the same compose file, the only service that receives the admin role (BYPASSRLS) (without Compose, reproduce it in your own orchestration: same image, entrypoint `python manage.py`, admin role). Setting up both makes the job run twice — details: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
 
@@ -1894,7 +1901,7 @@ docker system df -v | grep pgdata
 
 2. **Two views are deliberately not suppressed** and can therefore be used to check whether any data exists at all: the on-screen **statistics overview** and the PDF export in internal mode (`?internal=1`, with an "INTERNAL" banner; both restricted to lead/administration roles). It is expected that the overview may show different figures from a report. Forwarding content from these internal views falls outside the guarantee.
 
-3. **A boundary remains even when no suppression is visible:** the guarantee applies per artifact and period, not across multiple releases -- see [§ 8, "Releasing Reports: What You Need to Know"](#8-statistics-snapshots-materialized-view).
+3. **A boundary remains even when no suppression is visible:** the guarantee applies per artifact and period, not across multiple releases -- see [§ 8, "Releasing Reports: What You Need to Know"](#8-statistics-snapshots--materialized-view).
 
 > **Important:** Lowering the threshold is a privacy decision, not a troubleshooting step. It affects every report that leaves the organization; document the change accordingly -- the audit log records it as "Settings changed" with the old and new values ([§ 7.4](#74-audit-log)).
 
@@ -1962,20 +1969,29 @@ The application stores **no real names** in the database. Personal data is captu
 
 - Persons are referenced by internal IDs.
 - Display names in the interface are configurable pseudonyms.
-- Data at the "With additional details" contact level (identifiable) is only visible to authorized roles (Lead, Application manager). The system administration (`super_admin`) can access such data only through the `/system/` area; every such access is logged in the AuditLog (`SYSTEM_VIEW`).
+- Who sees which data depends not on the contact level but on sensitivity (the higher level of the documentation type and the field) and on the role: Assistant sees "Normal", Staff up to "Elevated", Lead and Application manager all levels. The person detail page is open from Assistant upwards, also at "With additional details"; there the assistant sees, for example, contacts including their note, but no crisis conversation. The contact level governs permitted documentation types, four-eyes deletion, the audit entry when the person is opened (`VIEW_QUALIFIED`), and retention periods.
+- The system administration (`super_admin`) reads across facilities through the `/system/` area and the admin interface (`/admin-mgmt/`, sudo required), there persons, cases, events, work items and attachments of all facilities. Row Level Security lets these sessions through via `app.is_super_admin` (§ 7.9). The AuditLog records these reads as `SYSTEM_VIEW`; if logging fails, access is still not blocked.
 
 ### 7.3 Retention Periods and `enforce_retention`
 
 Retention periods are configured per facility in the settings (see [Section 2.3](#23-settings-per-facility)).
 
-The management command `enforce_retention` enforces the configured periods by soft-deleting expired records:
+The management command `enforce_retention` enforces the configured periods. Depending on the kind of data it soft-deletes (the record is hidden; its contents go with the anonymization of the person), hard-deletes, anonymizes or redacts:
 
-| Strategy | Setting | Default |
-|---|---|---|
-| Anonymous contacts | `retention_anonymous_days` | 90 days |
-| Contacts at the "Pseudonym only" level | `retention_identified_days` | 365 days |
-| Cases at the "With additional details" level (after closure) | `retention_qualified_days` | 3650 days (10 years) |
-| Handover notes (shift note) | `retention_handover_notes_days` | 90 days |
+| Kind of data | Setting | Default | Effect |
+|---|---|---|---|
+| Anonymous events | `retention_anonymous_days` | 90 days | Soft delete; reference date is the event time |
+| Events of persons at the "Pseudonym only" level | `retention_identified_days` | 365 days | Soft delete; reference date is the event time |
+| Events of persons at the "With additional details" level that belong to a closed case | `retention_qualified_days` | 3650 days (10 years) | Soft delete once the case has been closed for longer than the period; the case itself remains |
+| Events of a documentation type with its own period | `retention_days` on the documentation type | empty (no type period) | Soft delete; reference date is the event time. Applies in addition to the level period; whichever expires first wins |
+| Activities (timeline) | `retention_activities_days` | 365 days | Hard delete |
+| Handover notes (shift note) | `retention_handover_notes_days` | 90 days | Hard delete |
+| Deleted persons and cases in the trash | `client_trash_days` | 30 days | Anonymization |
+| Values of old event versions | `eventhistory_detail_months` | 24 months | Redaction; `0` turns off age-based redaction |
+| Already redacted event versions | `eventhistory_chronicle_months` | 24 months after redaction | Hard delete; `0` = unlimited |
+| Audit log | `auditlog_retention_months` | 24 months | Hard delete; `0` = unlimited (§ 7.4) |
+
+Persons whose events are then all deleted are anonymized in the same run. The other fields of the group "Datenschutz und Fristen" are not periods: `retention_auto_approve_after_defer` and `retention_max_defer_count` control how deferred deletion proposals are handled in the retention dashboard, `retention_use_k_anonymization` and `k_anonymity_threshold` control k-anonymization (both below).
 
 > **The handover note is hard-deleted, not soft-deleted** (Refs #2042) -- like activities. What counts is the date of the last change (`updated_at`), not creation; key rotation deliberately does not advance that timestamp and therefore does not extend the period. There is **no** legal hold for handover notes: holds protect client, case and event records for ongoing proceedings, whereas the shift note is a duty note with no personal reference in the data model (see [security-notes.md](../security-notes.md)). Every run with matches writes an audit row (`DELETE`, category `handover_notes`) carrying the count and the period -- never any text.
 
@@ -2031,7 +2047,7 @@ A **legal hold** exempts data from automatic deletion and anonymization (e.g. du
 
 #### Retention of the Event History
 
-Every save of an event writes a **history version**: who changed which fields to which values, and when. Until version 0.89 these versions had **no retention period** — they outlived the deletion period of the event itself. Concretely: an event whose `retention_identified_days` have expired is emptied, but its earlier versions kept every wording ever stored. The period was formally enforced and factually undermined. Since [ADR-050](../adr/050-eventhistory-retention.md), `enforce_retention` closes this gap in two stages.
+Every save of an event writes a **history version**: who changed which fields to which values, and when. Without a period of their own, these versions would outlive the deletion period of the event itself: an event whose `retention_identified_days` have expired is emptied, but its earlier versions would keep every wording ever stored. `enforce_retention` therefore handles them in two stages ([ADR-050](../adr/050-eventhistory-retention.md)).
 
 **Stage 1 — redaction.** The version remains, its *values* fall away. What stays: timestamp, acting person, action and the names of the affected fields. What disappears: the contents. In the event detail view and in the Art. 15 access record, "– (redacted)" appears in their place. Two triggers:
 
@@ -2085,18 +2101,18 @@ Effect: instead of deleting the record, identifying attributes are aggregated or
 
 ### 7.4 Audit Log
 
-The audit log is **append-only** and immutable. It automatically records:
+The audit log is **append-only** and immutable. Among other things, it automatically records the following actions. The table is a selection; the first column gives the German label under which the action appears in the audit log's **Aktion** (action) filter, which shows the complete list.
 
-| Event | Trigger |
+| Action (filter) | Trigger |
 |---|---|
-| Login / Logout | Every login/logout |
-| Failed login | Incorrect password |
+| Anmeldung, Abmeldung (login, logout) | Every login/logout |
+| Anmeldung fehlgeschlagen (failed login) | Incorrect password |
 | Data at the "With additional details" level viewed | Opening the **person detail page** (`/clients/<id>/`) of a person at that level — not the person list, an event, a case or a search result |
 | Export | Data export by a user — including data subject access requests for individual people and on-screen views of the external report. **Released report files** (CSV/PDF/JSON/XML with a reporting period) are a subset: only those are exempt from the retention deadline and appear in the [release overview](#8-statistics-snapshots--materialized-view) |
 | Deletion | Manual or via `enforce_retention` |
 | Level change | Change in a person's contact status |
 | Settings changed | Changes to facility settings |
-| File download | Downloading an attachment from the file vault |
+| Download | Downloading an attachment from the file vault |
 | Event updated | A domain edit to an event; details contain only the documentation type and changed field identifiers |
 | Episode updated | A change to an episode's title, description or time period |
 | Outcome goal updated | A change to an outcome goal's title or description |
@@ -2150,7 +2166,7 @@ On top of that — **regardless of the action** — comes the fifth class: entri
 
 Deletion requests for personal data are processed using the four-eyes principle (dual approval): a request must be approved by a **second authorized person** before data is permanently deleted. This protects against accidental or unauthorized deletion — including by privileged roles themselves.
 
-**Approver pool — "deletion confirmation" permission** (Refs #1053): Who may approve is not derived from the user's role; instead, approvers are curated via the individually assignable user permission *deletion confirmation* (`can_confirm_deletion`). On first rollout, existing leads and facility admins receive the permission automatically. Afterwards, the facility admin can grant or revoke it under **Administration > Access** as needed — for example, granting it to an experienced staff member so that a second approver is always available even if there is only one lead. A permission holder can never approve their own requests; the view, service, and database layers all enforce **requester ≠ approver**.
+**Approver pool — "deletion confirmation" permission** (Refs #1053): Who may approve is not derived from the user's role; instead, approvers are curated via the individually assignable user permission *deletion confirmation* (`can_confirm_deletion`). The permission is off for every new account, including leads and facility admins; the initial setup grants it to nobody. On a fresh installation every four-eyes request therefore first ends up in the "Kein möglicher Genehmiger" (no possible approver) warning (see below). During initial setup, grant the permission under **Administration > Access** to **at least two people** so that a second person is available for every request; that is also where it can be revoked or granted to, for example, an experienced staff member. A permission holder can never approve their own requests; the view, service, and database layers all enforce **requester ≠ approver**.
 
 Every grant and revocation of the permission, as well as every approval, is recorded in the immutable audit log. If an open request has no active approver other than the requester, the deletion request list displays a prominent warning ("No possible approver") — grant the permission to an additional person to resolve this.
 
@@ -2226,7 +2242,7 @@ The following administrative capabilities are available for handling requests fr
 | Right | Action |
 |---|---|
 | Access (Art. 15) | Generate the data access record as JSON or PDF from the client view (lead or application manager, re-authentication required) -- scope see below |
-| Rectification (Art. 16) | Edit fields directly as application manager in the admin UI |
+| Rectification (Art. 16) | File a rectification request in the person record (section "Berichtigung (Art. 16 DSGVO)" → "Berichtigung beantragen", Staff and above); a Lead or Application manager reviews it under **Berichtigungen** ([ADR-041](../adr/041-berichtigungsworkflow-intern.md)). The admin interface shows persons, cases, events and work items read-only |
 | Erasure (Art. 17) | Submit a deletion request through the application (four-eyes principle) |
 | Restriction (Art. 18) | Set a **restriction marker** on the client record — see below |
 | Data portability (Art. 20) | Export function in the application |
@@ -2271,7 +2287,7 @@ Included (Refs #1752):
 | Events | Document type, timestamp, case/episode reference, field data (decrypted) |
 | Deleted events | Existence of events not yet purged (trash) together with the **deletion timestamp and the user who triggered it** (Refs #2157) -- for a deletion by the retention run the user stays empty, because nobody acts there |
 | Change history | Action, timestamp, editing user **and the before/after contents** -- including for deleted events |
-| Deletion requests | Requests targeting events **and the client record itself**, with reason and four-eyes review |
+| Deletion requests | Requests targeting events, cases **and the client record itself**, with reason and four-eyes review |
 | Rectification requests | Art. 16 requests concerning the client (Refs #1796, [ADR-041](../adr/041-berichtigungsworkflow-intern.md)) in **all** states (pending, approved, rejected): the field concerned, previous and requested value (decrypted), reason, review note, requesting and reviewing user, timestamps |
 | Retention | Legal holds (Art. 17(3) — **not** Art. 18) and open deletion proposals with due date and category |
 | Restriction of processing | Art. 18 restriction marker (Refs #2045), where set: legal ground, timestamp and the person who set it |
@@ -2331,11 +2347,10 @@ In addition to ORM-side facility scoping, **PostgreSQL row-level security** is e
 
 #### How It Works
 
-- The middleware [`FacilityScopeMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) sets the Postgres session variable `app.current_facility_id` per request via `SELECT set_config('app.current_facility_id', <id>, false)` (session scope, not transaction scope).
-- The RLS policies (migration [`0047_postgres_rls_setup`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0047_postgres_rls_setup.py)) filter every row via `facility_id = current_setting('app.current_facility_id', true)`.
-- **Fail-closed:** if the variable is empty or unset, `current_setting(..., true)` returns NULL, the comparison fails, and **no rows** are returned.
-- The middleware opens the DB cursor **only for authenticated requests**; anonymous routes (login, health check, static files) remain unaffected.
-- On every request the value is set fresh (including empty), so connection pooling cannot leak a leftover value from an earlier request.
+- The middleware [`FacilityScopeMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) sets two Postgres session variables per request in one call: `app.current_facility_id` (ID of the signed-in person's facility) and `app.is_super_admin` (`'true'` for system administration sessions, otherwise empty), each via `set_config(…, false)` (session scope, not transaction scope).
+- The RLS policies (migration [`0047_postgres_rls_setup`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0047_postgres_rls_setup.py)) filter every row via `facility_id::text = current_setting('app.current_facility_id', true)`. Migration [`0085_rls_superadmin_bypass`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0085_rls_superadmin_bypass.py) adds the branch `OR current_setting('app.is_super_admin', true) = 'true'` to all of these policies: system administration sessions thereby bypass facility isolation (the AuditLog records their reads as `SYSTEM_VIEW`, § 7.2).
+- **Fail-closed:** if the variable is empty or unset, `current_setting(..., true)` returns an empty value or NULL, the comparison matches nothing, and **no rows** are returned.
+- The middleware sets both variables afresh on **every** request, including anonymous ones: there (and for people of an archived facility) both are empty. This way connection pooling cannot pass on a leftover value from an earlier request.
 
 #### Debugging in `psql`
 
@@ -2474,11 +2489,13 @@ The **release overview** (Statistics → "Releases" tab, role: lead/facility adm
 >
 > **Recipient and purpose are free-text fields.** The application does not check their content and cannot change it later (the audit log is immutable). Enter the **organisation**, not the name of a contact person — otherwise a person's name stays in the log permanently.
 
-**3. The overview has two known gaps.**
+**3. The overview has three known gaps.**
 
-**First: it starts when it was introduced.** The marker that identifies a release only exists as of this release. Releases from before that are still in the audit log but cannot be recognised as releases there — they do not appear in the overview, are not exempt from the deadline and do not trigger an overlap warning. **Adding them retroactively is technically impossible:** the audit log is immutable and protected against later changes by a checksum chain; adding an entry would be indistinguishable from tampering. So expect older releases to be missing for the first few months after the update — the page says so itself.
+**First: it starts when this logging was introduced.** A release is recognisable by a marker in the audit log. Releases without this marker are still in the audit log but cannot be recognised as releases there — they do not appear in the overview, are not exempt from the deadline and do not trigger an overlap warning. **Adding them retroactively is technically impossible:** the audit log is immutable and protected against later changes by a checksum chain; adding an entry would be indistinguishable from tampering. The page says so itself.
 
 **Second: it ends at the download.** A forwarded PDF file, a photographed screen or a value copied by hand does not appear there. That is an organisational boundary.
+
+**Third: it evaluates only the 500 most recent releases.** Older ones remain in the audit log but do not appear in the overview and no longer trigger an overlap warning; the page points this out as well.
 
 ### Admin Interface
 
@@ -2487,5 +2504,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 6fee737321d2dea2f99a8b03030969683323e2a6 -->
+<!-- source-hash: c9694909a53ec6b92735f0db4b34ce04e85db165 -->
 <!-- translation-date: 2026-10-05 -->

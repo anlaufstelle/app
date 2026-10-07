@@ -326,7 +326,7 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 
 | Name | Default | Beschreibung |
 |---|---|---|
-| `BREACH_*` (Variablen-Familie) | siehe Runbook | Zeitfenster und Schwellen der heuristischen Anomalie-Erkennung (fehlgeschlagene Logins, Exporte, Löschungen, Langzeitfenster, verteilte Login-Angriffe) sowie `BREACH_NOTIFICATION_WEBHOOK_URL` (optionaler Eskalations-Webhook; leer = aus). Vollständige Liste samt Defaults: [Ops-Runbook § 6.5b](ops-runbook.md). |
+| `BREACH_*` (Variablen-Familie) | siehe Runbook | Zeitfenster und Schwellen der heuristischen Anomalie-Erkennung (fehlgeschlagene Logins, Exporte, Löschungen, Langzeitfenster, verteilte Login-Angriffe) sowie `BREACH_NOTIFICATION_WEBHOOK_URL` (optionaler Eskalations-Webhook; leer = aus). Vollständige Liste samt Defaults: [Ops-Runbook § 6.5b](ops-runbook.md#65b-dsgvo-art-3334--breach-notification-refs-685). |
 
 **Zwei-Faktor-Authentifizierung und Passkeys (siehe [§ 2.7](#27-zwei-faktor-authentifizierung-2fa))**
 
@@ -1389,7 +1389,14 @@ Der Prüflauf wählt den jüngsten **Satz** über sein signiertes Manifest, erzw
 
 ### 3.3 Wiederherstellung
 
-[`scripts/ops/restore.sh`](../scripts/ops/restore.sh) ist ausschließlich für die von `backup.sh` erzeugten Plain-SQL-Archive (`*.sql.gz.enc`) samt direkt danebenliegendem `.hmac`-Sidecar bestimmt. Ein `pg_restore`-Archiv aus einem anderen Backup-Pfad ist damit nicht kompatibel.
+[`scripts/ops/restore.sh`](../scripts/ops/restore.sh) ist ausschließlich für die von `backup.sh` erzeugten Backup-Sätze bestimmt. Ein `pg_restore`-Archiv aus einem anderen Backup-Pfad ist damit nicht kompatibel. Ein Satz besteht aus Dateien mit demselben Zeitstempel, die alle im selben Verzeichnis liegen müssen:
+
+- `anlaufstelle_<Zeitstempel>.manifest` mit `.manifest.hmac`: das signierte Manifest (Satzkennung, Hashes von Dump, Medienarchiv und Audit-Anker, Zeilenzahlen). **Pflicht**: Fehlt es, bricht `restore.sh` ab, bevor es irgendetwas einspielt; einen Weg am Manifest vorbei gibt es nicht.
+- `anlaufstelle_<Zeitstempel>.sql.gz.enc` mit `.sql.gz.enc.hmac`: der verschlüsselte Datenbank-Dump.
+- `anlaufstelle_<Zeitstempel>_media.tar.gz.enc` mit `.hmac`: das verschlüsselte Medienarchiv, sofern das Manifest eines bindet.
+- `audit_hwm-<Zeitstempel>.json`: der Audit-Anker, sofern `DJANGO_AUDIT_HWM_PATH` beim Backup gesetzt war.
+
+Wer nur Dump, Medienarchiv und deren Sidecars kopiert, kann nicht wiederherstellen.
 
 1. Planen Sie ein Wartungsfenster, sperren Sie den öffentlichen Zugriff und bereiten Sie eine leere Ziel-Datenbank mit denselben Rollen-Namen wie im gesicherten System vor. Die App-Rolle (`POSTGRES_USER`, `NOBYPASSRLS`) und die Admin-/Owner-Rolle (`POSTGRES_ADMIN_USER`, `BYPASSRLS`) müssen vor dem Einspielen existieren. Die vollständige, destruktive Prozedur für einen neuen Host steht im [Disaster-Recovery-Leitfaden § 6](disaster-recovery.md#6-wiederherstellung-auf-einem-fabrikfrischen-host).
 
@@ -1407,7 +1414,7 @@ BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-./backups}"
   "$BACKUP_HOST_DIR/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc"
 ```
 
-Noch vor der Bestätigungsabfrage prüft das Skript zuerst den DB-HMAC und, falls das zweite Argument übergeben wurde, den Medien-HMAC. Erst nach beiden erfolgreichen Vorprüfungen und der Eingabe `ja` spielt es die Datenbank ein; unmittelbar vor der jeweiligen Nutzung wiederholt es die zugehörige Prüfung, anschließend ersetzt und entpackt es den Medienbestand. Der SQL-Dump wird bewusst über den lokalen Bootstrap-Superuser (`POSTGRES_SUPERUSER`, Default `postgres`) eingespielt: Nur dieser kann die enthaltenen Owner-/`FORCE RLS`-Anweisungen und Datenkopien zuverlässig wiederherstellen. Bricht das Medien-Entpacken ab, ist der Medienbestand unvollständig und der vollständige Medien-Restore muss wiederholt werden.
+Noch vor der Bestätigungsabfrage prüft das Skript zuerst das Manifest (HMAC), dann die Bindung des Satzes (Satzkennung, Dump-Hash, Medien-Hash samt vorhandenem Sidecar, Audit-Anker), danach den DB-HMAC und, falls das zweite Argument übergeben wurde, den Medien-HMAC. Ein Medienarchiv, das das Manifest nicht bindet, lehnt es ab. Erst nach allen erfolgreichen Vorprüfungen und der Eingabe `ja` spielt es die Datenbank ein; unmittelbar vor der jeweiligen Nutzung wiederholt es die zugehörige Prüfung, anschließend ersetzt und entpackt es den Medienbestand. Der SQL-Dump wird bewusst über den lokalen Bootstrap-Superuser (`POSTGRES_SUPERUSER`, Default `postgres`) eingespielt: Nur dieser kann die enthaltenen Owner-/`FORCE RLS`-Anweisungen und Datenkopien zuverlässig wiederherstellen. Bricht das Medien-Entpacken ab, ist der Medienbestand unvollständig und der vollständige Medien-Restore muss wiederholt werden.
 
 4. Führen Sie die Migrationen mit der Admin-Rolle aus und starten Sie anschließend den Stack:
 
@@ -1430,7 +1437,7 @@ docker compose "${compose_files[@]}" up -d
 
 Neue veröffentlichte Versionen erscheinen auf der [GitHub-Release-Seite](https://github.com/anlaufstelle/app/releases); deren [Atom-Feed](https://github.com/anlaufstelle/app/releases.atom) lässt sich ohne GitHub-Konto in einem Feed-Reader abonnieren. Mit einem GitHub-Konto kann unter **Beobachten → Benutzerdefiniert → Veröffentlichungen** ausschließlich dieser Hinweis abonniert werden. Prüfen Sie den Kanal empfohlen einmal pro Woche und immer vor einem geplanten Update. Lesen Sie vor jeder Aktualisierung im CHANGELOG des Zielstands besonders den Abschnitt **„Erforderliche Betreiber-Aktionen“** und arbeiten Sie ihn vor beziehungsweise während des Deployments ab.
 
-Bis zum 1.0-Cut sind neue öffentliche Veröffentlichungen ausgesetzt; die Release-Seite und der Feed zeigen deshalb nur tatsächlich bereits veröffentlichte Stände und nicht jeden internen Release-Kandidaten.
+Veröffentlichungen erscheinen auf der Release-Seite auch als Pre-Release (so gekennzeichnet); Release-Seite und Feed zeigen jeden veröffentlichten Stand, mit dem zugehörigen Image in der Registry.
 
 ### 4.2 Neues Image ziehen und Stack aktualisieren
 
@@ -1616,7 +1623,7 @@ Bei CSP-Fehlern nach einem Update: Browser-Console auf **konkret blockierte URL/
 
 ### 5.5 Compliance-Dashboard
 
-Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Frische der Hintergrundjobs (Statistik-Snapshot, Breach-Scan, Materialized-View-Refresh), MFA-Quote (MFA-pflichtige Rollen), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
+Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), die Prüfung, dass die App-Rolle kein Django-Superuser ist („App-User kein Django-Superuser“), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Audit-Log-Aufbewahrung, Frische der Hintergrundjobs (Audit-Ketten-Prüfung, Statistik-Snapshot, Breach-Scan, Materialized-View-Refresh), MFA-Quote (MFA-pflichtige Rollen), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
 
 Steht die AuditLog-Aufbewahrung in einer oder mehreren Einrichtungen auf `0` Monate, zeigt die Kategorie **Retention** eine aggregierte Warnung mit den betroffenen Einrichtungsnamen; beheben lässt sie sich unter **Core → Einstellungen → Aufbewahrung**.
 
@@ -1648,7 +1655,7 @@ Das Error-Tracking (Sentry-kompatibel) ist **vollständig opt-in**: Das SDK wird
 
 **Logs.** Die Server-Logs werden in **beiden** Formaten PII-gescrubbt — sowohl der Default `LOG_FORMAT=text` als auch `LOG_FORMAT=json` ziehen Messages, Tracebacks und die strukturierten Zusatzfelder durch denselben Scrubber (Mailadressen, Passwörter und Token-artige Werte werden zu Platzhaltern). **Nicht** gescrubbt werden zwei Felder, die technische Sicherheitsereignisse zuordenbar machen sollen und deshalb bewusst im Klartext stehen: die Client-IP (`remote_addr`) und der Browser-Kennstring (`user_agent`) einer CSP-Verstoßmeldung. Beide sind personenbeziehbar — wer eine kurze Log-Aufbewahrung braucht, plant sie dafür ein. Unverändert passieren außerdem die rein technischen Kennungen (`request_id`, `user_id`, `facility_id`, `user_pk`): Sie enthalten keinen Freitext, sondern verweisen nur auf einen Datensatz, der Scrubber hat dort nichts zu greifen. `user_pk` erscheint zum Beispiel in den Einladungs-Log-Zeilen, die bewusst weder Benutzernamen noch Mailadresse führen — ohne diese Kennung wäre der Eintrag keinem Konto mehr zuzuordnen. Für DSGVO-Kontexte mit Log-Aggregation empfiehlt sich weiterhin `LOG_FORMAT=json` (strukturiert, maschinenlesbar); die Datenminimierung ist aber nicht mehr an dieses Format gebunden.
 
-**Selbst gehosteter Tracker (GlitchTip).** GlitchTip akzeptiert Standard-Sentry-DSNs, und dieses Projekt nutzt nur Kern-SDK-Features (Error-Events plus optionales Trace-Sampling). Diese Kombination wurde empirisch geprüft: Mit `sentry-sdk[django]` `2.64.0` gegen GlitchTip `6.2.1` (Docker-Image `glitchtip/glitchtip:6`) werden Server-Error-Events übertragen, plausibel geparst (Stacktrace, Tags, Request-Kontext) und als Issues angezeigt; Performance-Transactions (`SENTRY_TRACES_SAMPLE_RATE > 0`) werden ebenfalls **angenommen** und als Transaction-Gruppen einsortiert — sie werden also weder still verworfen noch lösen sie einen Fehler aus. Der serverseitige `before_send`/`before_send_transaction`-Scrubber greift dabei unverändert (keine Frame-Locals, gestrippte Query-Strings/Cookies/Request-Bodies); die weiter oben beschriebenen regel- und schlüsselbasierten Grenzen bleiben bestehen. Andere Versionskombinationen sind nicht getestet, und ein Fremdprojekt bleibt naturgemäß außerhalb der Kontrolle dieses Projekts.
+**Selbst gehosteter Tracker (GlitchTip).** GlitchTip akzeptiert Standard-Sentry-DSNs, und dieses Projekt nutzt nur Kern-SDK-Features (Error-Events plus optionales Trace-Sampling). Diese Kombination wurde empirisch geprüft: Mit `sentry-sdk[django]` `2.64.0` gegen GlitchTip `6.2.1` (Docker-Image `glitchtip/glitchtip:6`) werden Server-Error-Events übertragen, plausibel geparst (Stacktrace, Tags, Request-Kontext) und als Issues angezeigt; Performance-Transactions (`SENTRY_TRACES_SAMPLE_RATE > 0`) werden ebenfalls **angenommen** und als Transaction-Gruppen einsortiert — sie werden also weder still verworfen noch lösen sie einen Fehler aus. Der serverseitige `before_send`/`before_send_transaction`-Scrubber greift dabei unverändert (keine Frame-Locals, gestrippte Query-Strings/Cookies/Request-Bodies); die weiter oben beschriebenen regel- und schlüsselbasierten Grenzen bleiben bestehen. Ausgeliefert wird derzeit `sentry-sdk[django]` `2.71.0` (`requirements.txt`); gegen diese und andere Versionskombinationen ist die Prüfung nicht wiederholt worden, und ein Fremdprojekt bleibt naturgemäß außerhalb der Kontrolle dieses Projekts.
 
 **Gehosteter Sentry-Dienst.** Wer statt einer eigenen EU-/Self-Hosted-Instanz einen SaaS-Anbieter nutzt, muss vor Aktivierung Datenstandort, Aufbewahrungsfrist und mögliche Drittlandübermittlungen samt Garantien prüfen und einen AVV schließen. Anbieter und dessen Unterauftragnehmer gehören in § 6 der AVV-Vorlage im DSGVO-Paket.
 
@@ -1835,7 +1842,7 @@ docker system df -v | grep pgdata
 
 2. **Zwei Ansichten sind bewusst nicht unterdrückt** und taugen deshalb zur Gegenprobe, ob überhaupt Daten vorhanden sind: die **Statistik-Übersicht am Bildschirm** und der PDF-Export im internen Modus (`?internal=1`, mit „INTERN"-Banner; beides nur Leitung/Administration). Dass die Übersicht andere Zahlen zeigt als der Bericht, ist erwartet. Was aus diesen internen Ansichten weitergegeben wird, verlässt die Zusicherung.
 
-3. **Auch ohne sichtbare Unterdrückung bleibt eine Grenze:** Die Zusicherung gilt je Artefakt und je Zeitraum, nicht über mehrere Herausgaben hinweg — siehe [§ 8, „Herausgabe von Berichten: was Sie wissen müssen"](#8-statistik-snapshots-materialized-view).
+3. **Auch ohne sichtbare Unterdrückung bleibt eine Grenze:** Die Zusicherung gilt je Artefakt und je Zeitraum, nicht über mehrere Herausgaben hinweg — siehe [§ 8, „Herausgabe von Berichten: was Sie wissen müssen"](#8-statistik-snapshots--materialized-view).
 
 > **Wichtig:** Das Herabsetzen der Schwelle ist eine Datenschutz-Entscheidung, kein Bedienschritt. Sie gilt für alle Berichte, die das Haus verlassen; dokumentieren Sie die Änderung entsprechend — im Audit-Log erscheint sie als „Einstellungen geändert" mit Alt- und Neu-Wert ([§ 7.4](#74-audit-log)).
 
@@ -1902,20 +1909,29 @@ Die Anwendung speichert **keine Klarnamen** in der Datenbank. Personendaten werd
 
 - Personen werden über interne IDs referenziert.
 - Anzeigenamen in der Oberfläche sind konfigurierbare Pseudonyme.
-- Daten der Kontaktstufe „Mit Zusatzangaben" (identifizierbar) sind nur für berechtigte Rollen (Leitung, Anwendungsbetreuung) sichtbar. Die Systemadministration (`super_admin`) sieht solche Daten nur über den `/system/`-Bereich, jeder solche Zugriff wird im AuditLog (`SYSTEM_VIEW`) protokolliert.
+- Wer welche Daten sieht, richtet sich nicht nach der Kontaktstufe, sondern nach der Sensitivität (der höheren Stufe aus Dokumentationstyp und Feld) und der Rolle: Assistenz sieht „Normal", Fachkraft bis „Erhöht", Leitung und Anwendungsbetreuung alle Stufen. Die Personen-Detailseite ist ab Assistenz erreichbar, auch bei „Mit Zusatzangaben"; die Assistenz sieht dort etwa Kontakte samt Notiz, aber kein Krisengespräch. Die Kontaktstufe wirkt auf zulässige Dokumentationstypen, Vier-Augen-Löschung, das Protokoll beim Öffnen der Person (`VIEW_QUALIFIED`) und die Fristen.
+- Die Systemadministration (`super_admin`) liest einrichtungsübergreifend über den `/system/`-Bereich und über die Verwaltungsoberfläche (`/admin-mgmt/`, nur mit Sudo), dort Personen, Fälle, Ereignisse, Aufgaben und Anhänge aller Einrichtungen. Die Row Level Security lässt diese Sitzungen über `app.is_super_admin` durch (§ 7.9). Diese Lesezugriffe protokolliert das AuditLog als `SYSTEM_VIEW`; schlägt das Protokollieren fehl, wird der Zugriff trotzdem nicht gesperrt.
 
 ### 7.3 Löschfristen und `enforce_retention`
 
 Löschfristen werden pro Einrichtung in den Einstellungen konfiguriert (siehe [Abschnitt 2.3](#23-einstellungen-pro-einrichtung)).
 
-Das Management-Kommando `enforce_retention` setzt die konfigurierten Fristen durch, indem es abgelaufene Datensätze soft-löscht:
+Das Management-Kommando `enforce_retention` setzt die konfigurierten Fristen durch. Je nach Datenart löscht es weich (Soft-Delete: der Datensatz ist ausgeblendet, seine Inhalte fallen mit der Anonymisierung der Person), hart, anonymisiert oder redigiert:
 
-| Strategie | Einstellung | Standard |
-|---|---|---|
-| Anonyme Kontakte | `retention_anonymous_days` | 90 Tage |
-| Kontakte der Stufe „Nur Pseudonym" | `retention_identified_days` | 365 Tage |
-| Fälle der Stufe „Mit Zusatzangaben" (nach Abschluss) | `retention_qualified_days` | 3650 Tage (10 Jahre) |
-| Übergabenotizen (Schichtnotiz) | `retention_handover_notes_days` | 90 Tage |
+| Datenart | Einstellung | Standard | Wirkung |
+|---|---|---|---|
+| Anonyme Ereignisse | `retention_anonymous_days` | 90 Tage | Soft-Delete; Stichtag ist der Ereigniszeitpunkt |
+| Ereignisse von Personen der Stufe „Nur Pseudonym" | `retention_identified_days` | 365 Tage | Soft-Delete; Stichtag ist der Ereigniszeitpunkt |
+| Ereignisse von Personen der Stufe „Mit Zusatzangaben", die einem abgeschlossenen Fall zugeordnet sind | `retention_qualified_days` | 3650 Tage (10 Jahre) | Soft-Delete, sobald der Fall länger als die Frist abgeschlossen ist; der Fall selbst bleibt bestehen |
+| Ereignisse eines Dokumentationstyps mit eigener Frist | `retention_days` am Dokumentationstyp | leer (keine Typ-Frist) | Soft-Delete; Stichtag ist der Ereigniszeitpunkt. Gilt zusätzlich zur Stufen-Frist, es greift die zuerst ablaufende |
+| Aktivitäten (Zeitstrom) | `retention_activities_days` | 365 Tage | harte Löschung |
+| Übergabenotizen (Schichtnotiz) | `retention_handover_notes_days` | 90 Tage | harte Löschung |
+| Gelöschte Personen und Fälle im Papierkorb | `client_trash_days` | 30 Tage | Anonymisierung |
+| Werte alter Ereignis-Fassungen | `eventhistory_detail_months` | 24 Monate | Redaktion; `0` schaltet die altersabhängige Redaktion ab |
+| Bereits redigierte Ereignis-Fassungen | `eventhistory_chronicle_months` | 24 Monate nach der Redaktion | harte Löschung; `0` = unbegrenzt |
+| Audit-Log | `auditlog_retention_months` | 24 Monate | harte Löschung; `0` = unbegrenzt (§ 7.4) |
+
+Personen, deren Ereignisse danach alle gelöscht sind, anonymisiert derselbe Lauf. Die übrigen Felder der Gruppe „Datenschutz und Fristen" sind keine Fristen: `retention_auto_approve_after_defer` und `retention_max_defer_count` steuern den Umgang mit zurückgestellten Löschvorschlägen im Retention-Dashboard, `retention_use_k_anonymization` und `k_anonymity_threshold` die K-Anonymisierung (beide unten).
 
 > **Die Übergabenotiz wird hart gelöscht, nicht soft-gelöscht** (Refs #2042) — wie die Aktivitäten. Maßgeblich ist das Datum der letzten Änderung (`updated_at`), nicht das Anlegen; die Schlüsselrotation schreibt diesen Zeitstempel bewusst nicht fort und verlängert die Frist deshalb nicht. Es gibt **keinen** Legal Hold für Übergabenotizen: Holds sichern Personen-, Fall- und Ereignisakten für ein laufendes Verfahren, die Schichtnotiz ist eine Dienstnotiz ohne Personenbezug im Datenmodell (siehe [security-notes.md](security-notes.md)). Jeder Lauf mit Treffern schreibt eine Audit-Zeile (`DELETE`, Kategorie `handover_notes`) mit Anzahl und Frist — nie mit Text.
 
@@ -1971,7 +1987,7 @@ Ein **Legal Hold** nimmt Daten von der automatischen Löschung und Anonymisierun
 
 #### Aufbewahrung der Ereignis-Historie
 
-Jede Speicherung eines Ereignisses schreibt eine **Historien-Fassung**: wer wann welche Felder mit welchen Werten geändert hat. Diese Fassungen hatten bis Version 0.89 **keine Frist** — sie überlebten die Löschfrist des Ereignisses selbst. Konkret: Ein Ereignis, dessen `retention_identified_days` abgelaufen sind, wird geleert, seine früheren Fassungen behielten aber jeden jemals gespeicherten Wort­laut. Die Frist war formal vollzogen und faktisch unterlaufen. Seit [ADR-050](adr/050-eventhistory-retention.md) schließt `enforce_retention` diese Lücke in zwei Stufen.
+Jede Speicherung eines Ereignisses schreibt eine **Historien-Fassung**: wer wann welche Felder mit welchen Werten geändert hat. Ohne eigene Frist überlebten diese Fassungen die Löschfrist des Ereignisses selbst: Ein Ereignis, dessen `retention_identified_days` abgelaufen sind, wird geleert, seine früheren Fassungen behielten aber jeden jemals gespeicherten Wortlaut. `enforce_retention` behandelt sie deshalb in zwei Stufen ([ADR-050](adr/050-eventhistory-retention.md)).
 
 **Stufe 1 — Redaktion.** Die Fassung bleibt bestehen, ihre *Werte* fallen weg. Was stehen bleibt: Zeitpunkt, handelnde Person, Aktion und die Namen der betroffenen Felder. Was verschwindet: die Inhalte. In der Ereignis-Detailansicht und in der Auskunft nach Art. 15 erscheint an ihrer Stelle „– (redigiert)". Zwei Auslöser:
 
@@ -2025,18 +2041,18 @@ Wirkung: Statt den Datensatz zu löschen, werden identifizierende Merkmale aggre
 
 ### 7.4 Audit-Log
 
-Das Audit-Log ist **append-only** und unveränderlich. Es protokolliert automatisch:
+Das Audit-Log ist **append-only** und unveränderlich. Es protokolliert automatisch unter anderem die folgenden Aktionen. Die Tabelle ist eine Auswahl; die erste Spalte nennt die Beschriftung, unter der die Aktion im Filter **Aktion** des Audit-Logs steht, die vollständige Liste zeigt dieser Filter.
 
-| Ereignis | Auslöser |
+| Aktion (Filter) | Auslöser |
 |---|---|
-| Anmeldung / Abmeldung | Jeder Login/Logout |
-| Fehlgeschlagene Anmeldung | Falsches Passwort |
+| Anmeldung, Abmeldung | Jeder Login/Logout |
+| Anmeldung fehlgeschlagen | Falsches Passwort |
 | Daten der Stufe „Mit Zusatzangaben" eingesehen | Aufruf der **Personen-Detailseite** (`/clients/<id>/`) einer Person dieser Stufe — nicht der Aufruf der Personenliste, eines Ereignisses, eines Falls oder eines Suchtreffers |
 | Export | Datenexport durch Benutzer — auch Datenauskünfte zu einzelnen Personen und der Aufruf des externen Berichts am Bildschirm. **Herausgegebene Berichtsdateien** (CSV/PDF/JSON/XML mit Berichtszeitraum) sind eine Teilmenge davon: nur sie unterliegen nicht der Aufbewahrungsfrist und erscheinen in der [Freigabe-Übersicht](#8-statistik-snapshots--materialized-view) |
 | Löschung | Manuell oder durch `enforce_retention` |
 | Stufenwechsel | Änderung des Kontaktstatus einer Person |
 | Einstellungen geändert | Änderungen an Einrichtungseinstellungen |
-| Datei-Download | Herunterladen eines Anhangs aus dem Dateitresor |
+| Download | Herunterladen eines Anhangs aus dem Dateitresor |
 | Ereignis aktualisiert | Inhaltliche Änderung eines Ereignisses; im Detail stehen nur Dokumentationstyp und geänderte Feldbezeichner |
 | Episode aktualisiert | Änderung von Titel, Beschreibung oder Zeitraum einer Episode |
 | Wirkungsziel aktualisiert | Änderung von Titel oder Beschreibung eines Wirkungsziels |
@@ -2091,7 +2107,7 @@ Hinzu kommt — **unabhängig von der Aktion** — die fünfte Klasse: Einträge
 
 Löschanträge für Personendaten werden im Vier-Augen-Prinzip bearbeitet: Ein Antrag muss von einer **zweiten berechtigten Person** genehmigt werden, bevor Daten endgültig gelöscht werden. Dies schützt vor versehentlicher oder unberechtigter Löschung — auch durch privilegierte Rollen selbst.
 
-**Genehmiger-Pool über das Recht „Löschbestätigung"** (Refs #1053): Wer genehmigen darf, wird nicht aus der Rolle abgeleitet, sondern über das einzeln vergebbare Benutzer-Recht *Löschbestätigung* (`can_confirm_deletion`) kuratiert. Bei der Einführung erhalten bestehende Leitungen und Anwendungsbetreuungen das Recht automatisch; danach kann die Anwendungsbetreuung es unter **Verwaltung → Zugänge** gezielt vergeben oder entziehen — z. B. an eine erfahrene Fachkraft, damit auch bei einer einzelnen Leitung immer eine zweite Person verfügbar ist. Eigene Anträge kann auch ein:e Rechteträger:in nie selbst genehmigen (View-, Service- und Datenbank-Ebene erzwingen Antragsteller ≠ Genehmiger).
+**Genehmiger-Pool über das Recht „Löschbestätigung"** (Refs #1053): Wer genehmigen darf, wird nicht aus der Rolle abgeleitet, sondern über das einzeln vergebbare Benutzer-Recht *Löschbestätigung* (`can_confirm_deletion`) kuratiert. Das Recht ist für jedes neue Konto abgeschaltet, auch für Leitung und Anwendungsbetreuung; die Ersteinrichtung vergibt es niemandem. Auf einer frischen Installation landet deshalb jeder Vier-Augen-Antrag zunächst in der Warnung „Kein möglicher Genehmiger" (siehe unten). Vergeben Sie das Recht bei der Ersteinrichtung unter **Verwaltung → Zugänge** an **mindestens zwei Personen**, damit für jeden Antrag eine zweite Person bereitsteht; dort lässt es sich auch gezielt entziehen oder etwa an eine erfahrene Fachkraft vergeben. Eigene Anträge kann auch ein:e Rechteträger:in nie selbst genehmigen (View-, Service- und Datenbank-Ebene erzwingen Antragsteller ≠ Genehmiger).
 
 Jede Vergabe und jeder Entzug des Rechts sowie jede Genehmigung werden im unveränderlichen Audit-Log protokolliert. Existiert für einen offenen Antrag außer der antragstellenden Person keine aktive Person mit dem Recht, zeigt die Löschantragsliste eine deutliche Warnung („Kein möglicher Genehmiger") — vergeben Sie das Recht dann an eine weitere Person.
 
@@ -2167,7 +2183,7 @@ Für die Bearbeitung von Anfragen betroffener Personen stehen folgende administr
 | Recht | Maßnahme |
 |---|---|
 | Auskunft (Art. 15) | Datenauskunft als JSON oder PDF über die Personenansicht ziehen (Leitung oder Anwendungsbetreuung, Re-Authentifizierung erforderlich) — Umfang siehe unten |
-| Berichtigung (Art. 16) | Felder als Anwendungsbetreuung im Admin-UI direkt bearbeiten |
+| Berichtigung (Art. 16) | Berichtigungsantrag in der Personenakte stellen (Abschnitt „Berichtigung (Art. 16 DSGVO)" → „Berichtigung beantragen", ab Fachkraft); Leitung oder Anwendungsbetreuung prüft ihn unter **Berichtigungen** ([ADR-041](adr/041-berichtigungsworkflow-intern.md)). Die Verwaltungsoberfläche zeigt Personen, Fälle, Ereignisse und Aufgaben nur lesend |
 | Löschung (Art. 17) | Löschantrag über die Anwendung stellen (4-Augen-Prinzip) |
 | Einschränkung (Art. 18) | **Sperrvermerk** an der Personenakte setzen — siehe unten |
 | Datenportabilität (Art. 20) | Export-Funktion in der Anwendung |
@@ -2212,7 +2228,7 @@ Enthalten sind (Refs #1752):
 | Ereignisse | Dokumentationstyp, Zeitpunkt, Fall-/Episoden-Bezug, Felddaten (entschlüsselt) |
 | Gelöschte Ereignisse | Existenz der noch nicht endgültig entfernten Ereignisse (Papierkorb) samt **Löschzeitpunkt und auslösender Person** (Refs #2157) — bei einer Löschung durch den Aufbewahrungslauf bleibt die Person leer, weil dort niemand handelt |
 | Änderungshistorie | Aktion, Zeitpunkt, bearbeitende Person **und die Inhalte vorher/nachher** — auch für gelöschte Ereignisse |
-| Löschanträge | Anträge auf Löschung von Ereignissen **und der Person selbst**, inkl. Begründung und 4-Augen-Prüfung |
+| Löschanträge | Anträge auf Löschung von Ereignissen, Fällen **und der Person selbst**, inkl. Begründung und 4-Augen-Prüfung |
 | Berichtigungsanträge | Art.-16-Anträge zur Person (Refs #1796, [ADR-041](adr/041-berichtigungsworkflow-intern.md)) in **allen** Status (offen, genehmigt, abgelehnt): betroffenes Feld, bisheriger und gewünschter Wert (entschlüsselt), Begründung, Prüfvermerk, beantragende und prüfende Person, Zeitpunkte |
 | Aufbewahrung | Aufbewahrungssperren (Legal Holds, Art. 17 Abs. 3 — **nicht** Art. 18) und offene Löschvorschläge samt Frist und Kategorie |
 | Einschränkung der Verarbeitung | Sperrvermerk nach Art. 18 DSGVO (Refs #2045), sofern gesetzt: Rechtsgrund, Zeitpunkt und setzende Person |
@@ -2272,11 +2288,10 @@ Zusätzlich zum ORM-seitigen Facility-Scoping ist **PostgreSQL Row-Level-Securit
 
 #### Funktionsweise
 
-- Die Middleware [`FacilityScopeMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) setzt pro Request die Postgres-Session-Variable `app.current_facility_id` via `SELECT set_config('app.current_facility_id', <id>, false)` (Session-Scope, nicht Transaction-Scope).
-- Die RLS-Policies (Migration [`0047_postgres_rls_setup`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0047_postgres_rls_setup.py)) filtern jede Zeile über `facility_id = current_setting('app.current_facility_id', true)`.
-- **Fail-closed:** Ist die Variable leer oder nicht gesetzt, liefert `current_setting(..., true)` NULL, der Vergleich schlägt fehl und es werden **keine Zeilen** zurückgegeben.
-- Die Middleware öffnet den DB-Cursor **nur für authentifizierte Requests**; anonyme Routen (Login, Health-Check, statische Dateien) bleiben unbeeinflusst.
-- Bei jedem Request wird der Wert frisch gesetzt (auch leer), damit Connection-Pooling keinen stehengebliebenen Wert aus einem früheren Request leakt.
+- Die Middleware [`FacilityScopeMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) setzt pro Request zwei Postgres-Session-Variablen in einem Aufruf: `app.current_facility_id` (ID der Einrichtung der angemeldeten Person) und `app.is_super_admin` (`'true'` für Sitzungen der Systemadministration, sonst leer), jeweils via `set_config(…, false)` (Session-Scope, nicht Transaction-Scope).
+- Die RLS-Policies (Migration [`0047_postgres_rls_setup`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0047_postgres_rls_setup.py)) filtern jede Zeile über `facility_id::text = current_setting('app.current_facility_id', true)`. Migration [`0085_rls_superadmin_bypass`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0085_rls_superadmin_bypass.py) ergänzt alle diese Policies um den Zweig `OR current_setting('app.is_super_admin', true) = 'true'`: Sitzungen der Systemadministration umgehen damit die Einrichtungsisolation (ihre Lesezugriffe protokolliert das AuditLog als `SYSTEM_VIEW`, § 7.2).
+- **Fail-closed:** Ist die Variable leer oder nicht gesetzt, liefert `current_setting(..., true)` einen leeren Wert beziehungsweise NULL, der Vergleich trifft keine Zeile und es werden **keine Zeilen** zurückgegeben.
+- Die Middleware setzt beide Variablen bei **jedem** Request neu, auch bei anonymen: Dort (und für Personen einer archivierten Einrichtung) sind beide leer. So kann Connection-Pooling keinen stehengebliebenen Wert aus einem früheren Request weitergeben.
 
 #### Debugging in `psql`
 
@@ -2415,11 +2430,13 @@ Die **Freigabe-Übersicht** (Statistik → Reiter „Freigaben", Rolle: Leitung/
 >
 > **Empfänger und Zweck sind Freitextfelder.** Die Anwendung prüft ihren Inhalt nicht und kann ihn später nicht mehr ändern (das Audit-Log ist unveränderlich). Tragen Sie deshalb die **Organisation** ein, nicht den Namen einer Ansprechperson — sonst steht ein Personenname dauerhaft im Log.
 
-**3. Die Übersicht hat zwei bekannte Lücken.**
+**3. Die Übersicht hat drei bekannte Lücken.**
 
-**Erstens: sie beginnt mit ihrer Einführung.** Die Markierung, an der eine Herausgabe erkennbar ist, gibt es erst seit diesem Release. Herausgaben aus der Zeit davor stehen weiterhin im Audit-Log, lassen sich dort aber nicht als Herausgabe erkennen — sie erscheinen nicht in der Übersicht, sind nicht von der Frist ausgenommen und lösen keine Überschneidungswarnung aus. **Nachtragen ist technisch ausgeschlossen:** das Audit-Log ist unveränderlich und über eine Prüfsummen-Kette gegen nachträgliche Änderungen gesichert; ein Nachtragen wäre von einer Manipulation nicht zu unterscheiden. Rechnen Sie in den ersten Monaten nach dem Update also damit, dass ältere Herausgaben fehlen — die Seite weist darauf hin.
+**Erstens: sie beginnt mit der Einführung dieser Protokollierung.** Eine Herausgabe ist an einer Markierung im Audit-Log erkennbar. Herausgaben ohne diese Markierung stehen weiterhin im Audit-Log, lassen sich dort aber nicht als Herausgabe erkennen — sie erscheinen nicht in der Übersicht, sind nicht von der Frist ausgenommen und lösen keine Überschneidungswarnung aus. **Nachtragen ist technisch ausgeschlossen:** das Audit-Log ist unveränderlich und über eine Prüfsummen-Kette gegen nachträgliche Änderungen gesichert; ein Nachtragen wäre von einer Manipulation nicht zu unterscheiden. Die Seite weist darauf hin.
 
 **Zweitens: sie endet beim Download.** Eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm oder ein per Hand abgeschriebener Wert erscheinen dort nicht. Das ist eine organisatorische Grenze.
+
+**Drittens: sie wertet nur die 500 jüngsten Herausgaben aus.** Ältere bleiben im Audit-Log, erscheinen aber nicht in der Übersicht und lösen keine Überschneidungswarnung mehr aus; auch darauf weist die Seite hin.
 
 ### Admin-Oberfläche
 
