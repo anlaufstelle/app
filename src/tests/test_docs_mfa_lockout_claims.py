@@ -63,6 +63,7 @@ FORBIDDEN_CLAIMS = (
     re.compile(r"any attempts during the lock window"),
     # Swapping an existing TOTP device through the UI.
     re.compile(r"ein neues TOTP-Gerät und neue Backup-Codes ein"),
+    re.compile(r"Der Wechsel des TOTP-Geräts ist ein eigener Schritt"),
     re.compile(r"landet danach wieder auf `/mfa/setup/`"),
     re.compile(r"then returns to `/mfa/setup/`"),
     # Reset audit detail without the account identifiers.
