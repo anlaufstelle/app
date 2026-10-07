@@ -5,11 +5,14 @@ set -euo pipefail
 # Stellt verschlüsselte DB- und Medien-Backups wieder her.
 #
 # Verwendung:
-#   $0 [--yes] <db-backup.sql.gz.enc>                       # Nur DB
-#   $0 [--yes] <db-backup.sql.gz.enc> <media.tar.gz.enc>    # DB + Medien (Refs #720)
+#   $0 [--yes] [--skip-audit-anchor] <db-backup.sql.gz.enc>                       # Nur DB
+#   $0 [--yes] [--skip-audit-anchor] <db-backup.sql.gz.enc> <media.tar.gz.enc>    # DB + Medien (Refs #720)
 #
 # --yes (or RESTORE_CONFIRM=ja) confirms the destructive restore without a
 # prompt.
+# --skip-audit-anchor restores a set that binds an audit anchor on a host without
+# DJANGO_AUDIT_HWM_PATH. Without it such a restore stops before any change; with
+# it the anchor is neither checked nor restored and the audit chain is unanchored.
 #
 # Medien-Restore entpackt neben dem existierenden /data/media-Inhalt, prueft
 # jeden DB-Anhang und ersetzt den Bestand erst danach. Erwartet die im backup.sh
@@ -57,18 +60,22 @@ source "${SCRIPT_DIR}/lib/env-file.sh"
 # alle Vorpruefungen lesen nichts mehr von stdin, und JEDER zerstoerende Schritt
 # liegt hinter der Bestaetigung.
 ASSUME_YES=0
+SKIP_AUDIT_ANCHOR=0
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --yes) ASSUME_YES=1; shift ;;
+        --skip-audit-anchor) SKIP_AUDIT_ANCHOR=1; shift ;;
         --) shift; POSITIONAL+=("$@"); break ;;
-        --*) echo "ERROR: unknown option: $1 (allowed: --yes)" >&2; exit 1 ;;
+        --*) echo "ERROR: unknown option: $1 (allowed: --yes, --skip-audit-anchor)" >&2; exit 1 ;;
         *) POSITIONAL+=("$1"); shift ;;
     esac
 done
 if [[ ${#POSITIONAL[@]} -lt 1 || ${#POSITIONAL[@]} -gt 2 ]]; then
-    echo "Usage: $0 [--yes] <db-backup.sql.gz.enc> [media-backup.tar.gz.enc]"
-    echo "  --yes   confirm without prompting (alternatively RESTORE_CONFIRM=ja)"
+    echo "Usage: $0 [--yes] [--skip-audit-anchor] <db-backup.sql.gz.enc> [media-backup.tar.gz.enc]"
+    echo "  --yes                confirm without prompting (alternatively RESTORE_CONFIRM=ja)"
+    echo "  --skip-audit-anchor  restore a set with a bound audit anchor although DJANGO_AUDIT_HWM_PATH"
+    echo "                       is not set; the anchor is then neither checked nor restored"
     exit 1
 fi
 
@@ -128,8 +135,17 @@ BACKUP_TIMESTAMP="${BACKUP_FILE##*/}"
 BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP#anlaufstelle_}"
 BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP%.sql.gz.enc}"
 HWM_FILE=""
+# A set that binds an audit anchor is only restored without it on explicit request:
+# otherwise the restored audit chain would silently lose its external anchor.
 if [[ -z "${DJANGO_AUDIT_HWM_PATH:-}" && -n "$BACKUP_SET_HWM_SHA256" ]]; then
-    echo "WARNUNG: Der Satz enthaelt einen Audit-Anker, dieser Host hat aber keinen Ankerpfad konfiguriert." >&2
+    if [[ "$SKIP_AUDIT_ANCHOR" -ne 1 ]]; then
+        echo "FEHLER: Der Satz enthaelt einen Audit-Anker, dieser Host hat aber keinen Ankerpfad konfiguriert." >&2
+        echo "  DJANGO_AUDIT_HWM_PATH in .env setzen (Vorgabe: /data/audit_hwm.json) und den Restore wiederholen." >&2
+        echo "  Nur wer bewusst ohne Anker wiederherstellen will, startet erneut mit --skip-audit-anchor." >&2
+        echo "  Es wurde nichts veraendert." >&2
+        exit 1
+    fi
+    echo "WARNUNG: --skip-audit-anchor gesetzt: Der Satz enthaelt einen Audit-Anker, dieser Host hat keinen Ankerpfad." >&2
     echo "  Die Vorpruefung lief ohne Audit-Anker; der gebundene Anker wurde nicht geprueft." >&2
     echo "  DJANGO_AUDIT_HWM_PATH ist nicht gesetzt — der Anker wird NICHT eingespielt; die Audit-Kette gilt" >&2
     echo "  nach dem Restore als unverankert (docs/disaster-recovery.md § 6 Schritt 4b)." >&2

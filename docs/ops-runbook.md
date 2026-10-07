@@ -352,7 +352,9 @@ docker compose "${compose_files[@]}" up -d db web
 #    der bisherige Stand bleibt als <POSTGRES_DB>_vor_restore_<Zeitstempel> liegen.
 #    Ohne --yes (oder RESTORE_CONFIRM=ja) fragt das Skript interaktiv nach "ja";
 #    nicht-interaktiv (Cron, Pipe, kein Terminal) bricht es vor jeder Aenderung ab.
-#    Ein Satz ohne signiertes Manifest wird nicht eingespielt.
+#    Ein Satz ohne signiertes Manifest wird nicht eingespielt. Bindet der Satz
+#    einen Audit-Anker, muss DJANGO_AUDIT_HWM_PATH gesetzt sein; sonst bricht es
+#    ab (nur --skip-audit-anchor spielt den Satz dann ohne Anker ein).
 ./scripts/ops/restore.sh --yes \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc

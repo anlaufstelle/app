@@ -354,7 +354,9 @@ docker compose "${compose_files[@]}" up -d db web
 #    state remains as <POSTGRES_DB>_vor_restore_<timestamp>.
 #    Without --yes (or RESTORE_CONFIRM=ja) the script asks interactively for "ja";
 #    non-interactively (cron, pipe, no terminal) it aborts before any change.
-#    A set without a signed manifest is not restored.
+#    A set without a signed manifest is not restored. If the set binds an audit
+#    anchor, DJANGO_AUDIT_HWM_PATH must be set; otherwise it aborts (only
+#    --skip-audit-anchor restores the set without the anchor).
 ./scripts/ops/restore.sh --yes \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
@@ -3227,4 +3229,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 6df7f991fef0ccf3298a1be638bef7dbfdaf78fd -->
+<!-- source-hash: 398be4acd586d57df0908ea7ad394fccf09532b2 -->

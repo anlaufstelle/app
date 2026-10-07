@@ -658,6 +658,7 @@ def _run_hwm_restore(
     *,
     hwm_configured: bool = True,
     stream_fails: bool = False,
+    extra_args: tuple[str, ...] = (),
 ):
     root, bindir, action_log, db_backup, _ = _make_sandbox(tmp_path)
     manifest = db_backup.with_name("anlaufstelle_2026-09-10_020000.manifest")
@@ -688,7 +689,7 @@ def _run_hwm_restore(
     else:
         env.pop("DJANGO_AUDIT_HWM_PATH", None)
     result = subprocess.run(
-        ["bash", str(root / "scripts" / "ops" / "restore.sh"), str(db_backup)],
+        ["bash", str(root / "scripts" / "ops" / "restore.sh"), *extra_args, str(db_backup)],
         input="ja\n",
         capture_output=True,
         text=True,
