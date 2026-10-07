@@ -5,8 +5,10 @@ Derived from the manual check on the local E2E server:
 1. After the jobs the demo reset runs (``verify_audit_chain``,
    ``create_statistics_snapshots``, ``detect_breaches``,
    ``refresh_statistics_view``) the four job cards switch from ``unknown`` to
-   ``ok``; the retention card stays ``unknown`` (the reset never runs
-   ``enforce_retention``).
+   ``ok``; the retention card keeps the status and the last-run time it had
+   before the jobs (the reset never runs ``enforce_retention``). Earlier tests
+   of the same session may have run it, so the test compares against the card
+   as read before the jobs instead of expecting ``unknown``.
 2. The card "Admin-DB-Rolle" reads the latest ``DB_ROLES_VERIFIED`` marker of
    ``check_db_roles``: ``ok`` with the check time, ``critical`` with the codes.
 3. With ``DEMO_MODE`` the backup and restore cards explain that backup and
@@ -20,6 +22,7 @@ Preconditions: classes 1/2 run against the standard E2E server (no
 super admin, no sudo.
 """
 
+import re
 import subprocess
 
 import pytest
@@ -32,6 +35,9 @@ pytestmark = pytest.mark.e2e
 _COMPLIANCE = "/system/compliance/"
 _JOB_CARDS = ("audit_chain_last_run", "snapshot_last_run", "breach_scan_last_run", "mv_refresh_last_run")
 _JOBS = ("verify_audit_chain", "create_statistics_snapshots", "detect_breaches", "refresh_statistics_view")
+# Absolute timestamp of the retention card (``detail``); the relative message
+# ("vor 0h") could tick over between the two reads.
+_RETENTION_LAST_RUN = re.compile(r"Letzter Lauf: \d{4}-\d{2}-\d{2} \d{2}:\d{2}")
 
 
 def _card(page, key):
@@ -69,6 +75,11 @@ class TestJobCardsAfterResetJobs:
         if _demo_enabled(base_url, browser):
             pytest.skip("standard E2E server required (no DEMO_MODE)")
         page = super_admin_page
+        _open_dashboard(page, base_url)
+        retention = _card(page, "retention_last_run")
+        status_before = retention.get_attribute("data-status")
+        last_run_before = _RETENTION_LAST_RUN.search(retention.inner_text())
+
         for job in _JOBS:
             subprocess.run(
                 [python_bin(), "src/manage.py", job],
@@ -82,7 +93,12 @@ class TestJobCardsAfterResetJobs:
 
         for key in _JOB_CARDS:
             expect(_card(page, key)).to_have_attribute("data-status", "ok")
-        expect(_card(page, "retention_last_run")).to_have_attribute("data-status", "unknown")
+        retention = _card(page, "retention_last_run")
+        expect(retention).to_have_attribute("data-status", status_before)
+        if last_run_before:
+            expect(retention).to_contain_text(last_run_before.group(0))
+        else:
+            expect(retention).not_to_contain_text("Letzter Lauf:")
 
 
 class TestAdminRoleCardReadsMaintenanceResult:
