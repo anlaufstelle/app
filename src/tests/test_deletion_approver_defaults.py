@@ -15,7 +15,7 @@ from django.test import override_settings
 from django.urls import reverse
 
 from core.forms.user_access import UserAccessCreateForm
-from core.models import Facility, User
+from core.models import AuditLog, Facility, User
 from core.services import compliance
 from core.services.compliance import ComplianceStatus
 
@@ -197,3 +197,68 @@ class TestDjangoAdminAddDefaultsTheRightByRole:
 
         assert form.is_valid(), form.errors
         assert form.cleaned_data["can_confirm_deletion"] is expected
+
+
+def _creation_entries(user):
+    return list(
+        AuditLog.objects.filter(action=AuditLog.Action.USER_CREATED, target_type="User", target_id=str(user.pk))
+    )
+
+
+class TestInitialGrantIsAudited:
+    """The creation entry records the initial value of the right, so every grant is traceable."""
+
+    @pytest.mark.parametrize(
+        ("role", "choice", "expected"),
+        [(User.Role.LEAD, "role", True), (User.Role.STAFF, "role", False), (User.Role.LEAD, "no", False)],
+    )
+    def test_invite_records_the_initial_value(self, client, admin_user, facility, role, choice, expected):
+        client.force_login(admin_user)
+        data = {
+            "username": "audited",
+            "email": "audited@example.org",
+            "display_name": "",
+            "role": role,
+            "can_confirm_deletion": choice,
+        }
+
+        response = client.post(reverse("core:user_access_create"), data)
+
+        assert response.status_code == 302
+        user = User.objects.get(username="audited")
+        assert user.can_confirm_deletion is expected
+        (entry,) = _creation_entries(user)
+        assert entry.detail["can_confirm_deletion"] is expected
+        assert entry.actor == admin_user
+
+    def test_setup_facility_records_the_grant_without_an_actor(self):
+        with (
+            patch("builtins.input", side_effect=["Org", "Stelle", "firstadmin"]),
+            patch("getpass.getpass", side_effect=["secret123", "secret123"]),
+        ):
+            call_command("setup_facility")
+
+        user = User.objects.get(username="firstadmin")
+        (entry,) = _creation_entries(user)
+        assert entry.actor is None
+        assert entry.facility == user.facility
+        assert entry.detail["can_confirm_deletion"] is True
+        assert entry.detail["system"] is True
+        assert entry.detail["command"] == "setup_facility"
+        assert entry.detail["new_role"] == User.Role.FACILITY_ADMIN
+
+    def test_setup_facility_for_an_existing_account_writes_no_creation_entry(self, facility):
+        existing = User.objects.create(username="firstadmin", facility=facility, role=User.Role.LEAD)
+
+        with (
+            patch("builtins.input", side_effect=["Org", "Stelle", "firstadmin"]),
+            patch("getpass.getpass", side_effect=["secret123", "secret123"]),
+        ):
+            call_command("setup_facility")
+
+        assert _creation_entries(existing) == []
+
+    def test_creation_without_an_actor_stays_unaudited(self, facility):
+        user = User.objects.create(username="seeded", facility=facility, role=User.Role.LEAD, can_confirm_deletion=True)
+
+        assert _creation_entries(user) == []

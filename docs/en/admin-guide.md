@@ -2111,7 +2111,7 @@ Deletion requests for personal data are processed using the four-eyes principle 
 
 **Approver pool — "deletion confirmation" permission** (Refs #1053): Who may approve is not derived from the user's role; instead, approvers are curated via the individually assignable user permission *deletion confirmation* (`can_confirm_deletion`). The first account created by `setup_facility` holds the permission. When an account is created under **Administration > Access** or in the Django admin, "Löschbestätigung" is set to "Nach Rolle" (by role): leads and facility admins receive the permission, other roles do not; "Ja" (yes) and "Nein" (no) override the preset. Make sure **at least two active people** hold the permission so that a second person is available for every request; under **Administration > Access** it can also be revoked or granted to, for example, an experienced staff member. The compliance dashboard (`/system/compliance/`) shows the number of active approvers per facility in the card "Genehmiger für Löschanträge" (approvers for deletion requests): none = critical, exactly one = warning (that person's own requests stay open), two or more = OK. A permission holder can never approve their own requests; the view, service, and database layers all enforce **requester ≠ approver**.
 
-Every grant and revocation of the permission, as well as every approval, is recorded in the immutable audit log. If an open request has no active approver other than the requester, the deletion request list displays a prominent warning ("No possible approver") — grant the permission to an additional person to resolve this.
+The immutable audit log tracks the permission from account creation on: the creation entry (`USER_CREATED`) records the initial value (`can_confirm_deletion` yes/no) — with the acting person when the account is created via Management → Access or the Django admin, as a system entry for the initial setup with `setup_facility`. Every later change (grant or revocation) is recorded as a separate `DELETION_CONFIRMER_CHANGED` entry with the old and new value, as is every approval. If an open request has no active approver other than the requester, the deletion request list displays a prominent warning ("No possible approver") — grant the permission to an additional person to resolve this.
 
 #### Who sees the "Deletion requests" tab (Refs #1736)
 
@@ -2449,4 +2449,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: bdf4273c95fc0d0881815f2b77bb0222c77927b8 -->
+<!-- source-hash: 0d1fe797492f9010ad0d24eb5cdb28fc3f17d994 -->

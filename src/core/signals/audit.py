@@ -270,6 +270,9 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
                     {
                         "new_role": instance.role,
                         "username": instance.username,
+                        # The initial grant is part of the creation entry; later
+                        # changes are logged as DELETION_CONFIRMER_CHANGED.
+                        "can_confirm_deletion": bool(instance.can_confirm_deletion),
                         **attribution,
                     },
                     source="signals.USER_CREATED",

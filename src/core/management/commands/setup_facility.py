@@ -48,10 +48,11 @@ import yaml
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from core.models import Facility, Organization, Settings, User
+from core.models import AuditLog, Facility, Organization, Settings, User
 from core.packages.catalog import PACKAGE_INFO, UnknownPackageError, list_packages
 from core.packages.loader import PackageLoadError
 from core.packages.schema import PackageValidationError
+from core.services.audit import audit_event
 from core.services.facility_bootstrap import ensure_facility_baseline
 
 # Refs #1016/#1058/#1883: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
@@ -162,6 +163,22 @@ class Command(BaseCommand):
             if created:
                 user.set_password(password)
                 user.save()
+                # The command runs without a logged-in actor, so the creation
+                # signal stays silent; the system entry records the initial grant.
+                audit_event(
+                    AuditLog.Action.USER_CREATED,
+                    user=user,
+                    facility=facility,
+                    target_type="User",
+                    target_id=str(user.pk),
+                    detail={
+                        "new_role": user.role,
+                        "username": user.username,
+                        "can_confirm_deletion": user.can_confirm_deletion,
+                        "system": True,
+                        "command": "setup_facility",
+                    },
+                )
 
             baseline = self._ensure_baseline(facility, package=package_name)
 

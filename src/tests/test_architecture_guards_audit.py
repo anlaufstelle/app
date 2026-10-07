@@ -140,10 +140,10 @@ class TestAuditLogCreationAllowlist:
             167: "on_user_login_failed — no-facility branch",
             178: "on_user_login_failed — with-facility branch",
             262: "post_save User — request-getriebene Anlage (Refs #1871)",
-            287: "post_save User — role change detection (actor-Attribution, Refs #1369)",
-            306: "post_save User — deactivation detection (actor-Attribution, Refs #1369)",
-            338: "post_save User — MFA-Pflicht geändert (Refs #2172)",
-            359: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053/#1369)",
+            290: "post_save User — role change detection (actor-Attribution, Refs #1369)",
+            309: "post_save User — deactivation detection (actor-Attribution, Refs #1369)",
+            341: "post_save User — MFA-Pflicht geändert (Refs #2172)",
+            362: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053/#1369)",
         },
     }
 

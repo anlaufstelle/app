@@ -268,6 +268,7 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "new_role": "Neue Rolle eines Kontos — Enum-Wert",
     "old_value": "Vorheriger Wert einer booleschen Zugangs- oder Loeschbestaetigungs-Einstellung",
     "new_value": "Neuer Wert einer booleschen Zugangs- oder Loeschbestaetigungs-Einstellung",
+    "can_confirm_deletion": "Initial value of the deletion approval right when an account is created — boolean",
     "from": "Vorheriger Status eines Arbeitsauftrags — Enum-Wert",
     "to": "Neuer Status eines Arbeitsauftrags — Enum-Wert",
     "bulk": "Kennzeichen einer Sammelaenderung",
