@@ -1416,7 +1416,7 @@ BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-./backups}"
   "$BACKUP_HOST_DIR/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc"
 ```
 
-Before even asking for confirmation, the script first verifies the manifest (HMAC), then the set binding (set ID, dump hash, media hash including an existing sidecar, audit anchor), then the database HMAC and, when the second argument was supplied, the media HMAC. It rejects a media archive the manifest does not bind. Only after all preflight checks succeed and the operator enters `ja` does it restore the database; it repeats the corresponding check immediately before each archive is used, then replaces and extracts the media contents. The SQL dump is deliberately loaded through the local bootstrap superuser (`POSTGRES_SUPERUSER`, default `postgres`): only that role can reliably restore the included owner/`FORCE RLS` statements and data copies. If media extraction aborts, the media contents are incomplete and the full media restore must be repeated.
+Before even asking for confirmation, the script first verifies the manifest (HMAC), then the set binding (set ID, dump hash, media hash including an existing sidecar), then the database HMAC and, when the second argument was supplied, the media HMAC. It rejects a media archive the manifest does not bind. The script checks the audit anchor bound in the manifest (`audit_hwm-<timestamp>.json` next to the dump) only when `DJANGO_AUDIT_HWM_PATH` is set on the **target host**: it then aborts if the anchor file is missing, empty or its hash does not match the manifest, and writes it back to that path after the database restore. If the variable is not set on the target host, a set with a bound anchor only produces a warning and the restore continues; the anchor is neither checked nor restored, and the audit chain counts as unanchored after the restore ([Disaster Recovery § 6 Step 4b](../disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen), German). To restore the anchoring as well, set `DJANGO_AUDIT_HWM_PATH` before the run. Only after all preflight checks succeed and the operator enters `ja` does it restore the database; it repeats the corresponding check immediately before each archive is used, then replaces and extracts the media contents. The SQL dump is deliberately loaded through the local bootstrap superuser (`POSTGRES_SUPERUSER`, default `postgres`): only that role can reliably restore the included owner/`FORCE RLS` statements and data copies. If media extraction aborts, the media contents are incomplete and the full media restore must be repeated.
 
 4. Run migrations with the admin role, then start the stack:
 
@@ -1919,7 +1919,7 @@ The application stores **no real names** in the database. Personal data is captu
 
 Retention periods are configured per facility in the settings (see [Section 2.3](#23-settings-per-facility)).
 
-The management command `enforce_retention` enforces the configured periods. Depending on the kind of data it soft-deletes (the record is hidden; its contents go with the anonymization of the person), hard-deletes, anonymizes or redacts:
+The management command `enforce_retention` enforces the configured periods. Depending on the kind of data it soft-deletes, hard-deletes, anonymizes or redacts. When an event is soft-deleted, only the event row stays behind, marked as deleted (`is_deleted`, `deleted_at`); this step already removes its contents: it empties `data_json` and `search_text`, deletes the attachments including their encrypted files, and writes a `DELETE` entry to the event history that carries only the field names, no values. The older versions of the event in the history are redacted by the same run in the subsequent history step right away (deferred under a legal hold), without waiting for `eventhistory_detail_months`; from that redaction on, `eventhistory_chronicle_months` runs (table below). The person is not affected as long as they still have an event that is not deleted; they are anonymized only afterwards (paragraph below the table). Anonymous events have no person:
 
 | Kind of data | Setting | Default | Effect |
 |---|---|---|---|
@@ -2084,7 +2084,7 @@ Under **Core > Audit logs** (or `/audit/`), logs can be filtered by action, faci
 >
 > The same applies to the `detail` field: new rows carry `owner_type` + `owner_id` (values `event`/`client`/`case`), older rows only `event_id`. Download entries for **event** attachments keep `event_id` in addition, so existing queries do not break. Filtering on `Attachment` alone, or on `detail->>'event_id'` alone, yields a **silently incomplete** result.
 
-**Audit log retention:** The audit log **does** have its own automatic retention period inside the application. It is independent of the domain retention periods and can be shorter: with the default values the audit log reaches back 24 months, whereas events at the `qualified` level remain for up to 3650 days (ten years), and a type period (`DocumentType.retention_days`) can be chosen freely. Audit traces for older domain data then no longer exist; only the exceptions listed below are kept permanently. Anyone who needs audit traces for the entire lifetime of the domain data sets `auditlog_retention_months` to at least the longest domain period of the facility, or to `0`. The settings page does not warn when the audit period is shorter ([ADR-021, update 2026-10-07](../adr/021-retention-modell.md#update-2026-10-07-audit-log-frist-und-fristen-zuschnitt), German).
+**Audit log retention:** The audit log **does** have its own automatic retention period inside the application. It is independent of the domain retention periods and counts differently: `prune_auditlog` deletes every entry by its own age (`timestamp`), while the domain periods run from their own reference date per kind of data (table in [§ 7.3](#73-retention-periods-and-enforce_retention)). With the default values the audit log reaches back 24 months. Events at the `qualified` level, by contrast, are deleted by the level period only 3650 days (ten years) **after their case was closed**; as long as the case is open, or the event is not assigned to a closed case, that period does not apply at all (a type period can still apply), and a legal hold keeps the domain data, not the audit entries. A type period (`DocumentType.retention_days`) can be chosen freely. Audit traces for older domain data then no longer exist; only the exceptions listed below are kept permanently. Even an audit period as long as the longest domain period therefore does not cover the entire lifetime of the domain data: an event is recorded in year 0, its case is closed in year 5, the event is deleted around year 15; an audit period of ten years has already deleted the audit trace of the recording in year 10. All audit traces are kept only with `0` (no automatic audit deletion); any other value has to be weighed against the usual duration of cases, open cases and legal holds. The settings page does not warn when the audit period is shorter ([ADR-021, update 2026-10-07](../adr/021-retention-modell.md#update-2026-10-07-audit-log-frist-und-fristen-zuschnitt), German).
 
 | Setting in `Settings` | Default | Effect |
 |---|---|---|
@@ -2292,8 +2292,10 @@ In addition to ORM-side facility scoping, **PostgreSQL row-level security** is e
 
 - The middleware [`FacilityScopeMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) sets two Postgres session variables per request in one call: `app.current_facility_id` (ID of the signed-in person's facility) and `app.is_super_admin` (`'true'` for system administration sessions, otherwise empty), each via `set_config(…, false)` (session scope, not transaction scope).
 - The RLS policies (migration [`0047_postgres_rls_setup`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0047_postgres_rls_setup.py)) filter every row via `facility_id::text = current_setting('app.current_facility_id', true)`. Migration [`0085_rls_superadmin_bypass`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0085_rls_superadmin_bypass.py) adds the branch `OR current_setting('app.is_super_admin', true) = 'true'` to all of these policies: system administration sessions thereby bypass facility isolation (the AuditLog records their reads as `SYSTEM_VIEW`, § 7.2).
-- **Fail-closed:** if the variable is empty or unset, `current_setting(..., true)` returns an empty value or NULL, the comparison matches nothing, and **no rows** are returned.
-- The middleware sets both variables afresh on **every** request, including anonymous ones: there (and for people of an archived facility) both are empty. This way connection pooling cannot pass on a leftover value from an earlier request.
+- **Fail-closed only without the super-admin branch:** if `app.current_facility_id` is empty or unset **and** `app.is_super_admin` is not `'true'`, `current_setting(..., true)` returns an empty value or NULL, the comparison matches nothing, and **no rows** are returned. If `app.is_super_admin` is `'true'`, the policy releases all rows, even with an empty facility scope; that is the normal case for system administration.
+- The policies filter the app role (`POSTGRES_USER`, `NOBYPASSRLS`). The admin role (`POSTGRES_ADMIN_USER`, `BYPASSRLS`) used for migrations, maintenance and the retention run, as well as the bootstrap superuser, bypass them.
+- The middleware sets both variables afresh on **every** request, including anonymous ones: there both are empty. This way connection pooling cannot pass on a leftover value from an earlier request.
+- For an archived facility the middleware empties the facility scope only for requests it blocks (response 403). Not blocked are system administration requests and the paths in `ARCHIVED_EXEMPT_URLS` (`/login/`, `/logout/`, `/static/`, `/i18n/`, `/health/`, `/sw.js`, `/manifest.json`); for a signed-in staff account of the archived facility, `app.current_facility_id` still carries its facility's ID there.
 
 #### Debugging in `psql`
 
@@ -2305,7 +2307,7 @@ SELECT current_setting('app.current_facility_id', true);
 SELECT set_config('app.current_facility_id', '<facility-uuid>', false);
 ```
 
-Without the variable set, the protected tables visibly return **no rows** in `psql` -- this is by design.
+With the app role and without the variables set, the protected tables visibly return **no rows** in `psql` -- this is by design. Under the admin role or the bootstrap superuser RLS does not apply; there you see all rows.
 
 ---
 
@@ -2447,4 +2449,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: fe49df497c2b06a16e78e34f7a20b7cbba29b710 -->
+<!-- source-hash: e29ec5ff6a7d7c38d263fb6341ef011ba90aeb9e -->
