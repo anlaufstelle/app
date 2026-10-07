@@ -43,7 +43,7 @@ This guide and the [FAQ](../faq.md) are linked inside the application under "Hel
 > - **Unlock account by email** -- Sends an unlock link to your registered email address, valid for 30 minutes. No new password required.
 > - **Redeem a backup code** -- If you have 2FA enabled, enter your username plus one of your backup codes. Each code is single-use.
 >
-> If none of these options works, ask the application support of your facility to unlock the account (Administration > Access). All actions are recorded in the audit log.
+> If none of these options works, ask the application support of your facility to unlock the account (Management > Access). All actions are recorded in the audit log.
 
 ### Changing Your Password
 
@@ -761,18 +761,18 @@ For assignments without a reliable internet connection -- for example, outreach 
 
 1. Open the person list.
 2. For each person you want to take along, tap the offline-toggle button in the **Offline** column of the person list -- or, on the person's detail page, tap **Take offline**. Pseudonym, master data, and the most recent events are then encrypted and loaded onto your device for offline use; an **Available locally** badge confirms it. Up to 20 people at a time.
-3. An overview of your taken-along people is available any time under **"People"** (`/clients/`) -- this view also works offline since Wave 2 (see below).
+3. An overview of your taken-along people is available any time under **"People"** (`/clients/`) -- this view also works offline (see below).
 
 **During the assignment (offline):**
 
-- **People, tasks, and the timeline stay available at their usual address (since Waves 2/3, #1499):** The **person list** (`/clients/`), the **task list** (`/workitems/`), and the **timeline** as the start page (`/`) render offline the same local excerpt as online -- assembled from your taken-along people, in the usual look. The task list and timeline also show **anonymous or person-less entries** (standalone tasks, contacts without a person), clearly marked as such; the timeline is deliberately labeled a "local record" -- it shows only the offline-available activity, not the facility's complete history. You no longer need a separate offline start page for this.
+- **People, tasks, and the timeline stay available at their usual address:** The **person list** (`/clients/`), the **task list** (`/workitems/`), and the **timeline** as the start page (`/`) render offline the same local excerpt as online -- assembled from your taken-along people, in the usual look. The task list and timeline also show **anonymous or person-less entries** (standalone tasks, contacts without a person), clearly marked as such; the timeline is deliberately labeled a "local record" -- it shows only the offline-available activity, not the facility's complete history. You no longer need a separate offline start page for this.
 - Open a taken-along person as usual via their detail page -- the view stays at the **normal address** and is built from the encrypted offline store (no separate "offline" link anymore).
 - You can **record new events** (via **"Document contact"**) and **edit existing ones**; entries are stored encrypted locally (AES-GCM-256; the key is derived from your password) and sent automatically once you are back online. **File attachments** cannot be captured offline -- add them once you are back online.
-- **Capture anywhere offline (since Wave 1, #1499):** you no longer need an **open person dossier**. Offline, tap **"Document contact"** or **"Create task"** in the **"+" menu** (or open the forms `/events/new/` / `/workitems/new/` directly) -- a real capture form opens **at the usual address**: pick a document type, optionally assign a person you took offline, and save. The old "only within the dossier" dead end (#1483/#1485) is gone.
+- **Capture anywhere offline:** you no longer need an **open person dossier**. Offline, tap **"Document contact"** or **"Create task"** in the **"+" menu** (or open the forms `/events/new/` / `/workitems/new/` directly) -- a real capture form opens **at the usual address**: pick a document type, optionally assign a person you took offline, and save.
 - **Contacts without a person** (anonymous contacts) and **standalone tasks** can now be **started offline too** -- choose **"-- no person --"** in the person picker. If the chosen document type requires a contact stage, "no person" is disabled; assign a taken-along person instead (the server re-checks the contact stage on sync).
 - **Task capture is social workers-only.** As an assistant, opening the task form offline shows a note instead of the fields -- so no entry is created that would be rejected on sync.
 - If nothing has been **prepared for offline capture** yet (the facility was never opened online, the local cache is empty, or the installed app is not updated yet), the form shows a short **"open it once online"** hint instead of the fields.
-- **`/offline/` is a purely technical fallback since Wave 3**, no longer an entry point: the "No local view available" page appears only when **no** local view matches the requested address (e.g. an unknown URL, or the app has not yet been updated to the current version) -- with links to the person list, tasks, and the timeline, plus "Try again".
+- **`/offline/` is a purely technical fallback**, no longer an entry point: the "No local view available" page appears only when **no** local view matches the requested address (e.g. an unknown URL, or the app has not yet been updated to the current version) -- with links to the person list, tasks, and the timeline, plus "Try again".
 - The interface shows a hint that you are working offline and how many entries are still waiting to be synced.
 
 **Back online:**
@@ -1038,4 +1038,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 55753a2c141d900129b20db77618c81774879169 -->
+<!-- source-hash: 5ae17fd5577cacbcad51e124c85208d70640a118 -->

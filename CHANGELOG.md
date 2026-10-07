@@ -81,7 +81,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Handbuchbezeichnungen an die Oberfläche angeglichen** (#2455) — Profilwege, Filter, Aufgabenstatus, Export und Konfliktknöpfe sowie der Audit-Aufbewahrungshinweis nennen die sichtbaren Beschriftungen.
 
-- **Englische Handbuchbegriffe und Audit-Hinweis präzisiert** (#2453) — Benutzerhandbuch und Glossar nutzen die englischen Oberflächenbegriffe; der Audit-Hinweis grenzt die protokollierte Personen-Detailseite ab.
+- **Englische Handbuchbegriffe und Audit-Hinweis präzisiert** (#2453) — Benutzerhandbuch und Glossar nutzen die englischen Oberflächenbegriffe einschließlich „Management > Access“; der Audit-Hinweis grenzt die protokollierte Personen-Detailseite ab und die Offline-Anleitung beschreibt den aktuellen Ablauf ohne Wellen-Vokabular.
 
 - **Offline-Datenschutz im Benutzerhandbuch und in der FAQ berichtigt** (#2426) — Neustart, Schlüsselverwahrung, Fristablauf und der Erhalt ungesendeter Arbeit bei Inaktivität werden ohne unbelegte Löschzusagen beschrieben.
 
