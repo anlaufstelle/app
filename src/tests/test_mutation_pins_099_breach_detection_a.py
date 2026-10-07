@@ -161,7 +161,20 @@ def _bulk_audit(n, *, action, facility=None, user=None, ip=None, ago_min=0):
     — fuer Schwellen-Grenzwert-Pins, die exakt ``n`` Zeilen brauchen."""
     ts = timezone.now() - timedelta(minutes=ago_min)
     AuditLog.objects.bulk_create(
-        [AuditLog(facility=facility, user=user, action=action, ip_address=ip, timestamp=ts) for _ in range(n)]
+        [
+            AuditLog(
+                facility=facility,
+                user=user,
+                action=action,
+                ip_address=ip,
+                timestamp=ts,
+                # The database only accepts rows with a chain hash (#2449);
+                # the counting heuristics read no chain fields.
+                entry_hash="0" * 64,
+                prev_hash="",
+            )
+            for _ in range(n)
+        ]
     )
 
 

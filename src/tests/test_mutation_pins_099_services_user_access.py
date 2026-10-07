@@ -237,8 +237,8 @@ class TestLockedUserIdsQueryIntegritaet:
         1 Mikrosekunde an; ein nachtraegliches ``UPDATE`` blockt der
         Immutability-Trigger (``prevent_auditlog_mutation``). Der Grenzfall
         wird deshalb per ``bulk_create`` angelegt — das ruft ``save()`` nicht
-        auf und damit auch nicht die Monotonie-Anhebung, waehrend die
-        (hier nullable) Kettenfelder unbesetzt bleiben duerfen."""
+        auf und damit auch nicht die Monotonie-Anhebung. The chain fields
+        carry a placeholder hash: the database rejects rows without one (#2449)."""
         unlock_at = timezone.now() - timedelta(minutes=5)
         _unlock_event(facility, staff_user, timestamp=unlock_at)
         AuditLog.objects.bulk_create(
@@ -249,6 +249,9 @@ class TestLockedUserIdsQueryIntegritaet:
                     action=AuditLog.Action.LOGIN_FAILED,
                     detail={"username": staff_user.username},
                     timestamp=unlock_at,
+                    # The database only accepts rows with a chain hash (#2449).
+                    entry_hash="0" * 64,
+                    prev_hash="",
                 )
             ]
         )

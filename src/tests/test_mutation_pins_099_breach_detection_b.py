@@ -103,13 +103,23 @@ def _audit(*, facility, action, user=None, ip_address=None, minutes_ago=0.0):
 
 def _bulk_audit(n, *, facility, action, user=None, minutes_ago=0.0):
     """Wie ``_audit``, aber ``n`` Zeilen auf einmal ueber ``bulk_create``
-    (umgeht ``AuditLog.save()``/die HMAC-Kettenzuweisung — laut Modul-
-    Docstring sind ``prev_hash``/``entry_hash`` genau dafuer nullable:
-    „Raw-Inserts gueltig bleiben"). Nur fuer Zaehl-Heuristiken relevant, die
-    ausschliesslich ``Count`` bilden, keine Kettenfelder lesen."""
+    (umgeht ``AuditLog.save()``/die HMAC-Kettenzuweisung). The database only
+    accepts rows with a chain hash (#2449), so the rows carry a placeholder
+    hash. Nur fuer Zaehl-Heuristiken relevant, die ausschliesslich ``Count``
+    bilden, keine Kettenfelder lesen."""
     ts = timezone.now() - timedelta(minutes=minutes_ago)
     AuditLog.objects.bulk_create(
-        [AuditLog(facility=facility, user=user, action=action, timestamp=ts) for _ in range(n)]
+        [
+            AuditLog(
+                facility=facility,
+                user=user,
+                action=action,
+                timestamp=ts,
+                entry_hash="0" * 64,
+                prev_hash="",
+            )
+            for _ in range(n)
+        ]
     )
 
 

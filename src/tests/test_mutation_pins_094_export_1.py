@@ -311,6 +311,9 @@ class TestGatherAuditTrail:
                 target_id=str(client_identified.pk),
                 detail={},
                 timestamp=now,
+                # The database only accepts rows with a chain hash (#2449).
+                entry_hash="0" * 64,
+                prev_hash="",
             )
             for pk in TIEBREAK_INSERT_PKS
         ]
