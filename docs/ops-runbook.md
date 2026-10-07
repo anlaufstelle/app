@@ -706,9 +706,8 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 # Verwaiste FILE-Marker werden bei ALLEN drei Entitaeten bewusst UEBERSPRUNGEN
 # und separat als "Datei-Waise(n) uebersprungen" gemeldet, NICHT geloescht: der
 # data_json-Marker ist die einzige Bruecke zur verschluesselten Attachment-
-# Zeile. (Bis M24 traf die Regel faktisch nur Ereignisse — Datei-Felder waren an
-# Personen-/Fall-Typen gesperrt; seit Refs #1738 koennen auch Personen und
-# Faelle FILE-Waisen tragen und werden genauso verschont.)
+# Zeile. (Die Regel gilt fuer Ereignisse, Personen und Faelle gleichermassen:
+# Datei-Felder sind an allen drei Typen zulaessig, Refs #1738.)
 # Diese Datei-Bereinigung laeuft ueber die Attachment-Loeschpfade bzw.
 # cleanup_orphan_storage_files (nach dem Loeschen der Attachment-Zeile), nicht
 # ueber diesen Command — die uebersprungene Zaehlung gilt also nicht als
@@ -735,10 +734,10 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
   repair_eventhistory_redaction --apply     # heilen
 
 # Dieselbe Pruefung fuer Ereignisse, Personen, Faelle und Berichtigungs-
-# antraege (Refs #2188): bis v0.95.0 konnte die Rotation auch data_json eines
-# geloeschten Ereignisses, einer anonymisierten Person oder eines
-# anonymisierten Falls sowie die vier Wertspalten der Berichtigungsantraege
-# einer anonymisierten Person mit den alten Werten zurueckschreiben.
+# antraege (Refs #2188): sie findet data_json eines geloeschten Ereignisses,
+# einer anonymisierten Person oder eines anonymisierten Falls sowie die vier
+# Wertspalten der Berichtigungsantraege einer anonymisierten Person, die wieder
+# alte Werte tragen (z. B. in einem wiederhergestellten Bestand).
 # --target all prueft Person, Berichtigungsantrag, Fall, Ereignis und
 # Historie in dieser Reihenfolge (einzeln: --target client|rectification|
 # case|event|eventhistory; ohne --target nur die Historie). --apply leert
@@ -891,10 +890,9 @@ Mit `LOG_FORMAT=json` in `.env` gibt Django strukturierte JSON-Logs aus:
 | `user_agent` | User-Agent der Meldung (Steuerzeichen entfernt, auf 512 Zeichen gekappt) |
 
 Die letzten fuenf Felder stammen aus dem CSP-Report-Endpoint (`/csp-report/`,
-Logger `security.csp`) und stehen seit #1943
+Logger `security.csp`) und stehen (#1943)
 in **beiden** Formaten — auch im Default `LOG_FORMAT=text`, dort als
-`feld="wert"`-Paare hinter der Nachricht. Davor war von jeder Meldung nur
-die nackte Zeile `csp_violation` sichtbar. Zwei Meldungstypen sind dabei
+`feld="wert"`-Paare hinter der Nachricht. Zwei Meldungstypen sind dabei
 betriebsrelevant:
 
 - `csp_violation` — ein einzelner Verstoss.
@@ -2007,7 +2005,7 @@ neue Rollen an noch gleicht es bestehende an die Env an. Zwei Wege:
    [§ 13.1](#131-ablauf-mit-datenerhalt-wartungsfenster). Der einfachere,
    bereits durchgespielte Weg; das Init-Script baut die Zielrollen dabei selbst auf.
 2. **In-Place-Umbau** nach
-   [§ 9.6](#96-rollout-der-runtime-owner-rollentrennung-auf-bestandsinstallationen-a14).
+   [§ 9.6](#96-rollout-der-runtime-owner-rollentrennung-auf-laufenden-installationen-a14).
    **Achtung — ein reiner Ownership-Umzug reicht dafuer nicht:** auf einem Cluster,
    der ohne Init-Script hochkam, existiert gar keine Admin-Rolle, und die App-Rolle
    ist dort die **Bootstrap-Rolle**, die sich nicht entrechten laesst
@@ -2229,21 +2227,21 @@ Audit-Verlust.
 #2085). Die
 Papierkorb-Aktion „Jetzt endgültig anonymisieren" läuft **interaktiv im
 Webprozess** und damit unter der App-Rolle — dort gibt es keinen
-Owner-DDL-Weg und kein Wartungsfenster. Bis 0.90 lief sie ungebremst in den
-Bypass: das erste `ALTER TABLE … DISABLE TRIGGER` scheiterte, die
-`@transaction.atomic`-Klammer riss die **gesamte** Anonymisierung samt
-Nachweiseintrag zurück, und die Nutzerin sah einen **HTTP 500** — die Person
-blieb unverändert stehen, das Löschverlangen unerfüllt. Auf Entwicklungs- und
+Owner-DDL-Weg und kein Wartungsfenster. Liefe sie ungebremst in den
+Bypass, scheiterte das erste `ALTER TABLE … DISABLE TRIGGER`, die
+`@transaction.atomic`-Klammer risse die **gesamte** Anonymisierung samt
+Nachweiseintrag zurück, und die Nutzerin sähe einen **HTTP 500** — die Person
+bliebe unverändert stehen, das Löschverlangen unerfüllt. Auf Entwicklungs- und
 Testsystemen fiel das nie auf, weil dort das Einzelrollen-Modell läuft und
 dieselbe Verbindung Owner ist.
 
-Seit #2085 ist der Pfad **zweigeteilt**, und die App-Rolle bekommt **kein**
+Der Pfad ist **zweigeteilt** (#2085), und die App-Rolle bekommt **kein**
 neues Recht:
 
 | Was | Wann | Wer |
 |---|---|---|
 | Pseudonym, Notizen, Zusatzfelder, Fall-, Episoden- und Live-Ereignisinhalte, Zeitstempel-Generalisierung, Anhänge | **sofort im Request** | App-Rolle (gewöhnliches DML) |
-| **Frühere Fassungen der Ereignis-Dokumentation** (`core_eventhistory`) | **mit dem nächsten `enforce_retention`-Lauf** (Cron, 03:00) | Admin-/Owner-Rolle im `maintenance`-Service |
+| **Ältere Fassungen der Ereignis-Dokumentation** (`core_eventhistory`) | **mit dem nächsten `enforce_retention`-Lauf** (Cron, 03:00) | Admin-/Owner-Rolle im `maintenance`-Service |
 
 Der Nachlauf ist die vierte Kandidatenmenge des EventHistory-Sweeps aus
 [ADR-050](adr/050-eventhistory-retention.md) (Nachweiskategorie
@@ -2256,7 +2254,7 @@ Anonymisierung eintreffender Legal Hold stellt die Historie zurück),
 Nachweiszeile je Charge.
 
 > **Betrieblich relevant:** Zwischen der Aktion und dem nächtlichen Lauf stehen
-> die **früheren Fassungen** der Ereignis-Dokumentation dieser Person noch mit
+> die **älteren Fassungen** der Ereignis-Dokumentation dieser Person noch mit
 > ihren Werten in der Datenbank — höchstens bis zum nächsten Lauf, in der
 > Voreinstellung also bis 03:00 Uhr. Oberfläche und Handbuch sagen das
 > ausdrücklich. Wer eine Art.-17-Tilgung sofort vollständig abschließen muss,
@@ -2284,9 +2282,9 @@ Guard — laeuft `migrate` versehentlich als App-Rolle, bricht er fail-loud ab,
 statt still **0 Zeilen** zu backfillen und die Migration als erfolgreich zu
 melden. `docker-migrate.sh` laeuft deshalb ausschliesslich im Maintenance-Service.
 
-Das frühere `GRANT SET ON PARAMETER session_replication_role` wird **nicht mehr
-benötigt** und ist aus dem Init-Script entfernt. Auf Bestands-DBs kann es als
-Aufräum-Schritt entzogen werden (optional, Least Privilege):
+Ein `GRANT SET ON PARAMETER session_replication_role` wird **nicht
+benötigt** und steht nicht im Init-Script. Ein vorhandenes Recht kann
+entzogen werden (optional, Least Privilege):
 
 ```sql
 -- als Superuser (postgres), in der Anwendungs-DB, optional:
@@ -2304,7 +2302,7 @@ Regression zugunsten der Sicherheit. Bei `Client.anonymize()` kommt ein
 **Lock-Upgrade-Deadlock-Risiko** hinzu (erst `RowExclusiveLock` durch die
 EventHistory-`INSERT`s, dann `ShareRowExclusiveLock` durch das `DISABLE`).
 
-**Seit 0.89 ist der naechtliche Retention-Lauf ein REGELMAESSIGER Bypass-Aufrufer**
+**Der naechtliche Retention-Lauf ist ein REGELMAESSIGER Bypass-Aufrufer**
 (ADR-050, Refs #2065):
 der EventHistory-Sweep redigiert abgelaufene Historien-Fassungen und loescht
 laengst redigierte. Drei Eigenschaften begrenzen die Wirkung auf das
@@ -2319,8 +2317,8 @@ Wartungsfenster:
   Audit-`INSERT`s laufender Requests blockieren dadurch **nicht**.
 - **Kanonische Sperr-Reihenfolge** `core_client` → `core_event` →
   `core_eventhistory` → `core_auditlog`, also genau die Ordnung, in der die
-  Anwendung ohnehin schreibt. `_APPEND_ONLY_TRIGGERS` fuehrte bis 0.89
-  `core_auditlog` zuerst — ein ABBA-Zyklus gegen jeden mutierenden Request.
+  Anwendung ohnehin schreibt. `_APPEND_ONLY_TRIGGERS` fuehrt
+  `core_auditlog` nicht zuerst — das waere ein ABBA-Zyklus gegen jeden mutierenden Request.
   Personen- und Ereigniszeilen einer Charge werden per
   `SELECT … FOR UPDATE SKIP LOCKED` gesperrt, **bevor** der Trigger-Bypass
   oeffnet: sonst hielte der Lauf die Tabellensperre und wartete auf eine fremde
@@ -2369,7 +2367,7 @@ SELECT tgname, tgenabled FROM pg_trigger
 WHERE tgname IN ('auditlog_immutable','eventhistory_no_update','eventhistory_no_delete');
 ```
 
-### 9.6 Rollout der Runtime-/Owner-Rollentrennung auf Bestandsinstallationen (A1.4)
+### 9.6 Rollout der Runtime-/Owner-Rollentrennung auf laufenden Installationen (A1.4)
 
 **Fresh DBs** ziehen die Trennung automatisch auf
 ([`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh):
@@ -2805,11 +2803,10 @@ Gate erneut aus. `/health/` zeigt die tatsächliche Verbindungs-Rolle laufend al
 `degraded` an, sperrt den Start aber nicht — `check_db_roles` muss deshalb
 vor dem Deploy erfolgreich gewesen sein.
 
-Das Gate prüft seit #2086
-nicht mehr nur, dass die App-Rolle **nicht** Owner ist, sondern dass die
+Das Gate prüft (#2086)
+nicht nur, dass die App-Rolle **nicht** Owner ist, sondern dass die
 Admin-Rolle es **ist**. Ein Objekt, das nach einem halb gefahrenen Umbau noch der
-alten Bootstrap-Rolle gehört, fällt damit auf — vorher lief genau dieser Zustand
-grün durch.
+alten Bootstrap-Rolle gehört, fällt damit auf.
 
 **Fail-loud-Gate (Refs #1026):**
 `check_db_roles` prüft seit A1.4 **zusätzlich zur Attribut-Prüfung die Ownership**.
@@ -3038,7 +3035,7 @@ Abgesichert ist die Kombination durch zwei System-Checks in [`core/checks.py`](h
 | ID | Ausloeser | Bedeutung |
 |----|-----------|-----------|
 | `core.E001` | `TRUSTED_PROXY_HOPS` negativ/kein Integer | Start bricht ab |
-| `core.W001` | `hops >= 3` | Heuristik: mehr als CDN + Caddy ist selten echt (unveraendert seit #1375) |
+| `core.W001` | `hops >= 3` | Heuristik: mehr als CDN + Caddy ist selten echt (#1375) |
 | `core.W003` | `hops > 1`, aber `TRUSTED_PROXY_CIDRS` leer | **neu** — Hop-Zahl greift ins Leere (siehe oben) |
 | `core.E003` | Eintrag in `TRUSTED_PROXY_CIDRS` ist fuer Caddy kein IP-Bereich | **neu** — Start bricht ab; sonst verweigert **Caddy** den Start, und zwar erst nach dem als healthy gemeldeten `web`-Container |
 
@@ -3061,7 +3058,7 @@ EXTERNAL_ORIGIN=https://anlaufstelle.example.de
 - **Format:** Schema (`http`/`https`) + Host + optionaler Port. Kein Pfad, kein abschliessender Schraegstrich, keine Query. Ein fehlerhafter Wert bricht den Start ab, statt in einer bereits versendeten Mail aufzufallen.
 - **Ableitung:** Fuehrt `ALLOWED_HOSTS` genau **einen** oeffentlichen Hostnamen, wird `https://<host>` daraus abgeleitet (gleiches Muster wie `OTP_WEBAUTHN_RP_ID`) — der Regelfall „eine Domain hinter Caddy" braucht die Variable nicht.
 - **Loopback zaehlt nicht mit:** `localhost`, `127.0.0.1` und `::1` stehen in `ALLOWED_HOSTS` nur, damit der Container-Healthcheck (`http://localhost:8000/health/`) keinen `DisallowedHost`-400 bekommt — die mitgelieferten Deploy-Vorlagen fuehren sie deshalb neben der Domain. Fuer die Ableitung bleiben sie ausser Betracht; als Basis eines Token-Links kaemen sie ohnehin nie in Frage.
-- **Wenn `web` nie healthy wird, gibt es genau zwei Ursachen** (Refs #2077): entweder fehlt der Loopback in `ALLOWED_HOSTS` — dann antwortet der Healthcheck mit `DisallowedHost`-400 —, oder `SECURE_REDIRECT_EXEMPT` greift nicht: `SECURE_SSL_REDIRECT=True` beantwortet den Healthcheck-Aufruf `http://localhost:8000/health/` sonst mit einem 301 auf `https://`, und der Healthcheck-Client kann lokal kein TLS. `web` wird dann nie healthy und `caddy` (`condition: service_healthy`) startet gar nicht erst. Beide Haelften sind seit #2077 in `settings/prod.py` und den `.env*.example`-Vorlagen gesetzt; bei einer aelteren, von Hand gepflegten `.env` sind sie nachzutragen. Schnelltest im Container: `python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health/').status)"` muss `200` liefern, nicht 301 oder 400.
+- **Wenn `web` nie healthy wird, gibt es genau zwei Ursachen** (Refs #2077): entweder fehlt der Loopback in `ALLOWED_HOSTS` — dann antwortet der Healthcheck mit `DisallowedHost`-400 —, oder `SECURE_REDIRECT_EXEMPT` greift nicht: `SECURE_SSL_REDIRECT=True` beantwortet den Healthcheck-Aufruf `http://localhost:8000/health/` sonst mit einem 301 auf `https://`, und der Healthcheck-Client kann lokal kein TLS. `web` wird dann nie healthy und `caddy` (`condition: service_healthy`) startet gar nicht erst. Beide Haelften sind in `settings/prod.py` und den `.env*.example`-Vorlagen gesetzt; bei einer aelteren, von Hand gepflegten `.env` sind sie nachzutragen. Schnelltest im Container: `python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health/').status)"` muss `200` liefern, nicht 301 oder 400.
 - **Fail-closed:** Bei mehreren oeffentlichen Hosts, reiner Wildcard-Config oder ausschliesslich Loopback-Eintraegen gibt es keine eindeutige Antwort; Prod startet dann nicht und nennt `EXTERNAL_ORIGIN` im Abbruch. Bewusst kein Raten: eine falsch geratene Origin macht jeden Token-Link unbrauchbar.
 - **Nicht verschaerft wurde die `ALLOWED_HOSTS`-Pruefung selbst** — Subdomain-Muster bleiben erlaubt, sie sind fuer die Linkbildung jetzt schlicht ohne Bedeutung.
 

@@ -787,7 +787,7 @@ Wurde ein Ereignis gleichzeitig online (durch jemand anderen) und offline (durch
 
 **Konflikte und nicht übertragbare Einträge verwalten:**
 
-Unter **`/offline/conflicts/`** sehen Sie alle Einträge, die eine Entscheidung erfordern — die Seite öffnet sich seit #1396 auch ohne Netzverbindung. Zwei Bereiche:
+Unter **`/offline/conflicts/`** sehen Sie alle Einträge, die eine Entscheidung erfordern — die Seite öffnet sich auch ohne Netzverbindung (#1396). Zwei Bereiche:
 
 - **„Wartet auf Entscheidung"** — offene Konflikte; ein Klick führt zum Side-by-Side-Diff oben.
 - **„Nicht übertragbar"** — Einträge, die dauerhaft nicht gesendet werden konnten, jeweils mit Grund (z. B. auf dem Server gelöscht, Zugriff entzogen, vom Server als ungültig abgelehnt, keine Berechtigung). Sie können diese Einträge **erneut versuchen** oder **verwerfen** — bei nicht übertragbaren Ereignissen zusätzlich vorher **exportieren**, um den Inhalt nicht zu verlieren.

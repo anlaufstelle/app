@@ -789,7 +789,7 @@ If an event was edited online (by someone else) and offline (by you) at the same
 
 **Managing conflicts and undeliverable entries:**
 
-**`/offline/conflicts/`** shows every entry that needs a decision -- the page opens even without a network connection, since #1396. Two sections:
+**`/offline/conflicts/`** shows every entry that needs a decision -- the page opens even without a network connection (#1396). Two sections:
 
 - **"Awaiting decision"** -- open conflicts; click through to the side-by-side diff above.
 - **"Undeliverable"** -- entries that could not be sent permanently, each with a reason (e.g. deleted on the server, access revoked, rejected by the server as invalid, no permission). You can **retry** or **discard** these entries -- for undeliverable events you can also **export** the content first, so nothing is lost.
@@ -1038,4 +1038,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 8a0bc7d53e2076207a5ad92e24bb2d1c437a7cbd -->
+<!-- source-hash: 1ed5e52c0ddd0ceb289e79de9d6a82ac22fdba9e -->

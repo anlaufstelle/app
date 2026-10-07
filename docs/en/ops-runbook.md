@@ -702,9 +702,8 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 # Orphaned FILE markers are deliberately SKIPPED for ALL three entities
 # and reported separately as "file orphan(s) skipped", NOT deleted: the
 # data_json marker is the only bridge to the encrypted attachment
-# row. (Until M24 the rule effectively only affected events — file fields were
-# locked out of person/case types; since Refs #1738, persons and
-# cases can also carry FILE orphans and are spared in the same way.)
+# row. (The rule applies to events, persons and cases alike:
+# file fields are permitted on all three types, Refs #1738.)
 # This file cleanup runs via the attachment deletion paths, or
 # cleanup_orphan_storage_files (after the attachment row is deleted), not
 # via this command — the skipped count therefore does not count as
@@ -730,10 +729,10 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
   repair_eventhistory_redaction --apply     # repair
 
 # The same check for events, persons, cases and rectification requests
-# (Refs #2188): up to v0.95.0 the rotation could also write the old values
-# back into data_json of a deleted event, an anonymized person or an
-# anonymized case, and into the four value columns of the rectification
-# requests of an anonymized person. --target all checks person,
+# (Refs #2188): it finds data_json of a deleted event, an anonymized
+# person or an anonymized case, and the four value columns of the
+# rectification requests of an anonymized person, that carry old values again
+# (e.g. in a restored data set). --target all checks person,
 # rectification request, case, event and history in this order
 # (individually: --target client|rectification|case|event|eventhistory;
 # without --target the history only). --apply empties data_json or the
@@ -885,10 +884,9 @@ With `LOG_FORMAT=json` in `.env`, Django emits structured JSON logs:
 | `user_agent` | User agent of the report (control characters stripped, capped at 512 characters) |
 
 The last five fields come from the CSP report endpoint (`/csp-report/`,
-logger `security.csp`) and, since #1943,
-appear in **both** formats — including the default `LOG_FORMAT=text`, there as
-`field="value"` pairs after the message. Before that, only the
-bare `csp_violation` line was visible for each report. Two report types are
+logger `security.csp`) and
+appear in **both** formats (#1943) — including the default `LOG_FORMAT=text`, there as
+`field="value"` pairs after the message. Two report types are
 operationally relevant here:
 
 - `csp_violation` — a single violation.
@@ -1990,7 +1988,7 @@ aligns existing ones with the env. Two ways forward:
    [§ 13.1](#131-procedure-with-data-preservation-maintenance-window). The simpler,
    already rehearsed path; the init script builds the target roles itself.
 2. **In-place rebuild** per
-   [§ 9.6](#96-rolling-out-the-runtimeowner-role-split-to-existing-installations-a14).
+   [§ 9.6](#96-rolling-out-the-runtimeowner-role-split-to-running-installations-a14).
    **Careful — a plain ownership move is not enough there:** on a cluster that
    came up without the init script there is no admin role at all, and the app
    role is the **bootstrap role**, which cannot be stripped of its privileges
@@ -2215,20 +2213,19 @@ silent audit loss.
 #2085). The trash
 action "Anonymize permanently now" runs **interactively in the web process**
 and therefore as the app role — there is no owner DDL path and no maintenance
-window there. Until 0.90 it ran straight into the bypass: the first
-`ALTER TABLE … DISABLE TRIGGER` failed, the `@transaction.atomic` bracket rolled
-back the **entire** anonymization including its audit entry, and the user saw an
-**HTTP 500** — the person stayed untouched and the erasure request went
-unfulfilled. This never showed on development or test systems, because they run
+window there. Running straight into the bypass, the first
+`ALTER TABLE … DISABLE TRIGGER` would fail, the `@transaction.atomic` bracket would roll
+back the **entire** anonymization including its audit entry, and the user would see an
+**HTTP 500** — the person would stay untouched and the erasure request unfulfilled. This never showed on development or test systems, because they run
 the single-role model where the same connection is the owner.
 
-Since #2085 the path is **split in two**, and the app role gets **no** new
+The path is **split in two** (#2085), and the app role gets **no** new
 privilege:
 
 | What | When | Who |
 |---|---|---|
 | Pseudonym, notes, custom fields, case/episode/live event content, timestamp generalization, attachments | **immediately, in the request** | app role (ordinary DML) |
-| **Earlier versions of the event documentation** (`core_eventhistory`) | **with the next `enforce_retention` run** (cron, 03:00) | admin/owner role in the `maintenance` service |
+| **Older versions of the event documentation** (`core_eventhistory`) | **with the next `enforce_retention` run** (cron, 03:00) | admin/owner role in the `maintenance` service |
 
 The follow-up is the fourth candidate set of the event-history sweep from
 [ADR-050](../adr/050-eventhistory-retention.md) (proof category
@@ -2267,9 +2264,9 @@ guard — if `migrate` accidentally runs as the app role, it aborts fail-loud,
 instead of silently backfilling **0 rows** and reporting the migration as
 successful. `docker-migrate.sh` therefore runs exclusively in the maintenance service.
 
-The former `GRANT SET ON PARAMETER session_replication_role` is **no longer
-needed** and has been removed from the init script. On existing DBs it can
-be revoked as a cleanup step (optional, least privilege):
+A `GRANT SET ON PARAMETER session_replication_role` is **not
+needed** and is not part of the init script. An existing grant can
+be revoked (optional, least privilege):
 
 ```sql
 -- as superuser (postgres), in the application DB, optional:
@@ -2287,7 +2284,7 @@ regression in favor of security. `Client.anonymize()` additionally has a
 **lock-upgrade deadlock risk** (first a `RowExclusiveLock` from the
 EventHistory `INSERT`s, then a `ShareRowExclusiveLock` from the `DISABLE`).
 
-**Since 0.89 the nightly retention run is a REGULAR bypass caller**
+**The nightly retention run is a REGULAR bypass caller**
 (ADR-050, Refs #2065):
 the EventHistory sweep redacts expired history versions and deletes
 long-redacted ones. Three properties confine the impact to the maintenance
@@ -2302,8 +2299,8 @@ window:
   running requests therefore do **not** block.
 - **Canonical lock order** `core_client` → `core_event` →
   `core_eventhistory` → `core_auditlog`, which is exactly the order the
-  application writes in anyway. Until 0.89, `_APPEND_ONLY_TRIGGERS` listed
-  `core_auditlog` first — an ABBA cycle against every mutating request.
+  application writes in anyway. `_APPEND_ONLY_TRIGGERS` does not list
+  `core_auditlog` first — that would be an ABBA cycle against every mutating request.
   Person and event rows of a batch are locked with
   `SELECT … FOR UPDATE SKIP LOCKED` **before** the trigger bypass opens:
   otherwise the run would hold the table lock while waiting for a foreign row
@@ -2351,7 +2348,7 @@ SELECT tgname, tgenabled FROM pg_trigger
 WHERE tgname IN ('auditlog_immutable','eventhistory_no_update','eventhistory_no_delete');
 ```
 
-### 9.6 Rolling Out the Runtime/Owner Role Split to Existing Installations (A1.4)
+### 9.6 Rolling Out the Runtime/Owner Role Split to Running Installations (A1.4)
 
 **Fresh DBs** pick up the split automatically
 ([`deploy/postgres-init/01-app-role.sh`](../../deploy/postgres-init/01-app-role.sh):
@@ -2781,11 +2778,10 @@ same gate again. `/health/` shows the actual connection role continuously as
 `degraded` but does not block startup — `check_db_roles` must therefore have
 succeeded before the deploy.
 
-Since #2086 the gate no
-longer only checks that the app role is **not** the owner, but that the admin
+The gate (#2086) checks not
+only that the app role is **not** the owner, but that the admin
 role **is**. An object that still belongs to the old bootstrap role after a
-half-completed rebuild is therefore caught — before, exactly that state passed
-green.
+half-completed rebuild is therefore caught.
 
 **Fail-loud gate (Refs #1026):**
 Since A1.4, `check_db_roles` **additionally checks ownership on top of the attribute check**.
@@ -3014,7 +3010,7 @@ The combination is backed by two system checks in [`core/checks.py`](https://git
 | ID | Trigger | Meaning |
 |----|-----------|-----------|
 | `core.E001` | `TRUSTED_PROXY_HOPS` negative/not an integer | Startup aborts |
-| `core.W001` | `hops >= 3` | Heuristic: more than CDN + Caddy is rarely real (unchanged since #1375) |
+| `core.W001` | `hops >= 3` | Heuristic: more than CDN + Caddy is rarely real (#1375) |
 | `core.W003` | `hops > 1`, but `TRUSTED_PROXY_CIDRS` empty | **new** — the hop count has no effect (see above) |
 | `core.E003` | An entry in `TRUSTED_PROXY_CIDRS` is not a valid IP range for Caddy | **new** — startup aborts; otherwise **Caddy** refuses to start, and only after the `web` container has already been reported healthy |
 
@@ -3037,7 +3033,7 @@ EXTERNAL_ORIGIN=https://anlaufstelle.example.de
 - **Format:** scheme (`http`/`https`) + host + optional port. No path, no trailing slash, no query. An invalid value aborts startup, instead of surfacing in an already-sent email.
 - **Derivation:** If `ALLOWED_HOSTS` carries exactly **one** public hostname, `https://<host>` is derived from it (the same pattern as `OTP_WEBAUTHN_RP_ID`) — the normal case of "one domain behind Caddy" does not need the variable.
 - **Loopback doesn't count:** `localhost`, `127.0.0.1`, and `::1` are in `ALLOWED_HOSTS` only so the container healthcheck (`http://localhost:8000/health/`) doesn't get a `DisallowedHost` 400 — the bundled deploy templates therefore list them alongside the domain. They are disregarded for the derivation; they would never be a candidate as the basis of a token link anyway.
-- **If `web` never becomes healthy, there are exactly two causes** (Refs #2077): either the loopback entry is missing from `ALLOWED_HOSTS` — the healthcheck then gets a `DisallowedHost` 400 — or `SECURE_REDIRECT_EXEMPT` is not in effect: otherwise `SECURE_SSL_REDIRECT=True` answers the healthcheck call `http://localhost:8000/health/` with a 301 to `https://`, and the healthcheck client cannot speak TLS locally. `web` then never turns healthy and `caddy` (`condition: service_healthy`) never starts at all. Both halves have been set in `settings/prod.py` and the `.env*.example` templates since #2077; on an older, hand-maintained `.env` they must be added. Quick check inside the container: `python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health/').status)"` must return `200`, not 301 or 400.
+- **If `web` never becomes healthy, there are exactly two causes** (Refs #2077): either the loopback entry is missing from `ALLOWED_HOSTS` — the healthcheck then gets a `DisallowedHost` 400 — or `SECURE_REDIRECT_EXEMPT` is not in effect: otherwise `SECURE_SSL_REDIRECT=True` answers the healthcheck call `http://localhost:8000/health/` with a 301 to `https://`, and the healthcheck client cannot speak TLS locally. `web` then never turns healthy and `caddy` (`condition: service_healthy`) never starts at all. Both halves are set in `settings/prod.py` and the `.env*.example` templates (#2077); on an older, hand-maintained `.env` they must be added. Quick check inside the container: `python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health/').status)"` must return `200`, not 301 or 400.
 - **Fail-closed:** With several public hosts, a pure wildcard config, or only loopback entries, there is no unambiguous answer; prod then does not start, and names `EXTERNAL_ORIGIN` in the abort message. Deliberately no guessing: a wrongly guessed origin makes every token link unusable.
 - **The `ALLOWED_HOSTS` check itself was not tightened** — subdomain patterns remain allowed, they are now simply irrelevant for link construction.
 
@@ -3229,4 +3225,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: c8c77773c95e8f95b81817ed1438385427913e09 -->
+<!-- source-hash: f4df748d36e3028198f0690471becfc5619972ee -->

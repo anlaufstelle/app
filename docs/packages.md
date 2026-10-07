@@ -8,7 +8,7 @@ Der mitgelieferte Standardkatalog ist selbst ein Paket: [`src/core/packages/defa
 - **Warum `sort_order` zwei Bedeutungen hat:** [ADR-036](adr/036-globale-block-sequenz-feldordnung.md).
 - **Welche Operatoren zu welchem Feldtyp passen:** [ADR-035](adr/035-evaluator-semantik-bedingte-feldlogik.md).
 
-> **Der Slug ist die Identität.** Der Loader findet Bestandsobjekte ausschließlich über ihren Slug. Ein geänderter Slug legt in **jeder** Bestands-Einrichtung ein Duplikat an, statt das vorhandene Objekt zu aktualisieren. Slugs sind nach dem Anlegen in Modell **und** Datenbank-Trigger unveränderlich — es gibt kein „Umbenennen" auf Slug-Ebene.
+> **Der Slug ist die Identität.** Der Loader findet Bestandsobjekte ausschließlich über ihren Slug. Ein geänderter Slug legt in **jeder** Einrichtung, die das Objekt schon trägt, ein Duplikat an, statt das vorhandene Objekt zu aktualisieren. Slugs sind nach dem Anlegen in Modell **und** Datenbank-Trigger unveränderlich — es gibt kein „Umbenennen" auf Slug-Ebene.
 
 ---
 
@@ -88,7 +88,7 @@ field_templates:
 
   - slug: anhang
     name: Anhang
-    field_type: file         # an event, client und case zulässig (seit M24)
+    field_type: file         # an event, client und case zulässig
     is_required: false
     is_encrypted: true       # bei file modellseitig erzwungen
     sensitivity: ""
@@ -131,7 +131,7 @@ document_types:
     sort_order: 0
     field_refs:
       - {template_slug: alterscluster, sort_order: 0}
-      # Datei-Felder an Person und Fall (seit M24, ADR-039). Bewusst
+      # Datei-Felder an Person und Fall (ADR-039). Bewusst
       # auskommentiert: der Standardkatalog liefert KEIN file-Feld an einer
       # Personen-/Fall-Vorlage aus — ob eine Einrichtung Dokumente an der Person
       # ablegt, ist eine Trägerentscheidung, kein Auslieferungs-Default.
@@ -172,9 +172,9 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 >
 > **Bereichsverschärfung ohne stillen Datenumbau (#1914):** `min_value` und `max_value` gelten für künftige Schreibvorgänge; eine Migration oder ein Paketlauf verändert keine bereits gespeicherten `data_json`-Werte. Vor dem Setzen oder Verschärfen einer Grenze daher mit der Admin-DB-Rolle `python src/manage.py inventory_number_ranges --facility <UUID-oder-Name>` ausführen. Das Inventar nennt nur Entitätsart, Dokumentationstyp, Feld-Slug und Anzahl — nie gespeicherte Werte — und schreibt nichts.
 
-> **Datei-Felder an allen drei Entitäten (seit Milestone 24, #1738, [ADR-039](adr/039-owner-generische-dateianhaenge.md)):** `field_type: file` war bis dahin **nur an `entity_type: event`** zulässig; ein `field_ref` auf ein Datei-Feld unter einem Personen- oder Fall-Typ war ein Schema-Fehler. Diese Restriktion ist **ersatzlos entfallen** — Anhänge hängen jetzt an Ereignis, Person oder Fall. Ein Beispiel steht (auskommentiert) im Paket oben unter `aufnahmebogen`.
+> **Datei-Felder an allen drei Entitäten (#1738, [ADR-039](adr/039-owner-generische-dateianhaenge.md)):** `field_type: file` ist an `entity_type: event`, `client` und `case` zulässig; ein `field_ref` auf ein Datei-Feld unter einem Personen- oder Fall-Typ ist kein Schema-Fehler. Anhänge hängen an Ereignis, Person oder Fall. Ein Beispiel steht (auskommentiert) im Paket oben unter `aufnahmebogen`.
 >
-> **Kein `schema_version`-Bump:** die Lockerung ist **abwärtskompatibel** — jedes bisher gültige Paket bleibt unverändert gültig, es wird lediglich etwas erlaubt, was vorher abgewiesen wurde. Pakete bleiben bei `schema_version: 1`. Umgekehrt gilt das nicht: ein Paket mit `file` an einem Personen-/Fall-Typ lässt sich auf einem Stand vor Milestone 24 **nicht** einspielen.
+> **Ein Paket mit `file` an einem Personen- oder Fall-Typ bleibt bei `schema_version: 1`.** Ein Anwendungsstand, der Datei-Felder nur an Ereignissen kennt, kann ein solches Paket **nicht** einspielen.
 
 > **Reservierte Slugs (#1726):** Ein `slug`, der einen festen Formularfeld-Namen trifft, wird als **Schema-Fehler** abgelehnt — das dynamische Feld würde sonst nackt unter seinem Slug im selben `<form>` das gleichnamige feste Feld überschreiben (stiller Datenverlust). Betroffen sind u. a. `pseudonym`, `notes`, `client`, `title`, `description`, `case`, `document_type`, `lead_user`, `contact_stage`, `age_cluster`, `occurred_at`; die vollständige, an allen Schichten (Paket-Schema, Config-Formular, Modell) geteilte Liste steht als `_RESERVED_SLUGS` in `core/models/slug.py`. Dieselbe Regel gilt für das nachträgliche **Zuordnen** einer bestehenden Feldvorlage mit reserviertem Slug über die Config-UI.
 
@@ -186,7 +186,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `name` | nicht-leerer String | **Pflicht** | muss im Paket eindeutig sein |
 | `entity_type` | `event`, `client`, `case` | `event` | **Unveränderlich** nach dem Anlegen |
 | `tally_enabled` | Bool oder Schlüssel weglassen | *(nicht anfassen)* | Explizites Opt-in für die Strichliste. `true`/`false` wird geschrieben; fehlt der Schlüssel, bleibt ein bestehender Konfigurationswert erhalten, bei einem neuen Typ gilt der Modell-Default `false` |
-| `system_type` | `ban`, `crisis` oder `null` | `null` | Nur bei `entity_type: event`. **Unveränderlich**, Ausnahme `null → Wert`. Seit #1850 nur noch die beiden Werte mit App-Wirkung |
+| `system_type` | `ban`, `crisis` oder `null` | `null` | Nur bei `entity_type: event`. **Unveränderlich**, Ausnahme `null → Wert`. Nur die beiden Werte mit App-Wirkung (#1850) |
 | `sensitivity` | `normal`, `elevated`, `high` | `normal` | steuert Rollen-Sichtbarkeit |
 | `min_contact_stage` | `identified`, `qualified` oder `null` | `null` | Mindest-Kontaktstufe der Person — **wirkt nur bei `entity_type: event`** |
 | `report_key` | Schlüssel (`a-z`, `0-9`, `_`) oder `null` | `null` | Berichtszuordnung des Typs (#1849). **Unveränderlich**, Ausnahme `null → Wert`; `null`/weglassen = keine Angabe |
@@ -283,7 +283,7 @@ Weicht einer dieser Werte vom Bestand ab, ist das ein **Fehler** — der Loader 
 | Objekt | Unveränderlich | Ausnahme |
 |---|---|---|
 | Feldvorlage | `slug`, `field_type`, `is_encrypted`, `report_key` | `report_key: null → Wert`; Schlüssel im Paket weglassen = keine Angabe |
-| Dokumentationstyp | `slug`, `entity_type`, `system_type`, `report_key` | `system_type: null → Wert` (Bestandsdaten vor M2); `report_key: null → Wert`, Weglassen = keine Angabe |
+| Dokumentationstyp | `slug`, `entity_type`, `system_type`, `report_key` | `system_type: null → Wert` (bestehende Typen ohne `system_type`); `report_key: null → Wert`, Weglassen = keine Angabe |
 | Feldgruppe | `slug` | — |
 
 `is_encrypted` wird **vor** dieser Prüfung nach oben normalisiert: `field_type: file` und `sensitivity: high` erzwingen `true` (wie im Modell). Ein Paket mit `field_type: file` ohne `is_encrypted: true` bleibt dadurch idempotent. Ein *explizites* `is_encrypted: false` an einem `file`-Feld ist dagegen ein Schema-Fehler.
@@ -307,7 +307,8 @@ Schema-Fehler (vor dem Laden) tragen stattdessen den **Pfad in der YAML**, z. B.
 ## 4. `manage.py load_package`
 
 ```
-python src/manage.py load_package (--file <pfad/zur/paket.yaml> | --package <name> | --default) --facility <uuid> [--dry-run]
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  load_package (--file <pfad/zur/paket.yaml> | --package <name> | --default) --facility <uuid> [--dry-run]
 ```
 
 | Argument | Pflicht | Bedeutung |
@@ -324,7 +325,7 @@ python src/manage.py load_package (--file <pfad/zur/paket.yaml> | --package <nam
 
 > ⚠️ **Domänen-Pakete sind Ersatz, nicht Zusatz.** Ein mitgeliefertes Paket außer `default` wird nur auf eine frische, katalogfreie Einrichtung geladen. Trägt die Einrichtung Typ- oder Feld-Slugs, die im gewählten Paket nicht vorkommen, bricht der Command auch mit `--dry-run` ab und nennt die fremden Slugs. Das schützt insbesondere wiederverwendete Slugs und deren vollständig zurückgeschriebene Optionslisten. Für eine neue Einrichtung deshalb `setup_facility --package <name>` verwenden; der Doppellauf **desselben** Pakets bleibt idempotent erlaubt. Nur `--default` / `--package default` behält für bestehende Einrichtungen die dokumentierte Rücksync-Semantik.
 
-Im Container immer ueber den dedizierten **Maintenance-Service** (siehe Kasten):
+Beispiele über den dedizierten **Maintenance-Service** (siehe Kasten):
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm \
@@ -348,7 +349,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 
 > **`--dry-run` kann fehlschlagen.** Ein Dry-Run mit Fehlern bricht genauso ab wie ein Echtlauf (Exit ≠ 0). Das ist der Sinn der Sache: erst prüfen, dann anwenden.
 
-**Empfohlener Ablauf gegen eine Bestands-Einrichtung:**
+**Empfohlener Ablauf gegen eine bereits ausgestattete Einrichtung:**
 
 1. `--dry-run` laufen lassen und den Report lesen — insbesondere den `aktualisiert`-Bucket und alle Warnungen.
 2. Prüfen, ob die gemeldeten Aktualisierungen gewollt sind (siehe „Rücksync" unten).
@@ -381,7 +382,7 @@ Diese Punkte sind die häufigsten Fehlerquellen. Sie gelten für den Standardkat
 
 **Identität**
 
-- **Slugs nie ändern.** Ein geänderter Slug ist ein neues Objekt — in jeder Bestands-Einrichtung entsteht ein Duplikat. Wer einen anderen Slug will, legt einen neuen Typ an und deaktiviert den alten.
+- **Slugs nie ändern.** Ein geänderter Slug ist ein neues Objekt — in jeder Einrichtung, die das alte Objekt trägt, entsteht ein Duplikat. Wer einen anderen Slug will, legt einen neuen Typ an und deaktiviert den alten.
 - **`system_type` immer mitführen**, wo einer existiert (`ban`/`crisis`). Fehlender Schlüssel bedeutet `null`, und `Wert → null` ist ein Fehler, der den ganzen Lauf abbricht. Für die sieben entfallenen Werte gilt das **nicht** mehr: sie sind ersatzlos aus dem Paket zu nehmen (bis dahin entfallen sie beim Laden mit einer Warnung).
 - **`report_key` mitführen**, wo eine Berichtszuordnung gewollt ist. Weglassen ist gefahrlos (der Bestand bleibt unangetastet), aber dann entscheidet allein, was schon in der Einrichtung steht — ein frisch angelegter Typ erscheint in **keinem** Bericht. Ein *abweichender* Wert gegen einen gesetzten Bestandswert bricht dagegen den ganzen Lauf ab.
 - **`entity_type` immer mitführen**, wenn der Typ kein Ereignis-Typ ist. Fehlt der Schlüssel, gilt `event` — bei einem Bestandstyp mit `client`/`case` ist das ein Immutabilitäts-Fehler.

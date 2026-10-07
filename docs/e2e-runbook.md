@@ -304,8 +304,8 @@ Details: [e2e-architecture.md § Fixture-Architektur](e2e-architecture.md#fixtur
 
 ### Helfer-Referenz (`src/tests/e2e/_helpers.py`)
 
-Diese Bausteine lagen bis #1839
-dateilokal kopiert in bis zu zehn Spec-Dateien. **Nicht erneut kopieren** — importieren:
+Diese Bausteine liegen zentral (#1839),
+nicht dateilokal in den Spec-Dateien. **Nicht kopieren** — importieren:
 
 | Helfer | Wofür |
 |--------|-------|
@@ -366,7 +366,7 @@ Port oder Datenbank nicht außerhalb des Locks verändern. Für Screenshots dien
 
 ### Eine rot gewordene CI-Scheibe nachstellen
 
-Die E2E-CI faehrt seit #1976
+Die E2E-CI faehrt (#1976)
 eine Matrix aus vier seriellen Scheiben; der rote Job heisst `E2E-Scheibe 3`.
 Dieselbe Scheibe lokal, mit demselben Schnitt:
 

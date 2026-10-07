@@ -47,8 +47,9 @@ _PATTERNS: dict[str, re.Pattern[str]] = {
 # pre-existing data stock ("since 0.97", "since #1751", "Bestandsmigration",
 # "an earlier version of this text was wrong"). Public docs describe the
 # current state; history lives in CHANGELOG.md and dated ADR addenda.
-# These patterns are enforced on the real tree only for HISTORY_SCOPE (the
-# documents whose owners have been swept); other files are reported, not failed.
+# These patterns are enforced on the real tree for all public core documents
+# (same file set as the legacy markers); quoted literal UI/PDF strings are
+# the only exceptions (_HISTORY_ALLOWLIST).
 _HISTORY_PATTERNS: dict[str, re.Pattern[str]] = {
     "seit/bis/vor 0.x": re.compile(r"\b(?:[Ss]eit|[Bb]is|[Vv]or|[Ss]ince|[Uu]ntil|[Bb]efore) (?:[Vv]ersion )?v?0\.\d"),
     "Stand v0.": re.compile(r"\bStand:? v?0\.\d"),
@@ -76,14 +77,25 @@ _HISTORY_PATTERNS: dict[str, re.Pattern[str]] = {
     "Synchronization update": re.compile(r"\bSynchroni[sz]ation update\b", re.IGNORECASE),
 }
 
-# Documents swept for the history patterns (Refs #2447).
-HISTORY_SCOPE: tuple[str, ...] = (
-    "SECURITY.md",
-    "docs/security-notes.md",
-    "docs/threat-model.md",
-    "docs/datenschutz.md",
-    "docs/en/data-protection.md",
-)
+# Literal interface/PDF strings that the documents quote verbatim and that
+# cannot be reworded without changing the product text (.po / PDF labels).
+# Format: relpath -> [(substring of the line, reason)].
+_HISTORY_ALLOWLIST: dict[str, list[tuple[str, str]]] = {
+    "docs/admin-guide.md": [
+        (
+            "Frühere Fassungen ihrer Ereignis-Dokumentation",
+            "Quotes the German success message of the anonymization action verbatim.",
+        ),
+        ("vor 0.96 nicht erfasst", "Quotes the literal placeholder printed in the PDF export."),
+    ],
+    "docs/en/admin-guide.md": [
+        (
+            "Frühere Fassungen ihrer Ereignis-Dokumentation",
+            "Quotes the German success message of the anonymization action verbatim.",
+        ),
+        ("vor 0.96 nicht erfasst", "Quotes the literal placeholder printed in the PDF export."),
+    ],
+}
 
 
 @dataclass(frozen=True)
@@ -149,25 +161,6 @@ def scan_history_markers(root: Path, relpaths: tuple[str, ...] | None = None) ->
 # einen Anker, dessen Umbenennung eine ausserhalb des Sweep-Scopes liegende
 # Datei gebrochen haette. Format: relpath -> [(Teilstring der Zeile, Begruendung)].
 _ALLOWLIST: dict[str, list[tuple[str, str]]] = {
-    "docs/ops-runbook.md": [
-        (
-            "### 9.6 Rollout der Runtime-/Owner-Rollentrennung auf Bestandsinstallationen (A1.4)",
-            "Ueberschrift bewusst unveraendert gelassen: der Anker "
-            "'#96-rollout-der-runtime-owner-rollentrennung-auf-bestandsinstallationen-a14' "
-            "wird von docs/threat-model.md sowie von der dev-only "
-            "Dev-Deployment-Dokumentation referenziert; letztere ist fuer "
-            "diesen Sweep nicht im Scope, eine Umbenennung haette dort einen toten "
-            "Anker hinterlassen. Der Abschnitt beschreibt zudem eine "
-            "Rollentrennungs-Reparatur, die auf JEDER fehlkonfigurierten "
-            "Installation auftreten kann (z. B. nach einem Dump/Restore ohne "
-            "Init-Script) — nicht ausschliesslich auf Vor-1.0-Bestaenden. "
-            "Refs #2205.",
-        ),
-        (
-            "[§ 9.6](#96-rollout-der-runtime-owner-rollentrennung-auf-bestandsinstallationen-a14)",
-            "Selbstreferenz auf die oben begruendete unveraenderte Ueberschrift. Refs #2205.",
-        ),
-    ],
     "docs/security-notes.md": [
         (
             "Legacy-Wert",
@@ -406,17 +399,26 @@ class TestTicketHistoryExamples:
         assert scan_history_markers(tmp_path), f"history wording not flagged: {sentence!r}"
 
 
-class TestHistoryScopeIsClean:
-    """The swept documents (HISTORY_SCOPE) carry no history phrasing (Refs #2447)."""
+class TestPublicDocsCarryNoHistoryWording:
+    """The public core documents carry no history phrasing (Refs #2447)."""
 
-    def test_scope_files_exist(self) -> None:
-        missing = [rel for rel in HISTORY_SCOPE if not (REPO_ROOT / rel).is_file()]
-        assert missing == [], f"HISTORY_SCOPE names missing files: {missing}"
-
-    def test_no_history_markers_in_scope(self) -> None:
-        hits = scan_history_markers(REPO_ROOT, HISTORY_SCOPE)
+    def test_no_history_markers_in_public_docs(self) -> None:
+        hits = [
+            hit
+            for hit in scan_history_markers(REPO_ROOT)
+            if not any(needle in hit.line for needle, _ in _HISTORY_ALLOWLIST.get(hit.relpath, []))
+        ]
         assert hits == [], (
             "History or legacy-data wording in public docs (Refs #2447):\n"
             f"{_format_hits(hits)}\n"
             "Describe the current state; history belongs in CHANGELOG.md or a dated ADR addendum."
         )
+
+    def test_history_allowlist_entries_still_match_something(self) -> None:
+        stale = [
+            (relpath, needle)
+            for relpath, entries in _HISTORY_ALLOWLIST.items()
+            for needle, _ in entries
+            if not any(needle in hit.line for hit in scan_history_markers(REPO_ROOT, (relpath,)))
+        ]
+        assert stale == [], f"_HISTORY_ALLOWLIST entries without a matching hit: {stale}"

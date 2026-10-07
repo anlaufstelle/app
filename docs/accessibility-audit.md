@@ -1,6 +1,6 @@
 # Barrierefreiheits-Audit — Anlaufstelle (WCAG 2.1 Stufe AA)
 
-**Stand 2026-09-06** · Nachweis-Dokument im Rahmen von Meilenstein release-0.94, #1059 (Stufe 2 + 3).
+**Stand 2026-09-06** · Nachweis-Dokument zu #1059 (Stufe 2 + 3).
 Geprüfter Stand des Hauptzweigs: `378a614b` (Stand main 2026-09-06). Werkzeuge: axe-core 4.13.0 (Regelumfang siehe § 1.2), Gate `make test-a11y` / `src/tests/e2e/test_accessibility.py`, Bestandsschutz-Baseline `src/tests/e2e/a11y_baseline.json`.
 
 Dieses Dokument ist der Nachweis der Barrierefreiheit. § 1 (Scope/Methodik), § 2 (automatisierte Befunde und Korrekturen) und § 4 (bewusste Ausnahmen) sind belegt; § 3 ist ein Prüfprotokoll für den Screenreader-Handtest, dessen Ergebnis offen ist und nachgetragen wird.
@@ -30,7 +30,7 @@ Der dritte Schritt — die Prüfung mit echten Screenreadern (NVDA unter Windows
 | Testmarker / Aufruf | `pytest -m "e2e and a11y"` bzw. `make test-a11y` |
 | Bestandsschutz-Baseline | `src/tests/e2e/a11y_baseline.json` (`{page_key: {regel: knoten}}`) |
 
-Der Lauf ist als **Gate** angelegt: neue Verstöße lassen den Test scheitern; der im ersten Lauf ermittelte Altbestand ist über die Baseline dokumentiert und wird mit den Korrekturen aus § 2 abgebaut. Zusätzlich prüft derselbe Testlauf auf drei Seiten den **Skip-Link** funktional (Tabulator → Skip-Link fokussiert, Eingabetaste → Fokus im Hauptinhalt).
+Der Lauf ist als **Gate** angelegt: neue Verstöße lassen den Test scheitern; die bekannten Verstöße sind über die Baseline dokumentiert und werden mit den Korrekturen aus § 2 abgebaut. Zusätzlich prüft derselbe Testlauf auf drei Seiten den **Skip-Link** funktional (Tabulator → Skip-Link fokussiert, Eingabetaste → Fokus im Hauptinhalt).
 
 ### 1.3 Seiten-Matrix des automatisierten Laufs
 

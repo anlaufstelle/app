@@ -195,7 +195,7 @@ Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request a
 
 ### 5a. Was zeigt mir die Arbeitszentrale (Startseite `/start/`)?
 
-Die **Arbeitszentrale** (`/start/`) ist die Landingpage der **Leitung** (Refs #920, Zuschnitt seit #1813) — nicht zu verwechseln mit dem **Zeitstrom** (`/`, der chronologische Tages-Feed, siehe [Frage 5](#5-wie-funktioniert-der-zeitstrom)). Sie trägt den Titel „Leitungs-Arbeitszentrale" und verdichtet die Aufsichts-Kennzahlen der Einrichtung zu Karten. Alle Daten sind auf die aktuelle Einrichtung (`current_facility`) gescoped.
+Die **Arbeitszentrale** (`/start/`) ist die Landingpage der **Leitung** (Refs #920, Zuschnitt #1813) — nicht zu verwechseln mit dem **Zeitstrom** (`/`, der chronologische Tages-Feed, siehe [Frage 5](#5-wie-funktioniert-der-zeitstrom)). Sie trägt den Titel „Leitungs-Arbeitszentrale" und verdichtet die Aufsichts-Kennzahlen der Einrichtung zu Karten. Alle Daten sind auf die aktuelle Einrichtung (`current_facility`) gescoped.
 
 **Nur die Leitung sieht diese Seite.** Alle anderen Rollen werden beim Aufruf von `/start/` auf ihren eigenen Einstieg umgeleitet — die früher dort gezeigten Karten leben auf der jeweiligen Zielseite:
 
@@ -328,9 +328,9 @@ Ja — es gibt einen sicheren **Offline-Modus** für Streetwork und mobile Eins�
 
 **Wichtig — Daten können verloren gehen:** Bei **Logout** und **Passwort-Änderung** löscht die App Schlüssel und Offline-Daten, auch noch nicht übertragene Einträge. Nach **längerer Inaktivität als der Sitzungsdauer** entfernt sie den Schlüssel bei der nächsten Prüfung (beim Öffnen, bei der Tab-Rückkehr oder regelmäßig im offenen Tab). Liegt noch nicht übertragene Arbeit vor, bleibt der verschlüsselte Bestand erhalten und wird nach erneuter Anmeldung mit demselben Passwort wieder lesbar; sonst wird auch der Offline-Bestand gelöscht. Das bloße **Schließen des Tabs** oder ein Neustart löscht dagegen nichts — der Schlüssel wird beim erneuten Öffnen innerhalb der Session-Lebenszeit wiederhergestellt (Streetwork-Design, #1065/#1324). Daher gilt: **Erst synchronisieren, dann ausloggen!**
 
-**Erfassung überall offline (seit, #1499):** Sie können offline auch **ohne vorher geöffnetes Dossier** erfassen — über das **„+"-Menü** („Kontakt dokumentieren"/„Aufgabe erstellen") öffnet sich an der gewohnten Adresse (`/events/new/` / `/workitems/new/`) eine echte Erfassungsmaske. **Kontakte ohne Personenbezug** (anonyme Kontakte) und **Standalone-Aufgaben** lassen sich damit jetzt **auch offline neu beginnen** (Auswahl „— ohne Person —"); erfordert der Dokumentationstyp eine Kontaktstufe, ordnen Sie eine „mitgenommene" Person zu. Die frühere Sackgasse (#1483/#1485) entfällt.
+**Erfassung überall offline (#1499):** Sie können offline auch **ohne vorher geöffnetes Dossier** erfassen — über das **„+"-Menü** („Kontakt dokumentieren"/„Aufgabe erstellen") öffnet sich an der gewohnten Adresse (`/events/new/` / `/workitems/new/`) eine echte Erfassungsmaske. **Kontakte ohne Personenbezug** (anonyme Kontakte) und **Standalone-Aufgaben** lassen sich damit jetzt **auch offline neu beginnen** (Auswahl „— ohne Person —"); erfordert der Dokumentationstyp eine Kontaktstufe, ordnen Sie eine „mitgenommene" Person zu. Eine Sackgasse ohne geöffnetes Dossier gibt es nicht (#1483/#1485).
 
-**Kann ich offline auch meine Aufgaben und den Zeitstrom sehen? (seit/3, #1499):** Ja. Neben der Personenliste (`/clients/`) zeigen jetzt auch die **Aufgabenliste** (`/workitems/`) und der **Zeitstrom** als Startseite (`/`) offline denselben lokalen Ausschnitt wie online — zusammengestellt aus Ihren offline mitgenommenen Personen, dazu **anonyme bzw. personlose Einträge** (Standalone-Aufgaben, Kontakte ohne Personenbezug), klar markiert. Der Zeitstrom ist bewusst als **„lokale Chronik"** gekennzeichnet: Er zeigt nur die offline verfügbaren Vorgänge, nicht die vollständige Historie der Einrichtung. Die Seite **`/offline/`** ist damit **kein Einstiegspunkt mehr**, sondern nur noch ein technischer Fallback („Keine lokale Ansicht verfügbar") — er erscheint nur, wenn für die aufgerufene Adresse keine lokale Ansicht vorliegt.
+**Kann ich offline auch meine Aufgaben und den Zeitstrom sehen? (#1499):** Ja. Neben der Personenliste (`/clients/`) zeigen auch die **Aufgabenliste** (`/workitems/`) und der **Zeitstrom** als Startseite (`/`) offline denselben lokalen Ausschnitt wie online — zusammengestellt aus Ihren offline mitgenommenen Personen, dazu **anonyme bzw. personlose Einträge** (Standalone-Aufgaben, Kontakte ohne Personenbezug), klar markiert. Der Zeitstrom ist bewusst als **„lokale Chronik"** gekennzeichnet: Er zeigt nur die offline verfügbaren Vorgänge, nicht die vollständige Historie der Einrichtung. Die Seite **`/offline/`** ist damit **kein Einstiegspunkt mehr**, sondern nur noch ein technischer Fallback („Keine lokale Ansicht verfügbar") — er erscheint nur, wenn für die aufgerufene Adresse keine lokale Ansicht vorliegt.
 
 **Einschränkungen:** Datei-Anhänge (siehe FAQ #9) sind offline nicht möglich — das ist eine bewusste Sicherheitsentscheidung. Die Aufgaben-Erfassung ist Fachkräften vorbehalten (Assistenz sieht offline statt der Aufgaben-Maske einen Hinweis). Ist für die Offline-Erfassung noch nichts vorbereitet (Einrichtung nie online geöffnet, leerer Cache, App noch nicht aktualisiert), zeigt die Maske einen kurzen „einmal online öffnen"-Hinweis.
 
@@ -423,7 +423,7 @@ Jeder User mit Rolle `assistant` / `staff` / `lead` / `facility_admin` gehört z
 
 Navigation und Aktions-Buttons passen sich automatisch der Rolle an:
 
-- **Sidebar/Navigation** (Ziel-IA seit #1813):
+- **Sidebar/Navigation** (Ziel-IA, #1813):
   - „Arbeitszentrale" ausschließlich für die Leitung (siehe [Frage 5a](#5a-was-zeigt-mir-die-arbeitszentrale-startseite-start))
   - „Fälle" erscheint erst ab Fachkraft
   - „Statistik" ab Leitung

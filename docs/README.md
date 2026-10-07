@@ -80,7 +80,7 @@ Die Doku beschreibt den **Ist-Stand**. Historie gehört ins [CHANGELOG.md](../CH
 | [testing/manual-test-matrix.md](testing/manual-test-matrix.md) | Manuelle Testmatrix: Hub (Front-matter + Anhänge) mit den Sektions-Dateien [`manual-test-matrix-a.md`](testing/manual-test-matrix-a.md), [`-b.md`](testing/manual-test-matrix-b.md), [`-c.md`](testing/manual-test-matrix-c.md) und [`-d.md`](testing/manual-test-matrix-d.md) | QA, Entwickler |
 | `testing/test-matrix-index.md` (dev-only) | Test-Matrix-Übersicht (manuelle Testfälle + E2E-Mapping), Mutation-Testing in `testing/mutation-testing.md` (dev-only) | QA, Entwickler |
 | `testing/release-test-profiles.md` (dev-only) | Release-Testprofile — manueller Rest neben dem automatisierten Gate (Refs #1081); Vorlage `run-template.md` → `testing/runs/` | QA, Release-Manager |
-| `testing/abnahme-0.98.md` (dev-only) | Gerüst der konsolidierten Abnahmematrix für release-0.98 — Quellenabbildung, Spaltenschema, neue Prüfbereiche (Refs #2170) | QA, Release-Manager |
+| `testing/abnahme-0.98.md` (dev-only) | Gerüst der konsolidierten Abnahmematrix — Quellenabbildung, Spaltenschema, neue Prüfbereiche (Refs #2170) | QA, Release-Manager |
 | `testing/mutation-survivors-baseline.md` (dev-only) | Baseline überlebender Mutanten (Mutation-Testing) | QA, Entwickler |
 | [performance-budgets.md](performance-budgets.md) | Performance-Ziele und Budget-Grenzen | Entwickler, QA |
 | `async-pdf-evaluation.md` (dev-only) | _Historisch_ — Evaluierung asynchroner PDF-Generierung, abgelöst durch [ADR-010](adr/010-sync-pdf-generation.md) | Entwickler, Architekten |
