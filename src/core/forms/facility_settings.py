@@ -57,6 +57,21 @@ _FIELD_GROUPS = (
 )
 
 
+# Retention periods of the settings the audit log period is compared with:
+# field name -> (days per unit, whether 0 means "kept without limit").
+_DAYS_PER_MONTH = 30
+_RETENTION_PERIODS = {
+    "retention_anonymous_days": (1, False),
+    "retention_identified_days": (1, False),
+    "retention_qualified_days": (1, False),
+    "retention_activities_days": (1, False),
+    "retention_handover_notes_days": (1, False),
+    "client_trash_days": (1, False),
+    "eventhistory_detail_months": (_DAYS_PER_MONTH, True),
+    "eventhistory_chronicle_months": (_DAYS_PER_MONTH, True),
+}
+
+
 class FacilitySettingsForm(TailwindFormMixin, forms.ModelForm):
     """Alle fachlich editierbaren ``Settings``-Felder, ohne Facility-Scope."""
 
@@ -104,4 +119,43 @@ class FacilitySettingsForm(TailwindFormMixin, forms.ModelForm):
             )
         elif (low_k := k_threshold_warning(k)) is not None:
             warnings.append(low_k)
+        audit = self._audit_retention_warning()
+        if audit is not None:
+            warnings.append(audit)
         return warnings
+
+    def _audit_retention_warning(self):
+        """Warn when the audit log is pruned before the longest retention period ends.
+
+        ``auditlog_retention_months = 0`` keeps the audit log without limit and never
+        warns; a retention period of ``0`` that means "kept without limit" is the
+        longest period of all.
+        """
+        audit_months = self._current_value("auditlog_retention_months")
+        if not audit_months:
+            return None
+        audit_days = audit_months * _DAYS_PER_MONTH
+        longest_name: str | None = None
+        longest_days: int | None = 0
+        for name, (days_per_unit, zero_is_unlimited) in _RETENTION_PERIODS.items():
+            value = self._current_value(name)
+            if value is None:
+                continue
+            days = None if (value == 0 and zero_is_unlimited) else value * days_per_unit
+            if days is None:
+                longest_name, longest_days = name, None
+                break
+            if days > longest_days:
+                longest_name, longest_days = name, days
+        if longest_name is None or (longest_days is not None and audit_days >= longest_days):
+            return None
+        period = _("unbegrenzt") if longest_days is None else _("%(days)s Tage") % {"days": longest_days}
+        return _(
+            "Die Audit-Log-Frist (%(audit_days)s Tage) ist kürzer als die längste Fach-Frist "
+            "„%(field)s“ (%(period)s). Audit-Spuren werden gelöscht, während die zugehörigen "
+            "Fachdaten noch bestehen können; lückenlos bleibt das Audit-Log nur mit 0."
+        ) % {
+            "audit_days": audit_days,
+            "field": getattr(Settings._meta.get_field(longest_name), "verbose_name", longest_name),
+            "period": period,
+        }

@@ -125,3 +125,58 @@ class TestStoredThresholdBelowMinimum:
         content = _settings_page(client, admin_user)
 
         assert f"Berichte rechnen mit k = {effective}," in content
+
+
+AUDIT_WARNING = "ist kürzer als die längste Fach-Frist"
+
+
+def _audit_warnings(form):
+    assert form.is_valid(), form.errors
+    return [str(warning) for warning in form.setting_warnings if AUDIT_WARNING in str(warning)]
+
+
+class TestAuditRetentionShorterThanFieldRetention:
+    """The audit log period (months × 30 days) is compared with every period of the settings."""
+
+    def test_defaults_warn_and_name_the_longest_period(self, settings_obj):
+        warnings = _audit_warnings(_form(settings_obj))
+
+        assert len(warnings) == 1
+        assert "720 Tage" in warnings[0]
+        assert "Aufbewahrung qualifiziert (Tage)" in warnings[0]
+        assert "3650 Tage" in warnings[0]
+
+    def test_audit_period_covering_every_period_is_silent(self, settings_obj):
+        assert _audit_warnings(_form(settings_obj, auditlog_retention_months=122)) == []
+
+    def test_audit_zero_keeps_everything_and_is_silent(self, settings_obj):
+        assert _audit_warnings(_form(settings_obj, auditlog_retention_months=0)) == []
+
+    def test_unlimited_history_period_counts_as_longest(self, settings_obj):
+        warnings = _audit_warnings(_form(settings_obj, auditlog_retention_months=122, eventhistory_chronicle_months=0))
+
+        assert len(warnings) == 1
+        assert "Historien-Chronologie aufbewahren (Monate)" in warnings[0]
+        assert "unbegrenzt" in warnings[0]
+
+    def test_history_months_are_counted_as_thirty_days(self, settings_obj):
+        form = _form(
+            settings_obj,
+            auditlog_retention_months=122,
+            retention_qualified_days=365,
+            eventhistory_detail_months=123,
+        )
+
+        warnings = _audit_warnings(form)
+
+        assert len(warnings) == 1
+        assert "3660 Tage" in warnings[0]
+        assert "3690 Tage" in warnings[0]
+
+    def test_settings_page_shows_the_warning(self, client, admin_user, settings_obj):
+        assert AUDIT_WARNING in _settings_page(client, admin_user)
+
+    def test_settings_page_is_silent_with_audit_zero(self, client, admin_user, settings_obj):
+        Settings.objects.filter(pk=settings_obj.pk).update(auditlog_retention_months=0)
+
+        assert AUDIT_WARNING not in _settings_page(client, admin_user)
