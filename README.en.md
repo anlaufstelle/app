@@ -72,7 +72,7 @@ There is no name field. People are recorded under a pseudonym assigned by your t
 - **Pseudonym only** — pseudonym assigned, person is recognizable on return
 - **With additional details** — additional details recorded (e.g. age group, district)
 
-Anonymous is not a status of a person but an event without a person (e.g. brief visits, needle exchange): no person is created and nothing is recognized. An event without a person is still not anonymous by content: free text, locations or attachments can make a person identifiable.
+Anonymous is not a status of a person but an event without a person (e.g. brief visits, needle exchange): no person is created and nothing is recognized. An event without a person is not automatically anonymous by content: free text, locations or attachments can make a person identifiable.
 
 Pseudonymisation is the intended workflow: there is no required field for real names, and the workflows do without them. The software cannot technically prevent real names, though — pseudonyms, notes, free-text fields and attachments contain whatever the team enters or uploads. What matters is therefore the facility's data-entry practice.
 

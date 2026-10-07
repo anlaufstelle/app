@@ -1212,7 +1212,7 @@ class TestAwarenessMfaClaims:
 # Real-name promises (Refs #2430): pseudonymisation is the intended workflow
 # and there is no real-name field, but nothing technically keeps names out of
 # pseudonyms, notes, free-text fields or attachments, and an event without a
-# person is not anonymous by content.
+# person is not automatically anonymous by content.
 # ---------------------------------------------------------------------------
 
 _README_DE = REPO_ROOT / "README.md"
@@ -1241,9 +1241,10 @@ class TestRealNamePromises:
         de, en = _read_flat(_README_DE), _read_flat(_README_EN)
         assert "weder versehentlich noch absichtlich" not in de
         assert "neither accidentally nor intentionally" not in en
+        assert "is still not anonymous by content" not in en
         for part in ("Pflichtfeld", "Pseudonymisierung", "Anhänge", "nicht automatisch inhaltlich anonym"):
             assert part in de, part
-        for part in ("required field", "Pseudonymisation", "attachments", "not anonymous by content"):
+        for part in ("required field", "Pseudonymisation", "attachments", "not automatically anonymous by content"):
             assert part in en, part
 
     def test_domain_concept_separates_personless_from_anonymous_content(self):
