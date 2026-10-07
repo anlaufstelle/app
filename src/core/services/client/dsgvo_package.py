@@ -84,6 +84,10 @@ def _retention_values(settings_obj) -> dict[str, int]:
         # Admin-Handbuch.
         "eventhistory_detail_months": getattr(settings_obj, "eventhistory_detail_months", 24),
         "eventhistory_chronicle_months": getattr(settings_obj, "eventhistory_chronicle_months", 24),
+        # Refs #2492: the handover note period is a hard deletion with its own
+        # setting; DSFA, deletion concept and VVT render it, so it is part of
+        # the stamp as well (otherwise a changed period kept the old hash).
+        "retention_handover_notes_days": getattr(settings_obj, "retention_handover_notes_days", 90),
     }
 
 

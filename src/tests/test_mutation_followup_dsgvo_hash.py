@@ -75,6 +75,9 @@ def _make_stub(**overrides):
         # Refs #2065 (ADR-050): beide Historien-Fristen fliessen in den Stempel.
         "eventhistory_detail_months": 24,
         "eventhistory_chronicle_months": 24,
+        # Refs #2492: the handover note period is rendered in the templates,
+        # so it belongs in the stamp as well.
+        "retention_handover_notes_days": 90,
         "facility_full_name": "Anlaufstelle Musterstadt",
     }
     base.update(overrides)
@@ -130,6 +133,7 @@ class TestSettingsHash:
             # einen neuen Hash tragen, sonst ist der Aktualitaetsnachweis unwahr.
             eventhistory_detail_months=24,
             eventhistory_chronicle_months=24,
+            retention_handover_notes_days=90,
             facility_full_name="Anlaufstelle Musterstadt",
         )
         expected_payload = {
@@ -141,6 +145,7 @@ class TestSettingsHash:
             "auditlog_retention_months": 24,
             "eventhistory_detail_months": 24,
             "eventhistory_chronicle_months": 24,
+            "retention_handover_notes_days": 90,
             "backup_retention_days": 90,
             "facility_full_name": "Anlaufstelle Musterstadt",
             "document_type_overrides": [],
@@ -165,6 +170,21 @@ class TestSettingsHash:
         assert _settings_hash(_make_stub(eventhistory_chronicle_months=24)) != _settings_hash(
             _make_stub(eventhistory_chronicle_months=0)
         )
+
+    def test_changing_retention_handover_notes_days_changes_hash(self):
+        """Refs #2492: the deletion concept, DSFA and VVT render the handover
+        note period; changing it must move the stamp in the footer."""
+        assert _settings_hash(_make_stub(retention_handover_notes_days=90)) != _settings_hash(
+            _make_stub(retention_handover_notes_days=30)
+        )
+
+    def test_missing_handover_notes_field_defaults_to_ninety(self):
+        """Default constant 90 (``retention_handover_notes_days``, Refs #2492)."""
+        stub_full = _make_stub(retention_handover_notes_days=90)
+        stub_missing = _make_stub()
+        del stub_missing.retention_handover_notes_days
+        assert _settings_hash(stub_full) == _settings_hash(stub_missing)
+        assert _settings_hash(_make_stub(retention_handover_notes_days=91)) != _settings_hash(stub_missing)
 
     def test_changing_retention_anonymous_days_changes_hash(self):
         """Mutation, die ``retention_anonymous_days`` aus Payload entfernt,
