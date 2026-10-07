@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 10:31+0200\n"
+"POT-Creation-Date: 2026-10-07 11:30+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -3758,10 +3758,6 @@ msgstr ""
 msgid "Rollenbasierte Zugriffskontrolle (5 Rollen)"
 msgstr "Rollenbasierte Zugriffskontrolle (5 Rollen)"
 
-#: src/core/services/compliance/vvt.py:78
-msgid "MFA / TOTP fuer sensible Rollen"
-msgstr "MFA / TOTP fuer sensible Rollen"
-
 #: src/core/services/compliance/vvt.py:83
 msgid "Falldaten (Events, Episoden, Dokumentationen)"
 msgstr "Falldaten (Events, Episoden, Dokumentationen)"
@@ -3914,10 +3910,6 @@ msgstr ""
 msgid "Username, E-Mail-Adresse"
 msgstr "Username, E-Mail-Adresse"
 
-#: src/core/services/compliance/vvt.py:184
-msgid "Passwort-Hash (PBKDF2/Argon2, niemals Klartext)"
-msgstr "Passwort-Hash (PBKDF2/Argon2, niemals Klartext)"
-
 #: src/core/services/compliance/vvt.py:185
 msgid "MFA-Geraetesecret (TOTP, verschluesselt)"
 msgstr "MFA-Geraetesecret (TOTP, verschluesselt)"
@@ -3941,22 +3933,6 @@ msgstr "Intern: Anwendungsbetreuung der Einrichtung"
 #: src/core/services/compliance/vvt.py:192
 msgid "Systemadministration (User-Management ueber Django-Admin)"
 msgstr "Systemadministration (User-Management ueber Django-Admin)"
-
-#: src/core/services/compliance/vvt.py:201
-msgid "Passwort-Hashing mit aktuellen Verfahren (PBKDF2/Argon2)"
-msgstr "Passwort-Hashing mit aktuellen Verfahren (PBKDF2/Argon2)"
-
-#: src/core/services/compliance/vvt.py:202
-msgid "Rate-Limiting auf Login-Versuche (max. 5/Minute pro IP)"
-msgstr "Rate-Limiting auf Login-Versuche (max. 5/Minute pro IP)"
-
-#: src/core/services/compliance/vvt.py:203
-msgid "Account-Lockout nach 10 Fehlversuchen"
-msgstr "Account-Lockout nach 10 Fehlversuchen"
-
-#: src/core/services/compliance/vvt.py:204
-msgid "Optionale 2FA per TOTP (RFC 6238)"
-msgstr "Optionale 2FA per TOTP (RFC 6238)"
 
 #: src/core/services/compliance/vvt.py:205
 msgid "Recovery-Codes als Self-Service-Backup"
@@ -13369,3 +13345,27 @@ msgstr "Bearbeitungsvorgänge: Die Anwendung löscht Lösch- und Berichtigungsan
 #: src/core/services/compliance/vvt.py:476
 msgid "Vier-Augen-Prinzip für die Löschung von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“"
 msgstr "Vier-Augen-Prinzip für die Löschung von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“"
+
+#: src/core/services/compliance/vvt.py:120
+msgid "MFA / TOTP per Rollen-Default für alle Rollen verpflichtend (Leitung, Fachkraft und Assistenz nach 30 Tagen Übergangsfrist)"
+msgstr "MFA / TOTP per Rollen-Default für alle Rollen verpflichtend (Leitung, Fachkraft und Assistenz nach 30 Tagen Übergangsfrist)"
+
+#: src/core/services/compliance/vvt.py:338
+msgid "Passwort-Hash (PBKDF2, niemals Klartext)"
+msgstr "Passwort-Hash (PBKDF2, niemals Klartext)"
+
+#: src/core/services/compliance/vvt.py:361
+msgid "Passwort-Hashing mit aktuellem Verfahren (PBKDF2)"
+msgstr "Passwort-Hashing mit aktuellem Verfahren (PBKDF2)"
+
+#: src/core/services/compliance/vvt.py:362
+msgid "Rate-Limiting auf Login-Versuche (max. 5/Minute je IP, 10/Stunde je Benutzername)"
+msgstr "Rate-Limiting auf Login-Versuche (max. 5/Minute je IP, 10/Stunde je Benutzername)"
+
+#: src/core/services/compliance/vvt.py:364
+msgid "Kontosperre nach 10 Fehlversuchen in 15 Minuten je Konto und IP (Systemadministration ausgenommen, für sie gelten die Ratelimits)"
+msgstr "Kontosperre nach 10 Fehlversuchen in 15 Minuten je Konto und IP (Systemadministration ausgenommen, für sie gelten die Ratelimits)"
+
+#: src/core/services/compliance/vvt.py:367
+msgid "2FA per TOTP (RFC 6238), per Rollen-Default verpflichtend"
+msgstr "2FA per TOTP (RFC 6238), per Rollen-Default verpflichtend"
