@@ -262,7 +262,9 @@ class TestTamperDetection:
             detail={"pruned_count": 1, "boundary_hashes": [r2_hash]},
             timestamp=r3.timestamp + timedelta(seconds=1),
             prev_hash="deadbeef",
-            entry_hash=None,
+            # Any non-empty value: the database only accepts rows with a hash
+            # (Refs #2449), the attacker cannot compute the right one.
+            entry_hash="0" * 64,
         )
         AuditLog.objects.bulk_create([forged])
 

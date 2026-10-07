@@ -349,9 +349,10 @@ class AuditLog(models.Model):
 
     # Refs #1070: per-Zeile HMAC-Kette (Tamper-Evidenz). ``prev_hash`` ist der
     # entry_hash der vorherigen Zeile derselben Facility-Kette (""=Kettenstart);
-    # ``entry_hash = HMAC(key, prev_hash || canonical(row))``. Beide nullable,
-    # damit Bestandszeilen per ``backfill_audit_chain`` nachgezogen werden
-    # koennen (NULL = noch nicht verkettet) und Raw-Inserts gueltig bleiben.
+    # ``entry_hash = HMAC(key, prev_hash || canonical(row))``. Both nullable
+    # only for rows written before the chain existed (sealed later by
+    # ``backfill_audit_chain``); a new row must carry both -- migration 0184
+    # rejects every INSERT without them (Refs #2449).
     prev_hash = models.CharField(max_length=64, null=True, blank=True, verbose_name=_("Vorheriger Hash"))
     entry_hash = models.CharField(max_length=64, null=True, blank=True, db_index=True, verbose_name=_("Eintrags-Hash"))
 

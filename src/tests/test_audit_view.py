@@ -26,8 +26,8 @@ def _make_audit_log(facility, user, action=AuditLog.Action.LOGIN, delta_days=0):
         cursor.execute(
             "INSERT INTO core_auditlog"
             " (id, facility_id, user_id, action, target_type,"
-            " target_id, detail, ip_address, timestamp)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            " target_id, detail, ip_address, timestamp, entry_hash, prev_hash)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, repeat('0', 64), '')",
             [entry_id, facility.pk, user.pk, action, "", "", "{}", None, ts],
         )
     return AuditLog.objects.get(pk=entry_id)
@@ -122,8 +122,8 @@ def test_facility_admin_audit_view_excludes_null_facility_entries(client, admin_
     with conn.cursor() as cur:
         cur.execute(
             "INSERT INTO core_auditlog (id, facility_id, user_id, action, "
-            "target_type, target_id, detail, ip_address, timestamp) "
-            "VALUES (%s, NULL, %s, %s, '', %s, '{}', NULL, NOW())",
+            "target_type, target_id, detail, ip_address, timestamp, entry_hash, prev_hash) "
+            "VALUES (%s, NULL, %s, %s, '', %s, '{}', NULL, NOW(), repeat('0', 64), '')",
             [uuid.uuid4(), admin_user.pk, "login_failed", null_marker],
         )
 

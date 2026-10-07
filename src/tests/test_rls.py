@@ -686,8 +686,8 @@ class TestSuperAdminRLSBypass:
         with connection.cursor() as cur:
             cur.execute(
                 "INSERT INTO core_auditlog (id, facility_id, user_id, action, "
-                "target_type, target_id, detail, ip_address, timestamp) "
-                "VALUES (%s, NULL, %s, %s, '', %s, '{}', NULL, NOW())",
+                "target_type, target_id, detail, ip_address, timestamp, entry_hash, prev_hash) "
+                "VALUES (%s, NULL, %s, %s, '', %s, '{}', NULL, NOW(), repeat('0', 64), '')",
                 [uuid.uuid4(), admin_user.pk, "login_failed", marker_target_id],
             )
 

@@ -76,7 +76,9 @@ class TestAppRoleInsert:
         _require_postgres()
 
     def _insert_as_app_role(self, role, facility, **hash_fields):
-        with as_rls_role(role, facility_id=facility.pk):
+        # The savepoint sits inside the role switch: a rejected INSERT is rolled
+        # back before ``as_rls_role`` resets the role.
+        with as_rls_role(role, facility_id=facility.pk), transaction.atomic():
             AuditLog.objects.bulk_create(
                 [
                     AuditLog(
@@ -98,7 +100,7 @@ class TestAppRoleInsert:
         _legit(facility, "a")
         b = _legit(facility, "b")
 
-        with pytest.raises(IntegrityError), transaction.atomic():
+        with pytest.raises(IntegrityError):
             self._insert_as_app_role(rls_test_role, facility)
 
         assert not AuditLog.objects.filter(facility=facility, detail__reason="forged by app role").exists()
@@ -118,7 +120,7 @@ class TestAppRoleInsert:
         ids=["empty-entry-hash", "null-entry-hash", "null-prev-hash"],
     )
     def test_insert_with_missing_hash_field_is_rejected(self, facility, rls_test_role, hash_fields):  # noqa: F811
-        with pytest.raises(IntegrityError), transaction.atomic():
+        with pytest.raises(IntegrityError):
             self._insert_as_app_role(rls_test_role, facility, **hash_fields)
 
     def test_insert_with_a_forged_hash_passes_the_database_but_not_the_check(self, facility, rls_test_role):  # noqa: F811
