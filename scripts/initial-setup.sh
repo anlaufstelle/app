@@ -105,7 +105,7 @@ fi
 # Refs #2086: `--env-file` steuert bei Compose NUR die Interpolation. Services
 # mit service-level `env_file:` (staging: maintenance/cron) laden davon
 # unbeeindruckt ihren eigenen Pfad. Der wird dort als
-# `${STAGING_ENV_FILE:-.env.staging}` geschrieben; die exportierte Shell-
+# `${STAGING_ENV_FILE:-<default>}` geschrieben; die exportierte Shell-
 # Variable schlaegt die --env-file-Werte und zieht ihn auf dieselbe Datei.
 # Fuer Stacks ohne diese Variable ist der Export folgenlos.
 export STAGING_ENV_FILE="$ENV_FILE"
@@ -152,14 +152,13 @@ docker compose version >/dev/null 2>&1 ||
 [[ -f "$COMPOSE_FILE" ]] ||
     fail "Compose-Datei nicht gefunden: ${COMPOSE_FILE}
   Erwartet im Repo-Root — liegt initial-setup.sh unter <repo>/scripts/?
-  Andere Datei waehlen: COMPOSE_FILE=docker-compose.staging.yml ENV_FILE=.env.staging scripts/initial-setup.sh"
+  Andere Datei waehlen: COMPOSE_FILE=<compose-file> ENV_FILE=<env-file> scripts/initial-setup.sh"
 [[ -f "$ENV_FILE" ]] ||
     fail "Env-Datei nicht gefunden: ${ENV_FILE}
-  Zuerst die passende Vorlage kopieren und ausfuellen (.env.example fuer prod,
-  .env.staging.example fuer den Staging-Stack) — insbesondere DJANGO_SECRET_KEY,
+  Zuerst die Vorlage .env.example kopieren und ausfuellen — insbesondere DJANGO_SECRET_KEY,
   ENCRYPTION_KEY sowie das Drei-Rollen-Modell (POSTGRES_BOOTSTRAP_PASSWORD,
   POSTGRES_ADMIN_USER, POSTGRES_ADMIN_PASSWORD). Siehe docs/admin-guide.md § 1.
-  Andere Datei waehlen: ENV_FILE=.env.staging scripts/initial-setup.sh"
+  Andere Datei waehlen: ENV_FILE=<env-file> scripts/initial-setup.sh"
 
 # Refs #2086: Stacks, die den Health-Token an caddy durchreichen (heute:
 # staging), brauchen ihn NICHT-LEER. Caddy ersetzt `{$DJANGO_HEALTH_DETAIL_TOKEN}`

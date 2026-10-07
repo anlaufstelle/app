@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Atomare Rotation der drei PostgreSQL-Rollen-Passwoerter (Refs #1964).
 #
-# Default: Produktions-Stack im Repo-Root. Fuer dev/demo explizit aufrufen:
-#   COMPOSE_FILE=docker-compose.dev.yml ENV_FILE=.env.dev \
+# Default: Produktions-Stack im Repo-Root. Fuer andere Stacks explizit aufrufen:
+#   COMPOSE_FILE=<compose-file> ENV_FILE=<env-file> \
 #     ./scripts/ops/rotate-db-passwords.sh
 #
 # Das Skript gibt zu keinem Zeitpunkt Passwoerter aus. Es stoppt die dauerhaften

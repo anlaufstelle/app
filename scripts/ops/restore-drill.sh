@@ -19,7 +19,7 @@ set -uo pipefail
 #   dev  : dev-ops/deploy/backup.sh (dev.anlaufstelle.app)
 #          - Quelle:  $DEV_BACKUP_DIR/dump-*.pgc.enc  (Default /var/backups/anl)
 #          - Format:  pg_dump --format=custom -> pg_restore (NICHT psql)
-#          - Stack:   docker-compose.dev.yml --env-file .env.dev
+#          - Stack:   the dev compose file with its env file
 #   prod : scripts/ops/backup.sh (der an Self-Hoster ausgelieferte Pfad)
 #          - Quelle:  $BACKUP_HOST_DIR/daily/anlaufstelle_*.sql.gz.enc
 #          - Format:  plain SQL + gzip + A4.3-HMAC-Sidecar -> psql
