@@ -355,7 +355,10 @@ docker compose "${compose_files[@]}" up -d db web
 #    Ein Satz ohne signiertes Manifest wird nicht eingespielt. Bindet der Satz
 #    einen Audit-Anker, muss DJANGO_AUDIT_HWM_PATH gesetzt sein; sonst bricht es
 #    ab (nur --skip-audit-anchor spielt den Satz dann ohne Anker ein).
-./scripts/ops/restore.sh --yes \
+#    Die Backup-Dateien sind 0600 und gehören dem Konto von backup.sh (im
+#    empfohlenen Setup root): restore.sh als dieser Eigentümer starten (sudo);
+#    Lesen über die Gruppe reicht nicht. Die .env liest das Skript selbst.
+sudo ./scripts/ops/restore.sh --yes \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
 
@@ -3239,7 +3242,7 @@ docker compose "${compose_files[@]}" up -d
 
 ```text
 Backup erstellen          ./scripts/ops/backup.sh
-Backup wiederherstellen   ./scripts/ops/restore.sh <datei.sql.gz.enc>
+Backup wiederherstellen   sudo ./scripts/ops/restore.sh <datei.sql.gz.enc>
 Health-Check              curl -sf https://$DOMAIN/health/
 Container-Status          docker compose -f docker-compose.prod.yml ps
 Live-Logs                 docker compose -f docker-compose.prod.yml logs -f web

@@ -157,6 +157,15 @@ fi
 exit 0
 """,
     )
+    # The documented block runs restore.sh with sudo (backup files are 0600 and
+    # owned by root); the stub records the call and keeps the stubbed PATH.
+    _write_executable(
+        bindir / "sudo",
+        """#!/usr/bin/env bash
+printf 'sudo %s\\n' "$*" >> "$ACTION_LOG"
+exec "$@"
+""",
+    )
     return root, bindir, action_log
 
 
@@ -206,6 +215,9 @@ def test_documented_block_runs_non_interactively(tmp_path: Path) -> None:
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "RESTORE-SATZ WIEDERHERGESTELLT" in result.stdout
     assert _destructive_entries(action_log), "Ohne zerstoerenden Schritt ist kein Restore gelaufen"
+    assert "sudo ./scripts/ops/restore.sh --yes " in action_log.read_text(encoding="utf-8"), (
+        "The documented block must run restore.sh as the owner of the 0600 backup files"
+    )
 
 
 @pytest.mark.skipif(REAL_OPENSSL is None, reason="openssl nicht installiert")

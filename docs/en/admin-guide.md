@@ -1404,14 +1404,14 @@ Copying only the dump, the media archive and their sidecars is not enough to res
 
 2. Ensure that the DB and web containers are running for the database and media restore while Caddy and cron remain stopped.
 
-3. Start the restore from the repository root. The second argument is optional, but required for a complete recovery including file attachments:
+3. Start the restore from the repository root. The second argument is optional, but required for a complete recovery including file attachments. The backup files belong to the account `backup.sh` runs under (root in the recommended setup) and, except for the manifest, are readable only by that account (`0600`, including the `.hmac` signatures). Therefore run `restore.sh` as that owner, with `sudo` in the recommended setup; an operating account that only reads through the group cannot verify the set and aborts. The script reads the `.env` itself, so `sudo` loses no settings:
 
 ```bash
 set -a
 . ./.env
 set +a
 BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-./backups}"
-./scripts/ops/restore.sh \
+sudo ./scripts/ops/restore.sh \
   "$BACKUP_HOST_DIR/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc" \
   "$BACKUP_HOST_DIR/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc"
 ```
@@ -2449,4 +2449,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 0d1fe797492f9010ad0d24eb5cdb28fc3f17d994 -->
+<!-- source-hash: 5aaf776e61ce2c9dba7efbee96967bc0a75ac3a7 -->

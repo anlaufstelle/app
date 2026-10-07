@@ -357,7 +357,10 @@ docker compose "${compose_files[@]}" up -d db web
 #    A set without a signed manifest is not restored. If the set binds an audit
 #    anchor, DJANGO_AUDIT_HWM_PATH must be set; otherwise it aborts (only
 #    --skip-audit-anchor restores the set without the anchor).
-./scripts/ops/restore.sh --yes \
+#    The backup files are 0600 and belong to the account of backup.sh (root in
+#    the recommended setup): run restore.sh as that owner (sudo); reading
+#    through the group is not enough. The script reads the .env itself.
+sudo ./scripts/ops/restore.sh --yes \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
 
@@ -3210,7 +3213,7 @@ docker compose "${compose_files[@]}" up -d
 
 ```text
 Create backup             ./scripts/ops/backup.sh
-Restore backup            ./scripts/ops/restore.sh <file.sql.gz.enc>
+Restore backup            sudo ./scripts/ops/restore.sh <file.sql.gz.enc>
 Health check              curl -sf https://$DOMAIN/health/
 Container status          docker compose -f docker-compose.prod.yml ps
 Live logs                 docker compose -f docker-compose.prod.yml logs -f web
@@ -3229,4 +3232,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 398be4acd586d57df0908ea7ad394fccf09532b2 -->
+<!-- source-hash: b8a58a6f4433eccc9650be3c8410a8091c3de0e7 -->

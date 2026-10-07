@@ -1404,14 +1404,14 @@ Wer nur Dump, Medienarchiv und deren Sidecars kopiert, kann nicht wiederherstell
 
 2. Stellen Sie sicher, dass DB- und Web-Container für den Datenbank- beziehungsweise Medien-Restore laufen, während Caddy und Cron gestoppt bleiben.
 
-3. Starten Sie den Restore im Repository-Root. Das zweite Argument ist optional, für eine vollständige Wiederherstellung mit Dateianhängen aber erforderlich:
+3. Starten Sie den Restore im Repository-Root. Das zweite Argument ist optional, für eine vollständige Wiederherstellung mit Dateianhängen aber erforderlich. Die Backup-Dateien gehören dem Konto, unter dem `backup.sh` läuft (im empfohlenen Setup root), und sind außer dem Manifest nur für dieses lesbar (`0600`, auch die `.hmac`-Signaturen). Starten Sie `restore.sh` deshalb als dieser Eigentümer, im empfohlenen Setup mit `sudo`; ein Betriebskonto, das nur über die Gruppe liest, kann den Satz nicht prüfen und bricht ab. Das Skript liest die `.env` selbst, `sudo` verliert also keine Einstellungen:
 
 ```bash
 set -a
 . ./.env
 set +a
 BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-./backups}"
-./scripts/ops/restore.sh \
+sudo ./scripts/ops/restore.sh \
   "$BACKUP_HOST_DIR/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc" \
   "$BACKUP_HOST_DIR/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc"
 ```
