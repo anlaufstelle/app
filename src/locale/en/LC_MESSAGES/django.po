@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 11:34+0200\n"
+"POT-Creation-Date: 2026-10-07 19:40+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1509,14 +1509,6 @@ msgstr ""
 #: src/templates/core/config/document_types/detail.html:35
 msgid "Sensibilität"
 msgstr "Sensitivity"
-
-#: src/core/models/document_type.py:68
-msgid ""
-"Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen zusätzliche "
-"Berechtigungen voraus; „Hoch“ wird immer verschlüsselt gespeichert."
-msgstr ""
-"Controls who may see the content. „Elevated“ and „High“ require additional "
-"permissions; „High“ is always stored encrypted."
 
 #: src/core/models/document_type.py:78
 msgid "Mindest-Kontaktstufe"
@@ -13278,3 +13270,52 @@ msgstr "Open Management → Settings and set a limited audit log retention perio
 #: src/core/views/help.py:42
 msgid "Die Karten führen zu Löschanträgen, Löschvorschlägen und Statistik; die Zeile „Speicher“ zur Seite „Dateien“."
 msgstr "The cards lead to deletion requests, retention proposals and statistics; the “Storage” row leads to the “Files” page."
+
+#: src/core/forms/facility_settings.py:115
+#, python-format
+msgid "Die gespeicherte k-Anonymitäts-Schwelle %(k)s liegt unter dem zulässigen Minimum %(minimum)s. Berichte rechnen mit k = %(default)s, bis ein gültiger Wert gespeichert ist."
+msgstr "The stored k-anonymity threshold %(k)s is below the permitted minimum %(minimum)s. Reports compute with k = %(default)s until a valid value is saved."
+
+#: src/core/forms/facility_settings.py:152
+msgid "unbegrenzt"
+msgstr "unlimited"
+
+#: src/core/forms/facility_settings.py:152
+#, python-format
+msgid "%(days)s Tage"
+msgstr "%(days)s days"
+
+#: src/core/forms/facility_settings.py:154
+#, python-format
+msgid "Die Audit-Log-Frist (%(audit_days)s Tage) ist kürzer als die längste Fach-Frist „%(field)s“ (%(period)s). Audit-Spuren werden gelöscht, während die zugehörigen Fachdaten noch bestehen können; lückenlos bleibt das Audit-Log nur mit 0."
+msgstr "The audit log retention period (%(audit_days)s days) is shorter than the longest data retention period “%(field)s” (%(period)s). Audit traces are deleted while the related records may still exist; the audit log stays complete only with 0."
+
+#: src/core/forms/user_access.py:34
+msgid "Nach Rolle: ja für Leitung und Anwendungsbetreuung, sonst nein"
+msgstr "By role: yes for managers and application support, otherwise no"
+
+#: src/core/forms/user_access.py:41
+msgid "Darf Löschanträge als zweite Person genehmigen; eigene Anträge bleiben ausgeschlossen. Jede Einrichtung braucht mindestens zwei Konten mit diesem Recht."
+msgstr "May approve deletion requests as the second person; own requests remain excluded. Every facility needs at least two accounts with this right."
+
+#: src/core/services/compliance/deletion_approvers.py:42
+#, python-format
+msgid "Ohne Genehmiger: %(names)s."
+msgstr "No approver: %(names)s."
+
+#: src/core/services/compliance/deletion_approvers.py:45
+#, python-format
+msgid "Nur ein Genehmiger, eigene Anträge nicht genehmigbar: %(names)s."
+msgstr "Only one approver, own requests cannot be approved: %(names)s."
+
+#: src/core/services/compliance/deletion_approvers.py:53
+msgid "Jede Einrichtung hat mindestens zwei aktive Genehmiger für Löschanträge."
+msgstr "Every facility has at least two active approvers for deletion requests."
+
+#: src/core/services/compliance/deletion_approvers.py:65
+msgid "Verwaltung → Zugänge öffnen und mindestens zwei aktiven Konten das Recht „Löschbestätigung“ geben."
+msgstr "Open Administration → Access and give the “Deletion confirmation” right to at least two active accounts."
+
+#: src/core/services/dashboard/external_report.py:252
+msgid "Die k-Anonymitäts-Schwelle liegt unter 3. Gruppen ab zwei Datensätzen werden veröffentlicht; Personen in kleinen Gruppen können in den Zahlen wiedererkennbar sein. Empfohlen ist k = 5."
+msgstr "The k-anonymity threshold is below 3. Groups of two or more records are published; persons in small groups can be recognisable from the figures. k = 5 is recommended."

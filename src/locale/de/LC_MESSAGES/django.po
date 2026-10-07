@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 11:34+0200\n"
+"POT-Creation-Date: 2026-10-07 19:40+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1521,14 +1521,6 @@ msgstr ""
 #: src/templates/core/config/document_types/detail.html:35
 msgid "Sensibilität"
 msgstr "Sensibilität"
-
-#: src/core/models/document_type.py:68
-msgid ""
-"Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen zusätzliche "
-"Berechtigungen voraus; „Hoch“ wird immer verschlüsselt gespeichert."
-msgstr ""
-"Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen zusätzliche "
-"Berechtigungen voraus; „Hoch“ wird immer verschlüsselt gespeichert."
 
 #: src/core/models/document_type.py:78
 msgid "Mindest-Kontaktstufe"
@@ -13374,3 +13366,52 @@ msgstr "Verwaltung → Einstellungen öffnen und unter Datenschutz und Fristen e
 #: src/core/views/help.py:42
 msgid "Die Karten führen zu Löschanträgen, Löschvorschlägen und Statistik; die Zeile „Speicher“ zur Seite „Dateien“."
 msgstr "Die Karten führen zu Löschanträgen, Löschvorschlägen und Statistik; die Zeile „Speicher“ zur Seite „Dateien“."
+
+#: src/core/forms/facility_settings.py:115
+#, python-format
+msgid "Die gespeicherte k-Anonymitäts-Schwelle %(k)s liegt unter dem zulässigen Minimum %(minimum)s. Berichte rechnen mit k = %(default)s, bis ein gültiger Wert gespeichert ist."
+msgstr "Die gespeicherte k-Anonymitäts-Schwelle %(k)s liegt unter dem zulässigen Minimum %(minimum)s. Berichte rechnen mit k = %(default)s, bis ein gültiger Wert gespeichert ist."
+
+#: src/core/forms/facility_settings.py:152
+msgid "unbegrenzt"
+msgstr "unbegrenzt"
+
+#: src/core/forms/facility_settings.py:152
+#, python-format
+msgid "%(days)s Tage"
+msgstr "%(days)s Tage"
+
+#: src/core/forms/facility_settings.py:154
+#, python-format
+msgid "Die Audit-Log-Frist (%(audit_days)s Tage) ist kürzer als die längste Fach-Frist „%(field)s“ (%(period)s). Audit-Spuren werden gelöscht, während die zugehörigen Fachdaten noch bestehen können; lückenlos bleibt das Audit-Log nur mit 0."
+msgstr "Die Audit-Log-Frist (%(audit_days)s Tage) ist kürzer als die längste Fach-Frist „%(field)s“ (%(period)s). Audit-Spuren werden gelöscht, während die zugehörigen Fachdaten noch bestehen können; lückenlos bleibt das Audit-Log nur mit 0."
+
+#: src/core/forms/user_access.py:34
+msgid "Nach Rolle: ja für Leitung und Anwendungsbetreuung, sonst nein"
+msgstr "Nach Rolle: ja für Leitung und Anwendungsbetreuung, sonst nein"
+
+#: src/core/forms/user_access.py:41
+msgid "Darf Löschanträge als zweite Person genehmigen; eigene Anträge bleiben ausgeschlossen. Jede Einrichtung braucht mindestens zwei Konten mit diesem Recht."
+msgstr "Darf Löschanträge als zweite Person genehmigen; eigene Anträge bleiben ausgeschlossen. Jede Einrichtung braucht mindestens zwei Konten mit diesem Recht."
+
+#: src/core/services/compliance/deletion_approvers.py:42
+#, python-format
+msgid "Ohne Genehmiger: %(names)s."
+msgstr "Ohne Genehmiger: %(names)s."
+
+#: src/core/services/compliance/deletion_approvers.py:45
+#, python-format
+msgid "Nur ein Genehmiger, eigene Anträge nicht genehmigbar: %(names)s."
+msgstr "Nur ein Genehmiger, eigene Anträge nicht genehmigbar: %(names)s."
+
+#: src/core/services/compliance/deletion_approvers.py:53
+msgid "Jede Einrichtung hat mindestens zwei aktive Genehmiger für Löschanträge."
+msgstr "Jede Einrichtung hat mindestens zwei aktive Genehmiger für Löschanträge."
+
+#: src/core/services/compliance/deletion_approvers.py:65
+msgid "Verwaltung → Zugänge öffnen und mindestens zwei aktiven Konten das Recht „Löschbestätigung“ geben."
+msgstr "Verwaltung → Zugänge öffnen und mindestens zwei aktiven Konten das Recht „Löschbestätigung“ geben."
+
+#: src/core/services/dashboard/external_report.py:252
+msgid "Die k-Anonymitäts-Schwelle liegt unter 3. Gruppen ab zwei Datensätzen werden veröffentlicht; Personen in kleinen Gruppen können in den Zahlen wiedererkennbar sein. Empfohlen ist k = 5."
+msgstr "Die k-Anonymitäts-Schwelle liegt unter 3. Gruppen ab zwei Datensätzen werden veröffentlicht; Personen in kleinen Gruppen können in den Zahlen wiedererkennbar sein. Empfohlen ist k = 5."
