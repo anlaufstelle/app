@@ -603,12 +603,15 @@ Das Recht „Löschbestätigung“ ist rollenunabhängig und standardmäßig nic
 
 ### 16. Was hat KEINEN Löschmechanismus?
 
-- **Episoden, Wirkungsziele, Meilensteine** — kein eigener Löschweg; sie hängen am Fall und werden mit dessen Anonymisierung (bzw. der ihrer Person) redigiert
-- **User-Accounts** — kein Löschmechanismus
-- **AuditLog-Einträge** — immutabel, bewusst nicht löschbar
-- **EventHistory** — kaskadiert nur bei Hard-Delete
+Nicht alle Datentypen bieten eine einzelne Löschaktion in der Oberfläche. Davon zu unterscheiden sind die automatischen Wartungsläufe:
 
-> **Nachtrag:** **Personen** und **Fälle** stehen seit #1736 bzw. #1818 **nicht mehr** auf dieser Liste: beide haben einen manuellen Löschweg mit Papierkorb (siehe Frage 15), zusätzlich zur automatischen Anonymisierung durch `enforce_retention`.
+- **Episoden und Wirkungsziele** — kein eigener Löschweg; ihre Inhalte werden mit der Anonymisierung des Falls bzw. der Person redigiert.
+- **Meilensteine** — ab Fachkraft über **Meilenstein löschen** im Fall löschbar. Zustands- und Bearbeitungssperren der Akte gelten auch hier.
+- **Zugänge** — kein allgemeiner Löschweg in der fachlichen Oberfläche; die Anwendungsbetreuung kann Zugänge deaktivieren.
+- **AuditLog-Einträge** — im Benutzerbetrieb unveränderlich. Der Wartungslauf `enforce_retention` entfernt Einträge nach `auditlog_retention_months` (Vorgabe: 24 Monate; 0 deaktiviert das Pruning). Ausgenommen bleiben Sicherheitsverletzungen, Aufbewahrungslauf-Nachweise, Audit-Pruning-Prüfpunkte und Berichts-Exporte mit Berichtszeitraum. Personen- und DSGVO-Exporte ohne Berichtszeitraum sind nicht von dieser Ausnahme erfasst.
+- **Ereignis-Änderungshistorie (EventHistory)** — zweistufige Aufbewahrung: Alte Inhalte werden nach `eventhistory_detail_months` redigiert (Vorgabe: 24 Monate), die jüngste Fassung eines lebenden Ereignisses bleibt erhalten. Bei gelöschten Ereignissen oder anonymisierten Personen werden Inhalte unabhängig von dieser Altersfrist redigiert. Die leeren Chronologie-Zeilen werden nach weiteren `eventhistory_chronicle_months` ab Redaktion gelöscht (Vorgabe: 24 Monate). 0 deaktiviert jeweils die altersbezogene Stufe; aktive Aufbewahrungssperren an Ereignis, Person oder Fall stellen die Wartung zurück. Gleichzeitige Bearbeitungen können ebenfalls einen späteren Lauf nötig machen.
+
+**Personen und Fälle** haben einen manuellen Löschweg mit Papierkorb (siehe [Frage 15](#15-wie-funktioniert-das-löschsystem-4-augen-prinzip)) sowie automatische Anonymisierung durch `enforce_retention`.
 
 ---
 
@@ -616,7 +619,7 @@ Das Recht „Löschbestätigung“ ist rollenunabhängig und standardmäßig nic
 
 ### 17. Wie funktionieren Aufbewahrungsfristen?
 
-Konfigurierbar pro Facility in **Administration → Einstellungen**:
+Konfigurierbar pro Einrichtung unter **Verwaltung → Einstellungen**:
 
 | Kontaktstufe | Default | Setting |
 |--------------|---------|---------|
@@ -625,7 +628,7 @@ Konfigurierbar pro Facility in **Administration → Einstellungen**:
 | Mit Zusatzangaben | 3.650 Tage (10 Jahre) | `retention_qualified_days` |
 | Activity-Logs | 365 Tage | `retention_activities_days` |
 
-Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`. Die **Papierkorb-Frist** `client_trash_days` (Default 30 Tage) gilt für gelöschte **Personen und Fälle** gleichermaßen — bewusst kein zweiter Fristbegriff ([ADR-044](adr/044-fall-loeschpfad.md) § 2).
+Zusätzlich kann `DocumentType.retention_days` eine **weitere Frist für Ereignis-Typen** festlegen. Sie ersetzt die kontaktstufenbezogenen Fristen nicht: Ein Ereignis kann über jeden zutreffenden Aufbewahrungsweg ablaufen; eine längere Typ-Frist verlängert daher die andere Frist nicht. Die Sensibilität des Typs legt keine Frist automatisch fest. Für Personen- und Fall-Typen greift diese Typ-Frist nicht — ihre Daten und Anhänge folgen dem Lebenszyklus der Person bzw. des Falls. Die **Papierkorb-Frist** `client_trash_days` (Default 30 Tage) gilt für gelöschte **Personen und Fälle** gleichermaßen — bewusst kein zweiter Fristbegriff ([ADR-044](adr/044-fall-loeschpfad.md) § 2).
 
 **Automatische Durchsetzung:** Das Management Command `enforce_retention` läuft täglich per Cron und löscht/anonymisiert abgelaufene Daten.
 
@@ -635,16 +638,11 @@ Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`. Die **
 
 ### 18. Welche automatisierten Scripts gibt es?
 
-#### Cron-Schedule (Host-Level)
+#### Cron-Dienst und Host-Backup
 
-```
-02:00 UTC  backup.sh                     ← Backup zuerst
-03:00 UTC  enforce_retention             ← dann Retention
-04:00 UTC  create_statistics_snapshots   ← dann Snapshots (monatlich am 1.)
-*/5 min    Health Check (curl /health/)
-```
+Die Anwendungsjobs laufen im **`cron`-Dienst** des Produktionsstacks (Supercronic). Maßgeblich ist die [Jobtabelle im Ops-Runbook § 3.1](ops-runbook.md#31-uebersicht), abgeglichen mit [`deploy/crontab`](https://github.com/anlaufstelle/app/blob/main/deploy/crontab). Der Dienst nutzt die konfigurierbare Zeitzone `TZ`, standardmäßig **Europe/Berlin** — die Zeitangaben sind keine festen UTC-Zeiten.
 
-**Reihenfolge kritisch:** Backup → Retention → Snapshots
+Das **verschlüsselte Backup** ist eine gesonderte Host-Aufgabe. Der Betreiber muss es einrichten und zeitlich vor dem Aufbewahrungslauf einplanen; es wird nicht durch den `cron`-Dienst erzeugt. Einrichtung und Reihenfolge stehen im [Ops-Runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs).
 
 #### Management Commands
 

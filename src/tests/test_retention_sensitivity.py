@@ -1,25 +1,16 @@
-"""DocumentType.retention_days beeinflusst die Retention-Strategien.
+"""Document-type retention is an additional event-only expiry path.
 
 Refs Matrix DEV-RET-11 (Master #922).
 
-Die DSGVO-Retention-Logik kennt vier Strategien (anonymous, identified,
-qualified, document_type). Die Plan-Hypothese „Event-Sensitivity
-beeinflusst Aufbewahrungsfrist" hat im aktuellen Code eine konkrete
-Form: ``DocumentType.retention_days`` ist der Override-Mechanismus. Der
-Custom-Override greift unabhaengig von ``sensitivity`` — die
-``sensitivity``-Stufe regelt Sichtbarkeit, ``retention_days`` regelt
-Aufbewahrung. Beides sind Policy-Hebel auf demselben DocumentType, die
-zusammen konfiguriert werden duerfen.
+``iter_strategies`` yields anonymous, identified, qualified and document_type
+strategies independently. A positive ``DocumentType.retention_days`` adds a
+cutoff for event types; it does not replace or extend stage-based retention.
+Person and case types do not yield this strategy. Sensitivity controls
+visibility and does not automatically determine an expiry period.
 
-Tests verifizieren das IST-Verhalten ueber
-:func:`core.retention.strategies.iter_strategies`:
-
-- DocumentType mit ``retention_days=30`` taucht in der document_type-
-  Strategie auf; Events vor dem Cutoff werden gefunden.
-- DocumentType ohne ``retention_days`` taucht nicht auf.
-- ELEVATED/HIGH-Sensitivity ist *nicht* automatisch mit kuerzerer
-  Frist verknuepft — Marker-Test dokumentiert, dass die Settings frei
-  waehlbar sind.
+These tests verify that an event type with ``retention_days=30`` yields a
+cutoff matching older events, that an unset value yields no type strategy,
+and that sensitivity does not constrain the configured number of days.
 """
 
 from __future__ import annotations
