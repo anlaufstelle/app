@@ -45,6 +45,9 @@ source "${SCRIPT_DIR}/_backup_common.sh"
 # Satz-/Manifestpruefung, geteilt mit restore.sh (Refs #2290, #2292).
 # shellcheck source=scripts/ops/lib/backup-set.sh
 source "${SCRIPT_DIR}/lib/backup-set.sh"
+# Reads dotenv files as data, never as shell code.
+# shellcheck source=scripts/ops/lib/env-file.sh
+source "${SCRIPT_DIR}/lib/env-file.sh"
 
 # check_file_modes <label> <file>...: no file may carry a permission for others.
 # Reports each violation on stderr and returns 1 if there is any. A file system
@@ -68,9 +71,7 @@ check_file_modes() {
 
 # .env laden falls vorhanden
 if [[ -f "${PROJECT_DIR}/.env" ]]; then
-    set -a
-    source "${PROJECT_DIR}/.env"
-    set +a
+    load_env_file "${PROJECT_DIR}/.env"
 fi
 
 # Host- und Container-Sicht sind absichtlich getrennt: BACKUP_DIR aus .env

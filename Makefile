@@ -649,7 +649,6 @@ dev-shell:
 SEED_ARGS ?=
 dev-seed:
 	ssh $(DEV_HOST) 'cd /opt/anlaufstelle && \
-	  set -a && . ./.env.dev && set +a && \
 	  docker compose -f docker-compose.dev.yml --env-file .env.dev run --rm -T \
 	    maintenance seed $(SEED_ARGS) </dev/null'
 

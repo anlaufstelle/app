@@ -51,6 +51,9 @@ source "${SCRIPT_DIR}/_backup_common.sh"
 # Anker-Artefakt oder ein Medien-Archiv, das der Satz gar nicht bindet).
 # shellcheck source=scripts/ops/lib/backup-set.sh
 source "${SCRIPT_DIR}/lib/backup-set.sh"
+# Reads dotenv files as data, never as shell code.
+# shellcheck source=scripts/ops/lib/env-file.sh
+source "${SCRIPT_DIR}/lib/env-file.sh"
 
 # --- Backup-Format / Modus (OPS-05, Refs #1336) ---------------------------
 DRILL_FORMAT="${DRILL_FORMAT:-}"
@@ -90,10 +93,7 @@ DEV_BACKUP_DIR="${DEV_BACKUP_DIR:-/var/backups/anl}"
 resolve_prod_backup_dir() (
     local env_file="$1" host_dir
     if [[ -r "$env_file" ]]; then
-        set -a
-        # shellcheck disable=SC1090
-        source "$env_file"
-        set +a
+        load_env_file "$env_file"
     fi
     host_dir="${BACKUP_HOST_DIR:-$COMPOSE_DIR/backups}"
     if [[ "$host_dir" != /* ]]; then
@@ -134,10 +134,7 @@ fi
 
 # Env laden (nur Variablen) — liefert POSTGRES_*, BACKUP_ENCRYPTION_KEY.
 if [[ -r "$ENV_FILE" ]]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "$ENV_FILE"
-    set +a
+    load_env_file "$ENV_FILE"
 fi
 
 if [[ "$DRILL_FORMAT" == "prod" ]]; then

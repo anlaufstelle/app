@@ -542,6 +542,8 @@ def test_dev_count_mismatch_keeps_marker_blocked(tmp_path: Path) -> None:
     ops.mkdir(parents=True)
     shutil.copy(RESTORE_DRILL, ops / "restore-drill.sh")
     shutil.copy(OPS_DIR / "_backup_common.sh", ops / "_backup_common.sh")
+    # The drill reads .env.dev through scripts/ops/lib/env-file.sh.
+    shutil.copytree(OPS_DIR / "lib", ops / "lib")
     (root / "docker-compose.dev.yml").write_text("services: {}\n", encoding="utf-8")
     backup_dir = tmp_path / "dev-backups"
     backup_dir.mkdir()

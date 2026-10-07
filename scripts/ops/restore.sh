@@ -46,6 +46,9 @@ source "${SCRIPT_DIR}/_backup_common.sh"
 # Satz-/Manifestpruefung, geteilt mit ``backup.sh --verify`` (Refs #2290, #2292).
 # shellcheck source=scripts/ops/lib/backup-set.sh
 source "${SCRIPT_DIR}/lib/backup-set.sh"
+# Reads dotenv files as data, never as shell code.
+# shellcheck source=scripts/ops/lib/env-file.sh
+source "${SCRIPT_DIR}/lib/env-file.sh"
 
 # Bestaetigung (Refs #2318): Ein per Pipe zugefuehrtes "ja" wurde frueher von
 # einem vorgelagerten ``docker compose exec -T``-Aufruf verbraucht; die Kette
@@ -79,9 +82,7 @@ fi
 
 # .env laden falls vorhanden
 if [[ -f "${PROJECT_DIR}/.env" ]]; then
-    set -a
-    source "${PROJECT_DIR}/.env"
-    set +a
+    load_env_file "${PROJECT_DIR}/.env"
 fi
 
 : "${POSTGRES_USER:?POSTGRES_USER nicht gesetzt}"
