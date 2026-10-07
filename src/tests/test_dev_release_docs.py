@@ -15,6 +15,8 @@ def release_findings(root):
     workflow = (dev / "ci-workflows.md").read_text()
     exclusions = (dev / "release-exclusions.md").read_text()
     errors = []
+    if "CONTRIBUTING.md#python--django" not in checklist:
+        errors.append("wrong Django version anchor")
     if "ghcr.io/anlaufstelle/app" in checklist:
         errors.append("wrong image repository")
     if re.search(r"^docker compose[^\n]*pull ghcr\.io/", checklist, re.MULTILINE):
