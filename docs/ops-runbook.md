@@ -206,12 +206,11 @@ docker compose "${compose_files[@]}" run --rm maintenance enforce_retention --dr
 
 ### 1.4 Compose-Stack-Abgleich
 
-Refs #2086. Die ausgelieferten Stacks (prod und dev) fahren dasselbe Drei-Rollen-PostgreSQL-Modell (kanonische Beschreibung: [§ 9 „DB-Rollenmodell (Goldstandard)"](#db-rollenmodell-goldstandard)). Der Abgleich ist Soll **und** Ist — driftet ein Stack, faellt das Verhalten dort still auseinander, ohne dass ein Test es meldet:
+Refs #2086. Die Compose-Stacks fahren dasselbe Drei-Rollen-PostgreSQL-Modell (kanonische Beschreibung: [§ 9 „DB-Rollenmodell (Goldstandard)"](#db-rollenmodell-goldstandard)). Der Abgleich ist Soll **und** Ist — driftet ein Stack, faellt das Verhalten dort still auseinander, ohne dass ein Test es meldet:
 
 | Stack | `deploy/postgres-init` gemountet | `db` bootstrappt als | `web` verbindet als | `maintenance` | `cron` | Env-Vorlage |
 |---|---|---|---|---|---|---|
 | `docker-compose.prod.yml` | ja | `postgres` (Bootstrap-Superuser) | App-Rolle `${POSTGRES_USER}` (Allowlist) | ja | ja | `.env.example` |
-| `docker-compose.dev.yml` | ja | `postgres` | App-Rolle (Allowlist) | ja | nein (Host-Timer) | `.env.dev.example` |
 
 
 Invarianten, die fuer **jeden** Stack gelten:
@@ -1159,8 +1158,7 @@ Refs #1363 (N10 + Review-Nachschlag): Caddy weist Request-Bodies oberhalb von `1
 **Restrisiko (bewusst dokumentiert, nicht gefixt):** Ein `DocumentType` kann — nur konfigurierbar durch `facility_admin`/`super_admin` — **mehrere** FILE-Felder tragen; jedes traegt unabhaengig bis zu `FILE_VAULT_MAX_UPLOAD_FILES` Dateien. Der theoretische Worst-Case je Request waechst dann um weitere `FILE_VAULT_MAX_UPLOAD_BYTES * FILE_VAULT_MAX_UPLOAD_FILES` pro zusaetzlichem FILE-Feld. Deployments mit vielfeldigen Datei-Dokumentationstypen sollten den Caddy-Cap entsprechend hochskalieren (kein automatischer Abgleich).
 
 ```bash
-# 1. Aktuellen Caddy-Wert pruefen (beide Varianten: Caddyfile,
-#    Caddyfile.dev)
+# 1. Aktuellen Caddy-Wert pruefen
 grep -A2 request_body Caddyfile*
 
 # 2. App-seitiges Limit pruefen (falls per Env ueberschrieben)
@@ -1183,7 +1181,7 @@ docker compose -f docker-compose.prod.yml exec caddy \
 
 **Hintergrund:** Uploads oberhalb von `FILE_UPLOAD_MAX_MEMORY_SIZE` (Default 2,5 MB) puffert Django als **Klartext-Tempdatei** auf Platte, bevor sie von `core/services/file_vault/storage.py` gescannt und verschluesselt werden. Ohne explizites `FILE_UPLOAD_TEMP_DIR` faellt Django auf `tempfile.gettempdir()` zurueck (i. d. R. `/tmp`). Das ist nur ein kurzes Zeitfenster, aber unverschluesselter Klienten-Content liegt fuer diesen Moment auf Disk.
 
-**Gegenmassnahme:** `docker-compose.prod.yml`/`dev.yml` mounten `/tmp` im `web`-Container bereits als **tmpfs** (RAM) — noetig, weil der Container `read_only` laeuft (Refs #1374). `FILE_UPLOAD_TEMP_DIR=/tmp` ist dort explizit im `environment:`-Block der jeweiligen Compose-Datei gesetzt und pinnt Djangos Upload-Puffer nachweislich auf dieses tmpfs, statt sich auf Pythons `TMPDIR`-Ermittlungsreihenfolge zu verlassen (ein spaeter versehentlich gesetztes `TMPDIR` wuerde den impliziten Fallback sonst unbemerkt von tmpfs weg auf ein persistentes Volume umlenken). Der Tempdatei-Inhalt existiert also nur fluechtig im RAM und ist beim Container-Neustart weg — kein Aufraeum-Cronjob noetig.
+**Gegenmassnahme:** `docker-compose.prod.yml` mountet `/tmp` im `web`-Container bereits als **tmpfs** (RAM) — noetig, weil der Container `read_only` laeuft (Refs #1374). `FILE_UPLOAD_TEMP_DIR=/tmp` ist dort explizit im `environment:`-Block der Compose-Datei gesetzt und pinnt Djangos Upload-Puffer nachweislich auf dieses tmpfs, statt sich auf Pythons `TMPDIR`-Ermittlungsreihenfolge zu verlassen (ein spaeter versehentlich gesetztes `TMPDIR` wuerde den impliziten Fallback sonst unbemerkt von tmpfs weg auf ein persistentes Volume umlenken). Der Tempdatei-Inhalt existiert also nur fluechtig im RAM und ist beim Container-Neustart weg — kein Aufraeum-Cronjob noetig.
 
 ```bash
 # Verifizieren, dass /tmp im web-Container tatsaechlich ein tmpfs ist
@@ -1223,13 +1221,6 @@ Einladungs- und Reset-Links muss ausserdem `EXTERNAL_ORIGIN` die oeffentliche
 Basis-URL enthalten. Der Absender soll fuer SPF, DKIM und DMARC autorisiert
 sein.
 
-Der Dev-Stack reicht diese Mail-Variablen an `web` durch. Fuer SMTP auf
-dev genuegt `EMAIL_HOST` (und bei Bedarf Zugangsdaten) in `.env.dev`; bleibt
-`EMAIL_HOST` leer, schreibt `devlive` weiterhin in die Konsole. Nach dem Start
-laesst sich die Durchreichung mit
-`docker compose -f docker-compose.dev.yml --env-file .env.dev exec -T web env | grep '^EMAIL_HOST='`
-pruefen. Mit Detail-Token muss `/health/` im Feld `smtp` dann `ok` oder
-`unreachable` statt `disabled` melden.
 
 **Deploy-Check `mail.E001` (Django 6.1, #2326):** `python manage.py check --deploy`
 — der Web-Container fuehrt ihn bei jedem Start aus, siehe
@@ -1457,7 +1448,7 @@ docker compose "${compose_files[@]}" up -d web cron caddy
 docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.maintenance
 ```
 
-Der Produktions-Stack setzt `MAINTENANCE_FLAG_FILE` ohne weitere Konfiguration auf `/data/anlaufstelle.maintenance`. Der Pfad liegt im benannten `media`-Volume, ist für `appuser` beschreibbar und übersteht deshalb das Neuanlegen von `web`; `make maintenance-on/off` berührt nur das Host-Dateisystem und ist für diesen Stack nicht geeignet. Ein bereits in `.env` gesetzter Wert überschreibt den Standard weiterhin, muss aber ein beschreibbarer, persistenter **Container-Pfad** sein. Alternativ schaltet eine Systemadministration den Modus unter `/system/maintenance/` ein oder aus; die Seite schreibt dieselbe Datei.
+Der Produktions-Stack setzt `MAINTENANCE_FLAG_FILE` ohne weitere Konfiguration auf `/data/anlaufstelle.maintenance`. Der Pfad liegt im benannten `media`-Volume, ist für `appuser` beschreibbar und übersteht deshalb das Neuanlegen von `web`. Ein bereits in `.env` gesetzter Wert überschreibt den Standard weiterhin, muss aber ein beschreibbarer, persistenter **Container-Pfad** sein. Alternativ schaltet eine Systemadministration den Modus unter `/system/maintenance/` ein oder aus; die Seite schreibt dieselbe Datei.
 
 Whitelist:
 
@@ -1709,9 +1700,8 @@ Stack hinter einer Egress-Filterung, müssen die ClamAV-Mirror-Domains
 (`database.clamav.net`) von der Firewall des Hosts freigegeben sein; ohne
 Zugang friert der Signaturstand ein.
 
-`docker-compose.dev.yml` hängt `clamav` dagegen nur an `internal`: dort gibt
-es keinen Update-Pfad, der Signaturstand bleibt auf
-dem Stand des Images. Logs und Stand prüfen:
+
+Logs und Stand prüfen:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log
@@ -1940,7 +1930,7 @@ tatsaechlich verbindet.
 
 **Dies ist die kanonische Beschreibung des PostgreSQL-Rollenmodells** — andere
 Deployment-Dokumente verweisen hierher, statt sie zu wiederholen. Sie gilt fuer
-**alle** ausgelieferten Deployment-Stacks (prod und dev);
+**alle** ausgelieferten Deployment-Stacks;
 den Ist-Abgleich je Stack fuehrt [§ 1.4](#14-compose-stack-abgleich). Quelle der
 Wahrheit ist das Init-Script
 [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh)
@@ -2060,11 +2050,8 @@ Der kanonische, getestete Weg ist:
 ```bash
 cd /opt/anlaufstelle
 ./scripts/ops/rotate-db-passwords.sh
-
-# dev verwendet seine eigene Compose-/Env-Datei:
-COMPOSE_FILE=docker-compose.dev.yml ENV_FILE=.env.dev \
-  ./scripts/ops/rotate-db-passwords.sh
 ```
+
 
 **Compose-Dateiliste:** Das Skript baut die Dateiliste wie `scripts/initial-setup.sh`
 auf: die Basisdatei (`COMPOSE_FILE`), danach `compose.legal.yml` und
@@ -2111,7 +2098,7 @@ und eine einzige Transaktion verwenden.
 | Schritt/Consumer | Rolle | Was die Rotation tut |
 |---|---|---|
 | `web` | App (`POSTGRES_PASSWORD`) | Vor der DB-Aenderung stoppen; nach Env-Tausch mit neuem Passwort starten und Health abwarten. |
-| `cron` | Admin (`POSTGRES_ADMIN_PASSWORD`) | Zusammen mit `web` stoppen/starten, damit kein Retention-/Audit-Job mit altem Login neu verbindet. In Dev/Demo ohne `cron` entfaellt nur dieser Schritt. |
+| `cron` | Admin (`POSTGRES_ADMIN_PASSWORD`) | Zusammen mit `web` stoppen/starten, damit kein Retention-/Audit-Job mit altem Login neu verbindet. |
 | `maintenance` / [`docker-migrate.sh`](../docker-migrate.sh) | Admin | Nach DB-Recreate als kurzlebiger One-Shot mit der neuen Env ausfuehren. Das prueft `check_db_roles`, Migrationen und die Ownership-Normalisierung aus #1085. |
 | `db` | Bootstrap (`POSTGRES_BOOTSTRAP_PASSWORD`) | Alle drei Rollen in einer Transaktion aendern; danach den Container mit unveraendertem Datenvolume **recreaten**, damit auch seine Container-Env nicht das alte Bootstrap-Secret behaelt. |
 | [`scripts/ops/backup.sh`](../scripts/ops/backup.sh) | Admin | Kein Daemon-Neustart: das Host-Skript liest `.env` bei jedem neuen Lauf. Deshalb waehrend der Rotation nicht parallel starten. |
@@ -3007,7 +2994,7 @@ Damit erkennt Django HTTPS auch hinter dem Caddy-Proxy. Voraussetzung: **Caddy s
 
 **Wichtig:** Wenn die App **direkt** exponiert wird (ohne Reverse-Proxy), MUSS dieses Setting entfernt werden. Sonst kann ein Angreifer `X-Forwarded-Proto: https` selbst setzen — `request.is_secure()` liefert dann `True`, obwohl die Verbindung Klartext ist; HSTS-/Secure-Cookie-Logik wird ausgehebelt.
 
-In `Caddyfile` (und den Varianten `Caddyfile.dev`) wird `X-Forwarded-Proto` **nicht explizit** gesetzt — die blanke Direktive genuegt:
+In `Caddyfile` wird `X-Forwarded-Proto` **nicht explizit** gesetzt — die blanke Direktive genuegt:
 
 ```
 reverse_proxy web:8000
