@@ -2052,8 +2052,14 @@ aligns existing ones with the env. Two ways forward:
 
 **Until one of these two paths has been carried out, the old superuser
 situation stays live on a running server** — the repository fix alone
-changes nothing there. The `web` healthcheck does make it visible, though: the
-container never turns `healthy` there, and `caddy` does not release the runtime.
+changes nothing there. `/health/` makes it visible but does not block it: with a
+SUPERUSER/BYPASSRLS runtime role the endpoint reports `status: degraded`
+(`src/core/views/health.py:430`) and stays at HTTP 200 (`:390`). The `web`
+Compose healthcheck lets every status except `error` pass
+(`docker-compose.prod.yml:292–294`), and `caddy` only waits for `service_healthy`
+(`:526–528`). The container therefore still turns `healthy` and `caddy` routes.
+The only lock is the `check_db_roles` gate (`docker-migrate.sh:53`, migrate job)
+and the verification below; `/health/` is an early warning for the uptime monitor.
 
 **Verification** after the first startup — the gate checks both roles:
 
@@ -2579,7 +2585,8 @@ SELECT pg_terminate_backend(pid) FROM pg_stat_activity
 \set old_role anlaufstelle
 \set app_role anlaufstelle_app
 \set admin_role anlaufstelle_admin
-\set dbname anlaufstelle  -- adjust to the value of POSTGRES_DB
+-- dbname: adjust to the value of POSTGRES_DB (name of the database).
+\set dbname anlaufstelle
 
 -- Control output BEFORE the rebuild: exactly the four names must appear here,
 -- with nothing appended. If anything differs, abort.
@@ -2769,8 +2776,8 @@ Then switch the env file over — the part that is easy to forget:
 
 > **Why not keep the old name?** Because that very name is the bootstrap role
 > and stays `SUPERUSER` forever. If the runtime kept using it, the fix would be
-> ineffective — `FORCE ROW LEVEL SECURITY` does not apply to superusers. The
-> `web` healthcheck would notice and never report the container
+> ineffective — `FORCE ROW LEVEL SECURITY` does not apply to superusers.
+> `/health/` would show it as `degraded`; the container would still report
 > `healthy`.
 
 > **The `postgres` role is not optional after case C.** A cluster created this
@@ -2817,8 +2824,9 @@ docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 
 A non-zero exit means the rebuild is incomplete — do **not** start `web`, work
 through the message instead. Only then deploy; the migrate one-shot runs the
-same gate again, and the `web` healthcheck additionally verifies the
-actual connection role continuously.
+same gate again. `/health/` shows the actual connection role continuously as
+`degraded` but does not block startup — `check_db_roles` must therefore have
+succeeded before the deploy.
 
 Since #2086 the gate no
 longer only checks that the app role is **not** the owner, but that the admin
@@ -3267,7 +3275,7 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 87face5a43466a810886b3f47d37cba16a97ea64 -->
+<!-- source-hash: f92c6df637c3ba3dcdd414477737d8f08f5ef9b5 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
 <!-- translation-date: 2026-10-06 -->
