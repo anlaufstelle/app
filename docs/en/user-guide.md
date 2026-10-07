@@ -715,7 +715,7 @@ When a social worker, manager or application support wants to delete a contact b
 2. Click on a request to see the details and the affected event.
 3. Click **Approve** or **Reject** and confirm.
 
-> **Important:** The “Deletion confirmation” right is granted independently of the role and is disabled by default. Managers and application support also need it. You cannot approve or reject your own request (four-eyes principle). See [Admin Guide § 7.5](admin-guide.md#75-deletion-requests-four-eyes-principle--dual-approval) for how it is granted.
+> **Important:** The “Deletion confirmation” right is granted independently of the role. When an account is created it is preset for managers and application support and can be deselected; other roles do not get it unless chosen. Without the right, a manager cannot approve either. You cannot approve or reject your own request (four-eyes principle). See [Admin Guide § 7.5](admin-guide.md#75-deletion-requests-four-eyes-principle--dual-approval) for how it is granted.
 
 Regardless of your role: As the requesting person, you can withdraw your own deletion request yourself as long as it is still **pending**. At `/deletion-requests/`, your own pending request shows the **Withdraw** link next to the four-eyes notice. The confirmation dialog explicitly says: **Nothing is deleted — the data remains unchanged.** Afterwards, a new deletion request for the same target is possible at any time. The request remains visible to the approver pool in the **Withdrawn** section, and the withdrawal is logged with the final status **Withdrawn**.
 
@@ -1038,4 +1038,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 3b359a9114c08715be3d97d1a45fbd378e832b2e -->
+<!-- source-hash: d5f23c182e6e5791d65618b8c66675b9244887f2 -->

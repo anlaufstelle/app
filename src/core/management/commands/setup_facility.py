@@ -154,6 +154,9 @@ class Command(BaseCommand):
                     # Refs #1271: kein ``is_superuser`` — facility_admin ist auf eine
                     # Einrichtung beschraenkt; Autorisierung laeuft ueber die Rolle.
                     "display_name": admin_username.title(),
+                    # The first account approves deletion requests from the start;
+                    # without it no request of the new facility has an approver.
+                    "can_confirm_deletion": True,
                 },
             )
             if created:

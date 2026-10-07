@@ -863,6 +863,10 @@ class TestTenantModelScopeGuard:
             "Compliance-Check auf DB-Superuser — deploymentweit per Definition; "
             "gerendert nur im Super-Admin-Bereich (views/system/compliance.py)."
         ),
+        "compliance/deletion_approvers.py:_deletion_approver_checks:Facility": (
+            "Installation-wide compliance card for the super admin: counts the active approvers "
+            "of every facility, read under ``rls_bypass_for_read`` like ``_retention_config_checks``."
+        ),
         "compliance/retention.py:_retention_config_checks:Facility": (
             "Aggregierte Warnung fuer explizit unbegrenzte Audit-Aufbewahrung — "
             "deploymentweit per Definition, vollstaendig in rls_bypass_for_read gekapselt "

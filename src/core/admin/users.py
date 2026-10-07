@@ -12,9 +12,11 @@ from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
+from unfold.widgets import UnfoldAdminSelectWidget
 
 from core.admin.mixins import FacilityScopedAdminMixin
 from core.admin_site import anlaufstelle_admin_site
+from core.forms.user_access import deletion_approval_field, resolve_deletion_approval
 from core.models import AuditLog, User
 from core.models.user import SessionRevocationError
 from core.services.audit import audit_event
@@ -66,10 +68,21 @@ class UserAddForm(UserCreationForm):
     abzuschalten, ohne ``_post_clean``/``save`` selbst zu duplizieren.
     """
 
+    # Same creation-time default as the invitation form: leads and facility admins
+    # approve deletion requests unless deselected, other roles only if chosen.
+    can_confirm_deletion = deletion_approval_field()
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field_name in ("password1", "password2", "usable_password"):
             self.fields.pop(field_name, None)
+        if "can_confirm_deletion" in self.fields:
+            self.fields["can_confirm_deletion"].widget = UnfoldAdminSelectWidget(
+                choices=self.fields["can_confirm_deletion"].choices
+            )
+
+    def clean_can_confirm_deletion(self):
+        return resolve_deletion_approval(self.cleaned_data.get("can_confirm_deletion"), self.cleaned_data.get("role"))
 
     def validate_passwords(self, *args, **kwargs):
         del args, kwargs  # ungenutzt: es gibt keine Passwort-Felder mehr zu validieren.
@@ -354,7 +367,7 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
         (
             "Anlaufstelle",
             {
-                "fields": ("role", "facility", "display_name"),
+                "fields": ("role", "facility", "display_name", "can_confirm_deletion"),
             },
         ),
     )

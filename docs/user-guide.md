@@ -713,7 +713,7 @@ Wenn eine Fachkraft, Leitung oder Anwendungsbetreuung einen Kontakt einer Person
 2. Klicken Sie auf einen Antrag, um Details und das betroffene Ereignis einzusehen.
 3. Klicken Sie auf **Genehmigen** oder **Ablehnen** und bestätigen Sie.
 
-> **Wichtig:** Das Recht „Löschbestätigung“ wird unabhängig von der Rolle vergeben und ist standardmäßig nicht gesetzt. Auch Leitung und Anwendungsbetreuung benötigen es. Eigene Anträge können Sie weder genehmigen noch ablehnen (4-Augen-Prinzip). Zur Vergabe siehe [Admin-Handbuch § 7.5](admin-guide.md#75-löschanträge-4-augen-prinzip).
+> **Wichtig:** Das Recht „Löschbestätigung“ wird unabhängig von der Rolle vergeben. Beim Anlegen eines Zugangs ist es für Leitung und Anwendungsbetreuung vorbelegt und abwählbar, für andere Rollen nicht; ohne das Recht kann auch eine Leitung nicht genehmigen. Eigene Anträge können Sie weder genehmigen noch ablehnen (4-Augen-Prinzip). Zur Vergabe siehe [Admin-Handbuch § 7.5](admin-guide.md#75-löschanträge-4-augen-prinzip).
 
 Unabhängig von Ihrer Rolle: Als antragstellende Person können Sie Ihren eigenen Löschantrag selbst zurückziehen, solange er noch **ausstehend** ist. Unter `/deletion-requests/` erscheint an Ihrem eigenen ausstehenden Antrag neben dem Vier-Augen-Hinweis der Link **Zurückziehen**. Der Bestätigungsdialog sagt ausdrücklich: **Es wird nichts gelöscht — die Daten bleiben unverändert.** Danach ist jederzeit ein neuer Löschantrag für dasselbe Ziel möglich. Der Antrag bleibt für den Genehmiger-Pool in der Sektion **Zurückgezogen** sichtbar und der Rückzug wird mit dem Endstatus **Zurückgezogen** protokolliert.
 

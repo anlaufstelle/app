@@ -63,6 +63,7 @@ from core.services.compliance.db_roles import (
     _db_role_attribute_check,
     _db_role_checks,
 )
+from core.services.compliance.deletion_approvers import _deletion_approver_checks
 from core.services.compliance.k_anonymization import (
     count_clients_in_bucket,
     is_k_anonymous,
@@ -155,6 +156,7 @@ def aggregate_checks() -> list[ComplianceCheck]:
             _mv_refresh_checks,
             _restore_checks,
             _mfa_checks,
+            _deletion_approver_checks,
             _migration_checks,
             _version_checks,
             _audit_event_checks,
@@ -238,6 +240,7 @@ __all__ = [
     "_backup_checks",
     "_breach_scan_checks",
     "_clamav_checks",
+    "_deletion_approver_checks",
     "_mv_refresh_checks",
     "_db_role_admin_check",
     "_db_role_attribute_check",

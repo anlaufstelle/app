@@ -101,7 +101,9 @@ def test_admin_manages_invited_user_and_unlocks_account(authenticated_page, base
     page.fill('input[name="display_name"]', "E2E Zugang")
     page.select_option('select[name="role"]', "staff")
     page.check('input[name="mfa_required"]')
-    page.check('input[name="can_confirm_deletion"]')
+    # Creation offers the right as a choice preset to the role default; staff gets it only when chosen.
+    expect(page.locator('select[name="can_confirm_deletion"]')).to_have_value("role")
+    page.select_option('select[name="can_confirm_deletion"]', "yes")
     page.locator('[data-testid="user-access-form"] button[type="submit"]').click()
     page.wait_for_url(_DETAIL_RE, timeout=30000, wait_until="domcontentloaded")
     match = _DETAIL_RE.search(page.url)

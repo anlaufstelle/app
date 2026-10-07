@@ -36,7 +36,7 @@ def _create_data(**overrides):
         "display_name": "Neue Fachkraft",
         "role": User.Role.STAFF,
         "mfa_required": "on",
-        "can_confirm_deletion": "on",
+        "can_confirm_deletion": "yes",
     }
     data.update(overrides)
     return data

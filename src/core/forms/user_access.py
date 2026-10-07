@@ -21,6 +21,37 @@ _CREATE_FIELDS = (
 )
 _UPDATE_FIELDS = (*_CREATE_FIELDS[:4], "is_active", *_CREATE_FIELDS[4:])
 
+# Roles that receive the deletion approval right by default when an account is created.
+DELETION_APPROVER_DEFAULT_ROLES = frozenset({User.Role.FACILITY_ADMIN, User.Role.LEAD})
+_BY_ROLE, _YES, _NO = "role", "yes", "no"
+
+
+def deletion_approval_field() -> forms.ChoiceField:
+    """Creation-time choice for ``can_confirm_deletion``, preset to the role default."""
+    return forms.ChoiceField(
+        label=User._meta.get_field("can_confirm_deletion").verbose_name,
+        choices=(
+            (_BY_ROLE, _("Nach Rolle: ja für Leitung und Anwendungsbetreuung, sonst nein")),
+            (_YES, _("Ja")),
+            (_NO, _("Nein")),
+        ),
+        initial=_BY_ROLE,
+        required=False,
+        help_text=_(
+            "Darf Löschanträge als zweite Person genehmigen; eigene Anträge bleiben ausgeschlossen. "
+            "Jede Einrichtung braucht mindestens zwei Konten mit diesem Recht."
+        ),
+    )
+
+
+def resolve_deletion_approval(choice: str | None, role: str | None) -> bool:
+    """Boolean value of the creation-time choice; an empty choice follows the role."""
+    if choice == _YES:
+        return True
+    if choice == _NO:
+        return False
+    return role in DELETION_APPROVER_DEFAULT_ROLES
+
 
 class _UserAccessForm(TailwindFormMixin, forms.ModelForm):
     """Gemeinsame Guards fuer einrichtungsgebundene Benutzerformulare."""
@@ -46,6 +77,8 @@ class _UserAccessForm(TailwindFormMixin, forms.ModelForm):
 
 
 class UserAccessCreateForm(_UserAccessForm):
+    can_confirm_deletion = deletion_approval_field()
+
     class Meta:
         model = User
         fields = _CREATE_FIELDS
@@ -53,6 +86,9 @@ class UserAccessCreateForm(_UserAccessForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["email"].required = True
+
+    def clean_can_confirm_deletion(self):
+        return resolve_deletion_approval(self.cleaned_data.get("can_confirm_deletion"), self.cleaned_data.get("role"))
 
 
 class UserAccessUpdateForm(_UserAccessForm):

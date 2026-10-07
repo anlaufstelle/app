@@ -574,7 +574,7 @@ Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt
 3. Eine zweite Person mit Recht „Löschbestätigung“ prüft den Antrag — DB-Constraint `deletion_request_different_reviewer` erzwingt: **Reviewer ≠ Antragsteller**
 4. Approve → Event wird soft-deleted + anonymisiert | Reject → Event bleibt
 
-Das Recht „Löschbestätigung“ ist rollenunabhängig und standardmäßig nicht gesetzt; auch Leitung und Anwendungsbetreuung brauchen es. Eigene Anträge dürfen weder genehmigt noch abgelehnt werden. Zur Vergabe siehe [Admin-Handbuch § 7.5](admin-guide.md#75-löschanträge-4-augen-prinzip).
+Das Recht „Löschbestätigung“ ist rollenunabhängig. Beim Anlegen eines Zugangs ist es für Leitung und Anwendungsbetreuung vorbelegt und abwählbar, für andere Rollen nicht; das erste Konto der Ersteinrichtung trägt es. Eigene Anträge dürfen weder genehmigt noch abgelehnt werden. Zur Vergabe siehe [Admin-Handbuch § 7.5](admin-guide.md#75-löschanträge-4-augen-prinzip).
 
 **Was passiert bei einer Löschung?**
 
