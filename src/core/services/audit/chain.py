@@ -110,6 +110,9 @@ def _system_chain_latest_link_raw():
     (``facility=NULL``) via **einzelnem Raw-Cursor-SELECT** unter transient
     angehobener RLS-Sicht (R15, Refs #1476/#1665).
 
+    Only hashed rows count as the chain head (Refs #2449): a row without
+    ``entry_hash`` must never become the predecessor of a new entry.
+
     NULL-facility-Zeilen sind unter der RLS-USING-Policy nur fuer
     ``app.is_super_admin='true'`` sichtbar (Migration 0085). Ein nicht-super
     Schreiber unter der NOBYPASSRLS-App-Rolle (z.B. LOGIN_FAILED fuer einen
@@ -150,7 +153,8 @@ def _system_chain_latest_link_raw():
                 # kein User-Input); die WHERE-Bedingung ist literal.
                 sql = (
                     f"SELECT {ts_col}, {hash_col} FROM {table} "  # noqa: S608 — konstante, gequotete Identifier
-                    f"WHERE {fac_col} IS NULL ORDER BY {ts_col} DESC, {id_col} DESC LIMIT 1"
+                    f"WHERE {fac_col} IS NULL AND {hash_col} <> '' "
+                    f"ORDER BY {ts_col} DESC, {id_col} DESC LIMIT 1"
                 )
                 cur.execute(sql)
                 return cur.fetchone()
@@ -161,7 +165,16 @@ def _system_chain_latest_link_raw():
 
 
 def _latest_link(facility_id):
-    """``(timestamp, entry_hash)`` der juengsten Zeile der Facility-Kette."""
+    """``(timestamp, entry_hash)`` of the newest *hashed* row of the chain.
+
+    Rows without ``entry_hash`` are ignored (Refs #2449). Otherwise an unhashed
+    row at the chain end -- the database refuses to INSERT one, so it can only
+    come from before the chain existed or from an owner-level write -- would
+    become the predecessor, and the next legitimate entry would restart the
+    chain behind it with ``prev_hash=""``.
+    """
+    from django.db.models import Q
+
     from core.models import AuditLog
 
     # System-Kette (facility=NULL) auf PostgreSQL: Raw-Read unter eng
@@ -171,7 +184,7 @@ def _latest_link(facility_id):
         return _system_chain_latest_link_raw()
 
     return (
-        AuditLog.objects.filter(facility_id=facility_id)
+        AuditLog.objects.filter(Q(facility_id=facility_id), ~Q(entry_hash=""), entry_hash__isnull=False)
         .order_by("-timestamp", "-id")
         .values_list("timestamp", "entry_hash")
         .first()
@@ -240,6 +253,8 @@ def assign_chain_fields(instance) -> None:
     # juengsten Bestand (gleiche Mikrosekunde), um 1 us anheben. Damit ist
     # ``(timestamp, id)`` eine totale Ordnung, die der Insert-Reihenfolge
     # entspricht — Verify liest in derselben Reihenfolge.
+    # The reference is the newest hashed row (see ``_latest_link``); an
+    # unhashed row may sort after it and is reported by ``verify_chain``.
     if latest and latest[0] and instance.timestamp and instance.timestamp <= latest[0]:
         instance.timestamp = latest[0] + timedelta(microseconds=1)
 
@@ -315,6 +330,11 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
        *authentifizierten* Checkpoint protokollierte Prune-Grenze ist (siehe
        :func:`_checkpoint_boundaries`) — sonst wurde eine Zeile
        geloescht/eingeschoben.
+    3. **Completeness** -- a row without ``entry_hash`` is only accepted before
+       the first hashed row of the chain (written before the chain existed).
+       After the chain start it is a break of its own (Refs #2449): the
+       database refuses such an INSERT, so the row was slipped in past the
+       regular write path.
 
     ``facility`` darf eine ``Facility``-Instanz, ein PK oder ``None`` (System-
     Kette) sein. Vergleich via :func:`hmac.compare_digest`.
@@ -343,9 +363,17 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
     checked = 0
     for row in rows:
         if not row.entry_hash:
-            # Noch nicht verkettete Bestandszeile (vor ``backfill_audit_chain``)
-            # — ueberspringen und Kette ab der naechsten Zeile neu ansetzen.
-            prev_entry = None
+            if checked:
+                return ChainResult(
+                    False,
+                    checked,
+                    str(row.pk),
+                    "unhashed row after chain start (inserted without hash)",
+                    last_entry_hash=prev_entry,
+                )
+            # Row from before the chain existed (not yet sealed by
+            # ``backfill_audit_chain``) -- skip; the chain starts at the first
+            # hashed row with ``prev_hash=""``.
             continue
         checked += 1
         expected = compute_entry_hash(row, row.prev_hash or "")

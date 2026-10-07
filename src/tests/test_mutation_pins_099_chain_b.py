@@ -27,8 +27,10 @@ Killt (Test je Zeile):
   ``x_assign_chain_fields__mutmut_11``.
 - ``test_assign_chain_fields_bumpt_bei_exakter_kollision``:
   ``x_assign_chain_fields__mutmut_23``/``_26``/``_29``.
-- ``test_assign_chain_fields_bumpt_bei_unverketteter_bestandszeile``:
-  ``x_assign_chain_fields__mutmut_22``.
+- ``test_assign_chain_fields_bumps_against_the_newest_hashed_row``: pins the
+  hashed-only reference of the monotonic bump (Refs #2449);
+  ``x_assign_chain_fields__mutmut_22`` is equivalent since then (the head
+  lookup only returns rows with a truthy ``entry_hash``).
 - ``test_canonical_timestamp_falsy_leer_truthy_isoformat``:
   ``x__canonical_timestamp__mutmut_1``/``_2``.
 - ``test_canonical_timestamp_naive_wird_als_utc_interpretiert``:
@@ -134,31 +136,34 @@ def test_assign_chain_fields_bumpt_bei_exakter_kollision(facility, staff_user):
     assert kollidierend.timestamp == erste.timestamp + timedelta(microseconds=1)
 
 
-def test_assign_chain_fields_bumpt_bei_unverketteter_bestandszeile(facility, staff_user):
-    """Killt ``x_assign_chain_fields__mutmut_22``: ``latest[0]`` -> ``latest[1]``
-    in der Monotonie-Bedingung. Eine unverkettete Bestandszeile (vor
-    ``backfill_audit_chain``, ``entry_hash=""``) hat einen falsy ``latest[1]``,
-    aber einen gueltigen Zeitstempel ``latest[0]``. Die Original-Bedingung
-    prueft ``latest[0]`` und bumpt trotzdem; der Mutant prueft ``latest[1]``
-    und uebersieht die Kollision — die Monotonie-Garantie bricht genau an der
-    Nahtstelle zu unmigrierten Altzeilen."""
+def test_assign_chain_fields_bumps_against_the_newest_hashed_row(facility, staff_user):
+    """The monotonic bump and ``prev_hash`` both refer to the newest HASHED row
+    (Refs #2449). An unhashed row with a later timestamp is not the chain head:
+    otherwise the next legitimate entry would restart the chain behind it.
+    ``x_assign_chain_fields__mutmut_22`` (``latest[0]`` -> ``latest[1]`` in the
+    bump condition) is equivalent since then: ``latest[1]`` is always a
+    non-empty hash."""
     assert connection.vendor == "postgresql"
-    bestand = audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+    hashed = audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+    hashed.refresh_from_db()
+    unhashed = audit_event(AuditLog.Action.VIEW_QUALIFIED, user=staff_user, facility=facility)
     with transaction.atomic(), bypass_replication_triggers():
-        AuditLog.objects.filter(pk=bestand.pk).update(entry_hash="")
-    bestand.refresh_from_db()
-    assert bestand.entry_hash == ""
+        AuditLog.objects.filter(pk=unhashed.pk).update(entry_hash="")
+    unhashed.refresh_from_db()
+    assert unhashed.entry_hash == ""
+    assert unhashed.timestamp > hashed.timestamp
 
     neu = AuditLog(
         facility=facility,
         user=staff_user,
         action=AuditLog.Action.LOGOUT,
         detail={},
-        timestamp=bestand.timestamp,
+        timestamp=hashed.timestamp,
     )
     with transaction.atomic():
         chain_mod.assign_chain_fields(neu)
-    assert neu.timestamp == bestand.timestamp + timedelta(microseconds=1)
+    assert neu.timestamp == hashed.timestamp + timedelta(microseconds=1)
+    assert neu.prev_hash == hashed.entry_hash
 
 
 # ---------------------------------------------------------------------------

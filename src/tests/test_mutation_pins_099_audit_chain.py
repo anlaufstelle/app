@@ -527,7 +527,7 @@ class TestVerifyChainLastEntryHashInitialisation:
         assert result.last_entry_hash is None
 
 
-class TestVerifyChainLegacyRowResetValue:
+class TestVerifyChainUnhashedTailIsABreak:
     def setup_method(self):
         # Harte Assertion statt eines bedingten Auslassens (Pin-Dateien
         # duerfen Tests nicht bedingt uebergehen): die Suite laeuft
@@ -537,26 +537,28 @@ class TestVerifyChainLegacyRowResetValue:
         # abbrechen statt ihn stumm zu deaktivieren.
         assert connection.vendor == "postgresql", "AuditLog-Kette/Trigger/RLS erfordert PostgreSQL"
 
-    def test_a_chain_ending_on_an_unlinked_legacy_row_reports_last_entry_hash_none(self, facility, staff_user):
-        """Killt ``__mutmut_20``: ``prev_entry = None`` (Reset im
-        Bestandszeilen-Zweig) -> ``= ""``.
+    def test_a_chain_ending_on_an_unhashed_row_reports_the_break_with_the_verified_tail(self, facility, staff_user):
+        """An unhashed row after the first hashed row is a break (Refs #2449).
 
-        Eine Kette, deren LETZTE (juengste) Zeile eine unverkettete
-        Bestandszeile ist (``entry_hash`` leer, vor ``backfill_audit_chain``),
-        endet die Schleife mit dem Reset-Wert als ``prev_entry`` — der einzige
-        Fall ausser einer komplett leeren Kette, in dem der Initial-/Reset-Wert
-        (statt eines echten Zeilen-Hashes) den Rueckgabewert bestimmt.
-        Original liefert ``last_entry_hash=None`` (Vertrag: „None bei leerer
-        [restlicher] Kette"), der Mutant ``""``.
+        This pin used to assert ``ok`` for a chain whose newest row has no
+        ``entry_hash`` -- exactly the gap through which a row inserted without a
+        hash stayed undetected. ``__mutmut_20`` (the reset ``prev_entry = None``
+        in the skip branch) no longer exists: rows without a hash are only
+        skipped before the chain start, where ``prev_entry`` is ``None`` anyway.
+        The break carries the hash of the last verified row as its tail.
         """
-        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        first = audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
         trailing = audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility)
         _tamper(trailing.pk, prev_hash="", entry_hash="")
+        first.refresh_from_db()
 
         result = verify_chain(facility)
 
-        assert result.ok
-        assert result.last_entry_hash is None
+        assert not result.ok
+        assert result.first_break_id == str(trailing.pk)
+        assert result.reason == "unhashed row after chain start (inserted without hash)"
+        assert result.rows_checked == 1
+        assert result.last_entry_hash == first.entry_hash
 
 
 class TestVerifyChainLegacyRowDoesNotAbortTheScan:
