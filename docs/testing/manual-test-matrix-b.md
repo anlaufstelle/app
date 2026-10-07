@@ -20,7 +20,7 @@
 **Middleware:** `core.middleware.password_change.ForcePasswordChangeMiddleware`  
 **Settings:** `AUTH_PASSWORD_VALIDATORS` (min_length=12, BSI/NIST), `SESSION_COOKIE_AGE=1800`, `SESSION_SAVE_EVERY_REQUEST=False`, `AUDIT_HASH_KEY`, Audit-Action-Choices in `src/core/models/audit.py`  
 **Signals:** `src/core/signals/audit.py` (LOGIN/LOGOUT/LOGIN_FAILED via Django-Auth-Signals)  
-**E2E-Coverage:** `test_auth_roles.py`, `test_password_reset.py`, `test_logout_cleanup.py`, `test_security_hardening.py`  
+**E2E-Coverage:** `test_auth_roles.py`, `test_password_reset.py`, `test_logout_cleanup.py`  
 **Spezial-Setup:**
 - Login-Lockout-Test braucht 10 sequenzielle Fehlversuche innerhalb von 15 Min — IP-Rate-Limit (5/m) muss vorher umgangen werden (z.B. Cookie-Reset zwischen Bursts oder Limit per Settings hochsetzen).
 - Pwd-Reset-Test braucht den Console-Mailer über `MAILERS` (`MAILERS = {"default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"}}` — dev/e2e-Default) oder MailHog für Token-Capture.
@@ -93,7 +93,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
+| Auth | fachkraft (`miriam`) | C | — | `test_auth_roles.py::TestZZAccountLockout` |
 
 **Voraussetzung:** IP-Rate-Limit (5/m) vorübergehend deaktiviert ODER `RATELIMIT_ENABLE=False` in Test-Settings.
 
@@ -126,7 +126,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | unauthentifiziert | C | — | `test_security_hardening.py` |
+| Auth | unauthentifiziert | C | — | — (manuell; keine zugeordnete E2E-Spec) |
 
 **Voraussetzung:** `django_ratelimit` aktiv (Default in dev/e2e).
 
@@ -156,7 +156,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | unauthentifiziert | C | — | `test_security_hardening.py` |
+| Auth | unauthentifiziert | C | — | — (manuell; keine zugeordnete E2E-Spec) |
 
 **Voraussetzung:** mindestens 2 Quell-IPs simulierbar (z.B. via `X-Forwarded-For` mit `TRUSTED_PROXY_HOPS=1`) oder Direkt-Cache-Manipulation.
 
@@ -219,7 +219,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
+| Auth | fachkraft (`miriam`) | C | — | — (manuell; keine zugeordnete E2E-Spec) |
 
 **Voraussetzung:** Schnellvariante: `facility.settings.session_timeout_minutes = 1` setzen (Admin → Core → Einstellungen) und neu einloggen — ein globales `SESSION_COOKIE_AGE`-Test-Setting wirkt NICHT, weil der Login es per `set_expiry(facility-Wert)` immer überschreibt.
 
@@ -254,7 +254,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | fachkraft (`miriam`) | C/F/S | ⚪ | `test_security_hardening.py` |
+| Auth | fachkraft (`miriam`) | C/F/S | ⚪ | — (manuell; keine zugeordnete E2E-Spec) |
 
 **Voraussetzung:** aktiver Login als `miriam`.
 
@@ -331,7 +331,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | beliebig (z.B. neue Fachkraft) | C/F/S | ⚪ | `test_security_hardening.py` |
+| Auth | beliebig (z.B. neue Fachkraft) | C/F/S | ⚪ | — (manuell; keine zugeordnete E2E-Spec) |
 
 **Voraussetzung:** neuer User mit `must_change_password=True` — Konto **ohne** E-Mail-Adresse im Admin anlegen (die Neuanlage setzt das Flag und zeigt ein Klartext-Initialpasswort an) oder das Flag an einem bestehenden Konto von Hand setzen. **Nicht** über den Invite-Flow: Ein abgeschlossener Einladungs- oder Reset-Vorgang löscht das Flag seit #1969 mit, dieser Weg erzeugt die Voraussetzung also nicht mehr.
 
@@ -413,7 +413,7 @@
 **Services:** `src/core/services/mfa.py` (`generate_backup_codes`, `verify_backup_code`, `remaining_backup_codes`, SHA-256-Hash, 128-bit Entropie via `secrets.token_urlsafe(16)`)  
 **Middleware:** `core.middleware.mfa.MFAEnforcementMiddleware` (EXEMPT_URLS für /login/, /logout/, /mfa/, /static/, /sw.js, /manifest.json, /auth/offline-key-salt/, /health/)  
 **Settings:** `OTP_TOTP_ISSUER="Anlaufstelle"`; Apps: `django_otp`, `django_otp.plugins.otp_totp`, `django_otp.plugins.otp_static`  
-**E2E-Coverage:** `test_mfa_setup_flow.py`, `test_mfa_backup_codes.py`, `test_security_hardening.py`  
+**E2E-Coverage:** `test_mfa_setup_flow.py`, `test_mfa_backup_codes.py`; Faktorwechsel: `test_mfa_factor_change_sudo.py`  
 **Spezial-Setup:**
 - TOTP-Code-Generierung im Test: `pyotp` mit gleichem Secret wie QR-Code (Base32-decoded aus `device.bin_key`).
 - Backup-Codes: 22-Zeichen URL-safe Base64 (case-sensitive!) ab Refs #790. Alte Codes im Format `xxxx-xxxx` (8 Hex + Dash) hat die Datenmigration `0181` gehasht (Refs #2327); sie verifizieren weiter über den Hash, auch ohne Bindestrich eingegeben. Eine ungehashte Klartext-Zeile in der Datenbank ist kein gültiger Code.
@@ -3975,7 +3975,7 @@
 <details open>
 <summary><strong>🔎 SRCH — Suche (6 Cases)</strong></summary>
 
-**Routen:** `/search/`, Header-Typeahead via HTMX (`/search/typeahead/`)  
+**Routen:** `/search/`, Header-Typeahead via HTMX (`/partials/search/global/`)  
 **Views:** `src/core/views/search.py`  
 **Services:** `src/core/services/search.py`  
 **E2E-Coverage:** `test_clients_search.py`, `test_filters.py`, `test_fuzzy_search.py`
@@ -4162,7 +4162,7 @@
 <details open>
 <summary><strong>📰 ZS — Zeitstrom (5 Cases)</strong></summary>
 
-**Routen:** `/` (Home/Zeitstrom), `/zeitstrom/feed/` (HTMX-Partial)  
+**Routen:** `/` (Home/Zeitstrom), `/partials/zeitstrom/feed/` (HTMX-Partial)  
 **Views:** `src/core/views/zeitstrom.py`  
 **Services:** `src/core/services/feed.py`  
 **E2E-Coverage:** `test_zeitstrom_enrichment.py`, `test_zeitstrom_events.py`, `test_zeitstrom_filter_bug.py`
@@ -4214,7 +4214,7 @@
 3. Netzwerk-Tab beobachten.
 
 **Erwartetes Ergebnis:**
-- HTMX-Request an `/zeitstrom/feed/?page=2` löst aus.
+- HTMX-Request an `/partials/zeitstrom/feed/?page=2` löst aus.
 - Neue Einträge werden ans Ende angehängt.
 - Kein Full-Page-Reload.
 - Bei Live-Polling: alle 30 s Request, neue Einträge oben hinzufügen.
@@ -4316,7 +4316,7 @@
 <details open>
 <summary><strong>🤝 HOV — Übergabe (5 Cases)</strong></summary>
 
-**Routen:** `/uebergabe/`, `/uebergabe/print/`  
+**Routen:** `/uebergabe/` (Redirect auf `/?view=uebergabe`); Druckvorschau über den Browser, kein eigener Print-Endpunkt  
 **Views:** `src/core/views/handover.py`  
 **Services:** `src/core/services/handover.py`  
 **E2E-Coverage:** `test_handover.py`
@@ -4395,7 +4395,7 @@
 **Schritte:**
 1. `Strg+P` drücken (oder Print-Button klicken).
 2. Druckvorschau prüfen.
-3. Alternativ `/uebergabe/print/` direkt aufrufen.
+3. Druckvorschau schließen und prüfen, dass die Übergabeansicht erhalten bleibt.
 
 **Erwartetes Ergebnis:**
 - Druckvorschau ohne Header/Sidebar/Buttons.
@@ -6738,7 +6738,7 @@
 <details open>
 <summary><strong>🧩 CONFIG — Formular-Konfiguration (25 Cases)</strong></summary>
 
-**Routen:** `/config/document-types/`, `/config/document-types/new/`, `/config/document-types/<uuid>/`, `/config/document-types/<uuid>/edit/`, `/config/document-types/<uuid>/delete/`, `/config/document-types/<uuid>/fields/add/`, `/config/document-types/<uuid>/fields/<uuid>/remove/`, `/config/document-types/<uuid>/groups/new/`, `/config/document-types/<uuid>/groups/<uuid>/edit/`, `/config/document-types/<uuid>/groups/<uuid>/delete/`, `/config/document-types/<uuid>/reorder/groups/`, `/config/document-types/<uuid>/reorder/fields/`, `/config/document-types/<uuid>/reorder/move-field/`, `/config/field-templates/`, `/config/field-templates/new/`, `/config/field-templates/<uuid>/edit/`, `/config/field-templates/<uuid>/delete/`, `/config/field-templates/<uuid>/toggle-active/`  
+**Routen:** `/config/document-types/`, `/config/document-types/new/`, `/config/document-types/<uuid>/`, `/config/document-types/<uuid>/edit/`, `/config/document-types/<uuid>/delete/`, `/config/document-types/<uuid>/fields/add/`, `/config/document-types/<uuid>/fields/<uuid>/remove/`, `/config/document-types/<uuid>/groups/new/`, `/config/document-types/<uuid>/groups/<uuid>/edit/`, `/config/document-types/<uuid>/groups/<uuid>/delete/`, `/config/document-types/<uuid>/reorder/blocks/`, `/config/document-types/<uuid>/reorder/fields/`, `/config/document-types/<uuid>/reorder/move-field/`, `/config/field-templates/`, `/config/field-templates/new/`, `/config/field-templates/<uuid>/edit/`, `/config/field-templates/<uuid>/delete/`, `/config/field-templates/<uuid>/toggle-active/`  
 **Views:** `src/core/views/config/document_types.py` (`ConfigDocumentType{List,Create,Detail,Update,Delete}View`, `ConfigDocTypeField{Add,Remove}View`), `src/core/views/config/field_templates.py` (`ConfigFieldTemplate{List,Create,Update,Delete,Toggle}View`), `src/core/views/config/field_groups.py` (`ConfigFieldGroup{Create,Update,Delete}View`), `src/core/views/config/reorder.py` (`ConfigReorderGroupsView`, `ConfigReorderFieldsView`, `ConfigMoveFieldView`) — alle `FacilityAdminRequiredMixin`  
 **Services:** `src/core/services/config.py` (`save_document_type`, `delete_document_type`, `save_field_template`, `field_template_delete_blockers` + `field_template_trashed_client_count` (Papierkorb-Anteil), `delete_field_template`, `set_field_template_active`, `save_field_group`, `delete_field_group`, `add_field_to_doctype`, `remove_field_from_doctype`, `reorder_groups`, `reorder_fields`, `move_field`, Exception `ConfigDeleteBlocked`)  
 **Models:** `DocumentType` (`system_type`, `report_key`), `FieldTemplate` (`slug`, `report_key`, `is_active`), `FieldGroup` (transitiv facility-gescoped über `document_type.facility`), `DocumentTypeField` (`sort_order`, `field_group`)  

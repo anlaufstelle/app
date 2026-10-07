@@ -271,7 +271,7 @@ Methodik:
 | B | Attachments | 16 | 13 | 3 | 81 % |
 | B | Audit | 5 | 5 | 0 | 100 % |
 | B | Aufbewahrung | 2 | 2 | 0 | 100 % |
-| B | Auth | 11 | 10 | 1 | 91 % |
+| B | Auth | 11 | 5 | 6 | 45 % |
 | B | Berichtigungen | 8 | 5 | 3 | 62 % |
 | B | Compliance | 4 | 0 | 4 | 0 % |
 | B | DSGVO | 10 | 10 | 0 | 100 % |
@@ -329,10 +329,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 264 | 184 | 80 | 70 % |
+| B | 264 | 179 | 85 | 68 % |
 | C | 38 | 8 | 30 | 21 % |
 | D | 46 | 14 | 32 | 30 % |
-| **Gesamt** | **360** | **218** | **142** | **61 %** |
+| **Gesamt** | **360** | **213** | **147** | **59 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->
