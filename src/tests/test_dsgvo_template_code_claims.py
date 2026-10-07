@@ -54,6 +54,11 @@ def _section(content: str, start: str, end: str) -> str:
     return content[begin : content.index(end, begin + len(start))]
 
 
+def _blocks(content: str) -> list[str]:
+    """Paragraphs, list items and table rows of a rendered template, flattened."""
+    return [_flat(block) for block in re.split(r"\n\s*\n|\n(?=\s*(?:[-|]|\d+\.) )", content) if block.strip()]
+
+
 @pytest.fixture
 def toms(facility):
     return _flat(render_document("toms", facility)[0])
@@ -697,6 +702,29 @@ class TestFourEyesScope:
         content = _flat(render_document(slug, facility)[0])
         assert any("Datei" in s and "ohne zweite Person" in s for s in _sentences(content)), slug
 
+    @pytest.mark.parametrize("slug", ["dsfa", "toms", "loeschkonzept"])
+    def test_file_purge_names_both_locks(self, facility, slug):
+        _behaviour_test(
+            "test_mutation_pins_099_attachments_1",
+            "TestPurgeAttachmentChainArticle18MessageIsExact.test_artikel_18_sperre_meldet_den_exakten_wortlaut",
+        )
+        _behaviour_test(
+            "test_mutation_pins_099_attachments_1",
+            "TestPurgeAttachmentChainLegalHoldMessageIsExact.test_legal_hold_meldet_den_exakten_wortlaut",
+        )
+        blocks = [
+            block
+            for block in _blocks(render_document(slug, facility)[0])
+            if "Datei" in block and "ohne zweite Person" in block
+        ]
+        assert blocks, slug
+        for block in blocks:
+            if "Legal Hold" in block or "Aufbewahrungssperre" in block:
+                assert "Art. 18" in block, (slug, block)
+        # The detailed description sets the purge apart from the four-eyes
+        # deletion of persons and names both locks.
+        assert any("Art. 18" in block and "Augen" in block for block in blocks), slug
+
     def test_dsfa_residual_risk_names_the_purge_path(self, dsfa):
         residual = _section(dsfa, "**Restrisiko:** Aus beidem folgt", "**Auskunftsrecht")
         assert "Leitung und Anwendungsbetreuung" in residual
@@ -751,6 +779,22 @@ class TestAuditLoggingClaims:
         source = inspect.getsource(audit_pruning.prune_auditlog)
         assert "bypass_replication_triggers" in source
         assert ".delete()" in source or "_raw_delete" in source
+
+    def test_premise_chain_backfill_bypasses_the_trigger(self):
+        import inspect
+
+        from core.management.commands import backfill_audit_chain
+
+        _behaviour_test("test_audit_chain", "TestBackfill.test_backfill_recomputes_correct_hashes")
+        assert "bypass_replication_triggers()" in inspect.getsource(backfill_audit_chain)
+
+    def test_vvt_audit_log_names_every_trigger_bypass(self):
+        bypass = [text for text in _vvt_texts("auditlog") if "umgeh" in text]
+        assert bypass
+        for text in bypass:
+            assert "nur der Aufbewahrungslauf" not in text, text
+            assert "Aufbewahrungslauf" in text, text
+            assert "Hash-Kette" in text, text
 
     def test_vvt_audit_log_entry_names_the_pruning_exception(self):
         for text in _vvt_texts("auditlog"):
@@ -900,6 +944,16 @@ class TestHistoryRedactionClaims:
         assert "Sicherungsstände" in bullet
         retention = str(next(a for a in PROCESSING_ACTIVITIES if a["id"] == "falldaten")["retention_period"])
         assert "jüngste Fassung" in retention
+
+    def test_vvt_names_the_anonymised_person_exception(self):
+        _behaviour_test(
+            "test_eventhistory_retention",
+            "TestAnonymisierteFallenInDenSweep.test_historie_einer_anonymisierten_person_wird_erfasst",
+        )
+        retention = str(next(a for a in PROCESSING_ACTIVITIES if a["id"] == "falldaten")["retention_period"])
+        sentence = next(s for s in retention.split(". ") if "jüngste Fassung" in s)
+        assert "anonymisierten Person" in sentence, sentence
+        assert "alle Fassungen" in sentence, sentence
 
 
 _VERBATIM_CLAIM_RE = re.compile(r"\(wortgleich zur DSFA[^)]*\):\s*(.+)")

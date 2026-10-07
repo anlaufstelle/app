@@ -155,8 +155,10 @@ PROCESSING_ACTIVITIES = [
         # stage period. ``_soft_delete_events`` empties the content at once;
         # k-anonymity only exists in the reporting layer, not in retention.
         # Refs #2492: ``enforce_eventhistory_retention`` keeps the newest
-        # version of a living event (``_aged_living_event_rows``) and defers
-        # held rows; ``enforce_handover_notes`` deletes hard and has no hold
+        # version of a living event (``_aged_living_event_rows``) unless the
+        # person is anonymised (``_anonymized_client_rows`` redacts every
+        # version regardless of the period), defers held rows, and treats
+        # ``months <= 0`` as "period off"; ``enforce_handover_notes`` deletes hard and has no hold
         # branch. Defaults: ``eventhistory_*_months`` 24,
         # ``retention_handover_notes_days`` 90.
         "retention_period": _(
@@ -168,9 +170,12 @@ PROCESSING_ACTIVITIES = [
             "gelöscht; die Werte früherer Fassungen redigiert regulär der "
             "nächste Aufbewahrungslauf. Bei nicht gelöschten Ereignissen "
             "redigiert er die Werte früherer Fassungen nach 24 Monaten "
-            "(einstellbar); die jüngste Fassung behält ihre Werte, die "
-            "Fassung selbst (wer, wann, welche Felder) bleibt, bis er sie "
-            "24 Monate nach der Redaktion löscht (einstellbar). Fälle haben "
+            "(einstellbar, 0 schaltet die Frist ab); die jüngste Fassung "
+            "behält ihre Werte, außer bei Ereignissen einer anonymisierten "
+            "Person: dort redigiert er alle Fassungen unabhängig von der "
+            "Frist. Die Fassung selbst (wer, wann, welche Felder) bleibt, bis "
+            "er sie 24 Monate nach der Redaktion löscht (einstellbar, 0 "
+            "schaltet die Frist ab). Fälle haben "
             "keine eigene Frist, Episoden und Wirkungsziele folgen ihrem "
             "Fall. Daten unter einer Aufbewahrungssperre (Legal Hold) sind "
             "ausgenommen. Übergabenotizen löscht der Aufbewahrungslauf "
@@ -294,15 +299,19 @@ PROCESSING_ACTIVITIES = [
         ),
         "toms": [
             # Refs #2492: ``prune_auditlog`` deletes expired rows inside
-            # ``bypass_replication_triggers``; the promise names that path.
+            # ``bypass_replication_triggers``; ``backfill_audit_chain`` uses the
+            # same bypass to rewrite ``prev_hash``/``entry_hash`` only. The
+            # promise names both paths.
             _(
                 "Append-Only durch DB-Konvention und RLS-Policies; Ausnahme ist "
                 "das Löschen abgelaufener Einträge durch den Aufbewahrungslauf"
             ),
             _(
                 "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE "
-                "blockiert); nur der Aufbewahrungslauf umgeht den Trigger "
-                "transaktional, um abgelaufene Einträge zu löschen"
+                "blockiert); der Aufbewahrungslauf umgeht den Trigger "
+                "transaktional, um abgelaufene Einträge zu löschen, die "
+                "Wartungsfunktion für die Hash-Kette, um nur deren Prüfwerte "
+                "neu zu setzen; fachliche Inhalte ändert keiner der beiden Wege"
             ),
             _("Zugriff nur fuer Anwendungsbetreuung und Systemadministration"),
             _("Cross-Facility-Auswertung bedingt eigenen SYSTEM_VIEW-Audit"),

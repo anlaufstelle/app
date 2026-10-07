@@ -100,8 +100,11 @@ Ein bloßes Entfernen oder Ersetzen in der Oberfläche löscht eine Datei noch
 nicht physisch. Die endgültige Löschung folgt dem Lebenszyklus des zugehörigen
 Datensatzes. Daneben gibt es einen Sofortlöschweg: Leitung und
 Anwendungsbetreuung beseitigen eine Datei samt Versionen ersatzlos und ohne
-zweite Person, sofern kein Legal Hold greift; die Vernichtung wird im
-Audit-Log protokolliert und lässt sich nicht rückgängig machen.
+zweite Person — anders als die Löschung einer Person, die dem
+Vier-Augen-Prinzip folgt. Gesperrt ist der Weg, solange ein aktiver Legal Hold
+auf dem Datensatz liegt oder für die Person ein Sperrvermerk nach Art. 18
+DSGVO besteht. Die Vernichtung wird im Audit-Log protokolliert und lässt sich
+nicht rückgängig machen.
 
 Bereits beim Hochladen greift die Datenminimierung nach Art. 5 Abs. 1 lit. c
 DSGVO: Bilddateien werden vor der Verschlüsselung neu kodiert und verlieren
