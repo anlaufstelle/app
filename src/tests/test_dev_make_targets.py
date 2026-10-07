@@ -77,3 +77,50 @@ def test_busy_lock_prevents_e2e_preparation(tmp_path, target):
         )
     assert result.returncode != 0
     assert "PREPARATION" not in result.stdout
+
+
+def test_delta_target_guard_is_recognized_in_public_docs(tmp_path):
+    checker = ROOT / "dev-ops/release/sanitize_release_tree.py"
+    if not checker.exists():
+        pytest.skip("dev-ops/release/ and scripts/dev/ are excluded from public snapshots")
+    import sys
+
+    shutil.copyfile(ROOT / "Makefile", tmp_path / "Makefile")
+    (tmp_path / "README.md").write_text("`make mutation-delta BASE=HEAD`\n")
+    result = subprocess.run(
+        [sys.executable, str(checker), "--check-make-targets", str(tmp_path), "^scripts/dev/"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_delta_requires_base_before_calling_available_runner(tmp_path):
+    shutil.copyfile(ROOT / "Makefile", tmp_path / "Makefile")
+    runner = tmp_path / "scripts" / "dev" / "run_mutmut.py"
+    runner.parent.mkdir(parents=True)
+    runner.touch()
+    result = subprocess.run(
+        ["make", "mutation-delta", "PYTHON=echo RUNNER_CALLED"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "BASE=<tag/ref> required" in result.stdout
+    assert "RUNNER_CALLED" not in result.stdout
+
+
+def test_public_delta_without_base_reports_unavailable(tmp_path):
+    shutil.copyfile(ROOT / "Makefile", tmp_path / "Makefile")
+    result = subprocess.run(
+        ["make", "mutation-delta", "PYTHON=false"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "not available" in result.stdout

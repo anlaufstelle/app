@@ -494,9 +494,10 @@ mutation:
 # Meilenstein-Checkpoint im Hintergrund statt im Cut-Pfad. Der Voll-Lauf
 # bleibt 1x vor v1.0 Pflicht (docs/testing/mutation-testing.md § Score-Ziele).
 mutation-delta:
-	@if [ -f scripts/dev/run_mutmut.py ]; then \
-		[ -n "$(BASE)" ] || { echo "mutation-delta: BASE=<tag/ref> required"; exit 2; }; \
-		$(PYTHON) scripts/dev/run_mutmut.py run --since "$(BASE)"; \
+ifneq ($(wildcard scripts/dev/run_mutmut.py),)
+	@[ -n "$(BASE)" ] || { echo "mutation-delta: BASE=<tag/ref> required"; exit 2; }
+endif
+	@if [ -f scripts/dev/run_mutmut.py ]; then $(PYTHON) scripts/dev/run_mutmut.py run --since "$(BASE)"; \
 	else echo "mutation-delta: not available in the public source tree (maintainer tool)"; fi
 
 # Ergebnisse des letzten Mutation-Runs anzeigen (textuell, nicht-interaktiv).
