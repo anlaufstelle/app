@@ -596,7 +596,7 @@ Here you can manage:
 | Settings | Core > Settings | Configuration per facility |
 | Users | Core > Users | Technical fallback; maintained primarily under Administration > Access |
 | Documentation types | Core > Documentation types | Technical fallback; maintained primarily under Administration > Documentation types |
-| Time filters | Core > Time filters | Named time periods for reports. **A time filter that still has handover notes cannot be deleted** (#2042) -- the admin reports the protection error. Otherwise that shift's notes would vanish silently, bypassing both their retention period and the audit log. Renaming and reordering stay possible at any time; to delete, wait for the **Retention handover notes (days)** period to elapse, or deactivate the window instead of removing it |
+| Time filters | Anlaufstelle Core > Time filters (technical maintenance) | Named time periods for reports. **A time filter that still has handover notes cannot be deleted** (#2042) -- the admin reports the protection error. Otherwise that shift's notes would vanish silently, bypassing both their retention period and the audit log. Renaming and reordering stay possible at any time; to delete, wait for the **Retention handover notes (days)** period to elapse, or deactivate the window instead of removing it |
 | Audit log | Core > Audit logs | Immutable protocol |
 
 ### 2.2c Decommissioning a Facility: Archive Instead of Delete
@@ -628,7 +628,7 @@ When a location closes, **archiving** is the intended route -- not deletion. Und
 
 ### 2.3 Settings per Facility
 
-Under **Core > Settings** in the admin, you can configure the following key fields, among others; the complete field list is shown directly in the admin form:
+Under **Management → Settings** (groups "General and convenience", "Security" and "Data protection and retention periods"), you can configure the following key fields, among others; the complete field list is shown directly in the admin form:
 
 | Field | Default | Description |
 |---|---|---|
@@ -640,7 +640,7 @@ Under **Core > Settings** in the admin, you can configure the following key fiel
 | Retention identified (days) | 365 | Deletion period for contacts of clients at the "Pseudonym only" level |
 | Retention qualified (days) | 3650 | Deletion period after case closure ("With additional details" level) |
 | Retention handover notes (days) | 90 | Deletion period for the manual shift notes in the handover (#2042). Deliberately short: a duty note is not a case record. The run deletes them **permanently** (no trash) |
-| Facility-wide 2FA enforcement | false | Enforces TOTP 2FA for **all** users of this facility (see [Section 2.7](#27-two-factor-authentication-2fa)) |
+| 2FA enforced for all users | false | Enforces TOTP 2FA for **all** users of this facility (see [Section 2.7](#27-two-factor-authentication-2fa)) |
 | Quick-exit target | `https://www.wikipedia.org/` | Address opened by the **Quick exit** button and the shortcuts `Ctrl`+`Shift`+`X` / `Shift`+`Esc`. Required field, `http`/`https` only. Pick an innocuous public page without a cookie banner -- it ends up in the device history afterwards, and a consent dialog costs exactly the seconds the action is meant to save. The target does not learn where the visitor came from (no `Referer`) |
 | Privacy screen on window or tab change | false | Covers the content as soon as the window loses focus or the tab moves to the background. Released by click or key press, without a timer |
 
@@ -654,8 +654,8 @@ Under **Core > Settings** in the admin, you can configure the following key fiel
 >
 > | Stock | Maintained in the admin under | Effect when missing |
 > |---|---|---|
-> | Default catalog of documentation types | Administration > Documentation types | **Blocking:** without an event type the type selector in "New entry" stays empty and nothing can be documented |
-> | Default shifts: early (08-16), late (16-22), night (22-08) | Core > Time filters | Convenience: the timeline then evaluates the full day instead of a shift window; handover view and live tally have no shift reference |
+> | Default catalog of documentation types | Administration > Documentation types | **Blocking:** without an event type the type selector in "Document contact" stays empty and nothing can be documented |
+> | Default shifts: early (08-16), late (16-22), night (22-08) | Anlaufstelle Core > Time filters (technical maintenance) | Convenience: the timeline then evaluates the full day instead of a shift window; handover view and live tally have no shift reference |
 > | Quick templates "Kurzkontakt" and "Beratungskontakt" on the "Kontakt" type | Core > Quick templates | Convenience: recurring contacts are filled in by hand (see [Section 2.8](#28-quick-templates)) |
 >
 > **Once at creation, not on every save:** if a facility already carries its own documentation types, time filters, or quick templates at the moment it is created, that group is left **untouched** -- the check runs per group, and a single existing object is enough. Every later save of the facility in the admin leaves all three groups alone anyway: labels and orderings maintained in the admin are never silently reset to the shipped state, and deleted default shifts do not come back on their own. Pulling things in is explicit: `manage.py load_package --default` fetches the shipped catalog state (see [Section 2.2](#22-create-a-facility-and-application-manager)); time filters and quick templates you create yourself under **Core > Time filters** and **Core > Quick templates**. One exception: running the initial setup `setup_facility` again with the **same** organization and facility names provisions whatever is empty at that point -- if you deleted every time filter, you get the three default shifts back; the command states for each stock whether it created it or left it alone.
@@ -670,7 +670,7 @@ The regular path for an application manager is **Administration > Access > Creat
 - **Email:** Required for the invite flow (see below)
 - **Display name:** Name shown in the user interface
 - **Role:** One of the four facility-bound roles (see below)
-- **MFA required:** Requires a second factor for this individual account
+- **2FA required:** Requires a second factor for this individual account
 - **Deletion confirmation:** Adds the account to the approver pool for deletion requests
 
 Existing accounts can be edited, deactivated, or reactivated there. Application managers cannot deactivate or demote their own account. The product UI does not permanently delete accounts: deactivation is the regular lifecycle; permanent deletion remains a reviewed technical exception. `super_admin`, bootstrap, and emergency work stay under **Core > Users** in the Django admin; there, a `super_admin` can also toggle **MFA required** for these accounts; the field sits in the same form and is therefore also visible when an application manager edits a regular account of their own facility (in addition to the Administration > Access route). Each such change appears in the audit log as `USER_ACCESS_UPDATED` with `mfa_required` among the changed fields. Quick templates and time filters also deliberately remain technical admin functions.
@@ -895,7 +895,7 @@ To finally **remove** orphaned values (data minimisation, once they are no longe
 
 ### 2.6 Manage Selection Options (Field Templates)
 
-Under **Core > Field templates**, you can edit the options of selection and multi-selection fields (Select / Multi-Select). Options are stored in the **Options json** field as a JSON array.
+Under **Management → Field templates**, you can edit the options of selection and multi-selection fields (Select / Multi-Select). Options are stored in the **Options (JSON)** field as a JSON array.
 
 > **Applies only to Select / Multi-Select.** For other field types (Text, Textarea, Number, Date, Time, Yes/No, File), `options_json` is not evaluated -- please leave the field empty (`[]`).
 
@@ -952,7 +952,7 @@ When an option is no longer needed, set `is_active` to `false` instead of removi
 
 #### Numeric Range Bounds (`Minimum Value`/`Maximum Value`)
 
-Field templates of type **Number** can carry optional bounds at the same location (**Core > Field Templates**): **Minimum Value** and **Maximum Value**. They apply **only to future writes** -- creating, editing, and saving through the form or the service layer. Tightening a bound never rewrites an already-stored value: existing data outside the new bound stays unchanged in the database until it is corrected on its merits.
+Field templates of type **Number** can carry optional bounds at the same location (**Management → Field templates**): **Minimum Value** and **Maximum Value**. They apply **only to future writes** -- creating, editing, and saving through the form or the service layer. Tightening a bound never rewrites an already-stored value: existing data outside the new bound stays unchanged in the database until it is corrected on its merits.
 
 > **Before tightening a bound: run the read-only inventory.** In the `maintenance` service (admin DB role):
 >
@@ -984,7 +984,7 @@ If a bound turns out too tight, retract it at the same location: loosen or clear
 
 In addition to exact substring matching, the global person (pseudonym) search uses a **trigram-based fuzzy search** -- tolerant of typos and phonetic variants (e.g. "Schmidt" ↔ "Schmitt"). Implementation: [`src/core/services/dashboard/search.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/search.py), function `search_similar_clients`.
 
-**Per-facility threshold:** Under **Core > Settings > *Facility*** > field **"Fuzzy search threshold"** (`Settings.search_trigram_threshold`):
+**Per-facility threshold:** Under **Management → Settings** (group "General and convenience") > field **"Fuzzy search threshold"** (`Settings.search_trigram_threshold`):
 
 | Range | Default | Effect |
 |---|---|---|
@@ -1098,7 +1098,7 @@ These 2FA and sudo events each write one entry to the `AuditLog`:
 - `WEBAUTHN_REGISTERED`, `WEBAUTHN_REMOVED` -- passkey added or removed; `WEBAUTHN_FAILED` -- failed passkey check.
 - `SUDO_MODE_ENTERED`, `SUDO_MODE_FAILED` -- sudo confirmation succeeded, or failed at the password or the second factor.
 
-No entry of its own is written for a successful TOTP or passkey check at the 2FA sign-in, for a backup-code regeneration refused because of a wrong TOTP code, or for requests rejected by the rate limit (HTTP 429). Use the filter in **Core > Audit logs** to investigate failed verifications or activation/deactivation events.
+No entry of its own is written for a successful TOTP or passkey check at the 2FA sign-in, for a backup-code regeneration refused because of a wrong TOTP code, or for requests rejected by the rate limit (HTTP 429). Use the filter under **Privacy → Audit log** to investigate failed verifications or activation/deactivation events.
 
 #### Relevant Files
 
@@ -1627,7 +1627,7 @@ If CSP errors appear after an update: check the browser console for the **specif
 
 The super-admin area `/system/compliance/` (#919) consolidates typed health checks in a single dashboard: the three DB role checks (via `check_db_roles`, see the database variables in [§ 1](#1-installation-docker-compose)), the check that no application account carries Django's `is_superuser` flag (“App-User kein Django-Superuser”; it checks user accounts, not the database roles), backup age, restore-verified age, ClamAV ping and signature age, retention run age, audit log retention, background job freshness (audit chain check, statistics snapshot, breach scan, materialized view refresh), MFA quota (roles requiring MFA), pending Django migrations, app/Django/Python versions, and critical audit events from the last 24 hours.
 
-If AuditLog retention is set to `0` months in one or more facilities, the **Retention** category shows one aggregated warning with the affected facility names; resolve it under **Core → Settings → Retention**.
+If AuditLog retention is set to `0` months in one or more facilities, the **Retention** category shows one aggregated warning with the affected facility names; resolve it under **Management → Settings → Data protection and retention periods**.
 
 Each check returns a status of `ok` / `warning` / `critical` / `unknown`; a single failing check does not bring down the whole dashboard. The area is **super-admin only** (`facility_admin` receives a `403`). The freshness thresholds for background jobs and the restore marker are documented in the [Ops Runbook](ops-runbook.md).
 
@@ -1840,7 +1840,7 @@ docker system df -v | grep pgdata
 
 **User documentation:** [User Guide § 7 -- Statistics and Export](user-guide.md#7-statistics-and-export) explains the representation in each file format and the on-screen response (expand the period, rule out an empty period). Administrators should also know these three points:
 
-1. **The threshold is a setting of its own, not a side effect of retention.** It is configured per facility in the admin under **Core → Settings** (`k_anonymity_threshold`, default 5) and applies to **every report artifact that leaves the organization** -- regardless of whether k-anonymization is enabled for the retention run. [§ 7.3](#73-retention-periods-and-enforce_retention) documents both fields together in the retention context, but they are independent.
+1. **The threshold is a setting of its own, not a side effect of retention.** It is configured per facility under **Management → Settings** (group "Data protection and retention periods", `k_anonymity_threshold`, default 5) and applies to **every report artifact that leaves the organization** -- regardless of whether k-anonymization is enabled for the retention run. [§ 7.3](#73-retention-periods-and-enforce_retention) documents both fields together in the retention context, but they are independent.
 
 2. **Two views are deliberately not suppressed** and can therefore be used to check whether any data exists at all: the on-screen **statistics overview** and the PDF export in internal mode (`?internal=1`, with an "INTERNAL" banner; both restricted to lead/administration roles). It is expected that the overview may show different figures from a report. Forwarding content from these internal views falls outside the guarantee.
 
@@ -1908,7 +1908,7 @@ Error responses generated by Caddy itself -- such as HTTP 413 for an oversized u
 
 ### 7.2 Pseudonymization
 
-The application stores **no real names** in the database. Personal data is captured in pseudonymized form:
+Pseudonymisation is the intended workflow: the application has no required field for real names, and persons are recorded under a pseudonym. It cannot technically prevent real names, though — pseudonyms, notes, free-text fields and attachments contain whatever the team enters or uploads; events without a person can also relate to a person through free text, locations or attachments. What matters is the facility's data-entry practice. In detail:
 
 - Persons are referenced by internal IDs.
 - Display names in the interface are configurable pseudonyms.
@@ -2074,7 +2074,7 @@ retention -- the standard 24-month period described below applies.
 
 **View in the admin:**
 
-Under **Core > Audit logs** (or `/audit/`), logs can be filtered by action, facility, user, and time period. The application manager (`facility_admin`) has access for their own facility. Pre-auth audit logs without a facility reference (e.g. `LOGIN_FAILED` for an unknown username) are visible exclusively to the system administration (`super_admin`) in the `/system/` area -- see [ADR-007 Update 2026-05-10](../adr/007-auditlog-append-only.md).
+Under **Privacy → Audit log** (or `/audit/`), logs can be filtered by action, user, and time period; there is no facility filter. The application manager (`facility_admin`) has access for their own facility. Pre-auth audit logs without a facility reference (e.g. `LOGIN_FAILED` for an unknown username) are visible exclusively to the system administration (`super_admin`) in the `/system/` area -- see [ADR-007 Update 2026-05-10](../adr/007-auditlog-append-only.md).
 
 > ⚠️ **Operator note for your own queries: attachments carry two `target_type` strings** (Refs #1738, [ADR-039](../adr/039-owner-generische-dateianhaenge.md), German). Milestone 24 renamed the model `EventAttachment` to `Attachment`. The audit log is append-only and secured by an HMAC chain — **existing rows are therefore never migrated**. Anyone evaluating attachment actions (downloads, rejected uploads, deletions) must query both strings:
 >
@@ -2418,7 +2418,7 @@ Every artefact therefore states **source and as-of date** ("Data source: monthly
 
 If reports are released for the same facility covering sub-periods **and** their union (twelve monthly reports plus one annual report), every cell suppressed in a sub-report can be recomputed exactly from the sum of the others — even if **not a single** cell was suppressed in any of the reports involved. This is a property of the method, not a defect: k-anonymity is a property of *one* table over *one* population.
 
-The **release overview** (Statistics → "Releases" tab, role: lead/facility administration) lists the reporting periods already released, taken from the audit trail, and marks overlaps. It prevents nothing — it shows you where to look. To keep the warning meaningful, fill in the optional **Recipient** and **Purpose** fields on export; overlapping periods sent to *different* recipients are harmless, sent to the same one they are not.
+The **release overview** (Statistics → "Releases" tab, role: lead/application support) lists the reporting periods already released, taken from the audit trail, and marks overlaps. It prevents nothing — it shows you where to look. To keep the warning meaningful, fill in the optional **Recipient** and **Purpose** fields on export; overlapping periods sent to *different* recipients are harmless, sent to the same one they are not.
 
 > **Retention — three classes, not two.** Three different things are logged under the "Export" audit action, and only the first is a release in the sense of this overview:
 >
@@ -2449,4 +2449,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 6e4ffea528c2e9827282761ab978117f00e3d3ff -->
+<!-- source-hash: 4845a30d67a100350f1140efcd8177b07c37519b -->

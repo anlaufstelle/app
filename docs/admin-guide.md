@@ -574,7 +574,7 @@ Anschließend sind Organisation, Einrichtung, Standardeinstellungen, der **Stand
 
 > **Hinweis:** Sollte eine Organisation oder Einrichtung mit dem angegebenen Namen bereits existieren, wird sie wiederverwendet. Ein bestehender Benutzername wird nicht überschrieben.
 
-> **Zweite Einrichtung im Django-Admin (#1970):** Weitere Einrichtungen legen Sie im laufenden Betrieb unter **Core → Einrichtungen → Einrichtung hinzufügen** an — das ist der einzige Weg an der Oberfläche und `super_admin` vorbehalten. Im Feld **„Paket"** wählen Sie den mitgelieferten Katalog; ohne Änderung ist `default` vorausgewählt. Das Speichern erzeugt **dieselbe paketbezogene Grundausstattung** wie `setup_facility --package <name>`: Einstellungssatz, gewählter Katalog, passende Zeitfenster und die für dieses Paket deklarierten Schnellvorlagen. Die neue Einrichtung ist damit sofort dokumentierbar; zu tun bleibt nur noch, ihr unter **Core → Benutzer** mindestens ein Konto zuzuordnen. Der Startbestand entsteht **genau einmal, beim Anlegen**: Beim späteren Ändern fehlt das Paketfeld, und ein Speichern (z. B. Umbenennen oder „Aktiv" umschalten) rührt den Bestand nicht an — auch dann nicht, wenn er leer ist. Vor dieser Version im Admin angelegte, leer gebliebene Einrichtungen rüsten Sie deshalb ausdrücklich nach: den Standardkatalog mit `manage.py load_package --default --facility <uuid>` (Befehl samt Rollen-Override oben), Zeitfenster und Schnellvorlagen von Hand unter **Core → Zeitfenster** bzw. **Core → Quick-Templates**.
+> **Zweite Einrichtung im Django-Admin (#1970):** Weitere Einrichtungen legen Sie im laufenden Betrieb unter **Core → Einrichtungen → Einrichtung hinzufügen** an — das ist der einzige Weg an der Oberfläche und `super_admin` vorbehalten. Im Feld **„Paket"** wählen Sie den mitgelieferten Katalog; ohne Änderung ist `default` vorausgewählt. Das Speichern erzeugt **dieselbe paketbezogene Grundausstattung** wie `setup_facility --package <name>`: Einstellungssatz, gewählter Katalog, passende Zeitfenster und die für dieses Paket deklarierten Schnellvorlagen. Die neue Einrichtung ist damit sofort dokumentierbar; zu tun bleibt nur noch, ihr unter **Core → Benutzer** mindestens ein Konto zuzuordnen. Der Startbestand entsteht **genau einmal, beim Anlegen**: Beim späteren Ändern fehlt das Paketfeld, und ein Speichern (z. B. Umbenennen oder „Aktiv" umschalten) rührt den Bestand nicht an — auch dann nicht, wenn er leer ist. Vor dieser Version im Admin angelegte, leer gebliebene Einrichtungen rüsten Sie deshalb ausdrücklich nach: den Standardkatalog mit `manage.py load_package --default --facility <uuid>` (Befehl samt Rollen-Override oben), Zeitfenster und Schnellvorlagen von Hand unter **Anlaufstelle Core → Zeitfilter** (technische Pflege) bzw. **Core → Quick-Templates**.
 
 > **Organization als Branding-Hülse:** Die Organisation dient nur dem Träger-Branding (Logo, Name in Berichten). Es gibt keinen Org-Admin und keinen Cross-Facility-Effekt durch sie — facility-übergreifender Zugriff läuft ausschließlich über `super_admin` und `/system/`. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md).
 
@@ -597,7 +597,7 @@ Hier können Sie verwalten:
 | Einstellungen | Core → Einstellungen | Konfiguration pro Einrichtung |
 | Benutzer | Core → Benutzer | Technischer Fallback; primäre Pflege unter Verwaltung → Zugänge |
 | Dokumentationstypen | Core → Dokumentationstypen | Technischer Fallback; primäre Pflege unter Verwaltung → Dokumentationstypen |
-| Zeitfenster | Core → Zeitfenster | Benannte Zeiträume für Auswertungen. **Ein Zeitfenster, zu dem noch Übergabenotizen gespeichert sind, lässt sich nicht löschen** (#2042) — der Admin meldet die Schutzverletzung. Andernfalls verschwänden die Notizen dieser Schicht still, an ihrer Aufbewahrungsfrist und am Audit-Log vorbei. Umbenennen und Umsortieren bleiben jederzeit möglich; zum Löschen warten Sie das Ende der Frist **Aufbewahrung Übergabenotizen (Tage)** ab oder deaktivieren das Fenster statt es zu entfernen |
+| Zeitfilter | Anlaufstelle Core → Zeitfilter | Benannte Zeiträume für Auswertungen. **Ein Zeitfilter, zu dem noch Übergabenotizen gespeichert sind, lässt sich nicht löschen** (#2042) — der Admin meldet die Schutzverletzung. Andernfalls verschwänden die Notizen dieser Schicht still, an ihrer Aufbewahrungsfrist und am Audit-Log vorbei. Umbenennen und Umsortieren bleiben jederzeit möglich; zum Löschen warten Sie das Ende der Frist **Aufbewahrung Übergabenotizen (Tage)** ab oder deaktivieren das Fenster statt es zu entfernen |
 | Audit-Log | Core → Audit-Logs | Unveränderliches Protokoll |
 
 ### 2.2c Einrichtung stilllegen: archivieren statt löschen
@@ -629,7 +629,7 @@ Schließt ein Standort, ist **Archivieren** der vorgesehene Weg, nicht das Lösc
 
 ### 2.3 Einstellungen pro Einrichtung
 
-Im Admin unter **Core → Einstellungen** können Sie unter anderem die folgenden wichtigsten Felder konfigurieren; die vollständige Feldliste steht direkt im Adminformular:
+Unter **Verwaltung → Einstellungen** (Gruppen „Allgemein und Komfort“, „Sicherheit“ sowie „Datenschutz und Fristen“) können Sie unter anderem die folgenden wichtigsten Felder konfigurieren; die vollständige Feldliste steht direkt im Adminformular:
 
 | Feld | Standardwert | Beschreibung |
 |---|---|---|
@@ -641,7 +641,7 @@ Im Admin unter **Core → Einstellungen** können Sie unter anderem die folgende
 | Aufbewahrung identifiziert (Tage) | 365 | Löschfrist für Kontakte zu Personen der Stufe „Nur Pseudonym" |
 | Aufbewahrung qualifiziert (Tage) | 3650 | Löschfrist nach Fallabschluss (Stufe „Mit Zusatzangaben") |
 | Aufbewahrung Übergabenotizen (Tage) | 90 | Löschfrist für die manuellen Schichtnotizen in der Übergabe (#2042). Bewusst kurz: eine Dienstnotiz ist kein Fallvorgang. Der Lauf löscht sie **endgültig** (kein Papierkorb) |
-| 2FA einrichtungsweit verpflichtend | false | Erzwingt TOTP-2FA für **alle** Benutzer dieser Einrichtung (siehe [§ 2.7](#27-zwei-faktor-authentifizierung-2fa)) |
+| 2FA-Pflicht für alle Nutzer | false | Erzwingt TOTP-2FA für **alle** Benutzer dieser Einrichtung (siehe [§ 2.7](#27-zwei-faktor-authentifizierung-2fa)) |
 | Ziel für „Schnell verlassen" | `https://www.wikipedia.org/` | Adresse, die der Knopf **Schnell verlassen** und die Tastenkürzel `Strg`+`Umschalt`+`X` / `Umschalt`+`Esc` öffnen. Pflichtfeld, nur `http`/`https`. Eine unverfängliche, öffentliche Seite ohne Cookie-Banner wählen — sie steht danach im Verlauf des Geräts, und ein Consent-Dialog kostet genau die Sekunden, die die Aktion sparen soll. Das Ziel erfährt die Herkunft nicht (kein `Referer`) |
 | Sichtschutz bei Fenster- oder Tab-Wechsel | false | Verdeckt den Inhalt, sobald das Fenster den Fokus verliert oder der Tab in den Hintergrund geht. Freigabe per Klick oder Taste, ohne Timer |
 
@@ -655,11 +655,11 @@ Im Admin unter **Core → Einstellungen** können Sie unter anderem die folgende
 >
 > | Bestand | Pflege im Admin | Wirkung, wenn er fehlt |
 > |---|---|---|
-> | Standardkatalog der Dokumentationstypen | Verwaltung → Dokumentationstypen | **Blockierend:** Ohne Ereignistyp bleibt die Typ-Auswahl in „Neuer Eintrag" leer, es lässt sich nichts dokumentieren |
-> | Standardschichten Frühdienst (08–16), Spätdienst (16–22), Nachtdienst (22–08) | Core → Zeitfenster | Komfort: Der Zeitstrom wertet dann den vollen Tag aus statt ein Schichtfenster; Übergabe-Ansicht und Live-Zähler haben keinen Schichtbezug |
+> | Standardkatalog der Dokumentationstypen | Verwaltung → Dokumentationstypen | **Blockierend:** Ohne Ereignistyp bleibt die Typ-Auswahl in „Kontakt dokumentieren" leer, es lässt sich nichts dokumentieren |
+> | Standardschichten Frühdienst (08–16), Spätdienst (16–22), Nachtdienst (22–08) | Anlaufstelle Core → Zeitfilter (technische Pflege) | Komfort: Der Zeitstrom wertet dann den vollen Tag aus statt ein Schichtfenster; Übergabe-Ansicht und Live-Zähler haben keinen Schichtbezug |
 > | Schnellvorlagen „Kurzkontakt" und „Beratungskontakt" am Typ „Kontakt" | Core → Quick-Templates | Komfort: Wiederkehrende Kontakte werden von Hand ausgefüllt (siehe [§ 2.8](#28-schnell-vorlagen-quick-templates)) |
 >
-> **Einmalig beim Anlegen, nicht bei jedem Speichern:** Bringt eine Einrichtung im Moment des Anlegens bereits eigene Dokumentationstypen, Zeitfenster oder Schnellvorlagen mit, bleibt die jeweilige Gruppe **unangetastet** — geprüft wird je Gruppe, ein einziges vorhandenes Objekt genügt. Jedes spätere Speichern der Einrichtung im Admin lässt alle drei Gruppen ohnehin unberührt: Im Admin gepflegte Bezeichnungen und Sortierungen werden nie still auf den Auslieferungsstand zurückgesetzt, und gelöschte Standardschichten kommen nicht von selbst zurück. Nachziehen ist ausdrücklich: den Auslieferungsstand des Katalogs holt `manage.py load_package --default` (siehe [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)); Zeitfenster und Schnellvorlagen legen Sie unter **Core → Zeitfenster** bzw. **Core → Quick-Templates** selbst an. Einzige Ausnahme: Ein erneuter Lauf der Ersteinrichtung `setup_facility` mit **denselben** Namen für Organisation und Einrichtung stattet aus, was zu diesem Zeitpunkt leer ist — wer alle Zeitfenster gelöscht hat, bekommt dort die drei Standardschichten wieder; der Befehl schreibt zu jedem Bestand hin, ob er ihn angelegt oder unberührt gelassen hat.
+> **Einmalig beim Anlegen, nicht bei jedem Speichern:** Bringt eine Einrichtung im Moment des Anlegens bereits eigene Dokumentationstypen, Zeitfenster oder Schnellvorlagen mit, bleibt die jeweilige Gruppe **unangetastet** — geprüft wird je Gruppe, ein einziges vorhandenes Objekt genügt. Jedes spätere Speichern der Einrichtung im Admin lässt alle drei Gruppen ohnehin unberührt: Im Admin gepflegte Bezeichnungen und Sortierungen werden nie still auf den Auslieferungsstand zurückgesetzt, und gelöschte Standardschichten kommen nicht von selbst zurück. Nachziehen ist ausdrücklich: den Auslieferungsstand des Katalogs holt `manage.py load_package --default` (siehe [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)); Zeitfenster und Schnellvorlagen legen Sie unter **Anlaufstelle Core → Zeitfilter** (technische Pflege) bzw. **Core → Quick-Templates** selbst an. Einzige Ausnahme: Ein erneuter Lauf der Ersteinrichtung `setup_facility` mit **denselben** Namen für Organisation und Einrichtung stattet aus, was zu diesem Zeitpunkt leer ist — wer alle Zeitfenster gelöscht hat, bekommt dort die drei Standardschichten wieder; der Befehl schreibt zu jedem Bestand hin, ob er ihn angelegt oder unberührt gelassen hat.
 
 > **Jede Einrichtung hat genau einen Einstellungssatz.** Die Zeile entsteht automatisch, sobald die Einrichtung angelegt wird — beim interaktiven `setup_facility`, beim Anlegen im Admin unter **Core → Einrichtungen** und (nachträglich, für Altbestände) bei jedem `migrate`-Lauf. Das ist keine Formsache: `enforce_retention` und `create_statistics_snapshots` **überspringen** eine Einrichtung ohne Einstellungssatz — für sie würde also keine Aufbewahrungsfrist durchgesetzt und es entstünden keine Statistik-Snapshots. Beide Jobs protokollieren einen solchen Fall auf `WARNING`-Ebene (`No settings for …, skipping.`); taucht die Meldung im Log auf, ist das ein Betriebsfehler und kein Rauschen.
 
@@ -671,7 +671,7 @@ Der reguläre Weg für die Anwendungsbetreuung ist **Verwaltung → Zugänge →
 - **E-Mail:** Pflicht für den Invite-Flow (siehe unten)
 - **Anzeigename:** Name für die Benutzeroberfläche
 - **Rolle:** Eine der vier einrichtungsgebundenen Rollen (siehe unten)
-- **MFA erforderlich:** erzwingt einen zweiten Faktor für dieses einzelne Konto
+- **2FA erforderlich:** erzwingt einen zweiten Faktor für dieses einzelne Konto
 - **Löschbestätigung:** nimmt das Konto in den Genehmiger-Pool für Löschanträge auf
 
 Bestehende Zugänge lassen sich dort bearbeiten, deaktivieren oder reaktivieren. Der eigene Administrationszugang kann weder deaktiviert noch herabgestuft werden. Die Fach-UI löscht Konten nicht endgültig: Deaktivieren ist der reguläre Lebenszyklus; eine endgültige Löschung bleibt ein geprüfter technischer Sonderfall. `super_admin`, Bootstrap und Notfälle verbleiben unter **Core → Benutzer** im Django-Admin; dort kann ein `super_admin` auch das Feld **MFA erforderlich** für diese Konten umschalten; das Feld liegt im selben Formular und ist damit auch beim regulären Bearbeiten eines Kontos der eigenen Einrichtung durch eine Anwendungsbetreuung sichtbar (zusätzlich zum Weg über Verwaltung → Zugänge). Jede solche Änderung erscheint im Audit-Log als `USER_ACCESS_UPDATED` mit `mfa_required` in den geänderten Feldern. Quick-Templates und Zeitfenster bleiben ebenfalls bewusst technische Admin-Funktionen.
@@ -887,7 +887,7 @@ Neben der Sensibilität des Dokumentationstyps kann jedes einzelne Feld einer Fe
 
 Felder, zu denen bereits Werte in Ereignissen, Personen oder Fällen existieren, können **nicht ohne Weiteres gelöscht** werden. Beim Versuch, eine Feldvorlage zu entfernen, greift ein Schutzmechanismus, der auf gespeicherte Werte prüft. Wird das Feld dennoch benötigt zu entfernen, muss vorher eine Daten-Migration laufen, die die Werte aufräumt oder in ein anderes Feld überführt.
 
-> **Pragmatische Alternative:** Statt zu löschen, das Feld im Dokumentationstyp-Mapping deaktivieren — bestehende Daten bleiben erhalten, neue Ereignisse/Personen/Fälle bekommen das Feld nicht mehr angeboten.
+> **Pragmatische Alternative:** Statt zu löschen, die Feldvorlage deaktivieren (Schalter **Aktiv** an der Feldvorlage; die Zuordnung zum Dokumentationstyp hat kein eigenes Aktiv-Flag) — bestehende Daten bleiben erhalten, neue Ereignisse/Personen/Fälle bekommen das Feld nicht mehr angeboten.
 
 ##### Verwaiste Feldwerte („Nicht mehr zugeordnet")
 
@@ -897,7 +897,7 @@ Sollen verwaiste Werte endgültig **entfernt** werden (Datenminimierung, sobald 
 
 ### 2.6 Auswahloptionen verwalten (Feldvorlagen)
 
-Unter **Core → Feldvorlagen** können Sie die Optionen von Auswahl- und Mehrfachauswahl-Feldern (Select / Multi-Select) bearbeiten. Die Optionen werden im Feld **Options json** als JSON-Array gespeichert.
+Unter **Verwaltung → Feldvorlagen** können Sie die Optionen von Auswahl- und Mehrfachauswahl-Feldern (Select / Multi-Select) bearbeiten. Die Optionen werden im Feld **Optionen (JSON)** als JSON-Array gespeichert.
 
 > **Gilt nur für Select / Multi-Select.** Für andere Feldtypen (Text, Textbereich, Zahl, Datum, Uhrzeit, Ja/Nein, Datei) wird `options_json` nicht ausgewertet — das Feld bitte leer lassen (`[]`).
 
@@ -954,7 +954,7 @@ Wenn eine Option nicht mehr benötigt wird, setzen Sie `is_active` auf `false` s
 
 #### Zahlenbereichsgrenzen (`Minimalwert`/`Maximalwert`)
 
-Bei Feldvorlagen vom Typ **Zahl** lassen sich an derselben Stelle (**Core → Feldvorlagen**) optionale Grenzen setzen: **Minimalwert** und **Maximalwert**. Sie wirken **ausschließlich auf künftige Schreibvorgänge** — Neuanlage, Bearbeiten und Speichern über Formular oder Dienst-Schicht. Eine Verschärfung schreibt keinen einzigen bereits gespeicherten Wert um: Bestandsdaten außerhalb der neuen Grenze bleiben unverändert in der Datenbank stehen, bis sie fachlich korrigiert werden.
+Bei Feldvorlagen vom Typ **Zahl** lassen sich an derselben Stelle (**Verwaltung → Feldvorlagen**) optionale Grenzen setzen: **Minimalwert** und **Maximalwert**. Sie wirken **ausschließlich auf künftige Schreibvorgänge** — Neuanlage, Bearbeiten und Speichern über Formular oder Dienst-Schicht. Eine Verschärfung schreibt keinen einzigen bereits gespeicherten Wert um: Bestandsdaten außerhalb der neuen Grenze bleiben unverändert in der Datenbank stehen, bis sie fachlich korrigiert werden.
 
 > **Vor jeder Verschärfung: schreibfreies Inventar ausführen.** Im Dienst `maintenance` (Admin-DB-Rolle):
 >
@@ -986,7 +986,7 @@ Erweist sich eine Grenze als zu eng, nehmen Sie sie an derselben Stelle zurück:
 
 Die globale Suche nach Personen (Pseudonymen) nutzt zusätzlich zur exakten Teilstring-Suche eine **Trigramm-basierte Fuzzy-Suche** — tolerant gegenüber Tippfehlern und phonetischen Varianten (z. B. „Schmidt" ↔ „Schmitt"). Implementierung: [`src/core/services/dashboard/search.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/search.py), Funktion `search_similar_clients`.
 
-**Schwelle pro Einrichtung:** Unter **Core → Einstellungen → *Einrichtung*** → Feld **„Fuzzy-Search-Schwelle"** (`Settings.search_trigram_threshold`):
+**Schwelle pro Einrichtung:** Unter **Verwaltung → Einstellungen** (Gruppe „Allgemein und Komfort“) → Feld **„Fuzzy-Search-Schwelle"** (`Settings.search_trigram_threshold`):
 
 | Wertebereich | Default | Wirkung |
 |---|---|---|
@@ -1100,7 +1100,7 @@ Diese 2FA- und Sudo-Ereignisse schreiben je einen Eintrag im `AuditLog`:
 - `WEBAUTHN_REGISTERED`, `WEBAUTHN_REMOVED` — Passkey hinzugefügt bzw. entfernt; `WEBAUTHN_FAILED` — fehlgeschlagene Passkey-Prüfung.
 - `SUDO_MODE_ENTERED`, `SUDO_MODE_FAILED` — Sudo-Bestätigung gelungen bzw. am Passwort oder zweiten Faktor gescheitert.
 
-Keinen eigenen Eintrag schreiben: die erfolgreiche Prüfung eines TOTP-Codes oder Passkeys am 2FA-Login, ein mit falschem TOTP-Code abgewiesenes Neuerzeugen der Backup-Codes und vom Ratelimit abgewiesene Anfragen (HTTP 429). Nutzen Sie den Filter im Admin unter **Core → Audit-Logs**, um fehlgeschlagene Verifikationsversuche oder Aktivierungs-/Deaktivierungsereignisse auszuwerten.
+Keinen eigenen Eintrag schreiben: die erfolgreiche Prüfung eines TOTP-Codes oder Passkeys am 2FA-Login, ein mit falschem TOTP-Code abgewiesenes Neuerzeugen der Backup-Codes und vom Ratelimit abgewiesene Anfragen (HTTP 429). Nutzen Sie den Filter unter **Datenschutz → Audit-Log**, um fehlgeschlagene Verifikationsversuche oder Aktivierungs-/Deaktivierungsereignisse auszuwerten.
 
 #### Relevante Dateien
 
@@ -1627,7 +1627,7 @@ Bei CSP-Fehlern nach einem Update: Browser-Console auf **konkret blockierte URL/
 
 Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), die Prüfung, dass kein Anwendungskonto Djangos `is_superuser`-Flag trägt („App-User kein Django-Superuser“; geprüft werden Benutzerkonten, nicht die Datenbankrollen), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Audit-Log-Aufbewahrung, Frische der Hintergrundjobs (Audit-Ketten-Prüfung, Statistik-Snapshot, Breach-Scan, Materialized-View-Refresh), MFA-Quote (MFA-pflichtige Rollen), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
 
-Steht die AuditLog-Aufbewahrung in einer oder mehreren Einrichtungen auf `0` Monate, zeigt die Kategorie **Retention** eine aggregierte Warnung mit den betroffenen Einrichtungsnamen; beheben lässt sie sich unter **Core → Einstellungen → Aufbewahrung**.
+Steht die AuditLog-Aufbewahrung in einer oder mehreren Einrichtungen auf `0` Monate, zeigt die Kategorie **Retention** eine aggregierte Warnung mit den betroffenen Einrichtungsnamen; beheben lässt sie sich unter **Verwaltung → Einstellungen → Datenschutz und Fristen**.
 
 Jeder Check liefert einen Status `ok` / `warning` / `critical` / `unknown`; ein einzelner Check-Fehler kippt das Dashboard nicht. Der Bereich ist **Super-Admins** vorbehalten (`facility_admin` erhält `403`). Die Frische-Schwellen der Hintergrundjobs und des Restore-Markers sind im [Ops-Runbook](ops-runbook.md) dokumentiert.
 
@@ -1840,7 +1840,7 @@ docker system df -v | grep pgdata
 
 **Benutzerseitige Doku:** [User-Guide § 7 — Statistik und Export](user-guide.md#7-statistik-und-export) — Darstellung je Dateiformat und das Vorgehen am Bildschirm (Zeitraum vergrößern, leeren Zeitraum ausschließen). Für die Administration kommen drei Punkte hinzu:
 
-1. **Die Schwelle ist ein eigenes Setting, kein Nebeneffekt der Aufbewahrung.** Sie steht je Einrichtung im Admin unter **Core → Einstellungen** (Feld `k_anonymity_threshold`, Standard 5) und wirkt auf **jedes Berichts-Artefakt, das das Haus verlässt** — unabhängig davon, ob die K-Anonymisierung im Aufbewahrungslauf aktiviert ist. [§ 7.3](#73-löschfristen-und-enforce_retention) dokumentiert beide Felder gemeinsam im Retention-Kontext; sie hängen aber nicht voneinander ab.
+1. **Die Schwelle ist ein eigenes Setting, kein Nebeneffekt der Aufbewahrung.** Sie steht je Einrichtung unter **Verwaltung → Einstellungen** (Gruppe „Datenschutz und Fristen“, Feld `k_anonymity_threshold`, Standard 5) und wirkt auf **jedes Berichts-Artefakt, das das Haus verlässt** — unabhängig davon, ob die K-Anonymisierung im Aufbewahrungslauf aktiviert ist. [§ 7.3](#73-löschfristen-und-enforce_retention) dokumentiert beide Felder gemeinsam im Retention-Kontext; sie hängen aber nicht voneinander ab.
 
 2. **Zwei Ansichten sind bewusst nicht unterdrückt** und taugen deshalb zur Gegenprobe, ob überhaupt Daten vorhanden sind: die **Statistik-Übersicht am Bildschirm** und der PDF-Export im internen Modus (`?internal=1`, mit „INTERN"-Banner; beides nur Leitung/Administration). Dass die Übersicht andere Zahlen zeigt als der Bericht, ist erwartet. Was aus diesen internen Ansichten weitergegeben wird, verlässt die Zusicherung.
 
@@ -1907,7 +1907,7 @@ Von Caddy selbst erzeugte Fehlerantworten — etwa HTTP 413 bei einem zu großen
 
 ### 7.2 Pseudonymisierung
 
-Die Anwendung speichert **keine Klarnamen** in der Datenbank. Personendaten werden pseudonymisiert erfasst:
+Vorgesehen ist die Pseudonymisierung: Die Anwendung hat kein Pflichtfeld für Klarnamen, Personen werden unter einem Pseudonym geführt. Technisch verhindern kann sie Klarnamen nicht — Pseudonym, Notizen, Freitextfelder und Anhänge enthalten, was das Team einträgt oder hochlädt; auch Ereignisse ohne Person können über Freitext, Ort oder Anhänge personenbeziehbar sein. Entscheidend ist die Eingabepraxis der Einrichtung. Im Einzelnen:
 
 - Personen werden über interne IDs referenziert.
 - Anzeigenamen in der Oberfläche sind konfigurierbare Pseudonyme.
@@ -1975,9 +1975,9 @@ Unter [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/vie
 
 | Aktion im Dashboard | Wirkung |
 |---|---|
-| **Approve** | Markiert den Vorschlag als freigegeben. Gelöscht wird beim nächsten Standardlauf — der löscht das abgelaufene Ereignis allerdings auch ohne Freigabe. Steht das Ziel unter einem aktiven Legal Hold, wird die Freigabe abgelehnt. |
-| **Defer** | Stellt den Vorschlag zurück (Default 30 Tage). Nach Ablauf prüft ihn der nächste Lauf (Standard- oder Vorschlagslauf) und setzt ihn wieder auf offen. Nach `retention_max_defer_count` Zurückstellungen (Default 2) und mit `retention_auto_approve_after_defer=True` gibt er ihn stattdessen automatisch frei — aber nur, wenn weder auf dem Ereignis noch auf seiner Person ein aktiver Legal Hold liegt und die Zuordnung des Ereignisses unverändert ist. Sonst bleibt der Vorschlag zurückgestellt (Audit-Eintrag `retention_proposal_auto_approve_skipped`), und jeder weitere Lauf prüft ihn erneut. Die Zurückstellung schützt das Ereignis **nicht** vor dem Standardlauf. |
-| **Reject** | Verwirft den Vorschlag. Der Datensatz bleibt dadurch **nicht** erhalten — der Standardlauf löscht ihn trotzdem. Wer einen Datensatz erhalten muss, setzt einen Legal Hold. |
+| **Freigeben** | Markiert den Vorschlag als freigegeben. Gelöscht wird beim nächsten Standardlauf — der löscht das abgelaufene Ereignis allerdings auch ohne Freigabe. Steht das Ziel unter einem aktiven Legal Hold, wird die Freigabe abgelehnt. |
+| **Aufschieben** | Stellt den Vorschlag zurück (Default 30 Tage). Nach Ablauf prüft ihn der nächste Lauf (Standard- oder Vorschlagslauf) und setzt ihn wieder auf offen. Nach `retention_max_defer_count` Zurückstellungen (Default 2) und mit `retention_auto_approve_after_defer=True` gibt er ihn stattdessen automatisch frei — aber nur, wenn weder auf dem Ereignis noch auf seiner Person ein aktiver Legal Hold liegt und die Zuordnung des Ereignisses unverändert ist. Sonst bleibt der Vorschlag zurückgestellt (Audit-Eintrag `retention_proposal_auto_approve_skipped`), und jeder weitere Lauf prüft ihn erneut. Die Zurückstellung schützt das Ereignis **nicht** vor dem Standardlauf. |
+| **Ablehnen** | Verwirft den Vorschlag. Der Datensatz bleibt dadurch **nicht** erhalten — der Standardlauf löscht ihn trotzdem. Wer einen Datensatz erhalten muss, setzt einen Legal Hold. |
 
 #### Legal Hold
 
@@ -2074,7 +2074,7 @@ unten beschriebenen standardmäßig 24 Monate.
 
 **Im Admin einsehen:**
 
-Unter **Core → Audit-Logs** (bzw. `/audit/`) können Logs nach Aktion, Einrichtung, Benutzer und Zeitraum gefiltert werden. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung. Pre-Auth-AuditLogs ohne Facility-Bezug (z. B. `LOGIN_FAILED` bei unbekanntem Username) sind ausschließlich für die Systemadministration (`super_admin`) im `/system/`-Bereich sichtbar — siehe [ADR-007 Update 2026-05-10](adr/007-auditlog-append-only.md).
+Unter **Datenschutz → Audit-Log** (bzw. `/audit/`) können Logs nach Aktion, Benutzer und Zeitraum gefiltert werden; einen Einrichtungsfilter gibt es nicht. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung. Pre-Auth-AuditLogs ohne Facility-Bezug (z. B. `LOGIN_FAILED` bei unbekanntem Username) sind ausschließlich für die Systemadministration (`super_admin`) im `/system/`-Bereich sichtbar — siehe [ADR-007 Update 2026-05-10](adr/007-auditlog-append-only.md).
 
 > ⚠️ **Betreiberhinweis für eigene Auswertungen: Anhänge tragen zwei `target_type`-Strings** (Refs #1738, [ADR-039](adr/039-owner-generische-dateianhaenge.md)). Mit Milestone 24 wurde das Modell `EventAttachment` zu `Attachment` umbenannt. Das Audit-Log ist append-only und über eine HMAC-Kette gesichert — **Alt-Zeilen werden deshalb nie migriert**. Wer Anhang-Aktionen (Downloads, abgewiesene Uploads, Löschungen) auswertet, muss beide Strings abfragen:
 >
@@ -2418,7 +2418,7 @@ Jedes Artefakt weist deshalb **Quelle und Stand** aus („Datenquelle: Monats-Ag
 
 Werden für dieselbe Einrichtung Berichte über Teilzeiträume **und** über deren Vereinigung herausgegeben (zwölf Monatsberichte plus ein Jahresbericht), lässt sich jede in einem Teilbericht unterdrückte Zelle aus der Summe der übrigen exakt zurückrechnen — auch dann, wenn in **keinem** der beteiligten Berichte eine einzige Zelle unterdrückt wurde. Das ist eine Eigenschaft des Verfahrens, kein Fehler: k-Anonymität ist eine Eigenschaft *einer* Tabelle über *einer* Grundgesamtheit.
 
-Die **Freigabe-Übersicht** (Statistik → Reiter „Freigaben", Rolle: Leitung/Einrichtungsverwaltung) listet die bereits herausgegebenen Berichtszeiträume aus der Audit-Spur und markiert Überschneidungen. Sie verhindert nichts — sie zeigt Ihnen, wo Sie hinsehen müssen. Damit die Meldung bewertbar bleibt, erfassen Sie beim Export die optionalen Felder **Empfänger** und **Zweck**; überlappende Zeiträume an *verschiedene* Empfänger sind unkritisch, an denselben nicht.
+Die **Freigabe-Übersicht** (Statistik → Reiter „Freigaben", Rolle: Leitung/Anwendungsbetreuung) listet die bereits herausgegebenen Berichtszeiträume aus der Audit-Spur und markiert Überschneidungen. Sie verhindert nichts — sie zeigt Ihnen, wo Sie hinsehen müssen. Damit die Meldung bewertbar bleibt, erfassen Sie beim Export die optionalen Felder **Empfänger** und **Zweck**; überlappende Zeiträume an *verschiedene* Empfänger sind unkritisch, an denselben nicht.
 
 > **Aufbewahrung — drei Klassen, nicht zwei.** Unter der Audit-Aktion „Export" laufen drei verschiedene Dinge, und nur das erste ist eine Herausgabe im Sinne dieser Übersicht:
 >
