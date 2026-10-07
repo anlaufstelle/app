@@ -391,11 +391,13 @@ ps aux | grep -E 'gunicorn|runserver' | grep -v grep
 # Bestimmten Port freigeben
 lsof -ti :8443 | xargs kill
 
-# Alle gunicorn-Prozesse beenden
-pkill -f gunicorn
 ```
 
 ---
+
+Ein Server auf Port 8844 gehört zum jeweiligen E2E-Lauf. Den eigenen Lauf im
+zugehörigen Terminal beenden oder den fremden Lauf abwarten; nicht alle
+Gunicorn-Prozesse gemeinsam beenden.
 
 ## Coding Conventions
 

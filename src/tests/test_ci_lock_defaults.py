@@ -65,3 +65,12 @@ def test_command_line_lock_settings_are_exported(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == f"{lock} 23"
+
+
+def test_mutation_docs_do_not_claim_obsolete_lock_directory():
+    doc = ROOT / "docs/testing/mutation-testing.md"
+    if not doc.exists():
+        pytest.skip("docs/testing/mutation-testing.md is excluded from public snapshots")
+    text = doc.read_text()
+    assert "Default `/work`" not in text
+    assert "Default `/work/anlaufstelle-ci.lock`" not in text
