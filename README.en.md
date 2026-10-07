@@ -72,9 +72,9 @@ There is no name field. People are recorded under a pseudonym assigned by your t
 - **Pseudonym only** — pseudonym assigned, person is recognizable on return
 - **With additional details** — additional details recorded (e.g. age group, district)
 
-Anonymous is not a status of a person but an event without a person (e.g. brief visits, needle exchange): no person is created and nothing is recognized.
+Anonymous is not a status of a person but an event without a person (e.g. brief visits, needle exchange): no person is created and nothing is recognized. An event without a person is still not anonymous by content: free text, locations or attachments can make a person identifiable.
 
-No real name ever enters the database — neither accidentally nor intentionally.
+Pseudonymisation is the intended workflow: there is no required field for real names, and the workflows do without them. The software cannot technically prevent real names, though — pseudonyms, notes, free-text fields and attachments contain whatever the team enters or uploads. What matters is therefore the facility's data-entry practice.
 
 ### 2. Timeline documentation — like your logbook, but digital
 
@@ -233,6 +233,6 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 </details>
 
 <!-- translation-source: README.md -->
-<!-- translation-version: v0.99.5 -->
-<!-- translation-date: 2026-10-06 -->
-<!-- source-hash: cc03127a414132c7f7e6ef09d5fd632919d26bbb -->
+<!-- translation-version: v0.99.6 -->
+<!-- translation-date: 2026-10-07 -->
+<!-- source-hash: 9e082e34577aa0eeb3a283c2bc12570c1a3a9d63 -->

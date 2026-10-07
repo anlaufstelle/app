@@ -1192,3 +1192,103 @@ class TestAwarenessMfaClaims:
         assert "rollenbezogen für `lead` und `facility_admin`" not in text
         assert "per Rollen-Default für alle Rollen verpflichtend" in text
         assert "`MFA_ENFORCED_ROLES_GRACE`" in text
+
+
+# ---------------------------------------------------------------------------
+# Real-name promises (Refs #2430): pseudonymisation is the intended workflow
+# and there is no real-name field, but nothing technically keeps names out of
+# pseudonyms, notes, free-text fields or attachments, and an event without a
+# person is not anonymous by content.
+# ---------------------------------------------------------------------------
+
+_README_DE = REPO_ROOT / "README.md"
+_README_EN = REPO_ROOT / "README.en.md"
+
+
+def _read_flat(path: Path) -> str:
+    return _flat(path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.django_db
+def test_premise_no_real_name_field_and_personless_free_text():
+    from core.models import Client
+
+    assert not [f.name for f in Client._meta.get_fields() if "name" in f.name and f.name != "pseudonym"]
+    package = yaml.safe_load((PACKAGES_DIR / "awareness.yaml").read_text(encoding="utf-8"))
+    incident = next(t for t in package["document_types"] if t["slug"] == "gewaltvorfall")
+    assert not incident.get("min_contact_stage")
+    field_slugs = {ref["template_slug"] for ref in incident["field_refs"]}
+    assert {"ort-im-veranstaltungsgelaende", "notiz-vorfall"} <= field_slugs
+
+
+@pytest.mark.architecture
+class TestRealNamePromises:
+    def test_readmes_do_not_promise_technical_impossibility(self):
+        de, en = _read_flat(_README_DE), _read_flat(_README_EN)
+        assert "weder versehentlich noch absichtlich" not in de
+        assert "neither accidentally nor intentionally" not in en
+        for part in ("Pflichtfeld", "Pseudonymisierung", "Anhänge", "nicht automatisch inhaltlich anonym"):
+            assert part in de, part
+        for part in ("required field", "Pseudonymisation", "attachments", "not anonymous by content"):
+            assert part in en, part
+
+    def test_domain_concept_separates_personless_from_anonymous_content(self):
+        text = _section(_read_flat(DOMAIN_CONCEPT_DE), "**Stufe 1: Anonym.**", "**Stufe 3:")
+        assert "Im rechtlichen Sinn werden keine personenbezogenen Daten verarbeitet" not in text
+        assert "existiert nur im Wissen der Mitarbeitenden" not in text
+        assert "nicht automatisch anonym" in text
+        assert "Pflichtfeld" in text
+
+    def test_english_summary_separates_personless_from_anonymous_content(self):
+        text = _section(_read_flat(DOMAIN_SUMMARY_EN), "- **Anonymous** --", "- **Qualified**")
+        assert "stores no personal data" not in text
+        assert "No real name enters the database" not in text
+        assert "does not make it anonymous by content" in text
+        assert "required field" in text
+
+    def test_dpa_does_not_promise_no_real_names(self):
+        text = (REPO_ROOT / "src" / "core" / "dsgvo_templates" / "av-vertrag.md").read_text(encoding="utf-8")
+        assert "(keine Klarnamen)" not in text
+        assert "kein Pflichtfeld für Klarnamen" in _flat(text)
+
+
+# ---------------------------------------------------------------------------
+# Data protection overview (Refs #2492): file deletion paths and the staff
+# references of handover notes.
+# ---------------------------------------------------------------------------
+
+_PRIVACY_DE = REPO_ROOT / "docs" / "datenschutz.md"
+_PRIVACY_EN = REPO_ROOT / "docs" / "en" / "data-protection.md"
+
+
+def test_premise_case_purge_deletes_files_and_handover_notes_name_staff():
+    import inspect
+
+    from core.models import ShiftHandoverNote
+    from core.services.case import deletion
+
+    assert "delete_attachments_for(case)" in inspect.getsource(deletion.anonymize_case)
+    for caller in (deletion.anonymize_case_now, deletion.anonymize_eligible_soft_deleted_cases):
+        assert "anonymize_case(" in inspect.getsource(caller), caller
+    fields = {field.name for field in ShiftHandoverNote._meta.get_fields()}
+    assert {"author", "updated_by"} <= fields
+
+
+@pytest.mark.architecture
+class TestPrivacyOverview:
+    def test_file_deletion_paths_include_the_case_purge(self):
+        de, en = _read_flat(_PRIVACY_DE), _read_flat(_PRIVACY_EN)
+        assert "**drei** physische Löschpfade" not in de
+        assert "**three** physical deletion paths" not in en
+        for text in (de, en):
+            assert "`anonymize_case`" in text
+            assert "Art. 18" in text
+
+    def test_handover_note_row_names_author_and_editor(self):
+        for path, stale in (
+            (_PRIVACY_DE, "nur Einrichtung, Schichtdatum und Zeitfenster"),
+            (_PRIVACY_EN, "only facility, shift date and time window"),
+        ):
+            row = next(line for line in path.read_text(encoding="utf-8").splitlines() if "`ShiftHandoverNote`" in line)
+            assert stale not in row, path
+            assert "`author`" in row and "`updated_by`" in row, path

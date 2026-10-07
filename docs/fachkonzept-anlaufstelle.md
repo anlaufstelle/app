@@ -399,9 +399,9 @@ Zeitfilter sind optional. Eine Einrichtung kann beliebig viele definieren oder g
 
 Anlaufstelle unterscheidet drei Kontaktstufen, die den gesamten Lebenszyklus einer Person im System bestimmen:
 
-**Stufe 1: Anonym.** Die Person ist dem System nicht bekannt. Es wird nur gezählt: Ein Kontakt, eine Leistung, ein Alterscluster. Kein Pseudonym, kein Datensatz. Im rechtlichen Sinn werden keine personenbezogenen Daten verarbeitet.
+**Stufe 1: Anonym.** Die Person wird nicht als Datensatz geführt: kein Pseudonym, kein Personendatensatz. Das Ereignis steht ohne Personenbezug im Datenmodell (ein Kontakt, eine Leistung, ein Alterscluster). Sein Inhalt ist damit nicht automatisch anonym: Je nach Dokumentationstyp enthält ein solches Ereignis Freitext, Ortsangaben oder Anhänge — etwa die personenlose Vorfallserfassung des Awareness-Pakets —, über die eine Person erkennbar sein kann. Ob personenbezogene Daten verarbeitet werden, hängt deshalb auch vom Inhalt ab.
 
-**Stufe 2: Identifiziert.** Die Person hat ein Pseudonym — vergeben vom Team, festgehalten im System. Unter diesem Pseudonym werden Kontakte dokumentiert. Es gibt eine Chronik, eine Kontakthistorie, zugeordnete Leistungen. Das System kennt keinen Klarnamen. Die Zuordnung Pseudonym → reale Person existiert nur im Wissen der Mitarbeitenden.
+**Stufe 2: Identifiziert.** Die Person hat ein Pseudonym — vergeben vom Team, festgehalten im System. Unter diesem Pseudonym werden Kontakte dokumentiert. Es gibt eine Chronik, eine Kontakthistorie, zugeordnete Leistungen. Vorgesehen ist, dass die Zuordnung Pseudonym → reale Person im Wissen der Mitarbeitenden bleibt; es gibt kein Pflichtfeld für Klarnamen. Technisch verhindert die Software Klarnamen nicht: Pseudonym, Notizen, Freitextfelder und Anhänge enthalten, was das Team einträgt.
 
 **Stufe 3: Qualifiziert.** Die Person ist in einem Beratungs- oder Begleitungsprozess. Zusätzlich zum Pseudonym werden qualifizierte Daten dokumentiert: Beratungsinhalte, Gesundheitsdaten, Vermittlungsverlauf. Diese Daten sind besonders schutzbedürftig und unterliegen strengeren Zugriffsregeln und längeren, aber definierten Aufbewahrungsfristen.
 

@@ -68,9 +68,9 @@ Es gibt kein Namensfeld. Personen werden unter einem Pseudonym geführt, das Ihr
 - **Nur Pseudonym** — Pseudonym vergeben, Person ist wiedererkennbar
 - **Mit Zusatzangaben** — weitergehende Angaben (z. B. Altersgruppe, Bezirk)
 
-Anonym ist kein Personenstatus, sondern ein Ereignis ohne Person (z. B. Kurzbesuche, Spritzentausch): Dort wird keine Person angelegt und nichts wiedererkannt.
+Anonym ist kein Personenstatus, sondern ein Ereignis ohne Person (z. B. Kurzbesuche, Spritzentausch): Dort wird keine Person angelegt und nichts wiedererkannt. Ein Ereignis ohne Person ist aber nicht automatisch inhaltlich anonym: Freitext, Ortsangaben oder Anhänge können eine Person erkennbar machen.
 
-Kein Klartextname gelangt in die Datenbank — weder versehentlich noch absichtlich.
+Vorgesehen ist die Pseudonymisierung: Es gibt kein Pflichtfeld für Klarnamen, und die Arbeitsabläufe kommen ohne aus. Technisch verhindern kann die Software Klarnamen aber nicht — Pseudonym, Notizen, Freitextfelder und Anhänge enthalten, was das Team einträgt oder hochlädt. Entscheidend ist deshalb die Eingabepraxis der Einrichtung.
 
 ### 2. Dokumentation im Zeitstrom — wie Ihr Dienstbuch, nur digital
 

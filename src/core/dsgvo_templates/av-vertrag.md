@@ -49,7 +49,7 @@ Die Verarbeitung umfasst:
 ## § 3 Art der personenbezogenen Daten
 
 Folgende Datenkategorien werden verarbeitet:
-- Pseudonyme (keine Klarnamen)
+- Pseudonyme (vorgesehen ist die Pseudonymisierung, es gibt kein Pflichtfeld für Klarnamen; Pseudonym, Notizen, Freitextfelder und Anhänge können dennoch Namen enthalten)
 - Altersgruppe
 - Kontaktstufen
 - Kontaktdokumentation und Notizen (einzelne sensible Felder je nach Konfiguration verschlüsselt)

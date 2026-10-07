@@ -24,8 +24,8 @@ Beyond the original domain of low-threshold substance-use and homelessness servi
 
 Anlaufstelle uses a three-tier model that reflects how relationships develop in low-threshold settings:
 
-- **Anonymous** -- No pseudonym, no record. The system counts the contact (one visit, one service) but stores no personal data. Most contacts at a drop-in center remain at this level.
-- **Identified** -- The team assigns a pseudonym (e.g. "Maus"). Under this pseudonym, the system tracks a contact history and a timeline. No real name enters the database; the mapping from pseudonym to real person exists only in the minds of staff.
+- **Anonymous** -- No pseudonym, no record. The event has no person in the data model (one visit, one service). That does not make it anonymous by content: depending on the documentation type it can carry free text, locations or attachments (for example the personless incident capture of the awareness package) that make a person identifiable. Most contacts at a drop-in center remain at this level.
+- **Identified** -- The team assigns a pseudonym (e.g. "Maus"). Under this pseudonym, the system tracks a contact history and a timeline. The intended workflow keeps the mapping from pseudonym to real person in the minds of staff, and there is no required field for real names. The software does not technically prevent real names: pseudonyms, notes, free-text fields and attachments contain whatever the team enters.
 - **Qualified** -- The person is in an active counseling or support process. Additional sensitive data (health information, counseling notes) may be recorded, subject to stricter access rules and encryption. The transition to this level is a deliberate decision by facility leadership and is logged by the system.
 
 Contact levels govern which [documentation types](glossary.md) can be used, who may access the data, and how long records are retained.
@@ -325,6 +325,6 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Quick exit joins the glossary**: a header-bar action (button + keyboard shortcut) on every signed-in page that hides the content, ends the session and opens a neutral page, kept distinct from the separate opt-in privacy screen shown on window or tab switch.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.99.5 -->
-<!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 5dde14ccb21586da859bee9d0f0fd2b84e46cf6c -->
+<!-- translation-version: v0.99.6 -->
+<!-- translation-date: 2026-10-07 -->
+<!-- source-hash: 58fb9ad350cc89479b9f37e3c2139bad83ec7e0a -->
