@@ -773,7 +773,7 @@ Tests are located under `src/tests/`. The three largest families have their own 
 
 **Value tables:** The same check logic × different inputs belongs in `@pytest.mark.parametrize` with descriptive `ids=` — patterns: `test_boundary_*`, `_authz_expectations.py`, `_entity_expectations.py`.
 
-**Factories:** New tests that create `Event`, `DocumentType` or `Client` via `.objects.create(...)` should use the wrappers from `src/tests/_factories.py` (`make_event`, `make_document_type`, `make_client`) as soon as at least the fixed required fields per model are set explicitly — deviating cases (missing `client`/`created_by` on nullable fields, `**kwargs` forwarding) stay with direct `Model.objects.create(...)`. The factories deliberately create exactly one object and set no defaults for varying fields — whoever needs a field passes it explicitly via `**overrides`, so no test behavior silently depends on a factory default. Add new wrappers for further models only following the same pattern and after consulting the orchestrator.
+**Factories:** New tests that create `Event`, `DocumentType` or `Client` via `.objects.create(...)` should use the wrappers from `src/tests/_factories.py` (`make_event`, `make_document_type`, `make_client`) as soon as at least the fixed required fields per model are set explicitly — deviating cases (missing `client`/`created_by` on nullable fields, `**kwargs` forwarding) stay with direct `Model.objects.create(...)`. The factories deliberately create exactly one object and set no defaults for varying fields — whoever needs a field passes it explicitly via `**overrides`, so no test behavior silently depends on a factory default. Add new wrappers for further models only following the same pattern and after consulting the project maintainers.
 
 **Parallel:** `make test-parallel` uses pytest-xdist to run on all available CPU cores. `make ci` uses the parallel variant automatically.
 
@@ -1047,4 +1047,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 84bf12d022c52a4c32386674613370c0d9755a77 -->
+<!-- source-hash: f7a4325e64c55112a93526f84860421b404df791 -->

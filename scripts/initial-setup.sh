@@ -403,7 +403,7 @@ case "$roles_exit" in
         fail "check_db_roles meldet ein falsches DB-Rollenprofil (Exit ${roles_exit}).
   Row Level Security waere damit wirkungslos — die Facility-Isolation faellt
   still aus. Ursachen und Behebung: docs/ops-runbook.md § 9 (Rollenmodell)
-  bzw. § 9.6 (Ownership-Umzug auf Bestandsinstallationen)."
+  bzw. § 9.6 (Rollout der Runtime-/Owner-Rollentrennung auf laufenden Installationen)."
         ;;
 esac
 

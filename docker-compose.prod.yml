@@ -371,10 +371,10 @@ services:
     # ab Werk aktiv. Job-Liste + Zeitplan: ./deploy/crontab, Doku:
     # docs/ops-runbook.md § 3.2.
     #
-    # ACHTUNG Bestandsinstallationen: Wer die Host-Crontab aus dem Runbook
-    # bereits eingerichtet hat, laesst die Jobs sonst DOPPELT laufen. Vor dem
-    # ersten Start dieses Service die entsprechenden Host-Eintraege entfernen
-    # (Backup ausgenommen, das bleibt Host-seitig) — docs/ops-runbook.md § 3.3.
+    # Note: on hosts where the host crontab from the runbook is already set
+    # up, the jobs would otherwise run TWICE. Before the first start of this
+    # service, remove the corresponding host entries
+    # (except the backup, which stays on the host) — docs/ops-runbook.md § 3.3.
     # Registry-Stand pruefen und lokaler Build-Pfad: siehe Kommentar beim
     # ``web``-Dienst weiter oben.
     image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.99.5}${APP_IMAGE_DIGEST:-}
