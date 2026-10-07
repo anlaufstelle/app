@@ -66,6 +66,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Übersetzungen zusätzlich strukturell prüfbar** (#2454) — Ein Prüfer meldet Abweichungen bei Überschriften, Codeblöcken, Tabellen und erkannten Befehlen zwischen DE/EN-Paaren; bewusste Ausnahmen sind begründet und vorhandene Unterschiede werden ohne automatische Übersetzung ausgewiesen.
+
 - **Hand-Checks auf das aktuelle Release-Delta begrenzt** (#2457) — Die Einträge bis v0.99.5 liegen unverändert im Dev-Stichtag-Archiv; die Release-Checkliste verlangt die Archivierung und ein Guard lehnt historische Einträge im aktiven Delta ab.
 
 - **Ausführbare Befehle in den Handtest-Matrizen** (#2452) — Matrizen B, C, D und Hub nennen vorhandene Aufrufe; die Breach-Probe berücksichtigt Django-Schwellen, Kontosperre und HTTP-Ratelimit, der entfallene Geräte-Lease-Fall ist aus dem manuellen Pflichtprofil entfernt.
