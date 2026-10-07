@@ -1,5 +1,4 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805) and 2026-08-12 (§ 7 report selection: cards instead of a dropdown, "Dataset Reports" tab, PDF export moved onto the report card, #1804) and 2026-08-13 (§ 2a role landing redirects, #1813; § 6 search results page, #1803).
 
 # Anlaufstelle -- User Guide
 
@@ -12,12 +11,12 @@ This guide and the [FAQ](../faq.md) are linked inside the application under "Hel
 ## Table of Contents
 
 1. [Login and Password](#1-login-and-password)
-2. [Home -- Zeitstrom](#2-home--zeitstrom)
+2. [Home -- Timeline](#2-home--timeline)
    - [Tally](#tally)
    - [Work Center](#2a-work-center)
 3. [Documenting a Contact (Creating an Event)](#3-documenting-a-contact-creating-an-event)
    - [Files Overview](#3a-files-overview)
-4. [Managing Clients](#4-managing-clients)
+4. [Managing People](#4-managing-people)
 5. [Hints and Tasks (Work Items)](#5-hints-and-tasks-work-items)
 6. [Search](#6-search)
 7. [Statistics and Export](#7-statistics-and-export)
@@ -44,7 +43,7 @@ This guide and the [FAQ](../faq.md) are linked inside the application under "Hel
 > - **Unlock account by email** -- Sends an unlock link to your registered email address, valid for 30 minutes. No new password required.
 > - **Redeem a backup code** -- If you have 2FA enabled, enter your username plus one of your backup codes. Each code is single-use.
 >
-> If none of these options works, ask the application manager of your facility to unlock the account (Administration > Access). All actions are recorded in the audit log.
+> If none of these options works, ask the application support of your facility to unlock the account (Administration > Access). All actions are recorded in the audit log.
 
 ### Changing Your Password
 
@@ -60,7 +59,7 @@ This guide and the [FAQ](../faq.md) are linked inside the application under "Hel
 
 ### Two-Factor Authentication (2FA)
 
-Anlaufstelle supports time-based one-time passwords (TOTP) as a second login factor. In production 2FA is mandatory for all roles: immediately for the system administration and the application manager, and for lead, staff and assistant after a transition period of 30 days from the first sign-in. During that period a notice reminds you from 14 remaining days on; afterwards sign-in leads directly to setup. Operations can change this role default, and the application manager can additionally make 2FA mandatory immediately for individual accounts or the whole facility. Where there is no obligation, you can enable 2FA voluntarily.
+Anlaufstelle supports time-based one-time passwords (TOTP) as a second login factor. In production 2FA is mandatory for all roles: immediately for the system administration and the application support, and for manager, social workers and assistant after a transition period of 30 days from the first sign-in. During that period a notice reminds you from 14 remaining days on; afterwards sign-in managers directly to setup. Operations can change this role default, and the application support can additionally make 2FA mandatory immediately for individual accounts or the whole facility. Where there is no obligation, you can enable 2FA voluntarily.
 
 **Initial setup:**
 
@@ -93,7 +92,7 @@ Under `/mfa/settings/` > **Disable 2FA**. This is **not possible** if 2FA is man
 
 When setting up 2FA, you receive **10 single-use backup codes**. Store them safely -- e.g., printed and kept in your wallet, or in your password manager. If you lose your phone or your authenticator app has been reset, you can enter a backup code instead of a TOTP code at the 2FA login screen. Each code only works once.
 
-> **All codes used up or lost?** Contact the application manager of your facility. They can reset your second factor: this removes all authenticator apps, passkeys and backup codes of your account and signs you out everywhere. Your password stays valid. If 2FA is mandatory for you, you set up 2FA and new backup codes at your next sign-in.
+> **All codes used up or lost?** Contact the application support of your facility. They can reset your second factor: this removes all authenticator apps, passkeys and backup codes of your account and signs you out everywhere. Your password stays valid. If 2FA is mandatory for you, you set up 2FA and new backup codes at your next sign-in.
 
 **Passkey / security key (optional, in addition to the authenticator app):**
 
@@ -138,7 +137,7 @@ Pressing **Back** in the browser does not bring the application back: the page c
 
 One thing is certain: **your screen is cleared immediately.** Everything beyond that the application attempts as best it can -- four limits remain, and they are named here rather than left unsaid:
 
-- **The browser history.** The button only replaces the *current* history entry. Every page you opened earlier in this session stays in the browser's history (`Ctrl`+`H`) -- with address and page title, and the title of a client page contains the pseudonym. **Recommendation:** clear the history at the end of the shift, or work in a private window on shared devices.
+- **The browser history.** The button only replaces the *current* history entry. Every page you opened earlier in this session stays in the browser's history (`Ctrl`+`H`) -- with address and page title, and the title of a person page contains the pseudonym. **Recommendation:** clear the history at the end of the shift, or work in a private window on shared devices.
 - **A second open window.** The button acts on the window you press it in. A second open tab keeps showing its already loaded content until something is clicked or reloaded there -- at which point it ends up on the sign-in form as well. Its access to the local offline data is locked along with the first window, provided the deletion there succeeded (see the next point). **Recommendation:** work in a single window and close any second window beforehand.
 - **A dropped connection.** The sign-out is sent to the server without waiting. If there is no network at that exact moment, it may be lost; the session then only ends through the inactivity timeout (30 minutes by default) or the maximum session duration.
 - **A stalled or failed deletion of the local key.** Before switching pages the application waits half a second for the key to the offline data to actually be deleted -- which is enough in the normal case. If it does not succeed within that time, the page is switched anyway (your screen matters more), and the key remains until the next regular sign-out, until the automatic lock after a longer period of inactivity, or until the 48-hour offline authorization expires. Whoever opens the device afterwards may therefore still be able to see the locally stored data. **Recommendation:** do not leave the device unattended after quitting.
@@ -151,11 +150,11 @@ To continue, click **Continue** or press `Enter` or the space bar. The cursor th
 
 ---
 
-## 2. Home — Zeitstrom
+## 2. Home — Timeline
 
-After signing in, you land on the **Zeitstrom** (`/`) -- a chronological daily feed that unifies contacts, system activities, tasks, and entry bans in a single view.
+After signing in, you land on the **Timeline** (`/`) -- a chronological daily feed that unifies contacts, system activities, tasks, and entry bans in a single view.
 
-### What the Zeitstrom shows
+### What the Timeline shows
 
 The feed combines four sources for the current day:
 
@@ -170,7 +169,7 @@ The right sidebar contains **“Team tasks needing attention”**, a team focus 
 
 ### Tally
 
-When the administration has enabled suitable documentation types, the **tally** appears in the Zeitstrom. It counts anonymous contacts per type for the current time window. When a shift is currently running, its time window applies; otherwise the current calendar day applies.
+When the administration has enabled suitable documentation types, the **tally** appears in the Timeline. It counts anonymous contacts per type for the current time window. When a shift is currently running, its time window applies; otherwise the current calendar day applies.
 
 - **Without required fields:** `+1` immediately creates one anonymous contact.
 - **With required number fields:** `+1` opens a compact value form. Enter every required value and select **Count contact**. This creates exactly one anonymous contact. For a needle exchange, for example, issued and returned needles belong to the same contact rather than counting multiple contacts.
@@ -183,27 +182,27 @@ When the administration has enabled suitable documentation types, the **tally** 
 
 ### Shift filter
 
-Below the date navigation you find **TimeFilter tabs** (e.g., "Early shift", "Late shift", "Night shift" -- configurable by the administration). When you open the Zeitstrom, the shift that matches the current time is auto-selected; night shifts crossing midnight are handled correctly.
+Below the date navigation you find **TimeFilter tabs** (e.g., "Early shift", "Late shift", "Night shift" -- configurable by the administration). When you open the Timeline, the shift that matches the current time is auto-selected; night shifts crossing midnight are handled correctly.
 
-**Daylight-saving changes.** On both changeover weekends a clock time is ambiguous, and the shift filter resolves that explicitly. On the night the clocks fall back to standard time, the hour from 02:00 to 03:00 runs twice; a shift that ends within that hour ends at the **second** occurrence -- a night shift from 20:00 to 02:45 therefore actually lasts 7 hours 45 minutes that night, and everything documented during the extra hour stays visible in the Zeitstrom, the handover, and the tally. On the night the clocks spring forward to daylight-saving time, the hour from 02:00 to 03:00 is skipped; a shift that would have ended within it instead ends after its agreed duration from shift start and is actually one hour shorter. Full-day views are unaffected -- the changeover day in autumn still spans 25 hours, the one in spring 23.
+**Daylight-saving changes.** On both changeover weekends a clock time is ambiguous, and the shift filter resolves that explicitly. On the night the clocks fall back to standard time, the hour from 02:00 to 03:00 runs twice; a shift that ends within that hour ends at the **second** occurrence -- a night shift from 20:00 to 02:45 therefore actually lasts 7 hours 45 minutes that night, and everything documented during the extra hour stays visible in the Timeline, the handover, and the tally. On the night the clocks spring forward to daylight-saving time, the hour from 02:00 to 03:00 is skipped; a shift that would have ended within it instead ends after its agreed duration from shift start and is actually one hour shorter. Full-day views are unaffected -- the changeover day in autumn still spans 25 hours, the one in spring 23.
 
 **Capturing the doubled hour.** A contact that really did take place during that doubled hour can be documented with its true time -- you do not have to fall back on 01:59 or 03:00. Enter the **timestamp** as usual when creating the contact (25 October 2026 at 02:30, say) and save. Because that clock time exists twice on that day, the form asks once: right below the timestamp the select **"Which of the two hours?"** appears, offering **Daylight-saving time -- first hour (CEST)** and **Standard time -- second hour (CET)**. Pick the hour that applies and save again. The select appears in this edge case only; on every other day and at every other time you will not see it.
 
 **Offline capture.** The offline create shell has no fold selector, so it refuses a timestamp in the doubled hour with an explanatory message. Choose an unambiguous time (outside 02:00-02:59 on the fall-back day) or capture the contact online.
 
-For the application the two hours really are different points in time, one hour apart: the contact lands in the shift it took place in, and the order in the Zeitstrom is correct. Afterwards both cases display the same wall-clock time (02:30) -- the difference lives in the stored point in time, not in what is displayed.
+For the application the two hours really are different points in time, one hour apart: the contact lands in the shift it took place in, and the order in the Timeline is correct. Afterwards both cases display the same wall-clock time (02:30) -- the difference lives in the stored point in time, not in what is displayed.
 
 **When editing** a contact the timestamp can no longer be changed at all; it is shown there for reference only. So you make the choice when creating the contact. If an entry ended up in the wrong hour by mistake, create it again and have the wrong entry deleted ([Deleting a Contact](#deleting-a-contact)).
 
 On the night the clocks spring forward, by contrast, the hour from 02:00 to 03:00 **does not exist at all** -- there the form still rejects a time from that window and says why. There is nothing to choose: a time that does not exist is not made real by any selection.
 
-The permanently visible **Current shift** box above the feed shows contacts, new tasks, new clients and important occurrences for the ongoing shift. It is independent of the selected Zeitstrom filter and appears only while a configured shift is running.
+The permanently visible **Current shift** box above the feed shows contacts, new tasks, new people and important occurrences for the ongoing shift. It is independent of the selected Timeline filter and appears only while a configured shift is running.
 
 #### Handover note
 
 At the very top of the handover -- before the statistics -- sits the **handover note**: a free-text field for everything no metric captures ("B coped very well today, please follow up"). You see two blocks there: the note of the **shift that just ended**, the one you are taking over, and below it the field for the **current shift** you are working in. If **no shifts** are configured for your facility, the calendar day is the shift: the note from **yesterday** appears at the top, the field for **today** below it.
 
-**Who may.** Staff, leads and application administrators may read and write. Assistants do not see the note -- not even a hint that one exists.
+**Who may.** Social workers, managers and application support may read and write. Assistants do not see the note -- not even a hint that one exists.
 
 **How long it stays editable.** A note stays editable until the **end of the following shift**: whoever writes during the early shift can amend it until the late shift ends; after that the entry is read-only and states until when editing was possible. The deadline is shown below the text field. On the changeover weekends the same shift logic described above applies. **The deadline is fixed when the note is created:** if the application administration later changes the shift times or switches a shift off, that does **not** reopen a note that has already closed -- what was handed over stays handed over.
 
@@ -234,15 +233,15 @@ If there are active entry bans in your facility, they are displayed as a red ban
 
 ## 2a. Work Center
 
-The **Work Center** (`/start/`) is the landing page of the **Lead** role -- an overview page that condenses existing data into compact tiles. The sidebar link **"Work Center"** (above the Zeitstrom) therefore only appears for Leads. The Zeitstrom at `/` remains unchanged.
+The **Work Center** (`/start/`) is the landing page of the **Manager** role -- an overview page that condenses existing data into compact tiles. The sidebar link **"Work Center"** (above the Timeline) therefore only appears for Managers. The Timeline at `/` remains unchanged.
 
 All other roles are redirected from `/start/` straight to their own workplace:
 
-- **Social Worker / Assistant** -- to the Zeitstrom (`/`); the former tiles "Today's contacts", "My tasks", and "Recently edited" together with the lists "My open tasks" and "Recently edited persons" live on there as a cockpit block above the feed.
-- **Facility Admin** (`facility_admin`) -- to the administration overview (`/verwaltung/`).
-- **System Admin** (`super_admin`) -- to the system area (`/system/`).
+- **Social worker / Assistant** -- to the Timeline (`/`); the former tiles "Today's contacts", "My tasks", and "Recently edited" together with the lists "My open tasks" and "Recently edited persons" live on there as a cockpit block above the feed.
+- **Application support** (`facility_admin`) -- to the administration overview (`/verwaltung/`).
+- **System administration** (`super_admin`) -- to the system area (`/system/`).
 
-**Lead** -- title "Lead Work Center", GDPR workflows, retention, and statistics:
+**Manager** -- title "Lead work center", GDPR workflows, retention, and statistics:
 
 - **Deletion requests** -- pending requests (links to the deletion-request list)
 - **Retention proposals** -- pending retention proposals (links to the retention dashboard)
@@ -262,15 +261,15 @@ An **event** is a single documented contact -- for example, a counseling session
 2. **Select a documentation type:** Choose the appropriate type from the list (e.g., "Contact", "Crisis counseling", "Syringe exchange"). The available types are configured by your facility.
 3. **Fill in the fields:** After selecting the type, the corresponding input fields are loaded. Fill in all relevant fields.
 4. **Timestamp:** The "Timestamp" field is automatically set to the current time. You can adjust it if you are recording a contact retroactively.
-5. **Assign a client (optional):**
-   - For an **anonymous contact** (without a pseudonym): Enable the "Anonymous" option. No client will be linked.
-   - For a **client with a pseudonym**: Start typing the pseudonym in the client field. A suggestion list appears -- select the matching client.
-   - If the client has not been registered yet, create them first under **Clients** (see [Section 4](#4-managing-clients)).
+5. **Assign a person (optional):**
+   - For an **anonymous contact** (without a pseudonym): Enable the "Anonymous" option. No person will be linked.
+   - For a **person with a pseudonym**: Start typing the pseudonym in the person field. A suggestion list appears -- select the matching person.
+   - If the person has not been registered yet, create them first under **People** (see [Section 4](#4-managing-people)).
 6. Click **Save**.
 
 You will be redirected to the detail view of the newly created entry. A success message confirms the save.
 
-> **Tip:** If you create a contact from the client detail page, the client is already pre-filled.
+> **Tip:** If you create a contact from the person detail page, the person is already pre-filled.
 
 ### Quick Templates
 
@@ -288,20 +287,20 @@ If your administrator has set up **quick templates** for recurring documentation
 
 A file can be attached to each event -- for example, a scanned form, a photo of a document, or a PDF.
 
-> **On clients and cases as well:** File fields are no longer restricted to events. If your administrator has set up a file field on a **client** or **case type**, it appears in the client's or the case's form and works exactly as described here -- upload, replacement with previous versions, download from the detail view. Two differences: **case files** can only be seen and downloaded by social workers, leads, and administrators (assistants have no access to cases), and files on a client or a case are **deleted together with the client** -- they have no retention period of their own.
+> **On people and cases as well:** File fields are no longer restricted to events. If your administrator has set up a file field on a **person** or **case type**, it appears in the person's or the case's form and works exactly as described here -- upload, replacement with previous versions, download from the detail view. Two differences: **case files** can only be seen and downloaded by social workers, managers, and administrators (assistants have no access to cases), and files on a person or a case are **deleted together with the person** -- they have no retention period of their own.
 
-- **Upload:** The contact form includes a file upload field. Pick a file from your device and save the event as usual. On clients and cases it works identically: pick the file in the form, save the record.
+- **Upload:** The contact form includes a file upload field. Pick a file from your device and save the event as usual. On people and cases it works identically: pick the file in the form, save the record.
 - **Virus scan:** Before saving, every file is automatically checked by a virus scanner (ClamAV). Infected files are rejected -- you receive an error and the event is not saved.
 - **Encryption:** All attachments are stored encrypted (Fernet, AES-128-CBC with HMAC-SHA256). Keys are held in the installation-wide `ENCRYPTION_KEYS` key ring (alternatively `ENCRYPTION_KEY`), shared by all facilities; facilities do not have separate key rings. That means the file is not readable in cleartext on the server and can only be retrieved through Anlaufstelle itself.
-- **Image metadata is removed:** For images (JPG, PNG, WebP, TIFF -- not for GIF and BMP) the embedded metadata is deleted on upload -- above all the **GPS capture location** (on phone photos often the home or current address of the person concerned), plus device model, capture time and the embedded thumbnail, which may still show the uncropped original. The picture itself stays unchanged, and portrait photos stay portrait. This does **not** happen for PDF and Office files -- their document properties may still name the staff member who worked on them.
-- **Maximum size:** By default, **up to 10 MiB per file** are allowed. Your facility admin can adjust this up to the installation-wide operator cap `FILE_VAULT_MAX_UPLOAD_BYTES` (default: 50 MiB). The stricter of the two limits applies.
+- **Image metadata is removed:** For images (JPG, PNG, WebP, TIFF -- not for GIF and BMP) the embedded metadata is deleted on upload -- above all the **GPS capture location** (on phone photos often the home or current address of the person concerned), plus device model, capture time and the embedded thumbnail, which may still show the uncropped original. The picture itself stays unchanged, and portrait photos stay portrait. This does **not** happen for PDF and Office files -- their document properties may still name the social workers member who worked on them.
+- **Maximum size:** By default, **up to 10 MiB per file** are allowed. Your application support can adjust this up to the installation-wide operator cap `FILE_VAULT_MAX_UPLOAD_BYTES` (default: 50 MiB). The stricter of the two limits applies.
 - **Supported formats:** PDF, Office documents, and images. Ask your administrator for the exact list allowed in your facility.
-- **Download:** Open the detail view of the event (or of the client or the case) and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
-- **Replacing (with version history):** When editing, you can replace the existing file with a new one. The old file is **not** deleted -- it is preserved as a **previous version** and remains downloadable from the detail view via an expandable accordion. Previous versions are only removed when the record itself is fully deleted. This applies to events, clients, and cases alike.
+- **Download:** Open the detail view of the event (or of the person or the case) and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
+- **Replacing (with version history):** When editing, you can replace the existing file with a new one. The old file is **not** deleted -- it is preserved as a **previous version** and remains downloadable from the detail view via an expandable accordion. Previous versions are only removed when the record itself is fully deleted. This applies to events, people, and cases alike.
 - **Removing:** A stored file can be deselected in the form. It disappears from the detail view and can no longer be downloaded; the version chain is kept for traceability until the record itself is deleted. The file remains encrypted on the server and is reported as "removed on ..." in an Art. 15 GDPR access request. This is **not a dead end**: a removed file can still be deleted permanently later (see below and [Section 3a](#deleting-permanently)).
-- **Deleting permanently:** For genuine mistakes -- wrong file, wrong person -- there is additionally permanent deletion. It physically destroys the encrypted file including all previous versions. This is **irreversible** and therefore restricted to managers and administration. There are **two** entry points: directly at the file in the detail view of the event, the client, or the case (link "delete permanently" next to the filename) and in the [Files overview](#3a-files-overview).
+- **Deleting permanently:** For genuine mistakes -- wrong file, wrong person -- there is additionally permanent deletion. It physically destroys the encrypted file including all previous versions. This is **irreversible** and therefore restricted to managers and administration. There are **two** entry points: directly at the file in the detail view of the event, the person, or the case (link "delete permanently" next to the filename) and in the [Files overview](#3a-files-overview).
 
-> **Changing the type discards values *and* files:** If you change the documentation type on a client or a case -- or remove it ("— No type —") --, the additional fields of the old type no longer apply. A confirmation prompt before saving names both: how many **field values** will be discarded **and** how many stored **files** will be removed. "Cancel" leaves everything unchanged; only "OK" carries it out.
+> **Changing the type discards values *and* files:** If you change the documentation type on a person or a case -- or remove it ("— No type —") --, the additional fields of the old type no longer apply. A confirmation prompt before saving names both: how many **field values** will be discarded **and** how many stored **files** will be removed. "Cancel" leaves everything unchanged; only "OK" carries it out.
 
 > **Offline note:** Events with file attachments currently **cannot** be saved offline. If you work offline, attaching a file shows an explicit hint. See [Section 8](#8-installing-the-pwa-and-working-offline).
 
@@ -309,7 +308,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 
 ### Editing a Contact
 
-1. Open the event (via the Zeitstrom or the client chronology).
+1. Open the event (via the Timeline or the person chronology).
 2. Click **Edit**.
 3. Change the desired fields and click **Save**.
 
@@ -324,44 +323,44 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 3. Enter a reason.
 4. Confirm the deletion.
 
-> **Important:** If the contact is associated with a **client at the "With additional details" contact level**, it will not be deleted immediately. Instead, a **deletion request** is automatically created, which must be approved by a second person with the “Deletion confirmation” right (four-eyes principle). You will receive a corresponding notification.
+> **Important:** If the contact is associated with a **person at the "With additional details" contact level**, it will not be deleted immediately. Instead, a **deletion request** is automatically created, which must be approved by a second person with the “Deletion confirmation” right (four-eyes principle). You will receive a corresponding notification.
 
 ---
 
 ## 3a. Files Overview
 
-The **Files page** (`/attachments/`, sidebar entry **Files**) shows all attachments in your facility as a searchable list -- without having to open the respective record first. It covers files on **events, clients, and cases**.
+The **Files page** (`/attachments/`, sidebar entry **Files**) shows all attachments in your facility as a searchable list -- without having to open the respective record first. It covers files on **events, people, and cases**.
 
 ### Access
 
 - **Sidebar navigation -> Files**
-- Available to assistants, social workers, leads, and administrators.
+- Available to assistants, social workers, managers, and administrators.
 
 ### Visibility
 
-You only see files whose record (event, client, or case) **and** whose field reach your sensitivity role:
+You only see files whose record (event, person, or case) **and** whose field reach your sensitivity role:
 
 - Fields with "high" sensitivity remain hidden for social workers at a lower level -- the same gate as in the detail view.
-- Attachments of deleted events, clients, and cases are not included; neither are files you have removed again in the form.
+- Attachments of deleted events, people, and cases are not included; neither are files you have removed again in the form.
 - **Assistants do not see files on cases** -- cases are not visible to them at all, and consequently neither are their files.
 - Facility scoping: you only see files from your own facility.
 
 ### "Assigned to" column
 
-Each row states **what** the file is attached to: **Event**, **Client**, or **Case**. The entry is a link and leads directly to the corresponding detail page (for cases only for roles that are allowed to see cases).
+Each row states **what** the file is attached to: **Event**, **Person**, or **Case**. The entry is a link and managers directly to the corresponding detail page (for cases only for roles that are allowed to see cases).
 
 ### Filters
 
 Two filters above the table:
 
 - **Documentation type** -- only attachments belonging to records of a specific type (e.g., "Counseling", "Intake form"). Only types you are allowed to view according to your role are offered.
-- **Client** -- all attachments for a specific pseudonym. The filter covers **all three** paths by which a file can belong to a client: via their event, directly on the client, and via one of their cases.
+- **Person** -- all attachments for a specific pseudonym. The filter covers **all three** paths by which a file can belong to a person: via their event, directly on the person, and via one of their cases.
 
 The filters can be combined and update the list via HTMX without a full page reload.
 
 ### Download
 
-Each row shows the original filename. Clicking it delivers the decrypted file -- exactly as in the detail view of the event, the client, or the case. Downloads are recorded in the audit log.
+Each row shows the original filename. Clicking it delivers the decrypted file -- exactly as in the detail view of the event, the person, or the case. Downloads are recorded in the audit log.
 
 ### Encryption
 
@@ -369,16 +368,16 @@ All files are stored encrypted on the server (Fernet, AES-128-CBC with HMAC-SHA2
 
 ### Previous versions
 
-Replaced files are preserved as previous versions (see [Section 3 -- File Attachments](#file-attachments)). The Files overview currently only shows the latest version per entry; previous versions are accessible via the entry on the detail page of the event, the client, or the case.
+Replaced files are preserved as previous versions (see [Section 3 -- File Attachments](#file-attachments)). The Files overview currently only shows the latest version per entry; previous versions are accessible via the entry on the detail page of the event, the person, or the case.
 
 ### Deleting permanently
 
-Next to the download, every row carries a trash icon for **managers and administration**: delete permanently. The same entry point sits directly at the file in the detail view of the event, the client, or the case. It is meant for genuine mistakes -- a file that should never have been uploaded (wrong person, wrong file, a real name inside the document).
+Next to the download, every row carries a trash icon for **managers and administration**: delete permanently. The same entry point sits directly at the file in the detail view of the event, the person, or the case. It is meant for genuine mistakes -- a file that should never have been uploaded (wrong person, wrong file, a real name inside the document).
 
-- The click first opens a **confirmation page**. It names the record in question: filename, size, the assigned record **including the client ID**, the documentation type, the upload timestamp, and the number of affected versions. Check these details -- two identically named files belonging to two different people are otherwise indistinguishable.
+- The click first opens a **confirmation page**. It names the record in question: filename, size, the assigned record **including the person ID**, the documentation type, the upload timestamp, and the number of affected versions. Check these details -- two identically named files belonging to two different people are otherwise indistinguishable.
 - Once confirmed, the encrypted file **including all previous versions is removed from disk**. **Within the application** there is no trash bin and no way to restore it afterwards -- not even by the administration.
 - **Backups are not covered by this.** If your facility runs a media backup, the encrypted file stays there until the backup retention expires and could be brought back by restoring the overall state. If a data subject insists on complete erasure, do not promise otherwise and additionally involve your administration.
-- **Legal hold:** if the record or its client is under an active legal hold, the button is disabled and the confirmation page states the reason. Files that must be preserved as evidence cannot be destroyed. The rejected attempt is recorded.
+- **Legal hold:** if the record or its person is under an active legal hold, the button is disabled and the confirmation page states the reason. Files that must be preserved as evidence cannot be destroyed. The rejected attempt is recorded.
 - The operation is recorded in the audit log -- **without** the plaintext filename, but with the record reference and the timestamp. In an Art. 15 GDPR access request it appears there as "attachment deleted"; the file itself is no longer reported as stored, because it no longer is.
 
 **Files already removed.** Anyone who first took a file out of the documentation via the "Remove" checkbox will no longer find it in the regular overview -- yet it remains encrypted on the server. Managers and administration can show these files via **"Show removed files"** above the table and delete them permanently from there.
@@ -387,77 +386,77 @@ Next to the download, every row carries a trash icon for **managers and administ
 
 ---
 
-## 4. Managing Clients
+## 4. Managing People
 
-Clients in Anlaufstelle are recorded **exclusively using pseudonyms** -- no real names. The pseudonym is the primary identifier.
+People in Anlaufstelle are recorded **exclusively using pseudonyms** -- no real names. The pseudonym is the primary identifier.
 
 ### Contact Levels
 
-Each client has a **contact level**:
+Each person has a **contact level**:
 
 | Level | Description |
 |---|---|
 | **Pseudonym only** | Only the pseudonym is stored, plus the age group |
 | **With additional details** | Additional personal details are stored (restricted access, opening the detail page is logged) |
 
-> **Note:** Access to client profiles at the "With additional details" level is automatically recorded in the audit log.
+> **Note:** Opening the **detail page** (`/clients/<id>/`) of a person at the "With additional details" contact level is logged — and only that. The people list, the edit form for the same person, an event, a case and a search result generate **no** entry, even if additional details are visible there.
 
-### Creating a Client
+### Creating a Person
 
-1. Navigate to **Clients** (`/clients/`) and click **Create person** (or go directly to `/clients/new/`).
+1. Navigate to **People** (`/clients/`) and click **Create person** (or go directly to `/clients/new/`).
 2. Fill in the form:
    - **Pseudonym:** A unique name within your facility (e.g., a self-chosen nickname). The pseudonym must be unique within a facility.
    - **Contact level:** Select "Pseudonym only" or "With additional details".
    - **Age group:** "Under 18", "18--26", "27+", or "Unknown".
-   - **Notes:** Internal remarks about the client (optional).
+   - **Notes:** Internal remarks about the person (optional).
 3. Click **Save**.
 
-### Searching for Clients
+### Searching for People
 
-1. Navigate to **Clients** (`/clients/`).
+1. Navigate to **People** (`/clients/`).
 2. Type part of the pseudonym into the search field. The list filters automatically.
 3. Optionally, you can also filter by **contact level** or **age group**.
 4. Click on an entry to open the detail view.
 
-> **Tip:** The quick search via the global search field (magnifying glass at the top) finds clients and events simultaneously.
+> **Tip:** The quick search via the global search field (magnifying glass at the top) finds people and events simultaneously.
 
-### Client Detail Page and Chronology
+### Person Detail Page and Chronology
 
-The detail page of a client (`/clients/<id>/`) shows:
+The detail page of a person (`/clients/<id>/`) shows:
 
 - **Master data:** Pseudonym, contact level, age group, notes
-- **Chronology:** All previously documented contacts for this client, newest first
-- **Open work items:** Tasks and hints assigned to this client
+- **Chronology:** All previously documented contacts for this person, newest first
+- **Open work items:** Tasks and hints assigned to this person
 
-From the detail page, you can use **Document contact** to record a contact for this client directly, or **Create task** to add a task.
+From the detail page, you can use **Document contact** to record a contact for this person directly, or **Create task** to add a task.
 
-### Editing a Client
+### Editing a Person
 
-1. Open the client detail page.
+1. Open the person detail page.
 2. Click **Edit**.
 3. Change the desired fields (e.g., upgrading the contact level).
 4. Click **Save**.
 
-> **Note:** Social workers and above may change pseudonyms and upgrade the contact level. Only leads or facility admins may downgrade a client from “With additional details”. A change in contact level is automatically recorded in the audit log.
+> **Note:** Social workers and above may change pseudonyms and upgrade the contact level. Only managers or application support may downgrade a person from “With additional details”. A change in contact level is automatically recorded in the audit log.
 
 > **Concurrent editing:** If someone else edited the same record at the same time, an error message appears. Reload the page and re-enter your changes -- this ensures that no changes are silently overwritten.
 
-### Merging Clients (Duplicates)
+### Merging People (Duplicates)
 
-If the same person was accidentally created twice -- for example under two spellings of the pseudonym -- the two records can be merged afterwards. A hint already helps to avoid this at **creation time**: as soon as you type a pseudonym that resembles an existing client, "A similar client already exists" appears below the field with a link to that record. The hint blocks nothing -- you can still save.
+If the same person was accidentally created twice -- for example under two spellings of the pseudonym -- the two records can be merged afterwards. A hint already helps to avoid this at **creation time**: as soon as you type a pseudonym that resembles an existing person, "A similar person already exists" appears below the field with a link to that record. The hint blocks nothing -- you can still save.
 
 If the duplicate already exists:
 
-1. Open the record of the client that is to be **dissolved** and choose **Merge with duplicate** in the **More actions** menu (⋮).
-2. Search for the target client -- the record that remains. The search also finds similar spellings.
+1. Open the record of the person that is to be **dissolved** and choose **Merge with duplicate** in the **More actions** menu (⋮).
+2. Search for the target person -- the record that remains. The search also finds similar spellings.
 3. The confirmation page shows **both records side by side** (contact level, age group, creation date, last contact, number of events/cases/attachments) plus a statistics warning and the deadline note. The page itself tells you which of the two paths applies:
-   - **Merge directly** -- if both clients are at "Pseudonym only"; only the **lead** may do this.
-   - **Request with confirmation** -- as soon as one of the two clients carries "With additional details" (or a staff member takes this path). Enter a reason; confirmation happens under **Privacy → Deletion requests**, where the request appears as its own kind, **Merge**, with its target. Until then the record is flagged as "merge requested" and stays usable.
+   - **Merge directly** -- if both people are at "Pseudonym only"; only the **manager** may do this.
+   - **Request with confirmation** -- as soon as one of the two people carries "With additional details" (or a social workers member takes this path). Enter a reason; confirmation happens under **Privacy → Deletion requests**, where the request appears as its own kind, **Merge**, with its target. Until then the record is flagged as "merge requested" and stays usable.
 
 What happens:
 
 - **Events, cases, tasks and the recent-visits list move completely** to the target record. For the additional details, the target keeps its values; values from the source only fill empty fields. The contact level rises to the higher of the two -- never the other way around.
-- The dissolved record disappears from list, search and selection fields and sits in the **trash** with the note "merged into ...". Until the trash period expires, the facility admin can use **Revert merge** there -- the moved entries return; entries newly documented since the merge stay with the target. After that, the empty shell is anonymized for good like any deleted client; the reference to the target remains. If a **legal hold** covers either record, reverting is not possible while it lasts -- the facility admin gets a corresponding message.
+- The dissolved record disappears from list, search and selection fields and sits in the **trash** with the note "merged into ...". Until the trash period expires, the application support can use **Revert merge** there -- the moved entries return; entries newly documented since the merge stay with the target. After that, the empty shell is anonymized for good like any deleted person; the reference to the target remains. If a **legal hold** covers either record, reverting is not possible while it lasts -- the application support gets a corresponding message.
 - In an **Art. 15 GDPR access record**, the target record states in its "Merges" section which record was merged into it and when; the access record of the dissolved record conversely states "Merged into". The access log of the dissolved record stays with its own dataset -- a request covering the full history of both predecessors is answered with **both** access records.
 
 > **Offline:** Data of the dissolved record cached on devices is discarded at the next sync. If an event for it was **already documented offline** but not yet transmitted, it is not silently rebooked to the target record -- as with a deletion, it goes to the **conflict list** (dead letter) for follow-up, so that nothing is rewritten in the documenting person's name without their knowledge.
@@ -510,10 +509,10 @@ The list updates without a page reload.
    - **Description:** More detailed information (optional)
    - **Priority:** Normal, Important, or Urgent
    - **Assigned to:** A specific person from your facility (optional -- leave blank if the task applies to everyone)
-   - **Client:** If the task concerns a specific client (optional)
+   - **Person:** If the task concerns a specific person (optional)
 3. Click **Save**.
 
-> **Tip:** If you create a new task from the client detail page, the client is already pre-filled.
+> **Tip:** If you create a new task from the person detail page, the person is already pre-filled.
 
 ### Editing a Task
 
@@ -561,14 +560,14 @@ As soon as you set such a task to **"Done"**, a **follow-up task** with the same
 
 ## 6. Search
 
-**Search** simultaneously searches clients (by pseudonym) and events (by client pseudonym and content fields). It is accessible in two ways:
+**Search** simultaneously searches people (by pseudonym) and events (by person pseudonym and content fields). It is accessible in two ways:
 
 ### Global Search (Quick Search)
 
 The search field is **permanently visible in the sidebar** (desktop). On smartphones, tapping the search icon in the bottom navigation opens an overlay.
 
 1. Start typing in the search field. After a short delay, results appear as a dropdown.
-2. A maximum of **5 clients** and **5 events** are displayed.
+2. A maximum of **5 people** and **5 events** are displayed.
 3. Click on a result to jump directly to the detail page.
 4. Use **"Show all results"** to go to the full search page.
 
@@ -599,11 +598,11 @@ Technically this is based on trigram similarity in the PostgreSQL database (pg_t
 
 ## 7. Statistics and Export
 
-> **Access:** Statistics and exports are only available to **leads** and **administrators**.
+> **Access:** Statistics and exports are only available to **managers** and **application support**.
 
 ### Import CSV Data
 
-The import wizard for people and events is available only to **facility admins**. See [Admin Guide § 2.12 "Import Wizard"](admin-guide.md#212-import-wizard) for the complete step-by-step instructions covering file limits, mapping, dry run, commit, and abort.
+The import wizard for people and events is available only to **application support**. See [Admin Guide § 2.12 "Data import"](admin-guide.md#212-import-wizard) for the complete step-by-step instructions covering file limits, mapping, dry run, commit, and abort.
 
 ### Statistics Dashboard
 
@@ -616,7 +615,7 @@ The import wizard for people and events is available only to **facility admins**
    - **Custom period:** Enter start and end dates manually.
 
    > The three "Last N days" windows are **rolling** and end today; both ends count, so "Last 30 days" spans exactly 30 days. Calendar words are reserved for calendar units -- which is why the calendar period is called "Calendar year" and the rolling windows are named after their length.
-3. The dashboard updates automatically and displays aggregated key figures for contact numbers, documentation types, and client groups.
+3. The dashboard updates automatically and displays aggregated key figures for contact numbers, documentation types, and person groups.
 
 > **Note:** The "Overview" tab -- this dashboard -- counts events in the period **regardless of their report assignment**, including events whose documentation type is not assigned to a report or is explicitly excluded from reports. The report assignment (called "report key" in the configuration) affects the figures only on the "Dataset reports" tab. The two tabs may therefore show different figures for the same period; the "Dataset reports" section explains further reasons. The population evaluated by an individual table is stated below its heading: "Contacts by age group", for example, counts only events linked to a person.
 
@@ -642,7 +641,7 @@ The charts update automatically when the time period is changed.
 
 **Data Source Indicator:** The line chart legend shows whether a data point comes from a **Snapshot** (pre-computed monthly data) or from **Live Data** (current database query). Snapshots ensure that historical trends are preserved even after retention periods expire.
 
-**Documentation Type Filter:** Use the "All Documentation Types" dropdown above the charts to filter the view to a specific documentation type.
+**Documentation Type Filter:** Use the "All document types" dropdown above the charts to filter the view to a specific documentation type.
 
 > **Note:** Charts are not shown when printing. Use the PDF or CSV export functions for reports.
 
@@ -694,7 +693,7 @@ Clicking a time period does not discard your report selection -- the card and pr
 
 > **Note:** Every download is recorded in the audit log; the preview is not. An empty period looks like suppression in the preview -- when in doubt, check the selected time period.
 
-### Privacy-friendly External Reports (Lead / Admin)
+### Privacy-friendly External Reports (Manager / Application support)
 
 For sharing data with external parties (e.g., funding bodies or municipal authorities), an **external report with a privacy profile** is available at `/statistics/external/`. It uses the same time-period filters as the statistics dashboard but is deliberately data-minimal:
 
@@ -702,17 +701,17 @@ For sharing data with external parties (e.g., funding bodies or municipal author
 - **K-anonymization** -- aggregates with fewer than *k* records (threshold from the facility settings, default 5) are shown as **"suppressed"** rather than as a concrete number. This applies to "Unique persons", "By documentation type", and "By age group".
 - **Privacy profile header** -- facility, profile (`external`), time period, k-anonymity threshold, generation timestamp, and **data source** appear at the top of the report. This report is calculated live as well; in the JSON version the statement appears as `metadata.data_source` (value `live`).
 
-Via **"Export as JSON"** (or by appending `?format=json` to the URL) you receive the same data in machine-readable form. Every request is logged as an `EXPORT` event in the audit log. The external report is accessible to **leads** and **administrators** only.
+Via **"Export as JSON"** (or by appending `?format=json` to the URL) you receive the same data in machine-readable form. Every request is logged as an `EXPORT` event in the audit log. The external report is accessible to **managers** and **application support** only.
 
 ### Reviewing Deletion Requests (“Deletion confirmation” Right)
 
-When a social worker, lead or facility admin wants to delete a contact belonging to a client at the "With additional details" contact level, a **deletion request** is created that must be approved by a second person with the “Deletion confirmation” right.
+When a social worker, manager or application support wants to delete a contact belonging to a person at the "With additional details" contact level, a **deletion request** is created that must be approved by a second person with the “Deletion confirmation” right.
 
 1. View open deletion requests at `/deletion-requests/`.
 2. Click on a request to see the details and the affected event.
 3. Click **Approve** or **Reject** and confirm.
 
-> **Important:** The “Deletion confirmation” right is granted independently of the role and is disabled by default. Leads and facility admins also need it. You cannot approve or reject your own request (four-eyes principle). See [Admin Guide § 7.5](admin-guide.md#75-deletion-requests-four-eyes-principle--dual-approval) for how it is granted.
+> **Important:** The “Deletion confirmation” right is granted independently of the role and is disabled by default. Managers and application support also need it. You cannot approve or reject your own request (four-eyes principle). See [Admin Guide § 7.5](admin-guide.md#75-deletion-requests-four-eyes-principle--dual-approval) for how it is granted.
 
 Regardless of your role: As the requesting person, you can withdraw your own deletion request yourself as long as it is still **pending**. At `/deletion-requests/`, your own pending request shows the **Withdraw** link next to the four-eyes notice. The confirmation dialog explicitly says: **Nothing is deleted — the data remains unchanged.** Afterwards, a new deletion request for the same target is possible at any time. The request remains visible to the approver pool in the **Withdrawn** section, and the withdrawal is logged with the final status **Withdrawn**.
 
@@ -756,20 +755,20 @@ For assignments without a reliable internet connection -- for example, outreach 
 
 **Before the assignment (online):**
 
-1. Open the client list.
-2. For each client you want to take along, tap the offline-toggle button in the **Offline** column of the client list -- or, on the client's detail page, tap **Take offline**. Pseudonym, master data, and the most recent events are then encrypted and loaded onto your device for offline use; an **Available locally** badge confirms it. Up to 20 clients at a time.
-3. An overview of your taken-along clients is available any time under **"Clients"** (`/clients/`) -- this view also works offline since Wave 2 (see below).
+1. Open the person list.
+2. For each person you want to take along, tap the offline-toggle button in the **Offline** column of the person list -- or, on the person's detail page, tap **Take offline**. Pseudonym, master data, and the most recent events are then encrypted and loaded onto your device for offline use; an **Available locally** badge confirms it. Up to 20 people at a time.
+3. An overview of your taken-along people is available any time under **"People"** (`/clients/`) -- this view also works offline since Wave 2 (see below).
 
 **During the assignment (offline):**
 
-- **Clients, tasks, and the timeline stay available at their usual address (since Waves 2/3, #1499):** The **client list** (`/clients/`), the **task list** (`/workitems/`), and the **timeline** as the start page (`/`) render offline the same local excerpt as online -- assembled from your taken-along clients, in the usual look. The task list and timeline also show **anonymous or client-less entries** (standalone tasks, contacts without a client), clearly marked as such; the timeline is deliberately labeled a "local record" -- it shows only the offline-available activity, not the facility's complete history. You no longer need a separate offline start page for this.
-- Open a taken-along client as usual via their detail page -- the view stays at the **normal address** and is built from the encrypted offline store (no separate "offline" link anymore).
+- **People, tasks, and the timeline stay available at their usual address (since Waves 2/3, #1499):** The **person list** (`/clients/`), the **task list** (`/workitems/`), and the **timeline** as the start page (`/`) render offline the same local excerpt as online -- assembled from your taken-along people, in the usual look. The task list and timeline also show **anonymous or person-less entries** (standalone tasks, contacts without a person), clearly marked as such; the timeline is deliberately labeled a "local record" -- it shows only the offline-available activity, not the facility's complete history. You no longer need a separate offline start page for this.
+- Open a taken-along person as usual via their detail page -- the view stays at the **normal address** and is built from the encrypted offline store (no separate "offline" link anymore).
 - You can **record new events** (via **"Document contact"**) and **edit existing ones**; entries are stored encrypted locally (AES-GCM-256; the key is derived from your password) and sent automatically once you are back online. **File attachments** cannot be captured offline -- add them once you are back online.
-- **Capture anywhere offline (since Wave 1, #1499):** you no longer need an **open client dossier**. Offline, tap **"Document contact"** or **"Create task"** in the **"+" menu** (or open the forms `/events/new/` / `/workitems/new/` directly) -- a real capture form opens **at the usual address**: pick a document type, optionally assign a client you took offline, and save. The old "only within the dossier" dead end (#1483/#1485) is gone.
-- **Contacts without a client** (anonymous contacts) and **standalone tasks** can now be **started offline too** -- choose **"-- no client --"** in the client picker. If the chosen document type requires a contact stage, "no client" is disabled; assign a taken-along client instead (the server re-checks the contact stage on sync).
-- **Task capture is staff-only.** As an assistant, opening the task form offline shows a note instead of the fields -- so no entry is created that would be rejected on sync.
+- **Capture anywhere offline (since Wave 1, #1499):** you no longer need an **open person dossier**. Offline, tap **"Document contact"** or **"Create task"** in the **"+" menu** (or open the forms `/events/new/` / `/workitems/new/` directly) -- a real capture form opens **at the usual address**: pick a document type, optionally assign a person you took offline, and save. The old "only within the dossier" dead end (#1483/#1485) is gone.
+- **Contacts without a person** (anonymous contacts) and **standalone tasks** can now be **started offline too** -- choose **"-- no person --"** in the person picker. If the chosen document type requires a contact stage, "no person" is disabled; assign a taken-along person instead (the server re-checks the contact stage on sync).
+- **Task capture is social workers-only.** As an assistant, opening the task form offline shows a note instead of the fields -- so no entry is created that would be rejected on sync.
 - If nothing has been **prepared for offline capture** yet (the facility was never opened online, the local cache is empty, or the installed app is not updated yet), the form shows a short **"open it once online"** hint instead of the fields.
-- **`/offline/` is a purely technical fallback since Wave 3**, no longer an entry point: the "No local view available" page appears only when **no** local view matches the requested address (e.g. an unknown URL, or the app has not yet been updated to the current version) -- with links to the client list, tasks, and the timeline, plus "Try again".
+- **`/offline/` is a purely technical fallback since Wave 3**, no longer an entry point: the "No local view available" page appears only when **no** local view matches the requested address (e.g. an unknown URL, or the app has not yet been updated to the current version) -- with links to the person list, tasks, and the timeline, plus "Try again".
 - The interface shows a hint that you are working offline and how many entries are still waiting to be synced.
 
 **Back online:**
@@ -801,7 +800,7 @@ If an event was edited online (by someone else) and offline (by you) at the same
 
 ## 9. Roles and Permissions
 
-Anlaufstelle distinguishes five roles. Your role is assigned by the facility administrator (Anwendungsbetreuung) of your facility.
+Anlaufstelle distinguishes five roles. Your role is assigned by the application support (Anwendungsbetreuung) of your facility.
 
 > **Audience of this section:** the **practical** view -- what you are allowed to do with your role in day-to-day work. The professional rationale behind the model is in the [domain concept (Role)](../fachkonzept-anlaufstelle.md#role--die-rolle) (German only), the technical details (DB values, RLS scoping) in [FAQ § C](../faq.md#die-fünf-rollen) (German only), and creating and managing roles in [Admin Guide § 2.4](admin-guide.md#role-descriptions).
 
@@ -809,32 +808,32 @@ Anlaufstelle distinguishes five roles. Your role is assigned by the facility adm
 
 | Role | Display Name | Brief Description |
 |---|---|---|
-| `assistant` | Assistant | Limited data entry without access to client data at the "With additional details" level |
-| `staff` | Social Worker | Default role for employees doing documentation |
-| `lead` | Lead | All social worker functions plus reports and management tasks |
-| `facility_admin` | Facility Admin | Full access to all areas and settings **of your facility** (audit log, GDPR package, user management) |
-| `super_admin` | System Admin | Hosting/carrier role: cross-facility, bootstrap tools, separate `/system/` area. **Not visible in the regular staff UI** -- end users do not interact with it. |
+| `assistant` | Assistant | Limited data entry without access to person data at the "With additional details" level |
+| `staff` | Social worker | Default role for employees doing documentation |
+| `lead` | Manager | All social worker functions plus reports and management tasks |
+| `facility_admin` | Application support | Full access to all areas and settings **of your facility** (audit log, GDPR package, user management) |
+| `super_admin` | System administration | Hosting/carrier role: cross-facility, bootstrap tools, separate `/system/` area. **Not visible in the regular staff UI** -- end users do not interact with it. |
 
-> **Note:** The System Admin (`super_admin`) is a hosting/carrier role. It sets up the installation and creates the first facility and the first Facility Admin -- both in the Django admin interface (`/admin-mgmt/`); the `/system/` area only displays the organization and its facilities. You will not encounter it in day-to-day operations -- neither area is accessible to facility-bound users.
+> **Note:** The System administration (`super_admin`) is a hosting/carrier role. It sets up the installation and creates the first facility and the first Application support -- both in the Django admin interface (`/admin-mgmt/`); the `/system/` area only displays the organization and its facilities. You will not encounter it in day-to-day operations -- neither area is accessible to facility-bound users.
 
 ### Who Can Do What?
 
 Table covers the four facility-bound roles only -- `super_admin` is excluded here because it does not work in the staff UI:
 
-| Function | Assistant | Social Worker | Lead | Facility Admin |
+| Function | Assistant | Social worker | Manager | Application support |
 |---|---|---|---|---|
-| View Zeitstrom / home page | Yes | Yes | Yes | Yes |
+| View Timeline / home page | Yes | Yes | Yes | Yes |
 | Document anonymous contacts | Yes | Yes | Yes | Yes |
-| Document contacts for clients at the "Pseudonym only" level | Yes | Yes | Yes | Yes |
-| View and search for clients | Yes (without additional details) | Yes | Yes | Yes |
-| Create and edit clients | No | Yes | Yes | Yes |
-| View client details at the "With additional details" level | No | Yes (own facility) | Yes | Yes |
+| Document contacts for people at the "Pseudonym only" level | Yes | Yes | Yes | Yes |
+| View and search for people | Yes (without additional details) | Yes | Yes | Yes |
+| Create and edit people | No | Yes | Yes | Yes |
+| View person details at the "With additional details" level | No | Yes (own facility) | Yes | Yes |
 | Edit own events | Yes | Yes | Yes | Yes |
 | Edit other users' events | No | Yes | Yes | Yes |
 | Create and edit work items | No | Yes | Yes | Yes |
 | Use search | Yes | Yes | Yes | Yes |
 | Statistics and export | No | No | Yes | Yes |
-| Export client data (Art. 15 / 20 GDPR) | No | No | Yes | Yes |
+| Export person data (Art. 15 / 20 GDPR) | No | No | Yes | Yes |
 | Download GDPR documentation package | No | No | No | Yes |
 | Submit deletion requests | No | Yes | Yes | Yes |
 | Approve deletion requests | Only with Deletion confirmation | Only with Deletion confirmation | Only with Deletion confirmation | Only with Deletion confirmation |
@@ -845,21 +844,21 @@ Table covers the four facility-bound roles only -- `super_admin` is excluded her
 | Close / reopen cases | No | No | Yes | Yes |
 | Manage users and settings | No | No | No | Yes |
 
-> **Note:** Access is always restricted to your own facility. Employees of one facility cannot see data from other facilities within the same organization -- this applies to the Facility Admin (`facility_admin`) as well.
+> **Note:** Access is always restricted to your own facility. Employees of one facility cannot see data from other facilities within the same organization -- this applies to the Application support (`facility_admin`) as well.
 
-### Audit Log (Facility Admin Only)
+### Audit Log (Application support Only)
 
-The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, access to data at the "With additional details" level, exports, deletions, and contact level changes. It cannot be modified and serves traceability purposes in accordance with the GDPR. Access is granted to the Facility Admin (`facility_admin`) for their own facility.
+The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, opening person detail pages at the "With additional details" level, exports, deletions, and contact level changes. It cannot be modified and serves traceability purposes in accordance with the GDPR. Access is granted to the Application support (`facility_admin`) for their own facility.
 
 ---
 
 ## 10. Case Management
 
-Not every contact with a client stands on its own. When collaboration with a person extends over a longer period -- e.g., a counseling process, crisis support, or housing referral -- you can bundle this work into a **case**.
+Not every contact with a person stands on its own. When collaboration with a person extends over a longer period -- e.g., a counseling process, crisis support, or housing referral -- you can bundle this work into a **case**.
 
 A case is a **bracket** around thematically related contacts. Case management is **optional**: you can use Anlaufstelle just as well without cases if your facility does not document ongoing counseling processes.
 
-> **Access:** Case management is available to **social workers**, **leads**, and **administrators**. Assistants do not have access.
+> **Access:** Case management is available to **social workers**, **managers**, and **application support**. Assistants do not have access.
 
 ### Case List
 
@@ -873,14 +872,14 @@ A case is a **bracket** around thematically related contacts. Case management is
 1. Click **Create case** on the case list (or navigate to `/cases/new/`).
 2. Fill in the form:
    - **Title** (required): A short label for the case (e.g., "Housing search", "Addiction counseling").
-   - **Client:** Start typing the pseudonym -- a suggestion list appears. Select the matching client. A case can also be created without a client.
+   - **Person:** Start typing the pseudonym -- a suggestion list appears. Select the matching person. A case can also be created without a person.
    - **Description:** More detailed information about the case (optional).
-   - **Case owner:** Select the responsible person from the dropdown (optional). Only social workers, leads, and administrators from your facility are available.
+   - **Case owner:** Select the responsible person from the dropdown (optional). Only social workers, managers, and administrators from your facility are available.
 3. Click **Create case**.
 
 You will be redirected to the detail page of the new case.
 
-> **Tip:** If you start from the client detail page via **Create case**, the client is already pre-filled.
+> **Tip:** If you start from the person detail page via **Create case**, the person is already pre-filled.
 
 ### Case Detail Page
 
@@ -888,14 +887,14 @@ The detail page of a case (`/cases/<id>/`) is divided into three sections:
 
 **Header:**
 - Title and status badge (Open / Closed)
-- Link to the associated client
+- Link to the associated person
 - Case owner, created on, created by
 - Description (if available)
 - Buttons: **Edit**, **Close** or **Reopen**
 
 **Left column -- Contacts:**
 - All contacts (events) assigned to the case, sorted chronologically
-- Option to assign additional contacts from the client or remove existing ones
+- Option to assign additional contacts from the person or remove existing ones
 
 **Right column -- Episodes and Outcome Goals:**
 - List of episodes (phases within the case)
@@ -905,7 +904,7 @@ The detail page of a case (`/cases/<id>/`) is divided into three sections:
 
 1. Open the case detail page.
 2. Click **Edit**.
-3. Change the title, client, description, or case owner.
+3. Change the title, person, description, or case owner.
 4. Click **Save**.
 
 ### Closing and Reopening a Case
@@ -920,7 +919,7 @@ A closed case can be reopened at any time:
 1. Open the closed case.
 2. Click **Reopen**.
 
-> **Important:** Only **leads** and **administrators** can close and reopen cases.
+> **Important:** Only **managers** and **application support** can close and reopen cases.
 
 ### Deleting a Case
 
@@ -929,24 +928,24 @@ A case created by mistake can be deleted. "Closing" is **not** the right tool fo
 1. Open the case detail page.
 2. In the **More actions** menu (⋮), click **Delete**.
 3. The next page tells you which of the two paths applies:
-   - **Straight to the trash** — for clients at contact stage "Anonymous" or "Pseudonym only".
-   - **Deletion request with confirmation** — for a client at stage "With additional details". Enter a reason; the page also names who can confirm the request. Confirmation happens under **Privacy → Deletion requests**, just like for clients and contacts. While the request is pending, the case stays fully usable and is flagged as "deletion requested".
+   - **Straight to the trash** — for people at contact stage "Anonymous" or "Pseudonym only".
+   - **Deletion request with confirmation** — for a person at stage "With additional details". Enter a reason; the page also names who can confirm the request. Confirmation happens under **Privacy → Deletion requests**, just like for people and contacts. While the request is pending, the case stays fully usable and is flagged as "deletion requested".
 4. Confirm.
 
 What happens:
 
 - The case disappears from the case list, statistics and the activity feed, and moves to the **trash**. Episodes, outcome goals and file attachments go with it — and all come back if the case is restored.
-- **Assigned contacts stay with the client.** They are not deleted along with the case and do not block its deletion; they only lose their case assignment once the case is purged for good.
-- Once the trash period expires (30 days by default, the same one that applies to deleted clients), the case is **anonymized** automatically: title, description, custom fields, episodes, outcome goals and files are then irreversibly gone. Restoring is no longer possible after that.
+- **Assigned contacts stay with the person.** They are not deleted along with the case and do not block its deletion; they only lose their case assignment once the case is purged for good.
+- Once the trash period expires (30 days by default, the same one that applies to deleted people), the case is **anonymized** automatically: title, description, custom fields, episodes, outcome goals and files are then irreversibly gone. Restoring is no longer possible after that.
 - Until then, a case in the trash appears in an Art. 15 GDPR access record in its **own section** "Cases in the trash" — stating since when it has been deleted and whether it has already been anonymized for good.
 
-> Only the **facility admin** can **restore** a case — via **Trash** in the header of the case list. That page also offers **Anonymize permanently now** if waiting for the deadline is not an option.
+> Only the **application support** can **restore** a case — via **Trash** in the header of the case list. That page also offers **Anonymize permanently now** if waiting for the deadline is not an option.
 
 > **Offline:** a deleted case also disappears from the data cached on your device at the next sync. Cases cannot be created, edited or deleted offline anyway.
 
 ### Assigning and Removing Contacts
 
-On the case detail page, below the assigned contacts, you see a list of the client's **unassigned contacts**. To assign a contact:
+On the case detail page, below the assigned contacts, you see a list of the person's **unassigned contacts**. To assign a contact:
 
 1. Click the assign button next to the desired contact.
 2. The contact is immediately moved to the case list (without a page reload).
@@ -960,7 +959,7 @@ To remove a contact from the case:
 
 ### Episodes
 
-An **episode** is a distinct phase within a case. For example, if a client enters a crisis situation three times a year, these can be documented as three separate episodes within the same case.
+An **episode** is a distinct phase within a case. For example, if a person enters a crisis situation three times a year, these can be documented as three separate episodes within the same case.
 
 **Creating a new episode:**
 
@@ -1013,7 +1012,7 @@ Each episode shows its status:
 
 ### Permissions in Case Management
 
-| Function | Assistant | Social Worker | Lead | Facility Admin |
+| Function | Assistant | Social worker | Manager | Application support |
 |---|---|---|---|---|
 | View case list | No | Yes | Yes | Yes |
 | Create and edit cases | No | Yes | Yes | Yes |
