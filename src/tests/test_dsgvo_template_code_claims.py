@@ -613,12 +613,32 @@ def _behaviour_test(module: str, qualname: str):
     return target
 
 
-def _retention_settings() -> list[str]:
-    from core.services.client.dsgvo_package import _retention_values
+def _settings_retention_fields() -> list[str]:
+    """Retention periods read from the ``Settings`` model, not from the hash.
 
-    # ``DocumentType.retention_days`` is the only period that is not a
-    # ``Settings`` field (row 4 of the DSFA table).
-    return [*_retention_values(None), "DocumentType.retention_days"]
+    Every integer ``Settings`` field counted in days or months is a retention
+    period; the hours/minutes fields are session limits and the remaining
+    integers are counts or sizes. Deriving the list here keeps the inventory
+    independent of ``_retention_values``, which the hash test below checks.
+    """
+    from django.db import models as dj_models
+
+    from core.models import Settings
+
+    return [
+        field.name
+        for field in Settings._meta.get_fields()
+        if isinstance(field, dj_models.IntegerField) and field.name.endswith(("_days", "_months"))
+    ]
+
+
+def _retention_settings() -> list[str]:
+    # The document type period is the only one that lives on another model
+    # (row 4 of the DSFA table).
+    document_type_periods = [
+        f"DocumentType.{field.name}" for field in DocumentType._meta.get_fields() if field.name.startswith("retention_")
+    ]
+    return [*_settings_retention_fields(), *document_type_periods]
 
 
 def _sentences(text: str) -> list[str]:
@@ -647,6 +667,34 @@ class TestRetentionInventory:
 
         assert Settings._meta.get_field("retention_handover_notes_days").default == 90
         assert _retention_values(None)["retention_handover_notes_days"] == 90
+
+    def test_model_inventory_is_complete(self):
+        assert sorted(_retention_settings()) == sorted(
+            [
+                "retention_anonymous_days",
+                "retention_identified_days",
+                "retention_qualified_days",
+                "retention_activities_days",
+                "retention_handover_notes_days",
+                "client_trash_days",
+                "auditlog_retention_months",
+                "eventhistory_detail_months",
+                "eventhistory_chronicle_months",
+                "DocumentType.retention_days",
+            ]
+        )
+
+    def test_every_settings_period_changes_the_package_hash(self, facility):
+        from core.models import Settings
+        from core.services.client.dsgvo_package import _settings_hash
+
+        settings_obj, _ = Settings.objects.get_or_create(facility=facility)
+        baseline = _settings_hash(settings_obj)
+        for name in _settings_retention_fields():
+            original = getattr(settings_obj, name)
+            setattr(settings_obj, name, original + 1)
+            assert _settings_hash(settings_obj) != baseline, name
+            setattr(settings_obj, name, original)
 
     def test_dsfa_table_lists_every_retention_setting_with_its_count(self, facility):
         content = render_document("dsfa", facility)[0]
@@ -772,13 +820,7 @@ class TestAuditLoggingClaims:
         assert "löscht" in bullet
 
     def test_premise_audit_pruning_deletes_through_the_application(self):
-        import inspect
-
-        from core.retention import audit_pruning
-
-        source = inspect.getsource(audit_pruning.prune_auditlog)
-        assert "bypass_replication_triggers" in source
-        assert ".delete()" in source or "_raw_delete" in source
+        _behaviour_test("test_retention_auditlog", "TestPruneAuditlog.test_prune_deletes_entries_older_than_cutoff")
 
     def test_premise_chain_backfill_bypasses_the_trigger(self):
         import inspect
@@ -803,11 +845,8 @@ class TestAuditLoggingClaims:
                 assert "Aufbewahrungslauf" in text, text
 
     def test_premise_lockout_is_derived_from_audit_entries(self):
-        import inspect
-
-        from core.services.security import login_lockout
-
-        assert "LOGIN_FAILED" in inspect.getsource(login_lockout.is_locked)
+        _behaviour_test("test_auth", "TestLoginLockoutService.test_locked_after_threshold")
+        _behaviour_test("test_auth", "TestLoginLockoutService.test_not_locked_after_unlock")
 
     def test_vvt_does_not_promise_periods_the_code_lacks(self):
         auth = str(next(a for a in PROCESSING_ACTIVITIES if a["id"] == "auth_login")["retention_period"])

@@ -286,7 +286,7 @@ class TestDsfaExtendedRetentionPlaceholders:
         rows = _retention_rows(content)
 
         # Refs #2492: plus the two history periods and the handover note period.
-        assert sorted(rows) == list(range(1, 11)), f"§ 2.3 hat nicht mehr zehn Fristen: {rows}"
+        assert sorted(rows) == list(range(1, 11)), f"§ 2.3 no longer lists ten periods: {rows}"
         for nr, (frist, wert) in rows.items():
             assert "{{" not in wert, f"Frist {nr} ({frist}) traegt einen ungerenderten Platzhalter: {wert!r}"
             # Zeile 4 ist die einzige nicht-numerische ("keine" bzw.
