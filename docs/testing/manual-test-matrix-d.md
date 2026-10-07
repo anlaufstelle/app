@@ -815,12 +815,12 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 - `src/core/services/compliance/breach_detection.py`
 - `src/core/management/commands/detect_breaches.py`
 
-**Voraussetzung:** Fehlgeschlagene Logins in Anzahl und Zeitfenster entsprechend den Einrichtungs-Einstellungen für `detect_failed_login_burst`; keine bereits protokollierte identische Meldung.
+**Voraussetzung:** Isolierte lokale Testumgebung mit `anlaufstelle.settings.test` und eigener Testdatenbank; `RATELIMIT_ENABLE=False` ist dort gesetzt. Breach-Schwellen stammen aus Django-Settings/Umgebung, nicht aus Einrichtungs-Einstellungen: `BREACH_FAILED_LOGIN_THRESHOLD=20` und `BREACH_DETECTION_WINDOW_MINUTES=60` sind die Standardwerte. Für diesen Fall diese wirksamen Werte bestätigen. Frischer aktiver Testaccount einer aktiven Einrichtung, kein Super-Admin, keine Fehlversuche und kein identisches Finding im Prüfzeitraum.
 
 **Schritte:**
-1. Mit einem lokalen Testaccount den konfigurierten Login-Burst-Schwellwert im Zeitfenster erreichen; bereits gesperrte Anfragen nicht als neue `LOGIN_FAILED` zählen.
-2. `python src/manage.py detect_breaches --facility "<Einrichtungsname>"` (Name ersetzen; DB-Rolle mit RLS-Bypass verwenden) ausführen.
-3. Output prüfen: Anomalie wird gemeldet (Login-Burst).
+1. Für denselben bekannten Testaccount von derselben IP 20 Login-POSTs mit falschem Passwort innerhalb von 15 Minuten durchführen; jeweils prüfen, dass ein `LOGIN_FAILED` geschrieben wird. Die Kontosperre greift bei 10 Fehlversuchen je (User, IP) im 15-Minuten-Fenster; weitere Versuche während dieser Sperre zählen als `LOGIN_FAILED` mit. Auch ein korrektes Passwort gegen die aktive Sperre erzeugt einen mitgezählten Eintrag (`detail.reason=locked`).
+2. In derselben Testumgebung `python src/manage.py detect_breaches --facility "<Einrichtungsname>" --settings=anlaufstelle.settings.test` (Name ersetzen; gleiche Testdatenbank, DB-Rolle mit RLS-Bypass) ausführen. Die Login-View begrenzt im normalen Betrieb auf 5 POSTs/Minute je IP und 10/Stunde je Benutzername; deshalb für diese isolierte 20-Versuche-Probe das deaktivierte HTTP-Ratelimit der Test-Settings verwenden, niemals in Produktion.
+3. Output und Audit-Eintrag prüfen: `failed_login_burst` für den Testaccount mit `count=20`, `threshold=20`, `window_minutes=60`; die Erkennung aggregiert pro bekanntem User, nicht über mehrere Konten.
 4. Webhook-Konfiguration prüfen: SSRF-Whitelist greift (kein `http://localhost`-Webhook).
 
 **Erwartetes Ergebnis:**

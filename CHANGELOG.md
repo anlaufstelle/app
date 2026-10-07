@@ -59,7 +59,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
-- **Ausführbare Befehle in den Handtest-Matrizen** (#2452) — Matrizen B, C, D und Hub nennen vorhandene Aufrufe; der Geräte-Lease-Fall entfällt mit Code-Begründung.
+- **Ausführbare Befehle in den Handtest-Matrizen** (#2452) — Matrizen B, C, D und Hub nennen vorhandene Aufrufe; die Breach-Probe berücksichtigt Django-Schwellen, Kontosperre und HTTP-Ratelimit, der entfallene Geräte-Lease-Fall ist aus dem manuellen Pflichtprofil entfernt.
 
 - **Retention-Handtests am Datenmodell ausgerichtet** (#2498) — Matrix D prüft Ereignisfristen und einrichtungsweiten Laufumfang, Fallabschlüsse, k-Schwelle, Paket-Zugriff und Audit-Schutz mit explizitem RLS-Kontext; Matrix C nennt vorhandene Testbelege.
 
