@@ -201,7 +201,7 @@ Die **Arbeitszentrale** (`/start/`) ist die Landingpage der **Leitung** (Refs #9
 
 | Rolle | Was `/start/` tut |
 |-------|-------------------|
-| **Leitung** (`lead`) | Zeigt die Arbeitszentrale: Die Karten **Löschanträge**, **Löschvorschläge** und **Statistik**; daneben die Statuszeile **Speicher** mit Belegung und Link zur Dateien-Übersicht |
+| **Leitung** (`lead`) | Zeigt die Arbeitszentrale: Die Karten **Löschanträge**, **Löschvorschläge** und **Statistik**; daneben die Statuszeile **Speicher** mit Belegung und Link zur Seite **Dateien** |
 | **Fachkraft / Assistenz** (`staff`, `assistant`) | Weiterleitung auf den **Zeitstrom** (`/`) — heutige Kontakte, eigene offene Aufgaben und zuletzt bearbeitete Personen stehen dort als Cockpit-Block über dem Feed |
 | **Anwendungsbetreuung** (`facility_admin`) | Weiterleitung auf die **Verwaltung** (`/verwaltung/`) — dort stehen u. a. User ohne MFA und die Settings-Warnungen |
 | **Systemadministration** (`super_admin`) | Weiterleitung auf den **Systembereich** (`/system/`) mit der einrichtungsübergreifenden Sicht |
@@ -282,7 +282,7 @@ Die **Wiedervorlage** (Feld `remind_at`) ist ein **optionales Frühwarn-Datum**,
 |--------|------|
 | **Pflichtfeld?** | Nein — optional, Default leer |
 | **Verhältnis zu `due_date`** | Wiedervorlage muss **≤ Fälligkeit** sein (gleicher Tag erlaubt) |
-| **Sichtbarkeit** | Bis zum Wiedervorlage-Datum unauffällig in der Inbox; **am Vortag** gelbes Badge „Morgen fällig", **am Tag selbst** orange Badge „Heute fällig" |
+| **Sichtbarkeit** | Bis zum Wiedervorlage-Datum unauffällig in der Inbox; **am Vortag** gelbes Badge „Morgen fällig", **am Tag selbst und danach bis zum Abschluss** orange Badge „Heute fällig" |
 | **Erledigte Items** | Kein Badge mehr |
 | **Wiederholung** | Bei automatisch erzeugten Folgeaufgaben bleibt der Offset zwischen `remind_at` und `due_date` erhalten |
 

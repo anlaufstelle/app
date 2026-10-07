@@ -245,7 +245,7 @@ Alle übrigen Rollen werden von `/start/` direkt an ihren Arbeitsplatz umgeleite
 - **Löschvorschläge** — ausstehende Retention-Vorschläge (führt zum Retention-Dashboard)
 - **Statistik** — Monat/Jahr des letzten Statistik-Snapshots
 
-Daneben steht **Speicher** mit der aktuellen Belegung, dem Kontingent und einem Link zur Dateien-Übersicht.
+Daneben steht **Speicher** mit der aktuellen Belegung, dem Kontingent und einem Link zur Seite **Dateien**.
 
 ---
 

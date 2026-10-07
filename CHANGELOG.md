@@ -85,7 +85,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Offline-Datenschutz im Benutzerhandbuch und in der FAQ berichtigt** (#2426) — Neustart, Schlüsselverwahrung, Fristablauf und der Erhalt ungesendeter Arbeit bei Inaktivität werden ohne unbelegte Löschzusagen beschrieben.
 
-- **FAQ, Benutzerhandbuch und Leitungshilfe präzisiert** (#2489) — Sudo-Schutz, Team-Fokusbox, aktueller Dienst, Übergabenotiz, Wiedervorlage und Dateigrenzen entsprechen der Oberfläche und den tatsächlichen Schutzregeln.
+- **FAQ, Benutzerhandbuch und Leitungshilfe präzisiert** (#2489) — Sudo-Schutz, Team-Fokusbox, aktueller Dienst, Übergabenotiz, Wiedervorlage einschließlich des orange bleibenden Badges und Dateigrenzen entsprechen der Oberfläche und den tatsächlichen Schutzregeln; die Speicherzeile verweist auf die Seite „Dateien“.
 
 - **FAQ zu Löschung, Aufbewahrung und Cron korrigiert** (#2428) — Meilenstein-Löschung, Audit-/Historien-Wartung, zusätzliche Ereignistyp-Fristen und Cron-Dienst mit Host-Backup sind auf den Ist-Stand gebracht.
 

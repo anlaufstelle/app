@@ -39,6 +39,15 @@ class TestHelpPages:
         assert response.status_code == 200
         assert f'data-help-slug="{slug}"' in response.content.decode()
 
+    def test_work_center_help_names_the_files_page(self, client, lead_user):
+        """The storage destination uses the visible page title (Refs #2489)."""
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:help_page", kwargs={"slug": "arbeitszentrale"}))
+
+        assert response.status_code == 200
+        assert "die Zeile „Speicher“ zur Seite „Dateien“." in response.content.decode()
+
     def test_help_page_is_login_required(self, client):
         response = client.get(reverse("core:help_page", kwargs={"slug": "personen"}))
 

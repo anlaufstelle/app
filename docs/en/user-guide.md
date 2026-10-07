@@ -247,7 +247,7 @@ All other roles are redirected from `/start/` straight to their own workplace:
 - **Retention proposals** -- pending retention proposals (links to the retention dashboard)
 - **Statistics** -- month/year of the last statistics snapshot
 
-Alongside the cards, **Storage** shows current usage, the quota and a link to the file overview.
+Alongside the cards, **Storage** shows current usage, the quota and a link to the **Files** page.
 
 ---
 
@@ -1038,4 +1038,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 5ae17fd5577cacbcad51e124c85208d70640a118 -->
+<!-- source-hash: df9e73e99b8d4460ed87046cf3dbb9c7f8290fe1 -->

@@ -40,7 +40,7 @@ HELP_PAGES = {
             topics=(
                 _(
                     "Die Karten führen zu Löschanträgen, Löschvorschlägen und Statistik; "
-                    "die Zeile „Speicher“ zur Dateien-Übersicht."
+                    "die Zeile „Speicher“ zur Seite „Dateien“."
                 ),
                 _("Die Zahlen sind Einstiege in die jeweilige Arbeitsliste, keine eigene Ablage."),
             ),
