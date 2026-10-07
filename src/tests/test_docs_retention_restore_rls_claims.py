@@ -14,7 +14,12 @@ Each forbidden claim below promised more than the implementation delivers:
 - the RLS policies let rows through for ``app.is_super_admin = 'true'`` even
   with an empty facility scope (migration ``0085_rls_superadmin_bypass``), and
   ``FacilityScopeMiddleware`` empties the scope of an archived facility only
-  for blocked requests (``_is_archived_blocked``).
+  for blocked requests (``_is_archived_blocked``);
+- the history sweep after a soft delete is not unconditional: rows whose person
+  or event lock is taken (``_lock_rows`` uses ``skip_locked``) or whose event
+  moved to another person meanwhile are skipped, as are held ones, and only a
+  later run redacts them (``core.retention.eventhistory``). A sentence about the
+  history step that promises "immediately"/"same run" must name that deferral.
 """
 
 import re
@@ -54,6 +59,21 @@ FORBIDDEN_CLAIMS = (
 )
 
 
+HISTORY_STEP_SENTENCE = re.compile(r"[^.]*(?:Historien-Schritt|history step)[^.]*\.")
+IMMEDIACY = re.compile(r"sofort|im selben Lauf|right away|immediately|same run")
+DEFERRAL = re.compile(r"spätere[nr]? Lauf|later run")
+
+
+def _unqualified_history_immediacy(*, root: Path) -> list[str]:
+    findings = []
+    for relative_path in DOCUMENTS:
+        text = (root / relative_path).read_text(encoding="utf-8")
+        for sentence in HISTORY_STEP_SENTENCE.findall(text):
+            if IMMEDIACY.search(sentence) and not DEFERRAL.search(sentence):
+                findings.append(f"{relative_path}: {sentence.strip()[:80]}")
+    return findings
+
+
 def _overpromises(*, root: Path) -> list[str]:
     findings = []
     for relative_path in DOCUMENTS:
@@ -91,3 +111,30 @@ def test_scanner_accepts_the_conditional_phrasings(tmp_path: Path) -> None:
 
 def test_shipped_docs_do_not_overpromise_retention_restore_and_rls() -> None:
     assert _overpromises(root=REPO_ROOT) == []
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    (
+        "Die Fassungen redigiert derselbe Lauf im Historien-Schritt sofort (unter Legal Hold zurückgestellt).",
+        "The versions are redacted in the subsequent history step right away (deferred under a legal hold).",
+    ),
+)
+def test_history_scanner_rejects_immediacy_without_deferral(tmp_path: Path, sentence: str) -> None:
+    _write_tree(tmp_path, sentence)
+
+    assert len(_unqualified_history_immediacy(root=tmp_path)) == 1
+
+
+def test_history_scanner_accepts_immediacy_with_later_run(tmp_path: Path) -> None:
+    _write_tree(
+        tmp_path,
+        "Im Historien-Schritt sofort; gesperrte Zeilen holt ein späterer Lauf nach. "
+        "In the history step right away; a later run catches up.",
+    )
+
+    assert _unqualified_history_immediacy(root=tmp_path) == []
+
+
+def test_shipped_docs_name_the_history_step_deferrals() -> None:
+    assert _unqualified_history_immediacy(root=REPO_ROOT) == []
