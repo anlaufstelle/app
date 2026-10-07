@@ -79,3 +79,25 @@ def test_glossary_column_exception_does_not_hide_missing_rows(tmp_path):
     result = check(tmp_path)
     assert result.returncode == 1
     assert ": tables " in result.stdout
+
+
+@pytest.mark.parametrize("relative", ["CONTRIBUTING.en.md", "README.en.md", "docs/screenshots.en.md"])
+def test_detects_drift_in_mirrors_outside_docs_en(tmp_path, relative):
+    translated = tmp_path / relative
+    translated.parent.mkdir(parents=True, exist_ok=True)
+    source = relative.replace(".en.md", ".md")
+    (tmp_path / source).write_text("# Source\n```bash\nmake test\n```\n")
+    translated.write_text(f"# Translation\n```bash\nmake lint\n```\n<!-- translation-source: {source} -->\n")
+    result = check(tmp_path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert relative in result.stdout
+    assert "make_targets" in result.stdout
+
+
+def test_discovery_covers_every_registered_translation():
+    import runpy
+
+    versions = runpy.run_path(str(ROOT / "scripts/check_translation_versions.py"))
+    checker = runpy.run_path(str(ROOT / "scripts/check_translation_structure.py"))
+    discovered = {path.relative_to(ROOT).as_posix() for path in checker["translation_paths"](ROOT)}
+    assert set(versions["TRANSLATED_FILES"]) <= discovered

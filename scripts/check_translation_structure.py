@@ -72,10 +72,16 @@ def structure(text: str) -> dict[str, object]:
     }
 
 
+def translation_paths(root: Path) -> list[Path]:
+    """Include root mirrors, sibling EN files and the docs/en translation tree."""
+    docs = root / "docs"
+    return sorted(set(root.glob("*.en.md")) | set(docs.rglob("*.en.md")) | set((docs / "en").rglob("*.md")))
+
+
 def findings(root: Path) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     exceptions: list[str] = []
-    for en in sorted((root / "docs/en").rglob("*.md")):
+    for en in translation_paths(root):
         relative = en.relative_to(root).as_posix()
         text = en.read_text()
         match = SOURCE.search(text)
@@ -106,7 +112,10 @@ def main() -> int:
     errors, exceptions = findings(args.root)
     for line in [*exceptions, *errors]:
         print(line)
-    print(f"Translation structure: {len(errors)} findings, {len(exceptions)} intentional differences")
+    print(
+        f"Translation structure: {len(translation_paths(args.root))} pairs, "
+        f"{len(errors)} findings, {len(exceptions)} intentional differences"
+    )
     return bool(errors)
 
 
