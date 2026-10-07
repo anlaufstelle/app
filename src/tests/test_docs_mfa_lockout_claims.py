@@ -17,6 +17,15 @@ Each forbidden claim below promised more than the implementation delivers:
   (``core.services.user_access.reset_user_mfa``);
 - the factor reset does not depend on the session scan limit
   (``core.models.user.User.revoke_sessions``).
+
+Besides these known wrong phrasings, the guard ties the numbers the
+documented contract relies on to their single source in
+``anlaufstelle/settings/base.py``: the defaults of ``SUDO_MODE_TTL_SECONDS``
+and ``OFFLINE_REVOCATION_SESSION_SCAN_LIMIT`` in the admin-guide variable
+tables, and the sudo window the recovery steps name ("second press within
+the sudo window"). The step sequence itself is behaviour and is pinned over
+HTTP by ``test_mfa_recovery_and_revocation_contract.py``; a free-text match
+of the steps would only check wording, so the guard does not try.
 """
 
 import re
@@ -36,7 +45,12 @@ DOCUMENTS = (
     Path("docs/glossar.md"),
     Path("docs/en/glossary.md"),
     Path("docs/adr/015-mfa-totp.md"),
+    Path("docs/adr/032-webauthn-passkeys-2fa.md"),
 )
+ADMIN_GUIDES = (Path("docs/admin-guide.md"), Path("docs/en/admin-guide.md"))
+SETTINGS_SOURCE = Path("src/anlaufstelle/settings/base.py")
+DOCUMENTED_DEFAULTS = ("SUDO_MODE_TTL_SECONDS", "OFFLINE_REVOCATION_SESSION_SCAN_LIMIT")
+SUDO_WINDOW_IN_STEPS = re.compile(r"`SUDO_MODE_TTL_SECONDS`, (?:Standard|default) (\d+) (?:Minuten|minutes)\)")
 AUDIT_TRAIL_SECTIONS = (
     (Path("docs/admin-guide.md"), "#### Audit-Spur"),
     (Path("docs/en/admin-guide.md"), "#### Audit Trail"),
@@ -82,6 +96,27 @@ def _overpromises(*, root: Path) -> list[str]:
         for pattern in FORBIDDEN_CLAIMS:
             if pattern.search(text):
                 findings.append(f"{relative_path}: {pattern.pattern}")
+    return findings
+
+
+def _settings_default(name: str, *, root: Path) -> int:
+    source = (root / SETTINGS_SOURCE).read_text(encoding="utf-8")
+    return int(re.search(rf'^{name} = env_int\("{name}", (\d+)\)', source, re.MULTILINE).group(1))
+
+
+def _contract_value_mismatches(*, root: Path) -> list[str]:
+    findings = []
+    sudo_minutes = _settings_default("SUDO_MODE_TTL_SECONDS", root=root) // 60
+    for relative_path in ADMIN_GUIDES:
+        text = (root / relative_path).read_text(encoding="utf-8")
+        for name in DOCUMENTED_DEFAULTS:
+            row = re.search(rf"^\| `{name}` \| `(\d+)` \|", text, re.MULTILINE)
+            expected = _settings_default(name, root=root)
+            if row is None or int(row.group(1)) != expected:
+                findings.append(f"{relative_path}: {name} default is not `{expected}`")
+        windows = [int(minutes) for minutes in SUDO_WINDOW_IN_STEPS.findall(text)]
+        if not windows or any(minutes != sudo_minutes for minutes in windows):
+            findings.append(f"{relative_path}: recovery steps do not name the {sudo_minutes}-minute sudo window")
     return findings
 
 
@@ -143,3 +178,53 @@ def test_audit_trail_section_lists_exactly_the_2fa_and_sudo_actions(relative_pat
     expected = {name for name in AuditLog.Action.names if name.startswith(AUDITED_2FA_PREFIXES)}
 
     assert _documented_audit_actions(root=REPO_ROOT, relative_path=relative_path, heading=heading) == expected
+
+
+def _write_contract_tree(root: Path, *, ttl: int, scan_limit: int, documented_minutes: int | None) -> None:
+    settings_path = root / SETTINGS_SOURCE
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(
+        f'SUDO_MODE_TTL_SECONDS = env_int("SUDO_MODE_TTL_SECONDS", {ttl})\n'
+        f'OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = env_int("OFFLINE_REVOCATION_SESSION_SCAN_LIMIT", {scan_limit})\n',
+        encoding="utf-8",
+    )
+    steps = "" if documented_minutes is None else f"(`SUDO_MODE_TTL_SECONDS`, Standard {documented_minutes} Minuten)"
+    for relative_path in ADMIN_GUIDES:
+        path = root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "| `SUDO_MODE_TTL_SECONDS` | `900` | x |\n"
+            "| `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT` | `10000` | x |\n"
+            f"{steps}\n",
+            encoding="utf-8",
+        )
+
+
+def test_contract_values_accept_matching_tree(tmp_path: Path) -> None:
+    _write_contract_tree(tmp_path, ttl=900, scan_limit=10000, documented_minutes=15)
+
+    assert _contract_value_mismatches(root=tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    ("ttl", "scan_limit", "documented_minutes", "expected_fragment"),
+    [
+        (600, 10000, 10, "SUDO_MODE_TTL_SECONDS default"),
+        (900, 5000, 15, "OFFLINE_REVOCATION_SESSION_SCAN_LIMIT default"),
+        (900, 10000, 20, "15-minute sudo window"),
+        (900, 10000, None, "15-minute sudo window"),
+    ],
+)
+def test_contract_values_detect_drift(
+    tmp_path: Path, ttl: int, scan_limit: int, documented_minutes: int | None, expected_fragment: str
+) -> None:
+    _write_contract_tree(tmp_path, ttl=ttl, scan_limit=scan_limit, documented_minutes=documented_minutes)
+
+    findings = _contract_value_mismatches(root=tmp_path)
+
+    assert len(findings) == len(ADMIN_GUIDES)
+    assert all(expected_fragment in finding for finding in findings)
+
+
+def test_shipped_docs_state_the_contract_values_of_the_code() -> None:
+    assert _contract_value_mismatches(root=REPO_ROOT) == []
