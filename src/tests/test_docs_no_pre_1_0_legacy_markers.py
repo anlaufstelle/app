@@ -378,7 +378,7 @@ TICKET_HISTORY_EXAMPLES: tuple[str, ...] = (
     "Die Bestandsmigration läuft einmalig.",
     "Die Alt-Zeilen bleiben stehen.",
     "Das gilt seit dieser Welle.",
-    "Seit prüft der Guard das.",
+    "Seit Welle " + "3 prüft der Guard das.",  # split: the release tree must not carry the track code
     "Since Wave 3 the guard checks this.",
     "since wave 3 the guard checks this.",
     "Eine frühere Fassung dieses Abschnitts war falsch.",
