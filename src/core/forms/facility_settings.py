@@ -83,6 +83,7 @@ class FacilitySettingsForm(TailwindFormMixin, forms.ModelForm):
 
     def __init__(self, *args, facility, **kwargs):
         super().__init__(*args, **kwargs)
+        self.facility = facility
         current_id = getattr(self.instance, "default_document_type_id", None)
         queryset = DocumentType.objects.for_facility(facility).filter(
             Q(is_active=True) | Q(pk=current_id),
@@ -127,6 +128,8 @@ class FacilitySettingsForm(TailwindFormMixin, forms.ModelForm):
     def _audit_retention_warning(self):
         """Warn when the audit log is pruned before the longest retention period ends.
 
+        Compared are the periods of the settings and the own period of every event
+        document type of the facility (active or not, as retention enforces it).
         ``auditlog_retention_months = 0`` keeps the audit log without limit and never
         warns; a retention period of ``0`` that means "kept without limit" is the
         longest period of all.
@@ -147,7 +150,23 @@ class FacilitySettingsForm(TailwindFormMixin, forms.ModelForm):
                 break
             if days > longest_days:
                 longest_name, longest_days = name, days
-        if longest_name is None or (longest_days is not None and audit_days >= longest_days):
+        longest_label = None
+        if longest_days is not None:
+            longest_type = (
+                DocumentType.objects.filter(
+                    facility=self.facility,
+                    entity_type=DocumentType.EntityType.EVENT,
+                    retention_days__gt=longest_days,
+                )
+                .order_by("-retention_days", "name")
+                .first()
+            )
+            if longest_type is not None:
+                longest_days = longest_type.retention_days
+                longest_label = _("Dokumentationstyp %(name)s") % {"name": longest_type.name}
+        if longest_label is None and longest_name is not None:
+            longest_label = getattr(Settings._meta.get_field(longest_name), "verbose_name", longest_name)
+        if longest_label is None or (longest_days is not None and audit_days >= longest_days):
             return None
         period = _("unbegrenzt") if longest_days is None else _("%(days)s Tage") % {"days": longest_days}
         return _(
@@ -156,6 +175,6 @@ class FacilitySettingsForm(TailwindFormMixin, forms.ModelForm):
             "Fachdaten noch bestehen können; lückenlos bleibt das Audit-Log nur mit 0."
         ) % {
             "audit_days": audit_days,
-            "field": getattr(Settings._meta.get_field(longest_name), "verbose_name", longest_name),
+            "field": longest_label,
             "period": period,
         }

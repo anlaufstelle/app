@@ -15,7 +15,7 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 
 from core.forms.facility_settings import FacilitySettingsForm
-from core.models import Settings
+from core.models import DocumentType, Facility, Settings
 from core.services.dashboard.external_report import DEFAULT_K_THRESHOLD, _get_threshold
 from tests.test_facility_settings_hub import _post_data
 
@@ -223,3 +223,72 @@ class TestAuditRetentionShorterThanFieldRetention:
         Settings.objects.filter(pk=settings_obj.pk).update(auditlog_retention_months=0)
 
         assert AUDIT_WARNING not in _settings_page(client, admin_user)
+
+
+class TestAuditRetentionShorterThanDocumentTypeRetention:
+    """Event document types with their own period delete on their own schedule; the audit
+    period is compared with them like with the periods of the settings."""
+
+    def test_longer_type_period_warns_and_names_the_type(self, settings_obj):
+        _event_type(settings_obj.facility, "Lange Akte", 5000)
+
+        warnings = _audit_warnings(_form(settings_obj, auditlog_retention_months=122))
+
+        assert len(warnings) == 1
+        assert "„Dokumentationstyp Lange Akte“" in warnings[0]
+        assert "5000 Tage" in warnings[0]
+        assert "3660 Tage" in warnings[0]
+
+    def test_inactive_type_still_counts(self, settings_obj):
+        _event_type(settings_obj.facility, "Ruhende Akte", 5000, is_active=False)
+
+        warnings = _audit_warnings(_form(settings_obj, auditlog_retention_months=122))
+
+        assert len(warnings) == 1
+        assert "Ruhende Akte" in warnings[0]
+
+    def test_shorter_type_period_is_silent(self, settings_obj):
+        _event_type(settings_obj.facility, "Kurze Akte", 100)
+
+        assert _audit_warnings(_form(settings_obj, auditlog_retention_months=122)) == []
+
+    def test_longest_period_wins_between_type_and_settings(self, settings_obj):
+        _event_type(settings_obj.facility, "Mittlere Akte", 1000)
+
+        warnings = _audit_warnings(_form(settings_obj, auditlog_retention_months=24))
+
+        assert len(warnings) == 1
+        assert "Aufbewahrung qualifiziert (Tage)" in warnings[0]
+        assert "Mittlere Akte" not in warnings[0]
+
+    def test_person_type_period_is_ignored(self, settings_obj):
+        _event_type(settings_obj.facility, "Personenakte", 5000, entity_type=DocumentType.EntityType.CLIENT)
+
+        assert _audit_warnings(_form(settings_obj, auditlog_retention_months=122)) == []
+
+    def test_type_of_another_facility_is_ignored(self, settings_obj, organization):
+        other = Facility.objects.create(organization=organization, name="Andere Stelle")
+        _event_type(other, "Fremde Akte", 5000)
+
+        assert _audit_warnings(_form(settings_obj, auditlog_retention_months=122)) == []
+
+    def test_audit_zero_is_silent_despite_a_type_period(self, settings_obj):
+        _event_type(settings_obj.facility, "Lange Akte", 5000)
+
+        assert _audit_warnings(_form(settings_obj, auditlog_retention_months=0)) == []
+
+    def test_settings_page_names_the_type(self, client, admin_user, settings_obj):
+        Settings.objects.filter(pk=settings_obj.pk).update(auditlog_retention_months=122)
+        _event_type(settings_obj.facility, "Lange Akte", 5000)
+
+        assert "Dokumentationstyp Lange Akte" in _settings_page(client, admin_user)
+
+
+def _event_type(facility, name, retention_days, *, entity_type=None, is_active=True):
+    return DocumentType.objects.create(
+        facility=facility,
+        name=name,
+        entity_type=entity_type or DocumentType.EntityType.EVENT,
+        retention_days=retention_days,
+        is_active=is_active,
+    )
