@@ -3,8 +3,8 @@
 **Open-Source-Fachsystem für niedrigschwellige soziale Arbeit**
 
 Autor: Erika Musterfrau, Tobias Nix
-Stand: September 2026
-Version: 1.9
+Stand: Oktober 2026
+Version: 1.10
 
 ---
 
@@ -22,6 +22,7 @@ Version: 1.9
 | 1.7 | Juli 2026 (2026-07-07) | Doku-Drift-Korrektur (#1417): § 16 Stufe 3 auf ADR-022-Re-Evaluationsstand (2026-06-29) gehoben — Offline-Edit-Einstieg ist verdrahtet und produktiv (#1111), inkl. Dead-Letter-Ansicht (`/offline/conflicts/`, auch offline erreichbar, #1396) und Fallaufgaben-Editieren (#1398). |
 | 1.8 | September 2026 (2026-09-07) | Einsatzzwecke & Domänen-Pakete (#2140): § 1 Positionierung um die Öffnung über die Ursprungsdomäne ergänzt; § 3 als Arbeitsmodus neu gefasst (offene Sozial-/Lebensberatung und niedrigschwellige Beratungsstellen zuerst, Fit-/Anti-Fit-Tabellen, kuratierte Domänen Awareness/Frauenhaus/Jugendarbeit + generische Beratungsstelle); § 8 Roadmap-Zeile „Domänenbibliotheken" als umgesetzt markiert; § 11 verweist auf die YAML-Paket-Mechanik (`docs/packages.md`) und die vier mitgelieferten Pakete; § 14 Glossar um „Domänen-Paket", „Betreiber-Empfehlung" und „Quick-Exit" ergänzt. |
 | 1.9 | September 2026 (2026-09-10) | § 5 um die Persona der Beratungsstellen-Domäne ergänzt (#2190). |
+| 1.10 | Oktober 2026 (2026-10-07) | Softwarestand v0.99.6: Kontaktstufen „Anonym“ und „Identifiziert“ beschreiben die Pseudonymisierung als vorgesehenen Ablauf ohne Pflichtfeld für Klarnamen und unterscheiden Ereignisse ohne Person von inhaltlich anonymen Daten (#2430). |
 
 ---
 

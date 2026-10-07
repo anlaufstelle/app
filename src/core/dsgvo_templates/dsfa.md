@@ -2,7 +2,7 @@
 
 **Verantwortlicher:** {{ facility_name }}
 **Erstellt:** {{ date }}
-**Version:** 1.4 (Softwarestand v0.23, 2026-08-04)
+**Version:** 1.5 (Softwarestand v0.99.6, 2026-10-07)
 
 ---
 

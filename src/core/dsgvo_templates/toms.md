@@ -2,7 +2,7 @@
 
 **Verantwortlicher:** {{ facility_name }} — Dokumentationssystem „Anlaufstelle"
 **Erstellt:** {{ date }}
-**Version:** 1.2 (Softwarestand v0.89, 2026-08-28)
+**Version:** 1.3 (Softwarestand v0.99.6, 2026-10-07)
 
 ---
 

@@ -112,16 +112,19 @@ class TestTemplateCurrentState:
     @pytest.mark.parametrize(
         ("slug", "version"),
         [
-            ("av-vertrag", "1.1"),
-            ("informationspflichten", "1.1"),
-            ("toms", "1.2"),
-            ("verarbeitungsverzeichnis", "1.1"),
+            ("av-vertrag", "1.2"),
+            ("dsfa", "1.5"),
+            ("informationspflichten", "1.2"),
+            ("loeschkonzept", "1.1"),
+            ("mitarbeiter-informationspflichten", "1.1"),
+            ("toms", "1.3"),
+            ("verarbeitungsverzeichnis", "1.2"),
         ],
     )
     def test_stale_template_stamps_are_current(self, facility, slug, version):
         content, _ = render_document(slug, facility)
 
-        assert f"**Version:** {version} (Softwarestand v0.89, 2026-08-28)" in content
+        assert f"**Version:** {version} (Softwarestand v0.99.6, 2026-10-07)" in content
 
     def test_toms_describe_current_security_controls_and_limits(self, facility):
         content, _ = render_document("toms", facility)

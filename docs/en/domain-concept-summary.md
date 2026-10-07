@@ -327,4 +327,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 58fb9ad350cc89479b9f37e3c2139bad83ec7e0a -->
+<!-- source-hash: 8771d092cd363b6ac9b7be30f4dcc483bbbb82b3 -->
