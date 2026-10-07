@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 11:30+0200\n"
+"POT-Creation-Date: 2026-10-07 11:34+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12186,9 +12186,6 @@ msgstr "Help"
 msgid "Hilfe-Übersicht"
 msgstr "Help overview"
 
-msgid "Karten führen direkt zu Aufgaben, Löschanträgen und fälligen Prüfungen."
-msgstr "Cards lead directly to tasks, deletion requests, and due reviews."
-
 msgid "Kurze Orientierung zu den Bereichen, die für Ihre Rolle verfügbar sind."
 msgstr "Brief guidance on the areas available to your role."
 
@@ -13273,3 +13270,11 @@ msgstr "Account lockout after 10 failed attempts within 15 minutes per account a
 #: src/core/services/compliance/vvt.py:367
 msgid "2FA per TOTP (RFC 6238), per Rollen-Default verpflichtend"
 msgstr "2FA via TOTP (RFC 6238), mandatory by role default"
+
+#: src/core/services/compliance/retention.py:47
+msgid "Verwaltung → Einstellungen öffnen und unter Datenschutz und Fristen eine begrenzte AuditLog-Aufbewahrung festlegen."
+msgstr "Open Management → Settings and set a limited audit log retention period under Data protection and retention periods."
+
+#: src/core/views/help.py:42
+msgid "Die Karten führen zu Löschanträgen, Löschvorschlägen und Statistik; die Zeile „Speicher“ zur Seite „Dateien“."
+msgstr "The cards lead to deletion requests, retention proposals and statistics; the “Storage” row leads to the “Files” page."

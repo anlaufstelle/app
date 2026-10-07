@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 11:30+0200\n"
+"POT-Creation-Date: 2026-10-07 11:34+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12282,9 +12282,6 @@ msgstr "Hilfe"
 msgid "Hilfe-Übersicht"
 msgstr "Hilfe-Übersicht"
 
-msgid "Karten führen direkt zu Aufgaben, Löschanträgen und fälligen Prüfungen."
-msgstr "Karten führen direkt zu Aufgaben, Löschanträgen und fälligen Prüfungen."
-
 msgid "Kurze Orientierung zu den Bereichen, die für Ihre Rolle verfügbar sind."
 msgstr "Kurze Orientierung zu den Bereichen, die für Ihre Rolle verfügbar sind."
 
@@ -13369,3 +13366,11 @@ msgstr "Kontosperre nach 10 Fehlversuchen in 15 Minuten je Konto und IP (Systema
 #: src/core/services/compliance/vvt.py:367
 msgid "2FA per TOTP (RFC 6238), per Rollen-Default verpflichtend"
 msgstr "2FA per TOTP (RFC 6238), per Rollen-Default verpflichtend"
+
+#: src/core/services/compliance/retention.py:47
+msgid "Verwaltung → Einstellungen öffnen und unter Datenschutz und Fristen eine begrenzte AuditLog-Aufbewahrung festlegen."
+msgstr "Verwaltung → Einstellungen öffnen und unter Datenschutz und Fristen eine begrenzte AuditLog-Aufbewahrung festlegen."
+
+#: src/core/views/help.py:42
+msgid "Die Karten führen zu Löschanträgen, Löschvorschlägen und Statistik; die Zeile „Speicher“ zur Seite „Dateien“."
+msgstr "Die Karten führen zu Löschanträgen, Löschvorschlägen und Statistik; die Zeile „Speicher“ zur Seite „Dateien“."
