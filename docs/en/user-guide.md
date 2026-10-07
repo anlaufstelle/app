@@ -1,5 +1,4 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> Previously synchronized on 2026-09-08 (§ 2 capturing the doubled hour on the fall-back night -- the occurrence choice "Which of the two hours?", the timestamp being read-only when editing, and the spring-forward hour staying rejected, #2127; intro line opened to open consultation hours/advice centers, awareness teams, women's shelters, and youth work, #2140). Previously synchronized on 2026-09-07 (§ 1 quick exit and privacy screen, including the four named limits -- browser history, second window, dropped connection, and a stalled or failed deletion of the local key, #2136). Previously synchronized on 2026-09-02 (§ 2 shift filter and daylight-saving changes, #2057). Previously synchronized on 2026-09-02 (§ 7 self-withdrawal of a deletion request, #2092). Previously synchronized on 2026-08-24 (§ 3 authorized roles see decrypted before-values in event change history, #1961). Previously synchronized on 2026-08-22 (§ 10 deleting a case: the two paths, the trash, and what happens to assigned contacts, #1818). Previously synchronized on 2026-08-22 (§ 9 the System Admin creates the first facility in the Django admin -- the `/system/` area only displays it, #1894). Previously synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
 > The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805) and 2026-08-12 (§ 7 report selection: cards instead of a dropdown, "Dataset Reports" tab, PDF export moved onto the report card, #1804) and 2026-08-13 (§ 2a role landing redirects, #1813; § 6 search results page, #1803).
 
 # Anlaufstelle -- User Guide
@@ -167,7 +166,7 @@ The feed combines four sources for the current day:
 | **Tasks** (Work Items) | Hints and tasks with priority and status |
 | **Entry Bans** | Active entry bans -- additionally shown as a red banner on top |
 
-The right sidebar shows your **5 most urgent open tasks** (sorted by priority, due date, and created date) for quick access during a shift.
+The right sidebar contains **“Team tasks needing attention”**, a team focus box with up to **8 entries**, regardless of assignment. It groups tasks by **Overdue**, **Due today**, **Urgent · Important** and **In progress**; each task appears only in its highest applicable pressure group. Within groups, tasks are sorted by due date, priority and creation time. Open normal-priority tasks without a deadline remain available through **To task overview**.
 
 ### Tally
 
@@ -198,7 +197,7 @@ For the application the two hours really are different points in time, one hour 
 
 On the night the clocks spring forward, by contrast, the hour from 02:00 to 03:00 **does not exist at all** -- there the form still rejects a time from that window and says why. There is nothing to choose: a time that does not exist is not made real by any selection.
 
-When a shift filter is active, an expandable **shift handover block** appears above the feed with statistics (number of contacts, activities, new tasks) and highlights (crisis events, new entry bans, urgent tasks).
+The permanently visible **Current shift** box above the feed shows contacts, new tasks, new clients and important occurrences for the ongoing shift. It is independent of the selected Zeitstrom filter and appears only while a configured shift is running.
 
 #### Handover note
 
@@ -249,6 +248,8 @@ All other roles are redirected from `/start/` straight to their own workplace:
 - **Retention proposals** -- pending retention proposals (links to the retention dashboard)
 - **Statistics** -- month/year of the last statistics snapshot
 
+Alongside the cards, **Storage** shows current usage, the quota and a link to the file overview.
+
 ---
 
 ## 3. Documenting a Contact (Creating an Event)
@@ -291,9 +292,9 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 
 - **Upload:** The contact form includes a file upload field. Pick a file from your device and save the event as usual. On clients and cases it works identically: pick the file in the form, save the record.
 - **Virus scan:** Before saving, every file is automatically checked by a virus scanner (ClamAV). Infected files are rejected -- you receive an error and the event is not saved.
-- **Encryption:** All attachments are stored encrypted (Fernet, AES-128-CBC with HMAC-SHA256). That means the file is not readable in cleartext on the server and can only be retrieved through Anlaufstelle itself.
+- **Encryption:** All attachments are stored encrypted (Fernet, AES-128-CBC with HMAC-SHA256). Keys are held in the installation-wide `ENCRYPTION_KEYS` key ring (alternatively `ENCRYPTION_KEY`), shared by all facilities; facilities do not have separate key rings. That means the file is not readable in cleartext on the server and can only be retrieved through Anlaufstelle itself.
 - **Image metadata is removed:** For images (JPG, PNG, WebP, TIFF -- not for GIF and BMP) the embedded metadata is deleted on upload -- above all the **GPS capture location** (on phone photos often the home or current address of the person concerned), plus device model, capture time and the embedded thumbnail, which may still show the uncropped original. The picture itself stays unchanged, and portrait photos stay portrait. This does **not** happen for PDF and Office files -- their document properties may still name the staff member who worked on them.
-- **Maximum size:** By default, **up to 10 MiB per file** are allowed. Your administrator can adjust this limit.
+- **Maximum size:** By default, **up to 10 MiB per file** are allowed. Your facility admin can adjust this up to the installation-wide operator cap `FILE_VAULT_MAX_UPLOAD_BYTES` (default: 50 MiB). The stricter of the two limits applies.
 - **Supported formats:** PDF, Office documents, and images. Ask your administrator for the exact list allowed in your facility.
 - **Download:** Open the detail view of the event (or of the client or the case) and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
 - **Replacing (with version history):** When editing, you can replace the existing file with a new one. The old file is **not** deleted -- it is preserved as a **previous version** and remains downloadable from the detail view via an expandable accordion. Previous versions are only removed when the record itself is fully deleted. This applies to events, clients, and cases alike.
@@ -543,10 +544,10 @@ Tasks have two distinct time fields:
 
 | Field | Meaning |
 |---|---|
-| **Due date (due_date)** | Deadline -- the latest point at which the task must be completed |
-| **Reminder (remind_at)** | The moment you want to be notified -- usually before the due date |
+| **Due by** | Deadline -- the latest point at which the task must be completed |
+| **Follow-up on** | The date from whose preceding day the task is highlighted when you open the inbox/list -- usually before the due date |
 
-**Example:** The due date is April 15th, and you set the reminder to April 10th -- that way you get a heads-up five days ahead and do not run into last-minute stress on the deadline.
+**Example:** **Due by** is April 15th, and **Follow-up on** is April 10th. The yellow “Due tomorrow” badge appears on April 9th; the orange “Due today” badge appears from April 10th until the task is closed. There is no email, push message or background notification.
 
 Both fields are optional. You can also create a task with only a due date, or only a reminder.
 
@@ -1034,4 +1035,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 11aaeba5b37a43de2ee42c754f52d946af96702e -->
+<!-- source-hash: c5e19dd2d2182891af88ba88832ed93513bc282e -->

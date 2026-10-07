@@ -176,13 +176,11 @@ Alles wird nach Zeitpunkt absteigend sortiert (max. 200 Einträge pro Typ).
 
 #### Was ist die Schichtübergabe?
 
-Wenn ein Schichtfilter aktiv ist, erscheint ein aufklappbarer **Schichtübergabe-Block** mit:
-- Statistiken (Anzahl Ereignisse, Aktivitäten, neue Aufgaben …)
-- Highlights: Krisen-Ereignisse, neue Hausverbote, dringende Aufgaben
+Oberhalb des Feeds steht dauerhaft **Aktueller Dienst** mit Kontakten, neuen Aufgaben, neuen Personen und wichtigen Vorkommnissen der laufenden Schicht. Die Box folgt der aktuellen Uhrzeit, nicht der Filterauswahl des Feeds, und erscheint nur während einer eingerichteten laufenden Schicht. Die separate [Übergabe](#6-wie-funktioniert-die-übergabe-schichtübergabe) dient dem Schichtwechsel.
 
 #### Was steht in der Sidebar?
 
-Die rechte Spalte zeigt die **5 dringendsten offenen Arbeitsaufträge** (Status OPEN/IN_PROGRESS), sortiert nach Priorität → Fälligkeitsdatum → Erstelldatum.
+In der rechten Seitenspalte steht die Team-Fokusbox **„Team-Aufgaben mit Handlungsbedarf“** mit bis zu **8 Einträgen**, unabhängig von der Zuweisung. Sie gruppiert nach **Überfällig**, **Heute fällig**, **Dringend · Wichtig** und **In Bearbeitung**; jede Aufgabe erscheint nur in der höchsten zutreffenden Druckstufe. Innerhalb der Gruppen wird nach Fälligkeit, Priorität und Erstellzeit sortiert. Offene normale Aufgaben ohne Frist bleiben über **Zur Aufgabenübersicht** erreichbar.
 
 #### Wie funktioniert die HTMX-Interaktion?
 
@@ -203,7 +201,7 @@ Die **Arbeitszentrale** (`/start/`) ist die Landingpage der **Leitung** (Refs #9
 
 | Rolle | Was `/start/` tut |
 |-------|-------------------|
-| **Leitung** (`lead`) | Zeigt die Arbeitszentrale: Ausstehende Löschanträge (PENDING) · Offene Retention-Vorschläge (PENDING) · Aktive Legal Holds · Jüngster Statistik-Snapshot |
+| **Leitung** (`lead`) | Zeigt die Arbeitszentrale: Die Karten **Löschanträge**, **Löschvorschläge** und **Statistik**; daneben die Statuszeile **Speicher** mit Belegung und Link zur Dateien-Übersicht |
 | **Fachkraft / Assistenz** (`staff`, `assistant`) | Weiterleitung auf den **Zeitstrom** (`/`) — heutige Kontakte, eigene offene Aufgaben und zuletzt bearbeitete Personen stehen dort als Cockpit-Block über dem Feed |
 | **Anwendungsbetreuung** (`facility_admin`) | Weiterleitung auf die **Verwaltung** (`/verwaltung/`) — dort stehen u. a. User ohne MFA und die Settings-Warnungen |
 | **Systemadministration** (`super_admin`) | Weiterleitung auf den **Systembereich** (`/system/`) mit der einrichtungsübergreifenden Sicht |
@@ -233,16 +231,17 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 
 | Bereich | Inhalt | Zeitscope |
 |---------|--------|-----------|
-| **Statistik-Grid** | Kontakte, Aktivitäten, neue Aufgaben, neue Personen | Nur innerhalb der Schicht |
+| **Statistik-Grid** | Kontakte, neue Aufgaben, neue Personen | Nur innerhalb der Schicht |
 | **Wichtige Vorkommnisse** | Krisengespräche (gelb), Hausverbote (rot), dringende Aufgaben (blau) | Nur innerhalb der Schicht |
-| **Offene Aufgaben** | Sortiert nach Priorität (dringend → wichtig → normal), max. 10 | Einrichtungsweit, alle Zeiten |
+| **Übergabenotiz** | Notiz der letzten abgeschlossenen Schicht und Eingabe für die laufende Schicht; ohne Schichten gestern/heute | Eigene Schichtzeiträume |
 | **Event-Aufschlüsselung** | Kontakte nach Dokumentationstyp mit farbigen Badges | Nur innerhalb der Schicht |
 
 **Automatisches Verhalten:**
 - Öffnet man die Übergabe **heute**, wird automatisch der **zuletzt abgeschlossene Dienst** mit seinem Schichtdatum vorausgewählt — auch nach Mitternacht und beim Wechsel vom Nachtdienst zum Frühdienst
 - Datums-Navigation (vor/zurück) + Tab-Wechsel zwischen Schichten und „Ganzer Tag"
 - Nachtschichten über Mitternacht werden korrekt via `covers_time()`-Logik behandelt
-- Kompakte Version erscheint auch im Zeitstrom, wenn ein Schichtfilter aktiv ist
+- Im Zeitstrom zeigt **Aktueller Dienst** dauerhaft die laufende Schicht; die Übergabe selbst enthält keine allgemeine Aufgabenliste. Dafür gibt es die Team-Fokusbox und die Aufgabenübersicht.
+- Hinweise zu Bearbeitungsfrist, Verschlüsselung und Aufbewahrung der Notiz stehen im [Benutzerhandbuch](user-guide.md#übergabenotiz).
 
 **Relevante Dateien:**
 - [`src/core/views/zeitstrom.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/zeitstrom.py) — Zeitstrom-View mit Übergabe-Modus
@@ -289,7 +288,7 @@ Die **Wiedervorlage** (Feld `remind_at`) ist ein **optionales Frühwarn-Datum**,
 
 **Wichtig:** „Aufpoppen" heißt **ausschließlich UI-Badge** in der Inbox/Liste, sobald die Seite aufgerufen wird — es gibt **keine E-Mail, keine Push-Nachricht, keinen Hintergrund-Job**.
 
-**Beispiel:** Eine Aufgabe ist fällig am 30.04., Wiedervorlage am 28.04. Bis zum 27.04. ist sie unauffällig in der Inbox. Am 28.04. erscheint das gelbe „Morgen fällig"-Badge, am 29.04. das orangene „Heute fällig"-Badge.
+**Beispiel:** Eine Aufgabe ist fällig am 30.04., Wiedervorlage am 28.04. Bis einschließlich 26.04. ist sie unauffällig in der Inbox. Am 27.04. erscheint das gelbe „Morgen fällig“-Badge; ab 28.04. bleibt das orange „Heute fällig“-Badge bis zum Abschluss sichtbar.
 
 **Relevante Dateien:**
 - [`src/core/models/workitem.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/workitem.py) — Feld `remind_at`
@@ -307,9 +306,9 @@ Beim Anlegen oder Bearbeiten eines Ereignisses gibt es ein **Datei-Upload-Feld**
 
 | Aspekt | Wert |
 |--------|------|
-| Maximale Dateigröße | Standard 10 MiB pro Datei (Admin kann erhöhen) |
+| Maximale Dateigröße | Standard 10 MiB pro Datei; Anwendungsbetreuung kann bis zur Betreibergrenze `FILE_VAULT_MAX_UPLOAD_BYTES` erhöhen (Vorgabe: 50 MiB); das strengere Limit gilt |
 | Virenscan | ClamAV, automatisch vor der Speicherung |
-| Verschlüsselung | Fernet/AES-128, Schlüssel in der Einrichtungs-Konfiguration |
+| Verschlüsselung | Fernet/AES-128; installationsweiter Schlüsselring `ENCRYPTION_KEYS` (alternativ `ENCRYPTION_KEY`), gemeinsam für alle Einrichtungen; keine getrennten Einrichtungsschlüssel |
 | Offline-Modus | Datei-Anhänge sind offline nicht möglich |
 
 **Wenn der Upload abgelehnt wird:** Meldet das System die Datei als infiziert, ist sie mit hoher Wahrscheinlichkeit tatsächlich befallen — **nicht einfach erneut hochladen**. Informieren Sie Ihre IT/Administration und entfernen Sie die Datei aus Ihrem Arbeitsordner.
@@ -488,48 +487,47 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 
 ### 13a. Was ist Sudo-Mode (Re-Auth-Fenster)?
 
-**Sudo-Mode** ist ein zeitlich begrenztes Re-Authentifizierungs-Fenster für besonders sensible Aktionen. Bevor solche Aktionen ausgeführt werden können, muss der User sein **aktuelles Passwort erneut** eingeben — auch wenn er schon angemeldet ist. Nach erfolgreicher Eingabe ist die Aktion für **15 Minuten** ohne weitere Re-Auth möglich.
+**Sudo-Mode** ist ein zeitlich begrenztes Bestätigungsfenster für geschützte Aktionen. Sie geben Ihr **aktuelles Passwort erneut** ein; bei bestätigtem TOTP-Gerät zusätzlich einen aktuellen TOTP- oder unbenutzten Backup-Code. Nach erfolgreicher Bestätigung gilt das Fenster in dieser Sitzung für standardmäßig **15 Minuten** (`SUDO_MODE_TTL_SECONDS`).
 
 #### Was wird geschützt?
 
-| Bereich | View | Warum sensibel |
-|---------|------|----------------|
-| **DSGVO-Paket** (Übersicht + Download) | `DSGVOPackageView`, `DSGVODocumentDownloadView` | Vollständige Datenschutz-Dokumentation der Einrichtung — TOM, Verfahrensverzeichnis, Datenschutzerklärung etc. |
-| **Personen-Datenexport** (JSON + PDF, DSGVO Art. 15) | `ClientDataExportJSONView`, `ClientDataExportPDFView` | Datenauskunft über die Kernbestände einer Person — Stammdaten, Fälle, Episoden, Ereignisse, Änderungshistorie, Aufgaben, Aktivitäten und Aufbewahrungs-Metadaten, jeweils inkl. der entschlüsselten dynamischen Felder ([Umfang und bewusste Ausschlüsse: Admin-Guide § 7.6](admin-guide.md#umfang-der-auskunft-art-15)) |
-| **2FA deaktivieren** | `MFADisableView` | Entzieht den eigenen 2FA-Schutz — Account wäre danach nur noch passwort-geschützt |
+| Bereich | Geschützte Aktionen |
+|---------|---------------------|
+| **Personen-Datenexport** | JSON- und PDF-Auskunft (Art. 15/20 DSGVO); [Umfang: Admin-Handbuch § 7.6](admin-guide.md#umfang-der-auskunft-art-15) |
+| **Einstellungen** | Öffnen und Speichern der Einrichtungs-Einstellungen |
+| **Zugänge** | Anlegen, Bearbeiten, Setup-Link versenden, Sperre aufheben und zweiten Faktor zurücksetzen |
+| **Eigene zweite Faktoren** | 2FA deaktivieren, Passkey löschen; TOTP-Einrichtung und Passkey-Registrierung, wenn bereits ein bestätigter Faktor besteht |
+| **Django-Admin** (`/admin-mgmt/`) | Zugang zu den Verwaltungsseiten |
+| **Systembereich** | Wartungsmodus, Konto-Sperre aufheben, Audit-Log exportieren |
 
-Andere Aktionen (Personen-Detail anzeigen, Kontakte anlegen, Aufgaben bearbeiten …) brauchen **keinen** Sudo-Mode — die normale Session reicht.
+Das **DSGVO-Dokumentationspaket** (Übersicht und Download öffentlicher Vorlagen) verlangt kein Sudo-Fenster. Auch normale Fallarbeit wie Kontakte anlegen, Aufgaben bearbeiten oder die Personen-Detailansicht öffnen verlangt keines. Rollen- und Datenzugriffsrechte gelten weiterhin; Sudo vergibt keine zusätzlichen Rechte.
 
 #### Wozu — was ist das Bedrohungsmodell?
 
-Schutz gegen **Session-Hijack**. Wenn jemandem das Session-Cookie geklaut wird (Browser ungesperrt liegen gelassen, XSS, gekapertes Geräte-Backup …), darf der Angreifer mit der Session zwar lesen, aber **keine destruktiven oder massendaten-exportierenden Aktionen** ausführen. Dafür müsste er zusätzlich das aktuelle Klartext-Passwort kennen — und das hat er per Annahme nicht.
+Sudo erschwert den Missbrauch einer entwendeten oder unbeaufsichtigten Sitzung bei den **oben genannten Aktionen**. Die Sitzung allein reicht dort außerhalb eines gültigen Sudo-Fensters nicht aus: Zusätzlich werden das aktuelle Passwort und bei bestätigtem TOTP-Gerät ein zweiter Faktor geprüft. Während eines bereits bestätigten Fensters kann die Sitzung diese Schranke passieren.
 
-Sudo-Mode ergänzt damit die normale Session-Authentifizierung, ohne sie zu ersetzen.
+Sudo ergänzt die normale Sitzungsanmeldung und die jeweiligen Rollenprüfungen.
 
 #### Wie läuft der Flow ab?
 
-1. User klickt z.B. „DSGVO-Paket" in der Navigation
-2. `RequireSudoModeMixin` prüft `is_in_sudo(request)` → `False`
-3. Redirect auf `/sudo/?next=/dsgvo/`
-4. Sudo-Form: einzelnes Passwort-Feld + Submit-Button
-5. POST → Server prüft Passwort via `authenticate(...)` → bei Erfolg:
-   - Setzt `session['sudo_until'] = now + 900s`
-   - Schreibt `AuditLog`-Eintrag `SUDO_MODE_ENTERED`
-   - Redirect zurück auf `/dsgvo/`
-6. Innerhalb von 15 Minuten kann der User beliebig viele DSGVO-Dokumente runterladen, ohne erneut prompten zu müssen
-7. Nach Ablauf: nächste sensible Aktion löst erneut den Re-Auth-Prompt aus
+1. Eine berechtigte Person öffnet zum Beispiel den JSON-Datenexport einer Personenakte.
+2. Ohne gültiges Sudo-Fenster leitet die Anwendung auf `/sudo/` weiter; `next` enthält die Adresse des gewünschten Exports.
+3. Die Seite **Re-Authentifizierung erforderlich** fragt **Passwort** ab und bei bestätigtem TOTP-Gerät zusätzlich **Bestätigungscode (2FA)**.
+4. Der Server prüft das Passwort mit `request.user.check_password()` und die Aktivität des Zugangs; gegebenenfalls prüft er anschließend den TOTP- oder Backup-Code.
+5. Bei Erfolg setzt er `session['sudo_until']` entsprechend der konfigurierten Dauer, protokolliert `SUDO_MODE_ENTERED` und leitet zum Export zurück.
+6. Weitere geschützte Aktionen in derselben Sitzung können bis zum Ende des Fensters ohne erneute Bestätigung ausgeführt werden. Danach folgt bei der nächsten geschützten Aktion wieder die Abfrage.
 
-Bei falschem Passwort: HTTP 403, Form bleibt sichtbar, **5 Versuche pro Minute** sind erlaubt (Rate-Limit gegen Brute-Force über die gestohlene Session).
+Falsches Passwort oder falscher Zweitfaktor: HTTP 403 mit sichtbarem Formular und Audit-Eintrag `SUDO_MODE_FAILED`. Erlaubt sind **5 POST-Versuche pro Minute und Zugang**; eine Überschreitung liefert HTTP 429. Sudo-Fehlversuche zählen nicht als fehlgeschlagene Anmeldungen für die Konto-Sperre.
 
 #### Konfiguration
 
 | Parameter | Default | Wirkung |
 |-----------|---------|---------|
-| `SUDO_MODE_ENABLED` | `True` | Toggle pro Umgebung. In `settings/test.py` auf `False`, damit RBAC-Tests ohne Sudo durchlaufen |
+| `SUDO_MODE_ENABLED` | `True` | In Produktion erzwungen: ein falscher Wert verhindert den Start. Tests deaktivieren es standardmäßig für RBAC-Prüfungen |
 | `SUDO_MODE_TTL_SECONDS` | `900` (15 min) | Dauer des Re-Auth-Fensters |
 
 **Relevante Dateien:**
-- [`src/core/services/sudo_mode.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/sudo_mode.py) — `enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`
+- [`src/core/services/security/sudo_mode.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/sudo_mode.py) — `enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`
 - [`src/core/views/sudo_mode.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/sudo_mode.py) — `SudoModeView` (Re-Auth-Form), Rate-Limit
 - [`src/templates/auth/sudo_mode.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/auth/sudo_mode.html) — Form-Template
 - [`src/core/views/dsgvo.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/dsgvo.py), [`src/core/views/clients.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/clients.py), [`src/core/views/mfa.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mfa.py) — Verwendung des Mixins

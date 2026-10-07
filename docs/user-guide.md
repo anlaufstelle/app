@@ -163,7 +163,7 @@ Der Feed fasst vier Quellen des aktuellen Tages zusammen:
 | **Aufgaben** (WorkItems) | Hinweise und Aufgaben mit Priorität und Status |
 | **Hausverbote** | Aktive Hausverbote — zusätzlich als rotes Banner oben |
 
-In der rechten Seitenspalte stehen Ihre **5 dringendsten offenen Aufgaben** (sortiert nach Priorität, Fälligkeit und Erstelldatum) — ein Schnellzugriff während der Schicht.
+In der rechten Seitenspalte steht die Team-Fokusbox **„Team-Aufgaben mit Handlungsbedarf“** mit bis zu **8 Einträgen**, unabhängig von der Zuweisung. Sie gruppiert nach **Überfällig**, **Heute fällig**, **Dringend · Wichtig** und **In Bearbeitung**; jede Aufgabe erscheint nur in der höchsten zutreffenden Druckstufe. Innerhalb der Gruppen wird nach Fälligkeit, Priorität und Erstellzeit sortiert. Offene normale Aufgaben ohne Frist bleiben über **Zur Aufgabenübersicht** erreichbar.
 
 ### Strichliste
 
@@ -194,7 +194,7 @@ Die beiden Stunden sind für die Anwendung wirklich verschiedene Zeitpunkte, die
 
 In der Nacht zur Sommerzeit gibt es die Stunde von 02:00 bis 03:00 dagegen **gar nicht** — dort weist das Formular eine Uhrzeit aus diesem Fenster weiterhin zurück und nennt den Grund. Eine Auswahl gibt es hier nicht: eine Uhrzeit, die es nicht gibt, wird durch keine Angabe real.
 
-Wenn ein Schichtfilter aktiv ist, erscheint oberhalb des Feeds ein aufklappbarer **Schichtübergabe-Block** mit Statistiken (Anzahl Kontakte, neue Aufgaben, neue Personen) und Highlights (Krisen-Ereignisse, neue Hausverbote, dringende Aufgaben).
+Oberhalb des Feeds steht die dauerhaft sichtbare Box **Aktueller Dienst** mit Kontakten, neuen Aufgaben, neuen Personen und wichtigen Vorkommnissen der laufenden Schicht. Sie ist unabhängig vom gewählten Zeitstrom-Filter und erscheint nur, wenn gerade eine eingerichtete Schicht läuft.
 
 #### Übergabenotiz
 
@@ -245,6 +245,8 @@ Alle übrigen Rollen werden von `/start/` direkt an ihren Arbeitsplatz umgeleite
 - **Löschvorschläge** — ausstehende Retention-Vorschläge (führt zum Retention-Dashboard)
 - **Statistik** — Monat/Jahr des letzten Statistik-Snapshots
 
+Daneben steht **Speicher** mit der aktuellen Belegung, dem Kontingent und einem Link zur Dateien-Übersicht.
+
 ---
 
 ## 3. Kontakt dokumentieren (Event erstellen)
@@ -287,9 +289,9 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 
 - **Hochladen:** Im Kontakt-Formular gibt es ein Feld für den Datei-Upload. Wählen Sie eine Datei von Ihrem Gerät aus und speichern Sie das Ereignis wie gewohnt. An Person und Fall läuft es identisch: Datei im Formular wählen, Datensatz speichern.
 - **Virenscan:** Vor dem Speichern wird jede Datei automatisch durch einen Virenscanner (ClamAV) geprüft. Infizierte Dateien werden abgelehnt — Sie erhalten eine Fehlermeldung und das Ereignis wird nicht gespeichert.
-- **Verschlüsselung:** Alle Anhänge werden verschlüsselt gespeichert (Fernet, AES-128-CBC mit HMAC-SHA256). Das bedeutet: Die Datei ist auf dem Server nicht im Klartext lesbar, sondern nur über Anlaufstelle selbst abrufbar.
+- **Verschlüsselung:** Alle Anhänge werden verschlüsselt gespeichert (Fernet, AES-128-CBC mit HMAC-SHA256). Die Schlüssel liegen im installationsweiten Schlüsselring `ENCRYPTION_KEYS` (alternativ `ENCRYPTION_KEY`), gemeinsam für alle Einrichtungen; jede Einrichtung hat also keinen eigenen Schlüsselring. Das bedeutet: Die Datei ist auf dem Server nicht im Klartext lesbar, sondern nur über Anlaufstelle selbst abrufbar.
 - **Bild-Metadaten werden entfernt:** Bei Bildern (JPG, PNG, WebP, TIFF — nicht bei GIF und BMP) werden beim Hochladen die eingebetteten Metadaten gelöscht — vor allem der **GPS-Aufnahmeort** (bei Handyfotos oft der Wohn- oder Aufenthaltsort der betroffenen Person), außerdem Gerätemodell, Aufnahmezeit und das eingebettete Vorschaubild, das den unbeschnittenen Originalausschnitt zeigen kann. Das Bild selbst bleibt unverändert sichtbar, hochkant aufgenommene Fotos bleiben hochkant. Bei PDF- und Office-Dateien passiert das **nicht** — dort kann der Name der bearbeitenden Person in den Dokumenteigenschaften stehen bleiben.
-- **Maximale Größe:** Standardmäßig sind **bis zu 10 MiB pro Datei** erlaubt. Ihre Administration kann diesen Wert anpassen.
+- **Maximale Größe:** Standardmäßig sind **bis zu 10 MiB pro Datei** erlaubt. Ihre Anwendungsbetreuung kann diesen Wert bis zur installationsweiten Betreibergrenze `FILE_VAULT_MAX_UPLOAD_BYTES` anpassen (Vorgabe: 50 MiB). Es gilt das strengere der beiden Limits.
 - **Unterstützte Formate:** PDF, Office-Dokumente und Bilder. Die genaue, für Ihre Einrichtung erlaubte Liste erfragen Sie bitte bei Ihrer Administration.
 - **Herunterladen:** Öffnen Sie die Detailansicht des Ereignisses (bzw. der Person oder des Falls) und klicken Sie auf den Datei-Link. Die Datei wird beim Abruf automatisch entschlüsselt und im Browser ausgeliefert.
 - **Ersetzen (mit Versionshistorie):** Beim Bearbeiten können Sie die bestehende Datei durch eine neue ersetzen. Die alte Datei wird **nicht** gelöscht — sie bleibt als **Vorversion** erhalten und ist in der Detailansicht über ein aufklappbares Akkordeon weiterhin herunterladbar. Vorversionen werden erst beim vollständigen Löschen des Datensatzes entfernt. Das gilt an Ereignis, Person und Fall gleichermaßen.
@@ -539,10 +541,10 @@ Aufgaben kennen zwei unterschiedliche Zeit-Felder:
 
 | Feld | Bedeutung |
 |---|---|
-| **Frist (due_date)** | Fälligkeitstermin — wann die Aufgabe spätestens erledigt sein muss |
-| **Erinnerung (remind_at)** | Zeitpunkt, zu dem Sie benachrichtigt werden möchten — üblicherweise vor der Frist |
+| **Zu erledigen bis** | Fälligkeitstermin — wann die Aufgabe spätestens erledigt sein muss |
+| **Wiedervorlage am** | Datum, ab dessen Vortag die Aufgabe beim Öffnen der Inbox/Liste hervorgehoben wird — üblicherweise vor der Frist |
 
-**Beispiel:** Die Frist ist der 15.04., die Erinnerung setzen Sie auf den 10.04. — so bekommen Sie fünf Tage vorher einen Hinweis und laufen nicht in den Terminstress am Fälligkeitstag.
+**Beispiel:** **Zu erledigen bis** ist der 15.04., **Wiedervorlage am** setzen Sie auf den 10.04. Am 09.04. erscheint das gelbe Badge „Morgen fällig“, ab 10.04. das orange Badge „Heute fällig“ bis zum Abschluss. Es gibt keine E-Mail, Push-Nachricht oder Hintergrundbenachrichtigung.
 
 Beide Felder sind optional. Sie können eine Aufgabe auch nur mit Frist oder nur mit Erinnerung anlegen.
 

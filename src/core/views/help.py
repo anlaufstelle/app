@@ -38,7 +38,10 @@ HELP_PAGES = {
             nav_key="dashboard",
             intro=_("Die Arbeitszentrale bündelt die wichtigsten offenen Punkte für die Leitung."),
             topics=(
-                _("Karten führen direkt zu Aufgaben, Löschanträgen und fälligen Prüfungen."),
+                _(
+                    "Die Karten führen zu Löschanträgen, Löschvorschlägen und Statistik; "
+                    "die Zeile „Speicher“ zur Dateien-Übersicht."
+                ),
                 _("Die Zahlen sind Einstiege in die jeweilige Arbeitsliste, keine eigene Ablage."),
             ),
         ),
