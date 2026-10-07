@@ -8,13 +8,9 @@ E2E_WORKERS ?= 2
 # (test-parallel + Coverage-Gate) pro Gate-Pass.
 CI_TEST_TARGET ?= test-parallel
 
-# Globales Lock fuer ressourcenschwere Laeufe (Refs #1840). EIN fester,
-# absoluter Pfad — absichtlich AUSSERHALB jedes Worktrees: das Lock schuetzt
-# Host-RAM/CPU, die E2E-Datenbank und Port 8844, also genau die Ressourcen, die
-# sich NICHT isolieren lassen. Ein Lock je Worktree waere kein Lock.
-# Unter /work statt /tmp, weil /tmp keinen Reboot ueberlebt; projektpraefixiert,
-# weil der Host /work mit anderen Containern teilt.
-CI_LOCK ?= /work/anlaufstelle-ci.lock
+# One host-wide lock for all worktrees sharing CPU, E2E database and port 8844.
+# Set CI_LOCK consistently for every session when overriding the portable default.
+CI_LOCK ?= $(or $(XDG_RUNTIME_DIR),$(TMPDIR),/tmp)/anlaufstelle-ci.lock
 # 4 h — am laengsten bekannten Gate-Lauf ausgerichtet. Zu kurz hiesse stiller
 # Fehlschlag mitten im Lauf, zu lang hiesse haengende Sessions.
 CI_LOCK_TIMEOUT ?= 14400
@@ -151,7 +147,7 @@ lint:
 
 dco-check: RANGE ?= origin/main..HEAD
 dco-check:
-	$(PYTHON) scripts/dev/check_dco.py $(RANGE)
+	@if [ -f scripts/dev/check_dco.py ]; then $(PYTHON) scripts/dev/check_dco.py $(RANGE); else echo "dco-check: not available in the public source tree (maintainer tool)"; fi
 
 # mypy auf core/services strikt, Rest mit permissiver Baseline (Refs #741).
 # Erweiterung modulweise via [[tool.mypy.overrides]] in pyproject.toml.
@@ -471,30 +467,32 @@ sync-vendor-js:
 
 # Mutation-Testing für core/services + core/forms (Refs #922 / #923).
 # Konfiguration in pyproject.toml [tool.mutmut].
-# Erwartete Laufzeit: 30-60 Minuten — daher nightly per Cron, nicht PR-Pflicht.
+# Full measurements take several hours; the nightly workflow is paused (ADR-029).
 # Maintainer-/dev-only: scripts/dev/run_mutmut.py wird aus dem Public-Snapshot
 # gestrippt (analog die Release-Helfer unten), dieses Target läuft nur im Dev-Repo.
 # Der Wrapper umgeht den ``set_start_method``-Konflikt aus mutmut 3.5 (Refs #930).
 mutation:
-	$(PYTHON) scripts/dev/run_mutmut.py run
+	@if [ -f scripts/dev/run_mutmut.py ]; then $(PYTHON) scripts/dev/run_mutmut.py run; else echo "mutation: not available in the public source tree (maintainer tool)"; fi
 
 # Delta-Mutation (Refs #1953, Maintainer-Entscheid 2026-08-19): nur die seit
 # BASE geaenderten Dateien der Mutations-Scopes mutieren — laeuft am
 # Meilenstein-Checkpoint im Hintergrund statt im Cut-Pfad. Der Voll-Lauf
 # bleibt 1x vor v1.0 Pflicht (docs/testing/mutation-testing.md § Score-Ziele).
 mutation-delta:
-	@[ -n "$(BASE)" ] || { echo "mutation-delta: BASE=<tag/ref> fehlt (z.B. make mutation-delta BASE=v0.81.0)"; exit 2; }
-	$(PYTHON) scripts/dev/run_mutmut.py run --since "$(BASE)"
+	@if [ -f scripts/dev/run_mutmut.py ]; then \
+		[ -n "$(BASE)" ] || { echo "mutation-delta: BASE=<tag/ref> required"; exit 2; }; \
+		$(PYTHON) scripts/dev/run_mutmut.py run --since "$(BASE)"; \
+	else echo "mutation-delta: not available in the public source tree (maintainer tool)"; fi
 
 # Ergebnisse des letzten Mutation-Runs anzeigen (textuell, nicht-interaktiv).
 mutation-report:
-	$(PYTHON) -m mutmut results
+	@if [ -f scripts/dev/run_mutmut.py ]; then $(PYTHON) -m mutmut results; else echo "mutation-report: not available in the public source tree (maintainer tool)"; fi
 
 # Von mutmut strukturell uebersprungene Funktionen ausweisen (Refs #2098).
 # Maintainer-/dev-only: Das Skript wird aus dem Public-Snapshot gestrippt.
 # Braucht keinen Mutationslauf; der Bericht liest ausschliesslich den Quelltext.
 mutation-skipped:
-	$(PYTHON) scripts/dev/mutation_skipped_functions.py
+	@if [ -f scripts/dev/mutation_skipped_functions.py ]; then $(PYTHON) scripts/dev/mutation_skipped_functions.py; else echo "mutation-skipped: not available in the public source tree (maintainer tool)"; fi
 
 # Versions-Stempel des Doc-Sync §1.2 (Refs #1953): schreibt alle "Immer"-
 # Stellen (SECURITY.md-Tabelle, threat-model-Header, README-Banner,
@@ -685,3 +683,12 @@ demo-status:
 # Live-Logs.
 demo-logs:
 	ssh $(DEMO_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.demo.yml --env-file .env.demo logs -f --tail=200 web caddy'
+
+# Contributor target overview without counts that drift with the test suite.
+.PHONY: help
+help:
+	@echo "ci: lint, Django checks, changelog/dependency/audit/drift/translation/i18n/release/vendor/agent/CSS guards, mypy, JS and unit tests"
+	@echo "typecheck: mypy on services, forms, packages and management commands"
+	@echo "test-e2e-smoke: E2E flows marked smoke"
+	@echo "dco-check / mutation*: maintainer tools; availability is checked in public trees"
+	@echo "CI_LOCK: shared host lock; default XDG_RUNTIME_DIR, TMPDIR or /tmp + /anlaufstelle-ci.lock"
