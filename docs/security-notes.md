@@ -1856,6 +1856,7 @@ Die **Account-Lockout-Achse** — die die harte Sperre (`is_locked`, Refs #612)
 erzeugt — zählt Fehlversuche
 **je Quell-IP**. Fremde Falschpasswörter sperren den Login des Opfers von dessen eigener IP damit
 **nicht** mehr; der frühere *harte* Victim-Lockout ist geschlossen.
+Ausgenommen ist die Rolle `super_admin`: Sie wird nie gesperrt (Break-Glass-Konto, `is_locked` in `core.services.security.login_lockout`) und ist deshalb auf das IP- und Username-Limit angewiesen.
 
 ### Trade-off — warum das `10/h`-Username-Limit bleibt
 

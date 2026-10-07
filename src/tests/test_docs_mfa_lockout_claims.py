@@ -105,10 +105,18 @@ LOCKOUT_DOCUMENTS = (
     Path("docs/faq.md"),
     Path("docs/glossar.md"),
     Path("docs/en/glossary.md"),
+    Path("docs/admin-guide.md"),
+    Path("docs/en/admin-guide.md"),
+    Path("docs/security-notes.md"),
+    Path("docs/threat-model.md"),
+    Path("docs/adr/015-mfa-totp.md"),
+    Path("SECURITY.md"),
 )
 LOCKOUT_PROMISE = re.compile(
     r"(?:10[^.\n]{0,100}(?:fehlgeschlagen|failed)[^.\n]{0,180}(?:gesperrt|sperren|locked))"
-    r"|(?:(?:Konto-Sperre|account lock)[^.\n]{0,80}10[^.\n]{0,60}(?:fehlgeschlagen|failed))",
+    r"|(?:(?:Konto-Sperre|account lock)[^.\n]{0,80}10[^.\n]{0,60}(?:fehlgeschlagen|failed))"
+    r"|(?:Account-Lockout|account lockout)[^.\n]{0,40}10/15"
+    r"|Account-Lockout-Achse",
     re.IGNORECASE,
 )
 LOCKOUT_EXCEPTION = re.compile(r"ausgenommen|exempt|nie gesperrt|not (?:be )?locked", re.IGNORECASE)
