@@ -111,6 +111,17 @@ This guide is intended for IT administrators of social service facilities who in
 
 **Mandatory for ongoing operation:** `bash` (not just `sh`), `tar`, `gzip`/`gunzip`, `curl`, and an installed, running cron service for host backups. Optional tools are `jq` for JSON evaluation, `mail` for local alerts, and -- depending on the off-site target -- `rclone`, `aws`, or `scp`.
 
+#### Hardware
+
+Minimum values for a facility with fewer than 30 users:
+
+- 1 vCPU
+- 10 GB of free disk space for images, database, virus signatures and attachments; the local backups under `BACKUP_HOST_DIR` come on top ([§ 3](#3-backup-and-recovery))
+- Docker Engine 24 or newer (see above)
+- an HTTPS-capable domain; the delivered `Caddyfile` obtains the certificate automatically through Let's Encrypt ([Step 3](#step-3-review-the-caddyfile))
+
+**Memory:** `docker-compose.prod.yml` caps every service with `mem_limit`: `clamav` 3 GB, `db` 2 GB, `web` 2 GB, `cron` 1 GB, `redis` 512 MB, `caddy` 512 MB, and the short-lived maintenance service `maintenance` 1 GB. These values are upper limits, not reservations; the actual demand depends mainly on the virus scanner, which keeps its signature database in memory. Measure the usage after the first start with `docker stats` ([§ 5.3](#53-container-status)) and size the host's memory accordingly.
+
 ### Step 1: Download Files
 
 ```bash
@@ -172,7 +183,7 @@ docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:latest \
   -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-`latest` is an example value for a tag that is actually published. Whether a tag is currently pullable is shown by `docker manifest inspect ghcr.io/anlaufstelle/app:<tag>` (exit code 0 = published) or the [GHCR package page](https://github.com/anlaufstelle/app/pkgs/container/app). Before the 1.0 cut, release candidates are NOT published to the registry — the state selected under [`APP_VERSION`](#full-environment-variable-reference) in `docker-compose.prod.yml` therefore regularly does not exist there; in that case use the locally built image from the following section. The entrypoint override is required. If the host optionally has `python3` and the `cryptography` module installed, this alternative command generates the same key:
+`latest` is an example value for a tag that is actually published. Whether a tag is currently pullable is shown by `docker manifest inspect ghcr.io/anlaufstelle/app:<tag>` (exit code 0 = published) or the [GHCR package page](https://github.com/anlaufstelle/app/pkgs/container/app). Release tags are published as images in the registry, including those that GitHub marks as pre-releases. You will find the state selected under [`APP_VERSION`](#full-environment-variable-reference) in `docker-compose.prod.yml` there; without registry access, fall back to the image built locally as described in the following section. The entrypoint override is required. If the host optionally has `python3` and the `cryptography` module installed, this alternative command generates the same key:
 
 ```bash
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
@@ -180,7 +191,7 @@ python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().
 
 **Build the image locally from the Dockerfile (without registry access):**
 
-Before the 1.0 cut, release candidates are not published; anyone who wants the same state as `docker-compose.prod.yml` without registry access builds the image from the delivered `Dockerfile` in the installation directory:
+Anyone who wants the same state as `docker-compose.prod.yml` without registry access builds the image from the delivered `Dockerfile` in the installation directory:
 
 ```bash
 docker build -t ghcr.io/anlaufstelle/app:local .
@@ -225,14 +236,19 @@ The following tables document application settings and operating variables (see 
 | `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | passed from `.env` to `web` |
 | `SUPPORT_CONTACT` | passed from `.env` to `web`; empty shows a generic reference to the facility's application support on the server-error page |
 | `DJANGO_SETTINGS_MODULE`, `POSTGRES_HOST`, `CLAMAV_HOST` | `DJANGO_SETTINGS_MODULE` and `POSTGRES_HOST` are fixed in `docker-compose.prod.yml` to `anlaufstelle.settings.prod` and `db`; `CLAMAV_HOST` is configurable through `.env` |
+| `MEDIA_ROOT`, `BACKUP_DIR`, `GUNICORN_WORKERS`, `GUNICORN_TIMEOUT`, `REDIS_URL`, `SOURCE_CODE_URL`, `SOURCE_CODE_VERSION`, `DJANGO_AUDIT_HWM_PATH`, `DJANGO_HEALTH_BACKUP_REQUIRED`, `DJANGO_HEALTH_DISK_REQUIRED` | passed from `.env` to `web`; without an entry the Compose fallback from the "Default" column of the tables below applies |
+| `REDIS_PASSWORD` | `redis` (password protection); Compose embeds the value in the `REDIS_URL` fallback of `web`, `cron` and `maintenance`, `web` does not receive the variable itself |
+| `APP_VERSION`, `APP_IMAGE_DIGEST` | only select the image (`image:` in `docker-compose.prod.yml`); they do not reach `web` |
+| `ANLAUFSTELLE_PROCESS_ROLE`, `DJANGO_LOAD_DOTENV`, `POSTGRES_APP_USER`, `FILE_UPLOAD_TEMP_DIR` | internal: fixed in `docker-compose.prod.yml` (`POSTGRES_APP_USER` derived from `POSTGRES_USER`); do not control them through `.env` |
 | `DJANGO_HEALTH_DETAIL_TOKEN`, `LOG_FORMAT`, `FILE_VAULT_MAX_UPLOAD_BYTES`, `FILE_VAULT_MAX_UPLOAD_FILES`, `FILE_VAULT_MAX_IMAGE_PIXELS`, `FILE_VAULT_MAX_ARCHIVE_BYTES`, `FILE_VAULT_MAX_ARCHIVE_RATIO`, `FILE_VAULT_MAX_ARCHIVE_ENTRIES`, `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB`, `MAINTENANCE_FLAG_FILE`, `MAINTENANCE_ALLOW_IPS`, `MAINTENANCE_CACHE_TTL`, `MAINTENANCE_RETRY_AFTER`, `SUDO_MODE_TTL_SECONDS`, `DJANGO_INVITE_TOKEN_TIMEOUT`, `DJANGO_PASSWORD_RESET_TIMEOUT` | passed from `.env` to `web` |
 | `MFA_ENFORCED_ROLES_IMMEDIATE`, `MFA_ENFORCED_ROLES_GRACE`, `OTP_WEBAUTHN_RP_ID`, `OTP_WEBAUTHN_ALLOWED_ORIGINS`, `DJANGO_AUDIT_DETAIL_STRICT`, `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT`, `REPORTING_BACKEND_STATEMENT_TIMEOUT_MS` | passed from `.env` to `web`; without an entry in `.env` the application defaults apply, a deliberately empty role list stays empty |
 | `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` | `maintenance`/initialization only, deliberately **not** `web` |
-| `BREACH_*`, `TZ` | `cron`; `TZ` also sets the containers' time base |
+| `BREACH_*` | `cron` and `maintenance` (through `env_file`) |
+| `TZ` | `cron` (Compose fallback `Europe/Berlin`; time zone of the cron schedule) and `maintenance` (through `env_file`); `web` does not receive `TZ` -- the application computes with `TIME_ZONE = "Europe/Berlin"` regardless |
 | `BACKUP_HOST_DIR` | host scripts and volume mount; `BACKUP_DIR` is the read-only target in `web` |
 | `LEGAL_IMPRINT_FILE`, `LEGAL_PRIVACY_FILE` | `web` only with the additional `compose.legal.yml`, as shown under [Mandatory information](#configure-mandatory-information-imprintprivacy) |
 
-> Every variable assigned to `web` in this table reaches the service through the delivered allowlist; `BACKUP_HOST_DIR` acts through host scripts and the volume mount, and `LEGAL_IMPRINT_FILE`/`LEGAL_PRIVACY_FILE` only with the additional `compose.legal.yml`. A `compose.override.yml` is needed only for additional variable names not listed here.
+> Every variable assigned to `web` in this table reaches the service through the delivered allowlist; `APP_VERSION`/`APP_IMAGE_DIGEST` only affect the image selection, `BACKUP_HOST_DIR` acts through host scripts and the volume mount, and `LEGAL_IMPRINT_FILE`/`LEGAL_PRIVACY_FILE` only with the additional `compose.legal.yml`. A `compose.override.yml` is needed only for additional variable names not listed here.
 
 Set configuration values in `.env`, then recreate `web` with the complete **file set**. As soon as a Compose invocation contains at least one explicit `-f`, Compose does not load `compose.override.yml` automatically. Every recreate command below therefore builds the list in the fixed order `docker-compose.prod.yml`, `compose.legal.yml` (if configured), `compose.override.yml` (if configured):
 
@@ -254,7 +270,7 @@ docker compose "${compose_files[@]}" up -d --force-recreate web
 | `EXTERNAL_ORIGIN` | derived from `ALLOWED_HOSTS` | Fixed base of every security-relevant link -- the invitation setup link, the password-reset link, and the account-unlock link. Format `https://host[:port]`, without a path and without a trailing slash; a value carrying a path or missing the scheme is rejected at startup. Those links are therefore **no longer** built from the `Host` header of the incoming request. If `ALLOWED_HOSTS` lists exactly **one** public host name, the application derives `https://<host>` itself and the variable can be omitted -- `localhost`, `127.0.0.1` and `::1` do not count, they are only there for the container health check. With several public hosts or with subdomain patterns only (`.example.de`) it is **mandatory** -- otherwise the application refuses to start (#1967). |
 | `TRUSTED_PROXY_HOPS` | `1` | Number of trusted proxies in front of the app (X-Forwarded-For evaluation). `0` = no proxy, `1` = Caddy only, `2` = CDN + Caddy. A value above `1` only takes effect **together with** `TRUSTED_PROXY_CIDRS` -- otherwise the application never sees more than one entry and falls back to the proxy IP (#1963). |
 | `TRUSTED_PROXY_CIDRS` | empty | Address ranges of the proxies whose incoming `X-Forwarded-For` the reverse proxy may believe -- **space-separated only** (a comma is not a separator, and a netmask is not a valid notation), as CIDR (`203.0.113.0/24`, `2001:db8::/32`), as a single address, or with the keyword `private_ranges`. Leave empty as long as Caddy is the only proxy: Caddy then discards any value sent by the client and sets the header itself. In front of a CDN or load balancer the variable is a **prerequisite** for `TRUSTED_PROXY_HOPS > 1`; the same value populates the Caddy configuration and the application. An unusable range aborts startup (#1963). |
-| `DJANGO_HEALTH_DETAIL_TOKEN` | -- | Token for the `X-Health-Token` header; authorizes monitoring callers to retrieve the detail fields of `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `smtp`, backup age, disk free, `stale_jobs`). Without a token, `/health/` returns only `{"status": ...}` (see [§ 5.1](#51-health-endpoint), #1375). |
+| `DJANGO_HEALTH_DETAIL_TOKEN` | -- | Token for the `X-Health-Token` header; authorizes monitoring callers to retrieve the detail fields of `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `cache`, `smtp`, `last_backup_age_hours`/`backup`/`backup_required`, `disk_free_pct`/`disk`/`disk_required`, `stale_jobs`). Without a token, `/health/` returns only `{"status": ...}` (see [§ 5.1](#51-health-endpoint), #1375). |
 
 **Database (PostgreSQL — three-role model, #902)**
 
@@ -262,10 +278,10 @@ Anlaufstelle separates three DB roles: a hardcoded `postgres` bootstrap superuse
 
 | Name | Default | Description |
 |---|---|---|
-| `POSTGRES_DB` | `anlaufstelle` | Database name. |
-| `POSTGRES_USER` | `anlaufstelle` | App role (Django runtime), `NOSUPERUSER NOBYPASSRLS`. |
-| `POSTGRES_PASSWORD` | `anlaufstelle` | App-role password; at least 32 characters and not a `change-me` placeholder in production. |
-| `POSTGRES_ADMIN_USER` | `anlaufstelle_admin` | Admin role for migrations/seed/retention, `NOSUPERUSER BYPASSRLS`. |
+| `POSTGRES_DB` | -- | Database name (required: Compose passes the value through without a fallback; example in `.env.example`: `anlaufstelle`). |
+| `POSTGRES_USER` | -- | App role (Django runtime), `NOSUPERUSER NOBYPASSRLS` (required: Compose passes the value through without a fallback; example in `.env.example`: `anlaufstelle`). |
+| `POSTGRES_PASSWORD` | -- | App-role password; required, at least 32 characters and not a `change-me` placeholder in production. |
+| `POSTGRES_ADMIN_USER` | -- | Admin role for migrations/seed/retention, `NOSUPERUSER BYPASSRLS` (required, no default; example value in `.env.example`: `anlaufstelle_admin`). |
 | `POSTGRES_ADMIN_PASSWORD` | -- | Admin-role password; at least 32 characters and not a `change-me` placeholder. |
 | `POSTGRES_BOOTSTRAP_PASSWORD` | -- | Password for the `postgres` bootstrap superuser (initial role setup only); at least 32 characters and not a `change-me` placeholder. |
 | `POSTGRES_HOST` | `localhost` (via Compose: `db`) | DB host. |
@@ -314,7 +330,7 @@ The same key then decrypts all existing data; a later rotation follows the secti
 
 | Name | Default | Description |
 |---|---|---|
-| `EMAIL_HOST` | `localhost` | SMTP host for password-reset and invite emails. |
+| `EMAIL_HOST` | Compose: empty (settings without the variable: `localhost`) | SMTP host for password-reset and invite emails. Without an entry in `.env`, `docker-compose.prod.yml` passes an **empty** value: every e-mail then fails to send, and `/health/` reports `disabled` in the `smtp` field without lowering the overall status. Always set it for operation. |
 | `EMAIL_PORT` | `587` | SMTP port. |
 | `EMAIL_HOST_USER` | -- | SMTP user. |
 | `EMAIL_HOST_PASSWORD` | -- | SMTP password. |
@@ -335,7 +351,7 @@ mailer is a development-only backend (console, file, in-memory, dummy). The
 production settings always use the SMTP backend, so startup does not depend on
 a reachable relay. **Without a reachable SMTP server** the application starts,
 but every invitation and password-reset e-mail fails on sending: **Verwaltung → Zugänge** shows the warning that the invitation could not be sent, `/health/`
-reports `unreachable` in the `smtp` field, and only the technical fallback via
+reports `unreachable` in the `smtp` field (`disabled` with an empty `EMAIL_HOST`), and only the technical fallback via
 an initial password remains (see "SMTP requirements and troubleshooting" in the
 [token invite flow](#token-invite-flow-refs-528)). A console backend that only
 writes e-mails to the container log is provided solely in the live-dev and demo
@@ -383,12 +399,22 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 
 | Name | Default | Description |
 |---|---|---|
-| `MEDIA_ROOT` | `<BASE_DIR>/media` | Storage location for encrypted file attachments (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). |
+| `MEDIA_ROOT` | Compose: `/data/media` (settings without the variable: `<BASE_DIR>/media`) | Storage location for encrypted file attachments (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). In the stack, `/data` lives on the persistent `media` volume; a custom value must stay below `/data`, because outside of it the container file system is read-only (`/tmp` is volatile memory). |
 | `FILE_UPLOAD_TEMP_DIR` | Django default (`tempfile.gettempdir()`) | Directory for the plaintext staging buffer of uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, before they are encrypted into the file vault (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). Pinned to `/tmp` (tmpfs/RAM) in the shipped Compose files -- [ops runbook § 5.7a](../ops-runbook.md). |
 | `BACKUP_DIR` | `/backups` (Compose stack), otherwise `<repo>/backups` | Read-only mount target inside the container; the health endpoint and the backup row in the system area read the backup age from it. The host scripts ignore this variable. |
 | `BACKUP_HOST_DIR` | `./backups` | Base directory on the host; relative values are resolved against the repository root. `backup.sh` writes to `daily/`, `weekly/`, and `monthly/` below it; `restore-drill.sh` reads from `daily/`. Compose mounts this directory read-only onto `BACKUP_DIR`, so the container sees the same files. |
-| `APP_VERSION` | `dev` | Release tag of the app image selected by `docker-compose.prod.yml`, e.g. `latest` or a locally built tag (see ["Build the image locally from the Dockerfile"](#1-installation-docker-compose)); whether a tag is published to the registry is shown by `docker manifest inspect ghcr.io/anlaufstelle/app:<tag>` (exit code 0 = published) or the [GHCR package page](https://github.com/anlaufstelle/app/pkgs/container/app) — release candidates before the 1.0 cut are NOT published there. `/health/` exposes the value in the `version` detail field (token/authenticated callers only). |
-| `SUDO_MODE_TTL_SECONDS` | `900` | Validity duration (seconds) of the re-auth window for sensitive actions (MFA disable, setting up 2FA again while a factor exists, adding a passkey, GDPR export, account management including unlocking and resetting the second factor). |
+| `APP_VERSION` | Compose fallback: most recently pinned release tag | Selects the release tag of the app image used by `docker-compose.prod.yml` (e.g. `v1.2.3`). Whether a tag is published is shown by `docker manifest inspect ghcr.io/anlaufstelle/app:<tag>` (exit code 0 = published) or the [GHCR package page](https://github.com/anlaufstelle/app/pkgs/container/app). The variable does not reach the `web` container; `/health/` shows the value baked in at image build time in the `version` detail field (token/authenticated callers only), which is `dev` for a locally built image. |
+| `APP_IMAGE_DIGEST` | empty | Additionally binds the image to an immutable digest; written with a leading `@`, e.g. `@sha256:…`. Compose appends the value unchanged to the tag from `APP_VERSION` (Operations Runbook § 8.4a). |
+| `GUNICORN_WORKERS` | `3` | Number of Gunicorn workers in the `web` service (read by `docker-entrypoint.sh`). |
+| `GUNICORN_TIMEOUT` | `30` | Worker timeout in seconds; must be greater than `CLAMAV_TIMEOUT`. |
+| `REDIS_URL` | Compose: `redis://redis:6379/1` (with `REDIS_PASSWORD` set: `redis://:<password>@redis:6379/1`) | Shared cache for rate limits and health-detail caching. A custom value points to an external Redis; a deliberately empty value (`REDIS_URL=`) switches to the database cache. |
+| `REDIS_PASSWORD` | empty | Password of the delivered `redis` service; URL-safe characters only. When empty, `check --deploy` reports the warning `core.W004` (see [Step 4](#step-4-start-the-stack)). |
+| `SOURCE_CODE_URL` | `https://github.com/anlaufstelle/app` | Source-code link in the footer (AGPL § 13). Forks and modified installations enter their own source mirror here. |
+| `SOURCE_CODE_VERSION` | empty | Optional state (e.g. commit SHA) that the footer shows signed-in users next to the source-code link (truncated to eight characters). |
+| `DJANGO_AUDIT_HWM_PATH` | Compose/settings: empty; `.env.example`: `/data/audit_hwm.json` | Location of the signed audit anchor outside the database; written by `cron`/`maintenance`, backed up by `backup.sh` (see [§ 3.1](#31-encrypted-database-and-media-backup)). Empty = no external anchoring. |
+| `DJANGO_HEALTH_BACKUP_REQUIRED` | `true` | `true`: a missing backup signal lowers `/health/` to `degraded`. Use `false` only for instances without host backups; a stale backup still lowers the status. |
+| `DJANGO_HEALTH_DISK_REQUIRED` | `true` | `true`: free space on `MEDIA_ROOT` that cannot be measured lowers `/health/` to `degraded`. Use `false` only for instances without a measurable `MEDIA_ROOT`; low free space still lowers the status. |
+| `SUDO_MODE_TTL_SECONDS` | `900` | Validity duration (seconds) of the re-auth window for sensitive actions: disabling 2FA, setting up 2FA again while a factor exists, adding or removing a passkey, the person data export (JSON/PDF), **Verwaltung → Zugänge** (create, edit, send invitation, unlock, reset the second factor), the facility **Einstellungen**, the admin interface `/admin-mgmt/`, and in the system area the audit-log export, lifting locks and maintenance mode. |
 | `DJANGO_AUDIT_DETAIL_STRICT` | `false` | `true` aborts an audit write whose detail field contains a key that is not allowed; `false` writes the entry and reports the violation in the log at level ERROR. |
 | `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT` | `10000` | Maximum number of unexpired sessions of the whole installation searched when a sign-in against a lock, a role change, a deactivation or resending the invitation to an account with an initial password ends the sessions of an account. When the search reaches the limit it stops and reports this in the log at level ERROR. What happens to sessions of the account not found depends on the trigger: after a sign-in against a lock and after a role change they stay signed in (after the role change with the new role) until they end through inactivity or the maximum session duration. After a deactivation and after resending the invitation, which makes the initial password unusable, they still end on their next request, because authentication no longer accepts an inactive account or a changed password hash. Resetting the second factor searches no sessions and does not depend on this value. |
 | `REPORTING_BACKEND_STATEMENT_TIMEOUT_MS` | `10000` | Time limit (milliseconds) per database query of a reporting backend; `0` disables the limit. |
@@ -425,15 +451,15 @@ sudo install -d -m 2750 -o root -g 1000 "$BACKUP_HOST_DIR"
 
 The example uses the recommended backup account, `root`, because backups run from root's cron. Group GID 1000 belongs to the container user `appuser`; mode `2750` gives it read and traverse access only and passes the group to new subdirectories. Use `umask 0027` for backup runs so that new directories and files remain readable by that group. Never make backups readable by all users.
 
-`initial-setup.sh` then runs **without `sudo`** as the operating account. With #2219, it checks and requires exactly this directory contract; it does not run `chown` or `chgrp` on an existing directory. An existing `BACKUP_HOST_DIR` with group 1000 and mode `2750` is accepted. If the directory is missing, the script creates it only when the invoking account may set GID 1000 (a group member or root); otherwise it aborts **before the first `up`** and prints `sudo install -d -m 2750 -o root -g 1000 "$BACKUP_HOST_DIR"`. If the group or mode is wrong, it aborts with `sudo chgrp 1000 "$BACKUP_HOST_DIR" && sudo chmod 2750 "$BACKUP_HOST_DIR"` as the correction command. It does not create the directory with root privileges itself. The script then starts the database, waits for readiness, creates the schema through the one-shot job, brings up the full stack, and verifies deployment settings and database roles. Finally it creates the super-admin interactively unless one already exists (see [§ 2.1](#21-initial-installation-create-a-super-admin-bootstrap)).
+`initial-setup.sh` then runs **without `sudo`** as the operating account. With #2219, it checks and requires exactly this directory contract; it does not run `chown` or `chgrp` on an existing directory. An existing `BACKUP_HOST_DIR` with group 1000 and mode `2750` is accepted. If the directory is missing, the script creates it only when the invoking account may set GID 1000 (a group member or root); otherwise it aborts **before the first `up`** and prints `sudo install -d -m 2750 -o <invoking account> -g 1000 "$BACKUP_HOST_DIR"`; if backups run as a root cron job, put `root` there. If the group or mode is wrong, it aborts with `sudo chgrp 1000 "$BACKUP_HOST_DIR" && sudo chmod 2750 "$BACKUP_HOST_DIR"` as the correction command. Both messages show the resolved path instead of the variable; a relative `BACKUP_HOST_DIR` is resolved against the directory of the Compose file. It does not create the directory with root privileges itself. The script then starts the database, waits for readiness, creates the schema through the one-shot job, brings up the full stack, and verifies deployment settings and database roles. Finally it creates the super-admin interactively unless one already exists (see [§ 2.1](#21-initial-installation-create-a-super-admin-bootstrap)).
 
 The script automatically detects a `compose.legal.yml` and a `compose.override.yml` in the same directory as `docker-compose.prod.yml` and appends them in that order -- identical to the full file set from the [environment variable reference](#full-environment-variable-reference) and every other recreate example in this guide. The file list actually used is printed at the start of the output (`Compose-Dateien: …`); without either file the stack runs with the base file only, as before. The virus scanner's very first start downloads the complete signature database, which can take about three minutes and produces no interim output during that time -- the stack is not stuck, `web` is simply reported ready only afterwards. Check progress with `docker compose -f docker-compose.prod.yml logs clamav`.
 
-The script is **idempotent** (a second run is safe: migrations become no-ops, an existing super-admin is skipped) and **fail-loud** -- if a step fails, it exits with a non-zero code and an explanation. Optional environment variables: `COMPOSE_FILE` (default `docker-compose.prod.yml`), `ADMIN_USERNAME`, `ADMIN_EMAIL`, `WAIT_TIMEOUT`, `SKIP_SUPER_ADMIN=1`. It deliberately accepts **no** password -- `create_super_admin` prompts for it interactively ([ADR-018](../adr/018-rollenmodell-superadmin.md)).
+The script is **idempotent** (a second run is safe: migrations become no-ops, an existing super-admin is skipped) and **fail-loud** -- if a step fails, it exits with a non-zero code and an explanation. Optional environment variables: `COMPOSE_FILE` (default `docker-compose.prod.yml`), `ENV_FILE` (default `.env`; passed to every `docker compose` call as `--env-file`), `ADMIN_USERNAME`, `ADMIN_EMAIL`, `WAIT_TIMEOUT`, `SKIP_SUPER_ADMIN=1`. It deliberately accepts **no** password -- `create_super_admin` prompts for it interactively ([ADR-018](../adr/018-rollenmodell-superadmin.md)).
 
 > **Why the role verification belongs here:** if the application's database role runs as a PostgreSQL superuser, Row Level Security is **silently** bypassed -- facility isolation stops working without anything failing. The script checks this fail-loud; in addition, the health endpoint reports that state permanently as `degraded` (see [§ 5.1](#51-health-endpoint)).
 
-**Manual (equivalent, for step-by-step control):** Django migrations do **not** run automatically on `web` service startup — they are a separate one-shot step (Refs #802). For a fresh install, follow this order:
+**Manual (equivalent, for step-by-step control):** Django migrations do **not** run automatically on `web` service startup — they are a separate one-shot step (Refs #802). Create the backup directory beforehand as in the recommended path above with `sudo install -d -m 2750 -o root -g 1000 "$BACKUP_HOST_DIR"`: if it is missing, Docker creates it on the first start as `root:root` with mode `0755`, and a later run of `initial-setup.sh` aborts at the check for group 1000 and mode `2750`. For a fresh install, follow this order:
 
 ```bash
 # 1. Start the database (+ ClamAV) first
@@ -726,9 +752,12 @@ Both generators are additionally separated by their own `key_salt` (a reset toke
 **Resend the setup link:** If the email did not arrive or the token has expired, the application manager can issue a fresh token from the access detail view via **Resend invitation**. The button is only shown while account setup is still pending. For `super_admin` accounts and technical exceptions, the system administrator instead selects the relevant accounts under **Core → Users** in the Django admin and chooses the **Einladung erneut senden (Setup-Link)** action. The action only processes accounts that have an email address and whose setup is still pending; any initial password that may still be usable is revoked.
 
 **SMTP requirements and troubleshooting:** None of these values is technically
-required — without any set, the application starts with `EMAIL_HOST=localhost`,
-port `587`, STARTTLS enabled (`EMAIL_USE_TLS=True`), and the sender
-`noreply@anlaufstelle.app`. Operationally, i.e. for actual delivery, operators
+required — without any set, the application in the Compose stack starts with an
+empty `EMAIL_HOST`, port `587`, STARTTLS enabled (`EMAIL_USE_TLS=True`), and the sender
+`noreply@anlaufstelle.app`. With an empty `EMAIL_HOST` every send fails, and
+`/health/` reports `disabled` in the `smtp` field without lowering the overall
+status -- monitoring that only evaluates `status` therefore does not notice the
+missing configuration. Operationally, i.e. for actual delivery, operators
 must point `EMAIL_HOST` at a reachable relay; adjust `EMAIL_PORT` and
 `EMAIL_USE_TLS` only if they need to deviate from the default.
 `EMAIL_USE_TLS=True` negotiates **STARTTLS** on the configured port. For
@@ -1253,7 +1282,9 @@ For events, persons and cases, **soft-deleted records are rotated too**. That is
 #### Upload Limit
 
 - Per facility: `Settings.max_file_size_mb` (default **10 MB**) -- see [`src/core/models/settings.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py).
-- Global: Django's `DATA_UPLOAD_MAX_MEMORY_SIZE` applies as an additional hard limit. Raise it via ENV or settings override if larger uploads must be allowed.
+- Global per file: `FILE_VAULT_MAX_UPLOAD_BYTES` (default **50 MB**, adjustable in `.env`). The smaller of the two values applies.
+- Per request: Caddy rejects requests above `request_body max_size` (**1100 MiB**, sized for 20 files of 50 MB per field) with HTTP 413. The value in the `Caddyfile` does not follow a changed per-file limit automatically; after raising `FILE_VAULT_MAX_UPLOAD_BYTES` or `FILE_VAULT_MAX_UPLOAD_FILES`, adjust it as well (Operations Runbook § 5.7).
+- Django's `DATA_UPLOAD_MAX_MEMORY_SIZE` (2.5 MB, fixed in `prod.py`) only limits form data without files and is no limit for attachments.
 
 #### Storage Quotas
 
@@ -1289,7 +1320,7 @@ For field work (e.g. streetwork), Anlaufstelle offers a **secure offline mode** 
 | Aspect | Value |
 |---|---|
 | Algorithm | **AES-GCM-256** (WebCrypto-native) |
-| Storage | **IndexedDB** (AES ciphertext only, **never** plaintext) |
+| Storage | **IndexedDB**: contents as AES-GCM ciphertext; index metadata (record and person IDs, edit status, timestamps, send-queue target URLs) in plaintext; the non-extractable key lives in a separate IndexedDB (`anlaufstelle-crypto`) |
 | Key derivation | **PBKDF2** -- 600,000 iterations, SHA-256 |
 | KDF input | User password + `User.offline_key_salt` (16 bytes, per-user, stored server-side) |
 | Key lifetime | **Persisted** as a non-extractable `CryptoKey` (`extractable: false`) in its own IndexedDB (`anlaufstelle-crypto`) -- survives tab close and reload; coupled to the server session age (idle key wipe), see "Consequences for Admins" |
@@ -2456,5 +2487,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 6e85bdb38a63814c7f9b9e9e0b10f059b8959a38 -->
+<!-- source-hash: a17a46c597985921b0dbd7bbcd963badd52f751a -->
 <!-- translation-date: 2026-10-05 -->
