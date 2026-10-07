@@ -523,22 +523,27 @@ Audit-Anker) vorliegt. Ein abgebrochener Lauf laesst den Zustand auf
 `.in-progress-*`-Verzeichnis stammt von einem hart abgebrochenen Lauf und
 kann geloescht werden.
 
-**Dateirechte:** `backup.sh` setzt `umask 027`, unabhängig von der umask des
-Aufrufers (Cron, `sudo`): Dateien sind `0640`, vom Skript angelegte
-Verzeichnisse `0750`, Eigentümer ist das Konto, unter dem das Skript läuft
+**Dateirechte:** `backup.sh` setzt die Rechte unabhängig von der umask des
+Aufrufers (Cron, `sudo`): Dump, Medienarchiv, Audit-Anker und die
+`.hmac`-Signaturen sind `0600`, nur das Manifest ist `0640`, vom Skript angelegte
+Verzeichnisse `0750`; Eigentümer ist das Konto, unter dem das Skript läuft
 (empfohlen: root). Andere (weder Eigentümer noch Gruppe) bekommen nie ein Recht.
 Vor der Veröffentlichung prüft es, dass keine Datei des Satzes ein Recht für
-Andere trägt (Meldung `File modes checked (backup set): … none accessible to
-others.`); sonst bricht es mit Exit 1 ab und veröffentlicht den Satz nicht.
+Andere und außer dem Manifest keine ein Gruppenrecht trägt (Meldung
+`File modes checked (backup set): … only the manifest readable by the group, none
+accessible to others.`); sonst bricht es mit Exit 1 ab und veröffentlicht den
+Satz nicht.
 Die Weekly-/Monthly-Kopien entstehen in einem Zwischenverzeichnis, werden dort
 mit derselben Prüfung kontrolliert und erst danach (Manifest zuletzt) in
 `weekly/` bzw. `monthly/` verschoben; scheitert die Prüfung, wird von der Kopie
 nichts veröffentlicht, frühere Kopien bleiben unberührt (der bereits
-veröffentlichte Daily-Satz bleibt bestehen). Die Gruppe darf lesen, damit der
-`web`-Container (UID/GID 1000) das Manifest für die Backup-Anzeige in `/health/`,
-Systemübersicht und Compliance liest. Das setzt das Verzeichnis-Setup aus dem
-Admin-Handbuch voraus: `BACKUP_HOST_DIR` mit `root:1000` und Modus `2750` (die
-Gruppe 1000 erben dann die neuen Unterverzeichnisse und Dateien). Fehlt die
+veröffentlichte Daily-Satz bleibt bestehen). Die Gruppe darf das Manifest lesen,
+damit der `web`-Container (UID/GID 1000) es für die Backup-Anzeige in `/health/`,
+Systemübersicht und Compliance auswertet; die übrigen Dateien prüft die Anzeige
+nur auf Vorhandensein, ihr Inhalt bleibt dem Eigentümer vorbehalten. Das setzt das
+Verzeichnis-Setup aus dem Admin-Handbuch voraus: `BACKUP_HOST_DIR` mit `root:1000`
+und Modus `2750` (die Gruppe 1000 erben dann die neuen Unterverzeichnisse und
+Dateien). Fehlt die
 Gruppe 1000 am Verzeichnis, bleibt die Anzeige auf „fehlt/unbekannt“. Ein bereits
 vorhandenes `BACKUP_HOST_DIR` behält seinen Modus.
 
@@ -1519,7 +1524,7 @@ und `restore-drill.sh --prod` verlangen das Manifest ebenso. Fehlt es, den
 vollstaendigen Satz beschaffen (Dump, Medienarchiv und Manifest, jeweils mit
 `.hmac`-Sidecar; [Disaster-Recovery §5](disaster-recovery.md#5-off-site-backup-beschaffen)).
 
-`backup.sh` legt die Dateien mit `0640` an (Verzeichnisse `0750`, kein Recht fuer Andere); sie gehoeren dem Konto, unter dem es laeuft, im empfohlenen Setup root — der Drill liest sie daher **als root**. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`). Der Prod-Zweig liest `BACKUP_HOST_DIR` ausschließlich aus der `.env` im Compose-Verzeichnis; ein gleichnamiger Wert im `sudo env`-Praefix wird beim Laden der Datei ueberschrieben und ist daher kein Override. Liegt die Installation nicht unter dem Default `/opt/anlaufstelle`, muss `COMPOSE_DIR` auf das Verzeichnis mit `.env` und `docker-compose.prod.yml` zeigen:
+`backup.sh` legt die Dateien mit `0600` an (nur das Manifest `0640`, Verzeichnisse `0750`, kein Recht fuer Andere); sie gehoeren dem Konto, unter dem es laeuft, im empfohlenen Setup root — der Drill liest sie daher **als root**. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`). Der Prod-Zweig liest `BACKUP_HOST_DIR` ausschließlich aus der `.env` im Compose-Verzeichnis; ein gleichnamiger Wert im `sudo env`-Praefix wird beim Laden der Datei ueberschrieben und ist daher kein Override. Liegt die Installation nicht unter dem Default `/opt/anlaufstelle`, muss `COMPOSE_DIR` auf das Verzeichnis mit `.env` und `docker-compose.prod.yml` zeigen:
 
 ```bash
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh           # Format auto-erkennen
@@ -1562,7 +1567,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 ```
 
 **Host-Cron-Vorschlag (keine automatische Installation):** Die Backup-Dateien
-sind `0640` (kein Recht fuer Andere) und gehoeren dem Backup-Konto (empfohlen: root); den Einzeiler
+sind `0600` (nur das Manifest `0640`, kein Recht fuer Andere) und gehoeren dem Backup-Konto (empfohlen: root); den Einzeiler
 deshalb in der **Root-Crontab des Hosts** eintragen, nicht im `cron`-Sidecar und nicht in einer unprivilegierten
 Benutzer-Crontab. Er laeuft am ersten Tag jedes Quartals um 03:30 Uhr nach dem
 02:00-Uhr-Backup. Das Flag `--prod` bleibt gesetzt: ohne Angabe erkennt das

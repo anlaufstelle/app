@@ -522,18 +522,21 @@ is bound) are present. An aborted run leaves the state at "missing/unknown"
 instead of "current". A leftover `.in-progress-*` directory comes from a hard
 abort and can be deleted.
 
-**File modes:** `backup.sh` sets `umask 027`, regardless of the caller's umask
-(cron, `sudo`): files are `0640`, directories it creates are `0750`, and the owner
-is the account the script runs as (recommended: root). Others (neither owner nor
-group) never get a permission. Before publication it checks that no file of the set
-carries a permission for others (message `File modes checked (backup set): … none
-accessible to others.`); otherwise it aborts with exit 1 and does not publish the
-set. The weekly/monthly copies are created in a staging directory, checked there
+**File modes:** `backup.sh` sets the modes regardless of the caller's umask
+(cron, `sudo`): dump, media archive, audit anchor and the `.hmac` signatures are
+`0600`, only the manifest is `0640`, directories it creates are `0750`, and the
+owner is the account the script runs as (recommended: root). Others (neither owner
+nor group) never get a permission. Before publication it checks that no file of the
+set carries a permission for others and none except the manifest a group permission
+(message `File modes checked (backup set): … only the manifest readable by the
+group, none accessible to others.`); otherwise it aborts with exit 1 and does not
+publish the set. The weekly/monthly copies are created in a staging directory, checked there
 with the same check, and only then moved (manifest last) into `weekly/` or
 `monthly/`; if the check fails, nothing of the copy is published and earlier
-copies stay untouched (the already published daily set remains). The group may read so that the
-`web` container (UID/GID 1000) reads the manifest for the backup indicator in
-`/health/`, the system overview and compliance. This relies on the directory setup
+copies stay untouched (the already published daily set remains). The group may read
+the manifest so that the `web` container (UID/GID 1000) evaluates it for the backup
+indicator in `/health/`, the system overview and compliance; the indicator only
+checks that the other files exist, their content stays with the owner. This relies on the directory setup
 from the admin guide: `BACKUP_HOST_DIR` with `root:1000` and mode `2750` (new
 subdirectories and files then inherit group 1000). Without group 1000 on the
 directory, the indicator stays at "missing/unknown". An existing `BACKUP_HOST_DIR`
@@ -1507,7 +1510,7 @@ the manifest just the same. If it is missing, obtain the complete set (dump, med
 archive and manifest, each with its `.hmac` sidecar;
 [Disaster Recovery §5](../disaster-recovery.md#5-off-site-backup-beschaffen)) (German).
 
-`backup.sh` creates the files with `0640` (directories `0750`, no permission for others); they belong to the account it runs as, in the recommended setup root — the drill therefore reads them **as root**. Without a flag, the script auto-detects the format; explicitly via `--dev`/`--prod` (or `DRILL_FORMAT=dev|prod`). The prod branch reads `BACKUP_HOST_DIR` exclusively from the `.env` file in the Compose directory; a value of the same name in the `sudo env` prefix is overwritten when that file is loaded and is therefore not an override. If the installation is not under the default `/opt/anlaufstelle`, `COMPOSE_DIR` must point to the directory containing `.env` and `docker-compose.prod.yml`:
+`backup.sh` creates the files with `0600` (only the manifest `0640`, directories `0750`, no permission for others); they belong to the account it runs as, in the recommended setup root — the drill therefore reads them **as root**. Without a flag, the script auto-detects the format; explicitly via `--dev`/`--prod` (or `DRILL_FORMAT=dev|prod`). The prod branch reads `BACKUP_HOST_DIR` exclusively from the `.env` file in the Compose directory; a value of the same name in the `sudo env` prefix is overwritten when that file is loaded and is therefore not an override. If the installation is not under the default `/opt/anlaufstelle`, `COMPOSE_DIR` must point to the directory containing `.env` and `docker-compose.prod.yml`:
 
 ```bash
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh           # auto-detect the format
@@ -1550,7 +1553,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 ```
 
 **Host cron suggestion (not installed automatically):** The backup files are
-mode `0640` (no permission for others) and owned by the backup account (recommended: root). Therefore, put this one-liner in the **host's
+mode `0600` (only the manifest `0640`, no permission for others) and owned by the backup account (recommended: root). Therefore, put this one-liner in the **host's
 root crontab**, not in the `cron` sidecar or an unprivileged user's crontab. It
 runs at 03:30 on the first day of each quarter, after the 02:00 backup. Keep
 the `--prod` flag: without it the script auto-detects the format and would
@@ -3224,4 +3227,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 3d64dd03ea46d79508d649888d70c7cb42ddec47 -->
+<!-- source-hash: 6df7f991fef0ccf3298a1be638bef7dbfdaf78fd -->

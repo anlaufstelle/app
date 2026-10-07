@@ -1,8 +1,10 @@
-"""``backup.sh`` never writes files for "others" and ``--verify`` reports what it did and did not check.
+"""``backup.sh`` keeps backup files to their owner and ``--verify`` reports what it did and did not check.
 
 Backups hold Art. 9 data, so every file and directory a run creates must carry no
-permission for others, whatever umask the caller (cron, sudo) has. The group may
-read: the ``web`` service reads the manifest through the group to show the last backup.
+permission for others, whatever umask the caller (cron, sudo) has. Dump, media
+archive, audit anchor and the ``.hmac`` signatures are for the owner only (``0600``).
+The group may read the manifest alone (``0640``, directories ``0750``): the ``web``
+service reads it through the group to show the last backup.
 ``--verify`` is a sample, not a row-by-row comparison; its output must say so.
 """
 
@@ -159,18 +161,27 @@ def _mode(path: Path) -> int:
     return stat.S_IMODE(path.stat().st_mode)
 
 
-def test_backup_gives_group_read_but_nothing_to_others(tmp_path: Path) -> None:
-    result, backups = _run_backup(tmp_path)
+def _expected_mode(path: Path) -> int:
+    """Only the manifest is group-readable; every other artefact is for the owner alone."""
+    return 0o640 if path.name.endswith(".manifest") else 0o600
+
+
+def test_backup_gives_group_read_only_to_the_manifest(tmp_path: Path) -> None:
+    result, backups = _run_backup(tmp_path, DJANGO_AUDIT_HWM_PATH="/data/audit_hwm.json")
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     files = [path for path in backups.rglob("*") if path.is_file()]
-    assert files, "the run must have published a backup set"
-    # Group read is deliberate (the web service reads the manifest); nobody else gets anything.
-    odd_files = {str(path.relative_to(backups)): oct(_mode(path)) for path in files if _mode(path) != 0o640}
+    names = {path.name for path in files}
+    assert any(name.endswith(".manifest") for name in names), names
+    assert any(name.startswith("audit_hwm-") for name in names), names
+    # Group read is deliberate for the manifest (the web service reads it); nothing else.
+    odd_files = {
+        str(path.relative_to(backups)): oct(_mode(path)) for path in files if _mode(path) != _expected_mode(path)
+    }
     assert odd_files == {}
     directories = [backups, *[path for path in backups.rglob("*") if path.is_dir()]]
-    wide_dirs = {str(path.relative_to(backups)): oct(_mode(path)) for path in directories if _mode(path) & 0o007}
-    assert wide_dirs == {}
+    odd_dirs = {str(path.relative_to(backups)): oct(_mode(path)) for path in directories if _mode(path) != 0o750}
+    assert odd_dirs == {}
 
 
 def test_backup_reports_the_file_mode_check(tmp_path: Path) -> None:
@@ -178,7 +189,7 @@ def test_backup_reports_the_file_mode_check(tmp_path: Path) -> None:
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "File modes checked (backup set)" in result.stdout
-    assert "none accessible to others" in result.stdout
+    assert "only the manifest readable by the group, none accessible to others" in result.stdout
 
 
 def test_weekly_and_monthly_copies_have_nothing_for_others_and_are_checked(tmp_path: Path) -> None:
@@ -188,12 +199,17 @@ def test_weekly_and_monthly_copies_have_nothing_for_others_and_are_checked(tmp_p
     for stage in ("weekly", "monthly"):
         copies = [path for path in (backups / stage).iterdir() if path.is_file()]
         assert len(copies) == 6, f"{stage}: {[path.name for path in copies]}"
-        assert {oct(_mode(path)) for path in copies} == {"0o640"}
-        assert f"File modes checked ({stage} copy): 6 files, none accessible to others." in result.stdout
+        assert {path.name: oct(_mode(path)) for path in copies} == {
+            path.name: oct(_expected_mode(path)) for path in copies
+        }
+        assert (
+            f"File modes checked ({stage} copy): 6 files, only the manifest readable by the group,"
+            " none accessible to others." in result.stdout
+        )
 
 
-@pytest.mark.parametrize("mode", ["640", "660", "600"])
-def test_a_published_set_without_rights_for_others_passes_the_check(tmp_path: Path, mode: str) -> None:
+@pytest.mark.parametrize("mode", ["600", "400"])
+def test_a_published_set_with_owner_only_artefacts_passes_the_check(tmp_path: Path, mode: str) -> None:
     result, backups = _run_backup(
         tmp_path,
         DJANGO_AUDIT_HWM_PATH="/data/audit_hwm.json",
@@ -205,8 +221,12 @@ def test_a_published_set_without_rights_for_others_passes_the_check(tmp_path: Pa
     assert any((backups / "daily").iterdir())
 
 
-@pytest.mark.parametrize("mode", ["644", "604", "641"])
-def test_a_published_set_with_any_right_for_others_fails_the_run_before_publication(tmp_path: Path, mode: str) -> None:
+# A file system that ignores the umask (default ACL) can leave group or other rights
+# on an artefact; any of them stops the run before anything is published.
+@pytest.mark.parametrize("mode", ["640", "660", "610", "644", "604", "641"])
+def test_a_published_set_with_rights_beyond_the_owner_fails_the_run_before_publication(
+    tmp_path: Path, mode: str
+) -> None:
     result, backups = _run_backup(
         tmp_path,
         DJANGO_AUDIT_HWM_PATH="/data/audit_hwm.json",
@@ -223,11 +243,12 @@ def _daily_files(backups: Path) -> list[str]:
     return sorted(path.name for path in (backups / "daily").iterdir() if path.is_file())
 
 
-def test_a_retention_copy_with_rights_for_others_is_not_published_at_all(tmp_path: Path) -> None:
-    result, backups = _run_backup(tmp_path, retention_day=True, TEST_CP_MODE="644")
+@pytest.mark.parametrize("mode", ["644", "640"])
+def test_a_retention_copy_with_rights_beyond_the_owner_is_not_published_at_all(tmp_path: Path, mode: str) -> None:
+    result, backups = _run_backup(tmp_path, retention_day=True, TEST_CP_MODE=mode)
 
     assert result.returncode != 0
-    assert "unexpected file mode 644" in result.stderr
+    assert f"unexpected file mode {mode}" in result.stderr
     # Nothing of the rejected copy is visible, not even a staging directory.
     assert list((backups / "weekly").iterdir()) == []
     assert list((backups / "monthly").iterdir()) == []
@@ -252,7 +273,7 @@ def test_a_rejected_retention_copy_leaves_the_earlier_copies_untouched(tmp_path:
     assert {path.name: path.read_bytes() for path in (backups / "weekly").iterdir()} == before
 
 
-def test_a_repeated_retention_copy_replaces_wide_leftovers_with_owner_group_files(tmp_path: Path) -> None:
+def test_a_repeated_retention_copy_replaces_wide_leftovers_with_owner_only_files(tmp_path: Path) -> None:
     stamp = "2026-09-06_020000"
     first, backups = _run_backup(tmp_path, retention_day=True, TEST_FIXED_TIMESTAMP=stamp)
     assert first.returncode == 0, first.stderr
@@ -266,7 +287,9 @@ def test_a_repeated_retention_copy_replaces_wide_leftovers_with_owner_group_file
     for stage in ("weekly", "monthly"):
         copies = [path for path in (backups / stage).iterdir()]
         assert len(copies) == 6
-        assert {oct(_mode(path)) for path in copies} == {"0o640"}
+        assert {path.name: oct(_mode(path)) for path in copies} == {
+            path.name: oct(_expected_mode(path)) for path in copies
+        }
 
 
 def test_without_the_cron_sidecar_the_set_carries_no_audit_anchor(tmp_path: Path) -> None:

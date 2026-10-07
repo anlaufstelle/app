@@ -2,9 +2,11 @@
 set -euo pipefail
 
 # Backups hold Art. 9 data: files and directories this script creates carry no
-# permission for others, whatever umask the caller (cron, sudo) has. The group
-# may read (files 0640, directories 0750) so the web service can read the
-# manifest for the "last backup" status.
+# permission for others, whatever umask the caller (cron, sudo) has. Directories
+# are 0750 so the web service can reach the manifest through the group; before
+# the first backup file is written the umask drops to 077, so dump, media archive,
+# audit anchor and .hmac signatures are 0600. Only the manifest is made 0640: the
+# web service reads it for the "last backup" status.
 umask 027
 
 # Anlaufstelle Backup-Skript
@@ -49,16 +51,21 @@ source "${SCRIPT_DIR}/lib/backup-set.sh"
 # shellcheck source=scripts/ops/lib/env-file.sh
 source "${SCRIPT_DIR}/lib/env-file.sh"
 
-# check_file_modes <label> <file>...: no file may carry a permission for others.
-# Reports each violation on stderr and returns 1 if there is any. A file system
-# with a default ACL can ignore the umask, so the result is checked, not assumed.
+# check_file_modes <label> <file>...: no file may carry a permission for others,
+# and only the manifest may be readable (not writable) by the group. Reports each
+# violation on stderr and returns 1 if there is any. A file system with a default
+# ACL can ignore the umask, so the result is checked, not assumed.
 check_file_modes() {
-    local label="$1" file mode checked=0 failed=0
+    local label="$1" file mode forbidden checked=0 failed=0
     shift
     for file in "$@"; do
         mode="$(stat -c '%a' "$file")"
-        if (( 8#${mode} & 8#007 )); then
-            echo "ERROR: unexpected file mode ${mode} (no permission for others allowed): ${file}" >&2
+        forbidden=8#077
+        if [[ "$file" == *.manifest ]]; then
+            forbidden=8#027
+        fi
+        if (( 8#${mode} & forbidden )); then
+            echo "ERROR: unexpected file mode ${mode} (owner only; the manifest may be group-readable; nothing for others): ${file}" >&2
             failed=1
         fi
         checked=$((checked + 1))
@@ -66,7 +73,7 @@ check_file_modes() {
     if [[ "$failed" -ne 0 ]]; then
         return 1
     fi
-    echo "File modes checked (${label}): ${checked} files, none accessible to others."
+    echo "File modes checked (${label}): ${checked} files, only the manifest readable by the group, none accessible to others."
 }
 
 # .env laden falls vorhanden
@@ -271,6 +278,9 @@ fi
 cleanup_work_dir() { rm -rf "$WORK_DIR"; }
 trap cleanup_work_dir EXIT
 
+# All directories exist (0750); every file from here on is for the owner only.
+umask 077
+
 BACKUP_FILE="${WORK_DIR}/anlaufstelle_${TIMESTAMP}.sql.gz.enc"
 MEDIA_FILE="${WORK_DIR}/anlaufstelle_${TIMESTAMP}_media.tar.gz.enc"
 MANIFEST_FILE="${WORK_DIR}/anlaufstelle_${TIMESTAMP}.manifest"
@@ -293,6 +303,9 @@ for tbl in "${MANIFEST_TABLES[@]}"; do
     fi
     printf 'table_%s=%s\n' "$tbl" "$MANIFEST_COUNT" >> "$MANIFEST_FILE"
 done
+# The manifest holds row counts and hashes, no personal data; the web service
+# reads it through the group for the "last backup" status.
+chmod 0640 "$MANIFEST_FILE"
 
 # DB-Backup
 echo "Erstelle DB-Backup: ${BACKUP_FILE}"
@@ -374,7 +387,7 @@ fi
 } >> "$MANIFEST_FILE"
 backup_write_hmac "$MANIFEST_FILE"
 
-# Nothing is published unless no artefact of the set carries a permission for others.
+# Nothing is published unless every artefact of the set passes check_file_modes.
 # The work directory itself must not be accessible to others either.
 WORK_DIR_MODE="$(stat -c '%a' "$WORK_DIR")"
 # The last three digits are the permission bits; a leading digit is setgid inherited from the parent.
@@ -417,7 +430,8 @@ publish_retention_copy() {
     local staged=()
     stage="${WORK_DIR}/stage-${kind}"
     mkdir "$stage"
-    cp "${payload[@]}" "${sealed[@]}" "${stage}/"
+    # --preserve=mode keeps the group-readable manifest at 0640 under umask 077.
+    cp --preserve=mode "${payload[@]}" "${sealed[@]}" "${stage}/"
     for artifact in "${payload[@]}" "${sealed[@]}"; do
         staged+=("${stage}/${artifact##*/}")
     done
