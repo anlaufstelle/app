@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Atomare Rotation der drei PostgreSQL-Rollen-Passwoerter (Refs #1964).
 #
-# Default: Produktions-Stack im Repo-Root. Fuer andere Stacks explizit aufrufen:
+# Default: production stack in the repo root. Call explicitly for other stacks:
 #   COMPOSE_FILE=<compose-file> ENV_FILE=<env-file> \
 #     ./scripts/ops/rotate-db-passwords.sh
 #

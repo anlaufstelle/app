@@ -102,12 +102,11 @@ ENV_FILE="${ENV_FILE:-.env}"
 if [[ "$ENV_FILE" != /* ]]; then
     ENV_FILE="${PROJECT_DIR}/${ENV_FILE}"
 fi
-# Refs #2086: `--env-file` steuert bei Compose NUR die Interpolation. Services
-# mit service-level `env_file:` (staging: maintenance/cron) laden davon
-# unbeeindruckt ihren eigenen Pfad. Der wird dort als
-# `${STAGING_ENV_FILE:-<default>}` geschrieben; die exportierte Shell-
-# Variable schlaegt die --env-file-Werte und zieht ihn auf dieselbe Datei.
-# Fuer Stacks ohne diese Variable ist der Export folgenlos.
+# Refs #2086: for Compose, `--env-file` ONLY drives interpolation. Services
+# with a service-level `env_file:` load their own path regardless. That path
+# is written as `${STAGING_ENV_FILE:-<default>}`; the exported shell variable
+# overrides the --env-file values and points it at the same file.
+# For stacks without this variable the export has no effect.
 export STAGING_ENV_FILE="$ENV_FILE"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-180}"
 
@@ -171,7 +170,7 @@ docker compose version >/dev/null 2>&1 ||
 # automatisch mitgeschuetzt.
 # Wert einer Variablen so aus der Env-Datei lesen, wie Compose ihn sieht.
 # Die Regeln sind nicht geraten, sondern mit `docker compose config` gemessen
-# (Refs #2086, Fix-Runde 6):
+# (Refs #2086):
 #   - fuehrende Leerzeichen und ein `export `-Praefix sind erlaubt,
 #   - bei mehrfacher Definition gewinnt die LETZTE,
 #   - umschliessende Anfuehrungszeichen gehoeren nicht zum Wert.
