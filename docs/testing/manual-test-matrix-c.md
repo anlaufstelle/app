@@ -536,7 +536,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C | — | `src/tests/test_rls.py`, `src/tests/test_scope.py` |
+| Security | admin + admin_1 | C | — | `src/tests/test_rls.py`, `src/tests/test_scope.py` |
 
 **Code-Referenz:**
 - `src/core/middleware/facility_scope.py`
@@ -546,7 +546,7 @@
 
 **Schritte:**
 1. **Profil A — `admin`:** Eine Klient:in aufrufen, UUID aus URL kopieren.
-2. **Profil B — `admin_2`:** URL `/clients/<uuid>/` mit der UUID aus Profil A öffnen.
+2. **Profil B — `admin_1`:** URL `/clients/<uuid>/` mit der UUID aus Profil A öffnen.
 3. Erwartung: 404 (Klient:in „nicht gefunden") — nicht 403.
 4. AuditLog: kein Audit-Eintrag (Datensatz existiert für Profil B nicht — RLS).
 
@@ -562,7 +562,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C | — | `src/tests/test_rls.py` |
+| Security | admin + admin_1 | C | — | `src/tests/test_rls.py` |
 
 **Schritte:** Wie AUD-SEC-RLS-01, aber mit Case statt Client.
 
@@ -576,7 +576,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C | — | `src/tests/test_rls.py` |
+| Security | admin + admin_1 | C | — | `src/tests/test_rls.py` |
 
 **Schritte:** Wie AUD-SEC-RLS-01, aber mit Event.
 
@@ -588,7 +588,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C | — | `src/tests/test_rls.py` |
+| Security | admin + admin_1 | C | — | `src/tests/test_rls.py` |
 
 **Schritte:** Wie AUD-SEC-RLS-01, aber mit WorkItem.
 

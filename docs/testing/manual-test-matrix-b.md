@@ -1312,7 +1312,7 @@
 **Views:** `src/core/views/clients.py` (`ClientListView`, `ClientCreateView`, `ClientDetailView`, `ClientUpdateView`, `ClientAutocompleteView`, `ClientDataExportJSONView`, `ClientDataExportPDFView`) + `src/core/views/client_deletion.py` (`ClientDeleteRequestView`, `ClientTrashView`, `ClientRestoreView`, `ClientAnonymizeView`)  
 **Services:** `src/core/services/clients.py` (`create_client`, `update_client`, `request_client_deletion`, `restore_client`, `track_client_visit`, `get_pending_deletion_request`, `pending_deletion_client_ids`, `anonymize_client_now`)  
 **E2E-Coverage:** `test_clients_search.py`, `test_client_edit.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py`, `test_client_autocomplete_recency.py`, `test_client_export.py`, `test_min_contact_stage_anonymous.py`, `test_contact_stage.py`, `test_fuzzy_search.py`  
-**Spezial-Setup:** Cross-Facility-Tests benötigen `make seed FACILITIES=2` und 2 parallele Browser-Profile (`admin` in Facility 1, `admin_2` in Facility 2). DSGVO-Exporte erfordern Sudo-Re-Auth (Refs #683).
+**Spezial-Setup:** Cross-Facility-Tests benötigen `.venv/bin/python src/manage.py seed --flush --scale medium` und 2 parallele Browser-Profile (`admin` in Facility 1, `admin_1` in Facility 2). DSGVO-Exporte erfordern Sudo-Re-Auth (Refs #683).
 
 ---
 
@@ -1325,7 +1325,7 @@
 
 **Vorbereitung:**
 - Mit `fachkraft` / `anlaufstelle2026` einloggen.
-- Seed mit `make seed` (Standard-Scale legt mind. 25 Klient:innen an).
+- Seed mit `.venv/bin/python src/manage.py seed --flush --scale medium` (40 Personen je Einrichtung; Standard-Scale `small` legt nur 7 an).
 
 **Schritte:**
 1. `/clients/` aufrufen.
@@ -1698,17 +1698,17 @@
 
 ---
 
-### TC-ID: ENT-CLIENT-13 — Cross-Facility-Verbot: admin_2 sieht Klient:in von admin nicht
+### TC-ID: ENT-CLIENT-13 — Cross-Facility-Verbot: admin_1 sieht Klient:in von admin nicht
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / RLS | admin (F1) + admin_2 (F2) | C | — | `test_clients.py`, `test_rls.py` |
+| Klient:innen / RLS | admin (F1) + admin_1 (F2) | C | — | `test_clients.py`, `test_rls.py` |
 
-**Voraussetzung:** `make seed FACILITIES=2` — zwei parallele Facilities mit getrennten Admins.
+**Voraussetzung:** `.venv/bin/python src/manage.py seed --flush --scale medium` — zwei parallele Facilities mit getrennten Admins.
 
 **Vorbereitung:**
 - Browser-Profil 1: `admin` (Facility 1) eingeloggt.
-- Browser-Profil 2 (Inkognito): `admin_2` (Facility 2) eingeloggt.
+- Browser-Profil 2 (Inkognito): `admin_1` (Facility 2) eingeloggt.
 
 **Schritte:**
 1. Profil 1: `/clients/` öffnen, Person z.B. `Stern-42` anklicken, UUID aus URL kopieren.
@@ -2629,21 +2629,21 @@
 
 **Vorbereitung:**
 - Pseudonym/UUID einer geseedeten Klient:in notieren.
-- Mindestens ein DocumentType („Beratung", Sensitivity `normal`) ist via Seed vorhanden.
+- Mindestens ein DocumentType („Kontakt“, Sensitivity `normal`) ist via Seed vorhanden.
 
 **Schritte:**
 1. `/events/new/` aufrufen.
 2. Klient:in via Autocomplete-Feld (Pseudonym tippen) auswählen — `?client=<uuid>` wird in URL/Hidden-Input gespiegelt.
-3. Aus Dropdown DocumentType „Beratung" wählen — HTMX-Request `GET /partials/events/fields/?document_type=<id>` lädt dynamische Felder via `EventFieldsPartialView` (Status 200).
+3. Aus Dropdown DocumentType „Kontakt“ wählen — HTMX-Request `GET /partials/events/fields/?document_type=<id>` lädt dynamische Felder via `EventFieldsPartialView` (Status 200).
 4. Pflichtfelder ausfüllen, `occurred_at` auf jetzt setzen.
 5. Submit-Button „Speichern" klicken.
 
 **Erwartetes Ergebnis:**
 - Redirect 302 → `/events/<new-uuid>/`.
 - Flash-Message „Kontakt wurde dokumentiert."
-- AuditLog-Eintrag `event_create` mit `target_type=Event`, `detail.document_type="Beratung"`, `detail.is_anonymous=false`.
+- AuditLog-Eintrag `event_create` mit `target_type=Event`, `detail.document_type="Kontakt"`, `detail.is_anonymous=false`.
 - `EventHistory`-Eintrag mit `action=CREATE`.
-- Activity-Log mit `verb=CREATED` und Summary „Beratung für \<Pseudonym\>".
+- Activity-Log mit `verb=CREATED` und Summary mit Dokumentationstyp „Kontakt“ und Pseudonym.
 - Event erscheint in Klient-Timeline (`/clients/<uuid>/`) und Zeitstrom (`/`).
 
 **DSGVO/Security-Note:**
@@ -2817,11 +2817,11 @@
 **Voraussetzung:** DocumentType mit `sensitivity=high`.
 
 **Vorbereitung:**
-- DocumentType „Krisenintervention" mit `sensitivity=high` vorhanden.
+- Seed-DocumentType „Medizinische Versorgung“ mit `sensitivity=high` vorhanden; Person mit Kontaktstufe „Mit Zusatzangaben“.
 
 **Schritte:**
 1. Als `leitung` einloggen.
-2. `/events/new/` → DocumentType „Krisenintervention" wählen → Event mit sensiblem Inhalt anlegen.
+2. `/events/new/` → DocumentType „Medizinische Versorgung“ wählen → Event mit sensiblem Inhalt anlegen.
 3. UUID notieren, Logout.
 4. Als `fachkraft` (STAFF-Rolle, `ROLE_MAX_SENSITIVITY=1=ELEVATED`) einloggen.
 5. `/events/<uuid>/` aufrufen.
@@ -4452,7 +4452,7 @@
 **Voraussetzung:** Frische Facility ohne Cases (oder alle Cases geschlossen).
 
 **Vorbereitung:**
-- Test-Facility mit leerem Zustand vorbereiten (`make seed` Variante mit `--scale=empty` o. ä.).
+- Neue Testeinrichtung ohne Vorgänge vorbereiten; `seed` hat kein Profil `empty` und liefert für diese Probe keinen leeren Zustand.
 
 **Schritte:**
 1. `/uebergabe/` aufrufen.
@@ -4691,7 +4691,7 @@
 |---------|-------|---------|--------|-----|
 | Statistik | leitung | C | ⚪ | `test_statistics_dashboard.py` |
 
-**Voraussetzung:** Seed mit `--scale=large` (≥ 1000 Events).
+**Voraussetzung:** Seed mit `.venv/bin/python src/manage.py seed --flush --scale large` (10.000 Ereignisse je Einrichtung, 50.000 insgesamt).
 
 **Vorbereitung:**
 - Browser-DevTools mit Performance-Tab.
@@ -5064,7 +5064,7 @@
 **Voraussetzung:** > 1000 AuditLog-Einträge in DB (per Seed/Skript).
 
 **Vorbereitung:**
-- Skript: `for i in range(1100): AuditLog.objects.create(...)` oder `make seed --scale large`.
+- Isolierte Testdatenbank mit mindestens 1100 Audit-Einträgen vorbereiten; zum Erzeugen den typisierten Helper `log_audit_event` verwenden. `.venv/bin/python src/manage.py seed --flush --scale large` liefert große Fachdatenmengen, garantiert aber nicht diese Audit-Anzahl.
 
 **Schritte:**
 1. `/audit/` aufrufen.
@@ -6745,7 +6745,7 @@
 **E2E-Coverage:** `test_navigation_config.py`, `test_config_document_types.py`, `test_config_field_templates.py`, `test_config_field_groups.py`, `test_config_reorder.py`, `test_config_service.py`, `test_event_form_groups.py`, `test_seed.py`; Rollen-/IDOR-Vollmatrix generisch über `test_authz_idor.py`; RLS-Transitivität über `test_rls_functional.py`  
 **Spezial-Setup:**
 - Rolle **facility_admin** (`admin`) ist Voraussetzung für alle CRUD-Cases — das Rollen-Gate selbst wird negativ mit `emma` (lead), `miriam` (staff), `lena` (assistant) und `superadmin` getestet.
-- Für die Cross-Facility-/RLS-Cases zusätzlich `admin_2` (Facility 2) — `make seed FACILITIES=2` bzw. `--scale medium`.
+- Für die Cross-Facility-/RLS-Cases zusätzlich `admin_1` (Facility 2) — `.venv/bin/python src/manage.py seed --flush --scale medium`.
 - Der Feld-Board-Bereich (`/config/document-types/<uuid>/`) braucht mindestens einen DocumentType mit zugeordneten Feldern — der Seed-Typ „Kontakt" eignet sich direkt (Gruppen „Basisdaten"/„Leistungen & Notizen" + ungruppiertes „Straßenkontakt").
 
 ---
@@ -7210,22 +7210,22 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration / RLS | admin (F1) + admin_2 (F2) | C | — | `test_authz_idor.py`, `test_rls_functional.py` |
+| Konfiguration / RLS | admin (F1) + admin_1 (F2) | C | — | `test_authz_idor.py`, `test_rls_functional.py` |
 
-**Voraussetzung:** `make seed FACILITIES=2` (zwei Facilities mit je eigenem admin).
+**Voraussetzung:** `.venv/bin/python src/manage.py seed --flush --scale medium` (zwei Facilities mit je eigenem admin).
 
 **Vorbereitung:**
 - Browser-Profil 1: `admin` (Facility 1), legt DocumentType „F1-Only" samt FieldTemplate und FieldGroup an, notiert die UUIDs.
-- Browser-Profil 2 (Inkognito): `admin_2` (Facility 2).
+- Browser-Profil 2 (Inkognito): `admin_1` (Facility 2).
 
 **Schritte:**
-1. Mit `admin_2` die UUIDs der F1-Objekte direkt aufrufen: `/config/document-types/<uuid>/`, `.../edit/`, `.../delete/`.
+1. Mit `admin_1` die UUIDs der F1-Objekte direkt aufrufen: `/config/document-types/<uuid>/`, `.../edit/`, `.../delete/`.
 2. Gleiches für die FieldTemplate- und FieldGroup-Detail-/Edit-/Delete-Routen sowie die drei Reorder-Endpunkte.
-3. In der eigenen Liste `/config/document-types/` von `admin_2` prüfen, dass „F1-Only" nicht auftaucht.
+3. In der eigenen Liste `/config/document-types/` von `admin_1` prüfen, dass „F1-Only" nicht auftaucht.
 
 **Erwartetes Ergebnis:**
 - Alle Zugriffe auf fremde Objekt-IDs liefern **404** (nicht 403 — kein Existenz-Leak).
-- Liste von `admin_2` zeigt ausschließlich Facility-2-Objekte.
+- Liste von `admin_1` zeigt ausschließlich Facility-2-Objekte.
 - Kein POST verändert das fremde Objekt (in DB unverändert).
 
 **DSGVO/Security-Note:**

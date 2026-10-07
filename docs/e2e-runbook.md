@@ -428,17 +428,17 @@ Situation?
 
 ## 9. Seed-Daten-Referenz (Small-Scale)
 
-E2E-Tests nutzen standardmäßig `--scale=small` (via conftest.py):
+E2E-Tests nutzen standardmäßig `seed --flush --scale small` (via conftest.py; `small` ist der Default des Commands):
 
 | Daten | Anzahl | Details |
 |-------|--------|---------|
-| Einrichtungen | 1 | „Anlaufstelle Altstadt" |
-| Users | 6 | admin, emma (Leitung), miriam + markus (Fachkraft), lena + felix (Assistenz) |
+| Einrichtungen | 1 | „Hauptstelle“ |
+| Users | 7 | admin (Anwendungsbetreuung), emma (Leitung), miriam + markus (Fachkraft), lena + felix (Assistenz), superadmin (Systemadministration, ohne Einrichtung) |
 | Clients | 7 | Stern-42, Wolke-17, Blitz-08, Regen-55, Wind-33, Nebel-71, Sonne-99 |
 | Events | 25 | Verteilt über 80 Tage |
 | Cases | 3 | |
 | WorkItems | 5 | |
-| Dokumenttypen | 6 | Kontakt, Krisenintervention, Streetwork, Bedarfserhebung, Weitervermittlung, Nachbetreuung |
+| Dokumenttypen | 9 | Kontakt, Krisengespräch, Medizinische Versorgung, Spritzentausch, Begleitung, Beratungsgespräch, Vermittlung, Notiz, Hausverbot (Paket `default`, `src/core/packages/default.yaml`) |
 
 **Bekannte Clients:** `Stern-42` ist qualifiziert (18–26), `Blitz-08` ist identifiziert (U18). Für Tests die einen qualifizierten Client brauchen, `Stern-42` verwenden.
 

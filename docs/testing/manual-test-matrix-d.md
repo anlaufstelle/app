@@ -899,7 +899,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | leitung (F1) + leitung_2 (F2) | C | — | `test_rectification_model.py::TestRectificationRequestRLSIsolation` |
+| Security | leitung (F1) + emma_1 (F2) | C | — | `test_rectification_model.py::TestRectificationRequestRLSIsolation` |
 
 **Voraussetzung:** zwei Facilities mit jeweils mindestens einem offenen `RectificationRequest`.
 

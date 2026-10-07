@@ -66,8 +66,8 @@
 3. ☐ Bei „Alters-Cluster" zutreffende Spanne auswählen (z.B. 25–34).
 4. ☐ Speichern → Klient:in wird mit zufälliger interner Kennung angelegt.
 5. ☐ Sofort ein **„Event"** (Beratungsgespräch) anlegen.
-6. ☐ Dokumenten-Typ **„Beratung"** wählen — die passenden Felder erscheinen.
-7. ☐ Inhaltsfelder ausfüllen, Sensitivitätsstufe **„mittel"** belassen.
+6. ☐ Dokumenten-Typ **„Kontakt“** wählen — die passenden Felder erscheinen.
+7. ☐ Inhaltsfelder ausfüllen; der Seed-Dokumentationstyp „Kontakt“ hat Sensitivität **„normal“**.
 8. ☐ Speichern → Event erscheint sofort in der Klient:innen-Timeline.
 
 **Sicherheitsregeln im Hintergrund:**
@@ -294,8 +294,8 @@
 
 1. ☐ Klient:in suchen oder neu anlegen (Stage „identifiziert").
 2. ☐ Schnell-Erfassung **„Quick-Capture"** öffnen.
-3. ☐ Dokumenten-Typ **„Krise"** oder **„Notfall"** wählen.
-4. ☐ Sensitivitätsstufe **„hoch"** setzen.
+3. ☐ Seed-Dokumentationstyp **„Medizinische Versorgung“** wählen.
+4. ☐ Sensitivitätsstufe **„hoch“** des gewählten Dokumentationstyps prüfen.
 5. ☐ Kurze Beschreibung der Krise eintragen.
 6. ☐ Speichern.
 7. ☐ Aufgabe **„Nachsorge: Krise XYZ"** erstellen, Priorität **„hoch"**, Lead-Kollegin als Verantwortliche.

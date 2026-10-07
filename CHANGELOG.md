@@ -57,6 +57,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Seed-Referenzen der Testmatrizen vereinheitlicht** (#2493) — Aufrufe, Konten, Datenvolumen und Dokumentationstypen in den Matrizen und im E2E-Runbook folgen dem aktuellen Seed.
+
 - **DSGVO-, Offline- und Systemprüfungen berichtigt** (#2496) — Matrix B beschreibt die tatsächlichen Paket-Zugriffe, Audit-Aktionen, Offline-Speicherfristen und Systemantworten samt passenden Testbelegen.
 
 - **Routen und Schutzprüfungen in Testmatrix B präzisiert** (#2495) — HTMX- und Admin-Pfade, Löschanträge, PWA-Werte, Rate-Limits und Aufbewahrungsfristen entsprechen dem Code.

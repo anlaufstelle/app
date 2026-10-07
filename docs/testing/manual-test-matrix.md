@@ -57,7 +57,7 @@ Lokales Setup nur falls 🔧 LOKAL/SSH-Cases anstehen:
 |---------|--------|
 | Repo aktuell | `git pull` |
 | DB & Container | `sudo docker compose up -d` |
-| Seed mit 2 Facilities | `python src/manage.py seed --flush --scale medium` (small=1, **medium=2**, large=5 Einrichtungen; ein `FACILITIES`-Argument existiert nicht — Refs #973) |
+| Seed mit 2 Facilities | `.venv/bin/python src/manage.py seed --flush --scale medium` (small=1, **medium=2**, large=5 Einrichtungen; ein `FACILITIES`-Argument existiert nicht — Refs #973) |
 | Dev-Server starten | `make run` (gunicorn, HTTPS, Port 8443) oder `make run-http` (Port 8000). Für den E2E-Server (Port 8844) gibt es kein Make-Target — manuelle gunicorn-Sequenz: [`docs/e2e-runbook.md`](../e2e-runbook.md) §6. |
 | Migrationen | `make migrate` |
 
@@ -345,42 +345,36 @@ Aus `src/core/management/commands/seed.py` extrahiert: was wird wie geseedet, in
 
 ### D.1 — Standard-Logins
 
-Passwort für alle Seed-User: `anlaufstelle2026`
-
-| Username | Rolle | Facility | Verwendung |
-|----------|-------|----------|------------|
-| `admin` | ADMIN | 1 | Volle Rechte, Audit, DSGVO-Paket |
-| `leitung` (Seed-Variante: `emma`) | LEAD | 1 | Cases schließen, Retention, Statistik |
-| `fachkraft` (Seed-Variante: `miriam`) | STAFF | 1 | Standard-Beratung, Klient/Event-CRUD |
-| `assistenz` (Seed-Variante: `lena`) | ASSISTANT | 1 | Niedrigste Rolle, RBAC-Negativtests |
-| `admin_2`, `leitung_2`, `fachkraft_2`, `assistenz_2` | je 1 | 2 | Cross-Facility-/RLS-Tests (`make seed FACILITIES=2`) |
-
-> **Hinweis:** Die genauen Seed-Usernamen können je nach `seed.py`-Variante abweichen (`admin`/`emma`/`miriam`/`lena` vs. `admin`/`leitung`/`fachkraft`/`assistenz`). Vor Test-Lauf kurz `python manage.py shell -c "from django.contrib.auth import get_user_model; print(list(get_user_model().objects.values_list('username', flat=True)))"` ausführen.
+Die Konten und Rollen stehen in der Tabelle [Standard-Logins](#standard-logins-pwd-anlaufstelle2026-für-alle). Für zwei Einrichtungen `.venv/bin/python src/manage.py seed --flush --scale medium` verwenden; die zweite Einrichtung heißt „Zweigstelle Nord“, ihr Admin-Konto `admin_1`.
 
 ### D.2 — Seed-Skalierung
 
-| Skalierung | Klient:innen | Events | Cases | WorkItems | Aufruf |
-|------------|--------------|--------|-------|-----------|--------|
-| Small (Default) | ~10 | ~20 | ~5 | ~10 | `make seed` |
-| Medium | ~50 | ~100 | ~20 | ~50 | `make seed SCALE=medium` |
-| Large (Last-Smoke) | ~1000 | ~5000 | ~200 | ~500 | `make seed SCALE=large` |
+Die Zielwerte gelten für einen frischen Seed nach `--flush`. Angaben jeweils **je Einrichtung / insgesamt**; Pakete und Zusatzdaten unterscheiden sich je Einrichtung.
+
+| Skalierung | Einrichtungen | Klient:innen | Events | Cases | WorkItems | Aufruf |
+|------------|---------------|--------------|--------|-------|-----------|--------|
+| Small (Default) | 1 | 7 / 7 | 25 / 25 | 3 / 3 | 5 / 5 | `.venv/bin/python src/manage.py seed --flush --scale small` |
+| Medium | 2 | 40 / 80 | 750 / 1.500 | 12 / 24 | 25 / 50 | `.venv/bin/python src/manage.py seed --flush --scale medium` |
+| Large (Last-Smoke) | 5 | 500 / 2.500 | 10.000 / 50.000 | 50 / 250 | 100 / 500 | `.venv/bin/python src/manage.py seed --flush --scale large` |
+
+`make seed` ruft nur `.venv/bin/python src/manage.py seed` auf (Default `small`, ohne `--flush`); Make-Variablen für Skalierung oder Einrichtungszahl werden nicht weitergereicht. `solo` und `demo` sind weitere gültige Profile; `empty` ist kein Profil.
 
 Quelle: `src/core/management/commands/seed.py` und Helper-Funktionen `seed_clients_small/bulk()`, `seed_events_small/bulk()`, etc.
 
 ### D.3 — Stamm-Daten (Document-Types, Activities, FieldTemplates)
 
 Aus `seed.py` werden geseedet:
-- **Document-Types:** „Beratung", „Krise", „Verlaufsbericht", „Übergabe", „Anonymes Erstgespräch", … (8–12 Typen)
-- **Activities:** „Telefonat", „Hausbesuch", „Anlaufstelle", „Streetwork", „E-Mail", „Schriftverkehr", …
-- **FieldTemplates:** Pro Document-Type 5–15 dynamische Felder (Datum, Sensitivität, Kategorie, Freitext, Multi-Choice, …)
+- **Document-Types (Hauptstelle, Paket `default`):** Kontakt, Krisengespräch, Medizinische Versorgung, Spritzentausch, Begleitung, Beratungsgespräch, Vermittlung, Notiz, Hausverbot. Weitere Einrichtungen nutzen andere Pakete aus `FACILITY_PACKAGES`.
+- **Activities:** typisierte Aktivitätseinträge zu Personen, Ereignissen, Fällen und Aufgaben; kein Katalog von Gesprächsarten.
+- **FieldTemplates:** Felder und Typ-Zuordnungen aus dem jeweiligen YAML-Paket; im Standardpaket etwa Dauer, Notiz, Leistungen, Altersgruppe und Anhang.
 - **Settings:** Default-Aufbewahrungsfristen, MFA-Pflicht, k-Anonymität, Retention-Auto-Approve.
-- **TimeFilters:** „Heute", „Diese Woche", „Letzten 30 Tage", „Quartal", …
+- **TimeFilters (Hauptstelle):** Frühdienst, Spätdienst, Nachtdienst; die anderen Einrichtungen übernehmen die Komfortobjekte ihres Pakets.
 
 ### D.4 — Spezial-Daten
 
-- **Deletion-Requests:** 2–3 offene + 1 genehmigter Beispiel-Antrag.
-- **Retention-Proposals:** 2–3 ablaufende Einträge (für Bulk-Approve-Test).
-- **AuditLog-Snapshot:** 50–100 Einträge aus Seed-Vorgang.
+- **Deletion-Requests:** `small` erzeugt keine; `medium` hat einen Zielwert von 5, `large` von 15 je Einrichtung, mit gemischten Statuswerten.
+- **Retention-Proposals:** Zielwerte je Einrichtung: `small` 4, `medium` 6, `large` 12; nicht alle sind offen oder bereits fällig.
+- **AuditLog:** Der Seed garantiert keine bestimmte Anzahl; größere Audit-Datenmengen für Pagination-Proben gesondert vorbereiten.
 
 ### D.5 — Reset-Workflow für sauberen Test-Lauf
 
@@ -408,13 +402,13 @@ make seed
 
 | Bereich | Budget | Datenstand | Gemessen am |
 |---|---|---|---|
-| Dashboard/Home | TTI < 2 s | Medium-Seed (`make seed`) | Chrome DevTools-Lighthouse oder DjDT Footer-Zeit |
+| Dashboard/Home | TTI < 2 s | Medium-Seed (`.venv/bin/python src/manage.py seed --flush --scale medium`) | Chrome DevTools-Lighthouse oder DjDT Footer-Zeit |
 | Client-Detail | < 1 s Serverzeit bei ~100 Events | dev-Daten, ein typischer Klient | DjDT, Tab „Time" |
 | Event-Edit mit 10 Attachments | keine N+1-Queries; < 500 ms Serverzeit | manuell vorbereitetes Event | DjDT, Tab „SQL" + „Time" |
-| Suche (`?q=...`) | < 500 ms bei ~1.000 Klient:innen | Large-Seed | DjDT, Tab „Time" |
+| Suche (`?q=...`) | < 500 ms bei 2.500 Klient:innen insgesamt | Large-Seed | DjDT, Tab „Time" |
 | AuditLog-Liste | < 500 ms pro Seite bei ~10.000 Einträgen | Large-Seed plus zusätzlicher Audit-Bulk | DjDT, Tab „SQL" (Pagination-Query darf einen Index nutzen) |
 | Retention-Dashboard | < 2 s bei ~1.000 Proposals | gesonderter Setup-Script | DjDT „Time" |
-| Statistik-Dashboard | < 3 s bei Large-Seed (~10.000 Events) | Large-Seed | DjDT „Time" + Chart-Render im Browser |
+| Statistik-Dashboard | < 3 s bei Large-Seed (50.000 Events insgesamt) | Large-Seed | DjDT „Time" + Chart-Render im Browser |
 
 ### Wo messen?
 
