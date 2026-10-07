@@ -438,14 +438,20 @@ PROCESSING_ACTIVITIES = [
             _("Antragsteller:in (Auslieferung des Datenpakets)"),
         ],
         # Refs #2492: no code path deletes ``DeletionRequest`` or
-        # ``RectificationRequest``; anonymisation redacts the rectification
-        # texts (``_redact_rectification_requests``) but not deletion reasons.
-        # The audit rows of these actions are not in ``PRUNE_EXEMPT_ACTIONS``.
+        # ``RectificationRequest`` rows. Anonymising a person (manual and
+        # retention run, ``services/client/main.py`` ``_redact_*`` helpers,
+        # ``retention/anonymization.py``) empties the rectification texts and
+        # sets the reasons of the person's deletion requests and legal holds
+        # to "[Anonymisiert]"; proven by the residue sweeps in
+        # ``test_pii_residue_sweep.py``. The audit rows of these actions are
+        # not in ``PRUNE_EXEMPT_ACTIONS``.
         "retention_period": _(
             "Bearbeitungsvorgänge: Die Anwendung löscht Lösch- und "
-            "Berichtigungsanträge nicht; die Inhalte von "
-            "Berichtigungsanträgen tilgt die Anonymisierung der Person, die "
-            "Begründungen von Löschanträgen bleiben. Eine Frist (etwa "
+            "Berichtigungsanträge nicht; Status, beteiligte Personen und "
+            "Zeitpunkte bleiben als Nachweis. Die Anonymisierung einer Person "
+            "tilgt die Inhalte ihrer Berichtigungsanträge und ersetzt die "
+            "Begründungen der Löschanträge und Aufbewahrungssperren zu ihr, "
+            "ihren Fällen und Ereignissen durch „[Anonymisiert]“. Eine Frist (etwa "
             "3 Jahre nach Abschluss als Nachweis der Erfüllung) legt die "
             "Einrichtung organisatorisch fest. Erzeugte Datenpakete: nach "
             "Abholung löschen. Berichtigungs- und Löschvorgänge: im "

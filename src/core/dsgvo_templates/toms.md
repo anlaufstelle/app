@@ -79,10 +79,16 @@ Betroffen sind die Freitexte `Client.notes`, `Case.title`, `Case.description`,
 `LegalHold.reason` sowie `AuditLog.detail`. Die Notizen der Person und die
 Beschreibungen von Fall, Episode und Aufgabe warnen davor, Klarnamen oder
 Art.-9-Daten dort einzutragen; die Titelfelder und `OutcomeGoal.description`
-stehen ohne Warnhinweis. Die Anonymisierungs-Kaskade überschreibt Notizen,
-Titel und Beschreibungen von Person, Fall, Episode, Aufgabe, Wirkungsziel und
-Meilenstein. Die Begründungen von Löschanträgen und Aufbewahrungssperren tilgt
-die Anonymisierung nicht, und keine Aufbewahrungsfrist löscht sie.
+stehen ohne Warnhinweis. Die Anonymisierung einer Person (manuell oder durch
+den Aufbewahrungslauf, auch in der k-anonymisierenden Variante) überschreibt
+alle hier genannten Freitexte außer `AuditLog.detail`: Notizen, Titel und
+Beschreibungen von Person, Fall, Episode, Aufgabe, Wirkungsziel und
+Meilenstein sowie die Begründungen der Löschanträge und Aufbewahrungssperren
+zu dieser Person, ihren Fällen und Ereignissen, die durch „[Anonymisiert]“
+ersetzt werden. Die Antrags- und Sperrzeilen selbst (Status, beteiligte
+Personen, Zeitpunkte) bleiben als Nachweis bestehen; eine eigene
+Aufbewahrungsfrist für sie gibt es nicht. Bis zur Anonymisierung stehen die
+Begründungen im Klartext.
 `AuditLog.detail` bleibt als Teil des HMAC-verketteten Protokolls unverändert
 bestehen, bis die Audit-Frist abläuft (Ausnahmen: Löschkonzept § 3.3), und wird
 beim Schreiben minimiert. Eine

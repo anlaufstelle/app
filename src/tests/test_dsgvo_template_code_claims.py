@@ -590,6 +590,24 @@ _DSFA_ROW_RE = re.compile(r"^\|\s*(\d+)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*`
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.;:])\s+")
 
 
+def _behaviour_test(module: str, qualname: str):
+    """Resolve a behaviour test that backs a template claim.
+
+    The template guards below only check wording; whether the code behaves as
+    worded is proven by the referenced behaviour test. Resolving it here ties
+    the claim to that test: if the test is removed, renamed or parked as
+    skip/xfail, the claim guard fails instead of pinning a stale promise.
+    """
+    import importlib
+
+    target = importlib.import_module(f"tests.{module}")
+    for part in qualname.split("."):
+        target = getattr(target, part)
+    marks = {mark.name for mark in getattr(target, "pytestmark", [])}
+    assert not marks & {"skip", "skipif", "xfail"}, (module, qualname, marks)
+    return target
+
+
 def _retention_settings() -> list[str]:
     from core.services.client.dsgvo_package import _retention_values
 
@@ -774,6 +792,41 @@ FREE_TEXT_FIELDS = (
 )
 
 
+_BACKTICK_FIELD_RE = re.compile(r"`([A-Z][A-Za-z]+\.[a-z_]+)`")
+
+# Free texts that never carry client data in the first place: the audit
+# detail is minimised when written (Refs #1093), not redacted afterwards.
+WRITE_TIME_MINIMISED = {("AuditLog", "detail")}
+
+
+def _anonymisation_clears(model: str, field: str) -> bool:
+    """True when both residue sweeps prove that anonymisation clears the field.
+
+    ``test_no_residue_after_anonymize`` (manual) and
+    ``test_no_residue_after_retention_k_anonymization`` (retention run, k-
+    anonymising bridge) scan every ``pii`` column of every scoped table after
+    anonymising a fully populated person; a table listed in their xfail maps
+    is a known leak.
+    """
+    from django.apps import apps
+
+    from tests import test_pii_residue_sweep as sweep
+    from tests._residue_expectations import COLUMN_CLASSIFICATION
+
+    _behaviour_test("test_pii_residue_sweep", "test_no_residue_after_anonymize")
+    _behaviour_test("test_pii_residue_sweep", "test_no_residue_after_retention_k_anonymization")
+    if (model, field) in WRITE_TIME_MINIMISED:
+        return False
+    table = apps.get_model("core", model)._meta.db_table
+    kinds = {rule.kind for rule in COLUMN_CLASSIFICATION if (rule.table, rule.column) == (table, field)}
+    return (
+        kinds == {"pii"}
+        and table in sweep.SCOPED_TABLES
+        and table not in sweep.ANONYMIZE_XFAIL
+        and table not in sweep.RETENTION_XFAIL
+    )
+
+
 @pytest.mark.django_db
 class TestFreeTextInventory:
     def test_premise_fields_are_plain_columns(self):
@@ -793,10 +846,25 @@ class TestFreeTextInventory:
         for model_name, field_name in FREE_TEXT_FIELDS:
             assert f"`{model_name}.{field_name}`" in section, f"{model_name}.{field_name}"
 
-    def test_toms_name_what_anonymisation_does_not_clean(self, facility):
+    def test_toms_name_what_anonymisation_cleans(self, facility):
         section = _flat(_section(render_document("toms", facility)[0], "### 1.5 Restrisiko", "## 2."))
-        assert "tilgt die Anonymisierung nicht" in section
+        claim = next(s for s in _sentences(section) if s.startswith("Die Anonymisierung einer Person"))
+        exceptions = set(_BACKTICK_FIELD_RE.findall(claim.split(":", 1)[0].split("außer", 1)[1]))
+        expected = {f"{model}.{field}" for model, field in FREE_TEXT_FIELDS if not _anonymisation_clears(model, field)}
+        assert exceptions == expected, claim
+        for sentence in _sentences(section):
+            if "nicht" in sentence and "Anonymisierung" in sentence:
+                assert "Begründung" not in sentence, sentence
         assert "ohne Warnhinweis" in section
+
+    def test_vvt_request_retention_follows_the_residue_sweep(self):
+        retention = str(next(a for a in PROCESSING_ACTIVITIES if a["id"] == "dsgvo_requests")["retention_period"])
+        assert "Begründungen von Löschanträgen bleiben" not in retention
+        sentence = next(s for s in retention.split(". ") if "Begründungen" in s)
+        redacted = _anonymisation_clears("DeletionRequest", "reason") and _anonymisation_clears("LegalHold", "reason")
+        assert redacted
+        assert "[Anonymisiert]" in sentence, sentence
+        assert "Aufbewahrungssperren" in sentence, sentence
 
 
 @pytest.mark.django_db
