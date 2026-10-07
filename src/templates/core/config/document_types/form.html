@@ -52,10 +52,26 @@
              data-report-key-excluded-label="{% trans 'Gehört ausdrücklich in keinen Bericht.' %}"
              data-report-key-unbound-label="{% trans 'Dieser Schlüssel speist keinen registrierten Bericht.' %}">
             {% include "components/_form_field.html" with field=form.name %}
-            {% include "components/_form_field.html" with field=form.entity_type %}
-            {% include "components/_form_field.html" with field=form.sensitivity %}
-            {% include "components/_form_field.html" with field=form.system_type %}
-            {% include "components/_form_field.html" with field=form.report_key %}
+            {% trans "Legt fest, wofür der Typ gilt: Ereignis, Person oder Fall. Nach dem Anlegen nicht änderbar." as help_entity_type_inline %}
+            {% trans "Ereignis-Typen dokumentieren Kontakte im Zeitstrom; nur sie nutzen Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und Strichliste. Person-Typen ergänzen die Personenakte um eigene Felder, Fall-Typen den Fall." as help_entity_type_effect %}
+            {% trans "Nach dem Anlegen unveränderbar. Falsch gewählt? Den Typ deaktivieren und einen neuen anlegen." as help_entity_type_change %}
+            {% trans "Ein Typ „Beratungsgespräch“ hält Kontakte fest und ist ein Ereignis-Typ. Ein Typ „Zusatzangaben zur Wohnsituation“ ergänzt die Personenakte und ist ein Person-Typ." as help_entity_type_example %}
+            {% include "components/_form_field.html" with field=form.entity_type inline_help=help_entity_type_inline deep_help_effect=help_entity_type_effect deep_help_change=help_entity_type_change deep_help_example=help_entity_type_example %}
+            {% trans "Legt fest, welche Rollen die Inhalte sehen dürfen. „Hoch“ wird immer verschlüsselt gespeichert." as help_sensitivity_inline %}
+            {% trans "Normal sehen alle Rollen einschließlich Assistenz, Erhöht Fachkraft, Leitung und Anwendungsbetreuung, Hoch nur Leitung und Anwendungsbetreuung. Zusätzlich hat jede Feldvorlage eine eigene Stufe; für ein einzelnes Feld gilt die höhere der beiden Stufen." as help_sensitivity_effect %}
+            {% trans "Jederzeit änderbar. Die Sichtbarkeit folgt der jeweils aktuellen Stufe." as help_sensitivity_change %}
+            {% trans "Allgemeine Kontakte: Normal. Beratungs- und Gesundheitsgespräche: Erhöht. Krisengespräche: Hoch." as help_sensitivity_example %}
+            {% include "components/_form_field.html" with field=form.sensitivity inline_help=help_sensitivity_inline deep_help_effect=help_sensitivity_effect deep_help_change=help_sensitivity_change deep_help_example=help_sensitivity_example %}
+            {% trans "Steuert besondere App-Funktionen wie Hausverbot oder Krisen-Hervorhebung. Nach dem Anlegen nicht mehr änderbar." as help_system_type_inline %}
+            {% trans "Hausverbot zeigt das Banner an der Person, den Filter im Zeitstrom und die Hervorhebung in der Übergabe. Krisengespräch hebt Einträge in der Übergabe hervor. Die meisten Typen brauchen keinen Systemtyp; für die Zuordnung zu einem Bericht ist der Berichtsschlüssel zuständig." as help_system_type_effect %}
+            {% trans "Nach dem Anlegen unveränderbar. Falsch gewählt? Den Typ deaktivieren und einen neuen anlegen." as help_system_type_change %}
+            {% trans "Ein Typ „Hausverbot“ bekommt den Systemtyp Hausverbot, damit das Banner erscheint. Ein Typ „Beratungsgespräch“ bleibt ohne Systemtyp." as help_system_type_example %}
+            {% include "components/_form_field.html" with field=form.system_type inline_help=help_system_type_inline deep_help_effect=help_system_type_effect deep_help_change=help_system_type_change deep_help_example=help_system_type_example %}
+            {% trans "Ordnet diesen Typ Berichten zu. Leer bedeutet: noch nicht zugeordnet." as help_report_key_inline %}
+            {% trans "Der Schlüssel bestimmt die Zeile im Bericht. Leer heißt: noch keine Aussage — der Typ wird in Berichten als Lücke gemeldet. „Gehört ausdrücklich in keinen Bericht“ ist eine bewusste Entscheidung und keine Lücke. Die Übersicht in der Statistik zählt unabhängig vom Schlüssel." as help_report_key_effect %}
+            {% trans "Ein leerer Schlüssel kann jederzeit nachgetragen werden. Ein gesetzter Schlüssel ist danach unveränderbar." as help_report_key_change %}
+            {% trans "Ein Typ „Schuldnerberatung“ mit dem Schlüssel „Beratungsgespräch“ landet in derselben Berichtszeile wie jeder andere Typ mit diesem Schlüssel." as help_report_key_example %}
+            {% include "components/_form_field.html" with field=form.report_key inline_help=help_report_key_inline deep_help_effect=help_report_key_effect deep_help_change=help_report_key_change deep_help_example=help_report_key_example %}
             {% if not is_edit %}
             <div class="rounded-md border border-subtle bg-canvas p-3" data-entity-scoped-extra data-testid="doctype-report-key-preview">
                 <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Erscheint in" %}</p>
@@ -63,14 +79,26 @@
                 <p class="mt-1 text-[12px] text-ink-muted">{% trans "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen." %}</p>
             </div>
             {% endif %}
-            {% include "components/_form_field.html" with field=form.min_contact_stage %}
-            {% include "components/_form_field.html" with field=form.retention_days %}
+            {% trans "Legt fest, ob dieser Typ anonym nutzbar ist oder eine gespeicherte Person braucht." as help_min_contact_stage_inline %}
+            {% trans "Die Stufe gilt bei der Anlage eines Ereignisses. Leer: auch anonyme Kontakte ohne zugeordnete Person sind möglich. „Nur Pseudonym“: es muss eine Person zugeordnet sein. „Mit Zusatzangaben“: an der Person müssen zusätzliche Angaben gespeichert sein. Ein Typ mit Mindest-Kontaktstufe erscheint nicht in der Strichliste." as help_min_contact_stage_effect %}
+            {% trans "Jederzeit änderbar. Bereits erfasste Ereignisse bleiben unverändert." as help_min_contact_stage_change %}
+            {% trans "Beratungsgespräche verlangen „Mit Zusatzangaben“: Für eine Person, von der nur das Pseudonym bekannt ist, wird zuerst die Kontaktstufe angehoben." as help_min_contact_stage_example %}
+            {% include "components/_form_field.html" with field=form.min_contact_stage inline_help=help_min_contact_stage_inline deep_help_effect=help_min_contact_stage_effect deep_help_change=help_min_contact_stage_change deep_help_example=help_min_contact_stage_example %}
+            {% trans "Ereignisse dieses Typs werden nach dieser Zahl von Tagen gelöscht. Leer: nur die Frist der Kontaktstufe gilt." as help_retention_days_inline %}
+            {% trans "Der tägliche Aufbewahrungslauf löscht Ereignisse dieses Typs nach Ablauf der Frist. Es gilt die zuerst ablaufende Frist: eine längere Typ-Frist verlängert die Frist der Kontaktstufe nicht. Eine Aufbewahrungssperre (Legal Hold) nimmt Ereignisse aus." as help_retention_days_effect %}
+            {% trans "Jederzeit änderbar. Die neue Frist gilt ab dem nächsten Aufbewahrungslauf auch für bereits erfasste Ereignisse; eine Verkürzung kann daher Ereignisse löschen." as help_retention_days_change %}
+            {% trans "90 Tage für einen Typ „Kurzkontakt“: Ereignisse dieses Typs werden etwa drei Monate nach dem Kontakt gelöscht, auch wenn die Frist der Kontaktstufe länger wäre." as help_retention_days_example %}
+            {% include "components/_form_field.html" with field=form.retention_days inline_help=help_retention_days_inline deep_help_effect=help_retention_days_effect deep_help_change=help_retention_days_change deep_help_example=help_retention_days_example %}
             {% include "components/_form_field.html" with field=form.description %}
             {% include "components/_form_field.html" with field=form.icon %}
             {% include "components/_form_field.html" with field=form.color %}
             {% include "components/_form_field.html" with field=form.sort_order %}
             {% include "components/_form_field.html" with field=form.is_active %}
-            {% include "components/_form_field.html" with field=form.tally_enabled %}
+            {% trans "Macht diesen Ereignistyp für die schnelle anonyme Zählung verfügbar, wenn er die Voraussetzungen erfüllt." as help_tally_enabled_inline %}
+            {% trans "Hat der Typ keine Pflichtfelder, zählt +1 direkt einen anonymen Kontakt. Bestehen alle Pflichtfelder aus Zahlen, öffnet +1 eine kompakte Werteingabe. Hat er ein Pflichtfeld eines anderen Typs, erscheint er nicht in der Strichliste. Neue Typen sind nicht freigegeben." as help_tally_enabled_effect %}
+            {% trans "Jederzeit änderbar. Die Freigabe hebt keine Sichtbarkeitsregeln auf: Ein Typ erscheint nur für Rollen, die ihn und alle seine Pflichtfelder sehen dürfen." as help_tally_enabled_change %}
+            {% trans "Ein Typ „Kurzkontakt“ ohne Pflichtfelder: Jeder Tipp auf +1 in der Strichliste hält einen anonymen Kontakt fest." as help_tally_enabled_example %}
+            {% include "components/_form_field.html" with field=form.tally_enabled inline_help=help_tally_enabled_inline deep_help_effect=help_tally_enabled_effect deep_help_change=help_tally_enabled_change deep_help_example=help_tally_enabled_example %}
             {% if is_edit %}
             <p class="text-[12px] text-ink-muted">{% trans "Der Systemtyp und der Entitätstyp sind nach dem Anlegen unveränderbar." %}</p>
             {% endif %}

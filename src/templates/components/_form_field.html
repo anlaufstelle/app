@@ -8,7 +8,13 @@ Error-Markup. ``aria_field`` setzt aria-invalid/-describedby/-required; das
 aus clients/form.html übernommen (dort lief der Block bereits generisch).
 
 Parameter:
-  field  Pflicht — ein gebundenes Formularfeld (BoundField).
+  field            Pflicht — ein gebundenes Formularfeld (BoundField).
+  inline_help      Optional — ersetzt ``field.help_text`` unter dem Feld durch einen
+                   kurzen Orientierungssatz (Refs #2460).
+  deep_help_effect Optional — schaltet die aufklappbare Vertiefung unter dem Feld ein
+                   (``components/_field_deep_help.html``); zusammen mit
+                   ``deep_help_change`` und ``deep_help_example``. Der volle
+                   ``field.help_text`` steht dann in der Vertiefung.
 
 Nicht für Sonderfälle gedacht (Datei-Upload mit Ersetzen/Soft-Delete in
 events/edit.html, Autocomplete-/Quick-Date-Felder) — die bleiben individuell.
@@ -31,7 +37,12 @@ events/edit.html, Autocomplete-/Quick-Date-Felder) — die bleiben individuell.
         </ul>
     </div>
     {% endif %}
-    {% if field.help_text %}
+    {% if inline_help %}
+    <p id="{{ field.id_for_label }}-help" class="mt-1 text-[12px] text-ink-muted">{{ inline_help }}</p>
+    {% elif field.help_text %}
     <p id="{{ field.id_for_label }}-help" class="mt-1 text-[12px] text-ink-muted">{{ field.help_text }}</p>
+    {% endif %}
+    {% if deep_help_effect %}
+    {% include "components/_field_deep_help.html" with field=field effect=deep_help_effect change=deep_help_change example=deep_help_example only %}
     {% endif %}
 </div>

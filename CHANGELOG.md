@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Dokumentationstyp-Formular: kurze Inline-Hilfe, Vertiefung aufklappbar** (#2460) — Entitätstyp, Sensibilität, Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und „In Strichliste anbieten“ tragen unter dem Feld nur noch einen Orientierungssatz; Folgen, Änderbarkeit und ein Beispiel stehen in einem aufklappbaren „Mehr zu …“ direkt am Feld.
 - **Fehlerberichterstattung aktualisiert** (#2403) — sentry-sdk 2.71.0 ist mit den Initialisierungs- und Datenschutzprüfungen verifiziert.
 - **PostgreSQL-Treiber aktualisiert** (#2404) — Psycopg und sein Binärpaket sind auf 3.3.6 angehoben und mit den Datenbankprüfungen verifiziert.
 - **Python-Lintwerkzeug aktualisiert** (#2406) — Ruff 0.16.10 besteht die Lint- und Formatprüfungen ohne Formatänderungen am Bestand.
