@@ -27,8 +27,8 @@ Anlaufstelle implementiert ein **mehrstufiges Retention-Modell** mit getrennten 
   - `document_type` — pro Dokumenttyp konfigurierbare Frist, ueberschreibt die globale Event-Frist. *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
 - **Legal-Hold als Einfrier-Marker.** [`LegalHold`](../../src/core/retention/legal_holds.py) setzt einen Marker pro Entitaet; `has_active_hold(target)` haelt jede Soft-Delete- und Anonymisierungs-Pipeline auf. Hold setzen darf nur Lead/Admin, Aufheben mit AuditLog-Spur.
 - **`RetentionProposal`-Vorschlagspipeline** fuer qualifizierte Eintraege: Cron erzeugt Vorschlaege, Dashboard ([`build_retention_dashboard_context`](../../src/core/retention/proposals.py)) zeigt sie, Lead/Admin entscheidet `approve`/`defer`/`reject`. Damit bleibt das Pruning bei juristisch sensiblen Datensaetzen eine bewusste menschliche Entscheidung. *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
-- **AuditLog-Pruning auf eigener, laengerer Frist** ([`prune_auditlog`](../../src/core/retention/audit_pruning.py)). Die Frist ist absichtlich laenger als alle Fach-Fristen, damit Forensik nach einem Vorfall noch Spuren findet, wenn die Sachdaten bereits anonymisiert sind. Pruning ist append-only-kompatibel — keine `UPDATE`s, nur `DELETE` strikt nach Frist.
-- **Default-Reihenfolge im Cron:** Backup (02:00) → `enforce_retention` (03:00) → Snapshots (04:00). Backup laeuft **vor** Retention, damit gepruente Daten in einem Backup-Stand wiederherstellbar bleiben (siehe [`docs/ops-runbook.md` § Retention](../ops-runbook.md)).
+- **AuditLog-Pruning auf eigener, laengerer Frist** ([`prune_auditlog`](../../src/core/retention/audit_pruning.py)). Die Frist ist absichtlich laenger als alle Fach-Fristen, damit Forensik nach einem Vorfall noch Spuren findet, wenn die Sachdaten bereits anonymisiert sind. *(Berichtigt im [Update 2026-10-07](#update-2026-10-07-audit-log-frist-und-fristen-zuschnitt): die Frist ist unabhängig von den Fach-Fristen und kann kürzer sein.)* Pruning ist append-only-kompatibel — keine `UPDATE`s, nur `DELETE` strikt nach Frist.
+- **Default-Reihenfolge im Cron:** Backup (02:00) → `enforce_retention` (03:00) → Snapshots (04:00). Backup laeuft **vor** Retention, damit gepruente Daten in einem Backup-Stand wiederherstellbar bleiben (siehe [`docs/ops-runbook.md` § 3 Cron-Jobs](../ops-runbook.md#3-cron-jobs)).
 
 ## Consequences
 
@@ -94,14 +94,35 @@ Damit sind „verlangen einen `RetentionProposal` mit Lead/Admin-Freigabe" (Deci
 
 [`enforce_qualified`](../../src/core/retention/enforcement.py) erfasst nur Ereignisse, deren Fall geschlossen ist (`Case.Status.CLOSED`) und deren `closed_at` vor dem Stichtag liegt. `Event.case` ist optional. Ein Ereignis einer Person der Stufe `qualified` **ohne Fall** oder in einem **offenen Fall** verfällt über `retention_qualified_days` deshalb nie, sondern nur über eine gesetzte `DocumentType.retention_days`. Solange ein solches Ereignis besteht, greift auch `anonymize_clients` für die Person nicht. Gelöscht werden die Ereignisse, nicht der Fall. Ob diese Lücke fachlich gewollt ist oder ein eigener Fristbeginn für solche Ereignisse nötig ist, ist offen; die Vorlagen benennen sie, ohne eine Löschung zuzusagen.
 
+## Update 2026-10-07: Audit-Log-Frist und Fristen-Zuschnitt
+
+**Reine Doku-Korrektur — keine Verhaltensänderung.**
+
+### Die Audit-Log-Frist ist unabhängig und kann kürzer sein (Refs #2461)
+
+Die Decision nennt die Audit-Log-Frist „absichtlich laenger als alle Fach-Fristen". Das setzt weder der Code noch eine Validierung durch. Die ausgelieferten Standardwerte ([`src/core/models/settings.py`](../../src/core/models/settings.py)) sind `auditlog_retention_months` = 24 Monate, aber `retention_qualified_days` = 3650 Tage (zehn Jahre) und `DocumentType.retention_days` als frei wählbare Typ-Frist. Mit den Standardwerten löscht `prune_auditlog` die Audit-Spuren zu einem qualifizierten Ereignis also nach zwei Jahren, das Ereignis selbst fällt erst nach zehn.
+
+Forensische Reichweite: Das Audit-Log reicht `auditlog_retention_months` zurück, unabhängig davon, wie lange die zugehörigen Fachdaten noch bestehen. Dauerhaft erhalten bleiben nur die prune-exempten Einträge (unten). Wer Audit-Spuren über die gesamte Lebensdauer der Fachdaten braucht, setzt `auditlog_retention_months` mindestens auf die längste Fach-Frist der Einrichtung oder auf `0` (keine automatische Löschung). Die Einstellungsseite warnt nicht, wenn die Audit-Frist kürzer ist.
+
+### Fristen-Zuschnitt, Ergänzung zur Tabelle im Update 2026-08-03
+
+| Entität | Frist | Mechanik |
+|---|---|---|
+| **AuditLog** | `auditlog_retention_months` (24, `0` = aus) | `prune_auditlog`; **vier** prune-exempte Aktionen (`SECURITY_VIOLATION`, `RETENTION_RUN_COMPLETED`, `AUDIT_PRUNE_CHECKPOINT`, `EVENT_HISTORY_REDACTED`, siehe `PRUNE_EXEMPT_ACTIONS` in [`audit_pruning.py`](../../src/core/retention/audit_pruning.py)) plus die `EXPORT`-Berichts-Freigaben |
+| **Case** (Papierkorb) | keine eigene Frist; `client_trash_days` (30) gilt mit | Nach manuellem Soft-Delete anonymisiert `anonymize_eligible_soft_deleted_cases` den Fall im `enforce_retention`-Lauf ([ADR-044](044-fall-loeschpfad.md)). Die Aussage „kein eigener Cron-Pfad" der Tabelle oben gilt damit nur für Fälle, die nicht im Papierkorb liegen |
+| **EventHistory** | `eventhistory_detail_months` (24), `eventhistory_chronicle_months` (24) | `enforce_eventhistory_retention` im `enforce_retention`-Lauf: Redaktion der Werte, danach Löschung der Chronologie ab der Redaktion ([ADR-050](050-eventhistory-retention.md)) |
+| **Übergabenotizen** | `retention_handover_notes_days` (90) | **Hard**-Delete durch `enforce_handover_notes` im `enforce_retention`-Lauf |
+
 ## References
 
-- [`src/core/retention/`](../../src/core/retention/) — Submodule (`anonymization`, `audit_pruning`, `enforcement`, `legal_holds`, `proposals`)
+- [`src/core/retention/`](../../src/core/retention/) — Submodule (`anonymization`, `audit_pruning`, `enforcement`, `eventhistory`, `eventhistory_repair`, `legal_holds`, `proposals`, `redaction_repair`, `strategies`)
 - [`src/core/services/retention.py`](../../src/core/services/retention.py) — Re-Export-Stub fuer Bestands-Aufrufer
 - [`src/core/management/commands/enforce_retention.py`](../../src/core/management/commands/enforce_retention.py)
 - [`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/) — Verarbeitungs-Verzeichnis und Loeschkonzept
-- [`docs/ops-runbook.md` § Retention](../ops-runbook.md)
+- [`docs/ops-runbook.md` § 3 Cron-Jobs](../ops-runbook.md#3-cron-jobs)
 - [ADR-007](007-auditlog-append-only.md) — AuditLog Append-Only
 - [ADR-013](013-dsgvo-art16-no-selfservice.md) — DSGVO Art. 16 ohne Self-Service
 - [ADR-023](023-k-anonymization-statistik.md) — k-Anonymisierung fuer externe Statistik
+- [ADR-044](044-fall-loeschpfad.md) — Fall-Löschpfad und Fall-Papierkorb
+- [ADR-050](050-eventhistory-retention.md) — EventHistory-Retention
 - Issue #744 — Retention-Refactor

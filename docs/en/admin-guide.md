@@ -2125,7 +2125,7 @@ Under **Core > Audit logs** (or `/audit/`), logs can be filtered by action, faci
 >
 > The same applies to the `detail` field: new rows carry `owner_type` + `owner_id` (values `event`/`client`/`case`), older rows only `event_id`. Download entries for **event** attachments keep `event_id` in addition, so existing queries do not break. Filtering on `Attachment` alone, or on `detail->>'event_id'` alone, yields a **silently incomplete** result.
 
-**Audit log retention:** The audit log **does** have its own automatic retention period inside the application — deliberately longer than every domain retention period, so that forensics still finds traces after an incident that was noticed late ([ADR-021](../adr/021-retention-modell.md), German).
+**Audit log retention:** The audit log **does** have its own automatic retention period inside the application. It is independent of the domain retention periods and can be shorter: with the default values the audit log reaches back 24 months, whereas events at the `qualified` level remain for up to 3650 days (ten years), and a type period (`DocumentType.retention_days`) can be chosen freely. Audit traces for older domain data then no longer exist; only the exceptions listed below are kept permanently. Anyone who needs audit traces for the entire lifetime of the domain data sets `auditlog_retention_months` to at least the longest domain period of the facility, or to `0`. The settings page does not warn when the audit period is shorter ([ADR-021, update 2026-10-07](../adr/021-retention-modell.md#update-2026-10-07-audit-log-frist-und-fristen-zuschnitt), German).
 
 | Setting in `Settings` | Default | Effect |
 |---|---|---|
@@ -2487,5 +2487,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: a17a46c597985921b0dbd7bbcd963badd52f751a -->
+<!-- source-hash: 6fee737321d2dea2f99a8b03030969683323e2a6 -->
 <!-- translation-date: 2026-10-05 -->

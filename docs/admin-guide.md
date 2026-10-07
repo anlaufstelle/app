@@ -2066,7 +2066,7 @@ Unter **Core → Audit-Logs** (bzw. `/audit/`) können Logs nach Aktion, Einrich
 >
 > Dasselbe gilt für das `detail`-Feld: neue Zeilen tragen `owner_type` + `owner_id` (Werte `event`/`client`/`case`), Alt-Zeilen nur `event_id`. Download-Einträge zu **Ereignis**-Anhängen führen `event_id` zusätzlich weiter, damit Bestandsauswertungen nicht brechen. Ein Filter allein auf `Attachment` oder allein auf `detail->>'event_id'` liefert eine **stillschweigend unvollständige** Auswertung.
 
-**Aufbewahrung des Audit-Logs:** Das Audit-Log **hat** eine eigene automatische Löschfrist innerhalb der Anwendung — sie ist bewusst länger als alle Fach-Fristen, damit Forensik nach einem spät bemerkten Vorfall noch Spuren findet ([ADR-021](adr/021-retention-modell.md)).
+**Aufbewahrung des Audit-Logs:** Das Audit-Log **hat** eine eigene automatische Löschfrist innerhalb der Anwendung. Sie ist unabhängig von den Fach-Fristen und kann kürzer sein: Mit den Standardwerten reicht das Audit-Log 24 Monate zurück, Ereignisse der Stufe `qualified` bleiben dagegen bis zu 3650 Tage (zehn Jahre) bestehen, und eine Typ-Frist (`DocumentType.retention_days`) ist frei wählbar. Audit-Spuren zu älteren Fachdaten gibt es dann nicht mehr; dauerhaft bleiben nur die unten genannten Ausnahmen. Wer Audit-Spuren über die gesamte Lebensdauer der Fachdaten braucht, setzt `auditlog_retention_months` mindestens auf die längste Fach-Frist der Einrichtung oder auf `0`. Die Einstellungsseite warnt nicht, wenn die Audit-Frist kürzer ist ([ADR-021, Update 2026-10-07](adr/021-retention-modell.md#update-2026-10-07-audit-log-frist-und-fristen-zuschnitt)).
 
 | Einstellung in `Settings` | Standard | Wirkung |
 |---|---|---|
