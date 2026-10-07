@@ -117,7 +117,7 @@ class FacilitySettingsForm(TailwindFormMixin, forms.ModelForm):
                 )
                 % {"k": k, "minimum": K_ANONYMITY_MIN, "default": effective_k_threshold(k)}
             )
-        elif (low_k := k_threshold_warning(k)) is not None:
+        if k is not None and (low_k := k_threshold_warning(effective_k_threshold(k))) is not None:
             warnings.append(low_k)
         audit = self._audit_retention_warning()
         if audit is not None:

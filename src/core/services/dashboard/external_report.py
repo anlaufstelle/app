@@ -209,11 +209,12 @@ _ORDERS_CANONICAL_FOR_VISIBLE = frozenset({ORDER_CATEGORY})
 def effective_k_threshold(stored: int) -> int:
     """Threshold the reports compute with for a stored settings value.
 
-    The model validator keeps every stored value at ``K_ANONYMITY_MIN`` or above; a
-    smaller value only comes from a write that bypassed validation. ``0`` would
-    suppress nothing at all (no count is below 0), so it falls back to the default.
-    ``1`` stays as stored: it is the boundary the suppression functions are defined
-    for, and the settings page names it as below the minimum.
+    The model validator keeps every value saved through the form at ``K_ANONYMITY_MIN``
+    or above; a smaller value is either a stored value from before the validator or a
+    write that bypassed validation. ``0`` would suppress nothing at all (no count is
+    below 0), so it falls back to the default. ``1`` stays as stored: it is the boundary
+    the suppression functions are defined for; it is logged and warned about on the
+    settings page and on the report pages.
     """
     return stored if stored >= 1 else DEFAULT_K_THRESHOLD
 
@@ -241,13 +242,19 @@ def _get_threshold(facility) -> int:
 
 
 def k_threshold_warning(threshold):
-    """Risk warning for a threshold below 3 (ADR-023), ``None`` otherwise.
+    """Risk warning for an effective threshold below 3 (ADR-023), ``None`` otherwise.
 
     Below 3 the reports publish groups of two; persons in small groups can be
-    recognised from the figures. Shown on the settings page and the report pages.
+    recognised from the figures. At 1 nothing is suppressed, single cases included.
+    Shown on the settings page and the report pages.
     """
-    if threshold is None or not K_ANONYMITY_MIN <= threshold < K_ANONYMITY_WARN_BELOW:
+    if threshold is None or threshold >= K_ANONYMITY_WARN_BELOW:
         return None
+    if threshold < K_ANONYMITY_MIN:
+        return gettext_lazy(
+            "Die k-Anonymitäts-Schwelle liegt unter 3. Bei k = 1 wird keine Zahl unterdrückt; "
+            "auch Einzelfälle werden veröffentlicht und können Personen erkennbar machen. Empfohlen ist k = 5."
+        )
     return gettext_lazy(
         "Die k-Anonymitäts-Schwelle liegt unter 3. Gruppen ab zwei Datensätzen werden veröffentlicht; "
         "Personen in kleinen Gruppen können in den Zahlen wiedererkennbar sein. Empfohlen ist k = 5."

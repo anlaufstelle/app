@@ -1,8 +1,9 @@
 """Settings with privacy consequences: minimum values and visible warnings.
 
-k-anonymity threshold (ADR-023): ``1`` is rejected, ``2`` is stored with a warning on the
-settings page and on the external report page, ``5`` stays silent. A stored value below the
-minimum is never used for suppression.
+k-anonymity threshold (ADR-023): the form rejects ``1``, ``2`` is stored with a warning on the
+settings page and on the report pages, ``5`` stays silent. A stored value below the minimum is
+logged; ``0`` computes with the default, ``1`` keeps computing as stored and every effective
+value below 3 carries the warning on the settings page and on the report pages.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from tests.test_facility_settings_hub import _post_data
 
 K_WARNING = "Die k-Anonymitäts-Schwelle liegt unter 3."
 K_BELOW_MINIMUM = "liegt unter dem zulässigen Minimum 2"
+K_NO_SUPPRESSION = "Bei k = 1 wird keine Zahl unterdrückt"
 
 pytestmark = pytest.mark.django_db
 
@@ -94,6 +96,34 @@ class TestKAnonymityOnTheReportPage:
     def test_report_page_is_silent_for_five(self, client, lead_user, settings_obj):
         assert K_WARNING not in self._report(client, lead_user)
 
+    def test_report_page_warns_for_a_stored_one(self, client, lead_user, settings_obj):
+        Settings.objects.filter(pk=settings_obj.pk).update(k_anonymity_threshold=1)
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:statistics_external_report"))
+
+        assert response.status_code == 200
+        assert response.context["report"]["metadata"]["k_anonymity_threshold"] == 1
+        content = response.content.decode()
+        assert K_WARNING in content
+        assert K_NO_SUPPRESSION in content
+
+    def test_report_page_is_silent_for_a_stored_zero(self, client, lead_user, settings_obj):
+        Settings.objects.filter(pk=settings_obj.pk).update(k_anonymity_threshold=0)
+
+        assert K_WARNING not in self._report(client, lead_user)
+
+    @pytest.mark.parametrize("stored", [1, 2])
+    def test_report_preview_warns_below_three(self, client, lead_user, settings_obj, stored):
+        Settings.objects.filter(pk=settings_obj.pk).update(k_anonymity_threshold=stored)
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "sample-report-1"})
+
+        assert response.status_code == 200
+        assert response.context["k_anonymity_threshold"] == stored
+        assert K_WARNING in response.content.decode()
+
 
 class TestStoredThresholdBelowMinimum:
     """Only a write that bypasses validation can store 0 or 1; neither takes effect silently."""
@@ -125,6 +155,19 @@ class TestStoredThresholdBelowMinimum:
         content = _settings_page(client, admin_user)
 
         assert f"Berichte rechnen mit k = {effective}," in content
+
+    def test_settings_page_warns_for_a_stored_one(self, client, admin_user, settings_obj):
+        Settings.objects.filter(pk=settings_obj.pk).update(k_anonymity_threshold=1)
+
+        content = _settings_page(client, admin_user)
+
+        assert K_BELOW_MINIMUM in content
+        assert K_NO_SUPPRESSION in content
+
+    def test_settings_page_has_no_risk_warning_for_a_stored_zero(self, client, admin_user, settings_obj):
+        Settings.objects.filter(pk=settings_obj.pk).update(k_anonymity_threshold=0)
+
+        assert K_WARNING not in _settings_page(client, admin_user)
 
 
 AUDIT_WARNING = "ist kürzer als die längste Fach-Frist"
