@@ -34,6 +34,15 @@ backup_verify_hmac() {
         echo "FEHLER: HMAC-Sidecar fehlt (${file}.hmac) — Integrität nicht prüfbar. Abbruch." >&2
         return 1
     fi
+    # Backup files are 0600 for their owner: an unreadable file is a permission
+    # problem, not a wrong key or a damaged file.
+    local path
+    for path in "$file" "${file}.hmac"; do
+        if [[ ! -r "$path" ]]; then
+            echo "FEHLER: Backup-Datei nicht lesbar (${path}) — Integrität nicht prüfbar. Als Eigentümer der Backup-Dateien bzw. mit sudo starten. Abbruch." >&2
+            return 1
+        fi
+    done
     key="$(_backup_hmac_key)"
     expected="$(cat "${file}.hmac")"
     actual="$(openssl dgst -sha256 -hmac "$key" "$file" | awk '{print $NF}')"

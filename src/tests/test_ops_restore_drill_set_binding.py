@@ -228,3 +228,28 @@ def test_drill_step_zero_uses_the_shared_set_library(tmp_path: Path) -> None:
     assert "lib/backup-set.sh" in source, "restore-drill.sh muss die gemeinsame Satzbibliothek sourcen"
     assert "backup_set_load" in source and "backup_set_verify_artifacts" in source
     assert "hwm_sha256)" not in source, "Der Drill parst das Manifest nicht mehr selbst"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads files regardless of their mode")
+@pytest.mark.parametrize("suffix", [".manifest.hmac", ".manifest"])
+def test_unreadable_backup_file_names_the_permission_not_the_key(tmp_path: Path, suffix: str) -> None:
+    """A set file the caller cannot read is reported as a permission problem.
+
+    Backup files are ``0600 root``; a restore started without sudo used to end in
+    "HMAC-Pruefung fehlgeschlagen" and pointed at a wrong key or a damaged file.
+    """
+    _compose_dir, ops, db_file = _sandbox(
+        tmp_path, bind_media=False, write_media=False, bind_hwm=False, write_hwm=False
+    )
+    unreadable = db_file.parent / f"anlaufstelle_{TIMESTAMP}{suffix}"
+    unreadable.chmod(0)
+    try:
+        verify = _verify_rejects(ops, db_file)
+    finally:
+        unreadable.chmod(0o600)
+
+    assert verify.returncode != 0, verify.stderr
+    assert "nicht lesbar" in verify.stderr, verify.stderr
+    assert str(unreadable) in verify.stderr, verify.stderr
+    assert "sudo" in verify.stderr, verify.stderr
+    assert "HMAC-Pruefung fehlgeschlagen" not in verify.stderr, verify.stderr
