@@ -1028,8 +1028,8 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 1. `ENCRYPTION_KEYS=NEW_KEY,OLD_KEY` setzen (neuer Key zuerst → für Encrypt).
 2. `python manage.py reencrypt_fields --dry-run` → zeigt geplante Verschlüsselungs-Updates.
 3. `python manage.py reencrypt_fields` → re-encrypt aller verschlüsselten Felder mit NEW_KEY.
-4. ENCRYPTION_KEYS auf `NEW_KEY` reduzieren (OLD_KEY entfernen).
-5. App neu starten → Daten weiterhin lesbar.
+4. ENCRYPTION_KEYS bei `NEW_KEY,OLD_KEY` belassen: `reencrypt_fields` schlüsselt nur Datenbankfelder um, Dateianhänge bleiben mit OLD_KEY verschlüsselt.
+5. App neu starten → Felder und Dateianhänge weiterhin lesbar.
 
 **Erwartetes Ergebnis:**
 - Key-Rotation ohne Datenverlust.
