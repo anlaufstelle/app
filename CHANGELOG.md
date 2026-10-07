@@ -79,7 +79,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Admin-Handbuch zu Registry-Veröffentlichung, `APP_VERSION` und Postgres-Pflichtwerten berichtigt** (#2442) — Release-Tags (auch Pre-Releases) liegen als Image in der Registry, `APP_VERSION` erreicht den `web`-Container nicht, und `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_ADMIN_USER` sind Pflichtwerte ohne Compose-Fallback.
 - **Glossar-Fakten und englische Vertiefungen vervollständigt** (#2443) — Einladung, Nebenläufigkeit, Rollen, RLS, Arbeitszentrale sowie Offline- und Klarnamen-Zusagen folgen dem Code; Englisch enthält die Datenschutz-Vertiefungen.
 
-- **Handbuchbezeichnungen an die Oberfläche angeglichen** (#2455) — Profilwege, Filter, Aufgabenstatus, Export und Konfliktknöpfe sowie der Audit-Aufbewahrungshinweis nennen die sichtbaren Beschriftungen.
+- **Handbuchbezeichnungen an die Oberfläche angeglichen** (#2455) — Profilwege, Filter, Aufgabenstatus, Export und Konfliktknöpfe sowie der Audit-Aufbewahrungshinweis nennen die sichtbaren Beschriftungen und Zeitfilter ihren technischen Pflegeweg im Django-Admin.
 
 - **Englische Handbuchbegriffe und Audit-Hinweis präzisiert** (#2453) — Benutzerhandbuch und Glossar nutzen die englischen Oberflächenbegriffe einschließlich „Management > Access“; der Audit-Hinweis grenzt die protokollierte Personen-Detailseite ab und die Offline-Anleitung beschreibt den aktuellen Ablauf ohne Wellen-Vokabular.
 

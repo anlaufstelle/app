@@ -135,7 +135,7 @@ Die Sperre **endet von selbst**, sobald weniger als 10 gezählte Fehlversuche in
 **Entsperren durch die Administration:**
 
 1. Die Anwendungsbetreuung Ihrer Einrichtung öffnet **Verwaltung → Zugänge** → Ihren Zugang → unter „Sicherheitsaktionen" **Account-Sperre aufheben** (mit Sudo-Bestätigung) — das ist der Regelweg.
-2. Die Systemadministration entsperrt einrichtungsübergreifend unter **System → Sperrkonten**; im Django-Admin (**Anlaufstelle Core → Benutzer**) gibt es dafür nur noch eine Listenaktion als Ausweichweg.
+2. Die Systemadministration entsperrt einrichtungsübergreifend unter **Systembereich → Sperrkonten**; im Django-Admin (**Anlaufstelle Core → Benutzer**) gibt es dafür nur noch eine Listenaktion als Ausweichweg.
 3. Ist niemand mit Zugang zur Verwaltung erreichbar, entsperrt der Betrieb am Server per `unlock <username>` ([Admin-Guide § 2.7](admin-guide.md#account-lockout)).
 
 Jede Entsperrung wird im AuditLog als `LOGIN_UNLOCK` protokolliert.
@@ -219,7 +219,7 @@ Entsprechend erscheint auch der Sidebar-Eintrag „Arbeitszentrale" ausschließl
 
 Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das analoge A4-Übergabebuch.
 
-**Schichten** (konfigurierbar pro Einrichtung in Verwaltung → Zeitfilter):
+**Schichten** (pro Einrichtung im Django-Admin unter **Anlaufstelle Core → Zeitfilter**, durch die Anwendungsbetreuung mit bestätigtem Sudo-Modus):
 
 | Schicht | Zeitraum | Besonderheit |
 |---------|----------|-------------|
@@ -446,7 +446,7 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 | **Passwort-Pflicht** | Bei gesetztem `must_change_password`-Flag wird der User vor jeder Aktion zum Passwortwechsel gezwungen |
 | **Session-Timeout** | Konfigurierbar pro Einrichtung (Standard: 30 Min.), nach Ablauf **ohne Aktivität** automatischer Logout |
 | **Maximale Sitzungsdauer** | Zweite, aktivitätsunabhängige Grenze pro Einrichtung (Standard: 12 Std. ab Anmeldung); danach ist eine neue Anmeldung nötig, auch bei durchgehender Nutzung |
-| **Account-Sperre (Lockout)** | 10 fehlgeschlagene Logins innerhalb von 15 Minuten von derselben IP-Adresse sperren den Account; die Sperre endet von selbst, sobald weniger als 10 davon in den letzten 15 Minuten liegen (ohne neue Fehlversuche spätestens 15 Minuten nach dem letzten). `super_admin` ist ausgenommen (nur Ratelimits). Entsperren: Selbsthilfe auf der Login-Seite (E-Mail-Link, Backup-Code, Passwort-Reset), `facility_admin` unter Verwaltung → Zugänge, `super_admin` unter System → Sperrkonten, als letzter Weg `manage.py unlock <username>` (CLI) — siehe [FAQ #4a](#4a-mein-konto-ist-nach-mehreren-login-fehlversuchen-gesperrt--was-tun) |
+| **Account-Sperre (Lockout)** | 10 fehlgeschlagene Logins innerhalb von 15 Minuten von derselben IP-Adresse sperren den Account; die Sperre endet von selbst, sobald weniger als 10 davon in den letzten 15 Minuten liegen (ohne neue Fehlversuche spätestens 15 Minuten nach dem letzten). `super_admin` ist ausgenommen (nur Ratelimits). Entsperren: Selbsthilfe auf der Login-Seite (E-Mail-Link, Backup-Code, Passwort-Reset), `facility_admin` unter Verwaltung → Zugänge, `super_admin` unter Systembereich → Sperrkonten, als letzter Weg `manage.py unlock <username>` (CLI) — siehe [FAQ #4a](#4a-mein-konto-ist-nach-mehreren-login-fehlversuchen-gesperrt--was-tun) |
 | **Zurücksetzen des zweiten Faktors** | `facility_admin` für Zugänge der eigenen Einrichtung (ohne `super_admin`-Konten), `super_admin` für alle Konten; nie das eigene Konto, immer mit Sudo, protokolliert als `MFA_RESET_BY_ADMIN` — siehe [FAQ #4](#4-ich-habe-mein-handy-verloren--wie-komme-ich-wieder-rein) |
 
 #### Technische Steuerungsparameter
