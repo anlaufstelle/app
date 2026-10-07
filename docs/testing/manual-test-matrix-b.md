@@ -3906,7 +3906,7 @@
 **Services:** `src/core/services/retention.py`  
 **Management-Commands:** `enforce_retention`, `reencrypt_fields`  
 **E2E-Coverage:** `test_retention_dashboard.py`  
-**Spezial-Setup:** Testereignisse nach Kategorie (anonym, Kontaktstufe „Pseudonym“/„Mit Zusatzangaben“) vorbereiten; Für anonyme/identifizierte Ereignisse `occurred_at` zurückdatieren; für qualifizierte Personen Ereignisse einem geschlossenen Fall zuordnen und dessen `closed_at` zurückdatieren. Trockenlauf über `docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run`.
+**Spezial-Setup:** Testereignisse nach Kategorie (anonym, Kontaktstufe „Nur Pseudonym“/„Mit Zusatzangaben“) vorbereiten; Für anonyme/identifizierte Ereignisse `occurred_at` zurückdatieren; für qualifizierte Personen Ereignisse einem geschlossenen Fall zuordnen und dessen `closed_at` zurückdatieren. Trockenlauf über `docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run`.
 
 ---
 
@@ -3928,7 +3928,7 @@
 3. Spaltenüberschriften und Sortierung prüfen.
 
 **Erwartetes Ergebnis:**
-- Liste der Daten mit ablaufender Frist: standardmäßig 90 Tage für anonyme Ereignisse, 365 Tage bei Kontaktstufe „Pseudonym“ (IDENTIFIED), 3650 Tage bei „Mit Zusatzangaben“ (QUALIFIED). Maßgeblich sind die aktuellen Einrichtungs-Einstellungen; die Frist läuft bei anonymen/identifizierten Ereignissen ab `occurred_at`, bei qualifizierten Ereignissen ab `closed_at` des zugeordneten geschlossenen Falls. Ohne solchen Fall greift die qualifizierte Strategie nicht.
+- Liste der Daten mit ablaufender Frist: standardmäßig 90 Tage für anonyme Ereignisse, 365 Tage bei Kontaktstufe „Nur Pseudonym“ (IDENTIFIED), 3650 Tage bei „Mit Zusatzangaben“ (QUALIFIED). Maßgeblich sind die aktuellen Einrichtungs-Einstellungen; die Frist läuft bei anonymen/identifizierten Ereignissen ab `occurred_at`, bei qualifizierten Ereignissen ab `closed_at` des zugeordneten geschlossenen Falls. Ohne solchen Fall greift die qualifizierte Strategie nicht.
 - Holds-Tab listet aktive Sperren.
 - Historie-Tab zeigt vergangene Approvals/Rejections inkl. Akteur:in und Zeitstempel.
 

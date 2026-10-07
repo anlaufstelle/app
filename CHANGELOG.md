@@ -59,6 +59,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Retention-Handtests am Datenmodell ausgerichtet** (#2498) — Matrix D prüft Ereignisfristen, Fallabschlüsse, k-Schwelle, Paket-Zugriff und Audit-Schutz mit gültigen Routen und Code-Belegen.
+
 - **Seed-Referenzen der Testmatrizen vereinheitlicht** (#2493) — Aufrufe, Konten, Datenvolumen und Dokumentationstypen in den Matrizen und im E2E-Runbook folgen dem aktuellen Seed.
 
 - **DSGVO-, Offline- und Systemprüfungen berichtigt** (#2496) — Matrix B beschreibt die tatsächlichen Paket-Zugriffe, Audit-Aktionen, Offline-Speicherfristen und Systemantworten samt passenden Testbelegen.

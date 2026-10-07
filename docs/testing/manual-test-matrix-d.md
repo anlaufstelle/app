@@ -23,7 +23,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 **Voraussetzung:** Klient:in mit mindestens einem `Case` (Status egal — entscheidend ist die FK-Beziehung).
 
 **Code-Referenz:**
-- `src/core/models/case.py:29-38` — `Case.client on_delete=PROTECT` mit explizitem help_text: „PROTECT verhindert versehentliches Löschen einer Person mit aktiven Fällen."
+- `src/core/models/case.py` (`Case.client`) — `Case.client on_delete=PROTECT` mit explizitem help_text: „PROTECT verhindert versehentliches Löschen einer Person mit aktiven Fällen."
 
 **Schritte:**
 1. `python manage.py shell`.
@@ -55,8 +55,8 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 **Voraussetzung:** Fall mit ≥ 3 `OutcomeGoal` und je Goal ≥ 2 `Milestone` (Seed oder manuell anlegen).
 
 **Code-Referenz:**
-- `src/core/models/outcome.py:14` — `OutcomeGoal.case on_delete=CASCADE`.
-- `src/core/models/outcome.py:40` — `Milestone.goal on_delete=CASCADE`.
+- `src/core/models/outcome.py` (`OutcomeGoal.case`) — `OutcomeGoal.case on_delete=CASCADE`.
+- `src/core/models/outcome.py` (`Milestone.goal`) — `Milestone.goal on_delete=CASCADE`.
 
 **Schritte:**
 1. `python manage.py shell` öffnen.
@@ -88,7 +88,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 **Voraussetzung:** Fall mit ≥ 2 zugeordneten `Event`s (`event.case = <fall>`).
 
 **Code-Referenz:**
-- `src/core/models/event.py:38-40` — `Event.case on_delete=SET_NULL, null=True`.
+- `src/core/models/event.py` (`Event.case`) — `Event.case on_delete=SET_NULL, null=True`.
 
 **Schritte:**
 1. Shell: Event-UUIDs notieren, `Event.objects.filter(case_id=<uuid>).values_list('id', 'case_id')` ausgeben.
@@ -227,7 +227,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 **Erwartetes Ergebnis:**
 - Eintrag wechselt in Tab „Holds".
-- POST an `/api/retention/<uuid>/hold/` erfolgreich (HTTP 200).
+- POST an `/partials/retention/<uuid>/hold/` erfolgreich (HTTP 200).
 - Cron-Lauf überspringt Eintrag (kein Anonymize/Delete).
 - Audit-Log: „Hold gesetzt durch leitung".
 
@@ -268,7 +268,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 ---
 
-#### DEV-RET-07 — retention_anonymous_days = 90 → Anonyme Klient:in nach 90 Tagen
+#### DEV-RET-07 — Anonyme Ereignisse nach 90 Tagen
 
 > 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
@@ -276,30 +276,27 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 |---------|-------|---------|--------|-----|
 | Aufbewahrung | admin | C | ⚪ | `test_retention_dashboard.py` |
 
-**Voraussetzung:** Settings `retention_anonymous_days = 90`; Anonymous-Klient:in (kein Echtname, nur Pseudonym) seit 91 Tagen.
+**Voraussetzung:** Einrichtungs-Einstellung `retention_anonymous_days=90`; zwei isolierte Testereignisse mit `is_anonymous=True`, `is_deleted=False`, ohne Person und ohne Legal Hold. Dokumentationstyp ohne eigene `retention_days`.
 
-**Vorbereitung:**
-- DB-Backdate: `UPDATE core_client SET created_at = NOW() - INTERVAL '91 days' WHERE sensitivity = 'anonymous';`
-- `python manage.py enforce_retention --dry-run`.
+**Vorbereitung:** In der lokalen Testdatenbank gezielt `Event.occurred_at` eines Ereignisses auf vor 91 Tagen setzen, das Kontrollereignis auf vor 89 Tagen. IDs notieren. Keine pauschale Änderung aller Datensätze.
+
+**Code-Referenz:** `src/core/retention/strategies.py` (`iter_strategies`, Kategorie `anonymous`).
 
 **Schritte:**
-1. Dry-Run-Output prüfen.
-2. `python manage.py enforce_retention` (live).
-3. Klient-Detail aufrufen.
+1. Aus dem Repository mit aktivierter virtueller Umgebung `python src/manage.py enforce_retention --dry-run --facility "<Einrichtungsname>"` ausführen; erwartete Anzahl mit den vorbereiteten Ereignissen abgleichen.
+2. `python src/manage.py enforce_retention --facility "<Einrichtungsname>"` ausführen (DB-Rolle mit RLS-Bypass erforderlich).
+3. Beide Ereignisse in der DB vergleichen.
 
 **Erwartetes Ergebnis:**
-- Dry-Run listet anonymen Klient als „würde anonymisiert".
-- Nach Live-Run: Pseudonym auf Hash-Prefix gekürzt, Notizen geleert.
-- Audit-Eintrag „auto-anonymized (anonymous_days=90)".
-
-**DSGVO/Security-Note:**
-- Niedrigste Sensitivität = kürzeste Frist (Datenminimierung Art. 5 Abs. 1 lit. c).
+- Das 91 Tage alte Ereignis ist soft-gelöscht (`is_deleted=True`), seine Inhaltsdaten sind redigiert.
+- Das 89 Tage alte Kontrollereignis bleibt aktiv und unverändert.
+- Kein Personen-Datensatz wird für ein Ereignis ohne Person anonymisiert.
 
 **Status:** ☐ Offen
 
 ---
 
-#### DEV-RET-08 — retention_identified_days = 365 → Identifiziert nach 1 Jahr
+#### DEV-RET-08 — „Nur Pseudonym“: Ereignisse nach 365 Tagen
 
 > 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
@@ -307,31 +304,27 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 |---------|-------|---------|--------|-----|
 | Aufbewahrung | admin | C | ⚪ | `test_retention_dashboard.py` |
 
-**Voraussetzung:** Settings `retention_identified_days = 365`; identifizierte:r Klient:in seit 366 Tagen.
+**Voraussetzung:** `retention_identified_days=365`; Person mit `contact_stage=Client.ContactStage.IDENTIFIED` (UI: „Nur Pseudonym“), genau zwei aktive Ereignisse ohne Hold. Dokumentationstyp ohne eigene `retention_days`; `retention_use_k_anonymization=False`.
 
-**Vorbereitung:**
-- DB-Backdate für `sensitivity='identified'`.
-- Cron noch nicht gelaufen.
+**Vorbereitung:** Gezielt `Event.occurred_at` auf vor 366 bzw. vor 364 Tagen setzen. `Client.created_at` beeinflusst diese Frist nicht.
+
+**Code-Referenz:** `src/core/retention/strategies.py` (`iter_strategies`), `src/core/retention/anonymization.py` (`anonymize_clients`).
 
 **Schritte:**
-1. `/retention/` Tab „Ablaufende" — Klient sollte erscheinen.
-2. Bulk-Approve auswählen.
-3. `python manage.py enforce_retention`.
-4. Klient-Detail prüfen.
+1. `python src/manage.py enforce_retention --dry-run --facility "<Einrichtungsname>"` ausführen.
+2. `python src/manage.py enforce_retention --facility "<Einrichtungsname>"` ausführen; Ereignisse und Person prüfen.
+3. Auch das Kontrollereignis gezielt auf vor 366 Tagen setzen und den Live-Aufruf wiederholen.
 
 **Erwartetes Ergebnis:**
-- Klient erscheint im Tab „Ablaufende" mit Hinweis „Frist: 365 Tage".
-- Nach Approve + Cron: Anonymisierung (Echtname → Pseudonym, Adresse geleert).
-- Verknüpfte Events bleiben mit anonymisiertem Klient-Bezug.
-
-**DSGVO/Security-Note:**
-- Mittlere Sensitivität = Standardfrist 1 Jahr (Art. 5 Abs. 1 lit. e Speicherbegrenzung).
+- Nach Schritt 2 ist nur das ältere Ereignis soft-gelöscht; die Person bleibt wegen des aktiven Kontrollereignisses unverändert.
+- Nach Schritt 3 sind beide Ereignisse soft-gelöscht; erst jetzt wird die Person anonymisiert (Pseudonym `Gelöscht-…`, Notizen redigiert).
+- Die Ereigniszeilen bleiben vorhanden; die Audit-Spur enthält `DELETE` mit Kategorie `client_anonymized`.
 
 **Status:** ☐ Offen
 
 ---
 
-#### DEV-RET-09 — retention_qualified_days = 3650 → Qualifiziert (Pflicht) 10 Jahre
+#### DEV-RET-09 — „Mit Zusatzangaben“: Frist ab Fallabschluss
 
 > 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
@@ -339,25 +332,23 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 |---------|-------|---------|--------|-----|
 | Aufbewahrung | admin | C | ⚪ | `test_retention_dashboard.py` |
 
-**Voraussetzung:** Settings `retention_qualified_days = 3650`; qualifizierte:r Klient:in (z.B. Hilfeplan §27 SGB VIII) seit 1 Jahr.
+**Voraussetzung:** `retention_qualified_days=3650`; Person mit `contact_stage=Client.ContactStage.QUALIFIED` (UI: „Mit Zusatzangaben“). Drei aktive Ereignisse: eines in einem geschlossenen Fall, eines in einem offenen Fall und eines ohne Fall. Kein Hold, Dokumentationstyp ohne eigene `retention_days`.
 
-**Vorbereitung:**
-- Klient mit `sensitivity='qualified'` angelegt.
-- Cron läuft täglich.
+**Vorbereitung:** Geschlossenen Fall mit `status=Case.Status.CLOSED` und `Case.closed_at` vor 3649 Tagen vorbereiten. Ereignisse dürfen älter als 3650 Tage sein.
+
+**Code-Referenz:** `src/core/retention/strategies.py` (`iter_strategies`, Kategorie `qualified`).
 
 **Schritte:**
-1. `/retention/` Tab „Ablaufende" prüfen → Klient darf NICHT erscheinen.
-2. DB-Backdate auf 3651 Tage.
-3. `/retention/` erneut prüfen.
-4. `python manage.py enforce_retention --dry-run`.
+1. `python src/manage.py enforce_retention --dry-run --facility "<Einrichtungsname>"` ausführen: keines der drei Ereignisse ist über diese Strategie fällig.
+2. Nur `Case.closed_at` des geschlossenen Falls auf vor 3651 Tagen setzen.
+3. Trockenlauf wiederholen, anschließend `python src/manage.py enforce_retention --facility "<Einrichtungsname>"` ausführen.
+4. Alle drei Ereignisse und die Person prüfen.
 
 **Erwartetes Ergebnis:**
-- Vor Backdate: Klient nicht in „Ablaufende" (Frist 10 Jahre).
-- Nach Backdate: Klient erscheint zur Anonymisierungs-Freigabe.
-- Dry-Run dokumentiert geplante Aktion mit Frist-Berechnung.
-
-**DSGVO/Security-Note:**
-- Höchste Sensitivität = längste Pflicht-Aufbewahrung (Schnittstelle SGB VIII §62 ff., AO §147 Abs. 3 — überlagert Art. 17 DSGVO als spezialgesetzliche Pflicht).
+- Nur das Ereignis im abgelaufenen geschlossenen Fall wird soft-gelöscht.
+- Ereignisse im offenen Fall und ohne Fall bleiben aktiv, auch mit altem `occurred_at`.
+- Die Person bleibt wegen der aktiven Ereignisse unverändert.
+- Die Frist ist eine Einrichtungs-Einstellung; dieser Test belegt keine allgemeine gesetzliche Zehnjahrespflicht.
 
 **Status:** ☐ Offen
 
@@ -394,7 +385,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 ---
 
-#### DEV-RET-11 — Event-Sensitivity beeinflusst Aufbewahrung (HIGH vs. NORMAL)
+#### DEV-RET-11 — Dokumentationstyp-Frist statt Event-Sensitivity
 
 > 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
@@ -402,25 +393,20 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 |---------|-------|---------|--------|-----|
 | Aufbewahrung | admin | C | — | `test_retention_sensitivity.py` |
 
-**Voraussetzung:** Zwei Events am gleichen Klienten — eines mit `sensitivity=NORMAL`, eines mit `sensitivity=HIGH` (über DocumentType-Mindeststufe gesteuert).
+**Voraussetzung:** Zwei Ereignis-Dokumentationstypen (`entity_type=EVENT`) mit gleicher `sensitivity`, aber `retention_days=30` bzw. `60`. Je ein anonymes Ereignis ohne Hold, beide mit `occurred_at` vor 31 Tagen; `retention_anonymous_days=90`.
 
-**Code-Referenz:**
-- `src/core/services/retention.py` — Frist-Berechnung pro Sensitivity.
-- `src/core/models/event.py` — `sensitivity`-Feld + Default-Logik.
+**Code-Referenz:** `src/core/retention/strategies.py` (`iter_strategies`, Kategorie `document_type`), `src/core/models/document_type.py` (`DocumentType.retention_days`).
 
 **Schritte:**
-1. DB-Backdate beide Events um genau das Maximum der NORMAL-Frist (z.B. `retention_event_normal_days`).
-2. `python manage.py enforce_retention --dry-run` ausführen.
-3. Output filtern auf die beiden Event-IDs.
-4. Backdate +1 Tag, erneut `--dry-run`.
+1. `python src/manage.py enforce_retention --dry-run --facility "<Einrichtungsname>"` ausführen.
+2. `python src/manage.py enforce_retention --facility "<Einrichtungsname>"` ausführen; beide Ereignisse in der DB prüfen.
+3. `occurred_at` des verbleibenden Ereignisses auf vor 61 Tagen setzen und die Aufrufe wiederholen.
 
 **Erwartetes Ergebnis:**
-- NORMAL-Event erscheint zur Anonymisierung, HIGH-Event nicht (längere Frist).
-- Falls Code nur eine einheitliche Frist kennt: TC dokumentiert die Lücke, Backlog-Eintrag mit Verweis auf SGB VIII §62 ff.
-- AuditLog enthält keine Anonymisierungs-Aktion (Dry-Run).
-
-**DSGVO/Security-Note:**
-- Art. 5 Abs. 1 lit. e (Speicherbegrenzung) — Sensitivität rechtfertigt unterschiedliche Aufbewahrungsdauern; Pflichtfristen (SGB VIII §62 Abs. 3, AO §147) überlagern Art. 17.
+- Nach Schritt 2 ist nur das Ereignis mit 30-Tage-Typ soft-gelöscht; das mit 60-Tage-Typ bleibt aktiv.
+- Nach Schritt 3 ist auch das zweite Ereignis soft-gelöscht.
+- Maßgeblich ist `DocumentType.retention_days`, kein `Event.sensitivity` oder `retention_event_normal_days`. Andere passende Retention-Strategien können ein Ereignis früher auswählen.
+- Der Trockenlauf schreibt keine Lösch- oder Anonymisierungs-Aktion.
 
 **Status:** ☐ Offen
 
@@ -542,9 +528,9 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 1. `python manage.py shell` ausführen.
 2. `from core.models.audit import AuditLog`
 3. `entry = AuditLog.objects.first()`
-4. `entry.action = "TAMPERED"; entry.save()` versuchen → erwartet `ValueError` oder `IntegrityError`.
-5. `entry.delete()` versuchen → erwartet `ValueError` oder gleiche Exception.
-6. DB-Direktzugriff: `psql` → `UPDATE core_auditlog SET action='X' WHERE id=...;` → Trigger blockiert (PG-Exception).
+4. `entry.action = "TAMPERED"; entry.save()` versuchen → erwartet `ValueError`.
+5. `entry.delete()` versuchen → erwartet `ValueError`.
+6. DB-Direktzugriff: `psql` → `UPDATE core_auditlog SET action='X' WHERE id=...;` und entsprechendes `DELETE` versuchen → Trigger blockiert beide (PG-Exception).
 
 **Erwartetes Ergebnis:**
 - Schritt 4: ValueError mit Message wie „AuditLog ist append-only, save() nicht erlaubt".
@@ -552,9 +538,9 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 - Schritt 6: PostgreSQL-Trigger wirft Exception, UPDATE/DELETE rollt zurück.
 
 **DSGVO/Security-Note:**
-- **DSGVO-Beleg Art. 5 (Integrität & Vertraulichkeit):** Audit-Log ist immutable und damit gerichtsfest.
+- **DSGVO-Beleg Art. 5 (Integrität & Vertraulichkeit):** Audit-Log ist gegen UPDATE/DELETE geschützt; dieser Test belegt keine Gerichtsfestigkeit.
 - Append-Only ist mehrlagig: Django-Model-Override + PostgreSQL-Trigger (Defense-in-Depth).
-- Auch Superuser/Admin-User kann Audit-Log nicht manipulieren.
+- Ein App-Admin darf UPDATE/DELETE nicht durchführen; ein DB-Superuser könnte Trigger deaktivieren und gehört nicht zum App-Rechtemodell.
 
 **Status:** ☐ Offen
 
@@ -579,7 +565,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 2. `/audit/` aufrufen — nur die 5 Audit-Einträge der Facility A sichtbar.
 3. Versuch: `/audit/<uuid-von-facility-B>/` direkt aufrufen → 404 (RLS blockt).
 4. Als Admin-B einloggen, gleicher Test umgekehrt.
-5. SQL-Probe: `psql` ohne `SET app.current_facility_id` → 0 Audit-Einträge sichtbar (RLS-Default-Deny).
+5. SQL-Probe: in einer frischen `psql`-Verbindung als RLS-gefilterte Laufzeitrolle (kein Superuser/BYPASSRLS), ohne Einrichtungs-GUC und ohne Super-Admin-GUC lesen → 0 Audit-Einträge sichtbar (RLS-Default-Deny). Ein Lauf als DB-Admin belegt diesen Schutz nicht.
 
 **Erwartetes Ergebnis:**
 - Admin sieht ausschließlich Audit-Einträge der eigenen Facility.
@@ -589,13 +575,13 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 **DSGVO/Security-Note:**
 - **DSGVO Art. 32 (Mandantentrennung):** Audit-Log ist facility-gescoped via RLS.
 - Auch ein kompromittierter Admin-Account kann nicht über Facility-Grenzen lesen.
-- AuditLog-Tabelle in `JOIN_TABLES` der RLS-Migration `0047_postgres_rls_setup.py` registriert.
+- AuditLog-Tabelle in `DIRECT_TABLES` der RLS-Migration `0047_postgres_rls_setup.py` registriert.
 
 **Status:** ☐ Offen
 
 ### D.DSGVO
 
-#### DEV-DSGVO-Art17-03 — Auto-Anonymisierung mit k-Anonymität
+#### DEV-DSGVO-Art17-03 — Auto-Anonymisierung mit k-Schwelle und sicherem Rückfall
 
 > 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose -f docker-compose.prod.yml run --rm maintenance <command>`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
 
@@ -607,24 +593,25 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 **Code-Referenz:**
 - `src/core/retention/anonymization.py` (`anonymize_clients`)
-- `src/core/services/k_anonymization.py` (k=5 Default)
+- `src/core/services/compliance/k_anonymization.py` (`is_k_anonymous`, `k_anonymize_client`; Schwelle aus Einrichtungs-Einstellungen)
 - `src/core/management/commands/enforce_retention.py`
 
-**Voraussetzung:** Backdate-Daten (Klient:in mit `created_at` vor 400 Tagen).
+**Voraussetzung:** `retention_use_k_anonymization=True`, `k_anonymity_threshold=5`; mindestens fünf Personen im selben Bucket aus `age_cluster` und `contact_stage`, zusätzlich eine Person in einem Bucket mit weniger als fünf Mitgliedern. Je Person mindestens ein Ereignis, alle bereits soft-gelöscht, kein aktiver Hold.
+
+**Code-Referenz:** `src/core/retention/anonymization.py` (`anonymize_clients`), `src/core/services/compliance/k_anonymization.py` (`is_k_anonymous`, `k_anonymize_client`).
 
 **Schritte:**
-1. SQL: `UPDATE core_client SET created_at = NOW() - INTERVAL '400 days' WHERE id = '<uuid>'`.
-2. `python manage.py enforce_retention --dry-run` ausführen → zeigt geplante Anonymisierungen.
-3. `python manage.py enforce_retention` ausführen.
-4. Klient:in in DB prüfen: `pseudonym` ist auf k-anon-Cluster gesetzt, alle direkt identifizierenden Felder leer.
-5. Events der Klient:in: Sensitive Inhalte gelöscht oder generalisiert.
-6. AuditLog: `CLIENT_ANONYMIZED` mit Cluster-Hinweis.
+1. In der lokalen Testdatenbank die Vorbedingungen anhand der Ereignisse (`is_deleted=True`) und Bucket-Mitgliedschaft prüfen. Ein altes `Client.created_at` reicht nicht.
+2. `python src/manage.py enforce_retention --dry-run --facility "<Einrichtungsname>"` ausführen und Kandidatenzahl prüfen.
+3. `python src/manage.py enforce_retention --facility "<Einrichtungsname>"` ausführen.
+4. Personen, Ereignisse und Audit-Spur vergleichen.
 
 **Erwartetes Ergebnis:**
-- k-Anonymität: Klient:in ist mit ≥ 4 anderen ununterscheidbar (k=5).
-- Audit-Spur dokumentiert Anonymisierung.
-
-**Erwarteter Audit-Eintrag:** `CLIENT_ANONYMIZED` mit `anonymization_run_id`.
+- Im ausreichend besetzten Bucket: `k_anonymized=True`; Pseudonym und Notizen redigiert, Quasi-Identifikatoren für den Bucket bleiben erhalten.
+- Unterbesetzter Bucket: harte Anonymisierung (`Gelöscht-…`), keine fälschliche k-Anonymitätszusage.
+- Personen mit aktiven Ereignissen oder aktivem Hold werden nicht anonymisiert.
+- Ereignisinhalte und personenbezogene Nebenbestände bleiben redigiert.
+- Audit: `DELETE` mit Kategorie `client_k_anonymized` bzw. `client_anonymized`; kein erfundener `CLIENT_ANONYMIZED`-Eintrag mit `anonymization_run_id`.
 
 **Status:** ☐ Offen
 
@@ -642,7 +629,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 **Code-Referenz:**
 - `src/core/views/retention.py` (`RetentionHoldView`, `RetentionDismissHoldView`)
-- `src/core/models/legalhold.py` (`LegalHold`)
+- `src/core/models/retention.py` (`LegalHold`)
 
 **Voraussetzung:** Backdate-Daten, Retention-Dashboard offen.
 
@@ -705,13 +692,13 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 **Code-Referenz:**
 - `src/core/management/commands/generate_dsgvo_package.py`
-- `src/core/services/dsgvo_package.py`
+- `src/core/services/client/dsgvo_package.py`
 
-**Voraussetzung:** Sudo-Mode aktiv.
+**Voraussetzung:** Einrichtungs-Admin angemeldet und aktuelle Einrichtung ausgewählt; kein Sudo-Mode erforderlich.
 
 **Schritte:**
 1. `python manage.py generate_dsgvo_package` ausführen → erzeugt Markdown-Templates.
-2. Mit `admin` einloggen, Sudo-Mode betreten, `/dsgvo/` öffnen.
+2. Mit dem Einrichtungs-Admin einloggen, `/dsgvo/` öffnen, ohne Sudo-Mode zu betreten.
 3. **„Verarbeitungsverzeichnis"** herunterladen.
 4. Inhalt prüfen:
    - Verarbeitungszwecke benannt (Soziale Beratung, Falldokumentation).
@@ -724,7 +711,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 **Erwartetes Ergebnis:**
 - Template ist vollständig, Facility-spezifisch gerendert.
 
-**Erwarteter Audit-Eintrag:** `EXPORT` mit `slug=verarbeitungsverzeichnis`.
+**Erwarteter Audit-Eintrag:** `EXPORT` mit `detail.document=verarbeitungsverzeichnis`.
 
 **Status:** ☐ Offen
 
@@ -740,7 +727,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 **DSGVO-Artikel-Zitat:** *Art. 32 — Verschlüsselung als TOM.*
 
-**Code-Referenz:** `src/core/services/encryption.py` (`MultiFernet`, Key-Rotation)
+**Code-Referenz:** `src/core/services/file_vault/encryption.py` (`MultiFernet`, Key-Rotation)
 
 **Voraussetzung:** ENCRYPTION_KEY gesetzt.
 
@@ -802,7 +789,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 **DSGVO-Artikel-Zitat:** *Art. 33 — Meldung an Aufsichtsbehörde binnen 72h. Art. 34 — Benachrichtigung der Betroffenen bei hohem Risiko.*
 
 **Code-Referenz:**
-- `src/core/services/breach_detection.py`
+- `src/core/services/compliance/breach_detection.py`
 - `src/core/management/commands/detect_breaches.py`
 
 **Voraussetzung:** mind. 11 fehlgeschlagene Logins eines Users.
@@ -958,17 +945,9 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 **Code-Referenz:** `src/core/models/audit.py` (`AuditLog.save()` raises on update, `delete()` raises)
 
-**Schritte:**
-1. `python manage.py shell` öffnen.
-2. `from core.models import AuditLog`
-3. `log = AuditLog.objects.first()`
-4. `log.action = 'TAMPERED'; log.save()` → erwarte `ValueError` (Append-Only).
-5. `log.delete()` → erwarte `ValueError`.
-6. Direkt-SQL: `UPDATE core_auditlog SET action='X' WHERE id='<uuid>'` — falls DB-Trigger vorhanden: blockiert. Falls nur App-Layer: SQL umgeht App-Schutz, dann RLS+DB-Trigger ergänzen.
+**Schritte:** Die vollständige Probe [DEV-AUDIT-04](#dev-audit-04--append-only-probe-dsgvo-beleg-art-5) durchführen und deren Ergebnis hier referenzieren.
 
-**Erwartetes Ergebnis:**
-- App-Layer verhindert UPDATE/DELETE.
-- Falls DB-Trigger vorhanden: auch SQL-Direkt-Tampering blockiert.
+**Erwartetes Ergebnis:** Model-UPDATE und -DELETE sowie direktes SQL-UPDATE und -DELETE werden blockiert. Ein fehlender oder umgehbarer DB-Trigger ist ein Fehler, kein bestandener Fall.
 
 **Status:** ☐ Offen
 
@@ -1007,7 +986,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 | Security | admin | — | — | `src/tests/test_encryption.py` |
 
 **Code-Referenz:**
-- `src/core/services/encryption.py` (MultiFernet-Rotation)
+- `src/core/services/file_vault/encryption.py` (MultiFernet-Rotation)
 - `src/core/management/commands/reencrypt_fields.py`
 
 **Voraussetzung:** ENCRYPTION_KEYS mit 2 Schlüsseln (alt+neu).
@@ -1033,7 +1012,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | — | — | — | `src/tests/test_security_hardening.py` |
+| Security | — | — | — | `src/tests/test_security_headers_single_source.py` |
 
 **Schritte:**
 1. `curl -sI https://anlaufstelle-prod-mirror.example/` → alle Sicherheits-Header gesetzt.
@@ -1193,7 +1172,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | admin | — | — | `src/tests/test_migrations.py` (falls vorhanden) |
+| Ops | admin | — | — | — (lokale CLI-Prüfung) |
 
 **Schritte:**
 1. SSH: `docker compose -f docker-compose.prod.yml run --rm maintenance migrate --check` → Exit-Code 0.
@@ -1214,7 +1193,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | admin | — | — | `src/tests/test_retention_*.py` |
+| Ops | admin | — | — | `src/tests/test_retention.py` |
 
 **Code-Referenz:**
 - [`src/core/management/commands/enforce_retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/enforce_retention.py)
