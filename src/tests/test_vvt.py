@@ -115,12 +115,14 @@ class TestProcessingActivitiesSchema:
             assert missing == set(), f"Eintrag {entry.get('id', '?')} fehlen Felder: {missing}"
 
     def test_toms_describe_append_only_not_hash_chain(self):
-        """A6.2 (Refs #1024 / #1016): keine TOM darf 'Hash-Chain'-Integrität
-        behaupten.
+        """A6.2 (Refs #1024 / #1016): no TOM may base append-only on a
+        'Hash-Chain'.
 
-        Der AuditLog ist Append-Only via DB-Trigger + RLS-Policies — es gibt
-        keine kryptographische Hash-Kette. Eine solche Behauptung im VVT wäre
-        eine unzutreffende DSGVO-Art.-30-Dokumentation.
+        Append-only is enforced by DB trigger + RLS policies. The per-facility
+        HMAC chain (``AuditLog.prev_hash``/``entry_hash``,
+        ``core.services.audit.chain``, Refs #1070) makes tampering detectable
+        afterwards but blocks no write; a TOM presenting it as the append-only
+        mechanism would misstate the Art. 30 record.
         """
         for entry in PROCESSING_ACTIVITIES:
             for tom in entry["toms"]:

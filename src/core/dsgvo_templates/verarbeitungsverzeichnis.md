@@ -16,7 +16,7 @@
 - Qualitätssicherung der sozialen Arbeit
 
 ### 1.2 Kategorien betroffener Personen
-- Begleitete Personen der Einrichtung (Jugendliche und junge Erwachsene)
+- Begleitete Personen der Einrichtung; Zielgruppe: [Zielgruppe eintragen, z. B. Jugendliche und junge Erwachsene, Ratsuchende einer Beratungsstelle, Bewohnerinnen eines Frauenhauses, Gäste einer Veranstaltung]
 - Mitarbeitende der Einrichtung
 
 ### 1.3 Kategorien personenbezogener Daten
@@ -88,9 +88,11 @@ Bestreitet eine betroffene Person die Richtigkeit ihrer Daten (Art. 18 Abs. 1 li
 - Nachvollziehbarkeit von Änderungen (Audit-Log)
 
 ### 2.2 Kategorien personenbezogener Daten
-- Benutzername, Anzeigename
-- Rolle (Systemadministration, Anwendungsbetreuung, Leitung, Fachkraft, Assistenz)
-- Anmeldezeitpunkte (Audit-Log)
+- Benutzername, Anzeigename, E-Mail-Adresse
+- Rolle (Systemadministration, Anwendungsbetreuung, Leitung, Fachkraft, Assistenz), Berechtigung zur Bestätigung von Löschanträgen, Einrichtungszuordnung
+- Telefonnummer, Sprache und interne Kontonotiz, sofern diese Felder genutzt werden
+- Passwort-Hash, MFA-Pflicht und -Geräte, verschlüsselte TOTP-Secrets, gehashte Wiederherstellungscodes und Sicherheitsfristen
+- Anmelde-, Sperr- und Audit-Daten wie Zeitpunkt, Aktion, Konto- und Einrichtungskennung sowie bei protokollierten Vorgängen die IP-Adresse
 
 ### 2.3 Rechtsgrundlage
 - Art. 6 Abs. 1 lit. b DSGVO (Arbeitsvertrag)

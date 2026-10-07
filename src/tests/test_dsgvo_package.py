@@ -213,7 +213,7 @@ class TestMitarbeiterInformationspflichten:
         assert filename == "mitarbeiter_informationspflichten.md"
         assert "§ 26 BDSG" in content
         assert "Art. 6 Abs. 1 lit. b DSGVO" in content
-        assert "Benutzername, Anzeigename, E-Mail-Adresse und Rolle" in content
+        assert "Benutzername, Anzeigename, E-Mail-Adresse, Rolle und Berechtigung zur" in content
         assert "24 Monate" in content
         assert "{{" not in content
 

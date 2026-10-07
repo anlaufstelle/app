@@ -854,6 +854,25 @@ class TestFourEyesScope:
             assert delete_cell != "4-Augen", role
             assert "Dateien" in delete_cell, role
 
+    def test_toms_role_table_names_what_staff_may_delete(self, facility):
+        from core.views.case_deletion import CaseDeleteRequestView
+        from core.views.client_deletion import ClientDeleteRequestView
+        from core.views.events import EventDeleteView
+        from core.views.mixins import LeadOrAdminRequiredMixin, StaffRequiredMixin
+
+        # Staff open deletion of persons and cases they can see, but only
+        # their own events (``EventDeleteView.dispatch`` checks ``created_by``).
+        for view in (CaseDeleteRequestView, ClientDeleteRequestView, EventDeleteView):
+            assert issubclass(view, StaffRequiredMixin), view
+            assert not issubclass(view, LeadOrAdminRequiredMixin), view
+        _behaviour_test("test_permissions", "TestStaffEventDeletion.test_staff_cannot_delete_others_event")
+        _behaviour_test("test_permissions", "TestStaffEventDeletion.test_staff_can_delete_own_event")
+
+        delete_cell = _role_table_rows(render_document("toms", facility)[0])["Fachkraft"][2]
+        assert "identifiziert" not in delete_cell, delete_cell
+        for part in ("Personen", "Antrag", "eigene Ereignisse", "Fälle", "Mit Zusatzangaben"):
+            assert part in delete_cell, (part, delete_cell)
+
     def test_vvt_four_eyes_items_name_their_scope(self):
         for activity in PROCESSING_ACTIVITIES:
             if activity["id"] == "backup":
@@ -1072,3 +1091,104 @@ class TestVerbatimClaims:
     def test_verbatim_claims_are_verbatim(self, vvt_template, dsfa):
         for claim in _VERBATIM_CLAIM_RE.findall(vvt_template):
             assert _flat(claim) in dsfa, claim
+
+
+# ---------------------------------------------------------------------------
+# Redaction of the shipped documents (Refs #2492, #2477): no internal issue
+# references, the target group is a facility entry, value lists follow the
+# model choices, and the MFA/lockout promises follow the shipped defaults.
+# ---------------------------------------------------------------------------
+
+_TEMPLATE_SLUGS = (
+    "av-vertrag",
+    "dsfa",
+    "informationspflichten",
+    "loeschkonzept",
+    "mitarbeiter-informationspflichten",
+    "toms",
+    "verarbeitungsverzeichnis",
+)
+_ISSUE_REF_RE = re.compile(r"\(Ref\.|#\d{2,}")
+_STALE_MFA_CLAIMS = ("Optionale 2FA", "sensible Rollen", "Argon2", "(30 Min)", "zuvor ausschließlich optional")
+
+
+def _all_vvt_texts() -> list[str]:
+    return [text for activity in PROCESSING_ACTIVITIES for text in _vvt_texts(activity["id"])]
+
+
+@pytest.mark.django_db
+class TestDocumentRedaction:
+    @pytest.mark.parametrize("slug", _TEMPLATE_SLUGS)
+    def test_templates_carry_no_issue_references(self, facility, slug):
+        content = render_document(slug, facility)[0]
+        assert not _ISSUE_REF_RE.search(content), _ISSUE_REF_RE.search(content)
+
+    def test_vvt_view_carries_no_issue_references(self):
+        for text in _all_vvt_texts():
+            assert not _ISSUE_REF_RE.search(text), text
+
+    def test_target_group_is_a_facility_entry(self, facility):
+        dsfa_scope = _section(render_document("dsfa", facility)[0], "### 1.1", "### 1.2")
+        vvt_people = _section(render_document("verarbeitungsverzeichnis", facility)[0], "### 1.2", "### 1.3")
+        for text in (dsfa_scope, vvt_people):
+            assert "[Zielgruppe eintragen" in text, text
+            assert "mit Jugendlichen und jungen Erwachsenen" not in text
+            assert "Einrichtung (Jugendliche und junge Erwachsene)" not in text
+
+    @pytest.mark.parametrize("slug", ["informationspflichten", "verarbeitungsverzeichnis"])
+    def test_age_groups_follow_the_model_choices(self, facility, slug):
+        from core.models import Client
+
+        lines = render_document(slug, facility)[0].splitlines()
+        row = next(line for line in lines if line.startswith("| Altersgruppe"))
+        for label in Client.AgeCluster.labels:
+            assert str(label) in row, (label, row)
+
+    def test_vvt_staff_categories_match_the_employee_notice(self, facility):
+        vvt_staff = _section(render_document("verarbeitungsverzeichnis", facility)[0], "### 2.2", "### 2.3")
+        notice = _section(render_document("mitarbeiter-informationspflichten", facility)[0], "## 3.", "## 4.")
+        for category in (
+            "E-Mail-Adresse",
+            "Einrichtungszuordnung",
+            "Löschanträgen",
+            "Telefonnummer",
+            "Kontonotiz",
+            "Passwort-Hash",
+            "TOTP-Secrets",
+            "Wiederherstellungscodes",
+            "IP-Adresse",
+        ):
+            assert category in _flat(vvt_staff), category
+            assert category in _flat(notice), category
+
+    def test_premise_mfa_and_lockout_defaults(self):
+        from django.conf import settings
+
+        from core.constants import MFA_SETUP_GRACE_DAYS
+        from core.services.security.login_lockout import LOCKOUT_THRESHOLD, LOCKOUT_WINDOW
+
+        assert set(settings.MFA_ENFORCED_ROLES_IMMEDIATE) == {"super_admin", "facility_admin"}
+        assert set(settings.MFA_ENFORCED_ROLES_GRACE) == {"lead", "staff", "assistant"}
+        assert MFA_SETUP_GRACE_DAYS == 30
+        assert LOCKOUT_THRESHOLD == 10
+        assert LOCKOUT_WINDOW.total_seconds() == 15 * 60
+
+    def test_templates_and_vvt_state_the_role_default(self, toms, dsfa):
+        for name, text in (("toms", toms), ("dsfa", dsfa), ("vvt", " ".join(_all_vvt_texts()))):
+            for stale in _STALE_MFA_CLAIMS:
+                assert stale not in text, (name, stale)
+            assert "Rollen-Default" in text, name
+            assert "30 Tage" in text, name
+        for name, text in (("toms", toms), ("dsfa", dsfa)):
+            assert "innerhalb von 15 Minuten je Konto und Quell-IP" in text, name
+            assert "ausgenommen" in text, name
+
+
+@pytest.mark.architecture
+class TestAwarenessMfaClaims:
+    def test_awareness_guide_states_the_role_default(self):
+        text = _flat((REPO_ROOT / "docs" / "packages-awareness.md").read_text(encoding="utf-8"))
+        assert "MFA organisatorisch verpflichtend" not in text
+        assert "rollenbezogen für `lead` und `facility_admin`" not in text
+        assert "per Rollen-Default für alle Rollen verpflichtend" in text
+        assert "`MFA_ENFORCED_ROLES_GRACE`" in text

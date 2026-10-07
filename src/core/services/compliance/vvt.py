@@ -116,7 +116,10 @@ PROCESSING_ACTIVITIES = [
                 "und Suchaufrufe werden nicht protokolliert (ADR-043)"
             ),
             _("Rollenbasierte Zugriffskontrolle (5 Rollen)"),
-            _("MFA / TOTP fuer sensible Rollen"),
+            _(
+                "MFA / TOTP per Rollen-Default für alle Rollen verpflichtend "
+                "(Leitung, Fachkraft und Assistenz nach 30 Tagen Übergangsfrist)"
+            ),
         ],
     },
     {
@@ -332,7 +335,7 @@ PROCESSING_ACTIVITIES = [
         ),
         "data_categories": [
             _("Username, E-Mail-Adresse"),
-            _("Passwort-Hash (PBKDF2/Argon2, niemals Klartext)"),
+            _("Passwort-Hash (PBKDF2, niemals Klartext)"),
             _("MFA-Geraetesecret (TOTP, verschluesselt)"),
             _("Backup-Codes (Hash)"),
             _("Login-Versuche (Erfolg/Fehler) inkl. IP und Zeitstempel"),
@@ -355,10 +358,10 @@ PROCESSING_ACTIVITIES = [
             "Neuerstellung."
         ),
         "toms": [
-            _("Passwort-Hashing mit aktuellen Verfahren (PBKDF2/Argon2)"),
-            _("Rate-Limiting auf Login-Versuche (max. 5/Minute pro IP)"),
-            _("Account-Lockout nach 10 Fehlversuchen"),
-            _("Optionale 2FA per TOTP (RFC 6238)"),
+            _("Passwort-Hashing mit aktuellem Verfahren (PBKDF2)"),
+            _("Rate-Limiting auf Login-Versuche (max. 5/Minute je IP, 10/Stunde je Benutzername)"),
+            _("Kontosperre nach 10 Fehlversuchen in 15 Minuten je Konto und IP"),
+            _("2FA per TOTP (RFC 6238), per Rollen-Default verpflichtend"),
             _("Recovery-Codes als Self-Service-Backup"),
             _("Sudo-Mode fuer destruktive Aktionen (15 Min Re-Auth)"),
             _("HTTPS-only mit HSTS"),

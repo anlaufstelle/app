@@ -33,7 +33,8 @@ Ausgabe dieser Information.
 
 ## 3. Datenkategorien
 
-- Benutzername, Anzeigename, E-Mail-Adresse und Rolle;
+- Benutzername, Anzeigename, E-Mail-Adresse, Rolle und Berechtigung zur
+  Bestätigung von Löschanträgen;
 - Telefonnummer, Einrichtungszuordnung, Sprache und interne Kontonotiz, sofern
   diese Felder genutzt werden;
 - Passwort-Hash, MFA-Pflicht und -Geräte, verschlüsselte TOTP-Secrets,

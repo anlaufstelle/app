@@ -64,7 +64,7 @@ Innerhalb eines sichtbaren Typs gilt zusätzlich die Sensitivität des einzelnen
 | `notiz-vorfall` | Gewaltvorfall | **nicht sichtbar** | **nicht sichtbar** | sichtbar | sichtbar |
 | `notiz-krise` | Krisensituation | **nicht sichtbar** | **nicht sichtbar** | sichtbar | sichtbar |
 
-Empfohlene Rollenverteilung: Die Koordination arbeitet als `lead`; Crew-Mitglieder erhalten abhängig vom Sichtbarkeitsbedarf `staff` oder `assistant`. Für `lead` und `facility_admin` sollte MFA organisatorisch verpflichtend sein. Ein facility-weiter MFA-Zwang ist bei ehrenamtlicher Crew auf privaten Geräten nicht die empfohlene Voreinstellung.
+Empfohlene Rollenverteilung: Die Koordination arbeitet als `lead`; Crew-Mitglieder erhalten abhängig vom Sichtbarkeitsbedarf `staff` oder `assistant`. In Produktion ist MFA per Rollen-Default für alle Rollen verpflichtend — für `lead`, `staff` und `assistant` nach 30 Tagen Übergangsfrist ab der ersten Anmeldung. Ein zusätzlicher facility-weiter MFA-Zwang (sofort, ohne Frist) ist bei ehrenamtlicher Crew auf privaten Geräten nicht nötig. Wer für die Crew bewusst keine Pflicht will, entfernt `staff`/`assistant` aus `MFA_ENFORCED_ROLES_GRACE` (Betrieb, siehe [Admin-Handbuch § 2.7](admin-guide.md#27-zwei-faktor-authentifizierung-2fa)).
 
 ## Berichte und Veranstaltungssicht
 
@@ -79,7 +79,7 @@ Diese Einstellungen sind nicht Teil des Paketformats und werden nicht automatisc
 - `retention_anonymous_days`: je nach Veranstaltung und Rechtsgrundlage **14 bis 30 Tage**.
 - `retention_identified_days`: **60 Tage** als knapper Ausgangswert, anschließend organisatorisch prüfen.
 - `allowed_file_types`: restriktiv konfigurieren, obwohl das Paket selbst keine Datei-Felder enthält.
-- MFA rollenbezogen für `lead` und `facility_admin` verpflichtend machen; `mfa_enforced_facility_wide` für BYOD-/Ehrenamts-Teams nicht pauschal aktivieren.
+- MFA-Pflicht über den Rollen-Default belassen (Anwendungsbetreuung sofort, Leitung und Crew nach Übergangsfrist); `mfa_enforced_facility_wide` für BYOD-/Ehrenamts-Teams nicht zusätzlich aktivieren. Abweichungen nur über `MFA_ENFORCED_ROLES_GRACE`.
 - Die gelieferten Zeitfenster „Abend“ und „Nacht“ an die tatsächlichen Einsatzzeiten anpassen.
 - Die Schnellvorlagen „Wasser gegeben“ und „Ruheraum begleitet“ fachlich prüfen und bei Bedarf ergänzen. Schnellvorlagen mit Vorbelegung sind nur an Typen der Sensitivität normal wirksam — der Sicherheitsfilter verwirft Vorbelegungen an erhöhten Typen.
 

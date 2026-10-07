@@ -28,9 +28,9 @@
 - [x] Benutzername und Passwort erforderlich
 - [x] Passwort-Mindestlänge: 12 Zeichen
 - [x] Passwort-Komplexitätsanforderungen
-- [x] Kontosperrung nach 10 Fehlversuchen (30 Min)
+- [x] Kontosperrung nach 10 Fehlversuchen innerhalb von 15 Minuten je Konto und Quell-IP; die Sperre endet, sobald weniger als 10 gezählte Fehlversuche in den letzten 15 Minuten liegen (ohne neue Fehlversuche spätestens 15 Minuten nach dem letzten). Zusätzlich Ratelimits der Anmeldung (5 Versuche/Minute je IP, 10/Stunde je Benutzername). Das Systemadministrationskonto ist von der Sperre ausgenommen und nur durch die Ratelimits gebremst.
 - [x] Erzwungener Passwortwechsel bei Erstanmeldung
-- [x] Zwei-Faktor-Authentifizierung (TOTP) pro Benutzer oder facility-weit erzwingbar; zeitbasierte Einmalcodes (30 s) via Authenticator-App (Ref. #521)
+- [x] Zwei-Faktor-Authentifizierung (TOTP, ergänzend Passkeys) per Rollen-Default für alle Rollen verpflichtend (Administration sofort, übrige Rollen nach 30 Tagen Übergangsfrist), zusätzlich pro Benutzer oder einrichtungsweit erzwingbar; zeitbasierte Einmalcodes (30 s) via Authenticator-App
 - [x] Passkeys/WebAuthn optional als zusätzlicher zweiter Faktor neben TOTP; Registrierung nur nach bestätigtem TOTP und in bereits 2FA-verifizierter Sitzung
 - [x] Passkeys dienen nur als zweiter Faktor; kein passwordless Login: Ein Passkey ersetzt weder Passwort noch TOTP-/Backup-Code-Wiederherstellung
 - [ ] Passwordless Login und eine einrichtungsweite Passkey-Pflicht sind bewusst auf eine spätere Ausbaustufe vertagt
@@ -49,7 +49,7 @@
 | Systemadministration | Alle Einrichtungen, nur lesend über die Verwaltungsoberfläche (`/admin-mgmt/`, mit Sudo) und den Systembereich (`/system/`); protokolliert (`SYSTEM_VIEW`) werden jeder Aufruf im Systembereich sowie die Listen- und Detailansichten von Personen, Fällen, Ereignissen, Ereignis-Historie, Aufgaben und Anhängen, nicht die übrigen Verwaltungsansichten (z. B. Löschanträge, Benutzer, Einstellungen, Audit-Log); schlägt die Protokollierung fehl, bleibt der Zugriff möglich | Keine Fachdaten | Nein | Nein | Installationsweit |
 | Anwendungsbetreuung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | Personen: 4-Augen; Ereignisse und Fälle: 4-Augen bei „Mit Zusatzangaben“, sonst direkt; Dateien: direkt (Sofortlöschweg) | Ja | Ja (eigene Einrichtung) |
 | Leitung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | Personen: 4-Augen; Ereignisse und Fälle: 4-Augen bei „Mit Zusatzangaben“, sonst direkt; Dateien: direkt (Sofortlöschweg) | Ja | Nein |
-| Fachkraft | Bis Sensitivität „Erhöht“ | Alle für sie sichtbaren Ereignisse | Eigene (identifiziert) | Nein | Nein |
+| Fachkraft | Bis Sensitivität „Erhöht“ | Alle für sie sichtbaren Ereignisse | Personen: Antrag (4-Augen); nur eigene Ereignisse und für sie sichtbare Fälle: 4-Augen bei „Mit Zusatzangaben“, sonst direkt; Dateien: kein Sofortlöschweg | Nein | Nein |
 | Assistenz | Nur Sensitivität „Normal“, auch bei Personen der Stufe „Mit Zusatzangaben“ | Eigene | Nein | Nein | Nein |
 
 Maßgeblich für das Lesen ist die höhere Sensitivität aus Dokumentationstyp und Feld, verglichen mit der Rolle. Die Kontaktstufe einer Person steuert die Sichtbarkeit nicht; sie wirkt auf die zulässigen Dokumentationstypen, die Vier-Augen-Löschung, die Protokollierung beim Öffnen einer Person der Stufe „Mit Zusatzangaben“ und die Aufbewahrungsfristen.
@@ -110,7 +110,7 @@ berücksichtigen.
 - [x] File-Vault: Anhänge werden vor der Ablage in Fernet-Chunks verschlüsselt; Originaldateinamen liegen ebenfalls Fernet-verschlüsselt vor
 - [x] Schlüssel getrennt von Datenbank (Umgebungsvariable)
 - [x] Schlüsselrotation ohne Datenverlust (MultiFernet)
-- [x] Browser-seitige Verschlüsselung offline gehaltener Inhalte mit AES-GCM-256; Schlüsselableitung per PBKDF2 (600 000 Iterationen, SHA-256) aus Passwort und User-Salt (Ref. #573)
+- [x] Browser-seitige Verschlüsselung offline gehaltener Inhalte mit AES-GCM-256; Schlüsselableitung per PBKDF2 (600 000 Iterationen, SHA-256) aus Passwort und User-Salt
 - [x] Der Schlüssel ist non-extractable und liegt als `CryptoKey` in einer eigenen IndexedDB des Browsers (`anlaufstelle-crypto`), damit Neuladen sowie Tab-, Browser- und Geräteneustart die Offline-Daten nicht unbrauchbar machen. „Non-extractable“ verhindert das Auslesen der Schlüsselbytes, nicht das Entschlüsseln mit dem gespeicherten Schlüssel im Browser dieses Geräts
 - [x] Verschlüsselt sind die Inhalte; Ordnungsmerkmale (Datensatz- und Personen-IDs, Bearbeitungsstatus, Zeitstempel, Ziel-Adressen der Sende-Warteschlange) liegen unverschlüsselt daneben
 - [x] Abmelden löscht Schlüssel und Offline-Speicher, auch ungesendete Arbeit; ein Passwortwechsel ebenso (bei ungesendeter Arbeit fragt die Anwendung vorher nach). Nach Ablauf der Leerlaufzeit löscht die Anwendung beim nächsten Ausführen den Schlüssel; ungesendete Arbeit bleibt verschlüsselt erhalten und wird nach erneuter Anmeldung nur wieder lesbar, wenn Passwort und Offline-Salt des Kontos unverändert sind; den Salt erneuert der Server bei Rollenwechsel, Deaktivierung und einer Anmeldung mit korrektem Passwort an einem gesperrten Konto, eine Passwortänderung (auch das Zurücksetzen) ändert die Schlüsselableitung ohnehin — danach ist der alte Bestand nicht mehr entschlüsselbar (zwischengespeicherte Daten werden verworfen, ungesendete Einträge als nicht zustellbar angezeigt). Ohne ungesendete Arbeit wird auch der Offline-Speicher gelöscht. Schließen des Tabs oder Browsers und ein Geräteneustart sind kein Löschweg (Einzelheiten: DSFA § 4.1)
@@ -121,9 +121,9 @@ berücksichtigen.
 - [x] Audit-Log für sicherheitsrelevante Aktionen
 - [x] Ereignis-Historie für Änderungsnachverfolgung: Jede Fassung wird angehängt und im laufenden Betrieb nicht überschrieben. Der Aufbewahrungslauf redigiert die Werte früherer Fassungen nach `eventhistory_detail_months` — die jüngste Fassung eines nicht gelöschten Ereignisses behält ihre Werte, Fassungen gelöschter Ereignisse und anonymisierter Personen redigiert er ohne Frist — und löscht redigierte Fassungen nach `eventhistory_chronicle_months`; Fassungen unter einem Legal Hold überspringt er. Jede Redaktion hinterlässt einen dauerhaften Nachweis (`EVENT_HISTORY_REDACTED`) im Audit-Log. Bereits erzeugte Sicherungsstände erreicht die Redaktion nicht
 - [x] Benutzer- und Zeitstempel bei allen Datensätzen
-- [x] Malware-Scanning aller Datei-Uploads (ClamAV) vor der Verschlüsselung — fail-closed bei nicht erreichbarem Scanner (Ref. #524)
+- [x] Malware-Scanning aller Datei-Uploads (ClamAV) vor der Verschlüsselung — fail-closed bei nicht erreichbarem Scanner
 - [x] Protokollierung der Datei-Vorgänge im AuditLog: Hochladen und Ersetzen (`ATTACHMENT_UPLOAD`, Modus Hinzufügen bzw. Ersetzen), Herunterladen (`DOWNLOAD`), Entfernen und Vernichten (`ATTACHMENT_DELETE`)
-- [x] Optimistic Locking für Client, Case, WorkItem, Settings und Event — verhindert stilles Überschreiben bei parallelen Bearbeitungen (Ref. #531)
+- [x] Optimistic Locking für Client, Case, WorkItem, Settings und Event — verhindert stilles Überschreiben bei parallelen Bearbeitungen
 
 ---
 
