@@ -488,7 +488,7 @@ Navigate to **Tasks** (`/workitems/`). The inbox shows:
 
 - **Open:** New tasks and hints assigned to you or not yet assigned to anyone
 - **In Progress:** Tasks that you (or colleagues) have taken on
-- **Completed:** Items completed or dismissed within the last 7 days
+- **Completed in the last 7 days:** Items completed or dismissed
 
 ### Changing Status
 
@@ -1038,4 +1038,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 1ed5e52c0ddd0ceb289e79de9d6a82ac22fdba9e -->
+<!-- source-hash: 3b359a9114c08715be3d97d1a45fbd378e832b2e -->

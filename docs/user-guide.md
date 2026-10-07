@@ -486,7 +486,7 @@ Navigieren Sie zu **Aufgaben** (`/workitems/`). Die Inbox zeigt:
 
 - **Offen:** Neue Aufgaben und Hinweise, die Ihnen zugewiesen sind oder noch keiner Person zugewiesen wurden
 - **In Bearbeitung:** Aufgaben, die Sie (oder Kolleg:innen) übernommen haben
-- **Abgeschlossen:** In den letzten 7 Tagen erledigte oder verworfene Einträge
+- **Erledigt in den letzten 7 Tagen:** Erledigte oder verworfene Einträge
 
 ### Status ändern
 
