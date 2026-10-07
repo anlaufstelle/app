@@ -178,7 +178,8 @@ EXPECTED = {
         "display_name": ("TextInput", True, {"maxlength": "100"}),
         "role": ("Select", True, {}),
         "mfa_required": ("CheckboxInput", False, {}),
-        "can_confirm_deletion": ("CheckboxInput", False, {}),
+        # Creation offers a choice preset to the role default (role / yes / no).
+        "can_confirm_deletion": ("Select", True, {}),
     },
     "UserAccessUpdateForm": {
         "username": ("TextInput", True, {"maxlength": "150"}),
