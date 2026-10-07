@@ -166,6 +166,41 @@ def detail_pks(e2e_env):
     return pks
 
 
+HANDOVER_TASK_TITLE = "A11Y-Handover-Task"
+
+
+@pytest.fixture
+def handover_task_highlight(e2e_env):
+    """An urgent task with an assignee inside the window the handover shows.
+
+    Without it the scan depends on the test order: the assignee line of a task
+    highlight only renders when earlier tests happened to leave such a task in
+    the shift window. The handover shows the last completed shift, so
+    ``created_at`` is moved into the window the view resolves itself.
+    """
+    cleanup = f"from core.models import WorkItem; WorkItem.objects.filter(title='{HANDOVER_TASK_TITLE}').delete()"
+    django_shell(e2e_env, cleanup)
+    out = django_shell(
+        e2e_env,
+        "from core.models import Facility, User, WorkItem;"
+        " from core.services.events.feed import get_time_range;"
+        " from core.services.zeitstrom_filters import resolve_zeitstrom_state;"
+        " f = Facility.objects.get(name='Hauptstelle');"
+        " admin = User.objects.get(username='admin');"
+        " other = User.objects.exclude(pk=admin.pk).filter(facility=f, is_active=True).order_by('username').first();"
+        " state = resolve_zeitstrom_state({'view': 'uebergabe'}, f);"
+        " start, end = get_time_range(state.target_date, state.time_filter);"
+        " w = WorkItem.objects.create(facility=f, created_by=admin, assigned_to=other,"
+        f"  title='{HANDOVER_TASK_TITLE}', item_type='task', priority='urgent');"
+        " WorkItem.objects.filter(pk=w.pk).update(created_at=start + (end - start) / 2);"
+        " print('ASSIGNEE', other.display_name or other.username)",
+    )
+    assignee = next((line.split(" ", 1)[1] for line in out if line.startswith("ASSIGNEE ")), None)
+    assert assignee, out
+    yield assignee
+    django_shell(e2e_env, cleanup)
+
+
 def _scan(page, base_url, page_key, baseline, report_path):
     """axe laufen lassen, Artefakt schreiben, gegen die Baseline pruefen."""
     result = run_axe(page, base_url)
@@ -190,9 +225,14 @@ class TestAxeSeitenMatrix:
         ("page_key", "path", "ready"), AUTHENTICATED_PAGES, ids=[p[0] for p in AUTHENTICATED_PAGES]
     )
     def test_authenticated_pages(
-        self, authenticated_page, base_url, a11y_baseline, a11y_report_path, page_key, path, ready
+        self, request, authenticated_page, base_url, a11y_baseline, a11y_report_path, page_key, path, ready
     ):
+        assignee = request.getfixturevalue("handover_task_highlight") if page_key == "uebergabe" else None
         _open(authenticated_page, base_url, path, ready)
+        if assignee:
+            # The scan must cover the assignee line of a task highlight.
+            task = authenticated_page.locator("a", has_text=HANDOVER_TASK_TITLE)
+            expect(task).to_contain_text(f"→ {assignee}", timeout=15000)
         _scan(authenticated_page, base_url, page_key, a11y_baseline, a11y_report_path)
 
     @pytest.mark.parametrize(("page_key", "path", "ready"), SUPER_ADMIN_PAGES, ids=[p[0] for p in SUPER_ADMIN_PAGES])

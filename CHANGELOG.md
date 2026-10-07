@@ -43,6 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Übergabe: Zuständige und Vorschaufelder der Highlights gut lesbar** (#1059) — Die Zeile „→ Zuständige Person“ einer dringenden Aufgabe und die Vorschaufelder von Hausverbot-Highlights stehen jetzt in der dunkleren Sekundärschrift statt in Grau; auf dem getönten Kartenhintergrund lag der Kontrast bei 12 px mit 4,3:1 bzw. 4,2:1 unter WCAG AA (4,5:1), jetzt bei 9,3:1 bzw. 8,9:1. Der axe-Scan der Übergabe legt dafür selbst eine Aufgabe mit Zuständigem an und hängt nicht mehr von der Testreihenfolge ab.
 - **Django-Admin verspricht bei der Sensibilität des Dokumentationstyps keine Verschlüsselung mehr** (#2460) — Die Feldhilfe „Sensibilität“ im Django-Admin unter `/admin-mgmt/` nennt wie das Konfigurationsformular die Feldvorlage als Ort der Verschlüsselung; Admin, Formular und Modell tragen denselben Text.
 - **Screenshot- und manuelle E2E-Läufe schützen gemeinsame Ressourcen** (#2439) — `make docs-screens` und `make e2e-server` halten den globalen Lock während Vorbereitung und Serverlauf und beenden ausschließlich ihren eigenen Serverprozess. Die öffentlichen Screenshot-Anleitungen nennen das gültige Target und den E2E-Seed-Reset; das E2E-Runbook führt manuelle Server über denselben Lock.
 
