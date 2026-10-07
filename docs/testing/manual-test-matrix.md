@@ -265,7 +265,7 @@ Methodik:
 
 | Sektion | Bereich | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|---------|------:|--------:|-------------:|----------:|
-| A | Tagesablauf | 12 | 12 | 0 | 100 % |
+| A | Tagesablauf | 12 | 11 | 1 | 92 % |
 | B | Accessibility | 12 | 1 | 11 | 8 % |
 | B | Acct | 5 | 4 | 1 | 80 % |
 | B | Attachments | 16 | 13 | 3 | 81 % |
@@ -328,11 +328,11 @@ Methodik:
 
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
-| A | 12 | 12 | 0 | 100 % |
+| A | 12 | 11 | 1 | 92 % |
 | B | 264 | 179 | 85 | 68 % |
 | C | 38 | 9 | 29 | 24 % |
 | D | 46 | 14 | 32 | 30 % |
-| **Gesamt** | **360** | **214** | **146** | **59 %** |
+| **Gesamt** | **360** | **213** | **147** | **59 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->

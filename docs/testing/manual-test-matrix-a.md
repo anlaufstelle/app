@@ -84,7 +84,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Tagesablauf | fachkraft | C/F | ⚪ | `test_contact_stage.py` |
+| Tagesablauf | fachkraft | C/F | ⚪ | — |
 
 **Voraussetzung:** SMK-A-VORM-02 (anonymes Ereignis ohne Person vorhanden)
 
@@ -257,12 +257,12 @@
 
 **Ablauf:**
 
-1. ☐ Das Event aus VORM-02 öffnen.
-2. ☐ Auf **„Anhang hinzufügen"** klicken → das harmlose PDF auswählen.
-3. ☐ Upload-Status erscheint, kurz danach **„Virusprüfung erfolgreich"**.
-4. ☐ Anhang ist in der Liste sichtbar, herunterladbar.
-5. ☐ Erneut **„Anhang hinzufügen"** → diesmal die EICAR-Test-Datei.
-6. ☐ Upload wird **abgewiesen** mit Hinweis „Datei enthält Schadcode".
+1. ☐ Das Ereignis aus VORM-02 öffnen → **„Bearbeiten“** klicken.
+2. ☐ Im Dateifeld **„Anhang“** das harmlose PDF auswählen.
+3. ☐ **„Änderungen speichern“** klicken → nach erfolgreichem Speichern erscheint wieder das Ereignisdetail.
+4. ☐ Erneut **„Bearbeiten“** öffnen: Das PDF ist beim Feld **„Anhang“** als Dateinamen-Link sichtbar und herunterladbar.
+5. ☐ Unter **„Weitere Dateien hinzufügen (mehrere möglich):“** die EICAR-Test-Datei auswählen → **„Änderungen speichern“** klicken.
+6. ☐ Upload wird **abgewiesen** mit der Meldung **„Datei wurde von Virenscanner abgewiesen: …“** (… = erkannte Signatur); die EICAR-Datei wird nicht als Anhang übernommen, das PDF bleibt erhalten.
 7. ☐ Im Menü oben rechts auf **„Abmelden"** klicken.
 8. ☐ Login-Seite erscheint, lokale Daten sind gelöscht (in den Browser-Entwicklertools sichtbar).
 
@@ -326,9 +326,9 @@
 **Ablauf:**
 
 1. ☐ Mit `fachkraft` einloggen, vollständig laden lassen.
-2. ☐ Zur eingebauten Personen-Übersicht navigieren — Daten werden lokal gespeichert.
+2. ☐ Eine Person öffnen → **⋮-Menü** → **„Offline mitnehmen“** klicken; Badge **„Lokal verfügbar“** prüfen.
 3. ☐ Im DevTools → Network → **„Offline"** aktivieren (Netz simuliert weg).
-4. ☐ Eine zuvor über „Offline mitnehmen“ gespeicherte Person öffnen (`/clients/<uuid>/`).
+4. ☐ Die in Schritt 2 mitgenommene Person offline erneut unter ihrer Detail-URL (`/clients/<uuid>/`) öffnen.
 5. ☐ Detailansicht öffnet sich aus lokalem Cache.
 6. ☐ Ein neues Event lokal anlegen — wird im lokalen Speicher abgelegt.
 7. ☐ Network → **„Online"** wieder aktivieren.
