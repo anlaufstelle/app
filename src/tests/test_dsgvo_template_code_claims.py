@@ -69,6 +69,16 @@ def dsfa(facility):
     return _flat(render_document("dsfa", facility)[0])
 
 
+@pytest.fixture
+def toms_raw(facility):
+    return render_document("toms", facility)[0]
+
+
+@pytest.fixture
+def dsfa_raw(facility):
+    return render_document("dsfa", facility)[0]
+
+
 # ---------------------------------------------------------------------------
 # Offline key lifecycle (Refs #2426)
 # ---------------------------------------------------------------------------
@@ -1112,6 +1122,11 @@ _ISSUE_REF_RE = re.compile(r"\(Ref\.|#\d{2,}")
 _STALE_MFA_CLAIMS = ("Optionale 2FA", "sensible Rollen", "Argon2", "(30 Min)", "zuvor ausschließlich optional")
 
 
+_DSFA_LOCKOUT_EXEMPTION = (
+    "; das Systemadministrationskonto ist von der Sperre ausgenommen und nur durch die Ratelimits gebremst"
+)
+
+
 def _all_vvt_texts() -> list[str]:
     return [text for activity in PROCESSING_ACTIVITIES for text in _vvt_texts(activity["id"])]
 
@@ -1183,19 +1198,47 @@ class TestDocumentRedaction:
             assert "innerhalb von 15 Minuten je Konto und Quell-IP" in text, name
             assert "ausgenommen" in text, name
 
-    def test_every_lockout_claim_names_the_super_admin_exemption(self, toms, dsfa):
+    def test_every_lockout_claim_names_the_super_admin_exemption(self, toms_raw, dsfa_raw):
         """``login_lockout.is_locked`` never locks ``super_admin`` (behaviour:
         ``test_login_lockout_super_admin.py``), so each lockout promise must
-        carry the exemption in the same statement, not only somewhere else."""
+        carry the exemption in the same statement, not only somewhere else.
+
+        Template claims are taken from the unflattened rendering: the list item
+        or paragraph holding the lockout promise is selected first and only then
+        normalised, so an unrelated "ausgenommen" elsewhere cannot satisfy it.
+        """
         claims = [("vvt", t) for t in _vvt_texts("auth_login") if "Kontosperre nach" in t]
-        for name, text in (("toms", toms), ("dsfa", dsfa)):
-            claims += [(name, line) for line in text.splitlines() if "Kontosperrung nach" in line]
+        for name, text in (("toms", toms_raw), ("dsfa", dsfa_raw)):
+            assert "\n" in text, f"{name}: the guard needs the unflattened rendering"
+            claims += [(name, block) for block in _blocks(text) if "Kontosperrung nach" in block]
         summary = _read_flat(DOMAIN_SUMMARY_EN)
         claims += [("summary", _section(summary, "- **Account lockout.**", "- **"))]
         assert {name for name, _ in claims} == {"vvt", "toms", "dsfa", "summary"}
         for name, text in claims:
             assert "ausgenommen" in text or "exempt" in text, (name, text)
         assert "consecutive failed login attempts" not in summary
+
+    def test_lockout_guard_rejects_dsfa_without_its_lockout_exemption(self):
+        templates = REPO_ROOT / "src" / "core" / "dsgvo_templates"
+        toms = _flat((templates / "toms.md").read_text(encoding="utf-8"))
+        dsfa = (templates / "dsfa.md").read_text(encoding="utf-8")
+        exemption = _DSFA_LOCKOUT_EXEMPTION
+        assert dsfa.count(exemption) == 1
+        dsfa = _flat(dsfa.replace(exemption, ""))
+        assert "Systemadministrationskonto ist von der Sperre ausgenommen" not in dsfa
+        assert "ausgenommen" in dsfa  # unrelated retention/Article 18 exceptions remain
+
+        with pytest.raises(AssertionError):
+            self.test_every_lockout_claim_names_the_super_admin_exemption(toms, dsfa)
+
+    def test_lockout_guard_rejects_an_exemption_outside_the_lockout_item(self, toms_raw, dsfa_raw):
+        exemption = _DSFA_LOCKOUT_EXEMPTION
+        assert dsfa_raw.count(exemption) == 1
+        dsfa = dsfa_raw.replace(exemption, "")
+        assert "ausgenommen" in dsfa  # unrelated retention/Article 18 exceptions remain
+
+        with pytest.raises(AssertionError, match="dsfa"):
+            self.test_every_lockout_claim_names_the_super_admin_exemption(toms_raw, dsfa)
 
 
 @pytest.mark.architecture
