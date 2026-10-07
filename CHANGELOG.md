@@ -93,7 +93,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Handbuchbezeichnungen an die Oberfläche angeglichen** (#2455) — Profilwege, Filter, Aufgabenstatus, Export und Konfliktknöpfe sowie der Audit-Aufbewahrungshinweis nennen die sichtbaren Beschriftungen und Zeitfilter ihren technischen Pflegeweg im Django-Admin. Das Admin-Handbuch (DE/EN) nennt dieselben Beschriftungen: Einstellungen, Feldvorlagen und Audit-Log unter ihren Menüpfaden, „2FA erforderlich“, „Optionen (JSON)“ und die Freigabe-Knöpfe. Der Aufgabenbereich „Erledigt in den letzten 7 Tagen“ heißt im Handbuch (DE/EN) wie in der Oberfläche.
 
-- **Englische Handbuchbegriffe und Audit-Hinweis präzisiert** (#2453) — Benutzerhandbuch und Glossar nutzen die englischen Oberflächenbegriffe einschließlich „Management > Access“; der Audit-Hinweis grenzt die protokollierte Personen-Detailseite ab und die Offline-Anleitung beschreibt den aktuellen Ablauf ohne Wellen-Vokabular.
+- **Englische Handbuchbegriffe und Audit-Hinweis präzisiert** (#2453) — Benutzerhandbuch und Glossar nutzen die englischen Oberflächenbegriffe einschließlich „Management > Access“; der Audit-Hinweis grenzt die protokollierte Personen-Detailseite ab und die Offline-Anleitung beschreibt den aktuellen Ablauf ohne Wellen-Vokabular. Die englischen Handbücher, das Domänenkonzept und die englische README nennen die Kontaktstufe durchgehend „contact stage“ wie Glossar und Feldlabel.
 
 - **Offline-Datenschutz im Benutzerhandbuch und in der FAQ berichtigt** (#2426) — Neustart, Schlüsselverwahrung, Fristablauf und der Erhalt ungesendeter Arbeit bei Inaktivität werden ohne unbelegte Löschzusagen beschrieben.
 

@@ -63,7 +63,7 @@ Established commercial social-sector software targets large organizations, is pr
 
 ### 1. No real names — by design
 
-There is no name field. People are recorded under a pseudonym assigned by your team. For people, the system supports two contact levels:
+There is no name field. People are recorded under a pseudonym assigned by your team. For people, the system supports two contact stages:
 
 - **Pseudonym only** — pseudonym assigned, person is recognizable on return
 - **With additional details** — additional details recorded (e.g. age group, district)
@@ -99,7 +99,7 @@ The configuration also governs data protection:
 
 - **Document contacts** — in 30 seconds, including from a smartphone
 - **Notes and tasks** — share information between shifts, track follow-ups
-- **People** — pseudonyms, contact levels, history timeline
+- **People** — pseudonyms, contact stages, history timeline
 - **Cases and trajectories** — document longer engagements with episodes, goals and milestones
 - **File attachments** — documents and photos on an event, person or case; stored encrypted and virus-scanned before storage
 - **Typo-tolerant search** — quickly find what you need

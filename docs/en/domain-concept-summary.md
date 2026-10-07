@@ -10,7 +10,7 @@ Low-threshold social services -- drop-in centers, emergency shelters, street wor
 
 Established commercial social-sector software targets large providers with hundreds of staff. Licenses are expensive, rollouts require weeks of consulting, and every system assumes that each person is registered with a real name and address. In reality, most contacts at low-threshold facilities are anonymous. Clients have the right not to disclose their identity. A system that asks for a name first has not understood the working reality.
 
-Anlaufstelle fills this gap. It is an open-source specialized application for documentation, operations management, and impact measurement -- built around pseudonymization, contact levels, and the daily rhythms of low-threshold work. It is designed to be self-hosted with `docker compose up`, learnable in two to three hours, and affordable for donation-funded facilities with five to thirty staff members. Licensed under AGPL v3, it belongs to the community it serves.
+Anlaufstelle fills this gap. It is an open-source specialized application for documentation, operations management, and impact measurement -- built around pseudonymization, contact stages, and the daily rhythms of low-threshold work. It is designed to be self-hosted with `docker compose up`, learnable in two to three hours, and affordable for donation-funded facilities with five to thirty staff members. Licensed under AGPL v3, it belongs to the community it serves.
 
 ### Who It's For
 
@@ -20,7 +20,7 @@ Beyond the original domain of low-threshold substance-use and homelessness servi
 
 ## Core Domain Concepts
 
-### Contact Levels (Kontaktstufen)
+### Contact Stages (Kontaktstufen)
 
 Anlaufstelle uses a three-tier model that reflects how relationships develop in low-threshold settings:
 
@@ -28,7 +28,7 @@ Anlaufstelle uses a three-tier model that reflects how relationships develop in 
 - **Identified** -- The team assigns a pseudonym (e.g. "Maus"). Under this pseudonym, the system tracks a contact history and a timeline. The intended workflow keeps the mapping from pseudonym to real person in the minds of staff, and there is no required field for real names. The software does not technically prevent real names: pseudonyms, notes, free-text fields and attachments contain whatever the team enters.
 - **Qualified** -- The person is in an active counseling or support process. Additional sensitive data (health information, counseling notes) may be recorded, subject to stricter access rules and encryption. The transition to this level is a deliberate decision by facility leadership and is logged by the system.
 
-Contact levels govern which [documentation types](glossary.md) can be used, who may access the data, and how long records are retained.
+Contact stages govern which [documentation types](glossary.md) can be used, who may access the data, and how long records are retained.
 
 ### Timeline (Zeitstrom)
 
@@ -71,7 +71,7 @@ The data model follows a clear hierarchy with facility scoping as the primary bo
 Organization (name and creation date, visible in navigation/system overview)
   +-- Facilities (multiple sites per installation -- primary scope for staff)
         +-- Users (staff with role assignments)
-        +-- Clients (pseudonymized persons with contact levels)
+        +-- Clients (pseudonymized persons with contact stages)
         +-- Events (timestamped documentation entries, typed by DocumentType)
         +-- DocumentTypes (configurable, with FieldTemplates)
         +-- TimeFilters (named time windows for shift-based views)
@@ -109,13 +109,13 @@ Anlaufstelle uses five roles with increasing privileges (Refs #867, [ADR-018](..
 
 | Role | German | Description |
 |---|---|---|
-| **Assistant** | Assistenz | Read access with limited documentation rights. Sees entries and fields of sensitivity "Normal" only -- regardless of the person's contact level, so also for persons at "With additional details". Cannot edit other users' entries or delete events. |
+| **Assistant** | Assistenz | Read access with limited documentation rights. Sees entries and fields of sensitivity "Normal" only -- regardless of the person's contact stage, so also for persons at "With additional details". Cannot edit other users' entries or delete events. |
 | **Staff** | Fachkraft | Core documentation role. Can capture contacts, manage work items and search within their facility. Sees entries and fields up to sensitivity "Elevated" (not "High"), may edit every event visible to them and delete their own. |
-| **Lead** | Leitung | Supervisory role. Everything Staff can do, plus pseudonym management, contact level changes, statistics, exports, and deletion approvals. |
+| **Lead** | Leitung | Supervisory role. Everything Staff can do, plus pseudonym management, contact stage changes, statistics, exports, and deletion approvals. |
 | **Application manager** | Anwendungsbetreuung (`facility_admin`) | Full control within one facility: user management, document-type configuration, settings, audit log, GDPR package. |
 | **Super-Admin** | Systemadministration (`super_admin`) | Installation-wide system administration across all facilities; not bound to a single facility and no access to the regular application UI. Reads across facilities through the system area (`/system/`) and the admin interface (`/admin-mgmt/`, sudo required); Row Level Security lets these sessions through via `app.is_super_admin`, `SYSTEM_VIEW` is logged for every call in the system area and for the list and detail views of persons, cases, events, event history, work items and attachments in the admin interface -- not for the other admin views (e.g. deletion requests including their reason, users, settings, audit log), and access continues if logging fails. |
 
-Access is not purely role-based but context-dependent: what a user can see depends on the facility and on sensitivity -- the higher level of the documentation type and the field, compared with the role (Assistant: Normal; Staff: up to Elevated; Lead and Application manager: all levels). The contact level of the person does not control visibility; it governs which documentation types may be used, four-eyes deletion, the audit entry when a person at "With additional details" is opened, and retention periods.
+Access is not purely role-based but context-dependent: what a user can see depends on the facility and on sensitivity -- the higher level of the documentation type and the field, compared with the role (Assistant: Normal; Staff: up to Elevated; Lead and Application manager: all levels). The contact stage of the person does not control visibility; it governs which documentation types may be used, four-eyes deletion, the audit entry when a person at "With additional details" is opened, and retention periods.
 
 Event creation (`/events/new/`) saves drafts every 5 seconds in encrypted IndexedDB when a session key and the offline store are available; other forms do not share a general autosave feature. Synchronization runs in the open document, not through Service Worker Background Sync.
 
@@ -269,7 +269,7 @@ The largest collective pre-release to date — the configurability milestones M0
 
 - **Facility administration moves into the domain UI**: facility administrators can now invite and maintain their own users, edit facility-wide operational and security settings, maintain document-type presentation, and edit selection options through a validated row editor instead of raw JSON. All sensitive access-management paths require sudo re-authentication, remain facility-scoped, and produce actor/target-aware audit entries; the technical Django admin remains the bootstrap and emergency surface.
 - **Duplicate persons can be merged without losing their history**: a direct merge is available for pseudonym-only records, while records with additional data require approval by a second person. Events, cases, tasks and watch-list state move to the surviving record; the source remains recoverable in the trash until retention expires, the operation can be undone during that window, and Article 15 exports describe both sides of the merge.
-- **Cases gain a complete deletion lifecycle**: an accidental case can enter the trash, be restored with its episodes, goals and attachments, or be redacted after the shared retention period. The approval threshold follows the person's contact level, legal holds postpone final erasure, linked events stay with the person, and offline/data-portability views honour the same boundary.
+- **Cases gain a complete deletion lifecycle**: an accidental case can enter the trash, be restored with its episodes, goals and attachments, or be redacted after the shared retention period. The approval threshold follows the person's contact stage, legal holds postpone final erasure, linked events stay with the person, and offline/data-portability views honour the same boundary.
 - **Attachments can be erased deliberately and audibly**: leads and facility administrators can permanently remove an uploaded file and all its versions after a dedicated confirmation step. Legal holds block the operation, the physical vault content is removed, and the immutable audit record keeps only non-reversible filename evidence rather than the plaintext name.
 - **Credential and deployment boundaries are explicit**: password change, reset and initial setup share one documented side-effect matrix; security links use a configured canonical origin; trusted-proxy handling and access logs no longer retain query strings; database-role passwords can be rotated atomically on existing installations while privileged maintenance credentials stay out of the web container.
 - **PII and audit hardening closes duplicate traces**: timeline activity stores structured, PII-free references instead of copied pseudonyms or titles; event, case-assignment, episode, outcome-goal and attachment mutations have dedicated audit actions; authorised history views can render encrypted field changes without weakening role checks. CSP reports now accept only the standard CSP reporting media types and reject empty payloads.

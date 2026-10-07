@@ -554,7 +554,7 @@ Afterwards, the organization, facility, default settings, the **default catalog 
 
 > **All or nothing:** The run is a single database transaction. If it aborts (wrong DB role, dropped connection, catalog conflict), **nothing** half-created is left behind -- not even the admin user. Once the cause is fixed, the command can simply be repeated.
 
-> **Minimum contact level in the default catalog:** The "Beratungsgespräch" (counseling session) documentation type requires at least the contact level "with additional details" -- a freshly created person, by contrast, starts at "pseudonym only". The first documentation attempt for this type is therefore rejected until the person's contact level has been raised; the redisplayed form states where and how to fix it.
+> **Minimum contact stage in the default catalog:** The "Beratungsgespräch" (counseling session) documentation type requires at least the contact stage "with additional details" -- a freshly created person, by contrast, starts at "pseudonym only". The first documentation attempt for this type is therefore rejected until the person's contact stage has been raised; the redisplayed form states where and how to fix it.
 
 > **A repeat run leaves an existing catalog alone:** If the facility already carries documentation types or field templates (second run, facility created in the Django admin), the command does **not** apply the default catalog. Names, sort orders, colors, icons, and visibility levels maintained in the admin therefore stay untouched; the command says so at the end and points to `load_package --default` as the way to deliberately pull in the shipped state.
 
@@ -1912,7 +1912,7 @@ Pseudonymisation is the intended workflow: the application has no required field
 
 - Persons are referenced by internal IDs.
 - Display names in the interface are configurable pseudonyms.
-- Who sees which data depends not on the contact level but on sensitivity (the higher level of the documentation type and the field) and on the role: Assistant sees "Normal", Staff up to "Elevated", Lead and Application manager all levels. The person detail page is open from Assistant upwards, also at "With additional details"; there the assistant sees, for example, contacts including their note, but no crisis conversation. The contact level governs permitted documentation types, four-eyes deletion, the audit entry when the person is opened (`VIEW_QUALIFIED`), and retention periods.
+- Who sees which data depends not on the contact stage but on sensitivity (the higher level of the documentation type and the field) and on the role: Assistant sees "Normal", Staff up to "Elevated", Lead and Application manager all levels. The person detail page is open from Assistant upwards, also at "With additional details"; there the assistant sees, for example, contacts including their note, but no crisis conversation. The contact stage governs permitted documentation types, four-eyes deletion, the audit entry when the person is opened (`VIEW_QUALIFIED`), and retention periods.
 - The system administration (`super_admin`) reads across facilities through the `/system/` area and the admin interface (`/admin-mgmt/`, sudo required), there persons, cases, events, work items and attachments of all facilities. Row Level Security lets these sessions through via `app.is_super_admin` (§ 7.9). The AuditLog records these reads as `SYSTEM_VIEW`; if logging fails, access is still not blocked.
 
 ### 7.3 Retention Periods and `enforce_retention`

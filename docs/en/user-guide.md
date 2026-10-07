@@ -323,7 +323,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 3. Enter a reason.
 4. Confirm the deletion.
 
-> **Important:** If the contact is associated with a **person at the "With additional details" contact level**, it will not be deleted immediately. Instead, a **deletion request** is automatically created, which must be approved by a second person with the “Deletion confirmation” right (four-eyes principle). You will receive a corresponding notification.
+> **Important:** If the contact is associated with a **person at the "With additional details" contact stage**, it will not be deleted immediately. Instead, a **deletion request** is automatically created, which must be approved by a second person with the “Deletion confirmation” right (four-eyes principle). You will receive a corresponding notification.
 
 ---
 
@@ -390,23 +390,23 @@ Next to the download, every row carries a trash icon for **managers and administ
 
 People in Anlaufstelle are recorded **exclusively using pseudonyms** -- no real names. The pseudonym is the primary identifier.
 
-### Contact Levels
+### Contact Stages
 
-Each person has a **contact level**:
+Each person has a **contact stage**:
 
 | Level | Description |
 |---|---|
 | **Pseudonym only** | Only the pseudonym is stored, plus the age group |
 | **With additional details** | Additional personal details are stored (restricted access, opening the detail page is logged) |
 
-> **Note:** Opening the **detail page** (`/clients/<id>/`) of a person at the "With additional details" contact level is logged — and only that. The people list, the edit form for the same person, an event, a case and a search result generate **no** entry, even if additional details are visible there.
+> **Note:** Opening the **detail page** (`/clients/<id>/`) of a person at the "With additional details" contact stage is logged — and only that. The people list, the edit form for the same person, an event, a case and a search result generate **no** entry, even if additional details are visible there.
 
 ### Creating a Person
 
 1. Navigate to **People** (`/clients/`) and click **Create person** (or go directly to `/clients/new/`).
 2. Fill in the form:
    - **Pseudonym:** A unique name within your facility (e.g., a self-chosen nickname). The pseudonym must be unique within a facility.
-   - **Contact level:** Select "Pseudonym only" or "With additional details".
+   - **Contact stage:** Select "Pseudonym only" or "With additional details".
    - **Age group:** "Under 18", "18--26", "27+", or "Unknown".
    - **Notes:** Internal remarks about the person (optional).
 3. Click **Save**.
@@ -415,7 +415,7 @@ Each person has a **contact level**:
 
 1. Navigate to **People** (`/clients/`).
 2. Type part of the pseudonym into the search field. The list filters automatically.
-3. Optionally, you can also filter by **contact level** or **age group**.
+3. Optionally, you can also filter by **contact stage** or **age group**.
 4. Click on an entry to open the detail view.
 
 > **Tip:** The quick search via the global search field (magnifying glass at the top) finds people and events simultaneously.
@@ -424,7 +424,7 @@ Each person has a **contact level**:
 
 The detail page of a person (`/clients/<id>/`) shows:
 
-- **Master data:** Pseudonym, contact level, age group, notes
+- **Master data:** Pseudonym, contact stage, age group, notes
 - **Chronology:** All previously documented contacts for this person, newest first
 - **Open work items:** Tasks and hints assigned to this person
 
@@ -434,10 +434,10 @@ From the detail page, you can use **Document contact** to record a contact for t
 
 1. Open the person detail page.
 2. Click **Edit**.
-3. Change the desired fields (e.g., upgrading the contact level).
+3. Change the desired fields (e.g., upgrading the contact stage).
 4. Click **Save**.
 
-> **Note:** Social workers and above may change pseudonyms and upgrade the contact level. Only managers or application support may downgrade a person from “With additional details”. A change in contact level is automatically recorded in the audit log.
+> **Note:** Social workers and above may change pseudonyms and upgrade the contact stage. Only managers or application support may downgrade a person from “With additional details”. A change in contact stage is automatically recorded in the audit log.
 
 > **Concurrent editing:** If someone else edited the same record at the same time, an error message appears. Reload the page and re-enter your changes -- this ensures that no changes are silently overwritten.
 
@@ -449,13 +449,13 @@ If the duplicate already exists:
 
 1. Open the record of the person that is to be **dissolved** and choose **Merge with duplicate** in the **More actions** menu (⋮).
 2. Search for the target person -- the record that remains. The search also finds similar spellings.
-3. The confirmation page shows **both records side by side** (contact level, age group, creation date, last contact, number of events/cases/attachments) plus a statistics warning and the deadline note. The page itself tells you which of the two paths applies:
+3. The confirmation page shows **both records side by side** (contact stage, age group, creation date, last contact, number of events/cases/attachments) plus a statistics warning and the deadline note. The page itself tells you which of the two paths applies:
    - **Merge directly** -- if both people are at "Pseudonym only"; only the **manager** may do this.
    - **Request with confirmation** -- as soon as one of the two people carries "With additional details" (or a social workers member takes this path). Enter a reason; confirmation happens under **Privacy → Deletion requests**, where the request appears as its own kind, **Merge**, with its target. Until then the record is flagged as "merge requested" and stays usable.
 
 What happens:
 
-- **Events, cases, tasks and the recent-visits list move completely** to the target record. For the additional details, the target keeps its values; values from the source only fill empty fields. The contact level rises to the higher of the two -- never the other way around.
+- **Events, cases, tasks and the recent-visits list move completely** to the target record. For the additional details, the target keeps its values; values from the source only fill empty fields. The contact stage rises to the higher of the two -- never the other way around.
 - The dissolved record disappears from list, search and selection fields and sits in the **trash** with the note "merged into ...". Until the trash period expires, the application support can use **Revert merge** there -- the moved entries return; entries newly documented since the merge stay with the target. After that, the empty shell is anonymized for good like any deleted person; the reference to the target remains. If a **legal hold** covers either record, reverting is not possible while it lasts -- the application support gets a corresponding message.
 - In an **Art. 15 GDPR access record**, the target record states in its "Merges" section which record was merged into it and when; the access record of the dissolved record conversely states "Merged into". The access log of the dissolved record stays with its own dataset -- a request covering the full history of both predecessors is answered with **both** access records.
 
@@ -709,7 +709,7 @@ Via **"Export as JSON"** (or by appending `?format=json` to the URL) you receive
 
 ### Reviewing Deletion Requests (“Deletion confirmation” Right)
 
-When a social worker, manager or application support wants to delete a contact belonging to a person at the "With additional details" contact level, a **deletion request** is created that must be approved by a second person with the “Deletion confirmation” right.
+When a social worker, manager or application support wants to delete a contact belonging to a person at the "With additional details" contact stage, a **deletion request** is created that must be approved by a second person with the “Deletion confirmation” right.
 
 1. View open deletion requests at `/deletion-requests/`.
 2. Click on a request to see the details and the affected event.
@@ -841,7 +841,7 @@ Table covers the four facility-bound roles only -- `super_admin` is excluded her
 | Download GDPR documentation package | No | No | No | Yes |
 | Submit deletion requests | No | Yes | Yes | Yes |
 | Approve deletion requests | Only with Deletion confirmation | Only with Deletion confirmation | Only with Deletion confirmation | Only with Deletion confirmation |
-| Change pseudonyms / upgrade contact level | No | Yes | Yes | Yes |
+| Change pseudonyms / upgrade contact stage | No | Yes | Yes | Yes |
 | Downgrade from “With additional details” | No | No | Yes | Yes |
 | View audit log (own facility) | No | No | No | Yes |
 | Case management (cases, episodes, goals) | No | Yes | Yes | Yes |
@@ -852,7 +852,7 @@ Table covers the four facility-bound roles only -- `super_admin` is excluded her
 
 ### Audit Log (Application support Only)
 
-The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, opening person detail pages at the "With additional details" level, exports, deletions, and contact level changes. It cannot be modified and serves traceability purposes in accordance with the GDPR. Access is granted to the Application support (`facility_admin`) for their own facility.
+The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, opening person detail pages at the "With additional details" level, exports, deletions, and contact stage changes. It cannot be modified and serves traceability purposes in accordance with the GDPR. Access is granted to the Application support (`facility_admin`) for their own facility.
 
 ---
 
