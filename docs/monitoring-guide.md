@@ -263,7 +263,6 @@ Das Image enthält kein `curl`, und Gunicorn spricht im `web`-Container nur HTTP
 
 Ein **externer** Prüfer (Uptime-Tool, Host-Skript) darf stattdessen `curl -fsS https://$DOMAIN/health/` gegen die öffentliche Adresse nutzen; das Beispiel mit `curl` gehört nicht in den `web`-Container.
 
-> **Ausnahme `docker-compose.dev.yml`:** Dessen `web`-Healthcheck parst den Body und verlangt `status == "ok"` — dort macht **jeder** `degraded`-Zustand den Container `unhealthy`, und `caddy` (`depends_on: service_healthy`) startet nicht. Das ist für die Entwicklungsinstanz beabsichtigt (streng); die `db_role_posture`-Prüfung (Refs #793) setzt dafür voraus, dass `manage.py check_db_roles` Exit `0` liefert. Auf einem per [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) initialisierten Cluster ist das erfüllt.
 
 ### 7.3 Externes Tool mit Body-Matching (empfohlen)
 

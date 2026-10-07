@@ -1074,7 +1074,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 | Ops | admin | — | — | — |
 
 **Code-Referenz:**
-- [`docker-compose.dev.yml`](https://github.com/anlaufstelle/app/blob/main/docker-compose.dev.yml) — Bootstrap/App/Admin-Rollen
+- `docker-compose.prod.yml` — Bootstrap/App/Admin-Rollen
 - [`deploy/postgres-init/01-app-role.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/postgres-init/01-app-role.sh)
 - Prod-Pfad: #902 (docker-compose.prod auf gleiches Modell)
 
