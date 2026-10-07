@@ -83,3 +83,79 @@ def test_dependabot_watches_the_directories_of_all_pinned_compose_files() -> Non
     directories = {"/" + str(Path(name).parent) if Path(name).parent != Path(".") else "/" for name in _compose_files()}
     watched = _dependabot_ecosystems().get("docker-compose", set())
     assert directories <= watched, f"unwatched compose directories: {sorted(directories - watched)}"
+
+
+DIGEST_ECOSYSTEMS = {"docker", "docker-compose"}
+
+
+def digest_update_groups(config: dict) -> dict[str, set[str]]:
+    """Map each digest-bearing ecosystem entry (``ecosystem@directory``) to its multi-ecosystem group.
+
+    An entry without a declared group (or whose group is missing from the top-level
+    ``multi-ecosystem-groups``, or which lacks the required ``patterns``) maps to the empty string:
+    Dependabot would then open a separate pull request for it.
+    """
+    declared = set(config.get("multi-ecosystem-groups") or {})
+    result: dict[str, set[str]] = {}
+    for entry in config["updates"]:
+        if entry["package-ecosystem"] not in DIGEST_ECOSYSTEMS:
+            continue
+        group = entry.get("multi-ecosystem-group")
+        grouped = group in declared and bool(entry.get("patterns"))
+        for directory in entry.get("directories") or [entry["directory"]]:
+            result.setdefault(group if grouped else "", set()).add(f"{entry['package-ecosystem']}@{directory}")
+    return result
+
+
+def test_digest_update_groups_flags_separate_ecosystem_updates() -> None:
+    # Review case: a node digest bump in the Dockerfile PR and one in the compose PR arrive separately,
+    # so the equality guards above would fail on each of them.
+    separate = {
+        "updates": [
+            {"package-ecosystem": "docker", "directory": "/"},
+            {"package-ecosystem": "docker-compose", "directories": ["/", "/dev-ops/deploy/barbara"]},
+        ]
+    }
+    assert set(digest_update_groups(separate)) == {""}
+    undeclared = {
+        "updates": [
+            {"package-ecosystem": "docker", "directory": "/", "multi-ecosystem-group": "x", "patterns": ["*"]},
+        ]
+    }
+    assert set(digest_update_groups(undeclared)) == {""}
+    no_patterns = {
+        "multi-ecosystem-groups": {"x": {"schedule": {"interval": "weekly"}}},
+        "updates": [{"package-ecosystem": "docker", "directory": "/", "multi-ecosystem-group": "x"}],
+    }
+    assert set(digest_update_groups(no_patterns)) == {""}
+
+
+def test_digest_update_groups_accepts_one_shared_group() -> None:
+    grouped = {
+        "multi-ecosystem-groups": {"base-images": {"schedule": {"interval": "weekly"}}},
+        "updates": [
+            {
+                "package-ecosystem": "docker",
+                "directory": "/",
+                "multi-ecosystem-group": "base-images",
+                "patterns": ["*"],
+            },
+            {
+                "package-ecosystem": "docker-compose",
+                "directories": ["/", "/dev-ops/deploy/barbara"],
+                "multi-ecosystem-group": "base-images",
+                "patterns": ["*"],
+            },
+        ],
+    }
+    assert digest_update_groups(grouped) == {
+        "base-images": {"docker@/", "docker-compose@/", "docker-compose@/dev-ops/deploy/barbara"}
+    }
+
+
+def test_dependabot_updates_all_digest_pins_in_one_pull_request() -> None:
+    if not (REPO_ROOT / ".github/dependabot.yml").exists():
+        pytest.skip("dependabot.yml is not part of the release snapshot")
+    config = yaml.safe_load((REPO_ROOT / ".github/dependabot.yml").read_text(encoding="utf-8"))
+    groups = digest_update_groups(config)
+    assert len(groups) == 1 and "" not in groups, f"digest updates arrive in separate pull requests: {groups}"
