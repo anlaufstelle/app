@@ -8,9 +8,9 @@ Groups:
   the incomplete card keeps its credentials hint; "Geprüft am" shows the time
   stored in the marker, not the current time; an empty or unreadable problem
   list shows the dash instead of an empty list or a ``TypeError``.
-* ``_latest_db_roles_marker`` (2) — once the marker is looked up, building
-  the card issues no follow-up query that reloads ``timestamp`` or ``detail``
-  of the marker row by its primary key.
+* ``_latest_db_roles_marker`` (2) — the looked-up marker already carries
+  ``timestamp`` and ``detail``: formatting the card from it runs no SQL; how
+  the lookup itself queries is left open.
 * ``record_db_roles_marker`` (3) — without RLS bypass only an ``ok`` result is
   skipped while a ``problems`` result is still written; the marker carries the
   ``DbRoleCheck`` target type.
@@ -21,13 +21,11 @@ simulated by patching ``has_rls_bypass_context``.
 
 from __future__ import annotations
 
-import re
 from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
 from django.db import connection
-from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -213,26 +211,34 @@ class TestProblemMarkerCard:
 
 
 class TestLatestMarkerLoadsCardFields:
-    def test_building_the_card_reloads_no_field_of_the_marker_row(self):
-        """Building the card from the latest marker issues no query that reloads the marker row by primary key.
+    def test_formatting_the_looked_up_marker_runs_no_sql(self):
+        """Formatting the card from the looked-up marker runs no SQL; status and check time come from the marker.
 
-        The card still shows the marker's status and check time. Any loaded
-        representation of the row passes; only a per-row reload of a field the
-        lookup left out fails. Kills ``x__latest_db_roles_marker__mutmut_3``
-        (``timestamp`` reloaded) and ``x__latest_db_roles_marker__mutmut_4``
-        (``detail`` reloaded).
+        The SQL guard is attached only around the formatting step, after the
+        lookup has returned, so any lookup that loads ``timestamp`` and
+        ``detail`` passes. Kills ``x__latest_db_roles_marker__mutmut_3``
+        (``timestamp`` deferred and reloaded while formatting) and
+        ``x__latest_db_roles_marker__mutmut_4`` (``detail`` deferred and
+        reloaded while formatting).
         """
         entry = _write_marker("ok", [])
-        table = AuditLog._meta.db_table
-        pk_column = AuditLog._meta.pk.column
-        reload_by_pk = re.compile(rf'WHERE\s+"{table}"\."{pk_column}"\s*=', re.IGNORECASE)
+        sql_while_formatting = []
+        format_card = db_roles._db_role_marker_check
 
-        with CaptureQueriesContext(connection) as ctx:
+        def record_sql(execute, sql, params, many, context):
+            sql_while_formatting.append(sql)
+            return execute(sql, params, many, context)
+
+        def format_without_sql(marker):
+            with connection.execute_wrapper(record_sql):
+                return format_card(marker)
+
+        with patch.object(db_roles, "_db_role_marker_check", side_effect=format_without_sql):
             card = _admin_card()
 
         assert card.status == ComplianceStatus.OK
         assert _formatted(entry.timestamp) in card.detail
-        assert [q["sql"] for q in ctx.captured_queries if reload_by_pk.search(q["sql"])] == []
+        assert sql_while_formatting == []
 
 
 class TestRecordMarker:
