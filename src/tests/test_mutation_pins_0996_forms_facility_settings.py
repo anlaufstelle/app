@@ -15,8 +15,11 @@ the public ``setting_warnings`` property. Groups:
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils.translation import gettext as _
 
 from core.forms.facility_settings import FacilitySettingsForm
@@ -26,6 +29,7 @@ from tests.test_facility_settings_hub import _post_data
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
 AUDIT_MARKER = "ist kürzer als die längste Fach-Frist"
+_LONGER_TYPES = '"core_documenttype"."retention_days" > '
 
 
 def _form(settings_obj, **changes):
@@ -95,21 +99,24 @@ class TestLongestDocumentTypeIsNamed:
     def test_a_tie_names_the_type_first_by_name(self, settings_obj):
         """Two event types with the same longest period: the note names the one first by name.
 
-        On a small table the planner reads the types through the unique index on
-        ``(facility, name)`` and hands them to the sort in name order, which hides a missing
-        tie-break. Index scans are switched off for this transaction, as a facility with many
-        types is read by a sequential scan; the type created first then comes first in a sort
-        without tie-break. ``xǁFacilitySettingsFormǁ_audit_retention_warning__mutmut_31`` drops
-        the name tie-break and names "Zeta".
+        PostgreSQL returns rows that tie on every sort key in whatever order the scan delivers
+        them (here the unique index on ``(facility, name)``, elsewhere the heap), so the named
+        type alone cannot show a missing tie-break. The pin therefore also reads the query
+        that fetches the longer event types: after the period it orders by name.
+        ``xǁFacilitySettingsFormǁ_audit_retention_warning__mutmut_31`` drops the name key.
         """
         _event_type(settings_obj.facility, "Zeta", 5000)
         _event_type(settings_obj.facility, "Alpha", 5000)
-        with connection.cursor() as cursor:
-            for setting in ("enable_indexscan", "enable_indexonlyscan", "enable_bitmapscan"):
-                cursor.execute(f"SET LOCAL {setting} = off")
+        form = _form(settings_obj, auditlog_retention_months=122)
 
-        warnings = _audit_warnings(_form(settings_obj, auditlog_retention_months=122))
+        with CaptureQueriesContext(connection) as captured:
+            warnings = _audit_warnings(form)
 
+        type_queries = [q["sql"].replace('"', "") for q in captured.captured_queries if _LONGER_TYPES in q["sql"]]
+        assert type_queries
+        for sql in type_queries:
+            order_by = re.search(r" ORDER BY (.+?)(?: LIMIT \d+)?$", sql).group(1).split(", ")
+            assert order_by[:2] == ["core_documenttype.retention_days DESC", "core_documenttype.name ASC"]
         assert warnings == [_expected(3660, _type_label("Alpha"), 5000)]
 
 
