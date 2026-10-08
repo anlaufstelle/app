@@ -1211,24 +1211,23 @@ class TestDocumentRedaction:
         for name, text in (("toms", toms_raw), ("dsfa", dsfa_raw)):
             assert "\n" in text, f"{name}: the guard needs the unflattened rendering"
             claims += [(name, block) for block in _blocks(text) if "Kontosperrung nach" in block]
-        summary = _read_flat(DOMAIN_SUMMARY_EN)
-        claims += [("summary", _section(summary, "- **Account lockout.**", "- **"))]
-        assert {name for name, _ in claims} == {"vvt", "toms", "dsfa", "summary"}
+        assert {name for name, _ in claims} == {"vvt", "toms", "dsfa"}
         for name, text in claims:
-            assert "ausgenommen" in text or "exempt" in text, (name, text)
-        assert "consecutive failed login attempts" not in summary
+            assert "ausgenommen" in text, (name, text)
 
     def test_lockout_guard_rejects_dsfa_without_its_lockout_exemption(self):
         templates = REPO_ROOT / "src" / "core" / "dsgvo_templates"
-        toms = _flat((templates / "toms.md").read_text(encoding="utf-8"))
+        toms = (templates / "toms.md").read_text(encoding="utf-8")
         dsfa = (templates / "dsfa.md").read_text(encoding="utf-8")
         exemption = _DSFA_LOCKOUT_EXEMPTION
         assert dsfa.count(exemption) == 1
-        dsfa = _flat(dsfa.replace(exemption, ""))
-        assert "Systemadministrationskonto ist von der Sperre ausgenommen" not in dsfa
-        assert "ausgenommen" in dsfa  # unrelated retention/Article 18 exceptions remain
+        dsfa = dsfa.replace(exemption, "")
+        assert "Systemadministrationskonto ist von der Sperre ausgenommen" not in _flat(dsfa)
+        assert "ausgenommen" in _flat(dsfa)  # unrelated retention/Article 18 exceptions remain
 
-        with pytest.raises(AssertionError):
+        # Both inputs stay unflattened, so the guard reaches the DSFA lockout item
+        # instead of stopping at its unflattened-rendering precondition.
+        with pytest.raises(AssertionError, match="dsfa"):
             self.test_every_lockout_claim_names_the_super_admin_exemption(toms, dsfa)
 
     def test_lockout_guard_rejects_an_exemption_outside_the_lockout_item(self, toms_raw, dsfa_raw):
@@ -1239,6 +1238,18 @@ class TestDocumentRedaction:
 
         with pytest.raises(AssertionError, match="dsfa"):
             self.test_every_lockout_claim_names_the_super_admin_exemption(toms_raw, dsfa)
+
+
+@pytest.mark.architecture
+class TestLockoutClaimDocs:
+    """The English domain summary repeats the lockout promise. It lives under
+    ``docs/``, which the mutation run does not copy, hence the marker."""
+
+    def test_domain_summary_lockout_claim_names_the_super_admin_exemption(self):
+        summary = _read_flat(DOMAIN_SUMMARY_EN)
+        claim = _section(summary, "- **Account lockout.**", "- **")
+        assert "exempt" in claim, claim
+        assert "consecutive failed login attempts" not in summary
 
 
 @pytest.mark.architecture
