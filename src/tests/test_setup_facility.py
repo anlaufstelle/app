@@ -402,6 +402,8 @@ class TestSetupFacilityRlsGuard:
         assert Organization.objects.count() == 0
         assert Facility.objects.count() == 0
 
+    # Reads the compose files at the repository root, which the mutation run does not copy.
+    @pytest.mark.architecture
     def test_hint_command_selects_a_stack_that_defines_the_service(self, monkeypatch):
         import re
         import shlex
