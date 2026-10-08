@@ -36,31 +36,35 @@ from core.services.events.history_diff import build_anonymization_marker
 from core.services.system import current_connection_owns
 from tests.conftest import xdist_role_suffix
 
-# Unter mutmut überspringen (Refs #1388/#930). Die ``rls_test_role``-Fixture ist
-# session-scoped und räumt im Teardown per ``django_db_blocker.unblock()`` +
-# Roh-SQL auf. mutmut ruft ``pytest.main()`` über mehrere Phasen auf (in-process:
-# stats; Subprozess: clean/forced-fail/pro-Mutant) — pytest-djangos
-# DatabaseBlocker leakt dabei zwischen den Sessions (bekanntes Problem, siehe
-# ``scripts/dev/run_mutmut.py``). Beim Session-Teardown ist der Blocker dann
-# korrumpiert, ``unblock()`` greift nicht mehr und der Roh-SQL-Zugriff wirft
-# ``RuntimeError: Database access not allowed`` → mutmut bricht die Phase ab
-# (``-x``) und der Voll-Lauf zählt null Mutanten. Der Test prüft RLS-Policies auf
-# DB-Ebene und killt keine ``core.services``/``core.forms``-Mutanten; sein
-# Ausschluss aus dem Mutanten-Testpool kostet keine Mutation-Coverage.
+# Skipped under mutmut (Refs #1388/#930). The session-scoped ``rls_test_role``
+# fixture cleans up in its teardown via ``django_db_blocker.unblock()`` + raw SQL.
+# mutmut calls ``pytest.main()`` across several phases (in-process: stats;
+# subprocess: clean/forced-fail/per-mutant) and pytest-django's DatabaseBlocker
+# leaks between those sessions (known issue, see ``scripts/dev/run_mutmut.py``).
+# At session teardown the blocker is corrupted, ``unblock()`` no longer takes
+# effect and the raw SQL raises ``RuntimeError: Database access not allowed`` ->
+# mutmut aborts the phase (``-x``) and the full run counts zero mutants.
 #
-# PRÄSENZ-Check, nicht Truthy-Check: mutmut setzt ``MUTANT_UNDER_TEST`` in JEDER
-# Phase — aber in der Clean-Phase auf den LEEREN String (``""``, falsy). Ein
-# ``os.environ.get(...)``-Truthy-Test würde dort nicht greifen und der Teardown
-# liefe im Clean-Subprozess erneut auf. ``make ci`` setzt die Variable nie.
-if "MUTANT_UNDER_TEST" in os.environ:
-    pytest.skip(
-        "RLS-Funktionaltest inkompatibel mit mutmut-Lauf (DatabaseBlocker-Leak im Session-Teardown, Refs #1388)",
-        allow_module_level=True,
-    )
+# The skip lives in the fixture, not at module level: two dozen modules import
+# ``rls_test_role`` from here (some indirectly via ``tests.test_rls``), and a
+# module-level skip propagated through every such import, dropping all their
+# tests from the mutant pool. The fixture skips before its yield (and before
+# requesting ``django_db_setup``), so no teardown is registered and the leak
+# cannot occur; tests without the fixture keep running under mutmut. This
+# module's own tests check RLS policies at DB level and kill no
+# ``core.services``/``core.forms`` mutants, so they stay excluded via
+# ``pytestmark``. Guarded by ``test_rls_fixture_mutmut_skip_scope.py``.
+#
+# PRESENCE check, not truthiness: mutmut sets ``MUTANT_UNDER_TEST`` in EVERY
+# phase, but to the EMPTY string in the clean phase. ``make ci`` never sets it.
+UNDER_MUTMUT = "MUTANT_UNDER_TEST" in os.environ
+MUTMUT_SKIP_REASON = "RLS fixture incompatible with mutmut runs (DatabaseBlocker leak in session teardown, Refs #1388)"
+
+pytestmark = pytest.mark.skipif(UNDER_MUTMUT, reason=MUTMUT_SKIP_REASON)
 
 
 @pytest.fixture(scope="session")
-def rls_test_role(django_db_setup, django_db_blocker):
+def rls_test_role(request, django_db_blocker):
     """Erstellt eine session-globale Postgres-Rolle ohne Superuser.
 
     Der Rollenname traegt unter pytest-xdist einen Worker-Suffix
@@ -76,6 +80,9 @@ def rls_test_role(django_db_setup, django_db_blocker):
     global stehen und liess Folgelaeufe unter ``--reuse-db`` auf
     ``role already exists`` auflaufen.
     """
+    if UNDER_MUTMUT:
+        pytest.skip(MUTMUT_SKIP_REASON)
+    request.getfixturevalue("django_db_setup")
     if connection.vendor != "postgresql":
         pytest.skip("Non-Superuser-Test erfordert PostgreSQL")
 
