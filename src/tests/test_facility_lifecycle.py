@@ -339,7 +339,8 @@ class TestAdminGuideDokumentiertDieHardDeleteFussfalle:
     def test_abschnitt_verweist_auf_das_offboarding_ticket(self):
         """Nutzer-Offboarding laeuft als eigenes Ticket (DS7 = #2051) — der
         Querverweis haelt beide Haelften des Lifecycles zusammen."""
-        assert "issues/2051" in self._admin_guide()
+        # The public tree keeps the reference as plain text (#2437), so check the number, not the URL.
+        assert "#2051" in self._admin_guide()
 
     def test_abschnitt_nennt_das_archivieren_als_empfohlenen_weg(self):
         """Der Hard-Delete ist kein unterstuetzter Vorgang — der Abschnitt muss
