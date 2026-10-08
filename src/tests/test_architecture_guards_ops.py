@@ -2248,9 +2248,9 @@ class TestDemoDeployTreeSync:
 
     def test_remote_dir_is_overridable(self) -> None:
         assert 'REMOTE_DIR="${REMOTE_DIR:-' in self._flat(), (
-            "REMOTE_DIR muss ueberschreibbar sein (Refs #1971), damit der Sync "
-            "gegen ein Scratch-Verzeichnis geprueft werden kann, ohne die "
-            "laufende Demo anzufassen (Policy #1955)."
+            "REMOTE_DIR must be overridable (Refs #1971) so the sync can be "
+            "checked against a scratch directory without touching the running "
+            "demo, which is pinned to a release (ADR-028)."
         )
 
     # --- Verhaltens-Guards: Skript real starten, ssh/rsync gestubbt ---------
