@@ -34,8 +34,8 @@ Testklasse je Funktion; jeder Test nennt seine Mutanten in der Docstring samt
 dem Wert, der beim Mutanten abweicht; Zusicherungen vergleichen EXAKT
 (``==``/``is``), nie per Teilstring (mutmut erzeugt ``"XX<text>XX"``-
 Varianten); keine Fakes — es laufen echte Model-Objekte durch die echten
-Services; KEIN Import aus ``test_rls_functional`` (dessen modulweiter Skip
-unter ``MUTANT_UNDER_TEST`` wuerde jeden Pin entwerten).
+Services; KEIN Import aus ``test_rls_functional`` (its fixture ``rls_test_role`` skips
+itself under ``MUTANT_UNDER_TEST``; a pin requesting it never runs in a mutation run).
 """
 
 import re

@@ -25,7 +25,8 @@ Folge-Ticket #2120.
 Konventionen wie ``test_mutation_pins_091_cut.py``: Zusicherungen
 vergleichen EXAKT (``==``/``is``), nie per Teilstring (mutmut erzeugt
 ``"XX<text>XX"``-Varianten); KEINE Imports aus ``test_rls_functional``
-(modulweiter Skip unter ``MUTANT_UNDER_TEST`` wuerde jeden Pin entwerten);
+(its fixture ``rls_test_role`` skips itself under ``MUTANT_UNDER_TEST``; a pin
+requesting it never runs in a mutation run);
 jeder Test nennt seine Mutanten in der Docstring. Der Kill-Nachweis ist
 der Delta-RERUN des Checkpoints (Delta-Mutanten werden immer neu
 getestet).
@@ -84,8 +85,9 @@ from core.services.events.feed import _build_event_preview_fields
 # Konventionen wie ``src/tests/test_mutation_pins_091_cut.py``: eine Testklasse
 # je Funktion, jeder Test nennt seine Mutanten in der Docstring; Zusicherungen
 # vergleichen EXAKT (``==``/``is``), nie per Teilstring (mutmut erzeugt
-# ``"XX<text>XX"``-Varianten); KEINE Imports aus ``test_rls_functional`` (der
-# modulweite Skip unter ``MUTANT_UNDER_TEST`` wuerde jeden Pin entwerten);
+# ``"XX<text>XX"``-Varianten); KEINE Imports aus ``test_rls_functional`` (its fixture
+# ``rls_test_role`` skips itself under ``MUTANT_UNDER_TEST``; a pin requesting it never
+# runs in a mutation run);
 # Fixtures kommen aus ``src/tests/conftest.py`` und legen echte Model-Objekte an,
 # keine Fakes. Jeder Negativtest fuehrt einen Positiv-Zwilling mit, damit ein
 # still leer laufendes Queryset nicht als gruener Pin durchgeht.
@@ -916,8 +918,9 @@ class TestPreviewFieldsHonourFieldLevelSensitivity:
 # Konventionen wie ``test_mutation_pins_091_cut.py``: Zusicherungen vergleichen
 # EXAKT (nie per Teilstring — mutmut erzeugt ``"XX<text>XX"``-Varianten); es
 # werden echte Model-Objekte (Fixture ``facility`` aus ``tests/conftest.py``)
-# benutzt, keine Fakes; KEIN Import aus ``test_rls_functional`` (dessen
-# modulweiter Skip unter ``MUTANT_UNDER_TEST`` wuerde jeden Pin entwerten). Ein
+# benutzt, keine Fakes; KEIN Import aus ``test_rls_functional`` (its fixture
+# ``rls_test_role`` skips itself under ``MUTANT_UNDER_TEST``; a pin requesting it never
+# runs in a mutation run). Ein
 # ``translation.override`` ist hier nicht noetig: die Funktion liefert
 # ausschliesslich ``bool``, keine uebersetzten Texte.
 #

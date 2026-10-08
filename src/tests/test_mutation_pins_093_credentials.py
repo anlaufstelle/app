@@ -21,7 +21,8 @@ NOBYPASSRLS-App-Rolle lautlos, obwohl der INSERT durchlaeuft.
 Konventionen wie ``src/tests/test_mutation_pins_091_cut.py``: Zusicherungen
 vergleichen EXAKT (``==``), nie per Teilstring (mutmut erzeugt
 ``"XX<text>XX"``-Varianten); KEINE Imports aus ``test_rls_functional``
-(modulweiter Skip unter ``MUTANT_UNDER_TEST`` wuerde jeden Pin entwerten);
+(its fixture ``rls_test_role`` skips itself under ``MUTANT_UNDER_TEST``; a pin
+requesting it never runs in a mutation run);
 keine gefakten Fixtures, nur echte Model-Objekte; jeder Test nennt seine
 Mutanten samt abweichendem Wert in der Docstring.
 """

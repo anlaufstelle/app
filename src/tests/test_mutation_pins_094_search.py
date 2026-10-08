@@ -28,8 +28,9 @@ Survivor-Triage release-0.94 (Ledger des Meilensteins) (9 Mutanten). Vier Bloeck
 Konventionen wie ``test_mutation_pins_093_import_engine.py`` und
 ``test_mutation_pins_091_cut.py``: Zusicherungen vergleichen EXAKT (``==``),
 nie per Teilstring (mutmut erzeugt ``"XX<text>XX"``-Varianten); KEINE Imports
-aus ``test_rls_functional`` (modulweiter Skip unter ``MUTANT_UNDER_TEST``
-wuerde jeden Pin entwerten); Fixtures kommen aus ``src/tests/conftest.py``
+aus ``test_rls_functional`` (its fixture ``rls_test_role`` skips itself under
+``MUTANT_UNDER_TEST``; a pin requesting it never runs in a mutation run); Fixtures
+kommen aus ``src/tests/conftest.py``
 bzw. werden als echte Model-Objekte angelegt (keine Fakes). Jeder Test nennt
 seine Mutanten in der Docstring samt dem Wert, der beim Mutanten abweicht.
 """

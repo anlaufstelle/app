@@ -325,12 +325,11 @@ class TestLogAuditEventSuperAdminGuc:
 
     **Bewusst ohne die ``rls_test_role``-Fixturen** aus
     ``tests/test_rls_functional.py`` (wie in § 4.6 vorgeschlagen):
-    jenes Modul ruft bei gesetztem ``MUTANT_UNDER_TEST`` ein
-    ``pytest.skip(allow_module_level=True)`` (Refs #1388) — ein Import von
-    dort wuerde **diese ganze Datei** in jeder mutmut-Phase ueberspringen und
-    damit saemtliche Pins wirkungslos machen (empirisch belegt: mit
-    ``MUTANT_UNDER_TEST=`` sammelt ``test_preauth_audit_rls.py`` 0 statt 3
-    Tests). Fuer die hier gepinnte Zusicherung ist die Rolle auch nicht
+    the fixture skips itself under ``MUTANT_UNDER_TEST`` (Refs #1388), so a pin
+    requesting it never runs in a mutation run. Until the skip moved into the
+    fixture, the module skipped itself at import and took every importing file
+    with it (``test_preauth_audit_rls.py`` collected 0 instead of 3 tests).
+    Fuer die hier gepinnte Zusicherung ist die Rolle auch nicht
     noetig: gemessen wird der GUC-Wert, nicht das Verhalten der Policy.
     """
 

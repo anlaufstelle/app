@@ -34,8 +34,9 @@ je Funktion; jeder Test nennt seine Mutanten in der Docstring samt dem Wert,
 der beim Mutanten abweicht; Zusicherungen vergleichen EXAKT (``==`` bzw.
 ``is``), nie per Teilstring (mutmut erzeugt ``"XX<text>XX"``-Varianten); keine
 Fixture-Faken — es laufen echte Model-Objekte durch den echten File-Vault;
-KEIN Import aus ``test_rls_functional`` (dessen modulweiter Skip unter
-``MUTANT_UNDER_TEST`` wuerde jeden Pin entwerten). Sprachabhaengige Texte
+KEIN Import aus ``test_rls_functional`` (its fixture ``rls_test_role`` skips itself
+under ``MUTANT_UNDER_TEST``; a pin requesting it never runs in a mutation run).
+Sprachabhaengige Texte
 kommen hier nicht vor (die Datei pinnt Datenfluss, keine Wortlaute), deshalb
 ist kein ``translation.override`` noetig.
 """

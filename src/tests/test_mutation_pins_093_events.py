@@ -27,8 +27,8 @@ EXAKT (``==``), nie per Teilstring — mutmut erzeugt ``"XX<text>XX"``-Varianten
 die ein Teilstring-Match ueberleben wuerden; der Sprachkontext wird per
 ``translation.override("de")`` festgenagelt; Fixtures kommen aus
 ``src/tests/conftest.py``, es gibt keine Fixture-Faken (echte Model-Objekte);
-KEIN Import aus ``test_rls_functional`` (dessen modulweiter Skip unter
-``MUTANT_UNDER_TEST`` wuerde jeden Pin entwerten).
+KEIN Import aus ``test_rls_functional`` (its fixture ``rls_test_role`` skips itself
+under ``MUTANT_UNDER_TEST``; a pin requesting it never runs in a mutation run).
 """
 
 import uuid

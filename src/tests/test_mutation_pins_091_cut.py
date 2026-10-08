@@ -22,8 +22,9 @@ Konventionen wie ``test_mutation_pins_089/090/091.py``: Zusicherungen
 vergleichen EXAKT (``==``), nie per Teilstring (mutmut erzeugt
 ``"XX<text>XX"``-Varianten); Sprachkontext wird wo noetig per
 ``translation.override("de")`` festgenagelt; KEINE Imports aus
-``test_rls_functional`` (modulweiter Skip unter ``MUTANT_UNDER_TEST``
-wuerde jeden Pin entwerten); jeder Test nennt seine Mutanten in der
+``test_rls_functional`` (its fixture ``rls_test_role`` skips itself under
+``MUTANT_UNDER_TEST``; a pin requesting it never runs in a mutation run); jeder Test
+nennt seine Mutanten in der
 Docstring. Der Kill-Nachweis ist der Delta-RERUN des Cuts (Delta-Mutanten
 werden immer neu getestet) plus Stichproben von Hand.
 """
@@ -361,11 +362,11 @@ class TestInlineCreateFormCleanKeepsTheModelValidationLayer:
 #    (Quellzeilen 27 bzw. 222) ist nie geprueft worden.
 #
 # **Bewusst ohne die ``rls_test_role``-/``as_rls_role``-Helfer aus
-# ``tests/test_rls_functional.py``:** jenes Modul ruft bei gesetztem
-# ``MUTANT_UNDER_TEST`` ein ``pytest.skip(allow_module_level=True)`` (Refs #1388).
-# Ein Import von dort wuerde **diese ganze Datei** in jeder mutmut-Phase
-# stillschweigend ueberspringen und damit saemtliche Pins entwerten (empirisch
-# belegt, dokumentiert in ``test_mutation_pins_091.py``). Das Rollen-Handling ist
+# ``tests/test_rls_functional.py``:** the fixture skips itself under
+# ``MUTANT_UNDER_TEST`` (Refs #1388), so a pin requesting it never runs in a
+# mutation run. Until the skip moved into the fixture, the module skipped itself
+# at import and took every importing file with it (documented in
+# ``test_mutation_pins_091.py``). Das Rollen-Handling ist
 # deshalb — wie in
 # ``test_client_anonymize_now.py::TestAnonymizeClientNowUnterDerAppRolle`` — lokal
 # kopiert. Aus demselben Grund gibt es hier **keinen** Modul-Level-Skip.
@@ -685,11 +686,11 @@ class TestRlsBypassKontextUnterNichtBypassRolle:
 #   (``mutmut_48/49/50`` und ``52/53/54``) ist ebenfalls als aequivalent
 #   bestaetigt — der Test in ``TestOwnershipGateChecksEveryAppendOnlyTable``
 #   assertiert deshalb die **Anzahl** der Funde, nicht ihren Text.
-# * Kein Import aus ``tests/test_rls_functional.py``: jenes Modul ruft bei
-#   gesetztem ``MUTANT_UNDER_TEST`` ein ``pytest.skip(allow_module_level=True)``,
-#   und der Skip propagiert ueber den Import — er wuerde diese ganze Datei im
-#   Mutationslauf entwerten (Befund 1 aus Refs #2087). Auch modulweite Skips
-#   gibt es hier aus demselben Grund nicht.
+# * No RLS fixture from ``tests/test_rls_functional.py``: ``rls_test_role`` skips
+#   itself under ``MUTANT_UNDER_TEST``, a pin requesting it never runs in the
+#   mutation run. Finding 1 of Refs #2087 concerned the former module-level skip,
+#   which propagated through every import and dropped this whole file.
+#   Auch modulweite Skips gibt es hier aus demselben Grund nicht.
 
 _ROLE_SETUP_HINT = "DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh."
 _APP_ROLE = "anlaufstelle_app"
@@ -1219,11 +1220,11 @@ class TestQueryTableOwnerReadsPgTables:
 class TestCurrentConnectionBypassesRlsRunsAgainstTheRealConnection:
     """Die L10-Deploy-Assertion (Refs #1375) war im Mutationslauf unsichtbar.
 
-    ``test_connection_bypassrls.py`` deckt sie in ``make ci`` ab, importiert
-    aber Fixtures aus ``tests/test_rls_functional.py`` — jenes Modul skippt bei
-    gesetztem ``MUTANT_UNDER_TEST`` modulweit, und der Skip propagiert ueber den
-    Import. Im Mutationslauf erscheint die Funktion deshalb als "no-tests".
-    Dieser Test kommt ohne jeden Import aus dem Skip-Modul aus.
+    ``test_connection_bypassrls.py`` covers it in ``make ci`` with fixtures from
+    ``tests/test_rls_functional.py``. Until the skip moved into ``rls_test_role``,
+    that module skipped itself under ``MUTANT_UNDER_TEST`` at import and took the
+    importing file along, so the mutation run reported the function as "no-tests".
+    This test needs no RLS fixture.
     """
 
     def test_reports_the_rls_state_of_the_running_connection(self):

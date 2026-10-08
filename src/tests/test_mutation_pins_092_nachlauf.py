@@ -19,7 +19,8 @@ Modulen (Refs #2080, #2107, #2108, #2109, #2110, #2111):
 Konventionen wie ``test_mutation_pins_091_cut.py``/``..._092_checkpoint.py``:
 Zusicherungen vergleichen EXAKT (``==``/``is``), nie per Teilstring (mutmut
 erzeugt ``"XX<text>XX"``-Varianten); KEINE Imports aus ``test_rls_functional``
-(der modulweite Skip unter ``MUTANT_UNDER_TEST`` wuerde jeden Pin entwerten);
+(its fixture ``rls_test_role`` skips itself under ``MUTANT_UNDER_TEST``; a pin
+requesting it never runs in a mutation run);
 keine Fixture-Faken — alle Objekte sind echte Model-Zeilen aus
 ``src/tests/conftest.py``; jeder Test nennt seine Mutanten samt abweichendem
 Wert in der Docstring. Der Kill-Nachweis ist der Delta-RERUN des Nachlaufs
@@ -97,8 +98,9 @@ pytestmark = pytest.mark.django_db
 # Mutanten abweicht; Zusicherungen vergleichen EXAKT (``==``), nie per
 # Teilstring (mutmut erzeugt ``"XX<text>XX"``-Varianten); es werden echte
 # Model-Zeilen gebaut, keine Fixture-Fakes; KEINE Imports aus
-# ``test_rls_functional`` (der modulweite Skip unter ``MUTANT_UNDER_TEST``
-# wuerde jeden Pin entwerten). Ein Sprachkontext ist hier nirgends noetig: alle
+# ``test_rls_functional`` (its fixture ``rls_test_role`` skips itself under
+# ``MUTANT_UNDER_TEST``; a pin requesting it never runs in a mutation run). Ein
+# Sprachkontext ist hier nirgends noetig: alle
 # verglichenen Texte sind DB-Werte bzw. der nicht uebersetzte Marker
 # ``"[Anonymisiert]"``.
 #
@@ -1028,8 +1030,9 @@ class TestPendingDeletionRequestLookupIsPersonBound:
 # Konventionen wie ``src/tests/test_mutation_pins_091_cut.py``: Zusicherungen
 # vergleichen EXAKT (``==``/``is None``), nie per Teilstring (mutmut erzeugt
 # ``"XX<text>XX"``-Varianten); keine Fixture-Faken (echte Model-Objekte aus
-# ``src/tests/conftest.py``); KEIN Import aus ``test_rls_functional`` (dessen
-# modulweiter Skip unter ``MUTANT_UNDER_TEST`` wuerde die Pins entwerten); jeder
+# ``src/tests/conftest.py``); KEIN Import aus ``test_rls_functional`` (its fixture
+# ``rls_test_role`` skips itself under ``MUTANT_UNDER_TEST``; a pin requesting it never
+# runs in a mutation run); jeder
 # Test nennt seine Mutanten in der Docstring samt abweichendem Wert.
 
 
@@ -1301,8 +1304,9 @@ class TestVerifyRecoveryTokenAnchorIsPkBound:
 #
 # Konventionen wie ``test_mutation_pins_091_cut.py``: Zusicherungen vergleichen
 # EXAKT (``==`` / ``is``), nie per Teilstring (mutmut erzeugt
-# ``"XX<text>XX"``-Varianten); KEINE Imports aus ``test_rls_functional`` (dessen
-# modulweiter Skip unter ``MUTANT_UNDER_TEST`` wuerde jeden Pin entwerten); keine
+# ``"XX<text>XX"``-Varianten); KEINE Imports aus ``test_rls_functional`` (its fixture
+# ``rls_test_role`` skips itself under ``MUTANT_UNDER_TEST``; a pin requesting it never
+# runs in a mutation run); keine
 # Fixture-Faken, sondern echte ``User``-/``StaticDevice``-Zeilen; jeder Test nennt
 # seine Mutanten in der Docstring samt dem Wert, der beim Mutanten abweicht.
 # ``translation.override`` ist hier nicht noetig — die gepinnten Zeilen liefern

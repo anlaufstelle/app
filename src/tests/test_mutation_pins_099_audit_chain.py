@@ -68,13 +68,11 @@ from core.services.system import bypass_replication_triggers
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
-# WICHTIG: kein Modul-Import aus ``tests.test_rls_functional`` — jenes Modul
-# deaktiviert sich unter ``MUTANT_UNDER_TEST`` (Refs #1388, DatabaseBlocker-Leak
-# im mutmut-Mehrphasenlauf) beim Import selbst komplett (``allow_module_level=
-# True``-Selbstabschaltung). Ein Import auf Modulebene wuerde diese
-# Selbstabschaltung in DIESE Datei hineinziehen und JEDEN Test hier unter
-# JEDEM Mutanten als nicht ausgefuehrt erscheinen lassen (empirisch
-# verifiziert: "no tests collected"). Die RLS-durchsetzende Rollen-Fixture
+# The RLS-enforcing role fixture ``rls_test_role`` from ``tests.test_rls_functional``
+# skips itself under ``MUTANT_UNDER_TEST`` (Refs #1388, DatabaseBlocker leak in the
+# multi-phase mutmut run); a test requesting it never runs under any mutant. Until
+# the skip moved into the fixture, the module skipped itself at import and took every
+# importing file with it ("no tests collected"). Die RLS-durchsetzende Rollen-Fixture
 # (``rls_test_role``) bleibt deshalb fuer Mutation-Pins ausgeschlossen — s.
 # ``TestSystemChainLatestLinkRawElevationValueCase`` unten fuer die
 # Spy-Alternative.
@@ -410,11 +408,10 @@ class TestSystemChainLatestLinkRawElevationValueCase:
            dort ``false`` statt ``true``). Eine end-to-end-Pruefung MIT
            echter RLS-Durchsetzung ist in diesem Baum nicht moeglich (die
            einzige RLS-durchsetzende Rollen-Fixture
-           ``tests.test_rls_functional.rls_test_role`` schaltet sich unter
-           ``MUTANT_UNDER_TEST`` selbst komplett ab, Refs #1388,
-           DatabaseBlocker-Leak im mutmut-Mehrphasenlauf — ein Pin, der sie
-           importiert, wuerde unter JEDEM Mutanten dieser Datei
-           uebersprungen, verifiziert: „no tests collected"; die
+           ``tests.test_rls_functional.rls_test_role`` skips itself under
+           ``MUTANT_UNDER_TEST``, Refs #1388, DatabaseBlocker leak in the
+           multi-phase mutmut run — a pin requesting it would be skipped
+           under every mutant of this file; die
            Default-Testverbindung selbst laeuft zudem als Superuser/
            BYPASSRLS und macht RLS dort wirkungslos). Stattdessen wird der
            TATSAECHLICH ausgefuehrte SQL-Text ueber einen Spy auf

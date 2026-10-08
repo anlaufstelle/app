@@ -34,8 +34,9 @@ Konventionen wie ``src/tests/test_mutation_pins_091_cut.py``: eine Testklasse
 je Funktion, jeder Test nennt seine Mutanten in der Docstring samt dem Wert,
 der beim Mutanten abweicht; Zusicherungen vergleichen EXAKT (``==``), nie per
 Teilstring (mutmut erzeugt ``"XX<text>XX"``-Varianten); KEINE Imports aus
-``test_rls_functional`` (modulweiter Skip unter ``MUTANT_UNDER_TEST`` wuerde
-jeden Pin entwerten); keine Fixture-Faken, ausschliesslich echte
+``test_rls_functional`` (its fixture ``rls_test_role`` skips itself under
+``MUTANT_UNDER_TEST``; a pin requesting it never runs in a mutation run); keine
+Fixture-Faken, ausschliesslich echte
 Model-Objekte. Ein Sprachkontext per ``translation.override`` ist hier nicht
 noetig: gepinnt wird kein Text, sondern eine Sperrmenge.
 

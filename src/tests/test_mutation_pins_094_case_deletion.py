@@ -13,8 +13,9 @@ vergleichen EXAKT (``==``), nie per Teilstring (mutmut erzeugt
 ``"XX<text>XX"``-Varianten); Sprachkontext wird wo noetig per
 ``translation.override("de")`` festgenagelt; ``pytest.mark.django_db`` nur, wo
 die DB wirklich gebraucht wird (hier: ueberall, die Pfade sind reine
-ORM-Schreibwege); KEINE Imports aus ``test_rls_functional`` (modulweiter Skip
-unter ``MUTANT_UNDER_TEST`` wuerde jeden Pin entwerten); keine gefakten
+ORM-Schreibwege); KEINE Imports aus ``test_rls_functional`` (its fixture
+``rls_test_role`` skips itself under ``MUTANT_UNDER_TEST``; a pin requesting it never
+runs in a mutation run); keine gefakten
 Fixtures — jeder Test legt echte Model-Zeilen an. Jeder Test nennt seine
 Mutanten in der Docstring und benennt den Wert, der beim Mutanten abweicht.
 
