@@ -41,6 +41,12 @@ Begründung: Der App-Zweig kostet pro Cut eine eigene Maintainer-Handoff-Kette f
 
 Offen zu diesem Nachtrag: AGPL §13 für `demo.anlaufstelle.app` — läuft die öffentliche Demo auf einer Version, deren Corresponding Source nicht öffentlich abrufbar ist, muss die Demo entweder auf dem letzten veröffentlichten Stand bleiben oder die betreffende Version doch publiziert werden.
 
+## Nachtrag 2026-10-08: Stufe 3 wieder aktiv ab v0.99.6 (Refs #1955)
+
+Maintainer-Entscheid 2026-10-08: Ab v0.99.6 endet jeder Release-Cut wieder auf **app**, nicht erst ab 1.0. Der Nachtrag vom 2026-08-20 ist damit für alle folgenden Cuts aufgehoben und bleibt als Begründung der Cuts bis v0.99.5 stehen. Zu jedem Cut gehören wieder der Fast-Forward-Push des Public-Snapshots nach `anlaufstelle/app`, der Tag auf allen drei Repos, `release-verify-public.sh` und das GitHub-Release mit Release-Notes und SBOM. Die Pushes bleiben Schritte des Maintainers; das automatisierte Setup hat weiterhin keinen Push-Zugriff auf stage/app.
+
+`release-verify-tags.sh` (dev-only) leitet den Modus nicht mehr aus der Major-Version des Tags ab: Der App-Zweig ist für jeden Tag Pflicht, `RELEASE_APP_PUSH=0` überspringt ihn nur als ausdrücklicher Ausweg. Die offene AGPL-§13-Frage des Nachtrags vom 2026-08-20 entfällt für veröffentlichte Releases; die Demo bleibt nach [ADR-028](028-demo-release-versioning.md) auf veröffentlichte Stände beschränkt.
+
 ## Consequences
 
 - **+** Halbfertige Arbeit bleibt geschützt; veröffentlichter Stand ist immer geprüft.
