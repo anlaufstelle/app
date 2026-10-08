@@ -8,8 +8,9 @@ Groups:
   the incomplete card keeps its credentials hint; "Geprüft am" shows the time
   stored in the marker, not the current time; an empty or unreadable problem
   list shows the dash instead of an empty list or a ``TypeError``.
-* ``_latest_db_roles_marker`` (2) — the marker row arrives with ``timestamp``
-  and ``detail`` loaded, so building the card needs no follow-up query.
+* ``_latest_db_roles_marker`` (2) — once the marker is looked up, building
+  the card issues no follow-up query that reloads ``timestamp`` or ``detail``
+  of the marker row by its primary key.
 * ``record_db_roles_marker`` (3) — without RLS bypass only an ``ok`` result is
   skipped while a ``problems`` result is still written; the marker carries the
   ``DbRoleCheck`` target type.
@@ -20,10 +21,13 @@ simulated by patching ``has_rls_bypass_context``.
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -39,7 +43,7 @@ _CATEGORY = "Datenbank"
 
 
 class _StandInEntry:
-    """Marker row with a chosen timestamp (the audit log is append-only)."""
+    """Marker-shaped row with a chosen timestamp and detail, no audit chain insert involved."""
 
     def __init__(self, timestamp, detail):
         self.timestamp = timestamp
@@ -209,29 +213,26 @@ class TestProblemMarkerCard:
 
 
 class TestLatestMarkerLoadsCardFields:
-    def test_marker_row_arrives_with_timestamp_and_detail_loaded(self):
-        """The marker handed to the card has ``timestamp`` and ``detail`` loaded, so no follow-up query is needed.
+    def test_building_the_card_reloads_no_field_of_the_marker_row(self):
+        """Building the card from the latest marker issues no query that reloads the marker row by primary key.
 
-        The deferred fields are captured before the card reads them (reading a
-        deferred field loads it). Kills ``x__latest_db_roles_marker__mutmut_3``
-        (``timestamp`` deferred) and ``x__latest_db_roles_marker__mutmut_4``
-        (``detail`` deferred).
+        The card still shows the marker's status and check time. Any loaded
+        representation of the row passes; only a per-row reload of a field the
+        lookup left out fails. Kills ``x__latest_db_roles_marker__mutmut_3``
+        (``timestamp`` reloaded) and ``x__latest_db_roles_marker__mutmut_4``
+        (``detail`` reloaded).
         """
-        _write_marker("ok", [])
-        seen = []
-        original = db_roles._db_role_marker_check
+        entry = _write_marker("ok", [])
+        table = AuditLog._meta.db_table
+        pk_column = AuditLog._meta.pk.column
+        reload_by_pk = re.compile(rf'WHERE\s+"{table}"\."{pk_column}"\s*=', re.IGNORECASE)
 
-        def spy(entry):
-            seen.append(entry.get_deferred_fields())
-            return original(entry)
-
-        with patch.object(db_roles, "_db_role_marker_check", side_effect=spy):
+        with CaptureQueriesContext(connection) as ctx:
             card = _admin_card()
 
         assert card.status == ComplianceStatus.OK
-        assert len(seen) == 1
-        assert "timestamp" not in seen[0]
-        assert "detail" not in seen[0]
+        assert _formatted(entry.timestamp) in card.detail
+        assert [q["sql"] for q in ctx.captured_queries if reload_by_pk.search(q["sql"])] == []
 
 
 class TestRecordMarker:
@@ -265,4 +266,4 @@ class TestRecordMarker:
 
         markers = _markers()
         assert len(markers) == 1
-        assert markers[0].target_type == db_roles._MARKER_TARGET_TYPE
+        assert markers[0].target_type == "DbRoleCheck"
