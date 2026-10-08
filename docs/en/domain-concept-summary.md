@@ -301,6 +301,12 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Operations signal what they cannot see**: missing backup signals or an unmeasurable disk degrade the health status, audit high-water marks are anchored offsite and checked in the restore drill, host scripts use the host backup path, and compliance warns about unlimited audit retention.
 - **Time and speed**: the nights of the clock change keep their real hours (shift end and event form both explain the doubled or skipped hour), person search uses trigram-friendly matching, and the timeline checks event visibility only within the own facility. The test suite was restructured with identical coverage.
 
+### v0.99.6 (2026-10-08)
+
+- **Second-factor reset by administrators**: facility administrators (for their own facility) and system administrators can reset another account's second factor after confirming their own login again; the reset is audited and ends the account's open sessions.
+- **Audit, backup and data-protection hardening**: the audit chain no longer accepts unhashed rows, backups are written with restrictive file permissions, restoring a set that binds an audit anchor stops on a host without an anchor path unless explicitly overridden, the settings page requires a k-anonymity threshold of at least 2 and warns below 3 (a stored value of 1 stays effective and is flagged), new facilities get deletion approvers, and the compliance dashboard shows database roles, backup and retention runs — in the demo with dedicated texts.
+- **Documentation and public source tree**: guides, templates and promises were checked against the code and brought to the actual state; the release build compares code blocks, rendering and leaks of the public tree, prepares boundaries in parallel, and every release is published to the public repository again.
+
 ### v0.99.5 (2026-10-01)
 
 - **Second factor and account access hardened**: backup codes are stored hashed and the plaintext comparison is gone; re-enrolling the second factor, adding a passkey and the backup-code pages require the existing factor; setting a password via invitation or reset no longer ends in a server error; version and health details appear only after a complete login.
@@ -326,5 +332,5 @@ The largest collective pre-release to date — the configurability milestones M0
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-07 -->
+<!-- translation-date: 2026-10-08 -->
 <!-- source-hash: 8771d092cd363b6ac9b7be30f4dcc483bbbb82b3 -->

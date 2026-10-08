@@ -174,6 +174,6 @@ the tab or restarting the device deletes nothing. Server bundles are limited
 Details: [ADR-022](../adr/022-offline-snapshot-keys.md).
 
 <!-- translation-source: docs/glossar.md -->
-<!-- translation-version: v0.99.5 -->
+<!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-07 -->
 <!-- source-hash: 53c443794c6b0d87f87b01a08a782ac40dc008a9 -->
