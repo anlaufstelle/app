@@ -20,7 +20,7 @@ Source: mutation delta of the release-0.99.6 checkpoint, 9 mutants. Groups:
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from unittest import mock
 
 import pytest
@@ -30,7 +30,7 @@ from django.utils.translation import gettext
 from core.models import Event, Settings, StatisticsSnapshot
 from core.models.settings import K_ANONYMITY_MIN
 from core.services.dashboard import carry_deleted_event, create_or_update_snapshot, lead_dashboard_context
-from core.services.dashboard.external_report import DEFAULT_K_THRESHOLD, _get_threshold, k_threshold_warning
+from core.services.dashboard.external_report import DEFAULT_K_THRESHOLD, build_external_report, k_threshold_warning
 from core.services.dashboard.snapshot import SnapshotCarryError
 from tests._mutation_followup_snapshot_helpers import _make_event
 
@@ -65,21 +65,22 @@ class TestThresholdWarning:
 
 class TestStoredThresholdBelowMinimumIsLogged:
     @pytest.mark.parametrize(("stored", "effective"), [(0, DEFAULT_K_THRESHOLD), (1, 1)])
-    def test_log_names_value_facility_minimum_and_effective_threshold(
+    def test_report_logs_value_facility_minimum_and_effective_threshold(
         self, facility, settings_obj, caplog, stored, effective
     ):
-        """The warning names the stored value, the facility, the minimum and the threshold used.
+        """Building the external report with a stored threshold below the minimum computes with
+        the effective threshold and logs the stored value, the facility, the minimum and that
+        threshold.
 
-        ``_get_threshold`` is the shared entry point of every report backend and the log
-        record is its only trace, so the pin calls it directly.
         ``x__get_threshold__mutmut_8`` (stored value), ``__mutmut_9`` (facility),
         ``__mutmut_10`` (minimum) and ``__mutmut_11`` (effective threshold) log ``None``.
         """
         Settings.objects.filter(pk=settings_obj.pk).update(k_anonymity_threshold=stored)
 
         with caplog.at_level(logging.WARNING, logger="core.services.dashboard.external_report"):
-            assert _get_threshold(facility) == effective
+            report = build_external_report(facility, date(2024, 6, 1), date(2024, 6, 30))
 
+        assert report["metadata"]["k_anonymity_threshold"] == effective
         messages = [r.getMessage() for r in caplog.records if r.name == "core.services.dashboard.external_report"]
         assert messages == [
             f"Stored k-anonymity threshold {stored} for facility {facility.pk} is below the minimum "
