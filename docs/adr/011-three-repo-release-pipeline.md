@@ -31,15 +31,17 @@ Pipeline (vereinfacht):
 
 > **Release-Tag auf allen drei Repos:** Der signierte Tag `vX.Y.Z` wird vom Release-Build (`dev-ops/release/build-release.sh`, dev-only) auf **allen drei** Repos gesetzt — im **dev**-Repo auf dem Quell-Commit, in **stage**/**app** auf dem daraus gebauten, sanitierten Snapshot (andere SHA, dasselbe Release). So bleibt der Release-Stand auch aus dem dev-Repo allein eindeutig ablesbar; `dev-ops/release/verify-leak.sh` (dev-only) erzwingt den dev-Tag als Teil des Release-Gates (Refs #1237).
 
-## Nachtrag 2026-08-20: Stufe 3 ruht bis v1.0 (Refs #1955)
+## Nachtrag 2026-08-20 (aufgehoben durch den Nachtrag 2026-10-08): Stufe 3 ruhte bis v0.99.5 (Refs #1955)
 
-Die Pipeline bleibt dreistufig; bis einschließlich v0.x endet jeder Release-Cut aber bei **stage**. Der Push nach `anlaufstelle/app`, `release-verify-public.sh` und das GitHub-Release entfallen bis dahin — `anlaufstelle/app` bleibt auf `v0.80.0` stehen.
+Dieser Nachtrag ist durch den Nachtrag vom 2026-10-08 aufgehoben und gilt nicht mehr; er bleibt als Begründung der Cuts nach v0.80.0 bis einschließlich v0.99.5 stehen. Maßgeblich ist allein der Nachtrag vom 2026-10-08.
 
-Unberührt bleibt alles, was die Trennung überhaupt trägt: Der sanitierte Snapshot wird bei jedem Cut gebaut, `verify-leak.sh` läuft, der signierte Tag wird in Dev **und** Stage gesetzt, Stage-CI und Demo-Gate bleiben Pflicht. Es ruht ausschließlich die Veröffentlichungsstufe, nicht die Prüfsubstanz — der Stand bleibt jederzeit publizierbar.
+Damals galt: Die Pipeline blieb dreistufig, jeder Release-Cut endete aber bei **stage**. Der Push nach `anlaufstelle/app`, `release-verify-public.sh` und das GitHub-Release entfielen; `anlaufstelle/app` blieb auf `v0.80.0` stehen. Ausnahme war v0.99.5: Public-Snapshot und Tag wurden für das Demo-Image veröffentlicht, die GitHub-Release-Seite blieb ausgesetzt (Nachtrag 2026-10-06).
 
-Begründung: Der App-Zweig kostet pro Cut eine eigene Maintainer-Handoff-Kette für ein Publikum, das es vor 1.0 noch nicht gibt (Zeitmodell in #1953). `release-verify-tags.sh` leitet den Modus aus der Major-Version des Tags ab, damit die Kette zum 1.0-Cut ohne Code-Änderung zurückkommt.
+Unberührt blieb damals alles, was die Trennung überhaupt trägt: Der sanitierte Snapshot wurde bei jedem Cut gebaut, `verify-leak.sh` lief, der signierte Tag wurde in Dev **und** Stage gesetzt, Stage-CI und Demo-Gate blieben Pflicht. Es ruhte ausschließlich die Veröffentlichungsstufe, nicht die Prüfsubstanz.
 
-Offen zu diesem Nachtrag: AGPL §13 für `demo.anlaufstelle.app` — läuft die öffentliche Demo auf einer Version, deren Corresponding Source nicht öffentlich abrufbar ist, muss die Demo entweder auf dem letzten veröffentlichten Stand bleiben oder die betreffende Version doch publiziert werden.
+Damalige Begründung: Der App-Zweig kostete pro Cut eine eigene Maintainer-Handoff-Kette für ein Publikum, das es vor 1.0 noch nicht gab (Zeitmodell in #1953). `release-verify-tags.sh` leitete den Modus damals aus der Major-Version des Tags ab.
+
+Damals offen: AGPL §13 für `demo.anlaufstelle.app` — lief die öffentliche Demo auf einer Version, deren Corresponding Source nicht öffentlich abrufbar war, musste die Demo entweder auf dem letzten veröffentlichten Stand bleiben oder die betreffende Version doch publiziert werden.
 
 ## Nachtrag 2026-10-08: Stufe 3 wieder aktiv ab v0.99.6 (Refs #1955)
 
