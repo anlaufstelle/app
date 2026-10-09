@@ -197,9 +197,10 @@ test:
 # nicht manuell neu gebaut wurde (Assertions gegen sichtbare Klassen/Layout
 # faellig-still). Beseitigt die Falle an der Wurzel statt sie zu dokumentieren.
 # Demo uses its own server session and port under the shared host lock.
+# Literal make keeps -n from executing flock via recursive-make handling (Refs #2531).
 .PHONY: test-e2e-demo
 test-e2e-demo:
-	flock -w $(CI_LOCK_TIMEOUT) "$(CI_LOCK)" $(MAKE) tailwind-build
+	flock -w $(CI_LOCK_TIMEOUT) "$(CI_LOCK)" make tailwind-build
 	flock -w $(CI_LOCK_TIMEOUT) "$(CI_LOCK)" env E2E_DEMO_MODE=1 E2E_SEED_SCALE=demo E2E_PORT_BASE=8854 $(PYTHON) -m pytest src/tests/e2e/test_demo_scenario_switch.py src/tests/e2e/test_system_compliance_maintenance_results.py::TestDemoCards -m e2e --browser chromium --timeout=120 --timeout-method=thread -x -v -rs
 
 test-e2e: tailwind-build

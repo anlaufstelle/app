@@ -38,6 +38,8 @@ from core.models import (
     WorkItem,
 )
 
+pytest_plugins = ["tests._skip_profile"]
+
 
 def pytest_collection_modifyitems(items):
     """``@pytest.mark.postgres``-Items automatisch skippen, wenn die laufende

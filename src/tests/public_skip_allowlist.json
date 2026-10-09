@@ -1,0 +1,1556 @@
+[
+  {
+    "nodeid": "src/tests/test_architecture_guards_deploy_sources.py::test_deploy_ships_every_sourced_repo_file[dev-ops/deploy/barbara/deploy-barbara.sh]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/barbara/deploy-barbara.sh: dev-ops/ (incl. dev-ops/deploy/deploy-dev.sh) is stripped from the public snapshot",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_deploy_sources.py::test_deploy_ships_every_sourced_repo_file[dev-ops/deploy/deploy-demo.sh]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh: dev-ops/ (incl. dev-ops/deploy/deploy-dev.sh) is stripped from the public snapshot",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_deploy_sources.py::test_deploy_ships_every_sourced_repo_file[dev-ops/deploy/deploy-dev.sh]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh: dev-ops/ (incl. dev-ops/deploy/deploy-dev.sh) is stripped from the public snapshot",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestBackgroundJobTimers::test_verify_audit_chain_timer_is_enabled_on_restart",
+    "profile": "public",
+    "reason": "dev-ops/deploy/install-timers.sh nicht im Public-Snapshot (Refs #1047)",
+    "exclusion": "deploy/install-timers.sh",
+    "rationale": "The release strip list excludes deploy/install-timers.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestBackgroundJobTimers::test_verify_audit_chain_timer_runs_as_admin_role",
+    "profile": "public",
+    "reason": "dev-ops/deploy/install-timers.sh nicht im Public-Snapshot (Refs #1047)",
+    "exclusion": "deploy/install-timers.sh",
+    "rationale": "The release strip list excludes deploy/install-timers.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestBootstrapInstallsSyncDependency::test_apt_package_list_contains_rsync",
+    "profile": "public",
+    "reason": "dev-ops/deploy/bootstrap.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "deploy/bootstrap.sh",
+    "rationale": "The release strip list excludes deploy/bootstrap.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_access_log_uses_a_filtering_encoder[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.demo",
+    "rationale": "The release strip list excludes Caddyfile.demo; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_access_log_uses_a_filtering_encoder[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.dev",
+    "rationale": "The release strip list excludes Caddyfile.dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_access_log_uses_a_filtering_encoder[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_access_log_uses_a_filtering_encoder[dev-ops/deploy/barbara/barbara.caddy]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/barbara/barbara.caddy nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_path_without_query_survives_untouched[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.demo",
+    "rationale": "The release strip list excludes Caddyfile.demo; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_path_without_query_survives_untouched[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.dev",
+    "rationale": "The release strip list excludes Caddyfile.dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_path_without_query_survives_untouched[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_path_without_query_survives_untouched[dev-ops/deploy/barbara/barbara.caddy]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/barbara/barbara.caddy nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_query_bearing_fields_are_redacted[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.demo",
+    "rationale": "The release strip list excludes Caddyfile.demo; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_query_bearing_fields_are_redacted[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.dev",
+    "rationale": "The release strip list excludes Caddyfile.dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_query_bearing_fields_are_redacted[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_query_bearing_fields_are_redacted[dev-ops/deploy/barbara/barbara.caddy]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/barbara/barbara.caddy nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_retention_is_pinned_everywhere[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.demo",
+    "rationale": "The release strip list excludes Caddyfile.demo; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_retention_is_pinned_everywhere[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.dev",
+    "rationale": "The release strip list excludes Caddyfile.dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_retention_is_pinned_everywhere[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyAccessLogQueryRedaction::test_retention_is_pinned_everywhere[dev-ops/deploy/barbara/barbara.caddy]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/barbara/barbara.caddy nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_log_keeps_the_path_readable[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.demo",
+    "rationale": "The release strip list excludes Caddyfile.demo; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_log_keeps_the_path_readable[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.dev",
+    "rationale": "The release strip list excludes Caddyfile.dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_log_keeps_the_path_readable[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_log_lands_in_the_retained_volume[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.demo",
+    "rationale": "The release strip list excludes Caddyfile.demo; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_log_lands_in_the_retained_volume[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.dev",
+    "rationale": "The release strip list excludes Caddyfile.dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_log_lands_in_the_retained_volume[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_log_redacts_the_same_fields[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.demo",
+    "rationale": "The release strip list excludes Caddyfile.demo; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_log_redacts_the_same_fields[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.dev",
+    "rationale": "The release strip list excludes Caddyfile.dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_log_redacts_the_same_fields[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_logger_is_captured[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.demo",
+    "rationale": "The release strip list excludes Caddyfile.demo; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_logger_is_captured[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.dev",
+    "rationale": "The release strip list excludes Caddyfile.dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyErrorLogRedaction::test_error_logger_is_captured[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyReverseProxySubdirectivesExist::test_only_documented_subdirectives_are_used[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #2086)",
+    "exclusion": "Caddyfile.demo",
+    "rationale": "The release strip list excludes Caddyfile.demo; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyReverseProxySubdirectivesExist::test_only_documented_subdirectives_are_used[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev nicht im Public-Snapshot (Refs #1047, #2086)",
+    "exclusion": "Caddyfile.dev",
+    "rationale": "The release strip list excludes Caddyfile.dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyReverseProxySubdirectivesExist::test_only_documented_subdirectives_are_used[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #2086)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyTrustedProxies::test_compose_passes_the_variable_to_caddy[docker-compose.demo.yml]",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyTrustedProxies::test_compose_passes_the_variable_to_caddy[docker-compose.dev.yml]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyTrustedProxies::test_compose_passes_the_variable_to_caddy[docker-compose.staging.yml]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyTrustedProxies::test_global_servers_block_declares_proxy_trust[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.demo",
+    "rationale": "The release strip list excludes Caddyfile.demo; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyTrustedProxies::test_global_servers_block_declares_proxy_trust[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.dev",
+    "rationale": "The release strip list excludes Caddyfile.dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyTrustedProxies::test_global_servers_block_declares_proxy_trust[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyTrustedProxies::test_ranges_come_from_the_shared_env_var[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.demo",
+    "rationale": "The release strip list excludes Caddyfile.demo; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyTrustedProxies::test_ranges_come_from_the_shared_env_var[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.dev",
+    "rationale": "The release strip list excludes Caddyfile.dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyTrustedProxies::test_ranges_come_from_the_shared_env_var[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1963)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyUploadBodyLimit::test_all_variants_cover_a_full_multi_file_field",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1363)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestCaddyUploadBodyLimit::test_all_variants_share_the_same_cap",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1363)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployPullsTaggedRelease::test_demo_has_no_ad_hoc_version_default_or_server_build",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #2064)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployPullsTaggedRelease::test_demo_pulls_release_and_updates_the_compose_local_tag",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #2064)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployPullsTaggedRelease::test_demo_semver_guard_runs_before_rsync",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #2064)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployPullsTaggedRelease::test_ghcr_login_rejects_shell_unsafe_username",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #2064)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployPullsTaggedRelease::test_ghcr_login_uses_stdin_without_ssh_argument_assignment",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #2064)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployPullsTaggedRelease::test_sync_only_does_not_require_app_version",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #2064)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_the_service_users_home_itself",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[/]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[/etc/anlaufstelle]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[/home/anlaufstelle/.ssh]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[/home/anlaufstelle]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[/home]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[/mnt/backups/anlaufstelle]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[/opt/../etc/anlaufstelle]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[/opt/anlaufstelle/]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[/opt]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[/srv/anlaufstelle]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[/var/lib/anlaufstelle]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_guard_rejects_unsafe_remote_dir[relativ/pfad]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_no_tar_over_ssh_sync_left",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_non_default_remote_dir_does_not_touch_the_stack",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_refuses_to_sync_from_a_foreign_working_directory",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_remote_dir_is_overridable",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_server_side_env_file_is_only_rewritten_on_a_version_change",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_sync_deletes_orphans_on_the_server",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_sync_only_honours_common_boolean_spellings[1]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_sync_only_honours_common_boolean_spellings[TRUE]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_sync_only_honours_common_boolean_spellings[on]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_sync_only_honours_common_boolean_spellings[true]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_sync_only_honours_common_boolean_spellings[yes]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_sync_only_rejects_an_unrecognised_value",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_sync_preserves_server_side_env_file",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDemoDeployTreeSync::test_sync_targets_the_overridden_remote_dir",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestDeployChecksWiredIntoStartup::test_dev_ops_backup_rejects_placeholder_key",
+    "profile": "public",
+    "reason": "dev-ops/deploy/backup.sh nicht im Public-Snapshot (Refs #1441)",
+    "exclusion": "deploy/backup.sh",
+    "rationale": "The release strip list excludes deploy/backup.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestLocalOneCommandBootstrap::test_deployment_stacks_neither_seed_nor_auto_migrate[compose_path1]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml nicht im Public-Snapshot — Guard nur im Dev-Repo relevant.",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestLocalOneCommandBootstrap::test_deployment_stacks_neither_seed_nor_auto_migrate[compose_path2]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml nicht im Public-Snapshot — Guard nur im Dev-Repo relevant.",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestLocalOneCommandBootstrap::test_deployment_stacks_neither_seed_nor_auto_migrate[compose_path3]",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml nicht im Public-Snapshot — Guard nur im Dev-Repo relevant.",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestRunAsAdminPullPolicy::test_compose_run_uses_pull_never",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard nur im Dev-Repo relevant (Refs #1047)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestServerErrorSupportContactAcrossAllStacks::test_error_page_settings_are_documented_in_the_example_env[compose_path1-example_path1]",
+    "profile": "public",
+    "reason": ".env.dev.example is stripped from the public release snapshot (Refs #1904).",
+    "exclusion": ".env.dev.example",
+    "rationale": "The release strip list excludes .env.dev.example; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestServerErrorSupportContactAcrossAllStacks::test_error_page_settings_are_documented_in_the_example_env[compose_path2-example_path2]",
+    "profile": "public",
+    "reason": ".env.demo.example is stripped from the public release snapshot (Refs #1904).",
+    "exclusion": ".env.demo.example",
+    "rationale": "The release strip list excludes .env.demo.example; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestServerErrorSupportContactAcrossAllStacks::test_error_page_settings_are_documented_in_the_example_env[compose_path3-example_path3]",
+    "profile": "public",
+    "reason": ".env.staging.example is stripped from the public release snapshot (Refs #1904).",
+    "exclusion": ".env.staging.example",
+    "rationale": "The release strip list excludes .env.staging.example; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestServerErrorSupportContactAcrossAllStacks::test_error_page_settings_are_documented_in_the_example_env[compose_path5-example_path5]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/barbara/.env.barbara.example is stripped from the public release snapshot (Refs #1904).",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestServerErrorSupportContactAcrossAllStacks::test_error_page_settings_reach_the_web_container[compose_path1-example_path1]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is stripped from the public release snapshot (Refs #1904).",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestServerErrorSupportContactAcrossAllStacks::test_error_page_settings_reach_the_web_container[compose_path2-example_path2]",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml is stripped from the public release snapshot (Refs #1904).",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestServerErrorSupportContactAcrossAllStacks::test_error_page_settings_reach_the_web_container[compose_path3-example_path3]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml is stripped from the public release snapshot (Refs #1904).",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestServerErrorSupportContactAcrossAllStacks::test_error_page_settings_reach_the_web_container[compose_path5-example_path5]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/barbara/docker-compose.barbara.yml is stripped from the public release snapshot (Refs #1904).",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingEnvFileIsParametrisable::test_compose_resolves_an_absolute_env_file_outside_the_project",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingEnvFileIsParametrisable::test_service_env_file_is_interpolated_with_a_default[cron]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingEnvFileIsParametrisable::test_service_env_file_is_interpolated_with_a_default[maintenance]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingExposureIsGatedOnRolePosture::test_caddy_actively_probes_the_role_posture",
+    "profile": "public",
+    "reason": "Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #2086)",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingExposureIsGatedOnRolePosture::test_caddy_is_restarted_when_web_is_updated",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingExposureIsGatedOnRolePosture::test_health_token_reaches_web_and_caddy",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingStackFailClosedRolePosture::test_web_healthcheck_keeps_the_http_liveness_probe",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingStackFailClosedRolePosture::test_web_healthcheck_proves_the_runtime_role_posture",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingStackRoleSeparation::test_cron_sidecar_runs_jobs_as_the_admin_role",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingStackRoleSeparation::test_db_bootstraps_via_postgres_init_not_via_env_file",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingStackRoleSeparation::test_db_healthcheck_probes_the_bootstrap_role",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingStackRoleSeparation::test_maintenance_service_exists_and_uses_the_admin_role",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingStackRoleSeparation::test_new_services_carry_the_full_container_hardening[cron]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingStackRoleSeparation::test_new_services_carry_the_full_container_hardening[maintenance]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestStagingStackRoleSeparation::test_web_runs_as_the_unprivileged_app_role",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestUfwDockerPinning::test_bootstrap_parses_with_bash_n",
+    "profile": "public",
+    "reason": "dev-ops/deploy/bootstrap.sh nicht im Public-Snapshot (Refs #2062)",
+    "exclusion": "deploy/bootstrap.sh",
+    "rationale": "The release strip list excludes deploy/bootstrap.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestUfwDockerPinning::test_checksum_is_verified_before_install",
+    "profile": "public",
+    "reason": "dev-ops/deploy/bootstrap.sh nicht im Public-Snapshot (Refs #2062)",
+    "exclusion": "deploy/bootstrap.sh",
+    "rationale": "The release strip list excludes deploy/bootstrap.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestUfwDockerPinning::test_existing_binary_is_revalidated_against_the_pin",
+    "profile": "public",
+    "reason": "dev-ops/deploy/bootstrap.sh nicht im Public-Snapshot (Refs #2062)",
+    "exclusion": "deploy/bootstrap.sh",
+    "rationale": "The release strip list excludes deploy/bootstrap.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestUfwDockerPinning::test_mismatch_aborts_and_never_writes_the_target_directly",
+    "profile": "public",
+    "reason": "dev-ops/deploy/bootstrap.sh nicht im Public-Snapshot (Refs #2062)",
+    "exclusion": "deploy/bootstrap.sh",
+    "rationale": "The release strip list excludes deploy/bootstrap.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestUfwDockerPinning::test_no_moving_ref_in_ufw_docker_source",
+    "profile": "public",
+    "reason": "dev-ops/deploy/bootstrap.sh nicht im Public-Snapshot (Refs #2062)",
+    "exclusion": "deploy/bootstrap.sh",
+    "rationale": "The release strip list excludes deploy/bootstrap.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_ops.py::TestUfwDockerPinning::test_pin_constants_are_wellformed",
+    "profile": "public",
+    "reason": "dev-ops/deploy/bootstrap.sh nicht im Public-Snapshot (Refs #2062)",
+    "exclusion": "deploy/bootstrap.sh",
+    "rationale": "The release strip list excludes deploy/bootstrap.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_release.py::test_excluded_path_only_in_comment_passes",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_release.py::test_excluded_path_only_in_docstring_passes",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_release.py::test_real_tests_tree_passes",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_release.py::test_segment_style_chain_from_tmp_path_is_not_a_repo_reference",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_release.py::test_segment_style_directory_end_with_iterdir_is_detected",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_release.py::test_segment_style_excluded_reference_is_detected",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_release.py::test_segment_style_excluded_reference_with_skip_gate_passes",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_release.py::test_skip_gated_excluded_reference_passes",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_release.py::test_ungated_excluded_reference_is_detected",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_architecture_guards_settings_mailers.py::TestSettingsModuleDiscovery::test_instance_overlays_are_scanned_when_present",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Overlay-Scan nur im Dev-Repo relevant (Refs #1662)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_check_dco.py::test_accepts_signed_commits_and_ignores_merge_commit",
+    "profile": "public",
+    "reason": "scripts/dev/ nicht im Public-Snapshot — Test nur im Dev-Repo relevant",
+    "exclusion": "scripts/dev",
+    "rationale": "The release strip list excludes scripts/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_check_dco.py::test_invalid_revision_range_exits_with_two",
+    "profile": "public",
+    "reason": "scripts/dev/ nicht im Public-Snapshot — Test nur im Dev-Repo relevant",
+    "exclusion": "scripts/dev",
+    "rationale": "The release strip list excludes scripts/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_check_dco.py::test_reports_every_unsigned_non_merge_commit",
+    "profile": "public",
+    "reason": "scripts/dev/ nicht im Public-Snapshot — Test nur im Dev-Repo relevant",
+    "exclusion": "scripts/dev",
+    "rationale": "The release strip list excludes scripts/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ci_lock_defaults.py::test_make_and_runner_lock_defaults_match_without_ci_lock[None]",
+    "profile": "public",
+    "reason": "scripts/dev/run_mutmut.py is excluded from public snapshots",
+    "exclusion": "scripts/dev",
+    "rationale": "The release strip list excludes scripts/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ci_lock_defaults.py::test_make_and_runner_lock_defaults_match_without_ci_lock[TMPDIR]",
+    "profile": "public",
+    "reason": "scripts/dev/run_mutmut.py is excluded from public snapshots",
+    "exclusion": "scripts/dev",
+    "rationale": "The release strip list excludes scripts/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ci_lock_defaults.py::test_make_and_runner_lock_defaults_match_without_ci_lock[XDG_RUNTIME_DIR]",
+    "profile": "public",
+    "reason": "scripts/dev/run_mutmut.py is excluded from public snapshots",
+    "exclusion": "scripts/dev",
+    "rationale": "The release strip list excludes scripts/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ci_lock_defaults.py::test_mutation_docs_do_not_claim_obsolete_lock_directory",
+    "profile": "public",
+    "reason": "docs/testing/mutation-testing.md is excluded from public snapshots",
+    "exclusion": "docs/testing/mutation-testing.md",
+    "rationale": "The release strip list excludes docs/testing/mutation-testing.md; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_fresh_install.py::test_every_compose_file_with_a_clamav_service_is_covered",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml is not in the public snapshot",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_image_pins.py::test_dependabot_updates_all_digest_pins_in_one_pull_request",
+    "profile": "public",
+    "reason": "dependabot.yml is not part of the release snapshot",
+    "exclusion": "release",
+    "rationale": "The release strip list excludes release; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_image_pins.py::test_dependabot_watches_the_directories_of_all_pinned_compose_files",
+    "profile": "public",
+    "reason": "dependabot.yml is not part of the release snapshot",
+    "exclusion": "release",
+    "rationale": "The release strip list excludes release; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_image_pins.py::test_same_image_has_one_digest_in_every_compose_file",
+    "profile": "public",
+    "reason": "not a git checkout (release snapshot)",
+    "exclusion": "release",
+    "rationale": "The release strip list excludes release; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_log_rotation.py::test_barbara_services_use_the_production_log_limits",
+    "profile": "public",
+    "reason": "dev-ops/ is stripped from the public snapshot — guard only applies to the development tree",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_log_rotation.py::test_every_service_uses_bounded_container_logs[docker-compose.demo.yml]",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml is excluded from this release tree",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_log_rotation.py::test_every_service_uses_bounded_container_logs[docker-compose.dev.yml]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is excluded from this release tree",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_log_rotation.py::test_every_service_uses_bounded_container_logs[docker-compose.staging.yml]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml is excluded from this release tree",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_mail_env_drift.py::test_compose_mail_boolean_values_are_accepted_by_settings_parser[EMAIL_USE_SSL-docker-compose.dev.yml]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is absent from the public release tree",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_mail_env_drift.py::test_compose_mail_boolean_values_are_accepted_by_settings_parser[EMAIL_USE_SSL-docker-compose.staging.yml]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml is absent from the public release tree",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_mail_env_drift.py::test_compose_mail_boolean_values_are_accepted_by_settings_parser[EMAIL_USE_TLS-docker-compose.dev.yml]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is absent from the public release tree",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_mail_env_drift.py::test_compose_mail_boolean_values_are_accepted_by_settings_parser[EMAIL_USE_TLS-docker-compose.staging.yml]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml is absent from the public release tree",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_mail_env_drift.py::test_web_environment_contains_production_mail_variables[docker-compose.dev.yml]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml fehlt im öffentlichen Release-Baum (gestrippt: docker-compose.dev.yml)",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_mail_env_drift.py::test_web_environment_contains_production_mail_variables[docker-compose.staging.yml]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml fehlt im öffentlichen Release-Baum (gestrippt: docker-compose.dev.yml)",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_deliberately_empty_role_list_reaches_web_as_empty[barbara]",
+    "profile": "public",
+    "reason": "dev-ops/ is excluded from this release tree",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_deliberately_empty_role_list_reaches_web_as_empty[dev]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is excluded from this release tree",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_deliberately_empty_role_list_reaches_web_as_empty[staging]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml and .env.staging.example are excluded from this release tree",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_discovery_follows_the_settings_module_of_the_stack[barbara]",
+    "profile": "public",
+    "reason": "dev-ops/ is excluded from this release tree",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_discovery_follows_the_settings_module_of_the_stack[demo]",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml and .env.demo.example are excluded from this release tree",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_discovery_follows_the_settings_module_of_the_stack[dev]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is excluded from this release tree",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_discovery_follows_the_settings_module_of_the_stack[staging]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml and .env.staging.example are excluded from this release tree",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_every_setting_variable_reaches_the_services_that_need_it[barbara]",
+    "profile": "public",
+    "reason": "dev-ops/ is excluded from this release tree",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_every_setting_variable_reaches_the_services_that_need_it[demo]",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml and .env.demo.example are excluded from this release tree",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_every_setting_variable_reaches_the_services_that_need_it[dev]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is excluded from this release tree",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_every_setting_variable_reaches_the_services_that_need_it[staging]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml and .env.staging.example are excluded from this release tree",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_mfa_and_webauthn_operator_values_reach_web[barbara]",
+    "profile": "public",
+    "reason": "dev-ops/ is excluded from this release tree",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_mfa_and_webauthn_operator_values_reach_web[demo]",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml and .env.demo.example are excluded from this release tree",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_mfa_and_webauthn_operator_values_reach_web[dev]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is excluded from this release tree",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_mfa_and_webauthn_operator_values_reach_web[staging]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml and .env.staging.example are excluded from this release tree",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_mfa_role_defaults_in_web_match_the_settings[barbara]",
+    "profile": "public",
+    "reason": "dev-ops/ is excluded from this release tree",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_mfa_role_defaults_in_web_match_the_settings[dev]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is excluded from this release tree",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_mfa_role_defaults_in_web_match_the_settings[staging]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml and .env.staging.example are excluded from this release tree",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_does_not_replace_a_code_default_with_an_empty_value[barbara]",
+    "profile": "public",
+    "reason": "dev-ops/ is excluded from this release tree",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_does_not_replace_a_code_default_with_an_empty_value[demo]",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml and .env.demo.example are excluded from this release tree",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_does_not_replace_a_code_default_with_an_empty_value[dev]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is excluded from this release tree",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_does_not_replace_a_code_default_with_an_empty_value[staging]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml and .env.staging.example are excluded from this release tree",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_exemptions_are_read_kept_out_of_web_and_justified[barbara]",
+    "profile": "public",
+    "reason": "dev-ops/ is excluded from this release tree",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_exemptions_are_read_kept_out_of_web_and_justified[demo]",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml and .env.demo.example are excluded from this release tree",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_exemptions_are_read_kept_out_of_web_and_justified[dev]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is excluded from this release tree",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_exemptions_are_read_kept_out_of_web_and_justified[staging]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml and .env.staging.example are excluded from this release tree",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_keeps_the_explicit_allowlist[barbara]",
+    "profile": "public",
+    "reason": "dev-ops/ is excluded from this release tree",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_keeps_the_explicit_allowlist[demo]",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml and .env.demo.example are excluded from this release tree",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_keeps_the_explicit_allowlist[dev]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml is excluded from this release tree",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_compose_settings_env_reach.py::test_web_keeps_the_explicit_allowlist[staging]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml and .env.staging.example are excluded from this release tree",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_demo_deploy_seed_hint.py::test_deploy_script_names_only_the_seed_scale_the_reseed_timer_uses",
+    "profile": "public",
+    "reason": "dev-ops/ is excluded from this release tree",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_demo_deploy_seed_hint.py::test_reseed_script_seeds_the_scenario_catalogue",
+    "profile": "public",
+    "reason": "dev-ops/ is excluded from this release tree",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_demo_settings.py::TestDemoExternalOrigin::test_testwert_deckt_sich_mit_der_ausgelieferten_vorlage",
+    "profile": "public",
+    "reason": "Deploy-Vorlage nicht im Public-Snapshot — Abgleich nur im Dev-Repo moeglich",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_dev_make_targets.py::test_delta_target_guard_is_recognized_in_public_docs",
+    "profile": "public",
+    "reason": "dev-ops/release/ and scripts/dev/ are excluded from public snapshots",
+    "exclusion": "scripts/dev",
+    "rationale": "The release strip list excludes scripts/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_dev_release_docs.py::test_release_documentation_uses_current_commands",
+    "profile": "public",
+    "reason": "Dev documentation is absent from public snapshots",
+    "exclusion": "docs/dev",
+    "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_dev_test_evidence_docs.py::test_mutation_reference_names_existing_process_tree_regression",
+    "profile": "public",
+    "reason": "docs/testing/mutation-testing.md and dev-ops/release/ are absent from public snapshots",
+    "exclusion": "docs/testing/mutation-testing.md",
+    "rationale": "The release strip list excludes docs/testing/mutation-testing.md; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_dev_test_evidence_docs.py::test_status_matrix_replaces_run_log_requirement",
+    "profile": "public",
+    "reason": "docs/dev/ docs/testing/release-test-profiles.md docs/testing/run-template.md: public exclusions",
+    "exclusion": "docs/testing/release-test-profiles.md",
+    "rationale": "The release strip list excludes docs/testing/release-test-profiles.md; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_hand_check_archive.py::test_repository_hand_check_delta_is_current",
+    "profile": "public",
+    "reason": "Dev documentation is absent from public snapshots",
+    "exclusion": "docs/dev",
+    "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_initial_setup_fresh_install.py::test_staging_compose_requires_the_caddy_health_token",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml fehlt in diesem Baum — Staging-Guard nicht anwendbar",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_mutmut_atomic_patch_guard.py",
+    "profile": "public",
+    "reason": "dev-only scripts/dev/ fehlt (Release-Snapshot)",
+    "exclusion": "scripts/dev",
+    "rationale": "The release strip list excludes scripts/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_db_password_rotation.py::test_dev_deploy_syncs_rotation_script_to_the_host",
+    "profile": "public",
+    "reason": "dev-ops/ deploy/deploy-dev.sh nicht im Public-Snapshot",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_demo_reseed.py::test_failed_reset_is_visible_and_nonzero",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im öffentlichen Release-Baum",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_demo_reseed.py::test_successful_reset_has_only_success_message",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im öffentlichen Release-Baum",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_demo_reseed_jobs.py::TestJobListMatchesCrontab::test_cron_jobs_keep_the_crontab_order",
+    "profile": "public",
+    "reason": "dev-ops/, docker-compose.demo.yml, .env.demo: not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_demo_reseed_jobs.py::TestJobListMatchesCrontab::test_demo_job_list_is_the_expected_one",
+    "profile": "public",
+    "reason": "dev-ops/, docker-compose.demo.yml, .env.demo: not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_demo_reseed_jobs.py::TestJobListMatchesCrontab::test_every_cron_job_is_run_or_explicitly_skipped",
+    "profile": "public",
+    "reason": "dev-ops/, docker-compose.demo.yml, .env.demo: not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_demo_reseed_jobs.py::TestJobListMatchesCrontab::test_only_check_db_roles_is_added_beyond_the_crontab",
+    "profile": "public",
+    "reason": "dev-ops/, docker-compose.demo.yml, .env.demo: not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_demo_reseed_jobs.py::TestJobListMatchesCrontab::test_retention_never_runs_after_the_reset",
+    "profile": "public",
+    "reason": "dev-ops/, docker-compose.demo.yml, .env.demo: not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_demo_reseed_jobs.py::TestResetRunsTheJobs::test_failed_audit_chain_check_is_not_swallowed",
+    "profile": "public",
+    "reason": "dev-ops/, docker-compose.demo.yml, .env.demo: not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_demo_reseed_jobs.py::TestResetRunsTheJobs::test_failed_role_check_is_reported",
+    "profile": "public",
+    "reason": "dev-ops/, docker-compose.demo.yml, .env.demo: not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_demo_reseed_jobs.py::TestResetRunsTheJobs::test_failed_seed_runs_no_job",
+    "profile": "public",
+    "reason": "dev-ops/, docker-compose.demo.yml, .env.demo: not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_demo_reseed_jobs.py::TestResetRunsTheJobs::test_jobs_run_after_the_seed_in_order",
+    "profile": "public",
+    "reason": "dev-ops/, docker-compose.demo.yml, .env.demo: not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_demo.py::test_demo_deploy_checks_container_source_code_version_after_recreate",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh is not in the public snapshot (Refs #2408)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_demo.py::test_demo_deploy_does_not_export_stale_env_values",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-demo.sh is not in the public snapshot (Refs #2408)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_ausnahme_akzeptiert_nur_explizite_eins",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_ausnahme_ist_explizit_und_sichtbar",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_deploy_script_hat_gueltige_bash_syntax",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_dev_env_dokumentiert_loopback_hosts_fuer_container_healthcheck",
+    "profile": "public",
+    "reason": ".env.dev.example nicht im Public-Snapshot (Refs #2478)",
+    "exclusion": ".env.dev.example",
+    "rationale": "The release strip list excludes .env.dev.example; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_doppelte_source_code_version_zeilen_loesen_keinen_sigpipe_abbruch_aus",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_env_datei_und_container_werden_nach_dem_up_abgeglichen",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_env_dev_wird_nicht_mehr_vollstaendig_exportiert",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_health_detail_token_steht_in_dev_env_und_web_allowlist",
+    "profile": "public",
+    "reason": ".env.dev.example und docker-compose.dev.yml nicht im Public-Snapshot (Refs #2478)",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_kein_stale_wert_aus_der_ssh_umgebung",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_lokaler_teil_reicht_die_ausnahme_durch",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_nur_das_web_image_wird_inspiziert",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_release_checkliste_nennt_offline_key_salt_endpoint",
+    "profile": "public",
+    "reason": "docs/dev/release-checklist.md nicht im Public-Snapshot (Refs #2081)",
+    "exclusion": "docs/dev",
+    "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_unpruefbare_image_version_bricht_fail_closed_ab",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_up_sieht_die_frisch_gepatchte_source_code_version",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_web_image_wird_trotz_ungefiltertem_config_images_korrekt_erkannt",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_dr_drill_safety.py::test_changelog_has_one_fixed_bullet_per_ticket_position",
+    "profile": "public",
+    "reason": "docs/dev/hand-checks.md fehlt = Public-Snapshot; Changelog-Refs sind dort umgeschrieben — Guard nur im Dev-Repo relevant",
+    "exclusion": "docs/dev",
+    "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_dr_drill_safety.py::test_hand_check_builds_bad_sql_before_valid_sidecar_and_separates_control",
+    "profile": "public",
+    "reason": "docs/dev/hand-checks.md nicht im Public-Snapshot — Guard nur im Dev-Repo relevant",
+    "exclusion": "docs/dev",
+    "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_prod_settings.py::TestAusgelieferteDeployVorlagenStarten::test_vorlage_startet_und_leitet_die_oeffentliche_domain_ab[.env.barbara.example]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/barbara/.env.barbara.example nicht im Public-Snapshot — Guard nur im Dev-Repo relevant",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_prod_settings.py::TestAusgelieferteDeployVorlagenStarten::test_vorlage_startet_und_leitet_die_oeffentliche_domain_ab[.env.demo.example]",
+    "profile": "public",
+    "reason": ".env.demo.example nicht im Public-Snapshot — Guard nur im Dev-Repo relevant",
+    "exclusion": ".env.demo.example",
+    "rationale": "The release strip list excludes .env.demo.example; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_security_headers_single_source.py::test_non_production_caddyfiles_do_not_repeat_application_headers[Caddyfile.demo]",
+    "profile": "public",
+    "reason": "Caddyfile.dev/Caddyfile.demo/Caddyfile.staging nicht im Public-Snapshot",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_security_headers_single_source.py::test_non_production_caddyfiles_do_not_repeat_application_headers[Caddyfile.dev]",
+    "profile": "public",
+    "reason": "Caddyfile.dev/Caddyfile.demo/Caddyfile.staging nicht im Public-Snapshot",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_security_headers_single_source.py::test_non_production_caddyfiles_do_not_repeat_application_headers[Caddyfile.staging]",
+    "profile": "public",
+    "reason": "Caddyfile.dev/Caddyfile.demo/Caddyfile.staging nicht im Public-Snapshot",
+    "exclusion": "Caddyfile.staging",
+    "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  }
+]

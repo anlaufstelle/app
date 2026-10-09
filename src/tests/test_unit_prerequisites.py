@@ -41,8 +41,8 @@ def test_compose_without_example_checks_its_prerequisite():
     from tests.test_architecture_guards_ops import TestServerErrorSupportContactAcrossAllStacks
 
     try:
-        TestServerErrorSupportContactAcrossAllStacks._assert_error_page_settings_are_documented_in_the_example_env(
-            ROOT, Path("docker-compose.yml"), None
+        TestServerErrorSupportContactAcrossAllStacks().test_error_page_settings_are_documented_in_the_example_env(
+            Path("docker-compose.yml"), None
         )
     except pytest.skip.Exception as error:
         pytest.fail(f"Unchecked prerequisite: {error}")

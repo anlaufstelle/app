@@ -29,8 +29,11 @@ def test_expected_demo_fails_for_broken_server(monkeypatch):
 
     monkeypatch.setenv("E2E_DEMO_MODE", "1")
     monkeypatch.setenv("E2E_SEED_SCALE", "demo")
-    with pytest.raises(AssertionError, match="Demo server"):
-        require_demo(lambda: False)
+    try:
+        with pytest.raises(AssertionError, match="Demo server"):
+            require_demo(lambda: False)
+    except pytest.skip.Exception as error:
+        pytest.fail(f"Expected demo was skipped: {error}")
 
 
 def test_standard_profile_skips_without_probing(monkeypatch):
@@ -48,3 +51,22 @@ def test_expected_demo_requires_demo_seed(monkeypatch):
     monkeypatch.setenv("E2E_SEED_SCALE", "standard")
     with pytest.raises(AssertionError, match="E2E_SEED_SCALE"):
         require_demo(lambda: True)
+
+
+def test_demo_dry_run_does_not_execute_flock(tmp_path):
+    import os
+
+    marker = tmp_path / "executed"
+    executable = tmp_path / "flock"
+    executable.write_text(f"#!/bin/sh\ntouch '{marker}'\nexit 97\n")
+    executable.chmod(0o755)
+    result = subprocess.run(
+        ["make", "-n", "test-e2e-demo"],
+        cwd=ROOT,
+        env={**os.environ, "PATH": str(tmp_path) + os.pathsep + os.environ["PATH"]},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not marker.exists(), "Dry run must not execute the shared lock"
