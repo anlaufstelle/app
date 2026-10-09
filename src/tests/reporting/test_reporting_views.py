@@ -283,7 +283,13 @@ class TestBerichteFormZeitraumDurchreichung:
 
         dashboard = client.get(
             reverse("core:statistics"),
-            {**BERICHTE_VIEW, "zeitraum": "frei", "date_from": "2020-01-01", "date_to": "2020-01-31"},
+            {
+                **BERICHTE_VIEW,
+                "bericht": "sample-report-1",
+                "zeitraum": "frei",
+                "date_from": "2020-01-01",
+                "date_to": "2020-01-31",
+            },
         )
         section_html = _extract_report_section(dashboard.content.decode())
         hidden_fields = dict(_HIDDEN_INPUT_RE.findall(section_html))
@@ -304,8 +310,10 @@ class TestBerichteFormZeitraumDurchreichung:
         # Der Panel-Header weist den aufgeloesten Zeitraum aus (lokalisiert).
         assert date_format(date(2020, 1, 1)) in panel_html
         assert date_format(date(2020, 1, 31)) in panel_html
-        # Die Export-Schaltflaechen erben ihn ueber dasselbe Formular: CSV/JSON/XML.
-        assert panel_html.count("formaction=") == 3
+        # Die Export-Schaltflaechen sitzen in der Exportleiste desselben
+        # Formulars wie die Hidden-Felder: CSV, JSON, XML und PDF (Refs #2505).
+        assert section_html.count("formaction=") == 4
+        assert "formaction=" not in panel_html
 
 
 class TestPanelExportOhneRoundtrip:
@@ -324,9 +332,9 @@ class TestPanelExportOhneRoundtrip:
     ``DatasetReportPanelView`` mit ``400 backend erforderlich``, was
     ``htmx-errors.js`` als roten Fehler-Toast rendert.
 
-    Loesung wie im Dashboard-Export (``dashboard_content.html``): ein
-    GET-Formular, das das Panel umschliesst, mit ``formaction`` je
-    Schaltflaeche. Die Werte werden erst beim Submit serialisiert.
+    Loesung (Refs #2505: ``_export_bar.html``): ein GET-Formular in der
+    Exportleiste mit ``formaction`` je Schaltflaeche. Die Werte werden erst
+    beim Submit serialisiert.
     """
 
     def _panel(self, client, lead_user):
@@ -335,16 +343,25 @@ class TestPanelExportOhneRoundtrip:
         assert response.status_code == 200
         return response.content.decode()
 
-    def test_panel_exportiert_ueber_submit_buttons_statt_links(self, client, lead_user):
-        panel_html = self._panel(client, lead_user)
+    def _section(self, client, lead_user):
+        client.force_login(lead_user)
+        html = client.get(reverse("core:statistics"), {**BERICHTE_VIEW, "bericht": "sample-report-1"}).content.decode()
+        return _extract_report_section(html)
+
+    def test_exportleiste_exportiert_ueber_submit_buttons_statt_links(self, client, lead_user):
+        section = self._section(client, lead_user)
         export_url = reverse("core:statistics_report_export")
 
-        assert export_url not in panel_html.split("<a ", 1)[-1] or "<a " not in panel_html, (
-            "Die Export-Ziele duerfen keine <a href>-Links mehr sein — ihr href traegt den Race."
+        assert "<a href" not in section.split('id="report-panel"')[0].split('data-testid="export-bar"')[-1], (
+            "Die Export-Ziele duerfen keine <a href>-Links sein — ihr href traegt den Race."
         )
-        assert panel_html.count(f'formaction="{export_url}"') == 3
-        for fmt in ("csv", "json", "xml"):
-            assert f'name="format" value="{fmt}"' in panel_html
+        assert section.count(f'formaction="{export_url}"') == 4
+        for fmt in ("csv", "json", "xml", "pdf"):
+            assert f'name="format" value="{fmt}"' in section
+
+    def test_panel_enthaelt_keine_export_ziele_mehr(self, client, lead_user):
+        """Die Ziele wohnen in der Exportleiste (Refs #2505), nicht im Panel."""
+        assert "formaction=" not in self._panel(client, lead_user)
 
     def test_panel_backt_keinen_release_query_mehr_ein(self, client, lead_user):
         """``release_query`` war der Traeger des Race — er darf ganz verschwinden."""
@@ -357,13 +374,16 @@ class TestPanelExportOhneRoundtrip:
         assert "release_query" not in response.context
         assert "Musterstadt" not in response.content.decode()
 
-    def test_berichte_formular_umschliesst_das_panel(self, client, lead_user):
+    def test_exportleiste_formular_traegt_felder_und_schaltflaechen(self, client, lead_user):
         """Sonst serialisiert der Submit die Freitextfelder gar nicht mit."""
-        client.force_login(lead_user)
-        section = _extract_report_section(client.get(reverse("core:statistics"), BERICHTE_VIEW).content.decode())
+        section = self._section(client, lead_user)
+        form = section[section.rindex("<form", 0, section.index('data-testid="export-bar"')) :]
+        form = form[: form.index("</form>")]
 
-        assert section.index("<form") < section.index('id="report-panel"') < section.index("</form>")
-        assert 'method="get"' in section[section.index("<form") : section.index(">", section.index("<form"))]
+        assert 'method="get"' in form[: form.index(">")]
+        for name in ("recipient", "purpose", "backend", "date_from", "date_to"):
+            assert f'name="{name}"' in form
+        assert form.count("formaction=") == 4
 
     def test_freitextfelder_loesen_keinen_panel_request_mehr_aus(self, client, lead_user):
         """Ohne gewaehltes Backend antwortet das Panel 400 → roter Fehler-Toast.
@@ -392,7 +412,13 @@ class TestPanelExportOhneRoundtrip:
         section = _extract_report_section(
             client.get(
                 reverse("core:statistics"),
-                {**BERICHTE_VIEW, "zeitraum": "frei", "date_from": "2026-01-01", "date_to": "2026-01-31"},
+                {
+                    **BERICHTE_VIEW,
+                    "bericht": "sample-report-1",
+                    "zeitraum": "frei",
+                    "date_from": "2026-01-01",
+                    "date_to": "2026-01-31",
+                },
             ).content.decode()
         )
         felder = dict(_HIDDEN_INPUT_RE.findall(section))

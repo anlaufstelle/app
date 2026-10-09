@@ -32,7 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **PDF und Allgemeine Kennzahlen für Datensatz-Berichte** (#2505) — Der Berichts-Download unterstützt generische Tabellen-PDFs und die live berechnete Karte „Allgemeine Kennzahlen“ mit den bestehenden Schutzregeln, integriert das hybride Beispiel-Sachbericht-PDF über einen Layout-Hook, weist Quelle je Format und Grundgesamtheit je Tabelle aus und protokolliert erfolgreiche Downloads unter dem Backend-Namen in den Freigaben.
+- **Eine Exportleiste, PDF für Datensatz-Berichte und Karte „Allgemeine Kennzahlen“** (#2505) — Was den Statistik-Bereich als Datei verlässt, geht über eine gemeinsame Leiste mit Empfänger und Zweck und erscheint unter „Freigaben“. Die Datensatz-Berichte bieten CSV, JSON, XML und PDF (generische Tabellen-PDF; das Beispiel-Sachbericht-PDF behält sein Layout über einen Layout-Hook), weisen Quelle je Format und Grundgesamtheit je Tabelle aus und halten alle Schutzregeln ein. Die Karte „Allgemeine Kennzahlen“ ersetzt den Reiter „Externer Bericht“; dessen Adresse leitet mit Zeitraum auf die Karte um und liefert keine Datei mehr. Das Übersichts-PDF samt internem Pseudonym-Schalter und die Sachbericht-PDF-Sonderroute entfallen; die Übersicht bietet nur noch die interne Ereignisliste (CSV, mit Pseudonymen) mit Warnhinweis.
 
 ## [0.99.6] - 2026-10-08
 

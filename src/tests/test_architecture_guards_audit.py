@@ -289,7 +289,6 @@ class TestAuditDetailKeyInventory:
         ),
         "core/views/attachments.py": (1, "self._audit_detail(...) der Anhang-Domaene"),
         "core/views/mixins.py": (1, "**extra + **release_detail(...) des Export-Helpers"),
-        "core/views/statistics.py": (1, "**release_detail(...) des externen Berichts"),
     }
 
     def _iter_calls(self):

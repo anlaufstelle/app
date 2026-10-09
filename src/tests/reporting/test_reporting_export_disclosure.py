@@ -179,8 +179,9 @@ def test_sample_live_preview_is_digit_free_and_never_a_release(client, lead_user
     assert sum(row["count"] is None for row in result.records) >= 2
     assert result.completeness
     assert all(issue.count is None and not re.search(r"\d", str(issue.message)) for issue in result.completeness)
-    assert "Quelle je Format" in response.content.decode()
-    assert "PDF: Monats-Aggregate" in response.content.decode()
+    page = client.get(reverse("core:statistics"), {"ansicht": "datensaetze", "bericht": "sample-report-1"})
+    assert "Quelle je Format" in page.content.decode()
+    assert "PDF: Monats-Aggregate" in page.content.decode()
     assert not AuditLog.objects.filter(action=AuditLog.Action.EXPORT).exists()
 
 

@@ -74,44 +74,9 @@ Vorschau eines Reporting-Backends. Rendert das Ergebnis von
 </p>
 {% endif %}
 
-{# Quellenausweis (Refs #1743): Vorschau und Download lesen live, das Sachbericht-PDF hybrid. #}
+{# Quellenausweis (Refs #1743): die Vorschau liest live; die Quelle je Download-Format steht in der Exportleiste. #}
 <p class="text-[12px] text-ink-muted mb-1">
     {% trans "Datenquelle" %}: {{ data_source_note }} — {{ data_source_explanation }}
 </p>
-<p class="text-[12px] text-ink-muted mb-1">
-    {% trans "Quelle je Format" %}: {% for format_name, note in format_source_notes %}{{ format_name }}: {{ note }}{% if not forloop.last %} · {% endif %}{% endfor %}
-</p>
 {# K3-A3 (Refs #1770): Grundgesamtheit der Vorschau-/Export-Tabelle — vom Backend deklariert. #}
 {% for table, note in table_population_notes %}<p class="text-[12px] text-ink-muted mb-4 report-population">{{ table }} · {{ note }}</p>{% endfor %}
-
-{# Export: Server erzwingt LEAD_PLUS auf core:statistics_report_export — keine eigene Rollenprüfung hier nötig. #}
-{% comment %}
-K4a (Refs #1770): Schaltflächen statt Links. Das Panel liegt im GET-Formular der
-Berichte-Sektion (full_content.html); der Submit serialisiert Backend, Zeitraum,
-Empfänger und Zweck aus diesem Formular. Vorher stand der Zeitraum samt einem zur
-Renderzeit gebackenen `release_query` im `href` — ein Mousedown blurrte das
-Freitextfeld, der change-Trigger startete den Panel-Neubau, und der Klick folgte
-synchron dem alten `href`: Empfänger/Zweck fehlten still im append-only
-EXPORT-Audit.
-
-`format` MUSS Formularfeld sein (Submitter-name/value): ein GET-Formular
-verwirft die Query-String-Anteile einer `formaction`. `backend` kommt aus dem
-Select, `date_from`/`date_to`/`period` aus den Hidden-Feldern der Sektion.
-{% endcomment %}
-<div class="flex flex-wrap gap-2.5 no-print">
-    <button type="submit" name="format" value="csv" formaction="{% url 'core:statistics_report_export' %}"
-       class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
-        <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        {% trans "CSV-Export" %}
-    </button>
-    <button type="submit" name="format" value="json" formaction="{% url 'core:statistics_report_export' %}"
-       class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
-        <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        {% trans "JSON-Export" %}
-    </button>
-    <button type="submit" name="format" value="xml" formaction="{% url 'core:statistics_report_export' %}"
-       class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
-        <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        {% trans "XML-Export" %}
-    </button>
-</div>

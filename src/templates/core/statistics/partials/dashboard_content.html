@@ -236,64 +236,7 @@ nicht.
 </p>
 {% endif %}
 
-{# Export-Buttons #}
+{# Exportleiste (Refs #2505): in der Übersicht nur die interne Ereignisliste — Zahlen nach außen kommen aus den Datensatz-Berichten. #}
 {% if can_export %}
-{% comment %}
-K4a (Refs #1770): Der Export erfasst optional Empfänger und Zweck. Sie wandern
-in das EXPORT-Audit-Detail und tragen die Freigabe-Übersicht — ohne sie erzeugt
-jede Zeitraum-Überschneidung einen Alarm, den niemand bewerten kann.
-
-Bewusst ein reines GET-Formular mit `formaction` je Schaltfläche statt drei
-Links: nur so kommen die beiden Felder ohne JavaScript an allen drei Zielen an.
-Kein `action` am Formular, weil es keins braucht (jede Schaltfläche nennt ihr
-Ziel selbst) — und weil `action` die POST-Semantik des AuthZ-Template-Guards
-auslöste, die hier sachlich falsch wäre. Die `formaction`-Ziele prüft der Guard
-seit #1770 mit (GET-Semantik); sie sind nicht ausgenommen.
-{% endcomment %}
-<form method="get" class="no-print mb-4" data-testid="statistics-export-form">
-    <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
-    <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
-    {% comment %}
-    R2 (Refs #1804): Der Doktyp-Filter trifft KPI, Tabellen und Diagramme —
-    die beiden Schaltflächen darunter exportierten trotzdem ungefiltert. „Am
-    Bildschirm stand X, exportiert wurde Y" ist der teuerste Fehler des
-    Bereichs: die Datei geht als Verwendungsnachweis aus dem Haus. Dieses
-    Formular ist der einzige Träger des Filters zu beiden `formaction`-Zielen
-    (ein reines GET-Formular, K4a) — ohne das versteckte Feld kommt er nirgends
-    an.
-    {% endcomment %}
-    {% if selected_doc_type %}<input type="hidden" name="doktyp" value="{{ selected_doc_type.pk }}">{% endif %}
-    {% comment %}Refs #1776: Enter in Empfänger/Zweck löste als implizite
-    Formularübermittlung den ERSTEN Submit-Button aus (CSV-Export, inkl.
-    unwiderruflichem Audit-Eintrag) — ``suppressEnterSubmit`` fängt Enter in
-    beiden Feldern ab, Submit bleibt ausschließlich über einen Klick möglich.{% endcomment %}
-    <div class="flex flex-wrap gap-3 items-end mb-3" x-data="suppressEnterSubmit">
-        <div>
-            <label for="export-recipient" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Empfänger (optional)" %}</label>
-            <input type="text" id="export-recipient" name="recipient" maxlength="200"
-                   @keydown.enter="suppress"
-                   placeholder="{% trans 'z. B. Stadt Musterstadt' %}"
-                   class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
-        </div>
-        <div>
-            <label for="export-purpose" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zweck (optional)" %}</label>
-            <input type="text" id="export-purpose" name="purpose" maxlength="200"
-                   @keydown.enter="suppress"
-                   placeholder="{% trans 'z. B. Verwendungsnachweis 2026' %}"
-                   class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
-        </div>
-    </div>
-    <div class="flex flex-wrap gap-2.5">
-        <button type="submit" formaction="{% url 'core:statistics_csv_export' %}"
-                class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
-            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-            {% trans "CSV-Export" %}
-        </button>
-    </div>
-</form>
-{% comment %}
-Refs #1804 (§3.4): kein Textlink zur Freigabe-Übersicht mehr — sie ist seit
-#1813 ein eigener Reiter der Statistik-Subnav und braucht keinen versteckten
-Zweiteinstieg im Seitenfuß.
-{% endcomment %}
+{% include "core/statistics/partials/_export_bar.html" with variant="internal" %}
 {% endif %}

@@ -83,45 +83,16 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
     </ul>
 
     {% comment %}
-    Das Formular umschließt das Panel (K4a, Refs #1770): die Export-Schaltflächen
-    liegen im Panel und nennen ihr Ziel per `formaction` — beim Submit
-    serialisiert der Browser Backend, Zeitraum, Empfänger und Zweck aus diesem
-    einen Formular. Kein `action` am Formular selbst (jede Schaltfläche nennt ihr
-    Ziel) und `method="get"`, weil alle Ziele GET sind.
-
-    R2 (Refs #1804): Empfänger/Zweck stehen genau EINMAL je Reiter — bei dem
-    Export, den sie begleiten. Sie erscheinen erst mit einer Auswahl: ohne
-    Bericht gibt es nichts herauszugeben.
+    Exportleiste (Refs #2505): EIN Partial für alle Download-Ziele des Bereichs.
+    Empfänger/Zweck stehen genau EINMAL je Reiter — bei dem Export, den sie
+    begleiten (R2, Refs #1804), unter den Karten und über der Vorschau. Sie
+    erscheint erst mit einer Auswahl: ohne Bericht gibt es nichts herauszugeben.
+    Die Schaltflächen sitzen im Formular der Leiste, nicht im Panel — der
+    Submit serialisiert Backend, Zeitraum, Empfänger und Zweck race-frei
+    (K4a, Refs #1770).
     {% endcomment %}
-    <form method="get">
-    <input type="hidden" name="zeitraum" value="frei">
-    <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
-    <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
     {% if selected_backend %}
-    <input type="hidden" name="backend" value="{{ selected_backend.slug }}">
-    {% comment %}
-    Refs #1776: Enter in Empfänger/Zweck löste als implizite Formularübermittlung
-    den ERSTEN Submit-Button aus (CSV-Export, inkl. unwiderruflichem
-    Audit-Eintrag) — `suppressEnterSubmit` fängt Enter in beiden Feldern ab.
-    Einen hx-Trigger tragen sie bewusst nicht: das Panel braucht sie nicht, ihre
-    Werte gehen beim Submit mit, race-frei und ohne JavaScript.
-    {% endcomment %}
-    <div class="flex flex-wrap gap-3 items-end mb-4" x-data="suppressEnterSubmit">
-        <div>
-            <label for="report-recipient" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Empfänger (optional)" %}</label>
-            <input type="text" id="report-recipient" name="recipient" maxlength="200"
-                   @keydown.enter="suppress"
-                   placeholder="{% trans 'z. B. Stadt Musterstadt' %}"
-                   class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
-        </div>
-        <div>
-            <label for="report-purpose" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zweck (optional)" %}</label>
-            <input type="text" id="report-purpose" name="purpose" maxlength="200"
-                   @keydown.enter="suppress"
-                   placeholder="{% trans 'z. B. Verwendungsnachweis 2026' %}"
-                   class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
-        </div>
-    </div>
+    {% include "core/statistics/partials/_export_bar.html" with variant="reports" %}
     {% endif %}
     <div id="report-panel">
         {% comment %}
@@ -132,7 +103,6 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
         {% endcomment %}
         {% if report_error %}{% include "core/statistics/partials/report_panel_error.html" %}{% elif selected_backend %}{% include "core/statistics/partials/report_panel.html" %}{% else %}<p class="text-[13px] text-ink-muted">{% trans "Wählen Sie oben einen Bericht, um Vorschau und Export zu sehen." %}</p>{% endif %}
     </div>
-    </form>
 </section>
 {% else %}
 <p class="text-[13px] text-ink-muted">{% trans "Für diese Einrichtung ist derzeit kein Bericht hinterlegt." %}</p>

@@ -1,0 +1,109 @@
+{% load i18n %}
+{% comment %}
+Exportleiste des Statistik-Bereichs (Refs #2505) — die EINZIGE Stelle, an der der
+Bereich Download-Ziele (`formaction`) trägt. Ein Weg nach außen, immer mit
+Empfänger und Zweck davor, immer mit Eintrag unter „Freigaben".
+
+Kontrakt (aufrufende Seite):
+* `variant`   — "reports" (Datensatz-Berichte: CSV, JSON, XML, PDF über den
+                generischen Berichts-Export) oder "internal" (Übersicht: nur die
+                interne Ereignisliste, keine Formatbuttons).
+* `date_from`, `date_to` — der aufgelöste Zeitraum.
+* reports:  `selected_backend` (Slug geht als `backend` mit),
+            `format_source_notes` (Quelle je Format; fehlt bei Fehlerkarte).
+* internal: `selected_doc_type` (Doktyp-Filter geht als `doktyp` mit).
+
+Bewusst ein reines GET-Formular mit `formaction` je Schaltfläche: nur so kommen
+Empfänger und Zweck ohne JavaScript am Ziel an, serialisiert beim Submit
+(race-frei, Refs #1770). Kein `action` am Formular — jede Schaltfläche nennt ihr
+Ziel selbst. `suppressEnterSubmit` fängt Enter in beiden Feldern ab (Refs #1776):
+Enter würde sonst den ERSTEN Submit auslösen und damit eine Herausgabe
+protokollieren. Die Feld-IDs bleiben je Variante stabil (`report-*`/`export-*`).
+{% endcomment %}
+{% if variant == "internal" %}
+<form method="get" class="no-print mb-4 bg-amber-50 border border-amber-200 rounded-[10px] px-4 py-3" data-testid="statistics-export-form" data-variant="internal">
+    <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+    <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+    {% if selected_doc_type %}<input type="hidden" name="doktyp" value="{{ selected_doc_type.pk }}">{% endif %}
+    <p class="text-[13px] text-amber-800 mb-3" data-testid="export-bar-internal-warning">{% trans "Enthält Einzelereignisse mit Pseudonym — keine anonymisierte Statistik. Für Zahlen nach außen nutzen Sie die Datensatz-Berichte." %}</p>
+    <div class="flex flex-wrap gap-3 items-end mb-3" x-data="suppressEnterSubmit">
+        <div>
+            <label for="export-recipient" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Empfänger (optional)" %}</label>
+            <input type="text" id="export-recipient" name="recipient" maxlength="200"
+                   @keydown.enter="suppress"
+                   placeholder="{% trans 'z. B. Stadt Musterstadt' %}"
+                   class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
+        </div>
+        <div>
+            <label for="export-purpose" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zweck (optional)" %}</label>
+            <input type="text" id="export-purpose" name="purpose" maxlength="200"
+                   @keydown.enter="suppress"
+                   placeholder="{% trans 'z. B. Verwendungsnachweis 2026' %}"
+                   class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
+        </div>
+    </div>
+    <button type="submit" formaction="{% url 'core:statistics_csv_export' %}"
+            data-testid="export-bar-events-csv"
+            class="inline-flex items-center gap-1.5 bg-surface border border-amber-300 text-amber-900 text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+        <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        {% trans "Ereignisliste (CSV, intern, mit Pseudonymen)" %}
+    </button>
+    <p class="text-[12px] text-ink-muted mt-3">{% trans "Jeder Download wird protokolliert und erscheint unter „Freigaben“. Tragen Sie als Empfänger die Organisation ein, nicht eine Person." %}</p>
+</form>
+{% else %}
+<form method="get" class="no-print mb-6" data-testid="export-bar" data-variant="reports">
+    <input type="hidden" name="zeitraum" value="frei">
+    <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+    <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+    <input type="hidden" name="backend" value="{{ selected_backend.slug }}">
+    <div class="flex flex-wrap gap-3 items-end mb-3" x-data="suppressEnterSubmit">
+        <div>
+            <label for="report-recipient" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Empfänger (optional)" %}</label>
+            <input type="text" id="report-recipient" name="recipient" maxlength="200"
+                   @keydown.enter="suppress"
+                   placeholder="{% trans 'z. B. Stadt Musterstadt' %}"
+                   class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
+        </div>
+        <div>
+            <label for="report-purpose" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zweck (optional)" %}</label>
+            <input type="text" id="report-purpose" name="purpose" maxlength="200"
+                   @keydown.enter="suppress"
+                   placeholder="{% trans 'z. B. Verwendungsnachweis 2026' %}"
+                   class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
+        </div>
+    </div>
+    <div class="flex flex-wrap gap-2.5">
+        <button type="submit" name="format" value="csv" formaction="{% url 'core:statistics_report_export' %}"
+                data-testid="export-bar-csv"
+                class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            {% trans "CSV-Export" %}
+        </button>
+        <button type="submit" name="format" value="json" formaction="{% url 'core:statistics_report_export' %}"
+                data-testid="export-bar-json"
+                class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            {% trans "JSON-Export" %}
+        </button>
+        <button type="submit" name="format" value="xml" formaction="{% url 'core:statistics_report_export' %}"
+                data-testid="export-bar-xml"
+                class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            {% trans "XML-Export" %}
+        </button>
+        <button type="submit" name="format" value="pdf" formaction="{% url 'core:statistics_report_export' %}"
+                data-testid="export-bar-pdf"
+                class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+            {% trans "PDF-Export" %}
+        </button>
+    </div>
+    <p class="text-[12px] text-ink-muted mt-3">{% trans "Jeder Download wird protokolliert und erscheint unter „Freigaben“. Tragen Sie als Empfänger die Organisation ein, nicht eine Person." %}</p>
+    {# Quellenausweis (Refs #1743): je Format die Quelle — das Sachbericht-PDF liest hybrid, die übrigen Formate live. #}
+    {% if format_source_notes %}
+    <p class="text-[12px] text-ink-muted mt-1" data-testid="export-bar-sources">
+        {% trans "Quelle je Format" %}: {% for format_name, note in format_source_notes %}{{ format_name }}: {{ note }}{% if not forloop.last %} · {% endif %}{% endfor %}
+    </p>
+    {% endif %}
+</form>
+{% endif %}
