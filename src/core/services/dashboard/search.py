@@ -31,33 +31,17 @@ def client_search_queryset(facility, query):
 
 
 def event_search_queryset(facility, user, query):
-    """Ereignisse ueber Pseudonym ODER Suchindex — ein Queryset statt zwei Listen.
+    """Search events by pseudonym or indexed values within role and facility scope.
 
-    Vorher liefen die beiden Zweige getrennt und wurden in Python
-    dedupliziert; damit gab es nichts, worauf ``COUNT(*)`` oder ein Paginator
-    haetten aufsetzen koennen. Das ``Q``-ODER liefert dieselbe Menge (der
-    ``client``-Join ist n:1, vervielfacht also keine Zeilen) und traegt die
-    Modell-Sortierung ``-occurred_at``.
+    The write path indexes only unencrypted fields with effective Normal
+    sensitivity (ADR-016/043, Refs #2525). The read filter additionally limits
+    document types to the user's allowed levels. Pseudonym matches remain
+    available for those document types even when their field index is empty.
 
-    Der Sensitivity-Filter bleibt, wo er ist: ``Event.search_text`` enthaelt
-    schreibseitig nur unverschluesselte, nicht erhoehte Feldwerte (ADR-016);
-    der Lesefilter deckelt zusaetzlich ueber den Dokumentationstyp.
-
-    Refs #1803: ``exclude(client__is_deleted=True)`` — Ereignisse einer Person
-    im Papierkorb fallen KOMPLETT aus der Suche, auch die, die nur ueber
-    ``search_text`` matchen. Ohne den Filter blieb das Pseudonym einer
-    geloeschten Person ueber ihre Ereignis-Trefferkarten lesbar und ihre
-    Dokumentation von dort aus aufblaetterbar — derselbe Leak wie im
-    Client-Zweig, nur eine Flaeche weiter.
-
-    Das ist eine BEWUSSTE Nicht-Paritaet zum Zeitstrom (``build_feed_items``),
-    der diese Ereignisse weiter zeigt: Die Suche ist ein Nachschlagewerkzeug —
-    was sie nicht findet, ist praktisch weg, und genau das soll der Papierkorb
-    bewirken. Der Zeitstrom ist ein chronologisches Protokoll — eine Luecke
-    darin waere eine Faelschung des Verlaufs. Ereignisse ohne ``client``
-    (``SET_NULL``) haengen an keinem Papierkorb und bleiben suchbar; das
-    ``exclude`` ueber die nullable Relation laesst sie stehen (Django haengt
-    den ``IS NOT NULL``-Vorbehalt selbst an).
+    Events belonging to deleted clients are excluded, including matches found
+    solely through the index (Refs #1803). Events without a client remain
+    searchable. This differs intentionally from the chronological feed, which
+    retains events belonging to deleted clients.
     """
     allowed_sens = allowed_sensitivities_for_user(user)
     return (
@@ -88,20 +72,17 @@ def search_result_counts(facility, user, query):
 
 
 def search_clients_and_events(facility, user, query, max_clients=20, max_events=20):
-    """Search clients and events within a facility.
+    """Search clients and events within a facility, returning two result lists.
 
-    Refs #827 (C-60): Volltextsuche laeuft gegen die ``Event.search_text``-
-    Spalte (im create/update-Pfad gepflegt, GIN-trgm-Index), nicht mehr
-    gegen ``data_json__icontains``. Verschluesselte und ELEVATED/HIGH-
-    Felder sind im Suchindex bewusst nicht enthalten — der Sensitivity-
-    Filter geschieht damit beim Schreiben, nicht beim Lesen.
+    Full-text matches use Event.search_text and its GIN trigram index rather
+    than raw data_json (Refs #827). At write time, the index excludes encrypted
+    fields and every field whose effective sensitivity is above Normal,
+    including inherited levels (ADR-016/043, Refs #2525). At read time, a
+    document-type filter additionally enforces role visibility. Pseudonym
+    search is independent of the field index and retains that role filter.
 
-    Refs #1803: Der Client-Zweig filtert ``is_deleted=False`` — identisch zu
-    ``ClientListView``/``ClientDetailView``. ``soft_delete()`` setzt
-    ``is_active`` nicht mit; ohne den Filter blieb eine Person im Papierkorb
-    auffindbar und ihr Treffer verlinkte auf einen 404.
-
-    Returns (clients, events) tuple.
+    Deleted clients and their events are excluded, matching the client list
+    and detail visibility rules (Refs #1803).
     """
     if not query:
         return [], []

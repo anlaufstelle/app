@@ -1,24 +1,12 @@
-"""Field-Template- und Marker-Helfer fuer Events (Refs #777).
+"""Event field, search-index and history helpers (Refs #777, #2525).
 
-Reine Lese-Helfer ohne DB-Writes. Diese Funktionen werden von ``crud.py``
-und ``context.py`` gemeinsam genutzt; um Zirkular-Imports zu vermeiden
-liegen sie in einem eigenen Modul.
+Read helpers are shared by crud.py and context.py. The maintenance helper
+rebuild_event_search_text writes only the derived index within a facility.
 
-Aufgeteilt aus dem alten ``services/event.py`` (#777).
-
-M2 (Refs #1058): Die entity-agnostischen Helfer (``remove_restricted_fields``,
-``build_field_template_lookup``, ``validate_data_json`` — vormals
-``_validate_data_json``) leben jetzt in :mod:`core.services.dynamic_data`, weil
-Client/Case dieselbe Feldmechanik bekommen. Sie werden hier unveraendert
-**re-exportiert**, damit alle Bestands-Importe und -Monkeypatches
-(``from core.services.events.fields import ...``) stabil bleiben.
-
-M24/AP2 (Refs #1738, ADR-039): Dasselbe gilt jetzt fuer das
-**File-Marker-Parsing** (``_is_file_marker``, ``is_singleton_file_marker``,
-``is_multi_file_marker``, ``file_marker_slugs``, ``normalize_file_marker``) —
-Anhaenge haengen nicht mehr nur am Ereignis. Event-spezifisches (Suchindex,
-Delete-History, Form-Splitting, JSON-Wire-Normalisierung) bleibt in diesem
-Modul.
+Entity-independent dynamic-data and file-marker helpers are re-exported
+from core.services.dynamic_data to preserve existing imports and patches
+(Refs #1058, #1738, ADR-039). Search indexes, delete-history snapshots,
+form splitting and JSON serialization remain event-specific here.
 """
 
 from __future__ import annotations
@@ -26,8 +14,9 @@ from __future__ import annotations
 from datetime import date, time
 
 from django.core.files.uploadedfile import UploadedFile
+from django.db import transaction
 
-from core.models import Client
+from core.models import Client, Event, Facility
 from core.services.dynamic_data import (
     _is_file_marker,
     build_field_template_lookup,
@@ -58,6 +47,7 @@ __all__ = [
     "is_multi_file_marker",
     "is_singleton_file_marker",
     "normalize_file_marker",
+    "rebuild_event_search_text",
     "remove_restricted_fields",
     "split_file_and_text_data",
     "stage_index",
@@ -73,46 +63,24 @@ CONTACT_STAGE_ORDER = [
 
 
 def compute_event_search_text(data_json, document_type):
-    """Refs #827 (C-60): Plain-text-Suchindex fuer ``Event.search_text``.
+    """Build the plaintext event index using effective sensitivity (ADR-016/043).
 
-    Sammelt alle ``data_json``-Werte, deren ``FieldTemplate``
-    **unverschluesselt** ist und keine erhoehte Feld-Sensitivity hat
-    (Sensitivity == NORMAL bzw. erbt vom DocumentType). Verschluesselte
-    und ELEVATED/HIGH-Felder werden absichtlich nicht in den Index
-    aufgenommen — der Index soll keine Daten exponieren, die ein User
-    ueber das normale Detail-View nicht sehen darf.
+    Only unencrypted fields whose effective sensitivity is Normal are indexed:
+    the higher of document-type and field levels must have rank zero. An empty
+    field level inherits the document-type level. Elevated, High and unknown
+    levels are excluded at write time, including inheriting fields in sensitive
+    types (Refs #2525). Unknown levels fail closed through the central policy.
 
-    Refs #1991: Der Sensitivity-Test laeuft ueber die zentrale
-    ``sensitivity_rank`` statt ueber eine Mengen-Zugehoerigkeit. Die alte
-    Formulierung (``ft.sensitivity in {elevated, high}``) fragte, ob der Wert
-    zu den bekannten HOHEN Stufen gehoert — ein Wert ausserhalb von
-    ``DocumentType.Sensitivity`` fiel durch beide Zweige und landete im
-    Klartext-Index, obwohl ``user_can_see_field`` ihn fuer JEDE Rolle sperrt.
-    ``Event.search_text`` wird von ``event_search_queryset`` per ``icontains``
-    durchsucht; dessen Doc-Type-Gate greift auf EREIGNIS-Ebene und schuetzt
-    kein einzelnes Feld — der Index waere damit ein Substring-Orakel samt
-    Trefferkarte auf einen fuer niemanden sichtbaren Inhalt gewesen. Der Index
-    ist die dritte Sichtbarkeits-Wahrheit neben Listen-Query und Detail-Gate
-    und zieht deshalb dieselbe fail-closed-Linie.
-
-    Indexiert wird genau in zwei Faellen:
-
-    * ``sensitivity == ""`` — „erbt vom Dokumentationstyp". Der Typ-Schutz
-      greift auf Ereignis-Ebene, das Feld braucht keinen eigenen.
-    * ``sensitivity_rank(...) == 0`` — ausdrueckliches ``normal``.
-
-    Alles andere (ELEVATED, HIGH und jeder unbekannte Wert) bleibt draussen.
-
-    File-Marker (``__file__``/``__files__``) werden uebersprungen; ihr
-    Klartext-Dateiname kommt nicht in den Suchindex (Refs #622).
+    Unassigned slugs, file markers and legacy encrypted marker dictionaries are
+    excluded. Pseudonym search remains a separate, role-scoped read path.
     """
     if not data_json:
         return ""
     if document_type is None:
         return ""
 
-    # Field-Templates des DocumentType einmalig laden.
-    from core.services.compliance.sensitivity import sensitivity_rank
+    # Load field metadata once for this document type.
+    from core.services.compliance.sensitivity import effective_sensitivity
 
     field_meta = {
         dtf.field_template.slug: dtf.field_template
@@ -126,16 +94,40 @@ def compute_event_search_text(data_json, document_type):
             continue
         if ft.is_encrypted:
             continue
-        if ft.sensitivity != "" and sensitivity_rank(ft.sensitivity) != 0:
+        if effective_sensitivity(document_type.sensitivity, ft.sensitivity) != 0:
             continue
         if isinstance(value, dict):
-            # File-Marker oder altes encrypted-Marker-Dict — nicht aufnehmen.
+            # Exclude file markers and legacy encrypted marker dictionaries.
             continue
         if isinstance(value, list):
             parts.extend(str(v) for v in value if v is not None and not isinstance(v, dict))
         elif value is not None and value != "":
             parts.append(str(value))
     return " ".join(parts)
+
+
+@transaction.atomic
+def rebuild_event_search_text(facility: Facility, *, dry_run: bool = False) -> tuple[int, int]:
+    """Rebuild one facility's indexes, including deleted events (Refs #2525).
+
+    Only the derived search column is written; source data, timestamps and
+    history stay intact. Lock events on write runs so a concurrent event update
+    cannot be overwritten by an index computed from an older payload.
+    Return the checked and changed (or would-change) event counts.
+    """
+    events = Event.objects.for_facility(facility).select_related("document_type")
+    if not dry_run:
+        events = events.select_for_update(of=("self",))
+    checked = changed = 0
+    for event in events.iterator(chunk_size=500):
+        checked += 1
+        search_text = compute_event_search_text(event.data_json, event.document_type)
+        if search_text == event.search_text:
+            continue
+        changed += 1
+        if not dry_run:
+            Event.objects.for_facility(facility).filter(pk=event.pk).update(search_text=search_text)
+    return checked, changed
 
 
 def stage_index(stage):
