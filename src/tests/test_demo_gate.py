@@ -99,7 +99,7 @@ def test_e2e_origins_follow_server_port(port):
 def test_release_checklist_requires_demo_before_release_and_in_evidence():
     path = ROOT / "docs/dev/release-checklist.md"
     if not path.is_file():
-        pytest.skip("Dev documentation is absent from public snapshots")
+        pytest.skip("docs/dev/release-checklist.md not in the public snapshot — guard only relevant in the dev repo")
     checklist = path.read_text()
     section = checklist.split("## 1.", 1)[1].split("## 2.", 1)[0]
     evidence = next(line for line in checklist.splitlines() if line.startswith("**Nachweise aus dem Pre-Release"))
