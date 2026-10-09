@@ -899,6 +899,10 @@ Sollen verwaiste Werte endgültig **entfernt** werden (Datenminimierung, sobald 
 
 Unter **Verwaltung → Feldvorlagen** können Sie die Optionen von Auswahl- und Mehrfachauswahl-Feldern (Select / Multi-Select) bearbeiten. Die Optionen werden im Feld **Optionen (JSON)** als JSON-Array gespeichert.
 
+**Verschlüsselte Auswahlfelder:** Bei neu gespeicherten Mehrfachauswahlen bleibt die Liste der Options-Slugs beim Verschlüsseln, Lesen und erneuten Speichern erhalten. Bereits ausgewählte deaktivierte Optionen bleiben im Bearbeitungsformular von Personen, Fällen und Ereignissen angehakt und können unverändert gespeichert werden; nicht ausgewählte deaktivierte Optionen werden dort nicht angeboten. Die Verschlüsselung ändert die rollenabhängige Sichtbarkeit nicht.
+
+Die Detailansichten zeigen die Bezeichnungen einer Mehrfachauswahl jeweils auf einer eigenen Zeile. Der Ereignis-CSV-Export verwendet kommagetrennte Bezeichnungen; die Art.-15-PDF-Auskunft zeigt ebenfalls Bezeichnungen, während das Ereignis-JSON der Art.-20-Auskunft eine echte Liste der Options-Slugs enthält. Unbekannte Slugs ohne passende Bezeichnung bleiben als Rohwert lesbar. Bestehende Texttokens werden nicht nachträglich als Listen interpretiert; eine Umwandlung alter Daten erfolgt nicht. Refs #2520.
+
 > **Gilt nur für Select / Multi-Select.** Für andere Feldtypen (Text, Textbereich, Zahl, Datum, Uhrzeit, Ja/Nein, Datei) wird `options_json` nicht ausgewertet — das Feld bitte leer lassen (`[]`).
 
 #### Default-Werte (`default_value`)

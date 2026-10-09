@@ -897,6 +897,10 @@ To finally **remove** orphaned values (data minimisation, once they are no longe
 
 Under **Management → Field templates**, you can edit the options of selection and multi-selection fields (Select / Multi-Select). Options are stored in the **Options (JSON)** field as a JSON array.
 
+**Encrypted selection fields:** For newly saved multiple selections, the list of option slugs survives encryption, reading and saving again. Previously selected inactive options remain checked in the edit forms for clients, cases and events and can be saved unchanged; unselected inactive options are not offered there. Encryption does not change role-based visibility.
+
+Detail views show each multiple-selection label on its own line. The event CSV export uses comma-separated labels; the Article 15 PDF disclosure also shows labels, while event JSON in the Article 20 export contains an actual list of option slugs. Unknown slugs without a matching label remain readable as raw values. Existing text tokens are not reinterpreted as lists; no conversion of old data takes place. Refs #2520.
+
 > **Applies only to Select / Multi-Select.** For other field types (Text, Textarea, Number, Date, Time, Yes/No, File), `options_json` is not evaluated -- please leave the field empty (`[]`).
 
 #### Default Values (`default_value`)
@@ -2449,4 +2453,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 8c787347b5fb93b899dfe526893bdfd10f7db693 -->
+<!-- source-hash: 930e54929ad33457433dad9e30632d62a8872d04 -->
