@@ -159,6 +159,30 @@ def test_shift_range_reuses_feed_dst_window(client, staff_user, facility, doc_ty
     )
 
 
+def test_shift_filter_statements_carry_plain_range_bounds(client, staff_user, facility, doc_type_contact):
+    """A btree index cannot serve the multirange operator; plain bounds keep the scan on the index."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    shift = TimeFilter.objects.create(facility=facility, label="Day", start_time=time(8), end_time=time(16))
+    day = date(2026, 6, 10)
+    morning = timezone.make_aware(datetime.combine(day, time(9)))
+    Event.objects.create(facility=facility, document_type=doc_type_contact, occurred_at=morning)
+    params = {"date_from": day.isoformat(), "date_to": day.isoformat(), "time_filter": str(shift.pk)}
+    client.force_login(staff_user)
+    with CaptureQueriesContext(connection) as captured:
+        assert len(event_ids(list_response(client, staff_user, params))) == 1
+    statements = [
+        query["sql"]
+        for query in captured.captured_queries
+        if 'FROM "core_event"' in query["sql"] and ("MIN(" in query["sql"] or "tstzmultirange" in query["sql"])
+    ]
+    assert len(statements) == 3  # bounds aggregate, count, page
+    for sql in statements:
+        assert '"core_event"."occurred_at" >=' in sql
+        assert '"core_event"."occurred_at" <=' in sql
+
+
 @pytest.mark.parametrize("preset", ["this_week", "last_month"])
 def test_quick_ranges(client, staff_user, facility, doc_type_contact, preset):
     from core.services.events.list_filters import resolve_event_list_filters

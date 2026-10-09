@@ -94,8 +94,16 @@ def _apply_shift(queryset, shift, start, end):
     PostgreSQL multiranges avoid a growing OR expression for long periods.
     Only days within the remaining events' bounds need windows; this also
     avoids allocating ranges for arbitrary empty periods supplied in GET.
+    A btree index cannot serve the multirange operator, so the aggregate and
+    the final filter additionally carry plain range bounds.
     """
-    bounds = queryset.aggregate(first=Min("occurred_at"), last=Max("occurred_at"))
+    bounded = queryset
+    # One day of margin on both sides covers overnight windows and DST shifts.
+    if start:
+        bounded = bounded.filter(occurred_at__gte=get_time_range(start)[0] - timedelta(days=1))
+    if end:
+        bounded = bounded.filter(occurred_at__lte=get_time_range(end)[1] + timedelta(days=1))
+    bounds = bounded.aggregate(first=Min("occurred_at"), last=Max("occurred_at"))
     if bounds["first"] is None:
         return queryset.none()
     first = timezone.localdate(bounds["first"])
@@ -112,6 +120,9 @@ def _apply_shift(queryset, shift, start, end):
     if not windows:
         return queryset.none()
     return queryset.filter(
+        occurred_at__gte=min(window.lower for window in windows),
+        occurred_at__lte=max(window.upper for window in windows),
+    ).filter(
         RawSQL('"core_event"."occurred_at" <@ %s::tstzmultirange', (Multirange(windows),), output_field=BooleanField())
     )
 
