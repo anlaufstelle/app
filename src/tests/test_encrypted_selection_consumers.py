@@ -109,3 +109,24 @@ def test_unchanged_selection_survives_update_view(selection_entity, client, staf
         assert "First label" not in str(detail)
         assert "Second label" not in str(detail)
         assert ["a", "b"] not in (detail or {}).values()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "selection_entity",
+    [(kind, False, encrypted) for kind in ("client", "case", "event") for encrypted in (False, True)],
+    indirect=True,
+)
+def test_detail_view_renders_each_selection_label_on_its_own_line(selection_entity, client, staff_user):
+    entity, _template = selection_entity
+    client.force_login(staff_user)
+    response = client.get(reverse(f"core:{entity._meta.model_name}_detail", kwargs={"pk": entity.pk}))
+    assert response.status_code == 200
+    rendered = ConsumerHTMLParser()
+    rendered.feed(response.content.decode())
+    definitions = [(attrs, text.strip()) for attrs, text in rendered.definitions if "First label" in text]
+    assert len(definitions) == 1
+    attrs, text = definitions[0]
+    assert text == "First label\nSecond label"
+    assert "whitespace-pre-wrap" in attrs["class"].split()
+    assert "Unused label" not in response.content.decode()

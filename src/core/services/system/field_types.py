@@ -425,7 +425,7 @@ def _format_multi_select(value: Any, template: Any) -> Any:
         from core.services.dynamic_data import option_label_map
 
         label_map = option_label_map(template.options_json)
-        return ", ".join(label_map.get(v, str(v)) for v in value)
+        return "\n".join(label_map.get(v, str(v)) for v in value)
     return value
 
 

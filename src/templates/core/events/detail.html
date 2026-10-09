@@ -162,7 +162,7 @@
                 {# kommagetrennt statt als ``repr()`` ausgegeben. Eine gespeicherte 0 #}
                 {# ist ein echter Wert und bleibt stehen (gleiche Begruendung wie in  #}
                 {# core/export/client_data_pdf.html, das diesen Filter NICHT nutzt).  #}
-                <dd class="text-sm font-medium {% if field.is_sensitive %}text-amber-700{% endif %}">
+                <dd class="text-sm font-medium whitespace-pre-wrap {% if field.is_sensitive %}text-amber-700{% endif %}">
                     {{ field.value|display_dynamic_value }}
                 </dd>
                 {% endif %}

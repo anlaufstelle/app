@@ -1301,15 +1301,13 @@ def export_client_data(client, facility, user):
 
 
 def _format_pdf_event_data(events, facility):
-    """Ereigniswerte fuer das Auskunfts-PDF lesbar und verlustfrei formatieren.
+    """Format PDF event values with labels while JSON keeps its original slugs.
 
-    Der JSON-Export bleibt bewusst slug-treu und maschinenlesbar. Fuer das
-    ausgehaendigte PDF werden dagegen dieselben fachlichen Labels wie in der
-    Oberflaeche verwendet. Eine Liste ohne konfigurierten Optionskatalog wird
-    lediglich lesbar verbunden; ihre einzelnen Werte bleiben unveraendert.
+    Lists retain comma separators independently of the detail view's line breaks.
+    Values without a configured option label remain readable and unchanged.
     """
     from core.models import FieldTemplate
-    from core.services.dynamic_data import format_dynamic_display_value
+    from core.services.dynamic_data import format_dynamic_display_value, option_label_map
 
     slugs = {slug for event in events for slug in event["data"]}
     field_templates = {
@@ -1319,9 +1317,12 @@ def _format_pdf_event_data(events, facility):
     for event in events:
         formatted_data = {}
         for slug, value in event["data"].items():
-            displayed = format_dynamic_display_value(value, field_templates.get(slug))
-            if isinstance(displayed, list):
-                displayed = ", ".join(str(item) for item in displayed)
+            template = field_templates.get(slug)
+            if isinstance(value, list):
+                labels = option_label_map(template.options_json) if template else {}
+                displayed = ", ".join(labels.get(item, str(item)) for item in value)
+            else:
+                displayed = format_dynamic_display_value(value, template)
             formatted_data[slug] = displayed
         formatted_events.append({**event, "data": formatted_data})
     return formatted_events
