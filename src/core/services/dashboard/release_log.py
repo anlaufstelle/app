@@ -121,9 +121,9 @@ RELEASE_PERIOD_KEY = "date_from"
 # Listen-Update stillschweigend eine zu werden.
 RELEASE_ARTIFACT_KEY = "artifact_released"
 
-# ``AuditLog.target_type`` der externen Berichts-Ansicht. Hier und nicht in der
-# View, weil beide Seiten denselben Wert brauchen: die View schreibt ihn, der
-# Alt-Zeilen-Ausschluss unten liest ihn.
+# ``AuditLog.target_type`` of the former external report view. The view is gone
+# (Refs #2505, its address only redirects); existing rows stay in the log, so
+# the legacy exclusion below still reads this value. Nothing writes it anymore.
 EXTERNAL_REPORT_TARGET = "ExternalReport"
 
 # Alt-Zeilen der externen **Ansicht**, die den Freigabe-Marker noch tragen
