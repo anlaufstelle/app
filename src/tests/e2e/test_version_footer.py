@@ -1,10 +1,11 @@
 """E2E: Versions-Sichtbarkeit im Footer (Refs #1901, #1050).
 
-1:1 aus dem manuellen Playwright-Check abgeleitet: Die anonyme Login-Seite
-traegt die AGPL-§13-Pflichtlinks (Quellcode, AGPL-3.0), aber KEIN
-Versionsmuster (weder ``v<semver>`` noch ``main-<sha>`` — Fingerprinting);
-nach dem Login zeigt der Footer die deployte Version. Es wird gegen ein
-Muster geprueft, nie gegen den Literalwert der gerade laufenden Version.
+Derived 1:1 from the manual Playwright check: the anonymous login page carries
+the AGPL Section 13 links (source code, AGPL-3.0), but NO version pattern
+(neither ``v<semver>`` nor ``main-<sha>`` — fingerprinting). The authenticated
+footer keeps the source-code link, shows the deployed app version once, and no
+longer repeats the source version. Assertions use patterns, never the literal
+value of the running version.
 """
 
 from __future__ import annotations
@@ -44,10 +45,18 @@ class TestVersionFooterVisibility:
         finally:
             context.close()
 
-    def test_authenticated_footer_shows_version_pattern(self, staff_page, base_url):
+    def test_authenticated_footer_shows_source_link_and_only_app_version(self, staff_page, base_url):
         page = staff_page
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
 
+        footer = page.locator("footer").first
+        expect(footer).to_be_visible()
+        expect(footer.get_by_role("link", name="Quellcode")).to_be_visible()
         version = page.get_by_test_id("app-version")
         expect(version).to_be_visible()
         expect(version).to_have_text(re.compile(r"^v\d+\.\d+"))
+
+        footer_text = footer.inner_text()
+        assert len(_SEMVER_PATTERN.findall(footer_text)) == 1, (
+            f"Authentifizierter Footer darf die App-Version nur einmal zeigen (Refs #2532): {footer_text!r}"
+        )
