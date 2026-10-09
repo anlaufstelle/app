@@ -89,6 +89,22 @@ class CustomLoginView(auth_views.LoginView):
         """
         return resolve_post_login_url(self.request, self.get_redirect_url())
 
+    def form_invalid(self, form):
+        count = getattr(self.request, "super_admin_failed_login_count", 0)
+        if count:
+            from django_ratelimit.exceptions import Ratelimited
+
+            from core.services.security.login_lockout import LOCKOUT_THRESHOLD
+            from core.views.errors import permission_denied
+
+            # Retry advice only: failed passwords never occupy sleeping workers
+            # or establish a lock that rejects a subsequent valid password.
+            self.request.rate_limit_reason = "super_admin_backoff"
+            response = permission_denied(self.request, Ratelimited())
+            response["Retry-After"] = str(2 ** min(count - LOCKOUT_THRESHOLD, 3))
+            return response
+        return super().form_invalid(form)
+
     def form_valid(self, form):
         # Account-Lockout (Refs #612): Nach 10 Fehlversuchen in 15 Minuten
         # auch bei korrektem Passwort sperren. Der View-Level-Ratelimit

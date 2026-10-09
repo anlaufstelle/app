@@ -173,6 +173,13 @@ def on_user_login_failed(sender, credentials, request, **kwargs):
             ),
             ip_address=ip_address,
         )
+        if user is not None and is_super:
+            from core.services.compliance.breach_detection import record_super_admin_login_alarm
+
+            count = record_super_admin_login_alarm(user)
+            if request is not None and count:
+                request.super_admin_failed_login_count = count
+                request.failed_login_user = user
         return
 
     AuditLog.objects.create(

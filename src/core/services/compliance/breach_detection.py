@@ -357,6 +357,45 @@ def detect_distributed_login_attack(facility) -> list[dict]:
     return findings
 
 
+def detect_super_admin_login_bursts(user=None) -> list[dict]:
+    """Find ten failures in fifteen minutes against known facility-less admins."""
+    from core.models import User
+    from core.services.security.login_lockout import LOCKOUT_THRESHOLD, LOCKOUT_WINDOW
+
+    base = AuditLog.objects.filter(
+        action=AuditLog.Action.LOGIN_FAILED,
+        facility=None,
+        user__facility__isnull=True,
+        user__role=User.Role.SUPER_ADMIN,
+        timestamp__gte=timezone.now() - LOCKOUT_WINDOW,
+    )
+    if user is not None:
+        base = base.filter(user=user)
+    return [
+        _finding("super_admin_bruteforce", row["user"], row["count"], LOCKOUT_THRESHOLD, 15)
+        for row in base.values("user").annotate(count=Count("id")).filter(count__gte=LOCKOUT_THRESHOLD)
+    ]
+
+
+def record_super_admin_login_alarm(user):
+    """Serialize immediate alarms per account; never sleep or call a webhook."""
+    from core.models import User
+
+    if not user.is_super_admin or user.facility_id is not None:
+        return
+    with transaction.atomic():
+        # Keep FK KEY SHARE checks compatible with alarm serialization;
+        # otherwise a concurrent audit insert can deadlock on the chain lock.
+        # Refs #2527.
+        locked_user = User.objects.select_for_update(no_key=True).filter(pk=user.pk, facility=None).first()
+        if locked_user is None:
+            return
+        findings = detect_super_admin_login_bursts(user)
+        for finding in findings:
+            record_system_finding(finding, notify=False)
+        return findings[0]["count"] if findings else 0
+
+
 def detect_anonymous_login_bursts() -> list[dict]:
     """Installationsweite Bursts fehlgeschlagener Logins gegen UNBEKANNTE
     Usernames (``user IS NULL``) — Credential-Stuffing/Enumeration (Refs #1368).
@@ -536,10 +575,7 @@ def record_finding(facility, finding: dict) -> AuditLog | None:
 
 
 def _already_reported_system(finding: dict) -> bool:
-    """Dedup fuer installationsweite (``facility=None``) Findings — analog zu
-    ``_already_reported``, aber facility-los und mit der Quell-IP als
-    zusaetzlichem Diskriminator, damit Bursts verschiedener IPs sich nicht
-    gegenseitig unterdruecken. Die 24h-/kind-Dedup-Garantie bleibt identisch."""
+    """Deduplicate system findings for 24 hours by kind, account and source IP."""
     last_24h = timezone.now() - timedelta(hours=24)
     qs = AuditLog.objects.filter(
         facility__isnull=True,
@@ -549,26 +585,29 @@ def _already_reported_system(finding: dict) -> bool:
     source_ip = finding.get("source_ip")
     for entry in qs.iterator():
         detail = entry.detail or {}
-        if detail.get("kind") == finding["kind"] and detail.get("source_ip") == source_ip:
+        if (
+            detail.get("kind") == finding["kind"]
+            and detail.get("source_ip") == source_ip
+            and entry.user_id == finding["user_id"]
+        ):
             return True
     return False
 
 
-def record_system_finding(finding: dict) -> AuditLog | None:
-    """Schreibt einen installationsweiten (``facility=None``) SECURITY_VIOLATION-
-    Eintrag + optionalen Webhook fuer facility-lose Findings (anonyme
-    Login-Bursts, Refs #1368).
+def record_system_finding(finding: dict, *, notify=True) -> AuditLog | None:
+    """Record a facility-less finding, retaining a known target account.
 
-    Bewusst getrennt von ``record_finding``: Bursts gegen unbekannte Usernames
-    haben weder Facility noch User und gehoeren als System-Event mit
-    ``facility=None`` protokolliert. Die SSRF-gehaertete ``_post_webhook``-
-    Mechanik wird unveraendert wiederverwendet. Idempotent ueber 24h
-    (kind + Quell-IP)."""
+    Deduplicate by kind, account and source IP. Scheduled scans may notify
+    through the existing hardened webhook; immediate login alarms never do.
+    """
     if _already_reported_system(finding):
         return None
+    from core.models import User
+
+    user = User.objects.filter(pk=finding["user_id"], facility=None).first() if finding["user_id"] is not None else None
     entry = audit_security_violation(
         None,
-        None,
+        user,
         target_type="System",
         target_id=None,
         reason=finding["kind"],
@@ -578,19 +617,20 @@ def record_system_finding(finding: dict) -> AuditLog | None:
         window_minutes=finding["window_minutes"],
         source_ip=finding.get("source_ip"),
     )
-    _post_webhook(
-        {
-            "facility": None,
-            "kind": finding["kind"],
-            "count": finding["count"],
-            "threshold": finding["threshold"],
-            "window_minutes": finding["window_minutes"],
-            "user_id": None,
-            "source_ip": finding.get("source_ip"),
-            "audit_id": str(entry.pk),
-            "timestamp": entry.timestamp.isoformat(),
-        }
-    )
+    if notify:
+        _post_webhook(
+            {
+                "facility": None,
+                "kind": finding["kind"],
+                "count": finding["count"],
+                "threshold": finding["threshold"],
+                "window_minutes": finding["window_minutes"],
+                "user_id": finding["user_id"],
+                "source_ip": finding.get("source_ip"),
+                "audit_id": str(entry.pk),
+                "timestamp": entry.timestamp.isoformat(),
+            }
+        )
     return entry
 
 
@@ -619,7 +659,7 @@ def _run_system_detections() -> list[AuditLog]:
     UND die facility-losen Writes muessen im ``app.is_super_admin``-Scope laufen
     (siehe ``run_system_detections``)."""
     new_entries: list[AuditLog] = []
-    for finding in detect_anonymous_login_bursts():
+    for finding in (*detect_anonymous_login_bursts(), *detect_super_admin_login_bursts()):
         entry = record_system_finding(finding)
         if entry is not None:
             new_entries.append(entry)
