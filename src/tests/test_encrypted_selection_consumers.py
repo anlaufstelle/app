@@ -149,3 +149,39 @@ def test_csv_export_resolves_decrypted_selection_labels(selection_entity, facili
     assert rows[2][rows[1].index(template.name)] == "First label, Second label"
     assert "Unused label" not in output
     assert "__encrypted__" not in output
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("selection_entity", [("event", False, True)], indirect=True)
+def test_article_20_event_json_keeps_real_slug_lists(selection_entity, facility, staff_user):
+    import json
+
+    from core.services.client import export_client_data
+
+    entity, template = selection_entity
+    data = export_client_data(entity.client, facility, staff_user)
+    serialized = json.loads(json.dumps(data))
+    assert len(serialized["events"]) == 1
+    event = serialized["events"][0]
+    assert event["data"][template.slug] == ["a", "b"]
+    assert type(event["data"][template.slug]) is list
+    assert "First label" not in json.dumps(event["data"])
+    assert "__encrypted__" not in json.dumps(event["data"])
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "selection_entity", [(kind, False, True) for kind in ("client", "case", "event")], indirect=True
+)
+def test_article_15_pdf_uses_readable_selection_labels(selection_entity, facility, staff_user):
+    from core.services.client.export import export_client_data_pdf, render_client_export_html
+
+    entity, _template = selection_entity
+    person = entity if entity._meta.model_name == "client" else entity.client
+    html = render_client_export_html(person, facility, staff_user)
+    assert "First label" in html
+    assert "Second label" in html
+    assert "Unused label" not in html
+    assert "[&#x27;a&#x27;, &#x27;b&#x27;]" not in html
+    assert "__encrypted__" not in html
+    assert export_client_data_pdf(person, facility, staff_user).startswith(b"%PDF")
