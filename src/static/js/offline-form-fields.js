@@ -23,12 +23,17 @@
 (function () {
     "use strict";
 
+    // Field slugs may match Object.prototype names; only own values count (Refs #2520).
+    function getFieldValue(data, slug) {
+        return data && Object.hasOwn(data, slug) ? data[slug] : undefined;
+    }
+
     // Refs #1519: 1:1 aus offline-client-view.js `_fieldDescriptor(f, ev)`
     // extrahiert. `fileNote` ersetzt `this._fileNote` (dritter Parameter).
     function fieldDescriptor(f, ev, fileNote) {
         const t = f.field_type;
         const isFile = t === "file";
-        const cur = ev.data_fields ? ev.data_fields[f.slug] : null;
+        const cur = getFieldValue(ev.data_fields, f.slug) ?? null;
         return {
             slug: f.slug,
             name: f.name,
@@ -69,11 +74,11 @@
     // Refs #1519: 1:1 aus der skip-isFile-Schleife in offline-client-view.js
     // `saveCreate()` extrahiert.
     function buildFormData(fields, values) {
-        const formData = {};
+        const formData = Object.create(null);
         for (const f of fields) {
             // FILE-Felder sind offline nicht erfassbar (kein Blob im Cache).
             if (f.isFile) continue;
-            formData[f.slug] = values[f.slug];
+            formData[f.slug] = getFieldValue(values, f.slug);
         }
         return formData;
     }
@@ -257,7 +262,7 @@
     function formatValue(v, options) {
         if (v === null || v === undefined) return "";
         if (Array.isArray(v)) {
-            const labels = new Map((options || []).map((option) => [option.value, option.label]));
+            const labels = new Map((Array.isArray(options) ? options : []).map((option) => [option.value, option.label]));
             return v.map((value) => labels.has(value) ? labels.get(value) : String(value)).join("\n");
         }
         if (typeof v === "object") {
@@ -268,6 +273,7 @@
     }
 
     window.offlineFormFields = {
+        getFieldValue: getFieldValue,
         fieldDescriptor: fieldDescriptor,
         initialValue: initialValue,
         buildFormData: buildFormData,

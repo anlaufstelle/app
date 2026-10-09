@@ -88,3 +88,58 @@ describe("Selection conflict rendering and resolution", () => {
         expect(component.resolved).toBe(true);
     });
 });
+
+
+describe("Inherited field slugs", () => {
+    const slugs = ["constructor", "__proto__", "toString", "hasOwnProperty"];
+
+    it.each(slugs)("keeps the orphan conflict form visible for %s", async (slug) => {
+        record.data.formData = {};
+        record.data.serverState.data_json = { [slug]: ["a", "b", "a"] };
+        record.data.serverState.field_options = {};
+        const component = factory();
+        component.eventPk = record.pk;
+        await component.load();
+        expect(component.showForm).toBe(true);
+        expect(component.error).toBe("");
+        expect(component.diffRows).toEqual([{ key: slug, localFmt: "", serverFmt: "a\nb\na", hasDiff: true, diffClass: "bg-yellow-50" }]);
+        expect(component.serverData[slug]).toEqual(["a", "b", "a"]);
+    });
+
+    it.each(slugs)("ignores inherited label metadata for %s", async (slug) => {
+        record.data.formData = { [slug]: ["a"] };
+        record.data.serverState.data_json = { [slug]: ["b"] };
+        record.data.serverState.field_options = Object.create({ [slug]: options });
+        window.offlineStore.getOfflineEvent = vi.fn(async () => record);
+        const component = factory();
+        component.eventPk = record.pk;
+        await component.load();
+        expect(component.showForm).toBe(true);
+        expect(component.diffRows[0]).toMatchObject({ localFmt: "a", serverFmt: "b" });
+    });
+
+    it.each([null, {}, "invalid", 7])("falls back to raw slugs for non-array metadata %j", async (metadata) => {
+        record.data.serverState.field_options.selection = metadata;
+        const component = factory();
+        component.eventPk = record.pk;
+        await component.load();
+        expect(component.showForm).toBe(true);
+        expect(component.diffRows.find((row) => row.key === "selection")).toMatchObject({ localFmt: "b\na\nb", serverFmt: "a\nc" });
+    });
+
+    it.each(slugs)("uses own option metadata and replays the chosen array for %s", async (slug) => {
+        record.data.formData = { [slug]: ["b", "a", "b"] };
+        record.data.serverState.data_json = { [slug]: ["a", "c"] };
+        record.data.serverState.field_options = { [slug]: options };
+        const component = factory();
+        component.eventPk = record.pk;
+        await component.load();
+        expect(component.showForm).toBe(true);
+        expect(component.diffRows[0]).toMatchObject({ localFmt: "Second label\nFirst label\nSecond label", serverFmt: "First label\nInactive label" });
+        component.perFieldChoice[slug] = "server";
+        await component.keepMerged();
+        const replayed = window.offlineEdit.replayModifiedEvent.mock.calls[0][0];
+        expect(JSON.parse(JSON.stringify(replayed.data.formData))).toEqual({ [slug]: ["a", "c"] });
+        expect(component.resolved).toBe(true);
+    });
+});

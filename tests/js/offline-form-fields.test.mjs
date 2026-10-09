@@ -197,3 +197,18 @@ describe("Selection arrays across offline form initialization and submission", (
         },
     );
 });
+
+
+describe("Own field slug values", () => {
+    it.each(["constructor", "__proto__", "toString", "hasOwnProperty"])("preserves %s in submitted JSON", (slug) => {
+        const result = helpers.buildFormData([{ slug, isFile: false }], { [slug]: ["a", "b", "a"] });
+        expect(JSON.parse(JSON.stringify(result))).toEqual({ [slug]: ["a", "b", "a"] });
+    });
+
+    it.each(["constructor", "__proto__", "toString", "hasOwnProperty"])("ignores inherited form values for %s", (slug) => {
+        const result = helpers.buildFormData([{ slug, isFile: false }], {});
+        expect(result[slug]).toBeUndefined();
+        const desc = helpers.fieldDescriptor({ slug, field_type: "file" }, { data_fields: {} }, (value) => value);
+        expect(desc.fileNote).toBeNull();
+    });
+});

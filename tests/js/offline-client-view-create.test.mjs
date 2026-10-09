@@ -101,3 +101,25 @@ describe("Offline-Akten-Create", () => {
         root.remove();
     });
 });
+
+
+describe("Inherited field slugs in offline editing", () => {
+    it.each(["constructor", "__proto__", "toString", "hasOwnProperty"])("preserves %s when editing and creating", async (slug) => {
+        const root = componentRoot();
+        const component = makeComponent(root);
+        const field = { slug, name: "Selection", field_type: "multi_select" };
+        component.data.documentTypes = [{ pk: "doctype-1", fields: [field] }];
+        const event = { pk: "event-1", document_type_pk: "doctype-1", data_fields: { [slug]: ["a", "b", "a"] } };
+        component.startEdit(event);
+        expect(JSON.parse(JSON.stringify(component.editValues))).toEqual({ [slug]: ["a", "b", "a"] });
+        window.offlineEdit = { markEventModified: vi.fn(async () => ({ pk: event.pk })) };
+        await component.saveEdit(event);
+        expect(JSON.parse(JSON.stringify(window.offlineEdit.markEventModified.mock.calls[0][1]))).toEqual({ [slug]: ["a", "b", "a"] });
+        component.startEdit({ ...event, data_fields: {} });
+        expect(component.editValues[slug]).toEqual([]);
+        component.createDocTypePk = "doctype-1";
+        component.onCreateDocTypeChange();
+        expect(JSON.parse(JSON.stringify(component.editValues))).toEqual({ [slug]: [] });
+        root.remove();
+    });
+});

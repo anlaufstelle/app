@@ -136,7 +136,7 @@
                 const fields = (dt && dt.fields) || [];
                 const emptyEv = { data_fields: {} };
                 const descriptors = [];
-                const values = {};
+                const values = Object.create(null);
                 for (const f of fields) {
                     const desc = window.offlineFormFields.fieldDescriptor(f, emptyEv, window.offlineFormFields.fileNote);
                     descriptors.push(desc);

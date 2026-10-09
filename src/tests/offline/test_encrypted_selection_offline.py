@@ -214,3 +214,48 @@ def test_selection_conflict_resolution_replays_arrays(client, staff_user, encryp
     result = safe_decrypt(event.data_json[template.slug])
     assert result == selected
     assert type(result) is list
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("slug", "missing_template"),
+    [("constructor", False), ("constructor", True), ("__proto__", True), ("toString", True), ("hasOwnProperty", True)],
+)
+@pytest.mark.parametrize("role", ["staff_user", "lead_user"])
+def test_conflict_view_preserves_inherited_named_keys(
+    client, request, encrypted_offline_event, slug, missing_template, role
+):
+    event, template = encrypted_offline_event
+    if not missing_template:
+        template = FieldTemplate.objects.create(
+            facility=event.facility,
+            name="Inherited selection",
+            slug=slug,
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
+            is_encrypted=True,
+            options_json=template.options_json,
+        )
+        DocumentTypeField.objects.create(document_type=event.document_type, field_template=template)
+    values = ["a", "b", "a"]
+    event.data_json = {slug: encrypt_field(values)}
+    event.save()
+    event.refresh_from_db()
+    marker = event.data_json[slug]
+    client.force_login(request.getfixturevalue(role))
+
+    state = _conflict(client, event)
+
+    if missing_template and role == "staff_user":
+        assert slug not in state["data_json"]
+        assert slug not in state["field_options"]
+    else:
+        assert state["data_json"][slug] == values
+        assert type(state["data_json"][slug]) is list
+        if missing_template:
+            assert slug not in state["field_options"]
+        else:
+            assert state["field_options"][slug] == [
+                {"value": option["slug"], "label": option["label"]} for option in template.options_json
+            ]
+    event.refresh_from_db()
+    assert event.data_json[slug] == marker

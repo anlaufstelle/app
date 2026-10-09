@@ -64,10 +64,11 @@
     // Herausgezogen aus ``keepMerged`` als testbare Export-Oberflaeche
     // (Refs #1479, TST-01) — verhaltensidentisch.
     function _mergeByChoice(diffKeys, perFieldChoice, localData, serverData) {
-        const merged = {};
+        const merged = Object.create(null);
+        const fieldValue = window.offlineFormFields.getFieldValue;
         for (const key of diffKeys) {
-            const choice = (perFieldChoice && perFieldChoice[key]) || "local";
-            merged[key] = choice === "server" ? (serverData || {})[key] : (localData || {})[key];
+            const choice = fieldValue(perFieldChoice, key) || "local";
+            merged[key] = fieldValue(choice === "server" ? serverData : localData, key);
         }
         return merged;
     }
@@ -84,7 +85,7 @@
             localData: {},
             serverData: {},
             mergedData: {},
-            perFieldChoice: {}, // slug -> "local" | "server"
+            perFieldChoice: Object.create(null), // slug -> "local" | "server"
             documentTypeName: "",
             updatedAt: "",
             resolving: false,
@@ -138,6 +139,7 @@
                     const serverState = envelope.serverState || {};
                     this.serverData = serverState.data_json || {};
                     const fieldOptions = serverState.field_options || {};
+                    const fieldValue = window.offlineFormFields.getFieldValue;
                     this.documentTypeName = serverState.document_type_name || envelope.documentTypeName || "";
                     this.updatedAt = serverState.updated_at || "";
                     this.diffKeys = _diffKeys(this.localData, this.serverData);
@@ -145,17 +147,21 @@
                     // unchanged fields the choice is irrelevant but we
                     // seed `server` so "keep server" is a single-click
                     // shortcut to reset everything.
+                    this.perFieldChoice = Object.create(null);
                     for (const key of this.diffKeys) {
                         this.perFieldChoice[key] =
-                            this.localData[key] !== this.serverData[key] ? "local" : "server";
+                            fieldValue(this.localData, key) !== fieldValue(this.serverData, key) ? "local" : "server";
                     }
                     // CSP-konforme Vorab-Aufbereitung der Diff-Tabelle (Refs #693).
                     this.diffRows = this.diffKeys.map((key) => {
-                        const hasDiff = this.localData[key] !== this.serverData[key];
+                        const localValue = fieldValue(this.localData, key);
+                        const serverValue = fieldValue(this.serverData, key);
+                        const options = fieldValue(fieldOptions, key);
+                        const hasDiff = localValue !== serverValue;
                         return {
                             key: key,
-                            localFmt: _formatValue(this.localData[key], fieldOptions[key]),
-                            serverFmt: _formatValue(this.serverData[key], fieldOptions[key]),
+                            localFmt: _formatValue(localValue, options),
+                            serverFmt: _formatValue(serverValue, options),
                             hasDiff: hasDiff,
                             diffClass: hasDiff ? "bg-yellow-50" : "",
                         };

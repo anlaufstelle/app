@@ -368,12 +368,12 @@
                 const dt = this._findDocType(ev.document_type_pk);
                 const fields = (dt && dt.fields) || [];
                 const descriptors = [];
-                const values = {};
+                const values = Object.create(null);
                 for (const f of fields) {
                     const desc = window.offlineFormFields.fieldDescriptor(f, ev, window.offlineFormFields.fileNote);
                     descriptors.push(desc);
                     if (!desc.isFile) {
-                        const cur = ev.data_fields ? ev.data_fields[f.slug] : undefined;
+                        const cur = window.offlineFormFields.getFieldValue(ev.data_fields, f.slug);
                         values[f.slug] = window.offlineFormFields.initialValue(f.field_type, cur);
                     }
                 }
@@ -434,7 +434,7 @@
                 const fields = (dt && dt.fields) || [];
                 const emptyEv = { data_fields: {} };
                 const descriptors = [];
-                const values = {};
+                const values = Object.create(null);
                 for (const f of fields) {
                     const desc = window.offlineFormFields.fieldDescriptor(f, emptyEv, window.offlineFormFields.fileNote);
                     descriptors.push(desc);
@@ -533,8 +533,8 @@
                         this.editError = "Offline-Editor nicht verfügbar.";
                         return;
                     }
-                    const formData = {};
-                    const fileMarkers = {};
+                    const formData = Object.create(null);
+                    const fileMarkers = Object.create(null);
                     for (const f of this.editFields) {
                         if (f.isFile) {
                             // FILE-Felder sind offline nicht editierbar (der Server
@@ -542,11 +542,11 @@
                             // Den vorhandenen Anhang-Marker NUR fuer die Anzeige
                             // bewahren (Refs #1111) — NICHT in formData, damit der
                             // Replay ihn nicht als Formularwert mitschickt.
-                            const cur = ev.data_fields ? ev.data_fields[f.slug] : null;
+                            const cur = window.offlineFormFields.getFieldValue(ev.data_fields, f.slug) ?? null;
                             if (cur) fileMarkers[f.slug] = cur;
                             continue;
                         }
-                        formData[f.slug] = this.editValues[f.slug];
+                        formData[f.slug] = window.offlineFormFields.getFieldValue(this.editValues, f.slug);
                     }
                     const dt = this._findDocType(ev.document_type_pk);
                     const record = await window.offlineEdit.markEventModified(ev.pk, formData, {

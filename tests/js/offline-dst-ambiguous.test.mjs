@@ -149,3 +149,16 @@ describe("isAmbiguousWallClock", () => {
         root.remove();
     });
 });
+
+
+describe("Own field values in standalone offline creation", () => {
+    it.each(["constructor", "__proto__", "toString", "hasOwnProperty"])("preserves the inherited field slug %s in submitted JSON", (slug) => {
+        const component = eventCreateFactory();
+        component.facility = { documentTypes: [{ pk: "doctype-1", fields: [{ slug, field_type: "multi_select" }] }] };
+        component.createDocTypePk = "doctype-1";
+        component.onCreateDocTypeChange();
+        expect(JSON.parse(JSON.stringify(component.editValues))).toEqual({ [slug]: [] });
+        component.editValues[slug] = ["a", "b", "a"];
+        expect(JSON.parse(JSON.stringify(helpers.buildFormData(component.editFields, component.editValues)))).toEqual({ [slug]: ["a", "b", "a"] });
+    });
+});
