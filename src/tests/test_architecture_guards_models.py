@@ -1028,6 +1028,17 @@ class TestTenantModelScopeGuard:
         "file_vault/rotation.py:_reencrypt_shift_handover_notes:ShiftHandoverNote": (
             "Schluesselrotation, Schichtnotiz-Zweig (Refs #2042) — gleiche Begruendung."
         ),
+        "file_vault/file_rotation.py:rotate_files:Attachment": (
+            "File re-encryption rewrites ALL attachment files of the installation (the key "
+            "ring is deployment-wide); ops path behind the maintenance role, no request input. "
+            "The optional facility filter only narrows the run (Refs #2526)."
+        ),
+        "file_vault/file_rotation.py:verify_files:Attachment": (
+            "Primary-key-only verification of all referenced attachment files — same reasoning."
+        ),
+        "file_vault/file_rotation.py:_rotate_attachment:Attachment": (
+            "Row lock on the attachment being rotated (pk and facility re-checked after the lock) — same reasoning."
+        ),
         # --- (4) Auth-Grenze: Lockout/Recovery vor der Facility-Wahl --------
         "security/lockout_recovery.py:_latest_failed_anchor:AuditLog": (
             "Fehlversuchs-Anker zum bereits aufgeloesten ``user`` — die Sperre gilt am "
