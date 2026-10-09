@@ -193,3 +193,15 @@ def test_query_count_is_constant_for_page_size(staff_user, sample_event, django_
         with django_assert_num_queries(7):
             response = EventListView.as_view(page_size=page_size)(request)
             assert response.status_code == 200
+
+
+def test_creator_filter_accepts_user_primary_key(client, staff_user, admin_user, sample_event):
+    other = Event.objects.create(
+        facility=sample_event.facility,
+        document_type=sample_event.document_type,
+        occurred_at=sample_event.occurred_at,
+        created_by=admin_user,
+    )
+    response = list_response(client, staff_user, {"created_by": str(admin_user.pk)})
+    assert event_ids(response) == {other.pk}
+    assert response.context["filters"]["created_by"] == str(admin_user.pk)

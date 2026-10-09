@@ -73,7 +73,7 @@ def resolve_event_list_filters(params, facility, user, *, today=None, options=No
         choices["case"] = "cases"
     for key, option_key in choices.items():
         try:
-            identifier = UUID(params.get(key, ""))
+            identifier = int(params.get(key, "")) if key == "created_by" else UUID(params.get(key, ""))
         except (ValueError, TypeError, AttributeError):
             continue
         if any(item.pk == identifier for item in options[option_key]):
