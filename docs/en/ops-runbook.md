@@ -2323,11 +2323,7 @@ Operational rules that follow from this:
   hours** with low write load — not during peak time. This does not apply to the
   **interactive** Art. 17 action: it no longer takes any DDL lock in the web
   process (see above); its history redaction rides along with the nightly run.
-- `reencrypt_fields` re-encrypts database columns only, not the contents of the
-  file attachments under `MEDIA_ROOT`. Keep the old key in the `ENCRYPTION_KEYS`
-  ring even after a successful run, as long as attachments encrypted with it
-  exist -- otherwise they become unreadable
-  ([admin guide § 2.9 "Key Rotation"](admin-guide.md#key-rotation-encryption_keys)).
+- Before key removal, complete field and file rotation plus backup expiry using the procedure below; a successful `reencrypt_fields` run alone is insufficient.
 - Set a **`lock_timeout` as a role/session default** for the maintenance/owner
   role, so that a blocked `ALTER TABLE` does not wait indefinitely,
   but aborts fail-loud and stays retryable:
@@ -2342,6 +2338,24 @@ Operational rules that follow from this:
   runs that may run synchronously in the request into spurious hard fails, and a
   solid regression test would need two competing sessions (flaky in CI). The
   timeout is therefore operationally adjustable (ADR-033 § Consequences).
+
+#### File rotation and old-key removal
+
+One `ENCRYPTION_KEYS` ring serves **the entire installation**, not each facility. Prepend the new key, retain old keys initially, and recreate every process that uses the keys with the new ring. Plain `docker compose restart` does not reload changed `.env` values; for the shipped services use `docker compose -f docker-compose.prod.yml up -d --force-recreate web cron`. Fresh maintenance containers read the current configuration. Do not put keys into shell logs or reports.
+
+**Required sequence** (#2526):
+
+1. **Field rotation:** `docker compose -f docker-compose.prod.yml run --rm maintenance reencrypt_fields`. Repeat skipped-row or TOTP retry warnings until none remain; resolve errors first. Exit 0 with a contention warning is insufficient.
+2. **File rotation:** `docker compose -f docker-compose.prod.yml run --rm maintenance reencrypt_files`. This traverses all referenced Attachment versions, including soft-deleted and superseded versions. `--dry-run` checks without changing ciphertext/progress; `--batch-size 200` controls DB iteration, not plaintext buffering. `--facility <UUID>` restricts processing to one facility and does not prove installation-wide key removability.
+3. **Unfiltered primary-only verification:** `docker compose -f docker-compose.prod.yml run --rm maintenance reencrypt_files --verify`, **without `--facility`**. Every referenced version is fully authenticated with the first key alone, including the chunk binding provided by its file format. Missing keys, missing referenced files, old or damaged ciphertext cause a nonzero exit with UUID/reason or a run diagnostic. Retain old keys, resolve the cause, rotate and verify again. Verification changes neither ciphertext nor manifest, but writes an audit summary.
+4. **Resolve files outside its scope and let backups expire:** ImportJob temporary files under `imports/` are not Attachments and are neither rotated nor verified. Complete or abort pending imports through the regular import workflow before removal; also check existing import metadata and encrypted remnants for key dependencies. Encrypted `.rotate-*.tmp` staging remnants without surviving DB rows are not collected globally; full verification does not report them. Inspect such remnants in a maintenance window and clean up only after establishing their ownership; never treat them as rotation evidence. Keep the old key while any needed ciphertext still depends on it. Then **every local and off-site backup set containing old ciphertext must actually expire**: the longest local tier uses `-mtime +90` (91 full days, deletion at the next successful rotation run); off-site expiry follows the maximum retention configured at the destination, including versions/object locks and other copies. The current `backup.sh` sync does not delete remote copies; without effective destination retention no expiry has been established. Rotation does not change existing backups. Keep keys for retained older sets in separate escrow ([Disaster recovery § 4](disaster-recovery.md)).
+5. **Remove the old key:** Only remove it from `ENCRYPTION_KEYS` after these checks. Do not remove it while old backup sets remain or import/staging dependencies are unresolved. Elapsed time does not replace checking which sets actually remain.
+6. **Restart with the new configuration:** recreate every process that uses the keys (`docker compose -f docker-compose.prod.yml up -d --force-recreate web cron`; handle any additional custom processes accordingly). Processes that have not restarted may still use the previous ring.
+7. **Verify again without filtering:** `docker compose -f docker-compose.prod.yml run --rm maintenance reencrypt_files --verify`, without `--facility`, now using the shortened ring. Acceptance requires exit 0, no errors, readable domain fields/attachments and working MFA. File verification alone proves no field/import/backup readability. On failure restore the required ring, recreate processes with it, and resolve the cause.
+
+**Interruption and concurrency:** Only ciphertext goes into the temporary file in the same directory, never temporary plaintext. The service synchronises the file, replaces it atomically with `os.replace` and synchronises the directory. Interruption before replacement leaves the original intact; after replacement the new file may exist before manifest/audit completion. Resolve the cause and repeat the command: already-primary files remain byte-identical, and each actual file is authenticated again. `MEDIA_ROOT/.reencrypt-files.jsonl` records **progress, not integrity**; a torn final line is repaired, invalid complete records cause a hard error. An installation-wide run lock rejects parallel rotations; row/file locks protect the short replacement window against cooperating deletion paths. A deleted DB row is not resurrected; changed references/file snapshots are not blindly overwritten. This does not guarantee protection against arbitrary external file tampering or hardware faults. Pause writes and background writers for key retirement so verification and the decision concern the same dataset.
+
+**Role and audit:** `reencrypt_files` requires `ANLAUFSTELLE_PROCESS_ROLE=maintenance` and a PostgreSQL SUPERUSER or BYPASSRLS role; the maintenance service supplies that context. An application `super_admin` does not substitute for it; invocation in `web` fails before file/manifest changes. Authorised returning runs attempt a `FILE_REENCRYPTION_COMPLETED` summary containing counts, duration, options and error status, without filenames/contents. A kill can prevent the final summary; absent audit proves neither success nor unchanged files. Audit write failure is a hard command error: keep keys and repeat verification.
 
 **Verification** (the app role CANNOT disable triggers, the owner role can):
 
@@ -3231,5 +3245,5 @@ Check lock-file drift     make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-05 -->
-<!-- source-hash: b8a58a6f4433eccc9650be3c8410a8091c3de0e7 -->
+<!-- translation-date: 2026-10-09 -->
+<!-- source-hash: b11ad46a91e96d9818e4d187cd5ccfec630ce236 -->
