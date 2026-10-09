@@ -265,26 +265,26 @@
                                                     <p class="text-xs text-ink-muted italic" x-text="field.fileNote"></p>
                                                 </template>
                                                 <template x-if="field.isPlainInput">
-                                                    <input :type="field.inputType" x-model="editValues[field.slug]"
+                                                    <input :type="field.inputType" x-model="field.value"
                                                            :id="'offline-edit-field-' + field.slug"
                                                            :required="field.isRequired"
                                                            class="w-full rounded-md border-subtle text-sm"
                                                            :data-testid="'offline-edit-input-' + field.slug">
                                                 </template>
                                                 <template x-if="field.isTextarea">
-                                                    <textarea x-model="editValues[field.slug]" :required="field.isRequired" rows="3"
+                                                    <textarea x-model="field.value" :required="field.isRequired" rows="3"
                                                               :id="'offline-edit-field-' + field.slug"
                                                               class="w-full rounded-md border-subtle text-sm"
                                                               :data-testid="'offline-edit-input-' + field.slug"></textarea>
                                                 </template>
                                                 <template x-if="field.isBoolean">
-                                                    <input type="checkbox" x-model="editValues[field.slug]"
+                                                    <input type="checkbox" x-model="field.value"
                                                            :id="'offline-edit-field-' + field.slug"
                                                            class="rounded border-subtle text-accent"
                                                            :data-testid="'offline-edit-input-' + field.slug">
                                                 </template>
                                                 <template x-if="field.isSelect">
-                                                    <select x-model="editValues[field.slug]" :required="field.isRequired"
+                                                    <select x-model="field.value" :required="field.isRequired"
                                                             :id="'offline-edit-field-' + field.slug"
                                                             class="w-full rounded-md border-subtle text-sm"
                                                             :data-testid="'offline-edit-input-' + field.slug">
@@ -295,7 +295,7 @@
                                                     </select>
                                                 </template>
                                                 <template x-if="field.isMultiSelect">
-                                                    <select multiple x-model="editValues[field.slug]"
+                                                    <select multiple x-model="field.value"
                                                             :id="'offline-edit-field-' + field.slug"
                                                             class="w-full rounded-md border-subtle text-sm"
                                                             :data-testid="'offline-edit-input-' + field.slug">

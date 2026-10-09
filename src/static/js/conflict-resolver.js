@@ -85,7 +85,6 @@
             localData: {},
             serverData: {},
             mergedData: {},
-            perFieldChoice: Object.create(null), // slug -> "local" | "server"
             documentTypeName: "",
             updatedAt: "",
             resolving: false,
@@ -143,16 +142,7 @@
                     this.documentTypeName = serverState.document_type_name || envelope.documentTypeName || "";
                     this.updatedAt = serverState.updated_at || "";
                     this.diffKeys = _diffKeys(this.localData, this.serverData);
-                    // Default: for each differing field prefer local; for
-                    // unchanged fields the choice is irrelevant but we
-                    // seed `server` so "keep server" is a single-click
-                    // shortcut to reset everything.
-                    this.perFieldChoice = Object.create(null);
-                    for (const key of this.diffKeys) {
-                        this.perFieldChoice[key] =
-                            fieldValue(this.localData, key) !== fieldValue(this.serverData, key) ? "local" : "server";
-                    }
-                    // CSP-konforme Vorab-Aufbereitung der Diff-Tabelle (Refs #693).
+                    // Bind fixed row properties: CSP rejects some computed field slugs (Refs #2520).
                     this.diffRows = this.diffKeys.map((key) => {
                         const localValue = fieldValue(this.localData, key);
                         const serverValue = fieldValue(this.serverData, key);
@@ -160,6 +150,7 @@
                         const hasDiff = localValue !== serverValue;
                         return {
                             key: key,
+                            choice: hasDiff ? "local" : "server",
                             localFmt: _formatValue(localValue, options),
                             serverFmt: _formatValue(serverValue, options),
                             hasDiff: hasDiff,
@@ -216,7 +207,8 @@
             async keepMerged() {
                 this.resolving = true;
                 try {
-                    const merged = _mergeByChoice(this.diffKeys, this.perFieldChoice, this.localData, this.serverData);
+                    const choices = Object.fromEntries(this.diffRows.map((row) => [row.key, row.choice]));
+                    const merged = _mergeByChoice(this.diffKeys, choices, this.localData, this.serverData);
                     const record = await window.offlineStore.getOfflineEvent(this.eventPk);
                     if (!record) return;
                     const data = record.data || {};

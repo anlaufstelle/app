@@ -65,7 +65,9 @@ describe("Selection conflict rendering and resolution", () => {
         const component = factory();
         component.eventPk = record.pk;
         await component.load();
-        component.perFieldChoice = { selection: choice === "server" ? "server" : "local", other: "server" };
+        for (const row of component.diffRows) {
+            row.choice = row.key === "selection" && choice !== "server" ? "local" : "server";
+        }
         if (choice === "local") await component.keepLocal();
         else await component.keepMerged();
         const replayed = window.offlineEdit.replayModifiedEvent.mock.calls[0][0];
@@ -102,7 +104,7 @@ describe("Inherited field slugs", () => {
         await component.load();
         expect(component.showForm).toBe(true);
         expect(component.error).toBe("");
-        expect(component.diffRows).toEqual([{ key: slug, localFmt: "", serverFmt: "a\nb\na", hasDiff: true, diffClass: "bg-yellow-50" }]);
+        expect(component.diffRows).toEqual([{ key: slug, choice: "local", localFmt: "", serverFmt: "a\nb\na", hasDiff: true, diffClass: "bg-yellow-50" }]);
         expect(component.serverData[slug]).toEqual(["a", "b", "a"]);
     });
 
@@ -136,7 +138,7 @@ describe("Inherited field slugs", () => {
         await component.load();
         expect(component.showForm).toBe(true);
         expect(component.diffRows[0]).toMatchObject({ localFmt: "Second label\nFirst label\nSecond label", serverFmt: "First label\nInactive label" });
-        component.perFieldChoice[slug] = "server";
+        component.diffRows[0].choice = "server";
         await component.keepMerged();
         const replayed = window.offlineEdit.replayModifiedEvent.mock.calls[0][0];
         expect(JSON.parse(JSON.stringify(replayed.data.formData))).toEqual({ [slug]: ["a", "c"] });

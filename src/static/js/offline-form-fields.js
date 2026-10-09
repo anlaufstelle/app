@@ -23,9 +23,24 @@
 (function () {
     "use strict";
 
-    // Field slugs may match Object.prototype names; only own values count (Refs #2520).
+    // Read own descriptors: reactive proxies intercept `hasOwnProperty` lookups (Refs #2520).
     function getFieldValue(data, slug) {
-        return data && Object.hasOwn(data, slug) ? data[slug] : undefined;
+        const property = data && Object.getOwnPropertyDescriptor(data, slug);
+        return property && Object.hasOwn(property, "value") ? property.value : property?.get?.call(data);
+    }
+
+    // Keep slug lookups in JavaScript; Alpine CSP binds the fixed `value` property (Refs #2520).
+    function bindFieldValue(field, values) {
+        Object.defineProperty(field, "value", {
+            enumerable: true,
+            get() {
+                return getFieldValue(values, field.slug);
+            },
+            set(value) {
+                values[field.slug] = value;
+            },
+        });
+        return field;
     }
 
     // Refs #1519: 1:1 aus offline-client-view.js `_fieldDescriptor(f, ev)`
@@ -274,6 +289,7 @@
 
     window.offlineFormFields = {
         getFieldValue: getFieldValue,
+        bindFieldValue: bindFieldValue,
         fieldDescriptor: fieldDescriptor,
         initialValue: initialValue,
         buildFormData: buildFormData,

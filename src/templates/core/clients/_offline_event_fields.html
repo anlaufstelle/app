@@ -2,7 +2,7 @@
 {# Refs #1521 (#1499): pk-loser Ereignis-Feld-Loop, geteilt zwischen der #}
 {# Offline-Erfassung im Klient-Detail (offline_detail.html) UND der pk-losen  #}
 {# Event-Create-Shell (core/events/offline_create.html). Bindet an editFields  #}
-{# (Deskriptoren aus window.offlineFormFields.fieldDescriptor) und editValues.  #}
+{# Field descriptors bind their fixed value property to editValues (Refs #2520). #}
 {# Verhaltensneutral aus offline_detail.html extrahiert (Create-Form-Variante:  #}
 {# FILE-Felder zeigen einen statischen Hinweis, testid-Praefix offline-create). #}
 <template x-for="field in editFields" :key="field.slug">
@@ -14,23 +14,23 @@
             <p class="text-xs text-ink-muted italic">{% trans "Datei offline nicht erfassbar — später nachreichen." %}</p>
         </template>
         <template x-if="field.isPlainInput">
-            <input :type="field.inputType" x-model="editValues[field.slug]" :required="field.isRequired"
+            <input :type="field.inputType" x-model="field.value" :required="field.isRequired"
                    :id="'offline-create-field-' + field.slug"
                    :min="field.minValue" :max="field.maxValue"
                    class="w-full rounded-md border-subtle text-sm" :data-testid="'offline-create-input-' + field.slug">
         </template>
         <template x-if="field.isTextarea">
-            <textarea x-model="editValues[field.slug]" :required="field.isRequired" rows="3"
+            <textarea x-model="field.value" :required="field.isRequired" rows="3"
                       :id="'offline-create-field-' + field.slug"
                       class="w-full rounded-md border-subtle text-sm" :data-testid="'offline-create-input-' + field.slug"></textarea>
         </template>
         <template x-if="field.isBoolean">
-            <input type="checkbox" x-model="editValues[field.slug]"
+            <input type="checkbox" x-model="field.value"
                    :id="'offline-create-field-' + field.slug"
                    class="rounded border-subtle text-accent" :data-testid="'offline-create-input-' + field.slug">
         </template>
         <template x-if="field.isSelect">
-            <select x-model="editValues[field.slug]" :required="field.isRequired"
+            <select x-model="field.value" :required="field.isRequired"
                     :id="'offline-create-field-' + field.slug"
                     class="w-full rounded-md border-subtle text-sm" :data-testid="'offline-create-input-' + field.slug">
                 <option value="">{% trans "— Bitte auswählen —" %}</option>
@@ -40,7 +40,7 @@
             </select>
         </template>
         <template x-if="field.isMultiSelect">
-            <select multiple x-model="editValues[field.slug]"
+            <select multiple x-model="field.value"
                     :id="'offline-create-field-' + field.slug"
                     class="w-full rounded-md border-subtle text-sm" :data-testid="'offline-create-input-' + field.slug">
                 <template x-for="opt in field.options" :key="opt.value">

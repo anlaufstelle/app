@@ -61,7 +61,7 @@
                                 <td class="px-4 py-2 text-ink whitespace-pre-wrap" x-text="row.localFmt" data-testid="conflict-local"></td>
                                 <td class="px-4 py-2 text-ink whitespace-pre-wrap" x-text="row.serverFmt" data-testid="conflict-server"></td>
                                 <td class="px-4 py-2">
-                                    <select x-model="perFieldChoice[row.key]" aria-label="{% trans 'Version für dieses Feld wählen' %}"
+                                    <select x-model="row.choice" aria-label="{% trans 'Version für dieses Feld wählen' %}"
                                             class="text-xs rounded border-subtle" data-testid="conflict-choice">
                                         <option value="local">{% trans "Meine" %}</option>
                                         <option value="server">{% trans "Server" %}</option>

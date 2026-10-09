@@ -371,7 +371,7 @@
                 const values = Object.create(null);
                 for (const f of fields) {
                     const desc = window.offlineFormFields.fieldDescriptor(f, ev, window.offlineFormFields.fileNote);
-                    descriptors.push(desc);
+                    descriptors.push(window.offlineFormFields.bindFieldValue(desc, values));
                     if (!desc.isFile) {
                         const cur = window.offlineFormFields.getFieldValue(ev.data_fields, f.slug);
                         values[f.slug] = window.offlineFormFields.initialValue(f.field_type, cur);
@@ -437,7 +437,7 @@
                 const values = Object.create(null);
                 for (const f of fields) {
                     const desc = window.offlineFormFields.fieldDescriptor(f, emptyEv, window.offlineFormFields.fileNote);
-                    descriptors.push(desc);
+                    descriptors.push(window.offlineFormFields.bindFieldValue(desc, values));
                     if (!desc.isFile) values[f.slug] = window.offlineFormFields.initialValue(f.field_type, undefined);
                 }
                 this.editFields = descriptors;
