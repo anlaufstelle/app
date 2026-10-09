@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Solo-Demo ohne Zeitfenster** (#2506) — Die Beratungspraxis Lindenhof wird ohne Zeitfenster geseedet; die Zeitfenster der übrigen Demo-Einrichtungen bleiben erhalten.
 
+### Fixed
+
+- **Fußzeile zeigt die Version nur einmal** (#2532) — Die Source-Version entfällt neben dem Quellcode-Link, während die authentifizierte App-Version und der DSGVO-Paketfooter erhalten bleiben.
+
 ### Erforderliche Betreiber-Aktionen
 
 - Keine.

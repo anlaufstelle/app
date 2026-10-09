@@ -733,13 +733,12 @@ class TestAGPLFooter:
         assert b"https://git.example.org/fork/anlaufstelle" in response.content
         assert b"github.com/anlaufstelle" not in response.content
 
-    def test_source_code_version_truncated(self, client, staff_user, settings):
-        """Refs #1901: Versionsanzeige ist auth-gated -- nur eingeloggt sichtbar."""
+    def test_source_code_version_is_not_rendered_in_authenticated_footer(self, client, staff_user, settings):
+        """Refs #2532: the source version is retained for document footers only."""
         settings.SOURCE_CODE_VERSION = "abcdef1234567890"
         client.force_login(staff_user)
         response = client.get(reverse("core:zeitstrom"))
-        # truncatechars:8 -> "abcdef1…" (7 Zeichen + Ellipsis)
-        assert b"abcdef1" in response.content
+        assert b"abcdef1" not in response.content
 
     def test_source_code_version_hidden_on_login_page(self, client, db, settings):
         """Refs #1901: anonyme Login-Seite zeigt SOURCE_CODE_VERSION nicht (Fingerprinting)."""

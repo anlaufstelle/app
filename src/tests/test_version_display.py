@@ -28,6 +28,16 @@ class TestVersionFooter:
         content = response.content.decode()
         assert 'data-testid="app-version"' in content
 
+    def test_authenticated_footer_shows_source_link_and_only_app_version(self, client, staff_user, settings):
+        settings.SOURCE_CODE_VERSION = "abcdef1234567890"
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"))
+        content = response.content.decode()
+
+        assert "Quellcode" in content
+        assert content.count("abcdef1") == 0
+        assert content.count('data-testid="app-version"') == 1
+
     def test_login_page_shows_no_version(self, client):
         response = client.get(reverse("login"))
         assert 'data-testid="app-version"' not in response.content.decode()
@@ -269,7 +279,7 @@ class TestPublicFooterRendering:
         assert "Quellcode" in body
         assert 'data-testid="app-version"' in body
         assert 'data-testid="footer-help"' in body
-        assert "abcdef1" in body
+        assert "abcdef1" not in body
 
 
 @pytest.mark.django_db
@@ -390,4 +400,4 @@ class TestFooterVersionGateForPartiallyAuthenticatedSessions:
         assert response.status_code == 404
         body = response.content.decode()
         assert 'data-testid="app-version"' in body
-        assert self.SENTINEL[:7] in body
+        assert self.SENTINEL[:7] not in body

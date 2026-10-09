@@ -30,9 +30,6 @@
     <span aria-hidden="true" class="mx-1.5">·</span>
     {# AGPL §13: Source-Link fuer Network-Use-Disclosure. Refs #835: Forks/Self-Hoster MUESSEN SOURCE_CODE_URL setzen. #}
     <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
-    {% if footer_authenticated and session_fully_authenticated and SOURCE_CODE_VERSION %}
-    <span class="text-[12px] text-ink-muted">{{ SOURCE_CODE_VERSION|truncatechars:8 }}</span>
-    {% endif %}
     <span aria-hidden="true" class="mx-1.5">·</span>
     <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
     {% if footer_authenticated and session_fully_authenticated %}
