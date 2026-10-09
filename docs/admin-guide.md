@@ -1289,6 +1289,10 @@ Alle File-Downloads werden über den zentralen Helper [`safe_download_response`]
 
 ### 2.10 Offline-Modus & Streetwork (M6A)
 
+**Offline-Schlüssel und Widerrufsprüfung** (#2528). Der aus Passwort und Server-Salt abgeleitete non-extractable `CryptoKey` bleibt in der Browser-IndexedDB gespeichert und übersteht Tab-, Browser- und Geräteneustart. „Non-extractable“ verhindert den Export über WebCrypto; der Schutz des gespeicherten Schlüssels gegen Zugriff auf das Browserprofil hängt an **Geräteverschlüsselung und Bildschirmsperre**, die für Offline-Geräte verpflichtend sind. Beim Ableiten wird eine absolute Frist eingefroren: `session_absolute_hours` der Einrichtung (Vorgabe 12 Stunden). Aktivität und Navigation verlängern sie nicht. Die Anwendung prüft beim Laden, vor Entschlüsselung/Speicherung/Replay, bei Tab-Rückkehr und im 60-Sekunden-Intervall. Am Ablauf entzieht sie den Schlüssel und zeigt „Offline-Schlüssel abgelaufen — bitte online anmelden“; ungesendete Arbeit bleibt verschlüsselt erhalten und wird nach erneutem Online-Login mit unverändertem Passwort und Salt wieder lesbar. Das Leerlauffenster gilt zusätzlich. Fehlende oder ungültige Ablaufdaten sperren den Zugriff; Bundles ohne gültiges `expiresAt` gelten als abgelaufen. Ein beobachteter Rücksprung der Geräteuhr sperrt den Schlüssel; eine manipulierbare Geräteuhr bleibt dennoch ein Restrisiko. Bei ausgeschalteter Anwendung erfolgt kein Schlüsselentzug per Fernlöschung.
+
+Meldet die Widerrufsliste einen HTTP-/Netz-/Verarbeitungsfehler (auch 500/429), bleiben Queue- und Edit-Replay ausgesetzt: „Synchronisation wartet auf Widerrufsprüfung“. Der nächste Sync-Lauf prüft erneut; erst `ok` gibt den Replay frei. Die bestehenden Idempotenz-Schlüssel bleiben erhalten, und die Server-Gates (422 für widerrufene Personen, 409 für Statuskonflikte) bleiben verbindlich. Geräteverschlüsselung ersetzt diese Server-Prüfungen nicht.
+
 Für Außeneinsätze (z. B. Streetwork) bietet die Anlaufstelle einen **sicheren Offline-Modus** mit **client-seitiger** Ende-zu-Ende-Verschlüsselung aller auf dem Gerät zwischengespeicherten Daten. Refs #573, #576.
 
 #### Kryptographie-Design
@@ -1299,7 +1303,7 @@ Für Außeneinsätze (z. B. Streetwork) bietet die Anlaufstelle einen **sicheren
 | Storage | **IndexedDB**: Inhalte als AES-GCM-Chiffrat; Ordnungsmerkmale (Datensatz- und Personen-IDs, Bearbeitungsstatus, Zeitstempel, Ziel-Adressen der Sende-Warteschlange) im Klartext; der non-extractable Schlüssel liegt in einer eigenen IndexedDB (`anlaufstelle-crypto`) |
 | Key-Ableitung | **PBKDF2** — 600 000 Iterationen, SHA-256 |
 | KDF-Input | Benutzer-Passwort + `User.offline_key_salt` (16 Byte, pro User, serverseitig gespeichert) |
-| Key-Lebenszeit | **Persistiert** als non-extractable `CryptoKey` (`extractable: false`) in einer eigenen IndexedDB (`anlaufstelle-crypto`) — überlebt Tab-Schließen und Reload; gekoppelt an das Server-Session-Alter (Idle-Key-Wipe), siehe „Konsequenzen für Admins" |
+| Key-Lebenszeit | **Persistiert** als non-extractable `CryptoKey` (`extractable: false`) in einer eigenen IndexedDB (`anlaufstelle-crypto`) — überlebt Tab-Schließen und Reload; begrenzt durch Leerlaufzeit und absolute Höchstdauer ab Ableitung, siehe „Konsequenzen für Admins" |
 
 Quelle: [`src/static/js/crypto.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/crypto.js) (client-seitige Ableitung/Speicherung/Idle-Wipe), [`src/core/signals/offline_invalidation.py`](https://github.com/anlaufstelle/app/blob/main/src/core/signals/offline_invalidation.py) (server-seitige Salt-Rotation bei Rollenwechsel/Deaktivierung).
 

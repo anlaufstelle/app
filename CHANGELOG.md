@@ -28,6 +28,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Testprämissen und Release-Testprofile** (#2531) — Leere Parametersätze und fehlendes ShellCheck scheitern ausdrücklich; das gepinnte Dev-Werkzeug, Demo-Gate, xfail-feste Public-Skip-Zuordnung und eintragsbezogene Archivprüfung samt CHANGELOG-Abgleich sichern die Testabnahme. Die Browser-Specs für Zeitstrom-Aktivitätskarten, mobilen Ziel-Umschalter, Audit-Paginierung und Sammelaktionen stellen ihre Vorbedingung selbst her oder scheitern hart, statt bei fehlendem Seed-Treffer zu überspringen; Karten tragen dafür stabile `data-testid`-Attribute. Auf der Demo löscht die Antwort auf eine Anfrage, die der alte Tab vor einem Bereichswechsel gesendet hat und die mit dem ersetzten Sitzungsschlüssel eintrifft (etwa der Abruf der Offline-Seiten durch den Service Worker), das neue Sitzungscookie nicht mehr; Abmeldung und Verhalten außerhalb der Demo bleiben unverändert. Die Umschalter „Ziel erreicht“ und „Nicht erreicht“ am Fall-Detail sind jetzt mindestens 44 Pixel hoch und damit mobil treffsicher bedienbar. Das Demo-Gate läuft mit zehn Tests grün.
 - **Solo-Demo ohne Zeitfenster** (#2506) — Die Beratungspraxis Lindenhof wird ohne Zeitfenster geseedet; die Zeitfenster der übrigen Demo-Einrichtungen bleiben erhalten.
 
+### Security
+
+- **Offline-Schlüsseldauer und Widerrufsprüfung begrenzt** (#2528) — Offline-Schlüssel laufen unabhängig von Aktivität nach der absoluten Sitzungsdauer ab, ungesendete Arbeit bleibt verschlüsselt erhalten, und eine fehlgeschlagene Widerrufsprüfung pausiert den Replay bis zum nächsten erfolgreichen Sync-Lauf.
+
+- **Prüfseiten respektieren die Leserechte des Ziels** (#2516) — Ereignis-, Personen-, Fall- und Zusammenführungs-Prüfungen verlinken einsehbare Datensätze in einem neuen Tab; unsichtbare, gelöschte oder fehlende Ziele bleiben neutral und ohne Link, Ereignismetadaten werden nur nach der Sichtbarkeitsprüfung angezeigt und Merge-Fallzahlen zählen ausschließlich Fälle aktiver, nicht gelöschter Personen.
 ### Added
 
 - **Zeitraum-Summen für Stückzahl-Felder je Dokumentationstyp** (#2515) — Der neue Datensatz-Bericht weist Ereignis- und Beitragszahlen sowie Stückzahl-Summen mit gemeinsamer Unterdrückung in Vorschau und Export aus.
