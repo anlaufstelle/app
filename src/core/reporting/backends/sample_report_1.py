@@ -297,6 +297,33 @@ class SampleReport1Backend(DatasetBackend):
             completeness=self.validate_completeness(facility, date_from, date_to),
         )
 
+    def build_format_dataset(self, facility, date_from, date_to, *, format: str) -> DatasetResult:
+        """Keep the legacy hybrid source exclusively for PDF."""
+        if format != "pdf":
+            return self.build_dataset(facility, date_from, date_to)
+        from core.services.dashboard import get_sample_report_1_statistics_hybrid
+
+        summary = get_sample_report_1_statistics_hybrid(facility, date_from, date_to)
+        return DatasetResult("aggregate", [], summary, [])
+
+    def get_format_sources(self) -> dict[str, str]:
+        from core.reporting.data_source import SNAPSHOT_HYBRID
+
+        return {**super().get_format_sources(), "PDF": SNAPSHOT_HYBRID}
+
+    def render_pdf(self, facility, result: DatasetResult, *, date_from, date_to, generated_at) -> bytes:
+        """Render the hybrid result already protected by prepare_export."""
+        from core.services.system.export import render_sample_report_1_pdf
+
+        return render_sample_report_1_pdf(
+            facility,
+            result.summary,
+            date_from,
+            date_to,
+            generated_at=generated_at,
+            completeness_messages=[issue.message for issue in result.completeness],
+        )
+
     def summarize_events(self, events) -> dict:
         """Categories, age groups and persons over ``events`` (the ``build_dataset`` summary).
 

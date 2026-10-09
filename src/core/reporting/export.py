@@ -173,7 +173,7 @@ def export_dataset(
     if format not in _CONTENT_TYPES:
         raise ValueError(f"Unknown export format {format!r}; expected one of {sorted(SUPPORTED_FORMATS)}.")
 
-    result = backend.build_dataset(facility, date_from, date_to)
+    result = backend.build_format_dataset(facility, date_from, date_to, format=format)
     # Repo-Invariante (Refs #1278/T1, Security R4+R14): jedes extern
     # zirkulierende Berichts-Artefakt unterdrueckt Kleinstfallzahlen. Ein
     # Formatwechsel (CSV/JSON/XML statt PDF) darf diese Haertung nie

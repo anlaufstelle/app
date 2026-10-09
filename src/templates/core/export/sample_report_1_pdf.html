@@ -102,6 +102,8 @@
     <p>{% trans "Keine Altersdaten vorhanden." %}</p>
     {% endif %}
 
+    {% for message in completeness_messages %}<p>{{ message }}</p>{% endfor %}
+
     <div class="signature">
         <div class="signature-line">{% trans "Ort, Datum, Unterschrift" %}</div>
     </div>

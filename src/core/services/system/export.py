@@ -355,12 +355,17 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
 
 
 def generate_sample_report_1_pdf(facility, date_from, date_to):
-    """Generate the sample activity report as PDF.
+    """Generate the legacy hybrid sample PDF with one suppression pass."""
+    from core.services.dashboard import get_sample_report_1_statistics_hybrid, suppress_sample_report_1_stats
 
-    Refs #1278 (T1): Das Sachbericht-PDF ist das am ehesten externe Artefakt und
-    wird daher durch dieselbe k-Anon-Kleinstfallzahl-Suppression geleitet wie
-    der externe On-Screen-Bericht — Zellen < Schwelle werden unterdrueckt.
-    """
+    stats = suppress_sample_report_1_stats(
+        facility, get_sample_report_1_statistics_hybrid(facility, date_from, date_to)
+    )
+    return render_sample_report_1_pdf(facility, stats, date_from, date_to, generated_at=timezone.now())
+
+
+def render_sample_report_1_pdf(facility, stats, date_from, date_to, *, generated_at, completeness_messages=()):
+    """Render protected hybrid statistics without rebuilding or suppression."""
     from core.reporting.data_source import (
         DATA_SOURCE_EXPLANATIONS,
         DATA_SOURCE_NOTES,
@@ -369,10 +374,7 @@ def generate_sample_report_1_pdf(facility, date_from, date_to):
         SNAPSHOT_HYBRID,
         table_note,
     )
-    from core.services.dashboard import get_sample_report_1_statistics_hybrid, suppress_sample_report_1_stats
 
-    stats = get_sample_report_1_statistics_hybrid(facility, date_from, date_to)
-    stats = suppress_sample_report_1_stats(facility, stats)
     html = render_to_string(
         "core/export/sample_report_1_pdf.html",
         {
@@ -380,7 +382,8 @@ def generate_sample_report_1_pdf(facility, date_from, date_to):
             "date_from": date_from,
             "date_to": date_to,
             "stats": stats,
-            "generated_at": timezone.now(),
+            "generated_at": generated_at,
+            "completeness_messages": completeness_messages,
             # Quellenausweis (Refs #1743): dieses PDF ist das einzige hybrid
             # gelesene Artefakt — die Zahlen kommen aus den Monats-Snapshots
             # und ueberdauern die Loeschfristen.

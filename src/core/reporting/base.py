@@ -645,6 +645,21 @@ class DatasetBackend(ABC):
         """Datenqualitaets-Checks vor der Anzeige/dem Export (Default: keine Checks)."""
         return []  # Default: keine Checks
 
+    def build_format_dataset(self, facility, date_from, date_to, *, format: str) -> DatasetResult:
+        """Select the raw source before the single prepare_export call.
+
+        The default is live for every format. A backend with a legacy hybrid
+        PDF may select that source here; render_pdf still receives only the
+        prepared and contract-validated result.
+        """
+        return self.build_dataset(facility, date_from, date_to)
+
+    def get_format_sources(self) -> dict[str, str]:
+        """Expose the source used by each download and the preview."""
+        from core.reporting.data_source import LIVE
+
+        return dict.fromkeys(("CSV", "JSON", "XML", "PDF"), LIVE)
+
     def get_table_populations(self, result: DatasetResult) -> dict[str, str]:
         """Return the population of each published table."""
         return result.summary.get("metadata", {}).get("populations", {"records": self.population})

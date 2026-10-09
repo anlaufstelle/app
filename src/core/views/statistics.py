@@ -193,6 +193,9 @@ def build_report_panel_context(facility, backend, period_state) -> dict:
         # Quellenausweis (Refs #1743): die Vorschau ruft ``build_dataset``,
         # liest also live — anders als das hybrid gespeiste Sachbericht-PDF.
         "data_source_note": DATA_SOURCE_NOTES[LIVE],
+        "format_source_notes": [
+            (format_name, DATA_SOURCE_NOTES[source]) for format_name, source in backend.get_format_sources().items()
+        ],
         "data_source_explanation": DATA_SOURCE_EXPLANATIONS[LIVE],
         # K3-A3 (Refs #1770): Die Vorschau zeigt die tabellarische Projektion des
         # Backends — ihre Grundgesamtheit gehoert dazu. ``backend.population``
