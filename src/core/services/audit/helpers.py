@@ -56,6 +56,7 @@ def log_audit_event(
     detail: dict | None = None,
     user: Any = _UNSET,
     facility: Any = _UNSET,
+    actor: Any = None,
 ):
     """Erzeugt einen AuditLog-Eintrag aus einem View-Request.
 
@@ -107,6 +108,7 @@ def log_audit_event(
     return AuditLog.objects.create(
         facility=facility,
         user=user,
+        actor=actor,
         action=action,
         target_type=target_type or "",
         target_id=target_id or "",

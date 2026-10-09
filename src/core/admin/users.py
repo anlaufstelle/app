@@ -326,6 +326,16 @@ def reset_mfa_for_selected_users(modeladmin, request, queryset):
 
 @admin.register(User, site=anlaufstelle_admin_site)
 class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
+    # Creation and privilege changes already have actor-attributed signal audits.
+    admin_audit_save_actions = ("update",)
+
+    def get_admin_audit_changed_fields(self, request, obj, form, change):
+        covered = {"role", "mfa_required", "can_confirm_deletion"}
+        if not obj.is_active:
+            covered.add("is_active")
+        remaining = [name for name in getattr(form, "changed_data", ()) if name not in covered]
+        return remaining or None
+
     form = UserChangeForm
     add_form = UserAddForm
     change_password_form = AdminPasswordChangeForm
@@ -567,6 +577,8 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
         Audit-Zeilen ueber mehrere Facilities ergaenzt, muss sie nach
         ``facility_id`` ordnen.
         """
+        self._audit_admin_read(request, target_type="User", target_id=str(id), admin_view="password")
+
         # Lazy wie in ``unlock_selected_users``: ``core.signals.audit`` wird
         # erst nach ``AppConfig.ready()`` importierbar.
         from core.signals.audit import get_client_ip

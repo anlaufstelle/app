@@ -43,6 +43,9 @@ class AuditLogAdmin(FacilityScopedAdminMixin, ModelAdmin):
 
 @admin.register(Settings, site=anlaufstelle_admin_site)
 class SettingsAdmin(FacilityScopedAdminMixin, ModelAdmin):
+    # Updates retain their specialized SETTINGS_CHANGE entry.
+    admin_audit_save_actions = ("create",)
+
     list_display = (
         "facility",
         "facility_full_name",
@@ -69,10 +72,10 @@ class SettingsAdmin(FacilityScopedAdminMixin, ModelAdmin):
         """Write a SETTINGS_CHANGE audit entry for every Settings update."""
         from core.services.system import log_settings_change, snapshot_settings
 
-        before = snapshot_settings(obj) if change and obj.pk else {}
+        before = snapshot_settings(Settings.objects.select_for_update().get(pk=obj.pk)) if change else {}
         super().save_model(request, obj, form, change)
         if change:
-            log_settings_change(obj, request.user, before)
+            log_settings_change(obj, request.user, before, actor=request.user)
 
 
 @admin.register(StatisticsSnapshot, site=anlaufstelle_admin_site)

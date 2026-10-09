@@ -2,6 +2,8 @@
 
 import logging
 
+from django.core.exceptions import PermissionDenied
+
 from core.models import AuditLog
 from core.services.audit import audit_system_view
 from core.signals.audit import _set_session_vars
@@ -41,17 +43,15 @@ class SystemAuditMixin(SuperAdminRequiredMixin):
         # ``app.is_super_admin`` ist via Middleware bereits gesetzt;
         # wir refreshen sie defensiv (Cursor-Cache, parallele
         # Connections), damit der INSERT garantiert durchgeht.
-        _set_session_vars(None, is_super_admin=True)
         try:
+            _set_session_vars(None, is_super_admin=True)
             audit_system_view(
                 request,
                 AuditLog.Action.SYSTEM_VIEW,
                 target_type=self.__class__.__name__,
             )
-        except Exception:
-            # Audit-Fehler darf den View-Flow nicht kippen — der Zugriff
-            # selbst ist primaerer Use-Case (Read-Only-Sicht). Fehler im
-            # Log-Insert ist ein Ops-Problem, kein User-Problem.
-            logger.exception("SYSTEM_VIEW-Audit-Eintrag fehlgeschlagen")
+        except Exception as exc:
+            logger.exception("System read audit failed")
+            raise PermissionDenied from exc
 
         return super().dispatch(request, *args, **kwargs)

@@ -120,8 +120,8 @@ class TestAuditLogCreationAllowlist:
         },
         "core/services/audit/helpers.py": {
             4: "Docstring-Beispiel — kein echter Call",
-            107: "log_audit_event-Body — zentraler View-Helper",
-            150: "audit_event-Body — generischer Service-/Cron-Helper",
+            108: "log_audit_event body — central request helper",
+            152: "audit_event body — generic service/cron helper",
         },
         "core/services/system/settings.py": {
             # Refs #2129 + #2136: +8 Zeilen durch ``max_storage_mb`` und +12 Zeilen

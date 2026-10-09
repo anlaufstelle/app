@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Admin-Audit vervollständigt** (#2527) — Verwaltungszugriffe der Systemadministration werden bei fehlgeschlagenem Leseaudit mit 403 abgewiesen, Admin-Schreibaktionen einschließlich Sammellöschungen und Inline-Änderungen mit Actor protokolliert und Ereignisse samt Historien ausschließlich als Metadaten angezeigt.
+
 ### Erforderliche Betreiber-Aktionen
 
 - Keine.

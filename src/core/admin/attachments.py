@@ -11,7 +11,7 @@ from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
 
-from core.admin.mixins import AdminReadAuditMixin, FacilityScopedAdminMixin
+from core.admin.mixins import FacilityScopedAdminMixin
 from core.admin_site import anlaufstelle_admin_site
 from core.models.attachment import OWNER_FIELDS, Attachment
 
@@ -24,7 +24,7 @@ _OWNER_LABELS = {
 
 
 @admin.register(Attachment, site=anlaufstelle_admin_site)
-class AttachmentAdmin(AdminReadAuditMixin, FacilityScopedAdminMixin, ModelAdmin):
+class AttachmentAdmin(FacilityScopedAdminMixin, ModelAdmin):
     """Read-only Sicht auf die verschluesselten Dateianhaenge.
 
     Facility-Scoping laeuft ueber die **eigene** ``facility``-Spalte

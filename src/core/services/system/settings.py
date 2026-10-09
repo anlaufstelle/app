@@ -190,7 +190,7 @@ def update_settings(settings_obj, user, *, expected_updated_at=None, **fields):
     return settings_obj
 
 
-def log_settings_change(settings_obj, user, before_snapshot):
+def log_settings_change(settings_obj, user, before_snapshot, *, actor=None):
     """Compare a pre-save snapshot against the current Settings state and
     write a SETTINGS_CHANGE audit entry if any audited field changed.
 
@@ -202,6 +202,7 @@ def log_settings_change(settings_obj, user, before_snapshot):
         AuditLog.objects.create(
             facility=settings_obj.facility,
             user=user,
+            actor=actor,
             action=AuditLog.Action.SETTINGS_CHANGE,
             target_type="Settings",
             target_id=str(settings_obj.pk),

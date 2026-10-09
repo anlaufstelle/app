@@ -43,6 +43,9 @@ class DocumentTypeFieldInline(TabularInline):
 
 @admin.register(DocumentType, site=anlaufstelle_admin_site)
 class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
+    # Existing save audit also accompanies the banner revision hook.
+    admin_audit_save_actions = ()
+
     list_display = (
         "name",
         "sensitivity",
@@ -119,6 +122,7 @@ class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
             target_obj=obj,
             detail={"name": obj.name, "changed_fields": changed_fields},
             facility=obj.facility,
+            actor=request.user,
         )
         if not change:
             return
@@ -206,16 +210,6 @@ class FieldTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
             super().delete_model(request, obj)
         except ProtectedError as exc:
             messages.error(request, str(exc.args[0]))
-
-    def delete_queryset(self, request, queryset):
-        """Bulk-Delete: ProtectedError pro FieldTemplate abfangen und in der Admin-UI zeigen."""
-        from django.db.models import ProtectedError
-
-        for obj in queryset:
-            try:
-                obj.delete()
-            except ProtectedError as exc:
-                messages.error(request, str(exc.args[0]))
 
     def _bulk_set_active(self, request, queryset, *, is_active: bool) -> int:
         """``is_active`` sammelumstellen und JE tatsaechlich geaenderter Vorlage
@@ -308,6 +302,7 @@ class FieldTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
                     # ``bulk`` als Kennzeichen der Sammelaenderung. ``name`` ist
                     # Einrichtungs-Konfiguration, keine Klienten-PII (Allowlist
                     # ``AUDIT_DETAIL_KEYS``, Refs #1944).
+                    actor=request.user,
                     detail={"name": obj.name, "changed_fields": ["is_active"], "bulk": True},
                     facility=obj.facility,
                 )

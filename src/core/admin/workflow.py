@@ -7,13 +7,13 @@ ueber den Service-Layer.
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from core.admin.mixins import AdminReadAuditMixin, FacilityScopedAdminMixin, ReadOnlyDomainAdminMixin
+from core.admin.mixins import FacilityScopedAdminMixin, ReadOnlyDomainAdminMixin
 from core.admin_site import anlaufstelle_admin_site
 from core.models import DeletionRequest, WorkItem
 
 
 @admin.register(WorkItem, site=anlaufstelle_admin_site)
-class WorkItemAdmin(ReadOnlyDomainAdminMixin, AdminReadAuditMixin, ModelAdmin):
+class WorkItemAdmin(ReadOnlyDomainAdminMixin, ModelAdmin):
     list_display = ("title", "item_type", "status", "priority", "assigned_to", "facility")
     list_filter = ("status", "priority", "item_type", "facility")
     search_fields = ("title",)

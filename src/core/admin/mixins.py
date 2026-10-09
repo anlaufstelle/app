@@ -14,13 +14,143 @@ gibt es genau **einen** Ort, an dem das passieren muss:
 import logging
 
 from django.contrib.admin.utils import unquote
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
 
 from core.models import Facility
 
 logger = logging.getLogger(__name__)
 
 
-class RoleBasedPermissionMixin:
+class AdminReadAuditMixin:
+    """Require a successful audit before super-admin content is returned."""
+
+    def _audit_admin_read(self, request, target_obj=None, *, target_type=None, **detail):
+        if not getattr(request.user, "is_super_admin", False):
+            return
+        from core.services.audit import audit_admin_view
+        from core.signals.audit import _set_session_vars
+
+        try:
+            _set_session_vars(None, is_super_admin=True)
+            audit_admin_view(request, target_obj, target_type=target_type, **detail)
+        except Exception as exc:
+            logger.exception("Admin read audit failed")
+            raise PermissionDenied from exc
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        self._audit_admin_read(
+            request, target_type=self.model.__name__, target_id=unquote(object_id), admin_view="change"
+        )
+        return super().change_view(request, object_id, form_url, extra_context)
+
+    def changelist_view(self, request, extra_context=None):
+        self._audit_admin_read(request, target_type=self.model.__name__, admin_view="changelist")
+        return super().changelist_view(request, extra_context)
+
+    def add_view(self, request, form_url="", extra_context=None):
+        self._audit_admin_read(request, target_type=self.model.__name__, admin_view="add")
+        return super().add_view(request, form_url, extra_context)
+
+    def delete_view(self, request, object_id, extra_context=None):
+        self._audit_admin_read(
+            request, target_type=self.model.__name__, target_id=unquote(object_id), admin_view="delete"
+        )
+        return super().delete_view(request, object_id, extra_context)
+
+    def history_view(self, request, object_id, extra_context=None):
+        self._audit_admin_read(
+            request, target_type=self.model.__name__, target_id=unquote(object_id), admin_view="history"
+        )
+        return super().history_view(request, object_id, extra_context)
+
+    def get_search_results(self, request, queryset, search_term):
+        if getattr(request, "resolver_match", None) and request.resolver_match.url_name == "autocomplete":
+            self._audit_admin_read(request, target_type=self.model.__name__, admin_view="autocomplete")
+        return super().get_search_results(request, queryset, search_term)
+
+
+class AdminWriteAuditMixin:
+    """Audit admin mutations atomically, including bulk deletion and inlines."""
+
+    admin_audit_save_actions = ("create", "update")
+
+    def get_admin_audit_changed_fields(self, request, obj, form, change):
+        return list(getattr(form, "changed_data", ()))
+
+    def _audit_admin_write(self, request, obj, action, changed_fields, *, target_id=None):
+        from core.models import AuditLog
+        from core.services.audit import audit_event
+        from core.signals.audit import get_client_ip
+
+        facility = (
+            (None if action == "delete" else obj) if isinstance(obj, Facility) else getattr(obj, "facility", None)
+        )
+        if facility is None and hasattr(obj, "document_type"):
+            facility = obj.document_type.facility
+        audit_event(
+            getattr(AuditLog.Action, f"CONFIG_{action.upper()}"),
+            user=request.user,
+            actor=request.user,
+            facility=facility,
+            target_obj=obj,
+            target_id=target_id,
+            detail={"changed_fields": changed_fields},
+            ip_address=get_client_ip(request),
+        )
+
+    @transaction.atomic
+    def save_model(self, request, obj, form, change):
+        action = "update" if change else "create"
+        changed_fields = self.get_admin_audit_changed_fields(request, obj, form, change)
+        super().save_model(request, obj, form, change)
+        if action in self.admin_audit_save_actions and changed_fields is not None:
+            self._audit_admin_write(request, obj, action, changed_fields)
+
+    @transaction.atomic
+    def delete_model(self, request, obj):
+        target_id = str(obj.pk)
+        # Record the target before deletion clears its primary key.
+        # The transaction rolls this entry back if deletion is rejected.
+        self._audit_admin_write(request, obj, "delete", [], target_id=target_id)
+        super().delete_model(request, obj)
+
+    @transaction.atomic
+    def delete_queryset(self, request, queryset):
+        from core.services.audit.chain import advisory_lock_id
+
+        objects = list(queryset.order_by("pk"))
+        facility_ids = {obj.pk if isinstance(obj, Facility) else getattr(obj, "facility_id", None) for obj in objects}
+        lock_ids = {fid: advisory_lock_id(fid) or 0 for fid in facility_ids}
+        objects.sort(
+            key=lambda obj: (
+                lock_ids[obj.pk if isinstance(obj, Facility) else getattr(obj, "facility_id", None)],
+                str(obj.pk),
+            )
+        )
+        for obj in objects:
+            self.delete_model(request, obj)
+
+    @transaction.atomic
+    def save_formset(self, request, form, formset, change):
+        mutations = []
+        for inline_form in formset.forms:
+            if not inline_form.has_changed():
+                continue
+            obj = inline_form.instance
+            if inline_form.cleaned_data.get("DELETE"):
+                if not obj._state.adding:
+                    mutations.append((obj, "delete", [], str(obj.pk)))
+            else:
+                action = "create" if obj._state.adding else "update"
+                fields = [name for name in inline_form.changed_data if name != "DELETE"]
+                mutations.append((obj, action, fields, None))
+        super().save_formset(request, form, formset, change)
+        for obj, action, changed_fields, target_id in mutations:
+            self._audit_admin_write(request, obj, action, changed_fields, target_id=target_id)
+
+
+class RoleBasedPermissionMixin(AdminReadAuditMixin, AdminWriteAuditMixin):
     """Delegiert ModelAdmin-Permissions an ``self.admin_site.has_role_permission``.
 
     Einzelne ModelAdmins (EventHistoryAdmin, AuditLogAdmin, etc.) ueberschreiben
@@ -44,7 +174,7 @@ class RoleBasedPermissionMixin:
         return self.admin_site.has_role_permission(request)
 
 
-class SuperAdminOnlyAdminMixin:
+class SuperAdminOnlyAdminMixin(AdminReadAuditMixin, AdminWriteAuditMixin):
     """Permissions nur fuer super_admin (A2.3, Refs #1021).
 
     Fuer installationsweite Modelle oberhalb der Facility-Ebene (z.B.
@@ -109,57 +239,6 @@ class FacilityScopedAdminMixin(RoleBasedPermissionMixin):
             if current is not None:
                 obj.facility = current
         super().save_model(request, obj, form, change)
-
-
-class AdminReadAuditMixin:
-    """Auditiert Cross-Facility-PII-Reads im Admin als ``SYSTEM_VIEW`` (AUTHZ-2).
-
-    Refs #1341: Ein super_admin liest über die Admin-Listen/Change-Views
-    facility-übergreifend Klientel-PII — analog zu ``/system/`` (wo
-    :class:`~core.views.system.mixins.SystemAuditMixin` jeden Zugriff als
-    ``SYSTEM_VIEW`` protokolliert) muss auch dieser Lesepfad tamper-evident
-    protokolliert werden.
-
-    Nur super_admin-Reads werden geloggt: ein facility_admin ist über
-    :meth:`FacilityScopedAdminMixin.get_queryset` bereits auf die eigene
-    Facility beschränkt (kein facility-übergreifender Read möglich), sodass ein
-    same-facility-Read keinen Audit-Spam erzeugt — und wir setzen
-    ``app.is_super_admin`` nicht fälschlich in einer facility_admin-Session
-    (RLS-Bypass-Vermeidung). Die Changelist erzeugt genau **einen** Sammel-
-    Audit pro Request (nicht pro Zeile).
-    """
-
-    def _audit_admin_read(self, request, target_obj=None, *, target_type=None, **detail):
-        """Schreibt einen SYSTEM_VIEW-Audit, falls der Leser super_admin ist.
-
-        Setzt vor dem INSERT die Postgres-Session-GUCs so, dass die WITH-CHECK-
-        Policy (Migration 0083/0085) den facility=NULL-Eintrag durchlässt —
-        exakt wie ``SystemAuditMixin``. Audit-Fehler dürfen den Read-Flow nicht
-        kippen (defensiv geloggt).
-        """
-        if not getattr(request.user, "is_super_admin", False):
-            return
-        # Lazy-Imports gegen Zirkularitäten (mixins <-> services/signals).
-        from core.services.audit import audit_admin_view
-        from core.signals.audit import _set_session_vars
-
-        _set_session_vars(None, is_super_admin=True)
-        try:
-            audit_admin_view(request, target_obj, target_type=target_type, **detail)
-        except Exception:
-            logger.exception("Admin-Read-Audit (SYSTEM_VIEW) fehlgeschlagen")
-
-    def change_view(self, request, object_id, form_url="", extra_context=None):
-        obj = self.get_object(request, unquote(object_id))
-        if obj is not None:
-            self._audit_admin_read(request, obj, admin_view="change")
-        return super().change_view(request, object_id, form_url, extra_context)
-
-    def changelist_view(self, request, extra_context=None):
-        # EIN Sammel-Audit pro Changelist-Request (nicht pro Zeile): target_type
-        # = Model-Name, ohne target_id.
-        self._audit_admin_read(request, target_type=self.model.__name__, admin_view="changelist")
-        return super().changelist_view(request, extra_context)
 
 
 class ReadOnlyDomainAdminMixin(FacilityScopedAdminMixin):
