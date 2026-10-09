@@ -1293,6 +1293,8 @@ Quelle: [`src/static/js/crypto.js`](https://github.com/anlaufstelle/app/blob/mai
 - **Stufe 2 (Read-Cache):** Ausgewählte Personen-Dossiers werden vor dem Streetwork-Einsatz lokal verschlüsselt gecacht, damit sie offline eingesehen werden können.
 - **Stufe 3 (Offline-Edit):** Ereignisse und Notizen können offline erfasst werden und synchronisieren beim nächsten Online-Gang. Konflikte zwischen Offline-Edit und zwischenzeitlicher Server-Änderung werden per **Side-by-Side-Diff** dem Nutzer zur manuellen Auflösung präsentiert.
 
+Neu verschlüsselte Mehrfachauswahlwerte bleiben beim Offline-Bearbeiten von Ereignissen und beim Übertragen nach der Wiederverbindung Listen; unverändertes Speichern erhält die ausgewählten Optionen. In der Konfliktprüfung steht jede ausgewählte Bezeichnung auf einer eigenen Zeile, einschließlich deaktivierter Optionen; fehlt eine passende Option oder Feldvorlage, erscheint der Slug. Rollen- und Feldschutz greifen vor dem Entschlüsseln der Serverwerte. Refs #2520.
+
 ### 2.11 CSV-Import und -Export: Formelschutz
 
 Alle CSV-Exporte (Statistik-Export, Datensatz-Berichte, Audit-Log-Export) neutralisieren **Formel-Injection**: Eine Zelle, die mit `=`, `+`, `-`, `@`, Tabulator oder Zeilenumbruch beginnt, würde Excel oder LibreOffice beim Öffnen der Datei als **Formel** ausführen. Solche Zellen bekommen deshalb ein führendes Apostroph (`'`) — die Tabellenkalkulation zeigt den Originalwert an, führt ihn aber nicht aus. Refs #719.

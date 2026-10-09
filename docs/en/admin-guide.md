@@ -1291,6 +1291,8 @@ Source: [`src/static/js/crypto.js`](https://github.com/anlaufstelle/app/blob/mai
 - **Level 2 (Read cache):** Selected person dossiers are locally encrypted and cached before streetwork so they can be viewed offline.
 - **Level 3 (Offline edit):** Events and notes can be captured offline and synchronize on the next online period. Conflicts between an offline edit and a concurrent server change are presented to the user as a **side-by-side diff** for manual resolution.
 
+Newly encrypted multi-select values remain lists when editing events offline and replaying them after reconnecting; saving without changes preserves the selected options. Conflict review shows each selected label on its own line, including inactive options; if an option or field template cannot be resolved, it shows the slug. Role and field visibility checks apply before decrypting server values. Refs #2520.
+
 ### 2.11 CSV Import and Export: Formula Protection
 
 Every CSV export (statistics export, dataset reports, audit-log export) neutralizes **formula injection**: a cell starting with `=`, `+`, `-`, `@`, a tab or a line break would be executed as a **formula** by Excel or LibreOffice when the file is opened. Such cells therefore receive a leading apostrophe (`'`) -- the spreadsheet displays the original value but does not execute it. Refs #719.
@@ -2453,4 +2455,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 6f754b8683384efd04c71041544798bd0d4ded86 -->
+<!-- source-hash: 56d519225815d79c78f8488efc391fa5ea039c29 -->
