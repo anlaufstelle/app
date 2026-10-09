@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Solo-Demo ohne Zeitfenster** (#2506) — Die Beratungspraxis Lindenhof wird ohne Zeitfenster geseedet; die Zeitfenster der übrigen Demo-Einrichtungen bleiben erhalten.
+
 ### Erforderliche Betreiber-Aktionen
 
 - Keine.

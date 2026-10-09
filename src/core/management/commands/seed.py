@@ -97,20 +97,22 @@ class Command(BaseCommand):
         # und Datenvolumen sind damit entkoppelt (Ticket-Punkt 3): jede
         # Facility bekommt ihr eigenes Volumen-Profil (Solo kleiner als Team),
         # unabhaengig vom fuer den restlichen Katalog gewaehlten Profil.
-        # Jedes Tupel: (Facility-Name, Paket, Volumen-Cfg, Benutzer-Funktion).
+        # Each tuple: facility name, package, volume config, user seeder, time-filter flag.
         if scale == "demo":
-            facility_specs: list[tuple[str, str, dict, Callable[[Facility, int], list[User]]]] = [
+            facility_specs: list[tuple[str, str, dict, Callable[[Facility, int], list[User]], bool]] = [
                 (
                     scenario.facility_name,
                     scenario.package,
                     SCALE_CONFIG["demo_solo"] if scenario.solo else cfg,
                     seed_users_solo if scenario.solo else seed_users,
+                    not scenario.solo,
                 )
                 for scenario in SCENARIOS
             ]
         else:
             facility_specs = [
-                (FACILITY_NAMES[idx], FACILITY_PACKAGES[idx], cfg, seed_users) for idx in range(int(cfg["facilities"]))
+                (FACILITY_NAMES[idx], FACILITY_PACKAGES[idx], cfg, seed_users, True)
+                for idx in range(int(cfg["facilities"]))
             ]
 
         # Refs #2148 (R-L5c-7, Punkt 3): ALLE fuer dieses Profil
@@ -120,7 +122,7 @@ class Command(BaseCommand):
         # ausgestattete Einrichtung noch ueberhaupt eine NEUE Einrichtung
         # hinterlassen; ein bereits gefluteter Bestand waere zudem unnoetig
         # verloren, wenn der Lauf ohnehin abbricht.
-        needed_packages = sorted({package_name for _, package_name, _, _ in facility_specs})
+        needed_packages = sorted({package_name for _, package_name, _, _, _ in facility_specs})
         available_packages = set(list_packages())
         missing_packages = sorted({name for name in needed_packages if name not in available_packages})
         if missing_packages:
@@ -142,7 +144,7 @@ class Command(BaseCommand):
         # (mit z.B. ``attachment_ratio`` als float) zu ``int | float`` — "facilities"
         # ist immer ein int, ``int()`` ist daher verhaltensgleich und macht das
         # fuer ``range()`` explizit.
-        for idx, (facility_name, package_name, facility_cfg, users_fn) in enumerate(facility_specs):
+        for idx, (facility_name, package_name, facility_cfg, users_fn, with_time_filters) in enumerate(facility_specs):
             # Refs #2148 (R-L5c-1): ein mitgeliefertes Paket je Facility
             # statt fuer jede Einrichtung derselbe Standardkatalog. Faellt
             # ``seed_document_types`` fail-loud auf ein noch fehlendes
@@ -165,7 +167,8 @@ class Command(BaseCommand):
                 # angewendet — hier folgen nur noch die beiden Komfortlisten.
                 comfort = PACKAGE_COMFORT[package_name]
                 ensure_quick_templates(facility, comfort.quick_templates)
-                ensure_time_filters(facility, comfort.time_filters)
+                if with_time_filters:
+                    ensure_time_filters(facility, comfort.time_filters)
             seed_settings(facility)
             users = users_fn(facility, idx)
 

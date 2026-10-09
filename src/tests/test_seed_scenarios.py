@@ -25,9 +25,10 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
         allow_module_level=True,
     )
 
-from core.models import Case, Client, DocumentType, Event, Facility, User  # noqa: E402
+from core.models import Case, Client, DocumentType, Event, Facility, TimeFilter, User  # noqa: E402
 from core.packages.catalog import list_packages  # noqa: E402
 from core.seed.scenarios import SCENARIOS, DemoScenario, get_scenario, scenario_keys  # noqa: E402
+from core.services.facility_bootstrap import PACKAGE_COMFORT  # noqa: E402
 
 EXPECTED_KEYS = {
     "kontaktladen",
@@ -181,6 +182,21 @@ class TestSeedDemoScale:
         assert roles == {User.Role.STAFF, User.Role.FACILITY_ADMIN}
         admin_users = [u for u in users if u.role == User.Role.FACILITY_ADMIN]
         assert admin_users[0].can_confirm_deletion is True, "Vertretung muss Loeschungen freigeben koennen."
+
+    def test_solo_facility_has_no_time_filters_and_team_facility_keeps_three(self, _demo_seed_class):
+        solo_facility = Facility.objects.get(name=get_scenario("solo").facility_name)
+        team_facility = Facility.objects.get(name=get_scenario("beratungsstelle").facility_name)
+
+        assert TimeFilter.objects.filter(facility=solo_facility).count() == 0
+        assert TimeFilter.objects.filter(facility=team_facility).count() == 3
+
+    def test_non_solo_facilities_keep_package_time_filters(self, _demo_seed_class):
+        for scenario in SCENARIOS:
+            if scenario.solo:
+                continue
+            facility = Facility.objects.get(name=scenario.facility_name)
+            expected = len(PACKAGE_COMFORT[scenario.package].time_filters)
+            assert TimeFilter.objects.filter(facility=facility).count() == expected, scenario.key
 
     def test_non_solo_facilities_keep_the_full_six_user_team(self, _demo_seed_class):
         for scenario in SCENARIOS:
