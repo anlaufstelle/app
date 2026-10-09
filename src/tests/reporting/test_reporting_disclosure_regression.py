@@ -22,12 +22,21 @@ exakt zurueckrechnen. Deshalb drei strukturelle Tests statt weiterer Beispiele:
 
 from __future__ import annotations
 
+import copy
+import csv
+import io
 import itertools
+import json
+import xml.etree.ElementTree as ET
 from collections import defaultdict
 from datetime import date
+from html.parser import HTMLParser
 from typing import Any
 
 import pytest
+import weasyprint
+from django.urls import reverse
+from weasyprint.formatting_structure import boxes
 
 from core.services.dashboard import suppress_report_stats, suppress_sample_report_1_stats
 from core.services.dashboard.external_report import DEFAULT_K_THRESHOLD
@@ -395,31 +404,156 @@ def _label_sequence(text: str, labels: tuple[str, ...]) -> list[str]:
     return [label for _position, label in sorted(positions)]
 
 
-def _patch_external_report(monkeypatch, report: dict[str, Any]) -> None:
-    """Let the "Allgemeine Kennzahlen" card project an already protected report."""
-    from core.reporting.backends import general_key_figures
-    from core.reporting.data_source import ALL_EVENTS
+_CARD = "general-key-figures"
+_CARD_PERIOD = {"date_from": date(2026, 1, 1), "date_to": date(2026, 1, 31)}
+_CARD_TABLES = ("total_contacts", "unique_clients", "by_contact_stage", "by_document_type", "by_age_cluster")
+_SURFACES = ("preview", "csv", "json", "xml", "pdf")
+_NO_DATA_TEXT = "Keine Daten im gewählten Zeitraum."
+_DOC_TYPES_SUPPRESSED = "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)."
+# The CSV renderer never carries completeness notes (machine-readable by design).
+_SURFACES_WITH_NOTES = ("preview", "json", "xml", "pdf")
 
-    tables = ("total_contacts", "unique_clients", "by_contact_stage", "by_document_type", "by_age_cluster")
-    protected = {
-        **report,
-        "metadata": {"k_anonymity_threshold": 5, "populations": {table: ALL_EVENTS for table in tables}},
-    }
-    monkeypatch.setattr(general_key_figures, "build_external_report", lambda *args, **kwargs: protected)
+
+@pytest.fixture
+def pdf_text(monkeypatch):
+    """Laid-out text of every PDF written during the test.
+
+    Paragraphs become one line per text box. A table row becomes one line with
+    its cells joined by `` | ``: narrow columns wrap inside a cell, even in the
+    middle of a word, so cells have to be recovered from the box tree.
+    """
+    documents: list[str] = []
+
+    def write_pdf(html, *args, **kwargs):
+        document = html.render()
+        lines: list[str] = []
+        consumed: set[int] = set()
+        for page in document.pages:
+            for box in page._page_box.descendants():
+                if id(box) in consumed:
+                    continue
+                if isinstance(box, boxes.TableRowBox):
+                    cells = [
+                        " ".join(leaf.text for leaf in cell.descendants() if isinstance(leaf, boxes.TextBox))
+                        for cell in box.descendants()
+                        if isinstance(cell, boxes.TableCellBox)
+                    ]
+                    lines.append(" | ".join(cells))
+                    consumed.update(id(inner) for inner in box.descendants())
+                elif hasattr(box, "text"):
+                    lines.append(box.text)
+        documents.append("\n".join(lines))
+        return document.write_pdf(*args, **kwargs)
+
+    monkeypatch.setattr(weasyprint.HTML, "write_pdf", write_pdf)
+    return documents
+
+
+def _patch_raw_statistics(monkeypatch, raw: dict[str, Any]) -> None:
+    """Feed a raw statistics world into the real external-report pipeline.
+
+    Disclosure guard, secondary suppression, residual row and fail-safe all run
+    for real; only the database aggregation is replaced.
+    """
+    from core.services.dashboard import external_report
+
+    monkeypatch.setattr(external_report, "get_statistics", lambda *args, **kwargs: copy.deepcopy(raw))
+
+
+def _card_dataset(facility):
+    from core.reporting.registry import get_backend
+
+    return get_backend(_CARD).build_dataset(facility, **_CARD_PERIOD)
 
 
 def _card_notes(facility) -> list[str]:
-    from core.reporting.registry import get_backend
-
-    result = get_backend("general-key-figures").build_dataset(facility, date(2026, 1, 1), date(2026, 1, 31))
-    return [str(issue.message) for issue in result.completeness]
+    return [str(issue.message) for issue in _card_dataset(facility).completeness]
 
 
 def _card_tables(facility) -> set[str]:
-    from core.reporting.registry import get_backend
+    return {record["table"] for record in _card_dataset(facility).records}
 
-    result = get_backend("general-key-figures").build_dataset(facility, date(2026, 1, 1), date(2026, 1, 31))
-    return {record["table"] for record in result.records}
+
+def _render_card(client, pdf_text, surface: str) -> str:
+    """Request the card the way a user does and return the text of the artifact.
+
+    ``preview`` is the HTMX panel; the others are downloads through the export
+    route. For PDF the laid-out text of the real document is returned.
+    """
+    if surface == "preview":
+        response = client.get(
+            reverse("core:statistics_report_panel"), {"backend": _CARD, "period": "frei", **_CARD_PERIOD}
+        )
+        assert response.status_code == 200
+        return response.content.decode()
+    response = client.get(
+        reverse("core:statistics_report_export"), {"backend": _CARD, "format": surface, **_CARD_PERIOD}
+    )
+    assert response.status_code == 200
+    content = b"".join(response.streaming_content) if response.streaming else response.content
+    if surface == "pdf":
+        assert content.startswith(b"%PDF-")
+        return pdf_text[-1]
+    return content.decode("utf-8")
+
+
+class _PreviewRows(HTMLParser):
+    """Collect the cells of every table row of the preview."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.rows: list[list[str]] = []
+        self._cell: list[str] | None = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "tr":
+            self.rows.append([])
+        elif tag == "td":
+            self._cell = []
+
+    def handle_endtag(self, tag):
+        if tag == "td" and self._cell is not None:
+            self.rows[-1].append("".join(self._cell).strip())
+            self._cell = None
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell.append(data)
+
+
+def _visible(count: str | int | None) -> str | None:
+    """Normalise a rendered count cell: suppressed (``—``, empty, null) is ``None``."""
+    return None if count in (None, "", "—") else str(count)
+
+
+def _card_rows(surface: str, text: str) -> list[tuple[str, str, str | None]]:
+    """Table rows of the rendered card as ``(table, label, count)``.
+
+    ``count`` is ``None`` for a suppressed cell, whatever the format's marker is.
+    """
+    if surface == "csv":
+        rows = list(csv.reader(io.StringIO(text)))
+        return [(row[0], row[1], _visible(row[2])) for row in rows[2:]]
+    if surface == "json":
+        return [(r["table"], r["label"], _visible(r["count"])) for r in json.loads(text)["records"]]
+    if surface == "xml":
+        root = ET.fromstring(text)  # noqa: S314 — trusted output of the local export renderer
+        return [
+            (r.findtext("table"), r.findtext("label"), _visible(r.findtext("count")))
+            for r in root.findall("./records/record")
+        ]
+    if surface == "preview":
+        parser = _PreviewRows()
+        parser.feed(text)
+        cells = [row for row in parser.rows if len(row) == 4 and row[0] in _CARD_TABLES]
+        return [(row[0], row[1], _visible(row[2])) for row in cells]
+    # pdf: one ``cell | cell | ...`` line per table row; wrapped cells carry stray spaces
+    rows = []
+    for line in text.split("\n"):
+        cells = [cell.replace(" ", "") for cell in line.split(" | ")]
+        if len(cells) == 4 and cells[0] in _CARD_TABLES:
+            rows.append((cells[0], cells[1], _visible(cells[2])))
+    return rows
 
 
 @pytest.mark.django_db
@@ -431,22 +565,24 @@ class TestOrdnungAnDerArtefaktgrenze:
 
         return render_to_string(template, context)
 
-    @pytest.mark.parametrize("fmt", ["csv", "json", "xml"])
-    def test_general_key_figures_export(self, facility, monkeypatch, fmt):
-        from core.reporting.export import export_dataset
-        from core.reporting.registry import get_backend
-        from core.services.dashboard import suppress_report_stats
+    @pytest.mark.parametrize("surface", _SURFACES)
+    def test_general_key_figures_order_per_surface(self, client, lead_user, monkeypatch, pdf_text, surface):
+        """Preview, CSV, JSON, XML and PDF: two swapped worlds, one row order."""
+        client.force_login(lead_user)
+        rendered = []
+        for world in _swapped_worlds():
+            _patch_raw_statistics(monkeypatch, world)
+            rendered.append(_render_card(client, pdf_text, surface))
 
-        backend = get_backend("general-key-figures")
-        seiten = []
-        for welt in _swapped_worlds():
-            _patch_external_report(monkeypatch, suppress_report_stats(facility, welt))
-            response = export_dataset(backend, facility, date(2026, 1, 1), date(2026, 1, 31), format=fmt)
-            body = b"".join(response.streaming_content) if response.streaming else response.content
-            seiten.append(body.decode("utf-8"))
-
-        assert _label_sequence(seiten[0], _AGE_LABELS) == _label_sequence(seiten[1], _AGE_LABELS)
-        assert _label_sequence(seiten[0], _DOC_NAMES) == _label_sequence(seiten[1], _DOC_NAMES)
+        rows = [_card_rows(surface, text) for text in rendered]
+        sequences = [[(table, label) for table, label, _count in world_rows] for world_rows in rows]
+        assert sequences[0] == sequences[1]
+        for text in rendered:
+            # Guard against a vacuous comparison: every label is in the artifact.
+            assert len(_label_sequence(text, _AGE_LABELS)) == len(_AGE_LABELS)
+            assert len(_label_sequence(text, _DOC_NAMES)) == len(_DOC_NAMES)
+        assert _label_sequence(rendered[0], _AGE_LABELS) == _label_sequence(rendered[1], _AGE_LABELS)
+        assert _label_sequence(rendered[0], _DOC_NAMES) == _label_sequence(rendered[1], _DOC_NAMES)
 
     def test_beispiel_sachbericht_pdf_datenpfad(self, facility):
         from core.services.dashboard import suppress_sample_report_1_stats
@@ -568,25 +704,34 @@ class TestFailSafePfadIstNichtIrrefuehrend:
         assert "by_document_type" not in out, "Vorbedingung: der Fail-safe hat die Tabelle fallen lassen"
         return out
 
-    def test_karte_weist_die_unterdrueckung_aus(self, facility, monkeypatch):
-        _patch_external_report(monkeypatch, self._stats(facility))
+    @pytest.mark.parametrize("surface", _SURFACES)
+    def test_card_states_the_suppression_in_every_artifact(
+        self, client, lead_user, facility, monkeypatch, pdf_text, surface
+    ):
+        _patch_raw_statistics(monkeypatch, _KOLLAPS_STATS)
+        assert "by_document_type" not in _card_tables(facility), "precondition: the fail-safe dropped the table"
+        client.force_login(lead_user)
 
-        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." in _card_notes(facility)
-        assert "by_document_type" not in _card_tables(facility)
+        text = _render_card(client, pdf_text, surface)
 
-    def test_leerer_zeitraum_bekommt_denselben_hinweis(self, facility, monkeypatch):
-        """Bewusste Kehrseite, nicht Zufall: bei **leerem** Zeitraum ist
-        ``total_contacts`` ebenfalls ``None`` (Randsummen-Regel R14 auf 0), also
-        greift derselbe Zweig.
+        assert _NO_DATA_TEXT not in text
+        assert "by_document_type" not in {table for table, _label, _count in _card_rows(surface, text)}
+        if surface in _SURFACES_WITH_NOTES:
+            assert _DOC_TYPES_SUPPRESSED in text
 
-        Der Alternativtext waere „Keine Daten im Zeitraum" — und der publiziert
-        genau die Zahl, die R14 verbirgt (Gesamtkontakte = 0). Von zwei
-        unscharfen Aussagen ist die k-anonyme die richtige, und die Alterstabelle
-        verhaelt sich seit #1768
-        in derselben Lage identisch.
+    @pytest.mark.parametrize("surface", _SURFACES)
+    def test_empty_period_gets_the_same_note(self, client, lead_user, facility, monkeypatch, pdf_text, surface):
+        """Deliberate flip side, not an accident: for an **empty** period
+        ``total_contacts`` is ``None`` as well (marginal-sum rule R14 on 0), so
+        the same branch applies.
+
+        The alternative text would be "no data" -- and that publishes exactly
+        the number R14 hides (total contacts = 0). Of two imprecise statements
+        the k-anonymous one is correct, and the age table behaves the same way
+        since #1768.
         """
-        leer = suppress_report_stats(
-            facility,
+        _patch_raw_statistics(
+            monkeypatch,
             {
                 "total_contacts": 0,
                 "unique_clients": 0,
@@ -596,9 +741,16 @@ class TestFailSafePfadIstNichtIrrefuehrend:
                 "by_age_cluster": [],
             },
         )
-        _patch_external_report(monkeypatch, leer)
+        client.force_login(lead_user)
 
-        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." in _card_notes(facility)
+        text = _render_card(client, pdf_text, surface)
+
+        assert _NO_DATA_TEXT not in text
+        rows = _card_rows(surface, text)
+        assert {table for table, _label, _count in rows}.isdisjoint({"by_document_type", "by_age_cluster"})
+        assert all(count is None for _table, _label, count in rows), "no number may be published for an empty period"
+        if surface in _SURFACES_WITH_NOTES:
+            assert _DOC_TYPES_SUPPRESSED in text
 
     def test_beispiel_sachbericht_pdf_leerfall_publiziert_die_randsumme_nicht(self, facility):
         """Dieselbe Fehlklasse im dritten Artefakt (Refs #1770).
@@ -644,13 +796,14 @@ class TestFailSafePfadIstNichtIrrefuehrend:
         assert "Keine relevanten Kontakte im Berichtszeitraum." in abschnitt
         assert "Angaben nach Leistungskategorie unterdrückt (k-Anonymität)." not in abschnitt
 
-    def test_gefuellte_tabelle_zeigt_weiterhin_ihre_zeilen(self, facility, monkeypatch):
-        """Gegenprobe: solange die Tabelle da ist, aendert sich nichts — weder
-        der Marker je Zeile noch die sichtbaren Zahlen."""
-        from core.services.dashboard import suppress_report_stats
-
-        out = suppress_report_stats(
-            facility,
+    @pytest.mark.parametrize("surface", _SURFACES)
+    def test_gefuellte_tabelle_zeigt_weiterhin_ihre_zeilen(
+        self, client, lead_user, facility, monkeypatch, pdf_text, surface
+    ):
+        """Counter-check: as long as the table is there nothing changes -- neither
+        the suppression marker per row nor the visible numbers."""
+        _patch_raw_statistics(
+            monkeypatch,
             {
                 "total_contacts": 25,
                 "unique_clients": 20,
@@ -664,10 +817,16 @@ class TestFailSafePfadIstNichtIrrefuehrend:
                 "by_age_cluster": [],
             },
         )
-        _patch_external_report(monkeypatch, out)
+        assert "by_document_type" in _card_tables(facility), "precondition: the table survives the guard"
+        client.force_login(lead_user)
 
-        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." not in _card_notes(facility)
-        assert "by_document_type" in _card_tables(facility)
+        text = _render_card(client, pdf_text, surface)
+
+        assert _NO_DATA_TEXT not in text
+        assert _DOC_TYPES_SUPPRESSED not in text
+        by_label = {label: count for table, label, count in _card_rows(surface, text) if table == "by_document_type"}
+        assert by_label == {"Notiz": "20", "Kontakt": None, "Beratung": None}
+        assert "Notiz" in text
 
 
 # --- K3-A1: Enumeration ueber die Restzeilen-Welten ------------------------
