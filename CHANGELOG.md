@@ -9,10 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Erforderliche Betreiber-Aktionen
 
 - **Audit-Anker auf eigenes Volume umstellen** (#2527) — Neues Image und Compose-Dateien verwenden, `audit-anchor` beim Stack-Start anlegen lassen und `DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json` sowie `MAINTENANCE_FLAG_FILE=/media/anlaufstelle.maintenance` setzen; Medienwurzeln unter `/data/…` mit gleichem Restpfad nach `/media/…` umstellen (nur bisheriger Standard `/data/media` → `MEDIA_ROOT=/media/media`, individuell etwa `/data/vault` → `MEDIA_ROOT=/media/vault`), gegebenenfalls `MEDIA_ROOT_CONTAINER` auf dasselbe tatsächliche Verzeichnis setzen und prüfen, dass ein zuvor geöffneter Bestandsanhang nach dem Upgrade lädt (Medienvolume bleibt erhalten, Mount jetzt `/media`); bei neuen Instanzen vor dem ersten Backup initialisieren, bei bestehenden den signierten Anker unter angehaltenen Jobs erhalten und übernehmen ([Ops-Runbook § 6.7](docs/ops-runbook.md#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)).
+
 ### Security
 
 - **Admin-Audit und Anker abgesichert** (#2527) — Verwaltungszugriffe der Systemadministration werden bei fehlgeschlagenem Leseaudit mit 403 abgewiesen, Admin-Schreibaktionen einschließlich eigenem Passwortwechsel, Sammellöschungen und Inline-Änderungen mit Actor protokolliert (das Passwortformular und Fehler bei falschem Altpasswort werden korrekt angezeigt, erfolgreiche Wechsel führen zur Bestätigungsseite) und Ereignisse samt Historien ausschließlich als Metadaten angezeigt; der Audit-Anker liegt im eigenen Volume mit nur lesendem Webzugriff, und fehlende, leere oder unlesbare Anker brechen das Backup vor Veröffentlichung ab; Fehlanmeldungen einrichtungsloser Systemadministrationskonten lösen einen deduplizierten Alarm aus, TOTP-/Passkey-Erfolg und abgewiesene Backup-Code-Erneuerung werden auditiert, und HTTP-429-Abweisungen erhalten eine gedrosselte Spur ohne Request-Inhalte.
-
+- **Prüfseiten respektieren die Leserechte des Ziels** (#2516) — Ereignis-, Personen-, Fall- und Zusammenführungs-Prüfungen verlinken einsehbare Datensätze in einem neuen Tab; unsichtbare, gelöschte oder fehlende Ziele bleiben neutral und ohne Link, Ereignismetadaten werden nur nach der Sichtbarkeitsprüfung angezeigt und Merge-Fallzahlen zählen ausschließlich Fälle aktiver, nicht gelöschter Personen.
 
 ### Fixed
 
@@ -23,12 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Testprämissen und Release-Testprofile** (#2531) — Leere Parametersätze und fehlendes ShellCheck scheitern ausdrücklich; das gepinnte Dev-Werkzeug, Demo-Gate, xfail-feste Public-Skip-Zuordnung und eintragsbezogene Archivprüfung samt CHANGELOG-Abgleich sichern die Testabnahme.
-
 - **Solo-Demo ohne Zeitfenster** (#2506) — Die Beratungspraxis Lindenhof wird ohne Zeitfenster geseedet; die Zeitfenster der übrigen Demo-Einrichtungen bleiben erhalten.
 
-### Security
-
-- **Prüfseiten respektieren die Leserechte des Ziels** (#2516) — Ereignis-, Personen-, Fall- und Zusammenführungs-Prüfungen verlinken einsehbare Datensätze in einem neuen Tab; unsichtbare, gelöschte oder fehlende Ziele bleiben neutral und ohne Link, Ereignismetadaten werden nur nach der Sichtbarkeitsprüfung angezeigt und Merge-Fallzahlen zählen ausschließlich Fälle aktiver, nicht gelöschter Personen.
 ### Added
 
 - **Dateianhänge abbruchsicher umschlüsseln und prüfen** (#2526) — `reencrypt_files` rotiert im privilegierten Wartungsprozess alle referenzierten Anhang-Versionen chunkweise mit verschlüsselter Zwischenablage, atomarem Austausch, Konkurrenzschutz und wiederaufnehmbarem Fortschritt, bietet Einrichtungsfilter, Trockenlauf und Chargengröße sowie eine vollständige Primärschlüssel-Prüfung mit `--verify` und Fehlerstatus, versucht eine minimierte Audit-Sammelzeile zu schreiben und dokumentiert den DE/EN-Wartungsweg zur Altschlüsselentfernung erst nach Feldrotation, ungefilterter Dateiprüfung und Ablauf betroffener Backups.
