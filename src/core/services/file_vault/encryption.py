@@ -8,6 +8,7 @@ all keys are tried for decryption.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import struct
@@ -86,13 +87,23 @@ def _reset_fernet_cache(**kwargs):
 setting_changed.connect(_reset_fernet_cache)
 
 
+# The non-UTF-8 magic cannot collide with legacy UTF-8 text tokens (Refs #2520).
+# Version and type are inside the Fernet payload and therefore authenticated.
+_FIELD_FORMAT_MAGIC = b"\x89ANLAUFSTELLE-FIELD\x00"
+_LIST_FIELD_V1_PREFIX = _FIELD_FORMAT_MAGIC + b"1:list\x00"
+
+
 def encrypt_field(value):
-    """Encrypt plaintext and return a dict with a marker."""
+    """Encrypt text as before and non-empty lists as a versioned typed payload."""
     if not value:
         return value
     try:
         f = get_fernet()
-        token = f.encrypt(str(value).encode("utf-8")).decode("utf-8")
+        if isinstance(value, list):
+            plaintext = _LIST_FIELD_V1_PREFIX + json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        else:
+            plaintext = str(value).encode("utf-8")
+        token = f.encrypt(plaintext).decode("utf-8")
         return {"__encrypted__": True, "value": token}
     except EncryptionKeyMissing as exc:
         raise EncryptionError(
@@ -103,12 +114,23 @@ def encrypt_field(value):
 
 
 def decrypt_field(value):
-    """Decrypt an encrypted dict back to plaintext."""
+    """Restore typed lists; legacy UTF-8 tokens always remain text."""
     if not is_encrypted_value(value):
         return value
     try:
         f = get_fernet()
-        return f.decrypt(value["value"].encode("utf-8")).decode("utf-8")
+        plaintext = f.decrypt(value["value"].encode("utf-8"))
+        if not plaintext.startswith(_FIELD_FORMAT_MAGIC):
+            return plaintext.decode("utf-8")
+        if not plaintext.startswith(_LIST_FIELD_V1_PREFIX):
+            raise EncryptionError("Unsupported encrypted field format")
+        try:
+            decoded = json.loads(plaintext[len(_LIST_FIELD_V1_PREFIX) :].decode("utf-8"))
+        except ValueError as exc:
+            raise EncryptionError("Invalid encrypted list payload") from exc
+        if not isinstance(decoded, list):
+            raise EncryptionError("Encrypted list payload must contain a list")
+        return decoded
     except EncryptionKeyMissing:
         raise
     except InvalidToken as exc:

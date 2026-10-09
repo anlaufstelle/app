@@ -581,3 +581,85 @@ def test_reencrypt_command_rotates_rectification_requests(facility, client_ident
         assert decrypt_field(rr.new_value) == '"Neu"'
         assert decrypt_field(rr.reason) == "Antragsbegruendung"
         assert decrypt_field(rr.review_note) == "Pruefvermerk"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(["a", "b", "c"], id="selection"),
+        pytest.param(["ä", 'quote"', "line\n", "slash\\", "", "ä"], id="special-selection"),
+        pytest.param([], id="empty-selection"),
+        pytest.param("true", id="boolean-like-text"),
+        pytest.param("123", id="number-like-text"),
+        pytest.param('["a", "b"]', id="json-list-text"),
+        pytest.param('{"version": 1, "type": "list", "value": ["a"]}', id="json-object-text"),
+        pytest.param("", id="empty-text"),
+        pytest.param(None, id="null"),
+    ],
+)
+def test_field_roundtrip_preserves_selection_or_text_type(value, _encryption_key):
+    stored = encrypt_field(value)
+    result = decrypt_field(stored)
+    assert result == value
+    assert type(result) is type(value)
+    assert safe_decrypt(stored) == value
+    if value:
+        assert is_encrypted_value(stored)
+        assert set(stored) == {"__encrypted__", "value"}
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["true", "123", '["a", "b"]', "['a', 'b']", '{"type": "list"}', "\x89ANLAUFSTELLE-FIELD\x001:list\x00[]"],
+)
+def test_legacy_text_tokens_remain_text(text, _encryption_key, settings):
+    token = Fernet(settings.ENCRYPTION_KEY.encode()).encrypt(text.encode()).decode()
+    stored = {"__encrypted__": True, "value": token, "json": True, "type": "list"}
+    assert decrypt_field(stored) == text
+    assert type(decrypt_field(stored)) is str
+    new_token = encrypt_field(text)
+    assert Fernet(settings.ENCRYPTION_KEY.encode()).decrypt(new_token["value"].encode()) == text.encode()
+
+
+def test_selection_type_is_authenticated(_encryption_key):
+    stored = encrypt_field(["a", "b"])
+    stored.update(json=False, type="text", version=0)
+    assert decrypt_field(stored) == ["a", "b"]
+    token = bytearray(stored["value"].encode())
+    token[len(token) // 2] = ord("A") if token[len(token) // 2] != ord("A") else ord("B")
+    stored["value"] = token.decode()
+    with pytest.raises(EncryptionError):
+        decrypt_field(stored)
+    assert safe_decrypt(stored) == "[verschlüsselt]"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"2:list\x00[]",
+        b"1:object\x00{}",
+        b"1:list\x00true",
+        b"1:list\x00{broken",
+        b"1:list\x00\xff",
+    ],
+    ids=["unknown-version", "unknown-type", "wrong-json-type", "invalid-json", "invalid-utf8"],
+)
+def test_invalid_typed_field_payload_uses_existing_error_contract(payload, _encryption_key, settings):
+    token = Fernet(settings.ENCRYPTION_KEY.encode()).encrypt(b"\x89ANLAUFSTELLE-FIELD\x00" + payload).decode()
+    stored = {"__encrypted__": True, "value": token}
+    with pytest.raises(EncryptionError):
+        decrypt_field(stored)
+    assert safe_decrypt(stored) == "[verschlüsselt]"
+
+
+@pytest.mark.parametrize("value", [["a", "b"], "true", "123", {"choices": ["a", "b"]}, None])
+def test_rectification_json_text_is_decoded_only_by_its_service(value, _encryption_key):
+    import json
+
+    from core.services.client.rectification import decode_rectification_value
+
+    text = json.dumps(value)
+    stored = encrypt_field(text)
+    assert decrypt_field(stored) == text
+    assert type(decrypt_field(stored)) is str
+    assert decode_rectification_value(stored) == value

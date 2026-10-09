@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Typen verschlüsselter Mehrfachauswahl erhalten** (#2520) — Neu verschlüsselte Mehrfachauswahlwerte bleiben bei Person, Fall und Ereignis nach Speichern, Bulk-Anlage und Schlüsselrotation Listen; Texttokens bleiben unverändert Text.
+
 ### Erforderliche Betreiber-Aktionen
 
 - Keine.
