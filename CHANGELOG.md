@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Kalte Offline-Strichliste meldet Queue-Erfolg korrekt** (#2513) — Nach bestätigter Speicherung in der Offline-Queue setzt die kalte Strichliste das Formular zurück und meldet auch bei Fehlern der anschließenden Anzeigeaktualisierung keinen Speicherfehler, während echte Speicherfehler weiterhin angezeigt werden.
+
 ### Erforderliche Betreiber-Aktionen
 
 - Keine.

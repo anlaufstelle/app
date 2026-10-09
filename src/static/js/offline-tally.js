@@ -482,7 +482,7 @@
                     } catch (error) {
                         this.rows = [];
                         this.snapshotAtLabel = "";
-                        this.feedback = this._labels.submitError;
+                        // Loading failures use the existing unavailable state, not a submit error.
                         // eslint-disable-next-line no-console
                         console.error("[offline-tally] load", error);
                     } finally {
@@ -492,17 +492,28 @@
 
                 async submit(event) {
                     if (this.submitting) return;
+                    const form = event.currentTarget;
                     this.submitting = true;
                     this.feedback = "";
                     try {
-                        const response = await submitForm(event.currentTarget);
-                        if (!response.ok) throw new Error("TallyHTTP" + response.status);
-                        event.currentTarget.reset();
-                        notifyZeitstromChanged(response);
-                        await revalidateFacilitySnapshot();
+                        let response;
+                        try {
+                            response = await submitForm(form);
+                            if (!response.ok) throw new Error("TallyHTTP" + response.status);
+                        } catch (_error) {
+                            this.feedback = this._labels.submitError;
+                            return;
+                        }
+                        // Refs #2513: an acknowledged write stays successful if UI refresh fails.
+                        try {
+                            form.reset();
+                            notifyZeitstromChanged(response);
+                            await revalidateFacilitySnapshot();
+                        } catch (error) {
+                            // eslint-disable-next-line no-console
+                            console.error("[offline-tally] refresh", error);
+                        }
                         await this.load();
-                    } catch (_error) {
-                        this.feedback = this._labels.submitError;
                     } finally {
                         this.submitting = false;
                     }

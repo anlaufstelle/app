@@ -22,6 +22,7 @@ beforeAll(async () => {
     await import("../../src/static/js/crypto.js");
     await window.crypto_session.deriveSessionKey("correct horse battery", "c2FsdHNhbHRzYWx0");
     await importOfflineStoreModules();
+    await import("../../src/static/js/offline-queue.js");
     store = window.offlineStore;
     globalThis.Alpine = {
         data(name, factory) {
@@ -661,5 +662,138 @@ describe("kalte Offline-Tally-Shell", () => {
 
         expect(component.snapshotAtLabel).toBe("");
         expect(component.hasSnapshotAt).toBe(false);
+    });
+});
+
+// Refs #2513: exercise the Alpine submit path, not only submitForm().
+describe("cold tally acknowledgement boundaries", () => {
+    async function setupColdSubmit(mode = "direct") {
+        vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+        const bundle = facilityBundle();
+        if (mode === "number") {
+            bundle.tally.rows[0].mode = "number";
+            bundle.tally.rows[0].fields = [{ slug: "quantity", name: "Quantity", min_value: 0, max_value: 99 }];
+        }
+        await store.saveFacilityBundle(bundle);
+        document.body.innerHTML = `<form data-document-type="${TYPE_A}" data-tally-date="2026-08-16" data-tally-time-filter="all" data-tally-window-start="2026-08-16T00:00:00Z" data-tally-window-end="2026-08-16T23:59:59Z">${mode === "number" ? '<input name="quantity" type="number" value="">' : ""}</form>`;
+        const form = document.querySelector("form");
+        if (mode === "number") form.elements.quantity.value = "7";
+        const component = alpineFactory();
+        component.$el = { dataset: {} };
+        await component.load();
+        const response = new Response("queued", { status: 200, headers: { "X-Offline-Queued": "1" } });
+        global.fetch = vi.fn(async (url, options) => {
+            await window.offlineQueue.enqueueRequest(
+                new URL(url, window.location.origin).href,
+                options.method,
+                options.body,
+                Object.fromEntries(new Headers(options.headers)),
+            );
+            return response;
+        });
+        return { component, form, response };
+    }
+
+    it.each(["direct", "number"])("accepts one queued %s contact after currentTarget expires and ignores an overlapping submit", async (mode) => {
+        const { component, form } = await setupColdSubmit(mode);
+        const submissions = [];
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            submissions.push(component.submit(event));
+        });
+        const event = new Event("submit", { bubbles: true, cancelable: true });
+
+        form.dispatchEvent(event);
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        expect(event.currentTarget).toBeNull();
+        await Promise.all(submissions);
+
+        expect(component.feedback).toBe("");
+        expect(component.submitting).toBe(false);
+        expect(component.rows[0].pendingLabel).toBe("ausstehend: 1");
+        expect(component.rows[0].confirmedLabel).toBe("Serverstand: 12");
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        const records = await store.listDecrypted("queue");
+        expect(records).toHaveLength(1);
+        const params = new URLSearchParams(records[0].data.body);
+        expect(records[0].idempotencyKey).toBe(params.get("idempotency_key"));
+        expect(new Headers(records[0].data.headers).get("X-Idempotency-Key")).toBe(records[0].idempotencyKey);
+        if (mode === "number") {
+            expect(params.get("quantity")).toBe("7");
+            expect(form.elements.quantity.value).toBe("");
+        }
+
+        // Losing a replay response must preserve the original request and key.
+        vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+        window.csrfUtils = { fromMeta: () => "replay-token" };
+        global.fetch = vi.fn()
+            .mockRejectedValueOnce(new TypeError("Replay response lost"))
+            .mockResolvedValueOnce(new Response("saved", { status: 200 }));
+        await window.offlineQueue.replayQueue();
+        expect(await store.count("queue")).toBe(1);
+        await window.offlineQueue.replayQueue();
+        expect(await store.count("queue")).toBe(0);
+        await window.offlineQueue.replayQueue();
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        for (const [, options] of global.fetch.mock.calls) {
+            expect(options.body).toBe(records[0].data.body);
+            expect(new Headers(options.headers).get("X-Idempotency-Key")).toBe(records[0].idempotencyKey);
+            expect(new Headers(options.headers).get("X-Offline-Replay")).toBeTruthy();
+        }
+    });
+
+    it.each(["reset", "notification", "snapshot", "facility", "queue"])("does not report a storage failure when %s fails after acknowledgement", async (stage) => {
+        const { component, form, response } = await setupColdSubmit("number");
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        const error = new Error("Refresh failed");
+        if (stage === "reset") vi.spyOn(form, "reset").mockImplementation(() => { throw error; });
+        if (stage === "notification") vi.spyOn(response.headers, "get").mockImplementation(() => { throw error; });
+        if (stage === "snapshot") {
+            vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+            vi.spyOn(store, "revalidateCachedFacility").mockRejectedValue(error);
+        }
+        if (stage === "facility") vi.spyOn(store, "getOfflineFacility").mockRejectedValue(error);
+        if (stage === "queue") vi.spyOn(store, "listTallyQueueState").mockRejectedValue(error);
+
+        // A stable event object isolates follow-up failures from DOM dispatch lifetime.
+        await component.submit({ currentTarget: form });
+
+        expect(component.feedback).toBe("");
+        expect(component.submitting).toBe(false);
+        expect(await store.count("queue")).toBe(1);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        if (stage === "facility" || stage === "queue") {
+            expect(component.isUnavailable).toBe(true);
+        } else {
+            expect(component.rows[0].pendingLabel).toBe("ausstehend: 1");
+        }
+    });
+
+    it("shows unavailability rather than a storage failure when loading fails", async () => {
+        const { component } = await setupColdSubmit();
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        vi.spyOn(store, "getOfflineFacility").mockRejectedValue(new Error("Snapshot unavailable"));
+
+        await component.load();
+
+        expect(component.feedback).toBe("");
+        expect(component.isUnavailable).toBe(true);
+        expect(component.loading).toBe(false);
+    });
+
+    it.each(["nack", "network"])("still reports a real %s failure without resetting or queueing", async (failure) => {
+        const { component, form } = await setupColdSubmit("number");
+        global.fetch = failure === "nack"
+            ? vi.fn(async () => new Response("Queue persistence failed", { status: 503 }))
+            : vi.fn(async () => { throw new TypeError("Network unavailable"); });
+
+        await component.submit({ currentTarget: form });
+
+        expect(component.feedback).toBe("Erfassung konnte nicht gespeichert werden.");
+        expect(component.submitting).toBe(false);
+        expect(form.elements.quantity.value).toBe("7");
+        expect(await store.count("queue")).toBe(0);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(component.rows[0].pendingLabel).toBe("ausstehend: 0");
     });
 });
