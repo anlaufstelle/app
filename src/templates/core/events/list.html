@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+{% block title %}{% translate "Kontakte" %} – Anlaufstelle{% endblock %}
+{% block content %}
+{% back_link %}
+<h1>{% translate "Kontakte" %}</h1>
+{% include "core/events/partials/table.html" %}
+{% endblock %}

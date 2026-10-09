@@ -79,6 +79,7 @@ from core.views.event_deletion import (
     DeletionRequestReviewView,
     DeletionRequestWithdrawView,
 )
+from core.views.event_list import EventListView
 from core.views.events import (
     EventCreateView,
     EventDeleteView,
@@ -280,6 +281,7 @@ urlpatterns = [
     # ist; den Owner leitet der View aus der Zeile ab und gatet ihn wie beim Download.
     path("attachments/<uuid:pk>/delete/", AttachmentPurgeView.as_view(), name="attachment_delete"),
     # Events
+    path("events/", EventListView.as_view(), name="event_list"),
     path("events/new/", EventCreateView.as_view(), name="event_create"),
     path("events/<uuid:pk>/", EventDetailView.as_view(), name="event_detail"),
     path("events/<uuid:pk>/edit/", EventUpdateView.as_view(), name="event_update"),

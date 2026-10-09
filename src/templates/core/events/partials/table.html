@@ -1,0 +1,19 @@
+{% load i18n %}
+<table>
+  <thead><tr>
+    <th scope="col">{% translate "Zeitpunkt" %}</th>
+    <th scope="col">{% translate "Typ" %}</th>
+    <th scope="col">{% translate "Person" %}</th>
+    {% if show_cases %}<th scope="col">{% translate "Fall" %}</th>{% endif %}
+    <th scope="col">{% translate "Erfasst von" %}</th>
+  </tr></thead>
+  <tbody>{% for event in events %}<tr>
+    <td>{{ event.occurred_at|date:"d.m.Y H:i" }}</td>
+    <td>{{ event.document_type.name }}</td>
+    <td>{% if event.is_anonymous %}{% translate "Anonym" %}{% elif event.client %}{{ event.client.pseudonym }}{% endif %}</td>
+    {% if show_cases %}<td>{% if event.case and not event.case.is_deleted %}{{ event.case.title }}{% endif %}</td>{% endif %}
+    <td>{{ event.created_by|default:"" }}</td>
+  </tr>{% empty %}<tr><td>{% translate "Keine Kontakte gefunden." %}</td></tr>{% endfor %}</tbody>
+</table>
+{% if events.has_previous %}<a href="?{{ pagination_params }}&amp;page={{ events.previous_page_number }}">{% translate "Zurück" %}</a>{% endif %}
+{% if events.has_next %}<a href="?{{ pagination_params }}&amp;page={{ events.next_page_number }}">{% translate "Weiter" %}</a>{% endif %}

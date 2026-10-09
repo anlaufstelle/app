@@ -319,7 +319,7 @@ ZEITSTROM = NavItem(
     # Ereignis-Vollseiten gehören zum Zeitstrom-Anker (Verify-Befund #1813,
     # dieselbe Klasse wie der audit_detail-Fix): Detail, Neu, Edit und die
     # GET-Lösch-Bestätigung sind "du bist hier"-Zustände.
-    family=frozenset({"zeitstrom", "event_detail", "event_create", "event_update", "event_delete"}),
+    family=frozenset({"zeitstrom", "event_list", "event_detail", "event_create", "event_update", "event_delete"}),
     gates=("is_assistant_or_above",),
     icon="zeitstrom",
 )

@@ -189,6 +189,7 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "client_identified.pk"),),
         idor=(("pk", "foreign_client.pk"),),
     ),
+    E("core:event_list", "facility-read", get=ASSISTANT_PLUS),
     E("core:attachment_list", "facility-read", get=ASSISTANT_PLUS),
     E(
         "core:event_detail",
