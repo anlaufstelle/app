@@ -6,21 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Fixed
-
-- **Kalte Offline-Strichliste meldet Queue-Erfolg korrekt** (#2513) — Nach bestätigter Speicherung in der Offline-Queue setzt die kalte Strichliste das Formular zurück und meldet auch bei Fehlern der anschließenden Anzeigeaktualisierung keinen Speicherfehler, während echte Speicherfehler weiterhin angezeigt werden.
-
 ### Erforderliche Betreiber-Aktionen
 
 - Keine.
 
+### Fixed
+
+- **Kalte Offline-Strichliste meldet Queue-Erfolg korrekt** (#2513) — Nach bestätigter Speicherung in der Offline-Queue setzt die kalte Strichliste das Formular zurück und meldet auch bei Fehlern der anschließenden Anzeigeaktualisierung keinen Speicherfehler, während echte Speicherfehler weiterhin angezeigt werden.
+- **Fußzeile zeigt die Version nur einmal** (#2532) — Die Source-Version entfällt neben dem Quellcode-Link, während die authentifizierte App-Version und der DSGVO-Paketfooter erhalten bleiben.
+
 ### Changed
 
 - **Solo-Demo ohne Zeitfenster** (#2506) — Die Beratungspraxis Lindenhof wird ohne Zeitfenster geseedet; die Zeitfenster der übrigen Demo-Einrichtungen bleiben erhalten.
-
-### Fixed
-
-- **Fußzeile zeigt die Version nur einmal** (#2532) — Die Source-Version entfällt neben dem Quellcode-Link, während die authentifizierte App-Version und der DSGVO-Paketfooter erhalten bleiben.
 
 ### Security
 
