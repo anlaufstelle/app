@@ -30,7 +30,7 @@ def test_anchor_volume_is_read_only_for_web_and_writable_only_for_maintenance(co
         else f"docker-compose.{compose_name}.yml"
     )
     if compose_name == "barbara" and not compose_path.is_file():
-        pytest.skip("Deployment source is absent from the public release snapshot")
+        pytest.skip("dev-ops/deploy/barbara/docker-compose.barbara.yml not in the public snapshot — dev repo only")
     compose = yaml.safe_load(compose_path.read_text())
     assert "audit-anchor" in compose["volumes"]
     mounts = {}
