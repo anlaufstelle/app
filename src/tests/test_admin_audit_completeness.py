@@ -438,6 +438,83 @@ def test_site_index_records_read_before_showing_recent_actions(admin_client, sup
     assert entry.detail["admin_view"] == "index"
 
 
+@pytest.mark.parametrize(
+    ("name", "expected_status"),
+    [
+        ("index", 200),
+        ("app_list", 200),
+        ("login", 200),
+        ("logout", 405),
+        ("password_change_done", 200),
+        ("autocomplete", 200),
+        ("search", 200),
+        ("view_on_site", 404),
+        ("jsi18n", 200),
+        (None, 404),
+    ],
+)
+def test_site_routes_render_expected_get_response(admin_client, super_admin_user, name, expected_status):
+    from django.contrib.contenttypes.models import ContentType
+
+    if name == "login":
+        admin_client.logout()
+    args = []
+    kwargs = {}
+    query = {}
+    if name == "app_list":
+        kwargs = {"app_label": "core"}
+    elif name == "view_on_site":
+        args = [ContentType.objects.get_for_model(super_admin_user).pk, super_admin_user.pk]
+    elif name == "autocomplete":
+        query = {"app_label": "core", "model_name": "quicktemplate", "field_name": "document_type", "term": ""}
+    elif name == "search":
+        query = {"s": super_admin_user.username}
+    url = reverse(f"admin:{name}", args=args, kwargs=kwargs) if name is not None else "/admin-mgmt/missing-route/"
+    response = admin_client.get(url, query)
+    assert response.status_code == expected_status
+    if expected_status != 405:
+        assert response.content
+    if name == "login":
+        assert b'name="username"' in response.content
+        assert b'name="password"' in response.content
+
+
+def test_site_own_password_change_get_renders_form(admin_client):
+    response = admin_client.get(reverse("admin:password_change"))
+    assert response.status_code == 200
+    assert not response.context["form"].is_bound
+    for field in ("old_password", "new_password1", "new_password2"):
+        assert f'name="{field}"'.encode() in response.content
+
+
+def test_site_own_password_change_invalid_post_keeps_password_without_write_audit(admin_client, super_admin_user):
+    old_hash = super_admin_user.password
+    before = set(AuditLog.objects.values_list("pk", flat=True))
+    response = admin_client.post(
+        reverse("admin:password_change"),
+        {
+            "old_password": "incorrect-old-password",
+            "new_password1": "Cyclone-9182-new",
+            "new_password2": "Cyclone-9182-new",
+        },
+    )
+    assert response.status_code == 200
+    form = response.context["form"]
+    assert form.is_bound
+    assert set(form.errors) == {"old_password"}
+    assert form.errors.as_data()["old_password"][0].code == "password_incorrect"
+    for field in ("old_password", "new_password1", "new_password2"):
+        assert f'name="{field}"'.encode() in response.content
+    assert str(form.errors["old_password"][0]).encode() in response.content
+    super_admin_user.refresh_from_db()
+    assert super_admin_user.password == old_hash
+    assert super_admin_user.check_password("testpass123")
+    assert not super_admin_user.check_password("Cyclone-9182-new")
+    entries = AuditLog.objects.exclude(pk__in=before)
+    assert entries.exists()
+    assert not entries.exclude(action=AuditLog.Action.SYSTEM_VIEW).exists()
+
+
 def test_site_own_password_change_is_audited(admin_client, super_admin_user):
     new_password = "Cyclone-9182-new"
     response = admin_client.post(
@@ -454,6 +531,11 @@ def test_site_own_password_change_is_audited(admin_client, super_admin_user):
     entry = AuditLog.objects.get(action=AuditLog.Action.CREDENTIALS_REVOKED, user=super_admin_user)
     assert entry.actor_id == super_admin_user.pk
     assert entry.detail == {"reason": "password_change"}
+    assert response.url == reverse("admin:password_change_done")
+    done = admin_client.get(response.url)
+    assert done.status_code == 200
+    assert str(done.context["title"]).encode() in done.content
+    assert b'name="old_password"' not in done.content
 
 
 def test_site_own_password_change_rolls_back_on_audit_failure(admin_client, super_admin_user):

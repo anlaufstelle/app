@@ -204,7 +204,7 @@ class AnlaufstelleAdminSite(UnfoldAdminSite):
         request.current_app = self.name
         return CustomPasswordChangeView.as_view(
             form_class=AdminOwnPasswordChangeForm,
-            template_name=self.password_change_template or "admin/password_change_form.html",
+            template_name=self.password_change_template or "registration/password_change_form.html",
             success_url=reverse(f"{self.name}:password_change_done", current_app=self.name),
             extra_context={**self.each_context(request), **(extra_context or {})},
         )(request)
