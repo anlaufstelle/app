@@ -23,6 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 
 - **Prüfseiten respektieren die Leserechte des Ziels** (#2516) — Ereignis-, Personen-, Fall- und Zusammenführungs-Prüfungen verlinken einsehbare Datensätze in einem neuen Tab; unsichtbare, gelöschte oder fehlende Ziele bleiben neutral und ohne Link, Ereignismetadaten werden nur nach der Sichtbarkeitsprüfung angezeigt und Merge-Fallzahlen zählen ausschließlich Fälle aktiver, nicht gelöschter Personen.
+### Added
+
+- **Streaming-Dienst für die Datei-Umschlüsselung** (#2526) — Dateianhänge lassen sich chunkweise mit verschlüsselter Zwischenablage, atomarem Ersetzen, wiederaufnehmbarem Manifest und Konkurrenzschutz umschlüsseln; das Betreiberkommando folgt.
 
 ## [0.99.6] - 2026-10-08
 

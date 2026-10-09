@@ -25,6 +25,7 @@ from django.conf import settings as django_settings
 
 from core.models.attachment import Attachment
 from core.models.import_job import ImportJob
+from core.services.file_vault.file_locks import attachment_mutation_lock, fsync_directory
 from core.services.file_vault.storage import delete_attachment_file
 
 logger = logging.getLogger(__name__)
@@ -316,7 +317,9 @@ def cleanup_orphan_storage_files(
             deletion_candidates += 1
             if dry_run:
                 continue
-            enc_file.unlink()
+            with attachment_mutation_lock():
+                enc_file.unlink()
+                fsync_directory(enc_file.parent)
             deleted += 1
             logger.info("cleanup_orphan_storage_files removed orphan: %s", enc_file)
         except OSError as exc:

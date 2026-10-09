@@ -28,6 +28,7 @@ from django.utils import timezone
 
 from core.models.attachment import Attachment, owner_field_name
 from core.services.file_vault.encryption import decrypt_file_stream, encrypt_field, encrypt_file, safe_decrypt
+from core.services.file_vault.file_locks import attachment_mutation_lock, fsync_directory
 from core.services.file_vault.policy import (
     StorageQuotaBackstopError,
     check_storage_quota_at_commit,
@@ -537,6 +538,9 @@ def delete_attachment_file(attachment):
     """Delete the physical encrypted file from disk."""
     path = get_attachment_path(attachment)
     try:
-        path.unlink(missing_ok=True)
+        with attachment_mutation_lock():
+            path.unlink(missing_ok=True)
+            if path.parent.exists():
+                fsync_directory(path.parent)
     except OSError:
         logger.warning("Failed to delete attachment file: %s", path)

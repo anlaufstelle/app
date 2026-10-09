@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import struct
+from contextlib import nullcontext
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
@@ -336,26 +337,15 @@ def encrypt_file(input_stream, output_path, file_id=None):
             _write_token(out, token)
 
 
-def decrypt_file_stream(input_path, file_id=None):
-    """Generator that yields decrypted chunks from an encrypted file.
+def decrypt_file_stream(input_path, file_id=None, *, fernet=None):
+    """Yield authenticated chunks from a path or an already open binary stream.
 
-    Reads chunk-by-chunk to avoid loading the entire file into memory. Bei
-    v2-Dateien (A4.5) ist ``file_id`` erforderlich; jeder Chunk wird gegen
-    seine erwartete Position + Datei-Bindung geprueft (Reorder/Truncation/
-    Splicing werfen ``EncryptionError``).
-
-    Alle Header-Laengenfelder werden plausibilisiert (Refs #1968), bevor sie
-    eine Leseanforderung oder eine Schleifengrenze werden — sie sind nicht
-    Teil eines Fernet-Tokens und damit angreifer-kontrolliert. Referenz ist
-    die tatsaechliche Dateigroesse (``os.fstat`` auf dem offenen Deskriptor,
-    also TOCTOU-frei) plus ``MAX_CHUNK_TOKEN_BYTES``. Jeder Parserfehler
-    verlaesst die Funktion als ``EncryptionError`` — insbesondere ein hinter
-    dem Versionsbyte abgeschnittener Chunk-Zaehler, der frueher ``struct.error``
-    an den Aufrufern vorbeischleuste.
+    Supplying ``fernet`` restricts decryption to that cipher (primary-only
+    verification). Open streams remain owned by their callers. File lengths
+    are checked against the open descriptor before allocating token buffers.
     """
-    f = get_fernet()
-
-    with open(input_path, "rb") as inp:
+    f = fernet if fernet is not None else get_fernet()
+    with nullcontext(input_path) if hasattr(input_path, "read") else open(input_path, "rb") as inp:
         version_bytes = inp.read(1)
         if not version_bytes:
             raise EncryptionError("Empty encrypted file")
@@ -445,3 +435,6 @@ def decrypt_file_stream(input_path, file_id=None):
             if ctx != _chunk_context(fid16, index, chunk_count):
                 raise EncryptionError("Chunk binding mismatch — possible reorder/truncation/splicing")
             yield chunk_data
+
+        if inp.read(1):
+            raise EncryptionError("Trailing data after encrypted chunks")
