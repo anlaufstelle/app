@@ -463,7 +463,7 @@ class TestFormatFieldDisplayValue:
 
     # MULTI_SELECT -----------------------------------------------------------
 
-    def test_multi_select_joins_labels_with_comma_space(self):
+    def test_multi_select_joins_labels_line_by_line(self):
         ft = _bare_ft(
             FieldTemplate.FieldType.MULTI_SELECT,
             options_json=[
@@ -471,7 +471,7 @@ class TestFormatFieldDisplayValue:
                 {"slug": "b", "label": "Beta"},
             ],
         )
-        assert _format_field_display_value(["a", "b"], ft) == "Alpha, Beta"
+        assert _format_field_display_value(["a", "b"], ft) == "Alpha\nBeta"
 
     def test_multi_select_single_value_no_trailing_separator(self):
         ft = _bare_ft(
@@ -487,7 +487,7 @@ class TestFormatFieldDisplayValue:
             FieldTemplate.FieldType.MULTI_SELECT,
             options_json=[{"slug": "a", "label": "Alpha"}],
         )
-        assert _format_field_display_value(["a", "ghost"], ft) == "Alpha, ghost"
+        assert _format_field_display_value(["a", "ghost"], ft) == "Alpha\nghost"
 
     def test_multi_select_non_list_value_returns_raw(self):
         """``isinstance(value, list)``-Branch: Nicht-Liste fällt durch."""
