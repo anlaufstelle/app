@@ -3,7 +3,7 @@
 from django.utils.translation import gettext_lazy as _
 
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
-from core.reporting.data_source import POPULATION_NOTES
+from core.reporting.data_source import POPULATION_NOTES, TABLE_SPECIFIC
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import build_external_report
 
@@ -11,6 +11,7 @@ from core.services.dashboard.external_report import build_external_report
 @register_backend("general-key-figures")
 class GeneralKeyFiguresBackend(DatasetBackend):
     name = _("Allgemeine Kennzahlen")
+    population = TABLE_SPECIFIC
     description = _("Zeigt Kontakte und Personen nach Kontaktstufe, Dokumentationstyp und Altersgruppe.")
 
     def get_field_specs(self) -> list[FieldSpec]:
@@ -39,10 +40,13 @@ class GeneralKeyFiguresBackend(DatasetBackend):
 
         append("total_contacts", _("Gesamtkontakte"), report["total_contacts"])
         append("unique_clients", _("Unterschiedliche Personen"), report["unique_clients"])
+        stage_labels = {
+            "anonym": _("Anonym"),
+            "identifiziert": _("Nur Pseudonym"),
+            "qualifiziert": _("Mit Zusatzangaben"),
+        }
         for stage, count in report.get("by_contact_stage", {}).items():
-            from core.models import Client
-
-            append("by_contact_stage", Client.ContactStage(stage).label, count)
+            append("by_contact_stage", stage_labels[stage], count)
         for row in report.get("by_document_type", []):
             append("by_document_type", row["name"], row["count"])
         for row in report.get("by_age_cluster", []):

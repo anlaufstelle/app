@@ -1377,6 +1377,7 @@ class TestDiscovery:
             "client-metrics",
             "counseling-hours",
             "example",
+            "general-key-figures",
             "monthly-trend",
             "needle-exchange-balance",
             "sample-report-1",

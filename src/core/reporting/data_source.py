@@ -101,7 +101,10 @@ TYPED_EVENTS = "typed_events"
 CASES_IN_PERIOD = "cases_in_period"
 BANS_IN_PERIOD = "bans_in_period"
 
+TABLE_SPECIFIC = "table_specific"
+
 POPULATION_NOTES = {
+    TABLE_SPECIFIC: _("je Tabelle ausgewiesene Grundgesamtheit"),
     ALL_EVENTS: _("alle Ereignisse im Zeitraum"),
     EVENTS_WITH_PERSON: _("Ereignisse mit Personenbezug im Zeitraum"),
     MAPPED_EVENTS: _("Ereignisse mit Berichtszuordnung im Zeitraum"),

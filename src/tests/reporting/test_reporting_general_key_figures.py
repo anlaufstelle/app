@@ -38,3 +38,12 @@ def test_general_figures_reuse_external_report_in_downloads_and_preview(facility
     assert "live" in rows[0][0]
     xml = export_dataset(backend, facility, START, END, format="xml").content.decode()
     assert "<populations>" in xml and "<unique_clients>persons</unique_clients>" in xml
+
+
+@pytest.mark.django_db
+def test_general_population_metadata_does_not_label_person_counts_as_events(facility):
+    backend = get_backend("general-key-figures")
+    response = export_dataset(backend, facility, START, END, format="json")
+    payload = json.loads(response.content)
+    assert payload["population"] == "table_specific"
+    assert payload["summary"]["metadata"]["populations"]["unique_clients"] == "persons"
