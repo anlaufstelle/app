@@ -279,7 +279,7 @@ Methodik:
 | B | DeletionRequests | 6 | 6 | 0 | 100 % |
 | B | Episoden | 4 | 4 | 0 | 100 % |
 | B | Episoden / Permissions | 1 | 1 | 0 | 100 % |
-| B | Events | 12 | 11 | 1 | 92 % |
+| B | Events | 15 | 14 | 1 | 93 % |
 | B | Fälle | 9 | 9 | 0 | 100 % |
 | B | Fälle / API | 1 | 1 | 0 | 100 % |
 | B | Fälle / Events | 2 | 2 | 0 | 100 % |
@@ -329,10 +329,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 11 | 1 | 92 % |
-| B | 264 | 179 | 85 | 68 % |
+| B | 267 | 182 | 85 | 68 % |
 | C | 38 | 10 | 28 | 26 % |
 | D | 46 | 14 | 32 | 30 % |
-| **Gesamt** | **360** | **214** | **146** | **59 %** |
+| **Gesamt** | **363** | **217** | **146** | **60 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->

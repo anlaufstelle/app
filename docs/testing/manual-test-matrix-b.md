@@ -2609,7 +2609,7 @@
 </details>
 
 <details open>
-<summary><strong>📝 EVT — Events / Dokumentation (10 Cases)</strong></summary>
+<summary><strong>📝 EVT — Events / Dokumentation (13 Cases)</strong></summary>
 
 **Routen:** `/events/new/`, `/events/<uuid>/`, `/events/<uuid>/edit/`, `/events/<uuid>/delete/`, `/partials/events/fields/`  
 **Views:** `src/core/views/events.py` (`EventCreateView`, `EventDetailView`, `EventUpdateView`, `EventDeleteView`, `EventFieldsPartialView`)  
@@ -2920,6 +2920,100 @@
 
 **DSGVO/Security-Note:**
 - Ausgeblendete Felder werden NICHT geleert oder überschrieben — Lead/Admin sieht weiterhin den ursprünglichen Wert.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-EVT-11 — Kontakte-Liste: Filterlauf, teilbare Adresse und Zurück-Taste
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Events | fachkraft | C/F/S | ⚪ | `test_event_list.py::TestFilterRun::test_filter_run_narrows_rows_and_pushes_the_url`, `test_event_list.py::TestSharedUrlAndHistory::test_back_and_forward_restore_each_filter_state` |
+
+**Voraussetzung:** Mindestens 26 sichtbare Kontakte im gewählten Zeitraum (Seitengröße 25), davon mindestens zwei Dokumentationstypen und zwei erfassende Personen.
+
+**Vorbereitung:**
+- Mit `fachkraft` einloggen.
+
+**Schritte:**
+1. Über „Kontakte“ am Zeitstrom `/events/` öffnen.
+2. Zeitraum „Von“/„Bis“ setzen und „Filtern“ wählen.
+3. Zusätzlich einen Dokumentationstyp wählen und „Filtern“ wählen.
+4. Typ auf „Alle“ zurück, „Erfasst von“ eine Kollegin wählen, filtern.
+5. „Erfasst von“ auf „Alle“, „Nur meine“ ankreuzen, filtern.
+6. Die Adresszeile in einen neuen Tab derselben Sitzung kopieren.
+7. Im ersten Tab mehrfach die Zurück-Taste, danach die Vorwärts-Taste des Browsers drücken.
+8. Auf Seite 2 blättern (Pfeil „Nächste Seite“).
+
+**Erwartetes Ergebnis:**
+- Jeder Filterlauf tauscht nur die Ergebnistabelle (`#event-table`), die Adresszeile trägt den Filterzustand (`date_from`, `date_to`, `doc_type`, `created_by`, `mine`).
+- Die Kopie der Adresse zeigt dieselben Zeilen und dieselben Formularwerte.
+- Zurück/Vorwärts zeigen je Schritt Zeilen **und** Formularwerte des jeweiligen Zustands (nie Ergebnisse des einen und Auswahl eines anderen Zustands).
+- Die Paginierung behält alle Filter in der Adresse; Sortierung absteigend nach Zeitpunkt, 25 Zeilen je Seite.
+- Der Tastaturfokus bleibt nach „Filtern“ auf der Schaltfläche.
+
+**DSGVO/Security-Note:**
+- Die Liste zeigt nur Metadaten (Zeitpunkt, Typ, Person, Fall, erfasst von), keine Feldwerte; Listenaufrufe erzeugen keinen Audit-Eintrag.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-EVT-12 — Kontakte-Liste: Rollensicht, mobile Karten und Formular ohne JavaScript
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Events | assistenz, fachkraft | C/F/S | ✓ | `test_event_list.py::TestRoleColumns::test_assistant_gets_no_case_column_filter_or_elevated_contacts`, `test_event_list.py::TestMobileCards::test_cards_replace_the_table_on_a_narrow_viewport`, `test_event_list.py::TestWithoutJavaScript::test_form_submits_as_plain_get` |
+
+**Voraussetzung:** Je ein Kontakt eines normalen und eines erhöht eingestuften Dokumentationstyps, ein Kontakt mit Fallzuordnung.
+
+**Vorbereitung:**
+- Einmal mit `assistenz`, einmal mit `fachkraft` einloggen; einmal ein Browserfenster mit ausgeschaltetem JavaScript vorbereiten.
+
+**Schritte:**
+1. Als `assistenz` `/events/` öffnen; Spaltenköpfe und Filterfelder prüfen; die Typ-Auswahl ansehen.
+2. In der Adresszeile `?case=<UUID eines Falls>` anhängen.
+3. Als `fachkraft` dieselbe Liste öffnen, Spalte „Fall“ und Filter „Fall“ prüfen, einen Fall wählen.
+4. Mit iPhone-Viewport (375 px) die Liste öffnen, filtern und die Karten prüfen.
+5. Mit ausgeschaltetem JavaScript Zeitraum und Typ setzen und „Filtern“ wählen.
+
+**Erwartetes Ergebnis:**
+- `assistenz` sieht weder Spalte noch Filter „Fall“, der Parameter `case` wird ignoriert; der erhöht eingestufte Typ fehlt in der Auswahl und die zugehörigen Kontakte in der Liste.
+- `fachkraft` sieht Spalte und Filter „Fall“; der Fallfilter zeigt nur Kontakte dieses Falls.
+- Mobil erscheinen Karten statt der Tabelle, ohne horizontales Scrollen; der Filter funktioniert dort ebenso.
+- Ohne JavaScript lädt „Filtern“ die Seite per GET neu, der Zustand steht in der Adresse und im Formular.
+
+**DSGVO/Security-Note:**
+- Sichtbarkeit identisch zum Zeitstrom (`allowed_sensitivities_for_user`); ein nicht erlaubter oder fremder Bezeichner wird wie ein ungültiger behandelt.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-EVT-13 — Kontakte-Liste: Zeitstrom-Link und gelöschte Kontakte
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Events | fachkraft | C/F/S | ⚪ | `test_event_list.py::TestZeitstromLink::test_contacts_link_follows_the_zeitstrom_filter`, `test_event_list.py::TestFilterRun::test_trashed_and_deleted_contacts_never_appear` |
+
+**Voraussetzung:** Mindestens ein Kontakt des Tages mit einem bestimmten Dokumentationstyp, der von der Fachkraft selbst erfasst wurde.
+
+**Vorbereitung:**
+- Mit `fachkraft` einloggen.
+
+**Schritte:**
+1. Im Zeitstrom ein Datum und einen Dokumentationstyp wählen.
+2. Den Link „Kontakte“ unter der Überschrift beobachten und öffnen.
+3. In der Liste den eigenen Kontakt öffnen, über „Löschen“ endgültig entfernen und die Liste neu laden.
+
+**Erwartetes Ergebnis:**
+- Der Link trägt Tag (`date_from`/`date_to`), Typ und gegebenenfalls Schicht des Zeitstroms; nach jedem Filterwechsel im Zeitstrom ist er aktualisiert.
+- Die Liste zeigt genau die Kontakte dieses Tages und Typs; Formularwerte entsprechen dem Zeitstrom.
+- Der gelöschte Kontakt erscheint nicht mehr; bei leerem Ergebnis steht „Keine Kontakte gefunden.“.
+
+**DSGVO/Security-Note:**
+- Gelöschte Kontakte (`is_deleted`) sind nie Teil der Liste (`event_list_queryset`).
 
 **Status:** ☐ Offen
 
