@@ -29,9 +29,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Dateianhänge abbruchsicher umschlüsseln und prüfen** (#2526) — `reencrypt_files` rotiert im privilegierten Wartungsprozess alle referenzierten Anhang-Versionen chunkweise mit verschlüsselter Zwischenablage, atomarem Austausch, Konkurrenzschutz und wiederaufnehmbarem Fortschritt, bietet Einrichtungsfilter, Trockenlauf und Chargengröße sowie eine vollständige Primärschlüssel-Prüfung mit `--verify` und Fehlerstatus, versucht eine minimierte Audit-Sammelzeile zu schreiben und dokumentiert den DE/EN-Wartungsweg zur Altschlüsselentfernung erst nach Feldrotation, ungefilterter Dateiprüfung und Ablauf betroffener Backups.
-
-### Added
-
 - **Eine Exportleiste, PDF für Datensatz-Berichte und Karte „Allgemeine Kennzahlen“** (#2505) — Was den Statistik-Bereich als Datei verlässt, geht über eine gemeinsame Leiste mit Empfänger und Zweck und erscheint unter „Freigaben“. Die Datensatz-Berichte bieten CSV, JSON, XML und PDF (generische Tabellen-PDF; das Beispiel-Sachbericht-PDF behält sein Layout über einen Layout-Hook), weisen Quelle je Format und Grundgesamtheit je Tabelle aus und halten alle Schutzregeln ein. Die Karte „Allgemeine Kennzahlen“ ersetzt den Reiter „Externer Bericht“; dessen Adresse leitet mit Zeitraum auf die Karte um und liefert keine Datei mehr. Das Übersichts-PDF samt internem Pseudonym-Schalter und die Sachbericht-PDF-Sonderroute entfallen; die Übersicht bietet nur noch die interne Ereignisliste (CSV, mit Pseudonymen) mit Warnhinweis.
 
 ## [0.99.6] - 2026-10-08
