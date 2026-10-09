@@ -275,6 +275,7 @@ es wird nichts angewendet, auch nicht für die übrigen Typen):
 | RetentionProposals | 4 | 6 | 12 | 6 | 3 (Solo: 2) |
 | Dateianhänge (ca.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | Anteil 25 % (Beratungs-Ereignisse) | ~5 (30 %) (Solo: ~3) |
 | Zeitraum | 80 Tage | 365 Tage | 3 Jahre | 1000 Tage | 270 Tage |
+| Zeitfenster | 3 | 3 | 3 | 3 | Kontaktladen 3, Falkenweg 3, Lindenhof 0, übrige 3 |
 
 > **Hinweis:** `small` enthält kein Fallmanagement (keine Episoden, Ziele). Für die Entwicklung am Fallmanagement `medium` verwenden.
 >

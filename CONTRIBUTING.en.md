@@ -272,6 +272,7 @@ applied, not even for the remaining types):
 | RetentionProposals | 4 | 6 | 12 | 6 | 3 (solo: 2) |
 | Attachments (approx.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | share 25 % (counseling events) | ~5 (30 %) (solo: ~3) |
 | Time span | 80 days | 365 days | 3 years | 1000 days | 270 days |
+| Time filters | 3 | 3 | 3 | 3 | Kontaktladen 3, Falkenweg 3, Lindenhof 0, remaining 3 |
 
 > **Note:** `small` does not include case management (no episodes, goals). Use `medium` when developing case management features.
 >
@@ -1046,5 +1047,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-06 -->
-<!-- source-hash: f7a4325e64c55112a93526f84860421b404df791 -->
+<!-- translation-date: 2026-10-09 -->
+<!-- source-hash: 524e1c996d75f14289ea9c281c5213534a623179 -->
