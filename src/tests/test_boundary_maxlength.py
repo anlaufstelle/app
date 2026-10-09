@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
@@ -170,11 +169,7 @@ def test_charfields_respect_max_length(model, required_defaults, fixture_deps, r
     defaults = {key: value() if callable(value) else value for key, value in required_defaults.items()}
     defaults.update({key: request.getfixturevalue(fixture_name) for key, fixture_name in fixture_deps.items()})
 
-    if model is Activity:
-        target = defaults.pop("target")
-        defaults["target_type"] = ContentType.objects.get_for_model(Client)
-        defaults["target_id"] = target.id
-    elif model is Attachment:
+    if model is Attachment:
         # Ein FieldTemplate aus dem doc_type des sample_event ziehen.
         field_template = FieldTemplate.objects.filter(facility=defaults["event"].facility).first()
         assert field_template is not None, "Fixture-Setup: kein FieldTemplate vorhanden"

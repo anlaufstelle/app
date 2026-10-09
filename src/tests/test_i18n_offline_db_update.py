@@ -94,7 +94,7 @@ class TestNoLoadPathStaysSilent:
 
         assert loading == {*self.WITH_LABEL, *self.WITHOUT_LABEL}
 
-    def test_these_layouts_really_have_no_label(self):
+    def test_no_unlabeled_layout_without_explicit_fallback_check(self):
         """All known loading layouts must provide a translated label."""
         assert not self.WITHOUT_LABEL, "Add explicit fallback checks when an unlabeled layout is introduced"
 

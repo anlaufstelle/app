@@ -61,4 +61,4 @@ def test_activity_length_boundary_checks_its_prerequisite():
 def test_offline_layout_prerequisite_is_executable():
     from tests.test_i18n_offline_db_update import TestNoLoadPathStaysSilent
 
-    TestNoLoadPathStaysSilent().test_these_layouts_really_have_no_label()
+    TestNoLoadPathStaysSilent().test_no_unlabeled_layout_without_explicit_fallback_check()

@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **Testprämissen und Release-Testprofile** (#2531) — Leere Parametersätze und fehlendes ShellCheck scheitern ausdrücklich; Demo-Gate, Public-Skip-Zuordnung und eintragsbezogener Hand-Check-Archiv-Guard sichern die Testabnahme.
+- **Testprämissen und Release-Testprofile** (#2531) — Leere Parametersätze und fehlendes ShellCheck scheitern ausdrücklich; das gepinnte Dev-Werkzeug, Demo-Gate, xfail-feste Public-Skip-Zuordnung und eintragsbezogene Archivprüfung samt CHANGELOG-Abgleich sichern die Testabnahme.
 
 - **Solo-Demo ohne Zeitfenster** (#2506) — Die Beratungspraxis Lindenhof wird ohne Zeitfenster geseedet; die Zeitfenster der übrigen Demo-Einrichtungen bleiben erhalten.
 
