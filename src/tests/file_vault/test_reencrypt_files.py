@@ -368,3 +368,173 @@ def test_missing_key_is_a_command_error_before_file_changes(rotation_files, main
             run_command(*(["--verify"] if verify else []))
     assert path.read_bytes() == before
     assert set(settings.MEDIA_ROOT.rglob("*")) == files
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("mode", ["rotation", "dry_run", "verify", "filtered"])
+def test_audit_summary_records_counts_duration_and_options(rotation_files, maintenance, mode, monkeypatch):
+    from core.models import AuditLog
+
+    create, primary, _ = rotation_files
+    attachment = create(key=primary if mode == "verify" else rotation_files[2])
+    args = {
+        "rotation": [],
+        "dry_run": ["--dry-run"],
+        "verify": ["--verify"],
+        "filtered": ["--facility", str(attachment.facility_id)],
+    }[mode]
+    action = "file_reencryption_completed"
+    before = AuditLog.objects.filter(action=action).count()
+    with monkeypatch.context() as timer:
+        timer.setattr("core.management.commands.reencrypt_files.monotonic", iter([10.0, 12.5]).__next__, raising=False)
+        run_command(*args, "--batch-size", "1")
+    entries = AuditLog.objects.filter(action=action)
+    assert entries.count() == before + 1
+    entry = entries.latest("timestamp")
+    assert entry.facility_id is None
+    assert entry.user_id is None
+    assert entry.target_id == ""
+    assert entry.detail == {
+        "file_reencryption": {
+            "duration_seconds": 2.5,
+            "checked": 1,
+            "rotated": int(mode in {"rotation", "filtered"}),
+            "already_primary": int(mode == "verify"),
+            "deleted": 0,
+            "would_rotate": int(mode == "dry_run"),
+            "error_count": 0,
+            "facility_id": str(attachment.facility_id) if mode == "filtered" else None,
+            "dry_run": mode == "dry_run",
+            "verify": mode == "verify",
+            "batch_size": 1,
+            "status": "completed",
+        }
+    }
+    assert attachment.storage_filename not in str(entry.detail)
+    assert "private filename" not in str(entry.detail)
+    assert "private payload" not in str(entry.detail)
+    assert str(attachment.pk) not in str(entry.detail)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("failure", ["file", "verify", "locked", "manifest"])
+def test_failed_runs_have_one_minimized_audit_summary(rotation_files, maintenance, settings, failure):
+    from contextlib import nullcontext
+
+    from core.models import AuditLog
+    from core.services.file_vault.file_locks import vault_lock
+
+    create, primary, _ = rotation_files
+    attachment = create()
+    args = ["--verify"] if failure == "verify" else []
+    if failure == "manifest":
+        (settings.MEDIA_ROOT / ".reencrypt-files.jsonl").write_bytes(b"invalid record\n")
+    if failure == "file":
+        get_attachment_path(attachment).unlink()
+    lock = vault_lock(".reencrypt-files.lock", blocking=False) if failure == "locked" else nullcontext()
+    with lock:
+        with pytest.raises(CommandError):
+            run_command(*args)
+    entries = AuditLog.objects.filter(action="file_reencryption_completed")
+    assert entries.count() == 1
+    detail = entries.get().detail["file_reencryption"]
+    assert detail["error_count"] == 1
+    assert detail["status"] == "failed"
+    assert detail["checked"] == (1 if failure in {"file", "verify"} else None)
+    assert detail["duration_seconds"] >= 0
+    assert detail["verify"] == (failure == "verify")
+    assert attachment.storage_filename not in str(detail)
+    assert str(attachment.pk) not in str(detail)
+    assert "private filename" not in str(detail)
+    assert "private payload" not in str(detail)
+
+
+@pytest.mark.django_db
+def test_refused_role_does_not_create_a_rotation_audit(rotation_files, monkeypatch):
+    from core.models import AuditLog
+
+    rotation_files[0]()
+    monkeypatch.setenv("ANLAUFSTELLE_PROCESS_ROLE", "runtime")
+    with pytest.raises(CommandError, match="maintenance"):
+        run_command()
+    assert not AuditLog.objects.filter(action="file_reencryption_completed").exists()
+
+
+@pytest.mark.django_db
+def test_audit_failure_prevents_a_successful_command(rotation_files, maintenance, monkeypatch):
+    from django.db import DatabaseError
+
+    rotation_files[0]()
+
+    def fail_audit(*args, **kwargs):
+        raise DatabaseError("private database details")
+
+    monkeypatch.setattr("core.management.commands.reencrypt_files.audit_event", fail_audit, raising=False)
+    output = io.StringIO()
+    with pytest.raises(CommandError, match="audit could not be written"):
+        call_command("reencrypt_files", stdout=output)
+    assert output.getvalue() == ""
+
+
+@pytest.mark.django_db
+def test_migration_records_the_new_audit_action():
+    from django.db.migrations.loader import MigrationLoader
+
+    from core.models import AuditLog
+
+    state = MigrationLoader(connection).project_state()
+    choices = state.apps.get_model("core", "AuditLog")._meta.get_field("action").choices
+    assert ("file_reencryption_completed", "Datei-Umschlüsselung abgeschlossen") in choices
+    assert AuditLog.Action.FILE_REENCRYPTION_COMPLETED.value == "file_reencryption_completed"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_non_superuser_maintenance_database_role_rotates_and_audits(rotation_files, maintenance):
+    from core.models import AuditLog
+
+    create, primary, _ = rotation_files
+    attachment = create()
+    role = f"rot_e2_admin_{os.getpid()}"
+    with connection.cursor() as cursor:
+        cursor.execute(f"CREATE ROLE {role} NOSUPERUSER BYPASSRLS")
+        cursor.execute(f"GRANT USAGE ON SCHEMA public TO {role}")
+        cursor.execute(f"GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO {role}")
+        cursor.execute(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {role}")
+    try:
+        with transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute(f"SET LOCAL ROLE {role}")
+            output, _ = run_command()
+            assert "rotated=1" in output
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(f"REVOKE ALL ON ALL TABLES IN SCHEMA public FROM {role}")
+            cursor.execute(f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM {role}")
+            cursor.execute(f"REVOKE ALL ON SCHEMA public FROM {role}")
+            cursor.execute(f"DROP ROLE {role}")
+    with override_settings(ENCRYPTION_KEYS=primary):
+        assert (
+            b"".join(decrypt_file_stream(get_attachment_path(attachment), file_id=attachment.storage_filename))
+            == b"private payload"
+        )
+    assert AuditLog.objects.filter(action="file_reencryption_completed").count() == 1
+
+
+@pytest.mark.django_db
+def test_unexpected_interruption_records_failed_audit_without_claiming_counts(rotation_files, maintenance, monkeypatch):
+    from core.models import AuditLog
+
+    rotation_files[0]()
+
+    def interrupt(**kwargs):
+        raise RuntimeError("simulated interruption")
+
+    monkeypatch.setattr("core.management.commands.reencrypt_files.rotate_files", interrupt)
+    with pytest.raises(RuntimeError, match="simulated interruption"):
+        run_command()
+    entries = AuditLog.objects.filter(action="file_reencryption_completed")
+    assert entries.count() == 1
+    summary = entries.get().detail["file_reencryption"]
+    assert summary["status"] == "failed"
+    assert summary["checked"] is None
+    assert summary["rotated"] is None
+    assert summary["error_count"] == 1

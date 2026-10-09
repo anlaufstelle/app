@@ -175,6 +175,7 @@ class AuditLog(models.Model):
         # vom Operator manuell gesetzt, nachdem ein Restore gegen eine
         # frische DB verifiziert wurde.
         RESTORE_VERIFIED = "restore_verified", _("Restore-Test verifiziert")
+        FILE_REENCRYPTION_COMPLETED = "file_reencryption_completed", _("Datei-Umschlüsselung abgeschlossen")
         # Refs #932: 4-Augen-Lösch-Workflow — pro Workflow-Stufe ein
         # dedizierter AuditLog-Eintrag (DSGVO Art. 5(2) Rechenschaftspflicht).
         # Generisch über target_type="DeletionRequest" — funktioniert sowohl
