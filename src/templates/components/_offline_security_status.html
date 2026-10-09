@@ -1,0 +1,12 @@
+{% load i18n %}
+{# Refs #2528: static translated status regions also work in precached shells. #}
+<div data-offline-key-expired hidden data-testid="offline-key-expired"
+     role="status" aria-live="polite"
+     class="bg-yellow-100 text-yellow-800 text-center text-sm py-2 px-3">
+    {% trans "Offline-Schlüssel abgelaufen — bitte online anmelden" %}
+</div>
+<div data-offline-revocation-pending hidden data-testid="offline-revocation-pending"
+     role="status" aria-live="polite"
+     class="bg-yellow-100 text-yellow-800 text-center text-sm py-2 px-3">
+    {% trans "Synchronisation wartet auf Widerrufsprüfung" %}
+</div>

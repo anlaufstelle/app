@@ -401,17 +401,12 @@
         }
     }
 
-    /*
-     * True, wenn `expiresAt` (ISO-8601-String vom Server) echt vor `now`
-     * (ms-Epoch) liegt. Fehlt/ungueltig der Wert, gilt der Bundle NICHT als
-     * abgelaufen (fail-open gegen versehentliches Loeschen frischer Daten;
-     * der Server-Re-Fetch und der TTL-Index der Queue fangen das ab).
-     */
+    // Refs #2528: absent/invalid expiry is expired at both read and list gates.
     function _isExpired(expiresAt, now) {
-        if (!expiresAt) return false;
+        if (typeof expiresAt !== "string" || !expiresAt) return true;
         const exp = Date.parse(expiresAt);
-        if (Number.isNaN(exp)) return false;
-        return exp < (now || Date.now());
+        if (!Number.isFinite(exp)) return true;
+        return exp <= (now ?? Date.now());
     }
 
     /*

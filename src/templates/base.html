@@ -58,7 +58,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 {# Refs #1065: data-session-age (Sekunden) koppelt den Offline-Krypto-Schlüssel in crypto.js an die Session-Lebenszeit (inkl. Facility-Override via set_expiry). #}
-<body class="h-full overflow-x-hidden" data-user-id="{{ request.user.pk|default:'' }}" data-session-age="{{ request.session.get_expiry_age }}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+<body class="h-full overflow-x-hidden" data-user-id="{{ request.user.pk|default:'' }}" data-session-age="{{ request.session.get_expiry_age }}" data-offline-key-max-age="{{ offline_key_max_age }}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
       data-i18n-sw-update="{% trans 'Neue Version verfügbar.' %}" data-i18n-sw-reload="{% trans 'Neu laden' %}" data-i18n-sw-dismiss="{% trans 'Schließen' %}"
       {# Refs #2060: Meldung fuer den Versionskonflikt der lokalen Datenbank (offline-db.js) — #}
       {# derselbe data-i18n-Kanal wie beim Service-Worker-Toast darueber. #}
@@ -172,6 +172,7 @@
             </div>
             {# Refs #2289: Hinweis „Authentifizierung ausstehend" (Übertragung pausiert). #}
             {% include "components/_offline_auth_pending.html" %}
+            {% include "components/_offline_security_status.html" %}
         </div>
     </div>
 

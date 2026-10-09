@@ -324,7 +324,7 @@
     // Idempotenz-Schlüssel bei jedem Replay-Versuch mitschicken, damit der
     // Server einen Wiederholungs-POST nach Verbindungsabbruch als solchen
     // erkennt.
-    function _send(record, csrf) {
+    async function _send(record, csrf) {
         // Zweite Grenze unmittelbar vor dem Netz: Altbestand oder manipulierte
         // IndexedDB-Zeilen duerfen die Enqueue-Pruefung nie umgehen.
         const blockedReason = _queueRequestBlockReason(
@@ -373,6 +373,20 @@
             headers["X-CSRFToken"] = csrf;
         }
         if (record.idempotencyKey) headers["X-Idempotency-Key"] = record.idempotencyKey;
+        // Refs #2528: check immediately before each write, including retries.
+        // Decrypted work may have been read before the absolute deadline.
+        await window.crypto_session?.awaitReady?.();
+        if (!window.crypto_session || !window.crypto_session.hasSessionKey()) {
+            const err = new Error("NoSessionKey");
+            err.name = "NoSessionKeyError";
+            throw err;
+        }
+        // A manual retry must not bypass a failed coordinated revocation check.
+        if (window.syncOrchestrator?.isRevocationPending?.()) {
+            const err = new Error("RevocationPending");
+            err.name = "RevocationPendingError";
+            throw err;
+        }
         return fetch(record.url, {
             method: record.data.method,
             body: record.data.body,

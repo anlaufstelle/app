@@ -49,6 +49,7 @@ def source_code(request):
     and ``session_fully_authenticated``: authenticated, no pending second
     factor, and no forced password change.
     """
+    from core.services.security.offline_keys import offline_key_max_age
     from core.services.security.session_state import session_fully_authenticated
 
     app_version, app_build = _app_version_info()
@@ -58,6 +59,7 @@ def source_code(request):
         "app_version": app_version,
         "app_build": app_build,
         "session_fully_authenticated": session_fully_authenticated(request),
+        "offline_key_max_age": offline_key_max_age(getattr(request, "current_facility", None)),
     }
 
 

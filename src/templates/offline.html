@@ -157,6 +157,7 @@
 </head>
 <body data-i18n-db-update-required="{% trans 'Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren.' %}"
       data-i18n-db-update-dismiss="{% trans 'Schließen' %}">
+    {% include "components/_offline_security_status.html" %}
     <a href="#main-content" class="skip-link">{% trans "Zum Inhalt springen" %}</a>
     <!-- Refs #1494 (#1544, #1499): Rueckbau der /offline/-Sonderseite
          auf einen reinen, STATISCHEN Fallback. Seit dem SW-Flip (CACHE v22)

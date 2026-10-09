@@ -5,7 +5,8 @@
  * IndexedDB (table `meta`, key `sessionKey`). Persistence is required to
  * survive page navigations, and the key also outlives closing the tab, the
  * browser or a device restart. Non-extractable only means the raw key bytes
- * cannot be read out; until the row is deleted, any code running in this
+ * cannot be exported through WebCrypto; browser-profile protection requires
+ * device encryption. Until expiry is enforced, any code running in this
  * origin of the browser profile (e.g. on an unlocked device) can still use
  * the key to decrypt the offline store.
  *
@@ -20,8 +21,13 @@
  *   - Idle wipe (Refs #1065): the key lifetime is coupled to the server
  *     session. A throttled lastActivity stamp lives next to the key; once
  *     it is older than the session age (data-session-age on <body>,
- *     fallback 1800 s = SESSION_COOKIE_AGE), key AND offline store are
- *     wiped — on boot/rehydration, on a 60 s interval and on tab return.
+ *     fallback 1800 s = SESSION_COOKIE_AGE), the key is withdrawn; unsent
+ *     encrypted work is retained (Refs #1324). Checks run on boot, every
+ *     crypto operation, a 60 s interval and tab return.
+ *   - Absolute cap (Refs #2528): createdAt/expiresAt are stored at derivation
+ *     using the server policy (data-offline-key-max-age, seconds). Activity
+ *     never renews this cap. Expiry only deletes the key, retaining ciphertext.
+ *     Missing/invalid metadata or an observed clock rollback also locks it.
  *     No wipe on pagehide/close: re-opening offline within the idle window
  *     must keep working (Streetwork use case).
  *
@@ -83,11 +89,14 @@
     const KEY_NAME = "sessionKey";
     // Idle wipe (Refs #1065): lastActivity stamp in the same meta store.
     const ACTIVITY_KEY = "lastActivity";
+    const EXPIRED_KEY = "keyExpired";
+    const DEFAULT_KEY_MAX_AGE_S = 12 * 3600; // server model default (Refs #2528)
     const ACTIVITY_THROTTLE_MS = 30 * 1000;
     const IDLE_CHECK_INTERVAL_MS = 60 * 1000;
     const DEFAULT_SESSION_AGE_S = 1800; // fallback = SESSION_COOKIE_AGE
 
     let cachedKey = null;
+    let cachedLifetime = null;
     let initialLoad = null; // Promise<void> that resolves once cachedKey reflects IndexedDB
     let lastActivityWrite = 0; // in-memory throttle marker for _touchActivity
 
@@ -237,6 +246,59 @@
         return seconds * 1000;
     }
 
+    function _keyMaxAgeMs() {
+        const raw = document.body?.dataset.offlineKeyMaxAge;
+        // Neutral offline shells carry no facility policy; the persisted row
+        // remains authoritative there. This default is only for derivation.
+        const seconds = raw === undefined ? DEFAULT_KEY_MAX_AGE_S : Number(raw);
+        if (!Number.isFinite(seconds) || seconds <= 0) {
+            throw new Error("InvalidOfflineKeyMaxAge");
+        }
+        return seconds * 1000;
+    }
+
+    function _keyLifetimeValid(row, now) {
+        return !!row && Number.isFinite(row.createdAt) && Number.isFinite(row.expiresAt) &&
+            Number.isFinite(row.checkedAt) && row.expiresAt > row.createdAt &&
+            row.checkedAt >= row.createdAt && now >= row.checkedAt && now < row.expiresAt;
+    }
+
+    function _showKeyExpired(expired) {
+        document.querySelectorAll("[data-offline-key-expired]").forEach(function (node) {
+            node.hidden = !expired;
+        });
+    }
+
+    async function _enforceAbsoluteKeyExpiry() {
+        const row = await _idbGet(KEY_NAME);
+        if (!row || !row.cryptoKey) {
+            cachedKey = null;
+            cachedLifetime = null;
+            _showKeyExpired(!!(await _idbGet(EXPIRED_KEY)));
+            return false;
+        }
+        const now = Date.now();
+        if (!_keyLifetimeValid(row, now)) {
+            // Refs #2528: retain all ciphertext, including unsent work. Keep
+            // invalid metadata if deletion fails so the next check retries.
+            await clearSessionKey();
+            try {
+                await _idbPut({ key: EXPIRED_KEY, expired: true });
+            } finally {
+                _showKeyExpired(true);
+                _broadcastKeyCleared();
+            }
+            return true;
+        }
+        // Persist the high-water mark across navigation/restarts. A detected
+        // backwards clock locks rather than granting additional lifetime.
+        row.checkedAt = now;
+        await _idbPut(row);
+        cachedKey = row.cryptoKey;
+        cachedLifetime = row;
+        return false;
+    }
+
     function _touchActivity(force) {
         const now = Date.now();
         if (!force && now - lastActivityWrite < ACTIVITY_THROTTLE_MS) {
@@ -329,10 +391,11 @@
     async function _applyKeyCleared() {
         try {
             const row = await _idbGet(KEY_NAME);
-            if (row && row.cryptoKey) {
+            if (row && row.cryptoKey && _keyLifetimeValid(row, Date.now())) {
                 // Geteilter Key-Zustand NICHT (mehr) fehlend -> re-verankern,
                 // kein Drop, kein Sequenz-Abbruch.
                 cachedKey = row.cryptoKey;
+                cachedLifetime = row;
                 return;
             }
         } catch (_e) {
@@ -372,6 +435,7 @@
     }
 
     async function _enforceIdleWipeLocked() {
+        if (await _enforceAbsoluteKeyExpiry()) return true;
         const row = await _idbGet(ACTIVITY_KEY);
         if (!row || typeof row.ts !== "number") {
             // No stamp yet (pre-#1065 install or first run): start the idle
@@ -452,20 +516,15 @@
     }
 
     async function _loadKey() {
-        if (cachedKey) return cachedKey;
-        // Idle gate (Refs #1065): before rehydrating from IndexedDB, check
-        // whether the session age has passed since the last activity — then
-        // wipe instead of making the key usable again without re-auth. Der Gate
-        // laeuft reentranz-bewusst gesperrt/direkt (Refs #1493, siehe
-        // ``_runIdleGate``).
+        // Refs #2528: check even a cached key before every read/write/replay.
+        // The existing reentrancy-aware lock also serializes metadata updates.
         try {
             if (await _runIdleGate()) return null;
         } catch (_e) {
-            // ignore — a stamp read error must not break online operation
-        }
-        const row = await _idbGet(KEY_NAME);
-        if (row && row.cryptoKey) {
-            cachedKey = row.cryptoKey;
+            // Fail closed when the lifetime cannot be checked in IndexedDB.
+            cachedKey = null;
+            cachedLifetime = null;
+            return null;
         }
         return cachedKey;
     }
@@ -539,12 +598,15 @@
     // Seiten ohne crypto.js und Test-Stubs ohne diese Methode).
     async function awaitReady() {
         await ready();
+        await _loadKey();
     }
 
     async function deriveSessionKey(password, saltB64Url) {
         if (!isSupported()) {
             throw new Error("WebCrypto not supported");
         }
+        const createdAt = Date.now();
+        const expiresAt = createdAt + _keyMaxAgeMs();
         const salt = b64UrlToBytes(saltB64Url);
         const baseKey = await window.crypto.subtle.importKey(
             "raw",
@@ -568,8 +630,12 @@
         // Stamp BEFORE storing the key so a stale pre-login stamp can never
         // race the new key into an immediate idle wipe (#1065).
         await _touchActivity(true);
+        const row = { key: KEY_NAME, cryptoKey: key, createdAt, expiresAt, checkedAt: createdAt };
+        await _idbPut(row);
         cachedKey = key;
-        await _idbPut({ key: KEY_NAME, cryptoKey: key });
+        cachedLifetime = row;
+        await _idbDelete(EXPIRED_KEY);
+        _showKeyExpired(false);
     }
 
     // Refs #1476 (R7): `aad` bindet den Umschlag an seine Record-Identitaet
@@ -681,6 +747,7 @@
      */
     async function clearSessionKey() {
         cachedKey = null;
+        cachedLifetime = null;
         try {
             await _idbDelete(KEY_NAME);
         } catch (_e) {
@@ -727,7 +794,7 @@
     function hasSessionKey() {
         // Synchronous boolean reflecting the in-memory cache. Callers that
         // need certainty after a fresh page load should `await ready()` first.
-        return cachedKey !== null;
+        return cachedKey !== null && _keyLifetimeValid(cachedLifetime, Date.now());
     }
 
     // Refs #1476 (R8): Die Krypto-Primitive (encrypt/decrypt) stehen bewusst

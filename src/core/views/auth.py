@@ -452,7 +452,15 @@ class OfflineKeySaltView(LoginRequiredMixin, View):
         # liest und der Location-Header bei opaqueredirect-Responses nicht
         # auslesbar ist (Fetch-API-Spec, same-origin). Vorher: Fallback ""/"".
         home_url = "/system/" if getattr(request.user, "is_super_admin", False) else "/"
-        return JsonResponse({"salt": salt, "home_url": home_url})
+        from core.services.security.offline_keys import offline_key_max_age
+
+        return JsonResponse(
+            {
+                "salt": salt,
+                "home_url": home_url,
+                "offline_key_max_age": offline_key_max_age(request.user.facility),
+            }
+        )
 
 
 @require_POST

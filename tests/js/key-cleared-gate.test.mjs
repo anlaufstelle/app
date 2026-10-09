@@ -117,10 +117,11 @@ function makeOrchestrator() {
 let orch;
 
 async function loadCryptoWithKey() {
-    // Memory-Key hydrieren: KEY_NAME vorab seeden, dann crypto.js importieren
-    // (eager _loadKey laedt das Row in cachedKey; ohne lastActivity-Stamp
-    // startet der Idle-Gate ein frisches Fenster statt zu wipen).
-    await _put({ key: KEY_NAME, cryptoKey: { marker: "grounded" } });
+    // Refs #2528: seed a valid lifetime as a fresh login would. The original
+    // assertions still verify cross-tab anchoring and lock serialization.
+    const now = Date.now();
+    await _put({ key: KEY_NAME, cryptoKey: { marker: "grounded" },
+        createdAt: now, checkedAt: now, expiresAt: now + 3600_000 });
     await import("../../src/static/js/crypto.js");
     await window.crypto_session.ready();
 }

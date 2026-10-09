@@ -155,3 +155,34 @@ class TestPasswordChangeRotatesSalt:
         # Next salt fetch generates a new value
         new_salt = client.post("/auth/offline-key-salt/").json()["salt"]
         assert new_salt != original
+
+
+@pytest.mark.django_db
+class TestOfflineKeyMaxAge:
+    """Refs #2528: policy reaches derivation and authenticated HTML via HTTP."""
+
+    def test_authenticated_page_exposes_facility_cap(self, client, staff_user, facility):
+        from core.models import Settings
+
+        Settings.objects.create(facility=facility, session_absolute_hours=7)
+        client.force_login(staff_user)
+        response = client.get("/account/")
+        assert response.status_code == 200
+        assert 'data-offline-key-max-age="25200"' in response.content.decode()
+
+    def test_salt_endpoint_delivers_facility_cap_for_login_bootstrap(self, client, staff_user, facility):
+        from core.models import Settings
+
+        Settings.objects.create(facility=facility, session_absolute_hours=7)
+        client.force_login(staff_user)
+        response = client.post("/auth/offline-key-salt/")
+        assert response.status_code == 200
+        assert response.json()["offline_key_max_age"] == 25200
+
+    def test_salt_endpoint_uses_model_default_without_settings(self, client, staff_user):
+        from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
+
+        client.force_login(staff_user)
+        response = client.post("/auth/offline-key-salt/")
+        assert response.status_code == 200
+        assert response.json()["offline_key_max_age"] == DEFAULT_SESSION_ABSOLUTE_HOURS * 3600

@@ -156,28 +156,30 @@
 
     /* ─── Sync-Sequenz + Pro-Tab-Koaleszenz ───────────────────────────────── */
 
+    let _revocationPending = false;
+
+    async function _checkClientRevocations(store) {
+        let result;
+        try {
+            result = await store.applyClientRevocations();
+        } catch (_e) {
+            result = { status: "error" };
+        }
+        _revocationPending = !result || result.status !== "ok";
+        document.querySelectorAll("[data-offline-revocation-pending]").forEach(function (node) {
+            node.hidden = !_revocationPending;
+        });
+        return !_revocationPending;
+    }
+
     async function _runSyncSequence() {
-        // Reihenfolge FIX: erst die Widerrufe anwenden, dann die Writes
-        // rausspielen, dann re-validieren. Jeder Schritt ist isoliert
-        // (try/catch) — so bleibt die Unabhaengigkeit der frueheren drei
-        // getrennten online-Listener erhalten (ein Fehler in der Queue darf den
-        // Edit-Replay nicht verhindern).
+        // Refs #2528: revocations must succeed before either replay path.
+        // Transport/storage errors retain the queue and retry next sequence.
         const q = window.offlineQueue;
         const ed = window.offlineEdit;
         const st = window.offlineStore;
-        // Refs #1760: Der Widerrufs-Schritt steht bewusst VOR den Replays und
-        // erweitert damit die bisherige "Writes RAUS vor Revalidierung"-Regel um
-        // eine strengere Vorstufe. Liefe er danach, spielte der Replay noch die
-        // gequeuten Schreibzugriffe zu einer gerade anonymisierten Person aus —
-        // frische Klartext-PII zurueck auf den Server, die Art.-17-Loeschung
-        // liefe rueckwaerts. Fehler sind wie ueberall geschluckt: ohne
-        // verlaessliche Liste wird nichts geloescht, der naechste Lauf holt nach.
-        if (st && st.applyClientRevocations) {
-            try {
-                await st.applyClientRevocations();
-            } catch (_e) {
-                /* naechster Schritt trotzdem */
-            }
+        if (st && st.applyClientRevocations && !(await _checkClientRevocations(st))) {
+            return "revocation-pending";
         }
         if (q && q.replayQueue) {
             try {
@@ -370,7 +372,7 @@
             if (!(await _bootRevocationDue(store))) return;
             try {
                 await runExclusive(function () {
-                    return store.applyClientRevocations();
+                    return _checkClientRevocations(store);
                 });
             } finally {
                 // Immer stempeln — auch bei error/ratelimited (siehe DROSSEL oben).
@@ -398,6 +400,7 @@
 
     window.syncOrchestrator = {
         requestSync: requestSync,
+        isRevocationPending: function () { return _revocationPending; },
         runExclusive: runExclusive,
         isLockHeld: isLockHeld,
         broadcast: broadcast,

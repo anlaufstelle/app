@@ -54,7 +54,7 @@
         return window.csrfUtils ? window.csrfUtils.refresh() : null;
     }
 
-    function _postForm(url, body, csrf, extraHeaders) {
+    async function _postForm(url, body, csrf, extraHeaders) {
         const headers = Object.assign(
             {
                 "Content-Type": "application/x-www-form-urlencoded",
@@ -81,6 +81,20 @@
             extraHeaders || {}
         );
         if (csrf) headers["X-CSRFToken"] = csrf;
+        // Refs #2528: check immediately before each write, including retries.
+        // Decrypted work may have been read before the absolute deadline.
+        await window.crypto_session?.awaitReady?.();
+        if (!window.crypto_session || !window.crypto_session.hasSessionKey()) {
+            const err = new Error("NoSessionKey");
+            err.name = "NoSessionKeyError";
+            throw err;
+        }
+        // A manual retry must not bypass a failed coordinated revocation check.
+        if (window.syncOrchestrator?.isRevocationPending?.()) {
+            const err = new Error("RevocationPending");
+            err.name = "RevocationPendingError";
+            throw err;
+        }
         return fetch(url, {
             method: "POST",
             body: body,

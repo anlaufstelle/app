@@ -63,6 +63,9 @@
         });
         if (!saltResp.ok) return null;
         var json = await saltResp.json();
+        // Refs #2528: login HTML predates authentication and has no facility.
+        // The authenticated salt response supplies the policy before derivation.
+        document.body.dataset.offlineKeyMaxAge = String(json.offline_key_max_age);
         await window.crypto_session.deriveSessionKey(password, json.salt);
         // Refs #1520/#1499: das personenlose Facility-Meta-Bundle EAGER beim
         // Login-Bootstrap vorwaermen — direkt nach der Schluesselableitung
