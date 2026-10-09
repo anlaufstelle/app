@@ -1008,6 +1008,8 @@ References: #536, #581.
 
 ### 2.7 Two-Factor Authentication (2FA)
 
+**Audit (#2527).** Successful TOTP and passkey verification records `MFA_VERIFIED` with the fixed method `totp` or `passkey`; failed factor checks retain `MFA_FAILED` or `WEBAUTHN_FAILED`. Consuming a backup code retains exactly its existing `BACKUP_CODES_USED` row. For signed-in accounts, a POST request to regenerate backup codes rejected for invalid TOTP, an unverified session or a missing TOTP device records `MFA_BACKUP_REGENERATE_DENIED` with the fixed reason `invalid_totp`, `unverified_session` or `missing_totp`. These audit details contain no codes, TOTP secrets or passkey assertions.
+
 Anlaufstelle supports TOTP-based 2FA via [`django-otp`](https://django-otp-official.readthedocs.io/), complemented by passkeys and backup codes. Every user can enable 2FA themselves (`/mfa/settings/`); in addition, there are three enforcement levels.
 
 **User-facing documentation:** [User Guide § 1 -- Two-Factor Authentication](user-guide.md#two-factor-authentication-2fa).
@@ -1088,7 +1090,7 @@ The command works for the facility-bound roles (`facility_admin`, `lead`, `staff
 
 **Path D -- Self-service via MFA backup code:** If the user has 2FA enabled and has noted one of their backup codes, they can unlock themselves at `/account/recovery/backup-code/` using their username and code. Audit trail: `LOGIN_UNLOCK` (trigger `backup_code`) + `BACKUP_CODES_USED` (flow `lockout_recovery`). Each code is single-use -- the next recovery event consumes the next code.
 
-The AuditLog holds every checked failed attempt (`LOGIN_FAILED`, with the correct password during the lock additionally `reason: "locked"`) and every unlock (`LOGIN_UNLOCK`). No entry of its own is written for the start of the lock (it follows from the `LOGIN_FAILED` entries) or for requests rejected by the rate limit (HTTP 429), not even during the lock. Use the "Login failed" / "Account unlocked" filter for retrospective analysis. The `LOGIN_UNLOCK` detail block contains a `trigger` field: `admin` (Path A, System > Sperrkonten, the Django admin action and the CLI command from Path B -- the CLI does not write a value of its own), `password_reset` (Path C via standard reset), `invite_setup` (initial setup via the invitation link), `recovery_token` (Path C via dedicated link), `backup_code` (Path D); unlocks via password reset, invitation link, recovery token or backup code also record the source IP on the audit entry.
+The AuditLog holds every checked failed attempt (`LOGIN_FAILED`, with the correct password during the lock additionally `reason: "locked"`) and every unlock (`LOGIN_UNLOCK`). The start of the lock follows from the `LOGIN_FAILED` entries and does not write an entry of its own. Requests rejected by the rate limit (HTTP 429) receive a throttled `RATE_LIMITED` trail, including during the lock. Use the "Login failed" / "Account unlocked" filter for retrospective analysis. The `LOGIN_UNLOCK` detail block contains a `trigger` field: `admin` (Path A, System > Sperrkonten, the Django admin action and the CLI command from Path B -- the CLI does not write a value of its own), `password_reset` (Path C via standard reset), `invite_setup` (initial setup via the invitation link), `recovery_token` (Path C via dedicated link), `backup_code` (Path D); unlocks via password reset, invitation link, recovery token or backup code also record the source IP on the audit entry.
 
 #### Audit Trail
 
@@ -1098,11 +1100,13 @@ These 2FA and sudo events each write one entry to the `AuditLog`:
 - `MFA_DISABLED` -- disabling at `/mfa/settings/` when a TOTP device or passkey was removed.
 - `MFA_RESET_BY_ADMIN` -- reset by the administration (see above).
 - `MFA_FAILED` -- wrong TOTP or backup code at the 2FA sign-in.
+- `MFA_VERIFIED` -- successful TOTP or passkey check at the 2FA sign-in, with the method and no secrets.
+- `MFA_BACKUP_REGENERATE_DENIED` -- backup-code regeneration refused because the session is unverified, the TOTP device is missing or the TOTP code is invalid.
 - `BACKUP_CODES_GENERATED` -- backup codes generated during setup; `BACKUP_CODES_REGENERATED` -- regenerated at `/mfa/settings/`; `BACKUP_CODES_USED` -- backup code redeemed at the 2FA sign-in or for unlocking.
 - `WEBAUTHN_REGISTERED`, `WEBAUTHN_REMOVED` -- passkey added or removed; `WEBAUTHN_FAILED` -- failed passkey check.
 - `SUDO_MODE_ENTERED`, `SUDO_MODE_FAILED` -- sudo confirmation succeeded, or failed at the password or the second factor.
 
-No entry of its own is written for a successful TOTP or passkey check at the 2FA sign-in, for a backup-code regeneration refused because of a wrong TOTP code, or for requests rejected by the rate limit (HTTP 429). Use the filter under **Privacy → Audit log** to investigate failed verifications or activation/deactivation events.
+Requests rejected by the rate limit (HTTP 429) write at most one `RATE_LIMITED` row per path class, known account and facility within 60 seconds; anonymous requests share the bucket independently of the source IP. Use the filter under **Privacy → Audit log** to investigate failed verifications or activation/deactivation events.
 
 #### Relevant Files
 
@@ -1888,6 +1892,14 @@ docker compose -f docker-compose.prod.yml exec web \
 
 ---
 
+
+
+### Authentication alarms and audit review (#2527)
+
+Known `super_admin` accounts without a facility raise a `SECURITY_VIOLATION` alarm with `reason=super_admin_bruteforce` after ten failed logins in fifteen minutes, immediately in the failed-login path and as a heuristic in a full `detect_breaches` scan (scheduled hourly). The same alarm is deduplicated per account for 24 hours. No account lock is introduced. At the regular `/login/` endpoint, failed passwords at or above the threshold receive HTTP 429 with progressive retry advice of 1, 2, 4 and at most 8 seconds (`Retry-After`); the server does not sleep and this advice does not reject a subsequent correct password. The existing IP/username rate limits remain effective and can still reject valid logins.
+
+HTTP 429 rejections record `RATE_LIMITED` with a masked route class, a fixed reason (`request_rate` or `super_admin_backoff`), and the user/facility where already known. Unresolved paths are recorded only as `unresolved`; bodies, queries and actual URL tokens stay out of the details. The cache caps the trail at one row per route class and known account/facility in sixty seconds (anonymous requests share a bucket across all source IPs). If the audit write fails, the response stays 429 and an equally capped security log line names the route class, reason and known identifiers without request contents. Passkey failures and denied backup regeneration also count as critical audit events; successful verification and ordinary throttling alone do not trigger a compliance warning.
+
 ## 7. GDPR Notes
 
 Anlaufstelle was developed following the principle of **Privacy by Design** (Art. 25 GDPR, known in German law as DSGVO). This chapter describes the privacy-relevant technical measures and administrative obligations.
@@ -1921,7 +1933,7 @@ Pseudonymisation is the intended workflow: the application has no required field
 - Persons are referenced by internal IDs.
 - Display names in the interface are configurable pseudonyms.
 - Who sees which data depends not on the contact stage but on sensitivity (the higher level of the documentation type and the field) and on the role: Assistant sees "Normal", Staff up to "Elevated", Lead and Application manager all levels. The person detail page is open from Assistant upwards, also at "With additional details"; there the assistant sees, for example, contacts including their note, but no crisis conversation. The contact stage governs permitted documentation types, four-eyes deletion, the audit entry when the person is opened (`VIEW_QUALIFIED`), and retention periods.
-- The system administration (`super_admin`) reads across facilities through the `/system/` area and the admin interface (`/admin-mgmt/`, sudo required), there persons, cases, events, work items and attachments of all facilities. Row Level Security lets these sessions through via `app.is_super_admin` (§ 7.9). The AuditLog records these reads as `SYSTEM_VIEW`; if logging fails, access is still not blocked.
+- The system administration (`super_admin`) reads across facilities through the `/system/` area and the admin interface (`/admin-mgmt/`, sudo required), there persons, cases, events, work items and attachments of all facilities. Row Level Security lets these sessions through via `app.is_super_admin` (§ 7.9). The AuditLog records these reads as `SYSTEM_VIEW` for all registered administrative models, including deletion requests, users and configuration; if logging fails, content is denied with HTTP 403. Event and event-history admin pages show metadata only, without field contents.
 
 ### 7.3 Retention Periods and `enforce_retention`
 
@@ -2457,4 +2469,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 3b836d052a96d382fc3e97a57d1b65bd8800f9ed -->
+<!-- source-hash: 957548448201298f93837539e19757a32c68dec6 -->

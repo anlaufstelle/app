@@ -1010,6 +1010,8 @@ Referenzen: #536, #581.
 
 ### 2.7 Zwei-Faktor-Authentifizierung (2FA)
 
+**Audit (#2527).** Erfolgreiche TOTP- und Passkey-Verifikation erzeugt `MFA_VERIFIED` mit der festen Methode `totp` oder `passkey`; Fehlgeschlagene Faktorprüfungen behalten `MFA_FAILED` bzw. `WEBAUTHN_FAILED`. Der Backup-Code-Verbrauch behält genau seine bestehende `BACKUP_CODES_USED`-Zeile. Für angemeldete Konten erzeugt eine wegen ungültigem TOTP, unverifizierter Sitzung oder fehlendem TOTP-Gerät abgewiesene POST-Anfrage zum Erneuern der Backup-Codes `MFA_BACKUP_REGENERATE_DENIED` mit dem festen Grund `invalid_totp`, `unverified_session` oder `missing_totp`. Codes, TOTP-Secrets und Passkey-Assertions stehen nicht in diesen Audit-Details.
+
 Die Anlaufstelle unterstützt TOTP-basierte 2FA über [`django-otp`](https://django-otp-official.readthedocs.io/), ergänzt um Passkeys und Backup-Codes. Jeder Benutzer kann 2FA selbst aktivieren (`/mfa/settings/`); zusätzlich gibt es drei Verpflichtungs-Ebenen.
 
 **Benutzerseitige Doku:** [User-Guide § 1 — Zwei-Faktor-Authentifizierung](user-guide.md#zwei-faktor-authentifizierung-2fa).
@@ -1090,7 +1092,7 @@ Der Befehl ist auf die facility-gebundenen Rollen anwendbar (`facility_admin`, `
 
 **Pfad D — Self-Service per MFA-Backup-Code:** Hat der User 2FA aktiviert und einen seiner Backup-Codes notiert, kann er sich unter `/account/recovery/backup-code/` mit Username + Code entsperren. Audit-Trail: `LOGIN_UNLOCK` (Trigger `backup_code`) + `BACKUP_CODES_USED` (Flow `lockout_recovery`). Jeder Code ist einmalig — der nächste Recovery-Vorgang verbraucht den nächsten Code.
 
-Im AuditLog stehen jeder geprüfte Fehlversuch (`LOGIN_FAILED`, während der Sperre mit richtigem Passwort zusätzlich `reason: "locked"`) und jede Entsperrung (`LOGIN_UNLOCK`). Keinen eigenen Eintrag schreiben der Beginn der Sperre (er ergibt sich aus den `LOGIN_FAILED`-Einträgen) und vom Ratelimit abgewiesene Anfragen (HTTP 429), auch nicht während der Sperre. Nutzen Sie den Filter „Anmeldung fehlgeschlagen" / „Sperre aufgehoben" für eine retroaktive Auswertung. Der `LOGIN_UNLOCK`-Detail-Block enthält ein `trigger`-Feld: `admin` (Pfad A, System → Sperrkonten, Django-Admin-Aktion und CLI-Befehl aus Pfad B — die CLI schreibt keinen eigenen Wert), `password_reset` (Pfad C via Standard-Reset), `invite_setup` (Ersteinrichtung über den Einladungslink), `recovery_token` (Pfad C via dedizierter Link), `backup_code` (Pfad D); Entsperrungen per Passwort-Reset, Einladungslink, Recovery-Token oder Backup-Code tragen außerdem die Quell-IP am Audit-Eintrag.
+Im AuditLog stehen jeder geprüfte Fehlversuch (`LOGIN_FAILED`, während der Sperre mit richtigem Passwort zusätzlich `reason: "locked"`) und jede Entsperrung (`LOGIN_UNLOCK`). Der Beginn der Sperre ergibt sich aus den `LOGIN_FAILED`-Einträgen und schreibt keinen eigenen Eintrag. Vom Ratelimit abgewiesene Anfragen (HTTP 429) erhalten eine gedrosselte `RATE_LIMITED`-Spur, auch während der Sperre. Nutzen Sie den Filter „Anmeldung fehlgeschlagen" / „Sperre aufgehoben" für eine retroaktive Auswertung. Der `LOGIN_UNLOCK`-Detail-Block enthält ein `trigger`-Feld: `admin` (Pfad A, System → Sperrkonten, Django-Admin-Aktion und CLI-Befehl aus Pfad B — die CLI schreibt keinen eigenen Wert), `password_reset` (Pfad C via Standard-Reset), `invite_setup` (Ersteinrichtung über den Einladungslink), `recovery_token` (Pfad C via dedizierter Link), `backup_code` (Pfad D); Entsperrungen per Passwort-Reset, Einladungslink, Recovery-Token oder Backup-Code tragen außerdem die Quell-IP am Audit-Eintrag.
 
 #### Audit-Spur
 
@@ -1100,11 +1102,13 @@ Diese 2FA- und Sudo-Ereignisse schreiben je einen Eintrag im `AuditLog`:
 - `MFA_DISABLED` — Deaktivieren unter `/mfa/settings/`, wenn dabei ein TOTP-Gerät oder Passkey entfernt wurde.
 - `MFA_RESET_BY_ADMIN` — Zurücksetzen durch die Administration (siehe oben).
 - `MFA_FAILED` — falscher TOTP- oder Backup-Code am 2FA-Login.
+- `MFA_VERIFIED` — erfolgreiche TOTP- oder Passkey-Prüfung am 2FA-Login, mit Methode ohne Geheimnisse.
+- `MFA_BACKUP_REGENERATE_DENIED` — abgewiesene Backup-Code-Erneuerung wegen unverifizierter Sitzung, fehlendem TOTP-Gerät oder ungültigem TOTP-Code.
 - `BACKUP_CODES_GENERATED` — Backup-Codes bei der Einrichtung erzeugt; `BACKUP_CODES_REGENERATED` — neu erzeugt unter `/mfa/settings/`; `BACKUP_CODES_USED` — Backup-Code am 2FA-Login oder bei der Entsperrung eingelöst.
 - `WEBAUTHN_REGISTERED`, `WEBAUTHN_REMOVED` — Passkey hinzugefügt bzw. entfernt; `WEBAUTHN_FAILED` — fehlgeschlagene Passkey-Prüfung.
 - `SUDO_MODE_ENTERED`, `SUDO_MODE_FAILED` — Sudo-Bestätigung gelungen bzw. am Passwort oder zweiten Faktor gescheitert.
 
-Keinen eigenen Eintrag schreiben: die erfolgreiche Prüfung eines TOTP-Codes oder Passkeys am 2FA-Login, ein mit falschem TOTP-Code abgewiesenes Neuerzeugen der Backup-Codes und vom Ratelimit abgewiesene Anfragen (HTTP 429). Nutzen Sie den Filter unter **Datenschutz → Audit-Log**, um fehlgeschlagene Verifikationsversuche oder Aktivierungs-/Deaktivierungsereignisse auszuwerten.
+Vom Ratelimit abgewiesene Anfragen (HTTP 429) schreiben höchstens eine `RATE_LIMITED`-Zeile je Pfadklasse, bekanntem Konto und Einrichtung innerhalb von 60 Sekunden; anonyme Anfragen teilen den Bucket unabhängig von der Quell-IP. Nutzen Sie den Filter unter **Datenschutz → Audit-Log**, um fehlgeschlagene Verifikationsversuche oder Aktivierungs-/Deaktivierungsereignisse auszuwerten.
 
 #### Relevante Dateien
 
@@ -1887,6 +1891,14 @@ docker compose -f docker-compose.prod.yml exec web \
 
 ---
 
+
+
+### Auth-Alarme und Audit-Prüfung (#2527)
+
+Bekannte, einrichtungslose `super_admin`-Konten erhalten ab zehn Fehlanmeldungen in 15 Minuten einen `SECURITY_VIOLATION`-Alarm mit `reason=super_admin_bruteforce`, sofort im Fehlanmeldepfad und als Heuristik im vollständigen `detect_breaches`-Lauf (planmäßig stündlich). Derselbe Alarm wird je Konto 24 Stunden dedupliziert. Es entsteht keine Kontosperre. Am normalen Login (`/login/`) erhalten weitere falsche Passwörter ab der Schwelle HTTP 429 mit einer progressiven Retry-Empfehlung von 1, 2, 4 und höchstens 8 Sekunden (`Retry-After`); der Server schläft nicht, und diese Empfehlung verhindert keinen Folgeversuch mit korrektem Passwort. Die bestehenden IP-/Benutzernamen-Ratelimits bleiben wirksam und können weiterhin auch korrekte Anmeldungen abweisen.
+
+HTTP-429-Abweisungen schreiben `RATE_LIMITED` mit maskierter Pfadklasse und festem Grund (`request_rate` bzw. `super_admin_backoff`) sowie Nutzer und Einrichtung, soweit bereits bekannt. Unaufgelöste Pfade werden nur als `unresolved` erfasst; Body, Query und konkrete URL-Tokens bleiben aus den Details. Der Cache begrenzt die Spur auf eine Zeile je Pfadklasse und bekanntem Konto/Einrichtung in 60 Sekunden (anonym gemeinsam über alle Quell-IPs). Scheitert das Audit-Schreiben, bleibt die Antwort 429 und eine ebenso gedrosselte, inhaltsfreie Sicherheitszeile nennt Pfadklasse, Grund und bekannte Kennungen. Passkey-Fehler und abgewiesene Backup-Erneuerungen zählen zusätzlich als kritische Audit-Ereignisse; erfolgreiche Verifikation und gewöhnliche Drosselung lösen allein keine Compliance-Warnung aus.
+
 ## 7. DSGVO-Hinweise
 
 Anlaufstelle wurde nach dem Prinzip **Privacy by Design** (Art. 25 DSGVO) entwickelt. Dieses Kapitel beschreibt die datenschutzrelevanten technischen Maßnahmen und die administrativen Pflichten.
@@ -1920,7 +1932,7 @@ Vorgesehen ist die Pseudonymisierung: Die Anwendung hat kein Pflichtfeld für Kl
 - Personen werden über interne IDs referenziert.
 - Anzeigenamen in der Oberfläche sind konfigurierbare Pseudonyme.
 - Wer welche Daten sieht, richtet sich nicht nach der Kontaktstufe, sondern nach der Sensitivität (der höheren Stufe aus Dokumentationstyp und Feld) und der Rolle: Assistenz sieht „Normal", Fachkraft bis „Erhöht", Leitung und Anwendungsbetreuung alle Stufen. Die Personen-Detailseite ist ab Assistenz erreichbar, auch bei „Mit Zusatzangaben"; die Assistenz sieht dort etwa Kontakte samt Notiz, aber kein Krisengespräch. Die Kontaktstufe wirkt auf zulässige Dokumentationstypen, Vier-Augen-Löschung, das Protokoll beim Öffnen der Person (`VIEW_QUALIFIED`) und die Fristen.
-- Die Systemadministration (`super_admin`) liest einrichtungsübergreifend über den `/system/`-Bereich und über die Verwaltungsoberfläche (`/admin-mgmt/`, nur mit Sudo), dort Personen, Fälle, Ereignisse, Aufgaben und Anhänge aller Einrichtungen. Die Row Level Security lässt diese Sitzungen über `app.is_super_admin` durch (§ 7.9). Diese Lesezugriffe protokolliert das AuditLog als `SYSTEM_VIEW`; schlägt das Protokollieren fehl, wird der Zugriff trotzdem nicht gesperrt.
+- Die Systemadministration (`super_admin`) liest einrichtungsübergreifend über den `/system/`-Bereich und über die Verwaltungsoberfläche (`/admin-mgmt/`, nur mit Sudo), dort Personen, Fälle, Ereignisse, Aufgaben und Anhänge aller Einrichtungen. Die Row Level Security lässt diese Sitzungen über `app.is_super_admin` durch (§ 7.9). Diese Lesezugriffe protokolliert das AuditLog als `SYSTEM_VIEW` für alle registrierten Verwaltungsmodelle einschließlich Löschanträgen, Benutzern und Konfiguration; schlägt das Protokollieren fehl, wird die Ausgabe mit HTTP 403 gesperrt. Ereignisse und Ereignis-Historie zeigen im Admin ausschließlich Metadaten ohne Feldinhalte.
 
 ### 7.3 Löschfristen und `enforce_retention`
 
