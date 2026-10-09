@@ -252,3 +252,36 @@ def rotate_files(
     finally:
         run_lock.__exit__(None, None, None)
     return result
+
+
+def verify_files(*, facility_id: str | None = None, batch_size: int = 200) -> FileRotationResult:
+    """Authenticate every referenced version using only the primary key.
+
+    Verification never updates ciphertext or the progress manifest. Missing
+    referenced files are errors; soft deletion and supersession do not exclude
+    versions. The command caller must enforce the maintenance database role.
+    """
+    if batch_size < 1:
+        raise ValueError("batch_size must be at least 1")
+    keys = _get_keys()
+    if not keys:
+        raise EncryptionError("No primary encryption key configured")
+    primary = Fernet(keys[0].encode())
+    result = FileRotationResult()
+    attachments = Attachment.objects.order_by("pk")
+    if facility_id is not None:
+        attachments = attachments.filter(facility_id=facility_id)
+    for attachment in attachments.iterator(chunk_size=batch_size):
+        result.checked += 1
+        try:
+            file_id = attachment.storage_filename
+            if not file_id or Path(file_id).name != file_id or file_id in {".", ".."}:
+                raise EncryptionError("Invalid attachment storage identifier")
+            path = Path(settings.MEDIA_ROOT) / str(attachment.facility_id) / file_id
+            with _open_regular(path, os.O_RDONLY, "rb") as source:
+                _verify(source, file_id, primary)
+        except (EncryptionError, OSError) as exc:
+            result.errors[str(attachment.pk)] = str(exc) if isinstance(exc, EncryptionError) else type(exc).__name__
+        else:
+            result.already_primary += 1
+    return result
