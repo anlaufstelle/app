@@ -28,9 +28,7 @@ ENV_ASSIGNMENT = re.compile(r"(?<![A-Z0-9_])([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)=")
 ENV_LINE = re.compile(r"^#?\s*([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)=", re.MULTILINE)
 
 # Named in an operator action, but deliberately absent from ``.env.example``.
-FORWARD_ALLOWLIST: dict[str, str] = {
-    "MAINTENANCE_FLAG_FILE": "operators are told to REMOVE a host-path override; the default lives in the container",
-}
+FORWARD_ALLOWLIST: dict[str, str] = {}
 BASELINE = "installation baseline: set at first setup per the admin guide, not a release-time action"
 # In ``.env.example`` but not named in any operator action. Remove an entry as soon as
 # an operator action names the variable (the guard then reports it as stale).
@@ -65,8 +63,6 @@ REVERSE_ALLOWLIST: dict[str, str] = {
     "LEGAL_IMPRINT_FILE": BASELINE,
     "LEGAL_PRIVACY_FILE": BASELINE,
     "LOG_FORMAT": BASELINE,
-    "MEDIA_ROOT": BASELINE,
-    "MEDIA_ROOT_CONTAINER": BASELINE,
     "POSTGRES_ADMIN_PASSWORD": BASELINE,
     "POSTGRES_ADMIN_USER": BASELINE,
     "POSTGRES_BOOTSTRAP_PASSWORD": BASELINE,

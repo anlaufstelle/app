@@ -1,26 +1,4 @@
-"""Audit-Anker ab Werk: Vorlage, Compose-Weg und Backup-Warnung (Refs #2315).
-
-Befund aus dem Fresh-Host-Drill (Refs #2024): Eine streng nach README und
-Admin-Guide durchgefuehrte Erstinstallation erzeugt einen Backup-Satz mit
-**sechs statt sieben** Dateien — ohne ``audit_hwm-<Zeitstempel>.json``. Ursache
-war die Kombination aus einer auskommentierten Vorlagenzeile und einem
-``backup.sh``, das den fehlenden Anker nur als ``INFO`` meldete. Folge: Schritt
-4b des Wiederherstellungs-Runbooks (Audit-HWM zurueckspielen und
-``verify_audit_chain --require-anchor``) ist nach einem echten Totalverlust
-nicht ausfuehrbar, und der Prod-Drill fuehrt Schritt 2b als uebersprungen.
-
-Gedeckt wird deshalb:
-
-- ``.env.example`` liefert den Ankerpfad **aktiv** aus (nicht auskommentiert).
-- Der ausgelieferte Prod-Stack reicht die Variable an die Dienste durch, die
-  ``verify_audit_chain`` fahren, und mountet das persistente Volume, in dem die
-  Datei liegt — sonst waere der aktive Vorlagenwert wirkungslos.
-- ``backup.sh`` warnt deutlich (WARN-Zeile + eigener Hinweis im Abschlussblock),
-  wenn kein Anker-Artefakt exportiert wurde — in allen drei Ursachen (Variable
-  nicht gesetzt, Datei fehlt/unlesbar, Datei leer).
-- Mit konfiguriertem Anker entsteht der vollstaendige Sieben-Dateien-Satz und
-  es gibt keine Warnung.
-"""
+"""Audit anchor configuration and fail-loud backup export (Refs #2527)."""
 
 from __future__ import annotations
 
@@ -66,23 +44,12 @@ def test_env_example_ships_the_anchor_path_active() -> None:
 
 
 def test_prod_stack_carries_the_anchor_into_the_verifying_services() -> None:
-    """Ohne Durchreichung und persistentes Volume bliebe der Vorlagenwert wirkungslos.
-
-    ``verify_audit_chain`` laeuft im ``cron``-Sidecar und im
-    ``maintenance``-Dienst. Beide beziehen die vollstaendige ``.env`` (und damit
-    den Ankerpfad) und sehen dasselbe ``media``-Volume unter ``/data``, in dem
-    die signierte Datei liegt. Der HTTP-Dienst ``web`` hat bewusst nur eine
-    Allowlist; er fuehrt den Ankerpfad zwar darin (jede aktive Zeile der
-    Vorlage muss dort stehen — Drift-Guard aus Refs #1962), hat aber keinen
-    Leser dafuer. Diese Zeile ist reine Allowlist-Pflege, kein Funktionsweg.
-    """
+    """Both maintenance services persist the anchor on its own writable volume."""
     services = yaml.safe_load(COMPOSE_PROD.read_text(encoding="utf-8"))["services"]
-
     for name in ("cron", "maintenance"):
         service = services[name]
-        assert service.get("env_file") == ".env", f"{name} muss die vollstaendige .env beziehen"
-        mounts = [str(volume).split(":")[:2] for volume in service.get("volumes", [])]
-        assert ["media", "/data"] in mounts, f"{name} braucht das persistente /data-Volume fuer {ANCHOR_PATH}"
+        assert service.get("env_file") == ".env"
+        assert "audit-anchor:/data:rw" in service["volumes"]
 
 
 def _write_executable(path: Path, body: str) -> None:
@@ -134,7 +101,9 @@ exit 0
     return root, bindir
 
 
-def _run_backup(root: Path, bindir: Path, **extra_env: str) -> subprocess.CompletedProcess[str]:
+def _run_backup(
+    root: Path, bindir: Path, *, expected_returncode: int = 0, **extra_env: str
+) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     env.update(
         {
@@ -150,7 +119,7 @@ def _run_backup(root: Path, bindir: Path, **extra_env: str) -> subprocess.Comple
         env=env,
         timeout=120,
     )
-    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert result.returncode == expected_returncode, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     return result
 
 
@@ -158,26 +127,23 @@ def _daily_files(root: Path) -> list[str]:
     return sorted(path.name for path in (root / "backups" / "daily").iterdir())
 
 
-@pytest.mark.parametrize(
-    ("anchor_path", "mode", "label"),
-    [
-        (None, "ok", "Variable nicht gesetzt"),
-        (ANCHOR_PATH, "missing", "Ankerdatei fehlt oder ist unlesbar"),
-        (ANCHOR_PATH, "empty", "Ankerdatei ist leer"),
-    ],
-)
-def test_backup_without_anchor_artifact_warns_loudly(
-    tmp_path: Path, anchor_path: str | None, mode: str, label: str
-) -> None:
-    """Ein Satz ohne Anker darf nicht als beilaeufige INFO-Zeile durchgehen."""
+@pytest.mark.parametrize("anchor_path", [None, "", ANCHOR_PATH])
+@pytest.mark.parametrize("mode", ["missing", "empty"])
+def test_backup_without_anchor_artifact_aborts(tmp_path: Path, anchor_path: str | None, mode: str) -> None:
+    """Unset and empty values use the Compose default and cannot bypass the anchor."""
     root, bindir = _sandbox(tmp_path, anchor_path=anchor_path)
+    result = _run_backup(root, bindir, expected_returncode=1, TEST_HWM_MODE=mode)
+    assert "ERROR: Audit anchor" in result.stderr
+    assert ANCHOR_PATH in result.stderr
+    assert _daily_files(root) == []
 
-    result = _run_backup(root, bindir, TEST_HWM_MODE=mode)
 
-    output = result.stdout + result.stderr
-    assert not any(name.startswith(_ANCHOR_ARTEFACT) for name in _daily_files(root)), label
-    assert "WARNUNG" in output, f"{label}: der fehlende Anker muss als Warnung erscheinen"
-    assert _CLOSING_HINT in output, f"{label}: der Abschlussblock muss die Folge fuer die Wiederherstellung benennen"
+@pytest.mark.parametrize("anchor_path", [None, ""])
+def test_backup_default_anchor_produces_the_full_set(tmp_path: Path, anchor_path: str | None) -> None:
+    root, bindir = _sandbox(tmp_path, anchor_path=anchor_path)
+    result = _run_backup(root, bindir)
+    assert len(_daily_files(root)) == 7
+    assert "Audit anchor backed up" in result.stdout
 
 
 def test_backup_with_configured_anchor_produces_the_full_set(tmp_path: Path) -> None:

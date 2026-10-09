@@ -216,7 +216,7 @@ services:
       EMAIL_USE_TLS: ${EMAIL_USE_TLS:-true}
       EMAIL_USE_SSL: ${EMAIL_USE_SSL-}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@anlaufstelle.app}
-      MEDIA_ROOT: ${MEDIA_ROOT:-/data/media}
+      MEDIA_ROOT: ${MEDIA_ROOT:-/media/media}
       CLAMAV_ENABLED: ${CLAMAV_ENABLED:-true}
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
@@ -233,8 +233,8 @@ services:
       DJANGO_HEALTH_DETAIL_TOKEN: ${DJANGO_HEALTH_DETAIL_TOKEN-}
       # Refs #2315: Ankerpfad ist ab Werk gesetzt und gehoert damit zur
       # dokumentierten Runtime-Allowlist. Geschrieben wird die Datei von
-      # cron/maintenance (verify_audit_chain); web sieht dasselbe /data-Volume.
-      DJANGO_AUDIT_HWM_PATH: ${DJANGO_AUDIT_HWM_PATH-}
+      # cron/maintenance advance the anchor; web can only read its separate volume.
+      DJANGO_AUDIT_HWM_PATH: ${DJANGO_AUDIT_HWM_PATH:-/data/audit_hwm.json}
       SUDO_MODE_TTL_SECONDS: ${SUDO_MODE_TTL_SECONDS:-900}
       # Refs #2470: the MFA role enforcement and the passkey relying party act
       # in the HTTP runtime. ``-`` instead of ``:-``: unset keeps the code
@@ -250,7 +250,7 @@ services:
       DJANGO_AUDIT_DETAIL_STRICT: ${DJANGO_AUDIT_DETAIL_STRICT:-false}
       OFFLINE_REVOCATION_SESSION_SCAN_LIMIT: ${OFFLINE_REVOCATION_SESSION_SCAN_LIMIT:-10000}
       REPORTING_BACKEND_STATEMENT_TIMEOUT_MS: ${REPORTING_BACKEND_STATEMENT_TIMEOUT_MS:-10000}
-      MAINTENANCE_FLAG_FILE: ${MAINTENANCE_FLAG_FILE:-/data/anlaufstelle.maintenance}
+      MAINTENANCE_FLAG_FILE: ${MAINTENANCE_FLAG_FILE:-/media/anlaufstelle.maintenance}
       MAINTENANCE_ALLOW_IPS: ${MAINTENANCE_ALLOW_IPS-}
       MAINTENANCE_CACHE_TTL: ${MAINTENANCE_CACHE_TTL:-5}
       MAINTENANCE_RETRY_AFTER: ${MAINTENANCE_RETRY_AFTER:-600}
@@ -288,10 +288,11 @@ services:
       # Refs #2119: Disk-Check ohne Messwert degradiert, abschaltbar per Schalter.
       DJANGO_HEALTH_DISK_REQUIRED: ${DJANGO_HEALTH_DISK_REQUIRED:-true}
     volumes:
-      # Persistenter Mount fuer MEDIA_ROOT (=/data/media) — verhindert
+      # Persistent writable media root: /media/media (Refs #720, #2527).
       # stillen Datenverlust bei docker compose pull && up -d.
       # Refs #720.
-      - media:/data
+      - media:/media
+      - audit-anchor:/data:ro
       # Refs #1872: Backup-Ablage von scripts/ops/backup.sh (Host, Default
       # <repo>/backups) read-only hereinreichen, damit die Health-Card unter
       # /system/ und last_backup_age_hours in /health/ das Backup-Alter sehen.
@@ -337,6 +338,9 @@ services:
     mem_limit: 1g
     env_file: .env
     environment:
+      MEDIA_ROOT: ${MEDIA_ROOT:-/media/media}
+      MAINTENANCE_FLAG_FILE: ${MAINTENANCE_FLAG_FILE:-/media/anlaufstelle.maintenance}
+      DJANGO_AUDIT_HWM_PATH: ${DJANGO_AUDIT_HWM_PATH:-/data/audit_hwm.json}
       ANLAUFSTELLE_PROCESS_ROLE: maintenance
       DJANGO_LOAD_DOTENV: "false"
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
@@ -351,7 +355,8 @@ services:
       FILE_UPLOAD_TEMP_DIR: /tmp
       REDIS_URL: ${REDIS_URL-redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/1}
     volumes:
-      - media:/data
+      - media:/media
+      - audit-anchor:/data:rw
       - ${BACKUP_HOST_DIR:-./backups}:${BACKUP_DIR:-/backups}:ro
     depends_on:
       db:
@@ -401,6 +406,9 @@ services:
     mem_limit: 1g
     env_file: .env
     environment:
+      MEDIA_ROOT: ${MEDIA_ROOT:-/media/media}
+      MAINTENANCE_FLAG_FILE: ${MAINTENANCE_FLAG_FILE:-/media/anlaufstelle.maintenance}
+      DJANGO_AUDIT_HWM_PATH: ${DJANGO_AUDIT_HWM_PATH:-/data/audit_hwm.json}
       ANLAUFSTELLE_PROCESS_ROLE: maintenance
       DJANGO_LOAD_DOTENV: "false"
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
@@ -428,7 +436,8 @@ services:
       - ./deploy/crontab:/etc/anlaufstelle/crontab:ro
       # MEDIA_ROOT: cleanup_orphan_storage_files und enforce_retention
       # loeschen Anhaenge — dieselbe Volume-Sicht wie web.
-      - media:/data
+      - media:/media
+      - audit-anchor:/data:rw
     depends_on:
       db:
         condition: service_healthy
@@ -546,6 +555,7 @@ services:
       - frontend
 
 volumes:
+  audit-anchor:
   pgdata:
   caddy_data:
   caddy_config:

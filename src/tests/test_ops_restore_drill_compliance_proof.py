@@ -1,21 +1,4 @@
-"""Der Compliance-Nachweis belegt nur den vollstaendigen Drill (Refs #2341).
-
-Seit Refs #2316 endet ein Lauf mit uebersprungenen Pflichtschritten mit
-Exit-Code 2 und der Zeile „kein vollstaendiger Nachweis". Schritt 7 prueft
-davon aber nichts: er sieht nur ``DRILL_FAILED``/``DRILL_UNDETERMINED`` und
-ruft ``manage.py mark_restore_verified`` auch dann, wenn die Ankerpruefung
-mangels Konfiguration ausgefallen ist — und laeuft ausserdem VOR dem
-Exit-2-Block. Der Compliance-Check „Restore-Test" springt damit auf ``ok``,
-obwohl der Lauf ausdruecklich keinen vollstaendigen Nachweis behauptet: die
-Ampel im Dashboard widerspricht dem Exit-Code des Skripts.
-
-Gedeckt wird deshalb:
-
-- Lauf mit Luecke ⇒ Exit 2 UND **kein** ``mark_restore_verified`` im Stub-Log.
-- Die Abschlussausgabe sagt ausdruecklich, dass kein Nachweis geschrieben wurde.
-- Kontrollproben unveraendert: vollstaendiger Lauf ⇒ Exit 0 **mit** Nachweis,
-  Lauf mit FAIL ⇒ Exit 1 **ohne** Nachweis.
-"""
+"""Only a complete restore drill writes a compliance proof; defaults cannot bypass anchors."""
 
 from __future__ import annotations
 
@@ -38,23 +21,25 @@ def _valid_hwm_payload() -> str:
     return f'{{"version":1,"chains":{{}},"sig":"{signature}"}}'
 
 
-def test_skipped_mandatory_step_writes_no_compliance_proof(tmp_path: Path) -> None:
+def test_missing_default_anchor_writes_no_compliance_proof(tmp_path: Path) -> None:
     """Der Kern des Befunds: Luecke im Drill, aber gruene Compliance-Karte."""
     _, docker_log, result = _restore_sandbox(tmp_path, hwm_payload=None, hwm_configured=False)
 
-    assert result.returncode == 2, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert "SKIP - Schritt 2b" in result.stdout, "Vorbedingung: der Lauf hat eine Luecke"
+    assert result.returncode == 1, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "FAIL - Schritt 2b: Kein Audit-HWM-Backup" in result.stdout
     assert _PROOF not in docker_log.read_text(encoding="utf-8"), (
         "Ein Lauf, der ausdruecklich keinen vollstaendigen Nachweis behauptet, darf den "
         "Compliance-Nachweis nicht schreiben"
     )
 
 
-def test_skipped_run_says_that_no_proof_was_written(tmp_path: Path) -> None:
+def test_missing_default_anchor_reports_failure(tmp_path: Path) -> None:
     """Der Betreiber muss die Folge im Protokoll lesen koennen, nicht raten."""
     _, _, result = _restore_sandbox(tmp_path, hwm_payload=None, hwm_configured=False)
 
-    assert _NO_PROOF_LINE in result.stdout, result.stdout
+    assert result.returncode == 1, result.stdout
+    assert "DRILL FEHLGESCHLAGEN" in result.stdout
+    assert "FAIL - Schritt 2b: Kein Audit-HWM-Backup" in result.stdout
 
 
 def test_complete_run_still_writes_the_proof(tmp_path: Path) -> None:

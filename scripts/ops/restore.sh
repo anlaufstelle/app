@@ -10,13 +10,11 @@ set -euo pipefail
 #
 # --yes (or RESTORE_CONFIRM=ja) confirms the destructive restore without a
 # prompt.
-# --skip-audit-anchor restores a set that binds an audit anchor on a host without
-# DJANGO_AUDIT_HWM_PATH. Without it such a restore stops before any change; with
-# it the anchor is neither checked nor restored and the audit chain is unanchored.
-#
-# Medien-Restore entpackt neben dem existierenden /data/media-Inhalt, prueft
-# jeden DB-Anhang und ersetzt den Bestand erst danach. Erwartet die im backup.sh
-# erzeugte Struktur (`media/...` relativ zu `/data`).
+# --skip-audit-anchor explicitly bypasses the Compose anchor default on a
+# host without a custom DJANGO_AUDIT_HWM_PATH. The anchor is neither checked
+# nor restored, so this override does not prove an anchored audit chain.
+# Media restore stages data next to /media/media, checks every attachment,
+# then activates it. Archives contain media/... relative to the media parent.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # SCRIPT_DIR ist <repo>/scripts/ops — der Repo-Root (mit docker-compose.prod.yml)
@@ -92,6 +90,11 @@ if [[ -f "${PROJECT_DIR}/.env" ]]; then
     load_env_file "${PROJECT_DIR}/.env"
 fi
 
+# An explicit legacy recovery override remains available on an unconfigured host.
+if [[ "$SKIP_AUDIT_ANCHOR" != "1" ]]; then
+    DJANGO_AUDIT_HWM_PATH="${DJANGO_AUDIT_HWM_PATH:-/data/audit_hwm.json}"
+fi
+
 : "${POSTGRES_USER:?POSTGRES_USER nicht gesetzt}"
 : "${POSTGRES_DB:?POSTGRES_DB nicht gesetzt}"
 : "${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY nicht gesetzt}"
@@ -103,7 +106,7 @@ if [[ -n "${POSTGRES_ADMIN_USER:-}" && ! "$POSTGRES_ADMIN_USER" =~ ^[A-Za-z0-9_-
     echo "FEHLER: POSTGRES_ADMIN_USER darf nur Buchstaben, Ziffern, Unterstriche und Bindestriche enthalten." >&2
     exit 1
 fi
-MEDIA_ROOT_CONTAINER="${MEDIA_ROOT_CONTAINER:-/data/media}"
+MEDIA_ROOT_CONTAINER="${MEDIA_ROOT_CONTAINER:-/media/media}"
 backup_require_real_key
 
 # Der Backup-Satz wird als Ganzes authentifiziert: signiertes Manifest,

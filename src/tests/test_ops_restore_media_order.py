@@ -98,6 +98,7 @@ def _make_sandbox(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     shutil.copytree(OPS_DIR / "lib", ops / "lib")
     (root / "docker-compose.prod.yml").write_text("services: {}\n", encoding="utf-8")
     (root / ".env").write_text(
+        "MEDIA_ROOT_CONTAINER=/data/media\n"
         "POSTGRES_USER=appuser\n"
         "POSTGRES_DB=anlaufstelle\n"
         f"BACKUP_ENCRYPTION_KEY={BACKUP_KEY}\n"
@@ -128,6 +129,11 @@ def _make_sandbox(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     signature = hmac.new(derived.encode(), manifest.read_bytes(), hashlib.sha256).hexdigest()
     manifest.with_name(f"{manifest.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
 
+    anchor = daily / "audit_hwm-2026-09-10_020000.json"
+    payload = b'{"version":1,"chains":{},"sig":"signed"}'
+    anchor.write_bytes(payload)
+    _bind_manifest_hwm(manifest, payload)
+
     bindir = tmp_path / "bin"
     bindir.mkdir()
     action_log = tmp_path / "actions.log"
@@ -144,6 +150,19 @@ exec "$REAL_OPENSSL" "$@"
     _write_executable(
         bindir / "docker",
         """#!/usr/bin/env bash
+# Record the operation, not shell source containing an unexecuted install branch.
+if [[ "$*" == *"HWM_CHECK="* ]]; then
+    args=("$@")
+    for index in "${!args[@]}"; do
+        if [[ "${args[$index]}" == "-c" ]]; then
+            args[$((index + 1))]="anchor-operation"
+            break
+        fi
+    done
+    printf 'docker %s\\n' "${args[*]}" >> "$ACTION_LOG"
+    cat >/dev/null
+    exit 0
+fi
 printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
 if [[ "$*" == *" exec -T web sh -c "* ]]; then
     if [[ "${TEST_WEB_MEDIA_ROOT_ERROR:-0}" == "1" ]]; then
@@ -363,8 +382,8 @@ def test_restore_drill_extracts_and_reports_matching_media_archive(tmp_path: Pat
         timeout=30,
     )
 
-    # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
-    assert result.returncode == 2, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    # The fixture carries the production default anchor, so the drill is complete.
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "anlaufstelle_2026-09-10_020000_media.tar.gz.enc: 2 Dateien, 9 Bytes, HMAC ok" in result.stdout
     assert list(media_tmp.iterdir()) == []
 
@@ -425,12 +444,11 @@ def test_restore_drill_allows_database_only_manifest_without_media_hash(tmp_path
         timeout=30,
     )
 
-    # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
-    assert result.returncode == 2, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    # The fixture carries the production default anchor, so the drill is complete.
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "DB-only-Backup zulaessig" in result.stdout
-    # Refs #2341: Eine Luecke im Lauf schreibt keinen Compliance-Nachweis mehr;
-    # geprueft wird hier, dass der DB-only-Satz nicht am Medien-Hash scheitert.
-    assert "mark_restore_verified" not in action_log.read_text(encoding="utf-8")
+    # A database-only set with a bound anchor is now a complete production drill.
+    assert "mark_restore_verified" in action_log.read_text(encoding="utf-8")
 
 
 def test_restore_drill_rejects_media_with_wrong_manifest_hash(tmp_path: Path) -> None:
@@ -539,6 +557,11 @@ if [[ "$*" == *" exec -T db psql "* ]]; then
     else
         cat >/dev/null
     fi
+    exit 0
+fi
+if [[ "$*" == *"HWM_CHECK="* ]]; then
+    # This fixture executes media operations; anchor validation has its own real-shell tests.
+    cat >/dev/null
     exit 0
 fi
 if [[ "$*" == *" run --rm --entrypoint sh -T maintenance "* ]]; then

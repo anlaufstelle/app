@@ -105,6 +105,7 @@ def _sandbox(tmp_path: Path) -> tuple[Path, Path, Path]:
         shutil.copytree(lib_src, ops / "lib")
     (root / "docker-compose.prod.yml").write_text("services: {}\n", encoding="utf-8")
     (root / ".env").write_text(
+        "MEDIA_ROOT_CONTAINER=/data/media\n"
         "POSTGRES_USER=appuser\n"
         "POSTGRES_ADMIN_USER=adminuser\n"
         "POSTGRES_DB=anlaufstelle\n"
@@ -131,6 +132,11 @@ def _sandbox(tmp_path: Path) -> tuple[Path, Path, Path]:
         f"media_sha256={hashlib.sha256(media_backup.read_bytes()).hexdigest()}\n",
         encoding="utf-8",
     )
+    anchor = manifest.with_name(f"audit_hwm-{manifest.stem.removeprefix('anlaufstelle_')}.json")
+    payload = b'{"version":1,"chains":{},"sig":"signed"}'
+    anchor.write_bytes(payload)
+    manifest.write_text(manifest.read_text() + f"hwm_sha256={hashlib.sha256(payload).hexdigest()}\n")
+
     _sign(manifest)
 
     bindir = tmp_path / "bin"
@@ -140,6 +146,18 @@ def _sandbox(tmp_path: Path) -> tuple[Path, Path, Path]:
     _write_executable(
         bindir / "docker",
         """#!/usr/bin/env bash
+if [[ "$*" == *"HWM_CHECK="* ]]; then
+    args=("$@")
+    for index in "${!args[@]}"; do
+        if [[ "${args[$index]}" == "-c" ]]; then
+            args[$((index + 1))]="anchor-operation"
+            break
+        fi
+    done
+    printf 'docker %s\\n' "${args[*]}" >> "$ACTION_LOG"
+    cat >/dev/null
+    exit 0
+fi
 printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
 if [[ "$*" == *" exec -T web sh -c "* ]]; then
     MEDIA_ROOT="${TEST_WEB_MEDIA_ROOT-/data/media}" sh -c "${@: -1}"

@@ -167,6 +167,8 @@ elif [[ "$*" == *"FROM pg_trigger"* ]]; then
     printf '1\\n'
 elif [[ "$*" == *"SELECT COUNT(*)"* ]]; then
     printf '1\\n'
+elif [[ "$*" == *" exec -T cron cat "* ]]; then
+    printf '{"version":1,"chains":{},"sig":"signed"}\\n'
 elif [[ "$*" == *" pg_dump "* || "$*" == *" tar -C "* ]]; then
     printf 'FAKE-CONTAINER-OUTPUT\\n'
 elif [[ "$*" == *" psql "* ]]; then

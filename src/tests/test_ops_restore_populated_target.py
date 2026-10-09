@@ -65,6 +65,18 @@ def _media_payload() -> bytes:
 
 
 DOCKER_STUB = """#!/usr/bin/env bash
+if [[ "$*" == *"HWM_CHECK="* ]]; then
+    args=("$@")
+    for index in "${!args[@]}"; do
+        if [[ "${args[$index]}" == "-c" ]]; then
+            args[$((index + 1))]="anchor-operation"
+            break
+        fi
+    done
+    printf 'docker %s\\n' "${args[*]}" >> "$ACTION_LOG"
+    cat >/dev/null
+    exit 0
+fi
 printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
 if [[ "$*" == *" exec -T web sh -c "* ]]; then
     MEDIA_ROOT="${TEST_WEB_MEDIA_ROOT-/data/media}" sh -c "${@: -1}"
@@ -112,6 +124,7 @@ def _sandbox(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
         shutil.copytree(OPS_DIR / "lib", ops / "lib")
     (root / "docker-compose.prod.yml").write_text("services: {}\n", encoding="utf-8")
     (root / ".env").write_text(
+        "MEDIA_ROOT_CONTAINER=/data/media\n"
         "POSTGRES_USER=appuser\n"
         "POSTGRES_ADMIN_USER=adminuser\n"
         f"POSTGRES_DB={TARGET_DB}\n"
@@ -143,6 +156,11 @@ def _sandbox(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
         + f"media_sha256={hashlib.sha256(media_backup.read_bytes()).hexdigest()}\n",
         encoding="utf-8",
     )
+    anchor = manifest.with_name(f"audit_hwm-{manifest.stem.removeprefix('anlaufstelle_')}.json")
+    payload = b'{"version":1,"chains":{},"sig":"signed"}'
+    anchor.write_bytes(payload)
+    manifest.write_text(manifest.read_text() + f"hwm_sha256={hashlib.sha256(payload).hexdigest()}\n")
+
     _sign(manifest)
 
     bindir = tmp_path / "bin"
@@ -240,7 +258,8 @@ def test_media_are_activated_after_the_database_switchover(tmp_path: Path) -> No
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     lines = _lines(action_log)
-    assert _index(lines, f'RENAME TO "{TARGET_DB}";') < _index(lines, "maintenance")
+    # Anchor preflight also uses maintenance; compare the actual media activation.
+    assert _index(lines, f'RENAME TO "{TARGET_DB}";') < _index(lines, 'mv "$stage" "$live"')
 
 
 def test_fresh_target_without_existing_database_needs_no_backup_copy(tmp_path: Path) -> None:
@@ -343,6 +362,9 @@ ANCHOR_PATH = "/data/audit_hwm.json"
 def test_set_with_manifest_still_requires_its_anchor(tmp_path: Path) -> None:
     """With a manifest and a configured anchor path the anchor is mandatory (fail-closed)."""
     root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+
+    # The standard fixture is complete; remove only its anchor to reproduce the failure.
+    db_backup.with_name(f"audit_hwm-{TIMESTAMP}.json").unlink()
 
     result = _run(root, bindir, action_log, db_backup, media_backup, DJANGO_AUDIT_HWM_PATH=ANCHOR_PATH)
 

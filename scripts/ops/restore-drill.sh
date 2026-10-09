@@ -138,6 +138,7 @@ if [[ -r "$ENV_FILE" ]]; then
 fi
 
 if [[ "$DRILL_FORMAT" == "prod" ]]; then
+    DJANGO_AUDIT_HWM_PATH="${DJANGO_AUDIT_HWM_PATH:-/data/audit_hwm.json}"
     BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-$COMPOSE_DIR/backups}"
     if [[ "$BACKUP_HOST_DIR" != /* ]]; then
         BACKUP_HOST_DIR="${COMPOSE_DIR}/${BACKUP_HOST_DIR#./}"
@@ -489,10 +490,8 @@ if [[ "$DRILL_FORMAT" == "prod" && -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
     fi
     rm -f "$HWM_VERIFY_OUT" "$HWM_VERIFY_ERR"
 elif [[ "$DRILL_FORMAT" == "prod" ]]; then
-    # Refs #2242: Der externe Anker ist ein Opt-in-Feature (DJANGO_AUDIT_HWM_PATH
-    # ist in .env.example auskommentiert). Ein fehlender Pfad bleibt deshalb kein
-    # Fehlschlag, wird aber nicht mehr als beilaeufige INFO-Zeile gefuehrt: der
-    # Schritt gilt als nicht geprueft und steht so auch im Ergebnisblock.
+    # Legacy fallback: the production default above prevents this branch from
+    # skipping an anchor when the host variable is unset or empty (Refs #2527).
     skip "Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration) — DJANGO_AUDIT_HWM_PATH nicht gesetzt (${ENV_FILE}); dieser Lauf belegt keine unversehrte Audit-Kette"
 else
     skip "Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration) — das dev-Backup-Format fuehrt keinen externen Audit-Anker mit"

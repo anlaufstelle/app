@@ -101,12 +101,10 @@ RUN chmod +x /app/docker-entrypoint.sh /app/docker-migrate.sh
 
 RUN adduser --disabled-password --gecos '' --uid 1000 appuser && chown -R appuser:appuser /app
 
-# MEDIA_ROOT-Mount-Punkt vorbereiten: Docker-Named-Volumes erben die
-# Permissions des Mount-Targets im Image. /data/media muss daher als
-# appuser-owned vorab existieren, damit das Volume beim ersten Mount
-# nicht als root angelegt wird (sonst kein Schreibzugriff fuer den
-# appuser, kein Datei-Upload moeglich). Refs #720, Refs #733.
-RUN mkdir -p /data/media && chown -R appuser:appuser /data
+# Named volumes inherit their mount target's initial content and ownership.
+# Compose mounts /data read-only in web and read-write in maintenance (Refs #2527).
+# Prepare separate roots; web uploads remain writable under /media/media.
+RUN mkdir -p /media/media /data && chown -R appuser:appuser /media /data
 
 USER appuser
 

@@ -1,9 +1,4 @@
-"""Restore of a set with a bound audit anchor on a host without an anchor path.
-
-Such a restore stops before anything is changed. Only the explicit
-``--skip-audit-anchor`` switch lets it continue, and the output then says what
-is not checked and not restored.
-"""
+"""Restore uses the Compose anchor default unless explicitly skipped."""
 
 from __future__ import annotations
 
@@ -25,23 +20,15 @@ def test_normal_bound_anchor_restore_has_no_unchecked_warning(tmp_path: Path):
     assert "Anker wurde nicht geprueft" not in result.stderr
 
 
-def test_bound_anchor_without_configured_path_aborts_before_any_change(tmp_path: Path):
-    result, hwm_target, action_log = _run_hwm_restore(
-        tmp_path,
-        _signed_hwm_payload(tmp_path),
-        hwm_configured=False,
-    )
-
-    assert result.returncode == 1, result.stderr
-    assert "DJANGO_AUDIT_HWM_PATH" in result.stderr
-    assert "--skip-audit-anchor" in result.stderr
-    assert "FEHLER: Der Satz enthält einen Audit-Anker" in result.stderr
-    assert "Es wurde nichts verändert." in result.stderr
-    actions = action_log.read_text(encoding="utf-8") if action_log.exists() else ""
-    assert " psql " not in actions
-    assert " mv " not in actions
-    assert " tar " not in actions
-    assert hwm_target.read_bytes() == b"old-anchor"
+def test_bound_anchor_without_host_path_is_restored_to_the_compose_default(tmp_path: Path):
+    payload = _signed_hwm_payload(tmp_path)
+    result, hwm_target, action_log = _run_hwm_restore(tmp_path, payload, hwm_configured=False)
+    assert result.returncode == 0, result.stderr
+    assert hwm_target.read_bytes() == payload
+    actions = action_log.read_text(encoding="utf-8")
+    assert "/data/audit_hwm.json" in actions
+    assert " psql " in actions
+    assert "Anker wurde nicht geprueft" not in result.stderr
 
 
 def test_skip_audit_anchor_switch_restores_and_says_what_is_not_checked(tmp_path: Path):

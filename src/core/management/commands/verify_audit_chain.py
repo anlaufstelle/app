@@ -132,8 +132,13 @@ class Command(BaseCommand):
             hwm.save()
         except ValueError as exc:
             raise CommandError(
-                f"AUDIT_HWM_PATH ist ungueltig: {exc} Einen Pfad ohne '..'-Komponenten "
-                "konfigurieren und verify_audit_chain erneut ausfuehren."
+                f"AUDIT_HWM_PATH is invalid: {exc} Configure a path without '..' components "
+                "and run verify_audit_chain again."
+            ) from exc
+        except OSError as exc:
+            raise CommandError(
+                f"AUDIT_HWM_PATH is not writable: {hwm.path!r} ({exc}). "
+                "Run verify_audit_chain in cron or maintenance with a writable audit-anchor volume."
             ) from exc
 
     def _require_anchor(self, hwm_path: str, hwm, targets: list) -> None:

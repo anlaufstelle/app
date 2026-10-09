@@ -48,6 +48,8 @@ elif [[ "$*" == *"UPDATE core_auditlog"* ]]; then
     exit 1
 elif [[ "$*" == *"SELECT COUNT(*)"* ]]; then
     printf '1\\n'
+elif [[ "$*" == *" exec -T cron cat "* ]]; then
+    printf '{"version":1,"chains":{},"sig":"signed"}\\n'
 elif [[ "$*" == *" pg_dump "* || "$*" == *" tar -C "* ]]; then
     printf 'FAKE-CONTAINER-OUTPUT\\n'
 elif [[ "$*" == *" psql "* ]]; then
@@ -173,8 +175,8 @@ def _assert_backup_and_drill_use_daily_dir(root: Path, docker_log: Path, fake_bi
         timeout=60,
     )
 
-    # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
-    assert restore_result.returncode == 2, (
+    # The backup now includes the default anchor, so its drill is complete.
+    assert restore_result.returncode == 0, (
         f"restore-drill.sh scheiterte (rc={restore_result.returncode}).\n"
         f"STDOUT:\n{restore_result.stdout}\nSTDERR:\n{restore_result.stderr}"
     )

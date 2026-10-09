@@ -1,10 +1,4 @@
-"""Exit-Codes des Restore-Drills: Lücken sind kein Erfolg (#2316).
-
-Ein Lauf mit übersprungenen Pflichtschritten (Werkskonfiguration ohne
-Ankerpfad) endete mit Exit 0 und einer Erfolgszeile — die Alarmregel des
-Runbooks (`Exit != 0`) schlug deshalb nie an. Die Fälle nutzen die
-Drill-Sandbox aus ``test_ops_backup_hwm``.
-"""
+"""Production defaults require an anchor; missing proof must never count as success."""
 
 from __future__ import annotations
 
@@ -28,12 +22,11 @@ def _valid_hwm_payload() -> str:
     return f'{{"version":1,"chains":{{}},"sig":"{signature}"}}'
 
 
-def test_run_with_skipped_mandatory_step_is_not_reported_as_success(tmp_path: Path) -> None:
+def test_missing_default_anchor_is_not_reported_as_success(tmp_path: Path) -> None:
     _, _, result = _restore_sandbox(tmp_path, hwm_payload=None, hwm_configured=False)
 
-    assert result.returncode == SKIPPED_EXIT_CODE, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert "SKIP - Schritt 2b: Audit-Anker NICHT geprueft" in result.stdout
-    assert GAP_LINE in result.stdout
+    assert result.returncode == 1, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "FAIL - Schritt 2b: Kein Audit-HWM-Backup" in result.stdout
     assert SUCCESS_LINE not in result.stdout
 
 

@@ -7,4 +7,4 @@ This excerpt translates the key rotation assessment in [TB5 of the German threat
 <!-- translation-source: docs/threat-model.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 12b7d5ce8fbce7d24282e76b7f091d853725c3d3 -->
+<!-- source-hash: b998dbbd9431c24b17fc6a256e7644c5c460e7a0 -->

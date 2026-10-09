@@ -207,14 +207,13 @@ def check_media_root_persistent(app_configs, **kwargs):
     if under_base:
         messages.append(
             Error(
-                f"MEDIA_ROOT ({settings.MEDIA_ROOT}) liegt unter BASE_DIR ({base_dir}) — "
-                "in Produktion nicht persistent und unter read_only nicht beschreibbar.",
+                f"MEDIA_ROOT ({settings.MEDIA_ROOT}) is below BASE_DIR ({base_dir}); "
+                "it is not persistent in production and is not writable on a read-only root filesystem.",
                 hint=(
-                    "Setze MEDIA_ROOT auf ein persistentes, beschreibbares Volume außerhalb "
-                    "des Anwendungs-Verzeichnisses (z. B. MEDIA_ROOT=/data/media, wie in "
-                    ".env.example). Ein Pfad unter BASE_DIR (/app) liegt auf dem read_only-"
-                    "Root-FS der web-Container (#1374) und überlebt kein 'docker compose pull' "
-                    "(#720) — Datei-Uploads scheitern sonst erst zur Laufzeit mit HTTP 500."
+                    "Set MEDIA_ROOT to a persistent, writable volume outside the application directory "
+                    "(for example MEDIA_ROOT=/media/media, as in .env.example). A path below BASE_DIR "
+                    "(/app) is on the web container's read-only root filesystem (#1374) and does not "
+                    "survive container recreation (#720); file uploads would fail with HTTP 500."
                 ),
                 id="core.E002",
             )

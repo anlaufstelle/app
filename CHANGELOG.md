@@ -8,11 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
-- **Admin-Audit vervollständigt** (#2527) — Verwaltungszugriffe der Systemadministration werden bei fehlgeschlagenem Leseaudit mit 403 abgewiesen, Admin-Schreibaktionen einschließlich Sammellöschungen und Inline-Änderungen mit Actor protokolliert und Ereignisse samt Historien ausschließlich als Metadaten angezeigt.
+- **Admin-Audit und Anker abgesichert** (#2527) — Verwaltungszugriffe der Systemadministration werden bei fehlgeschlagenem Leseaudit mit 403 abgewiesen, Admin-Schreibaktionen einschließlich Sammellöschungen und Inline-Änderungen mit Actor protokolliert und Ereignisse samt Historien ausschließlich als Metadaten angezeigt; der Audit-Anker liegt im eigenen Volume mit nur lesendem Webzugriff, und fehlende, leere oder unlesbare Anker brechen das Backup vor Veröffentlichung ab.
 
 ### Erforderliche Betreiber-Aktionen
 
-- Keine.
+- **Audit-Anker auf eigenes Volume umstellen** (#2527) — Neues Image und Compose-Dateien verwenden, `audit-anchor` beim Stack-Start anlegen lassen und `DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json` sowie `MEDIA_ROOT=/media/media`, gegebenenfalls `MEDIA_ROOT_CONTAINER=/media/media` und `MAINTENANCE_FLAG_FILE=/media/anlaufstelle.maintenance` setzen (Medienvolume bleibt erhalten, Mount jetzt `/media`); bei neuen Instanzen vor dem ersten Backup initialisieren, bei bestehenden den signierten Anker unter angehaltenen Jobs erhalten und übernehmen ([Ops-Runbook § 6.7](docs/ops-runbook.md#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)).
 
 ### Fixed
 

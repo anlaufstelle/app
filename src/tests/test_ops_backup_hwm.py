@@ -401,16 +401,16 @@ def test_restore_drill_reports_fail_for_missing_hwm_and_continues(tmp_path: Path
     assert "Schritt 3: Tabellen-Stichproben erfolgreich" in result.stdout
 
 
-def test_restore_drill_skips_hwm_when_not_configured_and_writes_no_proof(tmp_path: Path) -> None:
+def test_restore_drill_requires_default_anchor_and_writes_no_proof(tmp_path: Path) -> None:
     _, docker_log, result = _restore_sandbox(
         tmp_path,
         hwm_payload=None,
         hwm_configured=False,
     )
 
-    # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
-    assert result.returncode == 2, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert "SKIP - Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration)" in result.stdout
+    # The production Compose default requires an anchor even without a host value.
+    assert result.returncode == 1, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "FAIL - Schritt 2b: Kein Audit-HWM-Backup" in result.stdout
     # Refs #2341: Ein Lauf mit Luecke schreibt keinen Compliance-Nachweis mehr —
     # sonst stuende die Karte „Restore-Test" auf gruen, waehrend derselbe Lauf
     # mit Exit-Code 2 ausdruecklich keinen vollstaendigen Nachweis behauptet.
@@ -510,8 +510,8 @@ def test_restore_drill_timestamp_selects_requested_not_latest_set(tmp_path: Path
         add_newer_backup=True,
     )
 
-    # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
-    assert result.returncode == 2, result.stdout
+    # Missing host configuration uses the production default and fails without an anchor.
+    assert result.returncode == 1, result.stdout
     assert "explizit gewaehlter Restore-Satz: 2026-09-02_020000" in result.stdout
     assert "Drill gegen DB-Backup:" in result.stdout
     assert "anlaufstelle_2026-09-02_020000.sql.gz.enc" in result.stdout

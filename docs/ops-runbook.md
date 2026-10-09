@@ -353,8 +353,8 @@ docker compose "${compose_files[@]}" up -d db web
 #    Ohne --yes (oder RESTORE_CONFIRM=ja) fragt das Skript interaktiv nach "ja";
 #    nicht-interaktiv (Cron, Pipe, kein Terminal) bricht es vor jeder Aenderung ab.
 #    Ein Satz ohne signiertes Manifest wird nicht eingespielt. Bindet der Satz
-#    einen Audit-Anker, muss DJANGO_AUDIT_HWM_PATH gesetzt sein; sonst bricht es
-#    ab (nur --skip-audit-anchor spielt den Satz dann ohne Anker ein).
+#    einen Audit-Anker, verwendet es den eigenen Pfad oder den Compose-Default.
+#    Nur --skip-audit-anchor auf einem Host ohne eigenen Pfad lässt den Anker aus.
 #    Die Backup-Dateien sind 0600 und gehören dem Konto von backup.sh (im
 #    empfohlenen Setup root): restore.sh als dieser Eigentümer starten (sudo);
 #    Lesen über die Gruppe reicht nicht. Die .env liest das Skript selbst.
@@ -605,13 +605,12 @@ wird; laeuft er, fuehren diese Zeilen jeden Job doppelt aus. Die Zeilen setzen
 den Compose-Stack und den Dienst `maintenance` voraus. Wer ohne Compose
 orchestriert (z. B. k8s), uebertraegt dieselben Kommandos mit der Admin-Rolle
 in die eigene Umgebung.
-**Grenze (Audit-Anker):** `backup.sh` liest den Audit-Anker (`DJANGO_AUDIT_HWM_PATH`)
-ausschließlich per `docker compose exec -T cron cat`. Läuft der `cron`-Sidecar
-nicht, endet der Lauf mit der Warnung „kein Audit-Anker“ und einem Satz ohne
-`audit_hwm-<Zeitstempel>.json`; `restore.sh` lehnt einen solchen Satz ab, solange
-`DJANGO_AUDIT_HWM_PATH` gesetzt ist. Das Backup-Beispiel dieser Alternative sichert
-den Anker also nur, wenn der Dienst `cron` zumindest für die Dauer des Backups
-läuft; die übrigen Jobs der Alternative sind davon nicht betroffen.
+**Grenze (Audit-Anker):** `backup.sh` liest den Anker ausschließlich per
+`docker compose exec -T cron cat`. Ist `cron` gestoppt oder die Ankerdatei
+fehlend, unlesbar oder leer, bricht das Backup mit Exit-Code 1 ab und
+veröffentlicht keinen neuen Satz. Das Backup-Beispiel dieser Alternative
+braucht deshalb einen laufenden `cron`-Sidecar; die übrigen Jobs sind davon
+nicht betroffen.
 Auch diese Alternative setzt den laufenden Cron-Dienst, die richtige
 Host-Zeitzone, vorab angelegte beschreibbare Logdateien und eine Logrotate-Regel
 voraus. Das Beispiel gehoert ausschliesslich in `sudo crontab -e`.
@@ -1124,8 +1123,8 @@ docker system prune -f
 sudo du -sh /opt/anlaufstelle/backups/*/
 
 # Belegung der Anhaenge je Einrichtung: MEDIA_ROOT liegt im benannten Volume media
-# (/data/media im Container), nicht im Host-Dateisystem
-docker compose -f docker-compose.prod.yml exec -T web sh -c 'du -sh /data/media/*/'
+# (/media/media im Container), nicht im Host-Dateisystem
+docker compose -f docker-compose.prod.yml exec -T web sh -c 'du -sh /media/media/*/'
 ```
 
 > **Monitoring ersetzt kein Kontingent** (#2129). Der Disk-Check in `/health/` (`HEALTH_DISK_REQUIRED`) meldet, **dass** der Datenträger volläuft — er verhindert es nicht und kennt keine Einrichtung. Im Mehr-Mandanten-Betrieb reicht das nicht: Eine einzige Einrichtung kann den gemeinsamen `MEDIA_ROOT` mit lauter legitimen Uploads füllen, und die Folge (Upload- und Backup-Fehler) trifft dann alle. Setzen Sie deshalb ein Speicherkontingent je Einrichtung:
@@ -1443,7 +1442,7 @@ compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 
 # Aktivieren (File-Flag im persistenten Web-Volume anlegen)
-docker compose "${compose_files[@]}" exec -T web touch /data/anlaufstelle.maintenance
+docker compose "${compose_files[@]}" exec -T web touch /media/anlaufstelle.maintenance
 
 # Update ausfuehren (Schritte 0 bis 4 aus § 1.2): cron anhalten, Images ziehen,
 # Migrations-One-Shot, Stack neu erzeugen. Ohne den One-Shot laeuft der neue Code
@@ -1455,10 +1454,10 @@ docker compose "${compose_files[@]}" run --rm \
 docker compose "${compose_files[@]}" up -d web cron caddy
 
 # Deaktivieren (dieselbe File-Flag im neu angelegten Web-Container entfernen)
-docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.maintenance
+docker compose "${compose_files[@]}" exec -T web rm -f /media/anlaufstelle.maintenance
 ```
 
-Der Produktions-Stack setzt `MAINTENANCE_FLAG_FILE` ohne weitere Konfiguration auf `/data/anlaufstelle.maintenance`. Der Pfad liegt im benannten `media`-Volume, ist für `appuser` beschreibbar und übersteht deshalb das Neuanlegen von `web`. Ein bereits in `.env` gesetzter Wert überschreibt den Standard weiterhin, muss aber ein beschreibbarer, persistenter **Container-Pfad** sein. Alternativ schaltet eine Systemadministration den Modus unter `/system/maintenance/` ein oder aus; die Seite schreibt dieselbe Datei.
+Der Produktions-Stack setzt `MAINTENANCE_FLAG_FILE` ohne weitere Konfiguration auf `/media/anlaufstelle.maintenance`. Der Pfad liegt im benannten `media`-Volume, ist für `appuser` beschreibbar und übersteht deshalb das Neuanlegen von `web`. Ein bereits in `.env` gesetzter Wert überschreibt den Standard weiterhin, muss aber ein beschreibbarer, persistenter **Container-Pfad** sein. Alternativ schaltet eine Systemadministration den Modus unter `/system/maintenance/` ein oder aus; die Seite schreibt dieselbe Datei.
 
 
 Whitelist:
@@ -1516,7 +1515,7 @@ Beide Formate spielen als Postgres-Superuser (`postgres`, via Local-Socket-Trust
 
 | Backup-Quelle | Dump-Format | Verschluesselung | Datei(en) | Restore-Tool | Restore-Drill |
 |---|---|---|---|---|---|
-| `scripts/ops/backup.sh` (Prod-Schema) | plain SQL + gzip | AES-256-CBC **+ HMAC-SHA256**-Sidecars (Refs #1024) | DB + Medien samt Sidecars, `*.manifest` samt Sidecar, optional zeitgleicher HWM | `psql` (`scripts/ops/restore.sh`) | ✓ `restore-drill.sh --prod --timestamp <Zeitstempel>` (Manifest-/HMAC-Check vor Decrypt); `backup.sh --verify` bleibt leichtgewichtige Alternative |
+| `scripts/ops/backup.sh` (Prod-Schema) | plain SQL + gzip | AES-256-CBC **+ HMAC-SHA256**-Sidecars (Refs #1024) | DB + Medien samt Sidecars, `*.manifest` samt Sidecar, verpflichtender zeitgleicher HWM | `psql` (`scripts/ops/restore.sh`) | ✓ `restore-drill.sh --prod --timestamp <Zeitstempel>` (Manifest-/HMAC-Check vor Decrypt); `backup.sh --verify` bleibt leichtgewichtige Alternative |
 
 
 Warum kein Cross-Restore: Der `--dev`-Zweig sucht per Glob `dump-*.pgc.enc` und pipet in `pg_restore` — ein plain-SQL-Backup (`*.sql.gz.enc`) wird so gar nicht gefunden und ist auch kein gueltiges `pg_restore`-Archiv. Der `--prod`-Zweig sucht `anlaufstelle_*.sql.gz.enc`, prueft den `.hmac`-Sidecar und spielt via `gunzip | psql` ein — ein `dump-*.pgc.enc` traegt keinen Sidecar (`backup_verify_hmac` bricht ab) und ist Binaerformat. Ein Lauf gegen das jeweils fremde Format schlaegt also fehl. Wer keinen vollen Drill fahren will, nutzt fuer den Prod-Pfad `scripts/ops/backup.sh --verify` (Satzauswahl ueber das signierte Manifest, Satzbindung wie beim Restore, HMAC, Probe-Restore des Dumps in eine temporaere Datenbank und ein Leer-Guard ueber vier RLS-Tabellen: `core_client`, `core_event`, `core_workitem` und `core_auditlog` duerfen im Restore nicht leer sein, wenn die Live-DB Zeilen hat). Das ist **kein** Zeilenabgleich gegen Manifest oder Live-DB; die Ausgabe „Verification summary“ nennt am Ende, was geprueft wurde und was nicht. Den exakten Abgleich der sechs Manifesttabellen liefert nur der Drill. Fehlt das Manifest oder gehoert das Medienarchiv zu einem anderen Satz, endet der Lauf mit Exit != 0.
@@ -1546,7 +1545,7 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev     # Dev-Format 
 | 0 | Backup im format-spezifischen Verzeichnis finden; bei `--prod --timestamp <Zeitstempel>` oder `--prod` mit `BACKUP_TIMESTAMP=<Zeitstempel>` exakt diesen Satz waehlen, sonst den neuesten. Das zeitgleiche Manifest samt HMAC authentifizieren, Satzkennung sowie DB-/Medien-/HWM-Hashes pruefen und die Referenzzahlen fuer sechs Tabellen laden. Ohne Manifest bricht der Prod-Drill ab. Enthält das authentifizierte Manifest einen `media_sha256`, bricht der Drill bei fehlendem Medienarchiv, fehlendem Sidecar oder falschem Hash bereits vor Anlage der Wegwerf-DB ab; `restore.sh` bricht in denselben Fällen vor dem Import ab. |
 | 1 | Frische Wegwerf-DB (`anlaufstelle_drill_<pid>`) anlegen |
 | 2 | Backup decrypten + einspielen — `--prod` prueft zuerst den HMAC-Sidecar, dann `gunzip \| psql -v ON_ERROR_STOP=1 --single-transaction` (plain SQL); `--dev` `pg_restore` (custom format) |
-| 2b | Nur `--prod` und bei gesetztem `DJANGO_AUDIT_HWM_PATH`: nach Schritt 3b die zum gewaehlten DB-Backup-Zeitstempel gehoerende `audit_hwm-<Zeitstempel>.json` per Stream in den gehaerteten Drill-Container schreiben, die HMAC-Signatur laden und die restaurierte Kette prüfen; fehlend, abweichend oder manipuliert → `FAIL`, die weiteren Restore-Pruefungen laufen trotzdem weiter. Die Bezeichnung 2b bleibt für das Prüfblatt stabil. Ist die Variable nicht gesetzt, wird der Schritt als `SKIP` gefuehrt; der Drill endet dann mit **Exit-Code 2** (bestanden mit Luecken) statt mit 0 ([§6.7](#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)) |
+| 2b | Bei `--prod`, auch mit dem Compose-Default: nach Schritt 3b die zum gewaehlten DB-Backup-Zeitstempel gehoerende `audit_hwm-<Zeitstempel>.json` per Stream in den gehaerteten Drill-Container schreiben, die HMAC-Signatur laden und die restaurierte Kette prüfen; fehlend, abweichend oder manipuliert → `FAIL`, die weiteren Restore-Pruefungen laufen trotzdem weiter. Die Bezeichnung 2b bleibt für das Prüfblatt stabil. Im dev-Format wird der Schritt als `SKIP` geführt; der Drill endet dann mit **Exit-Code 2** (bestanden mit Lücken) statt mit 0 ([§6.7](#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)) |
 | 3 | Stichproben pro Manifesttabelle (`core_facility`, `core_client`, `core_event`, `core_workitem`, `core_auditlog`, `core_attachment`) — Counts abfragbar? |
 | 3b | Im Prod-Format exakter Zeilenabgleich dieser sechs Tabellen zwischen Wegwerf-DB und authentifiziertem Manifest; jede Abweichung ist `FAIL`. Nur der Dev-Zweig vergleicht weiterhin exakt gegen die Live-DB. Dieser Schritt läuft vor der schreibenden Audit-Kettenprüfung und dem Compliance-Marker. |
 | 4 | RLS-Policy-Check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` muss `>= 18` ergeben (konservativer Mindestwert im Skript; tatsaechliche Anzahl liegt hoeher, siehe Abschnitt 9) |
@@ -1591,7 +1590,7 @@ Der automatische Schritt 6 prüft die Integrität und Probeentpackbarkeit des Me
 ```bash
 # 1. Sentinel-Datei in MEDIA_ROOT anlegen
 docker compose -f docker-compose.prod.yml exec web \
-    sh -c 'echo "drill-$(date +%s)" > /data/media/.restore-drill'
+    sh -c 'echo "drill-$(date +%s)" > /media/media/.restore-drill'
 
 # 2. Stack neu erzeugen (Containers loeschen — Volume bleibt)
 docker compose -f docker-compose.prod.yml down
@@ -1603,23 +1602,48 @@ docker compose "${compose_files[@]}" up -d
 
 # 3. Sentinel ueberprueft Volume-Persistenz
 docker compose -f docker-compose.prod.yml exec web \
-    cat /data/media/.restore-drill
+    cat /media/media/.restore-drill
 # -> erwarteter Output: drill-<timestamp>
 ```
 
-Sentinel danach loeschen: `rm /data/media/.restore-drill` im Container.
+Sentinel danach loeschen: `rm /media/media/.restore-drill` im Container.
 
 ---
 
 ### 6.7 Audit-High-Water-Mark sichern und pruefen (Refs #2022)
 
-Die Audit-Kettenpruefung kann Tail-Truncation und eine komplett geleerte Kette nur erkennen, wenn ihr letzter gruener Stand ausserhalb der Datenbank verankert bleibt. Dafuer in `.env` den empfohlenen Pfad im persistenten `/data`-Volume setzen:
+Die Audit-Kettenprüfung erkennt einen fehlenden zuvor verankerten Tail nur,
+wenn der Anker außerhalb der Datenbank erhalten bleibt. Prod, Staging, Dev und
+Demo verwenden dafür das eigene Named Volume `audit-anchor`:
 
 ```dotenv
 DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json
 ```
 
-Der Pfad liegt bewusst neben `MEDIA_ROOT=/data/media`: Er ist damit fuer `cron`/`maintenance` unter dem schreibgeschuetzten Container-Dateisystem persistent beschreibbar, wird aber nicht mit Nutzer-Uploads vermischt. Geschrieben wird die Datei von `cron` und `maintenance` (`verify_audit_chain`). Der `web`-Dienst fuehrt die Variable in seiner expliziten Env-Allowlist (`docker-compose.prod.yml`) und sieht dasselbe `/data`-Volume.
+Dies ist auch bei leerer oder fehlender Variable der Compose-Default. `web`
+mountet das Volume unter `/data` **nur lesend**, `maintenance` und
+gegebenenfalls `cron` **beschreibbar**. Das Medienvolume unter `/media` bleibt
+separat; eigene Ankerpfade müssen innerhalb des Anker-Volumes liegen. Das Image
+bereitet den Mount-Punkt mit UID/GID 1000 vor. Ein neuer Stack legt das Volume
+beim ersten Start an; vor dem ersten Backup den Anker wie unten initialisieren.
+
+**Wechsel einer bestehenden Instanz:** Vor der Umstellung alle Anker schreibenden
+Jobs anhalten und die bisherige signierte Datei separat sichern. Mit dem neuen
+Image und Compose-Vertrag das Volume anlegen, die Datei im
+`maintenance`-Dienst unter UID/GID 1000 in eine temporäre Datei im neuen
+Ankerverzeichnis übernehmen, mit `HighWaterMarkStore.load()` prüfen und erst
+danach per Rename als `audit_hwm.json` aktivieren. Größe und SHA-256 mit der
+Quelle vergleichen. In `.env` `DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json`, `MEDIA_ROOT=/media/media` und gegebenenfalls `MEDIA_ROOT_CONTAINER=/media/media` sowie `MAINTENANCE_FLAG_FILE=/media/anlaufstelle.maintenance` setzen. Das bestehende Medienvolume wird unter `/media` eingehängt, seine Inhalte bleiben erhalten; der bisherige Standardanker ist dort als `/media/audit_hwm.json` erreichbar. Ein vorhandenes Wartungsflag liegt nach dem Umhängen ebenfalls unter `/media`. Die Container neu erstellen
+und erst nach erfolgreicher Prüfung Jobs freigeben. Kein neuer Erstlauf darf
+einen vorhandenen Anker ersetzen; das gesicherte Original behalten. Dies ist
+ein Betreiber-Schritt, keine Datenbankmigration.
+
+**Vertrauensgrenze:** Der ro-Mount verhindert Schreiben durch den Webprozess
+auf dieses Volume. Er schützt nicht gegen Host-/Docker-Zugriff oder die
+Wartungs-/Owner-Rolle; `web` besitzt weiterhin den Audit-HMAC-Schlüssel. Die
+Karte „Letztes Backup“ prüft die Ankerkopie neben dem Backupmanifest auf Existenz
+und eine Dateigröße größer null, **nicht** den laufenden `AUDIT_HWM_PATH` und nicht die
+Signatur. Ein ro-Mount allein beweist keine unveränderte Historie.
 
 Den ersten Anker sofort nach der Einrichtung und **vor dem ersten Backup**
 erzeugen; nicht bis zum naechsten Sidecar-Termin warten:
@@ -1631,9 +1655,19 @@ docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_c
 Nur ein vollstaendig gruener Lauf schreibt den Anker. Bei einem `FAIL` zuerst die
 Audit-Kette klaeren und kein Backup als vollstaendig verankert behandeln.
 
-Ein gruener `verify_audit_chain`-Lauf schreibt dort Zaehler und letzten Hash je Kette. Die Datei ist mit `DJANGO_AUDIT_HASH_KEY` HMAC-signiert und enthaelt keine Klartext-Falldaten; eine zusaetzliche Verschluesselung ist deshalb nicht noetig. `scripts/ops/backup.sh` exportiert sie per `docker compose -f docker-compose.prod.yml exec -T cron cat …` als `backups/daily/audit_hwm-<Zeitstempel>.json`, rotiert sie mit DB-/Medienbackups und nimmt sie in alle drei Off-Site-Wege (rclone, S3, SCP) auf. Ist der Pfad nicht gesetzt oder die Datei noch nicht vorhanden, bleibt das DB-/Medienbackup gueltig, aber das Skript protokolliert den fehlenden HWM-Anker.
+Ein gruener `verify_audit_chain`-Lauf schreibt dort Zaehler und letzten Hash je Kette. Die Datei ist mit `DJANGO_AUDIT_HASH_KEY` HMAC-signiert und enthält Zählstände, Hash-Anker und gegebenenfalls eingegebene Begründungen für stillgelegte Ketten. `scripts/ops/backup.sh` exportiert sie per `docker compose -f docker-compose.prod.yml exec -T cron cat …` als `backups/daily/audit_hwm-<Zeitstempel>.json`, rotiert sie mit DB-/Medienbackups und nimmt sie in alle drei Off-Site-Wege (rclone, S3, SCP) auf. Fehlt die Datei, ist sie leer oder kann `cron` sie nicht lesen, bricht das Skript mit Exit-Code 1 ab, bevor es den Satz veröffentlicht. Auch ohne Hostvariable verwendet es den Compose-Default.
 
-Ist `DJANGO_AUDIT_HWM_PATH` gesetzt, streamt `scripts/ops/restore-drill.sh --prod` die zum gewaehlten DB-Backup-Zeitstempel gehoerende HWM-Datei nach `/tmp` des gehaerteten Drill-Containers und laedt sie ueber `HighWaterMarkStore.load()`. Eine fehlende, zeitlich abweichende oder ungueltig signierte Datei erzeugt `FAIL` und damit Exit-Code 1; der Drill fuehrt die uebrigen Restore-, RLS- und Trigger-Pruefungen dennoch aus, damit ein zweiter Fehler nicht verdeckt wird. Ist die Variable nicht gesetzt, fuehrt der Drill Schritt 2b als `SKIP`: der Lauf endet mit Exit-Code 2 und einer Abschlusszeile, die kein Erfolg ist, und **es wird kein Compliance-Nachweis geschrieben** — `mark_restore_verified` laeuft nur nach einem vollstaendigen Drill, damit die Karte „Restore-Test" nicht gruen wird, waehrend derselbe Lauf ausdruecklich keinen vollstaendigen Nachweis behauptet (#2341).
+`scripts/ops/restore-drill.sh --prod` verwendet denselben Default und streamt
+die Ankerkopie des gewählten Backup-Zeitstempels nach `/tmp` des
+Wartungscontainers. `HighWaterMarkStore.load()` prüft ihre Signatur; danach
+prüft `verify_audit_chain --require-anchor` die restaurierte Kette. Fehlender
+oder ungültiger Anker ergibt `FAIL`, Exit-Code 1 und keinen Compliance-Nachweis.
+Die übrigen Prüfungen laufen weiter. Das dev-Format führt keinen Anker mit und
+bleibt ein Lauf mit Lücken (Exit-Code 2). `restore.sh` verwendet ebenfalls den
+Default; auf einem Host ohne eigenen Pfad erlaubt allein der ausdrücklich
+gewählte Schalter `--skip-audit-anchor` einen Restore ohne Ankerprüfung und
+-import. Ein solcher Lauf belegt keine verankerte Audit-Kette.
+
 
 Beim echten Recovery gilt eine strengere Reihenfolge: `cron` erfolgreich
 stoppen und die HWM-Quelle auf Existenz pruefen. `restore.sh` prüft Signatur und
@@ -3123,7 +3157,7 @@ echo "Volume: ${pg_volume:-NICHT GEFUNDEN}"   # genau ein Name, z. B. anlaufstel
 # 0. Maintenance-Mode aktivieren (§ 6.5a). web und cron laufen weiter: backup.sh
 #    liest die Medien über web und den Audit-Anker über cron, beide Dienste
 #    müssen für das Backup laufen.
-docker compose "${compose_files[@]}" exec -T web touch /data/anlaufstelle.maintenance
+docker compose "${compose_files[@]}" exec -T web touch /media/anlaufstelle.maintenance
 
 # 1. Finales verschlüsseltes Backup (§ 1.1, Restore § 6.6); db, web und cron
 #    müssen laufen.
@@ -3211,7 +3245,7 @@ curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
 # 10. Maintenance-Mode aus. Der Arbeits-Dump enthält KLARTEXT-Daten — sofort
 #     löschen; den Tarball nach der Aufbewahrungsfrist (z. B. 1 Woche) entsorgen.
-docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.maintenance
+docker compose "${compose_files[@]}" exec -T web rm -f /media/anlaufstelle.maintenance
 rm -f "$dump"
 ```
 

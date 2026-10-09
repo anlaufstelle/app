@@ -198,12 +198,12 @@ def test_weekly_and_monthly_copies_have_nothing_for_others_and_are_checked(tmp_p
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     for stage in ("weekly", "monthly"):
         copies = [path for path in (backups / stage).iterdir() if path.is_file()]
-        assert len(copies) == 6, f"{stage}: {[path.name for path in copies]}"
+        assert len(copies) == 7, f"{stage}: {[path.name for path in copies]}"
         assert {path.name: oct(_mode(path)) for path in copies} == {
             path.name: oct(_expected_mode(path)) for path in copies
         }
         assert (
-            f"File modes checked ({stage} copy): 6 files, only the manifest readable by the group,"
+            f"File modes checked ({stage} copy): 7 files, only the manifest readable by the group,"
             " none accessible to others." in result.stdout
         )
 
@@ -253,7 +253,7 @@ def test_a_retention_copy_with_rights_beyond_the_owner_is_not_published_at_all(t
     assert list((backups / "weekly").iterdir()) == []
     assert list((backups / "monthly").iterdir()) == []
     # The daily set was checked and published before; it stays.
-    assert len(_daily_files(backups)) == 6
+    assert len(_daily_files(backups)) == 7
 
 
 def test_a_rejected_retention_copy_leaves_the_earlier_copies_untouched(tmp_path: Path) -> None:
@@ -286,22 +286,22 @@ def test_a_repeated_retention_copy_replaces_wide_leftovers_with_owner_only_files
     assert second.returncode == 0, f"STDOUT:\n{second.stdout}\nSTDERR:\n{second.stderr}"
     for stage in ("weekly", "monthly"):
         copies = [path for path in (backups / stage).iterdir()]
-        assert len(copies) == 6
+        assert len(copies) == 7
         assert {path.name: oct(_mode(path)) for path in copies} == {
             path.name: oct(_expected_mode(path)) for path in copies
         }
 
 
-def test_without_the_cron_sidecar_the_set_carries_no_audit_anchor(tmp_path: Path) -> None:
+def test_without_the_cron_sidecar_the_backup_aborts_before_publication(tmp_path: Path) -> None:
     result, backups = _run_backup(
         tmp_path,
         DJANGO_AUDIT_HWM_PATH="/data/audit_hwm.json",
         TEST_CRON_DOWN="1",
     )
 
-    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert "KEINEN Audit-Anker" in result.stderr
-    assert not [name for name in _daily_files(backups) if name.startswith("audit_hwm-")]
+    assert result.returncode != 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "ERROR: Audit anchor" in result.stderr
+    assert _daily_files(backups) == []
 
 
 def _sign(path: Path) -> None:

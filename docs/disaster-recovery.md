@@ -88,7 +88,7 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 | `POSTGRES_ADMIN_USER` / `POSTGRES_ADMIN_PASSWORD` | Admin-Rolle (NOSUPERUSER, BYPASSRLS) für Migrationen/Seed/Retention → `ADMIN_DB_USER`/`ADMIN_DB_PASSWORD`. | Compose-Variablen `ADMIN_DB_USER`/`ADMIN_DB_PASSWORD` in [`docker-compose.prod.yml`](../docker-compose.prod.yml), Rollenerzeugung in [`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) |
 | `DJANGO_SECRET_KEY` | Session-/CSRF-/Signing-Key. Ein **neuer** Wert ist technisch zulässig (invalidiert bestehende Sessions und Signaturen); den alten Wert nach Möglichkeit wiederbeschaffen. | Produktionsprüfung `DJANGO_SECRET_KEY` in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) |
 | `DJANGO_AUDIT_HASH_KEY` | HMAC-Key für pseudonymisierte AuditLog-Einträge, die Audit-Ketten und die Signatur des externen HWM. Ein neuer Wert macht alte Audit-Hashes, die Ketten und den gesicherten HWM unverifizierbar. | [`compute_entry_hash`](../src/core/services/audit/chain.py) und [`_sign`](../src/core/services/audit/hwm.py) |
-| `DJANGO_AUDIT_HWM_PATH` | Persistenter Pfad der HWM-Betriebsdatei, empfohlen `/data/audit_hwm.json`. Er muss vor dem ersten Backup gesetzt sein. | Einstellung `AUDIT_HWM_PATH` in [`settings/base.py`](../src/anlaufstelle/settings/base.py) |
+| `DJANGO_AUDIT_HWM_PATH` | Persistenter Pfad auf dem eigenen `audit-anchor`-Volume; Compose-Default `/data/audit_hwm.json`, auch bei leerer oder fehlender Variable. Nur Wartungsdienste schreiben, `web` liest. Vor dem ersten Backup initialisieren. | Einstellung `AUDIT_HWM_PATH` in [`settings/base.py`](../src/anlaufstelle/settings/base.py) |
 | `BACKUP_HOST_DIR` / `BACKUP_DIR` | Host-Ablage und read-only Container-Mount der Backups. `BACKUP_HOST_DIR` muss den wiederbeschafften Satz enthalten; `BACKUP_DIR` muss zum Compose-Mount passen. | Variablen `BACKUP_HOST_DIR` in [`backup.sh`](../scripts/ops/backup.sh) und `BACKUP_DIR` in [`settings/base.py`](../src/anlaufstelle/settings/base.py) |
 | `MEDIA_ROOT` / `MEDIA_ROOT_CONTAINER` | App-Pfad und Skriptpfad für die Medien. Beide müssen auf dasselbe persistente Verzeichnis zeigen; der Archivwurzelname muss dessen Basename entsprechen. | Einstellung `MEDIA_ROOT` in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) und Variable `MEDIA_ROOT_CONTAINER` in [`backup.sh`](../scripts/ops/backup.sh)/[`restore.sh`](../scripts/ops/restore.sh) |
 | `EXTERNAL_ORIGIN` | Öffentliche Basis-URL für Links. Fehlt sie, wird sie nur bei genau einem öffentlichen Host aus `ALLOWED_HOSTS` abgeleitet; bei mehreren öffentlichen Hosts muss sie ausdrücklich gesetzt sein. | Ableitung und Pflichtprüfung `EXTERNAL_ORIGIN` in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py); `.env.example` zeigt Haupt- und `www`-Host |
@@ -212,7 +212,7 @@ docker compose "${compose_files[@]}" logs db | grep -icE 'error|fatal'   # erwar
 
 ### Schritt 4 — DB-Backup entschlüsseln + wiederherstellen
 
-`restore.sh` bereitet das Ziel selbst vor — aber **erst nach der Bestätigung**. Nicht-interaktiv wird sie mit `--yes` (gleichwertig: `RESTORE_CONFIRM=ja`) gegeben; ohne sie bricht das Skript ab, bevor irgendein Bestand verändert wird. Bindet der Satz einen Audit-Anker und ist `DJANGO_AUDIT_HWM_PATH` nicht gesetzt, bricht es ebenfalls vor jeder Änderung ab; der Schalter `--skip-audit-anchor` erzwingt den Restore ohne Anker, dann wird der Anker weder geprüft noch eingespielt und [Schritt 4b](#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen) ist nicht ausführbar. Der Dump wird **nie direkt in die Ziel-Datenbank** eingespielt: Das Skript legt eine frische Wiederherstellungs-Datenbank `<POSTGRES_DB>_restore_<PID>` an, spielt den Dump dort ein, gleicht die sechs Manifesttabellen dort gegen das signierte Manifest ab und schaltet erst danach um. Dieser Weg funktioniert deshalb auch gegen eine **bereits migrierte oder befüllte** Zielinstallation, in der ein Direktimport an den vorhandenen Objekten scheitern würde. Die Backup-Dateien sind außer dem Manifest `0600` und gehören dem Konto, unter dem sie abgelegt wurden (im empfohlenen Setup root); `restore.sh` läuft deshalb mit `sudo`, Lesen über die Gruppe reicht für die HMAC-Prüfung nicht. Die `.env` liest das Skript selbst. Das Stoppen der schreibenden Dienste, der Start des für den Medientransport benötigten `web`-Containers und der Restore sind als eine Fehlerkette verbunden; scheitert ein Glied, wird nicht fortgesetzt. `restore.sh` nutzt dieselbe vollständige Compose-Dateiliste (Basisdatei, dann `compose.legal.yml` und `compose.override.yml`, soweit neben der Basisdatei vorhanden):
+`restore.sh` bereitet das Ziel selbst vor — aber **erst nach der Bestätigung**. Nicht-interaktiv wird sie mit `--yes` (gleichwertig: `RESTORE_CONFIRM=ja`) gegeben; ohne sie bricht das Skript ab, bevor irgendein Bestand verändert wird. Für den Anker verwendet es den konfigurierten Pfad oder den Compose-Default; fehlt die Kopie im Satz, bricht es vor jeder Änderung ab. Auf einem Host ohne eigenen Pfad gilt: der Schalter `--skip-audit-anchor` erzwingt den Restore ohne Anker, dann wird der Anker weder geprüft noch eingespielt und [Schritt 4b](#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen) ist nicht ausführbar. Der Dump wird **nie direkt in die Ziel-Datenbank** eingespielt: Das Skript legt eine frische Wiederherstellungs-Datenbank `<POSTGRES_DB>_restore_<PID>` an, spielt den Dump dort ein, gleicht die sechs Manifesttabellen dort gegen das signierte Manifest ab und schaltet erst danach um. Dieser Weg funktioniert deshalb auch gegen eine **bereits migrierte oder befüllte** Zielinstallation, in der ein Direktimport an den vorhandenen Objekten scheitern würde. Die Backup-Dateien sind außer dem Manifest `0600` und gehören dem Konto, unter dem sie abgelegt wurden (im empfohlenen Setup root); `restore.sh` läuft deshalb mit `sudo`, Lesen über die Gruppe reicht für die HMAC-Prüfung nicht. Die `.env` liest das Skript selbst. Das Stoppen der schreibenden Dienste, der Start des für den Medientransport benötigten `web`-Containers und der Restore sind als eine Fehlerkette verbunden; scheitert ein Glied, wird nicht fortgesetzt. `restore.sh` nutzt dieselbe vollständige Compose-Dateiliste (Basisdatei, dann `compose.legal.yml` und `compose.override.yml`, soweit neben der Basisdatei vorhanden):
 
 ```bash
 cd /opt/anlaufstelle
@@ -272,7 +272,7 @@ openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_
       sums "$verify_dir/tree" "$verify_dir/archive.sha256"
       sums "$media_root" "$verify_dir/live.sha256"
       cmp "$verify_dir/archive.sha256" "$verify_dir/live.sha256"
-    ' sh "/data/media-verify-$RESTORE_TIMESTAMP" "${MEDIA_ROOT_CONTAINER:-/data/media}"
+    ' sh "/media/media-verify-$RESTORE_TIMESTAMP" "${MEDIA_ROOT_CONTAINER:-/media/media}"
 ```
 
 Exit 0 bedeutet: Archiv und aktivierter `MEDIA_ROOT` enthalten dieselben Dateien mit denselben SHA-256-Summen. Eine Abweichung (fehlende, zusätzliche oder veränderte `.enc`-Datei) beendet den Block mit `cmp: … differ` und Exit != 0. Ein Lesefehler im Archiv oder im Bestand (etwa `find: … Permission denied`) beendet ihn ebenfalls mit Exit != 0 — nie mit Erfolg.
@@ -297,7 +297,7 @@ done
 
 Bevor irgendein Hintergrundjob startet, das zum gewählten Restore-Satz gehörende HWM-Original aus `RESTORE_SET_DIR` nochmals fail-closed an `DJANGO_AUDIT_HWM_PATH` ablegen. Dazu zählen auch selbst eingerichtete Zeitpläne außerhalb des `cron`-Sidecars (Host-Cron oder Timer, die `verify_audit_chain` aufrufen): Sie sind **vor** dem Restore anzuhalten und erst **nach** dem grünen Lauf mit `--require-anchor` wieder zu aktivieren, weil ein dazwischen laufender Standardaufruf ohne Schalter den vorgefundenen Bestand als Erstlauf neu verankern und damit die Herkunft des Ankers verwischen würde. Das Anhalten verhindert nur neue Starts: Deshalb **vor** dem Restore zusätzlich mit `docker compose -f docker-compose.prod.yml ps --all` prüfen, dass kein laufender Container mehr `verify_audit_chain` in seiner Kommandospalte zeigt (ein per `run --rm … maintenance verify_audit_chain` gestarteter Wartungscontainer läuft neben dem gestoppten `cron`-Sidecar weiter und würde seinen Anker nach dem Import schreiben) — erst wenn keiner mehr läuft, mit dem Restore fortfahren. Nicht pauschal die jüngste Datei verwenden. Ein fehlender Betriebsanker gilt der Software als Erstlauf; deshalb müssen Existenz, erfolgreicher Import und Byte-Identität **vor** `verify_audit_chain` belegt sein. Der abschließende Lauf trägt zusätzlich `--require-anchor` und bricht damit ab, falls trotz aller vorherigen Prüfungen kein Anker vorliegt — statt den wiederhergestellten Bestand ungeprüft als Erstlauf neu zu verankern. Das Off-Site-Original bleibt unverändert. Die gesamte Folge ist eine `&&`-Kette; auch ein fehlgeschlagenes `stop cron` bricht sie ab:
 
-Enthält der gewählte Satz keine `audit_hwm-<Zeitstempel>.json`, ist dieser Schritt **nicht ausführbar** — die Wiederherstellung ist dann unvollständig, nicht „grün ohne Anker" (#2315). Ein solcher Satz entsteht, wenn `DJANGO_AUDIT_HWM_PATH` auf der Quellinstallation nicht gesetzt war oder der erste grüne `verify_audit_chain`-Lauf dort nie stattgefunden hat; `scripts/ops/backup.sh` warnt in diesem Fall ausdrücklich. Prüfen Sie deshalb vor dem Restore, ob die Datei im Satz liegt, und greifen Sie andernfalls auf einen älteren, vollständigen Satz zurück. Auf der neu aufgebauten Installation gehört der Pflichtschritt aus [admin-guide § 3.1](admin-guide.md#31-verschlüsselte-datenbank--und-mediensicherung) vor das erste eigene Backup.
+Enthält der gewählte Satz keine `audit_hwm-<Zeitstempel>.json`, ist dieser Schritt **nicht ausführbar** — die Wiederherstellung ist dann unvollständig, nicht „grün ohne Anker" (#2315). Solche Sätze können aus älteren Skriptständen stammen. Das aktuelle `scripts/ops/backup.sh` veröffentlicht bei fehlendem, leerem oder unlesbarem Anker keinen Satz und bricht mit Exit-Code 1 ab. Prüfen Sie deshalb vor dem Restore, ob die Datei im Satz liegt, und greifen Sie andernfalls auf einen älteren, vollständigen Satz zurück. Auf der neu aufgebauten Installation gehört der Pflichtschritt aus [admin-guide § 3.1](admin-guide.md#31-verschlüsselte-datenbank--und-mediensicherung) vor das erste eigene Backup.
 
 ```bash
 HWM_SOURCE="$RESTORE_SET_DIR/audit_hwm-${RESTORE_TIMESTAMP}.json"
@@ -518,21 +518,18 @@ Testdatenbank benutzt.
   schreibenden Hintergrundjobs bis zum Abschluss von DB-Dump, Medienarchiv und
   HWM angehalten. Ein gleicher Dateizeitstempel allein ist kein
   Konsistenznachweis.
-- Für den HWM-Nachweis war `DJANGO_AUDIT_HWM_PATH` bereits **vor Erstellung des
-  Quellbackups** gesetzt (empfohlen: `/data/audit_hwm.json`), sodass
-  `scripts/ops/backup.sh` die signierte Datei tatsächlich offsite übertragen
-  hat. Die rekonstruierte `.env` enthält außerdem den ursprünglichen
-  `DJANGO_AUDIT_HASH_KEY`. Ohne gesetzten HWM-Pfad gibt es kein HWM-Artefakt;
-  Schritt 2b des Prod-Drills kann dann nicht ausgeführt werden. Das ist kein
-  Signaturnachweis, und dieser Drill darf nicht als vollständig grün
-  protokolliert werden. Fehlt `DJANGO_AUDIT_HWM_PATH` in der
-  **rekonstruierten** `.env`, meldet Schritt 2b
-  `SKIP - Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration)`
-  und erscheint im Ergebnisblock unter `Uebersprungen`; dasselbe gilt im
-  dev-Backup-Format, das kein Anker-Artefakt mitführt. Nicht geprüft ist nicht
-  bestanden: Ein solcher Lauf darf nicht als vollständig grüner Drill
-  protokolliert werden — für diesen Drill die Variable deshalb setzen, damit
-  die Signaturprüfung wirklich läuft.
+- Der HWM-Nachweis verwendet `DJANGO_AUDIT_HWM_PATH` oder den Compose-Default
+  `/data/audit_hwm.json` auf dem eigenen `audit-anchor`-Volume.
+  Die signierte Datei muss bereits vor dem Quellbackup vorhanden sein:
+  `backup.sh` bricht bei fehlendem, leerem oder unlesbarem Anker mit Exit-Code 1
+  vor Veröffentlichung ab. Die rekonstruierte `.env` enthält den ursprünglichen
+  `DJANGO_AUDIT_HASH_KEY`. Der Prod-Drill verwendet auch ohne eigenen Pfad den
+  Default und meldet bei fehlender oder ungültiger Kopie `FAIL`, Exit-Code 1 und
+  keinen Compliance-Nachweis. Das dev-Format enthält keinen Anker und bleibt
+  ein Lauf mit Lücken (Exit-Code 2). Volume-Rechte, Übernahme eines bestehenden
+  Ankers und die Grenze „kein Schutz gegen Host/Owner“ stehen in
+  [Ops-Runbook § 6.7](ops-runbook.md#67-audit-high-water-mark-sichern-und-pruefen-refs-2022),
+  mit [englischem Spiegel](en/ops-runbook.md#67-back-up-and-verify-the-audit-high-water-mark-refs-2022).
 - Falls noch kein HWM existiert, ihn **vor dem Quellbackup** bewusst erzeugen:
   `docker compose "${compose_files[@]}" run --rm -T maintenance verify_audit_chain` (Dateiliste wie in §6 Schritt 4).
   Der Lauf muss vollständig grün sein, erst dann ist der Anker geschrieben.
@@ -776,8 +773,8 @@ Audit-HWM vorhanden: JA / NEIN
 Sieben-Dateien-Satz vollständig (Zählprobe `ls -1 | wc -l` = 7): JA / NEIN
 backup.sh --verify vor dem Restore-Lauf: OK / FAIL
 Off-Site-Rückholung auf drittem Rechner ohne Prod-Host: OK / FAIL
-DJANGO_AUDIT_HWM_PATH war am Quellhost gesetzt: JA / NEIN
-DJANGO_AUDIT_HWM_PATH in rekonstruierter .env gesetzt: JA / NEIN
+Ankerpfad am Quellhost (eigener Wert oder Compose-Default):
+Ankerpfad in rekonstruierter Umgebung (eigener Wert oder Compose-Default):
 Schlüsselquelle: getrennt verwahrtes Eskrow des Betreibers (Ort/Verfahren, keine Werte)
 Fachkonto samt zweitem Faktor (TOTP/Backup-Codes) aus Eskrow verfügbar: JA / NEIN
 

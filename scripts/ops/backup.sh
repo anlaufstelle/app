@@ -19,11 +19,9 @@ umask 027
 #                          row-by-row comparison; the output states what was and
 #                          what was not checked.
 #
-# Medien-Backup (Refs #720): MEDIA_ROOT (=/data/media im Container) wird via
-# `tar` aus dem web-Container heraus gelesen, gzippt und mit demselben
-# BACKUP_ENCRYPTION_KEY verschluesselt wie das DB-Backup. Ohne das Volume
-# waeren Anhaenge beim naechsten Container-Recreate verloren — der Backup-
-# Pfad sichert sowohl gegen Volume-Verlust als auch gegen Pod-Neustart.
+# Media backup (Refs #720): read MEDIA_ROOT (=/media/media) through web, then
+# gzip and encrypt with the same BACKUP_ENCRYPTION_KEY as the database dump.
+# The persistent media volume preserves attachments across container recreation.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # SCRIPT_DIR ist <repo>/scripts/ops — der Repo-Root (mit docker-compose.prod.yml)
@@ -326,11 +324,10 @@ backup_write_hmac "$BACKUP_FILE"
 echo "DB-Backup erstellt: $(du -h "$BACKUP_FILE" | cut -f1)"
 
 # Medien-Backup (Refs #720)
-# `tar -C /data media` erzeugt Pfade relativ zu /data, dh. das Archiv enthaelt
-# `media/...`-Eintraege ohne fuehrenden Slash. Restore kann das Archiv direkt
-# in `/data` einer recreated Volume entpacken.
+# tar uses the configured media parent (default /media), so archives keep
+# media/... entries without an absolute path and remain compatible with restore.
 echo "Erstelle Medien-Backup: ${MEDIA_FILE}"
-MEDIA_ROOT_CONTAINER="${MEDIA_ROOT_CONTAINER:-/data/media}"
+MEDIA_ROOT_CONTAINER="${MEDIA_ROOT_CONTAINER:-/media/media}"
 MEDIA_PARENT="$(dirname "$MEDIA_ROOT_CONTAINER")"
 MEDIA_NAME="$(basename "$MEDIA_ROOT_CONTAINER")"
 docker compose -f "$COMPOSE_FILE" exec -T web \
@@ -349,30 +346,19 @@ backup_write_hmac "$MEDIA_FILE"
 
 echo "Medien-Backup erstellt: $(du -h "$MEDIA_FILE" | cut -f1)"
 
-# Audit-High-Water-Mark (Refs #2022): Die signierte JSON-Datei liegt im
-# persistenten /data-Volume des cron-Containers. Der Host kann das Named Volume
-# nicht direkt lesen, deshalb wird sie ueber den Container exportiert. Fehlende
-# Konfiguration/Datei macht das regulaere DB-/Medien-Backup nicht unbrauchbar,
-# wird aber sichtbar geloggt.
-HWM_FILE=""
-if [[ -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
-    HWM_FILE="${WORK_DIR}/audit_hwm-${TIMESTAMP}.json"
-    if docker compose -f "$COMPOSE_FILE" exec -T cron cat "$DJANGO_AUDIT_HWM_PATH" > "$HWM_FILE"; then
-        if [[ -s "$HWM_FILE" ]]; then
-            echo "Audit-HWM gesichert: ${HWM_FILE}"
-        else
-            echo "WARNUNG: Audit-HWM unter ${DJANGO_AUDIT_HWM_PATH} ist leer — kein HWM-Artefakt gesichert." >&2
-            rm -f "$HWM_FILE"
-            HWM_FILE=""
-        fi
-    else
-        echo "WARNUNG: Audit-HWM unter ${DJANGO_AUDIT_HWM_PATH} fehlt oder ist nicht lesbar — DB-/Medien-Backup bleibt gueltig." >&2
-        rm -f "$HWM_FILE"
-        HWM_FILE=""
-    fi
-else
-    echo "WARNUNG: DJANGO_AUDIT_HWM_PATH ist nicht gesetzt — kein Audit-HWM-Artefakt gesichert." >&2
+# The anchor is mandatory with the Compose default, including an unset or empty
+# host variable. Export it from cron before publishing any backup set (Refs #2527).
+DJANGO_AUDIT_HWM_PATH="${DJANGO_AUDIT_HWM_PATH:-/data/audit_hwm.json}"
+HWM_FILE="${WORK_DIR}/audit_hwm-${TIMESTAMP}.json"
+if ! docker compose -f "$COMPOSE_FILE" exec -T cron cat "$DJANGO_AUDIT_HWM_PATH" > "$HWM_FILE"; then
+    echo "ERROR: Audit anchor at ${DJANGO_AUDIT_HWM_PATH} is missing or unreadable; backup aborted." >&2
+    exit 1
 fi
+if [[ ! -s "$HWM_FILE" ]]; then
+    echo "ERROR: Audit anchor at ${DJANGO_AUDIT_HWM_PATH} is empty; backup aborted." >&2
+    exit 1
+fi
+echo "Audit anchor backed up: ${HWM_FILE}"
 
 # Satzbindung: Die signierte Nutzlast nennt den ausgewaehlten Zeitstempel und
 # bindet mindestens den verschluesselten Dump, daneben auch Medien und HWM,
@@ -562,21 +548,4 @@ else
     find "$WEEKLY_DIR" -name "audit_hwm-*.json" -mtime +28 -delete
     find "$MONTHLY_DIR" -name "audit_hwm-*.json" -mtime +90 -delete
     echo "Rotation abgeschlossen."
-fi
-
-# Abschlussblock (Refs #2315): Ein Satz ohne Audit-Anker ist technisch gueltig,
-# aber betrieblich unvollstaendig — der Fresh-Host-Drill konnte Schritt 4b der
-# Wiederherstellung deshalb nie ausfuehren. Das darf nicht als beilaeufige
-# INFO-Zeile im Log untergehen.
-if [[ -z "$HWM_FILE" ]]; then
-    {
-        echo "WARNUNG: Dieser Backup-Satz enthaelt KEINEN Audit-Anker (audit_hwm-<Zeitstempel>.json)."
-        echo "  Folge: Schritt 4b der Wiederherstellung (Audit-Anker zurueckspielen und"
-        echo "  'verify_audit_chain --require-anchor') ist mit diesem Satz nicht ausfuehrbar,"
-        echo "  und der Prod-Restore-Drill fuehrt Schritt 2b als uebersprungen."
-        echo "  Abhilfe: DJANGO_AUDIT_HWM_PATH in .env setzen (Vorgabe: /data/audit_hwm.json),"
-        echo "  Stack neu erstellen, einen gruenen 'verify_audit_chain'-Lauf abwarten und"
-        echo "  danach erneut sichern. Siehe docs/admin-guide.md (Backup) und"
-        echo "  docs/disaster-recovery.md Schritt 4b."
-    } >&2
 fi

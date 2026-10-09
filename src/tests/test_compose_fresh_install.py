@@ -238,7 +238,7 @@ def test_smtp_environment_preserves_empty_host_and_supports_ssl() -> None:
 
 def test_media_container_path_matches_web_mount_contract() -> None:
     text = ENV_PATH.read_text(encoding="utf-8")
-    assert "MEDIA_ROOT_CONTAINER='/data/media'" in text
+    assert "MEDIA_ROOT_CONTAINER='/media/media'" in text
     assert "MEDIA_ROOT und MEDIA_ROOT_CONTAINER muessen identisch sein" in text
 
 
