@@ -278,6 +278,7 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "category": "semantische Differenzierung einer Retention-Entscheidung (Refs #901) — Enum-Wert",
     # -- Ablauf- und Herkunftskennzeichen ---------------------------------
     "event": "Unterart eines Auth-/MFA-Vorgangs — feste Slugs",
+    "path_class": "Resolved route with placeholders, or unresolved; never query, body or live URL tokens",
     "mode": "MFA-Verfahren oder Anhang-Modus (add/replace) — feste Slugs",
     "flow": "Zweig der Lockout-Wiederherstellung — feste Slugs",
     "factor": "Zweiter Faktor der Sudo-Bestaetigung — feste Slugs",

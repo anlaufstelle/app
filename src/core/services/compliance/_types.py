@@ -97,6 +97,8 @@ class ComplianceCheck:
 _CRITICAL_AUDIT_ACTIONS = (
     AuditLog.Action.SECURITY_VIOLATION,
     AuditLog.Action.MFA_FAILED,
+    AuditLog.Action.WEBAUTHN_FAILED,
+    AuditLog.Action.MFA_BACKUP_REGENERATE_DENIED,
     AuditLog.Action.SUDO_MODE_FAILED,
     AuditLog.Action.USER_DEACTIVATED,
 )

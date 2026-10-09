@@ -137,6 +137,7 @@ class AuditLog(models.Model):
         # protokolliert wird der WIDERRUF der am alten Passwort haengenden
         # Artefakte, nicht das neue Passwort.
         CREDENTIALS_REVOKED = "credentials_revoked", _("Zugangsdaten widerrufen")
+        RATE_LIMITED = "rate_limited", _("Anfrage gedrosselt")
         SECURITY_VIOLATION = "security_violation", _("Sicherheitsverletzung")
         MFA_ENABLED = "mfa_enabled", _("2FA aktiviert")
         MFA_DISABLED = "mfa_disabled", _("2FA deaktiviert")
@@ -144,6 +145,8 @@ class AuditLog(models.Model):
         # (TOTP, passkeys, backup codes) of ANOTHER account. ``user`` is the
         # target, ``actor`` the administrator; the detail only carries counters.
         MFA_RESET_BY_ADMIN = "mfa_reset_by_admin", _("2FA durch Administration zurückgesetzt")
+        MFA_VERIFIED = "mfa_verified", _("2FA-Verifikation erfolgreich")
+        MFA_BACKUP_REGENERATE_DENIED = "mfa_backup_regenerate_denied", _("2FA-Backup-Code-Erneuerung abgelehnt")
         MFA_FAILED = "mfa_failed", _("2FA-Verifikation fehlgeschlagen")
         BACKUP_CODES_GENERATED = "backup_codes_generated", _("2FA Backup-Codes generiert")
         BACKUP_CODES_USED = "backup_codes_used", _("2FA Backup-Code verwendet")

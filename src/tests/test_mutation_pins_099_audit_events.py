@@ -43,12 +43,10 @@ class TestOkBranchFullWording:
     """``count == 0`` — keine kritischen Events in den letzten 24h."""
 
     def test_ok_check_full_wording(self):
-        """Pins ``x__audit_event_checks__mutmut_13/17/23/24/25/27``.
+        """Pin the full wording, including every critical action (Refs #2527).
 
-        ``_13`` setzt ``label=None``; ``_17``/``_23`` setzen bzw. entfernen
-        ``detail``; ``_24``/``_25`` verstümmeln den ``key``; ``_27``
-        ersetzt den Trennstring des ``', '.join(...)`` durch ``'XX, XX'``
-        — nur bei mehr als einer gelisteten Aktion beobachtbar (hier vier).
+        Also pins x__audit_event_checks__mutmut_13/17/23/24/25/27: labels,
+        detail, key and join separators must retain their complete wording.
         """
         _clear_critical_events()
 
@@ -60,7 +58,8 @@ class TestOkBranchFullWording:
         assert checks[0].status == ComplianceStatus.OK
         assert checks[0].message == "Keine kritischen Events in den letzten 24h."
         assert checks[0].detail == (
-            "Gemonitorte Aktionen: security_violation, mfa_failed, sudo_mode_failed, user_deactivated"
+            "Gemonitorte Aktionen: security_violation, mfa_failed, webauthn_failed, "
+            "mfa_backup_regenerate_denied, sudo_mode_failed, user_deactivated"
         )
 
 
