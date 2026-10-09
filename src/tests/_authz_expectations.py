@@ -531,6 +531,8 @@ EXPECTATIONS = (
     # Grundzustand (Akteure ohne eigenen Antrag); die Navigation trägt exakt
     # dasselbe Gate.
     E("core:deletion_request_list", "deletion", get=LEAD_PLUS),
+    # Confirmation grants no target reading rights (Refs #2516).
+    # Role x target visibility is exercised by test_deletion_review_targets.
     E(
         "core:deletion_review",
         "deletion",

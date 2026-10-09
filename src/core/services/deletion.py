@@ -178,12 +178,21 @@ def annotate_deletion_targets(requests, facility, user) -> None:
     event_ids = [r.target_id for r in requests if r.target_type == TARGET_EVENT]
     case_ids = [r.target_id for r in requests if r.target_type == TARGET_CASE]
 
-    clients = {c.pk: c for c in Client.objects.for_facility(facility).filter(pk__in=client_ids)} if client_ids else {}
+    clients = (
+        {c.pk: c for c in Client.objects.for_facility(facility).filter(pk__in=client_ids)}
+        if client_ids and user is not None and user.is_assistant_or_above
+        else {}
+    )
     # Fail-closed: ohne Fall-Sichtbarkeit bleibt die Menge leer, der Zweig
     # unten faellt dann in denselben generischen Ast wie ein nicht mehr
     # auffindbarer Fall (Label ohne Link).
     cases = (
-        {c.pk: c for c in Case.objects.for_facility(facility).filter(pk__in=case_ids)}
+        {
+            c.pk: c
+            for c in Case.objects.for_facility(facility).filter(
+                pk__in=case_ids, client__is_deleted=False, client__is_active=True
+            )
+        }
         if case_ids and user is not None and user.is_staff_or_above
         else {}
     )
@@ -194,7 +203,7 @@ def annotate_deletion_targets(requests, facility, user) -> None:
             .filter(facility=facility, pk__in=event_ids)
             .select_related("document_type")
         }
-        if event_ids
+        if event_ids and user is not None and user.is_assistant_or_above
         else {}
     )
 

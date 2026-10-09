@@ -31,11 +31,25 @@
         <dl class="space-y-2 text-sm">
             <div class="flex justify-between items-center gap-2">
                 <dt class="text-ink-muted">{% trans "Wird aufgelöst" %}</dt>
-                <dd class="font-medium flex items-center gap-2">{{ client.pseudonym }} {% include "components/_client_badge.html" with client=client %}</dd>
+                <dd class="font-medium flex flex-wrap items-center gap-2">
+                    {% if client %}
+                    {{ client.pseudonym }} {% include "components/_client_badge.html" with client=client %}
+                    {% include "core/partials/_deletion_target_link.html" with target_url=deletion_request.target_url %}
+                    {% else %}
+                    {% include "core/partials/_deletion_target_unavailable.html" %}
+                    {% endif %}
+                </dd>
             </div>
             <div class="flex justify-between items-center gap-2">
                 <dt class="text-ink-muted">{% trans "Bleibt bestehen" %}</dt>
-                <dd class="font-medium flex items-center gap-2">{{ merge_target.pseudonym }} {% include "components/_client_badge.html" with client=merge_target %}</dd>
+                <dd class="font-medium flex flex-wrap items-center gap-2">
+                    {% if merge_target %}
+                    {{ merge_target.pseudonym }} {% include "components/_client_badge.html" with client=merge_target %}
+                    {% include "core/partials/_deletion_target_link.html" with target_url=deletion_request.merge_target_url target_testid="review-merge-target-link" %}
+                    {% else %}
+                    {% include "core/partials/_deletion_target_unavailable.html" with unavailable_testid="review-merge-target-not-visible" %}
+                    {% endif %}
+                </dd>
             </div>
         </dl>
         {% if stage_upgraded %}
@@ -56,7 +70,7 @@
     <div class="card p-4 mb-5" data-testid="merge-review-not-visible">
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Bestand der beiden Akten" %}</h2>
         <p class="text-[13px] text-ink-muted">
-            {% trans "Die Bestandszahlen (Fälle, Ereignisse, Anhänge) sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Zahlen braucht, gibt die Bestätigung an eine Fachkraft ab." %}
+            {% trans "Die Bestandszahlen (Fälle, Ereignisse, Anhänge) sind nicht einsehbar oder nicht mehr verfügbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Zahlen braucht, gibt die Bestätigung an eine Fachkraft ab." %}
         </p>
     </div>
     {% else %}

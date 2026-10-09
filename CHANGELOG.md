@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Prüfseiten respektieren die Leserechte des Ziels** (#2516) — Ereignis-, Personen-, Fall- und Zusammenführungs-Prüfungen verlinken einsehbare Datensätze in einem neuen Tab; unsichtbare, gelöschte oder fehlende Ziele bleiben neutral und ohne Link, Ereignismetadaten werden nur nach der Sichtbarkeitsprüfung angezeigt.
+
 ### Erforderliche Betreiber-Aktionen
 
 - Keine.

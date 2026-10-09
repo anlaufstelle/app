@@ -1,13 +1,6 @@
-"""Coverage-Tests fuer ``core.views.event_deletion.DeletionRequestReviewView`` Branches.
+"""Deletion review keeps missing targets neutral and supports decisions.
 
-Deckt die Branches:
-
-* Client-Target mit ``Client.DoesNotExist`` -> 404 (Lines 66-70).
-* Event-Target mit ``Event.DoesNotExist`` -> 404 (Lines 80-81).
-* POST ``action=approve`` fuer Event-Target (Line 107).
-* POST ``action=reject`` fuer Event-Target (Line 113).
-
-Refs #949.
+Refs #949, #2516.
 """
 
 import uuid
@@ -18,14 +11,14 @@ from django.urls import reverse
 
 @pytest.mark.django_db
 class TestDeletionRequestReviewClientNotFound:
-    def test_client_target_404_when_client_missing(self, client, lead_user, facility, staff_user):
-        """Lines 66-70: Client-Target ohne existierenden Client -> Http404."""
+    def test_missing_client_target_renders_neutral_review(self, client, lead_user, facility, staff_user):
+        """A missing client leaves the request reviewable with no target link."""
         from core.models import DeletionRequest
 
         dr = DeletionRequest.objects.create(
             facility=facility,
             target_type=DeletionRequest.TargetType.CLIENT,
-            target_id=uuid.uuid4(),  # nicht existent
+            target_id=uuid.uuid4(),
             status=DeletionRequest.Status.PENDING,
             requested_by=staff_user,
             reason="Test",
@@ -33,13 +26,14 @@ class TestDeletionRequestReviewClientNotFound:
         client.force_login(lead_user)
         url = reverse("core:deletion_review", args=[dr.pk])
         response = client.get(url)
-        assert response.status_code == 404
+        assert response.status_code == 200
+        assert "review-target-link" not in response.content.decode()
 
 
 @pytest.mark.django_db
 class TestDeletionRequestReviewEventNotFound:
-    def test_event_target_404_when_event_missing(self, client, lead_user, facility, staff_user):
-        """Lines 80-81: Event-Target ohne existierendes Event -> Http404."""
+    def test_missing_event_target_renders_neutral_review(self, client, lead_user, facility, staff_user):
+        """A missing event leaves the request reviewable without metadata."""
         from core.models import DeletionRequest
 
         dr = DeletionRequest.objects.create(
@@ -53,7 +47,8 @@ class TestDeletionRequestReviewEventNotFound:
         client.force_login(lead_user)
         url = reverse("core:deletion_review", args=[dr.pk])
         response = client.get(url)
-        assert response.status_code == 404
+        assert response.status_code == 200
+        assert "review-target-link" not in response.content.decode()
 
 
 @pytest.mark.django_db

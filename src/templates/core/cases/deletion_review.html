@@ -36,7 +36,7 @@
     <div class="card p-4 mb-5" data-testid="case-review-not-visible">
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Betroffener Fall" %}</h2>
         <p class="text-[13px] text-ink-muted">
-            {% trans "Die Angaben zum Fall sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Falldetails braucht, gibt die Bestätigung an eine Fachkraft ab." %}
+            {% trans "Die Angaben zum Fall sind nicht einsehbar oder nicht mehr verfügbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Falldetails braucht, gibt die Bestätigung an eine Fachkraft ab." %}
         </p>
     </div>
     {% else %}
@@ -60,6 +60,7 @@
                 <dd class="font-medium">{{ case.created_at|date:"DATE_FORMAT" }}</dd>
             </div>
         </dl>
+        {% include "core/partials/_deletion_target_link.html" with target_url=deletion_request.target_url %}
         <p class="text-xs text-ink-muted mt-3">
             {% trans "Bei Genehmigung wandert der Fall in den Papierkorb. Nach Ablauf der Aufbewahrungsfrist wird er automatisch anonymisiert; Episoden, Wirkungsziele und Dateianhänge gehen mit. Zugeordnete Kontakte bleiben in der Personenakte und verlieren erst dann ihre Fallzuordnung. Statistik-Aggregate bleiben erhalten." %}
         </p>

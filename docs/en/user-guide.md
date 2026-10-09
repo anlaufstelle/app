@@ -712,8 +712,10 @@ Via **"Export as JSON"** (or by appending `?format=json` to the URL) you receive
 When a social worker, manager or application support wants to delete a contact belonging to a person at the "With additional details" contact stage, a **deletion request** is created that must be approved by a second person with the “Deletion confirmation” right.
 
 1. View open deletion requests at `/deletion-requests/`.
-2. Click on a request to see the details and the affected event.
+2. Click on a request to view its reason and the available information about the affected record. **View record (new tab)** opens the event, person record or case in a new tab; the review page stays open in the original tab. A merge has separate links for the source and destination records.
 3. Click **Approve** or **Reject** and confirm.
+
+The review page does not extend your reading permissions: event information and links follow sensitivity and your role; case information and links require at least the social worker role and an available case belonging to an active person outside the trash. Hidden, deleted or missing targets receive a neutral notice without a link; hidden events also omit the document type, timestamp and pseudonym. You can still review the request based on the requester and reason. A withdrawn request keeps links to targets that remain visible; the withdrawal notice stays visible and a decision is no longer possible.
 
 > **Important:** The “Deletion confirmation” right is granted independently of the role. When an account is created it is preset for managers and application support and can be deselected; other roles do not get it unless chosen. Without the right, a manager cannot approve either. You cannot approve or reject your own request (four-eyes principle). See [Admin Guide § 7.5](admin-guide.md#75-deletion-requests-four-eyes-principle--dual-approval) for how it is granted.
 
@@ -1037,5 +1039,5 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-07 -->
-<!-- source-hash: d5f23c182e6e5791d65618b8c66675b9244887f2 -->
+<!-- translation-date: 2026-10-09 -->
+<!-- source-hash: 1bf58a99758705f80b6fa7c9b04937866de66449 -->

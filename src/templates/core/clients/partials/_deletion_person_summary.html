@@ -4,6 +4,7 @@ Loeschantrag-Rahmen (core/partials/_deletion_review.html).{% endcomment %}
 {# Person-Zusammenfassung #}
 <div class="card p-4 mb-5">
     <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Betroffene Person" %}</h2>
+    {% if client %}
     <dl class="space-y-2 text-sm">
         <div class="flex justify-between">
             <dt class="text-ink-muted">{% trans "Pseudonym" %}</dt>
@@ -20,7 +21,11 @@ Loeschantrag-Rahmen (core/partials/_deletion_review.html).{% endcomment %}
             <dd class="font-medium">{{ client.created_at|date:"DATE_FORMAT" }}</dd>
         </div>
     </dl>
+    {% include "core/partials/_deletion_target_link.html" with target_url=deletion_request.target_url %}
     <p class="text-xs text-ink-muted mt-3">
         {% trans "Bei Genehmigung wird die Person in den Papierkorb verschoben. Nach Ablauf der Aufbewahrungsfrist wird sie automatisch anonymisiert; Statistik-Aggregate bleiben erhalten." %}
     </p>
+    {% else %}
+    {% include "core/partials/_deletion_target_unavailable.html" %}
+    {% endif %}
 </div>

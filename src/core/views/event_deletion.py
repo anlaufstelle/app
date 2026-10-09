@@ -10,6 +10,7 @@ Ort fuer dieselbe Entscheidung; die Loeschantragsliste ist eine Flaeche.
 """
 
 import logging
+from contextlib import suppress
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -23,14 +24,15 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
-from core.models import Case, Client, DeletionRequest, Event
-from core.services.case import approve_case_deletion, reject_case_deletion
+from core.models import Client, DeletionRequest
+from core.services.case import approve_case_deletion, cases_with_live_client, reject_case_deletion
 from core.services.client import (
     approve_client_deletion,
     approve_client_merge,
     reject_client_deletion,
     reject_client_merge,
 )
+from core.services.compliance import get_visible_event_or_404
 from core.services.deletion import (
     annotate_deletion_targets,
     eligible_deletion_confirmers,
@@ -122,6 +124,8 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
     )
 
     def _load(self, request, pk):
+        if request.current_facility is None:
+            raise Http404
         return get_scoped_object(
             DeletionRequest,
             request,
@@ -138,94 +142,78 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
         next_url = safe_redirect_path(request.GET.get("next"))
         next_url = next_url if next_url != "/" else ""
 
+        # Reuse the list's target gates; confirmation grants no reading rights.
+        annotate_deletion_targets([dr], request.current_facility, request.user)
+        context = {"deletion_request": dr, "next_url": next_url}
+
         if dr.target_type == DeletionRequest.TargetType.CLIENT:
-            try:
-                client = Client.objects.get(pk=dr.target_id, facility=request.current_facility)
-            except Client.DoesNotExist as exc:
-                raise Http404 from exc
-            # Merge-Antrag (Refs #1876, ADR-045): dieselbe Flaeche, eigene
-            # Pruefseite — entschieden wird ueber eine ZUSAMMENFUEHRUNG, nicht
-            # eine Loeschung, und die Seite muss beide Akten unterscheidbar
-            # zeigen (Lehre #1874).
+            client = (
+                Client.objects.for_facility(request.current_facility).filter(pk=dr.target_id, is_deleted=False).first()
+                if dr.target_url
+                else None
+            )
+            if client is None:
+                dr.target_url = ""
+            context["client"] = client
             if dr.merge_into_id is not None:
-                try:
-                    merge_target = Client.objects.get(pk=dr.merge_into_id, facility=request.current_facility)
-                except Client.DoesNotExist as exc:
-                    raise Http404 from exc
+                merge_target = (
+                    Client.objects.for_facility(request.current_facility)
+                    .filter(pk=dr.merge_into_id, is_deleted=False)
+                    .first()
+                    if dr.merge_target_url
+                    else None
+                )
+                if merge_target is None:
+                    dr.merge_target_url = ""
                 from core.views.client_merge import merge_facts
 
-                # Fail-closed wie ``may_see_case`` (Refs #1818): die
-                # Bestandszahlen zaehlen Faelle — eine Domaene, die fuer die
-                # Assistenz geschlossen ist (``case_detail`` ist STAFF_PLUS).
-                # Pseudonym und Kontaktstufe bleiben sichtbar (die Personen-
-                # Flaechen sind assistant+), die ENTSCHEIDUNG bleibt moeglich.
-                may_see = request.user.is_staff_or_above
-                return render(
-                    request,
-                    "core/clients/merge_review.html",
+                # Inventory counts require both live records and case access.
+                may_see = bool(client and merge_target and request.user.is_staff_or_above)
+                context.update(
                     {
-                        "deletion_request": dr,
-                        "client": client,
                         "merge_target": merge_target,
-                        # Refs #2112: dieselbe Sichtbarkeitsgrenze wie auf der
-                        # Bestaetigungsseite — die Vier-Augen-Pruefseite ist die
-                        # zweite Leseflaeche derselben Zahlen und haette sonst
-                        # genau das Leck behalten, das dort geschlossen wurde.
                         "source_facts": merge_facts(client, request.user) if may_see else None,
                         "target_facts": merge_facts(merge_target, request.user) if may_see else None,
                         "may_see_inventory": may_see,
-                        "stage_upgraded": merge_target.contact_stage != Client.ContactStage.QUALIFIED
-                        and client.contact_stage == Client.ContactStage.QUALIFIED,
-                        "next_url": next_url,
-                    },
+                        "stage_upgraded": bool(
+                            client
+                            and merge_target
+                            and merge_target.contact_stage != Client.ContactStage.QUALIFIED
+                            and client.contact_stage == Client.ContactStage.QUALIFIED
+                        ),
+                    }
                 )
-            return render(
-                request,
-                "core/clients/deletion_review.html",
-                {"deletion_request": dr, "client": client, "next_url": next_url},
-            )
+                return render(request, "core/clients/merge_review.html", context)
+            return render(request, "core/clients/deletion_review.html", context)
 
-        # Fall-Ziele (Refs #1818, ADR-044). Bewusst OHNE
-        # ``cases_with_live_client()``: ein noch nicht genehmigter Antrag zeigt
-        # auf einen lebenden Fall, ein bereits genehmigter (Status PENDING ist
-        # hier zwar erzwungen, der Scope soll die Annahme aber nicht tragen) auf
-        # einen im Papierkorb — die Pruefseite muss beide anzeigen koennen.
         if dr.target_type == DeletionRequest.TargetType.CASE:
-            try:
-                case = Case.objects.select_related("client").get(pk=dr.target_id, facility=request.current_facility)
-            except Case.DoesNotExist as exc:
-                raise Http404 from exc
-            return render(
-                request,
-                "core/cases/deletion_review.html",
-                {
-                    "deletion_request": dr,
-                    "case": case,
-                    "next_url": next_url,
-                    # Fail-closed wie in ``annotate_deletion_targets``
-                    # (services/deletion.py): ``can_confirm_deletion`` ist
-                    # rollenunabhaengig (#1053), die Fall-Domaene ist fuer die
-                    # Assistenz aber geschlossen (``case_detail`` ist
-                    # STAFF_PLUS). Ohne dieses Flag haette die Liste ihr den
-                    # Falltitel vorenthalten und die Pruefseite ihn einen Klick
-                    # spaeter wieder ausgegeben. Die ENTSCHEIDUNG bleibt ihr
-                    # moeglich — nur der Freitext nicht.
-                    "may_see_case": request.user.is_staff_or_above,
-                },
+            case = (
+                cases_with_live_client()
+                .for_facility(request.current_facility)
+                .select_related("client")
+                .filter(pk=dr.target_id)
+                .first()
+                if dr.target_url
+                else None
             )
+            if case is None:
+                dr.target_url = ""
+            context.update({"case": case, "may_see_case": case is not None})
+            return render(request, "core/cases/deletion_review.html", context)
 
-        try:
-            event = Event.objects.select_related("document_type", "client").get(
-                pk=dr.target_id, facility=request.current_facility
-            )
-        except Event.DoesNotExist as exc:
-            raise Http404 from exc
-
-        return render(
-            request,
-            "core/events/deletion_review.html",
-            {"deletion_request": dr, "event": event, "next_url": next_url},
-        )
+        event = None
+        if dr.target_type == DeletionRequest.TargetType.EVENT and dr.target_url:
+            with suppress(Http404):
+                event = get_visible_event_or_404(
+                    request.user,
+                    request.current_facility,
+                    dr.target_id,
+                    select_related=("document_type", "client"),
+                )
+        if event is None:
+            dr.target_url = ""
+        context["event"] = event
+        return render(request, "core/events/deletion_review.html", context)
 
     def post(self, request, pk):
         dr = self._load(request, pk)

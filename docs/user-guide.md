@@ -710,8 +710,10 @@ Für die Weitergabe an externe Stellen (z. B. Fördermittelgeber oder Kommune) g
 Wenn eine Fachkraft, Leitung oder Anwendungsbetreuung einen Kontakt einer Person der Kontaktstufe „Mit Zusatzangaben" löschen möchte, entsteht ein **Löschantrag**, der von einer zweiten Person mit dem Recht „Löschbestätigung“ genehmigt werden muss.
 
 1. Offene Löschanträge sehen Sie unter `/deletion-requests/`.
-2. Klicken Sie auf einen Antrag, um Details und das betroffene Ereignis einzusehen.
+2. Klicken Sie auf einen Antrag, um Begründung und verfügbare Angaben zum betroffenen Datensatz einzusehen. **Datensatz ansehen (neuer Tab)** öffnet das Ereignis, die Personenakte oder den Fall in einem neuen Tab; die Prüfseite bleibt im bisherigen Tab offen. Bei einer Zusammenführung gibt es je einen Link für die aufzulösende und die verbleibende Akte.
 3. Klicken Sie auf **Genehmigen** oder **Ablehnen** und bestätigen Sie.
+
+Die Prüfseite erweitert Ihre Leserechte nicht: Ereignisangaben und Links folgen der Sensibilität und Ihrer Rolle; Fallangaben und Falllinks sind erst ab Fachkraft sichtbar und setzen einen verfügbaren Fall einer aktiven, nicht gelöschten Person voraus. Nicht einsehbare, gelöschte oder nicht auffindbare Ziele erhalten einen neutralen Hinweis ohne Link; bei unsichtbaren Ereignissen fehlen auch Dokumentationstyp, Zeitpunkt und Pseudonym. Sie können den Antrag weiterhin anhand von Antragsteller:in und Begründung prüfen. Bei einem zurückgezogenen Antrag bleiben Links auf weiterhin einsehbare Ziele erhalten; der Rückzugshinweis bleibt sichtbar und eine Entscheidung ist nicht mehr möglich.
 
 > **Wichtig:** Das Recht „Löschbestätigung“ wird unabhängig von der Rolle vergeben. Beim Anlegen eines Zugangs ist es für Leitung und Anwendungsbetreuung vorbelegt und abwählbar, für andere Rollen nicht; ohne das Recht kann auch eine Leitung nicht genehmigen. Eigene Anträge können Sie weder genehmigen noch ablehnen (4-Augen-Prinzip). Zur Vergabe siehe [Admin-Handbuch § 7.5](admin-guide.md#75-löschanträge-4-augen-prinzip).
 

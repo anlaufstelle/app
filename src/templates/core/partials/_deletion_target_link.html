@@ -1,0 +1,4 @@
+{% load i18n %}
+{% if target_url %}
+<a href="{{ target_url }}" target="_blank" rel="noopener" class="text-sm font-medium text-accent hover:underline" data-testid="{{ target_testid|default:'review-target-link' }}">{% trans "Datensatz ansehen (neuer Tab)" %}</a>
+{% endif %}

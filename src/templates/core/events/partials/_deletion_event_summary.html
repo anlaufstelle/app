@@ -4,6 +4,7 @@ Loeschantrag-Rahmen (core/partials/_deletion_review.html).{% endcomment %}
 {# Event-Zusammenfassung #}
 <div class="card p-4 mb-5">
     <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Betroffenes Ereignis" %}</h2>
+    {% if event %}
     <dl class="space-y-2 text-sm">
         <div class="flex justify-between">
             <dt class="text-ink-muted">{% trans "Dokumentationstyp" %}</dt>
@@ -18,4 +19,8 @@ Loeschantrag-Rahmen (core/partials/_deletion_review.html).{% endcomment %}
             <dd class="font-medium">{% if event.client %}{{ event.client.pseudonym }}{% else %}–{% endif %}</dd>
         </div>
     </dl>
+    {% include "core/partials/_deletion_target_link.html" with target_url=deletion_request.target_url %}
+    {% else %}
+    {% include "core/partials/_deletion_target_unavailable.html" with unavailable_testid="event-review-not-visible" %}
+    {% endif %}
 </div>
