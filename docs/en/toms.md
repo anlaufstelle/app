@@ -7,4 +7,4 @@ Key rotation without data loss (MultiFernet) covers database fields (`reencrypt_
 <!-- translation-source: src/core/dsgvo_templates/toms.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 16b2cc723d771553c2bad78da586e3bdd6c0e38f -->
+<!-- source-hash: 550b21bf6aee669f2d9325c3901e303d622413b1 -->

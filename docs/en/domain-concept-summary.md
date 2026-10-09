@@ -113,7 +113,7 @@ Anlaufstelle uses five roles with increasing privileges (Refs #867, [ADR-018](..
 | **Staff** | Fachkraft | Core documentation role. Can capture contacts, manage work items and search within their facility. Sees entries and fields up to sensitivity "Elevated" (not "High"), may edit every event visible to them and delete their own. |
 | **Lead** | Leitung | Supervisory role. Everything Staff can do, plus pseudonym management, contact stage changes, statistics, exports, and deletion approvals. |
 | **Application manager** | Anwendungsbetreuung (`facility_admin`) | Full control within one facility: user management, document-type configuration, settings, audit log, GDPR package. |
-| **Super-Admin** | Systemadministration (`super_admin`) | Installation-wide system administration across all facilities; not bound to a single facility and no access to the regular application UI. Reads across facilities through the system area (`/system/`) and the admin interface (`/admin-mgmt/`, sudo required); Row Level Security lets these sessions through via `app.is_super_admin`, `SYSTEM_VIEW` is logged for every call in the system area and for the list and detail views of persons, cases, events, event history, work items and attachments in the admin interface -- not for the other admin views (e.g. deletion requests including their reason, users, settings, audit log), and access continues if logging fails. |
+| **Super-Admin** | Systemadministration (`super_admin`) | Installation-wide system administration across all facilities; not bound to a single facility and no access to the regular application UI. Reads across facilities through the system area (`/system/`) and the admin interface (`/admin-mgmt/`, sudo required); Row Level Security lets these sessions through via `app.is_super_admin`. SYSTEM_VIEW records system-area calls and list/detail reads for all registered administrative models, including deletion requests, users, settings, audit log, snapshots, templates, organisation and facility; if logging fails, content is denied with HTTP 403. Event and event-history admin pages show metadata only, without field contents. |
 
 Access is not purely role-based but context-dependent: what a user can see depends on the facility and on sensitivity -- the higher level of the documentation type and the field, compared with the role (Assistant: Normal; Staff: up to Elevated; Lead and Application manager: all levels). The contact stage of the person does not control visibility; it governs which documentation types may be used, four-eyes deletion, the audit entry when a person at "With additional details" is opened, and retention periods.
 
@@ -130,6 +130,14 @@ Event creation (`/events/new/`) saves drafts every 5 seconds in encrypted Indexe
 - **Scaling target:** 5--30 concurrent users, up to 50,000 events/year per facility.
 - **Deployment:** The production Compose stack includes Caddy, Django, PostgreSQL, Redis, mandatory ClamAV, cron and maintenance services. Hardware requirements: [admin guide § 1 — Prerequisites](admin-guide.md#hardware). Installation prerequisites: [admin guide § 1 — Prerequisites](admin-guide.md#prerequisites).
 - **Availability:** 99% target. Health-check endpoint at `/health/` for monitoring integration.
+
+### Authentication audit (#2527)
+
+Known `super_admin` accounts without a facility raise a `SECURITY_VIOLATION` alarm with `reason=super_admin_bruteforce` after ten failed logins in fifteen minutes, immediately in the failed-login path and as a heuristic in a full `detect_breaches` scan (scheduled hourly). The same alarm is deduplicated per account for 24 hours. No account lock is introduced. At the regular `/login/` endpoint, failed passwords at or above the threshold receive HTTP 429 with progressive retry advice of 1, 2, 4 and at most 8 seconds (`Retry-After`); the server does not sleep and this advice does not reject a subsequent correct password. The existing IP/username rate limits remain effective and can still reject valid logins.
+
+Successful TOTP and passkey verification records `MFA_VERIFIED` with the fixed method `totp` or `passkey`; failed factor checks retain `MFA_FAILED` or `WEBAUTHN_FAILED`. Consuming a backup code retains exactly its existing `BACKUP_CODES_USED` row. For signed-in accounts, a POST request to regenerate backup codes rejected for invalid TOTP, an unverified session or a missing TOTP device records `MFA_BACKUP_REGENERATE_DENIED` with the fixed reason `invalid_totp`, `unverified_session` or `missing_totp`. These audit details contain no codes, TOTP secrets or passkey assertions.
+
+HTTP 429 rejections record `RATE_LIMITED` with a masked route class, a fixed reason (`request_rate` or `super_admin_backoff`), and the user/facility where already known. Unresolved paths are recorded only as `unresolved`; bodies, queries and actual URL tokens stay out of the details. The cache caps the trail at one row per route class and known account/facility in sixty seconds (anonymous requests share a bucket across all source IPs). If the audit write fails, the response stays 429 and an equally capped security log line names the route class, reason and known identifiers without request contents. Passkey failures and denied backup regeneration also count as critical audit events; successful verification and ordinary throttling alone do not trigger a compliance warning.
 
 ## Version Additions
 
@@ -332,5 +340,5 @@ The largest collective pre-release to date — the configurability milestones M0
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-08 -->
-<!-- source-hash: 8771d092cd363b6ac9b7be30f4dcc483bbbb82b3 -->
+<!-- translation-date: 2026-10-09 -->
+<!-- source-hash: 078e6e3f5fdfb22862ecfb2c649e7d6b1a00f8e8 -->

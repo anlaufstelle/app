@@ -16,10 +16,9 @@ Three claim families are pinned against the implementation:
 * Visibility (Refs #2466): what a role sees follows sensitivity (maximum of
   document type and field) times role (``ROLE_MAX_SENSITIVITY``), not the
   contact stage; the system administration reads across facilities through
-  the admin interface and bypasses RLS. Only the list and detail views of
-  the admin classes using ``AdminReadAuditMixin`` (plus every ``/system/``
-  view) write ``SYSTEM_VIEW``; the documents must name that scope instead of
-  promising that every administrative read is logged.
+  the admin interface and bypasses RLS. Every registered admin model must
+  audit system-administrator reads, and audit failures must deny content
+  (Refs #2527). The documents must describe that strengthened requirement.
 """
 
 import re
@@ -265,22 +264,16 @@ class TestVisibilityDomainConcept:
 # Administrative read audit scope (Refs #2466)
 # ---------------------------------------------------------------------------
 
-# Admin models whose list/detail views write SYSTEM_VIEW for the system
-# administration; the documents name exactly these as "Personen, Fälle,
-# Ereignisse, Ereignis-Historie, Aufgaben und Anhänge".
-AUDITED_ADMIN_MODELS = {"Client", "Case", "Event", "EventHistory", "WorkItem", "Attachment"}
-AUDITED_ADMIN_SCOPE_DE = "Personen, Fällen, Ereignissen, Ereignis-Historie, Aufgaben und Anhängen"
-AUDITED_ADMIN_SCOPE_EN = "persons, cases, events, event history, work items and attachments"
-
-OVERBROAD_READ_AUDIT_CLAIMS = (
-    "jeder Aufruf protokolliert",
-    "jeder Lesezugriff der Systemadministration",
-    "protokollieren diese Lesezugriffe als",
-    "jeweils mit `SYSTEM_VIEW`-Protokoll",
-    "jeder solche Aufruf wird im AuditLog",
-    "jeweils protokolliert",
-    "ohne dass dieser Zugriff im AuditLog (`SYSTEM_VIEW`) auftaucht",
-    "und einrichtungsübergreifende Zugriffe;",
+# Refs #2527 changes the requirement from six selected models to every
+# registered administrative model, including configuration and deletion requests.
+BASE_ADMIN_MODELS = {"Client", "Case", "Event", "EventHistory", "WorkItem", "Attachment"}
+AUDITED_ADMIN_SCOPE_DE = "alle registrierten Verwaltungsmodelle"
+AUDITED_ADMIN_SCOPE_EN = "all registered administrative models"
+STALE_READ_AUDIT_CLAIMS = (
+    "die übrigen Verwaltungsansichten",
+    "bleibt der Zugriff möglich",
+    "bleibt der Zugriff trotzdem möglich",
+    "nicht alle Verwaltungsansichten",
 )
 
 
@@ -297,6 +290,10 @@ def _system_view_count():
 
 
 @pytest.mark.django_db
+@pytest.mark.filterwarnings(
+    r"ignore:Overriding get_action_choices\(\) without the 'action_location' parameter:"
+    "django.utils.deprecation.RemovedInDjango70Warning"
+)
 class TestAdminReadAuditScope:
     def test_premise_audited_admin_models(self):
         audited = {
@@ -304,54 +301,56 @@ class TestAdminReadAuditScope:
             for model, model_admin in anlaufstelle_admin_site._registry.items()
             if isinstance(model_admin, AdminReadAuditMixin)
         }
-        assert audited == AUDITED_ADMIN_MODELS
+        registered = {model.__name__ for model in anlaufstelle_admin_site._registry}
+        assert registered >= BASE_ADMIN_MODELS
+        assert audited == registered
 
     @override_settings(SUDO_MODE_ENABLED=True)
     def test_super_admin_changelists_of_audited_models_write_system_view(self, client, super_admin_user):
         client.force_login(super_admin_user)
         _enter_sudo(client)
         for model in anlaufstelle_admin_site._registry:
-            if model.__name__ not in AUDITED_ADMIN_MODELS:
-                continue
             before = _system_view_count()
             url = f"/admin-mgmt/{model._meta.app_label}/{model._meta.model_name}/"
             assert client.get(url).status_code == 200, url
             assert _system_view_count() == before + 1, url
 
     @override_settings(SUDO_MODE_ENABLED=True)
-    def test_super_admin_deletion_request_read_writes_no_system_view(self, client, facility, super_admin_user):
-        """The documented exception: deletion request reasons are read unlogged."""
+    def test_super_admin_deletion_request_read_writes_system_view(self, client, facility, super_admin_user):
+        """Deletion request reasons require the same audit as other admin reads."""
         record = DeletionRequest.objects.create(
-            facility=facility, target_type="Event", target_id=uuid.uuid4(), reason="Unlogged admin read"
+            facility=facility, target_type="Event", target_id=uuid.uuid4(), reason="Audited admin read"
         )
         client.force_login(super_admin_user)
         _enter_sudo(client)
         before = _system_view_count()
         response = client.get(f"/admin-mgmt/core/deletionrequest/{record.pk}/change/")
         assert response.status_code == 200
-        assert b"Unlogged admin read" in response.content
-        assert _system_view_count() == before
+        assert b"Audited admin read" in response.content
+        assert _system_view_count() == before + 1
 
-    def test_toms_and_dsfa_name_the_audited_scope_and_its_gaps(self, toms, dsfa):
+    def test_toms_and_dsfa_name_full_admin_audit_and_fail_closed(self, toms, dsfa):
         for name, text in (("toms", toms), ("dsfa", dsfa)):
-            for claim in OVERBROAD_READ_AUDIT_CLAIMS:
+            for claim in STALE_READ_AUDIT_CLAIMS:
                 assert claim not in text, (name, claim)
             assert AUDITED_ADMIN_SCOPE_DE in text, name
             assert "Löschanträge" in text, name
             assert "schlägt die Protokollierung fehl" in text, name
+            assert "HTTP 403" in text, name
 
 
 @pytest.mark.architecture
 class TestAdminReadAuditScopeDocs:
-    def test_domain_concept_names_the_audited_scope_and_its_gaps(self):
+    def test_domain_concept_names_full_admin_audit_and_fail_closed(self):
         text = _flat(DOMAIN_CONCEPT_DE.read_text(encoding="utf-8"))
-        for claim in OVERBROAD_READ_AUDIT_CLAIMS:
+        for claim in STALE_READ_AUDIT_CLAIMS:
             assert claim not in text, claim
         assert AUDITED_ADMIN_SCOPE_DE in text
         assert "Löschanträge" in text
         assert "schlägt die Protokollierung fehl" in text
+        assert "HTTP 403" in text
 
-    def test_english_summary_names_the_audited_scope_and_its_gaps(self):
+    def test_english_summary_names_full_admin_audit_and_fail_closed(self):
         text = _flat(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8"))
         current = text[: text.index("## Version Additions")]
         assert "every such read is logged" not in current
@@ -359,6 +358,7 @@ class TestAdminReadAuditScopeDocs:
         assert AUDITED_ADMIN_SCOPE_EN in current
         assert "deletion requests" in current
         assert "if logging fails" in current
+        assert "HTTP 403" in current
 
 
 # ---------------------------------------------------------------------------
@@ -1123,7 +1123,8 @@ _STALE_MFA_CLAIMS = ("Optionale 2FA", "sensible Rollen", "Argon2", "(30 Min)", "
 
 
 _DSFA_LOCKOUT_EXEMPTION = (
-    "; das Systemadministrationskonto ist von der Sperre ausgenommen und nur durch die Ratelimits gebremst"
+    "; das Systemadministrationskonto ist von der Sperre ausgenommen; zusätzlich gelten Auth-Alarmierung "
+    "und Retry-Empfehlung ohne neue Kontosperre (TOM § 1.2)"
 )
 
 

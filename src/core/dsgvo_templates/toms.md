@@ -29,12 +29,20 @@
 - [x] Benutzername und Passwort erforderlich
 - [x] Passwort-Mindestlänge: 12 Zeichen
 - [x] Passwort-Komplexitätsanforderungen
-- [x] Kontosperrung nach 10 Fehlversuchen innerhalb von 15 Minuten je Konto und Quell-IP; die Sperre endet, sobald weniger als 10 gezählte Fehlversuche in den letzten 15 Minuten liegen (ohne neue Fehlversuche spätestens 15 Minuten nach dem letzten). Zusätzlich Ratelimits der Anmeldung (5 Versuche/Minute je IP, 10/Stunde je Benutzername). Das Systemadministrationskonto ist von der Sperre ausgenommen und nur durch die Ratelimits gebremst.
+- [x] Kontosperrung nach 10 Fehlversuchen innerhalb von 15 Minuten je Konto und Quell-IP; die Sperre endet, sobald weniger als 10 gezählte Fehlversuche in den letzten 15 Minuten liegen (ohne neue Fehlversuche spätestens 15 Minuten nach dem letzten). Zusätzlich Ratelimits der Anmeldung (5 Versuche/Minute je IP, 10/Stunde je Benutzername). Das Systemadministrationskonto ist von der Sperre ausgenommen; Ratelimits bleiben wirksam, zusätzlich gilt die unten beschriebene Auth-Alarmierung.
 - [x] Erzwungener Passwortwechsel bei Erstanmeldung
 - [x] Zwei-Faktor-Authentifizierung (TOTP, ergänzend Passkeys) per Rollen-Default für alle Rollen verpflichtend (Administration sofort, übrige Rollen nach 30 Tagen Übergangsfrist), zusätzlich pro Benutzer oder einrichtungsweit erzwingbar; zeitbasierte Einmalcodes (30 s) via Authenticator-App
 - [x] Passkeys/WebAuthn optional als zusätzlicher zweiter Faktor neben TOTP; Registrierung nur nach bestätigtem TOTP und in bereits 2FA-verifizierter Sitzung
 - [x] Passkeys dienen nur als zweiter Faktor; kein passwordless Login: Ein Passkey ersetzt weder Passwort noch TOTP-/Backup-Code-Wiederherstellung
 - [ ] Passwordless Login und eine einrichtungsweite Passkey-Pflicht sind bewusst auf eine spätere Ausbaustufe vertagt
+
+**Auth-Alarmierung und 2FA-Audit:**
+
+Bekannte, einrichtungslose `super_admin`-Konten erhalten ab zehn Fehlanmeldungen in 15 Minuten einen `SECURITY_VIOLATION`-Alarm mit `reason=super_admin_bruteforce`, sofort im Fehlanmeldepfad und als Heuristik im vollständigen `detect_breaches`-Lauf (planmäßig stündlich). Derselbe Alarm wird je Konto 24 Stunden dedupliziert. Es entsteht keine Kontosperre. Am normalen Login (`/login/`) erhalten weitere falsche Passwörter ab der Schwelle HTTP 429 mit einer progressiven Retry-Empfehlung von 1, 2, 4 und höchstens 8 Sekunden (`Retry-After`); der Server schläft nicht, und diese Empfehlung verhindert keinen Folgeversuch mit korrektem Passwort. Die bestehenden IP-/Benutzernamen-Ratelimits bleiben wirksam und können weiterhin auch korrekte Anmeldungen abweisen.
+
+Erfolgreiche TOTP- und Passkey-Verifikation erzeugt `MFA_VERIFIED` mit der festen Methode `totp` oder `passkey`; Fehlgeschlagene Faktorprüfungen behalten `MFA_FAILED` bzw. `WEBAUTHN_FAILED`. Der Backup-Code-Verbrauch behält genau seine bestehende `BACKUP_CODES_USED`-Zeile. Für angemeldete Konten erzeugt eine wegen ungültigem TOTP, unverifizierter Sitzung oder fehlendem TOTP-Gerät abgewiesene POST-Anfrage zum Erneuern der Backup-Codes `MFA_BACKUP_REGENERATE_DENIED` mit dem festen Grund `invalid_totp`, `unverified_session` oder `missing_totp`. Codes, TOTP-Secrets und Passkey-Assertions stehen nicht in diesen Audit-Details.
+
+HTTP-429-Abweisungen schreiben `RATE_LIMITED` mit maskierter Pfadklasse und festem Grund (`request_rate` bzw. `super_admin_backoff`) sowie Nutzer und Einrichtung, soweit bereits bekannt. Unaufgelöste Pfade werden nur als `unresolved` erfasst; Body, Query und konkrete URL-Tokens bleiben aus den Details. Der Cache begrenzt die Spur auf eine Zeile je Pfadklasse und bekanntem Konto/Einrichtung in 60 Sekunden (anonym gemeinsam über alle Quell-IPs). Scheitert das Audit-Schreiben, bleibt die Antwort 429 und eine ebenso gedrosselte, inhaltsfreie Sicherheitszeile nennt Pfadklasse, Grund und bekannte Kennungen. Passkey-Fehler und abgewiesene Backup-Erneuerungen zählen zusätzlich als kritische Audit-Ereignisse; erfolgreiche Verifikation und gewöhnliche Drosselung lösen allein keine Compliance-Warnung aus.
 
 **Session-Management:**
 - [x] Automatische Abmeldung nach Inaktivität
@@ -47,7 +55,7 @@
 **Rollenkonzept:**
 | Rolle | Lesen | Schreiben | Löschen | Export | Admin |
 |-------|-------|-----------|---------|--------|-------|
-| Systemadministration | Alle Einrichtungen, nur lesend über die Verwaltungsoberfläche (`/admin-mgmt/`, mit Sudo) und den Systembereich (`/system/`); protokolliert (`SYSTEM_VIEW`) werden jeder Aufruf im Systembereich sowie die Listen- und Detailansichten von Personen, Fällen, Ereignissen, Ereignis-Historie, Aufgaben und Anhängen, nicht die übrigen Verwaltungsansichten (z. B. Löschanträge, Benutzer, Einstellungen, Audit-Log); schlägt die Protokollierung fehl, bleibt der Zugriff möglich | Keine Fachdaten | Nein | Nein | Installationsweit |
+| Systemadministration | Alle Einrichtungen, nur lesend über die Verwaltungsoberfläche (`/admin-mgmt/`, mit Sudo) und den Systembereich (`/system/`); SYSTEM_VIEW protokolliert die Aufrufe im Systembereich und die Listen- und Detailansichten für alle registrierten Verwaltungsmodelle einschließlich Löschanträgen, Benutzern, Einstellungen, Audit-Log, Snapshots, Vorlagen, Organisation und Einrichtung; schlägt die Protokollierung fehl, wird die Ausgabe mit HTTP 403 gesperrt. Ereignisse und Ereignis-Historie zeigen im Admin nur Metadaten, keine Feldinhalte. | Keine Fachdaten | Nein | Nein | Installationsweit |
 | Anwendungsbetreuung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | Personen: 4-Augen; Ereignisse und Fälle: 4-Augen bei „Mit Zusatzangaben“, sonst direkt; Dateien: direkt (Sofortlöschweg) | Ja | Ja (eigene Einrichtung) |
 | Leitung | Alle Sensitivitätsstufen (Normal, Erhöht, Hoch) | Alle | Personen: 4-Augen; Ereignisse und Fälle: 4-Augen bei „Mit Zusatzangaben“, sonst direkt; Dateien: direkt (Sofortlöschweg) | Ja | Nein |
 | Fachkraft | Bis Sensitivität „Erhöht“ | Alle für sie sichtbaren Ereignisse | Personen: Antrag (4-Augen); nur eigene Ereignisse und für sie sichtbare Fälle: 4-Augen bei „Mit Zusatzangaben“, sonst direkt; Dateien: kein Sofortlöschweg | Nein | Nein |
