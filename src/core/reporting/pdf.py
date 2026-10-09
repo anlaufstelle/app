@@ -33,6 +33,10 @@ def render_dataset_pdf(
             "field_specs": field_specs,
             "rows": [[record.get(spec.key) for spec in field_specs] for record in result.records],
             "population_note": table_note(backend.population, LIVE),
+            "table_population_notes": [
+                (table, table_note(population, LIVE))
+                for table, population in backend.get_table_populations(result).items()
+            ],
             "completeness_messages": [issue.message for issue in result.completeness],
         },
     )

@@ -645,6 +645,10 @@ class DatasetBackend(ABC):
         """Datenqualitaets-Checks vor der Anzeige/dem Export (Default: keine Checks)."""
         return []  # Default: keine Checks
 
+    def get_table_populations(self, result: DatasetResult) -> dict[str, str]:
+        """Return the population of each published table."""
+        return result.summary.get("metadata", {}).get("populations", {"records": self.population})
+
     def render_pdf(self, facility, result: DatasetResult, *, date_from, date_to, generated_at) -> bytes:
         """Render an already prepared, suppression-stamped dataset as PDF.
 

@@ -198,6 +198,9 @@ def build_report_panel_context(facility, backend, period_state) -> dict:
         # Backends — ihre Grundgesamtheit gehoert dazu. ``backend.population``
         # ist der vom Backend deklarierte Code (Default: alle Ereignisse).
         "population_note": table_note(backend.population, LIVE),
+        "table_population_notes": [
+            (table, table_note(population, LIVE)) for table, population in backend.get_table_populations(result).items()
+        ],
         # K4a (Refs #1770): KEIN ``release_query``. Empfaenger/Zweck zur
         # Renderzeit in die Export-Ziele zu backen war ein Race: der Klick auf
         # einen Link blurrte zuerst das Freitextfeld (change → Panel-Neubau),

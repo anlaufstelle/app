@@ -79,7 +79,7 @@ Vorschau eines Reporting-Backends. Rendert das Ergebnis von
     {% trans "Datenquelle" %}: {{ data_source_note }} — {{ data_source_explanation }}
 </p>
 {# K3-A3 (Refs #1770): Grundgesamtheit der Vorschau-/Export-Tabelle — vom Backend deklariert. #}
-<p class="text-[12px] text-ink-muted mb-4 report-population">{{ population_note }}</p>
+{% for table, note in table_population_notes %}<p class="text-[12px] text-ink-muted mb-4 report-population">{{ table }} · {{ note }}</p>{% endfor %}
 
 {# Export: Server erzwingt LEAD_PLUS auf core:statistics_report_export — keine eigene Rollenprüfung hier nötig. #}
 {% comment %}

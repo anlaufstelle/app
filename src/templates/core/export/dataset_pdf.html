@@ -24,7 +24,7 @@
     <p class="meta">{% trans "Zeitraum" %}: {{ date_from|date:"d.m.Y" }} – {{ date_to|date:"d.m.Y" }}</p>
     <p class="meta">{% trans "Erstellt am" %}: {{ generated_at|date:"d.m.Y H:i" }}</p>
     <p>{% blocktrans %}Aggregate mit weniger als {{ threshold }} Datensätzen werden unterdrückt (k-Anonymität).{% endblocktrans %}</p>
-    <p class="population">{{ population_note }}</p>
+    {% for table, note in table_population_notes %}<p class="population">{{ table }} · {{ note }}</p>{% endfor %}
     <table>
         <thead><tr>{% for spec in field_specs %}<th>{{ spec.label }}</th>{% endfor %}</tr></thead>
         <tbody>

@@ -283,6 +283,8 @@ def _csv_metadata_line(
     # Download zeigen denselben Datensatz — benennt nur das Panel seine
     # Basismenge, fehlt die Angabe genau in der Datei, die das Haus verlaesst.
     metadata += f" | population: {backend.population} | {population_label}: {POPULATION_NOTES[backend.population]}"
+    for table, population in backend.get_table_populations(result).items():
+        metadata += f" | {table}: {population} · {POPULATION_NOTES[population]} · {DATA_SOURCE_NOTES[LIVE]}"
     # Ohne diesen Zusatz saehe der Empfaenger nur leere Zellen ohne Erklaerung —
     # das CSV traegt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
     # Refs #2069: die Praesenz des Schluessels garantiert
