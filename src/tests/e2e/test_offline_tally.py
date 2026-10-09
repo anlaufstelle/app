@@ -18,6 +18,7 @@ import pytest
 from django.utils import timezone
 from playwright.sync_api import expect
 
+from ._helpers import django_shell as _django_shell
 from ._helpers import do_real_login as _do_real_login
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 
@@ -106,6 +107,107 @@ def _cleanup_offline_state(page):
             }
             """
         )
+
+
+def _warm_up_for_cold_shell(page, base_url):
+    """Log in, activate the service worker and persist the facility snapshot."""
+    _do_real_login(page, base_url)
+    page.goto(f"{base_url}/", wait_until="domcontentloaded")
+    page.wait_for_function(
+        "() => !!(window.crypto_session && window.offlineStore && window.offlineTallyUi)",
+        timeout=10000,
+    )
+    page.evaluate("async () => { await window.crypto_session.ready(); }")
+    _wait_for_active_service_worker(page)
+    page.evaluate("async () => { await window.crypto_session.ready(); }")
+    revalidation = page.evaluate("async () => window.offlineStore.revalidateCachedFacility()")
+    assert revalidation in {"refreshed", "not-modified"}, revalidation
+
+
+def _load_cold_shell(page, base_url):
+    """Go offline and load ``/`` from the service worker without any warm page state.
+
+    Nothing is counted before the navigation, so the shell starts with an empty
+    queue and every assertion afterwards describes the cold submit only.
+    """
+    page.context.set_offline(True)
+    page.evaluate("window.dispatchEvent(new Event('offline'))")
+    cdp = page.context.new_cdp_session(page)
+    cdp.send("Network.enable")
+    cdp.send("Network.clearBrowserCache")
+    cdp.send("Network.setCacheDisabled", {"cacheDisabled": True})
+    page.goto(f"{base_url}/", wait_until="domcontentloaded")
+    shell = page.locator('[data-testid="offline-zeitstrom"]')
+    expect(shell).to_be_visible(timeout=10000)
+    page.wait_for_function(
+        "() => !!(window.offlineStore && window.offlineStore.listTallyQueueState && window.syncOrchestrator)",
+        timeout=10000,
+    )
+    return shell
+
+
+def _cold_row(shell, name):
+    row = shell.locator('[data-testid="offline-tally-row"]').filter(has_text=re.compile(rf"^\s*{name}\b"))
+    expect(row).to_have_count(1, timeout=10000)
+    return row
+
+
+def _queued_tally_keys(page):
+    """Idempotency keys of the queued tally POSTs (decrypted read side only)."""
+    return page.evaluate(
+        """async () => {
+            const rows = await window.offlineStore.listDecrypted('queue');
+            return rows
+                .filter((row) => (row.url || '').includes('/partials/tally/increment/'))
+                .map((row) => new URLSearchParams((row.data && row.data.body) || '')
+                    .get('idempotency_key'));
+        }"""
+    )
+
+
+def _server_tally_count(e2e_env, document_type_name):
+    """Tally contacts of the seeded user on the server, straight from the database."""
+    (line,) = _django_shell(
+        e2e_env,
+        "from core.models import Event; "
+        "print(Event.objects.filter("
+        "created_by__username='miriam', "
+        f"document_type__name='{document_type_name}', "
+        "created_via=Event.CreatedVia.TALLY).count())",
+    )
+    return int(line)
+
+
+def _server_count_for_key(e2e_env, idempotency_key):
+    (line,) = _django_shell(
+        e2e_env,
+        f"from core.models import Event; print(Event.objects.filter(idempotency_key='{idempotency_key}').count())",
+    )
+    return int(line)
+
+
+def _assert_cold_submit_succeeded(page, shell, row):
+    """The cold submit must look like a queued success: pending +1, no failure feedback."""
+    status = row.locator('[data-testid="offline-tally-server-status"]')
+    expect(status).to_contain_text("ausstehend: 1", timeout=15000)
+    # Wait until the submit handler has fully finished before judging feedback.
+    expect(row.locator('button[type="submit"]')).to_be_enabled(timeout=15000)
+    section = shell.locator('[data-testid="offline-tally"]')
+    feedback = section.locator('p[role="alert"]')
+    expect(feedback).to_be_hidden()
+    expect(feedback).to_have_text("")
+    expect(section).not_to_contain_text("Erfassung konnte nicht gespeichert werden")
+    expect(section.locator('[data-testid="offline-tally-blocked"]')).to_be_hidden()
+    queue = page.evaluate("async () => window.offlineStore.count('queue')")
+    assert queue == 1, queue
+
+
+def _reconnect_and_wait_for_empty_queue(page):
+    _reconnect_via_online_event(page)
+    page.wait_for_function(
+        "async () => (await window.offlineStore.count('queue')) === 0",
+        timeout=30000,
+    )
 
 
 class TestOfflineTallyReconciliation:
@@ -598,6 +700,76 @@ class TestOfflineTallyReconciliation:
             expect(snapshot).to_be_visible()
             expect(snapshot).to_have_text(snapshot_label)
             expect(snapshot).not_to_contain_text("Invalid Date")
+        finally:
+            _cleanup_offline_state(page)
+            context.close()
+
+
+class TestColdOfflineTallySubmit:
+    """Refs #2513: submitting from the cold offline shell is a queued success.
+
+    The page is loaded offline from the service worker, so ``offlineTally``
+    runs in the cold shell. Both form types go through the real service-worker
+    ACK, the encrypted queue and the central replay; the server sees exactly
+    one contact afterwards.
+    """
+
+    def test_cold_direct_tally_submit_queues_once_and_replays_once(self, browser, base_url, e2e_env):
+        context = browser.new_context(locale="de-DE", viewport={"width": 390, "height": 844})
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _warm_up_for_cold_shell(page, base_url)
+            server_before = _server_tally_count(e2e_env, "Kontakt")
+
+            shell = _load_cold_shell(page, base_url)
+            row = _cold_row(shell, "Kontakt")
+            expect(row.locator('[data-testid="offline-tally-server-status"]')).to_contain_text("ausstehend: 0")
+            assert page.evaluate("async () => window.offlineStore.count('queue')") == 0
+
+            row.locator('button[type="submit"]').click()
+
+            _assert_cold_submit_succeeded(page, shell, row)
+            keys = _queued_tally_keys(page)
+            assert len(keys) == 1 and keys[0], keys
+            assert _server_tally_count(e2e_env, "Kontakt") == server_before
+
+            _reconnect_and_wait_for_empty_queue(page)
+            assert _server_count_for_key(e2e_env, keys[0]) == 1
+            assert _server_tally_count(e2e_env, "Kontakt") == server_before + 1
+        finally:
+            _cleanup_offline_state(page)
+            context.close()
+
+    def test_cold_number_tally_submit_queues_once_resets_form_and_replays_once(self, browser, base_url, e2e_env):
+        context = browser.new_context(locale="de-DE", viewport={"width": 390, "height": 844})
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _warm_up_for_cold_shell(page, base_url)
+            server_before = _server_tally_count(e2e_env, "Spritzentausch")
+
+            shell = _load_cold_shell(page, base_url)
+            row = _cold_row(shell, "Spritzentausch")
+            expect(row.locator('[data-testid="offline-tally-server-status"]')).to_contain_text("ausstehend: 0")
+            assert page.evaluate("async () => window.offlineStore.count('queue')") == 0
+
+            outgoing = row.locator('input[name="ausgabe"]')
+            returned = row.locator('input[name="rueckgabe"]')
+            outgoing.fill("10")
+            returned.fill("4")
+            row.locator('button[type="submit"]').click()
+
+            _assert_cold_submit_succeeded(page, shell, row)
+            expect(outgoing).to_have_value("")
+            expect(returned).to_have_value("")
+            keys = _queued_tally_keys(page)
+            assert len(keys) == 1 and keys[0], keys
+            assert _server_tally_count(e2e_env, "Spritzentausch") == server_before
+
+            _reconnect_and_wait_for_empty_queue(page)
+            assert _server_count_for_key(e2e_env, keys[0]) == 1
+            assert _server_tally_count(e2e_env, "Spritzentausch") == server_before + 1
         finally:
             _cleanup_offline_state(page)
             context.close()
