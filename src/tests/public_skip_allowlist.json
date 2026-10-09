@@ -1246,6 +1246,13 @@
     "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
   },
   {
+    "nodeid": "src/tests/test_demo_gate.py::test_release_checklist_requires_demo_before_release_and_in_evidence",
+    "profile": "public",
+    "reason": "Dev documentation is absent from public snapshots",
+    "exclusion": "docs/dev",
+    "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
+  },
+  {
     "nodeid": "src/tests/test_demo_settings.py::TestDemoExternalOrigin::test_testwert_deckt_sich_mit_der_ausgelieferten_vorlage",
     "profile": "public",
     "reason": "Deploy-Vorlage nicht im Public-Snapshot — Abgleich nur im Dev-Repo moeglich",

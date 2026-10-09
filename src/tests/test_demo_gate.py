@@ -70,3 +70,38 @@ def test_demo_dry_run_does_not_execute_flock(tmp_path):
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert not marker.exists(), "Dry run must not execute the shared lock"
+
+
+@pytest.mark.parametrize("port", ["8844", "8854"])
+def test_e2e_origins_follow_server_port(port):
+    import os
+    import sys
+
+    env = {**os.environ, "E2E_PORT_BASE": port, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.e2e"}
+    env.pop("EXTERNAL_ORIGIN", None)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from django.conf import settings; "
+            f"assert settings.EXTERNAL_ORIGIN == 'http://localhost:{port}'; "
+            f"assert 'http://localhost:{port}' in settings.OTP_WEBAUTHN_ALLOWED_ORIGINS",
+        ],
+        cwd=ROOT / "src",
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_release_checklist_requires_demo_before_release_and_in_evidence():
+    path = ROOT / "docs/dev/release-checklist.md"
+    if not path.is_file():
+        pytest.skip("Dev documentation is absent from public snapshots")
+    checklist = path.read_text()
+    section = checklist.split("## 1.", 1)[1].split("## 2.", 1)[0]
+    evidence = next(line for line in checklist.splitlines() if line.startswith("**Nachweise aus dem Pre-Release"))
+    assert "make test-e2e-demo" in section
+    assert "make test-e2e-demo" in evidence
