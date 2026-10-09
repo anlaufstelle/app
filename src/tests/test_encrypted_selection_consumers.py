@@ -185,3 +185,107 @@ def test_article_15_pdf_uses_readable_selection_labels(selection_entity, facilit
     assert "[&#x27;a&#x27;, &#x27;b&#x27;]" not in html
     assert "__encrypted__" not in html
     assert export_client_data_pdf(person, facility, staff_user).startswith(b"%PDF")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "selection_entity", [(kind, False, True) for kind in ("client", "case", "event")], indirect=True
+)
+def test_option_usage_recognizes_each_encrypted_selection_slug(selection_entity):
+    from core.services.option_usage import option_slugs_in_use
+
+    _entity, template = selection_entity
+    assert option_slugs_in_use(template) == {"a", "b"}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("selection_entity", [("event", False, True)], indirect=True)
+@pytest.mark.parametrize("history_side", ["data_before", "data_after"])
+@pytest.mark.parametrize("encrypted", [True, False])
+def test_option_usage_includes_history_only_selection_slugs(selection_entity, staff_user, history_side, encrypted):
+    from core.models import EventHistory
+    from core.services.file_vault import encrypt_field
+    from core.services.option_usage import option_slugs_in_use
+
+    entity, template = selection_entity
+    entity.data_json = {}
+    entity.save()
+    value = encrypt_field(["a", "b"]) if encrypted else ["a", "b"]
+    EventHistory.objects.create(
+        event=entity, changed_by=staff_user, action=EventHistory.Action.UPDATE, **{history_side: {template.slug: value}}
+    )
+    assert option_slugs_in_use(template) == {"a", "b"}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("selection_entity", [("event", False, True)], indirect=True)
+@pytest.mark.parametrize("expected_slug, target_visible", [("a", True), ("b", True), ("c", False)])
+def test_condition_evaluator_matches_individual_decrypted_selection_slugs(
+    selection_entity, facility, expected_slug, target_visible
+):
+    from core.models import FieldCondition
+    from core.services.conditions import build_conditions_payload, evaluate_conditions, normalize_value
+    from core.services.events import decrypt_event_text_data
+
+    entity, template = selection_entity
+    target = FieldTemplate.objects.create(
+        facility=facility, name="Conditional note", slug="note", field_type=FieldTemplate.FieldType.TEXT
+    )
+    target_field = DocumentTypeField.objects.create(document_type=entity.document_type, field_template=target)
+    source_field = entity.document_type.fields.get(field_template=template)
+    FieldCondition.objects.create(
+        target_field=target_field,
+        depends_on_field=source_field,
+        operator=FieldCondition.Operator.CONTAINS,
+        value=expected_slug,
+    )
+    payload = build_conditions_payload(entity.document_type, {"selection", "note"})
+    fields = {slug: spec["type"] for slug, spec in payload["fields"].items()}
+    initial = decrypt_event_text_data(entity)
+    values = {slug: normalize_value(field_type, initial.get(slug)) for slug, field_type in fields.items()}
+    visible = evaluate_conditions(fields, payload["conditions"], values)
+    assert visible == ({"selection", "note"} if target_visible else {"selection"})
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("selection_entity", [("event", False, True)], indirect=True)
+def test_event_update_keeps_selection_history_encrypted(selection_entity, staff_user):
+    from core.models import EventHistory
+    from core.services.events import update_event
+    from core.services.option_usage import option_slugs_in_use
+
+    entity, template = selection_entity
+    update_event(entity, staff_user, data_json={template.slug: ["b"]})
+    history = EventHistory.objects.get(event=entity, action=EventHistory.Action.UPDATE)
+    for payload, expected in ((history.data_before, ["a", "b"]), (history.data_after, ["b"])):
+        stored = payload[template.slug]
+        assert is_encrypted_value(stored)
+        assert set(stored) == {"__encrypted__", "value"}
+        assert safe_decrypt(stored) == expected
+        assert type(safe_decrypt(stored)) is list
+    assert option_slugs_in_use(template) == {"a", "b"}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("selection_entity", [("event", False, True)], indirect=True)
+def test_option_usage_excludes_other_facility_history(selection_entity, other_facility, staff_user):
+    from core.models import EventHistory
+    from core.services.file_vault import encrypt_field
+    from core.services.option_usage import option_slugs_in_use
+
+    entity, template = selection_entity
+    entity.data_json = {}
+    entity.save()
+    foreign_type = make_document_type(facility=other_facility, name="Foreign selections")
+    foreign_event = make_event(
+        facility=other_facility,
+        client=None,
+        created_by=staff_user,
+        document_type=foreign_type,
+        data_json={},
+        occurred_at=timezone.now(),
+    )
+    EventHistory.objects.create(
+        event=foreign_event, action=EventHistory.Action.UPDATE, data_before={template.slug: encrypt_field(["c"])}
+    )
+    assert option_slugs_in_use(template) == set()

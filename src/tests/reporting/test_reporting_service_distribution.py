@@ -574,3 +574,30 @@ class TestIsAvailable:
         )
 
         assert backend.is_available(facility) is False
+
+
+def test_encrypted_multi_selection_counts_individual_slugs_once(backend, facility, admin_user, kontakt_typ, date_range):
+    from django.test import override_settings
+
+    from core.services.file_vault import generate_key
+    from tests._factories import make_event
+
+    FieldTemplate.objects.filter(facility=facility, slug=LEISTUNGEN_SLUG).update(is_encrypted=True)
+    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=generate_key()):
+        event = make_event(
+            facility=facility,
+            client=None,
+            document_type=kontakt_typ,
+            occurred_at=timezone.now(),
+            data_json={LEISTUNGEN_SLUG: ["essen", "beratung", "essen"]},
+            created_by=admin_user,
+        )
+        event.refresh_from_db()
+        assert event.data_json[LEISTUNGEN_SLUG]["__encrypted__"] is True
+        result = backend.build_dataset(facility, *date_range)
+    assert result.records == [
+        {"feld": LEISTUNGEN_SLUG, "option": "beratung", "count": 1},
+        {"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 1},
+    ]
+    assert result.summary["events_leistungen"] == 1
+    assert result.completeness == []
