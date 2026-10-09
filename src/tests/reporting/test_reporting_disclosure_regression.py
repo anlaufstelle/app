@@ -29,17 +29,20 @@ import itertools
 import json
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 from html.parser import HTMLParser
 from typing import Any
 
 import pytest
 import weasyprint
 from django.urls import reverse
+from django.utils import timezone
 from weasyprint.formatting_structure import boxes
 
+from core.models import Client, DocumentType, Event
 from core.services.dashboard import suppress_report_stats, suppress_sample_report_1_stats
 from core.services.dashboard.external_report import DEFAULT_K_THRESHOLD
+from core.services.dashboard.release_log import build_release_overview
 
 # Obergrenze der aufgezaehlten Randsumme. Sie ist der Grund fuer die Auflage
 # unten: die Aufzaehlung kennt nur Welten mit Σ <= ENUMERATION_LIMIT, also ist
@@ -825,6 +828,338 @@ class TestFailSafePfadIstNichtIrrefuehrend:
         by_label = {label: count for table, label, count in _card_rows(surface, text) if table == "by_document_type"}
         assert by_label == {"Notiz": "20", "Kontakt": None, "Beratung": None}
         assert "Notiz" in text
+
+
+# --- K0 person guard and the sample report through the real route ----------
+#
+# The retired external page had two artifact tests for a facility whose one
+# person produced nine events: the person-derived tables had to be absent and
+# the age section had to say "suppressed" instead of "no data". Both live here
+# again, per format, through the export route and the real renderers. Only the
+# database is real: no raw statistic is patched, so aggregation, K0 fail-safe,
+# backend projection, export preparation and rendering all run.
+
+_PERSON_LABEL = "UnterschiedlichePersonen"
+_AGE_NOTE = "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
+_LEGACY_NO_DATA_TEXT = "Keine Daten im Zeitraum."
+_PERSON_DERIVED_TABLES = {"by_age_cluster", "by_contact_stage"}
+
+
+def _create_persons_with_events(facility, user, *, persons: int, events_each: int) -> None:
+    """``persons`` clients with ``events_each`` contact events each, inside ``_CARD_PERIOD``."""
+    document_type = DocumentType.objects.create(facility=facility, name="Kontakt", report_key="contact")
+    for index in range(persons):
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym=f"PRIVATE-person-{index}",
+            contact_stage=Client.ContactStage.QUALIFIED,
+            age_cluster=Client.AgeCluster.UNKNOWN,
+            created_by=user,
+        )
+        for _ in range(events_each):
+            Event.objects.create(
+                facility=facility,
+                client=person,
+                document_type=document_type,
+                occurred_at=timezone.make_aware(datetime(2026, 1, 15)),
+                data_json={},
+                created_by=user,
+            )
+
+
+def _normalised_rows(surface: str, text: str) -> list[tuple[str, str, str | None]]:
+    """``_card_rows`` with line-wrap spaces of the PDF cells removed from the label."""
+    return [(table, label.replace(" ", ""), count) for table, label, count in _card_rows(surface, text)]
+
+
+@pytest.fixture
+def one_person_nine_events(facility, lead_user):
+    _create_persons_with_events(facility, lead_user, persons=1, events_each=9)
+    return facility
+
+
+@pytest.mark.django_db
+class TestPersonGuardAtTheArtifactBoundary:
+    """K0 fail-safe (one person below *k*, nine visible events) in every format."""
+
+    @pytest.mark.parametrize("surface", _SURFACES)
+    def test_event_count_is_visible_and_person_count_is_hidden(
+        self, client, lead_user, one_person_nine_events, pdf_text, surface
+    ):
+        client.force_login(lead_user)
+
+        rows = _normalised_rows(surface, _render_card(client, pdf_text, surface))
+
+        assert ("total_contacts", "Gesamtkontakte", "9") in rows
+        assert ("unique_clients", _PERSON_LABEL, None) in rows
+        assert [count for table, _label, count in rows if table == "unique_clients"] == [None]
+
+    @pytest.mark.parametrize("surface", _SURFACES)
+    def test_no_person_derived_row_is_rendered(self, client, lead_user, one_person_nine_events, pdf_text, surface):
+        client.force_login(lead_user)
+
+        text = _render_card(client, pdf_text, surface)
+        rows = _normalised_rows(surface, text)
+
+        assert rows, "precondition: the artifact has table rows at all"
+        assert not {table for table, _label, _count in rows} & _PERSON_DERIVED_TABLES
+        labels = {label for _table, label, _count in rows}
+        assert labels.isdisjoint({"Unbekannt", "Anonym", "NurPseudonym", "MitZusatzangaben", "ohnePersonenbezug"})
+
+    @pytest.mark.parametrize("surface", _SURFACES_WITH_NOTES)
+    def test_age_groups_are_stated_as_suppressed(self, client, lead_user, one_person_nine_events, pdf_text, surface):
+        client.force_login(lead_user)
+
+        text = _render_card(client, pdf_text, surface)
+
+        assert _AGE_NOTE in text
+        assert text.count(_AGE_NOTE) == 1
+
+    @pytest.mark.parametrize("surface", _SURFACES)
+    def test_the_gap_is_not_reported_as_no_data(self, client, lead_user, one_person_nine_events, pdf_text, surface):
+        client.force_login(lead_user)
+
+        text = _render_card(client, pdf_text, surface)
+
+        assert _NO_DATA_TEXT not in text
+        assert _LEGACY_NO_DATA_TEXT not in text
+        assert _normalised_rows(surface, text), "precondition: rows are rendered, so no empty-state text is due"
+
+    @pytest.mark.parametrize("surface", ["json", "xml"])
+    def test_structured_summary_carries_no_person_derived_values(
+        self, client, lead_user, one_person_nine_events, pdf_text, surface
+    ):
+        """The summary block repeats the totals; it must not leak what the rows hide."""
+        client.force_login(lead_user)
+        text = _render_card(client, pdf_text, surface)
+
+        if surface == "json":
+            summary = json.loads(text)["summary"]
+            persons_published = summary["unique_clients"] is not None
+        else:
+            summary = {child.tag: child for child in ET.fromstring(text).find("summary")}  # noqa: S314
+            persons_published = bool((summary["unique_clients"].text or "").strip())
+
+        assert not persons_published
+        assert _PERSON_DERIVED_TABLES.isdisjoint(summary)
+        assert "top_clients" not in summary
+        assert "PRIVATE-person" not in text
+
+    @pytest.mark.parametrize("surface", ["json", "xml"])
+    def test_structured_artifact_names_facility_profile_period_and_threshold(
+        self, client, lead_user, one_person_nine_events, pdf_text, surface
+    ):
+        client.force_login(lead_user)
+        text = _render_card(client, pdf_text, surface)
+
+        if surface == "json":
+            payload = json.loads(text)
+            period = (payload["date_from"], payload["date_to"])
+            meta = payload["summary"]["metadata"]
+        else:
+            root = ET.fromstring(text)  # noqa: S314 — trusted output of the local export renderer
+            period = (root.attrib["date_from"], root.attrib["date_to"])
+            meta = {child.tag: child.text for child in root.find("./summary/metadata")}
+
+        assert period == ("2026-01-01", "2026-01-31")
+        assert meta["facility"] == one_person_nine_events.name
+        assert meta["privacy_profile"] == "external"
+        assert (meta["date_from"], meta["date_to"]) == period
+        assert int(meta["k_anonymity_threshold"]) >= 1
+
+    @pytest.mark.parametrize("surface", _SURFACES)
+    def test_no_pseudonym_leaves_the_building(self, client, lead_user, one_person_nine_events, pdf_text, surface):
+        client.force_login(lead_user)
+
+        assert "PRIVATE-person" not in _render_card(client, pdf_text, surface)
+
+    @pytest.mark.parametrize(
+        ("persons", "events_each", "persons_visible"),
+        [(4, 3, False), (5, 2, True)],
+        ids=["one-below-threshold", "at-threshold"],
+    )
+    @pytest.mark.parametrize("surface", _SURFACES)
+    def test_the_threshold_decides_between_note_and_tables(
+        self, client, lead_user, facility, pdf_text, surface, persons, events_each, persons_visible
+    ):
+        """Counter-check on both sides of *k* = 5: the note is not unconditional."""
+        _create_persons_with_events(facility, lead_user, persons=persons, events_each=events_each)
+        client.force_login(lead_user)
+
+        text = _render_card(client, pdf_text, surface)
+        rows = _normalised_rows(surface, text)
+
+        assert ("total_contacts", "Gesamtkontakte", str(persons * events_each)) in rows
+        tables = {table for table, _label, _count in rows}
+        if persons_visible:
+            assert ("unique_clients", _PERSON_LABEL, str(persons)) in rows
+            assert tables >= _PERSON_DERIVED_TABLES
+            assert _AGE_NOTE not in text
+        else:
+            assert ("unique_clients", _PERSON_LABEL, None) in rows
+            assert tables.isdisjoint(_PERSON_DERIVED_TABLES)
+            if surface in _SURFACES_WITH_NOTES:
+                assert _AGE_NOTE in text
+
+
+def _sample_report_text(client, pdf_text) -> str:
+    """Download the sample report PDF through the export route; return its laid-out text."""
+    response = client.get(
+        reverse("core:statistics_report_export"),
+        {"backend": "sample-report-1", "format": "pdf", **_CARD_PERIOD},
+    )
+    assert response.status_code == 200
+    assert response.content.startswith(b"%PDF-")
+    text = pdf_text[-1]
+    assert "Leistungen nach Kategorie" in text, (
+        "precondition: the sample report layout hook rendered, not the generic PDF"
+    )
+    return text
+
+
+def _sample_section(text: str, start: str, end: str | None = None) -> str:
+    section = text.split(start)[-1]
+    return section.split(end)[0] if end else section
+
+
+def _patch_sample_hybrid(monkeypatch, raw: dict[str, Any]) -> None:
+    """Replace only the raw hybrid read; protection and PDF layout run for real."""
+    from core.services import dashboard
+
+    monkeypatch.setattr(dashboard, "get_sample_report_1_statistics_hybrid", lambda *args: copy.deepcopy(raw))
+
+
+def _release_identities(facility) -> list[tuple[str, str]]:
+    """``(backend, format)`` of every logged release of the facility."""
+    return [(release.backend, release.format) for release in build_release_overview(facility)]
+
+
+def _table_cells(section: str) -> list[tuple[str, ...]]:
+    return [tuple(cell.replace(" ", "") for cell in line.split(" | ")) for line in section.split("\n") if " | " in line]
+
+
+@pytest.mark.django_db
+class TestSampleReportThroughTheRoute:
+    """The sample report's PDF hook, reached the way a user reaches it."""
+
+    def test_age_order_does_not_depend_on_the_suppressed_values(
+        self, client, lead_user, facility, monkeypatch, pdf_text
+    ):
+        client.force_login(lead_user)
+        tables = []
+        for world in _swapped_worlds():
+            _patch_sample_hybrid(
+                monkeypatch,
+                {
+                    "total": 35,
+                    "unique_clients": 40,
+                    "by_category": [("Kontakte", 30), ("Beratung", 5)],
+                    "by_age_cluster": world["by_age_cluster"],
+                },
+            )
+            text = _sample_report_text(client, pdf_text)
+            tables.append(_table_cells(_sample_section(text, "Altersverteilung")))
+
+        assert tables[0] == tables[1]
+        assert _release_identities(facility) == [("sample-report-1", "pdf")] * 2
+        assert [label for label, *_ in tables[0]][:1] == ["Altersgruppe"]
+        by_label = dict(row for row in tables[0][1:])
+        assert by_label["27+"] == "30"
+        assert by_label["Unter18"] == by_label["18–26"] == "unterdrückt"
+
+    def test_the_release_is_logged_under_the_backend_slug(self, client, lead_user, facility, monkeypatch, pdf_text):
+        _patch_sample_hybrid(
+            monkeypatch,
+            {"total": 35, "unique_clients": 40, "by_category": [("Kontakte", 35)], "by_age_cluster": []},
+        )
+        client.force_login(lead_user)
+
+        _sample_report_text(client, pdf_text)
+
+        assert _release_identities(facility) == [("sample-report-1", "pdf")]
+
+    @pytest.mark.parametrize(
+        ("total", "margin_hidden"),
+        [(0, True), (25, False)],
+        ids=["margin-below-threshold", "margin-visible"],
+    )
+    def test_empty_category_table_matches_the_margin(
+        self, client, lead_user, facility, monkeypatch, pdf_text, total, margin_hidden
+    ):
+        """An empty category table says "no contacts" only where the margin is visible."""
+        _patch_sample_hybrid(
+            monkeypatch,
+            {"total": total, "unique_clients": 0 if margin_hidden else 20, "by_category": [], "by_age_cluster": []},
+        )
+        client.force_login(lead_user)
+
+        text = _sample_report_text(client, pdf_text)
+        categories = _sample_section(text, "Leistungen nach Kategorie", "Altersverteilung")
+        summary = _sample_section(text, "Zusammenfassung", "Leistungen nach Kategorie")
+
+        assert ("Keine relevanten Kontakte im Berichtszeitraum." in categories) is not margin_hidden
+        assert ("Angaben nach Leistungskategorie unterdrückt (k-Anonymität)." in categories) is margin_hidden
+        assert ("unterdrückt" in summary) is margin_hidden
+        assert (str(total) in summary) is not margin_hidden
+        assert _release_identities(facility) == [("sample-report-1", "pdf")]
+
+    def test_snapshot_stamp_reaches_the_footer(self, client, lead_user, monkeypatch, pdf_text):
+        """The hybrid source says which monthly aggregates it read; the PDF must carry that."""
+        from core.services.dashboard.snapshot import SNAPSHOT_AS_OF_KEY
+
+        raw = {"total": 25, "unique_clients": 20, "by_category": [("Kontakte", 25)], "by_age_cluster": []}
+        client.force_login(lead_user)
+
+        _patch_sample_hybrid(
+            monkeypatch, {**raw, SNAPSHOT_AS_OF_KEY: timezone.make_aware(datetime(2026, 1, 31, 23, 15))}
+        )
+        stamped = _sample_report_text(client, pdf_text)
+        _patch_sample_hybrid(monkeypatch, raw)
+        unstamped = _sample_report_text(client, pdf_text)
+
+        assert "Stand der Monats-Aggregate: 31.01.2026 23:15" in stamped
+        assert "Stand der Monats-Aggregate" not in unstamped
+
+    def test_age_group_note_replaces_the_table_below_the_person_threshold(
+        self, client, lead_user, facility, monkeypatch, pdf_text
+    ):
+        """The sample report's own K0 branch: nine visible contacts, one hidden person."""
+        _patch_sample_hybrid(
+            monkeypatch,
+            {
+                "total": 9,
+                "unique_clients": 1,
+                "by_category": [("Kontakte", 9)],
+                "by_age_cluster": [{"cluster": "unknown", "label": "Unbekannt", "count": 9, "persons": 1}],
+            },
+        )
+        client.force_login(lead_user)
+
+        text = _sample_report_text(client, pdf_text)
+        summary = _sample_section(text, "Zusammenfassung", "Leistungen nach Kategorie")
+        ages = _sample_section(text, "Altersverteilung")
+
+        assert "9" in summary
+        assert "unterdrückt" in summary.split("Einzigartige Personen")[-1]
+        assert _AGE_NOTE in ages
+        assert "Unbekannt" not in ages
+        assert "Keine Altersdaten vorhanden." not in ages
+        assert _release_identities(facility) == [("sample-report-1", "pdf")]
+
+    def test_age_group_note_is_not_shown_for_visible_persons_without_age_rows(
+        self, client, lead_user, monkeypatch, pdf_text
+    ):
+        """Counter-check: with enough persons an empty age table is plain "no age data"."""
+        _patch_sample_hybrid(
+            monkeypatch,
+            {"total": 25, "unique_clients": 20, "by_category": [("Kontakte", 25)], "by_age_cluster": []},
+        )
+        client.force_login(lead_user)
+
+        ages = _sample_section(_sample_report_text(client, pdf_text), "Altersverteilung")
+
+        assert "Keine Altersdaten vorhanden." in ages
+        assert _AGE_NOTE not in ages
 
 
 # --- K3-A1: Enumeration ueber die Restzeilen-Welten ------------------------
