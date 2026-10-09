@@ -25,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Prüfseiten respektieren die Leserechte des Ziels** (#2516) — Ereignis-, Personen-, Fall- und Zusammenführungs-Prüfungen verlinken einsehbare Datensätze in einem neuen Tab; unsichtbare, gelöschte oder fehlende Ziele bleiben neutral und ohne Link, Ereignismetadaten werden nur nach der Sichtbarkeitsprüfung angezeigt und Merge-Fallzahlen zählen ausschließlich Fälle aktiver, nicht gelöschter Personen.
 ### Added
 
-- **Streaming-Dienst für die Datei-Umschlüsselung** (#2526) — Dateianhänge lassen sich chunkweise mit verschlüsselter Zwischenablage, atomarem Ersetzen, wiederaufnehmbarem Manifest und Konkurrenzschutz umschlüsseln; das Betreiberkommando folgt.
+- **Dateianhänge abbruchsicher umschlüsseln und prüfen** (#2526) — `reencrypt_files` schlüsselt Anhänge im Wartungsprozess mit privilegierter DB-Rolle chunkweise über verschlüsselte Zwischenablage, atomaren Austausch und wiederaufnehmbares Manifest mit Konkurrenzschutz um; Einrichtungsfilter, Trockenlauf und Chargengröße sind wählbar, `--verify` prüft alle referenzierten Versionen einschließlich gelöschter und ersetzter Anhänge mit dem Primärschlüssel allein, eingeschränkte Läufe warnen vor einem installationsweiten Rückschluss, Fehler führen zu einem Fehlerstatus und jeder autorisierte Rücklauf schreibt eine Audit-Sammelzeile ohne Dateinamen oder Inhalte.
 
 ## [0.99.6] - 2026-10-08
 
