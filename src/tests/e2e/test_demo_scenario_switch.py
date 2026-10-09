@@ -14,9 +14,8 @@ Aufruf::
 
     E2E_DEMO_MODE=1 E2E_SEED_SCALE=demo pytest src/tests/e2e/test_demo_scenario_switch.py -m e2e
 
-Jede Testklasse ueberspringt sich SELBST (``pytest.skip``), wenn ``/demo/``
-nicht 200 liefert — gegen eine Umgebung ohne diese Vorbedingungen bricht die
-Spec nicht hart ab, sondern meldet, dass die Vorbedingung fehlt.
+Outside the explicit demo profile the spec skips. Inside that profile,
+a missing scenario catalog or a broken /demo/ response is a test failure.
 
 Deckt ab: Bereichsauswahl vor der ersten Anmeldung, Start ohne Zugangsdaten in
 der Alltagsrolle, jederzeit erreichbarer Wechsel ueber das Demo-Banner,
@@ -27,6 +26,7 @@ derselben Sitzung.
 import pytest
 
 from ._helpers import django_shell
+from ._profiles import require_demo
 
 pytestmark = pytest.mark.e2e
 
@@ -45,11 +45,7 @@ def _demo_enabled(base_url, browser):
 
 @pytest.fixture
 def demo_mode_or_skip(base_url, browser):
-    if not _demo_enabled(base_url, browser):
-        pytest.skip(
-            "Demo-Vorbedingung nicht erfuellt (E2E_DEMO_MODE=1 und E2E_SEED_SCALE=demo, "
-            "s. Moduldocstring) — Spec in dieser Umgebung nicht ausfuehrbar."
-        )
+    require_demo(lambda: _demo_enabled(base_url, browser))
 
 
 @pytest.mark.usefixtures("demo_mode_or_skip")

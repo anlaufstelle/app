@@ -29,6 +29,7 @@ import pytest
 from playwright.sync_api import expect
 
 from ._helpers import django_shell, python_bin
+from ._profiles import require_demo
 
 pytestmark = pytest.mark.e2e
 
@@ -130,8 +131,7 @@ class TestAdminRoleCardReadsMaintenanceResult:
 
 class TestDemoCards:
     def test_backup_and_restore_cards_explain_the_demo(self, super_admin_page, base_url, browser):
-        if not _demo_enabled(base_url, browser):
-            pytest.skip("demo precondition missing (E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo)")
+        require_demo(lambda: _demo_enabled(base_url, browser))
         page = super_admin_page
 
         _open_dashboard(page, base_url)
@@ -144,8 +144,7 @@ class TestDemoCards:
             expect(card).not_to_contain_text("mark_restore_verified")
 
     def test_retention_card_explains_the_demo(self, super_admin_page, base_url, browser):
-        if not _demo_enabled(base_url, browser):
-            pytest.skip("demo precondition missing (E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo)")
+        require_demo(lambda: _demo_enabled(base_url, browser))
         page = super_admin_page
 
         _open_dashboard(page, base_url)

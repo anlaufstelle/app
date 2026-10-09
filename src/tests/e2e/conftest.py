@@ -146,7 +146,7 @@ def base_url(request, tmp_path_factory):
     Bei xdist-Parallelisierung bekommt jeder Worker eigene DB + eigenen Port.
     """
     worker_num, worker_id = _get_worker_info(request)
-    port = 8844 + worker_num
+    port = int(os.environ.get("E2E_PORT_BASE", "8844")) + worker_num
     db_name = "anlaufstelle_e2e" if worker_num == 0 else f"anlaufstelle_e2e_{worker_num}"
 
     python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
@@ -238,7 +238,7 @@ def e2e_env(base_url):
     from urllib.parse import urlparse
 
     port = urlparse(base_url).port
-    worker_num = port - 8844
+    worker_num = port - int(os.environ.get("E2E_PORT_BASE", "8844"))
     db_name = "anlaufstelle_e2e" if worker_num == 0 else f"anlaufstelle_e2e_{worker_num}"
     return {**_E2E_ENV, "E2E_DATABASE_NAME": db_name}
 
