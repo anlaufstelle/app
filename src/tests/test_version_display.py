@@ -244,13 +244,11 @@ class TestPublicFooterRendering:
 
     @pytest.mark.parametrize("template", _RENDERED_TEMPLATES)
     def test_directly_rendered_pages_show_source_link_but_no_version(self, settings, template):
-        """Token-Seiten und Middleware-Sperrseiten haben keine anonym
-        erreichbare URL — sie werden mit demselben Minimalkontext gerendert,
-        den ``middleware/facility_scope.py`` baut (Refs #2090/#2102).
+        """Render token and middleware-blocked pages with the minimal context.
 
-        ``SOURCE_CODE_VERSION`` liegt dabei ausdruecklich IM Kontext: der Test
-        beweist damit, dass der Baustein sie ohne ``footer_authenticated``
-        nicht ausgibt — und nicht bloss, dass sie fehlt.
+        These pages have no anonymously reachable URL (Refs #2090/#2102).
+        The source-version probe remains in the context; the footer never
+        renders it. The version/help gate applies to app_version/app_build.
         """
         from django.template.loader import render_to_string
 

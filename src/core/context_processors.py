@@ -37,22 +37,17 @@ def _app_version_info():
 
 
 def source_code(request):
-    """Expose source-code settings for the footer and GDPR documents.
+    """Expose source-code settings and authentication state for the footer.
 
-    ``SOURCE_CODE_URL`` is rendered by the AGPL Section 13 footer link;
-    ``SOURCE_CODE_VERSION`` remains available to the GDPR document service and
-    is no longer rendered in the public footer. Refs #835, #2532.
-    Refs #1050: also expose app_version/app_build for the authenticated footer.
+    ``SOURCE_CODE_URL`` is rendered by the AGPL Section 13 footer link.
+    ``SOURCE_CODE_VERSION`` remains in the context but is never rendered in the
+    public footer; the GDPR document service reads it directly from settings.
+    Refs #835, #2532.
 
-    Refs #2286: ``session_fully_authenticated`` ist das Sicherheits-Gate der
-    Versions-/Build-/Hilfe-Anzeige. Die Werte selbst bleiben im Kontext (der
-    AGPL-Quellcode-Link braucht ``SOURCE_CODE_URL`` auf jeder Seite, und der
-    Footer-Baustein beweist per Test, dass er sie ohne Gate nicht ausgibt) —
-    ausgegeben werden sie nur noch, wenn die Sitzung vollstaendig angemeldet
-    ist: authentifiziert, kein offener zweiter Faktor, kein erzwungener
-    Passwortwechsel. Vorher genuegte ``user.is_authenticated``, und damit
-    sahen 404-/403-CSRF-Seiten und die 2FA-Einrichtung die Version schon vor
-    dem zweiten Faktor.
+    Refs #1050, #2286: app_version/app_build remain in the context, but the
+    footer renders version/build/help only with the authenticated layout flag
+    and ``session_fully_authenticated``: authenticated, no pending second
+    factor, and no forced password change.
     """
     from core.services.security.session_state import session_fully_authenticated
 

@@ -153,6 +153,7 @@ class Command(BaseCommand):
             facility = seed_facility(org, facility_name)
             seed_document_types(facility, package=package_name)
             if package_name == "default":
+                # Default demo shifts ignore with_time_filters; the solo demo uses beratungsstelle. Refs #2506.
                 # Hauptstelle/Kontaktladen: eigene, reichhaltigere Demo-
                 # Vorlagen/-Schichten (siehe core/seed/quick_templates.py-
                 # Docstring) statt des schmalen Produktions-Startbestands aus

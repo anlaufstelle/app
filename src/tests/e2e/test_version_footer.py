@@ -58,5 +58,5 @@ class TestVersionFooterVisibility:
 
         footer_text = footer.inner_text()
         assert len(_SEMVER_PATTERN.findall(footer_text)) == 1, (
-            f"Authentifizierter Footer darf die App-Version nur einmal zeigen (Refs #2532): {footer_text!r}"
+            f"The authenticated footer must show the app version exactly once (Refs #2532): {footer_text!r}"
         )
