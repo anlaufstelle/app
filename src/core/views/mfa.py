@@ -284,7 +284,7 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
     @method_decorator(ratelimit(key="user", rate="5/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
         token = (request.POST.get("token") or "").strip().replace(" ", "")
-        mode = request.POST.get("mode", "totp")
+        mode = "backup" if request.POST.get("mode") == "backup" else "totp"
         # Refs #2328: das geltende Geraet (nach einem Faktorwechsel das neue).
         device = current_totp_device(request.user)
         if device is None:
@@ -321,6 +321,13 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
             # Refs #2034: Rotation vor dem Anheben (siehe Backup-Zweig oben).
             rotate_session_after_privilege_gain(request)
             otp_login(request, device)
+            log_audit_event(
+                request,
+                AuditLog.Action.MFA_VERIFIED,
+                target_obj=request.user,
+                detail={"mode": "totp"},
+                facility=facility,
+            )
             request.session["mfa_verified"] = True
             return redirect(self._success_url(request))
 
@@ -554,17 +561,30 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
             and request.user.has_confirmed_mfa_device
             and not request.session.get("mfa_verified")
         ):
+            if request.method == "POST":
+                self._audit_denial(request, "unverified_session")
             return redirect("mfa_verify")
         return super().dispatch(request, *args, **kwargs)
+
+    def _audit_denial(self, request, reason):
+        log_audit_event(
+            request,
+            AuditLog.Action.MFA_BACKUP_REGENERATE_DENIED,
+            target_obj=request.user,
+            detail={"reason": reason},
+            facility=getattr(request.user, "facility", None),
+        )
 
     @method_decorator(ratelimit(key="user", rate="5/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
         user = request.user
         if not user.has_confirmed_totp_device:
+            self._audit_denial(request, "missing_totp")
             return redirect("mfa_setup")
         token = (request.POST.get("token") or "").strip().replace(" ", "")
         device = current_totp_device(user)
         if device is None or not token or not device.verify_token(token):
+            self._audit_denial(request, "invalid_totp")
             messages.error(
                 request,
                 _("TOTP-Code fehlt oder ist ungültig."),

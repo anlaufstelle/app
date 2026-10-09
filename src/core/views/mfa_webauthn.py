@@ -201,8 +201,13 @@ class WebAuthnAuthenticationCompleteView(CompleteCredentialAuthenticationView):
         # es in die neue Sitzung mit. Rotation vor dem Flag, damit ein vor der
         # Assertion entwendetes Cookie die verifizierte Sitzung nicht erbt.
         rotate_session_after_privilege_gain(self.request)
-        # Erfolg wird — analog zum TOTP-Verify — nicht eigens auditiert; nur das
-        # Anheben der Session auf 2FA-verifiziert ist hier sicherheitskritisch.
+        log_audit_event(
+            self.request,
+            AuditLog.Action.MFA_VERIFIED,
+            target_obj=self.request.user,
+            detail={"mode": "passkey"},
+            facility=getattr(self.request.user, "facility", None),
+        )
         self.request.session["mfa_verified"] = True
 
     # Vor-Verifikations-Fehler (kein begonnener Ablauf / kaputtes JSON / fehlende
