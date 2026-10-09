@@ -1,12 +1,12 @@
-// Refs #2067 (Cross-Review Finding 1, Rest aus Fix-Runde 1): Zustellung des
-// Archiv-Purges auf den beiden Wegen NEBEN der Bundle-Revalidierung.
+// Refs #2067: delivery of the archive purge on the two paths BESIDE the
+// bundle revalidation.
 //
-// Fix-Runde 1 markierte die Sperr-403 und liess `revalidateCachedClient` /
-// `revalidateCachedFacility` darauf purgen. Navigationen und HTMX-Antworten
-// reicht der Service Worker aber direkt vom Netz weiter — dort wertete
-// niemand den Marker aus, und der Entzug haette allein an `Clear-Site-Data`
-// gehangen, das Safari laut eigener security-notes.md nur unvollstaendig
-// umsetzt.
+// An earlier change marked the blocking 403 and let `revalidateCachedClient` /
+// `revalidateCachedFacility` purge on it. Navigations and HTMX responses,
+// however, go from the network straight through the service worker — nobody
+// evaluated the marker there, and the revocation would have hung on
+// `Clear-Site-Data` alone, which Safari implements only partially according
+// to our own security-notes.md.
 //
 // Diese Suite pinnt beide neuen Wege UND in beiden den #1354-Waechter: ein
 // nacktes 403 (CSRF-/Rate-Limit-/Proxy-Rauschen) darf NICHTS purgen.

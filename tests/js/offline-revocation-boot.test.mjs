@@ -1,4 +1,4 @@
-// Refs #1760 (Fix-Runde 1): Boot-Check der Widerrufsliste — Gate und Drosselung.
+// Refs #1760: boot check of the revocation list — gate and throttling.
 //
 // Befund 1: Das Gate zaehlte nur ``clients`` und ``queue``. ``applyClientRevocations``
 // tilgt aber AUCH Entwuerfe und Ereignisse, und beide koennen ohne clients-/queue-
