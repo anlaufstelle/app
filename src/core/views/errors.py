@@ -59,6 +59,9 @@ def permission_denied(request, exception):
     ist (bewacht von ``test_offline_bundle_api.py``).
     """
     if isinstance(exception, Ratelimited):
+        from core.services.security.rate_limit_audit import audit_rate_limit
+
+        audit_rate_limit(request)
         if request.headers.get("HX-Request") == "true":
             return HttpResponse(
                 gettext(RATELIMIT_HINWEIS),
