@@ -374,3 +374,100 @@ def test_event_admin_search_ignores_payload(admin_client, sample_event):
     response = admin_client.get(admin_url("event"), {"q": marker})
     assert response.status_code == 200
     assert sample_event not in response.context["cl"].queryset
+
+
+SITE_ROUTE_CLASSIFICATION = {
+    "index": True,
+    "app_list": False,
+    "login": False,
+    "logout": False,
+    "password_change": True,
+    "password_change_done": False,
+    "autocomplete": True,
+    "jsi18n": False,
+    "view_on_site": True,
+    "search": True,
+    None: False,
+}
+
+
+@pytest.mark.architecture
+def test_every_site_endpoint_has_a_reviewed_data_classification():
+    from django.urls import URLPattern, URLResolver
+
+    all_routes = anlaufstelle_admin_site.get_urls()
+    model_routes = {str(route.pattern) for route in all_routes if isinstance(route, URLResolver)}
+    assert model_routes == {
+        f"{model._meta.app_label}/{model._meta.model_name}/" for model in anlaufstelle_admin_site._registry
+    }
+    routes = [route for route in all_routes if isinstance(route, URLPattern)]
+    assert len(routes) == len(SITE_ROUTE_CLASSIFICATION)
+    assert {route.name for route in routes} == SITE_ROUTE_CLASSIFICATION.keys()
+
+
+@pytest.mark.parametrize("name", [name for name, has_data in SITE_ROUTE_CLASSIFICATION.items() if has_data])
+def test_site_data_routes_fail_closed(admin_client, super_admin_user, name):
+    from django.contrib.admin.models import ADDITION, LogEntry
+    from django.contrib.contenttypes.models import ContentType
+
+    marker = "PRIVATE_SITE_LOG_2527"
+    content_type = ContentType.objects.get_for_model(super_admin_user)
+    LogEntry.objects.create(
+        user=super_admin_user,
+        content_type=content_type,
+        object_id=str(super_admin_user.pk),
+        object_repr=marker,
+        action_flag=ADDITION,
+    )
+    args = [content_type.pk, super_admin_user.pk] if name == "view_on_site" else []
+    query = {"s": super_admin_user.username} if name == "search" else {}
+    if name == "autocomplete":
+        query = {"app_label": "core", "model_name": "quicktemplate", "field_name": "document_type", "term": ""}
+    with patch("core.services.audit.audit_admin_view", side_effect=RuntimeError("Audit unavailable")):
+        response = admin_client.get(reverse(f"admin:{name}", args=args), query)
+    assert response.status_code == 403
+    assert marker.encode() not in response.content
+    assert "app_list" not in (response.context or {})
+
+
+def test_site_index_records_read_before_showing_recent_actions(admin_client, super_admin_user):
+    response = admin_client.get(reverse("admin:index"))
+    assert response.status_code == 200
+    entry = AuditLog.objects.get(action=AuditLog.Action.SYSTEM_VIEW, target_type="AdminSite")
+    assert entry.user_id == super_admin_user.pk
+    assert entry.detail["admin_view"] == "index"
+
+
+def test_site_own_password_change_is_audited(admin_client, super_admin_user):
+    new_password = "Cyclone-9182-new"
+    response = admin_client.post(
+        reverse("admin:password_change"),
+        {
+            "old_password": "testpass123",
+            "new_password1": new_password,
+            "new_password2": new_password,
+        },
+    )
+    assert response.status_code == 302
+    super_admin_user.refresh_from_db()
+    assert super_admin_user.check_password(new_password)
+    entry = AuditLog.objects.get(action=AuditLog.Action.CREDENTIALS_REVOKED, user=super_admin_user)
+    assert entry.actor_id == super_admin_user.pk
+    assert entry.detail == {"reason": "password_change"}
+
+
+def test_site_own_password_change_rolls_back_on_audit_failure(admin_client, super_admin_user):
+    old_hash = super_admin_user.password
+    with patch("core.services.security.credentials.log_audit_event", side_effect=RuntimeError("Audit unavailable")):
+        with pytest.raises(RuntimeError, match="Audit unavailable"):
+            admin_client.post(
+                reverse("admin:password_change"),
+                {
+                    "old_password": "testpass123",
+                    "new_password1": "Cyclone-9182-new",
+                    "new_password2": "Cyclone-9182-new",
+                },
+            )
+    super_admin_user.refresh_from_db()
+    assert super_admin_user.password == old_hash
+    assert not AuditLog.objects.filter(action=AuditLog.Action.CREDENTIALS_REVOKED).exists()

@@ -22,21 +22,26 @@ from core.models import Facility
 logger = logging.getLogger(__name__)
 
 
+def require_admin_read_audit(request, target_obj=None, *, target_type=None, **detail):
+    """Deny super-admin reads if the shared audit writer is unavailable."""
+    if not getattr(request.user, "is_super_admin", False):
+        return
+    from core.services.audit import audit_admin_view
+    from core.signals.audit import _set_session_vars
+
+    try:
+        _set_session_vars(None, is_super_admin=True)
+        audit_admin_view(request, target_obj, target_type=target_type, **detail)
+    except Exception as exc:
+        logger.exception("Admin read audit failed")
+        raise PermissionDenied from exc
+
+
 class AdminReadAuditMixin:
     """Require a successful audit before super-admin content is returned."""
 
     def _audit_admin_read(self, request, target_obj=None, *, target_type=None, **detail):
-        if not getattr(request.user, "is_super_admin", False):
-            return
-        from core.services.audit import audit_admin_view
-        from core.signals.audit import _set_session_vars
-
-        try:
-            _set_session_vars(None, is_super_admin=True)
-            audit_admin_view(request, target_obj, target_type=target_type, **detail)
-        except Exception as exc:
-            logger.exception("Admin read audit failed")
-            raise PermissionDenied from exc
+        require_admin_read_audit(request, target_obj, target_type=target_type, **detail)
 
     def change_view(self, request, object_id, form_url="", extra_context=None):
         self._audit_admin_read(

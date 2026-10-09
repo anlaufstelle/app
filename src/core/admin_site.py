@@ -18,9 +18,13 @@ nur eine Definition pro Regel gibt.
 
 from __future__ import annotations
 
+from functools import wraps
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.shortcuts import redirect
+from django.urls import URLPattern, reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django_ratelimit.decorators import ratelimit
@@ -167,6 +171,43 @@ class AnlaufstelleAdminSite(UnfoldAdminSite):
     # setzt seine eigene Form nur, wenn hier ``None`` steht — die Unfold-
     # Widget-Klassen erben wir ueber die Basisklasse.
     login_form = AdminLockoutAuthenticationForm
+
+    # These endpoints expose only navigation, static assets or authentication status.
+    # New site endpoints require an audit unless explicitly reviewed here.
+    audit_exempt_site_routes = frozenset({"app_list", "login", "logout", "password_change_done", "jsi18n", None})
+
+    def _audited_site_view(self, view, route_name):
+        from core.admin.mixins import require_admin_read_audit
+
+        @wraps(view)
+        def audited(request, *args, **kwargs):
+            require_admin_read_audit(request, target_type="AdminSite", admin_view=route_name)
+            return view(request, *args, **kwargs)
+
+        return self.admin_view(audited)
+
+    def get_urls(self):
+        """Protect data-capable site endpoints before they evaluate or render data."""
+        routes = super().get_urls()
+        for route in routes:
+            if isinstance(route, URLPattern) and route.name not in self.audit_exempt_site_routes:
+                route.callback = self._audited_site_view(route.callback, route.name)
+        return routes
+
+    @transaction.atomic
+    def password_change(self, request, extra_context=None):
+        """Keep the Unfold form while using the audited credential lifecycle."""
+        from unfold.forms import AdminOwnPasswordChangeForm
+
+        from core.views.auth import CustomPasswordChangeView
+
+        request.current_app = self.name
+        return CustomPasswordChangeView.as_view(
+            form_class=AdminOwnPasswordChangeForm,
+            template_name=self.password_change_template or "admin/password_change_form.html",
+            success_url=reverse(f"{self.name}:password_change_done", current_app=self.name),
+            extra_context={**self.each_context(request), **(extra_context or {})},
+        )(request)
 
     @staticmethod
     def _has_admin_role(user) -> bool:

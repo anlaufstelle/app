@@ -281,6 +281,7 @@ def _write_audit(user, reason: RevocationReason, request) -> None:
             target_obj=user,
             detail={"reason": str(reason)},
             user=user,
+            actor=request.user if getattr(request.user, "is_authenticated", False) else None,
             facility=facility,
         )
     else:
