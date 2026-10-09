@@ -219,6 +219,7 @@ class TestGrundgesamtheitImEchtenViewRender:
         ausweise = self._ausweise(response.content.decode())
         by_table = {a.split(" · ")[0].strip(): a for a in ausweise}
         assert {"by_document_type", "by_age_cluster"} <= set(by_table), ausweise
+        assert all("Grundgesamtheit:" in ausweis for ausweis in ausweise), ausweise
         assert all("alle Ereignisse im Zeitraum" in by_table[t] for t in ("by_document_type", "by_age_cluster"))
 
     def test_statistik_dashboard_view(self, client, lead_user):
