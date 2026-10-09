@@ -645,6 +645,18 @@ class DatasetBackend(ABC):
         """Datenqualitaets-Checks vor der Anzeige/dem Export (Default: keine Checks)."""
         return []  # Default: keine Checks
 
+    def render_pdf(self, facility, result: DatasetResult, *, date_from, date_to, generated_at) -> bytes:
+        """Render an already prepared, suppression-stamped dataset as PDF.
+
+        Override this hook for a custom layout. Do not rebuild the dataset or
+        apply suppression again: the export pipeline supplies the protected
+        result. The default renders the same field projection as CSV and the
+        preview, without exposing extra summary keys or completeness counts.
+        """
+        from core.reporting.pdf import render_dataset_pdf
+
+        return render_dataset_pdf(self, facility, date_from, date_to, result, generated_at)
+
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
         """Transformation vor Export/Panel-Anzeige (z. B. K-Anon-Suppression).
 

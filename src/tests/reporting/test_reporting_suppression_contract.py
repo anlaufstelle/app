@@ -22,6 +22,7 @@ die **registrierten** Backends am Dateiende brauchen die DB.
 
 import dataclasses
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
@@ -40,6 +41,7 @@ class _Facility:
 
     def __init__(self, name: str = "Beispiel-Einrichtung") -> None:
         self.name = name
+        self.settings = SimpleNamespace(facility_full_name="")
 
     def __str__(self) -> str:
         return self.name
@@ -105,7 +107,7 @@ def _mit_schwelle(wert) -> _SchwellenBackend:
 class TestExportPfad:
     """Zusage Z1-Z3: der Download weist einen unsuppressierten Datensatz ab."""
 
-    @pytest.mark.parametrize("format", ["csv", "json", "xml"])
+    @pytest.mark.parametrize("format", ["csv", "json", "xml", "pdf"])
     def test_export_ohne_schwelle_scheitert_in_allen_formaten(self, facility_double, date_range, format):
         """Der Check sitzt VOR der Renderer-Verzweigung — deshalb alle drei.
 
@@ -127,7 +129,7 @@ class TestExportPfad:
         assert "_OhneSuppression" in text
         assert "prepare_export" in text
 
-    @pytest.mark.parametrize("format", ["csv", "json", "xml"])
+    @pytest.mark.parametrize("format", ["csv", "json", "xml", "pdf"])
     def test_gueltige_schwelle_passiert(self, facility_double, date_range, format):
         """Ohne diese Kontrolle waere ein Check, der IMMER wirft, gruen."""
         date_from, date_to = date_range
@@ -176,7 +178,7 @@ class TestExportPfad:
         der Suppressions-Check darf es nicht zu einem 500 hochstufen."""
         date_from, date_to = date_range
         with pytest.raises(ValueError) as excinfo:
-            export_dataset(_OhneSuppression(), facility_double, date_from, date_to, format="pdf")
+            export_dataset(_OhneSuppression(), facility_double, date_from, date_to, format="xlsx")
 
         assert not isinstance(excinfo.value, SuppressionContractError)
 

@@ -30,6 +30,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Dateianhänge abbruchsicher umschlüsseln und prüfen** (#2526) — `reencrypt_files` rotiert im privilegierten Wartungsprozess alle referenzierten Anhang-Versionen chunkweise mit verschlüsselter Zwischenablage, atomarem Austausch, Konkurrenzschutz und wiederaufnehmbarem Fortschritt, bietet Einrichtungsfilter, Trockenlauf und Chargengröße sowie eine vollständige Primärschlüssel-Prüfung mit `--verify` und Fehlerstatus, versucht eine minimierte Audit-Sammelzeile zu schreiben und dokumentiert den DE/EN-Wartungsweg zur Altschlüsselentfernung erst nach Feldrotation, ungefilterter Dateiprüfung und Ablauf betroffener Backups.
 
+### Added
+
+- **Generische PDF-Ausgabe für Datensatz-Berichte** (#2505) — Der Berichts-Download unterstützt PDF mit einer generischen Tabellenvorlage und einem Layout-Hook für vorbereitete Datensätze; Quelle, Grundgesamtheit, Zeitraum, Schwelle und Vollständigkeitshinweise bleiben sichtbar, und erfolgreiche Downloads erscheinen unter dem Backend-Namen in den Freigaben.
+
 ## [0.99.6] - 2026-10-08
 
 Weiterer Release-Kandidat vor 1.0: bündelt die Prüfung von Dokumentation und öffentlichem Quellbaum (Zusagen auf Ist-Stand, Leak- und Codeblock-Prüfungen im Release-Build), das Zurücksetzen des zweiten Faktors durch die Administration, Compliance-Karten für Datenbankrollen, Backup und Löschläufe auch im Demo-Modus, eine härtere Audit-Kette sowie strengere Backup-, Restore- und Anonymisierungsvorgaben.

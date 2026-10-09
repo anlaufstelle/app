@@ -277,7 +277,7 @@ class TestFormatDispatch:
     def test_unbekanntes_format_wirft_value_error(self, facility, date_range):
         date_from, date_to = date_range
         with pytest.raises(ValueError):
-            export_dataset(_RowsBackend(), facility, date_from, date_to, format="pdf")
+            export_dataset(_RowsBackend(), facility, date_from, date_to, format="xlsx")
 
 
 class TestCsvExport:

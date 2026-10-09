@@ -464,7 +464,7 @@ class TestDatasetExportView:
             reverse("core:statistics_report_export"),
             {
                 "backend": "sample-report-1",
-                "format": "pdf",
+                "format": "xlsx",
                 "date_from": str(today - timedelta(days=30)),
                 "date_to": str(today),
             },

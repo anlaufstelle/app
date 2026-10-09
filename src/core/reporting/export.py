@@ -1,16 +1,9 @@
-"""Formatunabhaengige Export-Pipeline fuer Reporting-Backends (M5 P4, Refs #1061).
+"""Format-independent downloads for reporting backends.
 
-:func:`export_dataset` ist der einzige oeffentliche Einstiegspunkt: sie ruft
-``backend.build_dataset(facility, date_from, date_to)`` auf und reicht das
-Ergebnis an genau einen der drei Format-Renderer (CSV/JSON/XML) weiter. Alle
-drei liefern ueber :func:`core.utils.downloads.safe_download_response` eine
-fertige Download-Response mit RFC-5987-Dateiname, ``nosniff`` und
-``Cache-Control: no-store``.
-
-CSV wird gestreamt (Muster ``export_events_csv`` in
-``core.services.system.export``:200-231) — Aggregat-Berichte koennen viele
-Records enthalten. JSON und XML sind dagegen kleine, geschlossene
-Aggregat-Payloads und werden als einzelne Bytes-Antwort gebaut.
+The public export pipeline prepares and validates the dataset before any
+renderer runs. CSV streams sanitized rows; JSON, XML and PDF return complete
+artifacts through the shared safe download response. PDF layouts can override
+DatasetBackend.render_pdf while receiving only the prepared dataset.
 """
 
 import csv
@@ -41,6 +34,7 @@ _CONTENT_TYPES = {
     "csv": "text/csv; charset=utf-8",
     "json": "application/json",
     "xml": "application/xml; charset=utf-8",
+    "pdf": "application/pdf",
 }
 
 # Oeffentliche Formatmenge (Refs #1061, M5 P5 Review M1): Single Source of
@@ -175,15 +169,9 @@ def export_dataset(
     date_to,
     format: str = "csv",
 ) -> HttpResponse | StreamingHttpResponse:
-    """Baue+rendere den Datensatz von ``backend`` als Download-Response.
-
-    ``format`` bestimmt den Renderer (``"csv"``, ``"json"`` oder ``"xml"``);
-    ein unbekannter Wert wirft ``ValueError`` (die View in P5 antwortet
-    darauf mit HTTP 400). Der Dateiname folgt immer dem Muster
-    ``f"{backend.slug}_{date_from}_{date_to}.{format}"``.
-    """
+    """Build and render a protected dataset as a CSV, JSON, XML or PDF download."""
     if format not in _CONTENT_TYPES:
-        raise ValueError(f"Unbekanntes Export-Format {format!r} — erwartet 'csv', 'json' oder 'xml'.")
+        raise ValueError(f"Unknown export format {format!r}; expected one of {sorted(SUPPORTED_FORMATS)}.")
 
     result = backend.build_dataset(facility, date_from, date_to)
     # Repo-Invariante (Refs #1278/T1, Security R4+R14): jedes extern
@@ -206,8 +194,12 @@ def export_dataset(
         content = _render_csv(backend, facility, date_from, date_to, result, generated_at)
     elif format == "json":
         content = _render_json(backend, date_from, date_to, result, generated_at)
-    else:
+    elif format == "xml":
         content = _render_xml(backend, date_from, date_to, result, generated_at)
+    else:
+        content = backend.render_pdf(facility, result, date_from=date_from, date_to=date_to, generated_at=generated_at)
+        if not isinstance(content, bytes):
+            raise TypeError(f"PDF hook for {backend.slug!r} must return bytes, got {type(content).__name__}")
 
     return safe_download_response(filename, _CONTENT_TYPES[format], content)
 
