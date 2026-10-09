@@ -44,8 +44,8 @@
     // Refs #1828: gemeinsamer Formatter (offline-form-fields.js) — der
     // Export auf window.conflictResolverUtils.formatValue bleibt als
     // Contract fuer conflict-list.js (_buildNoteText) und Tests bestehen.
-    function _formatValue(v) {
-        return window.offlineFormFields.formatValue(v);
+    function _formatValue(v, options) {
+        return window.offlineFormFields.formatValue(v, options);
     }
 
     function _diffKeys(localData, serverData) {
@@ -137,6 +137,7 @@
                     this.localData = envelope.formData || {};
                     const serverState = envelope.serverState || {};
                     this.serverData = serverState.data_json || {};
+                    const fieldOptions = serverState.field_options || {};
                     this.documentTypeName = serverState.document_type_name || envelope.documentTypeName || "";
                     this.updatedAt = serverState.updated_at || "";
                     this.diffKeys = _diffKeys(this.localData, this.serverData);
@@ -153,8 +154,8 @@
                         const hasDiff = this.localData[key] !== this.serverData[key];
                         return {
                             key: key,
-                            localFmt: _formatValue(this.localData[key]),
-                            serverFmt: _formatValue(this.serverData[key]),
+                            localFmt: _formatValue(this.localData[key], fieldOptions[key]),
+                            serverFmt: _formatValue(this.serverData[key], fieldOptions[key]),
                             hasDiff: hasDiff,
                             diffClass: hasDiff ? "bg-yellow-50" : "",
                         };

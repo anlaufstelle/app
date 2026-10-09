@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, DocumentTypeField, FieldTemplate
+from core.services.events import context as event_context
 from core.services.file_vault import encrypt_field, is_encrypted_value, safe_decrypt
 from core.services.system import offline
 from tests._factories import make_document_type, make_event
@@ -76,8 +77,9 @@ def test_bundle_view_preserves_encrypted_selection_arrays(client, staff_user, en
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("role", ["staff_user", "lead_user"])
+@pytest.mark.parametrize("endpoint", ["bundle", "conflict"])
 def test_bundle_view_gates_attached_and_orphan_selections_before_decrypt(
-    client, request, facility, encrypted_offline_event, role
+    client, request, facility, encrypted_offline_event, role, endpoint
 ):
     event, template = encrypted_offline_event
     hidden_templates = []
@@ -98,13 +100,14 @@ def test_bundle_view_gates_attached_and_orphan_selections_before_decrypt(
     event.refresh_from_db()
     client.force_login(request.getfixturevalue(role))
 
-    with patch.object(offline, "safe_decrypt", wraps=safe_decrypt) as decrypt:
-        payload = _bundle(client, event)
+    module = offline if endpoint == "bundle" else event_context
+    with patch.object(module, "safe_decrypt", wraps=safe_decrypt) as decrypt:
+        payload = _bundle(client, event) if endpoint == "bundle" else _conflict(client, event)
 
     visible = {template.slug}
     if role == "lead_user":
         visible.update({"attached-secret", "orphan-secret", "unknown-secret"})
-    result = payload["events"][0]["data_fields"]
+    result = payload["events"][0]["data_fields"] if endpoint == "bundle" else payload["data_json"]
     assert set(result) == visible
     assert result[template.slug] == ["a", "b"]
     assert all(type(value) is list for value in result.values())
@@ -112,8 +115,13 @@ def test_bundle_view_gates_attached_and_orphan_selections_before_decrypt(
     assert [call.args[0] for call in decrypt.call_args_list] == [
         marker for slug, marker in event.data_json.items() if slug in visible
     ]
-    fields = payload["document_types"][0]["fields"]
-    assert {field["slug"] for field in fields} == visible.intersection({template.slug, "attached-secret"})
+    if endpoint == "bundle":
+        fields = payload["document_types"][0]["fields"]
+        assert {field["slug"] for field in fields} == visible.intersection({template.slug, "attached-secret"})
+    else:
+        assert set(payload["field_options"]) == visible.difference({"unknown-secret"})
+    if role == "staff_user":
+        assert "Restricted label" not in json.dumps(payload)
 
 
 @pytest.mark.django_db
@@ -146,3 +154,63 @@ def test_offline_replay_preserves_encrypted_selection_arrays(client, staff_user,
     assert result == values
     assert type(result) is list
     assert _bundle(client, event)["events"][0]["data_fields"][template.slug] == values
+
+
+def _conflict(client, event, values=None):
+    response = client.post(
+        reverse("core:event_update", kwargs={"pk": event.pk}),
+        {"selection": values if values is not None else ["a", "b"], "expected_updated_at": "2000-01-01T00:00:00+00:00"},
+        HTTP_ACCEPT="application/json",
+        HTTP_X_OFFLINE_REPLAY="2",
+    )
+    assert response.status_code == 409
+    assert response.json()["error"] == "conflict"
+    return response.json()["server_state"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("orphan", [False, True])
+def test_conflict_view_preserves_selection_and_supplies_inactive_labels(
+    client, staff_user, encrypted_offline_event, orphan
+):
+    event, template = encrypted_offline_event
+    event.data_json = {template.slug: ["a", "c", "a"]}
+    event.save()
+    event.refresh_from_db()
+    marker = event.data_json[template.slug]
+    if orphan:
+        DocumentTypeField.objects.filter(document_type=event.document_type, field_template=template).delete()
+    client.force_login(staff_user)
+
+    state = _conflict(client, event)
+
+    assert state["data_json"][template.slug] == ["a", "c", "a"]
+    assert type(state["data_json"][template.slug]) is list
+    assert state["field_options"][template.slug] == [
+        {"value": option["slug"], "label": option["label"]} for option in template.options_json
+    ]
+    event.refresh_from_db()
+    assert event.data_json[template.slug] == marker
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("choice", ["local", "server"])
+def test_selection_conflict_resolution_replays_arrays(client, staff_user, encrypted_offline_event, choice):
+    event, template = encrypted_offline_event
+    client.force_login(staff_user)
+    local_values = ["b", "a", "b"]
+    state = _conflict(client, event, local_values)
+    selected = local_values if choice == "local" else state["data_json"][template.slug]
+    response = client.post(
+        reverse("core:event_update", kwargs={"pk": event.pk}),
+        {template.slug: selected, "expected_updated_at": state["updated_at"]},
+        HTTP_ACCEPT="application/json",
+        HTTP_X_OFFLINE_REPLAY="2",
+    )
+    assert response.status_code == 200
+    assert response["X-Offline-Replay-Result"] == "saved"
+    event.refresh_from_db()
+    assert is_encrypted_value(event.data_json[template.slug])
+    result = safe_decrypt(event.data_json[template.slug])
+    assert result == selected
+    assert type(result) is list

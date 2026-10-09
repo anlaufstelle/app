@@ -252,10 +252,14 @@
         return d.toLocaleDateString("de-DE", { dateStyle: "short" });
     }
 
-    // Feldwert fuer die Anzeige: Datei-Marker als "[Datei: name]", sonstige
-    // Objekte als JSON, null/undefined leer, Primitive als String.
-    function formatValue(v) {
+    // Selection labels are display-only; the underlying slug array stays
+    // intact for conflict resolution and replay (Refs #2520).
+    function formatValue(v, options) {
         if (v === null || v === undefined) return "";
+        if (Array.isArray(v)) {
+            const labels = new Map((options || []).map((option) => [option.value, option.label]));
+            return v.map((value) => labels.has(value) ? labels.get(value) : String(value)).join("\n");
+        }
         if (typeof v === "object") {
             if (v.__file__) return "[Datei: " + (v.name || "") + "]";
             return JSON.stringify(v);

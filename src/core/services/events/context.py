@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from django.utils.translation import gettext_lazy as _
 
-from core.models import DocumentType
+from core.models import DocumentType, FieldTemplate
 from core.services.attachments import context as attachments_context
 from core.services.attachments.context import build_prior_versions, resolve_file_entries
 from core.services.compliance import user_can_see_field
@@ -24,7 +24,7 @@ from core.services.compliance import user_can_see_field
 # ``services/events/__init__.py`` und die Mutation-Followup-Tests importieren ihn
 # unveraendert von hier (Muster P3: Umzug + Alias-Re-Export).
 from core.services.dynamic_data import format_dynamic_display_value as _format_field_display_value
-from core.services.dynamic_data import orphan_gating_sensitivity, resolve_orphan_field_templates
+from core.services.dynamic_data import option_label_map, orphan_gating_sensitivity, resolve_orphan_field_templates
 from core.services.events.fields import (
     _is_file_marker,
     build_field_template_lookup,
@@ -37,8 +37,8 @@ def filtered_server_data_json(user, event):
 
     Keeps the conflict-diff honest: the user only ever sees values they could
     also read via the normal detail view, so the merge UI cannot become a
-    side-channel for restricted content. Encrypted values stay as their
-    marker dicts.
+    side-channel for restricted content. Visible encrypted values are
+    decrypted after the gate, preserving selection lists for replay.
     """
     if not event.data_json:
         return {}
@@ -71,6 +71,25 @@ def filtered_server_data_json(user, event):
             continue
         result[slug] = safe_decrypt(value, default="") if isinstance(value, dict) else value
     return result
+
+
+def build_event_conflict_state(user, event):
+    """Keep replay values separate from role-filtered selection labels."""
+    data = filtered_server_data_json(user, event)
+    templates = build_field_template_lookup(event.document_type)
+    templates.update(resolve_orphan_field_templates(event.document_type, set(data).difference(templates)))
+    field_options = {}
+    for slug, template in templates.items():
+        if template.field_type != FieldTemplate.FieldType.MULTI_SELECT:
+            continue
+        if not user_can_see_field(user, event.document_type.sensitivity, template.sensitivity or ""):
+            continue
+        # Include inactive labels for existing selections, without making
+        # them available as new choices in the offline edit form (Refs #2520).
+        field_options[slug] = [
+            {"value": value, "label": label} for value, label in option_label_map(template.options_json).items()
+        ]
+    return {"data_json": data, "field_options": field_options}
 
 
 #: M24/AP2 (Refs #1738): Umzug nach :mod:`core.services.attachments.context`

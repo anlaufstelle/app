@@ -47,6 +47,7 @@ from core.services.events import (
     TallyUndoDenied,
     apply_attachment_changes,
     build_attachment_context,
+    build_event_conflict_state,
     build_event_detail_context,
     build_tally_summary,
     create_event,
@@ -54,7 +55,6 @@ from core.services.events import (
     current_tally_context,
     decrypt_event_text_data,
     evaluate_tally_eligibility,
-    filtered_server_data_json,
     finalize_staged_files,
     get_idempotent_result,
     get_pending_event_deletion_request,
@@ -189,7 +189,7 @@ def _event_conflict_response(user, event, client_expected, *, error="conflict"):
     :file:`conflict-resolver.js` needs only one parser.
     """
     server_state = {
-        "data_json": filtered_server_data_json(user, event),
+        **build_event_conflict_state(user, event),
         "updated_at": isoformat_or_none(event.updated_at),
         "document_type_name": event.document_type.name,
     }
