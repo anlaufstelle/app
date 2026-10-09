@@ -351,7 +351,7 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 | `REDIS_URL` | Compose: `redis://redis:6379/1` (with `REDIS_PASSWORD` set: `redis://:<password>@redis:6379/1`) | Shared cache for rate limits and health-detail caching. A custom value points to an external Redis; a deliberately empty value (`REDIS_URL=`) switches to the database cache. |
 | `REDIS_PASSWORD` | empty | Password of the delivered `redis` service; URL-safe characters only. When empty, `check --deploy` reports the warning `core.W004` (see [Step 4](#step-4-start-the-stack)). |
 | `SOURCE_CODE_URL` | `https://github.com/anlaufstelle/app` | Source-code link in the footer (AGPL § 13). Forks and modified installations enter their own source mirror here. |
-| `SOURCE_CODE_VERSION` | empty | Optional state (e.g. commit SHA) that the footer shows signed-in users next to the source-code link (truncated to eight characters). |
+| `SOURCE_CODE_VERSION` | empty | Optional state (e.g. commit SHA) for the version stamp in GDPR documents; the footer still shows the source-code link but no source version. |
 | `DJANGO_AUDIT_HWM_PATH` | Compose/settings: empty; `.env.example`: `/data/audit_hwm.json` | Location of the signed audit anchor outside the database; written by `cron`/`maintenance`, backed up by `backup.sh` (see [§ 3.1](#31-encrypted-database-and-media-backup)). Empty = no external anchoring. |
 | `DJANGO_HEALTH_BACKUP_REQUIRED` | `true` | `true`: a missing backup signal lowers `/health/` to `degraded`. Use `false` only for instances without host backups; a stale backup still lowers the status. |
 | `DJANGO_HEALTH_DISK_REQUIRED` | `true` | `true`: free space on `MEDIA_ROOT` that cannot be measured lowers `/health/` to `degraded`. Use `false` only for instances without a measurable `MEDIA_ROOT`; low free space still lowers the status. |
@@ -2448,5 +2448,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-07 -->
-<!-- source-hash: 9cb2085a4bbbfbf7583836cfd0b56c05da7c99dc -->
+<!-- translation-date: 2026-10-09 -->
+<!-- source-hash: 8c787347b5fb93b899dfe526893bdfd10f7db693 -->
