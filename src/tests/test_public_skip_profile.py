@@ -191,3 +191,21 @@ def test_bare_test_copy_keeps_the_dev_profile(tmp_path):
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Public skip policy unavailable" not in result.stdout
+
+
+@pytest.mark.parametrize("profile", ["dev", "public"])
+@pytest.mark.parametrize("kind", ["strict_xfail", "xfail", "runtime_xfail", "xpass", "strict_xpass"])
+def test_expected_failures_are_not_skip_inventory_entries(tmp_path, profile, kind):
+    marks = {
+        "strict_xfail": '@pytest.mark.xfail(strict=True, reason="Known failure")',
+        "xfail": '@pytest.mark.xfail(strict=False, reason="Known failure")',
+        "runtime_xfail": "",
+        "xpass": '@pytest.mark.xfail(strict=False, reason="Known failure")',
+        "strict_xpass": '@pytest.mark.xfail(strict=True, reason="Known failure")',
+    }
+    body = 'pytest.xfail("Known failure")' if kind == "runtime_xfail" else f"assert {kind.endswith('xpass')}"
+    source = f"import pytest\n{marks[kind]}\ndef test_sample():\n    {body}\n"
+    result, inventory = run_profile(tmp_path, [], profile=profile, source=source)
+    assert result.returncode == (1 if kind == "strict_xpass" else 0), result.stdout + result.stderr
+    assert "INTERNALERROR" not in result.stdout + result.stderr
+    assert json.loads(inventory.read_text()) == []

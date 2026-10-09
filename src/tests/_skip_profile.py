@@ -28,7 +28,7 @@ class SkipInventory:
         self.skips = {}
 
     def pytest_runtest_logreport(self, report):
-        if report.skipped:
+        if report.skipped and not hasattr(report, "wasxfail") and isinstance(report.longrepr, tuple):
             reason = report.longrepr[2].removeprefix("Skipped: ")
             self.skips[(report.nodeid, reason)] = {
                 "nodeid": report.nodeid,
