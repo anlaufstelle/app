@@ -1,5 +1,7 @@
 """Public consumer paths preserve encrypted selections and output contracts."""
 
+import csv
+import io
 from html.parser import HTMLParser
 
 import pytest
@@ -130,3 +132,20 @@ def test_detail_view_renders_each_selection_label_on_its_own_line(selection_enti
     assert text == "First label\nSecond label"
     assert "whitespace-pre-wrap" in attrs["class"].split()
     assert "Unused label" not in response.content.decode()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "selection_entity", [("event", False, encrypted) for encrypted in (True, False)], indirect=True
+)
+def test_csv_export_resolves_decrypted_selection_labels(selection_entity, facility, staff_user):
+    from core.services.system.export import export_events_csv
+
+    _entity, template = selection_entity
+    today = timezone.localdate()
+    output = "".join(export_events_csv(facility, today, today, user=staff_user))
+    rows = list(csv.reader(io.StringIO(output)))
+    assert len(rows) == 3
+    assert rows[2][rows[1].index(template.name)] == "First label, Second label"
+    assert "Unused label" not in output
+    assert "__encrypted__" not in output

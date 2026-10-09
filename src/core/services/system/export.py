@@ -138,7 +138,7 @@ def _resolve_field_value(value, ft):
     if is_file_marker(value):
         return ""
     if isinstance(value, dict):
-        return safe_decrypt(value)
+        value = safe_decrypt(value)
     if isinstance(value, list):
         if ft and ft.options_json:
             label_map = option_label_map(ft.options_json)
