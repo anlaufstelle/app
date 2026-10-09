@@ -15,7 +15,7 @@ def entries(text: str) -> set[tuple[str, str]]:
     """Identify checks by issue and whitespace-normalized text, ignoring link URLs."""
     return {
         (number, " ".join(body.split()))
-        for number, body in re.findall(r"^\s*- \[#(\d+)\]\([^\n]+?\)\s*[—–-]\s*(.*)$", text, re.M)
+        for number, body in re.findall(r"^\s*- \[(#[0-9]+|GHSA-[a-z0-9-]+)\]\([^\n]+?\)\s*[—–-]\s*(.*)$", text, re.M)
     }
 
 
@@ -35,10 +35,18 @@ def findings(root: Path) -> list[str]:
         return ["Missing hand-check archive"]
     for archive in archives:
         archived.update(entries(archive.read_text()))
-    stale = entries(active) & archived
+    checks = entries(active)
+    stale = checks & archived
+    changelog = (root / "CHANGELOG.md").read_text()
+    current_issues = set(re.findall(r"\[#(\d+)\]", unreleased(changelog)))
+    releases = re.findall(r"^## \[(?!Unreleased\])[^\n]+\n(.*?)(?=^## |\Z)", changelog, re.M | re.S)
+    released_issues = set(re.findall(r"\[#(\d+)\]", "\n".join(releases)))
+    stale.update(
+        (number, body) for number, body in checks if number.removeprefix("#") in released_issues - current_issues
+    )
     errors = [
-        f"Historical hand-check in [Unreleased]: #{number} — {body}"
-        for number, body in sorted(stale, key=lambda entry: (int(entry[0]), entry[1]))
+        f"Historical hand-check in [Unreleased]: {number} — {body}"
+        for number, body in sorted(stale, key=lambda entry: (entry[0], entry[1]))
     ]
     if STEP not in (dev / "release-checklist.md").read_text():
         errors.append("Missing hand-check archive guard in release checklist")

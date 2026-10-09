@@ -41,6 +41,7 @@ def test_rejects_archived_check_in_unreleased(tmp_path):
 def test_allows_new_check_for_archived_tracker(tmp_path):
     dev = prepare(tmp_path)
     (dev / "hand-checks.md").write_text("## [Unreleased]\n- [#1](https://example.org/1) — Different check.\n")
+    (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n[#1](x)\n## [0.99.5]\n[#1](x)\n")
     assert run_guard(tmp_path).returncode == 0
 
 
@@ -50,10 +51,12 @@ def test_rejects_same_check_with_normalized_whitespace(tmp_path):
     assert run_guard(tmp_path).returncode == 1
 
 
-def test_changelog_issue_alone_does_not_archive_a_check(tmp_path):
+def test_rejects_newly_released_check_missing_from_archive(tmp_path):
     prepare(tmp_path)
     (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.99.6]\n[#2](x)\n")
-    assert run_guard(tmp_path).returncode == 0
+    result = run_guard(tmp_path)
+    assert result.returncode == 1
+    assert "#2" in result.stdout
 
 
 def test_release_gates_runs_archive_guard():
@@ -80,3 +83,21 @@ def test_repository_hand_check_delta_is_current():
         pytest.skip("Dev documentation is absent from public snapshots")
     result = run_guard(ROOT)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_rejects_archived_advisory_check(tmp_path):
+    dev = prepare(tmp_path)
+    check = "- [GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q) — Audit clean.\n"
+    (dev / "hand-checks.md").write_text("## [Unreleased]\n" + check)
+    (dev / "hand-checks-archive-v0.99.6.md").write_text(check)
+    result = run_guard(tmp_path)
+    assert result.returncode == 1
+    assert "GHSA-68fv-2mgg-jv7q" in result.stdout
+
+
+def test_rejects_unarchived_check_from_an_older_release(tmp_path):
+    prepare(tmp_path)
+    (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.99.6]\n[#1](x)\n## [0.99.5]\n[#2](x)\n")
+    result = run_guard(tmp_path)
+    assert result.returncode == 1
+    assert "#2" in result.stdout
