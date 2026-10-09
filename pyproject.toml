@@ -75,6 +75,7 @@ pythonpath = ["src"]
 # der dev-ops/-Ordner ausgeschlossen (Excludes in dev-ops/release/build-release.sh).
 testpaths = ["src/tests"]
 addopts = "--reuse-db"
+empty_parameter_set_mark = "fail_at_collect"
 # Refs #1609: Warnings sind ab jetzt Fehler — neu eingeschleppte Deprecation-/
 # Resource-/UserWarnings failen die Suite, statt unbemerkt aufzulaufen. Die
 # Bestandsaufnahme (#1609) ergab, dass alle Warnings aus eigenem Code stammen

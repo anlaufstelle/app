@@ -94,12 +94,9 @@ class TestNoLoadPathStaysSilent:
 
         assert loading == {*self.WITH_LABEL, *self.WITHOUT_LABEL}
 
-    @pytest.mark.parametrize("template", WITHOUT_LABEL)
-    def test_these_layouts_really_have_no_label(self, template):
-        """Die Praemisse des Rueckfalls — sonst prueft er nichts."""
-        source = (TEMPLATES / template).read_text(encoding="utf-8")
-
-        assert ATTRIBUTE not in source
+    def test_these_layouts_really_have_no_label(self):
+        """All known loading layouts must provide a translated label."""
+        assert not self.WITHOUT_LABEL, "Add explicit fallback checks when an unlabeled layout is introduced"
 
     @pytest.mark.parametrize("template", WITH_LABEL)
     def test_the_non_precached_layouts_carry_the_translated_label(self, template):

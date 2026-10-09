@@ -143,11 +143,6 @@ _MAX_LENGTH_CASES = (
     ),
 )
 
-_NO_FIELDS_SKIP_MESSAGES = {
-    Event: "Event hat keine freien CharField(max_length)-Felder (nur JSON/FKs/Choices/TextField)",
-    Activity: "Activity hat keine freien CharField(max_length)-Felder (verb ist Choice)",
-}
-
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
@@ -167,8 +162,9 @@ _NO_FIELDS_SKIP_MESSAGES = {
 )
 def test_charfields_respect_max_length(model, required_defaults, fixture_deps, request):
     fields = _textfields_with_maxlength(model)
-    if model in _NO_FIELDS_SKIP_MESSAGES and not fields:
-        pytest.skip(_NO_FIELDS_SKIP_MESSAGES[model])
+    if model is Activity:
+        assert not fields, "Activity now has free CharFields: add length boundary cases"
+        return
     assert fields, f"Kein passendes max_length-CharField an {model.__name__} gefunden"
 
     defaults = {key: value() if callable(value) else value for key, value in required_defaults.items()}

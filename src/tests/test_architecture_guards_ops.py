@@ -743,7 +743,9 @@ class TestServerErrorSupportContactAcrossAllStacks:
         tree under ``tmp_path`` as well as the real repository (Refs
         #1904)."""
         if example_path is None:
-            pytest.skip(f"{compose_path} has no example env file of its own (Refs #1904).")
+            assert compose_path == Path("docker-compose.yml"), "Only the base stack has no dedicated example"
+            cls._assert_error_page_settings_reach_the_web_container(root, compose_path)
+            return
         status = cls._file_status(root, example_path)
         if status == cls._LEGITIMATELY_STRIPPED:
             pytest.skip(f"{example_path} is stripped from the public release snapshot (Refs #1904).")
