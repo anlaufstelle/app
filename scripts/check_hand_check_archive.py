@@ -11,8 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 STEP = "python scripts/check_hand_check_archive.py"
 
 
-def issue_ids(text: str) -> set[str]:
-    return set(re.findall(r"\[#(\d+)\]\(", text))
+def entries(text: str) -> set[tuple[str, str]]:
+    """Identify checks by issue and whitespace-normalized text, ignoring link URLs."""
+    return {
+        (number, " ".join(body.split()))
+        for number, body in re.findall(r"^\s*- \[#(\d+)\]\([^\n]+?\)\s*[—–-]\s*(.*)$", text, re.M)
+    }
 
 
 def unreleased(text: str) -> str:
@@ -25,19 +29,17 @@ def unreleased(text: str) -> str:
 def findings(root: Path) -> list[str]:
     dev = root / "docs/dev"
     active = unreleased((dev / "hand-checks.md").read_text())
-    archived: set[str] = set()
+    archived: set[tuple[str, str]] = set()
     archives = sorted(dev.glob("hand-checks-archive-*.md"))
     if not archives:
         return ["Missing hand-check archive"]
     for archive in archives:
-        archived.update(issue_ids(archive.read_text()))
-    changelog = (root / "CHANGELOG.md").read_text()
-    released = re.split(r"^## \[Unreleased\][^\n]*\n", changelog, maxsplit=1, flags=re.M)[-1]
-    released = re.split(r"^## ", released, maxsplit=1, flags=re.M)
-    if len(released) > 1:
-        archived.update(issue_ids(released[1]))
-    stale = issue_ids(active) & archived
-    errors = [f"Historical hand-check in [Unreleased]: #{number}" for number in sorted(stale, key=int)]
+        archived.update(entries(archive.read_text()))
+    stale = entries(active) & archived
+    errors = [
+        f"Historical hand-check in [Unreleased]: #{number} — {body}"
+        for number, body in sorted(stale, key=lambda entry: (int(entry[0]), entry[1]))
+    ]
     if STEP not in (dev / "release-checklist.md").read_text():
         errors.append("Missing hand-check archive guard in release checklist")
     return errors

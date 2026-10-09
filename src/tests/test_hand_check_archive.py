@@ -38,12 +38,28 @@ def test_rejects_archived_check_in_unreleased(tmp_path):
     assert "#1" in result.stdout
 
 
-def test_rejects_newly_released_check_in_unreleased(tmp_path):
+def test_allows_new_check_for_archived_tracker(tmp_path):
+    dev = prepare(tmp_path)
+    (dev / "hand-checks.md").write_text("## [Unreleased]\n- [#1](https://example.org/1) — Different check.\n")
+    assert run_guard(tmp_path).returncode == 0
+
+
+def test_rejects_same_check_with_normalized_whitespace(tmp_path):
+    dev = prepare(tmp_path)
+    (dev / "hand-checks.md").write_text("## [Unreleased]\n- [#1](https://example.org/1) —   Old.   \n")
+    assert run_guard(tmp_path).returncode == 1
+
+
+def test_changelog_issue_alone_does_not_archive_a_check(tmp_path):
     prepare(tmp_path)
     (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.99.6]\n[#2](x)\n")
-    result = run_guard(tmp_path)
-    assert result.returncode == 1
-    assert "#2" in result.stdout
+    assert run_guard(tmp_path).returncode == 0
+
+
+def test_release_gates_runs_archive_guard():
+    result = subprocess.run(["make", "-n", "release-gates"], cwd=ROOT, capture_output=True, text=True, check=False)
+    assert result.returncode == 0
+    assert "scripts/check_hand_check_archive.py" in result.stdout
 
 
 def test_accepts_current_delta(tmp_path):
