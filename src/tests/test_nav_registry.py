@@ -72,7 +72,8 @@ NAV_ROUTE_PREFIXES = (
 # 170 -> 171.
 # #2043 ergänzt Hilfe-Übersicht und die Slug-Whitelist-Route: 171 -> 173.
 # #2040 ergänzt die Withdraw-Route des eigenen Löschantrags: 173 -> 174.
-_EXPECTED_TOTAL_PATTERNS = 176  # Refs #2469: + core:user_access_mfa_reset
+# #2505 removes the two statistics PDF special routes: 176 -> 174.
+_EXPECTED_TOTAL_PATTERNS = 174
 
 
 def _prefixed_route_names() -> dict[str, str]:

@@ -31,8 +31,6 @@ from core.services.system.export import (
     _sanitize_csv_cell,
     _stream_row,
     export_events_csv,
-    generate_report_pdf,
-    generate_sample_report_1_pdf,
 )
 from core.services.system.field_types import (
     FIELD_TYPE_REGISTRY,
@@ -109,8 +107,6 @@ __all__ = [
     "bypass_replication_triggers",
     "current_connection_owns",
     "export_events_csv",
-    "generate_sample_report_1_pdf",
-    "generate_report_pdf",
     "get_active_bans",
     "get_form_field_cls_for_file",
     "get_active_bans_for_client",

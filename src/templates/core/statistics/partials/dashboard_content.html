@@ -289,20 +289,6 @@ seit #1770 mit (GET-Semantik); sie sind nicht ausgenommen.
             <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
             {% trans "CSV-Export" %}
         </button>
-        <button type="submit" formaction="{% url 'core:statistics_pdf_export' %}"
-                class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas"
-                title="{% trans 'Verwendet den oben gewählten Zeitraum als Berichtszeitraum.' %}">
-            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-            {% trans "PDF-Export" %}
-        </button>
-        {% comment %}
-        R2 (Refs #1804): Der Beispiel-Sachbericht ist das Artefakt eines
-        Berichts-Backends, nicht eine Ausgabe der Übersichtszahlen — sein
-        Einstieg liegt jetzt auf dem Reiter „Datensatz-Berichte", bei seinen
-        Daten. Die Route ``core:statistics_sample_report_1_export`` bleibt
-        bestehen; ihre Zusammenführung mit ``DatasetExportView`` als Format
-        ``pdf`` gehört zur Wiedervorlage von #1790 (b) (Entscheid F4).
-        {% endcomment %}
     </div>
 </form>
 {% comment %}

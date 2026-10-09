@@ -5,29 +5,21 @@ Refs Matrix AUD-SEC-EXPORT-02 (Master #922).
 Externe Berichte gehen an Traeger, Foerdergeber oder Behoerden und
 duerfen keine Re-Identifizierungs-Hinweise enthalten. Konkret:
 
-- :func:`generate_report_pdf` mit ``internal_mode=False`` rendert die
-  ``Top 5 Personen``-Tabelle gemaess Template-Branch nicht (siehe
-  ``core/export/report_pdf.html`` Zeile 105f. — gated auf
-  ``{% if internal_mode and stats.top_clients %}``). Refs #792 (C-24).
+- Der Dokumenttyp-/Altersgruppen-Bericht der Karte "Allgemeine Kennzahlen"
+  traegt keine Pseudonyme (``test_reporting_export_disclosure.py``; die frueheren
+  Uebersichts-PDF-Pfade samt Pseudonym-Rangliste existieren nicht mehr). Refs #792.
 - ``get_sample_report_1_statistics`` (seit M5 P3 der Testhelfer aus
   ``tests._reporting_helpers``, der auf ``SampleReport1Backend.build_dataset``
   zeigt) aggregiert ueber DocumentType-Kategorien und Altersgruppen, ohne
   Pseudonyme zurueckzugeben — der Output enthaelt keine ``pseudonym``-Felder.
 
-Die Tests verifizieren beide Pfade:
-
-1. Das HTML, das ``generate_report_pdf`` an WeasyPrint uebergibt, muss
-   pseudonymfrei sein. Wir rendern das Template direkt ueber
-   ``django.template.loader.render_to_string`` — robuster als
-   PDF-Bytes nach WeasyPrint zu durchsuchen (Font-Subsetting verschluckt
-   Plain-Text-Strings).
-2. Die Sachbericht-Aggregat-Funktion gibt strukturell keine Pseudonyme
-   zurueck (Output-Schema-Check).
+Der Test verifiziert, dass die Sachbericht-Aggregat-Funktion strukturell keine
+Pseudonyme zurueckgibt (Output-Schema-Check).
 
 Hinweis: ``get_statistics`` (interne Statistik fuer Lead/Admin)
 *enthaelt* ``top_clients`` mit Pseudonymen — das ist beabsichtigt, weil
-sie nur intern gezeigt werden. Die externe Berichts-Pipeline filtert
-das im Template-Layer aus.
+sie nur intern gezeigt werden. Die externen Berichts-Pfade enthalten sie
+nicht.
 """
 
 from __future__ import annotations
@@ -35,11 +27,9 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-from django.template.loader import render_to_string
 from django.utils import timezone
 
 from core.models import Client, Event
-from core.services.dashboard import get_statistics
 from tests._reporting_helpers import get_sample_report_1_statistics
 
 # Eindeutige Pseudonyme — wenn sie irgendwo im HTML auftauchen, ist das
@@ -72,80 +62,9 @@ def populated_facility(facility, doc_type_contact, staff_user):
     return facility
 
 
-def _render_report_html(facility, stats, *, internal_mode: bool, date_from, date_to):
-    """Spiegel von ``generate_report_pdf`` — rendert genau das Template,
-    das WeasyPrint sonst kassiert. Statt PDF-Bytes pruefen wir das HTML
-    direkt: dort sind Pseudonyme als Plaintext sichtbar, falls sie
-    gerendert werden.
-    """
-    return render_to_string(
-        "core/export/report_pdf.html",
-        {
-            "facility_name": facility.name,
-            "date_from": date_from,
-            "date_to": date_to,
-            "stats": stats,
-            "internal_mode": internal_mode,
-            "generated_at": timezone.now(),
-        },
-    )
-
-
 @pytest.mark.django_db
 class TestExportExternalNoPseudonyms:
     """Externe Berichts-Pfade enthalten keine Pseudonyme."""
-
-    def test_external_report_html_contains_no_pseudonyms(self, populated_facility):
-        """``report_pdf.html`` mit ``internal_mode=False`` darf keine
-        Pseudonyme rendern. Ohne den Template-Gate landeten sie sonst aus
-        ``stats.top_clients`` direkt im PDF.
-        """
-        # ``timezone.localdate()`` statt ``.now().date()``: Django wertet
-        # ``occurred_at__date`` in ``settings.TIME_ZONE`` aus — UTC-Date
-        # weicht zwischen 22-24 UTC um einen Kalendertag ab (#939).
-        today = timezone.localdate()
-        date_from = today - timedelta(days=7)
-        stats = get_statistics(populated_facility, date_from, today)
-
-        # Sanity: get_statistics enthaelt Pseudonyme — sonst koennte der
-        # Template-Gate nichts ausblenden und der Test waere trivial.
-        top_pseudonyms = {row["pseudonym"] for row in stats["top_clients"]}
-        assert set(_PSEUDONYMS).issubset(top_pseudonyms), (
-            f"Setup-Bug: erwartete Pseudonyme {_PSEUDONYMS} fehlen in top_clients={top_pseudonyms!r}."
-        )
-
-        html = _render_report_html(populated_facility, stats, internal_mode=False, date_from=date_from, date_to=today)
-
-        for pseudonym in _PSEUDONYMS:
-            assert pseudonym not in html, (
-                f"Externes Report-HTML enthaelt Pseudonym {pseudonym!r}. "
-                "internal_mode=False muss die Top-5-Tabelle ausblenden "
-                "(Refs #792 / C-24)."
-            )
-        # Auch die Spalten-Ueberschrift der Top-5-Tabelle darf nicht
-        # erscheinen — Indiz, dass der Gate-Block geschlossen ist.
-        assert "Top 5 Personen" not in html
-
-    def test_internal_report_html_contains_pseudonyms_sanity_check(self, populated_facility):
-        """Negativkontrolle: ``internal_mode=True`` *muss* Pseudonyme im
-        HTML rendern. Ohne diese Probe wuerde der Positivtest trivial
-        bestehen, falls das Template gar keine Pseudonyme mehr rendert.
-        """
-        today = timezone.localdate()
-        date_from = today - timedelta(days=7)
-        stats = get_statistics(populated_facility, date_from, today)
-
-        html = _render_report_html(populated_facility, stats, internal_mode=True, date_from=date_from, date_to=today)
-
-        # Mindestens eines der Pseudonyme muss erscheinen (typischerweise
-        # alle drei).
-        found = [p for p in _PSEUDONYMS if p in html]
-        assert found, (
-            "Internal-Mode rendert keine Pseudonyme — Setup-Bug oder "
-            "internal_mode-Gate defekt. Ohne diesen Negativtest sagt der "
-            "Positivtest nichts aus."
-        )
-        assert "Top 5 Personen" in html
 
     def test_sample_report_1_aggregate_has_no_pseudonym_keys(self, populated_facility):
         """``get_sample_report_1_statistics`` liefert nur Aggregate ueber

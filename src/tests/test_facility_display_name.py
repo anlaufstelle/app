@@ -45,15 +45,22 @@ class TestExportBuildersUseFacilityName:
         # render_to_string("...", {context}) — context is the 2nd positional arg.
         return mock_render.call_args.args[1]
 
-    def test_report_pdf_uses_facility_name_when_full_name_empty(self, facility):
+    def test_generic_dataset_pdf_uses_facility_name_when_full_name_empty(self, facility):
+        from datetime import date, datetime
+
+        from core.reporting.base import DatasetResult
+        from core.reporting.pdf import render_dataset_pdf
+        from core.reporting.registry import get_backend
+
         Settings.objects.create(facility=facility, facility_full_name="")
-        from core.services.system import export
+        backend = get_backend("general-key-figures")
+        result = DatasetResult("aggregate", [], {"k_anonymity_threshold": 5}, [])
 
         with (
-            mock.patch.object(export, "render_to_string", return_value="<html></html>") as m,
-            mock.patch.object(export, "weasyprint"),
+            mock.patch("core.reporting.pdf.render_to_string", return_value="<html></html>") as m,
+            mock.patch("weasyprint.HTML"),
         ):
-            export.generate_report_pdf(facility, "2026-01-01", "2026-06-30", stats={}, internal_mode=True)
+            render_dataset_pdf(backend, facility, date(2026, 1, 1), date(2026, 6, 30), result, datetime(2026, 7, 1))
         assert self._captured_context(m)["facility_name"] == facility.name
 
     def test_sample_report_1_pdf_uses_facility_name_when_full_name_empty(self, facility):
@@ -63,11 +70,12 @@ class TestExportBuildersUseFacilityName:
         with (
             mock.patch.object(export, "render_to_string", return_value="<html></html>") as m,
             mock.patch.object(export, "weasyprint"),
-            mock.patch(
-                "core.services.dashboard.get_sample_report_1_statistics_hybrid",
-                return_value={"total": 0, "by_category": [], "by_age_cluster": [], "unique_clients": 0},
-            ),
-            mock.patch("core.services.dashboard.suppress_sample_report_1_stats", side_effect=lambda f, s: s),
         ):
-            export.generate_sample_report_1_pdf(facility, "2026-01-01", "2026-06-30")
+            export.render_sample_report_1_pdf(
+                facility,
+                {"total": 0, "by_category": [], "by_age_cluster": [], "unique_clients": 0},
+                "2026-01-01",
+                "2026-06-30",
+                generated_at=None,
+            )
         assert self._captured_context(m)["facility_name"] == facility.name

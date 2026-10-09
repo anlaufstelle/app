@@ -174,8 +174,9 @@ class TestExportViewsSchreibenEmpfaengerUndZweck:
         ("url_name", "params"),
         [
             ("core:statistics_csv_export", {}),
-            ("core:statistics_external_report", {"period": "custom"}),
             ("core:statistics_report_export", {"backend": "sample-report-1", "format": "csv"}),
+            ("core:statistics_report_export", {"backend": "sample-report-1", "format": "pdf"}),
+            ("core:statistics_report_export", {"backend": "general-key-figures", "format": "pdf"}),
         ],
     )
     def test_export_schreibt_die_freigabe_angaben_ins_audit_detail(self, client, lead_user, facility, url_name, params):
@@ -201,15 +202,10 @@ class TestExportViewsSchreibenEmpfaengerUndZweck:
         ("url_name", "params", "ist_freigabe"),
         [
             ("core:statistics_csv_export", {}, True),
-            ("core:statistics_pdf_export", {}, True),
-            ("core:statistics_sample_report_1_export", {}, True),
             ("core:statistics_report_export", {"backend": "sample-report-1", "format": "csv"}, True),
-            # Refs #1772 (Punkt 2): der externe Bericht ist in BEIDEN Formaten
-            # nur eine Ansicht — ``?format=json`` hat keine Empfaenger-/
-            # Zweckfelder und keine Download-Geste, sondern ist die
-            # maschinenlesbare Fassung derselben Bildschirmseite.
-            ("core:statistics_external_report", {"period": "custom", "format": "json"}, False),
-            ("core:statistics_external_report", {"period": "custom"}, False),
+            ("core:statistics_report_export", {"backend": "sample-report-1", "format": "pdf"}, True),
+            ("core:statistics_report_export", {"backend": "general-key-figures", "format": "json"}, True),
+            ("core:statistics_report_export", {"backend": "general-key-figures", "format": "pdf"}, True),
         ],
     )
     def test_nur_herausgegebene_artefakte_tragen_den_freigabe_marker(
@@ -228,13 +224,15 @@ class TestExportViewsSchreibenEmpfaengerUndZweck:
         assert detail.get(RELEASE_ARTIFACT_KEY, False) is ist_freigabe, detail
 
     @pytest.mark.parametrize("params", [{}, {"format": "json"}])
-    def test_bildschirmaufruf_landet_nicht_in_der_uebersicht(self, client, lead_user, facility, params):
-        """Beide Formate der externen Ansicht bleiben draussen (Refs #1772)."""
+    def test_alte_externe_adresse_landet_nicht_in_der_uebersicht(self, client, lead_user, facility, params):
+        """The redirect writes no audit row at all - neither a view nor a release."""
         client.force_login(lead_user)
 
-        client.get(reverse("core:statistics_external_report"), {"period": "custom", **params})
+        response = client.get(reverse("core:statistics_external_report"), {"period": "custom", **params})
 
+        assert response.status_code == 302
         assert build_release_overview(facility) == []
+        assert self._letzter_export(facility) is None
 
     def test_ohne_angabe_bleibt_das_detail_unveraendert(self, client, lead_user, facility):
         """Die Felder sind optional — ein Pflichtfeld erzwänge eine Angabe auch

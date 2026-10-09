@@ -395,6 +395,33 @@ def _label_sequence(text: str, labels: tuple[str, ...]) -> list[str]:
     return [label for _position, label in sorted(positions)]
 
 
+def _patch_external_report(monkeypatch, report: dict[str, Any]) -> None:
+    """Let the "Allgemeine Kennzahlen" card project an already protected report."""
+    from core.reporting.backends import general_key_figures
+    from core.reporting.data_source import ALL_EVENTS
+
+    tables = ("total_contacts", "unique_clients", "by_contact_stage", "by_document_type", "by_age_cluster")
+    protected = {
+        **report,
+        "metadata": {"k_anonymity_threshold": 5, "populations": {table: ALL_EVENTS for table in tables}},
+    }
+    monkeypatch.setattr(general_key_figures, "build_external_report", lambda *args, **kwargs: protected)
+
+
+def _card_notes(facility) -> list[str]:
+    from core.reporting.registry import get_backend
+
+    result = get_backend("general-key-figures").build_dataset(facility, date(2026, 1, 1), date(2026, 1, 31))
+    return [str(issue.message) for issue in result.completeness]
+
+
+def _card_tables(facility) -> set[str]:
+    from core.reporting.registry import get_backend
+
+    result = get_backend("general-key-figures").build_dataset(facility, date(2026, 1, 1), date(2026, 1, 31))
+    return {record["table"] for record in result.records}
+
+
 @pytest.mark.django_db
 class TestOrdnungAnDerArtefaktgrenze:
     """K5 an der Grenze, an der das Artefakt entsteht — nicht nur im Service."""
@@ -404,26 +431,19 @@ class TestOrdnungAnDerArtefaktgrenze:
 
         return render_to_string(template, context)
 
-    def test_externer_bericht_html(self, facility):
+    @pytest.mark.parametrize("fmt", ["csv", "json", "xml"])
+    def test_general_key_figures_export(self, facility, monkeypatch, fmt):
+        from core.reporting.export import export_dataset
+        from core.reporting.registry import get_backend
         from core.services.dashboard import suppress_report_stats
 
-        welt_a, welt_b = _swapped_worlds()
-        seiten = [
-            self._rendered("core/statistics/external_report.html", {"report": suppress_report_stats(facility, welt)})
-            for welt in (welt_a, welt_b)
-        ]
-
-        assert _label_sequence(seiten[0], _AGE_LABELS) == _label_sequence(seiten[1], _AGE_LABELS)
-        assert _label_sequence(seiten[0], _DOC_NAMES) == _label_sequence(seiten[1], _DOC_NAMES)
-
-    def test_halbjahres_sachbericht_pdf_datenpfad(self, facility):
-        from core.services.dashboard import suppress_report_stats
-
-        welt_a, welt_b = _swapped_worlds()
-        seiten = [
-            self._rendered("core/export/report_pdf.html", {"stats": suppress_report_stats(facility, welt)})
-            for welt in (welt_a, welt_b)
-        ]
+        backend = get_backend("general-key-figures")
+        seiten = []
+        for welt in _swapped_worlds():
+            _patch_external_report(monkeypatch, suppress_report_stats(facility, welt))
+            response = export_dataset(backend, facility, date(2026, 1, 1), date(2026, 1, 31), format=fmt)
+            body = b"".join(response.streaming_content) if response.streaming else response.content
+            seiten.append(body.decode("utf-8"))
 
         assert _label_sequence(seiten[0], _AGE_LABELS) == _label_sequence(seiten[1], _AGE_LABELS)
         assert _label_sequence(seiten[0], _DOC_NAMES) == _label_sequence(seiten[1], _DOC_NAMES)
@@ -548,25 +568,13 @@ class TestFailSafePfadIstNichtIrrefuehrend:
         assert "by_document_type" not in out, "Vorbedingung: der Fail-safe hat die Tabelle fallen lassen"
         return out
 
-    def test_externer_bericht_html_weist_die_unterdrueckung_aus(self, facility):
-        from django.template.loader import render_to_string
+    def test_karte_weist_die_unterdrueckung_aus(self, facility, monkeypatch):
+        _patch_external_report(monkeypatch, self._stats(facility))
 
-        seite = render_to_string("core/statistics/external_report.html", {"report": self._stats(facility)})
-        abschnitt = seite.split("report-document-types")[-1].split("report-age")[0]
+        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." in _card_notes(facility)
+        assert "by_document_type" not in _card_tables(facility)
 
-        assert "Keine Daten im Zeitraum." not in abschnitt
-        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." in abschnitt
-
-    def test_sachbericht_pdf_weist_die_unterdrueckung_aus(self, facility):
-        from django.template.loader import render_to_string
-
-        seite = render_to_string("core/export/report_pdf.html", {"stats": self._stats(facility)})
-        abschnitt = seite.split("Kontakte nach Dokumentationstyp")[-1].split("Kontakte nach Altersgruppe")[0]
-
-        assert "Keine Daten im gewählten Zeitraum." not in abschnitt
-        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." in abschnitt
-
-    def test_leerer_zeitraum_bekommt_denselben_hinweis(self, facility):
+    def test_leerer_zeitraum_bekommt_denselben_hinweis(self, facility, monkeypatch):
         """Bewusste Kehrseite, nicht Zufall: bei **leerem** Zeitraum ist
         ``total_contacts`` ebenfalls ``None`` (Randsummen-Regel R14 auf 0), also
         greift derselbe Zweig.
@@ -577,10 +585,6 @@ class TestFailSafePfadIstNichtIrrefuehrend:
         verhaelt sich seit #1768
         in derselben Lage identisch.
         """
-        from django.template.loader import render_to_string
-
-        from core.services.dashboard import suppress_report_stats
-
         leer = suppress_report_stats(
             facility,
             {
@@ -592,10 +596,9 @@ class TestFailSafePfadIstNichtIrrefuehrend:
                 "by_age_cluster": [],
             },
         )
-        seite = render_to_string("core/statistics/external_report.html", {"report": leer})
-        abschnitt = seite.split("report-document-types")[-1].split("report-age")[0]
+        _patch_external_report(monkeypatch, leer)
 
-        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." in abschnitt
+        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." in _card_notes(facility)
 
     def test_beispiel_sachbericht_pdf_leerfall_publiziert_die_randsumme_nicht(self, facility):
         """Dieselbe Fehlklasse im dritten Artefakt (Refs #1770).
@@ -641,11 +644,9 @@ class TestFailSafePfadIstNichtIrrefuehrend:
         assert "Keine relevanten Kontakte im Berichtszeitraum." in abschnitt
         assert "Angaben nach Leistungskategorie unterdrückt (k-Anonymität)." not in abschnitt
 
-    def test_gefuellte_tabelle_zeigt_weiterhin_ihre_zeilen(self, facility):
+    def test_gefuellte_tabelle_zeigt_weiterhin_ihre_zeilen(self, facility, monkeypatch):
         """Gegenprobe: solange die Tabelle da ist, aendert sich nichts — weder
         der Marker je Zeile noch die sichtbaren Zahlen."""
-        from django.template.loader import render_to_string
-
         from core.services.dashboard import suppress_report_stats
 
         out = suppress_report_stats(
@@ -663,11 +664,10 @@ class TestFailSafePfadIstNichtIrrefuehrend:
                 "by_age_cluster": [],
             },
         )
-        seite = render_to_string("core/statistics/external_report.html", {"report": out})
-        abschnitt = seite.split("report-document-types")[-1].split("report-age")[0]
+        _patch_external_report(monkeypatch, out)
 
-        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." not in abschnitt
-        assert "Notiz" in abschnitt and "unterdrückt" in abschnitt
+        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." not in _card_notes(facility)
+        assert "by_document_type" in _card_tables(facility)
 
 
 # --- K3-A1: Enumeration ueber die Restzeilen-Welten ------------------------

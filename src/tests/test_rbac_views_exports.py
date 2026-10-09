@@ -1,4 +1,4 @@
-"""RBAC-Matrix-Tests, TestStatistics-, CSV-, PDF-, Sachbericht- und DSGVO-Exports.
+"""RBAC-Matrix-Tests, TestStatistics-, CSV-, Berichts- und DSGVO-Exports.
 
 Refs #929 — gesplittet aus test_rbac_matrix.py.
 Refs #867: SUPER_ADMIN ist installations-weite Top-Rolle (Persona Jonas);
@@ -58,9 +58,11 @@ class TestCSVExportViewRBAC:
 
 
 @pytest.mark.django_db
-class TestPDFExportViewRBAC:
-    """PDFExportView — GET, LeadOrAdminRequiredMixin."""
+class TestReportExportViewRBAC:
+    """DatasetExportView (CSV/JSON/XML/PDF) - GET, LeadOrAdminRequiredMixin."""
 
+    @pytest.mark.parametrize("slug", ["general-key-figures", "sample-report-1"])
+    @pytest.mark.parametrize("fmt", ["csv", "json", "xml", "pdf"])
     @pytest.mark.parametrize(
         "user_fixture,allowed",
         [
@@ -71,36 +73,11 @@ class TestPDFExportViewRBAC:
             ("super_admin_user", False),
         ],
     )
-    def test_pdf_export(self, client, user_fixture, allowed, request):
+    def test_report_export(self, client, user_fixture, allowed, request, slug, fmt):
         _login(client, user_fixture, request)
         today = timezone.localdate()
-        url = reverse("core:statistics_pdf_export")
-        response = client.get(url, {"date_from": str(today), "date_to": str(today)})
-        if allowed:
-            assert response.status_code == 200
-        else:
-            assert response.status_code == 403
-
-
-@pytest.mark.django_db
-class TestSampleReport1ExportViewRBAC:
-    """SampleReport1ExportView — GET, LeadOrAdminRequiredMixin."""
-
-    @pytest.mark.parametrize(
-        "user_fixture,allowed",
-        [
-            ("admin_user", True),
-            ("lead_user", True),
-            ("staff_user", False),
-            ("assistant_user", False),
-            ("super_admin_user", False),
-        ],
-    )
-    def test_sample_report_1_export(self, client, user_fixture, allowed, request):
-        _login(client, user_fixture, request)
-        today = timezone.localdate()
-        url = reverse("core:statistics_sample_report_1_export")
-        response = client.get(url, {"date_from": str(today), "date_to": str(today)})
+        url = reverse("core:statistics_report_export")
+        response = client.get(url, {"backend": slug, "format": fmt, "date_from": str(today), "date_to": str(today)})
         if allowed:
             assert response.status_code == 200
         else:

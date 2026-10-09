@@ -1,13 +1,12 @@
 """Reiterzeile des Statistik-Bereichs (Refs #1813, Konzept #1801 §7.1).
 
-Drei Statistik-Seiten waren praktisch unerreichbar: ``/statistics/external/``
-hatte **keinen einzigen Link** im ganzen Repo (nur per Direkt-URL aufrufbar),
-``/statistics/reports/releases/`` nur einen Textlink im Berichts-Panel, und die
-Berichts-Sektion selbst war ans Ende des Dashboards angehängt. Die Reiterzeile
-gibt allen dreien eine Heimat — nach demselben Muster wie ``/system/`` und die
-beiden Bereichs-Hubs.
+Die Reiterzeile gibt dem Bereich seine Heimat — nach demselben Muster wie
+``/system/`` und die beiden Bereichs-Hubs. Seit #2505 hat sie drei Reiter:
+„Übersicht", „Datensatz-Berichte" und „Freigaben". Der frühere Reiter
+„Externer Bericht" ist entfallen; seine Adresse leitet auf die Karte
+„Allgemeine Kennzahlen" um.
 
-Der vierte Reiter („Datensatz-Berichte") ist der interessante Fall. Sein
+Der Reiter „Datensatz-Berichte" ist der interessante Fall. Sein
 natürliches Ziel wäre ``core:statistics_report_panel`` — das ist aber ein
 HTMX-Partial ohne ``base.html``, das ohne ``?backend=`` mit 400 antwortet
 (Befund N2). Statt einer neuen Route trägt der Reiter deshalb
@@ -29,8 +28,6 @@ Daraus folgen zwei Aussagen, die sonst nirgends geprüft wären:
 
 from __future__ import annotations
 
-from datetime import timedelta
-
 import pytest
 from django.utils import timezone
 
@@ -39,7 +36,7 @@ from core import nav
 PILL_ACTIVE = "bg-accent text-white"
 SIDEBAR_ACTIVE = "bg-accent-light"
 
-TAB_KEYS = ("statistik_uebersicht", "statistik_external_report", "statistik_berichte", "statistik_releases")
+TAB_KEYS = ("statistik_uebersicht", "statistik_berichte", "statistik_releases")
 
 
 def _pill(content: str, key: str) -> str:
@@ -72,28 +69,33 @@ def _get(client, user, path: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_section_has_the_four_planned_tabs():
-    """Datenebene: Reihenfolge und Ziele der Reiter (Konzept §7.1)."""
+def test_section_has_the_three_planned_tabs():
+    """Datenebene: Reihenfolge und Ziele der Reiter (Konzept §7.1, #2505)."""
     section = nav.section("statistik")
     assert [tab.key for tab in section.tabs] == list(TAB_KEYS)
     assert [tab.url_name for tab in section.tabs] == [
         "core:statistics",
-        "core:statistics_external_report",
         "core:statistics",
         "core:statistics_report_releases",
     ]
-    assert section.tabs[2].query == "ansicht=datensaetze", (
+    assert section.tabs[1].query == "ansicht=datensaetze", (
         "Der Berichte-Reiter ist der Query-Reiter (Befund N2) — kanonisch deutsch (Refs #1804 F1)."
     )
-    assert section.tabs[2].query_aliases == ("view=berichte",), (
+    assert section.tabs[1].query_aliases == ("view=berichte",), (
         "Die #1813-Schreibweise bleibt dauerhaft gueltig (Refs #1804 F5) — sie steht in Bookmarks."
     )
 
 
 def test_orphaned_pages_are_part_of_the_sidebar_family():
-    """Ohne die beiden verwaisten Routen erlischt der Sidebar-Eintrag auf ihnen."""
+    """Ohne die Freigaben-Route erlischt der Sidebar-Eintrag auf ihr."""
     family = nav.item("statistics").family
-    assert {"statistics", "statistics_external_report", "statistics_report_releases"} <= family
+    assert {"statistics", "statistics_report_releases"} <= family
+
+
+def test_the_external_report_tab_is_gone():
+    """#2505 (E-1 a): kein Reiter, keine Familie — die Adresse leitet nur um."""
+    assert "statistik_external_report" not in [tab.key for tab in nav.section("statistik").tabs]
+    assert "statistics_external_report" not in nav.item("statistics").family
 
 
 # ---------------------------------------------------------------------------
@@ -106,12 +108,11 @@ class TestSubnavIsRenderedOnEveryStatisticsPage:
     PAGES = (
         "/statistics/",
         "/statistics/?ansicht=datensaetze",
-        "/statistics/external/",
         "/statistics/reports/releases/",
     )
 
     @pytest.mark.parametrize("path", PAGES)
-    def test_four_tabs_for_lead(self, client, lead_user, path):
+    def test_three_tabs_for_lead(self, client, lead_user, path):
         content = _get(client, lead_user, path)
         for key in TAB_KEYS:
             assert f'data-testid="subnav-tab-{key}"' in content, f"Reiter {key} fehlt auf {path}"
@@ -131,7 +132,6 @@ class TestSubnavIsRenderedOnEveryStatisticsPage:
             # F5: der Alt-Deep-Link aktiviert denselben Reiter — sonst stuende die
             # Reiterzeile fuer ein Bookmark von gestern ohne aktiven Reiter da.
             ("/statistics/?view=berichte", "statistik_berichte"),
-            ("/statistics/external/", "statistik_external_report"),
             ("/statistics/reports/releases/", "statistik_releases"),
         ],
     )
@@ -188,21 +188,6 @@ class TestVersteckteEinstiegeSindEntfallen:
     def test_freigaben_haben_keinen_ruecklink_mehr(self, client, lead_user):
         content = _get(client, lead_user, "/statistics/reports/releases/")
         assert "Zurück zur Statistik" not in content
-
-    def test_externer_bericht_ordnet_sich_ein(self, client, lead_user):
-        """Ohne Einordnungssatz liest man dieselben Zahlen in zwei Bedeutungen
-        (Konzept §3.4): das Artefakt ist k-anonym unterdrückt, die Übersicht nicht."""
-        content = _get(client, lead_user, "/statistics/external/")
-        assert "Dieselben Zahlen wie die Übersicht, aber für außen" in content
-
-    def test_json_link_steht_in_der_kopf_aktionsleiste(self, client, lead_user):
-        """Zonenregel des Hauptkonzepts: Aktionen oben, nicht im Seitenfuß-``aside``."""
-        content = _get(client, lead_user, "/statistics/external/")
-        assert 'data-testid="external-report-json"' in content
-        head_end = content.index('data-testid="external-report-metadata"')
-        assert content.index('data-testid="external-report-json"') < head_end, (
-            "Der JSON-Link gehört in die Aktionsleiste des Kopfs, nicht ans Seitenende."
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +321,7 @@ class TestZeitraumUeberlebtDenReiterwechsel:
     Fassungen — der Zeitraum gehört deshalb dem Bereich, nicht der Seite.
     """
 
-    OTHER_TABS = ("statistik_external_report", "statistik_berichte", "statistik_releases")
+    OTHER_TABS = ("statistik_berichte", "statistik_releases")
 
     def test_rolling_period_travels_to_every_tab(self, client, lead_user):
         content = _get(client, lead_user, "/statistics/?zeitraum=letzte90")
@@ -376,7 +361,7 @@ class TestZeitraumUeberlebtDenReiterwechsel:
     def test_doktyp_stays_on_the_overview(self, client, lead_user, statistik_doktyp):
         """§3.5 führt den **Zeitraum** mit, nicht jeden Filter: der
         Dokumentationstyp existiert nur auf der Übersicht, und ein Reiter, der
-        ihn mitschleppte, versprächen den anderen dreien eine Verengung, die
+        ihn mitschleppte, versprächen den anderen beiden eine Verengung, die
         dort niemand auswertet."""
         content = _get(client, lead_user, f"/statistics/?doktyp={statistik_doktyp.pk}")
         for key in TAB_KEYS:
@@ -403,7 +388,7 @@ class TestZeitraumUeberlebtDenReiterwechsel:
         ihn aber unverändert weiter — sonst kostet jeder Blick in die
         Herausgaben den Zeitraum, mit dem man gekommen ist."""
         content = _get(client, lead_user, "/statistics/reports/releases/?zeitraum=letzte90&year=2025")
-        for key in self.OTHER_TABS[:2] + ("statistik_uebersicht",):
+        for key in self.OTHER_TABS + ("statistik_uebersicht",):
             assert "zeitraum=letzte90" in _href(content, key), f"Reiter {key} verliert den Zeitraum"
 
     def test_the_releases_tab_says_that_it_ignores_the_period(self, client, lead_user):
@@ -411,57 +396,6 @@ class TestZeitraumUeberlebtDenReiterwechsel:
         liest sich wie ein Filterfehler (Refs #1772)."""
         content = _get(client, lead_user, "/statistics/reports/releases/?zeitraum=letzte90")
         assert "unabhängig vom gewählten Zeitraum" in content
-
-
-@pytest.mark.django_db
-class TestZeitraumLeisteAufDemExternenBericht:
-    """R6: keine wirkungslose Bedienung — und keine fehlende.
-
-    Der externe Bericht wertet den Zeitraum seit jeher aus
-    (``parse_statistics_period`` ist Single Source of Truth für alle
-    Statistik-Sichten), hatte aber kein einziges Bedienelement dafür: er war
-    nur über eine von Hand getippte Adresse steuerbar.
-    """
-
-    def test_the_period_bar_is_rendered(self, client, lead_user):
-        content = _get(client, lead_user, "/statistics/external/")
-        assert 'data-testid="statistics-zeitraum-leiste"' in content
-        for label in ("Letzte 30 Tage", "Letzte 90 Tage", "Letzte 180 Tage", "Kalenderjahr"):
-            assert label in content
-
-    def test_the_period_bar_links_to_this_page(self, client, lead_user):
-        """Ohne eigenes Ziel landete jeder Pill-Klick auf der Übersicht — ein
-        Bedienelement, das die Seite verlässt, statt sie zu steuern."""
-        content = _get(client, lead_user, "/statistics/external/")
-        assert "/statistics/external/?zeitraum=letzte90" in content.replace("&amp;", "&")
-
-    def test_the_period_is_effective(self, client, lead_user):
-        client.force_login(lead_user)
-        response = client.get("/statistics/external/", {"zeitraum": "letzte90"})
-        today = timezone.localdate()
-        assert response.context["date_from"] == today - timedelta(days=89)
-        assert response.context["period"] == "letzte90"
-
-    def test_the_year_stepper_appears_for_the_calendar_year(self, client, lead_user):
-        content = _get(client, lead_user, "/statistics/external/?zeitraum=jahr&year=2025")
-        assert "/statistics/external/?zeitraum=jahr&year=2024" in content.replace("&amp;", "&")
-
-    def test_the_json_link_carries_the_period(self, client, lead_user):
-        """Der JSON-Link trug bisher ``date_from``/``date_to`` **ohne**
-        ``zeitraum=frei`` — beide Werte fielen im Parser durch, und die Datei
-        beschrieb einen anderen Zeitraum als der Bildschirm darüber."""
-        content = _get(client, lead_user, "/statistics/external/?zeitraum=jahr&year=2025").replace("&amp;", "&")
-        idx = content.index('data-testid="external-report-json"')
-        link = content[content.rindex("<a", 0, idx) : content.index(">", idx)]
-        assert "format=json" in link
-        assert "zeitraum=jahr" in link
-        assert "year=2025" in link
-
-    def test_the_json_export_answers_with_that_period(self, client, lead_user):
-        client.force_login(lead_user)
-        payload = client.get("/statistics/external/", {"format": "json", "zeitraum": "jahr", "year": "2025"}).json()
-        assert payload["metadata"]["date_from"] == "2025-01-01"
-        assert payload["metadata"]["date_to"] == "2025-12-31"
 
 
 @pytest.fixture

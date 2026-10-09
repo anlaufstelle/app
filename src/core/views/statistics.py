@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 
 from django.core.exceptions import ValidationError
 from django.http import Http404, HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -14,7 +14,7 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
-from core.models import AuditLog, DocumentType
+from core.models import DocumentType
 from core.reporting.data_source import (
     ALL_EVENTS,
     DATA_SOURCE_EXPLANATIONS,
@@ -27,21 +27,17 @@ from core.reporting.data_source import (
 from core.reporting.db_guard import reporting_statement_timeout
 from core.reporting.export import SUPPORTED_FORMATS, enforce_suppression_contract, export_dataset
 from core.reporting.registry import get_backend_or_404, get_backends
-from core.services.audit import log_audit_event
 from core.services.dashboard import (
-    EXTERNAL_REPORT_TARGET,
     RELEASE_LOG_LIMIT,
     InvalidStatisticsPeriodError,
     aggregate_trend_segments,
-    build_external_report,
     build_release_overview,
     get_statistics,
     get_statistics_hybrid,
     get_statistics_trend,
     k_threshold_warning,
-    release_detail,
 )
-from core.services.system import export_events_csv, generate_report_pdf, generate_sample_report_1_pdf
+from core.services.system import export_events_csv
 from core.utils.downloads import safe_download_response
 from core.views.mixins import ExportRangeMixin, HTMXPartialMixin, LeadOrAdminRequiredMixin, htmx_absage, log_export
 
@@ -590,190 +586,34 @@ class CSVExportView(LeadOrAdminRequiredMixin, ExportRangeMixin, View):
         return response
 
 
-class PDFExportView(LeadOrAdminRequiredMixin, ExportRangeMixin, View):
-    """PDF semi-annual report as download."""
+class ExternalReportRedirectView(LeadOrAdminRequiredMixin, View):
+    """Former external report address: redirects to the "Allgemeine Kennzahlen" card.
 
-    @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
-    def get(self, request):
-        facility = request.current_facility
-        # Refs #1589: gleiche Range-Validierung wie parse_statistics_period —
-        # die Export-Views lesen date_from/date_to direkt aus der Query.
-        range_result = self.resolve_range(request)
-        if isinstance(range_result, HttpResponse):
-            return range_result
-        date_from, date_to = range_result
+    Refs #2505 (E-1 a): the on-screen external report and its ``?format=json``
+    file are gone. The card is the preview, the generic report export is the
+    only way out. This view never renders a file and writes no audit row —
+    a redirect is not a release, and previews are not logged either.
 
-        # R2 (Refs #1804): Dasselbe Regime wie die Uebersicht — bei gesetztem
-        # Filter live rechnen, weil Monats-Aggregate keine Zerlegung nach
-        # Dokumentationstyp kennen. Genau dieser Zweig ist die Zusicherung
-        # „am Bildschirm stand X, im PDF steht X".
-        document_type = resolve_document_type_filter(facility, request.GET)
-        if document_type is not None:
-            stats = get_statistics(facility, date_from, date_to, document_type)
-        else:
-            stats = get_statistics_hybrid(facility, date_from, date_to)
-        # Refs #792 (C-24): ``?internal=1`` aktiviert den internen Report-Modus
-        # mit Pseudonym-Ranking + INTERN-Banner. Standard ist der externe Modus
-        # ohne Top-Pseudonyme — DSGVO-Datenminimierung bei Traegerberichten.
-        internal_mode = request.GET.get("internal") in ("1", "true", "yes", "on")
-        pdf_bytes = generate_report_pdf(
-            facility, date_from, date_to, stats, internal_mode=internal_mode, document_type=document_type
-        )
-
-        filename_suffix = "_intern" if internal_mode else ""
-        response = safe_download_response(
-            f"bericht_{date_from}_{date_to}{filename_suffix}.pdf",
-            "application/pdf",
-            pdf_bytes,
-        )
-
-        log_export(
-            request,
-            "PDF",
-            format="PDF",
-            date_from=date_from,
-            date_to=date_to,
-            extra=export_document_type_detail(document_type),
-        )
-
-        return response
-
-
-class SampleReport1ExportView(LeadOrAdminRequiredMixin, ExportRangeMixin, View):
-    """Beispiel-Sachbericht als PDF-Download."""
-
-    @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
-    def get(self, request):
-        facility = request.current_facility
-        # Refs #1589: gleiche Range-Validierung wie parse_statistics_period —
-        # die Export-Views lesen date_from/date_to direkt aus der Query.
-        range_result = self.resolve_range(request)
-        if isinstance(range_result, HttpResponse):
-            return range_result
-        date_from, date_to = range_result
-
-        # Refs #2070 (Cross-Review-Befund M1): Dieser Download geht NICHT ueber
-        # ``export_dataset``, sondern ueber den hybriden Lesepfad
-        # ``generate_sample_report_1_pdf`` -> ``get_sample_report_1_statistics_hybrid``,
-        # der im Live-Fallback ``get_backend("sample-report-1").build_dataset(...)``
-        # ruft. Er war deshalb weder gefangen noch gedeckelt und lieferte bei
-        # einem defekten Backend einen nackten 500er — waehrend der generische
-        # Export daneben sauber mit 502 antwortete. Die k-Anon-Suppression
-        # laeuft in diesem Pfad unveraendert ueber ``suppress_sample_report_1_stats``;
-        # die Isolation aendert daran nichts, sie ergaenzt nur den Fehlerfall.
-        try:
-            with reporting_statement_timeout():
-                pdf_bytes = generate_sample_report_1_pdf(facility, date_from, date_to)
-        except Exception:
-            return backend_export_failed_response("Sachbericht-PDF des Backends 'sample-report-1'")
-
-        response = safe_download_response(
-            f"sample-report-1_{date_from}_{date_to}.pdf",
-            "application/pdf",
-            pdf_bytes,
-        )
-
-        log_export(request, "Sachbericht-PDF", format="Sachbericht-PDF", date_from=date_from, date_to=date_to)
-
-        return response
-
-
-class ExternalReportView(LeadOrAdminRequiredMixin, View):
-    """Datenschutzfreundlicher externer Bericht (Refs #921).
-
-    Wrappt :func:`core.services.dashboard.external_report.build_external_report`:
-    keine Pseudonyme, K-Anon-Schwelle aus Settings, Datenschutzprofil-Metadaten.
-
-    Output-Format wird ueber den ``format``-Query-Parameter gewaehlt:
-    - ``html`` (Default): rendert Template ``core/statistics/external_report.html``
-    - ``json``: liefert JsonResponse mit demselben Datenmodell
+    The role guard stays: the redirect target is Lead/Admin only, and an
+    unauthorised caller should get the same answer as for any statistics page.
     """
-
-    template_name = "core/statistics/external_report.html"
 
     def get(self, request):
         from core.services.dashboard import parse_statistics_period
 
-        facility = request.current_facility
-        today = timezone.localdate()
-        # Refs #1589: parse_statistics_period ist Single Source of Truth — das
-        # Range-Clamping haertet den externen Bericht automatisch mit.
         try:
-            period_state = parse_statistics_period(request.GET, today)
+            period_state = parse_statistics_period(request.GET, timezone.localdate())
         except InvalidStatisticsPeriodError as exc:
             return HttpResponse(str(exc), status=400)
 
-        report = build_external_report(facility, period_state.date_from, period_state.date_to)
-
-        output_format = request.GET.get("format", "html")
-        # Audit-Log: jeder externe Bericht ist ein DSGVO-relevanter Export.
-        #
-        # K4a (Refs #1770): Eine **Freigabe** ist nur der Abruf, bei dem ein
-        # Artefakt das Haus verlaesst. Diese View ist in **beiden** Formaten
-        # keiner (Refs #1772): ``?format=json`` liefert Maschinen-Text, aber es
-        # ist dieselbe Bildschirmseite — kein Empfaenger-/Zweckformular, keine
-        # Download-Geste, und wie die HTML-Fassung wird sie bei JEDEM Aufruf
-        # auditiert, auch bei jedem Reload. Als Herausgabe gefuehrt liesse sie
-        # den Log unbegrenzt und dauerhaft (prune-exempt) wachsen und
-        # verdraengte in der Freigabe-Uebersicht die echten Downloads aus dem
-        # Auswertungsfenster. Die Audit-Zeile bleibt, sie ist nur eine normale,
-        # befristete Zeile. Wer den Datensatz als Datei herausgibt, nimmt den
-        # generischen Berichts-Download (``DatasetExportView``) — dort gibt es
-        # die Freigabe-Felder.
-        log_audit_event(
-            request,
-            AuditLog.Action.EXPORT,
-            target_type=EXTERNAL_REPORT_TARGET,
-            detail={
-                "format": output_format,
-                "date_from": str(period_state.date_from),
-                "date_to": str(period_state.date_to),
-                "k_threshold": report["metadata"]["k_anonymity_threshold"],
-                **release_detail(request.GET, artifact_released=False),
-            },
-        )
-
-        if output_format == "json":
-            return JsonResponse(report)
-        return render(
-            request,
-            self.template_name,
+        query = urlencode(
             {
-                "report": report,
-                "k_threshold_warning": k_threshold_warning(report["metadata"]["k_anonymity_threshold"]),
-                "period": period_state.period,
-                "date_from": period_state.date_from,
-                "date_to": period_state.date_to,
-                "selected_year": period_state.selected_year,
-                "current_year": today.year,
-                # Refs #1804 (§3.5/R6): Diese Seite wertet den Zeitraum seit
-                # jeher aus (``parse_statistics_period`` ist Single Source of
-                # Truth fuer alle Statistik-Sichten) — sie hatte nur kein
-                # einziges Bedienelement dafuer und war ausschliesslich ueber
-                # eine von Hand getippte Adresse steuerbar. Die Zeitraum-Leiste
-                # navigiert hier per Link statt per HTMX: die Seite hat keine
-                # Inhaltszone, die sich unabhaengig tauschen liesse.
-                "zeitraum_url": reverse("core:statistics_external_report"),
-                "zeitraum_target": "",
-                "subnav_carry": statistics_state_params(period_state),
-                # Der JSON-Link trug bisher ``date_from``/``date_to`` OHNE
-                # ``zeitraum=frei``; beide Werte fielen im Parser durch und die
-                # Datei beschrieb einen anderen Zeitraum als der Bildschirm
-                # darueber. Jetzt traegt er den aufgeloesten Zustand.
-                "state_query": statistics_state_query(period_state),
-                # Quellenausweis (Refs #1743): der Erklaersatz gehoert zur
-                # Darstellung, der Code/die Kurzform stehen in
-                # ``report["metadata"]`` und damit auch im JSON-Format.
-                "data_source_explanation": DATA_SOURCE_EXPLANATIONS[LIVE],
-                # K3-A3 (Refs #1770): uebersetzter Grundgesamtheits-/Quellen-
-                # Ausweis je Tabelle; die stabilen Codes stehen in
-                # ``report["metadata"]["populations"]`` und damit im JSON.
-                "population_notes": {
-                    "by_document_type": table_note(ALL_EVENTS, LIVE),
-                    "by_age_cluster": table_note(ALL_EVENTS, LIVE),
-                },
-            },
+                "ansicht": "datensaetze",
+                "bericht": "general-key-figures",
+                **statistics_state_params(period_state),
+            }
         )
+        return redirect(f"{reverse('core:statistics')}?{query}")
 
 
 class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):

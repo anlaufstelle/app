@@ -774,12 +774,18 @@ class TestSachberichtPdfWeistDenLiveTermAus:
         from django.template.loader import render_to_string
 
         html = render_to_string(
-            "core/export/report_pdf.html",
+            "core/export/sample_report_1_pdf.html",
             {
                 "facility_name": facility.name,
                 "date_from": date(2025, 1, 1),
                 "date_to": date(2025, 6, 30),
-                "stats": {"total_contacts": 30, "unique_clients": 9, "unique_clients_data_source": "live"},
+                "stats": {
+                    "total": 30,
+                    "unique_clients": 9,
+                    "by_category": [],
+                    "by_age_cluster": [],
+                    "unique_clients_data_source": "live",
+                },
                 "generated_at": timezone.now(),
                 "data_source_note": "Monats-Aggregate",
                 "data_source_explanation": "…",

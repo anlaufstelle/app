@@ -84,9 +84,13 @@ class TestKAnonymityMinimum:
 
 
 class TestKAnonymityOnTheReportPage:
+    """The warning lives on the "Allgemeine Kennzahlen" card (former external report)."""
+
+    CARD_URL = reverse("core:statistics") + "?ansicht=datensaetze&bericht=general-key-figures"
+
     def _report(self, client, lead_user):
         client.force_login(lead_user)
-        return client.get(reverse("core:statistics_external_report")).content.decode()
+        return client.get(self.CARD_URL).content.decode()
 
     def test_report_page_warns_for_two(self, client, lead_user, settings_obj):
         Settings.objects.filter(pk=settings_obj.pk).update(k_anonymity_threshold=2)
@@ -100,10 +104,10 @@ class TestKAnonymityOnTheReportPage:
         Settings.objects.filter(pk=settings_obj.pk).update(k_anonymity_threshold=1)
         client.force_login(lead_user)
 
-        response = client.get(reverse("core:statistics_external_report"))
+        response = client.get(self.CARD_URL)
 
         assert response.status_code == 200
-        assert response.context["report"]["metadata"]["k_anonymity_threshold"] == 1
+        assert response.context["k_anonymity_threshold"] == 1
         content = response.content.decode()
         assert K_WARNING in content
         assert K_NO_SUPPRESSION in content

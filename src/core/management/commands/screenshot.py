@@ -106,7 +106,9 @@ SHOTS: list[Shot] = [
     Shot("ereignis-anlegen-beratungsstelle", "core:event_create", role="emma_1"),
     Shot("fallakte", "core:case_detail", pk_kind="case", full_page=True),
     Shot("uebergabe", "/?view=uebergabe"),
-    Shot("statistik-extern", "core:statistics_external_report"),
+    # Refs #2505: the former external report page is the "Allgemeine Kennzahlen"
+    # report card now. The shot keeps its name: docs/screenshots.md links the file.
+    Shot("statistik-extern", "/statistics/?ansicht=datensaetze&bericht=general-key-figures"),
     # Refs #1595: FacilityAdminRequiredMixin verlangt mehr als die Default-Rolle
     # "emma" (LEAD) — sonst 403 statt der DSGVO-Paket-Uebersicht.
     Shot("dsgvo-paket", "core:dsgvo_package", role="admin"),

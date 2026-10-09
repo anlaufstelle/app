@@ -18,12 +18,8 @@ dashboard.json``). Gepinnt werden fuenf Mutanten-Familien, alle ohne Sicherheits
   Provenienz-Zeile (Einrichtung, Nutzer, Zeitstempel) — der eigentliche
   Audit-Trail (``AuditLog`` via ``log_export`` in der View) ist davon
   unberuehrt, gepinnt wird der Datei-INHALT.
-* **PDF-Template-Kontext** (``generate_report_pdf``): acht Mutanten benennen
-  je einen von vier Context-Schluesseln um (``date_from``/``date_to``/
-  ``internal_mode``/``generated_at``). Django rendert eine undefinierte
-  Template-Variable klaglos leer — abgefangen wird das Kontext-Dict VOR dem
-  (hier gestubbten) Rendering.
-* **Sachbericht-PDF-Kontext** (``generate_sample_report_1_pdf``): zwoelf
+* **Sachbericht-PDF-Kontext** (Sachbericht-PDF ueber den generischen Export; Mutanten
+  benennen den frueheren Funktionsnamen): zwoelf
   Mutanten an fuenf Context-Schluesseln, darunter die K3-Populationshinweise
   (``population_notes.by_category``/``by_age_cluster``), ohne die der Bericht
   laut Code-Kommentar "nicht nur undicht, sondern irrefuehrend" ist.
@@ -38,8 +34,8 @@ modulweit an (Lehre 112): der Mutantenbaum hat keine ``.env`` und damit
 keinen ``ENCRYPTION_KEY``.
 
 **Warum die PDF-Kontext-Tests ``render_to_string`` monkeypatchen statt das
-gerenderte HTML zu inspizieren.** Alle 20 Mutanten dieser Datei fuer
-``generate_report_pdf``/``generate_sample_report_1_pdf`` benennen einen
+gerenderte HTML zu inspizieren.** Alle Mutanten dieser Datei fuer
+``generate_sample_report_1_pdf`` benennen einen
 Dictionary-Schluessel des Template-Kontexts um. Das abgefangene Dict vor dem
 Rendering zu pruefen, trifft die Mutation direkt und bleibt unabhaengig von
 Template-Markup-Details; ein vollstaendiger WeasyPrint-Lauf traegt hier keine
@@ -194,50 +190,7 @@ class TestExportEventsCsvMetadataRow:
 
 
 # ---------------------------------------------------------------------------
-# generate_report_pdf — der Template-Kontext
-# ---------------------------------------------------------------------------
-
-
-class TestGenerateReportPdfContext:
-    def test_context_carries_date_range_mode_and_generation_timestamp(self, facility, monkeypatch):
-        """Mutanten ``x_generate_report_pdf__mutmut_20/_21`` (Schluessel
-        ``date_from`` -> ``XXdate_fromXX``/``DATE_FROM``), ``_22/_23``
-        (``date_to``), ``_26/_27`` (``internal_mode``), ``_28/_29``
-        (``generated_at``).
-
-        Acht Mutationen an vier Context-Schluesseln des Templates
-        ``report_pdf.html``. Mit dem umbenannten Schluessel fehlt die Angabe im
-        gerenderten PDF, Django zeigt keinen Fehler (undefinierte
-        Template-Variable rendert leer) — abgefangen wird das Kontext-Dict VOR
-        dem (hier gestubbten) Rendering.
-        """
-        erfasst_context: dict = {}
-
-        def fake_render(template_name, context):
-            erfasst_context.update(context)
-            return "<html></html>"
-
-        monkeypatch.setattr(sys_export, "render_to_string", fake_render)
-        monkeypatch.setattr(sys_export.weasyprint, "HTML", _weasyprint_stub())
-
-        bis = timezone.localdate()
-        von = bis - timedelta(days=2)
-        vor_dem_aufruf = timezone.now()
-
-        sys_export.generate_report_pdf(facility, von, bis, {}, internal_mode=True)
-
-        nach_dem_aufruf = timezone.now()
-
-        assert erfasst_context.get("date_from") == von
-        assert erfasst_context.get("date_to") == bis
-        assert erfasst_context.get("internal_mode") is True
-        generated_at = erfasst_context.get("generated_at")
-        assert generated_at is not None
-        assert vor_dem_aufruf <= generated_at <= nach_dem_aufruf
-
-
-# ---------------------------------------------------------------------------
-# generate_sample_report_1_pdf — der Template-Kontext
+# Sample report PDF (generic export hook) — the template context
 # ---------------------------------------------------------------------------
 
 
@@ -281,7 +234,10 @@ class TestGenerateSampleReport1PdfContext:
         von = bis - timedelta(days=2)
         vor_dem_aufruf = timezone.now()
 
-        sys_export.generate_sample_report_1_pdf(facility, von, bis)
+        from core.reporting.export import export_dataset
+        from core.reporting.registry import get_backend
+
+        export_dataset(get_backend("sample-report-1"), facility, von, bis, format="pdf")
 
         nach_dem_aufruf = timezone.now()
 

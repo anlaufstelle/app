@@ -114,20 +114,4 @@ Select, `date_from`/`date_to`/`period` aus den Hidden-Feldern der Sektion.
         <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         {% trans "XML-Export" %}
     </button>
-    {% comment %}
-    R2 (Refs #1804): Der Sachbericht-PDF-Pfad ist von der Übersicht hierher
-    gewandert — er gibt die Zahlen DIESES Berichts aus, nicht die der
-    Übersicht. Er bleibt vorerst eine eigene Route (``PDFExportView``-Nachbar
-    ``SampleReport1ExportView``, hybrid gespeist); die Zusammenführung als
-    Format ``pdf`` in ``DatasetExportView`` gehört zur Wiedervorlage von
-    #1790 (b) — Entscheid F4, in diesem Lauf ausdrücklich NICHT umgesetzt.
-    Erst danach sieht die Freigabe-Übersicht eine Identität statt zweier.
-    {% endcomment %}
-    {% if backend.slug == "sample-report-1" %}
-    <button type="submit" formaction="{% url 'core:statistics_sample_report_1_export' %}"
-       class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
-        <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-        {% trans "PDF-Export" %}
-    </button>
-    {% endif %}
 </div>

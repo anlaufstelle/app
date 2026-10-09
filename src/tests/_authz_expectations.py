@@ -651,8 +651,6 @@ EXPECTATIONS = (
         idor=(("pk", "foreign_client.pk"),),
     ),
     E("core:statistics_csv_export", "export", get=LEAD_PLUS),
-    E("core:statistics_pdf_export", "export", get=LEAD_PLUS),
-    E("core:statistics_sample_report_1_export", "export", get=LEAD_PLUS),
     # Refs #1061 (M5 P5): Parität zu den übrigen Statistik-Exports — bewusst
     # OHNE sudo (anders als die Client-Rohdaten-Exporte oben).
     E("core:statistics_report_export", "export", get=LEAD_PLUS),

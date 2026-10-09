@@ -326,11 +326,6 @@ class TestUserFacingEntryPointGuard:
         "core:deletion_request_list",
         "core:audit_log",
         "core:statistics",
-        # Refs #1813 (Konzept #1801 §7.1): der externe Bericht war die einzige
-        # Seite im Repo mit NULL Links — nur per Direkt-URL erreichbar. Seit der
-        # Statistik-Reiterzeile hat er einen Einstieg; der Eintrag hier haelt den
-        # Orphan-Fix fest, statt ihn dem naechsten Umbau zu ueberlassen.
-        "core:statistics_external_report",
         "core:global_search",
         "core:account_profile",
         "core:dsgvo_package",

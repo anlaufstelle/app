@@ -77,7 +77,7 @@ class TestStatistikenWaitJs:
         assert "data-charts-ready" in shot.wait_js
 
     def test_statistik_extern_shot_unaffected(self):
-        """external_report.html hat keine Charts — kein wait_js noetig."""
+        """The "Allgemeine Kennzahlen" card has no charts - no wait_js needed."""
         assert _shot("statistik-extern").wait_js is None
 
 

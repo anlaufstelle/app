@@ -2,7 +2,7 @@
 
 from django.utils.translation import gettext_lazy as _
 
-from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.data_source import POPULATION_NOTES, TABLE_SPECIFIC
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import build_external_report
@@ -52,8 +52,37 @@ class GeneralKeyFiguresBackend(DatasetBackend):
         for row in report.get("by_age_cluster", []):
             append("by_age_cluster", row["label"], row["count"])
         return DatasetResult(
-            "aggregate", records, {**report, "k_anonymity_threshold": report["metadata"]["k_anonymity_threshold"]}, []
+            "aggregate",
+            records,
+            {**report, "k_anonymity_threshold": report["metadata"]["k_anonymity_threshold"]},
+            self._suppressed_table_notes(report),
         )
+
+    @staticmethod
+    def _suppressed_table_notes(report) -> list[CompletenessIssue]:
+        """Say so when the disclosure guard dropped a whole breakdown.
+
+        The guard removes the table; without a note the file would read like
+        "no data" although there were data. The messages carry no number.
+        """
+        notes = []
+        if not report.get("by_document_type") and report["total_contacts"] is None:
+            notes.append(
+                CompletenessIssue(
+                    "document_types_suppressed",
+                    _("Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)."),
+                    severity="info",
+                )
+            )
+        if not report.get("by_age_cluster") and report["unique_clients"] is None:
+            notes.append(
+                CompletenessIssue(
+                    "age_clusters_suppressed",
+                    _("Angaben nach Altersgruppe unterdrückt (k-Anonymität)."),
+                    severity="info",
+                )
+            )
+        return notes
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
         """The external report is already protected; never suppress it twice."""

@@ -58,32 +58,6 @@ class TestGrundgesamtheitsAusweis:
 class TestGrundgesamtheitInDenArtefakten:
     """Jede Tabelle der sichtbaren Artefakte traegt ihren Ausweis."""
 
-    def test_externer_bericht_html(self, facility):
-        from core.services.dashboard import suppress_report_stats
-
-        seite = render_to_string(
-            "core/statistics/external_report.html",
-            {
-                "report": suppress_report_stats(
-                    facility,
-                    {
-                        "total_contacts": 40,
-                        "unique_clients": 20,
-                        "by_contact_stage": {},
-                        "persons_by_contact_stage": {},
-                        "by_document_type": [{"name": "Kontakt", "count": 40}],
-                        "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 30, "persons": 20}],
-                    },
-                ),
-                "population_notes": {
-                    "by_document_type": table_note(ALL_EVENTS, LIVE),
-                    "by_age_cluster": table_note(ALL_EVENTS, LIVE),
-                },
-            },
-        )
-
-        assert seite.count("Grundgesamtheit:") == 2, "beide Tabellen brauchen den Ausweis"
-
     def test_externer_bericht_json_traegt_stabile_codes(self, facility):
         """Fuer Maschinen der Code, fuer Menschen der uebersetzte Text — dieselbe
         Trennung wie bei ``data_source`` (#1743)."""
@@ -96,32 +70,6 @@ class TestGrundgesamtheitInDenArtefakten:
         # Seit der K3-A1-Restzeile zaehlt die Alterstabelle ebenfalls ALLE
         # Ereignisse des Zeitraums — das ist der Punkt der Restzeile.
         assert populations["by_age_cluster"] == ALL_EVENTS
-
-    def test_halbjahres_sachbericht_pdf_datenpfad(self, facility):
-        from core.services.dashboard import suppress_report_stats
-
-        seite = render_to_string(
-            "core/export/report_pdf.html",
-            {
-                "stats": suppress_report_stats(
-                    facility,
-                    {
-                        "total_contacts": 40,
-                        "unique_clients": 20,
-                        "by_contact_stage": {},
-                        "persons_by_contact_stage": {},
-                        "by_document_type": [{"name": "Kontakt", "count": 40}],
-                        "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 30, "persons": 20}],
-                    },
-                ),
-                "population_notes": {
-                    "by_document_type": table_note(ALL_EVENTS, SNAPSHOT_HYBRID),
-                    "by_age_cluster": table_note(ALL_EVENTS, SNAPSHOT_HYBRID),
-                },
-            },
-        )
-
-        assert seite.count("Grundgesamtheit:") == 2
 
     def test_beispiel_sachbericht_pdf_nennt_zwei_verschiedene_mengen(self, facility):
         """Hier ist der Ausweis nicht Kosmetik: ``total``/``by_category``
@@ -262,16 +210,16 @@ class TestGrundgesamtheitImEchtenViewRender:
 
         return [treffer.strip() for treffer in re.findall(r'class="[^"]*report-population"[^>]*>(.*?)</p>', html, re.S)]
 
-    def test_externer_bericht_view(self, client, lead_user):
+    def test_general_key_figures_panel_view(self, client, lead_user):
         client.force_login(lead_user)
 
-        response = client.get(reverse("core:statistics_external_report"))
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "general-key-figures"})
 
         assert response.status_code == 200
         ausweise = self._ausweise(response.content.decode())
-        assert len(ausweise) == 2, f"beide Tabellen brauchen den Ausweis, gefunden: {ausweise}"
-        assert all("Grundgesamtheit:" in a for a in ausweise), ausweise
-        assert all("alle Ereignisse im Zeitraum" in a for a in ausweise), ausweise
+        by_table = {a.split(" · ")[0].strip(): a for a in ausweise}
+        assert {"by_document_type", "by_age_cluster"} <= set(by_table), ausweise
+        assert all("alle Ereignisse im Zeitraum" in by_table[t] for t in ("by_document_type", "by_age_cluster"))
 
     def test_statistik_dashboard_view(self, client, lead_user):
         client.force_login(lead_user)
@@ -361,79 +309,6 @@ class TestSnapshotStandStempel:
         )
 
         assert out[SNAPSHOT_AS_OF_KEY] == moment
-
-    def test_pdf_rendert_den_stand(self, facility):
-        from django.utils import timezone
-
-        from core.services.dashboard.snapshot import SNAPSHOT_AS_OF_KEY
-
-        seite = render_to_string(
-            "core/export/report_pdf.html",
-            {"stats": {SNAPSHOT_AS_OF_KEY: timezone.now(), "by_document_type": [], "by_age_cluster": []}},
-        )
-
-        assert "Stand der Monats-Aggregate:" in seite
-
-
-@pytest.mark.django_db
-class TestInternerModusWeistSeineGrundgesamtheitAus:
-    """Der ``?internal=1``-Modus des Halbjahres-PDF **ueberspringt die
-    Suppression** (Security R4: er ist das interne Artefakt mit
-    Pseudonym-Ranking und INTERN-Banner) — und damit auch die K3-A1-Restzeile,
-    die erst dort entsteht.
-
-    Die Alterstabelle zaehlt in diesem Modus also weiterhin **nur Ereignisse mit
-    Personenbezug**. Ein Ausweis „alle Ereignisse im Zeitraum" waere dort eine
-    schlicht falsche Angabe — und zwar genau die Sorte Falschangabe, die K3-A3
-    beseitigen sollte.
-    """
-
-    def _rendered(self, facility, *, internal_mode):
-        from unittest.mock import patch
-
-        from core.services.system.export import generate_report_pdf
-
-        stats = {
-            "total_contacts": 40,
-            "unique_clients": 20,
-            "by_contact_stage": {"anonym": 10, "identifiziert": 15, "qualifiziert": 15},
-            "persons_by_contact_stage": {"anonym": 10, "identifiziert": 15, "qualifiziert": 15},
-            "by_document_type": [{"name": "Kontakt", "count": 40}],
-            "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 30, "persons": 20}],
-            "top_clients": [],
-        }
-        captured = {}
-
-        def _capture(template, context):
-            captured["context"] = context
-            return "<html></html>"
-
-        with patch("core.services.system.export.render_to_string", side_effect=_capture):
-            generate_report_pdf(facility, date(2026, 1, 1), date(2026, 6, 30), stats, internal_mode=internal_mode)
-        return captured["context"]
-
-    def test_interner_modus_nennt_die_engere_menge(self, facility):
-        context = self._rendered(facility, internal_mode=True)
-
-        assert str(context["population_notes"]["by_age_cluster"]).find("Ereignisse mit Personenbezug") >= 0, context[
-            "population_notes"
-        ]["by_age_cluster"]
-        # Die Dokumenttyp-Tabelle zaehlt in beiden Modi alle Ereignisse.
-        assert "alle Ereignisse im Zeitraum" in str(context["population_notes"]["by_document_type"])
-
-    def test_externer_modus_nennt_alle_ereignisse(self, facility):
-        """Gegenprobe: dort laeuft die Suppression und mit ihr die Restzeile."""
-        context = self._rendered(facility, internal_mode=False)
-
-        assert "alle Ereignisse im Zeitraum" in str(context["population_notes"]["by_age_cluster"])
-
-    def test_interner_modus_hat_wirklich_keine_restzeile(self, facility):
-        """Anker: waere die Restzeile doch da, waere der Test oben falsch."""
-        from core.services.dashboard.external_report import NO_PERSON_CLUSTER
-
-        context = self._rendered(facility, internal_mode=True)
-
-        assert all(row["cluster"] != NO_PERSON_CLUSTER for row in context["stats"]["by_age_cluster"])
 
 
 @pytest.mark.django_db

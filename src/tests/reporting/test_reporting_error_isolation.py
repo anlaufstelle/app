@@ -603,13 +603,11 @@ class TestExportBrichtNieNachDenHeadernAb:
 class TestSachberichtPdfIsoliert:
     """M1: der hybride Sachbericht-PDF-Pfad ruft ``build_dataset`` selbst.
 
-    ``SampleReport1ExportView`` geht nicht ueber ``export_dataset``, sondern
-    ueber ``generate_sample_report_1_pdf`` →
-    ``get_sample_report_1_statistics_hybrid`` → im Live-Fallback
-    ``get_backend("sample-report-1").build_dataset(...)``. Dieser Pfad war
-    weder gefangen noch gedeckelt und lieferte reproduzierbar HTTP 500
-    (Cross-Review Befund M1). Die Suppression laeuft dort unveraendert ueber
-    ``suppress_sample_report_1_stats`` — die Isolation aendert daran nichts.
+    Das PDF des Sachberichts laeuft ueber den generischen Export
+    (``format=pdf``): der Hybrid-Leser ruft im Live-Fallback
+    ``get_backend("sample-report-1").build_dataset(...)``. Der Fang des
+    generischen Downloads muss auch diesen Pfad abdecken (Cross-Review Befund
+    M1): HTTP 502 statt 500, kein Attachment, kein Audit-Eintrag.
     """
 
     @pytest.fixture
@@ -636,7 +634,7 @@ class TestSachberichtPdfIsoliert:
     def test_pdf_antwortet_502_statt_500(self, client, admin_user, kaputter_sachbericht):
         client.force_login(admin_user)
 
-        response = client.get(reverse("core:statistics_sample_report_1_export"), _export_params("sample-report-1"))
+        response = client.get(reverse("core:statistics_report_export"), _export_params("sample-report-1", fmt="pdf"))
 
         assert response.status_code == 502
         assert "Content-Disposition" not in response
@@ -644,15 +642,15 @@ class TestSachberichtPdfIsoliert:
     def test_kein_export_audit_eintrag(self, client, admin_user, facility, kaputter_sachbericht):
         client.force_login(admin_user)
 
-        client.get(reverse("core:statistics_sample_report_1_export"), _export_params("sample-report-1"))
+        client.get(reverse("core:statistics_report_export"), _export_params("sample-report-1", fmt="pdf"))
 
-        assert not AuditLog.objects.filter(action=AuditLog.Action.EXPORT, target_type="Sachbericht-PDF").exists()
+        assert not AuditLog.objects.filter(action=AuditLog.Action.EXPORT, target_type="DatasetExport").exists()
 
     def test_intaktes_pdf_bleibt_ein_download(self, client, admin_user, doc_type_contact, sample_event):
         """Regression: der Erfolgspfad liefert weiter das PDF."""
         client.force_login(admin_user)
 
-        response = client.get(reverse("core:statistics_sample_report_1_export"), _export_params("sample-report-1"))
+        response = client.get(reverse("core:statistics_report_export"), _export_params("sample-report-1", fmt="pdf"))
 
         assert response.status_code == 200
         assert "Content-Disposition" in response

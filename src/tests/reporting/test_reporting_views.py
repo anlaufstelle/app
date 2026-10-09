@@ -304,9 +304,8 @@ class TestBerichteFormZeitraumDurchreichung:
         # Der Panel-Header weist den aufgeloesten Zeitraum aus (lokalisiert).
         assert date_format(date(2020, 1, 1)) in panel_html
         assert date_format(date(2020, 1, 31)) in panel_html
-        # Die Export-Schaltflaechen erben ihn ueber dasselbe Formular: CSV/JSON/XML
-        # plus — seit R2 (Refs #1804) — das hierher gewanderte Sachbericht-PDF.
-        assert panel_html.count("formaction=") == 4
+        # Die Export-Schaltflaechen erben ihn ueber dasselbe Formular: CSV/JSON/XML.
+        assert panel_html.count("formaction=") == 3
 
 
 class TestPanelExportOhneRoundtrip:

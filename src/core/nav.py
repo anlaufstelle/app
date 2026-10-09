@@ -232,27 +232,17 @@ SYSTEM_FAMILY = section_family(SYSTEM)
 # unbrauchbar. Statt einer neuen Route trägt er ``?ansicht=datensaetze`` auf
 # ``core:statistics``; das ist das Hausmuster der Bereichs-Konsolidierung
 # (Zeitstrom ``?view=``, Refs #1124) und hält Deep-Links abwärtskompatibel.
+#
+# Refs #2505: the former "Externer Bericht" tab is gone. Its address only
+# redirects to the "Allgemeine Kennzahlen" report card, so it is not a tab
+# and belongs to no family; the report export is the only way out.
 STATISTIK_UEBERSICHT = NavItem(
     key="statistik_uebersicht",
     label=_("Übersicht"),
     url_name="core:statistics",
-    # Die drei Download-Endpunkte gehören zur Übersicht, nicht zum Berichte-
-    # Reiter: sie hängen an den Schaltflächen des Dashboards.
-    family=frozenset(
-        {
-            "statistics",
-            "statistics_csv_export",
-            "statistics_pdf_export",
-            "statistics_sample_report_1_export",
-        }
-    ),
-    gates=("is_lead_or_admin",),
-)
-STATISTIK_EXTERNER_BERICHT = NavItem(
-    key="statistik_external_report",
-    label=_("Externer Bericht"),
-    url_name="core:statistics_external_report",
-    family=frozenset({"statistics_external_report"}),
+    # Der CSV-Endpunkt (interne Ereignisliste) gehört zur Übersicht, nicht zum
+    # Berichte-Reiter: er hängt an der internen Exportleiste des Dashboards.
+    family=frozenset({"statistics", "statistics_csv_export"}),
     gates=("is_lead_or_admin",),
 )
 STATISTIK_DATENSATZ_BERICHTE = NavItem(
@@ -296,7 +286,6 @@ STATISTIK_SECTION = NavSection(
     carry=("zeitraum", "period", "von", "bis", "date_from", "date_to", "jahr", "year"),
     tabs=(
         STATISTIK_UEBERSICHT,
-        STATISTIK_EXTERNER_BERICHT,
         STATISTIK_DATENSATZ_BERICHTE,
         STATISTIK_FREIGABEN,
     ),
@@ -730,12 +719,6 @@ MOBILE_MORE_EXCLUDED_ROUTES: dict[str, str] = {
     "statistics_csv_export": (
         "Reiner Download-Endpunkt (CSVExportView, safe_download_response) — kein gerendertes HTML."
     ),
-    "statistics_pdf_export": (
-        "Reiner Download-Endpunkt (PDFExportView, safe_download_response) — kein gerendertes HTML."
-    ),
-    "statistics_sample_report_1_export": (
-        "Reiner Download-Endpunkt (SampleReport1ExportView, safe_download_response) — kein gerendertes HTML."
-    ),
 }
 
 
@@ -756,6 +739,11 @@ def mobile_more_catalog() -> frozenset[str]:
 KNOWN_NON_NAV_ROUTES: dict[str, str] = {
     # /system/
     "system_audit_export": "Download-Endpunkt (CSV/JSON via ?format=) hinter dem Audit-Reiter, keine eigene Seite.",
+    # /statistics/
+    "statistics_external_report": (
+        "Redirect-only address of the former external report tab; forwards to the "
+        '"Allgemeine Kennzahlen" report card (Refs #2505).'
+    ),
     # /events/
     "attachment_download": "Datei-Download-Endpunkt am Ereignis (entschlüsselt, streamt), keine eigene Seite.",
     # /config/
@@ -871,7 +859,6 @@ BACKLINK_EXEMPT: frozenset[str] = frozenset(
         "system_legal_hold_list",
         "system_compliance",
         "statistics",
-        "statistics_external_report",
         "statistics_report_releases",
         "dsgvo_package",
         # Operative Listen (die Heimat selbst — ein Rücklink zeigte auf sich)

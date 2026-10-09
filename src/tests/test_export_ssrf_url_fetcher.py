@@ -6,12 +6,12 @@ Bisher war der ``file://``-SSRF-/Local-File-Read-Vektor in den PDF-Exporten
 Default-``url_fetcher`` liest ``file://``-URLs tatsaechlich vom lokalen
 Dateisystem (verifiziert) und wuerde externe ``http(s)://``-Ressourcen abrufen.
 
-Fix: Alle drei ``write_pdf``-Aufrufstellen uebergeben einen restriktiven
+Fix: Alle ``write_pdf``-Aufrufstellen uebergeben einen restriktiven
 ``url_fetcher``, der ``file://`` und externe Netzwerk-Fetches ablehnt und nur
 inline ``data:``-URIs an den Default-Fetcher durchreicht:
 
-- ``core.services.system.export.generate_report_pdf``
-- ``core.services.system.export.generate_sample_report_1_pdf``
+- ``core.reporting.pdf.render_dataset_pdf`` (generischer Berichts-Export)
+- ``core.services.system.export.render_sample_report_1_pdf`` (Sachbericht-Layout)
 - ``core.services.client.export.export_client_data_pdf``
 
 Da die legitimen Templates keine externen Ressourcen referenzieren, wird der
@@ -102,29 +102,33 @@ class _CapturingHTML:
 
 @pytest.mark.django_db
 class TestPdfCallSitesPassRestrictedFetcher:
-    """Jede der drei ``write_pdf``-Aufrufstellen muss den restriktiven Fetcher
+    """Jede ``write_pdf``-Aufrufstelle muss den restriktiven Fetcher
     an ``weasyprint.HTML(...)`` uebergeben (Red ohne den Fix)."""
 
-    def test_generate_report_pdf_passes_fetcher(self, facility, monkeypatch):
+    def test_generic_dataset_pdf_passes_fetcher(self, facility, monkeypatch):
+        from core.reporting import pdf as dataset_pdf
+        from core.reporting.export import export_dataset
+        from core.reporting.registry import get_backend
+
+        monkeypatch.setattr(dataset_pdf, "render_to_string", lambda *a, **k: "<html></html>")
+        monkeypatch.setattr(weasyprint, "HTML", _CapturingHTML)
+
+        today = date.today()
+        export_dataset(get_backend("general-key-figures"), facility, today - timedelta(days=30), today, format="pdf")
+
+        assert _CapturingHTML.last_kwargs.get("url_fetcher") is restricted_url_fetcher
+
+    def test_sample_report_1_pdf_passes_fetcher(self, facility, monkeypatch):
         from core.services.system import export as sys_export
 
         monkeypatch.setattr(sys_export, "render_to_string", lambda *a, **k: "<html></html>")
         monkeypatch.setattr(sys_export.weasyprint, "HTML", _CapturingHTML)
 
-        today = date.today()
-        out = sys_export.generate_report_pdf(facility, today - timedelta(days=30), today, {"total_contacts": 0})
-
-        assert out == b"%PDF-1.7 fake"
-        assert _CapturingHTML.last_kwargs.get("url_fetcher") is sys_export.restricted_url_fetcher
-
-    def test_generate_sample_report_1_pdf_passes_fetcher(self, facility, monkeypatch):
-        from core.services.system import export as sys_export
-
-        monkeypatch.setattr(sys_export, "render_to_string", lambda *a, **k: "<html></html>")
-        monkeypatch.setattr(sys_export.weasyprint, "HTML", _CapturingHTML)
+        from core.reporting.export import export_dataset
+        from core.reporting.registry import get_backend
 
         today = date.today()
-        sys_export.generate_sample_report_1_pdf(facility, today - timedelta(days=30), today)
+        export_dataset(get_backend("sample-report-1"), facility, today - timedelta(days=30), today, format="pdf")
 
         assert _CapturingHTML.last_kwargs.get("url_fetcher") is sys_export.restricted_url_fetcher
 

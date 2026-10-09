@@ -452,8 +452,8 @@ class TestCSVExportScope:
 
 @pytest.mark.django_db
 class TestPDFExportScope:
-    def test_pdf_export_scoped_to_facility(self, client, lead_user, facility, organization, doc_type_contact):
-        """PDF export only uses data from the user's own facility."""
+    def test_report_pdf_scoped_to_facility(self, client, lead_user, facility, organization, doc_type_contact):
+        """The generic report PDF only uses data from the user's own facility."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
         other_client = make_client(facility=other_facility, pseudonym="Fremd-PDF-01", created_by=lead_user)
         make_event(
@@ -468,8 +468,13 @@ class TestPDFExportScope:
         today = timezone.localdate()
         client.force_login(lead_user)
         response = client.get(
-            reverse("core:statistics_pdf_export"),
-            {"date_from": str(today - timedelta(days=1)), "date_to": str(today)},
+            reverse("core:statistics_report_export"),
+            {
+                "backend": "general-key-figures",
+                "format": "pdf",
+                "date_from": str(today - timedelta(days=1)),
+                "date_to": str(today),
+            },
         )
 
         # PDF export should succeed and return PDF content type

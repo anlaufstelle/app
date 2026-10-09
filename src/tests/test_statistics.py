@@ -221,16 +221,6 @@ class TestStatisticsViewHTMX:
         content = response.content.decode()
         assert 'id="statistics-content"' in content
 
-    def test_pdf_export_button_label_is_neutral(self, client, admin_user):
-        """Refs #1571: Der PDF-Export-Button heisst neutral 'PDF-Export' statt
-        'Halbjahresbericht (PDF)' — der Export nutzt den frei gewaehlten
-        Zeitraum, kein festes Halbjahr."""
-        client.force_login(admin_user)
-        response = client.get(reverse("core:statistics"))
-        assert response.status_code == 200
-        content = response.content.decode()
-        assert "PDF-Export" in content
-
 
 # Alpine-Direktive samt Wert: ``@event.modifier="…"`` und ``x-foo="…"``.
 _ALPINE_DIRECTIVE_RE = re.compile(r'(?:^|\s)(?P<name>@[a-zA-Z][\w:.-]*|x-[a-zA-Z][\w:.-]*)\s*=\s*"(?P<value>[^"]*)"')
@@ -711,24 +701,24 @@ class TestStatisticsRangeGuardViews:
         resp = client.get(reverse("core:statistics_chart_data"), self._huge_range())
         assert resp.status_code == 400
 
-    def test_external_report_view_rejects_huge_range(self, client, admin_user):
-        client.force_login(admin_user)
-        resp = client.get(reverse("core:statistics_external_report"), self._huge_range())
-        assert resp.status_code == 400
-
     def test_csv_export_rejects_huge_range(self, client, admin_user):
         client.force_login(admin_user)
         resp = client.get(reverse("core:statistics_csv_export"), self._huge_range())
         assert resp.status_code == 400
 
-    def test_pdf_export_rejects_huge_range(self, client, admin_user):
+    @pytest.mark.parametrize("slug", ["general-key-figures", "sample-report-1"])
+    @pytest.mark.parametrize("fmt", ["csv", "json", "xml", "pdf"])
+    def test_report_export_all_formats_reject_huge_range(self, client, admin_user, slug, fmt):
         client.force_login(admin_user)
-        resp = client.get(reverse("core:statistics_pdf_export"), self._huge_range())
+        resp = client.get(
+            reverse("core:statistics_report_export"), {**self._huge_range(), "backend": slug, "format": fmt}
+        )
         assert resp.status_code == 400
 
-    def test_sample_report_1_export_rejects_huge_range(self, client, admin_user):
+    def test_external_address_rejects_huge_range(self, client, admin_user):
+        """The redirect parses the period first: a huge range is not forwarded."""
         client.force_login(admin_user)
-        resp = client.get(reverse("core:statistics_sample_report_1_export"), self._huge_range())
+        resp = client.get(reverse("core:statistics_external_report"), self._huge_range())
         assert resp.status_code == 400
 
     def test_report_panel_rejects_huge_range(self, client, admin_user):
@@ -1114,87 +1104,6 @@ class TestDoktypFilterErreichtDieExporte:
         response = client.get(reverse("core:statistics_csv_export"), {**self._range(), "doktyp": str(fremd.pk)})
         body = b"".join(response.streaming_content).decode("utf-8")
         assert len([zeile for zeile in body.splitlines()[2:] if zeile.strip()]) == 3
-
-    def test_pdf_export_rechnet_mit_dem_filter(self, client, admin_user, facility, zwei_typen, monkeypatch):
-        """Das PDF speist sich aus denselben Zahlen wie die Kacheln — mit Filter
-        also aus dem Live-Pfad, nicht aus den Monats-Aggregaten."""
-        import core.views.statistics as statistics_views
-
-        kontakt, _ = zwei_typen
-        gesehen = {}
-
-        def _fake_pdf(fac, date_from, date_to, stats, **kwargs):
-            gesehen["stats"] = stats
-            gesehen["kwargs"] = kwargs
-            return b"%PDF-fake"
-
-        monkeypatch.setattr(statistics_views, "generate_report_pdf", _fake_pdf)
-        client.force_login(admin_user)
-
-        response = client.get(reverse("core:statistics_pdf_export"), {**self._range(), "doktyp": str(kontakt.pk)})
-        assert response.status_code == 200
-        assert gesehen["stats"]["total_contacts"] == 2
-        assert [row["name"] for row in gesehen["stats"]["by_document_type"]] == [kontakt.name]
-        assert gesehen["kwargs"]["document_type"] == kontakt
-
-    def test_pdf_export_ohne_filter_bleibt_hybrid(self, client, admin_user, facility, zwei_typen, monkeypatch):
-        import core.views.statistics as statistics_views
-
-        gesehen = {}
-
-        def _fake_pdf(fac, date_from, date_to, stats, **kwargs):
-            gesehen["stats"] = stats
-            gesehen["kwargs"] = kwargs
-            return b"%PDF-fake"
-
-        monkeypatch.setattr(statistics_views, "generate_report_pdf", _fake_pdf)
-        client.force_login(admin_user)
-
-        client.get(reverse("core:statistics_pdf_export"), self._range())
-        assert gesehen["stats"]["total_contacts"] == 3
-        assert gesehen["kwargs"]["document_type"] is None
-
-    def test_pdf_deckblatt_nennt_den_filter(self, facility, zwei_typen):
-        """Ein gefiltertes PDF, das seinen Filter verschweigt, ist im Umlauf
-        nicht mehr von einem vollstaendigen Bericht zu unterscheiden."""
-        from django.template.loader import render_to_string
-
-        from core.reporting.data_source import ALL_EVENTS, LIVE, table_note
-
-        kontakt, _ = zwei_typen
-        today = date.today()
-        stats = get_statistics(facility, today - timedelta(days=1), today, document_type=kontakt)
-
-        html = render_to_string(
-            "core/export/report_pdf.html",
-            {
-                "facility_name": facility.name,
-                "date_from": today - timedelta(days=1),
-                "date_to": today,
-                "stats": stats,
-                "internal_mode": False,
-                "generated_at": timezone.now(),
-                "document_type": kontakt,
-                "population_notes": {"by_document_type": table_note(ALL_EVENTS, LIVE)},
-            },
-        )
-        assert f"Gefiltert nach Dokumentationstyp: {kontakt.name}" in html
-
-    def test_pdf_quellenausweis_folgt_dem_gelaufenen_pfad(self, facility, zwei_typen):
-        """Der Ausweis „Monats-Aggregate" auf einem live gerechneten Bericht
-        waere genau die Falschangabe, die K3-A3 beseitigen sollte."""
-        from core.services.system import generate_report_pdf
-
-        kontakt, _ = zwei_typen
-        today = date.today()
-        stats = get_statistics(facility, today - timedelta(days=1), today, document_type=kontakt)
-
-        with patch("core.services.system.export.render_to_string", return_value="<html></html>") as gerendert:
-            generate_report_pdf(facility, today - timedelta(days=1), today, stats, document_type=kontakt)
-        kontext = gerendert.call_args[0][1]
-        assert kontext["document_type"] == kontakt
-        assert "Live-Abfrage" in str(kontext["data_source_note"])
-        assert "Live-Abfrage" in str(kontext["population_notes"]["by_document_type"])
 
     @staticmethod
     def _export_formular(content: str) -> str:

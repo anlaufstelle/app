@@ -24,9 +24,8 @@ Datenintegritaet des Streams):
   einem Null-Byte.
 * **Durchreichen des Nutzers** (``export_events_csv``) an Spalten- und
   Zeilenbau.
-* **PDF-Datenschutz** (``generate_report_pdf`` /
-  ``generate_sample_report_1_pdf``): der Default ``internal_mode=False`` und
-  die Facility, aus der die k-Anon-Schwelle gelesen wird.
+* **PDF-Datenschutz** (Sachbericht-PDF ueber den generischen Export): die
+  Facility, aus der die k-Anon-Schwelle gelesen wird.
 
 Konventionen wie ``test_mutation_pins_094_export_1.py``: Zusicherungen
 vergleichen EXAKT (``==``/``is``), nie per Teilstring, wo mutmut
@@ -340,7 +339,7 @@ class TestExportStream:
 
 
 # ---------------------------------------------------------------------------
-# generate_report_pdf / generate_sample_report_1_pdf — Datenschutz-Defaults
+# Sample report PDF (generic export, hybrid reader) — facility threshold
 # ---------------------------------------------------------------------------
 
 
@@ -360,71 +359,6 @@ class TestPdfDatenschutzDefaults:
                 is_anonymous=mit_person is None,
                 created_by=user,
             )
-
-    def test_standard_pdf_rendert_ohne_internen_modus(self, facility, admin_user, client_identified, monkeypatch):
-        """Mutante ``x_generate_report_pdf__mutmut_1`` (``internal_mode=False``
-        → ``True``).
-
-        Geprueft wird das tatsaechlich gerenderte Markup des Aufrufs OHNE
-        ``internal_mode`` (der Bestandstest prueft nur ``pdf_bytes[:4]`` und
-        rendert den Inhalt separat mit hart codiertem ``False``). Beim
-        Mutanten enthaelt das externe Traeger-PDF die Pseudonym-Rangliste
-        ``"Top 5 Personen"`` und den ``"INTERN"``-Banner.
-        """
-        from core.services.dashboard import get_statistics_hybrid
-
-        self._events(facility, admin_user, "Kontakt", 3, report_key="contact", mit_person=client_identified)
-
-        bis = timezone.localdate()
-        von = bis - timedelta(days=2)
-        stats = get_statistics_hybrid(facility, von, bis)
-        assert stats.get("top_clients"), "Setup-Sanity: stats.top_clients darf nicht leer sein"
-
-        erfasst: dict = {}
-        monkeypatch.setattr(sys_export.weasyprint, "HTML", _weasyprint_stub(erfasst))
-
-        with translation.override("de"):
-            pdf_bytes = sys_export.generate_report_pdf(facility, von, bis, stats)
-
-        assert pdf_bytes == b"%PDF-1.7 fake"
-        html = erfasst["string"]
-        assert "Top 5 Personen" not in html
-        assert "INTERN" not in html
-
-    def test_bericht_pdf_nutzt_die_schwelle_der_einrichtung(self, facility, admin_user, monkeypatch):
-        """Mutante ``x_generate_report_pdf__mutmut_6``
-        (``suppress_report_stats(facility, …)`` → ``(None, …)``).
-
-        ``facility=None`` laesst ``_get_threshold`` in den Default 5 fallen.
-        Die Einrichtung hat hier bewusst die strengere Schwelle 10 gesetzt:
-        Beim Mutanten steht die Zelle ``"Mittel"`` mit der rohen 7 im externen
-        Bericht statt unterdrueckt zu sein.
-        """
-        from core.services.dashboard import get_statistics_hybrid
-
-        Settings.objects.create(facility=facility, k_anonymity_threshold=10)
-        self._events(facility, admin_user, "Haeufig", 12)
-        self._events(facility, admin_user, "Mittel", 7)
-
-        bis = timezone.localdate()
-        von = bis - timedelta(days=2)
-        stats = get_statistics_hybrid(facility, von, bis)
-
-        erfasst: dict = {}
-        gerendert: dict = {}
-
-        def fake_render(template_name, context):
-            gerendert["stats"] = context["stats"]
-            return "<html></html>"
-
-        monkeypatch.setattr(sys_export, "render_to_string", fake_render)
-        monkeypatch.setattr(sys_export.weasyprint, "HTML", _weasyprint_stub(erfasst))
-
-        sys_export.generate_report_pdf(facility, von, bis, stats, internal_mode=False)
-
-        zeilen = {r["name"]: r for r in gerendert["stats"]["by_document_type"]}
-        assert zeilen["Mittel"]["count"] is None
-        assert zeilen["Mittel"]["suppressed"] is True
 
     def test_sachbericht_pdf_nutzt_die_schwelle_der_einrichtung(self, facility, admin_user, monkeypatch):
         """Mutante ``x_generate_sample_report_1_pdf__mutmut_9``
@@ -451,7 +385,10 @@ class TestPdfDatenschutzDefaults:
         monkeypatch.setattr(sys_export, "render_to_string", fake_render)
         monkeypatch.setattr(sys_export.weasyprint, "HTML", _weasyprint_stub(erfasst))
 
-        sys_export.generate_sample_report_1_pdf(facility, von, bis)
+        from core.reporting.export import export_dataset
+        from core.reporting.registry import get_backend
+
+        export_dataset(get_backend("sample-report-1"), facility, von, bis, format="pdf")
 
         kategorien = {r["name"]: r for r in gerendert["stats"]["by_category"]}
         assert kategorien["Beratung"]["count"] is None
