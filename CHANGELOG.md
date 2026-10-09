@@ -32,7 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **Generische PDF-Ausgabe für Datensatz-Berichte** (#2505) — Der Berichts-Download unterstützt PDF mit einer generischen Tabellenvorlage und einem Layout-Hook für vorbereitete Datensätze; Quelle, Grundgesamtheit, Zeitraum, Schwelle und Vollständigkeitshinweise bleiben sichtbar, und erfolgreiche Downloads erscheinen unter dem Backend-Namen in den Freigaben.
+- **PDF und Allgemeine Kennzahlen für Datensatz-Berichte** (#2505) — Der Berichts-Download unterstützt generische Tabellen-PDFs und die live berechnete Karte „Allgemeine Kennzahlen“ mit den bestehenden Schutzregeln, integriert das hybride Beispiel-Sachbericht-PDF über einen Layout-Hook, weist Quelle je Format und Grundgesamtheit je Tabelle aus und protokolliert erfolgreiche Downloads unter dem Backend-Namen in den Freigaben.
 
 ## [0.99.6] - 2026-10-08
 
