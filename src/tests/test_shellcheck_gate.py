@@ -49,9 +49,21 @@ def test_shellcheck_reports_script_errors(tmp_path):
 def test_existing_guard_requires_shellcheck(monkeypatch):
     from tests.test_architecture_guards_ops import TestShippedShellScriptsSyntax
 
-    monkeypatch.setattr("shutil.which", lambda name: None)
+    monkeypatch.setattr("shutil.which", lambda name, **kwargs: None)
     try:
         with pytest.raises(AssertionError, match="ShellCheck is required"):
             TestShippedShellScriptsSyntax().test_scripts_are_shellcheck_clean()
     except pytest.skip.Exception as error:
         pytest.fail(f"Required lint was skipped: {error}")
+
+
+def test_shellcheck_is_available_to_the_python_environment():
+    import shutil
+
+    executable = shutil.which(
+        "shellcheck", path=os.pathsep.join((str(Path(sys.executable).parent), os.environ["PATH"]))
+    )
+    assert executable is not None, "Install the locked development requirements"
+    result = subprocess.run([str(executable), "--version"], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "version: 0.11.0" in result.stdout

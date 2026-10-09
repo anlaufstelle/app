@@ -183,6 +183,13 @@ maintenance-off:
 test:
 	$(PYTHON) -m pytest -m "not e2e"
 
+# Demo uses its own server session and port under the shared host lock.
+# Literal make keeps -n from executing flock via recursive-make handling (Refs #2531).
+.PHONY: test-e2e-demo
+test-e2e-demo:
+	flock -w $(CI_LOCK_TIMEOUT) "$(CI_LOCK)" make tailwind-build
+	flock -w $(CI_LOCK_TIMEOUT) "$(CI_LOCK)" env E2E_DEMO_MODE=1 E2E_SEED_SCALE=demo E2E_PORT_BASE=8854 $(PYTHON) -m pytest src/tests/e2e/test_demo_scenario_switch.py src/tests/e2e/test_system_compliance_maintenance_results.py::TestDemoCards -m e2e --browser chromium --timeout=120 --timeout-method=thread -x -v -rs
+
 # --timeout-method=thread ist fuer die E2E-Laeufe Pflicht (Refs #1606): Stirbt
 # Chromium unter CPU-Knappheit weg, dreht die Playwright-Sync-API in einem
 # Greenlet frei — ausserhalb jeder Python-Ebene, die die Default-``signal``-
@@ -196,13 +203,6 @@ test:
 # ggf. veraltetes styles.css, wenn seit der letzten Template-Klassenaenderung
 # nicht manuell neu gebaut wurde (Assertions gegen sichtbare Klassen/Layout
 # faellig-still). Beseitigt die Falle an der Wurzel statt sie zu dokumentieren.
-# Demo uses its own server session and port under the shared host lock.
-# Literal make keeps -n from executing flock via recursive-make handling (Refs #2531).
-.PHONY: test-e2e-demo
-test-e2e-demo:
-	flock -w $(CI_LOCK_TIMEOUT) "$(CI_LOCK)" make tailwind-build
-	flock -w $(CI_LOCK_TIMEOUT) "$(CI_LOCK)" env E2E_DEMO_MODE=1 E2E_SEED_SCALE=demo E2E_PORT_BASE=8854 $(PYTHON) -m pytest src/tests/e2e/test_demo_scenario_switch.py src/tests/e2e/test_system_compliance_maintenance_results.py::TestDemoCards -m e2e --browser chromium --timeout=120 --timeout-method=thread -x -v -rs
-
 test-e2e: tailwind-build
 	$(PYTHON) -m pytest -m e2e --browser chromium --timeout=120 --timeout-method=thread -v
 
@@ -543,13 +543,14 @@ worktree:
 worktree-rm:
 	bash scripts/dev/worktree.sh rm "$(NAME)"
 
-# ── Release-Helfer (dev-only, Refs #1078/#1051): Skripte liegen unter
-#    dev-ops/release/ und sind nicht im Public-Snapshot — analog `make mutation`.
-# Lokale Replikation der Stage/App-only-CI-Gates (W3/W4-Lehre)
+# ShellCheck uses the locked development tool from the Python environment.
 .PHONY: shellcheck
 shellcheck:
-	$(PYTHON) scripts/check_shell_scripts.py
+	PATH="$(dir $(PYTHON)):$$PATH" $(PYTHON) scripts/check_shell_scripts.py
 
+# ── Release-Helfer (dev-only, Refs #1078/#1051): Skripte liegen unter
+#    dev-ops/release/ und sind nicht im Public-Snapshot — analog `make mutation`.
+# Local replication of the stage/app-only release gates.
 release-gates:
 	$(PYTHON) scripts/check_hand_check_archive.py
 	bash dev-ops/release/release-gates.sh

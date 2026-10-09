@@ -15,7 +15,11 @@ def main() -> int:
     args = parser.parse_args()
     shellcheck = shutil.which("shellcheck")
     if shellcheck is None:
-        print("ShellCheck is required; install shellcheck and make it available on PATH.")
+        print(
+            "ShellCheck is required; installation: "
+            ".venv/bin/python -m pip install --require-hashes -r requirements-dev.txt; "
+            "add .venv/bin to PATH."
+        )
         return 1
     scripts = sorted((args.root / "scripts").rglob("*.sh"))
     scripts += [path for name in ("docker-entrypoint.sh", "docker-migrate.sh") if (path := args.root / name).exists()]

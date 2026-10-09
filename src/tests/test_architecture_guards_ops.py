@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -1387,8 +1388,10 @@ class TestShippedShellScriptsSyntax:
 
     def test_scripts_are_shellcheck_clean(self) -> None:
         """Require ShellCheck for the development and public profiles."""
-        shellcheck = shutil.which("shellcheck")
-        assert shellcheck is not None, "ShellCheck is required; install shellcheck and add it to PATH"
+        shellcheck = shutil.which(
+            "shellcheck", path=os.pathsep.join((str(Path(sys.executable).parent), os.environ["PATH"]))
+        )
+        assert shellcheck is not None, "ShellCheck is required; install requirements-dev.txt"
         failures = []
         scripts = self._shipped_scripts()
         assert scripts, "No shell scripts found"
