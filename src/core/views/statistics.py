@@ -589,7 +589,7 @@ class CSVExportView(LeadOrAdminRequiredMixin, ExportRangeMixin, View):
 class ExternalReportRedirectView(LeadOrAdminRequiredMixin, View):
     """Former external report address: redirects to the "Allgemeine Kennzahlen" card.
 
-    Refs #2505 (E-1 a): the on-screen external report and its ``?format=json``
+    Refs #2505: the on-screen external report and its ``?format=json``
     file are gone. The card is the preview, the generic report export is the
     only way out. This view never renders a file and writes no audit row —
     a redirect is not a release, and previews are not logged either.

@@ -93,7 +93,7 @@ def test_orphaned_pages_are_part_of_the_sidebar_family():
 
 
 def test_the_external_report_tab_is_gone():
-    """#2505 (E-1 a): no tab, no family — the address only redirects."""
+    """#2505: no tab, no family — the address only redirects."""
     assert "statistik_external_report" not in [tab.key for tab in nav.section("statistik").tabs]
     assert "statistics_external_report" not in nav.item("statistics").family
 

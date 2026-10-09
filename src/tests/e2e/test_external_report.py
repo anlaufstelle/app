@@ -1,6 +1,6 @@
 """E2E tests: the old address of the external report (Refs #921, #2505).
 
-Since #2505 (E-1 a) there is no "Externer Bericht" tab any more. The address
+Since #2505 there is no "Externer Bericht" tab any more. The address
 ``/statistics/external/`` redirects — also with ``?format=json`` — with the
 period to the "Allgemeine Kennzahlen" card of the dataset reports and delivers
 no file. Wait strategy: domcontentloaded + anchor-first (locator.wait_for),
