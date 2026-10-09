@@ -1386,13 +1386,13 @@ class TestShippedShellScriptsSyntax:
         assert not failures, "Shell-Syntaxfehler:\n" + "\n".join(failures)
 
     def test_scripts_are_shellcheck_clean(self) -> None:
-        """Laeuft nur, wenn shellcheck installiert ist (nicht Teil der
-        Dev-Dependencies) — sonst Skip statt Fehlalarm."""
+        """Require ShellCheck for the development and public profiles."""
         shellcheck = shutil.which("shellcheck")
-        if shellcheck is None:
-            pytest.skip("shellcheck nicht installiert — optionaler Lint")
+        assert shellcheck is not None, "ShellCheck is required; install shellcheck and add it to PATH"
         failures = []
-        for script in self._shipped_scripts():
+        scripts = self._shipped_scripts()
+        assert scripts, "No shell scripts found"
+        for script in scripts:
             result = subprocess.run(  # noqa: S603 — fester Pfad, Repo-eigene Dateien
                 [shellcheck, "--severity=error", str(script)], capture_output=True, text=True, check=False
             )

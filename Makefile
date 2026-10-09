@@ -545,6 +545,10 @@ worktree-rm:
 # ── Release-Helfer (dev-only, Refs #1078/#1051): Skripte liegen unter
 #    dev-ops/release/ und sind nicht im Public-Snapshot — analog `make mutation`.
 # Lokale Replikation der Stage/App-only-CI-Gates (W3/W4-Lehre)
+.PHONY: shellcheck
+shellcheck:
+	$(PYTHON) scripts/check_shell_scripts.py
+
 release-gates:
 	$(PYTHON) scripts/check_hand_check_archive.py
 	bash dev-ops/release/release-gates.sh
