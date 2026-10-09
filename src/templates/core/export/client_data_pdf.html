@@ -73,12 +73,12 @@
         {% if client.document_type %}
         <tr><th>{% trans "Dokumentationstyp" %}</th><td>{{ client.document_type }}</td></tr>
         {% for entry in client.dynamic_data %}
-        <tr><th>{{ entry.label }}</th><td>{{ entry.value|default_if_none:"" }}</td></tr>
+        <tr><th>{{ entry.label }}</th><td>{{ entry.value|default_if_none:""|linebreaksbr }}</td></tr>
         {% endfor %}
         {% comment %}Refs #1725(a): verwaiste Felder (Slug nicht mehr am Typ) gehoeren
         zur Auskunft; separater Unterabschnitt aus ``client.dynamic_data_orphaned``.{% endcomment %}
         {% for entry in client.dynamic_data_orphaned %}
-        <tr><th>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em></th><td>{{ entry.value|default_if_none:"" }}</td></tr>
+        <tr><th>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em></th><td>{{ entry.value|default_if_none:""|linebreaksbr }}</td></tr>
         {% endfor %}
         {% endif %}
     </table>
@@ -162,11 +162,11 @@
                     {% if case.document_type %}
                     <strong>{{ case.document_type }}</strong>
                     {% for entry in case.dynamic_data %}
-                        <br>{{ entry.label }}: {{ entry.value|default_if_none:"" }}
+                        <br>{{ entry.label }}: {{ entry.value|default_if_none:""|linebreaksbr }}
                     {% endfor %}
                     {% comment %}Refs #1725(a): verwaiste Fall-Felder separat.{% endcomment %}
                     {% for entry in case.dynamic_data_orphaned %}
-                        <br>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em>: {{ entry.value|default_if_none:"" }}
+                        <br>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em>: {{ entry.value|default_if_none:""|linebreaksbr }}
                     {% endfor %}
                     {% else %}-{% endif %}
                 </td>
@@ -225,10 +225,10 @@
                     {% if case.document_type %}
                     <strong>{{ case.document_type }}</strong>
                     {% for entry in case.dynamic_data %}
-                        <br>{{ entry.label }}: {{ entry.value|default_if_none:"" }}
+                        <br>{{ entry.label }}: {{ entry.value|default_if_none:""|linebreaksbr }}
                     {% endfor %}
                     {% for entry in case.dynamic_data_orphaned %}
-                        <br>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em>: {{ entry.value|default_if_none:"" }}
+                        <br>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em>: {{ entry.value|default_if_none:""|linebreaksbr }}
                     {% endfor %}
                     {% else %}-{% endif %}
                 </td>
@@ -505,8 +505,8 @@
                 #1796): nur redigierte (NULL-)Spalten werden "—" — echte, aber
                 falsy Werte (0, leerer Bestandswert, leere Liste) bleiben als
                 das stehen, was gespeichert ist.{% endcomment %}
-                <td>{{ rr.old_value|default_if_none:"—" }}</td>
-                <td>{{ rr.new_value|default_if_none:"—" }}</td>
+                <td>{{ rr.old_value|default_if_none:"—"|linebreaksbr }}</td>
+                <td>{{ rr.new_value|default_if_none:"—"|linebreaksbr }}</td>
                 <td>{{ rr.reason|default_if_none:"—" }}</td>
                 <td>{{ rr.review_note|default_if_none:"—" }}</td>
                 <td>{{ rr.requested_by|default:"—" }}</td>

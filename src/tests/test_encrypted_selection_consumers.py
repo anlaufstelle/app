@@ -189,6 +189,67 @@ def test_article_15_pdf_uses_readable_selection_labels(selection_entity, facilit
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
+    ("selection_entity", "deleted"),
+    [
+        pytest.param((kind, False, encrypted), deleted, id=f"{kind}-{deleted}-{encrypted}")
+        for kind, deleted in (("client", False), ("case", False), ("case", True))
+        for encrypted in (False, True)
+    ],
+    indirect=["selection_entity"],
+)
+@pytest.mark.parametrize("orphaned", [False, True], ids=["assigned", "orphaned"])
+def test_disclosure_html_preserves_selection_boundaries(selection_entity, facility, staff_user, deleted, orphaned):
+    from core.services.client.export import render_client_export_html
+
+    entity, template = selection_entity
+    if deleted:
+        entity.is_deleted = True
+        entity.deleted_at = timezone.now()
+        entity.save(update_fields=["is_deleted", "deleted_at"])
+    if orphaned:
+        DocumentTypeField.objects.filter(document_type=entity.document_type, field_template=template).delete()
+    person = entity if entity._meta.model_name == "client" else entity.client
+    html = render_client_export_html(person, facility, staff_user)
+    assert "First label<br>Second label" in html
+    assert "First label\nSecond label" not in html
+    assert "Unused label" not in html
+    assert "__encrypted__" not in html
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("selection_entity", [("client", False, True)], indirect=True)
+def test_disclosure_selection_breaks_keep_labels_and_unknown_slugs_escaped(selection_entity, facility, staff_user):
+    from core.services.client.export import render_client_export_html
+
+    person, template = selection_entity
+    template.options_json = [{"slug": "a", "label": "First <label>"}, {"slug": "b", "label": "Second & label"}]
+    template.save(update_fields=["options_json"])
+    person.data_json = {template.slug: ["a", "b", "missing<&>"]}
+    person.save(update_fields=["data_json"])
+    html = render_client_export_html(person, facility, staff_user)
+    assert "First &lt;label&gt;<br>Second &amp; label<br>missing&lt;&amp;&gt;" in html
+    assert "<label>" not in html
+    assert "__encrypted__" not in html
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("selection_entity", [("client", False, True)], indirect=True)
+@pytest.mark.parametrize("value_side", ["old", "new"])
+def test_disclosure_rectification_preserves_selection_boundaries(selection_entity, facility, staff_user, value_side):
+    from core.services.client.export import render_client_export_html
+    from core.services.client.rectification import request_rectification
+
+    person, template = selection_entity
+    request_rectification(person, staff_user, f"data_json.{template.slug}", ["b", "a"], "Correction requested")
+    html = render_client_export_html(person, facility, staff_user)
+    section = html.split("11. Berichtigungsanträge", 1)[1].split("12. Aufbewahrung", 1)[0]
+    labels = ("First label", "Second label") if value_side == "old" else ("Second label", "First label")
+    assert "<br>".join(labels) in section
+    assert "__encrypted__" not in section
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
     "selection_entity", [(kind, False, True) for kind in ("client", "case", "event")], indirect=True
 )
 def test_option_usage_recognizes_each_encrypted_selection_slug(selection_entity):
