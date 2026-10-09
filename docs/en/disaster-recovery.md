@@ -7,4 +7,4 @@ An older backup set can contain database fields and attachments encrypted under 
 <!-- translation-source: docs/disaster-recovery.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-09 -->
-<!-- source-hash: a2c4a7dbcc4631debc237922e0d9de3b45e65051 -->
+<!-- source-hash: fef11d7643755eb7b3ced458b3b4e06be5496c00 -->

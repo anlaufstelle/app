@@ -1633,7 +1633,15 @@ Image und Compose-Vertrag das Volume anlegen, die Datei im
 `maintenance`-Dienst unter UID/GID 1000 in eine temporäre Datei im neuen
 Ankerverzeichnis übernehmen, mit `HighWaterMarkStore.load()` prüfen und erst
 danach per Rename als `audit_hwm.json` aktivieren. Größe und SHA-256 mit der
-Quelle vergleichen. In `.env` `DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json`, `MEDIA_ROOT=/media/media` und gegebenenfalls `MEDIA_ROOT_CONTAINER=/media/media` sowie `MAINTENANCE_FLAG_FILE=/media/anlaufstelle.maintenance` setzen. Das bestehende Medienvolume wird unter `/media` eingehängt, seine Inhalte bleiben erhalten; der bisherige Standardanker ist dort als `/media/audit_hwm.json` erreichbar. Ein vorhandenes Wartungsflag liegt nach dem Umhängen ebenfalls unter `/media`. Die Container neu erstellen
+Quelle vergleichen. In `.env` `DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json` sowie
+`MAINTENANCE_FLAG_FILE=/media/anlaufstelle.maintenance` setzen. Für Medienwurzeln
+unter dem bisherigen Mount `/data/…` nur das Präfix durch `/media/…` ersetzen
+und den Restpfad erhalten: Der bisherige Standard `/data/media` wird zu
+`MEDIA_ROOT=/media/media`; eine individuelle Wurzel `/data/vault` wird zu
+`MEDIA_ROOT=/media/vault`. Falls `MEDIA_ROOT_CONTAINER` gesetzt ist, ebenfalls
+auf dasselbe tatsächliche Verzeichnis umstellen. Vor dem Upgrade einen
+Bestandsanhang öffnen und nach dem Upgrade prüfen, dass derselbe Bestandsanhang
+lädt. Das bestehende Medienvolume wird unter `/media` eingehängt, seine Inhalte bleiben erhalten; der bisherige Standardanker ist dort als `/media/audit_hwm.json` erreichbar. Ein vorhandenes Wartungsflag liegt nach dem Umhängen ebenfalls unter `/media`. Die Container neu erstellen
 und erst nach erfolgreicher Prüfung Jobs freigeben. Kein neuer Erstlauf darf
 einen vorhandenen Anker ersetzen; das gesicherte Original behalten. Dies ist
 ein Betreiber-Schritt, keine Datenbankmigration.

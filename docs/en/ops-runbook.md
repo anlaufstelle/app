@@ -1617,9 +1617,14 @@ the change and preserve the existing signed file separately. Create the
 volume with the new image and Compose contract, transfer the file through
 `maintenance` under UID/GID 1000 to a temporary file in the new anchor
 directory, validate it with `HighWaterMarkStore.load()`, then rename it to
-`audit_hwm.json`. Compare size and SHA-256 with the source. Set `DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json`, `MEDIA_ROOT=/media/media`,
-and, where configured, `MEDIA_ROOT_CONTAINER=/media/media` and
-`MAINTENANCE_FLAG_FILE=/media/anlaufstelle.maintenance` in `.env`. The existing
+`audit_hwm.json`. Compare size and SHA-256 with the source. Set `DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json` and
+`MAINTENANCE_FLAG_FILE=/media/anlaufstelle.maintenance` in `.env`. For media
+roots beneath the previous mount `/data/…`, replace only the prefix with
+`/media/…` and preserve the remaining path: the previous default `/data/media`
+becomes `MEDIA_ROOT=/media/media`; a custom root `/data/vault` becomes
+`MEDIA_ROOT=/media/vault`. If `MEDIA_ROOT_CONTAINER` is configured, update it to
+the same actual directory. Open an existing attachment before the upgrade and
+verify that the same existing attachment loads after the upgrade. The existing
 media volume is mounted at `/media` with its contents preserved; its old default
 anchor is available at `/media/audit_hwm.json`. An existing maintenance flag
 also remains available under `/media`. Recreate the containers and release jobs only after successful verification.
@@ -3281,4 +3286,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 38f6f1b27e61d205d1810b955225e7bafc6f59b1 -->
+<!-- source-hash: 7389b142365e652f30ec1f5b3dfcd48b47e78d34 -->
