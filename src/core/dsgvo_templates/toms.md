@@ -110,7 +110,7 @@ berücksichtigen.
 - [x] Feldverschlüsselung für sensible dynamische Daten und TOTP-Secrets mit Fernet/MultiFernet; Schlüssel getrennt von der Datenbank und ohne Datenverlust rotierbar
 - [x] File-Vault: Anhänge werden vor der Ablage in Fernet-Chunks verschlüsselt; Originaldateinamen liegen ebenfalls Fernet-verschlüsselt vor
 - [x] Schlüssel getrennt von Datenbank (Umgebungsvariable)
-- [x] Schlüsselrotation ohne Datenverlust (MultiFernet)
+- [x] Schlüsselrotation ohne Datenverlust (MultiFernet) für Datenbankfelder (`reencrypt_fields`) und Dateianhänge (`reencrypt_files`); Altschlüssel erst nach ungefilterter Primärschlüssel-Prüfung (`reencrypt_files --verify`), Klärung nicht erfasster Import-/Staging-Dateien und Ablauf betroffener lokaler/Off-Site-Backups entfernen, Prozesse neu starten und ungefiltert erneut prüfen. Ein Schlüsselring je Installation, keine Einrichtungsschlüssel; das Manifest dokumentiert Fortschritt, keine Integrität.
 - [x] Browser-seitige Verschlüsselung offline gehaltener Inhalte mit AES-GCM-256; Schlüsselableitung per PBKDF2 (600 000 Iterationen, SHA-256) aus Passwort und User-Salt
 - [x] Der Schlüssel ist non-extractable und liegt als `CryptoKey` in einer eigenen IndexedDB des Browsers (`anlaufstelle-crypto`), damit Neuladen sowie Tab-, Browser- und Geräteneustart die Offline-Daten nicht unbrauchbar machen. „Non-extractable“ verhindert das Auslesen der Schlüsselbytes, nicht das Entschlüsseln mit dem gespeicherten Schlüssel im Browser dieses Geräts
 - [x] Verschlüsselt sind die Inhalte; Ordnungsmerkmale (Datensatz- und Personen-IDs, Bearbeitungsstatus, Zeitstempel, Ziel-Adressen der Sende-Warteschlange) liegen unverschlüsselt daneben

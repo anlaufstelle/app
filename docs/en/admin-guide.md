@@ -1193,11 +1193,11 @@ In production the `/health/` endpoint checks ClamAV daemon reachability in addit
 MultiFernet accepts a list of keys. To rotate:
 
 1. **Generate a new key** and add it as the **first** entry in `ENCRYPTION_KEYS`: `ENCRYPTION_KEYS=new,old`. Newly written data is encrypted with `new`; existing data stays readable via `old`.
-2. Optional: run `python manage.py reencrypt_fields` to re-encrypt existing database fields with the new key (see [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). A `--dry-run` reports how many records would be affected without writing anything. **The run must use the admin/owner role** -- see the box below.
-3. **Keep the old key in the list.** `reencrypt_fields` re-encrypts database columns only, not the contents of the file attachments under `MEDIA_ROOT`. These remain encrypted with the key that was first at upload time and stay readable only while that key is in the `ENCRYPTION_KEYS` ring. There is no tool that re-encrypts file contents. As long as attachments written with the old key exist, which usually means permanently, it stays in the list behind the new one.
+2. Run `reencrypt_fields` through the maintenance service; repeat after skipped-row or TOTP retry warnings until none remain.
+3. Then run `reencrypt_files`, followed by **unfiltered** `reencrypt_files --verify`: every referenced attachment version, including deleted and superseded versions, must be fully readable using the primary key alone. A failure exit means: keep old keys, resolve the cause, rotate and verify again.
+4. Let local and off-site backups containing old ciphertext expire under the applicable retention policies; keep their required keys in separate escrow until then. Only after complete verification and actual backup expiry, remove the old key, recreate every process that uses the keys with the new configuration, and run unfiltered `reencrypt_files --verify` again. The full maintenance procedure and its limits are in [Ops Runbook § 9.5](ops-runbook.md#file-rotation-and-old-key-removal).
 
-> **Important:** Never **replace** the old key instead of adding the new key as the **first** entry while retaining the old keys, and do not remove it even after a successful `reencrypt_fields` run. Otherwise every file attachment encrypted with it becomes unreadable, as does every database field the run skipped.
-
+> **Important:** Prepend the new key while retaining the old keys initially. `--facility` does not prove installation-wide key removability. There is **one key ring per installation**, no facility keys; successful file verification proves neither that every database field has been rotated nor that older backups remain readable.
 > ⚠️ **Role prerequisite (Refs #1058).** `reencrypt_fields` reads and writes tables protected by row-level security. The `NOBYPASSRLS` runtime role of `web` has no facility context outside a request and would see **0 rows**. Always invoke it via the maintenance service ([ops runbook § 9.5](ops-runbook.md#95-append-only-trigger-bypass-via-owner-ddl-a14)):
 >
 > ```bash
@@ -1213,7 +1213,7 @@ MultiFernet accepts a list of keys. To rotate:
 | **`Event.data_json`** | **complete -- including soft-deleted events** (#1724); per row with a row lock and compare-and-swap |
 | `EventHistory.data_before` / `data_after` | complete (append-only, updated through the replication bypass); per row with a row lock and compare-and-swap on the columns being changed (#2177) |
 | `Attachment.original_filename_encrypted` | complete -- the encrypted file name of attachments on events, clients and cases (#1738); per row with a row lock and compare-and-swap |
-| **File contents of attachments** (files under `MEDIA_ROOT`) | **not covered** -- they stay encrypted with the key they were uploaded with; readable only while that key is in the ring (step 3) |
+| **File contents of attachments** (files under `MEDIA_ROOT`) | **not covered by `reencrypt_fields`** -- rotate separately with `reencrypt_files` and check with `--verify` (step 3) |
 | TOTP secrets (`otp_totp_totpdevice.key`) | complete, per device with a row lock and compare-and-swap |
 | **`Client.data_json`** | **complete -- including soft-deleted persons**; per row with a row lock and compare-and-swap |
 | **`Case.data_json`** | **complete -- including soft-deleted cases**; per row with a row lock and compare-and-swap |
@@ -1224,7 +1224,7 @@ MultiFernet accepts a list of keys. To rotate:
 
 For events, persons and cases, **soft-deleted records are rotated too**. That is deliberate: a record waiting in the trash must not stay behind under a retired key just because it is pending deletion (#1724).
 
-> **Operational note:** The run protects every row it changes with a row lock and compare-and-swap. If a concurrent domain edit wins, the rotation skips its stale state and warns: "N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen" (N rows skipped due to a concurrent change -- repeat the run). The rotation never overwrites an interim change, including redaction or anonymization runs that do not advance `updated_at`. This also covers the **event history** (#2177): if the nightly retention run or an Art. 17 GDPR anonymization redacts a history row while the rotation is running, the rotation skips that row and reports it as skipped -- the redacted state stands. Rows that are already redacted are no longer rotation candidates at all: they carry no encrypted values, only the redaction marker. Repeat the run until it completes without this warning; the old key stays in the ring anyway because of the file contents (step 3). A maintenance window remains advisable to reduce database load, but it is no longer required to prevent lost updates.
+> **Operational note:** The run protects every row it changes with a row lock and compare-and-swap. If a concurrent domain edit wins, the rotation skips its stale state and warns: "N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen" (N rows skipped due to a concurrent change -- repeat the run). The rotation never overwrites an interim change, including redaction or anonymization runs that do not advance `updated_at`. This also covers the **event history** (#2177): if the nightly retention run or an Art. 17 GDPR anonymization redacts a history row while the rotation is running, the rotation skips that row and reports it as skipped -- the redacted state stands. Rows that are already redacted are no longer rotation candidates at all: they carry no encrypted values, only the redaction marker. Repeat the run until it completes without this warning; the old key stays in the ring until file rotation, full verification and backup expiry are complete (steps 3–4). A maintenance window remains advisable to reduce database load, but it is no longer required to prevent lost updates.
 
 #### Upload Limit
 
@@ -1902,7 +1902,7 @@ Sensitive fields in the database are stored encrypted using the `ENCRYPTION_KEY`
 - In production, the application refuses to start if no key is set.
 - Loss of the key means permanent loss of the encrypted data.
 
-**Key rotation:** There is no automatic key rotation. The manual rotation is described in [§ 2.9 "Key Rotation"](#key-rotation-encryption_keys); it re-encrypts database fields, not the contents of file attachments, so old keys stay in the ring. Store all keys of the ring redundantly and separately from database backups.
+**Key rotation:** There is no automatic key rotation. The manual rotation is described in [§ 2.9 "Key Rotation"](#key-rotation-encryption_keys); it re-encrypts database fields with `reencrypt_fields` and attachments with `reencrypt_files`; remove old keys only after unfiltered verification and expiry of backups encrypted with them. Store all keys of the ring redundantly and separately from database backups.
 
 **Transport encryption:** Caddy enforces HTTPS and automatically redirects HTTP to HTTPS.
 
@@ -2453,4 +2453,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 930e54929ad33457433dad9e30632d62a8872d04 -->
+<!-- source-hash: 6f754b8683384efd04c71041544798bd0d4ded86 -->

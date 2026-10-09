@@ -290,6 +290,8 @@ DDL (inkl. DISABLE) mit zurück, der Schutz bleibt aktiv
 
 ### TB5 — Off-Site-Backups
 
+**Schlüsselrotation und Vertrauensgrenze:** `ENCRYPTION_KEYS` ist ein Ring für die gesamte Installation, kein Ring je Einrichtung. `reencrypt_fields` rotiert Datenbankfelder, `reencrypt_files` referenzierte Dateianhänge; eine ungefilterte `--verify`-Prüfung authentifiziert alle referenzierten Versionen mit dem Primärschlüssel allein. Die Rotation verändert ältere Backup-Sätze nicht: Ein kompromittierter Altschlüssel entschlüsselt deren alte innere Chiffrate weiterhin, sofern der Angreifer auch an den entschlüsselten Backup-Inhalt gelangt. Lokale und Off-Site-Aufbewahrungsfristen sowie Schlüssel-Eskrow bleiben organisatorische Voraussetzungen der Entfernung; bei unbegrenzter Off-Site-Aufbewahrung ist kein endlicher Entfernungszeitpunkt nachgewiesen. ImportJob-Zwischendateien und Staging-Reste ohne DB-Zeile sind durch die Attachment-Prüfung nicht abgedeckt. Ablauf: [Ops-Runbook § 9.5](ops-runbook.md#dateirotation-und-altschlüssel-entfernen).
+
 | Threat | Mitigation (Bestand) | Quelle | Offene Lücke |
 |---|---|---|---|
 | **C** Backup-Diebstahl | AES-256-CBC + PBKDF2 mit `BACKUP_ENCRYPTION_KEY`; DB + Medien gemeinsam (#720) | [`backup.sh`](../scripts/ops/backup.sh) (Off-Site-Sync über `BACKUP_OFFSITE_TARGET`: rclone, S3 oder SCP, #738) | Off-Site ist optional: ohne `BACKUP_OFFSITE_TARGET` liegen alle Backups nur auf dem Prod-Host |
