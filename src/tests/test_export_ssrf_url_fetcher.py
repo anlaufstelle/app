@@ -1,21 +1,21 @@
-"""WeasyPrint ``url_fetcher``-Restriktion — file://-SSRF Defense-in-Depth (Refs #1272, T8).
+"""WeasyPrint ``url_fetcher`` restriction — file:// SSRF defence in depth (Refs #1272, T8).
 
-Bisher war der ``file://``-SSRF-/Local-File-Read-Vektor in den PDF-Exporten
-**nur** dadurch verhindert, dass die PDF-Templates kein ``|safe`` enthalten
-(injizierte Tags rendern inert) — fragiles Defense-in-Depth. WeasyPrints
-Default-``url_fetcher`` liest ``file://``-URLs tatsaechlich vom lokalen
-Dateisystem (verifiziert) und wuerde externe ``http(s)://``-Ressourcen abrufen.
+Previously the ``file://`` SSRF / local file read vector in the PDF exports
+was prevented **only** because the PDF templates contain no ``|safe``
+(injected tags render inert) — fragile defence in depth. WeasyPrint's default
+``url_fetcher`` actually reads ``file://`` URLs from the local file system
+(verified) and would fetch external ``http(s)://`` resources.
 
-Fix: Alle ``write_pdf``-Aufrufstellen uebergeben einen restriktiven
-``url_fetcher``, der ``file://`` und externe Netzwerk-Fetches ablehnt und nur
-inline ``data:``-URIs an den Default-Fetcher durchreicht:
+Fix: all ``write_pdf`` call sites pass a restrictive ``url_fetcher`` that
+rejects ``file://`` and external network fetches and hands only inline
+``data:`` URIs to the default fetcher:
 
-- ``core.reporting.pdf.render_dataset_pdf`` (generischer Berichts-Export)
-- ``core.services.system.export.render_sample_report_1_pdf`` (Sachbericht-Layout)
+- ``core.reporting.pdf.render_dataset_pdf`` (generic report export)
+- ``core.services.system.export.render_sample_report_1_pdf`` (sample report layout)
 - ``core.services.client.export.export_client_data_pdf``
 
-Da die legitimen Templates keine externen Ressourcen referenzieren, wird der
-Fetcher fuer regulaere Eingaben nie aufgerufen → byte-gleiche PDF-Ausgabe.
+Since the legitimate templates reference no external resources, the fetcher
+is never called for regular input → byte-identical PDF output.
 """
 
 from __future__ import annotations
@@ -102,8 +102,8 @@ class _CapturingHTML:
 
 @pytest.mark.django_db
 class TestPdfCallSitesPassRestrictedFetcher:
-    """Jede ``write_pdf``-Aufrufstelle muss den restriktiven Fetcher
-    an ``weasyprint.HTML(...)`` uebergeben (Red ohne den Fix)."""
+    """Every ``write_pdf`` call site must hand the restrictive fetcher
+    to ``weasyprint.HTML(...)`` (red without the fix)."""
 
     def test_generic_dataset_pdf_passes_fetcher(self, facility, monkeypatch):
         from core.reporting import pdf as dataset_pdf

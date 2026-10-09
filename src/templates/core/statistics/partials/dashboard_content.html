@@ -236,7 +236,7 @@ nicht.
 </p>
 {% endif %}
 
-{# Exportleiste (Refs #2505): in der Übersicht nur die interne Ereignisliste — Zahlen nach außen kommen aus den Datensatz-Berichten. #}
+{# Export bar (Refs #2505): the overview carries only the internal event list — figures for outside use come from the dataset reports. #}
 {% if can_export %}
 {% include "core/statistics/partials/_export_bar.html" with variant="internal" %}
 {% endif %}

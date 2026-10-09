@@ -1,4 +1,4 @@
-"""RBAC-Matrix-Tests, TestStatistics-, CSV-, Berichts- und DSGVO-Exports.
+"""RBAC matrix tests: statistics, CSV, report and GDPR exports.
 
 Refs #929 — gesplittet aus test_rbac_matrix.py.
 Refs #867: SUPER_ADMIN ist installations-weite Top-Rolle (Persona Jonas);

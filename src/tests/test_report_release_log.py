@@ -224,7 +224,7 @@ class TestExportViewsSchreibenEmpfaengerUndZweck:
         assert detail.get(RELEASE_ARTIFACT_KEY, False) is ist_freigabe, detail
 
     @pytest.mark.parametrize("params", [{}, {"format": "json"}])
-    def test_alte_externe_adresse_landet_nicht_in_der_uebersicht(self, client, lead_user, facility, params):
+    def test_old_external_address_is_not_listed_in_the_overview(self, client, lead_user, facility, params):
         """The redirect writes no audit row at all - neither a view nor a release."""
         client.force_login(lead_user)
 

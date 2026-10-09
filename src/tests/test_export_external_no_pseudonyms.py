@@ -1,25 +1,25 @@
-"""Externe Berichte enthalten keine Pseudonyme (DSGVO-Datenminimierung).
+"""External reports contain no pseudonyms (GDPR data minimisation).
 
-Refs Matrix AUD-SEC-EXPORT-02 (Master #922).
+Refs matrix AUD-SEC-EXPORT-02 (master #922).
 
-Externe Berichte gehen an Traeger, Foerdergeber oder Behoerden und
-duerfen keine Re-Identifizierungs-Hinweise enthalten. Konkret:
+External reports go to providers, funders or authorities and must not contain
+re-identification hints. Concretely:
 
-- Der Dokumenttyp-/Altersgruppen-Bericht der Karte "Allgemeine Kennzahlen"
-  traegt keine Pseudonyme (``test_reporting_export_disclosure.py``; die frueheren
-  Uebersichts-PDF-Pfade samt Pseudonym-Rangliste existieren nicht mehr). Refs #792.
-- ``get_sample_report_1_statistics`` (seit M5 P3 der Testhelfer aus
-  ``tests._reporting_helpers``, der auf ``SampleReport1Backend.build_dataset``
-  zeigt) aggregiert ueber DocumentType-Kategorien und Altersgruppen, ohne
-  Pseudonyme zurueckzugeben — der Output enthaelt keine ``pseudonym``-Felder.
+- The document-type/age-group report of the "Allgemeine Kennzahlen" card
+  carries no pseudonyms (``test_reporting_export_disclosure.py``; the former
+  overview PDF paths with the pseudonym ranking no longer exist). Refs #792.
+- ``get_sample_report_1_statistics`` (since M5 P3 the test helper from
+  ``tests._reporting_helpers`` that points to
+  ``SampleReport1Backend.build_dataset``) aggregates over DocumentType
+  categories and age groups without returning pseudonyms — the output
+  contains no ``pseudonym`` fields.
 
-Der Test verifiziert, dass die Sachbericht-Aggregat-Funktion strukturell keine
-Pseudonyme zurueckgibt (Output-Schema-Check).
+The test verifies that the sample report aggregate function structurally
+returns no pseudonyms (output schema check).
 
-Hinweis: ``get_statistics`` (interne Statistik fuer Lead/Admin)
-*enthaelt* ``top_clients`` mit Pseudonymen — das ist beabsichtigt, weil
-sie nur intern gezeigt werden. Die externen Berichts-Pfade enthalten sie
-nicht.
+Note: ``get_statistics`` (internal statistics for lead/admin) *does contain*
+``top_clients`` with pseudonyms — this is intended because they are only
+shown internally. The external report paths do not contain them.
 """
 
 from __future__ import annotations

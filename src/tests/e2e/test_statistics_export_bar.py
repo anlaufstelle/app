@@ -1,12 +1,12 @@
-"""E2E: Eine Exportleiste für den ganzen Statistik-Bereich (Refs #2505).
+"""E2E: one export bar for the whole statistics area (Refs #2505).
 
-Beobachtetes Verhalten (manuell, E2E-Server): Die Übersicht bietet nur die
-interne Ereignisliste im Warnkasten, die Datensatz-Berichte bieten unter den
-Karten CSV, JSON, XML und PDF mit Empfänger/Zweck davor und der Quelle je
-Format darunter. Jeder Download erscheint unter „Freigaben“; die alte externe
-Adresse leitet auf die Karte „Allgemeine Kennzahlen“ um.
+Observed behaviour (manual, E2E server): the overview offers only the internal
+event list in the warning box, the dataset reports offer CSV, JSON, XML and PDF
+below the cards with recipient/purpose in front and the source per format
+below. Every download appears under "Freigaben"; the old external address
+redirects to the "Allgemeine Kennzahlen" card.
 
-Wait-Strategie: domcontentloaded + Anchor-First (locator.wait_for), nie
+Wait strategy: domcontentloaded + anchor-first (locator.wait_for), never
 networkidle.
 """
 
@@ -56,7 +56,7 @@ def test_report_card_shows_the_bar_with_four_formats_and_sources(authenticated_p
     expect(bar.locator("#report-purpose")).to_be_visible()
     expect(bar).to_contain_text("Jeder Download wird protokolliert")
     expect(page.get_by_test_id("export-bar-sources")).to_contain_text("Quelle je Format")
-    # Position: unter den Karten, über der Vorschau.
+    # Position: below the cards, above the preview.
     cards = page.get_by_test_id("report-card-list").bounding_box()
     bar_box = bar.bounding_box()
     preview = page.locator("#report-panel").bounding_box()
@@ -64,7 +64,7 @@ def test_report_card_shows_the_bar_with_four_formats_and_sources(authenticated_p
 
 
 def test_enter_in_the_recipient_field_does_not_download(authenticated_page, base_url):
-    """Enter darf keine Herausgabe auslösen (Refs #1776)."""
+    """Enter must not trigger a release (Refs #1776)."""
     page = authenticated_page
     _open_card(page, base_url)
     downloads = []

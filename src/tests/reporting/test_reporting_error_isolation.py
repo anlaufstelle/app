@@ -601,13 +601,14 @@ class TestExportBrichtNieNachDenHeadernAb:
 
 
 class TestSachberichtPdfIsoliert:
-    """M1: der hybride Sachbericht-PDF-Pfad ruft ``build_dataset`` selbst.
+    """M1: the hybrid sample report PDF path calls ``build_dataset`` itself.
 
-    Das PDF des Sachberichts laeuft ueber den generischen Export
-    (``format=pdf``): der Hybrid-Leser ruft im Live-Fallback
-    ``get_backend("sample-report-1").build_dataset(...)``. Der Fang des
-    generischen Downloads muss auch diesen Pfad abdecken (Cross-Review Befund
-    M1): HTTP 502 statt 500, kein Attachment, kein Audit-Eintrag.
+    The PDF of the sample report runs through the generic export
+    (``format=pdf``): the hybrid reader calls
+    ``get_backend("sample-report-1").build_dataset(...)`` in the live fallback.
+    The catch of the generic download must cover this path as well
+    (cross-review finding M1): HTTP 502 instead of 500, no attachment, no
+    audit entry.
     """
 
     @pytest.fixture

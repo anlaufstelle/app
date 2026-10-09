@@ -1,18 +1,18 @@
-"""Reiterzeile des Statistik-Bereichs (Refs #1813, Konzept #1801 §7.1).
+"""Tab row of the statistics area (Refs #1813, concept #1801 §7.1).
 
-Die Reiterzeile gibt dem Bereich seine Heimat — nach demselben Muster wie
-``/system/`` und die beiden Bereichs-Hubs. Seit #2505 hat sie drei Reiter:
-„Übersicht", „Datensatz-Berichte" und „Freigaben". Der frühere Reiter
-„Externer Bericht" ist entfallen; seine Adresse leitet auf die Karte
-„Allgemeine Kennzahlen" um.
+The tab row gives the area its home — following the same pattern as
+``/system/`` and the two area hubs. Since #2505 it has three tabs:
+"Übersicht", "Datensatz-Berichte" and "Freigaben". The former tab
+"Externer Bericht" is gone; its address redirects to the
+"Allgemeine Kennzahlen" card.
 
-Der Reiter „Datensatz-Berichte" ist der interessante Fall. Sein
-natürliches Ziel wäre ``core:statistics_report_panel`` — das ist aber ein
-HTMX-Partial ohne ``base.html``, das ohne ``?backend=`` mit 400 antwortet
-(Befund N2). Statt einer neuen Route trägt der Reiter deshalb
-``?ansicht=datensaetze`` auf ``core:statistics`` — das Hausmuster der
-Bereichs-Konsolidierung (Zeitstrom ``?view=``, Refs #1124). Die #1813-Fassung
-``?view=berichte`` bleibt dauerhaft ein stiller Alias (Refs #1804, F1/F5).
+The "Datensatz-Berichte" tab is the interesting case. Its natural target
+would be ``core:statistics_report_panel`` — but that is an HTMX partial
+without ``base.html`` that answers 400 without ``?backend=`` (finding N2).
+Instead of a new route the tab therefore carries ``?ansicht=datensaetze`` on
+``core:statistics`` — the house pattern of the area consolidation (time
+stream ``?view=``, Refs #1124). The #1813 form ``?view=berichte`` stays a
+silent alias permanently (Refs #1804, F1/F5).
 
 Daraus folgen zwei Aussagen, die sonst nirgends geprüft wären:
 
@@ -70,7 +70,7 @@ def _get(client, user, path: str) -> str:
 
 
 def test_section_has_the_three_planned_tabs():
-    """Datenebene: Reihenfolge und Ziele der Reiter (Konzept §7.1, #2505)."""
+    """Data level: order and targets of the tabs (concept §7.1, #2505)."""
     section = nav.section("statistik")
     assert [tab.key for tab in section.tabs] == list(TAB_KEYS)
     assert [tab.url_name for tab in section.tabs] == [
@@ -87,13 +87,13 @@ def test_section_has_the_three_planned_tabs():
 
 
 def test_orphaned_pages_are_part_of_the_sidebar_family():
-    """Ohne die Freigaben-Route erlischt der Sidebar-Eintrag auf ihr."""
+    """Without the Freigaben route the sidebar entry goes out on it."""
     family = nav.item("statistics").family
     assert {"statistics", "statistics_report_releases"} <= family
 
 
 def test_the_external_report_tab_is_gone():
-    """#2505 (E-1 a): kein Reiter, keine Familie — die Adresse leitet nur um."""
+    """#2505 (E-1 a): no tab, no family — the address only redirects."""
     assert "statistik_external_report" not in [tab.key for tab in nav.section("statistik").tabs]
     assert "statistics_external_report" not in nav.item("statistics").family
 
@@ -359,10 +359,9 @@ class TestZeitraumUeberlebtDenReiterwechsel:
             assert "period=" not in href
 
     def test_doktyp_stays_on_the_overview(self, client, lead_user, statistik_doktyp):
-        """§3.5 führt den **Zeitraum** mit, nicht jeden Filter: der
-        Dokumentationstyp existiert nur auf der Übersicht, und ein Reiter, der
-        ihn mitschleppte, versprächen den anderen beiden eine Verengung, die
-        dort niemand auswertet."""
+        """§3.5 carries the **period** along, not every filter: the document type
+        exists only on the overview, and a tab that dragged it along would
+        promise the other two a narrowing that nobody evaluates there."""
         content = _get(client, lead_user, f"/statistics/?doktyp={statistik_doktyp.pk}")
         for key in TAB_KEYS:
             assert "doktyp=" not in _href(content, key)

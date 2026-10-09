@@ -18,11 +18,11 @@ dashboard.json``). Gepinnt werden fuenf Mutanten-Familien, alle ohne Sicherheits
   Provenienz-Zeile (Einrichtung, Nutzer, Zeitstempel) — der eigentliche
   Audit-Trail (``AuditLog`` via ``log_export`` in der View) ist davon
   unberuehrt, gepinnt wird der Datei-INHALT.
-* **Sachbericht-PDF-Kontext** (Sachbericht-PDF ueber den generischen Export; Mutanten
-  benennen den frueheren Funktionsnamen): zwoelf
-  Mutanten an fuenf Context-Schluesseln, darunter die K3-Populationshinweise
-  (``population_notes.by_category``/``by_age_cluster``), ohne die der Bericht
-  laut Code-Kommentar "nicht nur undicht, sondern irrefuehrend" ist.
+* **Sample report PDF context** (sample report PDF through the generic export;
+  mutants name the former function name): twelve mutants on five context
+  keys, among them the K3 population notes
+  (``population_notes.by_category``/``by_age_cluster``), without which the
+  report is, per the code comment, "not only leaky but misleading".
 
 Konventionen wie ``test_mutation_pins_096_export.py``: Zusicherungen
 vergleichen EXAKT (``==``/``is``), nie per Teilstring, wo mutmut
@@ -33,14 +33,13 @@ Mutante(n) samt der abweichenden Semantik. ``_encryption_key`` liegt
 modulweit an (Lehre 112): der Mutantenbaum hat keine ``.env`` und damit
 keinen ``ENCRYPTION_KEY``.
 
-**Warum die PDF-Kontext-Tests ``render_to_string`` monkeypatchen statt das
-gerenderte HTML zu inspizieren.** Alle Mutanten dieser Datei fuer
-``generate_sample_report_1_pdf`` benennen einen
-Dictionary-Schluessel des Template-Kontexts um. Das abgefangene Dict vor dem
-Rendering zu pruefen, trifft die Mutation direkt und bleibt unabhaengig von
-Template-Markup-Details; ein vollstaendiger WeasyPrint-Lauf traegt hier keine
-zusaetzliche Aussagekraft und wird deshalb (wie in ``test_mutation_pins_096_
-export.py``) gestubbt.
+**Why the PDF context tests monkeypatch ``render_to_string`` instead of
+inspecting the rendered HTML.** All mutants of this file for
+``generate_sample_report_1_pdf`` rename a dictionary key of the template
+context. Checking the intercepted dict before rendering hits the mutation
+directly and stays independent of template markup details; a full WeasyPrint
+run adds no further evidence here and is therefore stubbed (as in
+``test_mutation_pins_096_export.py``).
 """
 
 from __future__ import annotations

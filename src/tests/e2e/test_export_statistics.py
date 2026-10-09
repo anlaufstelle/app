@@ -1,10 +1,10 @@
-"""E2E-Tests: Statistik-Export (Ereignisliste, Berichts-PDF) und Zugriffskontrolle.
+"""E2E tests: statistics export (event list, report PDF) and access control.
 
-K4a (Refs #1770): Die Export-Aktionen sind ``<button formaction=…>`` statt
-``<a href=…>`` — nur so kommen die optionalen Felder Empfaenger/Zweck ohne
-JavaScript am Ziel an. Seit #2505 sitzen alle Ziele in der einen Exportleiste
-(``_export_bar.html``): die Uebersicht bietet nur die interne Ereignisliste, die
-Datensatz-Berichte CSV, JSON, XML und PDF.
+K4a (Refs #1770): the export actions are ``<button formaction=…>`` instead of
+``<a href=…>`` — only this way do the optional recipient/purpose fields reach
+the target without JavaScript. Since #2505 all targets sit in the one export
+bar (``_export_bar.html``): the overview offers only the internal event list,
+the dataset reports CSV, JSON, XML and PDF.
 """
 
 import re
@@ -18,7 +18,7 @@ EVENT_LIST = "button:has-text('Ereignisliste')"
 
 
 class TestCSVExportE2E:
-    """Interne Ereignisliste (CSV) → Download."""
+    """Internal event list (CSV) → download."""
 
     @pytest.mark.smoke
     def test_csv_export_button_visible(self, authenticated_page, base_url):
@@ -38,7 +38,7 @@ class TestCSVExportE2E:
 
 
 class TestOverviewHasNoFileExportExceptEventList:
-    """Die Uebersicht bleibt intern: keine Formatbuttons, kein PDF."""
+    """The overview stays internal: no format buttons, no PDF."""
 
     def test_overview_has_no_pdf_or_report_formats(self, authenticated_page, base_url):
         page = authenticated_page
@@ -52,11 +52,11 @@ class TestOverviewHasNoFileExportExceptEventList:
 
 
 class TestSampleReport1ExportE2E:
-    """Sachbericht-Export → Download ueber die Exportleiste.
+    """Sample report export → download through the export bar.
 
-    R2 (Refs #1804): Der Export steht bei seinen Daten. Seit #2505 gibt es dafuer
-    keine Sonderroute mehr — das PDF kommt wie CSV, JSON und XML aus der einen
-    Exportleiste unter den Berichtskarten (``statistics_report_export``).
+    R2 (Refs #1804): the export sits next to its data. Since #2505 there is no
+    special route for it any more — the PDF comes like CSV, JSON and XML from
+    the one export bar below the report cards (``statistics_report_export``).
     """
 
     def _open_report(self, page, base_url):
@@ -64,7 +64,7 @@ class TestSampleReport1ExportE2E:
         expect(page.locator("#report-panel h3")).to_have_text("Beispiel-Sachbericht", timeout=10000)
         return page.get_by_test_id("export-bar")
 
-    def test_sachbericht_pdf_nicht_auf_der_uebersicht(self, authenticated_page, base_url):
+    def test_sample_report_pdf_not_on_the_overview(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
         expect(page.locator("#dashboard-content")).to_be_visible(timeout=10000)
@@ -150,13 +150,14 @@ class TestFreigabeUebersichtE2E:
 
 
 class TestDoktypFilterErreichtDieExporteE2E:
-    """R2 (Refs #1804): Was am Bildschirm steht, steht auch in der Datei.
+    """R2 (Refs #1804): what the screen shows is also in the file.
 
-    Der Doktyp-Filter wirkt auf KPI, Tabellen und Diagramme — die
-    Ereignisliste darunter exportierte trotzdem den ganzen Zeitraum.
-    Der Fehler ist nur im echten Klickpfad sichtbar: Filter setzen (HTMX-Swap),
-    dann exportieren. Ein Server-Test der Vollseite sieht ihn nicht, weil er
-    das versteckte Feld des Export-Formulars nie mit dem Swap-Stand vergleicht.
+    The document-type filter acts on KPIs, tables and charts — the event list
+    below them nevertheless exported the whole period.
+    The defect is only visible in the real click path: set the filter (HTMX
+    swap), then export. A server test of the full page does not see it because
+    it never compares the hidden field of the export form with the state after
+    the swap.
     """
 
     def _filter_auf_ersten_typ(self, page, base_url):

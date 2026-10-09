@@ -240,8 +240,8 @@ STATISTIK_UEBERSICHT = NavItem(
     key="statistik_uebersicht",
     label=_("Übersicht"),
     url_name="core:statistics",
-    # Der CSV-Endpunkt (interne Ereignisliste) gehört zur Übersicht, nicht zum
-    # Berichte-Reiter: er hängt an der internen Exportleiste des Dashboards.
+    # The CSV endpoint (internal event list) belongs to the overview, not to the
+    # reports tab: it hangs off the dashboard's internal export bar.
     family=frozenset({"statistics", "statistics_csv_export"}),
     gates=("is_lead_or_admin",),
 )

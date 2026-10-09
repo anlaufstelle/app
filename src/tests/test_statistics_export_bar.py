@@ -21,7 +21,7 @@ FORMACTION_RE = re.compile(r'formaction="([^"]+)"')
 
 
 @pytest.fixture
-def statistik_doktyp(facility):
+def statistics_document_type(facility):
     return DocumentType.objects.create(
         facility=facility, name="Kontakt (Export-Leiste)", entity_type=DocumentType.EntityType.EVENT
     )
@@ -159,11 +159,11 @@ class TestOverviewIsInternal:
         assert "amber" in form
         assert 'name="format"' not in form
 
-    def test_doktyp_filter_still_reaches_the_event_list(self, client, lead_user, statistik_doktyp):
+    def test_document_type_filter_still_reaches_the_event_list(self, client, lead_user, statistics_document_type):
         client.force_login(lead_user)
-        html = client.get(reverse("core:statistics"), {"doktyp": str(statistik_doktyp.pk)}).content.decode()
+        html = client.get(reverse("core:statistics"), {"doktyp": str(statistics_document_type.pk)}).content.decode()
 
-        assert f'name="doktyp" value="{statistik_doktyp.pk}"' in html
+        assert f'name="doktyp" value="{statistics_document_type.pk}"' in html
 
     def test_event_list_download_is_a_release(self, client, lead_user, facility):
         client.force_login(lead_user)

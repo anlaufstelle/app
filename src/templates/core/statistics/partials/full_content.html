@@ -83,12 +83,12 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
     </ul>
 
     {% comment %}
-    Exportleiste (Refs #2505): EIN Partial für alle Download-Ziele des Bereichs.
-    Empfänger/Zweck stehen genau EINMAL je Reiter — bei dem Export, den sie
-    begleiten (R2, Refs #1804), unter den Karten und über der Vorschau. Sie
-    erscheint erst mit einer Auswahl: ohne Bericht gibt es nichts herauszugeben.
-    Die Schaltflächen sitzen im Formular der Leiste, nicht im Panel — der
-    Submit serialisiert Backend, Zeitraum, Empfänger und Zweck race-frei
+    Export bar (Refs #2505): ONE partial for all export targets of the area.
+    Recipient/purpose appear exactly ONCE per tab — next to the export they
+    belong to (R2, Refs #1804), below the cards and above the preview. The bar
+    appears only once a card is selected: without a report there is nothing to
+    release. The buttons sit in the form of the bar, not in the panel — the
+    submit serialises backend, period, recipient and purpose race-free
     (K4a, Refs #1770).
     {% endcomment %}
     {% if selected_backend %}

@@ -797,9 +797,7 @@ class TestFailSafePfadIstNichtIrrefuehrend:
         assert "Angaben nach Leistungskategorie unterdrückt (k-Anonymität)." not in abschnitt
 
     @pytest.mark.parametrize("surface", _SURFACES)
-    def test_gefuellte_tabelle_zeigt_weiterhin_ihre_zeilen(
-        self, client, lead_user, facility, monkeypatch, pdf_text, surface
-    ):
+    def test_filled_table_keeps_showing_its_rows(self, client, lead_user, facility, monkeypatch, pdf_text, surface):
         """Counter-check: as long as the table is there nothing changes -- neither
         the suppression marker per row nor the visible numbers."""
         _patch_raw_statistics(

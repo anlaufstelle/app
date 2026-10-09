@@ -1,24 +1,24 @@
 {% load i18n %}
 {% comment %}
-Exportleiste des Statistik-Bereichs (Refs #2505) — die EINZIGE Stelle, an der der
-Bereich Download-Ziele (`formaction`) trägt. Ein Weg nach außen, immer mit
-Empfänger und Zweck davor, immer mit Eintrag unter „Freigaben".
+Export bar of the statistics area (Refs #2505) — the ONLY place in the area
+that carries download targets (`formaction`). One way out, always with
+recipient and purpose in front, always with an entry under "Freigaben".
 
-Kontrakt (aufrufende Seite):
-* `variant`   — "reports" (Datensatz-Berichte: CSV, JSON, XML, PDF über den
-                generischen Berichts-Export) oder "internal" (Übersicht: nur die
-                interne Ereignisliste, keine Formatbuttons).
-* `date_from`, `date_to` — der aufgelöste Zeitraum.
-* reports:  `selected_backend` (Slug geht als `backend` mit),
-            `format_source_notes` (Quelle je Format; fehlt bei Fehlerkarte).
-* internal: `selected_doc_type` (Doktyp-Filter geht als `doktyp` mit).
+Contract (calling page):
+* `variant`   — "reports" (dataset reports: CSV, JSON, XML, PDF through the
+                generic report export) or "internal" (overview: only the
+                internal event list, no format buttons).
+* `date_from`, `date_to` — the resolved period.
+* reports:  `selected_backend` (the slug travels as `backend`),
+            `format_source_notes` (source per format; absent on the error card).
+* internal: `selected_doc_type` (the document-type filter travels as `doktyp`).
 
-Bewusst ein reines GET-Formular mit `formaction` je Schaltfläche: nur so kommen
-Empfänger und Zweck ohne JavaScript am Ziel an, serialisiert beim Submit
-(race-frei, Refs #1770). Kein `action` am Formular — jede Schaltfläche nennt ihr
-Ziel selbst. `suppressEnterSubmit` fängt Enter in beiden Feldern ab (Refs #1776):
-Enter würde sonst den ERSTEN Submit auslösen und damit eine Herausgabe
-protokollieren. Die Feld-IDs bleiben je Variante stabil (`report-*`/`export-*`).
+Deliberately a plain GET form with `formaction` per button: only this way do
+recipient and purpose reach the target without JavaScript, serialised on submit
+(race-free, Refs #1770). No `action` on the form — each button names its own
+target. `suppressEnterSubmit` catches Enter in both fields (Refs #1776):
+Enter would otherwise trigger the FIRST submit and thereby log a release.
+The field IDs stay stable per variant (`report-*`/`export-*`).
 {% endcomment %}
 {% if variant == "internal" %}
 <form method="get" class="no-print mb-4 bg-amber-50 border border-amber-200 rounded-[10px] px-4 py-3" data-testid="statistics-export-form" data-variant="internal">
@@ -99,7 +99,7 @@ protokollieren. Die Feld-IDs bleiben je Variante stabil (`report-*`/`export-*`).
         </button>
     </div>
     <p class="text-[12px] text-ink-muted mt-3">{% trans "Jeder Download wird protokolliert und erscheint unter „Freigaben“. Tragen Sie als Empfänger die Organisation ein, nicht eine Person." %}</p>
-    {# Quellenausweis (Refs #1743): je Format die Quelle — das Sachbericht-PDF liest hybrid, die übrigen Formate live. #}
+    {# Source statement (Refs #1743): the source per format — the sample report PDF reads hybrid, the other formats live. #}
     {% if format_source_notes %}
     <p class="text-[12px] text-ink-muted mt-1" data-testid="export-bar-sources">
         {% trans "Quelle je Format" %}: {% for format_name, note in format_source_notes %}{{ format_name }}: {{ note }}{% if not forloop.last %} · {% endif %}{% endfor %}

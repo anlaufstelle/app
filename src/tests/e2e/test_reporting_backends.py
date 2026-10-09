@@ -380,8 +380,8 @@ class TestReportPeriodPassthrough:
         """
         page = authenticated_page
         _open_statistics(page, base_url)
-        # Die Exportleiste (mit den Hidden-Feldern des Zeitraums) erscheint erst
-        # mit einer Berichtsauswahl (Refs #2505) — also zuerst die Karte waehlen.
+        # The export bar (with the hidden period fields) appears only once a
+        # card is selected (Refs #2505) — so pick the card first.
         _select_backend(page, "sample-report-1")
 
         date_from_input = page.locator("#report-section input[name='date_from']")
@@ -390,8 +390,8 @@ class TestReportPeriodPassthrough:
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.get_by_role("button", name="Kalenderjahr", exact=True).click()
 
-        # Pollt bis der Swap durch ist: das versteckte Feld der Exportleiste
-        # traegt danach den 1. Januar des gewaehlten Jahres.
+        # Poll until the swap is through: the hidden field of the export bar
+        # then carries January 1st of the chosen year.
         expect(date_from_input).to_have_attribute("value", re.compile(r"^\d{4}-01-01$"), timeout=10000)
         year_start = date_from_input.get_attribute("value")
 

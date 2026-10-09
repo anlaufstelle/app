@@ -1,10 +1,10 @@
-"""E2E-Tests: Die alte Adresse des externen Berichts (Refs #921, #2505).
+"""E2E tests: the old address of the external report (Refs #921, #2505).
 
-Seit #2505 (E-1 a) gibt es keinen Reiter „Externer Bericht" mehr. Die Adresse
-``/statistics/external/`` leitet — auch mit ``?format=json`` — mit Zeitraum auf
-die Karte „Allgemeine Kennzahlen" der Datensatz-Berichte um und liefert keine
-Datei. Wait-Strategie: domcontentloaded + Anchor-First (locator.wait_for),
-nie networkidle, nie wait_for_url mit kurzem Timeout.
+Since #2505 (E-1 a) there is no "Externer Bericht" tab any more. The address
+``/statistics/external/`` redirects — also with ``?format=json`` — with the
+period to the "Allgemeine Kennzahlen" card of the dataset reports and delivers
+no file. Wait strategy: domcontentloaded + anchor-first (locator.wait_for),
+never networkidle, never wait_for_url with a short timeout.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def _login(page: Page, base_url: str, username: str, password: str = SEED_PASSWO
 
 
 def test_lead_is_redirected_to_the_general_key_figures_card(page: Page, base_url: str) -> None:
-    """lead: /statistics/external/ -> Karte „Allgemeine Kennzahlen" mit Vorschau."""
+    """lead: /statistics/external/ -> "Allgemeine Kennzahlen" card with preview."""
     _login(page, base_url, "emma")
 
     page.goto(f"{base_url}/statistics/external/")
@@ -41,12 +41,12 @@ def test_lead_is_redirected_to_the_general_key_figures_card(page: Page, base_url
     assert "bericht=general-key-figures" in page.url, page.url
     assert "ansicht=datensaetze" in page.url, page.url
     expect(page.locator("#report-panel h3")).to_have_text("Allgemeine Kennzahlen")
-    # Refs #1743: sichtbarer Quellenausweis der Vorschau.
+    # Refs #1743: visible source statement of the preview.
     assert "Live-Abfrage zum Erstellungszeitpunkt" in page.locator("#report-panel").inner_text()
 
 
 def test_json_address_redirects_and_keeps_the_period(page: Page, base_url: str) -> None:
-    """?format=json liefert keine Datei mehr, sondern leitet mit Zeitraum um."""
+    """?format=json delivers no file any more but redirects with the period."""
     _login(page, base_url, "emma")
 
     page.goto(f"{base_url}/statistics/external/?format=json&zeitraum=jahr&year=2025")
@@ -56,13 +56,13 @@ def test_json_address_redirects_and_keeps_the_period(page: Page, base_url: str) 
     assert "zeitraum=jahr" in page.url, page.url
     assert "year=2025" in page.url, page.url
     assert "format=json" not in page.url, page.url
-    # Kein JSON-Dokument: die Seite ist die Anwendung, nicht ein Datensatz.
+    # Not a JSON document: the page is the application, not a dataset.
     assert "privacy_profile" not in page.evaluate("() => document.body.innerText")
     assert "2025" in page.get_by_test_id("statistics-period-range").inner_text()
 
 
 def test_the_external_tab_is_gone(page: Page, base_url: str) -> None:
-    """Die Reiterzeile kennt nur noch Übersicht, Datensatz-Berichte, Freigaben."""
+    """The tab row only knows Übersicht, Datensatz-Berichte and Freigaben."""
     _login(page, base_url, "emma")
 
     page.goto(f"{base_url}/statistics/")
@@ -80,5 +80,5 @@ def test_staff_blocked_from_the_old_external_address(page: Page, base_url: str) 
 
     page.goto(f"{base_url}/statistics/external/")
     page.wait_for_load_state("domcontentloaded")
-    # Erwartet: 403-Page mit "Zugriff verweigert"-Title.
+    # Expected: 403 page with the "Zugriff verweigert" title.
     assert "403" in page.title() or "verweigert" in page.title().lower()

@@ -24,8 +24,8 @@ Datenintegritaet des Streams):
   einem Null-Byte.
 * **Durchreichen des Nutzers** (``export_events_csv``) an Spalten- und
   Zeilenbau.
-* **PDF-Datenschutz** (Sachbericht-PDF ueber den generischen Export): die
-  Facility, aus der die k-Anon-Schwelle gelesen wird.
+* **PDF data protection** (sample report PDF through the generic export): the
+  facility from which the k-anonymity threshold is read.
 
 Konventionen wie ``test_mutation_pins_094_export_1.py``: Zusicherungen
 vergleichen EXAKT (``==``/``is``), nie per Teilstring, wo mutmut

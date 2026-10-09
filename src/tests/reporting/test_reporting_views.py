@@ -310,8 +310,8 @@ class TestBerichteFormZeitraumDurchreichung:
         # Der Panel-Header weist den aufgeloesten Zeitraum aus (lokalisiert).
         assert date_format(date(2020, 1, 1)) in panel_html
         assert date_format(date(2020, 1, 31)) in panel_html
-        # Die Export-Schaltflaechen sitzen in der Exportleiste desselben
-        # Formulars wie die Hidden-Felder: CSV, JSON, XML und PDF (Refs #2505).
+        # The export buttons sit in the export bar of the same form as the
+        # hidden fields: CSV, JSON, XML and PDF (Refs #2505).
         assert section_html.count("formaction=") == 4
         assert "formaction=" not in panel_html
 
@@ -332,9 +332,8 @@ class TestPanelExportOhneRoundtrip:
     ``DatasetReportPanelView`` mit ``400 backend erforderlich``, was
     ``htmx-errors.js`` als roten Fehler-Toast rendert.
 
-    Loesung (Refs #2505: ``_export_bar.html``): ein GET-Formular in der
-    Exportleiste mit ``formaction`` je Schaltflaeche. Die Werte werden erst
-    beim Submit serialisiert.
+    Solution (Refs #2505: ``_export_bar.html``): a GET form in the export bar
+    with ``formaction`` per button. The values are only serialised on submit.
     """
 
     def _panel(self, client, lead_user):
@@ -348,19 +347,19 @@ class TestPanelExportOhneRoundtrip:
         html = client.get(reverse("core:statistics"), {**BERICHTE_VIEW, "bericht": "sample-report-1"}).content.decode()
         return _extract_report_section(html)
 
-    def test_exportleiste_exportiert_ueber_submit_buttons_statt_links(self, client, lead_user):
+    def test_export_bar_exports_through_submit_buttons_instead_of_links(self, client, lead_user):
         section = self._section(client, lead_user)
         export_url = reverse("core:statistics_report_export")
 
         assert "<a href" not in section.split('id="report-panel"')[0].split('data-testid="export-bar"')[-1], (
-            "Die Export-Ziele duerfen keine <a href>-Links sein — ihr href traegt den Race."
+            "The export targets must not be <a href> links — their href carries the race."
         )
         assert section.count(f'formaction="{export_url}"') == 4
         for fmt in ("csv", "json", "xml", "pdf"):
             assert f'name="format" value="{fmt}"' in section
 
-    def test_panel_enthaelt_keine_export_ziele_mehr(self, client, lead_user):
-        """Die Ziele wohnen in der Exportleiste (Refs #2505), nicht im Panel."""
+    def test_panel_contains_no_export_targets_any_more(self, client, lead_user):
+        """The targets live in the export bar (Refs #2505), not in the panel."""
         assert "formaction=" not in self._panel(client, lead_user)
 
     def test_panel_backt_keinen_release_query_mehr_ein(self, client, lead_user):
@@ -374,7 +373,7 @@ class TestPanelExportOhneRoundtrip:
         assert "release_query" not in response.context
         assert "Musterstadt" not in response.content.decode()
 
-    def test_exportleiste_formular_traegt_felder_und_schaltflaechen(self, client, lead_user):
+    def test_export_bar_form_carries_fields_and_buttons(self, client, lead_user):
         """Sonst serialisiert der Submit die Freitextfelder gar nicht mit."""
         section = self._section(client, lead_user)
         form = section[section.rindex("<form", 0, section.index('data-testid="export-bar"')) :]
