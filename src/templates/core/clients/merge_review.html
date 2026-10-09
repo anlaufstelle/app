@@ -62,10 +62,8 @@
         </p>
     </div>
 
-    {# Bestandszahlen — nur fuer Rollen mit Fall-Domaene (fail-closed wie      #}
-    {# ``may_see_case`` in der Fall-Pruefseite, Refs #1818): die Zahlen        #}
-    {# zaehlen Faelle, die die Assistenz nirgendwo sonst sieht. Entscheidung   #}
-    {# bleibt ihr moeglich — anhand Antragsteller:in und Begruendung.          #}
+    {# Inventory requires case access and two readable person records (Refs #1818). #}
+    {# Each count follows its target's visibility in merge_facts (Refs #2516). #}
     {% if not may_see_inventory %}
     <div class="card p-4 mb-5" data-testid="merge-review-not-visible">
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Bestand der beiden Akten" %}</h2>

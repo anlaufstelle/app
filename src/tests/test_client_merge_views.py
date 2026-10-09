@@ -566,11 +566,8 @@ class TestMergeFactsSensitivity:
         assert fuer_leitung["attachments"] == 2
         assert fuer_leitung["last_contact"] == person.hoch_am
 
-    def test_cases_stay_unfiltered_because_there_is_no_case_sensitivity(
-        self, person_mit_anhaengen, facility, staff_user, lead_user
-    ):
-        """Bewusste Nicht-Filterung (ADR-039 §12): Faelle sind rollen-, nicht
-        sensitivitaetsgegatet, und diese Seite erreicht nur ``is_staff_or_above``."""
+    def test_live_cases_have_no_sensitivity_filter(self, person_mit_anhaengen, facility, staff_user, lead_user):
+        """Live cases need staff access but have no sensitivity gate (ADR-039 §12)."""
         from core.views.client_merge import merge_facts
 
         Case.objects.create(

@@ -252,3 +252,52 @@ def test_visibility_error_never_exposes_event(client, lead_user, facility, staff
     response = client.get(reverse("core:deletion_review", args=[dr.pk]))
     assert response.status_code == 403
     assert review_targets["event"].document_type.name not in response.content.decode()
+
+
+@pytest.mark.parametrize("role", ("facility_admin", "lead", "staff"))
+@pytest.mark.parametrize("page", ("review", "confirm"))
+@pytest.mark.parametrize("side", ("source", "target"))
+@pytest.mark.parametrize("state", ("inactive", "deleted", "live"))
+def test_merge_case_counts_match_detail_visibility(
+    client, request, role, page, side, state, facility, staff_user, review_targets
+):
+    login_confirmer(client, request, role)
+    people = {"source": review_targets["client"], "target": review_targets["merge"]}
+    cases = {
+        "source": review_targets["case"],
+        "target": Case.objects.create(
+            facility=facility, client=people["target"], created_by=staff_user, title="Target case"
+        ),
+    }
+    if state != "live":
+        field = "is_active" if state == "inactive" else "is_deleted"
+        setattr(people[side], field, state == "deleted")
+        people[side].save(update_fields=[field])
+
+    visible_counts = {}
+    for case_side, case in cases.items():
+        detail = client.get(reverse("core:case_detail", args=[case.pk]))
+        expected_status = 404 if case_side == side and state != "live" else 200
+        assert detail.status_code == expected_status
+        visible_counts[case_side] = int(detail.status_code == 200)
+
+    if page == "review":
+        dr = make_request(facility, staff_user, review_targets, "merge")
+        url = reverse("core:deletion_review", args=[dr.pk])
+    else:
+        url = reverse("core:client_merge", args=[people["source"].pk]) + f"?target={people['target'].pk}"
+    response = client.get(url)
+    if state == "deleted" and page == "confirm":
+        assert response.status_code == 404
+        return
+    assert response.status_code == 200
+    body = response.content.decode()
+    if state == "deleted":
+        assert 'data-testid="merge-review-not-visible"' in body
+        for case_side in people:
+            assert f'data-testid="merge-{case_side}-cases"' not in body
+    else:
+        for case_side, count in visible_counts.items():
+            assert f'data-testid="merge-{case_side}-cases">{count}</td>' in body
+        for person in people.values():
+            assert client.get(reverse("core:client_detail", args=[person.pk])).status_code == 200

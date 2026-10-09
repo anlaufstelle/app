@@ -167,7 +167,7 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
                     dr.merge_target_url = ""
                 from core.views.client_merge import merge_facts
 
-                # Inventory counts require both live records and case access.
+                # Inventory requires two readable person records and case access.
                 may_see = bool(client and merge_target and request.user.is_staff_or_above)
                 context.update(
                     {

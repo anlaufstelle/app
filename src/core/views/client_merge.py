@@ -43,7 +43,8 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
-from core.models import Case, Client, Event
+from core.models import Client, Event
+from core.services.case import cases_with_live_client
 from core.services.client import (
     create_or_get_client_merge_request,
     get_pending_deletion_request,
@@ -79,44 +80,19 @@ def _parse_uuid(raw):
 
 
 def merge_facts(person, user):
-    """Bestandszahlen und Unterscheidungsmerkmale einer Person (Lehre #1874).
+    """Return the inventory visible on the corresponding target pages.
 
-    Die Bestaetigungsseite traegt die Beweislast: zwei aehnlich benannte
-    Personen muessen auf ihr unterscheidbar sein. Gezaehlt wird der sichtbare
-    Bestand (``is_deleted=False`` bzw. ``is_current=True``) — der Merge nimmt
-    zwar auch Papierkorb-Ereignisse mit, aber die Entscheidung faellt ueber
-    das, was die Fachkraft kennt; eine Zahl, die groesser ist als jede
-    sichtbare Liste, wuerde eher verwirren als unterscheiden.
-
-    Refs #2112 (Red-Team B-1): „was die Fachkraft kennt" endet an der
-    **Sensitivitaetsgrenze**, nicht erst am Papierkorb. Die Zahlen liefen
-    vorher ungefiltert und verrieten damit genau die Metadaten, die die
-    Anwendung sonst hinter 404 verbirgt (``get_visible_event_or_404``): eine
-    Fachkraft mit Hoechstsensitivitaet ``erhoeht`` las hier die Gesamtzahl
-    inklusive ``hochvertraulich``-Dokumentation und — schwerer — den
-    **Zeitpunkt des letzten Kontakts**, obwohl das ausloesende Ereignis fuer
-    sie nicht existiert. Ereignisse laufen deshalb ueber
-    ``Event.objects.visible_to(user)`` (dieselbe Grenze wie Personenakte und
-    Zeitstrom), Anhaenge ueber
-    :func:`core.services.compliance.visible_attachments_for_user` (dieselbe
-    Grenze wie die Anhang-Uebersicht und das Download-Gate). Das Argument
-    verschiebt die Zahlen nach unten, nie nach oben — der Merge selbst nimmt
-    unveraendert **alles** mit; das sagt der Fliesstext der Bestaetigungsseite
-    ausdruecklich.
-
-    **Faelle bleiben ungefiltert**, und zwar bewusst: es gibt keine
-    Fall-Sensitivitaet (``Case`` hat kein ``visible_to``), die Abgrenzung
-    verlaeuft dort ueber die Rolle — die Assistenz sieht Faelle gar nicht
-    (ADR-039 §12). Diese Seite haengt an ``StaffRequiredMixin``
-    (``is_staff_or_above``), die Assistenz erreicht sie also nie; fuer jede
-    Rolle, die sie erreicht, ist die volle Fallzahl die richtige Zahl. Ein
-    Filter waere hier eine Grenze, die es nicht gibt.
+    Both callers require case access (staff or above). Cases also require an
+    active, non-deleted client, just like the case detail (Refs #2516).
+    Event counts and last contact follow event sensitivity; attachments follow
+    owner liveness and both owner and field sensitivity (Refs #2112).
+    These visibility filters apply only to the displayed inventory.
     """
     visible_events = Event.objects.visible_to(user).filter(client=person, is_deleted=False)
     return {
         "person": person,
         "events": visible_events.count(),
-        "cases": Case.objects.filter(client=person, is_deleted=False).count(),
+        "cases": cases_with_live_client().for_facility(person.facility).filter(client=person).count(),
         "attachments": visible_attachments_for_user(person.facility, user)
         .filter(client=person, is_current=True)
         .count(),
