@@ -1,4 +1,7 @@
 {% load i18n %}
+{% if contacts_navigation_oob %}
+{% include "core/zeitstrom/partials/contacts_navigation.html" %}
+{% endif %}
 {% if tally_panel_oob %}
 <div id="tally-panel-slot" hx-swap-oob="innerHTML">
     {% if show_tally_panel %}

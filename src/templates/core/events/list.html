@@ -3,6 +3,73 @@
 {% block title %}{% translate "Kontakte" %} – Anlaufstelle{% endblock %}
 {% block content %}
 {% back_link %}
-<h1>{% translate "Kontakte" %}</h1>
-{% include "core/events/partials/table.html" %}
+<h1 class="text-[22px] font-bold text-ink mb-6">{% translate "Kontakte" %}</h1>
+<form id="event-filters" method="get" action="{% url 'core:event_list' %}"
+      hx-get="{% url 'core:event_list' %}" hx-target="#event-table" hx-push-url="true"
+      class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+    <div><label for="event-date_from" class="block text-sm text-ink-soft mb-1">{% translate "Von" %}</label>
+    <input id="event-date_from" name="date_from" type="date" value="{{ filters.date_from|default:'' }}" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink"></div>
+    <div><label for="event-date_to" class="block text-sm text-ink-soft mb-1">{% translate "Bis" %}</label>
+    <input id="event-date_to" name="date_to" type="date" value="{{ filters.date_to|default:'' }}" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink"></div>
+    <div><label for="event-q" class="block text-sm text-ink-soft mb-1">{% translate "Suchbegriff" %}</label>
+    <input id="event-q" name="q" type="search" value="{{ filters.q|default:'' }}" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink"></div>
+    <div><label for="event-range" class="block text-sm text-ink-soft mb-1">{% translate "Schnellwahl" %}</label>
+    <select id="event-range" name="range" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
+        <option value="">{% translate "Alle" %}</option>
+        <option value="this_week" {% if filters.range == "this_week" %}selected{% endif %}>{% translate "Diese Woche" %}</option>
+        <option value="last_month" {% if filters.range == "last_month" %}selected{% endif %}>{% translate "Letzter Monat" %}</option>
+    </select></div>
+    <div><label for="event-anonymous" class="block text-sm text-ink-soft mb-1">{% translate "Anonym" %}</label>
+    <select id="event-anonymous" name="anonymous" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
+        <option value="">{% translate "Alle" %}</option>
+        <option value="yes" {% if filters.anonymous == "yes" %}selected{% endif %}>{% translate "Ja" %}</option>
+        <option value="no" {% if filters.anonymous == "no" %}selected{% endif %}>{% translate "Nein" %}</option>
+    </select></div>
+    <div><label for="event-doc_type" class="block text-sm text-ink-soft mb-1">{% translate "Typ" %}</label>
+    <select id="event-doc_type" name="doc_type" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
+        <option value="">{% translate "Alle" %}</option>
+        {% for item in document_types %}
+        <option value="{{ item.pk }}" {% if item.pk|stringformat:"s" == filters.doc_type %}selected{% endif %}>{{ item.name }}</option>
+        {% endfor %}
+    </select></div>
+    <div><label for="event-client" class="block text-sm text-ink-soft mb-1">{% translate "Person" %}</label>
+    <select id="event-client" name="client" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
+        <option value="">{% translate "Alle" %}</option>
+        {% for item in clients %}
+        <option value="{{ item.pk }}" {% if item.pk|stringformat:"s" == filters.client %}selected{% endif %}>{{ item.pseudonym }}</option>
+        {% endfor %}
+    </select></div>
+    {% if show_cases %}
+    <div><label for="event-case" class="block text-sm text-ink-soft mb-1">{% translate "Fall" %}</label>
+    <select id="event-case" name="case" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
+        <option value="">{% translate "Alle" %}</option>
+        {% for item in cases %}
+        <option value="{{ item.pk }}" {% if item.pk|stringformat:"s" == filters.case %}selected{% endif %}>{{ item.title }}</option>
+        {% endfor %}
+    </select></div>
+    {% endif %}
+    <div><label for="event-created_by" class="block text-sm text-ink-soft mb-1">{% translate "Erfasst von" %}</label>
+    <select id="event-created_by" name="created_by" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
+        <option value="">{% translate "Alle" %}</option>
+        {% for item in creators %}
+        <option value="{{ item.pk }}" {% if item.pk|stringformat:"s" == filters.created_by %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+    </select></div>
+    <div><label for="event-time_filter" class="block text-sm text-ink-soft mb-1">{% translate "Schicht" %}</label>
+    <select id="event-time_filter" name="time_filter" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
+        <option value="">{% translate "Alle" %}</option>
+        {% for item in time_filters %}
+        <option value="{{ item.pk }}" {% if item.pk|stringformat:"s" == filters.time_filter %}selected{% endif %}>{{ item.label }}</option>
+        {% endfor %}
+    </select></div>
+    <div class="flex items-center gap-2"><input id="event-mine" type="checkbox" name="mine" value="1" {% if filters.mine %}checked{% endif %}>
+        <label for="event-mine" class="text-sm text-ink-soft">{% translate "Nur meine" %}</label></div>
+    <div class="flex items-center gap-3">
+        <button type="submit" class="btn-primary px-4 py-2 min-h-[44px]">{% translate "Filtern" %}</button>
+        <a href="{% url 'core:event_list' %}" class="text-sm text-accent hover:underline min-h-[44px] inline-flex items-center">{% translate "Filter zurücksetzen" %}</a>
+    </div>
+</form>
+<div id="event-table" data-hx-no-focus>
+    {% include "core/events/partials/table.html" %}
+</div>
 {% endblock %}

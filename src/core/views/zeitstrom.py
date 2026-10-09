@@ -23,6 +23,7 @@ from django.views import View
 from django.views.generic import TemplateView
 from django_ratelimit.decorators import ratelimit
 
+from core import nav
 from core.constants import RATELIMIT_MUTATION
 from core.models import DocumentType, TimeFilter
 from core.services.case import build_handover_summary
@@ -42,6 +43,7 @@ from core.services.events import (
     current_tally_context,
     enrich_events_with_preview,
 )
+from core.services.events.list_filters import event_list_params_from_zeitstrom
 from core.services.system import get_active_bans
 from core.services.zeitstrom_filters import ZEITSTROM_FILTER_KEYS, resolve_zeitstrom_state
 from core.services.zeitstrom_watch import (
@@ -62,6 +64,14 @@ ZEITSTROM_PREVIOUS_STATE_HEADER = "X-Zeitstrom-Previous-State"
 #: Eine Meldung fuer jede Art unbrauchbarer Schichtkoordinaten — sie nennt
 #: bewusst keinen Feldnamen und keinen eingegebenen Wert (Refs #2042, E-06).
 _SHIFT_UNRESOLVED = _("Die Schicht konnte nicht bestimmt werden. Bitte die Seite neu laden.")
+
+
+def _contacts_navigation_context(user, state):
+    """Render the same contacts destination on full pages and feed refreshes."""
+    return {
+        "contacts_navigation": nav.CONTACTS if nav.is_visible(nav.CONTACTS, user) else None,
+        "contacts_list_params": urlencode(event_list_params_from_zeitstrom(state)),
+    }
 
 
 class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
@@ -178,6 +188,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 "focus_box": focus_box,
                 "active_bans": active_bans,
                 "zeitstrom_filter_state": state.params,
+                **_contacts_navigation_context(self.request.user, state),
             }
         )
 
@@ -712,6 +723,8 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFoll
         # behalten den OOB-Mechanismus.
         context["tally_panel_oob"] = self.request.GET.get("feed_only") != "1"
         context["zeitstrom_filter_state"] = filter_state
+        context.update(_contacts_navigation_context(self.request.user, state))
+        context["contacts_navigation_oob"] = True
         return context
 
 

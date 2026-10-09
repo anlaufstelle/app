@@ -164,3 +164,14 @@ def event_list_queryset(facility, user, filters, *, options=None):
         related.append("case")
         columns.extend(["case__id", "case__title", "case__is_deleted"])
     return queryset.select_related(*related).only(*columns).order_by("-occurred_at", "-pk")
+
+
+def event_list_params_from_zeitstrom(state):
+    """Carry the resolved feed day and supported metadata filters to the list."""
+    day = state.target_date.isoformat()
+    params = {"date_from": day, "date_to": day}
+    if state.doc_type_id:
+        params["doc_type"] = state.doc_type_id
+    if state.time_filter is not None:
+        params["time_filter"] = state.time_filter_id
+    return params

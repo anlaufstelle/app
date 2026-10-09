@@ -323,6 +323,14 @@ ZEITSTROM = NavItem(
     gates=("is_assistant_or_above",),
     icon="zeitstrom",
 )
+# Local contacts entry at the existing Zeitstrom anchor.
+CONTACTS = NavItem(
+    key="contacts",
+    label=_("Kontakte"),
+    url_name="core:event_list",
+    gates=("is_assistant_or_above",),
+    testid="zeitstrom-contacts-list",
+)
 AUFGABEN = NavItem(
     key="workitems",
     label=_("Aufgaben"),

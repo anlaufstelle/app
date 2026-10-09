@@ -57,6 +57,10 @@ Aufgaben sind eine eigene Etappe (#1842).
 
     {% if show_event_group %}
     <div class="mb-6" data-testid="search-group-events">
+        {% if user.is_assistant_or_above %}
+        <a href="{% url 'core:event_list' %}?q={{ q|urlencode }}" data-testid="search-contacts-list"
+           class="inline-flex items-center min-h-[44px] text-sm text-accent hover:underline">{% translate "Alle Treffer als Liste" %}</a>
+        {% endif %}
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Ereignisse" %} ({{ counts.events }})</h2>
         <p class="text-xs text-ink-muted mb-3">{% trans "Gesucht wird in den offen gespeicherten Feldinhalten der Ereignisse." %}</p>
         <div class="space-y-2">
