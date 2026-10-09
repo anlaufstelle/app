@@ -37,10 +37,12 @@ def _app_version_info():
 
 
 def source_code(request):
-    """Refs #835 (C-68): exponiere SOURCE_CODE_URL/SOURCE_CODE_VERSION
-    fuer den AGPL-§13-Footer. Wird in jedem Template gerendert.
-    Refs #1050: zusaetzlich app_version/app_build fuer die
-    Versionsanzeige im eingeloggten Footer.
+    """Expose source-code settings for the footer and GDPR documents.
+
+    ``SOURCE_CODE_URL`` is rendered by the AGPL Section 13 footer link;
+    ``SOURCE_CODE_VERSION`` remains available to the GDPR document service and
+    is no longer rendered in the public footer. Refs #835, #2532.
+    Refs #1050: also expose app_version/app_build for the authenticated footer.
 
     Refs #2286: ``session_fully_authenticated`` ist das Sicherheits-Gate der
     Versions-/Build-/Hilfe-Anzeige. Die Werte selbst bleiben im Kontext (der

@@ -90,8 +90,8 @@ INVITE_TOKEN_TIMEOUT = env_int("DJANGO_INVITE_TOKEN_TIMEOUT", 3 * 24 * 60 * 60)
 # AGPL §13 (Refs #835): Quellcode-Link im Footer. Forks/Self-Hoster MUESSEN
 # SOURCE_CODE_URL auf ihren eigenen Quellcode-Spiegel zeigen lassen, sonst
 # liefert der Footer eine technisch falsche § 13-Network-Use-Disclosure.
-# SOURCE_CODE_VERSION ist optional (Commit-SHA) und wird im Footer truncated
-# angezeigt — hilfreich fuer Forensik / Reproducible-Build-Hints.
+# SOURCE_CODE_VERSION is optional (commit SHA) and is used in the GDPR
+# document version stamp; the public footer does not display it.
 SOURCE_CODE_URL = os.environ.get("SOURCE_CODE_URL", "https://github.com/anlaufstelle/app")
 SOURCE_CODE_VERSION = os.environ.get("SOURCE_CODE_VERSION", "")
 

@@ -817,6 +817,9 @@ class TestPrecachedShellBumpGuard:
     # 2026-09-24, Refs #2383: offline_detail.html (eine der neun
     # _SHELL_TEMPLATES) hebt drei Textknoepfe auf 44px Mindesthoehe an —
     # gerendertes Markup geaendert, Hash zusammen mit v53 nachgezogen.
+    # Refs #2532: the source-version span was removed from the shared footer;
+    # it never renders in the precached shell, so only this hash changes and
+    # CACHE_NAME must not be bumped.
     _PINNED_SHELL_HASH = "aa89556327b4d0f660c325285eb193947af375c764b183906ff5b7b72468884d"
     # Refs #1904: SHA-256 over the Content-Security-Policy headers the server
     # delivers with the precached offline home (see _policy_fingerprint). Every
