@@ -21,7 +21,53 @@ beforeAll(async () => {
         countDeadEvents: vi.fn(async () => 0),
     };
     window.offlineStore = offlineStore;
+    await import("../../src/static/js/offline-form-fields.js");
     await import("../../src/static/js/offline-edit.js");
+});
+
+describe("Selection arrays survive an offline edit and reconnect replay", () => {
+    it.each([[], ["a"], ["b", "a"], ["a", "b", "a"], ["comma,value", "quote'value"]])(
+        "sends repeated form keys without converting the stored array for %j",
+        async (...values) => {
+            let saved;
+            offlineStore.getOfflineEvent = vi.fn(async () => saved || null);
+            offlineStore.saveOfflineEdit = vi.fn(async (record) => {
+                saved = JSON.parse(JSON.stringify(record));
+            });
+            const helpers = window.offlineFormFields;
+            const initial = helpers.initialValue("multi_select", values);
+            const formData = helpers.buildFormData([{ slug: "selection", isMultiSelect: true }], { selection: initial });
+            const token = "2026-10-09T10:00:00+00:00";
+            const record = await window.offlineEdit.markEventModified(eventPk, formData, { expectedUpdatedAt: token });
+            expect(saved.data.formData.selection).toEqual(values);
+            expect(Array.isArray(saved.data.formData.selection)).toBe(true);
+
+            vi.stubGlobal("fetch", vi.fn(async () => ({
+                status: 200,
+                redirected: false,
+                headers: new Headers({ "X-Offline-Replay-Result": "saved" }),
+            })));
+            Object.defineProperty(window.navigator, "onLine", { configurable: true, value: false });
+            try {
+                expect(await window.offlineEdit.replayModifiedEvent(saved)).toEqual({ status: "offline" });
+                expect(fetch).not.toHaveBeenCalled();
+            } finally {
+                Object.defineProperty(window.navigator, "onLine", { configurable: true, value: true });
+            }
+
+            expect(await window.offlineEdit.replayModifiedEvent(saved)).toEqual({ status: "synced" });
+            expect(fetch).toHaveBeenCalledTimes(1);
+            const [url, request] = fetch.mock.calls[0];
+            expect(url).toBe(`/events/${eventPk}/edit/`);
+            expect(request.headers.Accept).toBe("application/json");
+            const body = new URLSearchParams(request.body);
+            expect(body.getAll("selection")).toEqual(values);
+            expect(body.get("expected_updated_at")).toBe(token);
+            expect(saved.data.formData.selection).toEqual(values);
+            expect(record.data.formData.selection).toEqual(values);
+            expect(offlineStore.updateEventLocalStatus).toHaveBeenCalledWith(eventPk, "clean");
+        },
+    );
 });
 
 beforeEach(() => {

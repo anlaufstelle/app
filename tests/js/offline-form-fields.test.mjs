@@ -180,3 +180,20 @@ describe("Formatter formatTs/formatDate/formatValue", () => {
         expect(helpers.formatValue("x")).toBe("x");
     });
 });
+
+describe("Selection arrays across offline form initialization and submission", () => {
+    it.each([[], ["a"], ["b", "a"], ["a", "b", "a"], ["comma,value", "quote'value"]])(
+        "preserves values, type and order for %j",
+        (...items) => {
+            const current = items;
+            const field = { slug: "selection", field_type: "multi_select", options: [] };
+            const descriptor = helpers.fieldDescriptor(field, { data_fields: { selection: current } }, helpers.fileNote);
+            const initial = helpers.initialValue(field.field_type, current);
+            expect(Array.isArray(initial)).toBe(true);
+            expect(initial).toEqual(current);
+            expect(initial).not.toBe(current);
+            const formData = helpers.buildFormData([descriptor], { selection: initial });
+            expect(JSON.parse(JSON.stringify(formData))).toEqual({ selection: current });
+        },
+    );
+});

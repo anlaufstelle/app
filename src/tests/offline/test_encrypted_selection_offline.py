@@ -2,6 +2,7 @@
 
 import json
 from unittest.mock import patch
+from urllib.parse import urlencode
 
 import pytest
 from django.urls import reverse
@@ -113,3 +114,35 @@ def test_bundle_view_gates_attached_and_orphan_selections_before_decrypt(
     ]
     fields = payload["document_types"][0]["fields"]
     assert {field["slug"] for field in fields} == visible.intersection({template.slug, "attached-secret"})
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("values", [[], ["a"], ["b", "a"], ["a", "b", "a"], ["a", "c"], ["comma,value", "quote'value"]])
+def test_offline_replay_preserves_encrypted_selection_arrays(client, staff_user, encrypted_offline_event, values):
+    event, template = encrypted_offline_event
+    event.data_json = {template.slug: values}
+    event.save()
+    event.refresh_from_db()
+    client.force_login(staff_user)
+    body = urlencode(
+        [(template.slug, value) for value in values] + [("expected_updated_at", event.updated_at.isoformat())]
+    )
+
+    response = client.post(
+        reverse("core:event_update", kwargs={"pk": event.pk}),
+        body,
+        content_type="application/x-www-form-urlencoded",
+        HTTP_ACCEPT="application/json",
+        HTTP_X_OFFLINE_REPLAY="2",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "saved", "pk": str(event.pk)}
+    assert response["X-Offline-Replay-Result"] == "saved"
+    event.refresh_from_db()
+    stored = event.data_json[template.slug]
+    assert is_encrypted_value(stored) if values else stored == []
+    result = safe_decrypt(stored)
+    assert result == values
+    assert type(result) is list
+    assert _bundle(client, event)["events"][0]["data_fields"][template.slug] == values

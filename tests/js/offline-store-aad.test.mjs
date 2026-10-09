@@ -60,6 +60,47 @@ function rawDb() {
     return db;
 }
 
+it("encrypts selection arrays in bundles, pending edits and conflict states", async () => {
+    const local = ["private-first-choice", "private-second-choice", "private-first-choice"];
+    const server = ["private-second-choice"];
+    const payload = bundle("selection-client", "Selection person");
+    payload.events = [{ pk: "selection-event", data_fields: { selection: local } }];
+    await store.saveClientBundle(payload);
+    const cached = await store.getOfflineClient("selection-client");
+    expect(cached.events[0].data_fields.selection).toEqual(local);
+    expect(Array.isArray(cached.events[0].data_fields.selection)).toBe(true);
+
+    await store.saveOfflineEdit({
+        pk: "selection-event",
+        clientPk: "selection-client",
+        localStatus: "modified",
+        data: { formData: { selection: local } },
+    });
+    const pending = await store.getOfflineEvent("selection-event");
+    expect(pending.data.formData.selection).toEqual(local);
+    const state = {
+        data_json: { selection: server },
+        field_options: { selection: [{ value: local[0], label: "Private option label" }] },
+    };
+    await store.saveConflictState("selection-event", state);
+    const conflict = await store.getOfflineEvent("selection-event");
+    expect(conflict.localStatus).toBe("conflict");
+    expect(conflict.data.formData.selection).toEqual(local);
+    expect(conflict.data.serverState).toEqual(state);
+    expect(Array.isArray(conflict.data.serverState.data_json.selection)).toBe(true);
+
+    const db = rawDb();
+    try {
+        const rows = JSON.stringify({
+            client: await db.clients.get("selection-client"),
+            event: await db.events.get("selection-event"),
+        });
+        for (const secret of [...local, "Private option label"]) expect(rows).not.toContain(secret);
+    } finally {
+        db.close();
+    }
+});
+
 describe("R7 — AAD-Bindung im offline-store", () => {
     it("round-trippt ein Klienten-Bundle", async () => {
         await store.saveClientBundle(bundle("A", "Falke"));
