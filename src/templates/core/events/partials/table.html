@@ -1,4 +1,5 @@
 {% load i18n %}
+{% if filter_form_oob %}{% include "core/events/partials/filter_form.html" %}{% endif %}
 {% if events %}
 <div class="hidden md:block overflow-x-auto bg-surface border border-subtle rounded-[10px]">
 <table class="w-full text-sm text-left" aria-label="{% translate 'Kontakte' %}">

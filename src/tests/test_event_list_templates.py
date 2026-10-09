@@ -89,7 +89,8 @@ def test_htmx_contains_results_without_page_or_filters(client, staff_user, sampl
     assert html.find("table")
     assert not html.find("html")
     assert not html.find("h1")
-    assert not html.find("form")
+    # The only form in the partial is the filter form, sent out of band.
+    assert [form.get("hx-swap-oob") for form in html.find("form")] == ["outerHTML"]
     assert html.find("div", **{"data-testid": "event-mobile-cards"})
 
 
@@ -216,3 +217,48 @@ def test_feed_filter_refresh_updates_contacts_link(client, assistant_user, doc_t
         "date_to": ["2026-09-11"],
         "doc_type": [str(doc_type_contact.pk)],
     }
+
+
+def selected_values(html):
+    """Return the selected option value per select name inside the filter form."""
+    values, current = {}, None
+    for tag, attrs in html.filter_tags:
+        if tag == "select":
+            current = attrs["name"]
+        elif tag == "option" and "selected" in attrs and current:
+            values[current] = attrs.get("value", "")
+    return values
+
+
+def test_htmx_response_carries_the_filter_form_out_of_band(client, staff_user, sample_event):
+    """Browser history snapshots must show the controls of the state they hold."""
+    params = {"doc_type": str(sample_event.document_type_id), "mine": "1"}
+    response = list_response(client, staff_user, params, HTTP_HX_REQUEST="true")
+    html = Elements(response.content)
+    form = html.find("form", id="event-filters")
+    assert len(form) == 1
+    assert form[0]["hx-swap-oob"] == "outerHTML"
+    assert selected_values(html)["doc_type"] == str(sample_event.document_type_id)
+    mine = [a for t, a in html.filter_tags if t == "input" and a.get("name") == "mine"]
+    assert "checked" in mine[0]
+
+
+def test_full_page_renders_the_filter_form_once(client, staff_user, sample_event):
+    html = Elements(list_response(client, staff_user, {"doc_type": str(sample_event.document_type_id)}).content)
+    form = html.find("form", id="event-filters")
+    assert len(form) == 1
+    assert "hx-swap-oob" not in form[0]
+    assert selected_values(html)["doc_type"] == str(sample_event.document_type_id)
+
+
+def test_history_restore_request_gets_the_full_page(client, staff_user, sample_event):
+    """A history cache miss swaps the response into the body: it must be a full page."""
+    response = list_response(
+        client,
+        staff_user,
+        {"doc_type": str(sample_event.document_type_id)},
+        HTTP_HX_REQUEST="true",
+        HTTP_HX_HISTORY_RESTORE_REQUEST="true",
+    )
+    assert response.templates[0].name == "core/events/list.html"
+    assert len(Elements(response.content).find("form", id="event-filters")) == 1

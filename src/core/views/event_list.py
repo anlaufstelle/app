@@ -14,6 +14,10 @@ class EventListView(AssistantOrAboveRequiredMixin, PaginatedListMixin, HTMXParti
     template_name = "core/events/list.html"
     partial_template_name = "core/events/partials/table.html"
 
+    def is_htmx(self):
+        """A history restore swaps the response into the body, so it needs the full page."""
+        return super().is_htmx() and self.request.headers.get("HX-History-Restore-Request") != "true"
+
     def get(self, request):
         facility = request.current_facility
         options = {key: list(values) for key, values in event_list_options(facility, request.user).items()}
@@ -26,5 +30,6 @@ class EventListView(AssistantOrAboveRequiredMixin, PaginatedListMixin, HTMXParti
                 "filters": filters,
                 "show_cases": request.user.is_staff_or_above,
                 "pagination_params": urlencode(filters),
+                "filter_form_oob": self.is_htmx(),
             }
         )
