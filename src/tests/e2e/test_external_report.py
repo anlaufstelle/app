@@ -1,20 +1,16 @@
-"""E2E-Smoke-Tests fuer Externe Berichte (Refs #921, gehärtet Refs #992).
+"""E2E-Tests: Die alte Adresse des externen Berichts (Refs #921, #2505).
 
-Abgeleitet aus manueller Playwright-Verifikation 2026-05-21 auf E2E-Server
-Port 8844. Wait-Strategie: domcontentloaded + Anchor-First (locator.wait_for),
+Seit #2505 (E-1 a) gibt es keinen Reiter „Externer Bericht" mehr. Die Adresse
+``/statistics/external/`` leitet — auch mit ``?format=json`` — mit Zeitraum auf
+die Karte „Allgemeine Kennzahlen" der Datensatz-Berichte um und liefert keine
+Datei. Wait-Strategie: domcontentloaded + Anchor-First (locator.wait_for),
 nie networkidle, nie wait_for_url mit kurzem Timeout.
-
-Beobachtetes Verhalten:
-- lead (emma) -> HTML-Bericht 200 mit Datenschutzprofil-Block, K-Anon=5,
-  Aggregate < 5 als "unterdrueckt" angezeigt
-- ?format=json liefert JSON ohne "top_clients", mit "metadata"-Block
-- staff (miriam) -> 403 Zugriff verweigert
 """
 
 from __future__ import annotations
 
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from ._helpers import SEED_PASSWORD
 
@@ -32,41 +28,53 @@ def _login(page: Page, base_url: str, username: str, password: str = SEED_PASSWO
     page.get_by_role("button", name="Abmelden").first.wait_for(timeout=30_000)
 
 
-def test_lead_can_view_external_report_html(page: Page, base_url: str) -> None:
-    """lead: /statistics/external/ -> 200 HTML mit Datenschutzprofil."""
+def test_lead_is_redirected_to_the_general_key_figures_card(page: Page, base_url: str) -> None:
+    """lead: /statistics/external/ -> Karte „Allgemeine Kennzahlen" mit Vorschau."""
     _login(page, base_url, "emma")
 
     page.goto(f"{base_url}/statistics/external/")
     page.wait_for_load_state("domcontentloaded")
 
-    # Datenschutzprofil-Heading (H2) als Anker — danach Title-Assertion.
-    heading = page.get_by_role("heading", name="Datenschutzprofil", exact=True)
-    heading.wait_for(timeout=30_000)
-    assert "Externer Bericht" in page.title()
-    assert heading.is_visible()
-    # Refs #1743: sichtbarer Quellenausweis im Datenschutzprofil-Kopf.
-    assert "Live-Abfrage zum Erstellungszeitpunkt" in page.content()
+    bar = page.get_by_test_id("export-bar")
+    bar.wait_for(timeout=30_000)
+    assert "/statistics/" in page.url
+    assert "bericht=general-key-figures" in page.url, page.url
+    assert "ansicht=datensaetze" in page.url, page.url
+    expect(page.locator("#report-panel h3")).to_have_text("Allgemeine Kennzahlen")
+    # Refs #1743: sichtbarer Quellenausweis der Vorschau.
+    assert "Live-Abfrage zum Erstellungszeitpunkt" in page.locator("#report-panel").inner_text()
 
 
-def test_external_report_json_endpoint(page: Page, base_url: str) -> None:
-    """?format=json liefert JSON ohne Pseudonym-Ranking, mit metadata-Block."""
+def test_json_address_redirects_and_keeps_the_period(page: Page, base_url: str) -> None:
+    """?format=json liefert keine Datei mehr, sondern leitet mit Zeitraum um."""
     _login(page, base_url, "emma")
 
-    page.goto(f"{base_url}/statistics/external/?format=json")
+    page.goto(f"{base_url}/statistics/external/?format=json&zeitraum=jahr&year=2025")
     page.wait_for_load_state("domcontentloaded")
-    body_text = page.evaluate("() => document.body.innerText")
 
-    # Wichtige Strukturen muessen drin sein:
-    assert "metadata" in body_text
-    assert "privacy_profile" in body_text
-    assert "k_anonymity_threshold" in body_text
-    # Refs #1743: Quellenausweis als stabiler Code, nicht als Fliesstext.
-    assert '"data_source": "live"' in body_text
-    # Pseudonym-Ranking darf NICHT drin sein:
-    assert "top_clients" not in body_text
+    page.get_by_test_id("export-bar").wait_for(timeout=30_000)
+    assert "zeitraum=jahr" in page.url, page.url
+    assert "year=2025" in page.url, page.url
+    assert "format=json" not in page.url, page.url
+    # Kein JSON-Dokument: die Seite ist die Anwendung, nicht ein Datensatz.
+    assert "privacy_profile" not in page.evaluate("() => document.body.innerText")
+    assert "2025" in page.get_by_test_id("statistics-period-range").inner_text()
 
 
-def test_staff_blocked_from_external_report(page: Page, base_url: str) -> None:
+def test_the_external_tab_is_gone(page: Page, base_url: str) -> None:
+    """Die Reiterzeile kennt nur noch Übersicht, Datensatz-Berichte, Freigaben."""
+    _login(page, base_url, "emma")
+
+    page.goto(f"{base_url}/statistics/")
+    page.wait_for_load_state("domcontentloaded")
+    subnav = page.get_by_test_id("subnav-statistik")
+    subnav.wait_for(timeout=30_000)
+
+    assert subnav.locator("[data-testid='subnav-tab-statistik_external_report']").count() == 0
+    assert subnav.locator("[data-testid^='subnav-tab-']").count() == 3
+
+
+def test_staff_blocked_from_the_old_external_address(page: Page, base_url: str) -> None:
     """staff: /statistics/external/ -> 403 (LeadOrAdminRequiredMixin)."""
     _login(page, base_url, "miriam")
 
@@ -74,50 +82,3 @@ def test_staff_blocked_from_external_report(page: Page, base_url: str) -> None:
     page.wait_for_load_state("domcontentloaded")
     # Erwartet: 403-Page mit "Zugriff verweigert"-Title.
     assert "403" in page.title() or "verweigert" in page.title().lower()
-
-
-def test_external_report_has_a_working_period_bar(page: Page, base_url: str) -> None:
-    """Refs #1804 (§3.5/R6): Der externe Bericht wertet ``?zeitraum=`` seit jeher
-    aus — er hatte nur kein einziges Bedienelement dafuer und war ausschliesslich
-    ueber eine von Hand getippte Adresse steuerbar.
-
-    Die Leiste navigiert hier per Link (kein HTMX): die Seite hat keine
-    Inhaltszone, die sich unabhaengig tauschen liesse.
-    """
-    _login(page, base_url, "emma")
-
-    page.goto(f"{base_url}/statistics/external/")
-    page.wait_for_load_state("domcontentloaded")
-    leiste = page.locator("[data-testid='statistics-zeitraum-leiste']")
-    leiste.wait_for(timeout=30_000)
-
-    leiste.get_by_role("link", name="Kalenderjahr", exact=True).click()
-    page.wait_for_url("**/statistics/external/?zeitraum=jahr*", timeout=30_000)
-    page.wait_for_load_state("domcontentloaded")
-
-    # Der Zeitraum im Datenschutzprofil folgt der Auswahl: Kalenderjahr beginnt
-    # am 1. Januar. ``metadata.date_from`` wird als ISO-Datum gerendert.
-    metadaten = page.locator("[data-testid='external-report-metadata']")
-    assert "-01-01" in metadaten.inner_text(), metadaten.inner_text()
-
-
-def test_external_report_json_link_carries_the_period(page: Page, base_url: str) -> None:
-    """Refs #1804: Der JSON-Link trug ``date_from``/``date_to`` OHNE
-    ``zeitraum=frei``; beide Werte fielen im Parser durch, und die Datei
-    beschrieb einen anderen Zeitraum als der Bildschirm darueber."""
-    _login(page, base_url, "emma")
-
-    page.goto(f"{base_url}/statistics/external/?zeitraum=jahr&year=2025")
-    page.wait_for_load_state("domcontentloaded")
-    link = page.locator("[data-testid='external-report-json']")
-    link.wait_for(timeout=30_000)
-
-    href = link.get_attribute("href") or ""
-    assert "zeitraum=jahr" in href, href
-    assert "year=2025" in href, href
-
-    link.click()
-    page.wait_for_load_state("domcontentloaded")
-    body_text = page.evaluate("() => document.body.innerText")
-    assert '"date_from": "2025-01-01"' in body_text, body_text[:400]
-    assert '"date_to": "2025-12-31"' in body_text, body_text[:400]

@@ -164,10 +164,10 @@ class TestReportSectionVisibility:
         """Lead darf den Export ziehen (Server erzwingt LEAD_PLUS auf der Export-View)."""
         page = lead_page
         _open_statistics(page, base_url)
-        panel = _select_backend(page, "sample-report-1")
+        _select_backend(page, "sample-report-1")
 
         with page.expect_download() as download_info:
-            panel.locator("button:has-text('CSV-Export')").click()
+            page.get_by_test_id("export-bar").locator("button:has-text('CSV-Export')").click()
         assert download_info.value.suggested_filename.startswith("sample-report-1_")
 
 
@@ -300,9 +300,9 @@ class TestReportPanelPreview:
         assert page.locator("button:has-text('Beispiel-Sachbericht')").count() == 0
 
         _open_statistics(page, base_url)
-        panel = _select_backend(page, "sample-report-1")
+        _select_backend(page, "sample-report-1")
         with page.expect_download() as download_info:
-            panel.locator("button:has-text('PDF-Export')").click()
+            page.get_by_test_id("export-bar").locator("button:has-text('PDF-Export')").click()
         assert download_info.value.suggested_filename.endswith(".pdf")
         assert download_info.value.suggested_filename.startswith("sample-report-1_")
 
@@ -318,10 +318,10 @@ class TestReportDownloads:
         """Jede Format-Schaltflaeche liefert ``sample-report-1_<von>_<bis>.<ext>``."""
         page = authenticated_page
         _open_statistics(page, base_url)
-        panel = _select_backend(page, "sample-report-1")
+        _select_backend(page, "sample-report-1")
 
         with page.expect_download() as download_info:
-            panel.locator(f"button:has-text('{button_text}')").click()
+            page.get_by_test_id("export-bar").locator(f"button:has-text('{button_text}')").click()
         filename = download_info.value.suggested_filename
 
         assert filename.startswith("sample-report-1_"), filename
@@ -331,10 +331,10 @@ class TestReportDownloads:
         """Auch das Beispiel-Backend liefert einen Download (Dateiname nach Slug)."""
         page = authenticated_page
         _open_statistics(page, base_url)
-        panel = _select_backend(page, "example")
+        _select_backend(page, "example")
 
         with page.expect_download() as download_info:
-            panel.locator("button:has-text('CSV-Export')").click()
+            page.get_by_test_id("export-bar").locator("button:has-text('CSV-Export')").click()
         filename = download_info.value.suggested_filename
 
         assert filename.startswith("example_"), filename
@@ -351,10 +351,10 @@ class TestReportDownloads:
         """
         page = authenticated_page
         _open_statistics(page, base_url)
-        panel = _select_backend(page, slug)
+        _select_backend(page, slug)
 
         with page.expect_download() as download_info:
-            panel.locator("button:has-text('CSV-Export')").click()
+            page.get_by_test_id("export-bar").locator("button:has-text('CSV-Export')").click()
         download = download_info.value
 
         assert download.suggested_filename.startswith(f"{slug}_"), download.suggested_filename
@@ -380,6 +380,9 @@ class TestReportPeriodPassthrough:
         """
         page = authenticated_page
         _open_statistics(page, base_url)
+        # Die Exportleiste (mit den Hidden-Feldern des Zeitraums) erscheint erst
+        # mit einer Berichtsauswahl (Refs #2505) — also zuerst die Karte waehlen.
+        _select_backend(page, "sample-report-1")
 
         date_from_input = page.locator("#report-section input[name='date_from']")
         # Der Klick swappt ``#statistics-content`` inklusive Berichte-Sektion;
@@ -387,16 +390,14 @@ class TestReportPeriodPassthrough:
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.get_by_role("button", name="Kalenderjahr", exact=True).click()
 
-        # Pollt bis der Swap durch ist: das versteckte Feld der Berichte-Form
+        # Pollt bis der Swap durch ist: das versteckte Feld der Exportleiste
         # traegt danach den 1. Januar des gewaehlten Jahres.
         expect(date_from_input).to_have_attribute("value", re.compile(r"^\d{4}-01-01$"), timeout=10000)
         year_start = date_from_input.get_attribute("value")
 
-        panel = _select_backend(page, "sample-report-1")
-
-        expect(panel.locator("p").first).to_contain_text("1. Januar")
+        expect(page.locator("#report-panel p").first).to_contain_text("1. Januar")
         with page.expect_download() as download_info:
-            panel.locator("button:has-text('CSV-Export')").click()
+            page.get_by_test_id("export-bar").locator("button:has-text('CSV-Export')").click()
         assert download_info.value.suggested_filename.startswith(f"sample-report-1_{year_start}_"), (
             download_info.value.suggested_filename
         )
@@ -437,13 +438,13 @@ class TestBerichtsauswahlUeberlebtDenZeitraumWechsel:
         page = authenticated_page
         _open_statistics(page, base_url)
 
-        panel = _select_backend(page, "sample-report-1")
-        expect(panel.locator("button:has-text('CSV-Export')")).to_be_visible()
+        _select_backend(page, "sample-report-1")
+        expect(page.get_by_test_id("export-bar").locator("button:has-text('CSV-Export')")).to_be_visible()
 
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.get_by_role("button", name="Letzte 90 Tage", exact=True).click()
 
         assert "bericht=sample-report-1" in page.url, page.url
         expect(page.locator("[data-testid='report-card-sample-report-1']")).to_have_attribute("aria-current", "true")
-        expect(page.locator("#report-panel button:has-text('CSV-Export')")).to_be_visible()
+        expect(page.get_by_test_id("export-bar").locator("button:has-text('CSV-Export')")).to_be_visible()
         expect(page.locator("#report-recipient")).to_be_visible()

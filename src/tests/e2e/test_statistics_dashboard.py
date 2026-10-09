@@ -163,8 +163,8 @@ class TestZeitraumUeberlebtDenReiterwechsel:
         # wird vom Swap mit erneuert — genau deshalb tragen ihre Links danach den
         # neuen Zeitraum. Geprueft wird der echte Klick nach dem Swap: ein
         # Attribut-Test auf der frisch geladenen Seite bemerkt den Bruch nicht.
-        page.locator("[data-testid='subnav-tab-statistik_external_report']").click()
-        page.wait_for_url("**/statistics/external/**", timeout=30_000)
+        page.locator("[data-testid='subnav-tab-statistik_berichte']").click()
+        page.wait_for_url("**/statistics/?*ansicht=datensaetze*", timeout=30_000)
         assert "zeitraum=letzte180" in page.url, page.url
 
         page.locator("[data-testid='subnav-tab-statistik_releases']").click()
