@@ -272,3 +272,99 @@ def test_filtered_verification_warns_about_installation_scope(rotation_files, ma
     assert "checked=0" in output
     assert "does not prove installation-wide key removability" in output + errors
     assert get_attachment_path(attachment).exists()
+
+
+@pytest.mark.django_db
+def test_parallel_rotation_is_a_command_error(rotation_files, maintenance):
+    from core.services.file_vault.file_locks import vault_lock
+
+    create, _, _ = rotation_files
+    attachment = create()
+    path = get_attachment_path(attachment)
+    before = path.read_bytes()
+    with vault_lock(".reencrypt-files.lock", blocking=False):
+        with pytest.raises(CommandError, match="already running"):
+            run_command()
+    assert path.read_bytes() == before
+
+
+@pytest.mark.django_db
+def test_manifest_durability_failure_is_a_command_error(rotation_files, maintenance, monkeypatch):
+    create, _, _ = rotation_files
+    create()
+    fsync = os.fsync
+
+    def fail_manifest(descriptor):
+        if os.readlink(f"/proc/self/fd/{descriptor}").endswith(".reencrypt-files.jsonl"):
+            raise OSError("simulated durability failure")
+        fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", fail_manifest)
+    with pytest.raises(CommandError, match="Manifest progress could not be persisted"):
+        run_command()
+    monkeypatch.setattr(os, "fsync", fsync)
+    output, _ = run_command()
+    assert "already_primary=1" in output
+
+
+@pytest.mark.django_db
+def test_invalid_manifest_is_a_command_error_before_rotation(rotation_files, maintenance, settings):
+    create, _, _ = rotation_files
+    attachment = create()
+    path = get_attachment_path(attachment)
+    before = path.read_bytes()
+    manifest = settings.MEDIA_ROOT / ".reencrypt-files.jsonl"
+    manifest.write_bytes(b"invalid record\n")
+    with pytest.raises(CommandError, match="Invalid manifest record"):
+        run_command()
+    assert path.read_bytes() == before
+    assert manifest.read_bytes() == b"invalid record\n"
+
+
+@pytest.mark.django_db
+def test_per_file_rotation_errors_fail_loud_and_preserve_unreadable_file(rotation_files, maintenance, settings):
+    create, primary, _ = rotation_files
+    failed, valid = create(), create(key=primary)
+    failed_path = get_attachment_path(failed)
+    before = failed_path.read_bytes()
+    output, errors = io.StringIO(), io.StringIO()
+    with override_settings(ENCRYPTION_KEYS=primary):
+        with pytest.raises(CommandError, match="File re-encryption failed for 1 attachment"):
+            call_command("reencrypt_files", stdout=output, stderr=errors)
+    assert str(failed.pk) in errors.getvalue()
+    assert "Chunk decryption failed" in errors.getvalue()
+    assert failed.storage_filename not in errors.getvalue()
+    assert "private filename" not in errors.getvalue()
+    assert "checked=2" in output.getvalue()
+    assert "already_primary=1" in output.getvalue()
+    assert failed_path.read_bytes() == before
+    assert get_attachment_path(valid).exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("verify", [False, True])
+def test_missing_referenced_file_is_a_command_error(rotation_files, maintenance, verify):
+    create, primary, _ = rotation_files
+    attachment = create(key=primary)
+    get_attachment_path(attachment).unlink()
+    errors = io.StringIO()
+    with pytest.raises(CommandError, match="failed for 1 attachment"):
+        call_command("reencrypt_files", *(["--verify"] if verify else []), stderr=errors)
+    assert str(attachment.pk) in errors.getvalue()
+    assert "FileNotFoundError" in errors.getvalue()
+    assert attachment.storage_filename not in errors.getvalue()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("verify", [False, True])
+def test_missing_key_is_a_command_error_before_file_changes(rotation_files, maintenance, settings, verify):
+    create, _, _ = rotation_files
+    attachment = create()
+    path = get_attachment_path(attachment)
+    before = path.read_bytes()
+    files = set(settings.MEDIA_ROOT.rglob("*"))
+    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=""):
+        with pytest.raises(CommandError, match="encryption key|ENCRYPTION_KEY"):
+            run_command(*(["--verify"] if verify else []))
+    assert path.read_bytes() == before
+    assert set(settings.MEDIA_ROOT.rglob("*")) == files
