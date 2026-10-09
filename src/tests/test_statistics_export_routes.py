@@ -97,6 +97,14 @@ class TestExternalReportRedirect:
         assert AuditLog.objects.filter(target_type="ExternalReport").count() == 0
         assert AuditLog.objects.count() == before
 
+    def test_facility_admin_follows_the_redirect(self, client, admin_user):
+        client.force_login(admin_user)
+
+        response = client.get("/statistics/external/", {"zeitraum": "letzte30"})
+
+        assert response.status_code == 302
+        assert _query(response["Location"])["bericht"] == ["general-key-figures"]
+
     def test_staff_gets_no_redirect(self, client, staff_user):
         client.force_login(staff_user)
         response = client.get("/statistics/external/", {"format": "json"})
