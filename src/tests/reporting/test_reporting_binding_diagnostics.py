@@ -93,8 +93,9 @@ def test_foreign_configuration_is_not_disclosed(partial_type, facility, second_f
     assert registry.describe_field_bindings(foreign_field, facility) == []
 
 
-def test_generic_or_requirements_and_missing_type_key(partial_type, facility, monkeypatch):
-    doc_type, _ = partial_type
+def test_generic_or_requirements_and_missing_type_key(facility, monkeypatch):
+    doc_type = make_type(facility, "Unassigned", "")
+    add_field(doc_type, "ausgabe_stueck")
     first = FeldBindung((BindungsEintrag("ausgabe_stueck", "Output"),), bindet="report_key")
     second = FeldBindung((BindungsEintrag("quantity_units", "Units"),), bindet="report_key")
     alternate = FeldBindung((BindungsEintrag("alternative_units", "Alternative"),), bindet="report_key")
@@ -318,3 +319,12 @@ def test_unconfigured_group_does_not_claim_type_events(facility, staff_user):
     assert not dataset.completeness
     assert not any("Krisenarten-Verteilung" in line for line in registry.describe_type_bindings(crisis, facility))
     assert any("art_der_krise" in warning for warning in registry.diagnose_type_bindings(crisis, facility))
+
+
+@pytest.mark.parametrize("key", ["excluded", "contact"], ids=["excluded", "different-assignment"])
+def test_assigned_type_key_does_not_claim_a_missing_type_key(facility, key):
+    doc_type = make_type(facility, "Assigned", key)
+    output = add_field(doc_type, "ausgabe_stueck")
+    add_field(doc_type, "rueckgabe_stueck")
+    assert not any("Typ-Schlüssel" in warning for warning in registry.diagnose_type_bindings(doc_type, facility))
+    assert not any("Typ-Schlüssel" in warning for warning in registry.diagnose_field_bindings(output, facility))

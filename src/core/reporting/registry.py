@@ -352,6 +352,9 @@ def _requirement_state(requirement, document_type, facility, *, active_only=True
         binding = requirement.typ_bindung
         matched = binding.resolve_key(*_typ_werte(document_type, binding)) is not None
         if not matched:
+            if any(_typ_werte(document_type, binding)):
+                # An assigned key is immutable; this alternative cannot be completed on this type.
+                return False, None
             missing.append(_("Typ-Schlüssel: %(keys)s") % {"keys": _binding_labels(binding)})
     for binding in requirement.feld_bindungen:
         types = DocumentType.objects.for_facility(facility).filter(pk=getattr(document_type, "pk", None))
