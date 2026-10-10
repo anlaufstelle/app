@@ -50,7 +50,7 @@ def _snapshot_checks() -> list[ComplianceCheck]:
             )
         ]
     age_days = (_clock.now() - entry.timestamp).days
-    detail = _("Letzter Lauf: %(entry_timestamp)s") % {"entry_timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
+    detail = _("Letzter Lauf: %(timestamp)s") % {"timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
     if age_days <= 35:
         return [
             ComplianceCheck(
@@ -105,7 +105,7 @@ def _breach_scan_checks() -> list[ComplianceCheck]:
             )
         ]
     age = _age_hours(entry)
-    detail = _("Letzter Scan: %(entry_timestamp)s") % {"entry_timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
+    detail = _("Letzter Scan: %(timestamp)s") % {"timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
     if age <= 3:
         return [
             ComplianceCheck(
@@ -158,7 +158,7 @@ def _mv_refresh_checks() -> list[ComplianceCheck]:
             )
         ]
     age = _age_hours(entry)
-    detail = _("Letzter Refresh: %(entry_timestamp)s") % {"entry_timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
+    detail = _("Letzter Refresh: %(timestamp)s") % {"timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
     if age <= 2:
         return [
             ComplianceCheck(
@@ -226,7 +226,7 @@ def _audit_chain_checks() -> list[ComplianceCheck]:
             )
         ]
     age = _age_hours(entry)
-    detail = _("Letzte Prüfung: %(entry_timestamp)s") % {"entry_timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
+    detail = _("Letzte Prüfung: %(timestamp)s") % {"timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
     if age <= ops_thresholds.AUDIT_CHAIN_WARN_HOURS:
         return [
             ComplianceCheck(

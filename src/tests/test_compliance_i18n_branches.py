@@ -336,7 +336,7 @@ GERMAN_WORDS = re.compile(
     r"Verwaltung|Zugänge|Einstellungen|erzeugen|erzeugt|eingerichtet|"
     r"Lücke|schliessen|Risiko|Nur|haben|traegt|ausgefallen|Auffrischung|"
     r"Zeitstempel|Alter|Zukunft|messbar|antwortet|deaktiviert|abrufbar|ermittelbar|"
-    r"mit|filtern|Vorfall|Meldung|Aufsichtsbehörde|nachholen|dokumentieren|Statistik|"
+    r"Quelle|Aktualisierung|jedem|mit|filtern|Vorfall|Meldung|Aufsichtsbehörde|nachholen|dokumentieren|Statistik|"
     r"Verbleibende|Aktivierung|anhalten|aktivieren|erzwingen|oder)\b",
     re.IGNORECASE,
 )
@@ -371,7 +371,9 @@ def test_english_request_has_no_german_card_text(english_dashboard_response):
     content = english_dashboard_response.content.decode()
     sections = re.findall(r'<section[^>]+data-testid="compliance-group-[^\"]+"[^>]*>(.*?)</section>', content, re.S)
     assert sections
-    text = html.unescape(re.sub(r"<[^>]+>", " ", " ".join(sections)))
+    footnote = re.search(r"<p[^>]*>\s*[^<]*<code>core/services/compliance/</code>.*?</p>", content, re.S)
+    assert footnote
+    text = html.unescape(re.sub(r"<[^>]+>", " ", " ".join(sections) + footnote.group()))
     assert not GERMAN_WORDS.findall(text), GERMAN_WORDS.findall(text)
 
 
@@ -392,3 +394,43 @@ def test_card_text_uses_active_translation_backend(dashboard_scenario):
             )
             assert not GERMAN_WORDS.findall(text), (check.key, text)
     assert {check.key: check.status.value for check in checks} == _expected_statuses(dashboard_scenario)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("dashboard_scenario", ["fresh"], indirect=True)
+def test_full_mfa_quote_formats_translated_percentage(dashboard_scenario):
+    def translate(message):
+        if message.endswith("der MFA-pflichtigen Rollen haben MFA aktiv."):
+            return "All %(percent)s %% of required roles have MFA active."
+        return message
+
+    with translation.override("en"), patch("django.utils.translation._trans.gettext", side_effect=translate):
+        card = next(check for check in compliance.aggregate_checks() if check.key == "mfa_privileged_quote")
+    assert card.status == compliance.ComplianceStatus.OK
+    assert card.message == "All 100 % of required roles have MFA active."
+    with translation.override("de"):
+        card = next(check for check in compliance.aggregate_checks() if check.key == "mfa_privileged_quote")
+    assert card.message == "100 % der MFA-pflichtigen Rollen haben MFA aktiv."
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("dashboard_scenario", ["fresh", "critical", "future_backup"], indirect=True)
+def test_catalog_receives_readable_placeholders(dashboard_scenario):
+    messages = []
+
+    def translate(message):
+        messages.append(message)
+        return message
+
+    with translation.override("de"), patch("django.utils.translation._trans.gettext", side_effect=translate):
+        cards = compliance.aggregate_checks()
+    assert {card.key: card.status.value for card in cards} == _expected_statuses(dashboard_scenario)
+    names = {name for message in messages for name in re.findall(r"%\(([^)]+)\)s", message)}
+    assert not {
+        name
+        for name in names
+        if name.startswith(
+            ("entry_", "ops_thresholds_", "self_", "role_check_", "versions_", "len_", "value_", "info_")
+        )
+    }
+    assert all(not message.startswith(" ") for message in messages)

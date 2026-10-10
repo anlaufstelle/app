@@ -55,27 +55,24 @@ class RoleCheck:
 
     def problems(self) -> list[str]:
         if not self.exists:
-            return [_("Rolle %(self_role)s existiert nicht in pg_roles.") % {"self_role": f"{self.role!r}"}]
+            return [_("Rolle %(role)s existiert nicht in pg_roles.") % {"role": f"{self.role!r}"}]
         issues = []
         if self.actual_super != self.expected_super:
             issues.append(
-                _("Rolle %(self_role)s: rolsuper=%(self_actual_super)s (erwartet: %(self_expected_super)s).")
+                _("Rolle %(role)s: rolsuper=%(actual_super)s (erwartet: %(expected_super)s).")
                 % {
-                    "self_role": f"{self.role!r}",
-                    "self_actual_super": self.actual_super,
-                    "self_expected_super": self.expected_super,
+                    "role": f"{self.role!r}",
+                    "actual_super": self.actual_super,
+                    "expected_super": self.expected_super,
                 }
             )
         if self.actual_bypassrls != self.expected_bypassrls:
             issues.append(
-                _(
-                    "Rolle %(self_role)s: rolbypassrls=%(self_actual_bypassrls)s (erwartet: "
-                    "%(self_expected_bypassrls)s)."
-                )
+                _("Rolle %(role)s: rolbypassrls=%(actual_bypassrls)s (erwartet: %(expected_bypassrls)s).")
                 % {
-                    "self_role": f"{self.role!r}",
-                    "self_actual_bypassrls": self.actual_bypassrls,
-                    "self_expected_bypassrls": self.expected_bypassrls,
+                    "role": f"{self.role!r}",
+                    "actual_bypassrls": self.actual_bypassrls,
+                    "expected_bypassrls": self.expected_bypassrls,
                 }
             )
         return issues
@@ -579,8 +576,7 @@ def _db_role_attribute_check(role_check, attr: str, key: str, label: str) -> Com
             label=label,
             category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
-            message=_("Rolle '%(role_check_role)s' nicht in pg_roles gefunden.")
-            % {"role_check_role": role_check.role},  # pragma: no mutate
+            message=_("Rolle '%(role)s' nicht in pg_roles gefunden.") % {"role": role_check.role},  # pragma: no mutate
             action_hint=_("DB-Rollen-Setup prüfen — siehe deploy/postgres-init/01-app-role.sh."),  # pragma: no mutate
         )
     if actual == expected:
@@ -590,16 +586,14 @@ def _db_role_attribute_check(role_check, attr: str, key: str, label: str) -> Com
             category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.OK,
             message=_("Korrekt konfiguriert."),  # pragma: no mutate
-            detail=_("%(role_check_role)s: %(attr)s=%(actual)s")
-            % {"role_check_role": role_check.role, "attr": attr, "actual": actual},
+            detail=_("%(role)s: %(attr)s=%(actual)s") % {"role": role_check.role, "attr": attr, "actual": actual},
         )
     return ComplianceCheck(
         key=key,
         label=label,
         category=ComplianceCategory.DATABASE,  # pragma: no mutate
         status=ComplianceStatus.CRITICAL,
-        message=_("Rolle '%(role_check_role)s' hat falsches Attributprofil.")
-        % {"role_check_role": role_check.role},  # pragma: no mutate
+        message=_("Rolle '%(role)s' hat falsches Attributprofil.") % {"role": role_check.role},  # pragma: no mutate
         detail=_("%(attr)s=%(actual)s (erwartet: %(expected)s)")
         % {"attr": attr, "actual": actual, "expected": expected},
         action_hint=_("manage.py check_db_roles + Rollen-Init-Script prüfen (Refs #902)."),  # pragma: no mutate
@@ -614,8 +608,8 @@ def _db_role_admin_check(role_check) -> ComplianceCheck:
             label=_("Admin-DB-Rolle"),  # pragma: no mutate
             category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
-            message=_("Admin-Rolle '%(role_check_role)s' nicht in pg_roles gefunden.")
-            % {"role_check_role": role_check.role},  # pragma: no mutate
+            message=_("Admin-Rolle '%(role)s' nicht in pg_roles gefunden.")
+            % {"role": role_check.role},  # pragma: no mutate
             action_hint=_("DB-Rollen-Setup prüfen — siehe deploy/postgres-init/01-app-role.sh."),  # pragma: no mutate
         )
     if role_check.ok:
@@ -625,14 +619,11 @@ def _db_role_admin_check(role_check) -> ComplianceCheck:
             category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.OK,
             message=_("Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS)."),  # pragma: no mutate
-            detail=_(
-                "%(role_check_role)s: rolsuper=%(role_check_actual_super)s, "
-                "rolbypassrls=%(role_check_actual_bypassrls)s"
-            )
+            detail=_("%(role)s: rolsuper=%(actual_super)s, rolbypassrls=%(actual_bypassrls)s")
             % {
-                "role_check_role": role_check.role,
-                "role_check_actual_super": role_check.actual_super,
-                "role_check_actual_bypassrls": role_check.actual_bypassrls,
+                "role": role_check.role,
+                "actual_super": role_check.actual_super,
+                "actual_bypassrls": role_check.actual_bypassrls,
             },
         )
     return ComplianceCheck(

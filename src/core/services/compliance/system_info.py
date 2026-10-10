@@ -27,15 +27,14 @@ def _migration_checks() -> list[ComplianceCheck]:
         ]
     listing = ", ".join(f"{app}.{name}" for app, name in pending[:5])
     if len(pending) > 5:
-        listing += _(" (+ %(len_pending_5)s weitere)") % {"len_pending_5": len(pending) - 5}
+        listing += " " + _("(+ %(extra)s weitere)") % {"extra": len(pending) - 5}
     return [
         ComplianceCheck(
             key="migrations_pending",
             label=_("Migrationen"),  # pragma: no mutate
             category=ComplianceCategory.SYSTEM,  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
-            message=_("%(len_pending)s ausstehende Migration(en).")
-            % {"len_pending": len(pending)},  # pragma: no mutate
+            message=_("%(count)s ausstehende Migration(en).") % {"count": len(pending)},  # pragma: no mutate
             detail=listing,
             action_hint=_("docker compose exec web python manage.py migrate ausführen."),  # pragma: no mutate
         )
@@ -47,12 +46,10 @@ def _version_checks() -> list[ComplianceCheck]:
     from core.services.system.health import app_versions
 
     versions = app_versions()
-    message = _(
-        "App %(versions_app_version)s, Django %(versions_django_version)s, Python %(versions_python_version)s"
-    ) % {
-        "versions_app_version": versions["app_version"],
-        "versions_django_version": versions["django_version"],
-        "versions_python_version": versions["python_version"],
+    message = _("App %(app_version)s, Django %(django_version)s, Python %(python_version)s") % {
+        "app_version": versions["app_version"],
+        "django_version": versions["django_version"],
+        "python_version": versions["python_version"],
     }
     return [
         ComplianceCheck(

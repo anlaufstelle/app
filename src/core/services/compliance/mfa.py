@@ -51,7 +51,7 @@ def _mfa_checks() -> list[ComplianceCheck]:
     }
     if percent >= 100:
         status = ComplianceStatus.OK
-        message = _("100 % der MFA-pflichtigen Rollen haben MFA aktiv.")
+        message = _("%(percent)s %% der MFA-pflichtigen Rollen haben MFA aktiv.") % {"percent": f"{percent:g}"}
         hint = None
     elif percent >= 80:
         status = ComplianceStatus.WARNING

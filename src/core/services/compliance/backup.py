@@ -73,15 +73,15 @@ def _backup_checks() -> list[ComplianceCheck]:
                 message=_(
                     "Zeitstempel der letzten Sicherung liegt in der Zukunft — das Alter ist nicht messbar."
                 ),  # pragma: no mutate  # noqa: E501
-                detail=_("%(info_path)s (Zeitstempel: %(info_mtime)s)")
-                % {"info_path": info["path"], "info_mtime": f"{info['mtime']:%Y-%m-%d %H:%M UTC}"},
+                detail=_("%(path)s (Zeitstempel: %(timestamp)s)")
+                % {"path": info["path"], "timestamp": f"{info['mtime']:%Y-%m-%d %H:%M UTC}"},
                 action_hint=_(
                     "Systemuhr/Zeitsynchronisation des Hosts und den Dateizeitstempel der Sicherung prüfen."
                 ),  # pragma: no mutate  # noqa: E501
             )
         ]
     age_hours = info["age_hours"]
-    detail = _("%(info_path)s (Alter: %(age_hours)sh)") % {"info_path": info["path"], "age_hours": f"{age_hours:.1f}"}
+    detail = _("%(path)s (Alter: %(age_hours)sh)") % {"path": info["path"], "age_hours": f"{age_hours:.1f}"}
     # Refs #1872: Schwellen aus ``ops_thresholds`` (36 h / 48 h = 1,5 x / 2 x
     # Tagesintervall des Host-Cron) statt der frueheren, hier lokal gesetzten
     # 24 h / 72 h — dieselbe Backup-Zeile meldete sonst je nach Ansicht anderes.
@@ -92,10 +92,10 @@ def _backup_checks() -> list[ComplianceCheck]:
                 label=_("Letztes Backup"),  # pragma: no mutate
                 category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.OK,
-                message=_("Backup ist %(age_hours)sh alt (Schwelle: %(ops_thresholds_BACKUP_WARN_HOURS)sh).")
+                message=_("Backup ist %(age_hours)sh alt (Schwelle: %(hours)sh).")
                 % {
                     "age_hours": f"{age_hours:.0f}",
-                    "ops_thresholds_BACKUP_WARN_HOURS": ops_thresholds.BACKUP_WARN_HOURS,
+                    "hours": ops_thresholds.BACKUP_WARN_HOURS,
                 },  # pragma: no mutate  # noqa: E501
                 detail=detail,
             )
@@ -151,9 +151,9 @@ def _restore_checks() -> list[ComplianceCheck]:
             )
         ]
     age_days = (_clock.now() - entry.timestamp).days
-    detail = _("Letzter Restore-Test: %(entry_timestamp)s; Notiz: %(entry_detail_get_note_or)s") % {
-        "entry_timestamp": f"{entry.timestamp:%Y-%m-%d}",
-        "entry_detail_get_note_or": entry.detail.get("note") or "—",
+    detail = _("Letzter Restore-Test: %(timestamp)s; Notiz: %(note)s") % {
+        "timestamp": f"{entry.timestamp:%Y-%m-%d}",
+        "note": entry.detail.get("note") or "—",
     }
     if age_days <= 90:
         return [

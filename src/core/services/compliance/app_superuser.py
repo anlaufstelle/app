@@ -44,15 +44,14 @@ def _app_superuser_checks() -> list[ComplianceCheck]:
         ]
     listing = ", ".join(offenders[:5])
     if len(offenders) > 5:
-        listing += _(" (+ %(len_offenders_5)s weitere)") % {"len_offenders_5": len(offenders) - 5}
+        listing += " " + _("(+ %(extra)s weitere)") % {"extra": len(offenders) - 5}
     return [
         ComplianceCheck(
             key="app_user_no_django_superuser",
             label=_("App-User kein Django-Superuser"),  # pragma: no mutate
             category=ComplianceCategory.PERMISSIONS,  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
-            message=_("%(len_offenders)s App-User mit is_superuser=True.")
-            % {"len_offenders": len(offenders)},  # pragma: no mutate
+            message=_("%(count)s App-User mit is_superuser=True.") % {"count": len(offenders)},  # pragma: no mutate
             detail=listing,
             action_hint=(
                 _(

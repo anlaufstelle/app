@@ -28,8 +28,8 @@ def _audit_event_checks() -> list[ComplianceCheck]:
                 category=ComplianceCategory.AUDIT,  # pragma: no mutate
                 status=ComplianceStatus.OK,
                 message=_("Keine kritischen Events in den letzten 24h."),  # pragma: no mutate
-                detail=_("Gemonitorte Aktionen: %(value_1)s")
-                % {"value_1": ", ".join(a.value for a in _CRITICAL_AUDIT_ACTIONS)},
+                detail=_("Gemonitorte Aktionen: %(actions)s")
+                % {"actions": ", ".join(a.value for a in _CRITICAL_AUDIT_ACTIONS)},
             )
         ]
     if count <= 5:

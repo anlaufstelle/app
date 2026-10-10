@@ -108,7 +108,7 @@ def _retention_checks() -> list[ComplianceCheck]:
     # Job, an dem die DSFA-Zusage zu Loeschfristen haengt. Jetzt dieselbe
     # 1,5x/2x-Intervall-Regel wie Backup und Audit-Ketten-Pruefung.
     age_hours = (_clock.now() - entry.timestamp).total_seconds() / 3600.0
-    detail = _("Letzter Lauf: %(entry_timestamp)s") % {"entry_timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
+    detail = _("Letzter Lauf: %(timestamp)s") % {"timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
     if age_hours <= ops_thresholds.RETENTION_WARN_HOURS:
         status = ComplianceStatus.OK
         message = _("Letzter Lauf vor %(age_hours)sh.") % {"age_hours": f"{age_hours:.0f}"}
