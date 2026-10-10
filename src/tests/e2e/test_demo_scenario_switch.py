@@ -43,6 +43,12 @@ def _demo_enabled(base_url, browser):
         context.close()
 
 
+def _session_key(context):
+    """Value of the session cookie in the context, ``None`` when it is absent."""
+    cookies = [c for c in context.cookies() if c["name"] == "sessionid"]
+    return cookies[0]["value"] if cookies else None
+
+
 @pytest.fixture
 def demo_mode_or_skip(base_url, browser):
     require_demo(lambda: _demo_enabled(base_url, browser))
@@ -212,13 +218,6 @@ class TestOldTabAfterSwitch:
             cards.nth(0).locator("[data-testid='demo-scenario-start']").click()
             page_old_tab.wait_for_url(lambda url: "/demo/" not in url, timeout=10000)
 
-            # The old tab has to be at rest before the switch: right after the
-            # load its service worker still fetches the offline shells with the
-            # old session key, and a response to a request with a session that
-            # the switch has just replaced deletes the new session cookie.
-            page_old_tab.wait_for_load_state("networkidle")
-            page_old_tab.evaluate("() => navigator.serviceWorker.ready.then(() => true)")
-
             # "Alter Tab": bleibt auf der App-Seite von Bereich 1 stehen,
             # WAEHREND ein neuer Tab (gleiche Sitzung/Cookies) den Wechsel
             # ausloest.
@@ -244,5 +243,74 @@ class TestOldTabAfterSwitch:
             banner_text = banner.inner_text()
             assert second_name in banner_text, f"Banner zeigt nicht den neuen Bereich: {banner_text!r}"
             assert first_name not in banner_text, f"Banner zeigt noch den alten Bereich: {banner_text!r}"
+        finally:
+            context.close()
+
+    def test_requests_pending_during_the_switch_keep_the_new_session(self, base_url, browser):
+        """A request the old tab sent before the switch reaches the server
+        after it. Its response must not delete the cookie the switch set.
+
+        The service worker is blocked so that no background fetch races the
+        test. The pending request is created explicitly: the route holds it,
+        and once the switch is done it is sent with the replaced session key
+        pinned in the ``Cookie`` header, exactly what the browser attached when
+        the request was sent. ``route.fetch`` goes through the context's request
+        API, which applies the response's ``Set-Cookie`` to the shared cookie
+        jar like the browser does. Releasing the held route with ``continue_``
+        instead would make the browser add the new cookie at that moment, and
+        the stale request would not exist.
+        """
+        context = browser.new_context(locale="de-DE", service_workers="block")
+        held = []
+        try:
+            context.route("**/offline/workitems/?pending=1", lambda route: held.append(route))
+
+            page_old_tab = context.new_page()
+            page_old_tab.goto(f"{base_url}/demo/")
+            cards = page_old_tab.locator("[data-testid='demo-scenario-card']")
+            assert cards.count() >= 2, "The demo catalog must offer at least two scenarios to switch between."
+            first_key = cards.nth(0).get_attribute("data-scenario-key")
+            cards.nth(0).locator("[data-testid='demo-scenario-start']").click()
+            page_old_tab.wait_for_url(lambda url: "/demo/" not in url, timeout=10000)
+            old_session_key = _session_key(context)
+
+            # Request in flight from the old tab, held before it reaches the server.
+            page_old_tab.evaluate(
+                "() => { window.__pending = fetch('/offline/workitems/?pending=1').then((r) => r.status); }"
+            )
+            for _ in range(100):
+                if held:
+                    break
+                page_old_tab.wait_for_timeout(50)
+            assert len(held) == 1, "The old tab's request must be held by the route before the switch."
+
+            # The switch happens in a second tab of the same context (shared cookie jar).
+            page_new_tab = context.new_page()
+            page_new_tab.goto(f"{base_url}/demo/")
+            cards = page_new_tab.locator("[data-testid='demo-scenario-card']")
+            second_name = None
+            for i in range(cards.count()):
+                if cards.nth(i).get_attribute("data-scenario-key") != first_key:
+                    second_name = cards.nth(i).locator("h2").inner_text().strip()
+                    cards.nth(i).locator("[data-testid='demo-scenario-start']").click()
+                    break
+            assert second_name is not None
+            page_new_tab.wait_for_url(lambda url: "/demo/" not in url, timeout=10000)
+            new_session_key = _session_key(context)
+            assert new_session_key != old_session_key
+
+            # Send the pending request now: it arrives with the replaced key.
+            stale_response = held[0].fetch(
+                headers={**held[0].request.headers, "cookie": f"sessionid={old_session_key}"}
+            )
+            assert stale_response.status == 200
+            held[0].fulfill(response=stale_response)
+            assert page_old_tab.evaluate("() => window.__pending") == 200
+
+            assert _session_key(context) == new_session_key, "The stale response replaced or deleted the new cookie."
+            page_old_tab.reload()
+            banner = page_old_tab.locator("[data-testid='demo-current-scenario']")
+            banner.wait_for(timeout=10000)
+            assert second_name in banner.inner_text()
         finally:
             context.close()

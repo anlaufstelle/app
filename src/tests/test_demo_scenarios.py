@@ -485,3 +485,30 @@ class TestBanner:
         request.user = kontaktladen_staff
         tmpl = Template("{% load demo_scenarios %}{% demo_current_scenario_name %}")
         assert tmpl.render(RequestContext(request, {"request": request})) == "Anzeigename kontaktladen"
+
+
+class TestStaleRequestAfterSwitch:
+    """Requests the old tab sent before the switch arrive with the replaced key."""
+
+    def test_stale_request_keeps_the_cookie_the_switch_set(
+        self, client, demo_mode, patched_catalog, kontaktladen_staff, solo_staff
+    ):
+        from django.conf import settings as django_settings
+        from django.test import Client
+
+        client.post(reverse("demo_scenario_start"), {"scenario": "kontaktladen"})
+        old_key = client.session.session_key
+        switch = client.post(reverse("demo_scenario_start"), {"scenario": "solo"})
+        new_key = switch.cookies[django_settings.SESSION_COOKIE_NAME].value
+        assert new_key and new_key != old_key
+
+        stale = Client()
+        stale.cookies[django_settings.SESSION_COOKIE_NAME] = old_key
+        response = stale.get(reverse("core:offline_workitem_list_shell"))
+
+        assert response.status_code == 200
+        assert django_settings.SESSION_COOKIE_NAME not in response.cookies
+
+        # The visitor's own jar still holds the new session and is signed in.
+        assert client.cookies[django_settings.SESSION_COOKIE_NAME].value == new_key
+        assert int(client.session["_auth_user_id"]) == solo_staff.pk

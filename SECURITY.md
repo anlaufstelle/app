@@ -99,7 +99,7 @@ Die Werte stehen in [`src/anlaufstelle/settings/prod.py`](src/anlaufstelle/setti
 5. `django.middleware.clickjacking.XFrameOptionsMiddleware` — `X-Frame-Options`
 6. `core.middleware.maintenance.MaintenanceModeMiddleware` — antwortet im Wartungsmodus mit 503, vor Session und Anmeldung
 7. `whitenoise.middleware.WhiteNoiseMiddleware` — liefert statische Dateien aus
-8. `django.contrib.sessions.middleware.SessionMiddleware` — Sitzungen
+8. `core.middleware.demo_session.DemoSessionMiddleware` — Sitzungen; erweitert Djangos `SessionMiddleware` und lässt auf der Demo das Sitzungscookie unangetastet, wenn eine Anfrage einen bereits ersetzten Sitzungsschlüssel trug, sonst identisch
 9. `django.middleware.locale.LocaleMiddleware` — Sprache der Anfrage
 10. `django.middleware.common.CommonMiddleware` — URL-Normalisierung
 11. `django.middleware.csrf.CsrfViewMiddleware` — CSRF-Schutz
@@ -227,7 +227,7 @@ The values live in [`src/anlaufstelle/settings/prod.py`](src/anlaufstelle/settin
 5. `django.middleware.clickjacking.XFrameOptionsMiddleware` — `X-Frame-Options`
 6. `core.middleware.maintenance.MaintenanceModeMiddleware` — answers 503 in maintenance mode, before session and authentication
 7. `whitenoise.middleware.WhiteNoiseMiddleware` — serves static files
-8. `django.contrib.sessions.middleware.SessionMiddleware` — sessions
+8. `core.middleware.demo_session.DemoSessionMiddleware` — sessions; extends Django's `SessionMiddleware` and, on the demo, leaves the session cookie alone when a request carried an already replaced session key, otherwise identical
 9. `django.middleware.locale.LocaleMiddleware` — request language
 10. `django.middleware.common.CommonMiddleware` — URL normalisation
 11. `django.middleware.csrf.CsrfViewMiddleware` — CSRF protection
