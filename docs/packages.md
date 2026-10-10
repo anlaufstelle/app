@@ -8,7 +8,7 @@ Der mitgelieferte Standardkatalog ist selbst ein Paket: [`src/core/packages/defa
 - **Warum `sort_order` zwei Bedeutungen hat:** [ADR-036](adr/036-globale-block-sequenz-feldordnung.md).
 - **Welche Operatoren zu welchem Feldtyp passen:** [ADR-035](adr/035-evaluator-semantik-bedingte-feldlogik.md).
 
-> **Der Slug ist die Identität.** Der Loader findet Bestandsobjekte ausschließlich über ihren Slug. Ein geänderter Slug legt in **jeder** Einrichtung, die das Objekt schon trägt, ein Duplikat an, statt das vorhandene Objekt zu aktualisieren. Slugs sind nach dem Anlegen in Modell **und** Datenbank-Trigger unveränderlich — es gibt kein „Umbenennen" auf Slug-Ebene.
+> **Der Objekt-Slug ist die Identität.** Der Loader findet Dokumentationstypen, Feldvorlagen und Feldgruppen ausschließlich über ihren Slug. Ein geänderter Objekt-Slug legt in **jeder** Einrichtung, die das Objekt schon trägt, ein Duplikat an, statt das vorhandene Objekt zu aktualisieren. Diese Objekt-Slugs sind nach dem Anlegen in Modell **und** Datenbank-Trigger unveränderlich — es gibt kein „Umbenennen" auf Objekt-Slug-Ebene.
 
 ---
 
@@ -390,7 +390,7 @@ Diese Punkte sind die häufigsten Fehlerquellen. Sie gelten für den Standardkat
 
 **Optionen**
 
-- **Optionen nie löschen, sondern `is_active: false` setzen.** Bereits erfasste Datensätze tragen den Options-Slug in ihrem `data_json` weiter; verschwindet die Option, verliert der Wert sein Label. Der Loader warnt in diesem Fall, blockiert aber nicht.
+- **Verwendete Options-Slugs nicht umbenennen oder entfernen.** Der Paketlader weist das Entfernen eines verwendeten Slugs als Fehler zurück, auch im Trockenlauf. Setzen Sie stattdessen `is_active: false`; Bezeichnungen dürfen geändert werden. Nicht verwendete Optionen dürfen entfernt werden; der Loader meldet dies als Warnung. Das gilt auch, wenn die Liste durch Weglassen von `options` geleert würde.
 - **Bei `select`/`multi_select` immer die vollständige Optionsliste mitführen.** `options` weglassen leert die Liste — es gibt hier **kein** „nicht anfassen".
 
 **Bedingungen**
