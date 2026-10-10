@@ -38,12 +38,13 @@ def placeholder_event_pk(e2e_env):
     verifiziert gegen ``_widget_multi_select``/``FieldTemplateForm.
     clean_options_json``) — der reale Weg ist eine Feldvorlage, deren Optionen
     NACH dem Erfassen entfernt wurden (Bestandsdaten, #2243-Ticket-Notiz); die
-    ORM-Erstellung hier bildet exakt diesen Endzustand ab. Das Ereignis wird
-    mit gueltigen Optionen gespeichert (der Schreibpfad prueft Optionsbezuege);
-    die Optionen entfernt ein direktes SQL-Update, weil Vorlagen-Speichern und
-    Queryset-Updates verwendete Optionen schuetzen — der Zustand ist nur noch
-    als Altbestand (Import, Direktzugriff) erreichbar, das Rendering muss ihn
-    dennoch lesbar darstellen.
+    ORM-Erstellung hier bildet exakt diesen Endzustand ab.
+
+    The event is saved with valid options (the write path checks option
+    references); a direct SQL update then removes the options, because template
+    saves and queryset updates protect options in use. The state is only
+    reachable as legacy data (import, direct access), yet rendering must still
+    show it readably.
     """
     script = (
         "from django.utils import timezone;"

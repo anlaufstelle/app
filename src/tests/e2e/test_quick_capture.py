@@ -411,9 +411,9 @@ class TestAutoSave:
         dauer_value = page.locator("input[name='dauer']").input_value()
         assert dauer_value == "77", f"Server-Prefill (77) sollte den Draft (11) ueberschreiben, ist: {dauer_value!r}"
 
-        # 3) Draft muss aus IndexedDB entfernt sein. Das Entfernen laeuft im
-        # asynchronen Autosave-Start (hinter dem Boot-Lauf des Sync-Orchestrators),
-        # daher pollen statt einmal direkt nach domcontentloaded zu lesen.
+        # 3) The draft must be removed from IndexedDB. Removal runs in the
+        # asynchronous autosave start (after the sync orchestrator's boot run),
+        # so poll instead of reading once right after domcontentloaded.
         assert wait_until(page, lambda: page.evaluate(self._JS_GET) is None, timeout_ms=15000), (
             "Draft sollte beim Server-Prefill geloescht sein"
         )
