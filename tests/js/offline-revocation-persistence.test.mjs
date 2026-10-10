@@ -13,7 +13,7 @@ const validPayload = () => ({ revocations: [], server_time: new Date().toISOStri
 let pages, status, payload, writes, checks, lockTail, channels, responseOverrides;
 
 function page(online = true) {
-    const dom = new JSDOM('<body data-offline-key-max-age="43200"><div data-offline-revocation-pending hidden></div><div data-offline-auth-pending data-auth-pending-text="Sign in to sync {count} entries" hidden></div></body>', {
+    const dom = new JSDOM('<body data-offline-key-max-age="43200"><div data-offline-revocation-pending hidden></div><div data-offline-auth-pending data-auth-pending-text="Sign in to sync {count} entries" data-auth-pending-password-text="Password change required: preserve {count} unsent entries before continuing" hidden></div></body>', {
         url: "https://example.test/", runScripts: "outside-only",
     });
     pages.push(dom);
@@ -454,5 +454,139 @@ describe("revocation authentication notice", () => {
         expect(writes).toHaveLength(0);
         expect(await w.offlineStore.db.queue.count()).toBe(1);
         expect(await w.offlineStore.db.events.count()).toBe(1);
+    });
+});
+
+
+async function publicAction(w, action) {
+    if (action === "saveCreateWorkItem") {
+        const component = clientComponent(w);
+        return { component, invoke: () => {
+            component.wiValues = { title: "New task", item_type: "task", priority: "normal" };
+            return component.saveCreateWorkItem();
+        } };
+    }
+    let factory;
+    w.Alpine = { data: (_name, create) => { factory = create; } };
+    for (const name of ["offline-form-fields", "conflict-resolver"]) {
+        w.eval(readFileSync(`src/static/js/${name}.js`, "utf8"));
+    }
+    w.document.dispatchEvent(new w.Event("alpine:init"));
+    await w.offlineStore.saveOfflineEdit({
+        pk: eventPk, localStatus: "conflict", data: {
+            formData: { note: "local value" }, idempotencyKey: "stable-edit-key",
+            serverState: { data_json: { note: "server value" }, updated_at: "2026-10-10T08:00:00Z" },
+        },
+    });
+    const component = factory();
+    component.eventPk = eventPk;
+    await component.load();
+    return { component, invoke: () => component[action]() };
+}
+
+const directAuthResponses = [authResponses[0], authResponses[2]];
+
+describe.each(["saveCreateWorkItem", "keepLocal", "keepMerged"])("public authentication action %s", (action) => {
+    it.each(directAuthResponses)("shows authentication and preserves the action status for %s without prior sync", async (_name, kind, response) => {
+        const w = page();
+        await seed(w);
+        const { component, invoke } = await publicAction(w, action);
+        const beforeQueue = await w.offlineStore.db.queue.toArray();
+        const signals = [];
+        w.addEventListener("offline-auth-pending", (event) => signals.push(event.detail));
+        status = 200; payload = "not-json"; responseOverrides = response;
+        await invoke();
+        expect(signals).toContainEqual({ pending: true, count: action === "saveCreateWorkItem" ? 3 : 2, kind });
+        expect(w.document.querySelector("[data-offline-auth-pending]").hidden).toBe(false);
+        expect(w.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(true);
+        if (action === "saveCreateWorkItem") {
+            expect(component.lastSyncResult).toBe("auth-pending");
+            expect(component.showPending).toBe(false);
+            expect(component.showError).toBe(false);
+        } else {
+            expect(component.statusMessage).toBe("");
+            expect(component.authPendingKind).toBe(kind);
+            expect(component.error).toBe("");
+            expect(component.resolved).toBe(false);
+            expect(component.showForm).toBe(true);
+        }
+        const beforeEvents = await w.offlineStore.db.events.toArray();
+        expect(beforeEvents).toHaveLength(action === "saveCreateWorkItem" ? 2 : 1);
+        expect((await w.offlineStore.getOfflineEvent(eventPk)).data.formData).toEqual(action === "saveCreateWorkItem" ? {} : { note: "local value" });
+        expect(await w.offlineStore.db.queue.toArray()).toEqual(beforeQueue);
+        expect((await w.offlineStore.db.meta.get("revocationReplayState")).value.pending).toBe(true);
+        await directReplay(w, await w.offlineStore.getOfflineEvent(eventPk));
+        expect(await w.offlineStore.isRevocationPending()).toBe(true);
+        expect(writes).toHaveLength(0);
+        expect(await w.offlineStore.db.events.toArray()).toEqual(beforeEvents);
+        const next = page();
+        await directReplay(next, await w.offlineStore.getOfflineEvent(eventPk));
+        expect(writes).toHaveLength(0);
+        status = 200; payload = validPayload(); responseOverrides = {};
+        await w.syncOrchestrator.requestSync("fresh-authentication-retry");
+        const sent = action === "saveCreateWorkItem" ? 3 : 2;
+        expect(writes).toHaveLength(sent);
+        expect(writes.find(({ url }) => url.includes("tally")).options.headers["X-Idempotency-Key"]).toBe(beforeQueue[0].idempotencyKey);
+        const editPost = writes.find(({ url }) => url.includes("events"));
+        if (action === "saveCreateWorkItem") {
+            expect(editPost.options.headers["X-Idempotency-Key"]).toBe("stable-edit-key");
+        } else {
+            const body = new URLSearchParams(editPost.options.body);
+            expect(body.get("expected_updated_at")).toBe("2026-10-10T08:00:00Z");
+            expect(body.get("note")).toBe("local value");
+        }
+        await w.syncOrchestrator.requestSync("repeat-authentication-retry");
+        expect(writes).toHaveLength(sent);
+    });
+
+    it.each(directAuthResponses.flatMap(([name, kind, response]) => ["rate limit", "network failure"].map((failure) => [failure, name, kind, response])))(
+        "restores the revocation notice for %s after %s",
+        async (failure, _name, _kind, response) => {
+            const w = page();
+            await seed(w);
+            const { component, invoke } = await publicAction(w, action);
+            status = 200; payload = "not-json"; responseOverrides = response;
+            await invoke();
+            expect(w.document.querySelector("[data-offline-auth-pending]").hidden).toBe(false);
+            if (failure === "rate limit") status = 429;
+            else {
+                const fetch = w.fetch;
+                w.fetch = (url, options) => String(url).includes("/revocations/")
+                    ? Promise.reject(new TypeError("Network unavailable")) : fetch(url, options);
+            }
+            await invoke();
+            expect(w.document.querySelector("[data-offline-auth-pending]").hidden).toBe(true);
+            expect(w.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(false);
+            if (action === "saveCreateWorkItem") expect(component.lastSyncResult).toBe("pending");
+            else {
+                expect(component.statusMessage).toBe("Synchronisation wartet auf Widerrufsprüfung");
+                expect(component.authPendingKind).toBeNull();
+            }
+            expect(await w.offlineStore.isRevocationPending()).toBe(true);
+            expect(writes).toHaveLength(0);
+            expect(await w.offlineStore.db.queue.count()).toBe(1);
+            expect(await w.offlineStore.db.events.count()).toBe(action === "saveCreateWorkItem" ? 3 : 1);
+        }
+    );
+});
+
+describe("revocation password warning", () => {
+    it.each(["/password-change/", "/password-reset/", "/password-change", "/password-reset/confirm/token/"])("shows the existing data-loss warning for %s before any sync", async (path) => {
+        const w = page();
+        const record = await seed(w);
+        const beforeQueue = await w.offlineStore.db.queue.toArray();
+        const beforeEvents = await w.offlineStore.db.events.toArray();
+        status = 200; payload = "not-json";
+        responseOverrides = { redirected: true, url: `https://example.test${path}`, headers: { get: () => "text/html; charset=utf-8" } };
+        expect(await w.offlineStore.applyClientRevocations()).toMatchObject({ status: "auth-pending", kind: "password-change" });
+        const notice = w.document.querySelector("[data-offline-auth-pending]");
+        expect(notice.hidden).toBe(false);
+        expect(notice.textContent).toBe("Password change required: preserve 2 unsent entries before continuing");
+        expect(w.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(true);
+        await directReplay(w, record);
+        expect(await w.offlineStore.isRevocationPending()).toBe(true);
+        expect(writes).toHaveLength(0);
+        expect(await w.offlineStore.db.queue.toArray()).toEqual(beforeQueue);
+        expect(await w.offlineStore.db.events.toArray()).toEqual(beforeEvents);
     });
 });

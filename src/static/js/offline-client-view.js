@@ -720,6 +720,10 @@
                 const status = result && result.status;
                 if (status === "synced") this.lastSyncResult = "synced";
                 else if (status === "conflict") this.lastSyncResult = "conflict";
+                else if (status === "auth-pending") {
+                    // The shared authentication notice explains why replay is paused.
+                    if (this.lastSyncResult !== "discarded") this.lastSyncResult = "auth-pending";
+                }
                 else if (status === "invalid") {
                     // Refs #1111: Server-Validierung fehlgeschlagen — Edit bleibt
                     // offen, Feldfehler anzeigen statt still als "synced" zu werten.
@@ -775,6 +779,7 @@
                     let currentRecord;
                     try {
                         const result = await window.offlineStore?.applyClientRevocations?.();
+                        if (result?.status === "auth-pending") return result;
                         if (result?.status !== "ok") return { status: "network-error" };
                         // Applying the fresh list may have purged the captured record.
                         currentRecord = await window.offlineStore.getOfflineEvent(record.pk);

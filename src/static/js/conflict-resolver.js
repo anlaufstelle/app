@@ -82,6 +82,7 @@
             loading: true,
             error: "",
             statusMessage: "",
+            authPendingKind: null,
             eventPk: "",
             localData: {},
             serverData: {},
@@ -180,6 +181,7 @@
                 if (this.resolving || this.resolved) return;
                 this.resolving = true;
                 this.statusMessage = "";
+                this.authPendingKind = null;
                 try {
                     const resolve = async () => {
                         const record = await window.offlineStore.getOfflineEvent(this.eventPk);
@@ -193,6 +195,7 @@
                         let current;
                         try {
                             const check = await window.offlineStore.applyClientRevocations?.();
+                            if (check?.status === "auth-pending") return check;
                             if (check?.status !== "ok" ||
                                 await window.offlineStore.isRevocationPending?.() !== false) {
                                 return { status: "revocation-pending" };
@@ -250,6 +253,11 @@
                 }
                 if (result.status === "synced") {
                     this.resolved = true;
+                    return;
+                }
+                if (result.status === "auth-pending") {
+                    // The shared notice also carries the password-change warning.
+                    this.authPendingKind = result.kind || "login";
                     return;
                 }
                 if (result.status === "revocation-pending") {

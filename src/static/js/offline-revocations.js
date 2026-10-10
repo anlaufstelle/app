@@ -165,6 +165,10 @@
         } catch (_e) {
             // Missing or invalid URLs do not identify an authentication target.
         }
+        const normalized = path.endsWith("/") ? path : path + "/";
+        if (["/password-change/", "/password-reset/"].some((prefix) => normalized.startsWith(prefix))) {
+            return "password-change";
+        }
         if (path === "/mfa" || path.startsWith("/mfa/")) return "mfa";
         if (path === "/login" || path.startsWith("/login/")) return "login";
         const contentType = response.headers?.get?.("Content-Type") || "";
@@ -175,7 +179,7 @@
     /*
      * Fetch and apply a fully validated list. Authentication, transport and
      * validation failures preserve local work and cannot authorize replay.
-     * Results: ok, error, ratelimited, or auth-pending with kind login/mfa.
+     * Results: ok, error, ratelimited, or auth-pending with kind login/mfa/password-change.
      */
     async function _applyClientRevocations() {
         const empty = { purgedClients: 0, purgedQueueEntries: 0, purgedDrafts: 0 };
@@ -279,6 +283,7 @@
     async function applyClientRevocations() {
         const empty = { purgedClients: 0, purgedQueueEntries: 0, purgedDrafts: 0 };
         let marked = false;
+        let authKind = null;
         _storageFailure = true;
         _approval = null;
         _authPending = false;
@@ -292,6 +297,7 @@
             await _notifyRevocationState();
             const result = await _applyClientRevocations();
             _authPending = result.status === "auth-pending";
+            authKind = result.kind;
             if (result.status !== "ok") return result;
             const released = await db.transaction("rw", db.meta, async () => {
                 const row = await db.meta.get(REVOCATION_STATE_KEY);
@@ -310,6 +316,9 @@
             }
             return { status: "error", ...empty };
         } finally {
+            // Every fresh check, including direct saves and conflict choices,
+            // selects the shared notice before returning to its caller.
+            await window.offlineEdit?.signalAuthPending?.(_authPending, authKind);
             await _notifyRevocationState();
         }
     }

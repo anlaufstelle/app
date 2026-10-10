@@ -27,7 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Anmeldung bei ausstehender Offline-Synchronisation sichtbar** (#2528) — Führt die Widerrufsprüfung zur Anmeldung oder zum zweiten Faktor, erscheint „Anmeldung erforderlich“ statt des Widerrufshinweises; ungesendete Arbeit bleibt erhalten und die Übertragung bis zu einer erfolgreichen erneuten Widerrufsprüfung gesperrt.
+- **Authentifizierung bei ausstehender Offline-Synchronisation sichtbar** (#2528) — Führt die Widerrufsprüfung zur Anmeldung oder zum zweiten Faktor, erscheint auch bei Direktspeicherung und Konfliktaktionen der Anmeldehinweis statt eines Widerrufs- oder späteren Übertragungsversprechens; Passwortwechsel und Passwort-Reset zeigen die vorhandene Warnung vor dem Verlust ungesendeter Offline-Daten, die bis dahin erhalten bleiben und erst nach erfolgreicher erneuter Widerrufsprüfung übertragen werden können.
 
 - **Offline-Schlüssel nach Demo-Start aktivieren** (#2511) — Im Demo-Modus leitet die Zielseite nach dem Start einmalig den Offline-Schlüssel aus dem gemeinsamen Demo-Passwort mit der geltenden Höchstdauer ab und zeigt Bootstrap-Fehler sichtbar an; bei abweichendem Kontopasswort bleibt der bestehende Browserspeicher erhalten.
 
