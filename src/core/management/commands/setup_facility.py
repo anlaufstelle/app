@@ -43,6 +43,7 @@ auf den Auslieferungsstand zurueck. Begruendung und Abgrenzung zu
 """
 
 import getpass
+from uuid import uuid4
 
 import yaml
 from django.core.management.base import BaseCommand, CommandError
@@ -53,6 +54,7 @@ from core.packages.catalog import PACKAGE_INFO, UnknownPackageError, list_packag
 from core.packages.loader import PackageLoadError
 from core.packages.schema import PackageValidationError
 from core.services.audit import audit_event
+from core.services.dynamic_protection import lock_dynamic_protection_gate
 from core.services.facility_bootstrap import ensure_facility_baseline
 
 # Refs #1016/#1058/#1883: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
@@ -131,56 +133,69 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR("Passwort darf nicht leer sein."))
             return
 
-        # Alles-oder-nichts (Refs #1883): ohne die Klammer liess ein Abbruch am
-        # Settings-INSERT oder beim Katalog eine halb angelegte Einrichtung
-        # zurueck — Organisation und Facility bestanden, Einstellungen,
-        # Dokumentationstypen und Admin-Benutzer fehlten.
-        with transaction.atomic():
-            org, _ = Organization.objects.get_or_create(name=org_name)
-            facility, _ = Facility.objects.get_or_create(
-                organization=org,
-                name=facility_name,
-            )
-            Settings.objects.get_or_create(
-                facility=facility,
-                defaults={"facility_full_name": f"{org_name} – {facility_name}"},
-            )
-
-            user, created = User.objects.get_or_create(
-                username=admin_username,
-                defaults={
-                    "role": User.Role.FACILITY_ADMIN,
-                    "facility": facility,
-                    "is_staff": True,
-                    # Refs #1271: kein ``is_superuser`` — facility_admin ist auf eine
-                    # Einrichtung beschraenkt; Autorisierung laeuft ueber die Rolle.
-                    "display_name": admin_username.title(),
-                    # The first account approves deletion requests from the start;
-                    # without it no request of the new facility has an approver.
-                    "can_confirm_deletion": True,
-                },
-            )
-            if created:
-                user.set_password(password)
-                user.save()
-                # The command runs without a logged-in actor, so the creation
-                # signal stays silent; the system entry records the initial grant.
-                audit_event(
-                    AuditLog.Action.USER_CREATED,
-                    user=user,
+        # Keep setup atomic (Refs #1883) and gate every write (Refs #2525).
+        # A new UUID needs no existing row; catalog setup requires exclusive
+        # from the start, while the opt-out writes only shared-gated data.
+        while True:
+            with transaction.atomic():
+                facility_id = (
+                    Facility.objects.filter(name=facility_name).values_list("pk", flat=True).first() or uuid4()
+                )
+                lock_dynamic_protection_gate(facility_id, exclusive=package_name is not None)
+                org, _ = Organization.objects.get_or_create(name=org_name)
+                facility, _ = Facility.objects.get_or_create(
+                    organization=org,
+                    name=facility_name,
+                    defaults={"id": facility_id},
+                )
+                if facility.pk != facility_id:
+                    # Another transaction created the name after our initial read.
+                    # Retry without carrying writes or the reserved UUID's gate
+                    # into the transaction for the now-existing facility.
+                    transaction.set_rollback(True)
+                    continue
+                Settings.objects.get_or_create(
                     facility=facility,
-                    target_type="User",
-                    target_id=str(user.pk),
-                    detail={
-                        "new_role": user.role,
-                        "username": user.username,
-                        "can_confirm_deletion": user.can_confirm_deletion,
-                        "system": True,
-                        "command": "setup_facility",
-                    },
+                    defaults={"facility_full_name": f"{org_name} – {facility_name}"},
                 )
 
-            baseline = self._ensure_baseline(facility, package=package_name)
+                user, created = User.objects.get_or_create(
+                    username=admin_username,
+                    defaults={
+                        "role": User.Role.FACILITY_ADMIN,
+                        "facility": facility,
+                        "is_staff": True,
+                        # Refs #1271: facility_admin is scoped to one facility;
+                        # authorization uses the role, never is_superuser.
+                        "display_name": admin_username.title(),
+                        # The first account approves deletion requests from the start;
+                        # without it no request of the new facility has an approver.
+                        "can_confirm_deletion": True,
+                    },
+                )
+                if created:
+                    user.set_password(password)
+                    user.save()
+                    # The command runs without a logged-in actor, so the creation
+                    # signal stays silent; the system entry records the initial grant.
+                    audit_event(
+                        AuditLog.Action.USER_CREATED,
+                        user=user,
+                        facility=facility,
+                        target_type="User",
+                        target_id=str(user.pk),
+                        detail={
+                            "new_role": user.role,
+                            "username": user.username,
+                            "can_confirm_deletion": user.can_confirm_deletion,
+                            "system": True,
+                            "command": "setup_facility",
+                        },
+                    )
+
+                baseline = self._ensure_baseline(facility, package=package_name)
+
+                break
 
         if created:
             self.stdout.write(self.style.SUCCESS(f"Admin-Benutzer '{admin_username}' erstellt."))

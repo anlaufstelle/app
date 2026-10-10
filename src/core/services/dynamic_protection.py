@@ -46,16 +46,20 @@ def lock_dynamic_protection_many(facility_ids, *, exclusive=False):
                 raise ValidationError(_("Die Einrichtung ist nicht mehr vorhanden."))
 
 
-def lock_dynamic_protection_gate(facility_id):
-    """Take the shared gate before an ancillary audit/quota lock.
+def lock_dynamic_protection_gate(facility_id, *, exclusive=False):
+    """Take a gate before ancillary writes, including new facility setup.
 
-    This gate stabilizes configuration for subsequent protection decisions.
+    Setup can reserve a facility UUID before its first insert. Choose exclusive
+    from the start when configuration will be written; never upgrade shared.
     Data writers need no additional configuration row locks.
     """
     if not connection.in_atomic_block:
         raise transaction.TransactionManagementError("Dynamic protection requires an enclosing transaction")
     with connection.cursor() as cursor:
-        cursor.execute("SELECT pg_advisory_xact_lock_shared(2525, hashtext(%s))", [str(UUID(str(facility_id)))])
+        gate_query = "SELECT pg_advisory_xact_lock_shared(2525, hashtext(%s))"
+        if exclusive:
+            gate_query = "SELECT pg_advisory_xact_lock(2525, hashtext(%s))"
+        cursor.execute(gate_query, [str(UUID(str(facility_id)))])
 
 
 @contextmanager
