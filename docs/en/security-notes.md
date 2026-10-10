@@ -16,6 +16,10 @@ Recipient/purpose metadata accepts at most 200 characters and rejects detected e
 
 The mutation AST guard recursively scans view modules, POST functions, inherited mutation handlers and form views, resolving handlers through the complete MRO including external bases. It requires a concrete valid rate and a method-matching decorator with `block=True` on the resolved handler or first dispatch; shadowed parent dispatches do not count, and direct dispatch redirects to other HTTP handlers are detected. Dynamic rates are not evidence. This is a static check, not a runtime or load measurement. Narrow exceptions are `ClientRenameWarningView.post` (read-only warning) and `CustomLogoutView.post` (session termination including quick exit must remain available). Configuration POSTs and password changes use 60/h per user; anonymous password/invitation setup uses 5/min per IP, language selection 60/h per user or IP. Login, password and recovery form views share their limits between POST and inherited PUT. Passkey registration begins with 60/h per user before parsing. Caddy has no edge rate limit. Markup guards include installed Django-admin/Unfold templates with specific justified exceptions; the CSRF guard also scans package Python. The inline/Alpine guard remains limited to project templates.
 
+## Branch protection and maintainer evidence
+
+Branch protection/rulesets are unavailable for the private development repository without GitHub Pro; the substitutes are local gates, signed tags and the release dry run. For the public app repository, a ruleset is planned: no force pushes and no branch deletion. Evidence of active settings is provided through the maintainer checklist #1597. The local source tree does not prove active GitHub settings; this excerpt makes no claim that the ruleset has been checked.
+
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->

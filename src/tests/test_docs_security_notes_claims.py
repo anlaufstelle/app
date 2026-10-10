@@ -81,3 +81,13 @@ def test_branch_protection_contract_names_the_maintainer_evidence() -> None:
         "Für das öffentliche app-Repo gilt ein Ruleset (kein Force-Push, keine Löschung)."
     ) in text
     assert "#1597" in text
+
+
+def test_english_branch_protection_excerpt_preserves_the_evidence_boundary() -> None:
+    text = (REPO_ROOT / "docs/en/security-notes.md").read_text(encoding="utf-8")
+    assert "## Branch protection and maintainer evidence" in text
+    assert "a ruleset is planned: no force pushes and no branch deletion" in text
+    assert "#1597" in text
+    assert "does not prove active GitHub settings" in text
+    assert "private development repository without GitHub Pro" in text
+    assert "local gates, signed tags and the release dry run" in text
