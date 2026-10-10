@@ -8,7 +8,7 @@ from django.test import RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, Case, DocumentType, Event, TimeFilter
+from core.models import AuditLog, Case, DocumentType, Event, Facility, TimeFilter
 from core.services.dashboard.search import event_search_queryset
 from core.services.events.feed import build_feed_items
 
@@ -214,11 +214,13 @@ def test_query_count_is_constant_for_page_size(staff_user, sample_event, django_
             created_by=staff_user,
             occurred_at=timezone.now(),
         )
-    request = RequestFactory().get("/events/", HTTP_HX_REQUEST="true")
-    request.user = staff_user
-    request.current_facility = sample_event.facility
+    # One settings read per render comes from the offline key lifetime in the context processor;
+    # a fresh facility instance per request keeps that read from being served by the related-object cache.
     for page_size in [1, 25]:
-        with django_assert_num_queries(7):
+        request = RequestFactory().get("/events/", HTTP_HX_REQUEST="true")
+        request.user = staff_user
+        request.current_facility = Facility.objects.get(pk=sample_event.facility_id)
+        with django_assert_num_queries(8):
             response = EventListView.as_view(page_size=page_size)(request)
             assert response.status_code == 200
 
