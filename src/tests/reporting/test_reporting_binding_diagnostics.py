@@ -1,18 +1,22 @@
 """Local configuration diagnostics for report requirements."""
 
+from datetime import timedelta
+
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
-from core.models import DocumentType, DocumentTypeField, FieldTemplate
+from core.models import DocumentTypeField, FieldTemplate
 from core.reporting import registry
 from core.reporting.backends.needle_exchange_balance import NeedleExchangeBalanceBackend
 from core.reporting.base import Anforderung, BindungsEintrag, FeldBindung, TypBindung
+from tests._factories import make_document_type, make_event
 
 pytestmark = pytest.mark.django_db
 
 
 def make_type(facility, name="Counter", key="needle_exchange"):
-    return DocumentType.objects.create(facility=facility, name=name, report_key=key)
+    return make_document_type(facility=facility, name=name, report_key=key)
 
 
 def add_field(doc_type, key, *, active=True):
@@ -44,13 +48,22 @@ def test_complete_requirement_has_no_warning_and_is_listed(partial_type, facilit
     assert any("Spritzentausch-Bilanz" in line for line in registry.describe_field_bindings(field, facility))
 
 
-def test_other_complete_type_does_not_mask_local_gap(partial_type, facility):
+def test_other_complete_type_does_not_mask_local_gap(partial_type, facility, staff_user):
     doc_type, field = partial_type
     complete = make_type(facility, "Complete")
     add_field(complete, "ausgabe_stueck")
     add_field(complete, "rueckgabe_stueck")
-    assert registry.diagnose_type_bindings(doc_type, facility)
-    assert not any("Spritzentausch-Bilanz" in line for line in registry.describe_type_bindings(doc_type, facility))
+    now = timezone.now()
+    make_event(
+        facility=facility, client=None, document_type=doc_type, occurred_at=now, data_json={}, created_by=staff_user
+    )
+    result = NeedleExchangeBalanceBackend().build_dataset(
+        facility, now.date() - timedelta(days=1), now.date() + timedelta(days=1)
+    )
+    assert result.summary["events"] == 1
+    assert result.summary["events_ohne_werte"] == 1
+    assert any("rueckgabe_stueck" in warning for warning in registry.diagnose_type_bindings(doc_type, facility))
+    assert any("Spritzentausch-Bilanz" in line for line in registry.describe_type_bindings(doc_type, facility))
     assert not any("Spritzentausch-Bilanz" in line for line in registry.describe_field_bindings(field, facility))
 
 
@@ -161,3 +174,29 @@ def test_field_warning_escapes_type_name(client, admin_user, partial_type):
     response = client.get(reverse("core:config_fieldtemplate_update", args=[field.pk]))
     assert b"&lt;script&gt;alert(1)&lt;/script&gt;" in response.content
     assert b"<script>alert(1)</script>" not in response.content
+
+
+def test_inactive_type_with_counted_values_remains_listed(partial_type, facility, staff_user):
+    complete = make_type(facility, "Complete")
+    add_field(complete, "ausgabe_stueck")
+    add_field(complete, "rueckgabe_stueck")
+    doc_type, output = partial_type
+    returned = add_field(doc_type, "rueckgabe_stueck")
+    now = timezone.now()
+    make_event(
+        facility=facility,
+        client=None,
+        document_type=doc_type,
+        occurred_at=now,
+        data_json={output.slug: 3, returned.slug: 1},
+        created_by=staff_user,
+    )
+    doc_type.is_active = False
+    doc_type.save()
+    result = NeedleExchangeBalanceBackend().build_dataset(
+        facility, now.date() - timedelta(days=1), now.date() + timedelta(days=1)
+    )
+    assert result.summary["events"] == 1
+    assert result.summary["summe_ausgabe"] == 3
+    assert registry.diagnose_type_bindings(doc_type, facility) == []
+    assert any("Spritzentausch-Bilanz" in line for line in registry.describe_type_bindings(doc_type, facility))

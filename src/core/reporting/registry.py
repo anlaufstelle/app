@@ -336,11 +336,13 @@ def _belongs_to_facility(obj, facility) -> bool:
     return not hasattr(obj, "facility_id") or obj.facility_id == getattr(facility, "pk", None)
 
 
-def _requirement_state(requirement, document_type, facility):
+def _requirement_state(requirement, document_type, facility, *, active_only=True):
     """Return relevance and missing bindings for one local AND requirement."""
     from core.models import DocumentType
 
-    if not _belongs_to_facility(document_type, facility) or not getattr(document_type, "is_active", True):
+    if not _belongs_to_facility(document_type, facility) or (
+        active_only and not getattr(document_type, "is_active", True)
+    ):
         return False, None
     if requirement.entity_type is not None and document_type.entity_type != requirement.entity_type:
         return False, None
@@ -367,13 +369,6 @@ def _requirement_state(requirement, document_type, facility):
 def _binding_labels(binding) -> str:
     """Keep alternatives within a binding distinct from required bindings."""
     return _(" oder ").join(f"{label} ({key})" for key, label in binding.vokabular().items())
-
-
-def _locally_available(backend, document_type, facility) -> bool:
-    """Availability requirements are OR alternatives, evaluated on this type."""
-    return not backend.verfuegbarkeit or any(
-        missing == [] for _, missing in (_requirement_state(a, document_type, facility) for a in backend.verfuegbarkeit)
-    )
 
 
 def _diagnose_backend(backend, document_type, facility) -> str | None:
@@ -426,13 +421,11 @@ def diagnose_field_bindings(field_template, facility) -> list[str]:
 
 
 def describe_type_bindings(document_type, facility) -> list[str]:
-    """List available reports whose requirements this local type fulfills."""
+    """List available reports that count this type, including incomplete or inactive types."""
     if not _belongs_to_facility(document_type, facility):
         return []
     descriptions: list[str] = []
     for backend in get_available_backends(facility):
-        if not _locally_available(backend, document_type, facility):
-            continue
         before = len(descriptions)
         for binding in typ_bindungen(backend):
             key = binding.resolve_key(*_typ_werte(document_type, binding))
@@ -442,7 +435,7 @@ def describe_type_bindings(document_type, facility) -> list[str]:
             field_alternative = any(
                 requirement.typ_bindung is None
                 and requirement.feld_bindungen
-                and _requirement_state(requirement, document_type, facility)[1] == []
+                and _requirement_state(requirement, document_type, facility, active_only=False)[1] == []
                 for requirement in backend.verfuegbarkeit
             )
             if not typ_bindungen(backend) or field_alternative:
