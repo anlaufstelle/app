@@ -60,7 +60,10 @@ class ComplianceCheck:
 
     @property
     def category_display(self) -> str:
-        return ComplianceCategory(self.category).display
+        try:
+            return ComplianceCategory(self.category).display
+        except ValueError:
+            return str(self.category)
 
     @property
     def status_display(self) -> str:

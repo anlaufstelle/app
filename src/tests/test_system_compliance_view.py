@@ -177,3 +177,16 @@ class TestSystemComplianceRender:
         assert "Audit-Log unbegrenzt" in content
         assert facility.name in content
         assert 'data-status="warning"' in content
+
+
+@pytest.mark.django_db
+def test_unknown_category_renders_visible_fallback(client, super_admin_user, make_check):
+    client.force_login(super_admin_user)
+    checks = [make_check(key="future", category="future_category", message="Visible card")]
+    with patch("core.views.system.compliance.aggregate_checks", return_value=checks):
+        response = client.get(reverse("core:system_compliance"))
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert 'data-testid="compliance-group-future_category"' in content
+    assert ">future_category</h2>" in content
+    assert "Visible card" in content
