@@ -243,9 +243,15 @@ class ConfigDocumentTypeUpdateView(FacilityAdminRequiredMixin, View):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         form = DocumentTypeForm(request.POST, instance=doc_type, facility=request.current_facility)
         if form.is_valid():
-            config_service.save_document_type(request, form, creating=False)
-            messages.success(request, _("Dokumentationstyp „%(name)s“ wurde aktualisiert.") % {"name": doc_type.name})
-            return redirect("core:config_doctype_detail", pk=doc_type.pk)
+            try:
+                config_service.save_document_type(request, form, creating=False)
+            except ValidationError as error:
+                form.add_error("sensitivity", error)
+            else:
+                messages.success(
+                    request, _("Dokumentationstyp „%(name)s“ wurde aktualisiert.") % {"name": doc_type.name}
+                )
+                return redirect("core:config_doctype_detail", pk=doc_type.pk)
         context = {
             "form": form,
             "doc_type": doc_type,

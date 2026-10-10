@@ -12,6 +12,7 @@ import logging
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
@@ -139,9 +140,15 @@ class ConfigFieldTemplateUpdateView(FacilityAdminRequiredMixin, View):
             used_option_slugs=option_slugs_in_use(field_template),
         )
         if form.is_valid():
-            config_service.save_field_template(request, form, creating=False, facility=request.current_facility)
-            messages.success(request, _("Feldvorlage „%(name)s“ wurde aktualisiert.") % {"name": field_template.name})
-            return redirect("core:config_fieldtemplate_list")
+            try:
+                config_service.save_field_template(request, form, creating=False, facility=request.current_facility)
+            except ValidationError as error:
+                form.add_error(None, error)
+            else:
+                messages.success(
+                    request, _("Feldvorlage „%(name)s“ wurde aktualisiert.") % {"name": field_template.name}
+                )
+                return redirect("core:config_fieldtemplate_list")
         context = {
             "form": form,
             "field_template": field_template,

@@ -765,7 +765,11 @@ class DocumentTypeFieldAddForm(TailwindFormMixin, forms.Form):
         field_template = self.cleaned_data["field_template"]
         if self.doc_type is None:
             return field_template
-        validate_explicit_high_field(self.doc_type.sensitivity, field_template.sensitivity, field_template.name)
+        # The service repeats this check under a lock before writing.
+        current_level = (
+            DocumentType.objects.for_facility(self.doc_type.facility_id).get(pk=self.doc_type.pk).sensitivity
+        )
+        validate_explicit_high_field(current_level, field_template.sensitivity, field_template.name)
         konflikt = conflicting_report_key_field(self.doc_type, field_template)
         if konflikt is not None:
             raise ValidationError(

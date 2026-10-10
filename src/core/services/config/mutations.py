@@ -40,8 +40,18 @@ def _rewrite_document_type_records(doc_type: DocumentType) -> None:
 def save_document_type(request, form, *, creating: bool) -> DocumentType:
     """Save a type and atomically rewrite records when its sensitivity changes."""
     changed_fields = list(form.changed_data)
-    previous_sensitivity = form.initial.get("sensitivity", "")
     with transaction.atomic():
+        if creating:
+            previous_sensitivity = ""
+        else:
+            current = (
+                DocumentType.objects.for_facility(request.current_facility).select_for_update().get(pk=form.instance.pk)
+            )
+            previous_sensitivity = current.sensitivity
+            # Refs #2525: validation may predate a concurrent field assignment.
+            for assignment in current.fields.select_related("field_template"):
+                field = assignment.field_template
+                validate_explicit_high_field(form.cleaned_data["sensitivity"], field.sensitivity, field.name)
         obj = form.save()
         if not creating:
             from core.services.system.ban_revision import bump_ban_revision_for_document_type_change
@@ -69,27 +79,38 @@ def save_field_template(request, form, *, creating: bool, facility) -> FieldTemp
     obj = form.save(commit=False)
     if creating:
         obj.facility = facility
-    # Validate the report binding even for callers outside the configuration UI.
-    conflict = conflicting_report_key_assignment(obj, obj.report_key, is_active=obj.is_active)
-    if conflict is not None:
-        _doc_type, existing = conflict
-        raise ValidationError(
-            _(
-                "„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
-                "„%(bestand)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
-                "zulässig — sonst zählt der Bericht keine von beiden."
-            )
-            % {"neu": obj.name, "bestand": existing.name}
-        )
     with transaction.atomic():
-        obj.save()
-        if not creating and (
-            obj.sensitivity != form.initial.get("sensitivity", "")
-            or obj.is_encrypted != form.initial.get("is_encrypted", False)
-        ):
-            document_types = (
-                DocumentType.objects.for_facility(facility).filter(fields__field_template=obj).distinct().order_by("pk")
+        document_types = []
+        previous_sensitivity = ""
+        previous_encrypted = False
+        if not creating:
+            # Lock templates before types, as in assignment and package loading.
+            current = FieldTemplate.objects.for_facility(facility).select_for_update().get(pk=obj.pk)
+            previous_sensitivity = current.sensitivity
+            previous_encrypted = current.is_encrypted
+            assigned_type_ids = DocumentTypeField.objects.filter(field_template=current).values("document_type_id")
+            document_types = list(
+                DocumentType.objects.for_facility(facility)
+                .filter(pk__in=assigned_type_ids)
+                .order_by("pk")
+                .select_for_update()
             )
+            for doc_type in document_types:
+                validate_explicit_high_field(doc_type.sensitivity, obj.sensitivity, obj.name)
+        # Validate the report binding even for callers outside the configuration UI.
+        conflict = conflicting_report_key_assignment(obj, obj.report_key, is_active=obj.is_active)
+        if conflict is not None:
+            _doc_type, existing = conflict
+            raise ValidationError(
+                _(
+                    "„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
+                    "„%(bestand)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
+                    "zulässig — sonst zählt der Bericht keine von beiden."
+                )
+                % {"neu": obj.name, "bestand": existing.name}
+            )
+        obj.save()
+        if not creating and (obj.sensitivity != previous_sensitivity or obj.is_encrypted != previous_encrypted):
             for doc_type in document_types:
                 _rewrite_document_type_records(doc_type)
         action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
@@ -218,6 +239,7 @@ def conflicting_report_key_assignment(field_template: FieldTemplate, report_key,
     return None
 
 
+@transaction.atomic
 def add_field_to_doctype(
     request,
     doc_type: DocumentType,
@@ -247,6 +269,11 @@ def add_field_to_doctype(
     entfallen — es gibt heute **keine** Schicht mehr, die FILE-Feldvorlagen an
     Personen-/Fall-Typen abweist.
     """
+    # Refs #2525: share configuration locks and recheck both current policies.
+    field_template = (
+        FieldTemplate.objects.for_facility(doc_type.facility_id).select_for_update().get(pk=field_template.pk)
+    )
+    doc_type = DocumentType.objects.for_facility(doc_type.facility_id).select_for_update().get(pk=doc_type.pk)
     validate_explicit_high_field(doc_type.sensitivity, field_template.sensitivity, field_template.name)
     # Befund A (Refs #1056): Zugehörigkeit der Ziel-Gruppe hier prüfen, weil
     # .create() den Modell-clean()-Guard umgeht. Fehlerklasse konsistent zu

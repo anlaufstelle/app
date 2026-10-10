@@ -190,6 +190,10 @@ def load_package(facility: Facility, package: PackageV1, *, dry_run: bool = Fals
     report = PackageReport(dry_run=dry_run)
     try:
         with transaction.atomic():
+            # Refs #2525: package changes share configuration locks with UI writes.
+            # Acquire templates before types, including assignments omitted here.
+            list(FieldTemplate.objects.for_facility(facility).order_by("pk").select_for_update())
+            list(DocumentType.objects.for_facility(facility).order_by("pk").select_for_update())
             _apply_package(facility, package, report)
             if report.errors:
                 # Raise INNERHALB des atomic-Blocks — erst dadurch rollt der
