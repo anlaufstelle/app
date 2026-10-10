@@ -181,7 +181,7 @@ class WebAuthnRegistrationCompleteView(_RequireVerifiedSessionAndTOTPMixin, Comp
 
 @method_decorator(
     ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
+    name="dispatch",
 )
 class WebAuthnAuthenticationCompleteView(CompleteCredentialAuthenticationView):
     """Assertion abschliessen — setzt ``mfa_verified`` und auditiert Erfolg/Fehler.
@@ -190,6 +190,13 @@ class WebAuthnAuthenticationCompleteView(CompleteCredentialAuthenticationView):
     Assertion aufgerufen (nach ``authenticate_complete`` + ``check_device_usable``).
     Genau dort — und nur dort — heben wir die Session auf 2FA-verifiziert an.
     """
+
+    def dispatch(self, request, *args, **kwargs):
+        # Parsing happens before post(); remember whether this was an assertion.
+        self._assertion_started = request.method == "POST" and bool(
+            request.session.get("otp_webauthn_authentication_state")
+        )
+        return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         return resolve_post_login_url(self.request, self.get_redirect_url())
@@ -210,10 +217,7 @@ class WebAuthnAuthenticationCompleteView(CompleteCredentialAuthenticationView):
         )
         self.request.session["mfa_verified"] = True
 
-    # Vor-Verifikations-Fehler (kein begonnener Ablauf / kaputtes JSON / fehlende
-    # Auth) sind kein fehlgeschlagener zweiter Faktor und werden nicht als
-    # WEBAUTHN_FAILED auditiert — sonst rauschte jeder verwaiste Complete-Aufruf
-    # in den Audit-Trail.
+    # Requests without an authentication ceremony are not factor failures.
     _NON_ASSERTION_ERRORS = (
         exceptions.InvalidState,
         exceptions.MalformedRequest,
@@ -222,11 +226,15 @@ class WebAuthnAuthenticationCompleteView(CompleteCredentialAuthenticationView):
     )
 
     def handle_exception(self, exc):
-        # Echte Assertion-Fehler auditieren (symmetrisch zu MFA_FAILED), damit
-        # Brute-Force ueber eine gestohlene Session sichtbar bleibt.
+        interrupted = isinstance(exc, exceptions.MalformedRequest) and self._assertion_started
+        if interrupted:
+            # A malformed completion consumes the challenge just like an invalid
+            # cryptographic assertion; retrying requires a fresh ceremony.
+            self.request.session.pop("otp_webauthn_authentication_state", None)
+            self.request.session.save()
         if (
             isinstance(exc, exceptions.OTPWebAuthnApiError)
-            and not isinstance(exc, self._NON_ASSERTION_ERRORS)
+            and (interrupted or not isinstance(exc, self._NON_ASSERTION_ERRORS))
             and getattr(self.request.user, "is_authenticated", False)
         ):
             log_audit_event(
