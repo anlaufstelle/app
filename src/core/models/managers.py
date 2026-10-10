@@ -53,17 +53,30 @@ class FacilityScopedQuerySet(models.QuerySet):
             if hasattr(obj, "search_text"):
                 obj.search_text = compute_event_search_text(obj.data_json, obj.document_type)
 
-    def bulk_create(self, objs, *args, **kwargs):
+    def bulk_create(
+        self,
+        objs,
+        batch_size=None,
+        ignore_conflicts=False,
+        update_conflicts=False,
+        update_fields=None,
+        unique_fields=None,
+    ):
+        if update_conflicts and hasattr(self.model, "_encrypt_sensitive_fields"):
+            raise ValueError("bulk_create with update_conflicts is not supported for protected dynamic data")
+        options = {
+            "batch_size": batch_size,
+            "ignore_conflicts": ignore_conflicts,
+            "update_conflicts": update_conflicts,
+            "update_fields": update_fields,
+            "unique_fields": unique_fields,
+        }
         objects = list(objs)
         if not objects or not hasattr(objects[0], "_encrypt_sensitive_fields"):
-            return super().bulk_create(objects, *args, **kwargs)
+            return super().bulk_create(objects, **options)
         with transaction.atomic(using=self.db):
             self._protect_dynamic_batch(objects)
-            if kwargs.get("update_conflicts") and hasattr(objects[0], "search_text"):
-                update_fields = list(kwargs.get("update_fields") or ())
-                if "data_json" in update_fields and "search_text" not in update_fields:
-                    kwargs["update_fields"] = [*update_fields, "search_text"]
-            return super().bulk_create(objects, *args, **kwargs)
+            return super().bulk_create(objects, **options)
 
     def bulk_update(self, objs, fields, *args, **kwargs):
         objects = list(objs)
