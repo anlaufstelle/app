@@ -84,7 +84,13 @@ class FieldCondition(models.Model):
         return f"{self.target_field} ← {self.depends_on_field} {self.operator}"
 
     def save(self, *args, **kwargs):
-        """Recheck selection references while configuration changes cannot commit."""
+        """Recheck selection references while configuration changes cannot commit.
+
+        Takes the shared gate. Callers that also change field or type
+        configuration in the same transaction must take the exclusive gate
+        first (as the condition services do); taking it after this save would
+        upgrade a shared lock and can deadlock.
+        """
         from core.services.dynamic_protection import lock_dynamic_protection
 
         update_fields = kwargs.get("update_fields")
