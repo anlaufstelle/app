@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
+from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Attachment, Case, Client, LegalHold, RetentionProposal, WorkItem
@@ -151,3 +152,59 @@ def test_eventless_protected_person_is_preserved(idle_person, facility, lead_use
     _run_retention(facility, path)
     idle_person.refresh_from_db()
     assert idle_person.anonymized_at is None
+
+
+@pytest.mark.parametrize("path", ["service", "http"])
+@pytest.mark.parametrize("owner_kind,removed", [("client", False), ("client", True), ("case", True)])
+def test_attachment_purge_restarts_inactivity_period(
+    idle_person, facility, lead_user, client, path, owner_kind, removed, django_capture_on_commit_callbacks
+):
+    from core.models import DocumentType
+    from core.services.attachments import purge_attachment_chain
+    from tests.test_attachment_purge import _attach, _doc_type, _file_template
+
+    purged_at = timezone.now()
+    old = purged_at - timedelta(days=400)
+    field = _file_template(facility, "Retention file")
+    doc = _doc_type(facility, "Retention record", owner_kind, file_field=field)
+    owner = idle_person
+    if owner_kind == DocumentType.EntityType.CASE:
+        owner = Case.objects.create(
+            facility=facility,
+            client=idle_person,
+            title="Closed case",
+            status=Case.Status.CLOSED,
+            created_by=lead_user,
+            document_type=doc,
+        )
+    else:
+        owner.document_type = doc
+        owner.save(update_fields=["document_type", "data_json"])
+    attachment = _attach(facility, owner, field, lead_user, "retention.pdf")
+    Attachment.objects.filter(pk=attachment.pk).update(created_at=old, deleted_at=old if removed else None)
+    if removed:
+        owner.data_json = {}
+        owner.save(update_fields=["data_json"])
+    Client.objects.filter(pk=idle_person.pk).update(updated_at=old)
+    if owner_kind == DocumentType.EntityType.CASE:
+        Case.objects.filter(pk=owner.pk).update(last_activity_at=old, updated_at=old)
+    assert anonymize_clients(facility, dry_run=True)["count"] == 1
+
+    with patch("django.utils.timezone.now", return_value=purged_at), django_capture_on_commit_callbacks(execute=True):
+        if path == "http":
+            client.force_login(lead_user)
+            response = client.post(reverse("core:attachment_delete", kwargs={"pk": attachment.pk}))
+            assert response.status_code == 302
+            assert response.url == reverse("core:attachment_list")
+        else:
+            assert purge_attachment_chain(owner, attachment.entry_id) == 1
+    assert not Attachment.objects.filter(pk=attachment.pk).exists()
+    owner.refresh_from_db()
+    assert field.slug not in owner.data_json
+
+    for elapsed_days in (0, 364, 366):
+        with patch("django.utils.timezone.now", return_value=purged_at + timedelta(days=elapsed_days)):
+            result = anonymize_clients(facility, dry_run=False)
+        idle_person.refresh_from_db()
+        assert result["count"] == int(elapsed_days == 366)
+        assert (idle_person.anonymized_at is not None) == (elapsed_days == 366)

@@ -33,9 +33,10 @@ from contextlib import contextmanager
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection, transaction
 from django.db.models import Q
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models import FieldTemplate
+from core.models import Client, FieldTemplate
 from core.services.dynamic_data import build_field_template_lookup, is_file_marker, normalize_file_marker
 from core.services.fk_locks import fk_lock_targets, lock_fk_targets
 
@@ -1115,6 +1116,10 @@ def purge_attachment_chain(owner, entry_id):
         lock_attachment_rows_in_facility_order(owner, [entry_id], deletes_rows=True)
 
         _drop_purged_marker_entries(owner, {str(attachment.pk) for attachment in chain})
+        # Refs #2524: retain the purge time on the already locked person even
+        # when no marker remains; deleting the rows removes their activity anchor.
+        if owner_client_id is not None and owner.__class__.__name__ in {"Client", "Case"}:
+            Client.objects.for_facility(owner.facility_id).filter(pk=owner_client_id).update(updated_at=timezone.now())
         owner.attachments.filter(entry_id=entry_id).delete()
 
         # Der ``.enc``-Unlink laeuft NACH dem aeussersten Commit
