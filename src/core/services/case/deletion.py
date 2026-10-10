@@ -40,6 +40,7 @@ from core.models import Activity, AuditLog, Case, Client, DeletionRequest
 from core.retention.legal_holds import case_has_active_hold, exclude_cases_with_active_holds
 from core.services.audit import audit_event
 from core.services.dashboard import log_activity
+from core.services.dynamic_protection import lock_dynamic_protection_gate
 
 logger = logging.getLogger(__name__)
 
@@ -672,6 +673,8 @@ def anonymize_case_now(case, user):
     if actor_facility_id is None or actor_facility_id != case.facility_id:
         raise ValidationError(CASE_OTHER_FACILITY_MESSAGE)
     with transaction.atomic():
+        # Refs #2525: take the protection gate before any person, case or event row.
+        lock_dynamic_protection_gate(actor_facility_id)
         locked = _lock_case_chain(actor_facility_id, case.pk)
         if locked is None or not locked.is_deleted:
             # Zeile verschwunden, fremde Einrichtung oder waehrend der
