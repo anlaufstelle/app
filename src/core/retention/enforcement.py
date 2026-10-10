@@ -200,7 +200,16 @@ class _CarryFailure:
 
 
 def _soft_delete_events(
-    qs, facility, category, retention_days, extra_detail=None, *, now=None, settings_obj=None, deferred_ids=None
+    qs,
+    facility,
+    category,
+    retention_days,
+    extra_detail=None,
+    *,
+    now=None,
+    settings_obj=None,
+    deferred_ids=None,
+    recheck_expiry=False,
 ):
     """Soft-delete every event in ``qs``, write ``EventHistory`` + ``AuditLog``,
     and clean up approved proposals. Returns ``(count, deleted_ids)``.
@@ -256,7 +265,8 @@ def _soft_delete_events(
                     deferred_ids.add(pk)
             if event is None:
                 continue
-            if event.client_id and event.client.contact_stage == Client.ContactStage.QUALIFIED:
+            is_qualified = bool(event.client_id and event.client.contact_stage == Client.ContactStage.QUALIFIED)
+            if is_qualified:
                 latest = (
                     RetentionProposal.objects.filter(facility=facility, target_type="Event", target_id=event.pk)
                     .select_for_update()
@@ -265,13 +275,28 @@ def _soft_delete_events(
                 )
                 if latest is None or latest.status != RetentionProposal.Status.APPROVED:
                     continue
-                # A business change after approval can move the deadline forward.
-                if (
-                    not collect_doomed_events(facility, settings_obj or facility.settings, now or timezone.now())
-                    .filter(pk=event.pk)
-                    .exists()
-                ):
-                    continue
+            # Strategy callers recheck expiry; direct callers supply a preselected set.
+            if recheck_expiry or is_qualified:
+                # A concurrent edit can postpone expiry for any contact stage (Refs #2524).
+                current_settings = settings_obj
+                if current_settings is None:
+                    try:
+                        current_settings = facility.settings
+                    except facility._meta.model.settings.RelatedObjectDoesNotExist:
+                        if is_qualified:
+                            raise
+                if current_settings is not None:
+                    if (
+                        not collect_doomed_events(facility, current_settings, now or timezone.now())
+                        .filter(pk=pk)
+                        .exists()
+                    ):
+                        continue
+                else:
+                    # Direct callers may supply an explicit period without facility settings.
+                    days = event.document_type.retention_days if category == "document_type" else retention_days
+                    if not days or days < 1 or event.occurred_at >= (now or timezone.now()) - timedelta(days=days):
+                        continue
             # Refs #714: Beide Soft-Delete-Pfade muessen redaktiert sein — frueher
             # kopierte Retention den Klartext in EventHistory und die append-only-
             # Trigger machten ihn unloeschbar (DSGVO-Blocker). Payload + Metadaten
@@ -390,6 +415,7 @@ def _enforce(
             now=now,
             settings_obj=settings_obj,
             deferred_ids=deferred,
+            recheck_expiry=True,
         )
     if deferred_ids is not None:
         deferred_ids.update(deferred)
