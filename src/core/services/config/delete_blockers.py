@@ -23,6 +23,7 @@ from core.models import (
 )
 from core.services.audit import log_audit_event
 from core.services.config.block_order import iter_blocks_in_order
+from core.services.dynamic_protection import configuration_write
 
 
 class ConfigDeleteBlocked(Exception):  # noqa: N818 — Plan-Vorgabe (#1056); UI-Semantik „blockiert", kein Error-Suffix
@@ -410,30 +411,32 @@ def delete_field_group(request, group: FieldGroup) -> None:
     Reihenfolge) ersetzt, die übrigen Blöcke rücken kompakt nach — das Layout
     bleibt visuell erhalten.
     """
-    doc_type = group.document_type
-    inner_fields = list(DocumentTypeField.objects.filter(field_group=group).order_by("sort_order", "pk"))
-    name, target_type, target_id = group.name, group.__class__.__name__, str(group.pk)
-    with transaction.atomic():
-        # Blockliste VOR dem Delete erfassen und den Gruppenblock durch seine
-        # Innen-Felder (als freie Blöcke) an gleicher Stelle ersetzen.
-        new_order: list[tuple[str, uuid.UUID]] = []
-        for block in iter_blocks_in_order(doc_type):
-            if block["kind"] == "group" and block["group"].pk == group.pk:
-                new_order.extend(("field", dtf.pk) for dtf in inner_fields)
-            elif block["kind"] == "group":
-                new_order.append(("group", block["group"].pk))
-            else:
-                new_order.append(("field", block["field"].pk))
-        group.delete()  # SET_NULL → die Innen-Felder werden freie Blöcke
-        for position, (kind, block_id) in enumerate(new_order):
-            if kind == "group":
-                FieldGroup.objects.filter(pk=block_id).update(sort_order=position)
-            else:
-                DocumentTypeField.objects.filter(pk=block_id).update(sort_order=position)
-    log_audit_event(
-        request,
-        AuditLog.Action.CONFIG_DELETE,
-        target_type=target_type,
-        target_id=target_id,
-        detail={"name": name},
-    )
+    with configuration_write(group.document_type.facility_id):
+        group = FieldGroup.objects.get(pk=group.pk)
+        doc_type = group.document_type
+        inner_fields = list(DocumentTypeField.objects.filter(field_group=group).order_by("sort_order", "pk"))
+        name, target_type, target_id = group.name, group.__class__.__name__, str(group.pk)
+        with transaction.atomic():
+            # Blockliste VOR dem Delete erfassen und den Gruppenblock durch seine
+            # Innen-Felder (als freie Blöcke) an gleicher Stelle ersetzen.
+            new_order: list[tuple[str, uuid.UUID]] = []
+            for block in iter_blocks_in_order(doc_type):
+                if block["kind"] == "group" and block["group"].pk == group.pk:
+                    new_order.extend(("field", dtf.pk) for dtf in inner_fields)
+                elif block["kind"] == "group":
+                    new_order.append(("group", block["group"].pk))
+                else:
+                    new_order.append(("field", block["field"].pk))
+            group.delete()  # SET_NULL → die Innen-Felder werden freie Blöcke
+            for position, (kind, block_id) in enumerate(new_order):
+                if kind == "group":
+                    FieldGroup.objects.filter(pk=block_id).update(sort_order=position)
+                else:
+                    DocumentTypeField.objects.filter(pk=block_id).update(sort_order=position)
+        log_audit_event(
+            request,
+            AuditLog.Action.CONFIG_DELETE,
+            target_type=target_type,
+            target_id=target_id,
+            detail={"name": name},
+        )

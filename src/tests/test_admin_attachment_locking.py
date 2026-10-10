@@ -10,8 +10,9 @@ from django.test import RequestFactory
 from django.test.utils import CaptureQueriesContext
 
 from core.admin.documents import DocumentTypeAdmin, FieldTemplateAdmin
+from core.admin.organization import FacilityAdmin, OrganizationAdmin
 from core.admin_site import anlaufstelle_admin_site
-from core.models import Attachment, AuditLog, DocumentType, DocumentTypeField, Facility, FieldTemplate
+from core.models import Attachment, AuditLog, DocumentType, DocumentTypeField, Facility, FieldTemplate, Organization
 from core.services.file_vault.storage import commit_staged_upload
 from tests.test_admin_config_audit import _request
 from tests.test_sensitivity_write_locking import run_connection, wait_for_completion_or_lock
@@ -126,3 +127,37 @@ def test_admin_bulk_change_reads_fresh_state_after_waiting(facility, admin_user)
     field.refresh_from_db()
     assert field.name == "After gate"
     assert field.is_active is False
+
+
+@pytest.mark.parametrize("model_admin_class", [FacilityAdmin, OrganizationAdmin])
+def test_admin_cascade_deletion_waits_before_config_rows(facility, admin_user, model_admin_class):
+    organization = Organization.objects.create(name="Cascade gate organization")
+    scope = Facility.objects.create(organization=organization, name="Cascade gate facility")
+    field = FieldTemplate.objects.create(facility=scope, name="Cascade gate field")
+    target = scope if model_admin_class is FacilityAdmin else organization
+    started = ThreadEvent()
+    pids = {}
+
+    def delete():
+        pids["admin"] = connections["default"].connection.info.backend_pid
+        started.set()
+        model_admin_class(type(target), anlaufstelle_admin_site).delete_queryset(
+            _request(RequestFactory(), admin_user), type(target).objects.filter(pk=target.pk)
+        )
+
+    from core.services.dynamic_protection import lock_dynamic_protection
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with transaction.atomic():
+            lock_dynamic_protection(scope.pk)
+            changer = pool.submit(run_connection, delete)
+            assert started.wait(5)
+            assert wait_for_completion_or_lock(changer, pids["admin"]), "Cascade bypassed the configuration gate"
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_stat_clear_snapshot()")
+                cursor.execute("SELECT query FROM pg_stat_activity WHERE pid = %s", [pids["admin"]])
+                assert "pg_advisory_xact_lock(2525" in cursor.fetchone()[0]
+            assert FieldTemplate.objects.filter(pk=field.pk).exists()
+        changer.result(timeout=12)
+    assert not FieldTemplate.objects.filter(pk=field.pk).exists()
+    assert not type(target).objects.filter(pk=target.pk).exists()

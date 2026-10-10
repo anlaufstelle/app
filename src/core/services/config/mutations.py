@@ -21,7 +21,7 @@ from core.models.slug import _RESERVED_SLUGS
 from core.services.audit import log_audit_event
 from core.services.compliance.sensitivity import validate_explicit_high_field
 from core.services.config.block_order import _compact_block_positions, _next_block_position
-from core.services.dynamic_protection import lock_dynamic_protection
+from core.services.dynamic_protection import configuration_write, lock_dynamic_protection
 
 
 def save_document_type(request, form, *, creating: bool) -> DocumentType:
@@ -123,23 +123,24 @@ def save_field_group(request, form, *, doc_type: DocumentType, creating: bool) -
     Beim Anlegen wird der ``document_type`` gesetzt (Scope kommt aus dem View,
     nicht aus dem Formular).
     """
-    changed_fields = list(form.changed_data)
-    obj = form.save(commit=False)
-    if creating:
-        obj.document_type = doc_type
-        # #1713: neue Gruppe ans ENDE der globalen Block-Sequenz — konsistent zu
-        # add_field_to_doctype. Ohne das bekäme sie den Modell-Default sort_order=0
-        # und spränge vor bestehende freie Felder/Gruppen an den Anfang.
-        obj.sort_order = _next_block_position(doc_type)
-    obj.save()
-    action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
-    log_audit_event(
-        request,
-        action,
-        target_obj=obj,
-        detail={"name": obj.name, "changed_fields": changed_fields},
-    )
-    return obj
+    with configuration_write(doc_type.facility_id):
+        changed_fields = list(form.changed_data)
+        obj = form.save(commit=False)
+        if creating:
+            obj.document_type = doc_type
+            # #1713: neue Gruppe ans ENDE der globalen Block-Sequenz — konsistent zu
+            # add_field_to_doctype. Ohne das bekäme sie den Modell-Default sort_order=0
+            # und spränge vor bestehende freie Felder/Gruppen an den Anfang.
+            obj.sort_order = _next_block_position(doc_type)
+        obj.save()
+        action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
+        log_audit_event(
+            request,
+            action,
+            target_obj=obj,
+            detail={"name": obj.name, "changed_fields": changed_fields},
+        )
+        return obj
 
 
 def conflicting_report_key_field(doc_type: DocumentType, field_template: FieldTemplate) -> FieldTemplate | None:

@@ -30,6 +30,7 @@ from core.models import (
     User,
     WorkItem,
 )
+from core.services.dynamic_protection import lock_dynamic_protection_many
 
 
 def flush_seed_data() -> None:
@@ -43,6 +44,7 @@ def flush_seed_data() -> None:
     nicht committed zurück. Refs #1040 (S1).
     """
     with transaction.atomic():
+        lock_dynamic_protection_many(Facility.objects.values_list("pk", flat=True), exclusive=True)
         Attachment.objects.all().delete()
         Activity.objects.all().delete()
         LegalHold.objects.all().delete()

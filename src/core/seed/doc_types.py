@@ -46,6 +46,7 @@ from core.packages.catalog import parse_catalog_package
 from core.packages.default_catalog import load_default_package_data
 from core.packages.loader import PackageReport, load_package
 from core.packages.schema import PackageV1
+from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.facility_bootstrap import foreign_catalog_slugs
 
 __all__ = ["load_default_package_data", "seed_document_types"]
@@ -94,6 +95,7 @@ def seed_document_types(facility: Facility, *, package: str = "default") -> Pack
     # Cleanup + Anwendung in EINER Transaktion: ohne die Klammer bliebe eine
     # gelöschte Gruppe gelöscht, wenn der Loader danach zurückrollt.
     with transaction.atomic():
+        lock_dynamic_protection(facility.pk, exclusive=True)
         _delete_orphan_field_groups(facility, parsed_package)
         return load_package(facility, parsed_package)
 

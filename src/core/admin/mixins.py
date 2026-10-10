@@ -37,6 +37,24 @@ def require_admin_read_audit(request, target_obj=None, *, target_type=None, **de
         raise PermissionDenied from exc
 
 
+def _configuration_facility_ids(objects):
+    """Include configuration removed through facility/organization cascades."""
+    from core.models import DocumentType, FieldTemplate, Organization
+
+    facility_ids = set()
+    organization_ids = set()
+    for obj in objects:
+        if isinstance(obj, (DocumentType, FieldTemplate)):
+            facility_ids.add(obj.facility_id)
+        elif isinstance(obj, Facility):
+            facility_ids.add(obj.pk)
+        elif isinstance(obj, Organization):
+            organization_ids.add(obj.pk)
+    if organization_ids:
+        facility_ids.update(Facility.objects.filter(organization_id__in=organization_ids).values_list("pk", flat=True))
+    return facility_ids
+
+
 class AdminReadAuditMixin:
     """Require a successful audit before super-admin content is returned."""
 
@@ -114,11 +132,11 @@ class AdminWriteAuditMixin:
 
     @transaction.atomic
     def delete_model(self, request, obj):
-        from core.models import DocumentType, FieldTemplate
-        from core.services.dynamic_protection import lock_dynamic_protection
+        from core.services.dynamic_protection import lock_dynamic_protection_many
 
-        if isinstance(obj, (DocumentType, FieldTemplate)):
-            lock_dynamic_protection(obj.facility_id, exclusive=True)
+        protection_facilities = _configuration_facility_ids([obj])
+        if protection_facilities:
+            lock_dynamic_protection_many(protection_facilities, exclusive=True)
         target_id = str(obj.pk)
         # Record the target before deletion clears its primary key.
         # The transaction rolls this entry back if deletion is rejected.
@@ -130,10 +148,9 @@ class AdminWriteAuditMixin:
         from core.services.audit.chain import advisory_lock_id
 
         objects = list(queryset.order_by("pk"))
-        from core.models import DocumentType, FieldTemplate
         from core.services.dynamic_protection import lock_dynamic_protection_many
 
-        protection_facilities = {obj.facility_id for obj in objects if isinstance(obj, (DocumentType, FieldTemplate))}
+        protection_facilities = _configuration_facility_ids(objects)
         if protection_facilities:
             lock_dynamic_protection_many(protection_facilities, exclusive=True)
             # Configuration may have changed while waiting for the gates.

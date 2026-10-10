@@ -12,6 +12,7 @@ from django.utils.translation import gettext as _
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, FieldGroup
 from core.services.audit import log_audit_event
+from core.services.dynamic_protection import configuration_write
 
 
 def _validate_id_set(ordered_ids, existing_ids) -> None:
@@ -147,11 +148,12 @@ def _compact_block_positions(doc_type: DocumentType) -> None:
     Schließt Lücken, die beim Verschieben/Entfernen eines freien Blocks
     entstehen. Muss innerhalb einer offenen Transaktion aufgerufen werden.
     """
-    for position, block in enumerate(iter_blocks_in_order(doc_type)):
-        if block["kind"] == "group":
-            FieldGroup.objects.filter(pk=block["group"].pk).update(sort_order=position)
-        else:
-            DocumentTypeField.objects.filter(pk=block["field"].pk).update(sort_order=position)
+    with configuration_write(doc_type.facility_id):
+        for position, block in enumerate(iter_blocks_in_order(doc_type)):
+            if block["kind"] == "group":
+                FieldGroup.objects.filter(pk=block["group"].pk).update(sort_order=position)
+            else:
+                DocumentTypeField.objects.filter(pk=block["field"].pk).update(sort_order=position)
 
 
 def reorder_blocks(request, doc_type: DocumentType, ordered_blocks) -> None:
@@ -163,29 +165,30 @@ def reorder_blocks(request, doc_type: DocumentType, ordered_blocks) -> None:
     Gleichheit), schreibt danach atomar ``sort_order = Position`` und genau
     einen ``CONFIG_REORDER``-Eintrag ``{"operation": "block_order"}``.
     """
-    group_ids = [block_id for kind, block_id in ordered_blocks if kind == "group"]
-    field_ids = [block_id for kind, block_id in ordered_blocks if kind == "field"]
-    existing_group_ids = FieldGroup.objects.filter(document_type=doc_type).values_list("id", flat=True)
-    existing_field_ids = DocumentTypeField.objects.filter(document_type=doc_type, field_group__isnull=True).values_list(
-        "id", flat=True
-    )
-    _validate_id_set(group_ids, existing_group_ids)
-    _validate_id_set(field_ids, existing_field_ids)
+    with configuration_write(doc_type.facility_id):
+        group_ids = [block_id for kind, block_id in ordered_blocks if kind == "group"]
+        field_ids = [block_id for kind, block_id in ordered_blocks if kind == "field"]
+        existing_group_ids = FieldGroup.objects.filter(document_type=doc_type).values_list("id", flat=True)
+        existing_field_ids = DocumentTypeField.objects.filter(
+            document_type=doc_type, field_group__isnull=True
+        ).values_list("id", flat=True)
+        _validate_id_set(group_ids, existing_group_ids)
+        _validate_id_set(field_ids, existing_field_ids)
 
-    with transaction.atomic():
-        for position, (kind, block_id) in enumerate(ordered_blocks):
-            if kind == "group":
-                FieldGroup.objects.filter(pk=block_id, document_type=doc_type).update(sort_order=position)
-            else:
-                DocumentTypeField.objects.filter(pk=block_id, document_type=doc_type, field_group__isnull=True).update(
-                    sort_order=position
-                )
-    log_audit_event(
-        request,
-        AuditLog.Action.CONFIG_REORDER,
-        target_obj=doc_type,
-        detail={"operation": "block_order"},
-    )
+        with transaction.atomic():
+            for position, (kind, block_id) in enumerate(ordered_blocks):
+                if kind == "group":
+                    FieldGroup.objects.filter(pk=block_id, document_type=doc_type).update(sort_order=position)
+                else:
+                    DocumentTypeField.objects.filter(
+                        pk=block_id, document_type=doc_type, field_group__isnull=True
+                    ).update(sort_order=position)
+        log_audit_event(
+            request,
+            AuditLog.Action.CONFIG_REORDER,
+            target_obj=doc_type,
+            detail={"operation": "block_order"},
+        )
 
 
 def reorder_fields(request, doc_type: DocumentType, group_id, ordered_dtf_ids) -> None:
@@ -193,22 +196,23 @@ def reorder_fields(request, doc_type: DocumentType, group_id, ordered_dtf_ids) -
 
     ``group_id=None`` adressiert die „Ohne Gruppe"-Menge.
     """
-    existing_ids = DocumentTypeField.objects.filter(
-        document_type=doc_type,
-        field_group=group_id,
-    ).values_list("id", flat=True)
-    _validate_id_set(ordered_dtf_ids, existing_ids)
+    with configuration_write(doc_type.facility_id):
+        existing_ids = DocumentTypeField.objects.filter(
+            document_type=doc_type,
+            field_group=group_id,
+        ).values_list("id", flat=True)
+        _validate_id_set(ordered_dtf_ids, existing_ids)
 
-    with transaction.atomic():
-        for position, dtf_id in enumerate(ordered_dtf_ids):
-            DocumentTypeField.objects.filter(pk=dtf_id, document_type=doc_type).update(sort_order=position)
+        with transaction.atomic():
+            for position, dtf_id in enumerate(ordered_dtf_ids):
+                DocumentTypeField.objects.filter(pk=dtf_id, document_type=doc_type).update(sort_order=position)
 
-    log_audit_event(
-        request,
-        AuditLog.Action.CONFIG_REORDER,
-        target_obj=doc_type,
-        detail={"operation": "field_order"},
-    )
+        log_audit_event(
+            request,
+            AuditLog.Action.CONFIG_REORDER,
+            target_obj=doc_type,
+            detail={"operation": "field_order"},
+        )
 
 
 def move_field(
@@ -232,78 +236,81 @@ def move_field(
 
     Fremde ``dtf_id`` oder Zielgruppe → ``ValueError`` (View → HTTP 400).
     """
-    dtf = DocumentTypeField.objects.filter(pk=dtf_id, document_type=doc_type).first()
-    if dtf is None:
-        raise ValueError(_("Das zu verschiebende Feld gehört nicht zu diesem Dokumentationstyp."))
+    with configuration_write(doc_type.facility_id):
+        dtf = DocumentTypeField.objects.filter(pk=dtf_id, document_type=doc_type).first()
+        if dtf is None:
+            raise ValueError(_("Das zu verschiebende Feld gehört nicht zu diesem Dokumentationstyp."))
 
-    if target_group_id is not None:
-        _move_field_into_group(doc_type, dtf, target_group_id, ordered_dtf_ids)
-    else:
-        _move_field_to_top_level(doc_type, dtf, ordered_blocks)
+        if target_group_id is not None:
+            _move_field_into_group(doc_type, dtf, target_group_id, ordered_dtf_ids)
+        else:
+            _move_field_to_top_level(doc_type, dtf, ordered_blocks)
 
-    log_audit_event(
-        request,
-        AuditLog.Action.CONFIG_REORDER,
-        target_obj=doc_type,
-        detail={"operation": "move_field"},
-    )
+        log_audit_event(
+            request,
+            AuditLog.Action.CONFIG_REORDER,
+            target_obj=doc_type,
+            detail={"operation": "move_field"},
+        )
 
 
 def _move_field_into_group(doc_type: DocumentType, dtf: DocumentTypeField, target_group_id, ordered_dtf_ids) -> None:
-    if not FieldGroup.objects.filter(pk=target_group_id, document_type=doc_type).exists():
-        raise ValueError(_("Die Zielgruppe gehört nicht zu diesem Dokumentationstyp."))
+    with configuration_write(doc_type.facility_id):
+        if not FieldGroup.objects.filter(pk=target_group_id, document_type=doc_type).exists():
+            raise ValueError(_("Die Zielgruppe gehört nicht zu diesem Dokumentationstyp."))
 
-    ordered_dtf_ids = list(ordered_dtf_ids or [])
-    # Erwartete Zielmenge = aktuelle Felder der Zielgruppe + das verschobene Feld.
-    target_member_ids = DocumentTypeField.objects.filter(
-        document_type=doc_type,
-        field_group=target_group_id,
-    ).values_list("id", flat=True)
-    expected = {str(i) for i in target_member_ids} | {str(dtf.pk)}
-    requested = [str(i) for i in ordered_dtf_ids]
-    if len(requested) != len(expected) or set(requested) != expected:
-        raise ValueError(
-            _(
-                "Die übergebene Reihenfolge stimmt nicht mit der Zielgruppe überein "
-                "(fremde, fehlende oder doppelte IDs)."
+        ordered_dtf_ids = list(ordered_dtf_ids or [])
+        # Erwartete Zielmenge = aktuelle Felder der Zielgruppe + das verschobene Feld.
+        target_member_ids = DocumentTypeField.objects.filter(
+            document_type=doc_type,
+            field_group=target_group_id,
+        ).values_list("id", flat=True)
+        expected = {str(i) for i in target_member_ids} | {str(dtf.pk)}
+        requested = [str(i) for i in ordered_dtf_ids]
+        if len(requested) != len(expected) or set(requested) != expected:
+            raise ValueError(
+                _(
+                    "Die übergebene Reihenfolge stimmt nicht mit der Zielgruppe überein "
+                    "(fremde, fehlende oder doppelte IDs)."
+                )
             )
-        )
 
-    was_ungrouped = dtf.field_group_id is None
-    with transaction.atomic():
-        dtf.field_group_id = target_group_id
-        dtf.save(update_fields=["field_group"])
-        for position, member_id in enumerate(ordered_dtf_ids):
-            DocumentTypeField.objects.filter(pk=member_id, document_type=doc_type).update(sort_order=position)
-        # War das Feld ein freier Top-Level-Block, dessen Slot ist jetzt leer.
-        if was_ungrouped:
-            _compact_block_positions(doc_type)
+        was_ungrouped = dtf.field_group_id is None
+        with transaction.atomic():
+            dtf.field_group_id = target_group_id
+            dtf.save(update_fields=["field_group"])
+            for position, member_id in enumerate(ordered_dtf_ids):
+                DocumentTypeField.objects.filter(pk=member_id, document_type=doc_type).update(sort_order=position)
+            # War das Feld ein freier Top-Level-Block, dessen Slot ist jetzt leer.
+            if was_ungrouped:
+                _compact_block_positions(doc_type)
 
 
 def _move_field_to_top_level(doc_type: DocumentType, dtf: DocumentTypeField, ordered_blocks) -> None:
-    ordered_blocks = list(ordered_blocks or [])
-    group_ids = [block_id for kind, block_id in ordered_blocks if kind == "group"]
-    field_ids = [block_id for kind, block_id in ordered_blocks if kind == "field"]
+    with configuration_write(doc_type.facility_id):
+        ordered_blocks = list(ordered_blocks or [])
+        group_ids = [block_id for kind, block_id in ordered_blocks if kind == "group"]
+        field_ids = [block_id for kind, block_id in ordered_blocks if kind == "field"]
 
-    existing_group_ids = FieldGroup.objects.filter(document_type=doc_type).values_list("id", flat=True)
-    # Erwartete freie Felder NACH dem Move = aktuelle freie Felder ∪ {bewegtes}.
-    existing_field_ids = {
-        str(i)
-        for i in DocumentTypeField.objects.filter(document_type=doc_type, field_group__isnull=True).values_list(
-            "id", flat=True
-        )
-    }
-    existing_field_ids.add(str(dtf.pk))
-    _validate_id_set(group_ids, existing_group_ids)
-    _validate_id_set(field_ids, existing_field_ids)
+        existing_group_ids = FieldGroup.objects.filter(document_type=doc_type).values_list("id", flat=True)
+        # Erwartete freie Felder NACH dem Move = aktuelle freie Felder ∪ {bewegtes}.
+        existing_field_ids = {
+            str(i)
+            for i in DocumentTypeField.objects.filter(document_type=doc_type, field_group__isnull=True).values_list(
+                "id", flat=True
+            )
+        }
+        existing_field_ids.add(str(dtf.pk))
+        _validate_id_set(group_ids, existing_group_ids)
+        _validate_id_set(field_ids, existing_field_ids)
 
-    with transaction.atomic():
-        dtf.field_group_id = None
-        dtf.save(update_fields=["field_group"])
-        for position, (kind, block_id) in enumerate(ordered_blocks):
-            if kind == "group":
-                FieldGroup.objects.filter(pk=block_id, document_type=doc_type).update(sort_order=position)
-            else:
-                DocumentTypeField.objects.filter(pk=block_id, document_type=doc_type, field_group__isnull=True).update(
-                    sort_order=position
-                )
+        with transaction.atomic():
+            dtf.field_group_id = None
+            dtf.save(update_fields=["field_group"])
+            for position, (kind, block_id) in enumerate(ordered_blocks):
+                if kind == "group":
+                    FieldGroup.objects.filter(pk=block_id, document_type=doc_type).update(sort_order=position)
+                else:
+                    DocumentTypeField.objects.filter(
+                        pk=block_id, document_type=doc_type, field_group__isnull=True
+                    ).update(sort_order=position)
