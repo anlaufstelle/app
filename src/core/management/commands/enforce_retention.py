@@ -13,8 +13,10 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from core.models import AuditLog, Facility, Settings
+from core.retention.audit_pruning import prune_system_auditlog
 from core.retention.enforcement import enforce_handover_notes
 from core.retention.eventhistory import enforce_eventhistory_retention
+from core.retention.requests import prune_deletion_requests
 from core.services.audit import audit_event
 from core.services.import_engine import cleanup_stale_import_jobs
 from core.services.retention import (
@@ -59,6 +61,7 @@ class _RetentionTotals:
     # Loeschung physisch (nicht soft) erfolgt.
     handover_notes: int = 0
     auditlog_pruned: int = 0
+    requests_pruned: int = 0
     # Refs #1760: abgelaufene Offline-Widerrufe (klartext-frei, aber pseudonymer
     # Bezug auf bereits anonymisierte Personen -> Art. 5 Abs. 1 lit. e).
     offline_revocations_pruned: int = 0
@@ -134,6 +137,8 @@ class Command(BaseCommand):
         for facility in facilities:
             self._process_single_facility(facility, now, dry_run, totals)
 
+        if not facility_name:
+            totals.auditlog_pruned += prune_system_auditlog(now, dry_run)["count"]
         self._report_enforce_summary(totals, facilities, dry_run)
 
     def _warn_missing_settings(self, facility):
@@ -208,6 +213,7 @@ class Command(BaseCommand):
         totals.history_deleted += history["deleted"]
         totals.history_deferred += history["deferred"] + history["skipped"]
         totals.auditlog_pruned += prune_auditlog(facility, settings_obj, now, dry_run)["count"]
+        totals.requests_pruned += prune_deletion_requests(facility, settings_obj, now, dry_run)["count"]
         # Refs #1760: Widerrufe aelter als OFFLINE_REVOCATION_RETENTION_SECONDS
         # (2x Bundle-TTL) haben ihren Zweck erfuellt — kein Geraet im TTL-Fenster
         # braucht sie noch. Kein eigener Cron: der naechtliche Lauf ist ohnehin
@@ -238,6 +244,8 @@ class Command(BaseCommand):
         Would …`` block and writes no audit marker; a real pass prints the
         ``Soft-deleted …`` block and records the installation-wide LastRun event.
         """
+        prefix = "[dry-run] Would prune" if dry_run else "Pruned"
+        self.stdout.write(f"{prefix} {totals.requests_pruned} completed request(s).")
         self.stdout.write(f"Deferred {totals.deferred} event/person target(s) due to retention protection.")
         if dry_run:
             self.stdout.write(self.style.WARNING(f"[dry-run] Would soft-delete {totals.deleted} event(s) in total."))

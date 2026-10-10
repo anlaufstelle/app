@@ -100,6 +100,30 @@ class Migration(migrations.Migration):
                 name="deletion_request_downgrade_client_only",
             ),
         ),
+        migrations.AddField(
+            model_name="settings",
+            name="deletion_request_retention_days",
+            field=models.PositiveIntegerField(
+                default=1095,
+                validators=[django.core.validators.MinValueValidator(1)],
+                verbose_name="Aufbewahrung abgeschlossener Anträge (Tage)",
+            ),
+        ),
+        migrations.RemoveConstraint(model_name="settings", name="settings_retention_days_min_1"),
+        migrations.AddConstraint(
+            model_name="settings",
+            constraint=models.CheckConstraint(
+                condition=(
+                    models.Q(session_timeout_minutes__gte=1)
+                    & models.Q(retention_anonymous_days__gte=1)
+                    & models.Q(retention_identified_days__gte=1)
+                    & models.Q(retention_qualified_days__gte=1)
+                    & models.Q(retention_activities_days__gte=1)
+                    & models.Q(deletion_request_retention_days__gte=1)
+                ),
+                name="settings_retention_days_min_1",
+            ),
+        ),
         migrations.AlterField(
             model_name="auditlog",
             name="action",

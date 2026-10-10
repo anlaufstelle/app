@@ -133,6 +133,11 @@ class Settings(models.Model):
             "Während dieser Frist kann ein Admin den Datensatz wiederherstellen."
         ),
     )
+    deletion_request_retention_days = models.PositiveIntegerField(
+        default=1095,
+        validators=[MinValueValidator(1)],
+        verbose_name=_("Aufbewahrung abgeschlossener Anträge (Tage)"),
+    )
     auditlog_retention_months = models.PositiveIntegerField(
         default=24,
         verbose_name=_("AuditLog-Aufbewahrung (Monate)"),
@@ -325,6 +330,7 @@ class Settings(models.Model):
                     & models.Q(retention_identified_days__gte=1)
                     & models.Q(retention_qualified_days__gte=1)
                     & models.Q(retention_activities_days__gte=1)
+                    & models.Q(deletion_request_retention_days__gte=1)
                 ),
                 name="settings_retention_days_min_1",
             ),

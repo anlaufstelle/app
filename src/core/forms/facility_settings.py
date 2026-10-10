@@ -34,6 +34,7 @@ _FIELD_GROUPS = (
             "retention_handover_notes_days",
             "client_trash_days",
             "auditlog_retention_months",
+            "deletion_request_retention_days",
             # ADR-050 D3/D8 (Refs #2065): direkt hinter der Audit-Frist — beide
             # beantworten dieselbe Frage („wie lange bleibt Rechenschaft
             # lesbar") und teilen sich den Vorgabewert 24.
@@ -69,6 +70,7 @@ _RETENTION_PERIODS = {
     "retention_activities_days": (1, False),
     "retention_handover_notes_days": (1, False),
     "client_trash_days": (1, False),
+    "deletion_request_retention_days": (1, False),
     "eventhistory_detail_months": (_DAYS_PER_MONTH, True),
     "eventhistory_chronicle_months": (_DAYS_PER_MONTH, True),
 }

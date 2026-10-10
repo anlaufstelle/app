@@ -28,6 +28,12 @@ if env_bool("DJANGO_LOAD_DOTENV", default=True) and _DOTENV_PATH.exists():
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 
+# Installation-wide retention for audit rows without a facility (Refs #2524).
+# Zero disables cleanup; a negative value is a configuration error.
+AUDITLOG_SYSTEM_RETENTION_MONTHS = env_int("AUDITLOG_SYSTEM_RETENTION_MONTHS", 24)
+if AUDITLOG_SYSTEM_RETENTION_MONTHS < 0:
+    raise ImproperlyConfigured("AUDITLOG_SYSTEM_RETENTION_MONTHS must be non-negative.")
+
 # AUDIT_HASH_KEY (Refs #791) — separater HMAC-Schluessel fuer Audit-Hashes
 # (z.B. ``hmac_hash_email`` in Passwort-Reset-Audits). Bewusst getrennt von
 # SECRET_KEY, damit ein potenzieller SECRET_KEY-Leak nicht ruckwirkend

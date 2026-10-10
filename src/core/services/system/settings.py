@@ -35,6 +35,7 @@ _AUDIT_FIELDS = (
     # Retention-Workflow
     "client_trash_days",
     "auditlog_retention_months",
+    "deletion_request_retention_days",
     # ADR-050 D3/D8 (Refs #2065): eine Verkuerzung oder Abschaltung der
     # Historien-Fristen entscheidet ueber die Tilgung von Beratungsinhalten —
     # dieselbe Auditpflicht wie bei ``auditlog_retention_months``.
@@ -94,6 +95,7 @@ _AUDIT_VALUE_FIELDS = frozenset(
         "retention_handover_notes_days",
         "client_trash_days",
         "auditlog_retention_months",
+        "deletion_request_retention_days",
         "eventhistory_detail_months",
         "eventhistory_chronicle_months",
         "retention_auto_approve_after_defer",

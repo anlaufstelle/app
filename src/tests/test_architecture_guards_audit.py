@@ -134,8 +134,10 @@ class TestAuditLogCreationAllowlist:
             # check in ``update_settings`` (173 -> 174, 202 -> 203).
             # Refs #2524: two review settings in both audit field lists shift
             # the existing helpers by four lines; no new write site is allowed.
-            178: "update_settings body — settings diff helper",
-            207: "log_settings_change body — second create call",
+            # Refs #2524: the request period shifts the existing write sites by
+            # two more lines; no new write site is allowed.
+            180: "update_settings body — settings diff helper",
+            209: "log_settings_change body — second create call",
         },
         # Signal-Handler: kein Request, RLS-Session-State explizit gesetzt.
         "core/signals/audit.py": {

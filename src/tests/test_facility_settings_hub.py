@@ -28,6 +28,7 @@ EDITABLE_FIELDS = {
     "retention_handover_notes_days",
     "client_trash_days",
     "auditlog_retention_months",
+    "deletion_request_retention_days",
     # ADR-050 D3/D8 (Refs #2065): beide Historien-Fristen sind Betreiber-Regler,
     # der Drift-Guard unten erzwingt ihre Aufnahme ins Formular.
     "eventhistory_detail_months",
