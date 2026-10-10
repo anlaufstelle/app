@@ -1,0 +1,21 @@
+{% load i18n %}
+<div class="text-[12px] text-ink-muted" data-testid="field-protection">
+    <div class="flex flex-wrap items-center gap-1">
+        {% include "components/_badge.html" with text=protection.level color=protection.color %}
+        {% if protection.is_encrypted %}
+        {% include "components/_badge.html" with text=_("Verschlüsselt") color="blue" %}
+        {% else %}
+        {% include "components/_badge.html" with text=_("Klartext") color="gray" %}
+        {% endif %}
+        {% if show_origin %}
+            {% if protection.inherits %}<span>{% trans "wie Typ" %}</span>
+            {% elif protection.higher %}<span>{% trans "Feldvorlage:" %} {{ protection.field_level }}</span>{% endif %}
+        {% endif %}
+    </div>
+    {% if show_index %}
+    <span>{% if protection.is_indexed %}{% trans "Im Suchindex" %}{% else %}{% trans "Nicht im Suchindex" %}{% endif %}</span>
+    {% endif %}
+    {% if show_roles %}
+    <div>{% trans "Sichtbar für:" %} {{ protection.roles|default:_("Keine Rolle") }}</div>
+    {% endif %}
+</div>

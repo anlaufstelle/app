@@ -34,6 +34,9 @@
             <div>
                 <dt class="text-ink-muted">{% trans "Sensibilität" %}</dt>
                 <dd class="text-ink font-medium">{{ doc_type.get_sensitivity_display }}</dd>
+                {% if higher_field_count %}
+                <dd class="text-ink-muted">{% blocktrans count n=higher_field_count %}{{ n }} Feld ist höher eingestuft.{% plural %}{{ n }} Felder sind höher eingestuft.{% endblocktrans %}</dd>
+                {% endif %}
             </div>
             <div>
                 <dt class="text-ink-muted">{% trans "Entitätstyp" %}</dt>

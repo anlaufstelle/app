@@ -80,7 +80,7 @@ def compute_event_search_text(data_json, document_type):
         return ""
 
     # Load field metadata once for this document type.
-    from core.services.compliance.sensitivity import effective_sensitivity
+    from core.services.compliance.sensitivity import field_is_search_indexed
 
     field_meta = {
         dtf.field_template.slug: dtf.field_template
@@ -92,9 +92,7 @@ def compute_event_search_text(data_json, document_type):
         ft = field_meta.get(slug)
         if ft is None:
             continue
-        if ft.is_encrypted:
-            continue
-        if effective_sensitivity(document_type.sensitivity, ft.sensitivity) != 0:
+        if not field_is_search_indexed(document_type.sensitivity, ft):
             continue
         if isinstance(value, dict):
             # Exclude file markers and legacy encrypted marker dictionaries.

@@ -8,6 +8,7 @@
                 <th scope="col" class="px-4 py-2.5">{% trans "Name" %}</th>
                 <th scope="col" class="px-4 py-2.5 hidden sm:table-cell">{% trans "Slug" %}</th>
                 <th scope="col" class="px-4 py-2.5">{% trans "Typ" %}</th>
+                <th scope="col" class="px-4 py-2.5">{% trans "Stufe" %}</th>
                 <th scope="col" class="px-4 py-2.5 hidden md:table-cell">{% trans "Verwendung" %}</th>
                 <th scope="col" class="px-4 py-2.5">{% trans "Status" %}</th>
                 <th scope="col" class="px-4 py-2.5 text-right">{% trans "Aktionen" %}</th>
@@ -21,6 +22,14 @@
                 </td>
                 <td class="px-4 py-3 text-[13px] font-mono text-ink-muted hidden sm:table-cell">{{ ft.slug }}</td>
                 <td class="px-4 py-3 text-[13px] text-ink-soft">{{ ft.get_field_type_display }}</td>
+                <td class="px-4 py-3">
+                    {% include "core/config/partials/field_protection.html" with protection=ft.protection show_roles=False show_origin=False show_index=False %}
+                    {% for item in ft.protection_by_type %}
+                    <div class="text-[12px] text-ink-muted" data-testid="field-index-status">
+                        {{ item.name }}: {% if item.protection.is_indexed %}{% trans "Im Suchindex" %}{% else %}{% trans "Nicht im Suchindex" %}{% endif %}
+                    </div>
+                    {% empty %}<span class="text-[12px] text-ink-muted">{% trans "Nicht zugeordnet; kein Suchindex" %}</span>{% endfor %}
+                </td>
                 <td class="px-4 py-3 text-[13px] text-ink-muted hidden md:table-cell" data-testid="fieldtemplate-usage">
                     {% blocktrans count n=ft.doctype_count %}{{ n }} Typ{% plural %}{{ n }} Typen{% endblocktrans %}
                     ·

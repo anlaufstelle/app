@@ -65,14 +65,15 @@ Kontext: doc_type, blocks (Liste aus {"kind":"group","group":g,"fields":[...]} |
             data-reorder-url="{% url 'core:config_reorder_fields' doc_type.pk %}"
             data-move-url="{% url 'core:config_move_field' doc_type.pk %}">
             {% for f in block.fields %}
-            <li class="py-2 flex items-center justify-between gap-3" data-dtf-id="{{ f.pk }}" data-testid="field-row">
+            <li class="py-2 flex flex-wrap items-center justify-between gap-3" data-dtf-id="{{ f.pk }}" data-testid="field-row">
                 <div class="flex items-center gap-2 min-w-0">
                     <span class="drag-handle field-drag-handle cursor-grab text-ink-muted select-none" aria-hidden="true" title="{% trans 'Zum Sortieren ziehen' %}">⠿</span>
                     <span class="text-[14px] text-ink">{{ f.field_template.name }}</span>
                     {% if f.field_template.is_required %}<span class="text-[12px] text-red-600 ml-1" title="{% trans 'Pflichtfeld' %}">*</span>{% endif %}
                 </div>
-                <div class="flex items-center gap-3 flex-shrink-0">
+                <div class="flex flex-wrap items-center justify-end gap-3 min-w-0">
                     <span class="text-[12px] text-ink-muted">{{ f.field_template.get_field_type_display }}</span>
+                    {% include "core/config/partials/field_protection.html" with protection=f.protection show_roles=True show_origin=True show_index=True %}
                     <form method="post" action="{% url 'core:config_doctype_field_remove' doc_type.pk f.pk %}"
                           hx-post="{% url 'core:config_doctype_field_remove' doc_type.pk f.pk %}"
                           hx-target="#field-board" hx-swap="outerHTML"
@@ -90,15 +91,16 @@ Kontext: doc_type, blocks (Liste aus {"kind":"group","group":g,"fields":[...]} |
     </div>
     {% else %}
     {# --- Freies (ungruppiertes) Feld als Top-Level-Block ------------------ #}
-    <div class="card px-4 py-2 flex items-center justify-between gap-3"
+    <div class="card px-4 py-2 flex flex-wrap items-center justify-between gap-3"
          data-block data-dtf-id="{{ block.field.pk }}" data-testid="free-field-row">
         <div class="flex items-center gap-2 min-w-0">
             <span class="drag-handle field-drag-handle cursor-grab text-ink-muted select-none" aria-hidden="true" title="{% trans 'Zum Sortieren ziehen' %}">⠿</span>
             <span class="text-[14px] text-ink">{{ block.field.field_template.name }}</span>
             {% if block.field.field_template.is_required %}<span class="text-[12px] text-red-600 ml-1" title="{% trans 'Pflichtfeld' %}">*</span>{% endif %}
         </div>
-        <div class="flex items-center gap-3 flex-shrink-0">
+        <div class="flex flex-wrap items-center justify-end gap-3 min-w-0">
             <span class="text-[12px] text-ink-muted">{{ block.field.field_template.get_field_type_display }}</span>
+            {% include "core/config/partials/field_protection.html" with protection=block.field.protection show_roles=True show_origin=True show_index=True %}
             <form method="post" action="{% url 'core:config_doctype_field_remove' doc_type.pk block.field.pk %}"
                   hx-post="{% url 'core:config_doctype_field_remove' doc_type.pk block.field.pk %}"
                   hx-target="#field-board" hx-swap="outerHTML"

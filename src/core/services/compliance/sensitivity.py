@@ -11,7 +11,7 @@ from django.db.models.functions import Coalesce
 from django.http import Http404
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Attachment, DocumentType, Event
+from core.models import Attachment, DocumentType, Event, FieldTemplate
 from core.models.user import User
 
 #: Sentinel fuer „Owner ohne ``document_type``" in der Sensitivity-Coalesce
@@ -90,6 +90,39 @@ def effective_sensitivity(doc_type_sensitivity, field_sensitivity=""):
     if field_sensitivity:
         return max(base, sensitivity_rank(field_sensitivity))
     return base
+
+
+def field_is_search_indexed(doc_type_sensitivity: str, field_template: FieldTemplate) -> bool:
+    """Share the event index eligibility rule with configuration displays."""
+    return (
+        not field_template.is_encrypted and effective_sensitivity(doc_type_sensitivity, field_template.sensitivity) == 0
+    )
+
+
+def field_protection(document_type: DocumentType | None, field_template: FieldTemplate) -> dict:
+    """Describe protection and permitted roles from the shared sensitivity policy."""
+    base = document_type.sensitivity if document_type is not None else DocumentType.Sensitivity.NORMAL
+    rank = effective_sensitivity(base, field_template.sensitivity)
+    labels = {sensitivity_rank(level): label for level, label in DocumentType.Sensitivity.choices}
+    own_level = dict(DocumentType.Sensitivity.choices).get(field_template.sensitivity, _("Unbekannte Stufe"))
+    inherits = field_template.sensitivity == ""
+    level = labels.get(rank, _("Unbekannte Stufe"))
+    if document_type is None and inherits:
+        level = _("wie Typ")
+    return {
+        "level": level,
+        "color": {0: "gray", 1: "amber", 2: "red"}.get(rank, "red"),
+        "roles": ", ".join(
+            str(User.Role(role).label) for role, maximum in ROLE_MAX_SENSITIVITY.items() if rank <= maximum
+        ),
+        "inherits": inherits,
+        "field_level": own_level,
+        "higher": not inherits and sensitivity_rank(field_template.sensitivity) > sensitivity_rank(base),
+        "is_encrypted": field_template.is_encrypted,
+        "is_indexed": document_type is not None
+        and document_type.entity_type == DocumentType.EntityType.EVENT
+        and field_is_search_indexed(base, field_template),
+    }
 
 
 def validate_explicit_high_field(doc_type_sensitivity: str, field_sensitivity: str, field_name: str) -> None:

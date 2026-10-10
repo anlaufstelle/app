@@ -13,6 +13,7 @@ from django.utils.translation import gettext_lazy as _
 from core.forms.config import DocumentTypeFieldAddForm, FieldConditionForm, FieldGroupForm
 from core.models import DocumentTypeField, FieldCondition
 from core.services import config as config_service
+from core.services.compliance.sensitivity import field_protection
 from core.services.conditions import OPERATORS_BY_FIELD_TYPE, VALUELESS_OPERATORS
 from core.services.dynamic_data import option_label_map
 
@@ -133,13 +134,17 @@ def board_context(doc_type, *, add_form=None, group_form=None):
     # Refs #1725(b): je Feld die Zahl der Datensätze, die beim Entfernen einen
     # „Nicht mehr zugeordnet"-Wert behielten — speist die hx-confirm-Warnung. Ein
     # Count pro dtf; das Board ist klein.
+    higher_field_count = 0
     for block in blocks:
         fields = block["fields"] if block["kind"] == "group" else [block["field"]]
         for dtf in fields:
+            dtf.protection = field_protection(doc_type, dtf.field_template)
+            higher_field_count += int(dtf.protection["higher"])
             dtf.removal_impact = config_service.count_field_removal_impact(dtf)
     return {
         "doc_type": doc_type,
         "blocks": blocks,
+        "higher_field_count": higher_field_count,
         "add_form": add_form if add_form is not None else DocumentTypeFieldAddForm(doc_type=doc_type),
         # Prefix "group-new": das stets vorhandene Neu-Formular bekommt eindeutige
         # Feld-IDs (id_group-new-name), damit es nicht mit einem gleichzeitig

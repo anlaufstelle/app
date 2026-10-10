@@ -21,6 +21,7 @@ from core.forms.config import FieldTemplateForm
 from core.models import FieldTemplate
 from core.reporting.registry import describe_field_bindings
 from core.services import config as config_service
+from core.services.compliance.sensitivity import field_protection
 from core.services.config import ConfigDeleteBlocked
 from core.services.option_usage import option_slugs_in_use
 from core.views.mixins import (
@@ -59,11 +60,24 @@ class ConfigFieldTemplateListView(FacilityAdminRequiredMixin, PaginatedListMixin
 
         # distinct=True je Aggregat verhindert die Join-Fanout-Multiplikation
         # bei zwei gleichzeitigen Count()-Annotationen.
-        qs = qs.annotate(
-            doctype_count=Count("document_type_fields", distinct=True),
-            attachment_count=Count("attachments", distinct=True),
-        ).order_by("name")
+        qs = (
+            qs.annotate(
+                doctype_count=Count("document_type_fields", distinct=True),
+                attachment_count=Count("attachments", distinct=True),
+            )
+            .prefetch_related("document_type_fields__document_type")
+            .order_by("name")
+        )
         field_templates = self.paginate(qs, request)
+        for template in field_templates:
+            template.protection = field_protection(None, template)
+            template.protection_by_type = [
+                {
+                    "name": assignment.document_type.name,
+                    "protection": field_protection(assignment.document_type, template),
+                }
+                for assignment in template.document_type_fields.all()
+            ]
 
         params = {k: v for k, v in (("q", q), ("field_type", field_type), ("is_active", active)) if v}
         context = {
