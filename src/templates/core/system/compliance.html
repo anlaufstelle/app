@@ -41,8 +41,8 @@
 
 {# Pro Kategorie eine Card mit den Checks darin. #}
 {% for category, checks in groups.items %}
-<section class="mb-6 bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="compliance-group-{{ category|slugify }}">
-    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{{ category }}</h2>
+<section class="mb-6 bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="compliance-group-{{ category }}">
+    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{{ checks.0.category_display }}</h2>
     <div class="divide-y divide-subtle">
         {% for check in checks %}
         <div class="px-4 py-3 flex items-start gap-3" data-testid="compliance-check-{{ check.key }}" data-status="{{ check.status }}">
@@ -64,7 +64,7 @@
                                 {% elif check.status == 'warning' %}text-yellow-700
                                 {% elif check.status == 'critical' %}text-red-700
                                 {% else %}text-gray-600{% endif %}">
-                        {{ check.status }}
+                        {{ check.status_display }}
                     </span>
                 </div>
                 <div class="text-[13px] text-ink-soft mt-0.5">{{ check.message }}</div>
@@ -84,7 +84,7 @@
 {% endfor %}
 
 <p class="text-[12px] text-ink-muted">
-    {% blocktrans %}Quelle: <code>core/services/compliance.py</code>. Aktualisierung bei jedem Reload — kein Caching im MVP.{% endblocktrans %}
+    {% blocktrans %}Quelle: <code>core/services/compliance/</code>. Aktualisierung bei jedem Reload — kein Caching im MVP.{% endblocktrans %}
 </p>
 
 {% endblock %}

@@ -31,6 +31,7 @@ from core.services.compliance import (
     _mfa_checks,
     _retention_checks,
 )
+from core.services.compliance._types import ComplianceCategory
 
 
 def _patch_compliance_now(fixed: datetime):
@@ -122,7 +123,7 @@ class TestRetentionChecks:
         with _patch_compliance_now(entry.timestamp):
             result = _retention_checks()
         assert result[0].status == ComplianceStatus.OK
-        assert result[0].category == "Retention"
+        assert result[0].category == ComplianceCategory.RETENTION
 
 
 # ---------------------------------------------------------------------------

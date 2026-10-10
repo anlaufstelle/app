@@ -1,14 +1,11 @@
-"""Compliance-Datentypen + Konstanten (Refs #919, #958-M3).
-
-Aus dem ehemaligen ``core/services/compliance.py`` extrahiert. Submodule
-importieren von hier, ``__init__.py`` re-exportiert ``ComplianceCheck`` und
-``ComplianceStatus`` fuer Aufrufer.
-"""
+"""Compliance card types and request-time display labels (Refs #2530)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+
+from django.utils.translation import gettext as _
 
 from core.models import AuditLog
 
@@ -20,28 +17,59 @@ class ComplianceStatus(StrEnum):
     UNKNOWN = "unknown"
 
 
+class ComplianceCategory(StrEnum):
+    """Stable grouping and test identifiers, independent of the active language."""
+
+    DATABASE = "database"
+    BACKUP = "backup"
+    VIRUS_SCAN = "virus_scan"
+    RETENTION = "retention"
+    BACKGROUND_JOBS = "background_jobs"
+    MFA = "mfa"
+    AUDIT = "audit"
+    SYSTEM = "system"
+    PERMISSIONS = "permissions"
+
+    @property
+    def display(self) -> str:
+        """Translate when accessed, including after a language override."""
+        return {
+            self.DATABASE: _("Datenbank"),
+            self.BACKUP: _("Backup"),
+            self.VIRUS_SCAN: _("Virus-Scan"),
+            self.RETENTION: _("Retention"),
+            self.BACKGROUND_JOBS: _("Hintergrundjobs"),
+            self.MFA: _("MFA"),
+            self.AUDIT: _("Audit"),
+            self.SYSTEM: _("System"),
+            self.PERMISSIONS: _("Berechtigungen"),
+        }[self]
+
+
 @dataclass(frozen=True)
 class ComplianceCheck:
-    """Ein einzelner Compliance-Check (Refs #919).
-
-    - ``key`` ist stabil und maschinen-lesbar (z.B. ``"db_role_app"``);
-      Tests + Templates verlassen sich darauf.
-    - ``label`` ist UI-Text (z.B. ``"App-DB-Rolle"``).
-    - ``category`` gruppiert Checks in der UI (z.B. ``"Datenbank"``).
-    - ``status`` einer von vier Enum-Werten.
-    - ``message`` ist die kurze Statusmeldung.
-    - ``detail`` ist optionale Zusatz-Info (Wert, Schwellwert, Erklaerung).
-    - ``action_hint`` ist die empfohlene Korrekturmassnahme bei
-      ``warning``/``critical``.
-    """
+    """One card with stable category/status values and translated display text."""
 
     key: str
     label: str
-    category: str
+    category: ComplianceCategory
     status: ComplianceStatus
     message: str
     detail: str | None = None
     action_hint: str | None = None
+
+    @property
+    def category_display(self) -> str:
+        return ComplianceCategory(self.category).display
+
+    @property
+    def status_display(self) -> str:
+        return {
+            ComplianceStatus.OK: _("OK"),
+            ComplianceStatus.WARNING: _("Warnung"),
+            ComplianceStatus.CRITICAL: _("Kritisch"),
+            ComplianceStatus.UNKNOWN: _("Unbekannt"),
+        }[self.status]
 
 
 # Liste der "kritischen" AuditLog-Aktionen fuer Check #11 (Audit-Events

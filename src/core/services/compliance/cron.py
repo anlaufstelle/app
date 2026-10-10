@@ -15,9 +15,9 @@ from __future__ import annotations
 from core.models import AuditLog
 from core.services import ops_thresholds
 from core.services.compliance import _clock
-from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 
-_CATEGORY = "Hintergrundjobs"
+_CATEGORY = ComplianceCategory.BACKGROUND_JOBS
 _CRON_ACTION_HINT = "docker compose -f docker-compose.prod.yml logs cron prüfen (Ops-Runbook § 3.2)."
 
 

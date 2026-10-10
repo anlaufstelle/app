@@ -57,6 +57,7 @@ import pytest
 
 from core.services import compliance
 from core.services.compliance import ComplianceStatus
+from core.services.compliance._types import ComplianceCategory
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -90,7 +91,7 @@ class TestBackupChecksUnknownBranch:
         check = checks[0]
         assert check.key == "backup_age"
         assert check.label == "Letztes Backup"
-        assert check.category == "Backup"
+        assert check.category == ComplianceCategory.BACKUP
         assert check.status == ComplianceStatus.UNKNOWN
         assert check.detail is None
         assert check.action_hint == "settings.BACKUP_DIR pruefen, Cron-Job 'backup.sh' aktivieren."
@@ -117,7 +118,7 @@ class TestBackupChecksOkBranch:
         check = checks[0]
         assert check.key == "backup_age"
         assert check.label == "Letztes Backup"
-        assert check.category == "Backup"
+        assert check.category == ComplianceCategory.BACKUP
         assert check.status == ComplianceStatus.OK
         assert check.message == "Backup ist 6h alt (Schwelle: 36h)."
         assert check.detail == "/var/backups/x.sql (Alter: 6.0h)"
@@ -148,7 +149,7 @@ class TestBackupChecksWarningBranch:
         check = checks[0]
         assert check.key == "backup_age"
         assert check.label == "Letztes Backup"
-        assert check.category == "Backup"
+        assert check.category == ComplianceCategory.BACKUP
         assert check.status == ComplianceStatus.WARNING
         assert check.message == "Backup ist 40h alt — ein Tageslauf fehlt."
         assert check.detail == "/var/backups/x.sql (Alter: 40.0h)"
@@ -183,7 +184,7 @@ class TestBackupChecksCriticalBranch:
         check = checks[0]
         assert check.key == "backup_age"
         assert check.label == "Letztes Backup"
-        assert check.category == "Backup"
+        assert check.category == ComplianceCategory.BACKUP
         assert check.status == ComplianceStatus.CRITICAL
         assert check.message == "Backup ist 60h alt — mindestens zwei Laeufe ausgefallen."
         assert check.detail == "/var/backups/x.sql (Alter: 60.0h)"

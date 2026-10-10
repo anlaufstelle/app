@@ -7,19 +7,19 @@ from collections import OrderedDict, defaultdict
 from django.views.generic import TemplateView
 
 from core.services.compliance import ComplianceStatus, aggregate_checks
+from core.services.compliance._types import ComplianceCategory
 from core.views.system.mixins import SystemAuditMixin
 
-# Render-Reihenfolge der Kategorien — Backup oben, weil DSGVO Art. 32
-# Wiederherstellbarkeit zuerst priorisiert; Versionen ganz unten als Info.
+# Stable category order; version information remains at the bottom.
 _CATEGORY_ORDER = (
-    "Datenbank",
-    "Backup",
-    "Virus-Scan",
-    "Retention",
-    "Hintergrundjobs",
-    "MFA",
-    "Audit",
-    "System",
+    ComplianceCategory.DATABASE,
+    ComplianceCategory.BACKUP,
+    ComplianceCategory.VIRUS_SCAN,
+    ComplianceCategory.RETENTION,
+    ComplianceCategory.BACKGROUND_JOBS,
+    ComplianceCategory.MFA,
+    ComplianceCategory.AUDIT,
+    ComplianceCategory.SYSTEM,
 )
 
 

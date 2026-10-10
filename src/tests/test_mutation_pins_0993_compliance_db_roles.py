@@ -8,7 +8,7 @@ Dataclass, ``==`` vergleicht jedes Feld).
 """
 
 from core.services.compliance import db_roles
-from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 
 
 class TestDbRoleAdminMissingCheck:
@@ -19,7 +19,7 @@ class TestDbRoleAdminMissingCheck:
         assert db_roles._db_role_admin_missing_check(["a fehlt", "b fehlt"]) == ComplianceCheck(
             key="db_role_admin_missing",
             label="Admin-DB-Rolle",
-            category="Datenbank",
+            category=ComplianceCategory.DATABASE,
             status=ComplianceStatus.WARNING,
             message="Admin-/Maintenance-Rolle nicht konfiguriert.",
             detail="a fehlt; b fehlt",

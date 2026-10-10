@@ -5,7 +5,7 @@ from __future__ import annotations
 from django.db.models import Count
 
 from core.models.user import User, mfa_enforced_roles
-from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 
 
 def _mfa_checks() -> list[ComplianceCheck]:
@@ -32,7 +32,7 @@ def _mfa_checks() -> list[ComplianceCheck]:
             ComplianceCheck(
                 key="mfa_privileged_quote",
                 label="MFA-Quote (MFA-pflichtige Rollen)",  # pragma: no mutate
-                category="MFA",  # pragma: no mutate
+                category=ComplianceCategory.MFA,  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
                 message="Keine MFA-pflichtigen User vorhanden.",  # pragma: no mutate
             )
@@ -61,7 +61,7 @@ def _mfa_checks() -> list[ComplianceCheck]:
         ComplianceCheck(
             key="mfa_privileged_quote",
             label="MFA-Quote (MFA-pflichtige Rollen)",  # pragma: no mutate
-            category="MFA",  # pragma: no mutate
+            category=ComplianceCategory.MFA,  # pragma: no mutate
             status=status,
             message=message,
             detail=detail,

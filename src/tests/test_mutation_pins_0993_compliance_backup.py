@@ -10,7 +10,7 @@ verglichen.
 from datetime import UTC, datetime
 
 from core.services.compliance import backup
-from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 from core.services.system import health
 
 
@@ -29,7 +29,7 @@ class TestBackupChecksZukunft:
         assert karte == ComplianceCheck(
             key="backup_age",
             label="Letztes Backup",
-            category="Backup",
+            category=ComplianceCategory.BACKUP,
             status=ComplianceStatus.WARNING,
             message="Zeitstempel der letzten Sicherung liegt in der Zukunft — das Alter ist nicht messbar.",
             detail="/backups/anlaufstelle-2031.sql.gz (Zeitstempel: 2031-05-04 03:02 UTC)",

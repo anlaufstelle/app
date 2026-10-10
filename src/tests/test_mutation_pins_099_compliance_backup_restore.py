@@ -41,6 +41,7 @@ from django.test.utils import CaptureQueriesContext
 
 from core.models import AuditLog
 from core.services.compliance import ComplianceStatus, _restore_checks
+from core.services.compliance._types import ComplianceCategory
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -114,7 +115,7 @@ class TestRestoreChecksUnknownBranch:
         assert check.status == ComplianceStatus.UNKNOWN
         assert check.key == "restore_verified"
         assert check.label == "Restore-Test"
-        assert check.category == "Backup"
+        assert check.category == ComplianceCategory.BACKUP
         assert check.message == "Noch nie ein Restore-Test dokumentiert."
         assert check.action_hint == ("manage.py mark_restore_verified --note '...' nach jedem Test ausfuehren.")
 
@@ -146,7 +147,7 @@ class TestRestoreChecksOkBranch:
         assert check.status == ComplianceStatus.OK
         assert check.key == "restore_verified"
         assert check.label == "Restore-Test"
-        assert check.category == "Backup"
+        assert check.category == ComplianceCategory.BACKUP
         assert check.message == "Letzter Test vor 30 Tagen."
         assert check.detail == f"Letzter Restore-Test: {entry.timestamp:%Y-%m-%d}; Notiz: Testnotiz"
 
@@ -176,7 +177,7 @@ class TestRestoreChecksWarningBranch:
         assert check.status == ComplianceStatus.WARNING
         assert check.key == "restore_verified"
         assert check.label == "Restore-Test"
-        assert check.category == "Backup"
+        assert check.category == ComplianceCategory.BACKUP
         assert check.message == "Letzter Test vor 120 Tagen — Auffrischung empfohlen."
         assert check.detail == f"Letzter Restore-Test: {entry.timestamp:%Y-%m-%d}; Notiz: —"
         assert check.action_hint == ("Restore gegen frische DB testen, dann mark_restore_verified ausfuehren.")
@@ -205,7 +206,7 @@ class TestRestoreChecksCriticalBranch:
         assert check.status == ComplianceStatus.CRITICAL
         assert check.key == "restore_verified"
         assert check.label == "Restore-Test"
-        assert check.category == "Backup"
+        assert check.category == ComplianceCategory.BACKUP
         assert check.message == "Letzter Test vor 400 Tagen — DSGVO Art. 32 verletzt."
         assert check.detail == f"Letzter Restore-Test: {entry.timestamp:%Y-%m-%d}; Notiz: Testnotiz"
         assert check.action_hint == "Restore-Test sofort nachholen und dokumentieren."

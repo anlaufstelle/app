@@ -51,6 +51,7 @@ import pytest
 
 from core.services import compliance
 from core.services.compliance import ComplianceStatus
+from core.services.compliance._types import ComplianceCategory
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -90,14 +91,14 @@ class TestReachableOkSignatureUnknownPingOk:
 
         assert reachability.key == "clamav_reachable"
         assert reachability.label == "ClamAV erreichbar"
-        assert reachability.category == "Virus-Scan"
+        assert reachability.category == ComplianceCategory.VIRUS_SCAN
         assert reachability.status == ComplianceStatus.OK
         assert reachability.message == "Daemon antwortet."
         assert reachability.action_hint is None
 
         assert signature.key == "clamav_signature"
         assert signature.label == "ClamAV-Signatur"
-        assert signature.category == "Virus-Scan"
+        assert signature.category == ComplianceCategory.VIRUS_SCAN
         assert signature.status == ComplianceStatus.UNKNOWN
         assert signature.message == "Signatur-Daten nicht abrufbar."
         assert signature.action_hint == "ClamAV-Container neu starten, dann erneut pruefen."
@@ -127,7 +128,7 @@ class TestReachableCriticalSignatureUnknownPingDown:
 
         assert reachability.key == "clamav_reachable"
         assert reachability.label == "ClamAV erreichbar"
-        assert reachability.category == "Virus-Scan"
+        assert reachability.category == ComplianceCategory.VIRUS_SCAN
         assert reachability.status == ComplianceStatus.CRITICAL
         assert reachability.message == "Daemon nicht erreichbar oder deaktiviert."
         assert reachability.action_hint == "docker compose ps clamav; CLAMAV_ENABLED in .env pruefen."
@@ -155,7 +156,7 @@ class TestSignatureDateUnknown:
         signature = checks[1]
         assert signature.key == "clamav_signature"
         assert signature.label == "ClamAV-Signatur"
-        assert signature.category == "Virus-Scan"
+        assert signature.category == ComplianceCategory.VIRUS_SCAN
         assert signature.status == ComplianceStatus.UNKNOWN
         assert signature.message == "Signatur-Datum nicht ermittelbar."
         assert signature.detail == "Version: unbekannt"
@@ -181,7 +182,7 @@ class TestSignatureFresh:
         signature = checks[1]
         assert signature.key == "clamav_signature"
         assert signature.label == "ClamAV-Signatur"
-        assert signature.category == "Virus-Scan"
+        assert signature.category == ComplianceCategory.VIRUS_SCAN
         assert signature.status == ComplianceStatus.OK
         assert signature.message == "Signatur ist 3 Tag(e) alt."
         assert signature.detail == "Version: unbekannt"
@@ -206,7 +207,7 @@ class TestSignatureStale:
         signature = checks[1]
         assert signature.key == "clamav_signature"
         assert signature.label == "ClamAV-Signatur"
-        assert signature.category == "Virus-Scan"
+        assert signature.category == ComplianceCategory.VIRUS_SCAN
         assert signature.status == ComplianceStatus.WARNING
         assert signature.message == "Signatur ist 30 Tage alt (Schwelle: 7)."
         assert signature.detail == "Version: 1.4.2"

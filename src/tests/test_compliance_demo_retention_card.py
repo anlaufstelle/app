@@ -17,6 +17,7 @@ from core.models import AuditLog
 from core.services import compliance
 from core.services.audit import audit_event
 from core.services.compliance import ComplianceStatus, retention
+from core.services.compliance._types import ComplianceCategory
 
 _DEMO_TEXT = "In der Demo nicht eingerichtet: der Löschlauf würde die stündlich neu erzeugten Beispieldaten löschen."
 _OPERATOR_STEPS = ("enforce_retention", "Cron", "Runbook", "crontab")
@@ -54,7 +55,7 @@ class TestRetentionCardInDemoMode:
         assert card.detail is None
         assert card.action_hint is None
         assert card.label == "Retention-Lauf"
-        assert card.category == "Retention"
+        assert card.category == ComplianceCategory.RETENTION
         assert _no_operator_steps(card)
 
     def test_demo_retention_card_ignores_a_run_marker(self, settings):

@@ -90,7 +90,7 @@ AUTHENTICATED_PAGES = [
 
 SUPER_ADMIN_PAGES = [
     ("system_dashboard", "/system/", "[data-testid='system-cron-card']"),
-    ("system_compliance", "/system/compliance/", "[data-testid='compliance-group-hintergrundjobs']"),
+    ("system_compliance", "/system/compliance/", "[data-testid='compliance-group-background_jobs']"),
 ]
 
 # Seiten fuer den Skip-Link-Funktionstest ohne ``autofocus``: alle drei erben

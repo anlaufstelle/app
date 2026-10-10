@@ -59,6 +59,7 @@ from django.urls import reverse
 
 from core.services import compliance
 from core.services.compliance import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory
 
 LOGGER_NAME = "core.services.compliance"
 
@@ -134,7 +135,7 @@ class TestRunHelpersFehlerCheck:
             ComplianceCheck(
                 key="_internal_boom",
                 label="Interner Fehler: boom",
-                category="System",
+                category=ComplianceCategory.SYSTEM,
                 status=ComplianceStatus.UNKNOWN,
                 message="Check konnte nicht ausgefuehrt werden.",
                 detail=BOOM_DETAIL,
@@ -161,7 +162,7 @@ class TestRunHelpersFehlerCheck:
             ComplianceCheck(
                 key="_internal_unknown_helper",
                 label="Interner Fehler: unknown_helper",
-                category="System",
+                category=ComplianceCategory.SYSTEM,
                 status=ComplianceStatus.UNKNOWN,
                 message="Check konnte nicht ausgefuehrt werden.",
                 detail="kaputt ohne Namen",
@@ -252,9 +253,11 @@ class TestComplianceDashboardUeberlebtHelperFehler:
         groups = response.context["groups"]
         # Die Voraussetzung des Mutanten-Kills: eine Kategorie ausserhalb von
         # _CATEGORY_ORDER ist tatsaechlich vorhanden, der sorted()-Zweig laeuft.
-        assert "Berechtigungen" in groups
+        assert ComplianceCategory.PERMISSIONS in groups
         assert None not in groups
-        internal = [check for check in groups["System"] if check.key == "_internal__db_role_checks_boom"]
+        internal = [
+            check for check in groups[ComplianceCategory.SYSTEM] if check.key == "_internal__db_role_checks_boom"
+        ]
         assert len(internal) == 1
-        assert internal[0].category == "System"
+        assert internal[0].category == ComplianceCategory.SYSTEM
         assert internal[0].status == ComplianceStatus.UNKNOWN

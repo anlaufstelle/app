@@ -16,7 +16,7 @@ from django.utils.translation import gettext as _
 from core.models import AuditLog
 from core.services import ops_thresholds
 from core.services.compliance import _clock
-from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 
 
 def _demo_mode() -> bool:
@@ -35,7 +35,7 @@ def _demo_card(key: str, label: str) -> ComplianceCheck:
     return ComplianceCheck(
         key=key,
         label=label,
-        category="Backup",  # pragma: no mutate
+        category=ComplianceCategory.BACKUP,  # pragma: no mutate
         status=ComplianceStatus.UNKNOWN,
         message=_("In der Demo nicht eingerichtet: die Daten werden stündlich neu erzeugt."),
     )
@@ -54,7 +54,7 @@ def _backup_checks() -> list[ComplianceCheck]:
             ComplianceCheck(
                 key="backup_age",
                 label="Letztes Backup",  # pragma: no mutate
-                category="Backup",  # pragma: no mutate
+                category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
                 message="Kein Backup gefunden oder BACKUP_DIR nicht konfiguriert.",  # pragma: no mutate
                 action_hint="settings.BACKUP_DIR pruefen, Cron-Job 'backup.sh' aktivieren.",  # pragma: no mutate
@@ -68,7 +68,7 @@ def _backup_checks() -> list[ComplianceCheck]:
             ComplianceCheck(
                 key="backup_age",
                 label="Letztes Backup",  # pragma: no mutate
-                category="Backup",  # pragma: no mutate
+                category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
                 message="Zeitstempel der letzten Sicherung liegt in der Zukunft — das Alter ist nicht messbar.",  # pragma: no mutate  # noqa: E501
                 detail=f"{info['path']} (Zeitstempel: {info['mtime']:%Y-%m-%d %H:%M UTC})",
@@ -85,7 +85,7 @@ def _backup_checks() -> list[ComplianceCheck]:
             ComplianceCheck(
                 key="backup_age",
                 label="Letztes Backup",  # pragma: no mutate
-                category="Backup",  # pragma: no mutate
+                category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.OK,
                 message=f"Backup ist {age_hours:.0f}h alt (Schwelle: {ops_thresholds.BACKUP_WARN_HOURS}h).",  # pragma: no mutate  # noqa: E501
                 detail=detail,
@@ -96,7 +96,7 @@ def _backup_checks() -> list[ComplianceCheck]:
             ComplianceCheck(
                 key="backup_age",
                 label="Letztes Backup",  # pragma: no mutate
-                category="Backup",  # pragma: no mutate
+                category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
                 message=f"Backup ist {age_hours:.0f}h alt — ein Tageslauf fehlt.",  # pragma: no mutate
                 detail=detail,
@@ -107,7 +107,7 @@ def _backup_checks() -> list[ComplianceCheck]:
         ComplianceCheck(
             key="backup_age",
             label="Letztes Backup",  # pragma: no mutate
-            category="Backup",  # pragma: no mutate
+            category=ComplianceCategory.BACKUP,  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
             message=f"Backup ist {age_hours:.0f}h alt — mindestens zwei Laeufe ausgefallen.",  # pragma: no mutate
             detail=detail,
@@ -131,7 +131,7 @@ def _restore_checks() -> list[ComplianceCheck]:
             ComplianceCheck(
                 key="restore_verified",
                 label="Restore-Test",  # pragma: no mutate
-                category="Backup",  # pragma: no mutate
+                category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
                 message="Noch nie ein Restore-Test dokumentiert.",  # pragma: no mutate
                 action_hint="manage.py mark_restore_verified --note '...' nach jedem Test ausfuehren.",  # pragma: no mutate # noqa: E501
@@ -144,7 +144,7 @@ def _restore_checks() -> list[ComplianceCheck]:
             ComplianceCheck(
                 key="restore_verified",
                 label="Restore-Test",  # pragma: no mutate
-                category="Backup",  # pragma: no mutate
+                category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.OK,
                 message=f"Letzter Test vor {age_days} Tagen.",  # pragma: no mutate
                 detail=detail,
@@ -155,7 +155,7 @@ def _restore_checks() -> list[ComplianceCheck]:
             ComplianceCheck(
                 key="restore_verified",
                 label="Restore-Test",  # pragma: no mutate
-                category="Backup",  # pragma: no mutate
+                category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
                 message=f"Letzter Test vor {age_days} Tagen — Auffrischung empfohlen.",  # pragma: no mutate
                 detail=detail,
@@ -166,7 +166,7 @@ def _restore_checks() -> list[ComplianceCheck]:
         ComplianceCheck(
             key="restore_verified",
             label="Restore-Test",  # pragma: no mutate
-            category="Backup",  # pragma: no mutate
+            category=ComplianceCategory.BACKUP,  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
             message=f"Letzter Test vor {age_days} Tagen — DSGVO Art. 32 verletzt.",  # pragma: no mutate
             detail=detail,

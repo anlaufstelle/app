@@ -9,13 +9,22 @@ from django.urls import reverse
 
 from core.models import Settings
 from core.services.compliance import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory
 
 
 @pytest.fixture
 def make_check():
     """Factory: ein ``ComplianceCheck`` mit Defaults."""
 
-    def _make(key="k", label="L", category="System", status=ComplianceStatus.OK, message="m", detail=None, hint=None):
+    def _make(
+        key="k",
+        label="L",
+        category=ComplianceCategory.SYSTEM,
+        status=ComplianceStatus.OK,
+        message="m",
+        detail=None,
+        hint=None,
+    ):
         return ComplianceCheck(
             key=key,
             label=label,
@@ -77,7 +86,7 @@ class TestSystemComplianceRender:
             make_check(
                 key="db_role_app_nosuperuser",
                 label="App-DB-Rolle NOSUPERUSER",
-                category="Datenbank",
+                category=ComplianceCategory.DATABASE,
                 status=ComplianceStatus.OK,
                 message="Korrekt konfiguriert.",
                 detail="anlaufstelle: rolsuper=False",
@@ -110,15 +119,15 @@ class TestSystemComplianceRender:
         """Datenbank kommt vor Backup, Audit kommt vor System."""
         client.force_login(super_admin_user)
         fake_checks = [
-            make_check(key="a", category="System"),
-            make_check(key="b", category="Datenbank"),
-            make_check(key="c", category="Audit"),
-            make_check(key="d", category="Backup"),
+            make_check(key="a", category=ComplianceCategory.SYSTEM),
+            make_check(key="b", category=ComplianceCategory.DATABASE),
+            make_check(key="c", category=ComplianceCategory.AUDIT),
+            make_check(key="d", category=ComplianceCategory.BACKUP),
         ]
         with patch("core.views.system.compliance.aggregate_checks", return_value=fake_checks):
             response = client.get(reverse("core:system_compliance"))
         content = response.content.decode("utf-8")
-        db_pos = content.find("compliance-group-datenbank")
+        db_pos = content.find("compliance-group-database")
         backup_pos = content.find("compliance-group-backup")
         audit_pos = content.find("compliance-group-audit")
         system_pos = content.find("compliance-group-system")
@@ -129,15 +138,15 @@ class TestSystemComplianceRender:
         """Refs #794: Kategorie 'Hintergrundjobs' erscheint zwischen Retention und MFA."""
         client.force_login(super_admin_user)
         fake_checks = [
-            make_check(key="mfa1", category="MFA"),
-            make_check(key="job1", category="Hintergrundjobs"),
-            make_check(key="ret1", category="Retention"),
+            make_check(key="mfa1", category=ComplianceCategory.MFA),
+            make_check(key="job1", category=ComplianceCategory.BACKGROUND_JOBS),
+            make_check(key="ret1", category=ComplianceCategory.RETENTION),
         ]
         with patch("core.views.system.compliance.aggregate_checks", return_value=fake_checks):
             response = client.get(reverse("core:system_compliance"))
         content = response.content.decode("utf-8")
         ret_pos = content.find("compliance-group-retention")
-        jobs_pos = content.find("compliance-group-hintergrundjobs")
+        jobs_pos = content.find("compliance-group-background_jobs")
         mfa_pos = content.find("compliance-group-mfa")
         assert 0 <= ret_pos < jobs_pos < mfa_pos
 

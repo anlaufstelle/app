@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 from core.services.file_vault import virus_scan as virus_scan_service
 
 
@@ -12,7 +12,7 @@ def _clamav_checks() -> list[ComplianceCheck]:
     reachability = ComplianceCheck(
         key="clamav_reachable",
         label="ClamAV erreichbar",  # pragma: no mutate
-        category="Virus-Scan",  # pragma: no mutate
+        category=ComplianceCategory.VIRUS_SCAN,  # pragma: no mutate
         status=ComplianceStatus.OK if ping_ok else ComplianceStatus.CRITICAL,
         message="Daemon antwortet." if ping_ok else "Daemon nicht erreichbar oder deaktiviert.",
         action_hint=None if ping_ok else "docker compose ps clamav; CLAMAV_ENABLED in .env pruefen.",
@@ -22,7 +22,7 @@ def _clamav_checks() -> list[ComplianceCheck]:
         signature = ComplianceCheck(
             key="clamav_signature",
             label="ClamAV-Signatur",  # pragma: no mutate
-            category="Virus-Scan",  # pragma: no mutate
+            category=ComplianceCategory.VIRUS_SCAN,  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
             message="Signatur-Daten nicht abrufbar.",  # pragma: no mutate
             action_hint=None if not ping_ok else "ClamAV-Container neu starten, dann erneut pruefen.",
@@ -34,7 +34,7 @@ def _clamav_checks() -> list[ComplianceCheck]:
             signature = ComplianceCheck(
                 key="clamav_signature",
                 label="ClamAV-Signatur",  # pragma: no mutate
-                category="Virus-Scan",  # pragma: no mutate
+                category=ComplianceCategory.VIRUS_SCAN,  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
                 message="Signatur-Datum nicht ermittelbar.",  # pragma: no mutate
                 detail=f"Version: {version}",
@@ -46,7 +46,7 @@ def _clamav_checks() -> list[ComplianceCheck]:
             signature = ComplianceCheck(
                 key="clamav_signature",
                 label="ClamAV-Signatur",  # pragma: no mutate
-                category="Virus-Scan",  # pragma: no mutate
+                category=ComplianceCategory.VIRUS_SCAN,  # pragma: no mutate
                 status=ComplianceStatus.OK,
                 message=f"Signatur ist {age} Tag(e) alt.",  # pragma: no mutate
                 detail=f"Version: {version}",
@@ -55,7 +55,7 @@ def _clamav_checks() -> list[ComplianceCheck]:
             signature = ComplianceCheck(
                 key="clamav_signature",
                 label="ClamAV-Signatur",  # pragma: no mutate
-                category="Virus-Scan",  # pragma: no mutate
+                category=ComplianceCategory.VIRUS_SCAN,  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
                 message=f"Signatur ist {age} Tage alt (Schwelle: 7).",  # pragma: no mutate
                 detail=f"Version: {version}",

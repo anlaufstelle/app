@@ -33,11 +33,12 @@ from core.models import AuditLog
 from core.services import ops_thresholds
 from core.services.audit import audit_event
 from core.services.compliance import ComplianceStatus, db_roles
+from core.services.compliance._types import ComplianceCategory
 
 pytestmark = pytest.mark.django_db
 
 _KEY = "db_role_admin"
-_CATEGORY = "Datenbank"
+_CATEGORY = ComplianceCategory.DATABASE
 
 
 class _StandInEntry:

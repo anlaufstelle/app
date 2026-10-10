@@ -31,6 +31,7 @@ from django.conf import settings
 
 from core.services.compliance._types import (
     _CRITICAL_AUDIT_ACTIONS,
+    ComplianceCategory,
     ComplianceCheck,
     ComplianceStatus,
 )
@@ -124,7 +125,7 @@ def _run_helpers(helpers) -> list[ComplianceCheck]:
                 ComplianceCheck(
                     key=f"_internal_{name}",
                     label=f"Interner Fehler: {name}",
-                    category="System",  # pragma: no mutate
+                    category=ComplianceCategory.SYSTEM,  # pragma: no mutate
                     status=ComplianceStatus.UNKNOWN,
                     message="Check konnte nicht ausgefuehrt werden.",  # pragma: no mutate
                     detail=str(exc),

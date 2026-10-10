@@ -22,7 +22,7 @@ Dieser Check betrachtet ausschliesslich das Django-``User.is_superuser``-Feld
 
 from __future__ import annotations
 
-from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 
 
 def _app_superuser_checks() -> list[ComplianceCheck]:
@@ -35,7 +35,7 @@ def _app_superuser_checks() -> list[ComplianceCheck]:
             ComplianceCheck(
                 key="app_user_no_django_superuser",
                 label="App-User kein Django-Superuser",  # pragma: no mutate
-                category="Berechtigungen",  # pragma: no mutate
+                category=ComplianceCategory.PERMISSIONS,  # pragma: no mutate
                 status=ComplianceStatus.OK,
                 message="Kein App-User traegt Djangos is_superuser-Flag.",  # pragma: no mutate
             )
@@ -47,7 +47,7 @@ def _app_superuser_checks() -> list[ComplianceCheck]:
         ComplianceCheck(
             key="app_user_no_django_superuser",
             label="App-User kein Django-Superuser",  # pragma: no mutate
-            category="Berechtigungen",  # pragma: no mutate
+            category=ComplianceCategory.PERMISSIONS,  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
             message=f"{len(offenders)} App-User mit is_superuser=True.",  # pragma: no mutate
             detail=listing,

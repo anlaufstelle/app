@@ -15,7 +15,7 @@ from django.utils.translation import gettext as _
 from core.models import AuditLog, Facility
 from core.services import ops_thresholds
 from core.services.compliance import _clock
-from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 
 
 def _retention_config_checks() -> list[ComplianceCheck]:
@@ -51,7 +51,7 @@ def _retention_config_checks() -> list[ComplianceCheck]:
         ComplianceCheck(
             key="auditlog_retention_unlimited",
             label="Audit-Log-Aufbewahrung",  # pragma: no mutate
-            category="Retention",  # pragma: no mutate
+            category=ComplianceCategory.RETENTION,  # pragma: no mutate
             status=ComplianceStatus.WARNING,
             message=message,
             action_hint=action_hint,
@@ -71,7 +71,7 @@ def _demo_retention_card() -> ComplianceCheck:
     return ComplianceCheck(
         key="retention_last_run",
         label="Retention-Lauf",  # pragma: no mutate
-        category="Retention",  # pragma: no mutate
+        category=ComplianceCategory.RETENTION,  # pragma: no mutate
         status=ComplianceStatus.UNKNOWN,
         message=_(
             "In der Demo nicht eingerichtet: der Löschlauf würde die stündlich neu erzeugten Beispieldaten löschen."
@@ -94,7 +94,7 @@ def _retention_checks() -> list[ComplianceCheck]:
             ComplianceCheck(
                 key="retention_last_run",
                 label="Retention-Lauf",  # pragma: no mutate
-                category="Retention",  # pragma: no mutate
+                category=ComplianceCategory.RETENTION,  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
                 message="Noch kein RETENTION_RUN_COMPLETED-Eintrag — Cron lief vielleicht nie.",  # pragma: no mutate
                 action_hint="enforce_retention-Cron pruefen (Ops-Runbook §6).",  # pragma: no mutate
@@ -123,7 +123,7 @@ def _retention_checks() -> list[ComplianceCheck]:
         ComplianceCheck(
             key="retention_last_run",
             label="Retention-Lauf",  # pragma: no mutate
-            category="Retention",  # pragma: no mutate
+            category=ComplianceCategory.RETENTION,  # pragma: no mutate
             status=status,
             message=message,
             detail=detail,

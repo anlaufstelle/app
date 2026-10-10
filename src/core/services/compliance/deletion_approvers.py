@@ -13,7 +13,7 @@ from django.db.models import Count, Q
 from django.utils.translation import gettext as _
 
 from core.models import Facility
-from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 
 MIN_APPROVERS = 2
 
@@ -54,10 +54,9 @@ def _deletion_approver_checks() -> list[ComplianceCheck]:
     return [
         ComplianceCheck(
             key="deletion_approvers",
-            # Translated per request; the dashboard groups by this value, so every card
-            # of one request shares the same language.
+            # Grouping uses the stable category key in every language.
             label=_("Genehmiger für Löschanträge"),  # pragma: no mutate
-            category=_("Berechtigungen"),  # pragma: no mutate
+            category=ComplianceCategory.PERMISSIONS,  # pragma: no mutate
             status=status,
             message=" ".join(parts),
             detail=detail,

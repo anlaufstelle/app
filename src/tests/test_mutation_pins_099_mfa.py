@@ -42,6 +42,7 @@ import pytest
 from core.models import EncryptedTOTPDevice
 from core.models.user import User, mfa_enforced_roles
 from core.services.compliance import ComplianceStatus
+from core.services.compliance._types import ComplianceCategory
 from core.services.compliance.mfa import _mfa_checks
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
@@ -77,7 +78,7 @@ class TestUnknownBranchFullWording:
 
         assert checks[0].key == "mfa_privileged_quote"
         assert checks[0].label == "MFA-Quote (MFA-pflichtige Rollen)"
-        assert checks[0].category == "MFA"
+        assert checks[0].category == ComplianceCategory.MFA
         assert checks[0].status == ComplianceStatus.UNKNOWN
         assert checks[0].message == "Keine MFA-pflichtigen User vorhanden."
 
@@ -111,7 +112,7 @@ class TestOkBranchFullWording:
 
         assert checks[0].key == "mfa_privileged_quote"
         assert checks[0].label == "MFA-Quote (MFA-pflichtige Rollen)"
-        assert checks[0].category == "MFA"
+        assert checks[0].category == ComplianceCategory.MFA
         assert checks[0].status == ComplianceStatus.OK
         assert checks[0].message == "100 % der MFA-pflichtigen Rollen haben MFA aktiv."
         assert checks[0].detail == "1 von 1 MFA-pflichtigen Usern haben MFA aktiv."
@@ -145,7 +146,7 @@ class TestWarningBranchFullWording:
 
         assert checks[0].key == "mfa_privileged_quote"
         assert checks[0].label == "MFA-Quote (MFA-pflichtige Rollen)"
-        assert checks[0].category == "MFA"
+        assert checks[0].category == ComplianceCategory.MFA
         assert checks[0].status == ComplianceStatus.WARNING
         assert checks[0].message == "80 % MFA-Quote — Lücke schliessen."
         assert checks[0].detail == "4 von 5 MFA-pflichtigen Usern haben MFA aktiv."
@@ -180,7 +181,7 @@ class TestCriticalBranchFullWording:
 
         assert checks[0].key == "mfa_privileged_quote"
         assert checks[0].label == "MFA-Quote (MFA-pflichtige Rollen)"
-        assert checks[0].category == "MFA"
+        assert checks[0].category == ComplianceCategory.MFA
         assert checks[0].status == ComplianceStatus.CRITICAL
         assert checks[0].message == "Nur 66.7 % der MFA-pflichtigen Rollen haben MFA — Risiko."
         assert checks[0].detail == "2 von 3 MFA-pflichtigen Usern haben MFA aktiv."

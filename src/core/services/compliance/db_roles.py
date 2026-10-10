@@ -28,7 +28,7 @@ from core.models import AuditLog
 from core.services import ops_thresholds
 from core.services.audit import audit_event
 from core.services.compliance import _clock
-from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 from core.utils.migration_guards import connection_bypasses_rls
 
 
@@ -412,7 +412,7 @@ def _db_role_marker_check(entry) -> ComplianceCheck:
             return ComplianceCheck(
                 key="db_role_admin",
                 label="Admin-DB-Rolle",  # pragma: no mutate
-                category="Datenbank",  # pragma: no mutate
+                category=ComplianceCategory.DATABASE,  # pragma: no mutate
                 status=ComplianceStatus.OK,
                 message=_("Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS), App-Rolle und Ownership ebenfalls."),
                 detail=checked,
@@ -420,7 +420,7 @@ def _db_role_marker_check(entry) -> ComplianceCheck:
         return ComplianceCheck(
             key="db_role_admin",
             label="Admin-DB-Rolle",  # pragma: no mutate
-            category="Datenbank",  # pragma: no mutate
+            category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.WARNING,
             message=_("Letzte Rollenprüfung ist älter als %(days)s Tage.")
             % {"days": ops_thresholds.DB_ROLES_CHECK_WARN_DAYS},
@@ -431,7 +431,7 @@ def _db_role_marker_check(entry) -> ComplianceCheck:
         return ComplianceCheck(
             key="db_role_admin",
             label="Admin-DB-Rolle",  # pragma: no mutate
-            category="Datenbank",  # pragma: no mutate
+            category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.WARNING,
             message=_("Rollenprüfung unvollständig: nicht jede Rolle ist konfiguriert."),
             detail=_("%(checked)s Befunde: %(findings)s") % {"checked": checked, "findings": findings},
@@ -443,7 +443,7 @@ def _db_role_marker_check(entry) -> ComplianceCheck:
     return ComplianceCheck(
         key="db_role_admin",
         label="Admin-DB-Rolle",  # pragma: no mutate
-        category="Datenbank",  # pragma: no mutate
+        category=ComplianceCategory.DATABASE,  # pragma: no mutate
         status=ComplianceStatus.CRITICAL,
         message=_("Letzte Rollenprüfung meldet Befunde."),
         detail=_("%(checked)s Befunde: %(findings)s") % {"checked": checked, "findings": findings},
@@ -518,7 +518,7 @@ def _db_role_admin_missing_check(config_errors: list[str]) -> ComplianceCheck:
         return ComplianceCheck(
             key="db_role_admin_missing",
             label="Admin-DB-Rolle",  # pragma: no mutate
-            category="Datenbank",  # pragma: no mutate
+            category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.WARNING,
             message="Admin-/Maintenance-Rolle nicht konfiguriert.",  # pragma: no mutate
             detail="; ".join(config_errors),
@@ -530,7 +530,7 @@ def _db_role_admin_missing_check(config_errors: list[str]) -> ComplianceCheck:
     return ComplianceCheck(
         key="db_role_admin_missing",
         label="Admin-DB-Rolle",  # pragma: no mutate
-        category="Datenbank",  # pragma: no mutate
+        category=ComplianceCategory.DATABASE,  # pragma: no mutate
         status=ComplianceStatus.UNKNOWN,
         message="Im Web-Container nicht prüfbar — Prüfung über den Wartungsdienst.",  # pragma: no mutate
         detail="; ".join(config_errors),
@@ -549,7 +549,7 @@ def _db_role_attribute_check(role_check, attr: str, key: str, label: str) -> Com
         return ComplianceCheck(
             key=key,
             label=label,
-            category="Datenbank",  # pragma: no mutate
+            category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
             message=f"Rolle '{role_check.role}' nicht in pg_roles gefunden.",  # pragma: no mutate
             action_hint="DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh.",  # pragma: no mutate
@@ -558,7 +558,7 @@ def _db_role_attribute_check(role_check, attr: str, key: str, label: str) -> Com
         return ComplianceCheck(
             key=key,
             label=label,
-            category="Datenbank",  # pragma: no mutate
+            category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.OK,
             message="Korrekt konfiguriert.",  # pragma: no mutate
             detail=f"{role_check.role}: {attr}={actual}",
@@ -566,7 +566,7 @@ def _db_role_attribute_check(role_check, attr: str, key: str, label: str) -> Com
     return ComplianceCheck(
         key=key,
         label=label,
-        category="Datenbank",  # pragma: no mutate
+        category=ComplianceCategory.DATABASE,  # pragma: no mutate
         status=ComplianceStatus.CRITICAL,
         message=f"Rolle '{role_check.role}' hat falsches Attributprofil.",  # pragma: no mutate
         detail=f"{attr}={actual} (erwartet: {expected})",
@@ -580,7 +580,7 @@ def _db_role_admin_check(role_check) -> ComplianceCheck:
         return ComplianceCheck(
             key="db_role_admin",
             label="Admin-DB-Rolle",  # pragma: no mutate
-            category="Datenbank",  # pragma: no mutate
+            category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
             message=f"Admin-Rolle '{role_check.role}' nicht in pg_roles gefunden.",  # pragma: no mutate
             action_hint="DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh.",  # pragma: no mutate
@@ -589,7 +589,7 @@ def _db_role_admin_check(role_check) -> ComplianceCheck:
         return ComplianceCheck(
             key="db_role_admin",
             label="Admin-DB-Rolle",  # pragma: no mutate
-            category="Datenbank",  # pragma: no mutate
+            category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.OK,
             message="Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS).",  # pragma: no mutate
             detail=f"{role_check.role}: rolsuper={role_check.actual_super}, rolbypassrls={role_check.actual_bypassrls}",
@@ -597,7 +597,7 @@ def _db_role_admin_check(role_check) -> ComplianceCheck:
     return ComplianceCheck(
         key="db_role_admin",
         label="Admin-DB-Rolle",  # pragma: no mutate
-        category="Datenbank",  # pragma: no mutate
+        category=ComplianceCategory.DATABASE,  # pragma: no mutate
         status=ComplianceStatus.CRITICAL,
         message="Admin-Rolle hat falsches Attributprofil.",  # pragma: no mutate
         detail="; ".join(role_check.problems()),

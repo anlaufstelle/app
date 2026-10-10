@@ -48,7 +48,7 @@ def _card(page, key):
 def _open_dashboard(page, base_url):
     page.goto(f"{base_url}{_COMPLIANCE}")
     page.wait_for_load_state("domcontentloaded")
-    expect(page.locator("[data-testid='compliance-group-datenbank']")).to_be_visible(timeout=30000)
+    expect(page.locator("[data-testid='compliance-group-database']")).to_be_visible(timeout=30000)
 
 
 def _demo_enabled(base_url, browser):

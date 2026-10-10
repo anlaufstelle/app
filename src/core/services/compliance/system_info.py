@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 
 
 def _migration_checks() -> list[ComplianceCheck]:
@@ -18,7 +18,7 @@ def _migration_checks() -> list[ComplianceCheck]:
             ComplianceCheck(
                 key="migrations_pending",
                 label="Migrationen",  # pragma: no mutate
-                category="System",  # pragma: no mutate
+                category=ComplianceCategory.SYSTEM,  # pragma: no mutate
                 status=ComplianceStatus.OK,
                 message="Alle Migrationen angewendet.",  # pragma: no mutate
             )
@@ -30,7 +30,7 @@ def _migration_checks() -> list[ComplianceCheck]:
         ComplianceCheck(
             key="migrations_pending",
             label="Migrationen",  # pragma: no mutate
-            category="System",  # pragma: no mutate
+            category=ComplianceCategory.SYSTEM,  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
             message=f"{len(pending)} ausstehende Migration(en).",  # pragma: no mutate
             detail=listing,
@@ -49,7 +49,7 @@ def _version_checks() -> list[ComplianceCheck]:
         ComplianceCheck(
             key="versions",
             label="Versionen",  # pragma: no mutate
-            category="System",  # pragma: no mutate
+            category=ComplianceCategory.SYSTEM,  # pragma: no mutate
             status=ComplianceStatus.OK,
             message=message,
         )

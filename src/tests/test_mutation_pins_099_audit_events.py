@@ -29,7 +29,7 @@ import pytest
 
 from core.models import AuditLog
 from core.services.compliance import ComplianceStatus
-from core.services.compliance._types import _CRITICAL_AUDIT_ACTIONS
+from core.services.compliance._types import _CRITICAL_AUDIT_ACTIONS, ComplianceCategory
 from core.services.compliance.audit_events import _audit_event_checks
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
@@ -54,7 +54,7 @@ class TestOkBranchFullWording:
 
         assert checks[0].key == "critical_audit_events_24h"
         assert checks[0].label == "Kritische Audit-Events (24h)"
-        assert checks[0].category == "Audit"
+        assert checks[0].category == ComplianceCategory.AUDIT
         assert checks[0].status == ComplianceStatus.OK
         assert checks[0].message == "Keine kritischen Events in den letzten 24h."
         assert checks[0].detail == (
@@ -91,7 +91,7 @@ class TestWarningBranchFullWording:
 
         assert checks[0].key == "critical_audit_events_24h"
         assert checks[0].label == "Kritische Audit-Events (24h)"
-        assert checks[0].category == "Audit"
+        assert checks[0].category == ComplianceCategory.AUDIT
         assert checks[0].status == ComplianceStatus.WARNING
         assert checks[0].message == "3 kritische Event(s) in 24h."
         assert checks[0].detail == (
@@ -126,7 +126,7 @@ class TestCriticalBranchFullWording:
 
         assert checks[0].key == "critical_audit_events_24h"
         assert checks[0].label == "Kritische Audit-Events (24h)"
-        assert checks[0].category == "Audit"
+        assert checks[0].category == ComplianceCategory.AUDIT
         assert checks[0].status == ComplianceStatus.CRITICAL
         assert checks[0].message == "7 kritische Event(s) in 24h — moeglicher Vorfall."
         assert checks[0].detail == "Im System-Audit-Log dringend pruefen."

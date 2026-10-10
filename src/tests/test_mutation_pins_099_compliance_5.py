@@ -73,6 +73,7 @@ import pytest
 from core.models.user import User
 from core.services import compliance
 from core.services.compliance import ComplianceStatus
+from core.services.compliance._types import ComplianceCategory
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -116,7 +117,7 @@ class TestMigrationChecksOkNoPending:
         check = checks[0]
         assert check.key == "migrations_pending"
         assert check.label == "Migrationen"
-        assert check.category == "System"
+        assert check.category == ComplianceCategory.SYSTEM
         assert check.status == ComplianceStatus.OK
         assert check.message == "Alle Migrationen angewendet."
         assert check.detail is None
@@ -144,7 +145,7 @@ class TestMigrationChecksCriticalFewPending:
         check = checks[0]
         assert check.key == "migrations_pending"
         assert check.label == "Migrationen"
-        assert check.category == "System"
+        assert check.category == ComplianceCategory.SYSTEM
         assert check.status == ComplianceStatus.CRITICAL
         assert check.message == "3 ausstehende Migration(en)."
         assert check.detail == "core.0201_test, core.0202_test, core.0203_test"
@@ -222,7 +223,7 @@ class TestVersionChecksFullWording:
         check = checks[0]
         assert check.key == "versions"
         assert check.label == "Versionen"
-        assert check.category == "System"
+        assert check.category == ComplianceCategory.SYSTEM
         assert check.status == ComplianceStatus.OK
         assert "Django" in check.message
         assert "Python" in check.message
@@ -245,7 +246,7 @@ class TestAppSuperuserChecksOkNoOffenders:
         check = checks[0]
         assert check.key == "app_user_no_django_superuser"
         assert check.label == "App-User kein Django-Superuser"
-        assert check.category == "Berechtigungen"
+        assert check.category == ComplianceCategory.PERMISSIONS
         assert check.status == ComplianceStatus.OK
         assert check.message == "Kein App-User traegt Djangos is_superuser-Flag."
         assert check.detail is None
@@ -274,7 +275,7 @@ class TestAppSuperuserChecksCriticalFewOffenders:
         check = checks[0]
         assert check.key == "app_user_no_django_superuser"
         assert check.label == "App-User kein Django-Superuser"
-        assert check.category == "Berechtigungen"
+        assert check.category == ComplianceCategory.PERMISSIONS
         assert check.status == ComplianceStatus.CRITICAL
         assert check.message == "3 App-User mit is_superuser=True."
         assert check.detail == ", ".join(offenders)

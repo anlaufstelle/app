@@ -18,6 +18,7 @@ from core.forms.user_access import UserAccessCreateForm
 from core.models import AuditLog, Facility, User
 from core.services import compliance
 from core.services.compliance import ComplianceStatus
+from core.services.compliance._types import ComplianceCategory
 
 pytestmark = pytest.mark.django_db
 
@@ -102,22 +103,29 @@ class TestComplianceApproverCard:
 
         assert "Genehmiger für Löschanträge" in content
 
-    def test_label_and_category_are_translated(self, facility):
+    def test_label_and_category_display_are_translated(self, facility):
         with patch("core.services.compliance.deletion_approvers._", side_effect=lambda text: f"[{text}]"):
             card = self._card()
 
         assert card.label == "[Genehmiger für Löschanträge]"
-        assert card.category == "[Berechtigungen]"
+        assert card.category == ComplianceCategory.PERMISSIONS
+        with patch("core.services.compliance._types._", side_effect=lambda text: f"[{text}]"):
+            assert card.category_display == "[Berechtigungen]"
 
-    def test_dashboard_groups_the_card_under_the_translated_category(self, client, super_admin_user, facility):
+    def test_dashboard_groups_the_card_by_key_with_a_translated_heading(self, client, super_admin_user, facility):
         client.force_login(super_admin_user)
 
-        with patch("core.services.compliance.deletion_approvers._", side_effect=lambda text: f"[{text}]"):
+        with (
+            patch("core.services.compliance.deletion_approvers._", side_effect=lambda text: f"[{text}]"),
+            patch("core.services.compliance._types._", side_effect=lambda text: f"[{text}]"),
+        ):
             response = client.get(reverse("core:system_compliance"))
 
-        group = response.context["groups"]["[Berechtigungen]"]
-        assert [check.key for check in group] == ["deletion_approvers"]
+        group = response.context["groups"][ComplianceCategory.PERMISSIONS]
+        assert [check.key for check in group] == ["app_user_no_django_superuser", "deletion_approvers"]
         assert "[Genehmiger für Löschanträge]" in response.content.decode()
+        assert "[Berechtigungen]" in response.content.decode()
+        assert 'data-testid="compliance-group-permissions"' in response.content.decode()
 
 
 def _create_form(facility, actor, **overrides):

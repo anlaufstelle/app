@@ -12,6 +12,7 @@ from django.utils import timezone
 from core.models import AuditLog, Facility, Settings
 from core.models.user import User
 from core.services import compliance
+from core.services.compliance._types import ComplianceCategory
 
 
 def _make_role_check(label: str, role: str, actual_super: bool | None, actual_bypassrls: bool | None):
@@ -38,7 +39,15 @@ class TestAggregateChecks:
     def test_includes_all_categories(self):
         result = compliance.aggregate_checks()
         categories = {c.category for c in result}
-        assert {"Datenbank", "Backup", "Virus-Scan", "Retention", "MFA", "System", "Audit"} <= categories
+        assert {
+            ComplianceCategory.DATABASE,
+            ComplianceCategory.BACKUP,
+            ComplianceCategory.VIRUS_SCAN,
+            ComplianceCategory.RETENTION,
+            ComplianceCategory.MFA,
+            ComplianceCategory.SYSTEM,
+            ComplianceCategory.AUDIT,
+        } <= categories
 
     def test_single_helper_failure_does_not_crash_aggregator(self):
         with patch.object(compliance, "_db_role_checks", side_effect=RuntimeError("boom")):
@@ -107,7 +116,7 @@ class TestAuditChainChecks:
         AuditLog.objects.filter(action=AuditLog.Action.AUDIT_CHAIN_VERIFIED).delete()
         checks = compliance._audit_chain_checks()
         assert checks[0].key == "audit_chain_last_run"
-        assert checks[0].category == "Hintergrundjobs"
+        assert checks[0].category == ComplianceCategory.BACKGROUND_JOBS
         assert checks[0].status == compliance.ComplianceStatus.UNKNOWN
 
     def test_ok_when_fresh(self):
@@ -503,7 +512,7 @@ class TestRetentionConfigurationChecks:
 
         assert warning is not None
         assert warning.status == compliance.ComplianceStatus.WARNING
-        assert warning.category == "Retention"
+        assert warning.category == ComplianceCategory.RETENTION
         assert "1 von 1 Einrichtungen" in warning.message
         assert facility.name in warning.message
         assert "Einstellungen" in (warning.action_hint or "")

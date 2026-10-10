@@ -38,6 +38,7 @@ from django.utils import translation
 from core.forms.clients import ClientForm, ClientInlineCreateForm
 from core.models import Client, DocumentType
 from core.services.compliance import ComplianceStatus, db_roles
+from core.services.compliance._types import ComplianceCategory
 from core.services.compliance.db_roles import RoleCheck
 from core.services.system import _db_admin
 from core.services.system._db_admin import current_connection_owns, has_rls_bypass_context
@@ -759,7 +760,7 @@ class TestAttributeCheckKeepsItsDisplayFields:
 
         assert result.status == ComplianceStatus.UNKNOWN
         assert result.label == "App-DB-Rolle NOSUPERUSER"
-        assert result.category == "Datenbank"
+        assert result.category == ComplianceCategory.DATABASE
         assert result.action_hint == _ROLE_SETUP_HINT
 
     def test_ok_branch_keeps_label_and_category(self):
@@ -778,7 +779,7 @@ class TestAttributeCheckKeepsItsDisplayFields:
 
         assert result.status == ComplianceStatus.OK
         assert result.label == "App-DB-Rolle NOSUPERUSER"
-        assert result.category == "Datenbank"
+        assert result.category == ComplianceCategory.DATABASE
         assert result.action_hint is None
 
     def test_critical_branch_keeps_label_category_and_action_hint(self):
@@ -801,7 +802,7 @@ class TestAttributeCheckKeepsItsDisplayFields:
 
         assert result.status == ComplianceStatus.CRITICAL
         assert result.label == "App-DB-Rolle NOSUPERUSER"
-        assert result.category == "Datenbank"
+        assert result.category == ComplianceCategory.DATABASE
         assert result.action_hint == "manage.py check_db_roles + Rollen-Init-Script pruefen (Refs #902)."
 
 
@@ -893,7 +894,7 @@ class TestAdminCheckKeepsItsDisplayFields:
 
         assert result.status == ComplianceStatus.UNKNOWN
         assert result.label == "Admin-DB-Rolle"
-        assert result.category == "Datenbank"
+        assert result.category == ComplianceCategory.DATABASE
         assert result.action_hint == _ROLE_SETUP_HINT
 
     def test_ok_branch_keeps_label_and_category(self):
@@ -905,7 +906,7 @@ class TestAdminCheckKeepsItsDisplayFields:
 
         assert result.status == ComplianceStatus.OK
         assert result.label == "Admin-DB-Rolle"
-        assert result.category == "Datenbank"
+        assert result.category == ComplianceCategory.DATABASE
         assert result.action_hint is None
 
     def test_critical_branch_keeps_label_category_and_action_hint(self):
@@ -924,7 +925,7 @@ class TestAdminCheckKeepsItsDisplayFields:
 
         assert result.status == ComplianceStatus.CRITICAL
         assert result.label == "Admin-DB-Rolle"
-        assert result.category == "Datenbank"
+        assert result.category == ComplianceCategory.DATABASE
         assert result.action_hint == "deploy/postgres-init/01-app-role.sh pruefen (Refs #902)."
 
 
@@ -1037,7 +1038,7 @@ class TestDbRoleChecksBuildsCompleteCards:
         card = next(c for c in checks if c.key == "db_role_admin_missing")
         assert card.status == ComplianceStatus.UNKNOWN
         assert card.label == "Admin-DB-Rolle"
-        assert card.category == "Datenbank"
+        assert card.category == ComplianceCategory.DATABASE
         assert card.message == "Im Web-Container nicht prüfbar — Prüfung über den Wartungsdienst."
         assert card.detail == "erster Konfigurationshinweis; zweiter Konfigurationshinweis"
         assert card.action_hint == (

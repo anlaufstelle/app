@@ -17,7 +17,7 @@ class TestComplianceCronChecks:
         page = super_admin_page
         page.goto(f"{base_url}/system/compliance/")
         page.wait_for_load_state("domcontentloaded")
-        group = page.locator("[data-testid='compliance-group-hintergrundjobs']")
+        group = page.locator("[data-testid='compliance-group-background_jobs']")
         expect(group).to_be_visible()
         expect(group).to_contain_text("Hintergrundjobs")
 
