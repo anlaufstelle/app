@@ -90,29 +90,31 @@ class EventHistory(models.Model):
         from core.services.file_vault import encrypt_field, is_encrypted_value
 
         payloads = (self.data_before, self.data_after)
+        # Empty and redacted history carries no values needing protection.
+        if not any(isinstance(payload, dict) and payload and not is_redaction_marker(payload) for payload in payloads):
+            return super().save(*args, **kwargs)
         with transaction.atomic():
-            if any(isinstance(payload, dict) and payload and not is_redaction_marker(payload) for payload in payloads):
-                lock_dynamic_protection(self.event.facility_id)
-                encrypted_slugs = set(
-                    FieldTemplate.objects.for_facility(self.event.facility_id)
-                    .filter(is_encrypted=True)
-                    .values_list("slug", flat=True)
-                )
-                encrypted_slugs.update(
-                    slug
-                    for slug, metadata in self.field_metadata.items()
-                    if isinstance(metadata, dict) and metadata.get("is_encrypted") is True
-                )
-                for payload in payloads:
-                    if not isinstance(payload, dict) or is_redaction_marker(payload):
+            lock_dynamic_protection(self.event.facility_id)
+            encrypted_slugs = set(
+                FieldTemplate.objects.for_facility(self.event.facility_id)
+                .filter(is_encrypted=True)
+                .values_list("slug", flat=True)
+            )
+            encrypted_slugs.update(
+                slug
+                for slug, metadata in self.field_metadata.items()
+                if isinstance(metadata, dict) and metadata.get("is_encrypted") is True
+            )
+            for payload in payloads:
+                if not isinstance(payload, dict) or is_redaction_marker(payload):
+                    continue
+                for slug in encrypted_slugs:
+                    value = payload.get(slug)
+                    if value is None or value == "" or is_encrypted_value(value):
                         continue
-                    for slug in encrypted_slugs:
-                        value = payload.get(slug)
-                        if value is None or value == "" or is_encrypted_value(value):
-                            continue
-                        if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
-                            continue
-                        payload[slug] = encrypt_field(value)
+                    if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
+                        continue
+                    payload[slug] = encrypt_field(value)
             super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):

@@ -86,37 +86,38 @@ def dynamic_data_write(record, update_fields=None):
                 + ", ".join(sorted(required_fields))
                 + " in update_fields"
             )
+    writes_data = update_fields is None or "data_json" in update_fields
+    writes_index = update_fields is None or "search_text" in update_fields
+    # Empty data and unrelated updates need no protection decision or savepoint.
+    if not record.data_json or not (writes_data or writes_index):
+        yield
+        return
     with transaction.atomic():
-        writes_data = update_fields is None or "data_json" in update_fields
-        writes_index = update_fields is None or "search_text" in update_fields
-        if record.data_json and (writes_data or writes_index):
-            lock_dynamic_protection(record.facility_id)
-            from core.models import DocumentType
+        lock_dynamic_protection(record.facility_id)
+        from core.models import DocumentType
 
-            if (
-                not record._state.adding
-                and update_fields is not None
-                and "document_type" not in update_fields
-                and "document_type_id" not in update_fields
-            ):
-                current = (
-                    type(record)
-                    .objects.for_facility(record.facility_id)
-                    .filter(pk=record.pk)
-                    .select_for_update(of=("self",))
-                    .values_list("document_type_id")
-                    .first()
-                )
-                if current is None:
-                    raise ValidationError(_("Der Datensatz ist nicht mehr vorhanden."))
-                record.document_type_id = current[0]
-            if (
-                record.document_type_id is not None
-                and not DocumentType.objects.for_facility(record.facility_id)
-                .filter(pk=record.document_type_id)
-                .exists()
-            ):
-                raise ValidationError(_("Dynamische Daten benötigen einen Dokumentationstyp derselben Einrichtung."))
+        if (
+            not record._state.adding
+            and update_fields is not None
+            and "document_type" not in update_fields
+            and "document_type_id" not in update_fields
+        ):
+            current = (
+                type(record)
+                .objects.for_facility(record.facility_id)
+                .filter(pk=record.pk)
+                .select_for_update(of=("self",))
+                .values_list("document_type_id")
+                .first()
+            )
+            if current is None:
+                raise ValidationError(_("Der Datensatz ist nicht mehr vorhanden."))
+            record.document_type_id = current[0]
+        if (
+            record.document_type_id is not None
+            and not DocumentType.objects.for_facility(record.facility_id).filter(pk=record.document_type_id).exists()
+        ):
+            raise ValidationError(_("Dynamische Daten benötigen einen Dokumentationstyp derselben Einrichtung."))
         yield
 
 
