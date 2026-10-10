@@ -1045,6 +1045,20 @@ def create_proposals_for_facility(facility, settings_obj, now, *, qualified_only
                 .first()
             )
             if latest is not None:
+                # Target locks and protection rechecks above also cover expired
+                # proposal holds. Restore review, never approval (Refs #2524).
+                if latest.status == RetentionProposal.Status.HELD:
+                    latest.status = RetentionProposal.Status.PENDING
+                    latest.save(update_fields=["status"])
+                    audit_retention_decision(
+                        facility,
+                        target_type=latest.target_type,
+                        target_id=latest.target_id,
+                        action=AuditLog.Action.DELETE,
+                        category="retention_proposal_reactivated",
+                        retention_category=latest.retention_category,
+                        reason="legal_hold_expired",
+                    )
                 if latest.status != RetentionProposal.Status.REJECTED:
                     continue
                 if latest.rejected_at is None or now < latest.rejected_at + timedelta(days=retry_days):
