@@ -394,14 +394,15 @@ def diagnose_type_bindings(document_type, facility) -> list[str]:
     return [warning for backend in get_backends() if (warning := _diagnose_backend(backend, document_type, facility))]
 
 
-def _linked_types(field_template, facility):
+def _linked_types(field_template, facility, *, active_only=True):
     from core.models import DocumentType
 
-    return (
-        DocumentType.objects.for_facility(facility)
-        .filter(fields__field_template=field_template, fields__field_template__facility=facility, is_active=True)
-        .distinct()
+    types = DocumentType.objects.for_facility(facility).filter(
+        fields__field_template=field_template, fields__field_template__facility=facility
     )
+    if active_only:
+        types = types.filter(is_active=True)
+    return types.distinct()
 
 
 def diagnose_field_bindings(field_template, facility) -> list[str]:
@@ -458,36 +459,20 @@ def _typ_werte(document_type, bindung) -> tuple:
     return tuple(getattr(document_type, feld) for feld in bindung.values_fields())
 
 
-def _field_contributes(backend, field_template, document_type, facility) -> bool:
-    """The assigned field must belong to a locally completed alternative."""
-    if not backend.verfuegbarkeit:
-        return True
-    return any(
-        _requirement_state(requirement, document_type, facility)[1] == []
-        and (
-            not requirement.feld_bindungen
-            or any(binding.key_for_template(field_template) is not None for binding in requirement.feld_bindungen)
-        )
-        for requirement in backend.verfuegbarkeit
-    )
-
-
 def describe_field_bindings(field_template, facility) -> list[str]:
-    """List reports to which this specific assigned template can contribute."""
+    """List available reports reading this exact template, including historical types."""
     if not _belongs_to_facility(field_template, facility):
         return []
     descriptions: list[str] = []
     for backend in get_available_backends(facility):
-        if backend.verfuegbarkeit or hasattr(field_template, "facility_id"):
-            if not field_template.is_active:
-                continue
-            if not any(
-                _field_contributes(backend, field_template, doc_type, facility)
-                for doc_type in _linked_types(field_template, facility)
-            ):
-                continue
         for binding in feld_bindungen(backend):
             key = binding.key_for_template(field_template)
-            if key is not None:
-                descriptions.append(f"{backend.name} ({binding.vokabular()[key]})")
+            if key is None:
+                continue
+            if (backend.verfuegbarkeit or hasattr(field_template, "facility_id")) and not any(
+                backend.uses_field_template(field_template, doc_type, facility, binding)
+                for doc_type in _linked_types(field_template, facility, active_only=False)
+            ):
+                continue
+            descriptions.append(f"{backend.name} ({binding.vokabular()[key]})")
     return descriptions

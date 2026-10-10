@@ -58,14 +58,20 @@ def test_other_complete_type_does_not_mask_local_gap(partial_type, facility, sta
     add_field(complete, "rueckgabe_stueck")
     now = timezone.now()
     make_event(
-        facility=facility, client=None, document_type=doc_type, occurred_at=now, data_json={}, created_by=staff_user
+        facility=facility,
+        client=None,
+        document_type=doc_type,
+        occurred_at=now,
+        data_json={field.slug: 5},
+        created_by=staff_user,
     )
     result = NeedleExchangeBalanceBackend().build_dataset(
         facility, now.date() - timedelta(days=1), now.date() + timedelta(days=1)
     )
     assert result.summary["events"] == 1
-    assert result.summary["events_ohne_werte"] == 1
-    assert not any("Spritzentausch-Bilanz" in line for line in registry.describe_field_bindings(field, facility))
+    assert result.summary["events_ohne_werte"] == 0
+    assert result.summary["summe_ausgabe"] == 5
+    assert any("Spritzentausch-Bilanz" in line for line in registry.describe_field_bindings(field, facility))
     assert any("rueckgabe_stueck" in warning for warning in registry.diagnose_type_bindings(doc_type, facility))
     assert any("Spritzentausch-Bilanz" in line for line in registry.describe_type_bindings(doc_type, facility))
 
@@ -201,6 +207,7 @@ def test_inactive_type_with_counted_values_remains_listed(partial_type, facility
     )
     assert result.summary["events"] == 1
     assert result.summary["summe_ausgabe"] == 3
+    assert any("Spritzentausch-Bilanz" in line for line in registry.describe_field_bindings(output, facility))
     assert registry.diagnose_type_bindings(doc_type, facility) == []
     assert any("Spritzentausch-Bilanz" in line for line in registry.describe_type_bindings(doc_type, facility))
 
@@ -254,6 +261,42 @@ def test_inventory_keeps_counted_types_and_excludes_unused_fields(partial_type, 
     for counted_type in (doc_type, inactive):
         assert any("Spritzentausch-Bilanz" in name for name in types[str(counted_type.pk)])
     unbound = {entry["id"]: entry["appears_in"] for entry in result["field_templates"]["unbound"]}
-    assert unbound[str(field.pk)] == []
+    bound = {entry["id"]: entry["appears_in"] for entry in result["field_templates"]["bound"]}
+    assert any("Spritzentausch-Bilanz" in name for name in bound[str(field.pk)])
     assert unbound[str(unused.pk)] == []
     assert unbound[str(inactive_field.pk)] == []
+
+
+@pytest.mark.parametrize("inactive", [False, True], ids=["one-field", "inactive-complete"])
+def test_counted_field_is_listed_in_edit_view_and_inventory(client, admin_user, facility, staff_user, inactive):
+    complete = make_type(facility, "Complete")
+    add_field(complete, "ausgabe_stueck")
+    add_field(complete, "rueckgabe_stueck")
+    doc_type = make_type(facility, "Counted")
+    output = add_field(doc_type, "ausgabe_stueck")
+    if inactive:
+        add_field(doc_type, "rueckgabe_stueck")
+        doc_type.is_active = False
+        doc_type.save()
+    now = timezone.now()
+    make_event(
+        facility=facility,
+        client=None,
+        document_type=doc_type,
+        occurred_at=now,
+        data_json={output.slug: 7},
+        created_by=staff_user,
+    )
+    dataset = NeedleExchangeBalanceBackend().build_dataset(
+        facility, now.date() - timedelta(days=1), now.date() + timedelta(days=1)
+    )
+    assert dataset.summary["summe_ausgabe"] == 7
+    client.force_login(admin_user)
+    response = client.get(reverse("core:config_fieldtemplate_update", args=[output.pk]))
+    assert response.status_code == 200
+    assert "Erscheint in keinem Bericht." not in response.content.decode()
+    assert "Spritzentausch-Bilanz" in response.content.decode()
+    out = StringIO()
+    call_command("inventory_report_bindings", "--facility", str(facility.pk), "--format", "json", stdout=out)
+    bound = {entry["id"]: entry["appears_in"] for entry in json.loads(out.getvalue())["field_templates"]["bound"]}
+    assert any("Spritzentausch-Bilanz" in name for name in bound[str(output.pk)])

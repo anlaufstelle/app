@@ -285,7 +285,7 @@ Was du daraus bekommst — und **nie** danebenschreibst:
 | `FELD_BINDUNG.key_for_template(feldvorlage)` | Feldvorlage → Feld-Berichtsschlüssel, dieselbe Rolle auf Feld-Ebene (`describe_field_bindings()`); liest die Erststufe der Deklaration |
 | `FELD_BINDUNG.leseschluessel(facility)` | der `data_json`-**Lesepfad** je Dokumentationstyp — gebunden wird über den Schlüssel, gelesen unter dem Slug der so gebundenen Vorlage |
 
-Das Wartungskommando `inventory_report_bindings` verwendet dieselbe Auskunft wie „Erscheint in“: Verfügbare Berichte bleiben bei passenden Typ-Schlüsseln auch für deaktivierte oder lokal unvollständige Typen gelistet, sofern ihre Ereignisse mitgezählt werden. Die Feldvorlagen-Sektion führt nicht zugeordnete, inaktive oder nur an unvollständigen Alternativen beteiligte Vorlagen unter `unbound`; eine andere vollständige Alternative allein macht die Vorlage nicht beitragend. Das Inventar beschreibt Zuordnungen, nicht Ereignisanzahlen oder Summen.
+Das Wartungskommando `inventory_report_bindings` verwendet dieselbe Auskunft wie „Erscheint in“: Verfügbare Berichte bleiben bei passenden Typ-Schlüsseln auch für deaktivierte oder lokal unvollständige Typen gelistet, sofern ihre Ereignisse mitgezählt werden. Die Feldvorlagen-Sektion führt Vorlagen unter `bound`, wenn ein verfügbarer Bericht ihre Werte über seinen tatsächlichen Lesepfad liest, auch an unvollständigen oder deaktivierten Typen; nicht zugeordnete, inaktive oder nicht gelesene Vorlagen stehen unter `unbound`. Das Inventar beschreibt Zuordnungen, nicht Ereignisanzahlen oder Summen.
 
 Konsumenten, die „erscheint dieser Typ/diese Feldvorlage in einem Bericht?" beantworten wollen, bauen auf diesen beiden — **nicht** auf einer eigenen Kopie von `resolve()`.
 

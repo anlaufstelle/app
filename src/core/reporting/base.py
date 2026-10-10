@@ -636,6 +636,47 @@ class DatasetBackend(ABC):
         """
         return not self.verfuegbarkeit or any(anforderung.erfuellt(facility) for anforderung in self.verfuegbarkeit)
 
+    def counting_requirements(self, facility) -> tuple[Anforderung, ...]:
+        """Expose the bindings used to count, separately from report availability.
+
+        A single type binding counts historical and incomplete types too.
+        Independent groups count only while their own requirement is fulfilled.
+        The dataset contract tests pin both policies against actual results.
+        """
+        if self.typ_bindung is not None:
+            return (
+                Anforderung(self.typ_bindung, self.feld_bindungen),
+                *(a for a in self.verfuegbarkeit if a.typ_bindung is None and a.erfuellt(facility)),
+            )
+        return tuple(a for a in self.verfuegbarkeit if a.erfuellt(facility))
+
+    def contributions_for_type(self, document_type, facility) -> tuple[Anforderung, ...]:
+        """Resolve counted bindings using the same keys and read paths as datasets."""
+        if hasattr(document_type, "facility_id") and document_type.facility_id != getattr(facility, "pk", None):
+            return ()
+        contributions = []
+        for requirement in self.counting_requirements(facility):
+            binding = requirement.typ_bindung
+            if binding is not None:
+                values = (getattr(document_type, field) for field in binding.values_fields())
+                if binding.resolve_key(*values) is not None:
+                    contributions.append(requirement)
+            elif requirement.feld_bindungen and all(
+                getattr(document_type, "pk", None) in field.leseschluessel(facility).je_typ
+                for field in requirement.feld_bindungen
+            ):
+                contributions.append(requirement)
+        return tuple(contributions)
+
+    def uses_field_template(self, field_template, document_type, facility, binding: FeldBindung) -> bool:
+        """Whether the dataset reads this exact template for the supplied type."""
+        return any(
+            any(field is binding for field in requirement.feld_bindungen)
+            and binding.leseschluessel(facility, requirement.typ_bindung).je_typ.get(document_type.pk)
+            == field_template.slug
+            for requirement in self.contributions_for_type(document_type, facility)
+        )
+
     @abstractmethod
     def get_field_specs(self) -> list[FieldSpec]:  # pragma: no cover - overridden
         """Spaltendefinitionen der tabellarischen Projektion (``DatasetResult.records``)."""
