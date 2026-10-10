@@ -661,7 +661,7 @@ The **Statistics** area has three tabs. They differ by task, protection of the f
 | release key figures or a specialist evaluation as a file | **Dataset reports**, for example **General key figures** |
 | check earlier releases and overlapping periods | **Releases** |
 
-> **Tip:** Use Dataset reports for figures intended for outside parties. Enter recipient and purpose in the export bar and check [Releases](#releases-lead--admin). The preview is not a release; file downloads are logged. Sharing requires a professional and data-protection assessment even with suppression.
+> **Tip:** Use Dataset reports for figures intended for outside parties. Enter recipient and purpose in the export bar and check [Releases](#releases-manager--admin). The preview is not a release; file downloads are logged. Sharing requires a professional and data-protection assessment even with suppression.
 
 ### Import CSV Data
 

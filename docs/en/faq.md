@@ -58,7 +58,7 @@ The [User Guide § 7](https://github.com/anlaufstelle/app/blob/main/docs/en/user
 | Example activity report | Fixed-layout example, explicitly not a binding official report |
 | Dataset reports (CSV / JSON / XML / PDF) | Select card, preview, download; completeness notes and k-anonymity |
 | General key figures | Dataset report card; live evaluation with small-count suppression |
-| [Releases](https://github.com/anlaufstelle/app/blob/main/docs/en/user-guide.md#releases-lead--admin) | Marked file releases and overlap warnings |
+| [Releases](https://github.com/anlaufstelle/app/blob/main/docs/en/user-guide.md#releases-manager--admin) | Marked file releases and overlap warnings |
 
 **The main pitfall: two data sources.** The example activity report PDF reads monthly aggregates with live fallback; its preview and CSV/JSON/XML, and other reports, are live. Monthly aggregates can preserve event counts after retention deadlines, but distinct persons are counted live across the entire period, not added month by month. Reports state source and population; cards explain format differences.
 
@@ -78,7 +78,7 @@ Figures can differ due to **suppression**, different **populations** and **data 
 
 Releases displays 50 entries per page; warning checks consider all matching releases still recorded for the same artifact. Identical periods do not trigger a warning but can differ after changes to records. Different recipients are organisationally less risky only if files are not combined. The history is not a complete record of all sharing.
 
-Decision aid: [User Guide § 7 “The Three Tabs at a Glance”](https://github.com/anlaufstelle/app/blob/main/docs/en/user-guide.md#the-three-tabs-at-a-glance). Details: [Releases](https://github.com/anlaufstelle/app/blob/main/docs/en/user-guide.md#releases-lead--admin). Release rules: [Admin Guide § 8](https://github.com/anlaufstelle/app/blob/main/docs/en/admin-guide.md#releasing-reports-what-you-need-to-know).
+Decision aid: [User Guide § 7 “The Three Tabs at a Glance”](https://github.com/anlaufstelle/app/blob/main/docs/en/user-guide.md#the-three-tabs-at-a-glance). Details: [Releases](https://github.com/anlaufstelle/app/blob/main/docs/en/user-guide.md#releases-manager--admin). Release rules: [Admin Guide § 8](https://github.com/anlaufstelle/app/blob/main/docs/en/admin-guide.md#releasing-reports-what-you-need-to-know).
 
 <!-- translation-source: docs/faq.md -->
 <!-- translation-version: v0.99.6 -->
