@@ -88,6 +88,21 @@ class QuickTemplate(models.Model):
             models.Index(fields=["facility", "document_type", "is_active"]),
         ]
 
+    def clean(self):
+        """Reject a document type from another facility with a form error instead of a server error."""
+        super().clean()
+        if self.facility_id is None or self.document_type_id is None:
+            return
+        from django.core.exceptions import ValidationError
+
+        from core.models.document_type import DocumentType
+
+        type_facility_id = (
+            DocumentType.objects.filter(pk=self.document_type_id).values_list("facility_id", flat=True).first()
+        )
+        if type_facility_id is not None and type_facility_id != self.facility_id:
+            raise ValidationError({"document_type": _("Der Dokumentationstyp gehört nicht zu dieser Einrichtung.")})
+
     def save(self, *args, **kwargs):
         """Take the shared protection gate before persistence and deferred FK checks."""
         from core.services.dynamic_protection import lock_dynamic_protection

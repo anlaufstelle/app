@@ -491,3 +491,24 @@ class TestQuickTemplateOrdering:
         order2 = [t.pk for t in get_templates_for_document_type(staff_user, facility, doc_type_with_all)]
         assert order1 == order2
         assert order1 == [tpl_a.pk, tpl_b.pk]
+
+
+@pytest.mark.django_db
+def test_clean_rejects_document_type_from_other_facility(facility, other_facility):
+    from django.core.exceptions import ValidationError
+
+    foreign_type = DocumentType.objects.create(facility=other_facility, name="Foreign type")
+    template = QuickTemplate(facility=facility, document_type=foreign_type, name="Cross facility")
+
+    with pytest.raises(ValidationError) as excinfo:
+        template.full_clean()
+
+    assert "document_type" in excinfo.value.message_dict
+
+
+@pytest.mark.django_db
+def test_clean_accepts_document_type_of_same_facility(facility):
+    own_type = DocumentType.objects.create(facility=facility, name="Own type")
+    template = QuickTemplate(facility=facility, document_type=own_type, name="Same facility")
+
+    template.full_clean()
