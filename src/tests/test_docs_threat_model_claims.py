@@ -2,9 +2,9 @@
 
 Two rows of the STRIDE tables are coupled to code here (Refs #2445):
 
-* **D Login-Flood / Bot-Spam** — the mutation guard scans view modules
-  recursively, including POST functions and inherited handlers, and requires
-  method-specific blocking limits. The row names each allowlisted view.
+* **D Login-Flood / Bot-Spam** — the mutation guard resolves registered URL
+  callbacks recursively and requires method-specific blocking evidence.
+  The row names each narrowly exempt URL and view.
 * **D ClamAV-Outage** — ``/health/`` answers 503 on a database failure *and*
   on a failed encryption-key roundtrip (behaviour pinned in
   ``test_health.py``); the row must name both causes.
@@ -49,11 +49,13 @@ class TestRateLimitRow:
 
     def test_row_names_every_allowlisted_view(self) -> None:
         row = table_row(THREAT_MODEL.read_text(encoding="utf-8"), RATE_LIMIT_ROW)
-        missing = sorted(
-            entry.split(":", 1)[1]
-            for entry in views_guards.TestRateLimitOnAllMutations._ALLOWLIST
-            if entry.split(":", 1)[1] not in row
-        )
+        missing = []
+        for name, (target, methods, _reason) in views_guards.TestRateLimitOnAllMutations._ALLOWLIST.items():
+            owner, _, attribute = target.partition(":")
+            class_name = owner.rsplit(".", 1)[-1]
+            qualified_handlers = [f"{class_name}.{attribute or method.lower()}" for method in methods]
+            if f"`{name}`" not in row or any(handler not in row for handler in qualified_handlers):
+                missing.append(name)
         assert missing == [], f"threat-model.md does not name POST views exempt from the rate limit: {missing}"
 
     def test_row_describes_recursive_blocking_guard(self) -> None:
@@ -64,6 +66,11 @@ class TestRateLimitRow:
         assert "geerbten Mutationshandlern" in row
         assert "Formularviews" in row
         assert "nicht rekursiv" not in row
+        assert "fail-closed" in row
+        assert "URL-Resolver" in row
+        assert "Laufzeit" in row
+        assert "Markierung" in row
+        assert "Ausnahmeliste" in row
 
 
 class TestClamavRow:
