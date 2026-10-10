@@ -428,20 +428,17 @@ def describe_type_bindings(document_type, facility) -> list[str]:
         return []
     descriptions: list[str] = []
     for backend in get_available_backends(facility):
-        before = len(descriptions)
-        for binding in typ_bindungen(backend):
-            key = binding.resolve_key(*_typ_werte(document_type, binding))
-            if key is not None:
-                descriptions.append(f"{backend.name} ({binding.vokabular()[key]})")
-        if len(descriptions) == before and backend.verfuegbarkeit:
-            field_alternative = any(
-                requirement.typ_bindung is None
-                and requirement.feld_bindungen
-                and _requirement_state(requirement, document_type, facility, active_only=False)[1] == []
-                for requirement in backend.verfuegbarkeit
-            )
-            if not typ_bindungen(backend) or field_alternative:
-                descriptions.append(str(backend.name))
+        for requirement in backend.contributions_for_type(document_type, facility):
+            binding = requirement.typ_bindung
+            if binding is None:
+                description = str(backend.name)
+            else:
+                key = binding.resolve_key(*_typ_werte(document_type, binding))
+                if key is None:
+                    continue
+                description = f"{backend.name} ({binding.vokabular()[key]})"
+            if description not in descriptions:
+                descriptions.append(description)
     return descriptions
 
 

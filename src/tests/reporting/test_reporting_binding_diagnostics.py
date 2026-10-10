@@ -12,6 +12,7 @@ from django.utils import timezone
 from core.models import DocumentTypeField, FieldTemplate
 from core.reporting import registry
 from core.reporting.backends.needle_exchange_balance import NeedleExchangeBalanceBackend
+from core.reporting.backends.service_distribution import ServiceDistributionBackend
 from core.reporting.base import Anforderung, BindungsEintrag, FeldBindung, TypBindung
 from tests._factories import make_document_type, make_event
 
@@ -300,3 +301,20 @@ def test_counted_field_is_listed_in_edit_view_and_inventory(client, admin_user, 
     call_command("inventory_report_bindings", "--facility", str(facility.pk), "--format", "json", stdout=out)
     bound = {entry["id"]: entry["appears_in"] for entry in json.loads(out.getvalue())["field_templates"]["bound"]}
     assert any("Spritzentausch-Bilanz" in name for name in bound[str(output.pk)])
+
+
+def test_unconfigured_group_does_not_claim_type_events(facility, staff_user):
+    contact = make_type(facility, "Contact", "contact")
+    add_field(contact, "leistungen")
+    crisis = make_type(facility, "Crisis", "crisis")
+    now = timezone.now()
+    make_event(
+        facility=facility, client=None, document_type=crisis, occurred_at=now, data_json={}, created_by=staff_user
+    )
+    dataset = ServiceDistributionBackend().build_dataset(
+        facility, now.date() - timedelta(days=1), now.date() + timedelta(days=1)
+    )
+    assert dataset.summary == {"events_leistungen": 0}
+    assert not dataset.completeness
+    assert not any("Krisenarten-Verteilung" in line for line in registry.describe_type_bindings(crisis, facility))
+    assert any("art_der_krise" in warning for warning in registry.diagnose_type_bindings(crisis, facility))

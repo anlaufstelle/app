@@ -287,7 +287,7 @@ What you get from it — and must **never** write next to it:
 | `FELD_BINDUNG.key_for_template(field_template)` | field template → field report key, the same role at the field level (`describe_field_bindings()`); reads the declaration's first stage |
 | `FELD_BINDUNG.leseschluessel(facility)` | the `data_json` **read path** per documentation type — binding goes through the key, reading through the slug of the template bound that way |
 
-The `inventory_report_bindings` maintenance command uses the same information as “Appears in”: available reports remain listed for matching type keys, including deactivated or locally incomplete types whose events are counted. The field template section places templates in `bound` when an available report reads their values through its actual read path, including incomplete or deactivated types; unassigned, inactive, or unread templates appear in `unbound`. The inventory describes mappings, not event counts or totals.
+The `inventory_report_bindings` maintenance command uses the same information as “Appears in”: available reports remain listed for matching type keys, including deactivated or locally incomplete types whose events are included by the counting logic; independent groups require the respective group to be configured. The field template section places templates in `bound` when an available report reads their values through its actual read path, including incomplete or deactivated types; unassigned, inactive, or unread templates appear in `unbound`. The inventory describes mappings, not event counts or totals.
 
 Consumers that want to answer "does this type/field template appear in a report?" build on these two — **not** on their own copy of `resolve()`.
 
@@ -683,4 +683,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: b458859395c1efed4abd028ea8a4fc92e63e0a49 -->
+<!-- source-hash: 8f22699c91a1ec9373f0e2dd1e4592ca32392202 -->
