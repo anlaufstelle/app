@@ -75,7 +75,7 @@ class TestRectifiableFields:
 
     def test_dynamic_slugs_are_offered(self, client_identified, doc_type_client_profile, lead_user):
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         paths = _paths(client_identified, lead_user)
         assert "data_json.wohnsituation" in paths
         assert "data_json.diagnose" in paths
@@ -90,7 +90,7 @@ class TestRectifiableFields:
         )
         DocumentTypeField.objects.create(document_type=doc_type_client_profile, field_template=ft_file, sort_order=9)
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         assert "data_json.bescheid" not in _paths(client_identified, lead_user)
 
     def test_invisible_fields_are_filtered_per_user(
@@ -99,14 +99,14 @@ class TestRectifiableFields:
         """Ein HOCH-Feld darf die Assistenz nicht einmal als Ziel angeboten bekommen."""
         _add_high_field(facility, doc_type_client_profile)
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         paths = _paths(client_identified, assistant_user)
         assert "data_json.wohnsituation" in paths
         assert "data_json.suchtdiagnose" not in paths
 
     def test_labels_come_from_field_names(self, client_identified, doc_type_client_profile, lead_user):
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         labels = dict(rectifiable_fields(client_identified, lead_user))
         assert labels["data_json.wohnsituation"] == "Wohnsituation"
         assert str(labels["pseudonym"]) == "Pseudonym"
@@ -132,7 +132,7 @@ class TestRequestRectification:
     ):
         _add_high_field(facility, doc_type_client_profile)
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         with pytest.raises(ValidationError):
             request_rectification(client_identified, assistant_user, "data_json.suchtdiagnose", "X", "Grund")
 
@@ -255,7 +255,7 @@ class TestApproveGuards:
         ft = FieldTemplate.objects.create(facility=facility, name="Anmerkung", field_type=FieldTemplate.FieldType.TEXT)
         DocumentTypeField.objects.create(document_type=doc_type_client_profile, field_template=ft, sort_order=8)
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
 
         rr = request_rectification(client_identified, staff_user, "data_json.anmerkung", "Neu", "Grund")
         DocumentTypeField.objects.filter(document_type=doc_type_client_profile, field_template=ft).delete()
@@ -278,7 +278,7 @@ class TestApproveGuards:
         Antragsteller-Sicht oder pauschal gegen NORMAL pruefen.
         """
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         rr = request_rectification(client_identified, lead_user, "data_json.wohnsituation", "Neu", "Grund")
         doc_type_client_profile.sensitivity = DocumentType.Sensitivity.HIGH
         doc_type_client_profile.save(update_fields=["sensitivity"])
@@ -340,7 +340,7 @@ class TestApproveGuards:
         from django.test.utils import CaptureQueriesContext
 
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         rr = request_rectification(client_identified, staff_user, "notes", "Neu", "Grund")
 
         with CaptureQueriesContext(connection) as ctx:
@@ -503,7 +503,7 @@ class TestApproveEndToEnd:
             getattr(FieldTemplate.FieldType, field_type_attr),
         )
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
 
         rr = request_rectification(client_identified, staff_user, f"data_json.{ft.slug}", value, "Korrigiert")
         assert decode_rectification_value(rr.new_value) == expected_iso

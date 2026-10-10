@@ -65,14 +65,14 @@ def _attach(owner, ft, user):
 @pytest.fixture
 def client_with_type(client_identified, doc_type_client_profile):
     client_identified.document_type = doc_type_client_profile
-    client_identified.save(update_fields=["document_type"])
+    client_identified.save(update_fields=["document_type", "data_json"])
     return client_identified
 
 
 @pytest.fixture
 def case_with_type(case_open, doc_type_case_form):
     case_open.document_type = doc_type_case_form
-    case_open.save(update_fields=["document_type"])
+    case_open.save(update_fields=["document_type", "data_json"])
     return case_open
 
 

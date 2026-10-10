@@ -66,7 +66,7 @@ def case_with_direct_and_event_attachment(facility, staff_user, client_identifie
     dt_event = _doc_type(facility, "Ereignistyp mit Datei (im Fall)", DocumentType.EntityType.EVENT, ft_event)
 
     case_open.document_type = dt_case
-    case_open.save(update_fields=["document_type"])
+    case_open.save(update_fields=["document_type", "data_json"])
     direct = _attach(facility, case_open, ft_case, staff_user, "fall_direkt.pdf")
 
     event_in_case = Event.objects.create(

@@ -374,7 +374,7 @@ class TestUpdateClientDynamicDataGuards:
         ``data_json`` (Mass-Assignment-Bypass an der dynamischen
         Formularkomponente)."""
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         wohn_key = doc_type_client_profile.fields.get(field_template__name="Wohnsituation").field_template.slug
 
         update_client(

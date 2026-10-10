@@ -75,7 +75,17 @@ def configuration_write(facility_id):
 
 @contextmanager
 def dynamic_data_write(record, update_fields=None):
-    """Keep protection stable through model encryption, signals and INSERT/UPDATE."""
+    """Reject incomplete type changes and keep protection stable until persistence."""
+    if update_fields is not None and {"document_type", "document_type_id"}.intersection(update_fields):
+        required_fields = {"data_json"}
+        if hasattr(record, "search_text"):
+            required_fields.add("search_text")
+        if not required_fields.issubset(update_fields):
+            raise ValueError(
+                "Saving document_type or document_type_id requires "
+                + ", ".join(sorted(required_fields))
+                + " in update_fields"
+            )
     with transaction.atomic():
         writes_data = update_fields is None or "data_json" in update_fields
         writes_index = update_fields is None or "search_text" in update_fields

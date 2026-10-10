@@ -263,7 +263,7 @@ class TestEnforceDocumentTypeRetention:
         doc_type_client_profile.retention_days = 1
         doc_type_client_profile.save(update_fields=["retention_days"])
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         attachment = Attachment.objects.create(
             facility=facility,
             client=client_identified,

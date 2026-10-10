@@ -880,7 +880,7 @@ class TestPurgeEntryPointAtTheCase:
         ft = _file_template(facility, "Fall-Datei")
         dt = _doc_type(facility, "Falltyp mit Datei", DocumentType.EntityType.CASE, file_field=ft)
         case_open.document_type = dt
-        case_open.save(update_fields=["document_type"])
+        case_open.save(update_fields=["document_type", "data_json"])
         attachment = _attach(facility, case_open, ft, staff_user, "fall.pdf")
         client.force_login(lead_user)
         response = client.get(reverse("core:case_detail", kwargs={"pk": case_open.pk}))

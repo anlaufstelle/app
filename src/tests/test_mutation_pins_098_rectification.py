@@ -146,7 +146,7 @@ class TestRectifiableFieldsSchleifensemantik:
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_hoch, sort_order=1)
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_sichtbar, sort_order=2)
         client_identified.document_type = doc_type
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
 
         result = dict(rectifiable_fields(client_identified, staff_user))
 

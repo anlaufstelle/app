@@ -220,7 +220,7 @@ def three_owner_attachments(facility, staff_user, client_identified):
         created_by=staff_user,
     )
     client_identified.document_type = dt_client
-    client_identified.save(update_fields=["document_type"])
+    client_identified.save(update_fields=["document_type", "data_json"])
     case = Case.objects.create(
         facility=facility,
         client=client_identified,
@@ -427,7 +427,7 @@ class TestOwnerGenericOverview:
         ft_high = _file_template(facility, "Feld-HIGH", sensitivity=DocumentType.Sensitivity.HIGH)
         dt = _doc_type(facility, "P-Typ-Feldsens", DocumentType.EntityType.CLIENT, file_field=ft_high)
         client_identified.document_type = dt
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         _attach(facility, client_identified, ft_high, staff_user, "feld_high.pdf")
         client.force_login(staff_user)
         assert "feld_high.pdf" not in client.get(reverse(LIST_URL_NAME)).content.decode()
@@ -627,7 +627,7 @@ def versioned_client_attachment(facility, staff_user, client_identified):
     ft = _file_template(facility, "Versionierte Datei")
     dt = _doc_type(facility, "P-Typ versioniert", DocumentType.EntityType.CLIENT, file_field=ft)
     client_identified.document_type = dt
-    client_identified.save(update_fields=["document_type"])
+    client_identified.save(update_fields=["document_type", "data_json"])
     v1 = _attach(facility, client_identified, ft, staff_user, "vertrag_v1.pdf")
     v2 = _replace(facility, client_identified, ft, staff_user, "vertrag_v2.pdf", v1)
     v3 = _replace(facility, client_identified, ft, staff_user, "vertrag_v3.pdf", v2)

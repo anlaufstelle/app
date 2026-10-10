@@ -644,7 +644,7 @@ def authz_client_attachment(facility, client_identified, doc_type_client_profile
     die Assistenz (ASSISTANT_PLUS) den Download sehen darf.
     """
     client_identified.document_type = doc_type_client_profile
-    client_identified.save(update_fields=["document_type"])
+    client_identified.save(update_fields=["document_type", "data_json"])
     return _make_attachment(facility, client_identified, staff_user, ft_name="Anhang (AuthZ Person)")
 
 
@@ -656,7 +656,7 @@ def authz_case_attachment(facility, case_open, doc_type_case_form, staff_user):
     sind fuer die Assistenz unsichtbar.
     """
     case_open.document_type = doc_type_case_form
-    case_open.save(update_fields=["document_type"])
+    case_open.save(update_fields=["document_type", "data_json"])
     return _make_attachment(facility, case_open, staff_user, ft_name="Anhang (AuthZ Fall)")
 
 
@@ -882,7 +882,7 @@ def foreign_attachment(second_facility, foreign_event, foreign_staff):
 def foreign_client_attachment(second_facility, foreign_client, foreign_doc_type_client, foreign_staff):
     """IDOR-Spiegel zu ``authz_client_attachment`` in der zweiten Einrichtung."""
     foreign_client.document_type = foreign_doc_type_client
-    foreign_client.save(update_fields=["document_type"])
+    foreign_client.save(update_fields=["document_type", "data_json"])
     return _make_attachment(second_facility, foreign_client, foreign_staff, ft_name="Anhang (AuthZ Person fremd)")
 
 
@@ -890,7 +890,7 @@ def foreign_client_attachment(second_facility, foreign_client, foreign_doc_type_
 def foreign_case_attachment(second_facility, foreign_case, foreign_doc_type_case, foreign_staff):
     """IDOR-Spiegel zu ``authz_case_attachment`` in der zweiten Einrichtung."""
     foreign_case.document_type = foreign_doc_type_case
-    foreign_case.save(update_fields=["document_type"])
+    foreign_case.save(update_fields=["document_type", "data_json"])
     return _make_attachment(second_facility, foreign_case, foreign_staff, ft_name="Anhang (AuthZ Fall fremd)")
 
 

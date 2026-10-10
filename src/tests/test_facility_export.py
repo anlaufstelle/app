@@ -333,9 +333,9 @@ class TestAttachments:
         self, facility, client_identified, doc_type_client_profile, case_open, doc_type_case_form, staff_user
     ):
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         case_open.document_type = doc_type_case_form
-        case_open.save(update_fields=["document_type"])
+        case_open.save(update_fields=["document_type", "data_json"])
 
         client_att = _make_attachment(facility, client_identified, staff_user, ft_name="Anhang Person")
         case_att = _make_attachment(facility, case_open, staff_user, ft_name="Anhang Fall")
@@ -356,9 +356,9 @@ class TestAttachments:
         still verlorenes ``with_file_hashes`` an genau diesen Serializer-Zeilen
         blieb gruen."""
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         case_open.document_type = doc_type_case_form
-        case_open.save(update_fields=["document_type"])
+        case_open.save(update_fields=["document_type", "data_json"])
 
         client_att = _make_attachment(facility, client_identified, staff_user, ft_name="Anhang Person (Hash)")
         case_att = _make_attachment(facility, case_open, staff_user, ft_name="Anhang Fall (Hash)")

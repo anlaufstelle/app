@@ -2144,7 +2144,7 @@ def _select_field_on_client(facility, sample_client, name="Wohnsituation", slug_
     )
     DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
     sample_client.document_type = dt
-    sample_client.save(update_fields=["document_type"])
+    sample_client.save(update_fields=["document_type", "data_json"])
     return ft
 
 

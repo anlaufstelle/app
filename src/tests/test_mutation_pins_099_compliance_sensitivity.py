@@ -229,7 +229,7 @@ class TestVisibleAttachmentsSelectRelatedVollstaendig:
             document_type=doc_type_client_profile,
         )
         case_open.document_type = doc_type_case_form
-        case_open.save(update_fields=["document_type"])
+        case_open.save(update_fields=["document_type", "data_json"])
 
         ft_event = _ft(facility, "Beleg-Event")
         ft_client = _ft(facility, "Beleg-Client")
@@ -348,7 +348,7 @@ class TestOwnerGateSelectRelatedUndFailClosedAttribut:
         from core.services.compliance.sensitivity import get_visible_attachment_for_owner_or_404
 
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         ft = _ft(facility, "Beleg-Gate-SR")
         att = _attach(facility, staff_user, ft, client=client_identified)
 
@@ -475,7 +475,7 @@ class TestHttp404MeldungenSindExakt:
         from core.services.compliance.sensitivity import get_visible_attachment_for_owner_or_404
 
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
 
         with pytest.raises(Http404) as exc_info:
             get_visible_attachment_for_owner_or_404(lead_user, client_identified, uuid.uuid4())

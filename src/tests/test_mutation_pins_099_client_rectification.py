@@ -113,7 +113,7 @@ class TestRectifiableFieldsBlockReihenfolge:
             document_type=doc_type, field_template=ft_gruppe, field_group=gruppe, sort_order=0
         )
         client_identified.document_type = doc_type
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
 
         result = rectifiable_fields(client_identified, staff_user)
         dynamic_paths = [path for path, _label in result if path.startswith(DATA_JSON_PREFIX)]

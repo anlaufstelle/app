@@ -299,7 +299,7 @@ class TestConfigDeleteBlockerHasAWayOut:
         self, client, admin_user, staff_user, case_open, doc_type_case_form
     ):
         case_open.document_type = doc_type_case_form
-        case_open.save(update_fields=["document_type"])
+        case_open.save(update_fields=["document_type", "data_json"])
         soft_delete_case(case_open, staff_user)
 
         client.force_login(admin_user)
@@ -311,7 +311,7 @@ class TestConfigDeleteBlockerHasAWayOut:
         from core.services.config import ConfigDeleteBlocked, delete_document_type
 
         case_open.document_type = doc_type_case_form
-        case_open.save(update_fields=["document_type"])
+        case_open.save(update_fields=["document_type", "data_json"])
         soft_delete_case(case_open, staff_user)
 
         with pytest.raises(ConfigDeleteBlocked) as exc:

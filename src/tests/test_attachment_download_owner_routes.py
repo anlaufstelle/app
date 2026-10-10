@@ -136,7 +136,7 @@ class TestClientAttachmentDownload:
         """Stufe 2 fail-closed: ohne Typ gibt es keine Bezugs-Sensitivitaet."""
         person, attachment, _ft = client_owner
         person.document_type = None
-        person.save(update_fields=["document_type"])
+        person.save(update_fields=["document_type", "data_json"])
         client.force_login(staff_user)
         assert client.get(_client_url(person, attachment)).status_code == 404
 
@@ -225,7 +225,7 @@ class TestCaseAttachmentDownload:
     def test_case_without_document_type_is_404(self, client, staff_user, case_owner):
         case, attachment, _ft = case_owner
         case.document_type = None
-        case.save(update_fields=["document_type"])
+        case.save(update_fields=["document_type", "data_json"])
         client.force_login(staff_user)
         assert client.get(_case_url(case, attachment)).status_code == 404
 

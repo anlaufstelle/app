@@ -27,7 +27,7 @@ def _login(client, user):
 class TestCreateView:
     def test_form_offers_only_visible_fields(self, client, client_identified, doc_type_client_profile, staff_user):
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         _login(client, staff_user)
         response = client.get(reverse("core:rectification_create", args=[client_identified.pk]))
         assert response.status_code == 200
@@ -65,7 +65,7 @@ class TestCreateView:
         )
         DocumentTypeField.objects.create(document_type=doc_type_client_profile, field_template=ft, sort_order=11)
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
 
         _login(client, staff_user)
         response = client.post(
@@ -221,7 +221,7 @@ class TestReviewView:
         ft = FieldTemplate.objects.create(facility=facility, name="Anmerkung", field_type=FieldTemplate.FieldType.TEXT)
         DocumentTypeField.objects.create(document_type=doc_type_client_profile, field_template=ft, sort_order=8)
         client_identified.document_type = doc_type_client_profile
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
         rr = request_rectification(client_identified, staff_user, "data_json.anmerkung", "Geheimwert", "Grund")
         DocumentTypeField.objects.filter(document_type=doc_type_client_profile, field_template=ft).delete()
 

@@ -90,7 +90,7 @@ def test_apply_mapping_only_saves_mapping_status_and_timestamp(facility, admin_u
 
 def test_merge_saves_each_client_with_only_its_owned_columns(source, target, lead_user, doc_type_client_profile):
     source.document_type = doc_type_client_profile
-    source.save(update_fields=["document_type"])
+    source.save(update_fields=["document_type", "data_json"])
 
     with _captured_update_fields(Client) as seen:
         merge_clients(source, target, lead_user)

@@ -257,7 +257,7 @@ def attach_files_to_client_and_case(facility: Facility, users: list[User]) -> in
             person.document_type = _owner_doc_type(
                 facility, CLIENT_DOC_TYPE_NAME, DocumentType.EntityType.CLIENT, field_template
             )
-            person.save(update_fields=["document_type"])
+            person.save(update_fields=["document_type", "data_json"])
             _attach_to_owner(facility, person, field_template, author, "Personenakte.pdf")
             created += 1
 
@@ -267,7 +267,7 @@ def attach_files_to_client_and_case(facility: Facility, users: list[User]) -> in
             case.document_type = _owner_doc_type(
                 facility, CASE_DOC_TYPE_NAME, DocumentType.EntityType.CASE, field_template
             )
-            case.save(update_fields=["document_type"])
+            case.save(update_fields=["document_type", "data_json"])
             _attach_to_owner(facility, case, field_template, author, "Fallakte.pdf")
             created += 1
 

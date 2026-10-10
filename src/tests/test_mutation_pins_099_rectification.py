@@ -65,7 +65,7 @@ class TestCleanCoerciesDynamicValueUsingBoundClient:
         String stehen statt zur Ganzzahl ``42`` gewandelt zu werden."""
         doc_type, ft_number = _dynamic_field(facility, field_type=FieldTemplate.FieldType.NUMBER, name="Zahl")
         client_identified.document_type = doc_type
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
 
         form = RectificationRequestForm(
             data={
@@ -91,7 +91,7 @@ class TestCleanLeererWunschwert:
         gewandelt zu werden."""
         doc_type, ft_text = _dynamic_field(facility, field_type=FieldTemplate.FieldType.TEXT, name="Text")
         client_identified.document_type = doc_type
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
 
         form = RectificationRequestForm(
             data={
@@ -117,7 +117,7 @@ class TestChoicesOhneUser:
         ``choices``."""
         doc_type, _ft = _dynamic_field(facility, field_type=FieldTemplate.FieldType.TEXT, name="NurClient")
         client_identified.document_type = doc_type
-        client_identified.save(update_fields=["document_type"])
+        client_identified.save(update_fields=["document_type", "data_json"])
 
         form = RectificationRequestForm(client=client_identified, user=None)
 
