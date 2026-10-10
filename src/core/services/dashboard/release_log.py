@@ -1,83 +1,10 @@
-"""Freigabe-Übersicht herausgegebener Berichtszeiträume (K4a, Refs #1770).
+"""Facility-scoped release history and overlap warnings (Refs #2529).
 
-**K4a ist keine Lücke im Verfahren, sondern seine Definitionsgrenze.** Die
-k-Anonymitäts-Zusicherung gilt je Artefakt und je Zeitraum; werden Berichte über
-Teilzeiträume **und** über deren Vereinigung herausgegeben (Monatsberichte plus
-Jahresbericht), lässt sich jede in einem Teilbericht unterdrückte Zelle aus der
-Summe der übrigen exakt zurückrechnen — auch dann, wenn die Sekundärsuppression
-gegriffen hat, und auch dann, wenn in **keinem** der beteiligten Berichte eine
-einzige Zelle unterdrückt wurde. Artefakt-lokal ist dagegen nichts auszurichten:
-es gibt keine Zelle, an der eine Suppression ansetzen könnte.
-
-Deshalb flankierend, nicht abwehrend: eine Übersicht der ohnehin auditierten
-Herausgaben, die überlappende Zeiträume **sichtbar** macht. Die Analyse hat dafür
-zwei Auflagen benannt, beide sind umgesetzt:
-
-* Das ``EXPORT``-Detail braucht ein **Empfänger-/Zweckfeld** — sonst erzeugt jede
-  Überlappung einen Alarm, den niemand bewerten kann, und die Übersicht wird
-  weggeklickt (:func:`release_detail`).
-* Die Historie darf **nicht** von ``auditlog_retention_months`` gekappt werden,
-  sonst täuscht die Übersicht Vollständigkeit vor (:data:`RELEASE_EXPORT_Q`,
-  ausgewertet in :mod:`core.retention.audit_pruning`).
-
-Dazu kam eine dritte aus der finalen Fix-Welle zu #1754: **eine Herausgabe muss
-zuordenbar sein.** Solange es einen Berichts-Download gab, genügte das Format als
-Kennung; mit neun registrierten Backends liefern alle dasselbe ``csv``, und eine
-Überlappungswarnung „csv überschneidet sich mit csv" ist nicht bewertbar — genau
-die Sorte Alarm, wegen der die Seite weggeklickt wird. Die Audit-Zeile der
-Berichts-Pipeline (``DatasetExportView``) trägt den Backend-Slug ohnehin; er ist
-seit dieser Welle die **Identität** der Herausgabe (:func:`_as_release`) und
-zugleich das Gruppenkriterium der Überlappungsprüfung (:func:`_overlaps`).
-
-**``EXPORT`` ist eine Sammelklasse, kein Freigabe-Register.** Unter derselben
-Aktion laufen die Art.-15-Datenauskunft einer Person (``target_id`` = Klienten-
-UUID), die DSGVO-Dokument-Downloads und **jeder Bildschirm-Aufruf** des externen
-Berichts. Eine Berichts-Freigabe erkennt man deshalb an zwei Dingen, die beide im
-``detail`` stehen müssen und beide ihren eigenen Grund haben:
-
-* :data:`RELEASE_ARTIFACT_KEY` — **ein Artefakt hat das Haus verlassen.** Ohne
-  diese Grenze zählte jeder Reload der Bildschirm-Ansicht als Herausgabe: der
-  Log wüchse mit jedem Seitenaufruf unbegrenzt (prune-exempt, mit
-  Beschäftigten-Username), und die Ansichten verdrängten bei
-  :data:`RELEASE_LOG_LIMIT` die echten Downloads aus dem Auswertungsfenster —
-  ein stiller falscher Negativ in genau der Warnung, die die Retention-Ausnahme
-  rechtfertigt. Das gilt seit #1772
-  für **beide** Formate des externen Berichts: ``?format=json`` liefert
-  Maschinen-Text, ist aber dieselbe Seite ohne Empfänger-/Zweckfelder und ohne
-  Download-Geste. Alt-Zeilen mit Marker schließt :data:`_LEGACY_VIEW_Q` aus.
-* :data:`RELEASE_PERIOD_KEY` — **es gibt einen Berichtszeitraum.** Ohne ihn ist
-  keine Überlappung berechenbar; das ist die Grenze gegen die Klienten-/
-  DSGVO-Exportpfade.
-
-:data:`RELEASE_EXPORT_Q` fasst beides zu **einer** Definition zusammen, und beide
-Konsumenten (Übersicht und Retention-Ausnahme) lesen sie von dort. Zwei Kopien
-wären zwei Wahrheiten: eine Zeile, die die Übersicht führt, aber das Pruning
-löscht, macht die Übersicht still unvollständig.
-
-**Rollout-Grenze — kein Backfill möglich, und das ist keine Bequemlichkeit.**
-:data:`RELEASE_ARTIFACT_KEY` ist neu; **keine** vor seiner Einführung
-geschriebene Zeile trägt ihn. Bestands-Freigaben sind deshalb weder
-prune-exempt noch in der Übersicht sichtbar — für bis zu
-``auditlog_retention_months`` laufen sie wie bisher aus dem Log, und eine
-Überlappungswarnung kann gegen sie nicht feuern. Nachtragen ist **ausgeschlossen**:
-
-* ``AuditLog.save()`` verbietet Updates, und der DB-Trigger ``auditlog_immutable``
-  steht auf ``ENABLE ALWAYS`` (nur die Owner-Rolle könnte ihn abschalten);
-* vor allem geht ``detail`` in den Ketten-Hash ein
-  (``core.services.audit.chain._canonical_payload``). Eine nachträgliche
-  Markierung bräche die HMAC-Kette ab der geänderten Zeile — genau das, was
-  ``test_audit_chain.py::TestTamperDetection::test_inplace_detail_mutation_breaks_chain``
-  als Manipulation nachweist. Sie zu „reparieren" hieße, die Kette vorwärts
-  neu zu schreiben, und damit ihre einzige Eigenschaft aufzugeben: dass
-  Vergangenes nicht unbemerkt änderbar ist. Dieselbe Doktrin gilt schon beim
-  Pruning („die Kette wird nie umgeschrieben, der Checkpoint legitimiert nur
-  die Lücke", :mod:`core.retention.audit_pruning`).
-
-Die Richtung ist fail-safe (lieber eine Freigabe zu wenig zeigen als eine
-erfinden), aber sie macht die Übersicht in den ersten Monaten unvollständig.
-Deshalb sagt die Seite es selbst, statt Vollständigkeit zu behaupten; die
-Betreiber-Doku nennt dieselbe Grenze. Test-gepinnt in
-``test_report_release_log.py`` (``…_altzeilen_vor_der_marker_einfuehrung_…``).
+Only marked report artifacts satisfy ``RELEASE_EXPORT_Q``. Display windows
+are bounded; overlap candidates come from the entire matching period history.
+The warning compares the same artifact across distinct overlapping periods,
+never employee identities. Unmarked downloads and transfers outside the app
+remain outside this register; no historical audit entries are rewritten.
 """
 
 from __future__ import annotations
@@ -85,18 +12,18 @@ from __future__ import annotations
 import dataclasses
 from datetime import date
 
-from django.db.models import Q
+from django.db.models import CharField, F, Q, Value
+from django.db.models.fields.json import KeyTextTransform
+from django.db.models.functions import Coalesce, NullIf
 
 from core.models import AuditLog
 from core.services.audit.detail_policy import RELEASE_FIELD_MAX_LENGTH as RELEASE_FIELD_MAX_LENGTH
 from core.services.audit.detail_policy import validate_release_metadata
 from core.utils.formatting import parse_date
 
-# Wie viele Herausgaben die Übersicht höchstens auswertet. Die Überlappungs-
-# prüfung ist quadratisch; die Grenze hält sie bei einer append-only wachsenden
-# Tabelle berechenbar. Sie ist bewusst großzügig — drei Jahre monatlicher
-# Träger-Berichte über mehrere Formate liegen deutlich darunter.
+# Default service display window; the view paginates independently.
 RELEASE_LOG_LIMIT = 500
+RELEASE_PAGE_SIZE = 50
 
 # Freitextfelder am Export. Bewusst **optional**: ein Pflichtfeld erzwänge eine
 # Angabe auch dort, wo der Export gar keine Herausgabe ist (Probelauf,
@@ -289,30 +216,53 @@ def _overlaps(first: Release, second: Release) -> bool:
     return first_from <= second_to and second_from <= first_to
 
 
-def build_release_overview(facility, limit: int = RELEASE_LOG_LIMIT) -> list[Release]:
-    """Die auditierten Herausgaben der Einrichtung, mit Überlappungswarnung.
+def release_queryset(facility):
+    """Use the shared artifact marker definition and stay inside the facility."""
+    return AuditLog.objects.for_facility(facility).filter(RELEASE_EXPORT_Q).order_by("-timestamp", "-pk")
 
-    Liest ausschließlich ``AuditLog``-Einträge, die :data:`RELEASE_EXPORT_Q`
-    erfüllen — es gibt kein zweites Register und keinen neuen Schreibpfad. Der
-    Filter ist nicht bloß Kosmetik: ``EXPORT`` umfasst auch Art.-15-Auskünfte
-    und DSGVO-Downloads (kein Berichtszeitraum, keine Überlappung berechenbar,
-    Klientenbezug auf einer LEAD_PLUS-Seite) sowie jeden **Bildschirm-Aufruf**
-    des externen Berichts — letztere verdrängten sonst bei
-    :data:`RELEASE_LOG_LIMIT` die echten Downloads aus dem Auswertungsfenster.
 
-    Zwei blinde Flecken, beide bewusst und beide auf der Seite selbst
-    ausgewiesen: Herausgaben aus der Zeit **vor** der Markierung (Rollout-Grenze,
-    siehe Modul-Docstring — kein Backfill möglich) und Artefakte, die auf
-    anderem Weg weitergegeben wurden (abfotografierter Bildschirm,
-    weitergeleitete PDF-Datei). Der zweite ist eine organisatorische, keine
-    technische Grenze.
+def build_release_overview(facility, limit: int = RELEASE_LOG_LIMIT, *, offset: int = 0) -> list[Release]:
+    """Annotate a display window using every overlapping release of its artifact.
+
+    Candidate queries are bounded by the report period rather than an entry
+    count. Artifact identity matches ``_as_release`` (backend, format, target).
+    Identical periods are excluded in SQL, so repeated downloads cannot hide
+    an older enclosing period or force an all-history pairwise comparison.
     """
-    entries = AuditLog.objects.for_facility(facility).filter(RELEASE_EXPORT_Q).order_by("-timestamp")[:limit]
-    releases = [_as_release(entry) for entry in entries]
-    return [
-        dataclasses.replace(
-            release,
-            overlaps=tuple(other.label for other in releases if other is not release and _overlaps(release, other)),
+    history = release_queryset(facility)
+    entries = history.only("timestamp", "target_type", "detail")[offset : offset + limit]
+    result = []
+    for entry in entries:
+        release = _as_release(entry)
+        if release.date_from is None or release.date_to is None:
+            result.append(release)
+            continue
+        candidates = (
+            history.annotate(
+                release_artifact=Coalesce(
+                    NullIf(KeyTextTransform("backend", "detail"), Value("")),
+                    NullIf(KeyTextTransform("format", "detail"), Value("")),
+                    F("target_type"),
+                    output_field=CharField(),
+                )
+            )
+            .filter(
+                release_artifact=release.artifact,
+                detail__date_from__lte=release.date_to.isoformat(),
+                detail__date_to__gte=release.date_from.isoformat(),
+            )
+            .exclude(
+                detail__date_from=release.date_from.isoformat(),
+                detail__date_to=release.date_to.isoformat(),
+            )
+            .only("timestamp", "target_type", "detail")
         )
-        for release in releases
-    ]
+        result.append(
+            dataclasses.replace(
+                release,
+                overlaps=tuple(
+                    other.label for candidate in candidates if _overlaps(release, other := _as_release(candidate))
+                ),
+            )
+        )
+    return result

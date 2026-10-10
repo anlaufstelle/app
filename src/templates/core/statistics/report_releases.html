@@ -32,7 +32,7 @@ Filterfehler.
 {% if overlap_count %}
 <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-6">
     <p class="text-[13px] text-amber-900 font-semibold mb-1">
-        {% blocktrans count count=overlap_count %}{{ count }} Herausgabe mit überschneidendem Zeitraum{% plural %}{{ count }} Herausgaben mit überschneidendem Zeitraum{% endblocktrans %}
+        {% blocktrans count count=overlap_count %}{{ count }} Herausgabe auf dieser Seite mit überschneidendem Zeitraum{% plural %}{{ count }} Herausgaben auf dieser Seite mit überschneidendem Zeitraum{% endblocktrans %}
     </p>
     <p class="text-[12px] text-amber-800">
         {% blocktrans %}Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen sind. Identische Zeiträume sind unkritisch und werden nicht gemeldet.{% endblocktrans %}
@@ -89,9 +89,10 @@ Filterfehler.
 <p class="text-[12px] text-ink-muted mt-2 max-w-3xl">
     {% blocktrans %}Erfasst wird außerdem nur, was als Datei herausgegeben wurde. Das Betrachten eines Berichts am Bildschirm ist keine Herausgabe — auch nicht in der maschinenlesbaren Fassung. Weitergaben auf anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm — erscheinen hier ebenfalls nicht.{% endblocktrans %}
 </p>
-<p class="text-[12px] text-ink-muted mt-2 max-w-3xl" data-testid="release-limit-note">
-    {% blocktrans with limit=release_limit %}Ausgewertet werden die {{ limit }} jüngsten Herausgaben. Ältere bleiben im Audit-Log, erscheinen aber nicht in dieser Übersicht und lösen keine Überschneidungswarnung mehr aus.{% endblocktrans %}
+<p class="text-[12px] text-ink-muted mt-2 max-w-3xl" data-testid="release-history-note">
+    {% blocktrans %}Die Anzeige ist auf Seiten aufgeteilt. Überschneidungen werden mit allen protokollierten Herausgaben desselben Berichts geprüft, deren Berichtszeitraum die angezeigte Herausgabe berührt.{% endblocktrans %}
 </p>
+{% include "components/_pagination.html" with page=page_obj extra_params=pagination_params %}
 {% comment %}
 Refs #1804 (§3.4): kein Rücklink — Hub-/Subnav-Seiten tragen ihre Orientierung
 in der Reiterzeile, ein zusätzlicher „Zurück"-Link böte einen zweiten,

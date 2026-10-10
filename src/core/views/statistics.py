@@ -4,6 +4,7 @@ import logging
 from urllib.parse import urlencode
 
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -28,7 +29,6 @@ from core.reporting.db_guard import reporting_statement_timeout
 from core.reporting.export import SUPPORTED_FORMATS, enforce_suppression_contract, export_dataset
 from core.reporting.registry import get_backend_or_404, get_backends
 from core.services.dashboard import (
-    RELEASE_LOG_LIMIT,
     InvalidStatisticsPeriodError,
     aggregate_trend_segments,
     build_release_overview,
@@ -37,6 +37,7 @@ from core.services.dashboard import (
     get_statistics_trend,
     k_threshold_warning,
 )
+from core.services.dashboard.release_log import RELEASE_PAGE_SIZE, release_queryset
 from core.services.system import export_events_csv
 from core.utils.downloads import safe_download_response
 from core.views.mixins import ExportRangeMixin, HTMXPartialMixin, LeadOrAdminRequiredMixin, htmx_absage, log_export
@@ -692,18 +693,25 @@ class ReportReleaseLogView(LeadOrAdminRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="GET", block=True))
     def get(self, request):
-        releases = build_release_overview(request.current_facility)
+        pagination_params = request.GET.copy()
+        pagination_params.pop("page", None)
+        paginator = Paginator(release_queryset(request.current_facility), RELEASE_PAGE_SIZE)
+        page = paginator.get_page(request.GET.get("page"))
+        releases = build_release_overview(
+            request.current_facility,
+            limit=RELEASE_PAGE_SIZE,
+            offset=(page.number - 1) * RELEASE_PAGE_SIZE,
+        )
         return render(
             request,
             self.template_name,
             {
                 "releases": releases,
                 "overlap_count": sum(1 for release in releases if release.overlaps),
-                # Refs #1772 (Punkt 3): die Auswertung endet bei den N juengsten
-                # Freigaben. Der Hinweistext nennt die Zahl, statt sie im Code
-                # zu verstecken — sonst ist sie ein blinder Fleck genau in der
-                # Warnung, um derentwillen die Seite existiert.
-                "release_limit": RELEASE_LOG_LIMIT,
+                "page_obj": page,
+                "paginator": paginator,
+                "is_paginated": paginator.num_pages > 1,
+                "pagination_params": pagination_params.urlencode(),
             },
         )
 

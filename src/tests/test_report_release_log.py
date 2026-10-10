@@ -504,24 +504,14 @@ class TestFreigabeUebersichtView:
         assert "release-overlap" not in content
         assert "Noch keine Herausgabe protokolliert." in content
 
-    def test_seite_nennt_die_mengen_grenze_der_auswertung(self, client, lead_user, facility):
-        """Refs #1772 (Punkt 3): dritter blinder Fleck, bisher unbenannt.
-
-        Die Seite wies die Rollout-Grenze und die Weitergabe auf anderem Weg
-        aus, nicht aber ``RELEASE_LOG_LIMIT``: aeltere Freigaben fallen aus dem
-        Auswertungsfenster und koennen keine Ueberschneidung mehr ausloesen.
-        Eine Grenze, die niemand kennt, ist keine ehrliche Grenze.
-        """
-        from core.services.dashboard.release_log import RELEASE_LOG_LIMIT
-
+    def test_page_explains_complete_overlap_analysis(self, client, lead_user, facility):
+        """Pagination limits display, never overlap detection (Refs #2529)."""
         _export(facility, lead_user, "2026-01-01", "2026-12-31")
         client.force_login(lead_user)
-
         response = client.get(reverse("core:statistics_report_releases"))
-
-        inhalt = response.content.decode()
-        assert response.context["release_limit"] == RELEASE_LOG_LIMIT
-        assert str(RELEASE_LOG_LIMIT) in inhalt
+        assert response.context["page_obj"].paginator.count == 1
+        assert "release-history-note" in response.content.decode()
+        assert "release-limit-note" not in response.content.decode()
 
     def test_staff_darf_nicht(self, client, staff_user):
         """Rollen-Guard wie das Berichts-Panel selbst."""
