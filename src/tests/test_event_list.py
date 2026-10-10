@@ -160,7 +160,11 @@ def test_shift_range_reuses_feed_dst_window(client, staff_user, facility, doc_ty
 
 
 def test_shift_filter_statements_carry_plain_range_bounds(client, staff_user, facility, doc_type_contact):
-    """A btree index cannot serve the multirange operator; plain bounds keep the scan on the index."""
+    """A btree index cannot serve the multirange operator; plain bounds keep the scan on the index.
+
+    Deliberately a query-shape guard, not a runtime benchmark: it pins the SQL form that
+    made the 50k-contact EXPLAIN use the index. Runtime itself is not asserted here.
+    """
     from django.db import connection
     from django.test.utils import CaptureQueriesContext
 
