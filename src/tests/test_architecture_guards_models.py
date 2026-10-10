@@ -2089,3 +2089,115 @@ def test_configuration_hook_delegate_never_covers_operations_before_save(operati
     }
     assert find_hook_gated_configuration_upserts(source, hooks) == []
     assert find_ungated_configuration_writes(source) == [("write", 2)]
+
+
+_KEY_LOCKED_CONFIGURATION_MODELS = {"DocumentType", "FieldTemplate", "DocumentTypeField"}
+
+
+def _registered_admin_models(class_node):
+    """Return model names passed to ``admin.register`` on an admin class."""
+    return {
+        argument.id
+        for decorator in class_node.decorator_list
+        if isinstance(decorator, ast.Call) and _configuration_root(decorator.func) == "admin"
+        for argument in decorator.args
+        if isinstance(argument, ast.Name)
+    }
+
+
+def find_key_strength_configuration_locks(source):
+    """Find configuration row locks that block deferred FK checks outside deletions.
+
+    ``select_for_update()`` without ``no_key=True`` takes ``FOR UPDATE``, which
+    conflicts with the ``FOR KEY SHARE`` lock of every referencing insert at
+    commit. Configuration writers serialize through the exclusive gate, so
+    rows they read or update without changing a key need only
+    ``FOR NO KEY UPDATE``. Functions whose name contains ``delete`` keep the
+    full lock; deletion takes it anyway.
+
+    Lexical limits: receivers are resolved through model names, imported
+    aliases, local queryset aliases and ``queryset``/``self`` inside admin
+    classes registered for these models. Generic helpers that lock
+    ``type(instance)`` or a passed model, querysets returned from other
+    functions and raw SQL are not resolved; ``no_key`` must be a literal.
+    A model ``save()`` still takes PostgreSQL's key-strength lock for its own
+    update, so FK writers stay behind the shared gate (Refs #2525).
+    """
+    tree = ast.parse(source)
+    aliases = set(_KEY_LOCKED_CONFIGURATION_MODELS)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            aliases.update(
+                alias.asname or alias.name for alias in node.names if alias.name in _KEY_LOCKED_CONFIGURATION_MODELS
+            )
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    locks = []
+    for function in (node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))):
+        if "delete" in function.name:
+            continue
+        query_aliases = set(aliases)
+        owner = parents.get(function)
+        if isinstance(owner, ast.ClassDef) and _registered_admin_models(owner) & aliases:
+            query_aliases.update({"queryset", "self"})
+        for node in sorted(ast.walk(function), key=lambda item: getattr(item, "lineno", 0)):
+            if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                names = {target.id for target in targets if isinstance(target, ast.Name)}
+                if _configuration_root(node.value) in query_aliases:
+                    query_aliases.update(names)
+                else:
+                    query_aliases.difference_update(names)
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "select_for_update"
+                and _configuration_root(node.func.value) in query_aliases
+            ):
+                continue
+            if not any(
+                keyword.arg == "no_key" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True
+                for keyword in node.keywords
+            ):
+                locks.append((function.name, node.lineno))
+    return locks
+
+
+def test_configuration_row_locks_leave_fk_checks_free_outside_deletions():
+    root = Path(__file__).resolve().parents[1] / "core"
+    violations = [
+        f"{path.relative_to(root).as_posix()}:{line}: {function}"
+        for path in sorted(root.rglob("*.py"))
+        if "migrations" not in path.relative_to(root).parts
+        for function, line in find_key_strength_configuration_locks(path.read_text())
+    ]
+    assert not violations, "Configuration row locks without no_key=True:\n" + "\n".join(violations)
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("def write():\n    DocumentType.objects.select_for_update().get()\n", [("write", 2)]),
+        ("def write():\n    FieldTemplate.objects.select_for_update(no_key=False).get()\n", [("write", 2)]),
+        ("def write():\n    rows = DocumentTypeField.objects.all()\n    rows.select_for_update()\n", [("write", 3)]),
+        (
+            "from core.models import FieldTemplate as Template\n"
+            "def write():\n    Template.objects.select_for_update(of=('self',)).get()\n",
+            [("write", 3)],
+        ),
+        (
+            "@admin.register(FieldTemplate, site=site)\nclass TemplateAdmin(ModelAdmin):\n"
+            "    def toggle(self, request, queryset):\n        queryset.select_for_update().update()\n",
+            [("toggle", 4)],
+        ),
+        ("def write():\n    DocumentType.objects.select_for_update(no_key=True, of=('self',)).get()\n", []),
+        ("def delete_selected():\n    DocumentType.objects.select_for_update().get()\n", []),
+        ("def write():\n    Event.objects.select_for_update().get()\n", []),
+        (
+            "@admin.register(Settings, site=site)\nclass SettingsAdmin(ModelAdmin):\n"
+            "    def save(self, request, queryset):\n        queryset.select_for_update().get()\n",
+            [],
+        ),
+    ],
+)
+def test_configuration_lock_strength_guard_cases(source, expected):
+    assert find_key_strength_configuration_locks(source) == expected
