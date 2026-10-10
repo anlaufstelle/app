@@ -257,12 +257,20 @@ class TestUebergebeneInstanzBleibtDerRueckgabewert:
 
 @pytest.mark.django_db
 class TestAbfrageBudgetDerStatuswechsel:
-    """Pin status-workflow budgets including the six-query protection phase.
+    """Pin status-workflow budgets including the four-query protection phase.
 
     The phase discovers the facility from the person PK, obtains its shared
-    gate and locks scoped types/templates before entity rows. Warm ContentType
-    separately; its one-time lookup is not part of these workflow budgets.
+    gate and verifies the facility before entity rows without configuration
+    scans (Refs #2525). Warm ContentType separately; its one-time lookup is not
+    part of these workflow budgets. Keep every budget exact.
     """
+
+    def _assert_gate_before_rows_without_configuration_scans(self, captured):
+        queries = [query["sql"] for query in captured.captured_queries]
+        gate = next(index for index, sql in enumerate(queries) if "pg_advisory_xact_lock_shared(2525," in sql)
+        row = next(index for index, sql in enumerate(queries) if "FOR UPDATE" in sql)
+        assert gate < row
+        assert not any("FOR SHARE" in sql for sql in queries)
 
     @pytest.fixture(autouse=True)
     def _content_type_cache(self, db):
@@ -273,24 +281,29 @@ class TestAbfrageBudgetDerStatuswechsel:
     def test_close_case_budget(self, case_open, staff_user):
         with CaptureQueriesContext(connection) as captured:
             close_case(case_open, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 18
+        assert len(_fachliche_abfragen(captured)) == 16
+        self._assert_gate_before_rows_without_configuration_scans(captured)
 
     def test_reopen_case_budget(self, case_closed, staff_user):
         with CaptureQueriesContext(connection) as captured:
             reopen_case(case_closed, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 18
+        assert len(_fachliche_abfragen(captured)) == 16
+        self._assert_gate_before_rows_without_configuration_scans(captured)
 
     def test_achieve_goal_budget(self, outcome_goal, staff_user):
         with CaptureQueriesContext(connection) as captured:
             achieve_goal(outcome_goal, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 14
+        assert len(_fachliche_abfragen(captured)) == 12
+        self._assert_gate_before_rows_without_configuration_scans(captured)
 
     def test_unachieve_goal_budget(self, outcome_goal, staff_user):
         with CaptureQueriesContext(connection) as captured:
             unachieve_goal(outcome_goal, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 14
+        assert len(_fachliche_abfragen(captured)) == 12
+        self._assert_gate_before_rows_without_configuration_scans(captured)
 
     def test_toggle_milestone_budget(self, milestone, staff_user):
         with CaptureQueriesContext(connection) as captured:
             toggle_milestone(milestone, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 15
+        assert len(_fachliche_abfragen(captured)) == 13
+        self._assert_gate_before_rows_without_configuration_scans(captured)
