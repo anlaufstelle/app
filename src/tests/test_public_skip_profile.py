@@ -12,7 +12,7 @@ pytestmark = pytest.mark.architecture
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run_profile(tmp_path, allowed, profile="public", collection_skip=False, source=None):
+def run_profile(tmp_path, allowed, profile="public", collection_skip=False, source=None, show_skips=True):
     test_file = tmp_path / "test_sample.py"
     source = source or 'import pytest\ndef test_sample(): pytest.skip("Absent dev docs")\n'
     if collection_skip:
@@ -40,7 +40,7 @@ def run_profile(tmp_path, allowed, profile="public", collection_skip=False, sour
             "--skip-inventory",
             str(inventory),
             "-q",
-            "-rs",
+            "-rs" if show_skips else "-rN",
             "-p",
             "no:cacheprovider",
         ],
@@ -209,3 +209,28 @@ def test_expected_failures_are_not_skip_inventory_entries(tmp_path, profile, kin
     assert result.returncode == (1 if kind == "strict_xpass" else 0), result.stdout + result.stderr
     assert "INTERNALERROR" not in result.stdout + result.stderr
     assert json.loads(inventory.read_text()) == []
+
+
+@pytest.mark.parametrize("profile", ["dev", "public"])
+def test_skip_report_without_location_is_reported_loudly(tmp_path, profile):
+    """A skipped report whose ``longrepr`` is not the usual location tuple must not vanish.
+
+    The inventory reads reason and location from that tuple; before this
+    guard such a report was dropped silently, so the skip was neither listed
+    nor approved.
+    """
+    (tmp_path / "conftest.py").write_text(
+        "import pytest\n"
+        "@pytest.hookimpl(hookwrapper=True)\n"
+        "def pytest_runtest_makereport(item, call):\n"
+        "    outcome = yield\n"
+        "    report = outcome.get_result()\n"
+        "    if report.skipped and call.when == 'call':\n"
+        "        report.longrepr = 'skip without location tuple'\n"
+    )
+    # Without ``-rs``: pytest's own skip summary asserts the tuple and would
+    # abort before the policy plugin reports.
+    result, _ = run_profile(tmp_path, [], profile=profile, show_skips=False)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Unreadable skip report" in result.stdout
+    assert "test_sample.py::test_sample" in result.stdout

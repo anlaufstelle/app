@@ -26,15 +26,23 @@ class SkipInventory:
     def __init__(self, config):
         self.config = config
         self.skips = {}
+        self.unreadable = {}
 
     def pytest_runtest_logreport(self, report):
-        if report.skipped and not hasattr(report, "wasxfail") and isinstance(report.longrepr, tuple):
-            reason = report.longrepr[2].removeprefix("Skipped: ")
-            self.skips[(report.nodeid, reason)] = {
-                "nodeid": report.nodeid,
-                "profile": self.config.getoption("test_profile"),
-                "reason": reason,
-            }
+        if not report.skipped or hasattr(report, "wasxfail"):
+            return
+        if not isinstance(report.longrepr, tuple):
+            # Reason and location come from the (path, line, message) tuple.
+            # A skip without it cannot be listed or approved, so it is reported
+            # at the end of the session instead of being dropped.
+            self.unreadable[report.nodeid] = type(report.longrepr).__name__
+            return
+        reason = report.longrepr[2].removeprefix("Skipped: ")
+        self.skips[(report.nodeid, reason)] = {
+            "nodeid": report.nodeid,
+            "profile": self.config.getoption("test_profile"),
+            "reason": reason,
+        }
 
     def pytest_collectreport(self, report):
         self.pytest_runtest_logreport(report)
@@ -46,9 +54,13 @@ class SkipInventory:
         records = sorted(self.skips.values(), key=lambda item: (item["nodeid"], item["reason"]))
         if inventory is not None:
             inventory.write_text(json.dumps(records, ensure_ascii=False, indent=2) + "\n")
+        terminal = self.config.pluginmanager.getplugin("terminalreporter")
+        for nodeid, kind in sorted(self.unreadable.items()):
+            if terminal is not None:
+                terminal.write_line(f"Unreadable skip report ({kind}): {nodeid}", red=True)
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
         if self.config.getoption("test_profile") != "public":
             return
-        terminal = self.config.pluginmanager.getplugin("terminalreporter")
         try:
             allowed = json.loads(self.config.getoption("skip_allowlist").read_text())
             if not isinstance(allowed, list) or any(
