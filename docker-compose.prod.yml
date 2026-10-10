@@ -235,6 +235,7 @@ services:
       # dokumentierten Runtime-Allowlist. Geschrieben wird die Datei von
       # cron/maintenance advance the anchor; web can only read its separate volume.
       DJANGO_AUDIT_HWM_PATH: ${DJANGO_AUDIT_HWM_PATH:-/data/audit_hwm.json}
+      AUDITLOG_SYSTEM_RETENTION_MONTHS: ${AUDITLOG_SYSTEM_RETENTION_MONTHS:-24}
       SUDO_MODE_TTL_SECONDS: ${SUDO_MODE_TTL_SECONDS:-900}
       # Refs #2470: the MFA role enforcement and the passkey relying party act
       # in the HTTP runtime. ``-`` instead of ``:-``: unset keeps the code
@@ -341,6 +342,7 @@ services:
       MEDIA_ROOT: ${MEDIA_ROOT:-/media/media}
       MAINTENANCE_FLAG_FILE: ${MAINTENANCE_FLAG_FILE:-/media/anlaufstelle.maintenance}
       DJANGO_AUDIT_HWM_PATH: ${DJANGO_AUDIT_HWM_PATH:-/data/audit_hwm.json}
+      AUDITLOG_SYSTEM_RETENTION_MONTHS: ${AUDITLOG_SYSTEM_RETENTION_MONTHS:-24}
       ANLAUFSTELLE_PROCESS_ROLE: maintenance
       DJANGO_LOAD_DOTENV: "false"
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
@@ -409,6 +411,7 @@ services:
       MEDIA_ROOT: ${MEDIA_ROOT:-/media/media}
       MAINTENANCE_FLAG_FILE: ${MAINTENANCE_FLAG_FILE:-/media/anlaufstelle.maintenance}
       DJANGO_AUDIT_HWM_PATH: ${DJANGO_AUDIT_HWM_PATH:-/data/audit_hwm.json}
+      AUDITLOG_SYSTEM_RETENTION_MONTHS: ${AUDITLOG_SYSTEM_RETENTION_MONTHS:-24}
       ANLAUFSTELLE_PROCESS_ROLE: maintenance
       DJANGO_LOAD_DOTENV: "false"
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
