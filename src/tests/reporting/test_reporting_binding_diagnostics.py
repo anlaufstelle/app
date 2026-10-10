@@ -2,8 +2,10 @@
 
 import json
 from datetime import timedelta
+from io import StringIO
 
 import pytest
+from django.core.management import call_command
 from django.urls import reverse
 from django.utils import timezone
 
@@ -229,3 +231,29 @@ def test_create_view_has_separate_warning_heading(client, admin_user):
     assert response.status_code == 200
     assert b"data-report-key-warnings-output" in response.content
     assert "Fehlende Zuordnungen" in response.content.decode()
+
+
+def test_inventory_keeps_counted_types_and_excludes_unused_fields(partial_type, facility):
+    doc_type, field = partial_type
+    complete = make_type(facility, "Complete")
+    add_field(complete, "ausgabe_stueck")
+    add_field(complete, "rueckgabe_stueck")
+    inactive = make_type(facility, "Inactive")
+    add_field(inactive, "ausgabe_stueck")
+    add_field(inactive, "rueckgabe_stueck")
+    inactive.is_active = False
+    inactive.save()
+    unused = FieldTemplate.objects.create(facility=facility, name="Unused", report_key="ausgabe_stueck")
+    inactive_field = FieldTemplate.objects.create(
+        facility=facility, name="Inactive field", report_key="ausgabe_stueck", is_active=False
+    )
+    out = StringIO()
+    call_command("inventory_report_bindings", "--facility", str(facility.pk), "--format", "json", stdout=out)
+    result = json.loads(out.getvalue())
+    types = {entry["id"]: entry["appears_in"] for entry in result["document_types"]["bound"]}
+    for counted_type in (doc_type, inactive):
+        assert any("Spritzentausch-Bilanz" in name for name in types[str(counted_type.pk)])
+    unbound = {entry["id"]: entry["appears_in"] for entry in result["field_templates"]["unbound"]}
+    assert unbound[str(field.pk)] == []
+    assert unbound[str(unused.pk)] == []
+    assert unbound[str(inactive_field.pk)] == []
