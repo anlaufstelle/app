@@ -20,6 +20,9 @@ from __future__ import annotations
 import re
 
 import pytest
+from playwright.sync_api import expect
+
+from ._helpers import django_shell
 
 pytestmark = pytest.mark.e2e
 
@@ -163,28 +166,79 @@ class TestMobileCaseDetail:
 # ---------------------------------------------------------------------------
 
 
+_GOAL_PREFIX = "E2E Mobil"
+
+_GOAL_CLEANUP = f"""
+from core.models import Case, Client
+
+Case.objects.filter(title__startswith='{_GOAL_PREFIX}').delete()
+Client.objects.filter(pseudonym__startswith='{_GOAL_PREFIX}').delete()
+"""
+
+_GOAL_SETUP = f"""
+from core.models import Case, Client, Facility, OutcomeGoal, User
+
+facility = Facility.objects.get(name='Hauptstelle')
+admin = User.objects.get(username='admin')
+person = Client.objects.create(
+    facility=facility, contact_stage='identified', pseudonym='{_GOAL_PREFIX}-Person', created_by=admin
+)
+case = Case.objects.create(facility=facility, client=person, title='{_GOAL_PREFIX} Fall', created_by=admin)
+goal = OutcomeGoal.objects.create(case=case, title='{_GOAL_PREFIX} Ziel', created_by=admin)
+print('GOAL_CASE', case.pk, goal.pk)
+"""
+
+
+@pytest.fixture(scope="module")
+def open_case_with_goal(e2e_env):
+    """An open case with exactly one open goal, created for this module.
+
+    The seeded goals are spread over the cases at random, so no seeded case is
+    guaranteed to carry one; the precondition is built here and handed over as
+    the real primary keys.
+    """
+    django_shell(e2e_env, _GOAL_CLEANUP)
+    lines = django_shell(e2e_env, _GOAL_SETUP)
+    row = next((line.split() for line in lines if line.startswith("GOAL_CASE ")), None)
+    assert row and len(row) == 3, f"Goal setup did not report the created case: {lines}"
+    yield {"case": row[1], "goal": row[2]}
+    django_shell(e2e_env, _GOAL_CLEANUP)
+
+
+def _goal_toggle(page, base_url, fixture):
+    """Open the fixture case and return its goal-toggle button."""
+    page.goto(f"{base_url}/cases/{fixture['case']}/", wait_until="domcontentloaded")
+    return page.locator(f"form[hx-post$='/goals/{fixture['goal']}/toggle/'] button[type='submit']")
+
+
 class TestMobileStreetworkCaseUpdate:
     """Refs Matrix SMK-A-MOBI-02 (reduzierter Scope — siehe Modul-Docstring)."""
 
-    def test_goal_toggle_via_tap_persists(self, mobile_authenticated_page, base_url):
-        """Tap auf Goal-Toggle-Button ändert den Zustand und persistiert.
-
-        Voraussetzung: der Seed legt für qualifizierte Fälle Goals an.
-        Falls ein bestimmter Fall keine Goals hat, wird der Test übersprungen.
-        """
+    def test_goal_toggle_via_tap_persists(self, mobile_authenticated_page, base_url, open_case_with_goal):
+        """Tap auf Goal-Toggle-Button ändert den Zustand und persistiert."""
         page = mobile_authenticated_page
-        _open_first_qualified_case(page, base_url)
+        toggle = _goal_toggle(page, base_url, open_case_with_goal)
+        goal_card = page.locator("#goals-section .card", has=toggle)
+        expect(goal_card.get_by_text("offen", exact=True)).to_be_visible()
+        expect(toggle).to_have_text("Ziel erreicht")
 
-        toggle = page.locator("form[action*='/goals/'][action$='/toggle/'] button[type='submit']").first
-        if toggle.count() == 0 or not toggle.is_visible():
-            pytest.skip("Fall hat keine Goals — Seed-Variation; nicht testbar in diesem Lauf.")
+        toggle.tap()
+
+        # The HTMX swap replaces the goals section; the new state is rendered ...
+        expect(goal_card.get_by_text("erreicht", exact=True)).to_be_visible()
+        expect(toggle).to_have_text("Nicht erreicht")
+
+        # ... and survives a reload, i.e. it was persisted.
+        page.reload(wait_until="domcontentloaded")
+        expect(goal_card.get_by_text("erreicht", exact=True)).to_be_visible()
+        expect(toggle).to_have_text("Nicht erreicht")
+
+    def test_goal_toggle_touch_target(self, mobile_authenticated_page, base_url, open_case_with_goal):
+        """The toggle is a touch target of at least 44 px (the matrix case asks for it)."""
+        page = mobile_authenticated_page
+        toggle = _goal_toggle(page, base_url, open_case_with_goal)
+        toggle.wait_for(state="visible", timeout=10000)
         _assert_touch_target(toggle, "goal-toggle-button")
-
-        url_before = page.url
-        toggle.click()
-        page.wait_for_load_state("domcontentloaded")
-        # Goal-Toggle redirected zurück auf Case-Detail (oder bleibt).
-        assert page.url.startswith(url_before.rsplit("/", 1)[0]) or page.url == url_before
 
 
 # ---------------------------------------------------------------------------
