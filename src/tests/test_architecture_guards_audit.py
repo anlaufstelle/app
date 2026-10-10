@@ -130,8 +130,10 @@ class TestAuditLogCreationAllowlist:
             # Refs #2042: +9 Zeilen durch ``retention_handover_notes_days`` in
             # denselben beiden Listen (164 -> 173, 193 -> 202). Reine Zeilen-
             # Nachfuehrung, keine neue Schreibstelle.
-            173: "update_settings-Body — Settings-Diff-Helper",
-            202: "log_settings_change-Body — zweite create-Stelle",
+            # Refs #2525: +1 Zeile durch die Schutzsperre vor dem Versionscheck
+            # in ``update_settings`` (173 -> 174, 202 -> 203).
+            174: "update_settings-Body — Settings-Diff-Helper",
+            203: "log_settings_change-Body — zweite create-Stelle",
         },
         # Signal-Handler: kein Request, RLS-Session-State explizit gesetzt.
         "core/signals/audit.py": {

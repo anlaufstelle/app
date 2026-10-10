@@ -159,6 +159,7 @@ def update_settings(settings_obj, user, *, expected_updated_at=None, **fields):
     ``expected_updated_at`` enables optimistic locking (Refs #531) — when the
     DB-side ``updated_at`` differs, a ``ValidationError`` is raised.
     """
+    lock_settings_protection(settings_obj, fields.get("default_document_type"))
     check_version_conflict(settings_obj, expected_updated_at)
     before = _snapshot(settings_obj)
     for key, value in fields.items():
@@ -231,3 +232,18 @@ __all__ = [
     "snapshot_settings",
     "update_settings",
 ]
+
+
+def lock_settings_protection(settings_obj, default_document_type=None):
+    """Take shared protection gates before Settings rows and audit (Refs #2525).
+
+    PostgreSQL checks the default document type FK at commit, after the audit
+    lock. A gated configuration writer holds that type row while it waits for
+    its own audit lock, so settings writers must queue at the gate first.
+    """
+    from core.services.dynamic_protection import lock_dynamic_protection_many
+
+    facility_ids = {settings_obj.facility_id}
+    if default_document_type is not None:
+        facility_ids.add(default_document_type.facility_id)
+    lock_dynamic_protection_many(facility_ids)

@@ -5,6 +5,7 @@ spezielles save_model fuer SETTINGS_CHANGE-AuditLog (Refs #893).
 """
 
 from django.contrib import admin
+from django.db import transaction
 from unfold.admin import ModelAdmin
 
 from core.admin.mixins import FacilityScopedAdminMixin
@@ -68,10 +69,17 @@ class SettingsAdmin(FacilityScopedAdminMixin, ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    @transaction.atomic
     def save_model(self, request, obj, form, change):
-        """Write a SETTINGS_CHANGE audit entry for every Settings update."""
-        from core.services.system import log_settings_change, snapshot_settings
+        """Write a SETTINGS_CHANGE audit entry for every Settings update.
 
+        Take the protection gates before the row lock, persistence and audit
+        (Refs #2525).
+        """
+        from core.services.system import log_settings_change, snapshot_settings
+        from core.services.system.settings import lock_settings_protection
+
+        lock_settings_protection(obj, obj.default_document_type)
         before = snapshot_settings(Settings.objects.select_for_update().get(pk=obj.pk)) if change else {}
         super().save_model(request, obj, form, change)
         if change:
