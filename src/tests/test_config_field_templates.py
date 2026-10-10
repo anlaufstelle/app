@@ -14,6 +14,7 @@ from html import unescape
 
 import pytest
 from django.contrib.messages import get_messages
+from django.forms import modelform_factory
 from django.urls import reverse
 from django.utils import timezone
 
@@ -264,6 +265,11 @@ class TestValidation:
 
 @pytest.mark.django_db
 class TestOptionsEditor:
+    def test_generic_model_form_has_no_options_ui_help_text(self):
+        form_class = modelform_factory(FieldTemplate, fields=["options_json"])
+
+        assert form_class()["options_json"].help_text == ""
+
     def test_options_help_is_visible_outside_the_collapsible_json_wrapper(self, client, admin_user):
         client.force_login(admin_user)
 

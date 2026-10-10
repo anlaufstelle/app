@@ -2,12 +2,14 @@
 
 import logging
 
+from django import forms
 from django.contrib import admin, messages
 from django.db import transaction
 from unfold.admin import ModelAdmin, TabularInline
 
 from core.admin.mixins import FacilityScopedAdminMixin
 from core.admin_site import anlaufstelle_admin_site
+from core.forms.config import FieldTemplateForm
 from core.models import AuditLog, DocumentType, DocumentTypeField, FieldGroup, FieldTemplate, QuickTemplate, TimeFilter
 from core.services.audit import log_audit_event
 from core.services.audit.chain import advisory_lock_id
@@ -178,8 +180,17 @@ class DocumentTypeAdmin(ConfigurationSelectionAdminMixin, ModelAdmin):
         return form
 
 
+class FieldTemplateAdminForm(forms.ModelForm):
+    class Meta:
+        model = FieldTemplate
+        fields = "__all__"
+        help_texts = FieldTemplateForm.Meta.help_texts
+
+
 @admin.register(FieldTemplate, site=anlaufstelle_admin_site)
 class FieldTemplateAdmin(ConfigurationSelectionAdminMixin, ModelAdmin):
+    form = FieldTemplateAdminForm
+
     list_display = (
         "name",
         "slug",

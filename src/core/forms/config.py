@@ -547,6 +547,13 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
             "help_text",
             "is_active",
         ]
+        help_texts = {
+            "options_json": _(
+                "Für Auswahl- und Mehrfachauswahl-Felder enthält dieses Feld die wählbaren Werte. "
+                'Beispiel: [{"slug": "beratung", "label": "Beratung"}]. '
+                "Bei anderen Feldtypen leer lassen. Nicht mehr benötigte Optionen deaktivieren statt entfernen."
+            ),
+        }
         widgets = {
             "options_json": forms.Textarea(attrs={"rows": 3}),
             # ``default_value`` ist am Modell ein ``TextField`` — der

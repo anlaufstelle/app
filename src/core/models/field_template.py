@@ -74,11 +74,6 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
         blank=True,
         default=list,
         verbose_name=_("Optionen (JSON)"),
-        help_text=_(
-            "Für Auswahl- und Mehrfachauswahl-Felder enthält dieses Feld die wählbaren Werte. "
-            'Beispiel: [{"slug": "beratung", "label": "Beratung"}]. '
-            "Bei anderen Feldtypen leer lassen. Nicht mehr benötigte Optionen deaktivieren statt entfernen."
-        ),
     )
     default_value = models.TextField(
         blank=True,
