@@ -64,7 +64,7 @@ Templates included:
 | [facility-export-schema.md](../facility-export-schema.md) | Full facility export (JSON, schema v1): field list, versioning rule, trash/anonymization boundaries, attachment hashes, `manage.py export_facility` (Refs #1060) |
 | [monitoring-guide.md](../monitoring-guide.md) | `/health/` endpoint: fields, HTTP status codes, liveness vs. detail, hooking up uptime/monitoring tools (Refs #1071) |
 | (DE: [disaster-recovery.md](../disaster-recovery.md)) | Total-loss recovery: obtaining an off-site backup, key escrow, restore on a fresh host, RTO/RPO (Refs #1071) |
-| [faq.md](../faq.md) | Authoritative source for frequently asked questions about operations, troubleshooting, and organizational workflows |
+| [faq.md](../faq.md) ([English offline excerpt](faq.md)) | Authoritative source for frequently asked questions about operations, troubleshooting, and organizational workflows |
 | [accessibility-audit.md](../accessibility-audit.md) | Accessibility audit evidence for WCAG 2.1 Level AA, including automated findings, remediation, and the screen-reader test protocol |
 | (DE: [security-notes.md](../security-notes.md)) | Deliberate security design decisions (2FA, Fernet, RLS, audit, lockout) |
 | (DE: [threat-model.md](../threat-model.md)) | Security model, attack surface, known open gaps |

@@ -14,4 +14,4 @@ An HTTP/network/processing error fetching revocations (including 500/429), or an
 <!-- translation-source: docs/threat-model.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 851acf7a4aea005d6145ffc9c90299331bb84b17 -->
+<!-- source-hash: 6ba3f0f9359cd62a6008bb13212e38ef83889d7e -->

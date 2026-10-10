@@ -183,4 +183,4 @@ An HTTP/network/processing error fetching revocations (including 500/429), or an
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 476aed50249ff6a6399792dbd80e04e72067db61 -->
+<!-- source-hash: cf2d064e93af5e9fd9309d8b67d87754b0ce07cd -->

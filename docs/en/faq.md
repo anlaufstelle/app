@@ -9,4 +9,4 @@ An HTTP/network/processing error fetching revocations (including 500/429), or an
 <!-- translation-source: docs/faq.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: c92c7406a596325467abd938d88740d0ade376c3 -->
+<!-- source-hash: d0b8f9c331ff0f4fdf197010162b00ead97561b1 -->

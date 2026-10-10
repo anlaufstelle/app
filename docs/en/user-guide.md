@@ -4,7 +4,7 @@
 
 This guide is intended for social workers, managers, and assistants working in open consultation hours and advice centers, drop-in centers, emergency shelters, awareness teams, women's shelters, youth work, and other low-threshold social service facilities that use Anlaufstelle.
 
-This guide and the [FAQ](../faq.md) are linked inside the application under "Help" (`/hilfe/`) (Refs #1904).
+This guide and the [FAQ](../faq.md) ([English offline excerpt](faq.md)) are linked inside the application under "Help" (`/hilfe/`) (Refs #1904).
 
 ---
 
@@ -816,7 +816,7 @@ If an event was edited online (by someone else) and offline (by you) at the same
 
 Anlaufstelle distinguishes five roles. Your role is assigned by the application support (Anwendungsbetreuung) of your facility.
 
-> **Audience of this section:** the **practical** view -- what you are allowed to do with your role in day-to-day work. The professional rationale behind the model is in the [domain concept (Role)](../fachkonzept-anlaufstelle.md#role--die-rolle) (German only), the technical details (DB values, RLS scoping) in [FAQ § C](../faq.md#die-fünf-rollen) (German only), and creating and managing roles in [Admin Guide § 2.4](admin-guide.md#role-descriptions).
+> **Audience of this section:** the **practical** view -- what you are allowed to do with your role in day-to-day work. The professional rationale behind the model is in the [domain concept (Role)](../fachkonzept-anlaufstelle.md#role--die-rolle) (German only), the technical details (DB values, RLS scoping) in [FAQ § C](../faq.md#die-fünf-rollen) ([English offline excerpt](faq.md)) (German only), and creating and managing roles in [Admin Guide § 2.4](admin-guide.md#role-descriptions).
 
 ### Role Overview
 
@@ -1039,7 +1039,7 @@ Each episode shows its status:
 
 ---
 
-> **More questions?** The [FAQ](../faq.md) (German only) answers common questions about data protection, 2FA, offline mode, retention periods, and more.
+> **More questions?** The [FAQ](../faq.md) (German; [English offline excerpt](faq.md)) answers common questions about data protection, 2FA, offline mode, retention periods, and more.
 
 ---
 
@@ -1048,5 +1048,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 6401b5306cd6ce5ba3c35e65dba2a1cda2bb0a7a -->
+<!-- source-hash: 552c0ef019db22aefb1fb1825276918c1009d1cd -->
 <!-- translation-date: 2026-10-09 -->

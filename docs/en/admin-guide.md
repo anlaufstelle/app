@@ -730,7 +730,7 @@ route below is available as a technical emergency fallback.
 
 #### Role Descriptions
 
-> **Audience of this section:** the **bootstrap/administration view** -- which role you assign when creating users, and which bootstrap rights come with it. The professional rationale is in the [domain concept (Role)](../fachkonzept-anlaufstelle.md#role--die-rolle) (German), the practical "who may do what?" view in [User Guide § 9](user-guide.md#9-roles-and-permissions), the technical details (DB values, RLS scoping) in [FAQ § C](../faq.md#die-fünf-rollen) (German).
+> **Audience of this section:** the **bootstrap/administration view** -- which role you assign when creating users, and which bootstrap rights come with it. The professional rationale is in the [domain concept (Role)](../fachkonzept-anlaufstelle.md#role--die-rolle) (German), the practical "who may do what?" view in [User Guide § 9](user-guide.md#9-roles-and-permissions), the technical details (DB values, RLS scoping) in [FAQ § C](../faq.md#die-fünf-rollen) ([English offline excerpt](faq.md)) (German).
 
 Anlaufstelle has five roles -- four facility-bound, one facility-spanning:
 
@@ -2497,5 +2497,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 97c43b692cb38742679a254cb4eb6fede2e9a348 -->
+<!-- source-hash: 3c36230b01696eb3f4eeff45baeddd9a16856ce1 -->
 <!-- translation-date: 2026-10-09 -->
