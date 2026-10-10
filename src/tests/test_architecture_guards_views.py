@@ -47,6 +47,7 @@ class TestRateLimitOnAllMutations:
 
         from core.utils.ratelimit import RATE_LIMIT_WRAPPER_CODE, AppliedRateLimit, RateLimit
         from core.views.demo_scenarios import require_demo_mode
+        from core.views.mixins import anonymous_session_required
 
         def dummy(*args, **kwargs):
             pass
@@ -130,6 +131,8 @@ class TestRateLimitOnAllMutations:
                     type(decorator) is RateLimit
                     or (type(decorator) is FunctionType and decorator.__code__ is http_decorator_code)
                     or decorator is require_demo_mode
+                    # Refuses signed-in sessions only; the wrapped dispatch must still prove its limit.
+                    or decorator is anonymous_session_required
                     for decorator in bound["decorators"]
                 ):
                     return bound["method"]

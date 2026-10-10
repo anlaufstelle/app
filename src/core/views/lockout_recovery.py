@@ -108,8 +108,8 @@ class LockoutRecoveryRequestView(FormView):
 
 # Refs #2391: the confirmation belongs to the request above; a signed-in
 # session gets the same notice there as on every other unlock page.
-@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 @method_decorator(anonymous_session_required, name="dispatch")
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class LockoutRecoverySentView(TemplateView):
     template_name = "auth/lockout_recovery_sent.html"
 
