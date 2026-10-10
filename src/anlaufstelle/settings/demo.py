@@ -15,6 +15,8 @@ Verwendung:
 
 import copy
 
+from core.demo import DEMO_PASSWORD  # noqa: F401
+
 from . import base as _base
 from .devlive import *  # noqa: F401, F403
 
@@ -64,7 +66,6 @@ MFA_ENFORCE_PRIVILEGED_ROLES = False
 # flaeche, die der stuendliche Reset nicht mindert). Das Konto darf per Seed
 # weiter existieren — es wird nur nicht mehr oeffentlich mit Zugangsdaten
 # angezeigt.
-DEMO_PASSWORD = "anlaufstelle2026"  # noqa: S105 — oeffentliches Demo-Passwort, bewusst
 DEMO_LOGINS = [
     {"username": "admin", "role": "Einrichtungs-Admin"},
     {"username": "emma", "role": "Leitung"},

@@ -43,6 +43,10 @@
             </p>
         </div>
 
+        {% for message in messages %}
+        <div role="alert" class="mb-4 bg-red-100 border border-red-300 text-red-900 p-4">{{ message }}</div>
+        {% endfor %}
+
         {% if not scenario_cards %}
         <div class="bg-amber-50 border border-amber-300 rounded-[10px] p-4 text-[13px] text-amber-900" role="status">
             {% trans "Für diese Demo sind derzeit keine Bereiche hinterlegt." %}

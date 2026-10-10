@@ -1,10 +1,12 @@
 /*
- * Login + password-change bootstrap for the encrypted offline mode.
+ * Login, password-change and demo-start bootstrap for encrypted offline mode.
  *
  * - On the login page: intercept the submit, fetch /login/, then
  *   POST /auth/offline-key-salt/ and call crypto_session.deriveSessionKey()
  *   with the user's password before navigating away. Falls back to a native
  *   form submit if WebCrypto is unavailable.
+ * - After demo start: consume server-rendered password data once, using
+ *   the authenticated page CSRF token and the same key lifetime policy.
  * - On the password-change page: same flow with the new password, after
  *   purging any stale ciphertext.
  *
@@ -14,7 +16,17 @@
 (function () {
     "use strict";
 
-    if (!window.crypto_session || !window.crypto_session.isSupported()) return;
+    var demoData = document.querySelector("[data-demo-offline-password]");
+
+    function showDemoBootstrapError() {
+        var error = document.querySelector("[data-demo-offline-error]");
+        if (error) error.hidden = false;
+    }
+
+    if (!window.crypto_session || !window.crypto_session.isSupported()) {
+        if (demoData) showDemoBootstrapError();
+        return;
+    }
 
     function csrfFromMeta() {
         // Refs #602: CSRF_COOKIE_HTTPONLY schließt JS aus dem Cookie aus, der
@@ -54,15 +66,22 @@
         return await tryFetch("/login/");
     }
 
-    async function fetchSaltAndDeriveKey(password, location) {
-        var token = (await fetchFreshCsrfToken(location)) || csrfFromMeta() || "";
+    async function fetchSaltAndDeriveKey(password, location, demoBootstrap) {
+        var token = demoBootstrap
+            ? csrfFromMeta() || ""
+            : (await fetchFreshCsrfToken(location)) || csrfFromMeta() || "";
+        var headers = { "X-CSRFToken": token };
+        if (demoBootstrap) headers["X-Demo-Offline-Bootstrap"] = "1";
         var saltResp = await fetch("/auth/offline-key-salt/", {
             method: "POST",
             credentials: "same-origin",
-            headers: { "X-CSRFToken": token },
+            headers: headers,
         });
         if (!saltResp.ok) return null;
         var json = await saltResp.json();
+        if (demoBootstrap && (!Number.isFinite(json.offline_key_max_age) || json.offline_key_max_age <= 0)) {
+            throw new Error("Invalid offline key lifetime");
+        }
         // Refs #2528: login HTML predates authentication and has no facility.
         // The authenticated salt response supplies the policy before derivation.
         document.body.dataset.offlineKeyMaxAge = String(json.offline_key_max_age);
@@ -209,6 +228,20 @@
                     form.submit();
                 });
         });
+    }
+
+    if (demoData) {
+        // Consume rendered data locally as well, preventing a second derivation.
+        var demoPassword = demoData.getAttribute("data-demo-offline-password");
+        demoData.removeAttribute("data-demo-offline-password");
+        window.crypto_session.ready()
+            .then(function () {
+                return fetchSaltAndDeriveKey(demoPassword, null, true);
+            })
+            .then(function (homeUrl) {
+                if (!homeUrl) showDemoBootstrapError();
+            })
+            .catch(showDemoBootstrapError);
     }
 
     if (document.getElementById("login-form")) {

@@ -52,6 +52,7 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
+from core.demo import DEMO_OFFLINE_BOOTSTRAP_ERROR, DEMO_OFFLINE_BOOTSTRAP_PENDING, DEMO_PASSWORD
 from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY, LAST_RENEWAL_KEY
 from core.models import User
 from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
@@ -238,6 +239,11 @@ class DemoScenarioStartView(View):
             messages.error(request, _("Für diesen Demo-Bereich ist noch kein passendes Konto vorbereitet."))
             return redirect(SCENARIO_SELECT_URL_NAME)
 
+        # Refuse before login and Clear-Site-Data to preserve existing work.
+        if not user.check_password(DEMO_PASSWORD):
+            messages.error(request, DEMO_OFFLINE_BOOTSTRAP_ERROR)
+            return redirect(SCENARIO_SELECT_URL_NAME)
+
         # ``authenticate()`` entfaellt bewusst — es gibt kein Passwort in
         # diesem Ablauf, Vertrauensanker ist die serverseitige Szenario-/
         # Rollen-Pruefung oben. ``login()`` erkennt einen Wechsel des
@@ -247,6 +253,7 @@ class DemoScenarioStartView(View):
         user.backend = "django.contrib.auth.backends.ModelBackend"
         auth_login(request, user)
         _stamp_session_timeout(request, facility)
+        request.session[DEMO_OFFLINE_BOOTSTRAP_PENDING] = True
 
         response = redirect(settings.LOGIN_REDIRECT_URL)
         response["Clear-Site-Data"] = CLEAR_SITE_DATA_VALUE

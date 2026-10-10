@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 from django.urls import reverse
 
+from core.demo import DEMO_PASSWORD
 from core.models import Facility, User
 from core.views import demo_scenarios as views
 
@@ -56,7 +57,7 @@ def kontaktladen_staff(kontaktladen_facility):
         facility=kontaktladen_facility,
         is_staff=True,
     )
-    user.set_password("irrelevant")
+    user.set_password(DEMO_PASSWORD)
     user.save()
     return user
 
@@ -69,7 +70,7 @@ def kontaktladen_admin(kontaktladen_facility):
         facility=kontaktladen_facility,
         is_staff=True,
     )
-    user.set_password("irrelevant")
+    user.set_password(DEMO_PASSWORD)
     user.save()
     return user
 
@@ -87,7 +88,7 @@ def solo_staff(solo_facility):
         facility=solo_facility,
         is_staff=True,
     )
-    user.set_password("irrelevant")
+    user.set_password(DEMO_PASSWORD)
     user.save()
     return user
 
@@ -512,3 +513,85 @@ class TestStaleRequestAfterSwitch:
         # The visitor's own jar still holds the new session and is signed in.
         assert client.cookies[django_settings.SESSION_COOKIE_NAME].value == new_key
         assert int(client.session["_auth_user_id"]) == solo_staff.pk
+
+
+class TestDemoOfflineBootstrap:
+    @pytest.mark.parametrize("role", TEAM_ROLES)
+    @pytest.mark.parametrize("scenario_key", ["kontaktladen", "solo"])
+    def test_start_renders_one_time_password_data_after_clear_site_data(
+        self, client, demo_mode, patched_catalog, kontaktladen_staff, solo_staff, role, scenario_key
+    ):
+        user = kontaktladen_staff if scenario_key == "kontaktladen" else solo_staff
+        scenario = next(item for item in patched_catalog if item.key == scenario_key)
+        if role not in scenario.demo_roles:
+            pytest.skip("Role is not available in this scenario")
+        user.role = role
+        user.set_password(DEMO_PASSWORD)
+        user.save()
+        response = client.post(reverse("demo_scenario_start"), {"scenario": scenario_key, "role": role})
+        assert response.status_code == 302
+        assert response["Clear-Site-Data"] == views.CLEAR_SITE_DATA_VALUE
+        assert "data-demo-offline-password" not in response.content.decode()
+        page = client.get(response.url)
+        assert page.status_code == 200
+        body = page.content.decode()
+        assert 'data-demo-offline-password="anlaufstelle2026"' in body
+        assert 'src="/static/js/auth-bootstrap.js"' in body
+        assert "data-demo-offline-error" in body
+        assert body.index("data-demo-offline-error") < body.index('id="flash-messages"')
+        assert "data-demo-offline-password" not in client.get(response.url).content.decode()
+
+    def test_changed_password_shows_error_without_login_or_storage_reset(
+        self, client, demo_mode, patched_catalog, kontaktladen_staff
+    ):
+        kontaktladen_staff.set_password("changed demo password")
+        kontaktladen_staff.save()
+        password_hash = kontaktladen_staff.password
+        salt = kontaktladen_staff.ensure_offline_key_salt()
+        response = client.post(reverse("demo_scenario_start"), {"scenario": "kontaktladen"})
+        assert response.status_code == 302
+        assert "Clear-Site-Data" not in response
+        body = client.get(response.url).content.decode()
+        assert "Offline-Schlüssel konnte nicht aktiviert werden" in body
+        assert "_auth_user_id" not in client.session
+        assert "data-demo-offline-password" not in body
+        kontaktladen_staff.refresh_from_db()
+        assert kontaktladen_staff.password == password_hash
+        assert kontaktladen_staff.offline_key_salt == salt
+
+    def test_non_demo_ignores_pending_flag_and_never_exposes_password(self, client, settings, staff_user):
+        settings.DEMO_MODE = False
+        client.force_login(staff_user)
+        session = client.session
+        session["demo_offline_bootstrap_pending"] = True
+        session.save()
+        body = client.get("/account/").content.decode()
+        assert "data-demo-offline-password" not in body
+        assert 'src="/static/js/auth-bootstrap.js"' not in body
+        assert "anlaufstelle2026" not in body
+
+    def test_demo_without_start_has_no_bootstrap(self, client, demo_mode, kontaktladen_staff):
+        client.force_login(kontaktladen_staff)
+        assert "data-demo-offline-password" not in client.get("/account/").content.decode()
+
+    @pytest.mark.parametrize("demo_enabled", [False, True])
+    def test_salt_rejects_demo_bootstrap_with_changed_password(self, client, settings, staff_user, demo_enabled):
+        settings.DEMO_MODE = demo_enabled
+        client.force_login(staff_user)
+        response = client.post("/auth/offline-key-salt/", HTTP_X_DEMO_OFFLINE_BOOTSTRAP="1")
+        assert response.status_code == 403
+        assert "salt" not in response.json()
+        staff_user.refresh_from_db()
+        assert staff_user.offline_key_salt == ""
+
+    def test_demo_salt_keeps_audit_and_facility_lifetime(self, client, demo_mode, kontaktladen_staff):
+        from core.models import AuditLog, Settings
+
+        Settings.objects.create(facility=kontaktladen_staff.facility, session_absolute_hours=3)
+        kontaktladen_staff.set_password(DEMO_PASSWORD)
+        kontaktladen_staff.save()
+        client.force_login(kontaktladen_staff)
+        response = client.post("/auth/offline-key-salt/", HTTP_X_DEMO_OFFLINE_BOOTSTRAP="1")
+        assert response.status_code == 200
+        assert response.json()["offline_key_max_age"] == 10800
+        assert AuditLog.objects.filter(action=AuditLog.Action.OFFLINE_KEY_FETCH, user=kontaktladen_staff).count() == 1

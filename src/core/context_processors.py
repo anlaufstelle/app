@@ -252,11 +252,17 @@ def demo(request):
     """
     if not getattr(settings, "DEMO_MODE", False):
         return {"demo_mode": False}
+    from core.demo import DEMO_OFFLINE_BOOTSTRAP_ERROR, DEMO_OFFLINE_BOOTSTRAP_PENDING, DEMO_PASSWORD
+
+    session = getattr(request, "session", {})
+    bootstrap_pending = request.user.is_authenticated and session.pop(DEMO_OFFLINE_BOOTSTRAP_PENDING, False)
     now = timezone.localtime()
     next_reset = now.replace(minute=0, second=0, microsecond=0) + datetime.timedelta(hours=1)
     return {
         "demo_mode": True,
         "demo_logins": getattr(settings, "DEMO_LOGINS", []),
-        "demo_password": getattr(settings, "DEMO_PASSWORD", ""),
+        "demo_password": DEMO_PASSWORD,
+        "demo_offline_password": DEMO_PASSWORD if bootstrap_pending else "",
+        "demo_offline_bootstrap_error": DEMO_OFFLINE_BOOTSTRAP_ERROR,
         "demo_next_reset": next_reset,
     }

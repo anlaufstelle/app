@@ -197,6 +197,9 @@
             <span aria-hidden="true" class="text-amber-400">·</span>
             <a href="{% url 'demo_scenario_select' %}" class="font-semibold underline hover:no-underline" data-testid="demo-scenario-switch-link">{% trans "Demo-Bereich wechseln" %}</a>
         </div>
+        {% if demo_offline_password %}
+        <div hidden role="alert" data-demo-offline-error class="bg-red-100 border border-red-300 text-red-900 p-4">{{ demo_offline_bootstrap_error }}</div>
+        {% endif %}
         {% endif %}
         <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7">
             {# Refs #811 (C-44): stabile Live-Region — siehe CONTRIBUTING.md "Templates und Frontend". #}
@@ -256,6 +259,10 @@
     <script src="{% static 'js/offline-bundles.js' %}"></script>
     <script src="{% static 'js/offline-revocations.js' %}"></script>
     <script src="{% static 'js/offline-store.js' %}"></script>
+    {% if demo_mode and demo_offline_password %}
+    <div hidden data-demo-offline-password="{{ demo_offline_password }}"></div>
+    <script src="{% static 'js/auth-bootstrap.js' %}"></script>
+    {% endif %}
     <script src="{% static 'js/filter-persistence.js' %}" defer></script>
     <script src="{% static 'js/offline-queue.js' %}"></script>
     <script src="{% static 'js/offline-client.js' %}"></script>

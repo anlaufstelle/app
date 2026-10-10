@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from core.demo import DEMO_PASSWORD
 from core.models import Facility, User
 from core.seed.constants import USER_TEMPLATES
 
@@ -44,7 +45,7 @@ def _seed_users_from_templates(
             },
         )
         if created:
-            user.set_password("anlaufstelle2026")
+            user.set_password(DEMO_PASSWORD)
             user.save()
         created_users.append(user)
     return created_users
@@ -90,6 +91,6 @@ def seed_super_admin() -> User:
         },
     )
     if created:
-        user.set_password("anlaufstelle2026")
+        user.set_password(DEMO_PASSWORD)
         user.save()
     return user

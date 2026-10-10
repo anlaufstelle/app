@@ -438,6 +438,12 @@ class OfflineKeySaltView(LoginRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate="10/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
+        if request.headers.get("X-Demo-Offline-Bootstrap") == "1":
+            from core.demo import DEMO_OFFLINE_BOOTSTRAP_ERROR, DEMO_PASSWORD
+
+            # Recheck in case the password changed after the demo-start redirect.
+            if not getattr(settings, "DEMO_MODE", False) or not request.user.check_password(DEMO_PASSWORD):
+                return JsonResponse({"error": str(DEMO_OFFLINE_BOOTSTRAP_ERROR)}, status=403)
         salt = request.user.ensure_offline_key_salt()
         log_audit_event(
             request,
