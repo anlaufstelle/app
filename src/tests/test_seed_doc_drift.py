@@ -1,15 +1,7 @@
-"""Drift-Guard: Seed-Code ↔ CONTRIBUTING-Doku (Refs #1096).
+"""Guard seed profiles and documented credentials against runtime behavior.
 
-Die Seed-Konfiguration (``SCALE_CONFIG``/``USER_TEMPLATES`` + das Seed-Passwort)
-und die Tabelle „Seed-Daten laden" in ``CONTRIBUTING.md`` werden heute von Hand
-synchron gehalten — die Regel steht in den Coding-Regeln, aber nichts erzwingt sie.
-Dieser Guard erzwingt die **Vollstaendigkeit** (Profile, Metrik-Felder,
-Credentials), bewusst NICHT die Zahlenwerte (die Doku zeigt menschenfreundliche
-Werte wie „3 Jahre"/„50 %").
-
-Skeleton-Vorbild: ``scripts/verify_test_matrix_drift.py`` + ``test_matrix_drift``
-— reine Funktionen, mit synthetischem Input unit-getestet. Kein ``django_db``:
-der Test importiert nur Seed-Module (Registry, kein DB-Zugriff) und liest Dateien.
+Profiles are checked against registry data; passwords are verified through
+public seed functions using Django's password checker.
 """
 
 from __future__ import annotations
@@ -19,8 +11,10 @@ from pathlib import Path
 
 import pytest
 
+from core.demo import DEMO_PASSWORD
 from core.seed.constants import USER_TEMPLATES
 from core.seed.scale import FACILITY_PACKAGES, SCALE_CONFIG
+from core.seed.users import seed_super_admin, seed_users, seed_users_solo
 
 # Meta-Test, der auf das Repo-Filesystem zugreift (``CONTRIBUTING.md`` +
 # Seed-Quellen). Im Mutmut-Subprozess laeuft pytest aus ``mutants/`` und diese
@@ -29,7 +23,6 @@ pytestmark = pytest.mark.architecture
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRIBUTING = REPO_ROOT / "CONTRIBUTING.md"
-SEED_USERS_SRC = REPO_ROOT / "src" / "core" / "seed" / "users.py"
 
 # Profile, die bewusst NICHT in der oeffentlichen CONTRIBUTING-Tabelle stehen
 # (``demo_solo`` is NOT a CLI value of ``--scale`` — only an internal volume
@@ -122,19 +115,6 @@ def parse_seed_credentials(md: str) -> tuple[dict[str, str], str]:
     return creds, password
 
 
-def seed_password() -> str:
-    """Das in ``core/seed/users.py`` geseedete Passwort-Literal (SSOT).
-
-    Bewusst aus der Quelle gelesen statt im Test dupliziert — sonst entstaende
-    eine dritte, ungeprüfte Kopie. Mehrere ``set_password``-Aufrufe muessen
-    denselben Wert tragen, sonst ist der Seed selbst inkonsistent.
-    """
-    src = SEED_USERS_SRC.read_text(encoding="utf-8")
-    literals = set(re.findall(r"""set_password\(\s*["']([^"']+)["']\s*\)""", src))
-    assert len(literals) == 1, f"Erwartete genau ein Seed-Passwort-Literal in users.py, fand: {sorted(literals)}"
-    return literals.pop()
-
-
 # ---------------------------------------------------------------------------
 # Echte-Daten-Guards (heute MUSS Code == Doku gelten)
 # ---------------------------------------------------------------------------
@@ -175,12 +155,17 @@ def test_paket_zeile_nennt_jedes_facility_package() -> None:
         assert f"`{package}`" in row, f"Paket {package!r} (core.seed.scale.FACILITY_PACKAGES) fehlt in der Zeile."
 
 
-def test_documented_credentials_match_seed_code() -> None:
+@pytest.mark.django_db
+def test_documented_credentials_match_seed_code(facility) -> None:
     creds, password = parse_seed_credentials(_contributing())
     expected = {"superadmin": "super_admin"}
     expected.update({base: role.value for base, _first, _last, role in USER_TEMPLATES})
-    assert creds == expected, f"Seed-Logins (Doku) != Code. Doku: {creds}; erwartet: {expected}."
-    assert password == seed_password(), f"Dokumentiertes Seed-Passwort '{password}' != Seed-Quelle '{seed_password()}'."
+    assert creds == expected, f"Documented seed logins differ: {creds}; expected: {expected}."
+    assert password == DEMO_PASSWORD, "Documented seed password differs from the shared runtime constant."
+    users = seed_users(facility, 0) + seed_users_solo(facility, 0) + [seed_super_admin()]
+    assert users
+    for user in users:
+        assert user.check_password(password), f"Seed account {user.username} rejects the documented password."
 
 
 # ---------------------------------------------------------------------------
