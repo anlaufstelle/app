@@ -342,3 +342,19 @@ def test_shared_field_view_ignores_non_event_types(client, admin_user, partial_t
     assert response.context["report_binding_warnings"] == []
     assert b"report-binding-warning" not in response.content
     assert any("Spritzentausch-Bilanz" in line for line in response.context["field_bindings"])
+
+
+@pytest.mark.parametrize("route", ["core:config_doctype_update", "core:config_doctype_detail"])
+def test_configured_group_without_local_field_warns_instead_of_listing(client, admin_user, facility, route):
+    configured = make_type(facility, "Configured crisis", "crisis")
+    add_field(configured, "art_der_krise")
+    incomplete = make_type(facility, "Incomplete crisis", "crisis")
+    client.force_login(admin_user)
+    response = client.get(reverse(route, args=[incomplete.pk]))
+    assert response.status_code == 200
+    assert not any("Krisenarten-Verteilung" in name for name in response.context["report_bindings"])
+    assert any("art_der_krise" in warning for warning in response.context["report_binding_warnings"])
+    out = StringIO()
+    call_command("inventory_report_bindings", "--facility", str(facility.pk), "--format", "json", stdout=out)
+    bound = {entry["id"]: entry["appears_in"] for entry in json.loads(out.getvalue())["document_types"]["bound"]}
+    assert not any("Krisenarten-Verteilung" in name for name in bound[str(incomplete.pk)])

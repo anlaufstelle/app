@@ -659,7 +659,14 @@ class DatasetBackend(ABC):
             binding = requirement.typ_bindung
             if binding is not None:
                 values = (getattr(document_type, field) for field in binding.values_fields())
-                if binding.resolve_key(*values) is not None:
+                # Independent groups need a local read path; single-type reports also count incomplete types.
+                if binding.resolve_key(*values) is not None and (
+                    self.typ_bindung is not None
+                    or all(
+                        getattr(document_type, "pk", None) in field.leseschluessel(facility, binding).je_typ
+                        for field in requirement.feld_bindungen
+                    )
+                ):
                     contributions.append(requirement)
             elif requirement.feld_bindungen and all(
                 getattr(document_type, "pk", None) in field.leseschluessel(facility).je_typ

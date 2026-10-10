@@ -63,7 +63,10 @@ def counted_field_values(backend, result, key):
 
 
 @pytest.mark.parametrize("backend", registry.get_backends(), ids=lambda backend: backend.slug)
-@pytest.mark.parametrize("scenario", ["complete", "one-field", "inactive", "other-group", "excluded", "foreign"])
+@pytest.mark.parametrize(
+    "scenario",
+    ["complete", "one-field", "inactive", "other-group", "incomplete-in-configured-group", "excluded", "foreign"],
+)
 def test_binding_information_matches_actual_dataset(
     backend, scenario, facility, second_facility, staff_user, date_range
 ):
@@ -80,7 +83,7 @@ def test_binding_information_matches_actual_dataset(
     fields = requirement.feld_bindungen if requirement else ()
     if scenario == "one-field":
         fields = fields[:1]
-    if scenario == "other-group" and len(requirements) > 1:
+    if scenario == "incomplete-in-configured-group" or (scenario == "other-group" and len(requirements) > 1):
         fields = ()
     doc_type, templates = configure_type(
         target_facility,
@@ -116,7 +119,7 @@ def test_binding_information_matches_actual_dataset(
     expected = 0 if scenario == "foreign" else 5
     if declared and scenario == "excluded" and backend.slug != "ban-overview":
         expected = 0
-    if backend.slug == "service-distribution" and scenario == "other-group":
+    if backend.slug == "service-distribution" and scenario in {"other-group", "incomplete-in-configured-group"}:
         expected = 0
     if backend.slug == "general-key-figures" and scenario == "foreign":
         expected = None  # The exported zero remains suppressed by the existing privacy pipeline.
@@ -135,4 +138,9 @@ def test_binding_information_matches_actual_dataset(
         assert any("rueckgabe_stueck" in warning for warning in registry.diagnose_type_bindings(doc_type, facility))
     if backend.slug == "service-distribution" and scenario == "other-group":
         assert result.summary == {"events_leistungen": 0}
+        assert any("art_der_krise" in warning for warning in registry.diagnose_type_bindings(doc_type, facility))
+
+    if backend.slug == "service-distribution" and scenario == "incomplete-in-configured-group":
+        assert result.summary == {"events_leistungen": 0, "events_art_der_krise": 0}
+        assert any(issue.code == "missing_field_values" and issue.count == 5 for issue in result.completeness)
         assert any("art_der_krise" in warning for warning in registry.diagnose_type_bindings(doc_type, facility))
