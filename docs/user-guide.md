@@ -1047,4 +1047,31 @@ Jede Episode zeigt ihren Status:
 
 ---
 
+## Aufbewahrung und Sperren
+
+Leitung und Anwendungsbetreuung öffnen in Personen-, Fall- oder Ereignisakte
+**Legal Hold verwalten**, tragen einen Grund und bei Bedarf ein Ablaufdatum
+ein und setzen die Sperre. Dort lässt sie sich auch aufheben; beide Aktionen
+werden protokolliert. Ein Personen-/Fall-Hold schützt auch zugehörige
+Ereignisse und die Audit-Zeilen zu geschützten Zielen. Die Systemadministration
+kann Holds in `/system/legal-holds/` aufheben.
+
+Der Nachtlauf schlägt abgelaufene Ereignisse „Mit Zusatzangaben“ vor; erst eine
+andere Person mit **Löschbestätigung** gibt sie frei. Zurückstellen schützt bis
+zum Datum; Ablehnen löscht nichts, frühestens nach der Wiedervorlagefrist
+(Default 365 Tage) entsteht eine neue Vorlage. Auto-Freigabe bleibt Opt-in.
+Ohne Fall beginnt die Stufenfrist beim Ereignisdatum, im offenen Fall bei
+letzter fachlicher Fallaktivität (Fallback Anlage), geschlossen beim Abschluss.
+Eine Typ-**Höchstfrist (verkürzt nur)** ersetzt den Freigabeschritt nicht.
+
+Auch die Herabstufung „Mit Zusatzangaben“ → „Nur Pseudonym“ benötigt bei
+vorhandenen Ereignissen einen Antrag und eine andere Person mit diesem Recht.
+Ohne Ereignis anonymisiert der Lauf nach der Inaktivitätsfrist „Nur Pseudonym“
+ab letzter Änderung. Hold und Art. 18 stellen Löschung, Anonymisierung und
+Historien-Redaktion zurück. Nach Anonymisierung zeigen Personenakte und
+Papierkorb noch offene Historienfassungen an; regulär redigiert sie der Nachtlauf.
+Abgeschlossene Lösch-, Zusammenführungs- und Herabstufungsanträge bleiben
+1095 Tage (konfigurierbar) erhalten. Die Monatszählwerte bleiben auch nach
+manueller Ereignislöschung unbefristet erhalten.
+
 *Anlaufstelle – Dokumentationssystem für niedrigschwellige soziale Hilfsangebote*

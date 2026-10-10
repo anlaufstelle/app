@@ -23,7 +23,7 @@ Anlaufstelle implementiert ein **mehrstufiges Retention-Modell** mit getrennten 
 - **Vier Soft-Delete-Strategien** statt Hard-Delete:
   - `anonymous` — datensparsame Eintraege werden sofort nach Frist soft-geloescht;
   - `identified` — identifizierte Klient-Eintraege werden nach Frist **anonymisiert** ([`anonymize_clients`](../../src/core/retention/anonymization.py)); *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
-  - `qualified` — fachlich qualifizierte Eintraege verlangen einen `RetentionProposal` mit Lead/Admin-Freigabe vor Soft-Delete; *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
+  - `qualified` — fachlich qualifizierte Eintraege verlangen einen `RetentionProposal` mit Freigabe durch eine andere Person mit „Löschbestätigung“ vor Soft-Delete; *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
   - `document_type` — pro Dokumenttyp konfigurierbare Frist, ueberschreibt die globale Event-Frist. *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
 - **Legal-Hold als Einfrier-Marker.** [`LegalHold`](../../src/core/retention/legal_holds.py) setzt einen Marker pro Entitaet; `has_active_hold(target)` haelt jede Soft-Delete- und Anonymisierungs-Pipeline auf. Hold setzen darf nur Lead/Admin, Aufheben mit AuditLog-Spur.
 - **`RetentionProposal`-Vorschlagspipeline** fuer qualifizierte Eintraege: Cron erzeugt Vorschlaege, Dashboard ([`build_retention_dashboard_context`](../../src/core/retention/proposals.py)) zeigt sie, Lead/Admin entscheidet `approve`/`defer`/`reject`. Damit bleibt das Pruning bei juristisch sensiblen Datensaetzen eine bewusste menschliche Entscheidung. *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
@@ -54,7 +54,7 @@ Die Entscheidung oben formuliert *„Events, Cases, Clients, WorkItems und Audit
 
 | Entitaet | Eigene konfigurierbare Frist? | Mechanik |
 |---|---|---|
-| **Event** | **ja** — `retention_anonymous_days` (90), `retention_identified_days` (365), `retention_qualified_days` (3650), zusaetzlich `DocumentType.retention_days` als Typ-Override | Soft-Delete durch `enforce_retention`; `qualified` nur ueber `RetentionProposal` mit Lead/Admin-Freigabe |
+| **Event** | **ja** — `retention_anonymous_days` (90), `retention_identified_days` (365), `retention_qualified_days` (3650), zusaetzlich `DocumentType.retention_days` als Typ-Override | Soft-Delete durch `enforce_retention`; `qualified` nur ueber `RetentionProposal` mit Freigabe durch eine andere Person mit „Löschbestätigung“ |
 | **Activity** (Zeitstrom) | **ja** — `retention_activities_days` (365) | **Hard**-Delete, kein Soft-Delete |
 | **AuditLog** | **ja** — `auditlog_retention_months` (24, `0` = aus) | `prune_auditlog`; drei prune-exempte Aktionen plus `EXPORT`-**Berichts-Freigaben** (Zeitraum + herausgegebenes Artefakt, Refs #1770 — Klienten-/DSGVO-Exporte und Bildschirm-Ansichten bleiben der Frist unterworfen), Checkpoint-Tombstone fuer die HMAC-Kette |
 | **Client** | **nein**, zwei *abgeleitete* Ausloeser | (a) `client_trash_days` (30) nach **manuellem** Soft-Delete → `anonymize_eligible_soft_deleted_clients`; (b) `anonymize_clients`, sobald **alle** Events der Person soft-geloescht sind. Beide Wege enden in `anonymize_client` |
@@ -64,54 +64,42 @@ Konsequenz fuer Betreiber und Auditor: „loeschen" heisst fuer Faelle/Episoden/
 
 Beide Anonymisierungs-Pfade (hart und k-anonymisiert) fahren dieselbe Kaskade; die Paritaet ist seit #1750 durch einen ableitungsbasierten Architektur-Guard erzwungen (siehe [ADR-023 Update 2026-08-03](023-k-anonymization-statistik.md)). Legal Holds blockieren beide Bulk-Einstiege (#1756).
 
-## Update 2026-10-06: Ist-Stand der Löschwirkung
+## Nachtrag 2026-10-10: Freigabe und geschlossene Fristlücken
 
-Die Entscheidung oben und das Update vom 2026-08-03 beschreiben einzelne Punkte stärker, als der Aufbewahrungslauf sie umsetzt. **Reine Doku-Korrektur — keine Verhaltensänderung.** Maßgeblich ist der folgende Ist-Stand; die DSGVO-Vorlagen in [`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/) sind darauf abgeglichen.
+Die ursprüngliche Decision zur Freigabe von `qualified` gilt im Standardlauf
+wieder (#2524). Dieser
+Nachtrag ersetzt die Ist-Beschreibung vom 2026-10-06 und präzisiert die Audit-
+Fristkorrektur vom 2026-10-07:
 
-### Dokumentationstyp-Frist ist zusätzlich, kein Override (Refs #2462)
-
-`DocumentType.retention_days` ersetzt die Kontaktstufen-Frist nicht. [`process_facility_retention`](../../src/core/retention/enforcement.py) führt die Strategien `anonymous`, `identified`, `qualified` und `document_type` nacheinander aus; ein Ereignis fällt, sobald die erste greift. Es gilt also die zuerst ablaufende Frist: Eine kürzere Typ-Frist verkürzt, eine längere verlängert nichts. Die Formulierungen „ueberschreibt die globale Event-Frist" (Decision) und „Typ-Override" (Tabelle im Update 2026-08-03) sind in diesem Sinn zu lesen.
-
-### Keine Freigabe im Standardlauf (Refs #2425)
-
-Der ausgelieferte Zeitplan ([`deploy/crontab`](../../deploy/crontab)) ruft `enforce_retention` ohne `--propose` auf. Dieser Standardlauf setzt abgelaufene Ereignisse **aller** Strategien unmittelbar auf gelöscht, auch `qualified` — ohne `RetentionProposal` und ohne Freigabe. Er liest den Vorschlagsstatus nicht; nur ein aktiver Legal Hold (auf Ereignis, Person oder Fall) nimmt Daten aus. Nach der Löschung räumt er lediglich freigegebene Vorschläge der gelöschten Ereignisse auf.
-
-- **Vorschlagslauf** (`enforce_retention --propose`): eigener, nicht eingeplanter Aufruf. Er löscht nichts, sondern legt für die Ereignisse, die die Strategien als abgelaufen erfassen, `RetentionProposal`-Einträge an — für alle vier Strategien, nicht nur `qualified` — und reaktiviert fällige Zurückstellungen.
-- **Dashboard-Entscheidungen** (`approve`/`defer`/`reject`) ändern nur den Vorschlagsstatus. `reject` und `defer` schützen das Ereignis nicht vor dem Standardlauf; schützen kann nur ein Legal Hold, den die Oberfläche auf einer Vorschlagskarte setzt.
-- **Vier-Augen-Prinzip** gilt für **manuelle** Löschungen (`DeletionRequest`): Personen immer, Ereignisse und Fälle bei Personen der Stufe `qualified`. Den Aufbewahrungslauf erfasst es nicht.
-
-Damit sind „verlangen einen `RetentionProposal` mit Lead/Admin-Freigabe" (Decision, `qualified`), „bewusste menschliche Entscheidung" (Vorschlagspipeline) und „`qualified` nur über `RetentionProposal` mit Lead/Admin-Freigabe" (Tabelle im Update 2026-08-03) **nicht** der Ist-Stand. Ob der Standardlauf eine Freigabe verlangen soll, ist eine offene Produktentscheidung.
-
-### Fristbeginn und Wirkung
-
-- `anonymous` und `identified` messen die Frist **je Ereignis** ab `Event.occurred_at`. Ein neuer Kontakt verlängert ältere Ereignisse nicht; „nach letztem Kontakt" ist kein Fristbeginn der Anwendung.
-- `qualified` misst ab `Case.closed_at` des verknüpften, geschlossenen Falls.
-- `identified` löscht die Ereignisse (Soft-Delete), anonymisiert aber nicht unmittelbar die Person: [`anonymize_clients`](../../src/core/retention/anonymization.py) greift erst, wenn **alle** Ereignisse einer Person gelöscht sind (das Update 2026-08-03 beschreibt das in der Client-Zeile).
-- Der Soft-Delete leert Inhalte und Suchtext sofort und löscht die Anhänge; die Ereigniszeile bleibt als gelöscht markiert.
-- In derselben Transaktion, in der der Lauf ein Ereignis löscht, rechnet er dessen Zählwerte dem Statistik-Aggregat seines Monats hinzu (`carry_deleted_event`; die Monatszeile ist per `select_for_update` gesperrt), auch dem laufenden Monat. Nur die Transaktion, die das Ereignis tatsächlich auf gelöscht setzt, überträgt es — ein überlappender Lauf überspringt es unter der Ereignissperre. Scheitert der Übertrag, wird die Löschung zurückgerollt und als Fehler protokolliert; der nächste Lauf versucht es erneut. Das Aggregat führt die Zählwerte als Übertrag; ein Löschlauf ändert die Zählwerte eines bestehenden Aggregats nicht. Jede Neuberechnung (`create_statistics_snapshots`) sperrt die Monatszeile, bevor sie die noch vorhandenen Ereignisse zählt, und addiert den Übertrag. Die Aggregate haben keine Frist.
-
-### Ereignisse der Stufe `qualified` ohne geschlossenen Fall (Refs #2463)
-
-[`enforce_qualified`](../../src/core/retention/enforcement.py) erfasst nur Ereignisse, deren Fall geschlossen ist (`Case.Status.CLOSED`) und deren `closed_at` vor dem Stichtag liegt. `Event.case` ist optional. Ein Ereignis einer Person der Stufe `qualified` **ohne Fall** oder in einem **offenen Fall** verfällt über `retention_qualified_days` deshalb nie, sondern nur über eine gesetzte `DocumentType.retention_days`. Solange ein solches Ereignis besteht, greift auch `anonymize_clients` für die Person nicht. Gelöscht werden die Ereignisse, nicht der Fall. Ob diese Lücke fachlich gewollt ist oder ein eigener Fristbeginn für solche Ereignisse nötig ist, ist offen; die Vorlagen benennen sie, ohne eine Löschung zuzusagen.
-
-## Update 2026-10-07: Audit-Log-Frist und Fristen-Zuschnitt
-
-**Reine Doku-Korrektur — keine Verhaltensänderung.**
-
-### Die Audit-Log-Frist ist unabhängig und kann kürzer sein (Refs #2461)
-
-Die Decision nennt die Audit-Log-Frist „absichtlich laenger als alle Fach-Fristen". Das setzt weder der Code noch eine Validierung durch. Die ausgelieferten Standardwerte ([`src/core/models/settings.py`](../../src/core/models/settings.py)) sind `auditlog_retention_months` = 24 Monate, aber `retention_qualified_days` = 3650 Tage (zehn Jahre) und `DocumentType.retention_days` als frei wählbare Typ-Frist. Mit den Standardwerten löscht `prune_auditlog` die Audit-Spuren zu einem qualifizierten Ereignis also nach zwei Jahren. Das Ereignis selbst löscht die Stufen-Frist erst zehn Jahre nach Abschluss seines Falls (`Case.closed_at`, [`src/core/retention/enforcement.py`](../../src/core/retention/enforcement.py)); bei offenem Fall oder ohne abgeschlossenen Fall greift sie nicht.
-
-Forensische Reichweite: Das Audit-Log reicht `auditlog_retention_months` zurück, unabhängig davon, wie lange die zugehörigen Fachdaten noch bestehen. Dauerhaft erhalten bleiben nur die prune-exempten Einträge (unten). Eine Audit-Frist so lang wie die längste Fach-Frist deckt die Lebensdauer der Fachdaten nicht ab: `prune_auditlog` löscht nach dem Alter des einzelnen Eintrags (`timestamp`), die qualifizierte Frist läuft erst ab Fallabschluss, und offene Fälle sowie Legal Holds verlängern den Bestand der Fachdaten ohne Obergrenze, nicht aber den der Audit-Einträge. Lückenlos bleibt das Audit-Log nur mit `0` (keine automatische Löschung). Ist die Audit-Frist (Monate × 30 Tage) kürzer als die längste Frist der Einstellungsseite (Stufen-Fristen, Aktivitäten, Übergabenotizen, Papierkorb, Historien-Fristen; dort `0` = unbegrenzt) oder als die längste Typ-Frist (`DocumentType.retention_days`) eines Ereignis-Dokumentationstyps der Einrichtung — aktiv oder nicht, wie der Aufbewahrungslauf sie anwendet —, zeigt die Einstellungsseite einen Hinweis mit beiden Werten und nennt die Frist bzw. den Typ; mit `0` entfällt er (`FacilitySettingsForm.setting_warnings`, [`forms/facility_settings.py`](../../src/core/forms/facility_settings.py)).
-
-### Fristen-Zuschnitt, Ergänzung zur Tabelle im Update 2026-08-03
-
-| Entität | Frist | Mechanik |
-|---|---|---|
-| **AuditLog** | `auditlog_retention_months` (24, `0` = aus) | `prune_auditlog`; **vier** prune-exempte Aktionen (`SECURITY_VIOLATION`, `RETENTION_RUN_COMPLETED`, `AUDIT_PRUNE_CHECKPOINT`, `EVENT_HISTORY_REDACTED`, siehe `PRUNE_EXEMPT_ACTIONS` in [`audit_pruning.py`](../../src/core/retention/audit_pruning.py)) plus die `EXPORT`-Berichts-Freigaben |
-| **Case** (Papierkorb) | keine eigene Frist; `client_trash_days` (30) gilt mit | Nach manuellem Soft-Delete anonymisiert `anonymize_eligible_soft_deleted_cases` den Fall im `enforce_retention`-Lauf ([ADR-044](044-fall-loeschpfad.md)). Die Aussage „kein eigener Cron-Pfad" der Tabelle oben gilt damit nur für Fälle, die nicht im Papierkorb liegen |
-| **EventHistory** | `eventhistory_detail_months` (24), `eventhistory_chronicle_months` (24) | `enforce_eventhistory_retention` im `enforce_retention`-Lauf: Redaktion der Werte, danach Löschung der Chronologie ab der Redaktion ([ADR-050](050-eventhistory-retention.md)) |
-| **Übergabenotizen** | `retention_handover_notes_days` (90) | **Hard**-Delete durch `enforce_handover_notes` im `enforce_retention`-Lauf |
+- „Mit Zusatzangaben“: Standardlauf erzeugt Vorschläge und löscht erst nach
+  Freigabe durch eine andere Person mit „Löschbestätigung“. Zurückstellen
+  schützt bis zum Datum, Ablehnen erlaubt frühestens nach 365 Tagen
+  (konfigurierbar) eine neue Vorlage. Auto-Freigabe bleibt Opt-in.
+- Fristanker: Fallabschluss; ohne Fall Ereignisdatum; offen letzte fachliche
+  Fallaktivität (Fallback Anlage). Fachliche Änderungen an Fall, Ereignissen,
+  Aufgaben und Verlauf zählen, Umschlüsselung nicht.
+- Dokumentationstyp: **Höchstfrist (verkürzt nur)**, der früheste Stichtag
+  gewinnt. Kein Umgehen der Freigabe durch Typ-Frist oder einseitige
+  Herabstufung bei vorhandenen Ereignissen.
+- Legal Hold aus Personen-, Fall- und Ereignisakte mit Audit-Spur;
+  Systemliste bietet Aufheben. Hold und Art. 18 schützen im Lauf Ereignisse,
+  Personen-Anonymisierung und Historien-Redaktion. Audit-Ziele mit Einrichtung unter Hold
+  bleiben erhalten, mit authentifizierten HMAC-Checkpoint-Grenzen.
+- Audit-Fristen bleiben unabhängig von Fach-Fristen: 24 Monate je Einrichtung
+  und 24 Monate installationsweit ohne Einrichtung, separat konfigurierbar;
+  jeweils 0 = aus. Dauerhafte Ausnahmen bleiben unverändert. Lückenlose
+  Historie ohne Routinebereinigung verlangt weiterhin 0; ein Hold schützt
+  nur seine Zielmenge. Ein eingeschränkter Einrichtungslauf bereinigt die
+  Systemkette nicht.
+- Personen ohne Ereignis: Inaktivitätsfrist ab letzter Änderung. Abgeschlossene
+  Lösch-/Zusammenführungs-/Herabstufungsanträge: 1095 Tage ab Abschluss,
+  konfigurierbar. Keine Bestandsmigration oder nachträgliche Altdatenbereinigung.
+- Automatische und manuelle Ereignislöschung übertragen Monatszählwerte in
+  derselben Transaktion. Aggregate bleiben unbefristet als statistischer
+  Restbestand; sie sind keine unveränderlichen Archivkopien. Personenstatus
+  und Papierkorb weisen noch offene Historienfassungen nach Anonymisierung aus.
+- Keine zusätzliche Fall-, Datei- oder Übergabenotiz-Frist; Datei-Sofortlöschung
+  bleibt die einzelne berechtigte Entscheidung mit Hold-/Art.-18-Prüfung.
 
 ## References
 

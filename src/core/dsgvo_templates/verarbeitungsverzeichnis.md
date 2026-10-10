@@ -51,19 +51,18 @@ siehe AVV § 6.
 |--------------|-------|------------------|
 | Anonym | {{ retention_anonymous_days }} Tage | ab dem jeweiligen Kontakt (Ereignis) |
 | Nur Pseudonym | {{ retention_identified_days }} Tage | ab dem jeweiligen Kontakt (Ereignis) |
-| Mit Zusatzangaben | {{ retention_qualified_days }} Tage | ab Abschluss des Falls, dem das Ereignis zugeordnet ist |
+| Mit Zusatzangaben | {{ retention_qualified_days }} Tage | ab Fallabschluss; ohne Fall ab Ereignisdatum; offener Fall ab letzter fachlicher Fallaktivität (Fallback Anlage) |
 
-Die Fristen gelten je Ereignis; ein neuer Kontakt verlängert ältere Ereignisse
-nicht. Eine Frist am Dokumentationstyp gilt zusätzlich (es gilt die zuerst
-ablaufende). Ereignisse der Stufe „Mit Zusatzangaben“, die keinem Fall
-zugeordnet sind oder zu einem noch offenen Fall gehören, verfallen nicht über
-diese Frist, sondern nur über eine Frist am Dokumentationstyp; solange sie
-bestehen, wird auch die Person nicht anonymisiert. Der tägliche
-Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabeschritt; Personen
-mit mindestens einem Ereignis werden anonymisiert, sobald alle ihre Ereignisse
-gelöscht sind. Ausgenommen sind Daten unter einer Aufbewahrungssperre (Legal
-Hold). Weitere Fristen (Aktivitäten, Papierkorb, Audit-Log, Ereignis-Historie,
-Übergabenotizen, Sicherungsstände) und die Statistik-Aggregate nennt das Löschkonzept.
+Die Fristen gelten je Ereignis. „Höchstfrist (verkürzt nur)“ am
+Dokumentationstyp ergänzt den Stichtag; eine längere Frist verlängert nichts.
+Der Standardlauf erzeugt für „Mit Zusatzangaben“ Vorschläge und löscht erst nach
+Freigabe durch eine andere Person mit „Löschbestätigung“. Zurückstellen schützt
+bis zum Datum; Ablehnen erlaubt frühestens nach {{ retention_rejected_retry_days }}
+Tagen eine neue Vorlage. Ohne Ereignis anonymisiert der Lauf nach
+{{ retention_identified_days }} Tagen ab letzter Änderung. Hold und Art. 18
+schützen im Lauf Ereignisse, Person und Historieninhalte. Die Soll-Matrix und
+weitere Fristen (Aktivitäten, Papierkorb, Audit-Log, Ereignis-Historie und
+Übergabenotizen) stehen im Löschkonzept.
 
 ### 1.8 Technische und organisatorische Maßnahmen
 Siehe separates TOM-Dokument.
@@ -120,5 +119,10 @@ Bestreitet eine betroffene Person die Richtigkeit ihrer Daten (Art. 18 Abs. 1 li
 - Aufbewahrung: {{ auditlog_retention_months }} Monate rollierend, danach automatische Löschung (`0` schaltet die Löschung **ab**)
 - Ebenfalls dauerhaft: der Nachweis je Charge der Historien-Redaktion (er belegt, dass die Unveränderlichkeit für bestimmte Zeilen legitim geöffnet wurde, und enthält Anzahl, Fristgrenze und Chargengrenzen — keine Inhalte)
 - Dauerhaft ausgenommen (wie in der DSFA § 2.3, Frist 7): protokollierte Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs und der Nachweis herausgegebener Berichtszeiträume. Letzterer enthält Zeitraum, Format und die auslösende Person; Empfänger und Zweck sind ungeprüfter Freitext (organisatorische Vorgabe: Organisation statt Ansprechperson eintragen)
-- Ebenfalls unbefristet: alle Einträge ohne Einrichtung (Aufrufe und Aktionen der Systemadministration, Anmelde- und Sicherheitsereignisse von Konten ohne Einrichtung, fehlgeschlagene Anmeldungen unter unbekanntem Benutzernamen, installationsweite Lauf-Marker); der Aufbewahrungslauf bereinigt nur die Einträge einer Einrichtung
-- Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log
+- Einträge ohne Einrichtung: {{ auditlog_system_retention_months }} Monate installationsweit (0 = aus); dieselben dauerhaften Ausnahmen gelten
+- Aufbewahrungssperren (Legal Hold) schützen Audit-Zeilen mit Einrichtung zu gesperrten Personen, Fällen und Ereignissen
+
+Abgeschlossene Lösch-, Zusammenführungs- und Herabstufungsanträge werden nach
+{{ deletion_request_retention_days }} Tagen hart gelöscht. Berichtigungsanträge
+haben weiterhin keine technische Frist; Inhaltsredaktion folgt der Anonymisierung.
+Monatsaggregate bleiben unbefristet als statistischer Restbestand erhalten.

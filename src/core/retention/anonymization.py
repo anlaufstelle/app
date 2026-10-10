@@ -155,10 +155,11 @@ def _k_anonymize_with_cascade(client):
 
 
 def anonymize_clients(facility, dry_run, *, deferred_ids=None):
-    """Anonymize clients whose events have all been soft-deleted.
+    """Anonymize clients after final event deletion or eventless inactivity.
 
-    A client is anonymized when they have at least one event and all of them have
-    ``is_deleted=True``. Already anonymized clients (pseudonym starts with
+    With events, every event must have ``is_deleted=True``. Without events,
+    the identified inactivity period starts at ``updated_at``. Active holds
+    and processing restrictions defer both paths. Already anonymized clients (pseudonym starts with
     ``Gelöscht-`` or ``k_anonymized=True``) are skipped.
 
     Refs #1756: Klienten mit **aktivem Legal Hold** — auf der Person selbst

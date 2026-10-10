@@ -329,17 +329,18 @@ class TestProcessingActivitiesContent:
         assert "sofort geleert" in retention
         assert "Aufbewahrungssperre" in retention
 
-    def test_audit_log_retention_names_exemptions_and_no_legal_hold(self):
-        """``prune_auditlog`` excludes only ``PRUNE_EXEMPT_Q``; a legal hold protects no audit entry."""
+    def test_audit_log_retention_names_exemptions_and_hold_protection(self):
+        """Audit pruning has permanent exceptions, target holds and a system period."""
         retention = str(get_activity("auditlog")["retention_period"])
 
         assert "per LegalHold" not in retention
-        assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in retention
+        assert "aktivem Legal Hold" in retention
+        assert "AUDITLOG_SYSTEM_RETENTION_MONTHS" in retention
         for exemption in ("Sicherheitsverstöße", "Ereignis-Historie", "Berichtszeiträume"):
             assert exemption in retention, exemption
-        # The run prunes per facility only; entries without one stay for good.
+        # The system chain has a separate period in the same regular run.
         assert "Einträge ohne Einrichtung" in retention
-        assert "unbefristet" in retention
+        assert "24 Monate installationsweit" in retention
 
     def test_data_subject_rights_match_implemented_paths(self):
         purpose = str(get_activity("dsgvo_requests")["purpose"])
@@ -519,8 +520,8 @@ class TestVVTHelpers:
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.postgres
-class TestAuditLogPruningIgnoresLegalHolds:
-    """Premise of the VVT and deletion concept wording: holds do not reach the audit log."""
+class TestAuditLogPruningRespectsLegalHolds:
+    """Audit holds and the installation period match the revised VVT (Refs #2524)."""
 
     def test_premise_prune_exemptions_are_action_based(self):
         from core.retention.audit_pruning import PRUNE_EXEMPT_ACTIONS
@@ -532,7 +533,7 @@ class TestAuditLogPruningIgnoresLegalHolds:
             AuditLog.Action.EVENT_HISTORY_REDACTED,
         }
 
-    def test_premise_daily_run_never_prunes_entries_without_facility(self, facility, settings_obj):
+    def test_daily_run_prunes_expired_entries_without_facility(self, facility, settings_obj):
         from datetime import timedelta
         from io import StringIO
         from unittest import mock
@@ -550,7 +551,7 @@ class TestAuditLogPruningIgnoresLegalHolds:
             call_command("enforce_retention", stdout=StringIO())
 
         assert not AuditLog.objects.filter(pk=facility_entry.pk).exists()
-        assert AuditLog.objects.filter(pk=system_entry.pk).exists()
+        assert not AuditLog.objects.filter(pk=system_entry.pk).exists()
 
     def test_prune_for_a_facility_keeps_entries_without_facility(self, facility, settings_obj):
         from datetime import timedelta
@@ -570,7 +571,7 @@ class TestAuditLogPruningIgnoresLegalHolds:
         assert not AuditLog.objects.filter(pk=facility_entry.pk).exists()
         assert AuditLog.objects.filter(pk=system_entry.pk).exists()
 
-    def test_audit_entry_about_held_event_is_pruned(self, facility, settings_obj, sample_event, lead_user):
+    def test_audit_entry_about_held_event_survives(self, facility, settings_obj, sample_event, lead_user):
         from datetime import timedelta
 
         from django.utils import timezone
@@ -597,6 +598,6 @@ class TestAuditLogPruningIgnoresLegalHolds:
 
         prune_auditlog(facility, settings_obj, now=timezone.now() + timedelta(days=25 * 31))
 
-        assert not AuditLog.objects.filter(pk=entry.pk).exists()
+        assert AuditLog.objects.filter(pk=entry.pk).exists()
         hold.refresh_from_db()
         assert hold.is_active

@@ -131,21 +131,22 @@ als Anonymisierung. Abgrenzung zu **K-Anonymität** siehe oben.
 als für den Zweck erforderlich aufbewahren. In Anlaufstelle über das Retention-Modell ([ADR-021](adr/021-retention-modell.md))
 umgesetzt.
 
-**Soft-Delete-Strategien** — die vier Strategien für automatische Aufbewahrung und Soft-Delete, je
-Ereignis: `anonymous` und `identified` (Frist ab dem Zeitpunkt des Ereignisses),
-`qualified` (Frist ab Abschluss des verknüpften Falls), `document_type` (zusätzliche
-Frist pro Dokumenttyp; es gilt die zuerst ablaufende). Der tägliche Lauf löscht
-ohne Freigabeschritt; Löschvorschläge (`RetentionProposal`) entstehen nur in einem
-gesonderten Vorschlagslauf. Eine Person mit mindestens einem Ereignis wird
-anonymisiert, sobald alle ihre Ereignisse gelöscht sind und kein aktiver Legal
-Hold auf ihr, einem ihrer Fälle oder Ereignisse liegt. Details:
-[ADR-021](adr/021-retention-modell.md).
+**Soft-Delete-Strategien** — Vier Strategien je Ereignis: `anonymous` und
+`identified` ab Ereignisdatum; `qualified` ab Fallabschluss, ohne Fall ab
+Ereignisdatum, im offenen Fall ab letzter fachlicher Fallaktivität (Fallback
+Anlage). `document_type` ist die **Höchstfrist (verkürzt nur)**; der früheste
+Stichtag gewinnt. Der Standardlauf legt für „Mit Zusatzangaben“ Vorschläge an
+und löscht erst nach Freigabe durch eine andere Person mit „Löschbestätigung“.
+Zurückstellen schützt bis zum Datum; Ablehnen erlaubt eine neue Vorlage erst
+nach der Wiedervorlagefrist. Auto-Freigabe ist Opt-in. Personen ohne Ereignis
+werden nach Inaktivitätsfrist ab letzter Änderung anonymisiert; mit Ereignissen
+nach deren vollständiger Löschung. Hold und Art. 18 schützen im Lauf.
 
 **Legal Hold** — Eigener Aufbewahrungssperren-Eintrag auf Ereignis, Person oder
-Fall, kein Flag am Datensatz. Nimmt das Ziel und bei Person/Fall auch seine
-Ereignisse von automatischer Retention-Löschung und Anonymisierung aus, solange
-die Sperre aktiv ist, etwa für ein laufendes Verfahren
-([ADR-021](adr/021-retention-modell.md)).
+Fall, kein Flag. Leitung/Anwendungsbetreuung setzen und lösen ihn in der Akte;
+Systemadministration kann in der Systemliste aufheben. Er schützt Ziel und
+zugehörige Ereignisse sowie Audit-Zeilen zu geschützten Zielen; Aufheben und
+Anlegen tragen eine Audit-Spur ([ADR-021](adr/021-retention-modell.md)).
 
 **k-Anon-Retention** — Spielart des Retention-Pfads: Sobald alle Ereignisse einer
 Person soft-gelöscht sind und keine aktive Aufbewahrungssperre besteht, kann die

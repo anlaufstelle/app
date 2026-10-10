@@ -289,7 +289,7 @@ class TestDsfaExtendedRetentionPlaceholders:
         rows = _retention_rows(content)
 
         # Refs #2492: plus the two history periods and the handover note period.
-        assert sorted(rows) == list(range(1, 11)), f"§ 2.3 no longer lists ten periods: {rows}"
+        assert sorted(rows) == list(range(1, 12)), f"§ 2.3 no longer lists eleven periods: {rows}"
         for nr, (frist, wert) in rows.items():
             assert "{{" not in wert, f"Frist {nr} ({frist}) traegt einen ungerenderten Platzhalter: {wert!r}"
             # Zeile 4 ist die einzige nicht-numerische ("keine" bzw.
@@ -300,7 +300,7 @@ class TestDsfaExtendedRetentionPlaceholders:
         # Die alte Prosa-Fassung im Einleitungssatz ("die uebrigen vier stehen
         # mit ihrem Standardwert und sind vor Freigabe zu pruefen").
         assert "Standardwert" not in content
-        assert "Alle zehn sind unten mit dem für diese Einrichtung **tatsächlich konfigurierten** Wert" in content
+        assert "Alle elf sind unten mit dem für diese Einrichtung **tatsächlich konfigurierten** Wert" in content
 
     def test_document_type_override_placeholder_is_replaced(self, facility):
         content, _ = render_document("dsfa", facility)
@@ -312,7 +312,7 @@ class TestDsfaExtendedRetentionPlaceholders:
         # Refs #1775: Kein Dokumentationstyp mit eigener Frist -> die ZELLE
         # sagt "keine". ``"keine" in content`` war vakuum-wahr: die Prosa unter
         # der Tabelle enthaelt "greift **keine** der sieben Fristen".
-        assert rows[4] == ("Abweichende Frist einzelner Dokumentationstypen", "keine")
+        assert rows[4] == ("Höchstfrist (verkürzt nur) einzelner Dokumentationstypen", "keine")
 
 
 class TestVerarbeitungsverzeichnisAuditLogFrist:
@@ -364,7 +364,7 @@ class TestVerarbeitungsverzeichnisAuditLogFrist:
         content, _ = render_document("dsfa", facility)
 
         assert _retention_rows(content)[4] == (
-            "Abweichende Frist einzelner Dokumentationstypen",
+            "Höchstfrist (verkürzt nur) einzelner Dokumentationstypen",
             "Vermittlung: 180 Tage",
         )
         assert "je Typ gesetzt, sonst keine" not in content
@@ -404,7 +404,7 @@ class TestVerarbeitungsverzeichnisAuditLogFrist:
         content, _ = render_document("dsfa", facility)
 
         assert _retention_rows(content)[4] == (
-            "Abweichende Frist einzelner Dokumentationstypen",
+            "Höchstfrist (verkürzt nur) einzelner Dokumentationstypen",
             "Vermittlung: 180 Tage",
         )
         assert "Personenprofil-Frist" not in content
@@ -597,7 +597,7 @@ class TestDocumentTypePeriodIsAdditional:
     @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
     def test_effect_cell_describes_earliest_expiring_period(self, facility, slug):
         content, _ = render_document(slug, facility)
-        effect = _effect_cell(content, "Abweichende Frist einzelner Dokumentationstypen")
+        effect = _effect_cell(content, "Höchstfrist (verkürzt nur) einzelner Dokumentationstypen")
 
         assert "Überschreibt" not in effect
         assert "zuerst ablaufende" in effect
@@ -726,33 +726,28 @@ class TestBackupDeletionBoundary:
 
 
 @pytest.mark.django_db
-class TestRetentionRunNeedsNoApproval:
-    """Refs #2425: the shipped daily run deletes without a proposal or approval.
-
-    ``deploy/crontab`` calls ``enforce_retention`` without ``--propose``; the
-    regular run ignores the proposal status and only spares legal holds. The
-    templates must not promise an approval step for any contact stage.
-    """
+class TestRetentionRunRequiresQualifiedApproval:
+    """The regular run now requires approval for additional details (Refs #2524)."""
 
     @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
-    def test_qualified_row_promises_no_approval(self, facility, slug):
+    def test_qualified_row_requires_approval(self, facility, slug):
         content, _ = render_document(slug, facility)
         effect = _effect_cell(content, "Stufe „Mit Zusatzangaben")
-
-        assert "Freigabe" not in effect
-        assert "Prüfung" not in effect
-        assert "Löschvorschlag" not in effect
-        assert "Abschluss" in effect
+        assert "Vorschlag" in effect
+        assert "Freigabe" in effect
+        assert "Löschbestätigung" in effect
+        assert "Fallabschluss" in effect
+        assert "ohne Fall ab Ereignisdatum" in effect
+        assert "letzter fachlicher Fallaktivität" in effect
 
     @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
-    def test_templates_separate_regular_run_proposal_run_and_four_eyes(self, facility, slug):
+    def test_templates_name_proposal_protection_and_opt_in(self, facility, slug):
         content = _flat(render_document(slug, facility)[0])
-
-        assert "ohne Freigabe" in content
-        assert "enforce_retention --propose" in content
-        assert "Verwerfen schützt" in content
+        assert "Zurückstellen schützt" in content
+        assert "Ablehnen" in content
+        assert "365 Tagen" in content
+        assert "Auto-Freigabe" in content
         assert "Vier-Augen" in content or "4-Augen" in content
-        assert "für manuelle Löschungen personenbezogener Daten" not in content
 
     @pytest.mark.parametrize("slug", ["informationspflichten", "verarbeitungsverzeichnis"])
     def test_period_start_is_named_per_stage(self, facility, slug):
@@ -760,7 +755,9 @@ class TestRetentionRunNeedsNoApproval:
 
         assert "letztem Kontakt" not in content
         assert "ab dem jeweiligen Kontakt" in content
-        assert "ab Abschluss des Falls" in content
+        assert "ab Fallabschluss" in content
+        assert "ohne Fall ab" in content
+        assert "letzter fachlicher" in content
 
     def test_information_notice_names_exceptions_of_automatic_deletion(self, facility):
         content = _flat(render_document("informationspflichten", facility)[0])
@@ -783,8 +780,11 @@ class TestRetentionRunNeedsNoApproval:
 
         assert "letztem Kontakt" not in retention
         assert "Falllauf-Ende" not in retention
-        assert "ab dem jeweiligen Kontakt" in retention
-        assert "ab Abschluss des zugeordneten Falls" in retention
+        assert "ab Ereignisdatum" in retention
+        assert "ab Fallabschluss" in retention
+        assert "ohne Fall ab Ereignisdatum" in retention
+        assert "letzter fachlicher Fallaktivität" in retention
+        assert "Löschbestätigung" in retention
 
     def test_rejected_proposal_does_not_keep_the_event(self, facility, client_identified, staff_user):
         from datetime import timedelta
@@ -844,36 +844,33 @@ class TestRetentionRunNeedsNoApproval:
 
 
 @pytest.mark.django_db
-class TestQualifiedPeriodNeedsClosedCase:
-    """Refs #2463: the "Mit Zusatzangaben" period only reaches events of a closed case.
-
-    ``enforce_qualified`` selects events whose case is ``CLOSED`` with
-    ``closed_at`` past the cutoff; ``Event.case`` is nullable. Events without a
-    case or in an open case never expire through this period.
-    """
+class TestQualifiedPeriodAnchors:
+    """Additional details expire through three case anchors (Refs #2524)."""
 
     @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
-    def test_qualified_row_names_events_and_the_gap(self, facility, slug):
+    def test_qualified_row_names_all_case_anchors(self, facility, slug):
         content, _ = render_document(slug, facility)
 
         assert "Fälle der Stufe „Mit Zusatzangaben" not in content
         effect = _effect_cell(content, "Ereignisse der Stufe „Mit Zusatzangaben")
-        assert "ohne Fall oder in offenen Fällen" in effect
-        assert "nicht über diese Frist" in effect
+        assert "ohne Fall ab Ereignisdatum" in effect
+        assert "offenen Fall ab letzter fachlicher Fallaktivität" in effect
+        assert "Freigabe" in effect
 
     @pytest.mark.parametrize("slug", ["informationspflichten", "verarbeitungsverzeichnis"])
-    def test_stage_tables_name_the_gap(self, facility, slug):
+    def test_stage_tables_name_all_anchors(self, facility, slug):
         content = _flat(render_document(slug, facility)[0])
 
-        assert "keinem Fall zugeordnet" in content
-        assert "noch offenen Fall" in content
+        assert "ohne Fall ab" in content
+        assert "offener Fall ab letzter fachlicher" in content
 
-    def test_vvt_view_names_the_gap(self):
+    def test_vvt_view_names_case_anchors(self):
         from core.services.compliance import get_activity
 
         retention = str(get_activity("klienten_stammdaten")["retention_period"])
 
-        assert "ohne Fall oder in offenen Fällen" in retention
+        assert "ohne Fall ab Ereignisdatum" in retention
+        assert "offenen Fall ab letzter fachlicher Fallaktivität" in retention
 
     def test_qualified_event_without_case_gets_proposed(self, facility, client_qualified, staff_user):
         from datetime import timedelta
@@ -938,13 +935,16 @@ class TestRetentionExceptionsAreNamed:
         retention = _flat(str(get_activity("klienten_stammdaten")["retention_period"]))
 
         assert "die Person wird anonymisiert, sobald alle ihre Ereignisse gelöscht sind." not in retention
-        assert "eine Person mit mindestens einem Ereignis" in retention
-        assert "keine Aufbewahrungssperre (Legal Hold)" in retention
+        assert "sobald alle Ereignisse gelöscht sind" in retention
+        assert "ohne Ereignis" in retention
+        assert "Hold und Art. 18 stellen zurück" in retention
 
-    def test_processing_register_template_requires_at_least_one_event(self, facility):
+    def test_processing_register_template_names_eventless_inactivity(self, facility):
         content = _flat(render_document("verarbeitungsverzeichnis", facility)[0])
 
-        assert "Personen mit mindestens einem Ereignis werden anonymisiert" in content
+        assert "Ohne Ereignis anonymisiert der Lauf nach" in content
+        assert "Tagen ab letzter Änderung" in content
+        assert "Hold und Art. 18" in content
 
     def test_deletion_concept_does_not_wait_for_trash_period(self, facility):
         content = _flat(render_document("loeschkonzept", facility)[0])

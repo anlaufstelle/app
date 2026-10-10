@@ -874,7 +874,7 @@ Sinnvoll vor allem, nachdem Sie viele Typen von Hand angelegt oder ein fremdes K
 
 Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Ereignis dieses Typs erstellt werden kann. Beispiel: Beratungsgespräche erfordern mindestens „Mit Zusatzangaben", weil zusätzliche persönliche Angaben zur Person vorliegen müssen.
 
-> **Nur für Ereignis-Typen wirksam (Refs #1058).** **Mindest-Kontaktstufe**, **Aufbewahrungsfrist (`retention_days`)**, **Systemtyp** und **Berichtsschlüssel** wirken ausschließlich an Dokumentationstypen mit Entitätstyp **Ereignis**: Die Kontaktstufen-Prüfung greift nur bei der Ereignis-Anlage, und der Aufbewahrungslauf löscht ausschließlich Ereignisse. Für **Personen** greifen stattdessen die einrichtungsweiten Regeln aus den Einstellungen: die Papierkorb-Frist (`client_trash_days`) und die Anonymisierung, sobald die Ereignis-Retention den Bestand einer Person abgeräumt hat. **Fälle haben keine eigene Aufbewahrungsfrist** — der Aufbewahrungslauf löscht keinen Fall von sich aus. Er greift nur, wenn ein Fall bereits **gelöscht** wurde: Dann läuft dessen Papierkorb nach `client_trash_days` ab und der Fall wird anonymisiert (Refs #1818, [ADR-044](adr/044-fall-loeschpfad.md) — ersetzt die Zusage aus [ADR-039](adr/039-owner-generische-dateianhaenge.md) § 6 ab). Ohne Löschung werden die Inhalte eines Falls weiterhin erst mit der Anonymisierung der zugehörigen Person redigiert. `retention_qualified_days` knüpft zwar an den Abschluss eines Falls an, löscht aber dessen Ereignisse, nicht den Fall.
+> **Nur für Ereignis-Typen wirksam (Refs #1058).** **Mindest-Kontaktstufe**, **Höchstfrist (verkürzt nur), `retention_days`**, **Systemtyp** und **Berichtsschlüssel** wirken ausschließlich an Dokumentationstypen mit Entitätstyp **Ereignis**: Die Kontaktstufen-Prüfung greift nur bei der Ereignis-Anlage, und der Aufbewahrungslauf löscht ausschließlich Ereignisse. Für **Personen** greifen stattdessen die einrichtungsweiten Regeln aus den Einstellungen: die Papierkorb-Frist (`client_trash_days`) und die Anonymisierung, sobald die Ereignis-Retention den Bestand einer Person abgeräumt hat. **Fälle haben keine eigene Aufbewahrungsfrist** — der Aufbewahrungslauf löscht keinen Fall von sich aus. Er greift nur, wenn ein Fall bereits **gelöscht** wurde: Dann läuft dessen Papierkorb nach `client_trash_days` ab und der Fall wird anonymisiert (Refs #1818, [ADR-044](adr/044-fall-loeschpfad.md) — ersetzt die Zusage aus [ADR-039](adr/039-owner-generische-dateianhaenge.md) § 6 ab). Ohne Löschung werden die Inhalte eines Falls weiterhin erst mit der Anonymisierung der zugehörigen Person redigiert. `retention_qualified_days` knüpft zwar an den Abschluss eines Falls an, löscht aber dessen Ereignisse, nicht den Fall.
 >
 > Das Formular **blendet diese vier Felder aus**, sobald Sie als Entitätstyp **Person** oder **Fall** wählen (Refs #1757) — Sie füllen also keine Felder mehr aus, die nie greifen. Das Ausblenden ist rein optisch: bereits gesetzte Werte bleiben unverändert am Datensatz, und ein Feld mit Fehlermeldung bleibt sichtbar. Ohne JavaScript bleiben alle Felder sichtbar und tragen den erklärenden Hilfetext.
 
@@ -1979,16 +1979,18 @@ Das Management-Kommando `enforce_retention` setzt die konfigurierten Fristen dur
 |---|---|---|---|
 | Anonyme Ereignisse | `retention_anonymous_days` | 90 Tage | Soft-Delete; Stichtag ist der Ereigniszeitpunkt |
 | Ereignisse von Personen der Stufe „Nur Pseudonym" | `retention_identified_days` | 365 Tage | Soft-Delete; Stichtag ist der Ereigniszeitpunkt |
-| Ereignisse von Personen der Stufe „Mit Zusatzangaben", die einem abgeschlossenen Fall zugeordnet sind | `retention_qualified_days` | 3650 Tage (10 Jahre) | Soft-Delete, sobald der Fall länger als die Frist abgeschlossen ist; der Fall selbst bleibt bestehen |
-| Ereignisse eines Dokumentationstyps mit eigener Frist | `retention_days` am Dokumentationstyp | leer (keine Typ-Frist) | Soft-Delete; Stichtag ist der Ereigniszeitpunkt. Gilt zusätzlich zur Stufen-Frist, es greift die zuerst ablaufende |
+| Ereignisse „Mit Zusatzangaben“ | `retention_qualified_days` | 3650 Tage | Frist ab Fallabschluss; ohne Fall ab Ereignisdatum; offen ab letzter fachlicher Fallaktivität (Fallback Anlage). Erst Vorschlag und Freigabe, dann Löschung |
+| Ereignisse eines Dokumentationstyps mit eigener Frist | „Höchstfrist (verkürzt nur)“ (`retention_days`) am Dokumentationstyp | leer (keine Typ-Frist) | Soft-Delete; Stichtag ist der Ereigniszeitpunkt. Gilt zusätzlich zur Stufen-Frist, es greift die zuerst ablaufende |
 | Aktivitäten (Zeitstrom) | `retention_activities_days` | 365 Tage | harte Löschung |
 | Übergabenotizen (Schichtnotiz) | `retention_handover_notes_days` | 90 Tage | harte Löschung |
 | Gelöschte Personen und Fälle im Papierkorb | `client_trash_days` | 30 Tage | Anonymisierung |
 | Werte alter Ereignis-Fassungen | `eventhistory_detail_months` | 24 Monate | Redaktion; `0` schaltet die altersabhängige Redaktion ab |
 | Bereits redigierte Ereignis-Fassungen | `eventhistory_chronicle_months` | 24 Monate nach der Redaktion | harte Löschung; `0` = unbegrenzt |
-| Audit-Log | `auditlog_retention_months` | 24 Monate | harte Löschung; `0` = unbegrenzt (§ 7.4) |
+| Audit-Log mit Einrichtung | `auditlog_retention_months` | 24 Monate | harte Löschung; aktiver Ziel-Hold schützt; `0` = aus (§ 7.4) |
+| Audit ohne Einrichtung | `AUDITLOG_SYSTEM_RETENTION_MONTHS` (Umgebungsvariable) | 24 Monate installationsweit | gleiches Verhalten; nur beim nicht auf eine Einrichtung eingeschränkten Lauf |
+| Abgeschlossene Lösch-, Zusammenführungs- und Herabstufungsanträge | `deletion_request_retention_days` | 1095 Tage ab Abschluss | harte Löschung; offene Anträge bleiben, Audit folgt seiner Frist |
 
-Personen, deren Ereignisse danach alle gelöscht sind, anonymisiert derselbe Lauf. Die übrigen Felder der Gruppe „Datenschutz und Fristen" sind keine Fristen: `retention_auto_approve_after_defer` und `retention_max_defer_count` steuern den Umgang mit zurückgestellten Löschvorschlägen im Retention-Dashboard, `retention_use_k_anonymization` und `k_anonymity_threshold` die K-Anonymisierung (beide unten).
+Personen, deren Ereignisse danach alle gelöscht sind, anonymisiert derselbe Lauf. Ohne Ereignis gilt die Inaktivitätsfrist `retention_identified_days` ab `updated_at`; Hold und Art. 18 schützen beide Wege. Die übrigen Felder der Gruppe „Datenschutz und Fristen" sind keine Fristen: `retention_auto_approve_after_defer` und `retention_max_defer_count` steuern den Umgang mit zurückgestellten Löschvorschlägen im Retention-Dashboard, `retention_use_k_anonymization` und `k_anonymity_threshold` die K-Anonymisierung (beide unten).
 
 > **Die Übergabenotiz wird hart gelöscht, nicht soft-gelöscht** (Refs #2042) — wie die Aktivitäten. Maßgeblich ist das Datum der letzten Änderung (`updated_at`), nicht das Anlegen; die Schlüsselrotation schreibt diesen Zeitstempel bewusst nicht fort und verlängert die Frist deshalb nicht. Es gibt **keinen** Legal Hold für Übergabenotizen: Holds sichern Personen-, Fall- und Ereignisakten für ein laufendes Verfahren, die Schichtnotiz ist eine Dienstnotiz ohne Personenbezug im Datenmodell (siehe [security-notes.md](security-notes.md)). Jeder Lauf mit Treffern schreibt eine Audit-Zeile (`DELETE`, Kategorie `handover_notes`) mit Anzahl und Frist — nie mit Text.
 
@@ -2022,25 +2024,40 @@ Jede Ausführung, die Datensätze löscht, wird automatisch im Audit-Log protoko
 
 Unter [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/views/retention.py) steht ein **Retention-Dashboard** bereit, über das Leitung und Admin Löschvorschläge abarbeiten. Refs #514, #515, #2425.
 
-> **Drei getrennte Wege — nur der erste läuft ab Werk:**
->
-> 1. **Standardlauf** `enforce_retention` (täglich im mitgelieferten `cron`-Sidecar): setzt alle abgelaufenen Ereignisse **unmittelbar** auf gelöscht — für alle Kontaktstufen, ohne Vorschlag und ohne Freigabe. Er liest den Vorschlagsstatus nicht; nur ein aktiver Legal Hold nimmt Daten aus.
-> 2. **Vorschlagslauf** `enforce_retention --propose`: löscht nichts, sondern legt für Ereignisse, deren Frist abgelaufen ist, Löschvorschläge an (je Ereignis höchstens ein offener, gehaltener oder zurückgestellter; ist ein Vorschlag freigegeben oder verworfen und das Ereignis noch nicht gelöscht, legt ein weiterer Vorschlagslauf einen neuen an) und reaktiviert fällige Zurückstellungen. Der mitgelieferte Cron ruft ihn **nicht** auf — ohne ihn bleibt das Dashboard leer. Wer ihn nutzen will, ruft ihn von Hand auf oder plant ihn selbst ein. Er erfasst dieselben bereits abgelaufenen Ereignisse, die der nächste Standardlauf löscht; zwischen Vorschlag und Löschung bleibt also höchstens die Zeit bis zu diesem Lauf.
-> 3. **Manuelle Löschung** über Löschanträge (§ 7.5): Vier-Augen-Prinzip für Personen sowie für Ereignisse und Fälle der Stufe „Mit Zusatzangaben".
+> **Standardlauf:** Anonym und „Nur Pseudonym“ werden automatisch gelöscht.
+> Für „Mit Zusatzangaben“ entstehen Vorschläge; nur freigegebene Vorschläge
+> erlauben die Löschung. Auch die Typ-Höchstfrist umgeht die Freigabe nicht.
+> `--propose` bleibt als zusätzlicher Vorschlagslauf für alle Strategien erhalten.
 
 | Aktion im Dashboard | Wirkung |
 |---|---|
-| **Freigeben** | Markiert den Vorschlag als freigegeben. Gelöscht wird beim nächsten Standardlauf — der löscht das abgelaufene Ereignis allerdings auch ohne Freigabe. Steht das Ziel unter einem aktiven Legal Hold, wird die Freigabe abgelehnt. |
-| **Aufschieben** | Stellt den Vorschlag zurück (Default 30 Tage). Nach Ablauf prüft ihn der nächste Lauf (Standard- oder Vorschlagslauf) und setzt ihn wieder auf offen. Nach `retention_max_defer_count` Zurückstellungen (Default 2) und mit `retention_auto_approve_after_defer=True` gibt er ihn stattdessen automatisch frei — aber nur, wenn weder auf dem Ereignis noch auf seiner Person ein aktiver Legal Hold liegt und die Zuordnung des Ereignisses unverändert ist. Sonst bleibt der Vorschlag zurückgestellt (Audit-Eintrag `retention_proposal_auto_approve_skipped`), und jeder weitere Lauf prüft ihn erneut. Die Zurückstellung schützt das Ereignis **nicht** vor dem Standardlauf. |
-| **Ablehnen** | Verwirft den Vorschlag. Der Datensatz bleibt dadurch **nicht** erhalten — der Standardlauf löscht ihn trotzdem. Wer einen Datensatz erhalten muss, setzt einen Legal Hold. |
+| **Freigeben** | Andere Person mit „Löschbestätigung“; nächster Lauf löscht, sofern Hold/Art. 18 nicht schützen |
+| **Aufschieben** | Schützt bis `deferred_until`; danach wieder offen. Auto-Freigabe nach maximalen Zurückstellungen bleibt Opt-in |
+| **Ablehnen** | Löscht nichts; neue Vorlage frühestens nach `retention_rejected_retry_days` (Vorgabe 365 Tage) |
+
+`retention_open_case_inactive_days` (Vorgabe 365 Tage) steuert den Hinweis für
+ruhende offene Fälle. Fallaktivität sind fachliche Änderungen an Fall,
+Ereignissen, Aufgaben und Verlauf; Umschlüsselung zählt nicht.
 
 #### Legal Hold
 
-Ein **Legal Hold** nimmt Daten von der automatischen Löschung und Anonymisierung aus (z. B. bei laufenden Verfahren, Prüfverfahren oder Auskunftsersuchen). Er ist ein eigener Eintrag (`LegalHold`, siehe [`src/core/models/retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/retention.py)), kein Flag am Datensatz, und kann auf ein Ereignis, eine Person oder einen Fall zeigen; ein Hold auf eine Person oder einen Fall schützt auch deren Ereignisse. Der Standardlauf, die Personen-Anonymisierung und die Papierkorb-Anonymisierung respektieren ihn.
+Leitung und Anwendungsbetreuung setzen und lösen einen Hold direkt in der
+Personen-, Fall- und Ereignisakte („Legal Hold verwalten“), mit Grund,
+optionalem Ablaufdatum und Audit-Spur. Auf Personen/Fälle gesetzte Holds
+schützen auch deren Ereignisse. Die Systemadministration kann Holds in
+`/system/legal-holds/` aufheben. Eine Vorschlagskarte bleibt ein zusätzlicher
+Bedienweg; ein gesonderter Vorschlags-Cron ist nicht nötig.
 
-**Bedienweg:** In der Oberfläche setzen Leitung und Admin einen Hold nur auf einer **Vorschlagskarte** im Retention-Dashboard („Hold setzen", mit Begründung und optionalem Ablaufdatum); Ziel ist das Ereignis des Vorschlags. Aufgehoben wird er ebenfalls dort. Die Systemansicht `/system/legal-holds/` zeigt Holds nur an. Im Django-Admin ist `LegalHold` nicht verwaltbar, und Holds auf Personen oder Fälle setzt die Oberfläche nicht. Ohne eingerichteten Vorschlagslauf gibt es damit **keinen** Bedienweg, einen Datensatz vor der automatischen Löschung zu sperren.
+Aktive Holds schützen auch Audit-Zeilen zu gesperrten Zielen. Art. 18 schützt
+im Aufbewahrungslauf Ereignisse, Personen-Anonymisierung und Historien-
+Redaktion. Beide Schutzarten werden unabhängig geprüft; die manuelle
+Vier-Augen-Löschung als Art.-17-Weg bleibt gesondert geregelt (§ 7.5).
 
-> **Abgrenzung zu Art. 18 DSGVO (Refs #2045):** Ein Legal Hold ist **keine** Einschränkung der Verarbeitung im Sinne des Art. 18. Er blockiert die **Löschung** (Art. 17 Abs. 3) und lässt die tägliche Arbeit am Datensatz unberührt. Die Einschränkung nach Art. 18 ist der umgekehrte Fall: Die Daten bleiben gespeichert, aber die inhaltliche Arbeit an der Person ist gesperrt. Dafür gibt es den eigenen **Sperrvermerk** an der Personenakte (§ 7.6). Beide können unabhängig voneinander bestehen.
+Beim ersten Lauf können zuvor unbefristete Ereignisse „Mit Zusatzangaben“
+Vorschläge erhalten. Vor Inbetriebnahme Fristen, Auto-Freigabe (Default aus)
+und den Genehmiger-Pool prüfen; die Compliance-Karte „Genehmiger“ zeigt dessen
+Besetzung. Die neue Antragsfrist ist unter Verwaltung → Einstellungen
+sichtbar; die installationsweite Audit-Frist wird über die Umgebung gesetzt.
 
 #### Aufbewahrung der Ereignis-Historie
 
@@ -2161,6 +2178,8 @@ Hinzu kommt — **unabhängig von der Aktion** — die fünfte Klasse: Einträge
 > **Datenschutz-Restrisiko:** Weil das Log append-only ist, wird es von der Anonymisierung einer Person **nicht** mitredigiert — Details und Gegenmaßnahmen in [`security-notes.md` § Audit-Log-Restdaten überleben die Art.-17-Löschung](security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753).
 
 ### 7.5 Löschanträge (4-Augen-Prinzip)
+
+Abgeschlossene Anträge bleiben für die konfigurierte Antragsfrist (Vorgabe 1095 Tage) sichtbar. Bei vorhandenen Ereignissen wird auch „Mit Zusatzangaben“ → „Nur Pseudonym“ über Antrag und zweite Person mit „Löschbestätigung“ freigegeben. Personenakte und Papierkorb zählen noch offene Historienfassungen nach Anonymisierung; Hold, Art. 18 oder gleichzeitige Bearbeitung können die reguläre Redaktion im Nachtlauf zurückstellen.
 
 Löschanträge für Personendaten werden im Vier-Augen-Prinzip bearbeitet: Ein Antrag muss von einer **zweiten berechtigten Person** genehmigt werden, bevor Daten endgültig gelöscht werden. Dies schützt vor versehentlicher oder unberechtigter Löschung — auch durch privilegierte Rollen selbst.
 

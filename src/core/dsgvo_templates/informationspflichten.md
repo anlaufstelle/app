@@ -70,25 +70,30 @@ Eingesetzte Dienste: [keine / Dienst, Land und geeignete Garantie eintragen].
 |--------------|--------------|------------------|
 | Anonym | {{ retention_anonymous_days }} Tage | ab dem jeweiligen Kontakt |
 | Nur Pseudonym | {{ retention_identified_days }} Tage | ab dem jeweiligen Kontakt |
-| Mit Zusatzangaben | {{ retention_qualified_days }} Tage | ab Abschluss des Falls, dem der Kontakt zugeordnet ist |
+| Mit Zusatzangaben | {{ retention_qualified_days }} Tage | ab Fallabschluss; ohne Fall ab Kontakt; offener Fall ab letzter fachlicher Aktivität (ersatzweise Anlage) |
 
 Jeder dokumentierte Kontakt hat seine eigene Frist; ein späterer Kontakt
 verlängert die Frist früherer Kontakte nicht. Für einzelne Arten von Kontakten
 kann die Einrichtung eine kürzere Frist festlegen.
 
-Für die Stufe „Mit Zusatzangaben“ gilt die Frist nur für Kontakte, die einem
-abgeschlossenen Fall zugeordnet sind. Kontakte dieser Stufe, die
-keinem Fall zugeordnet sind oder zu einem noch offenen Fall gehören, werden
-über diese Frist nicht gelöscht; automatisch gelöscht werden sie nur, wenn
-die Einrichtung für die Art des Kontakts eine eigene Frist festgelegt hat.
-Solange solche Kontakte bestehen, werden auch die Angaben zu Ihrer Person
-nicht anonymisiert.
+Für die Stufe „Mit Zusatzangaben“ schlägt der tägliche Lauf eine Löschung vor.
+Erst eine andere Person mit dem Recht „Löschbestätigung“ gibt sie frei; auch eine
+kürzere Typ-Frist ersetzt diese Freigabe nicht. Zurückstellen oder Ablehnen
+schützt vor der Löschung, bis der Vorschlag erneut geprüft wird.
 
-Nach Ablauf der Frist löscht ein täglicher automatischer Lauf die Inhalte des
-Kontakts. Sind alle Kontakte zu Ihrer Person gelöscht, werden auch die Angaben
-zu Ihrer Person anonymisiert. Solange eine Aufbewahrungssperre besteht (etwa
-wegen eines laufenden Verfahrens), werden die betroffenen Daten nicht
-gelöscht. Statistische Zählwerte ohne Bezug zu Ihrer Person bleiben erhalten.
+Bei anonymen Kontakten und „Nur Pseudonym“ entfernt der Lauf die Inhalte nach
+Fristablauf automatisch. Sind alle Kontakte gelöscht, werden die Angaben zu
+Ihrer Person anonymisiert; ohne Kontakt gilt {{ retention_identified_days }} Tage
+ab der letzten Änderung. Aufbewahrungssperre und Art.-18-Sperrvermerk stellen
+die automatische Löschung, Anonymisierung und Historien-Redaktion zurück.
+Frühere Historienfassungen werden regulär im Nachtlauf redigiert; offene
+Fassungen bleiben im Personenstatus als zurückgestellt sichtbar.
+Statistische Zählwerte ohne Bezug zu Ihrer Person bleiben erhalten. Die
+Monatsaggregate haben keine Frist. Abgeschlossene
+Löschanträge verfallen nach {{ deletion_request_retention_days }} Tagen; Audit
+folgt seiner eigenen Frist ({{ auditlog_retention_months }} Monate in der
+Einrichtung, {{ auditlog_system_retention_months }} Monate ohne Einrichtung;
+0 = keine Bereinigung, Holds und dauerhafte Ausnahmen bleiben geschützt).
 In Sicherungskopien bleiben Daten bis zu deren Ablauf erhalten; die Fristen
 dafür regelt das Löschkonzept der Einrichtung.
 

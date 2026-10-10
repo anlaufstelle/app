@@ -78,6 +78,10 @@ def _retention_values(settings_obj) -> dict[str, int]:
         "retention_activities_days": getattr(settings_obj, "retention_activities_days", 365),
         "client_trash_days": getattr(settings_obj, "client_trash_days", 30),
         "auditlog_retention_months": getattr(settings_obj, "auditlog_retention_months", 24),
+        "auditlog_system_retention_months": django_settings.AUDITLOG_SYSTEM_RETENTION_MONTHS,
+        "deletion_request_retention_days": getattr(settings_obj, "deletion_request_retention_days", 1095),
+        "retention_rejected_retry_days": getattr(settings_obj, "retention_rejected_retry_days", 365),
+        "retention_open_case_inactive_days": getattr(settings_obj, "retention_open_case_inactive_days", 365),
         # Refs #2065 (ADR-050): jede Friststellung zwingt zum Abgleich mit
         # Verarbeitungsverzeichnis und Loeschkonzept (ADR-021) — die beiden
         # Historien-Fristen gehoeren deshalb in die Vorlagen, nicht nur ins
@@ -128,6 +132,9 @@ def _settings_hash(settings_obj, document_type_overrides=()) -> str:
     payload = {
         **_retention_values(settings_obj),
         "backup_retention_days": _backup_retention_days(),
+        "templates_hash": hashlib.sha256(
+            b"".join(path.name.encode() + b"\0" + path.read_bytes() for path in sorted(TEMPLATE_DIR.glob("*.md")))
+        ).hexdigest(),
         "facility_full_name": getattr(settings_obj, "facility_full_name", "") or "",
         "document_type_overrides": [list(pair) for pair in document_type_overrides],
     }
@@ -219,6 +226,10 @@ def render_document(slug, facility):
         "{{ retention_activities_days }}": str(retention["retention_activities_days"]),
         "{{ client_trash_days }}": str(retention["client_trash_days"]),
         "{{ auditlog_retention_months }}": str(retention["auditlog_retention_months"]),
+        "{{ auditlog_system_retention_months }}": str(retention["auditlog_system_retention_months"]),
+        "{{ deletion_request_retention_days }}": str(retention["deletion_request_retention_days"]),
+        "{{ retention_rejected_retry_days }}": str(retention["retention_rejected_retry_days"]),
+        "{{ retention_open_case_inactive_days }}": str(retention["retention_open_case_inactive_days"]),
         "{{ eventhistory_detail_months }}": str(retention["eventhistory_detail_months"]),
         "{{ eventhistory_chronicle_months }}": str(retention["eventhistory_chronicle_months"]),
         "{{ retention_handover_notes_days }}": str(retention["retention_handover_notes_days"]),

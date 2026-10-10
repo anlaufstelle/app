@@ -128,19 +128,22 @@ anonymization. For the distinction from **k-anonymity**, see above.
 longer than necessary for the purpose. Implemented in Anlaufstelle through the
 retention model ([ADR-021](../adr/021-retention-modell.md)).
 
-**Soft-delete strategies** — The four retention strategies, applied per event:
-`anonymous` and `identified` (period from the event's time), `qualified` (period
-from the close of the linked case), `document_type` (additional period per document
-type; whichever expires first applies). The daily run deletes without an approval
-step; deletion proposals (`RetentionProposal`) only come from a separate proposal
-run. A person with at least one event is anonymized once all their events are
-deleted and no active legal hold exists on the person, one of their cases or
-events. Details: [ADR-021](../adr/021-retention-modell.md).
+**Soft-delete strategies** — Four strategies per event: anonymous and
+identified from the event date; qualified from case closure, without a case
+from the event date, in an open case from the last substantive activity
+(fallback creation). The document type setting is a **maximum period (shortens
+only)**; the earliest deadline wins. The regular run creates proposals for
+additional details and only deletes after approval by another person with
+deletion confirmation permission. Deferral protects until its date; rejection
+allows a new proposal only after the retry interval. Automatic approval is
+opt-in. People without events are anonymized after inactivity from the last
+update; people with events after all events are deleted. Holds and Art. 18
+protect these retention paths.
 
-**Legal hold** — A separate retention hold entry on an event, person or case, not
-a flag on the record. Excludes the target and, for a person or case, their events
-from automated retention deletion and anonymization while the hold is active,
-for example during ongoing proceedings
+**Legal hold** — A separate hold entry on an event, person or case. Lead and
+facility admin create and lift it in the record; system administration can
+lift it in the system list. It protects the target and related events, plus
+audit rows of protected targets. Creation and lifting have an audit trail
 ([ADR-021](../adr/021-retention-modell.md)).
 
 **k-anon retention** — A variant of the retention path: once all a person's events
@@ -183,4 +186,4 @@ An HTTP/network/processing error fetching revocations (including 500/429), or an
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 356a4aa0ba02ac3247a7feb97a1d3cef29eba7b1 -->
+<!-- source-hash: 4685a18f81a5d62a52eb62e6264a1491684338d0 -->

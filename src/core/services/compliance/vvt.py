@@ -68,29 +68,19 @@ PROCESSING_ACTIVITIES = [
             _("Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"),
         ],
         "retention_period": format_lazy(
-            # Refs #2425: the period starts per event (``occurred_at``) or at the
-            # close of the linked case (``closed_at``), see
-            # ``core.retention.enforcement``; a newer contact extends nothing.
-            # Refs #2463: ``enforce_qualified`` only reaches events of a closed
-            # case, so events without a case or in an open case never expire
-            # through the stage period. ``anonymize_clients`` only takes a
-            # person with at least one event and without an active hold on the
-            # person, one of their cases or events.
+            # Keep stage anchors and approval wording aligned with the retention services.
             _(
-                "Konfigurierbar pro Kontaktstufe; eine Frist am "
-                "Dokumentationstyp gilt zusätzlich (es gilt die zuerst "
-                "ablaufende). Standardfristen je Ereignis: Anonyme Kontakte: "
-                "{anonymous_days} Tage ab dem jeweiligen Kontakt; Kontakte der "
-                "Stufe „Nur Pseudonym“: {identified_days} Tage ab dem "
-                "jeweiligen Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: "
-                "{qualified_days} Tage ab Abschluss des zugeordneten Falls; "
-                "Ereignisse dieser Stufe ohne Fall oder in offenen Fällen "
-                "verfallen nicht über diese Frist, nur über eine Frist am "
-                "Dokumentationstyp. Der tägliche Aufbewahrungslauf löscht ohne "
-                "Freigabeschritt; eine Person mit mindestens einem Ereignis "
-                "anonymisiert er, sobald alle ihre Ereignisse gelöscht sind und "
-                "keine Aufbewahrungssperre (Legal Hold) auf der Person, einem "
-                "ihrer Fälle oder Ereignisse besteht."
+                "Konfigurierbare Ereignisfristen, ergänzt durch die Höchstfrist (verkürzt nur) "
+                "am Dokumentationstyp. Anonym: {anonymous_days} Tage ab Ereignisdatum; "
+                "Nur Pseudonym: {identified_days} Tage ab Ereignisdatum; Mit Zusatzangaben: "
+                "{qualified_days} Tage ab Fallabschluss, ohne Fall ab Ereignisdatum, "
+                "im offenen Fall ab letzter fachlicher Fallaktivität (Fallback Anlage). "
+                "Der Standardlauf legt für Mit Zusatzangaben Vorschläge an und löscht erst "
+                "nach Freigabe durch eine andere Person mit Löschbestätigung. Zurückstellen "
+                "schützt bis zum Datum, Ablehnen bis zu einer neuen Vorlage frühestens nach "
+                "der konfigurierten Wiedervorlagefrist (Vorgabe 365 Tage). Auto-Freigabe ist Opt-in. "
+                "Personen werden anonymisiert, sobald alle Ereignisse gelöscht sind; ohne Ereignis "
+                "nach {identified_days} Tagen ab letzter Änderung. Hold und Art. 18 stellen zurück."
             ),
             anonymous_days=DEFAULT_RETENTION_ANONYMOUS_DAYS,
             identified_days=DEFAULT_RETENTION_IDENTIFIED_DAYS,
@@ -283,22 +273,16 @@ PROCESSING_ACTIVITIES = [
                 "Aufruf)"
             ),
         ],
-        # Refs #2425: ``prune_auditlog`` only spares ``PRUNE_EXEMPT_Q``; it
-        # never consults ``LegalHold``, so no hold can extend an audit entry.
-        # It deletes ``facility=facility`` rows only, so system entries
-        # (``facility=None``) are never pruned.
+        # Facility and system chains have separate periods; held targets survive pruning.
         "retention_period": _(
-            "Standardmäßig 24 Monate rollierend, je Einrichtung einstellbar "
-            "(0 schaltet die Löschung ab). Bereinigung durch den täglichen "
-            "``enforce_retention``-Lauf, je Einrichtung nur deren eigene "
-            "Einträge. Ausgenommen bleiben Sicherheitsverstöße, System-Marker "
-            "des Aufbewahrungslaufs, Nachweise der Redaktion der "
-            "Ereignis-Historie und Nachweise herausgegebener "
-            "Berichtszeiträume. Einträge ohne Einrichtung (Systemadministration, "
-            "Konten ohne Einrichtung, Anmeldeversuche unter unbekanntem "
-            "Benutzernamen, installationsweite Lauf-Marker) löscht kein Lauf; "
-            "sie bleiben unbefristet erhalten. Aufbewahrungssperren (Legal "
-            "Hold) wirken nicht auf das Audit-Log."
+            "Standardmäßig 24 Monate je Einrichtung; Einträge ohne Einrichtung ebenfalls "
+            "24 Monate installationsweit (AUDITLOG_SYSTEM_RETENTION_MONTHS). Jeweils 0 = aus. "
+            "Der tägliche Aufbewahrungslauf lässt Audit-Zeilen mit Einrichtung zu Zielen "
+            "unter aktivem Legal Hold "
+            "stehen. Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs, Nachweise der "
+            "Historien-Redaktion (Ereignis-Historie) und herausgegebener Berichtszeiträume bleiben dauerhaft. "
+            "Die Audit-Frist gilt unabhängig von der Lebensdauer der Fachdaten; "
+            "Anonymisierung redigiert die Audit-Zeilen nicht."
         ),
         "toms": [
             # Refs #2492: ``prune_auditlog`` deletes expired rows inside
@@ -353,8 +337,8 @@ PROCESSING_ACTIVITIES = [
             "Login-Versuche und Kontosperren: als Audit-Einträge, aus denen "
             "die Sperre berechnet wird; sie folgen der Audit-Frist (siehe "
             "Verarbeitung 'Audit-Log'), Fehlversuche unter unbekanntem "
-            "Benutzernamen und von Konten ohne Einrichtung bleiben "
-            "unbefristet. Recovery-Codes bis zu deren Verbrauch oder "
+            "Benutzernamen und von Konten ohne Einrichtung folgen der installationsweiten "
+            "Audit-Frist (Vorgabe 24 Monate, 0 = aus). Recovery-Codes bis zu deren Verbrauch oder "
             "Neuerstellung."
         ),
         "toms": [
@@ -461,17 +445,14 @@ PROCESSING_ACTIVITIES = [
         # ``test_pii_residue_sweep.py``. The audit rows of these actions are
         # not in ``PRUNE_EXEMPT_ACTIONS``.
         "retention_period": _(
-            "Bearbeitungsvorgänge: Die Anwendung löscht Lösch- und "
-            "Berichtigungsanträge nicht; Status, beteiligte Personen und "
-            "Zeitpunkte bleiben als Nachweis. Die Anonymisierung einer Person "
-            "tilgt die Inhalte ihrer Berichtigungsanträge und ersetzt die "
-            "Begründungen der Löschanträge und Aufbewahrungssperren zu ihr, "
-            "ihren Fällen und Ereignissen durch „[Anonymisiert]“. Eine Frist (etwa "
-            "3 Jahre nach Abschluss als Nachweis der Erfüllung) legt die "
-            "Einrichtung organisatorisch fest. Erzeugte Datenpakete: nach "
-            "Abholung löschen. Berichtigungs- und Löschvorgänge: im "
-            "AuditLog bis zum Ablauf der Audit-Frist (siehe Verarbeitung "
-            "'Audit-Log')."
+            "Abgeschlossene Lösch-, Zusammenführungs- und Herabstufungsanträge werden nach "
+            "deletion_request_retention_days (Vorgabe 1095 Tage) ab Abschluss hart gelöscht; "
+            "offene Anträge bleiben. Berichtigungsanträge haben weiterhin keine technische Frist. "
+            "Anonymisierung redigiert deren Inhalte und die Begründungen zugehöriger Löschanträge "
+            "und Aufbewahrungssperren zu „[Anonymisiert]“. Audit-Nachweise folgen ihrer eigenen Audit-Frist. "
+            "Erzeugte Datenpakete "
+            "sind nach Abholung organisatorisch zu löschen. Monatsaggregate bleiben unbefristet "
+            "als statistischer Restbestand erhalten."
         ),
         "toms": [
             _(

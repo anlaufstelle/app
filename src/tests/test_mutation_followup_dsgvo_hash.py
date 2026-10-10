@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -116,11 +117,7 @@ class TestSettingsHash:
         assert _settings_hash(stub_a) == _settings_hash(stub_b)
 
     def test_hash_matches_explicit_sha256_of_payload(self):
-        """Algorithmus-Identität: Reproduktion mit explizitem SHA-256.
-
-        Killt Mutationen am Hash-Algorithmus (sha256 → md5/sha1) und
-        an der JSON-Serialisierung (sort_keys, encoding).
-        """
+        """Pin SHA-256 and canonical JSON over the documented package inputs."""
         stub = _make_stub(
             retention_anonymous_days=90,
             retention_identified_days=365,
@@ -143,6 +140,16 @@ class TestSettingsHash:
             "retention_activities_days": 365,
             "client_trash_days": 30,
             "auditlog_retention_months": 24,
+            "auditlog_system_retention_months": 24,
+            "deletion_request_retention_days": 1095,
+            "retention_rejected_retry_days": 365,
+            "retention_open_case_inactive_days": 365,
+            "templates_hash": hashlib.sha256(
+                b"".join(
+                    path.name.encode() + b"\0" + path.read_bytes()
+                    for path in sorted((Path(__file__).resolve().parents[1] / "core" / "dsgvo_templates").glob("*.md"))
+                )
+            ).hexdigest(),
             "eventhistory_detail_months": 24,
             "eventhistory_chronicle_months": 24,
             "retention_handover_notes_days": 90,

@@ -1047,9 +1047,34 @@ Each episode shows its status:
 
 ---
 
+## Retention and holds
+
+Lead and facility admin open **Legal Hold verwalten** in a person, case or
+event record, enter a reason and optional expiry, and create the hold. They
+can lift it there; both actions are audited. Person/case holds protect related
+events and audit rows of protected targets. System administration can lift
+holds at `/system/legal-holds/`.
+
+The nightly run proposes expired events with additional details; another person
+with **deletion confirmation** permission must approve. Deferral protects until
+its date. Rejection deletes nothing; a new proposal can appear after the retry
+interval (default 365 days). Automatic approval remains opt-in. Without a case
+the stage period starts at the event date; in an open case at last substantive
+activity (fallback creation); in a closed case at closure. A type **maximum
+period (shortens only)** cannot replace approval.
+
+Downgrading additional details to pseudonym only with existing events also
+requires a request and another person with that permission. Without events the
+run anonymizes after the pseudonym-only inactivity period from last update.
+Holds and Art. 18 defer retention deletion, anonymization and history redaction.
+Person records and trash show pending history versions after anonymization;
+regular redaction happens in the nightly run. Completed deletion, merge and
+downgrade requests remain for a configurable 1095 days. Monthly counts remain
+without expiry even after manual event deletion.
+
 *Anlaufstelle -- Documentation system for low-threshold social services*
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: b3c5d377dffd8e2f11c8fb6998b5c34c83dcf7ba -->
+<!-- source-hash: 03231bcf5408cadc34f4cc6b46e199a2916b35e9 -->

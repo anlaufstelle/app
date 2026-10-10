@@ -873,7 +873,7 @@ This is particularly useful after creating many types manually or loading a thir
 
 Defines the minimum contact stage a person must have for an event of this type to be created. Example: Counseling sessions require at least "With additional details" because additional personal details about the person must be on record.
 
-> **Effective for event types only (Refs #1058).** **Minimum contact stage**, **retention period (`retention_days`)**, **system type** and **report key** only take effect on documentation types whose entity type is **event**: the contact-stage check only applies when creating events, and the retention run deletes events only. For **persons**, the facility-wide rules from the settings apply instead: the trash period (`client_trash_days`) and anonymisation once event retention has cleared out a person's records. **Cases have no retention period of their own** — the retention run never deletes a case by itself. It only acts on a case that has already been **deleted**: its trash period then expires after `client_trash_days` and the case is anonymised (Refs #1818, [ADR-044](../adr/044-fall-loeschpfad.md), which supersedes the earlier promise in [ADR-039](../adr/039-owner-generische-dateianhaenge.md) § 6). Without a deletion, a case's contents are still only redacted when the associated person is anonymised. `retention_qualified_days` does key off a case being closed, but it deletes that case's events, not the case.
+> **Effective for event types only (Refs #1058).** **Minimum contact stage**, **maximum period (shortens only), `retention_days`**, **system type** and **report key** only take effect on documentation types whose entity type is **event**: the contact-stage check only applies when creating events, and the retention run deletes events only. For **persons**, the facility-wide rules from the settings apply instead: the trash period (`client_trash_days`) and anonymisation once event retention has cleared out a person's records. **Cases have no retention period of their own** — the retention run never deletes a case by itself. It only acts on a case that has already been **deleted**: its trash period then expires after `client_trash_days` and the case is anonymised (Refs #1818, [ADR-044](../adr/044-fall-loeschpfad.md), which supersedes the earlier promise in [ADR-039](../adr/039-owner-generische-dateianhaenge.md) § 6). Without a deletion, a case's contents are still only redacted when the associated person is anonymised. `retention_qualified_days` does key off a case being closed, but it deletes that case's events, not the case.
 >
 > The form **hides these four fields** as soon as you pick **person** or **case** as the entity type (Refs #1757) — so you no longer fill in fields that never apply. Hiding is purely visual: values already set stay unchanged on the record, and a field carrying an error message stays visible. Without JavaScript all fields remain visible and keep their explanatory help text.
 
@@ -1981,16 +1981,18 @@ The management command `enforce_retention` enforces the configured periods. Depe
 |---|---|---|---|
 | Anonymous events | `retention_anonymous_days` | 90 days | Soft delete; reference date is the event time |
 | Events of persons at the "Pseudonym only" level | `retention_identified_days` | 365 days | Soft delete; reference date is the event time |
-| Events of persons at the "With additional details" level that belong to a closed case | `retention_qualified_days` | 3650 days (10 years) | Soft delete once the case has been closed for longer than the period; the case itself remains |
-| Events of a documentation type with its own period | `retention_days` on the documentation type | empty (no type period) | Soft delete; reference date is the event time. Applies in addition to the level period; whichever expires first wins |
+| Events with additional details | `retention_qualified_days` | 3650 days | From case closure; without a case from the event date; open case from last substantive activity (fallback creation). Proposal and approval before deletion |
+| Events of a documentation type with its own period | Maximum period (shortens only), `retention_days` on the documentation type | empty (no type period) | Soft delete; reference date is the event time. Applies in addition to the level period; whichever expires first wins |
 | Activities (timeline) | `retention_activities_days` | 365 days | Hard delete |
 | Handover notes (shift note) | `retention_handover_notes_days` | 90 days | Hard delete |
 | Deleted persons and cases in the trash | `client_trash_days` | 30 days | Anonymization |
 | Values of old event versions | `eventhistory_detail_months` | 24 months | Redaction; `0` turns off age-based redaction |
 | Already redacted event versions | `eventhistory_chronicle_months` | 24 months after redaction | Hard delete; `0` = unlimited |
-| Audit log | `auditlog_retention_months` | 24 months | Hard delete; `0` = unlimited (§ 7.4) |
+| Facility audit log | `auditlog_retention_months` | 24 months | Hard delete; active target holds protect it; `0` = off (§ 7.4) |
+| Audit without a facility | `AUDITLOG_SYSTEM_RETENTION_MONTHS` (environment) | 24 months installation-wide | Same behavior; only in a run not restricted to one facility |
+| Completed deletion, merge and downgrade requests | `deletion_request_retention_days` | 1095 days from completion | Hard delete; pending requests remain, audit has its own period |
 
-Persons whose events are then all deleted are anonymized in the same run. The other fields of the group "Datenschutz und Fristen" are not periods: `retention_auto_approve_after_defer` and `retention_max_defer_count` control how deferred deletion proposals are handled in the retention dashboard, `retention_use_k_anonymization` and `k_anonymity_threshold` control k-anonymization (both below).
+Persons whose events are then all deleted are anonymized in the same run. Without events, the inactivity period is retention_identified_days from updated_at; holds and Art. 18 protect both paths. The other fields of the group "Datenschutz und Fristen" are not periods: `retention_auto_approve_after_defer` and `retention_max_defer_count` control how deferred deletion proposals are handled in the retention dashboard, `retention_use_k_anonymization` and `k_anonymity_threshold` control k-anonymization (both below).
 
 > **The handover note is hard-deleted, not soft-deleted** (Refs #2042) -- like activities. What counts is the date of the last change (`updated_at`), not creation; key rotation deliberately does not advance that timestamp and therefore does not extend the period. There is **no** legal hold for handover notes: holds protect client, case and event records for ongoing proceedings, whereas the shift note is a duty note with no personal reference in the data model (see (DE: [security-notes.md](../security-notes.md))). Every run with matches writes an audit row (`DELETE`, category `handover_notes`) carrying the count and the period -- never any text.
 
@@ -2024,25 +2026,38 @@ Every execution that deletes records is automatically logged in the audit log.
 
 A **retention dashboard** is available under [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/views/retention.py) where Lead and Admin roles process deletion proposals. Refs #514, #515, #2425.
 
-> **Three separate paths -- only the first one runs out of the box:**
->
-> 1. **Regular run** `enforce_retention` (daily in the bundled `cron` sidecar): marks every expired event as deleted **immediately** -- for all contact stages, without a proposal and without approval. It does not read the proposal status; only an active legal hold exempts data.
-> 2. **Proposal run** `enforce_retention --propose`: deletes nothing; it creates deletion proposals for events whose period has expired (at most one open, held, or deferred proposal per event; once a proposal is approved or rejected and the event is not deleted yet, another proposal run creates a new one) and reactivates deferrals that are due. The bundled cron does **not** call it -- without it the dashboard stays empty. Anyone who wants to use it runs it manually or schedules it themselves. It covers the same already-expired events that the next regular run deletes, so at most the time until that run lies between proposal and deletion.
-> 3. **Manual deletion** via deletion requests (§ 7.5): four-eyes principle for clients and for events and cases at the "With additional details" stage.
+> **Regular run:** Anonymous and pseudonym-only events are deleted automatically.
+> Events with additional details receive proposals; only approved proposals
+> permit deletion. A type maximum cannot bypass approval. `--propose` remains
+> an additional proposal run for every strategy.
 
 | Dashboard action | Effect |
 |---|---|
-| **Approve** | Marks the proposal as approved. Deletion happens in the next regular run -- which deletes the expired event without approval as well. If the target is under an active legal hold, approval is refused. |
-| **Defer** | Postpones the proposal (default 30 days). Once that has passed, the next run (regular or proposal run) checks it and reopens it. After `retention_max_defer_count` deferrals (default 2) and with `retention_auto_approve_after_defer=True` it approves it automatically instead -- but only if there is no active legal hold on the event or its client and the event's assignment is unchanged. Otherwise the proposal stays deferred (audit entry `retention_proposal_auto_approve_skipped`), and every later run checks it again. Deferring does **not** protect the event from the regular run. |
-| **Reject** | Discards the proposal. This does **not** keep the record -- the regular run deletes it anyway. To keep a record, set a legal hold. |
+| **Approve** | Another person with deletion confirmation permission; next run deletes unless hold/Art. 18 protects the target |
+| **Defer** | Protects until deferred_until, then reopens. Automatic approval after maximum deferrals remains opt-in |
+| **Reject** | Deletes nothing; new proposal no earlier than retention_rejected_retry_days (default 365 days) |
+
+`retention_open_case_inactive_days` (default 365 days) controls the reminder for
+inactive open cases. Activity means substantive changes to cases, events, tasks
+and progress; key rotation does not count.
 
 #### Legal Hold
 
-A **legal hold** exempts data from automatic deletion and anonymization (e.g. during ongoing investigations, audits, or data subject requests). It is a separate entry (`LegalHold`, see [`src/core/models/retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/retention.py)), not a flag on the record, and can point to an event, a client, or a case; a hold on a client or case also protects their events. The regular run, client anonymization, and trash anonymization respect it.
+Lead and facility admin create and lift holds directly in person, case and event
+records (Legal Hold verwalten), with a reason, optional expiry and audit trail.
+Person/case holds also protect their events. System administration can lift holds
+at `/system/legal-holds/`. Proposal cards remain an additional path; no separate
+proposal cron is required.
 
-**How to set one:** In the UI, Lead and Admin can set a hold only on a **proposal card** in the retention dashboard ("Set hold", with a reason and an optional expiry date); the target is the proposal's event. It is lifted there as well. The system view `/system/legal-holds/` only lists holds. `LegalHold` cannot be managed in the Django admin, and the UI does not set holds on clients or cases. Without a configured proposal run there is therefore **no** way in the UI to lock a record against automatic deletion.
+Active holds also protect audit rows of held targets. Art. 18 protects events,
+person anonymization and history redaction in the retention run. Both forms of
+protection are checked separately; manual four-eyes deletion under Art. 17 remains
+a separate path (§ 7.5).
 
-> **Distinction from Art. 18 GDPR (Refs #2045):** A legal hold is **not** a restriction of processing under Art. 18. It blocks **erasure** (Art. 17(3)) and leaves day-to-day work on the record untouched. An Art. 18 restriction is the reverse: the data stays stored, but substantive work on the client record is blocked. That is what the separate **restriction marker** on the client record is for. The two are independent of each other.
+The first run can propose previously unbounded events with additional details.
+Before operation, review periods, automatic approval (off by default), and the
+approver pool shown by the compliance card. The new completed-request period is
+available in Verwaltung → Einstellungen; the system audit period uses the environment.
 
 #### Retention of the Event History
 
@@ -2162,6 +2177,8 @@ On top of that — **regardless of the action** — comes the fifth class: entri
 > **Residual data-protection risk:** because the log is append-only, anonymising a person does **not** redact it — details and countermeasures in (DE: [`security-notes.md` § Audit-Log-Restdaten überleben die Art.-17-Löschung](../security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753)) (German).
 
 ### 7.5 Deletion Requests (Four-Eyes Principle / Dual Approval)
+
+Completed requests remain visible for the configured period (default 1095 days). With existing events, downgrading from additional details to pseudonym only also requires a request and another person with deletion confirmation permission. Person records and trash display the number of pending history versions after anonymization; hold, Art. 18 or concurrent editing can defer regular nightly redaction.
 
 Deletion requests for personal data are processed using the four-eyes principle (dual approval): a request must be approved by a **second authorized person** before data is permanently deleted. This protects against accidental or unauthorized deletion — including by privileged roles themselves.
 
@@ -2505,4 +2522,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 34caca9f239d1e33c6417f6daff5dc438b6cdd98 -->
+<!-- source-hash: bf7564d29b8d916c3c9ca874f4532c8c25fb3979 -->

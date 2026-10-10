@@ -121,6 +121,10 @@ HELP_PAGES = {
                     items=(
                         _("Wer den Antrag gestellt hat, kann ihn nicht selbst genehmigen."),
                         _("Die prüfende Person braucht das Recht „Löschbestätigung“."),
+                        _(
+                            "Auch die Herabstufung von „Mit Zusatzangaben“ auf „Nur Pseudonym“ braucht bei "
+                            "vorhandenen Ereignissen Antrag und Freigabe."
+                        ),
                         _("Wer den Antrag gestellt hat, kann ihn zurückziehen, solange er aussteht."),
                         _("Ein zurückgezogener oder abgelehnter Antrag löscht nichts; die Daten bleiben unverändert."),
                     ),
@@ -131,19 +135,28 @@ HELP_PAGES = {
                     paragraphs=(
                         _(
                             "Ereignisse haben eine Aufbewahrungsfrist. Sie ergibt sich aus der Kontaktstufe "
-                            "oder aus einer Frist am Dokumentationstyp."
+                            "und einer Höchstfrist (verkürzt nur) am Dokumentationstyp; der früheste Stichtag gewinnt."
                         ),
                         _(
-                            "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; "
-                            "nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus."
+                            "Der Standardlauf erzeugt für „Mit Zusatzangaben“ einen Löschvorschlag und löscht "
+                            "erst nach "
+                            "Freigabe durch eine andere Person mit „Löschbestätigung“. Anonym und „Nur Pseudonym“ "
+                            "werden automatisch gelöscht; Legal Hold und Art. 18 stellen den Lauf zurück."
                         ),
                     ),
                     items=(
                         _(
-                            "Löschvorschläge erscheinen in den Löschfristen nur, wenn zusätzlich der Vorschlagslauf "
-                            "(enforce_retention --propose) eingerichtet ist."
+                            "Ohne Fall beginnt die Frist am Ereignisdatum, im offenen Fall bei der letzten fachlichen "
+                            "Fallaktivität (ersatzweise Anlage), im geschlossenen Fall beim Abschluss."
                         ),
-                        _("Zurückstellen oder Verwerfen eines Löschvorschlags hält die Löschung nicht auf."),
+                        _(
+                            "Zurückstellen schützt bis zum Datum; Ablehnen erlaubt eine neue Vorlage erst nach "
+                            "der Wiedervorlagefrist."
+                        ),
+                        _(
+                            "Legal Hold setzen und aufheben: direkt in Personen-, Fall- und Ereignisakte, mit "
+                            "Grund und optionalem Ablaufdatum."
+                        ),
                     ),
                 ),
             ),

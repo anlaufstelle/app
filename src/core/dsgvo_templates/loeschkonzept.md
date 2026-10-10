@@ -20,14 +20,15 @@ jeder Änderung ihrer Einstellungen oder Backup-Rotation.
 |----------------|-------|--------|--------------------|
 | Kontakte anonymer Personen | {{ retention_anonymous_days }} Tage | `retention_anonymous_days` | Ereignis wird soft-gelöscht (Frist ab dem Zeitpunkt des Ereignisses) |
 | Kontakte der Stufe „Nur Pseudonym" | {{ retention_identified_days }} Tage | `retention_identified_days` | Ereignis wird soft-gelöscht (Frist ab dem Zeitpunkt des jeweiligen Ereignisses; ein neuer Kontakt verlängert ältere Ereignisse nicht) |
-| Ereignisse der Stufe „Mit Zusatzangaben" in abgeschlossenen Fällen | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Ereignis wird soft-gelöscht (Frist ab Abschluss des verknüpften Falls). Ereignisse ohne Fall oder in offenen Fällen verfallen nicht über diese Frist, sondern nur über eine Dokumentationstyp-Frist |
-| Abweichende Frist einzelner Dokumentationstypen | {{ retention_document_type_overrides }} | `DocumentType.retention_days` | Zusätzliche Frist für Ereignisse dieses Typs (ab Zeitpunkt des Ereignisses): Es gilt die zuerst ablaufende Frist. Eine längere Typ-Frist verlängert die kontaktstufenbezogene Frist nicht |
+| Ereignisse der Stufe „Mit Zusatzangaben" | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Frist ab Fallabschluss, ohne Fall ab Ereignisdatum, im offenen Fall ab letzter fachlicher Fallaktivität (ersatzweise Anlage); Vorschlag und Freigabe durch eine andere Person mit „Löschbestätigung“ vor der Löschung |
+| Höchstfrist (verkürzt nur) einzelner Dokumentationstypen | {{ retention_document_type_overrides }} | `DocumentType.retention_days` | Zusätzliche Frist für Ereignisse dieses Typs (ab Zeitpunkt des Ereignisses): Es gilt die zuerst ablaufende Frist. Eine längere Typ-Frist verlängert die kontaktstufenbezogene Frist nicht |
 | Aktivitäten / Zeitstrom-Einträge | {{ retention_activities_days }} Tage | `retention_activities_days` | Harte Löschung |
 | Papierkorb für gelöschte Personen und Fälle | {{ client_trash_days }} Tage | `client_trash_days` | Automatische Anonymisierung; bis dahin Wiederherstellung möglich |
-| Audit-Log | {{ auditlog_retention_months }} Monate | `auditlog_retention_months` | Rollierende Löschung; `0` deaktiviert sie, gesetzliche und technische Ausnahmen siehe § 3.3 |
+| Audit-Log | {{ auditlog_retention_months }} Monate | `auditlog_retention_months` | Rollierende Löschung; Einträge ohne Einrichtung: {{ auditlog_system_retention_months }} Monate installationsweit (0 = aus). Zeilen mit Einrichtung zu einem Ziel unter aktivem Legal Hold bleiben erhalten; Ausnahmen siehe § 3.3 |
 | Inhalte früherer Fassungen eines Ereignisses | {{ eventhistory_detail_months }} Monate | `eventhistory_detail_months` | Die Werte der Fassung werden gelöscht, die Fassung selbst (Zeitpunkt, handelnde Person, Feldnamen) bleibt; die jüngste Fassung eines nicht gelöschten Ereignisses behält ihre Werte. `0` deaktiviert diese Frist. Bei einem **gelöschten** Ereignis und bei Ereignissen einer anonymisierten Person geschieht dasselbe für alle Fassungen unabhängig von dieser Frist, regulär mit dem nächsten Aufbewahrungslauf (Ausnahmen § 3.1) |
 | Chronologie früherer Fassungen (nach ihrer Inhalts-Löschung) | {{ eventhistory_chronicle_months }} Monate | `eventhistory_chronicle_months` | Die inhaltsleere Fassung wird gelöscht; gemessen ab dem Zeitpunkt ihrer Inhalts-Löschung. `0` deaktiviert die Löschung — dann wird die Chronologie unbefristet aufbewahrt |
 | Übergabenotizen (Schichtnotizen) | {{ retention_handover_notes_days }} Tage | `retention_handover_notes_days` | Die Notiz wird endgültig gelöscht (Frist ab ihrer letzten Änderung); kein Legal Hold — verfahrensrelevanter Inhalt ist vorher als Vermerk am Fall zu dokumentieren |
+| Abgeschlossene Lösch-, Zusammenführungs- und Herabstufungsanträge | {{ deletion_request_retention_days }} Tage ab Abschluss | `deletion_request_retention_days` | Harte Löschung; offene Anträge bleiben, Audit folgt seiner eigenen Frist |
 | Monatliche Statistik-Aggregate | unbefristet | — | Bleiben bestehen: Der Aufbewahrungslauf rechnet die Zählwerte jedes gelöschten Ereignisses zusammen mit dessen Löschung dem Aggregat seines Monats hinzu, auch im laufenden Monat; spätere Neuberechnungen behalten sie (siehe § 3.5) |
 | Backup-Sicherungsstände | {{ backup_retention_days }} Tage (Altersgrenze, keine Höchstfrist) | Längste lokale Rotation im ausgelieferten `backup.sh` | Die Rotation entfernt ein lokales verschlüsseltes Archiv beim ersten erfolgreichen Lauf von `backup.sh`, in dem es mindestens 8 (täglich), 29 (wöchentlich) bzw. 91 volle Tage (monatlich) alt ist; keine feste Höchstfrist. Die Rotation ist ausgesetzt, solange der Off-Site-Abgleich fehlschlägt |
 | Off-Site-Kopien der Sicherungsstände | [eintragen] | Aufbewahrungsregel am Off-Site-Ziel (von der Einrichtung festzulegen) | `backup.sh` löscht am Off-Site-Ziel nichts; Kopien bleiben bis zur Löschung durch die Regel am Ziel bestehen |
@@ -48,50 +49,58 @@ Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
 
 ### 3.1 Ereignisse, Personen und Fälle
 
-- Der tägliche Aufbewahrungslauf (`enforce_retention`) setzt abgelaufene
-  Ereignisse gemäß den Kontaktstufen- und Dokumentationstyp-Fristen auf
-  gelöscht — für alle Kontaktstufen unmittelbar, ohne Löschvorschlag und
-  ohne Freigabe durch eine Person. Ausgenommen sind nur Daten unter einem
-  aktiven Legal Hold.
-- Mit der Löschung werden die Inhalte des Ereignisses (Zusatzfelder, Suchtext)
-  sofort geleert und seine Dateianhänge gelöscht. Die Ereigniszeile bleibt als
-  gelöscht markiert bestehen; die Werte früherer Fassungen löscht regulär der
-  nächste Aufbewahrungslauf. Ereignisse unter einem aktiven Legal Hold und
-  Ereignisse, deren Datensatz oder Person in diesem Moment von einer anderen
-  Bearbeitung gesperrt ist, überspringt er; ein späterer Lauf holt sie nach,
-  sobald Sperre bzw. Bearbeitung beendet sind.
-- Optional legt ein gesonderter Vorschlagslauf (`enforce_retention --propose`)
-  für abgelaufene Ereignisse Löschvorschläge im Löschfristen-Dashboard an; die
-  ausgelieferte Zeitplanung ruft ihn nicht auf. Leitung und
-  Anwendungsbetreuung können einen Vorschlag freigeben, zurückstellen,
-  verwerfen oder dort einen Legal Hold setzen. Die Entscheidung hält den
-  täglichen Lauf nicht auf: Er löscht abgelaufene Ereignisse unabhängig vom
-  Vorschlagsstatus. Weder Zurückstellen noch Verwerfen schützt das Ereignis —
-  nur ein Legal Hold.
-- Manuelle Löschungen folgen dem Vier-Augen-Prinzip: Die Löschung einer Person
-  braucht immer die Bestätigung einer zweiten berechtigten Person, die eines
-  Ereignisses oder Falls nur bei Personen der Stufe „Mit Zusatzangaben".
-  Dateien vernichten Leitung und Anwendungsbetreuung über den Sofortlöschweg
-  ohne zweite Person (§ 3.2).
-- Sind alle Ereignisse einer Person gelöscht, anonymisiert ein nachfolgender
-  Lauf ihre identifizierenden Inhalte, sofern kein aktiver Legal Hold auf der
-  Person, einem ihrer Fälle oder Ereignisse liegt. Eine Person, zu der nie ein
-  Ereignis dokumentiert wurde, erfasst dieser Weg nicht. Er wartet nicht auf
-  die Papierkorb-Frist: Auch eine Person im Papierkorb, deren Ereignisse alle
-  gelöscht sind, anonymisiert der nächste Lauf. Andere manuell gelöschte
-  Personen sowie Fälle im Papierkorb anonymisiert der Lauf nach Ablauf der oben
-  ausgewiesenen Papierkorb-Frist.
-- Fälle haben keine zusätzliche eigene Aufbewahrungsfrist. Episoden,
-  Wirkungsziele, Meilensteine und Aufgaben folgen dem Lebenszyklus ihres Falls
-  beziehungsweise ihrer Person.
-- Aktive Aufbewahrungssperren (Legal Hold) halten automatische Löschung und
-  Anonymisierung bis zu ihrer Aufhebung an; eine Sperre auf eine Person oder
-  einen Fall schützt auch deren Ereignisse. In der Oberfläche lässt sich eine
-  Sperre nur auf einem Löschvorschlag setzen, also nur, wenn der
-  Vorschlagslauf eingerichtet ist. Rechtsgrundlage ist Art. 17 Abs. 3
-  DSGVO (Ausnahme von der Löschpflicht) — **nicht** Art. 18. Der Sperrvermerk
-  nach Art. 18 ist das Gegenstück: Er lässt die Daten gespeichert, sperrt aber
-  ihre inhaltliche Nutzung und Änderung.
+- Der tägliche Standardlauf (`enforce_retention`) löscht abgelaufene anonyme
+  Ereignisse und Ereignisse der Stufe „Nur Pseudonym“ automatisch. Für „Mit
+  Zusatzangaben“ legt er Vorschläge an; gelöscht wird erst nach Freigabe durch
+  eine andere Person mit dem Recht „Löschbestätigung“. Auch eine Typ-Höchstfrist
+  umgeht diesen Freigabeschritt nicht.
+- Zurückstellen schützt bis zum gesetzten Datum. Ablehnen löscht nichts;
+  frühestens nach {{ retention_rejected_retry_days }} Tagen kann ein neuer
+  Vorschlag entstehen. Auto-Freigabe nach maximalen Zurückstellungen ist
+  standardmäßig ausgeschaltet und muss ausdrücklich aktiviert werden.
+  `--propose` bleibt ein zusätzlicher Vorschlagslauf für alle Strategien.
+- Ereignisinhalte und Suchtext werden bei der Löschung sofort geleert, Dateien
+  endgültig gelöscht. Die Ereignishülle bleibt; Ereignisse haben keinen
+  Wiederherstellungsweg. Frühere Historienfassungen redigiert regulär der
+  nächste Aufbewahrungslauf. Fassungen unter Hold oder Art. 18 sowie
+  Ereignisse, die von einer anderen Bearbeitung gesperrt sind, werden
+  zurückgestellt; ein späterer Lauf holt sie nach. Der Personenstatus zählt
+  noch offene Historienfassungen.
+- Manuelle Löschungen folgen dem Vier-Augen-Prinzip: Personen immer, Ereignisse
+  und Fälle bei „Mit Zusatzangaben“. Die Herabstufung auf „Nur Pseudonym“ braucht
+  bei vorhandenen Ereignissen ebenfalls Antrag und zweite berechtigte Person.
+  Datei-Sofortlöschung bleibt eine Einzelentscheidung (§ 3.2).
+- Sind alle Ereignisse einer Person gelöscht, anonymisiert derselbe Lauf die
+  Person; er wartet nicht auf die Papierkorb-Frist. Ohne Ereignis gilt {{ retention_identified_days }} Tage Inaktivität
+  ab `updated_at`. Personen unter Hold oder Art.-18-Sperrvermerk werden
+  zurückgestellt. Personen und Fälle im Papierkorb haben zusätzlich die
+  Papierkorb-Frist; Episoden, Ziele, Meilensteine und Aufgaben folgen ihrer Akte.
+- Leitung und Anwendungsbetreuung setzen und lösen Legal Holds direkt in
+  Personen-, Fall- und Ereignisakten mit Grund und optionalem Ablaufdatum.
+  Die Systemadministration kann in `/system/legal-holds/` aufheben. Eine
+  Sperre auf Person/Fall schützt auch zugehörige Ereignisse. Der Art.-18-
+  Sperrvermerk schützt im Lauf vor Löschung, Anonymisierung und Historien-
+  Redaktion. Beide Schutzarten werden unabhängig voneinander geprüft.
+
+#### Soll-Fristenmatrix
+
+| Datenart | Fristbeginn | Maßgebliche Frist | Freigabe | Hold / Art. 18 | Vernichtung |
+|---|---|---|---|---|---|
+| Anonymes Ereignis | Ereignisdatum | min(Stufenfrist, Typ-Höchstfrist) | nein | ja / bei Personenbezug | Inhalt und Dateien weg, Hülle bleibt |
+| Ereignis „Nur Pseudonym“ | Ereignisdatum | min(Stufenfrist, Typ-Höchstfrist) | nein | ja / ja | wie oben |
+| „Mit Zusatzangaben“, geschlossen | Fallabschluss | min(Stichtag der Stufenfrist, Typ-Stichtag ab Ereignisdatum) | ja | ja / ja | nach Freigabe im Lauf |
+| „Mit Zusatzangaben“, ohne Fall | Ereignisdatum | min(Stufenfrist, Typ-Höchstfrist) | ja | ja / ja | nach Freigabe |
+| „Mit Zusatzangaben“, offen | letzte fachliche Fallaktivität, Fallback Anlage | frühester Stufen-/Typ-Stichtag | ja | ja / ja | nach Freigabe |
+| Person mit Ereignissen | letztes Ereignis gelöscht | abgeleitet | nein | ja / ja | anonymisiert |
+| Person ohne Ereignis | letzte Änderung | Frist „Nur Pseudonym“ | nein | ja / ja | anonymisiert |
+| Audit mit Einrichtung | Zeitstempel | Audit-Frist | nein | ja, Ziel / keine eigene Art.-18-Prüfung | hart gelöscht, Ausnahmen § 3.3 |
+| Audit ohne Einrichtung | Zeitstempel | installationsweite Frist | nein | kein Fachziel / keine eigene Art.-18-Prüfung | hart gelöscht, Ausnahmen § 3.3 |
+| Abgeschlossener Antrag | Abschluss | Antragsfrist | nein | keine eigene Prüfung | hart gelöscht, Audit bleibt seiner Frist unterworfen |
+| Monatsaggregate | — | unbefristet | — | — | bleiben als statistischer Restbestand |
+
+Als Fallaktivität zählen fachliche Änderungen an Fall, Ereignissen, Aufgaben
+und Verlauf; Umschlüsselung zählt nicht. Das Dashboard meldet offene Fälle
+nach {{ retention_open_case_inactive_days }} Tagen Ruhe.
 
 ### 3.2 Dateien
 
@@ -117,27 +126,22 @@ organisatorisch zu behandeln.
 
 ### 3.3 Audit-Log
 
-Das Audit-Log wird rollierend nach `auditlog_retention_months` bereinigt; der
-Aufbewahrungslauf bereinigt dabei je Einrichtung nur deren eigene Einträge. Der
-Wert `0` schaltet die reguläre Löschung ab. Von der regulären Frist ausgenommen
-sind:
+Einrichtungsbezogene Zeilen verfallen nach `auditlog_retention_months`.
+Einträge ohne Einrichtung verfallen nach {{ auditlog_system_retention_months }} Monate installationsweit
+(`AUDITLOG_SYSTEM_RETENTION_MONTHS`, Vorgabe 24). Jeweils deaktiviert `0` die
+Bereinigung. Ein auf eine Einrichtung eingeschränkter Lauf bereinigt die
+installationsweite Kette nicht.
 
-- Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs (Laufabschluss und
-  Kontrollpunkte der Audit-Bereinigung), Nachweise der Redaktion der
-  Ereignis-Historie und Nachweise herausgegebener Berichtszeiträume;
-- alle Einträge ohne Einrichtung: Aufrufe und Aktionen der
-  Systemadministration (mit Benutzer und IP-Adresse), Anmelde- und
-  Sicherheitsereignisse von Konten ohne Einrichtung, fehlgeschlagene
-  Anmeldungen unter unbekanntem Benutzernamen (mit dem eingegebenen
-  Benutzernamen und der IP-Adresse) sowie installationsweite Lauf-Marker. Kein
-  Lauf löscht sie; sie bleiben unbefristet erhalten.
+Aufbewahrungssperren (Legal Hold) schützen Audit-Zeilen mit Einrichtung zu gesperrten Personen,
+Fällen und Ereignissen einschließlich ihrer geschützten Zuordnungen. Die
+HMAC-Checkpoints dokumentieren auch die Kettengrenzen gehaltener Überlebender;
+Löschung und Checkpoint werden gemeinsam gespeichert.
 
-Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log, auch nicht
-auf Einträge zu einer gesperrten Person, einem gesperrten Fall oder Ereignis. Soll ein Audit-Eintrag länger
-erhalten bleiben, ist er vor Ablauf der Frist organisatorisch zu sichern (etwa
-über den Audit-Export der Systemadministration) oder die Frist anzuheben.
-Diese Ausnahmen sind bei der Festlegung und Prüfung des Löschkonzepts
-gesondert zu bewerten.
+Dauerhaft ausgenommen sind Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs,
+Kontrollpunkte der Audit-Bereinigung, Nachweise der Redaktion der Ereignis-Historie
+und Nachweise herausgegebener Berichtszeiträume. Diese Ausnahmen gelten auch für
+die Kette ohne Einrichtung. Audit wird bei Anonymisierung nicht mitredigiert;
+bei abgeschalteter Frist, aktivem Hold oder Ausnahmen kann es unbefristet bleiben.
 
 ### 3.4 Sicherungsstände
 
@@ -168,7 +172,8 @@ der erneuten Freigabe des Systems auszuführen.
 
 ### 3.5 Statistik-Aggregate
 
-Der Aufbewahrungslauf löscht jedes Ereignis in einer eigenen Transaktion und
+Der Aufbewahrungslauf und manuelle Ereignislöschungen sichern Löschung und
+Monatsübertrag in derselben Transaktion und
 rechnet in derselben Transaktion dessen Zählwerte dem monatlichen
 Statistik-Aggregat des Monats hinzu, in dem das Ereignis stattfand — auch dem
 laufenden Monat, etwa wenn eine kurze Dokumentationstyp-Frist Ereignisse noch
@@ -184,10 +189,10 @@ behoben ist.
 Die Zählwerte eines bestehenden Aggregats ändert ein Löschlauf nicht; er
 erweitert nur den Übertrag. Jede Neuberechnung des Aggregats (der monatliche
 Statistiklauf) zählt die noch vorhandenen Ereignisse und addiert die Zählwerte
-aller vom Aufbewahrungslauf gelöschten Ereignisse dieses Monats. Personenzahlen
+aller automatisch oder manuell gelöschten Ereignisse dieses Monats. Personenzahlen
 werden dabei nicht addiert, sondern als Untergrenze geführt. Die Aggregate sind
 dennoch keine unveränderliche Archivkopie: Nachgetragene Ereignisse kommen bei
-der nächsten Neuberechnung hinzu, manuell gelöschte Ereignisse fallen heraus,
+der nächsten Neuberechnung hinzu, gelöschte Ereignisse bleiben über ihren Monatsübertrag enthalten,
 und noch vorhandene Ereignisse werden nach dem aktuellen Stand der Person einer
 Alters- oder Kontaktstufe zugeordnet.
 

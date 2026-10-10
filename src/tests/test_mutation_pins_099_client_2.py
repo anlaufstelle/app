@@ -87,6 +87,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 from django.contrib.contenttypes.models import ContentType
@@ -214,17 +215,19 @@ class TestLiftProcessingRestrictionMeldungen:
 
 
 class TestSettingsHashUndFooterInhalt:
-    def test_settings_hash_unterscheidet_fehlenden_von_erfundenem_einrichtungsnamen(self):
-        """Pins ``x__settings_hash__mutmut_17``: der ``or``-Fallback fuer
-        ``facility_full_name`` wird von ``""`` auf das Literal ``"XXXX"`` verfaelscht —
-        bei fehlendem Einrichtungsnamen enthielte der Hash-Payload einen erfundenen
-        Platzhaltertext statt eines leeren Werts. Rechnet den erwarteten Hash aus denselben
-        Bausteinen wie das Original nach, statt Implementierungsdetails zu duplizieren."""
+    def test_settings_hash_preserves_an_empty_facility_name(self):
+        """Pin the empty name and the complete package inputs without placeholders."""
         baseline = _settings_hash(None)
 
         expected_payload = {
             **_retention_values(None),
             "backup_retention_days": _backup_retention_days(),
+            "templates_hash": hashlib.sha256(
+                b"".join(
+                    path.name.encode() + b"\0" + path.read_bytes()
+                    for path in sorted((Path(__file__).resolve().parents[1] / "core" / "dsgvo_templates").glob("*.md"))
+                )
+            ).hexdigest(),
             "facility_full_name": "",
             "document_type_overrides": [],
         }

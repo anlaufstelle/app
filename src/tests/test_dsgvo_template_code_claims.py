@@ -456,8 +456,7 @@ _SECTION_REF_RE = re.compile(r"§ (\d+(?:\.\d+)*)")
 _HEADING_RE = re.compile(r"^#{2,4} (\d+(?:\.\d+)*)\.? (.+)$", re.MULTILINE)
 
 
-#: Wording every audit retention text uses for the class ``prune_auditlog``
-#: never reaches (it deletes only ``facility=facility`` rows).
+#: System audit rows have their own installation-wide retention period.
 AUDIT_WITHOUT_FACILITY = "Einträge ohne Einrichtung"
 
 
@@ -488,7 +487,7 @@ class TestDeletionConceptAuditLog:
         for ref in refs:
             assert "Audit-Log" in headings[ref], (ref, headings.get(ref))
 
-    def test_audit_log_section_names_every_exemption_and_no_hold(self, deletion_concept):
+    def test_audit_log_section_names_every_exemption_and_hold_protection(self, deletion_concept):
         section = _flat(_section(deletion_concept, "### 3.3 Audit-Log", "### 3.4"))
         for exemption in (
             "Sicherheitsverstöße",
@@ -497,24 +496,24 @@ class TestDeletionConceptAuditLog:
             "herausgegebener Berichtszeiträume",
         ):
             assert exemption in section, exemption
-        assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in section
-        # ``prune_auditlog`` filters ``facility=facility``: entries without a
-        # facility are never pruned, so the list of exemptions is not closed.
+        assert "Aufbewahrungssperren (Legal Hold) schützen Audit-Zeilen" in section
+        # Holds and permanent exceptions remain; system rows have a separate period.
         assert "Weitere Ausnahmen gibt es nicht" not in section
         assert AUDIT_WITHOUT_FACILITY in section
-        assert "unbefristet" in section
+        assert "AUDITLOG_SYSTEM_RETENTION_MONTHS" in section
+        assert "installationsweit" in section
 
-    def test_dsfa_and_vvt_template_name_history_proof_and_no_hold(self, facility):
+    def test_dsfa_and_vvt_template_name_history_proof_and_hold_protection(self, facility):
         dsfa_row = next(
             line for line in render_document("dsfa", facility)[0].splitlines() if line.startswith("| 7 | Audit-Log |")
         )
         assert "Historien-Redaktion" in dsfa_row
-        assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in dsfa_row
+        assert "Aktiver Legal Hold schützt Audit-Ziele mit Einrichtung" in dsfa_row
         assert AUDIT_WITHOUT_FACILITY in dsfa_row
         vvt = _flat(render_document("verarbeitungsverzeichnis", facility)[0])
         audit_deadlines = _section(vvt, "### 3.4 Löschfristen", "---")
         assert "Historien-Redaktion" in audit_deadlines
-        assert "Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log" in audit_deadlines
+        assert "Aufbewahrungssperren (Legal Hold) schützen Audit-Zeilen" in audit_deadlines
         assert "weitere Ausnahmen gibt es nicht" not in audit_deadlines
         assert AUDIT_WITHOUT_FACILITY in audit_deadlines
 
@@ -734,6 +733,7 @@ class TestRetentionInventory:
                 "retention_handover_notes_days",
                 "client_trash_days",
                 "auditlog_retention_months",
+                "deletion_request_retention_days",
                 "eventhistory_detail_months",
                 "eventhistory_chronicle_months",
                 "DocumentType.retention_days",
