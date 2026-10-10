@@ -63,6 +63,7 @@ from core.services.client.main import (
 )
 from core.services.dashboard.activity import ACTIVITY_CONTEXT_SCHEMA, render_activity_summary
 from core.services.deletion import annotate_deletion_targets, eligible_deletion_confirmers
+from tests._sensitivity_helpers import make_inherited_fields_explicit
 
 pytestmark = pytest.mark.django_db
 
@@ -314,6 +315,7 @@ class TestGenericLabelsStayGeneric:
         self, facility, staff_user, assistant_user, sample_event
     ):
         """Toetet ``x_annotate_deletion_targets__mutmut_102/103/104``."""
+        make_inherited_fields_explicit(sample_event.document_type)
         sample_event.document_type.sensitivity = DocumentType.Sensitivity.HIGH
         sample_event.document_type.save(update_fields=["sensitivity"])
         assistant_user.can_confirm_deletion = True

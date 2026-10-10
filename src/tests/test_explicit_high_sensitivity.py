@@ -113,7 +113,8 @@ def test_loader_validates_existing_assignments_not_mentioned_in_package(facility
 def test_type_form_and_view_reject_inheriting_high_fields(client, admin_user, facility, initial_level):
     doc_type = make_document_type(facility=facility, name="Secure", sensitivity=initial_level)
     field = FieldTemplate.objects.create(facility=facility, name="Inherited note")
-    DocumentTypeField.objects.create(document_type=doc_type, field_template=field)
+    # Deliberately corrupt configuration to exercise the existing-state form guard.
+    DocumentTypeField.objects.bulk_create([DocumentTypeField(document_type=doc_type, field_template=field)])
     data = {"name": doc_type.name, "sensitivity": "high", "is_active": "on"}
     form = DocumentTypeForm(data, instance=doc_type, facility=facility)
     assert not form.is_valid()

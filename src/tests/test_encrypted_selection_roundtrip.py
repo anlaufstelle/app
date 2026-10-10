@@ -51,6 +51,7 @@ def test_encrypted_values_survive_persistence_paths(entity_type, path, value, fa
             else FieldTemplate.FieldType.TEXT,
             is_encrypted=encrypted,
             options_json=[{"slug": slug, "label": slug} for slug in ("a", "b", "c")] if isinstance(value, list) else [],
+            sensitivity=DocumentType.Sensitivity.NORMAL,
         )
         DocumentTypeField.objects.create(document_type=document_type, field_template=template)
     kwargs = {

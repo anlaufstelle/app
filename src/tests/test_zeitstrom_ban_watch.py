@@ -61,6 +61,7 @@ def _make_ban_doc_type(facility, *, sensitivity=DocumentType.Sensitivity.ELEVATE
             name=field_name,
             field_type=field_type,
             is_required=required,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
         )
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft)
     return doc_type

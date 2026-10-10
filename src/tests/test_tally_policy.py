@@ -204,7 +204,13 @@ class TestTallyEligibilityPolicy:
                 name=name,
                 **{"tally_enabled": True, **overrides},
             )
-            _assignment(document_type, name=f"Ausgeschlossene Zahl {index}")
+            _assignment(
+                document_type,
+                name=f"Excluded number {index}",
+                sensitivity=DocumentType.Sensitivity.NORMAL
+                if document_type.sensitivity == DocumentType.Sensitivity.HIGH
+                else "",
+            )
             impossible.append(document_type)
 
         evaluated_ids = []

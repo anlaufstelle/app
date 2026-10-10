@@ -492,6 +492,7 @@ class TestAttachmentListSensitivityFiltering:
             facility=facility,
             name="Datei",
             field_type=FieldTemplate.FieldType.FILE,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
         )
 
         # HIGH doc type — invisible to STAFF

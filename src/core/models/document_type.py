@@ -163,9 +163,23 @@ class DocumentType(ReportKeyMixin, SluggedModel):
 
         super().clean()
         validate_configuration_facility(self, self.facility_id)
+        self._validate_explicit_high_fields()
+
+    def _validate_explicit_high_fields(self, sensitivity=None):
+        """Use the shared rule for model saves and admin form validation."""
+        from core.services.compliance.sensitivity import validate_explicit_high_field
+
+        level = self.sensitivity if sensitivity is None else sensitivity
+        if level == self.Sensitivity.HIGH and self.pk is not None:
+            for assignment in self.fields.select_related("field_template"):
+                field = assignment.field_template
+                try:
+                    validate_explicit_high_field(level, field.sensitivity, field.name)
+                except ValidationError as error:
+                    raise ValidationError({"sensitivity": error.messages}) from error
 
     @contextmanager
-    def _save_context(self):
+    def _save_context(self, *, update_fields=None):
         """Serialize shared slug persistence and sensitivity rewrites (Refs #2525)."""
         from core.services.dynamic_protection import (
             configuration_write,
@@ -175,9 +189,18 @@ class DocumentType(ReportKeyMixin, SluggedModel):
 
         validate_configuration_facility(self, self.facility_id)
         with configuration_write(self.facility_id):
-            previous = DocumentType.objects.for_facility(self.facility_id).filter(pk=self.pk).first()
+            previous = (
+                DocumentType.objects.for_facility(self.facility_id)
+                .select_for_update(no_key=True, of=("self",))
+                .filter(pk=self.pk)
+                .first()
+            )
+            level = self.sensitivity
+            if previous is not None and update_fields is not None and "sensitivity" not in update_fields:
+                level = previous.sensitivity
+            self._validate_explicit_high_fields(level)
             yield
-            if previous is not None and previous.sensitivity != self.sensitivity:
+            if previous is not None and previous.sensitivity != level:
                 rewrite_dynamic_records([self])
 
     def delete(self, *args, **kwargs):

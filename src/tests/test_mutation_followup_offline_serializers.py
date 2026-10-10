@@ -15,6 +15,7 @@ from django.utils import timezone
 from core.models import (
     Case,
     DocumentType,
+    DocumentTypeField,
     Episode,
     Event,
     User,
@@ -644,7 +645,10 @@ class TestSerializeDocumentType:
         # Richtung B (Refs #1998): TYP-Stufe HIGH, Feld OHNE eigenen Override.
         dt_high = _make_doc_type(facility, name="Streng", sensitivity=DocumentType.Sensitivity.HIGH)
         ft_inherit = _make_field_template(facility, name="Geerbt")
-        _attach(dt_high, ft_inherit, sort_order=0)
+        # Deliberately inject invalid configuration to keep the read boundary covered.
+        DocumentTypeField.objects.bulk_create(
+            [DocumentTypeField(document_type=dt_high, field_template=ft_inherit, sort_order=0)]
+        )
         # Vorbedingung explizit: das Feld traegt KEINE eigene Sensitivity, die
         # Gate-Stufe kann also nur aus ``doc_type.sensitivity`` kommen. Ohne
         # diese Zusicherung koennte der Test spaeter aus dem falschen Grund

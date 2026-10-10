@@ -53,7 +53,7 @@ def _title_hrefs(content: str, filename: str) -> list[str]:
     ]
 
 
-def _file_template(facility, name, *, sensitivity=""):
+def _file_template(facility, name, *, sensitivity=DocumentType.Sensitivity.NORMAL):
     return FieldTemplate.objects.create(
         facility=facility,
         name=name,

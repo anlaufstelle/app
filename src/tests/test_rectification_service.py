@@ -24,6 +24,7 @@ from core.services.client.rectification import (
     request_rectification,
 )
 from core.services.file_vault import is_encrypted_value
+from tests._sensitivity_helpers import make_inherited_fields_explicit
 
 
 def _paths(client, user):
@@ -280,6 +281,7 @@ class TestApproveGuards:
         client_identified.document_type = doc_type_client_profile
         client_identified.save(update_fields=["document_type", "data_json"])
         rr = request_rectification(client_identified, lead_user, "data_json.wohnsituation", "Neu", "Grund")
+        make_inherited_fields_explicit(doc_type_client_profile)
         doc_type_client_profile.sensitivity = DocumentType.Sensitivity.HIGH
         doc_type_client_profile.save(update_fields=["sensitivity"])
 

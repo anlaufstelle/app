@@ -187,6 +187,7 @@ class TestSerializeDocumentTypeFullDict:
             facility=facility,
             name="Pin-Feldvorlage facility_export-a",
             field_type=FieldTemplate.FieldType.TEXT,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
         )
         field = DocumentTypeField.objects.create(
             document_type=doc_type,

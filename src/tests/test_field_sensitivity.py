@@ -27,6 +27,7 @@ def doc_type_high(facility):
         facility=facility,
         name="Normalfeld",
         field_type=FieldTemplate.FieldType.TEXT,
+        sensitivity=DocumentType.Sensitivity.NORMAL,
     )
     DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_secret, sort_order=0)
     DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_normal, sort_order=1)

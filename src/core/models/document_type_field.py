@@ -72,6 +72,29 @@ class DocumentTypeField(models.Model):
             validate_configuration_facility(
                 self, self.document_type.facility_id, facility_lookup="document_type__facility_id"
             )
+        if self.document_type_id and self.field_template_id:
+            from core.services.compliance.sensitivity import validate_explicit_high_field
+
+            current_type = (
+                DocumentType.objects.for_facility(self.document_type.facility_id).get(pk=self.document_type_id)
+                if not self.document_type._state.adding
+                else self.document_type
+            )
+            field = (
+                FieldTemplate.objects.for_facility(self.document_type.facility_id)
+                .filter(pk=self.field_template_id)
+                .first()
+            )
+            if field is None:
+                raise ValidationError({"field_template": _("Die Feldvorlage gehört zu einer anderen Einrichtung.")})
+            # Inline validation must also consider a pending parent upgrade.
+            level = self.document_type.sensitivity
+            if current_type.sensitivity == DocumentType.Sensitivity.HIGH:
+                level = current_type.sensitivity
+            try:
+                validate_explicit_high_field(level, field.sensitivity, field.name)
+            except ValidationError as error:
+                raise ValidationError({"field_template": error.messages}) from error
         # M0 (Refs #1056): Eine zugeordnete Feldgruppe muss zum selben
         # Dokumentationstyp gehoeren — sonst wuerde ein Feld unter einer Gruppe
         # eines fremden DocumentType (ggf. sogar fremder Facility) einsortiert.
@@ -88,16 +111,33 @@ class DocumentTypeField(models.Model):
         validate_configuration_facility(
             self, self.document_type.facility_id, facility_lookup="document_type__facility_id"
         )
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = frozenset(kwargs["update_fields"])
         with configuration_write(self.document_type.facility_id):
+            from core.services.compliance.sensitivity import validate_explicit_high_field
+
             previous = type(self).objects.filter(pk=self.pk).first()
-            if (
-                FieldTemplate.objects.for_facility(self.document_type.facility_id)
-                .filter(pk=self.field_template_id)
-                .values_list("pk", flat=True)
+            type_id, field_id = self.document_type_id, self.field_template_id
+            update_fields = kwargs.get("update_fields")
+            if previous is not None and update_fields is not None:
+                if not {"document_type", "document_type_id"}.intersection(update_fields):
+                    type_id = previous.document_type_id
+                if not {"field_template", "field_template_id"}.intersection(update_fields):
+                    field_id = previous.field_template_id
+            current_type = (
+                DocumentType.objects.for_facility(self.document_type.facility_id)
+                .select_for_update(no_key=True, of=("self",))
+                .get(pk=type_id)
+            )
+            field = (
+                FieldTemplate.objects.for_facility(current_type.facility_id)
+                .select_for_update(no_key=True, of=("self",))
+                .filter(pk=field_id)
                 .first()
-                is None
-            ):
+            )
+            if field is None:
                 raise ValidationError(_("Die Feldvorlage gehört zu einer anderen Einrichtung."))
+            validate_explicit_high_field(current_type.sensitivity, field.sensitivity, field.name)
             super().save(*args, **kwargs)
             if previous is None or (previous.document_type_id, previous.field_template_id) != (
                 self.document_type_id,

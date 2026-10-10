@@ -51,6 +51,7 @@ def doc_type_client_high(facility):
         facility=facility,
         name="Schutzkonzept",
         field_type=FieldTemplate.FieldType.TEXTAREA,
+        sensitivity=DocumentType.Sensitivity.NORMAL,
     )
     DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
     return doc_type
@@ -185,6 +186,7 @@ def doc_type_case_high(facility):
         facility=facility,
         name="Gefahrenlage",
         field_type=FieldTemplate.FieldType.TEXTAREA,
+        sensitivity=DocumentType.Sensitivity.NORMAL,
     )
     DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
     return doc_type

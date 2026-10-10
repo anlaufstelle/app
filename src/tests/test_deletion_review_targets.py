@@ -11,6 +11,7 @@ from django.utils import timezone
 from core.models import Case, DeletionRequest
 from tests._authz_expectations import ROLES
 from tests._factories import make_client, make_document_type, make_event
+from tests._sensitivity_helpers import make_inherited_fields_explicit
 
 pytestmark = pytest.mark.django_db
 
@@ -107,6 +108,8 @@ def test_event_review_matches_detail_visibility(
 ):
     login_confirmer(client, request, role)
     event = review_targets["event"]
+    if sensitivity == "high":
+        make_inherited_fields_explicit(event.document_type)
     event.document_type.sensitivity = sensitivity
     event.document_type.name = "SECRET-EVENT-TYPE"
     event.document_type.save(update_fields=["sensitivity", "name"])

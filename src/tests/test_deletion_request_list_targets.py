@@ -12,6 +12,7 @@ from django.urls import reverse
 from core.models import DocumentType
 from core.services.client import approve_client_deletion, request_client_deletion
 from core.services.events import request_deletion
+from tests._sensitivity_helpers import make_inherited_fields_explicit
 
 pytestmark = pytest.mark.django_db
 
@@ -64,6 +65,7 @@ class TestEventTargets:
     def test_invisible_event_stays_generic(self, client, staff_user, assistant_user, sample_event):
         """Sensibilität schlägt Bequemlichkeit: kein Typname für eine Rolle,
         die das Ereignis nicht sehen darf (Refs #1725-Muster)."""
+        make_inherited_fields_explicit(sample_event.document_type)
         sample_event.document_type.sensitivity = DocumentType.Sensitivity.HIGH
         sample_event.document_type.save(update_fields=["sensitivity"])
         request_deletion(sample_event, staff_user, "Grund")

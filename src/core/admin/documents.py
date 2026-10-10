@@ -4,6 +4,8 @@ import logging
 
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.utils import unquote
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from unfold.admin import ModelAdmin, TabularInline
 
@@ -46,6 +48,41 @@ class DocumentTypeFieldInline(TabularInline):
 
 class ConfigurationSelectionAdminMixin(FacilityScopedAdminMixin):
     """Lock the selected rows after all gates, before deletion audit (Refs #2525)."""
+
+    def _lock_form_configuration(self, request, object_id=None):
+        """Acquire the exclusive gate before form validation and read audit."""
+        if request.method != "POST":
+            return
+        try:
+            if object_id is not None:
+                facility_id = (
+                    self.get_queryset(request)
+                    .filter(pk=unquote(object_id))
+                    .values_list("facility_id", flat=True)
+                    .first()
+                )
+            elif request.user.is_super_admin:
+                facility_field = self.model._meta.get_field("facility")
+                facility_id = facility_field.target_field.to_python(request.POST.get("facility"))
+                if not facility_field.remote_field.model.objects.filter(pk=facility_id).exists():
+                    return
+            else:
+                facility_id = getattr(getattr(request, "current_facility", None), "pk", None)
+        except ValidationError:
+            # Invalid identifiers remain the responsibility of the admin form.
+            return
+        if facility_id is not None:
+            lock_dynamic_protection(facility_id, exclusive=True)
+
+    @transaction.atomic
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        self._lock_form_configuration(request, object_id)
+        return super().change_view(request, object_id, form_url, extra_context)
+
+    @transaction.atomic
+    def add_view(self, request, form_url="", extra_context=None):
+        self._lock_form_configuration(request)
+        return super().add_view(request, form_url, extra_context)
 
     @transaction.atomic
     def delete_queryset(self, request, queryset):

@@ -28,6 +28,7 @@ from django_ratelimit.core import get_usage
 from core.constants import RATELIMIT_FREQUENT
 from core.models import AuditLog, Case, Client, DocumentType, DocumentTypeField, FieldTemplate
 from core.services.file_vault import get_attachment_path, store_encrypted_file
+from tests._sensitivity_helpers import make_inherited_fields_explicit
 
 pytestmark = pytest.mark.django_db
 
@@ -144,6 +145,7 @@ class TestClientAttachmentDownload:
         """Stufe 2: 404 statt 403 — die Zusatzfelder-Sektion ist fuer
         Unterberechtigte komplett abwesend, ein 403 waere ein Existenz-Leak."""
         person, attachment, _ft = client_owner
+        make_inherited_fields_explicit(doc_type_client_profile)
         doc_type_client_profile.sensitivity = DocumentType.Sensitivity.HIGH
         doc_type_client_profile.save(update_fields=["sensitivity"])
         client.force_login(staff_user)

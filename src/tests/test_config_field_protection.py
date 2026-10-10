@@ -33,7 +33,12 @@ def test_board_exposes_effective_protection(client, admin_user, facility, type_l
     doc_type = make_document_type(facility=facility, name="Protection type", sensitivity=type_level)
     field = FieldTemplate.objects.create(facility=facility, name="Protection field", sensitivity=field_level)
     group = FieldGroup.objects.create(document_type=doc_type, name="Fields") if grouped else None
-    link = DocumentTypeField.objects.create(document_type=doc_type, field_template=field, field_group=group)
+    link = DocumentTypeField(document_type=doc_type, field_template=field, field_group=group)
+    if type_level == "high" and field_level == "":
+        # The display must stay accurate even for configuration injected outside model saves.
+        DocumentTypeField.objects.bulk_create([link])
+    else:
+        link.save()
     client.force_login(admin_user)
     response = client.get(reverse("core:config_doctype_detail", args=[doc_type.pk]))
     row = next(elements(parse_html(response.content.decode()), "data-dtf-id", str(link.pk)))
@@ -57,7 +62,7 @@ def test_board_exposes_effective_protection(client, admin_user, facility, type_l
 
 def test_list_shows_own_level_and_index_per_assigned_type(client, admin_user, facility):
     field = FieldTemplate.objects.create(facility=facility, name="Shared field")
-    for level in ("normal", "high"):
+    for level in ("normal", "elevated"):
         doc_type = make_document_type(facility=facility, name=f"Type {level}", sensitivity=level)
         DocumentTypeField.objects.create(document_type=doc_type, field_template=field)
     client.force_login(admin_user)
@@ -68,7 +73,7 @@ def test_list_shows_own_level_and_index_per_assigned_type(client, admin_user, fa
     text = text_content(row)
     assert "wie Typ" in text
     assert "Klartext" in text
-    for name, status in (("Type normal", "Im Suchindex"), ("Type high", "Nicht im Suchindex")):
+    for name, status in (("Type normal", "Im Suchindex"), ("Type elevated", "Nicht im Suchindex")):
         item = next(item for item in elements(row, "data-testid", "field-index-status") if name in text_content(item))
         assert status in text_content(item)
 

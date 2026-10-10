@@ -123,6 +123,7 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
 
         super().clean()
         validate_configuration_facility(self, self.facility_id)
+        self._validate_explicit_high_types()
         if self.slug and not _SLUG_RE.fullmatch(self.slug):
             raise ValidationError({"slug": _("Nur a-z, 0-9 und Bindestriche erlaubt.")})
         # Refs #1726: reservierter Slug (fester Formularfeld-Name) — nur beim
@@ -230,6 +231,25 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
                 _("Der Slug „%(slug)s“ kollidiert mit einem festen Formularfeld.") % {"slug": self.slug}
             )
 
+    def _validate_explicit_high_types(self, sensitivity=None, *, document_types=None):
+        """Reject inheritance using current assigned types or the caller's locked rows."""
+        from core.services.compliance.sensitivity import validate_explicit_high_field
+
+        level = self.sensitivity if sensitivity is None else sensitivity
+        if level != "":
+            return
+        if document_types is None:
+            document_types = (
+                DocumentType.objects.for_facility(self.facility_id)
+                .filter(fields__field_template_id=self.pk)
+                .order_by("pk")
+            )
+        for doc_type in document_types:
+            try:
+                validate_explicit_high_field(doc_type.sensitivity, level, self.name)
+            except ValidationError as error:
+                raise ValidationError({"sensitivity": error.messages}) from error
+
     def save(self, *args, **kwargs):
         """Normalize protection and atomically rewrite assigned records."""
         from core.services.dynamic_protection import (
@@ -246,9 +266,28 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
         with configuration_write(self.facility_id):
             # Refs #2519: check used option slugs while the configuration lock holds.
             self._validate_option_changes(update_fields=kwargs.get("update_fields"))
-            previous = FieldTemplate.objects.for_facility(self.facility_id).filter(pk=self.pk).first()
+            previous = (
+                FieldTemplate.objects.for_facility(self.facility_id)
+                .select_for_update(no_key=True, of=("self",))
+                .filter(pk=self.pk)
+                .first()
+            )
+            level = self.sensitivity
+            if (
+                previous is not None
+                and kwargs.get("update_fields") is not None
+                and "sensitivity" not in kwargs["update_fields"]
+            ):
+                level = previous.sensitivity
+            document_types = (
+                DocumentType.objects.for_facility(self.facility_id)
+                .filter(fields__field_template_id=self.pk)
+                .order_by("pk")
+                .select_for_update(no_key=True, of=("self",))
+            )
+            self._validate_explicit_high_types(level, document_types=document_types)
             # Refs #1270, #2525: normalize before persistence and the rewrite.
-            if self.field_type == self.FieldType.FILE or self.sensitivity == DocumentType.Sensitivity.HIGH:
+            if self.field_type == self.FieldType.FILE or level == DocumentType.Sensitivity.HIGH:
                 self.is_encrypted = True
                 if kwargs.get("update_fields") is not None:
                     kwargs["update_fields"] = {*kwargs["update_fields"], "is_encrypted"}

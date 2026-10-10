@@ -59,12 +59,14 @@ class SluggedModel(models.Model):
     def _check_immutable_fields(self, orig):
         """Hook: weitere Unveränderbarkeits-Guards beim Update (Default: keine)."""
 
-    def _save_context(self):
+    def _save_context(self, *, update_fields=None):
         """Wrap shared slug persistence and any subclass rewrite in one context."""
         return nullcontext()
 
     def save(self, *args, **kwargs):
-        with self._save_context():
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = frozenset(kwargs["update_fields"])
+        with self._save_context(update_fields=kwargs.get("update_fields")):
             if self._state.adding:
                 auto_slug = not self.slug
                 if auto_slug:
@@ -171,6 +173,7 @@ class DynamicDataEncryptionMixin(models.Model):
 
     def _encrypt_sensitive_fields(self):
         """Encrypt fields that are marked as encrypted in the field template."""
+        from core.services.compliance.sensitivity import validate_explicit_high_field
         from core.services.file_vault import encrypt_field, is_encrypted_value
 
         if not self.document_type_id or not self.data_json:
@@ -178,12 +181,19 @@ class DynamicDataEncryptionMixin(models.Model):
 
         # Refs #2525: template encryption can change without changing the type ID.
         # Read current protection on every save, including reused model instances.
-        encrypted_field_names = self.document_type.fields.filter(
-            field_template__is_encrypted=True,
-            document_type__facility_id=self.facility_id,
-        ).values_list("field_template__slug", flat=True)
-        for key in encrypted_field_names:
+        assignments = self.document_type.fields.filter(document_type__facility_id=self.facility_id).values_list(
+            "field_template__slug",
+            "field_template__is_encrypted",
+            "field_template__sensitivity",
+            "field_template__name",
+            "document_type__sensitivity",
+        )
+        for key, encrypted, field_level, field_name, type_level in assignments:
             value = self.data_json.get(key)
+            if value is not None and value != "":
+                validate_explicit_high_field(type_level, field_level, field_name)
+            if not encrypted:
+                continue
             if value is not None and value != "" and not is_encrypted_value(value):
                 # Skip file attachment markers — they are metadata, not user data.
                 # Beide Formate berücksichtigen: Stufe A (__file__) und Stufe B

@@ -33,6 +33,7 @@ def doc_type_high(facility):
         facility=facility,
         name="GeheimFeld",
         field_type=FieldTemplate.FieldType.TEXT,
+        sensitivity=DocumentType.Sensitivity.NORMAL,
     )
     DocumentTypeField.objects.create(document_type=dt, field_template=ft_secret, sort_order=0)
     return dt

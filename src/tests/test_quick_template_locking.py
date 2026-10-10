@@ -12,6 +12,7 @@ from django.test.utils import CaptureQueriesContext
 from core.admin.documents import FieldTemplateAdmin, QuickTemplateAdmin
 from core.admin_site import anlaufstelle_admin_site
 from core.models import DocumentType, FieldTemplate, QuickTemplate
+from tests._sensitivity_helpers import make_inherited_fields_explicit
 from tests.test_admin_config_audit import _request
 from tests.test_sensitivity_write_locking import run_connection, wait_for_completion_or_lock
 
@@ -97,6 +98,7 @@ def test_admin_prefilled_values_use_fresh_type_under_the_gate(facility, sample_e
     field = FieldTemplate.objects.create(facility=facility, name="Prefilled", field_type=FieldTemplate.FieldType.TEXT)
     DocumentTypeField.objects.create(document_type=document_type, field_template=field)
     stale_type = DocumentType.objects.get(pk=document_type.pk)
+    make_inherited_fields_explicit(document_type)
     document_type.sensitivity = DocumentType.Sensitivity.HIGH
     document_type.save()
     obj = QuickTemplate(

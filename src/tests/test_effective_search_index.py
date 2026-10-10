@@ -4,6 +4,7 @@ from io import StringIO
 from uuid import uuid4
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.utils import timezone
@@ -43,6 +44,11 @@ def make_event(facility, user, type_level="normal", field_level="", *, encrypted
     "field_level", ["", "normal", "elevated", "high"], ids=["inherit", "normal", "elevated", "high"]
 )
 def test_write_and_search_use_effective_level(facility, lead_user, client_identified, type_level, field_level):
+    if type_level == "high" and field_level == "":
+        with pytest.raises(ValidationError, match="erben"):
+            make_event(facility, lead_user, type_level, field_level, client=client_identified)
+        assert not Event.objects.for_facility(facility).exists()
+        return
     event, field = make_event(facility, lead_user, type_level, field_level, client=client_identified)
     indexed = type_level == "normal" and field_level in {"", "normal"}
     for token in ("NeedleToken", "UpdatedToken"):

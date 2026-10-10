@@ -6,13 +6,12 @@ the application paths the statements rely on.
 """
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.urls import reverse
-from django.utils import timezone
 
 from core.models import Client, DocumentType, DocumentTypeField, FieldCondition, FieldTemplate
-from core.services.events.crud import _validate_contact_stage, create_event
+from core.services.events.crud import _validate_contact_stage
 from core.services.events.tally import TallyIneligibilityReason, evaluate_tally_eligibility
-from core.services.file_vault import is_encrypted_value
 from tests.test_doctype_form_field_help import _parse
 
 pytestmark = pytest.mark.django_db
@@ -49,28 +48,17 @@ class TestSensitivityDoesNotPromiseEncryption:
 
         assert "immer verschlüsselt" not in str(DocumentTypeForm().fields["sensitivity"].help_text)
 
-    def test_high_document_type_alone_leaves_an_inheriting_field_in_plaintext(self, facility, admin_user):
-        """The code fact the help relies on: only the field template encrypts."""
+    def test_high_document_type_rejects_an_inheriting_field(self, facility):
+        """High types require explicit field protection on every model save."""
         document_type = DocumentType.objects.create(
             facility=facility, name="High type", sensitivity=DocumentType.Sensitivity.HIGH
         )
         template = FieldTemplate.objects.create(
             facility=facility, name="Inherited note", field_type=FieldTemplate.FieldType.TEXTAREA
         )
-        DocumentTypeField.objects.create(document_type=document_type, field_template=template)
-
-        event = create_event(
-            facility=facility,
-            user=admin_user,
-            document_type=document_type,
-            occurred_at=timezone.now(),
-            data_json={template.slug: "Plain content"},
-            is_anonymous=True,
-        )
-        event.refresh_from_db()
-
-        assert not template.is_encrypted
-        assert not is_encrypted_value(event.data_json[template.slug])
+        with pytest.raises(ValidationError, match="Inherited note.*erben"):
+            DocumentTypeField.objects.create(document_type=document_type, field_template=template)
+        assert not document_type.fields.exists()
 
     def test_high_field_template_forces_encryption(self, facility):
         """The other half of the statement: HIGH on the field template encrypts."""
