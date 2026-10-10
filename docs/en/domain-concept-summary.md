@@ -22,7 +22,7 @@ Beyond the original domain of low-threshold substance-use and homelessness servi
 
 ### Personless Contacts and Contact Stages (Kontaktstufen)
 
-Relationships in low-threshold settings may develop from personless contacts to documentation under a pseudonym and then with additional details. The data model distinguishes personless events from two contact stages for people:
+The data model distinguishes personless events from two contact stages for people; personless contacts are not a contact stage of a person:
 
 - **Personless contact** -- No linked person record. The event has no person in the data model (one visit, one service). That does not make it anonymous by content: depending on the documentation type it can carry free text, locations or attachments (for example the personless incident capture of the awareness package) that make a person identifiable. Most contacts at a drop-in center remain at this level.
 - **Pseudonym only** (`identified`) -- The team assigns a pseudonym (e.g. "Maus"). Under this pseudonym, the system tracks a contact history and a timeline. The intended workflow keeps the mapping from pseudonym to real person in the minds of staff, and there is no required field for real names. The software does not technically prevent real names: pseudonyms, notes, free-text fields and attachments contain whatever the team enters.
@@ -349,4 +349,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: a1e70f7cf9dfa34125803871242a4b17c456b18b -->
+<!-- source-hash: 61c2ef05de8dad5b9fbb710b82ff9b1a365514f6 -->

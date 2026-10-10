@@ -1327,7 +1327,9 @@ class TestRealNamePromises:
             assert part in en, part
 
     def test_domain_concept_separates_personless_from_anonymous_content(self):
-        text = _section(_read_flat(DOMAIN_CONCEPT_DE), "**Stufe 1: Anonym.**", "**Stufe 3:")
+        text = _section(
+            _read_flat(DOMAIN_CONCEPT_DE), "**Personenloser Kontakt.**", "**Mit Zusatzangaben (`qualified`).**"
+        )
         assert "Im rechtlichen Sinn werden keine personenbezogenen Daten verarbeitet" not in text
         assert "existiert nur im Wissen der Mitarbeitenden" not in text
         assert "nicht automatisch anonym" in text

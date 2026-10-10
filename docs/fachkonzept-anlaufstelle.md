@@ -398,17 +398,17 @@ Zeitfilter sind optional. Eine Einrichtung kann beliebig viele definieren oder g
 
 ### Kontaktstufen und Pseudonymisierung
 
-Anlaufstelle unterscheidet drei Kontaktstufen, die den gesamten Lebenszyklus einer Person im System bestimmen:
+Anlaufstelle unterscheidet personenlose Ereignisse und zwei Kontaktstufen für Personen:
 
-**Stufe 1: Anonym.** Die Person wird nicht als Datensatz geführt: kein Pseudonym, kein Personendatensatz. Das Ereignis steht ohne Personenbezug im Datenmodell (ein Kontakt, eine Leistung, ein Alterscluster). Sein Inhalt ist damit nicht automatisch anonym: Je nach Dokumentationstyp enthält ein solches Ereignis Freitext, Ortsangaben oder Anhänge — etwa die personenlose Vorfallserfassung des Awareness-Pakets —, über die eine Person erkennbar sein kann. Ob personenbezogene Daten verarbeitet werden, hängt deshalb auch vom Inhalt ab.
+**Personenloser Kontakt.** Es gibt keinen zugeordneten Personendatensatz und kein Pseudonym. Das Ereignis steht ohne Personenbezug im Datenmodell (ein Kontakt, eine Leistung, ein Alterscluster). Sein Inhalt ist damit nicht automatisch anonym: Je nach Dokumentationstyp enthält ein solches Ereignis Freitext, Ortsangaben oder Anhänge — etwa die personenlose Vorfallserfassung des Awareness-Pakets —, über die eine Person erkennbar sein kann. Ob personenbezogene Daten verarbeitet werden, hängt deshalb auch vom Inhalt ab.
 
-**Stufe 2: Identifiziert.** Die Person hat ein Pseudonym — vergeben vom Team, festgehalten im System. Unter diesem Pseudonym werden Kontakte dokumentiert. Es gibt eine Chronik, eine Kontakthistorie, zugeordnete Leistungen. Vorgesehen ist, dass die Zuordnung Pseudonym → reale Person im Wissen der Mitarbeitenden bleibt; es gibt kein Pflichtfeld für Klarnamen. Technisch verhindert die Software Klarnamen nicht: Pseudonym, Notizen, Freitextfelder und Anhänge enthalten, was das Team einträgt.
+**Nur Pseudonym (`identified`).** Die Person hat ein Pseudonym — vergeben vom Team, festgehalten im System. Unter diesem Pseudonym werden Kontakte dokumentiert. Es gibt eine Chronik, eine Kontakthistorie, zugeordnete Leistungen. Vorgesehen ist, dass die Zuordnung Pseudonym → reale Person im Wissen der Mitarbeitenden bleibt; es gibt kein Pflichtfeld für Klarnamen. Technisch verhindert die Software Klarnamen nicht: Pseudonym, Notizen, Freitextfelder und Anhänge enthalten, was das Team einträgt.
 
-**Stufe 3: Qualifiziert.** Die Person ist in einem Beratungs- oder Begleitungsprozess. Zusätzlich zum Pseudonym werden qualifizierte Daten dokumentiert: Beratungsinhalte, Gesundheitsdaten, Vermittlungsverlauf. Diese Daten sind besonders schutzbedürftig und unterliegen strengeren Zugriffsregeln und längeren, aber definierten Aufbewahrungsfristen.
+**Mit Zusatzangaben (`qualified`).** Zusätzlich zum Pseudonym werden persönliche Angaben in dynamischen Feldern dokumentiert. Ihre Verschlüsselung und rollenabhängige Sichtbarkeit sind getrennte Regeln.
 
-Der Übergang zwischen Stufen ist ein bewusster Akt: Die Einrichtungsleitung entscheidet, wann aus einem identifizierten Kontakt ein qualifizierter wird. Das System protokolliert den Stufenwechsel. Die Stufe bestimmt, welche Dokumentationstypen zugeordnet werden können, wer die Daten einsehen darf und welche Löschfristen gelten.
+Bearbeiten und Hochstufen sind ab Fachkraft möglich; das System protokolliert den Stufenwechsel. Die Kontaktstufe bestimmt zulässige Dokumentationstypen, Löschverfahren, Protokollierung beim Öffnen der Person und Aufbewahrungsfristen. Assistenz kann Personendetails beider Stufen öffnen. Zusatzfelder sind sichtbar, soweit die höhere Sensibilität aus Dokumentationstyp und Feld für die Rolle erlaubt ist: Assistenz sieht „Normal“, Fachkraft bis „Erhöht“, Leitung und Anwendungsbetreuung alle Stufen. Interne Personennotizen sind erst ab Fachkraft sichtbar. Verschlüsselung allein begrenzt die Sichtbarkeit nicht.
 
-Keine Stufe ist Pflicht. Eine Einrichtung, die nur Kurzbesuche zählt, nutzt fast ausschließlich Stufe 1. Ein Beratungsprojekt nutzt vor allem Stufe 3. Anlaufstelle unterstützt das gesamte Spektrum.
+Ein Personenbezug ist keine Pflicht. Eine Einrichtung, die nur Kurzbesuche zählt, nutzt fast ausschließlich personenlose Kontakte. Ein Beratungsprojekt dokumentiert vor allem Personen mit Zusatzangaben. Anlaufstelle unterstützt das gesamte Spektrum.
 
 ### Offene Arbeitsinfos
 
@@ -614,7 +614,7 @@ Rollen definieren, welche Aktionen ein User ausführen darf. Anlaufstelle kennt 
 
 #### Client — Die Person / Klientel
 
-Der Client repräsentiert eine Person im System. Der primäre Identifikator ist das Pseudonym — ein vom Team vergebener Name. Der Client hat eine Kontaktstufe (anonym, identifiziert, qualifiziert), die seinen Lebenszyklus im System bestimmt.
+Der Client repräsentiert eine Person im System. Der primäre Identifikator ist das Pseudonym — ein vom Team vergebener Name. Der Client hat eine der beiden Kontaktstufen „Nur Pseudonym“ (`identified`) oder „Mit Zusatzangaben“ (`qualified`). Personenlose Ereignisse haben keinen Client.
 
 Ein Client gehört zu genau einer Facility; dort wird dokumentiert und dort gelten die Scope-Regeln. Das Modell hat keinen direkten Fremdschlüssel auf Organization. Die gemeinsame Organisation erzeugt keine einrichtungsübergreifende Personenakte.
 
@@ -1036,7 +1036,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 | **Hausverbot** | Betretungsverbot für eine Person in einer Einrichtung, mit Begründung, Gültigkeitszeitraum und Erteilender. In Anlaufstelle als Dokumentationstyp mit `system_type=ban` abgebildet. |
 | **Inbox** | Persönliche Übersicht aller offenen Hinweise und fälligen Aufgaben für die angemeldete Mitarbeitende. Teil der Operations-Ebene. |
 | **JSONB** | PostgreSQL-Datentyp für binäres JSON. Wird in Anlaufstelle verwendet, um die Feldwerte eines Ereignisses zusammen mit dem Ereignis zu speichern. Indexierbar (GIN-Index), abfragbar, performant. |
-| **Kontaktstufe** | Dreistufiges Modell, das den Identifizierungsgrad einer Person im System beschreibt: anonym (nur Zählung), identifiziert (Pseudonym), qualifiziert (Beratungsprozess). Bestimmt zulässige Dokumentationstypen, Vier-Augen-Löschung, Protokollierung beim Öffnen der Person und Löschfristen — nicht die Sichtbarkeit, die über die Sensitivität geregelt ist. |
+| **Kontaktstufe** | Zwei Stufen für Personen: „Nur Pseudonym“ (`identified`) und „Mit Zusatzangaben“ (`qualified`). Personenlose Kontakte sind Ereignisse ohne zugeordneten Personendatensatz. Bestimmt zulässige Dokumentationstypen, Vier-Augen-Löschung, Protokollierung beim Öffnen der Person und Löschfristen — nicht die Sichtbarkeit, die über die Sensitivität geregelt ist. |
 | **Milestone** | Meilenstein — ein konkreter Schritt auf dem Weg zu einem Wirkungsziel. |
 | **Organization** | Träger — Verwaltungsentität mit Name und Anlagedatum; Logo und gesondertes Berichts-Branding sind nicht implementiert. Keine Cross-Facility-Sichtbarkeit über die Organisation. Facility-übergreifender Zugriff ausschließlich über die Rolle `super_admin` (`/system/`-Bereich und Verwaltungsoberfläche `/admin-mgmt/`, protokolliert im Umfang von § 9 „Role — Die Rolle“). Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md), Variante b1 („Branding-Hülse"). |
 | **Outcome** | Wirkung — das Ergebnis der Arbeit mit einer Person. Nicht die Aktivität („347 Kontakte"), sondern die Veränderung („stabile Wohnsituation erreicht"). |
