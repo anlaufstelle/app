@@ -32,14 +32,15 @@
                 </p>
             {% endif %}
 
+            <a href="{% url 'mfa_device_change' %}" data-testid="mfa-device-change-button"
+               class="inline-flex items-center px-4 py-2 border border-subtle text-sm font-medium rounded-md text-ink hover:bg-canvas">
+                {% trans "Neues Gerät einrichten" %}
+            </a>
             {% if can_disable %}
-            <form method="post" action="{% url 'mfa_disable' %}" class="inline">
-                {% csrf_token %}
-                <button type="submit" data-testid="mfa-disable-button"
-                        class="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 hover:bg-red-50">
-                    {% trans "2FA deaktivieren" %}
-                </button>
-            </form>
+            <a href="{% url 'mfa_disable' %}" data-testid="mfa-disable-button"
+               class="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 hover:bg-red-50">
+                {% trans "2FA deaktivieren" %}
+            </a>
             {% endif %}
 
             {# Backup-Codes (Refs #588) #}

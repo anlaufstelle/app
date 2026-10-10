@@ -8,10 +8,10 @@ can cite them as evidence:
 * Recovery after losing the TOTP device (2FA not mandatory): sign in with a
   backup code, press "2FA deaktivieren" on ``/mfa/settings/``, confirm sudo
   with password plus another backup code. The sudo step redirects back to
-  ``/mfa/disable/`` with GET, which only accepts POST — the factor stays.
-  Opening ``/mfa/settings/`` again and pressing the button a second time
-  (now inside the sudo window) removes it; afterwards ``/mfa/setup/`` offers
-  a fresh setup. With a running sudo window a single press is enough.
+  ``/mfa/disable/`` with GET, which shows a confirmation and keeps the factor.
+  Submitting that confirmation inside the sudo window removes the factor;
+  afterwards ``/mfa/setup/`` offers a fresh setup. An explicit device-change
+  flow also reuses setup without disabling the old factor first.
 * Sessions beyond ``OFFLINE_REVOCATION_SESSION_SCAN_LIMIT``: after a lockout
   or a role change a session the scan did not reach stays authenticated;
   after deactivation or an invitation resend that made the initial password
@@ -67,7 +67,7 @@ def _disabled_audits(user):
 
 @pytest.mark.django_db
 class TestLostDeviceRecoveryByDisableAndSetup:
-    def test_first_press_ends_after_sudo_with_405_and_keeps_the_factor(self, client, lost_device_account):
+    def test_after_sudo_confirmation_keeps_the_factor(self, client, lost_device_account):
         user, device, codes = lost_device_account
         _sign_in_with_backup_code(client, user, codes[0])
 
@@ -87,11 +87,12 @@ class TestLostDeviceRecoveryByDisableAndSetup:
         assert client.session["sudo_until"] > time.time()
 
         response = client.get(DISABLE_URL)
-        assert response.status_code == 405
+        assert response.status_code == 200
+        assert b'action="/mfa/disable/"' in response.content
         assert TOTPDevice.objects.filter(pk=device.pk).exists()
         assert _disabled_audits(user) == 0
 
-    def test_second_press_inside_sudo_window_disables_and_setup_follows(self, client, lost_device_account):
+    def test_confirmation_post_inside_sudo_window_disables_and_setup_follows(self, client, lost_device_account):
         user, device, codes = lost_device_account
         _sign_in_with_backup_code(client, user, codes[0])
         client.post(DISABLE_URL)

@@ -236,6 +236,20 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
         return self.render_to_response(self.get_context_data(token_error=True))
 
 
+class MFADeviceChangeView(MFASetupView):
+    """Reuse setup's MFA and sudo gates for an explicit TOTP replacement."""
+
+    def get(self, request, *args, **kwargs):
+        # Unlike initial setup, replacement must display a new device's QR code.
+        return TemplateView.get(self, request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["device_change"] = True
+        context["back_link"] = object_back_link("mfa_settings", _("2FA-Einstellungen"))
+        return context
+
+
 class MFAVerifyView(LoginRequiredMixin, TemplateView):
     """OTP-Prompt direkt nach Login, markiert Session als verifiziert."""
 
@@ -605,12 +619,24 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
     ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
     name="post",
 )
-class MFADisableView(LoginRequiredMixin, RequireSudoModeMixin, View):
+class MFADisableView(LoginRequiredMixin, RequireSudoModeMixin, TemplateView):
     """Deaktiviert 2FA für den aktuellen Nutzer, sofern nicht erzwungen.
 
     Refs #683: ``RequireSudoModeMixin`` zwingt Re-Auth-Pruefung — eine
     gestohlene Session reicht nicht zum 2FA-Disable.
     """
+
+    template_name = "auth/mfa_disable_confirm.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["back_link"] = object_back_link("mfa_settings", _("2FA-Einstellungen"))
+        return context
+
+    def get(self, request, *args, **kwargs):
+        if request.user.is_mfa_enforced:
+            return redirect("mfa_settings")
+        return super().get(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
         user = request.user

@@ -18,6 +18,7 @@ from core.views.health import HealthView
 from core.views.legal import DemoImprintView, DemoPrivacyView
 from core.views.mfa import (
     MFABackupCodesView,
+    MFADeviceChangeView,
     MFADisableView,
     MFAPasskeyDeleteView,
     MFARegenerateBackupCodesView,
@@ -42,6 +43,7 @@ urlpatterns = [
     path("auth/offline-key-salt/", OfflineKeySaltView.as_view(), name="offline_key_salt"),
     # Two-Factor Authentication (TOTP)
     path("mfa/setup/", MFASetupView.as_view(), name="mfa_setup"),
+    path("mfa/change-device/", MFADeviceChangeView.as_view(), name="mfa_device_change"),
     path("mfa/verify/", MFAVerifyView.as_view(), name="mfa_verify"),
     path("mfa/settings/", MFASettingsView.as_view(), name="mfa_settings"),
     path("mfa/disable/", MFADisableView.as_view(), name="mfa_disable"),

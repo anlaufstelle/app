@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+{% block title %}{% trans "2FA deaktivieren" %} – Anlaufstelle{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto p-6">
+    {% back_link %}
+    <h1 class="text-2xl font-bold mb-4">{% trans "2FA deaktivieren" %}</h1>
+    <p class="text-sm text-ink-muted mb-4">
+        {% trans "Damit entfernst du deine Authenticator-Geräte und Passkeys. Dein Konto ist danach nur noch durch das Passwort geschützt." %}
+    </p>
+    <form method="post" action="{% url 'mfa_disable' %}">
+        {% csrf_token %}
+        <button type="submit" data-testid="mfa-disable-confirm-button"
+                class="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 hover:bg-red-50">
+            {% trans "Deaktivierung bestätigen" %}
+        </button>
+    </form>
+</div>
+{% endblock %}

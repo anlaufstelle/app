@@ -148,7 +148,10 @@ class TestSudoDisableVariantFlow:
         audit = AuditLog.objects.get(user=staff_user, action=AuditLog.Action.SUDO_MODE_ENTERED)
         assert audit.detail == {"next": "/mfa/disable/"}
 
-        assert client.get("/mfa/disable/").status_code == 405
+        confirmation = client.get("/mfa/disable/")
+        assert confirmation.status_code == 200
+        assert b'action="/mfa/disable/"' in confirmation.content
+        assert TOTPDevice.objects.filter(pk=device.pk, confirmed=True).exists()
 
         disabled = client.post("/mfa/disable/")
         assert disabled["Location"] == "/mfa/settings/"

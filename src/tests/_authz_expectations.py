@@ -132,9 +132,10 @@ EXPECTATIONS = (
     # Authentifizierungs-, keine Autorisierungs-Semantik.
     E("sudo_mode", "auth-flow", get=ALL_AUTH, post=ALL_AUTH, extra_ok=(403,)),
     E("mfa_setup", "auth-flow", get=ALL_AUTH, post=ALL_AUTH),
+    E("mfa_device_change", "auth-flow", get=ALL_AUTH, post=ALL_AUTH),
     E("mfa_verify", "auth-flow", get=ALL_AUTH, post=ALL_AUTH),
     E("mfa_settings", "auth-flow", get=ALL_AUTH),
-    E("mfa_disable", "auth-flow", post=ALL_AUTH, sudo=True),
+    E("mfa_disable", "auth-flow", get=ALL_AUTH, post=ALL_AUTH, sudo=True),
     E("mfa_backup_codes", "auth-flow", get=ALL_AUTH),
     E("mfa_backup_codes_regenerate", "auth-flow", post=ALL_AUTH),
     # Passkeys/WebAuthn als zweiter Faktor (ADR-032, Refs #1492).

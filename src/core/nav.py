@@ -907,6 +907,8 @@ BACKLINK_EXEMPT: frozenset[str] = frozenset(
 # ``_authz_expectations.py``), die Liste braucht darum keine Rollenlogik — nur
 # der Guard muss sie einfrieren.
 VIEW_PROVIDED_BACKLINK: dict[str, str] = {
+    "mfa_device_change": "Device replacement belongs to the account's MFA settings; the view provides that link.",
+    "mfa_disable": "Disabling MFA returns to the account's MFA settings; the confirmation view provides that link.",
     "episode_create": "Episode liegt unter einem Fall (cases/<pk>/episodes/…) — Rücklink ist der Fallname.",
     "episode_update": "wie episode_create.",
     "rectification_create": "Antrag wird AUS der Personenakte gestellt (clients/<pk>/rectification/new/).",
