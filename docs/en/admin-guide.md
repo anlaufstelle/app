@@ -507,7 +507,7 @@ The script interactively prompts for:
 2. **Email address** (required -- used for recovery emails)
 3. **Password** (enter twice -- no default, no demo value)
 
-After successful completion, exactly one user with the role `super_admin` exists. Use this account to log in at `/login/`. The 2FA initial setup required immediately in production is complete only after the backup codes have been stored securely and acknowledged with the required checkbox; leaving early sends the next attempt back to `/mfa/setup/`. Then create the first facility and the first `facility_admin` -- in the Django admin (`/admin-mgmt/`, **Core > Facilities**) or with the setup script from [§ 2.2](#22-create-a-facility-and-application-manager). On the first visit to `/admin-mgmt/`, sudo mode asks you to confirm the password again. The `/system/` area only displays the organization and its facilities; nothing is created there.
+After successful completion, exactly one user with the role `super_admin` exists. Use this account to log in at `/login/`. The 2FA initial setup required immediately in production is complete only after the backup codes have been stored securely and acknowledged with the required checkbox; leaving early sends the next attempt back to `/mfa/setup/`. Then create the first facility and the first `facility_admin` -- in the Django admin (`/admin-mgmt/`, **Anlaufstelle Core > Facilities**) or with the setup script from [§ 2.2](#22-create-a-facility-and-application-support). On the first visit to `/admin-mgmt/`, sudo mode asks you to confirm the password again. The `/system/` area only displays the organization and its facilities; nothing is created there.
 
 > **Important -- no default password:** For GDPR and security reasons, the application ships with **no** default password and no default username (unlike the former `make seed` workflow for development demos). Skipping this command leaves you with **no** usable login.
 
@@ -522,11 +522,11 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
   unlock <username>
 ```
 
-The command unlocks the specified user and writes a `LOGIN_UNLOCK` AuditLog entry. With the username of a `super_admin` it has no effect: it still reports "Account-Sperre aufgehoben" (account lock lifted) but writes no audit entry, because there is nothing to lift. For facility-bound users, the UI path via the facility application manager remains available in addition (see [§ 2.7 Account Lockout](#account-lockout)).
+The command unlocks the specified user and writes a `LOGIN_UNLOCK` AuditLog entry. With the username of a `super_admin` it has no effect: it still reports "Account-Sperre aufgehoben" (account lock lifted) but writes no audit entry, because there is nothing to lift. For facility-bound users, the UI path via the facility application support remains available in addition (see [§ 2.7 Account Lockout](#account-lockout)).
 
-### 2.2 Create a Facility and Application Manager
+### 2.2 Create a Facility and Application support
 
-After logging in as `super_admin`, create the first facility and a `facility_admin` (application manager) for it in the Django admin (`/admin-mgmt/`, **Core > Facilities** and **Core > Users**). Alternatively, the interactive setup script is available -- suitable for pure single-tenant installations where system administration and application management are the same person:
+After logging in as `super_admin`, create the first facility and a `facility_admin` (application support) for it in the Django admin (`/admin-mgmt/`, **Anlaufstelle Core > Facilities** and **Anlaufstelle Core > Users**). Alternatively, the interactive setup script is available -- suitable for pure single-tenant installations where system administration and application management are the same person:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
@@ -547,8 +547,8 @@ The script interactively prompts for:
 
 1. **Organization name** -- e.g., `Diakonie Musterstadt e.V.`
 2. **Facility name** -- e.g., `Beratungsstelle Nord`
-3. **Admin username** for the application manager (`facility_admin`; the `admin` default can be replaced)
-4. **Application manager password** (enter twice)
+3. **Admin username** for the application support (`facility_admin`; the `admin` default can be replaced)
+4. **Application support password** (enter twice)
 
 Afterwards, the organization, facility, default settings, the **default catalog of documentation types**, the three **default shifts** (early, late, night), two **quick templates** on the "Kontakt" type, and the first `facility_admin` user are created. The facility is usable right away: without at least one documentation type, the type selector would be empty and not a single contact could be recorded.
 
@@ -562,18 +562,18 @@ Afterwards, the organization, facility, default settings, the **default catalog 
 
 > ⚠️ **Domain packages are replacements, not additions.** Load a domain package with `setup_facility --package <name>` against a fresh facility. `load_package --package <name>` aborts if it finds type or field slugs that do not belong to the selected package -- including during a dry run. Repeating the same package remains allowed. The default catalog is the existing-installation case: `--default` or `--package default` retains its documented write-back semantics.
 
-> **Retrofitting an existing facility:** For a facility that already exists -- created in the Django admin under **Core > Facilities**, or deliberately started empty with `--no-default-package` -- the same default catalog can be applied afterwards:
+> **Retrofitting an existing facility:** For a facility that already exists -- created in the Django admin under **Anlaufstelle Core > Facilities**, or deliberately started empty with `--no-default-package` -- the same default catalog can be applied afterwards:
 >
 > ```bash
 > docker compose -f docker-compose.prod.yml run --rm maintenance \
 >   load_package --default --facility <uuid> --dry-run
 > ```
 >
-> `--dry-run` first shows only what would happen; without the flag the package is applied. The run never deletes anything, **but it does write the catalog properties of existing types and field templates back to the shipped state** (name, sort order, color, icon, visibility) -- unlike the initial setup, which does not touch an existing catalog at all. So look at it with `--dry-run` first; the full write-back table is in [docs/packages.md § 4](../packages.md). The facility UUID appears in the address bar of its detail page under **Core > Facilities** in the Django admin.
+> `--dry-run` first shows only what would happen; without the flag the package is applied. The run never deletes anything, **but it does write the catalog properties of existing types and field templates back to the shipped state** (name, sort order, color, icon, visibility) -- unlike the initial setup, which does not touch an existing catalog at all. So look at it with `--dry-run` first; the full write-back table is in [docs/packages.md § 4](../packages.md). The facility UUID appears in the address bar of its detail page under **Anlaufstelle Core > Facilities** in the Django admin.
 
 > **Note:** If an organization or facility with the given name already exists, it will be reused. An existing username will not be overwritten.
 
-> **Adding a second facility in the Django admin (#1970):** Additional facilities are created at runtime under **Core > Facilities > Add facility** -- that is the only path in the user interface, and it is reserved for `super_admin`. Select the bundled catalog in the **Package** field; `default` is preselected. Saving creates the **same package-specific baseline** as `setup_facility --package <name>`: settings record, selected catalog, matching time filters, and the quick templates declared for that package. The new facility is documentable immediately; all that remains is to assign at least one account to it under **Core > Users**. The baseline is created **exactly once, when the facility is added**: the package field is absent when the facility is edited later, and saving it again does not touch its stock -- not even when that stock is empty. Facilities that were created in the admin and stayed empty are therefore provisioned explicitly: the default catalog with `manage.py load_package --default --facility <uuid>` (command including the role override above), time filters and quick templates by hand under **Core > Time filters** and **Core > Quick templates**.
+> **Adding a second facility in the Django admin (#1970):** Additional facilities are created at runtime under **Anlaufstelle Core > Facilities > Add facility** -- that is the only path in the user interface, and it is reserved for `super_admin`. Select the bundled catalog in the **Package** field; `default` is preselected. Saving creates the **same package-specific baseline** as `setup_facility --package <name>`: settings record, selected catalog, matching time filters, and the quick templates declared for that package. The new facility is documentable immediately; all that remains is to assign at least one account to it under **Anlaufstelle Core > Users**. The baseline is created **exactly once, when the facility is added**: the package field is absent when the facility is edited later, and saving it again does not touch its stock -- not even when that stock is empty. Facilities that were created in the admin and stayed empty are therefore provisioned explicitly: the default catalog with `manage.py load_package --default --facility <uuid>` (command including the role override above), time filters and quick templates by hand under **Anlaufstelle Core > Time filters** and **Anlaufstelle Core > Quick templates**.
 
 > **Organization as a branding shell:** The organization serves only as a carrier branding container (logo, name in reports). There is no org-admin and no cross-facility effect through it -- cross-facility access runs exclusively through `super_admin` and `/system/`. Architecture decision: [ADR-018](../adr/018-rollenmodell-superadmin.md).
 
@@ -591,17 +591,17 @@ Here you can manage:
 
 | Area | Path in Admin | Description |
 |---|---|---|
-| Organizations | Core > Organizations | Parent entities (tenant level) |
-| Facilities | Core > Facilities | Locations within an organization |
-| Settings | Core > Settings | Configuration per facility |
-| Users | Core > Users | Technical fallback; maintained primarily under Administration > Access |
-| Documentation types | Core > Documentation types | Technical fallback; maintained primarily under Administration > Documentation types |
+| Organizations | Anlaufstelle Core > Organizations | Parent entities (tenant level) |
+| Facilities | Anlaufstelle Core > Facilities | Locations within an organization |
+| Settings | Anlaufstelle Core > Settings | Configuration per facility |
+| Users | Anlaufstelle Core > Users | Technical fallback; maintained primarily under Management > Access |
+| Documentation types | Anlaufstelle Core > Documentation types | Technical fallback; maintained primarily under Management > Documentation types |
 | Time filters | Anlaufstelle Core > Time filters (technical maintenance) | Named time periods for reports. **A time filter that still has handover notes cannot be deleted** (#2042) -- the admin reports the protection error. Otherwise that shift's notes would vanish silently, bypassing both their retention period and the audit log. Renaming and reordering stay possible at any time; to delete, wait for the **Retention handover notes (days)** period to elapse, or deactivate the window instead of removing it |
-| Audit log | Core > Audit logs | Immutable protocol |
+| Audit log | Anlaufstelle Core > Audit logs | Immutable protocol |
 
 ### 2.2c Decommissioning a Facility: Archive Instead of Delete
 
-When a location closes, **archiving** is the intended route -- not deletion. Under **Core > Facilities**, clear the **Active** checkbox and save. Only `super_admin` may do this; facility management is reserved for that role.
+When a location closes, **archiving** is the intended route -- not deletion. Under **Anlaufstelle Core > Facilities**, clear the **Active** checkbox and save. Only `super_admin` may do this; facility management is reserved for that role.
 
 **What archiving does (as of #2067):**
 
@@ -624,11 +624,11 @@ When a location closes, **archiving** is the intended route -- not deletion. Und
 >
 > If you really want to remove a facility entirely, the route is: archive it, let the retention periods expire (see [§ 7.3](#73-retention-periods-and-enforce_retention)), and then take a backup -- not the cascade.
 
-**User offboarding.** Archiving blocks *access* but does not clear the identity data of departed staff (first/last name, display name, email, phone). That second half of the lifecycle is handled separately: #2051 -- offboarding cleanup for departed staff. Until then, deactivate the affected accounts under **Administration > Access**; the username and identifier are deliberately retained so the attribution in the audit log stays readable.
+**User offboarding.** Archiving blocks *access* but does not clear the identity data of departed staff (first/last name, display name, email, phone). That second half of the lifecycle is handled separately: #2051 -- offboarding cleanup for departed staff. Until then, deactivate the affected accounts under **Management > Access**; the username and identifier are deliberately retained so the attribution in the audit log stays readable.
 
 ### 2.3 Settings per Facility
 
-Under **Management → Settings** (groups "General and convenience", "Security" and "Data protection and retention periods"), you can configure the following key fields, among others; the complete field list is shown directly in the admin form:
+Under **Management → Settings** (groups "General and convenience", "Security" and "Data protection and retention periods"), you can configure the following key fields, among others; the complete field list is shown directly in the settings form:
 
 | Field | Default | Description |
 |---|---|---|
@@ -654,17 +654,17 @@ Under **Management → Settings** (groups "General and convenience", "Security" 
 >
 > | Stock | Maintained in the admin under | Effect when missing |
 > |---|---|---|
-> | Default catalog of documentation types | Administration > Documentation types | **Blocking:** without an event type the type selector in "Document contact" stays empty and nothing can be documented |
+> | Default catalog of documentation types | Management > Documentation types | **Blocking:** without an event type the type selector in "Document contact" stays empty and nothing can be documented |
 > | Default shifts: early (08-16), late (16-22), night (22-08) | Anlaufstelle Core > Time filters (technical maintenance) | Convenience: the timeline then evaluates the full day instead of a shift window; handover view and live tally have no shift reference |
-> | Quick templates "Kurzkontakt" and "Beratungskontakt" on the "Kontakt" type | Core > Quick templates | Convenience: recurring contacts are filled in by hand (see [Section 2.8](#28-quick-templates)) |
+> | Quick templates "Kurzkontakt" and "Beratungskontakt" on the "Kontakt" type | Anlaufstelle Core > Quick templates | Convenience: recurring contacts are filled in by hand (see [Section 2.8](#28-quick-templates)) |
 >
-> **Once at creation, not on every save:** if a facility already carries its own documentation types, time filters, or quick templates at the moment it is created, that group is left **untouched** -- the check runs per group, and a single existing object is enough. Every later save of the facility in the admin leaves all three groups alone anyway: labels and orderings maintained in the admin are never silently reset to the shipped state, and deleted default shifts do not come back on their own. Pulling things in is explicit: `manage.py load_package --default` fetches the shipped catalog state (see [Section 2.2](#22-create-a-facility-and-application-manager)); time filters and quick templates you create yourself under **Core > Time filters** and **Core > Quick templates**. One exception: running the initial setup `setup_facility` again with the **same** organization and facility names provisions whatever is empty at that point -- if you deleted every time filter, you get the three default shifts back; the command states for each stock whether it created it or left it alone.
+> **Once at creation, not on every save:** if a facility already carries its own documentation types, time filters, or quick templates at the moment it is created, that group is left **untouched** -- the check runs per group, and a single existing object is enough. Every later save of the facility in the admin leaves all three groups alone anyway: labels and orderings maintained in the admin are never silently reset to the shipped state, and deleted default shifts do not come back on their own. Pulling things in is explicit: `manage.py load_package --default` fetches the shipped catalog state (see [Section 2.2](#22-create-a-facility-and-application-support)); time filters and quick templates you create yourself under **Anlaufstelle Core > Time filters** and **Anlaufstelle Core > Quick templates**. One exception: running the initial setup `setup_facility` again with the **same** organization and facility names provisions whatever is empty at that point -- if you deleted every time filter, you get the three default shifts back; the command states for each stock whether it created it or left it alone.
 
-> **Every facility has exactly one settings record.** The row is created automatically as soon as the facility is created -- by the interactive `setup_facility`, when adding it in the admin under **Core > Facilities**, and (retroactively, for existing data) on every `migrate` run. This is not a formality: `enforce_retention` and `create_statistics_snapshots` **skip** a facility without a settings record -- no retention period would be enforced for it and no statistics snapshots would be created. Both jobs log such a case at `WARNING` level (`No settings for ..., skipping.`); if that message shows up in the log it is an operational fault, not noise.
+> **Every facility has exactly one settings record.** The row is created automatically as soon as the facility is created -- by the interactive `setup_facility`, when adding it in the admin under **Anlaufstelle Core > Facilities**, and (retroactively, for existing data) on every `migrate` run. This is not a formality: `enforce_retention` and `create_statistics_snapshots` **skip** a facility without a settings record -- no retention period would be enforced for it and no statistics snapshots would be created. Both jobs log such a case at `WARNING` level (`No settings for ..., skipping.`); if that message shows up in the log it is an operational fault, not noise.
 
 ### 2.4 Create Additional Users
 
-The regular path for an application manager is **Administration > Access > Create account** (`/verwaltung/zugaenge/`). Creating or changing an account requires confirmation in sudo mode. The list and all actions are limited to the manager's own facility; the `super_admin` role can neither be viewed nor assigned there ([ADR-048](../adr/048-fachhoheit-zugaenge-hub.md)).
+The regular path for an application support is **Management > Access > Create account** (`/verwaltung/zugaenge/`). Creating or changing an account requires confirmation in sudo mode. The list and all actions are limited to the manager's own facility; the `super_admin` role can neither be viewed nor assigned there ([ADR-048](../adr/048-fachhoheit-zugaenge-hub.md)).
 
 - **Username:** Login name (no real names)
 - **Email:** Required for the invite flow (see below)
@@ -673,13 +673,13 @@ The regular path for an application manager is **Administration > Access > Creat
 - **2FA required:** Requires a second factor for this individual account
 - **Deletion confirmation:** Adds the account to the approver pool for deletion requests
 
-Existing accounts can be edited, deactivated, or reactivated there. Application managers cannot deactivate or demote their own account. The product UI does not permanently delete accounts: deactivation is the regular lifecycle; permanent deletion remains a reviewed technical exception. `super_admin`, bootstrap, and emergency work stay under **Core > Users** in the Django admin; there, a `super_admin` can also toggle **MFA required** for these accounts; the field sits in the same form and is therefore also visible when an application manager edits a regular account of their own facility (in addition to the Administration > Access route). Each such change appears in the audit log as `USER_ACCESS_UPDATED` with `mfa_required` among the changed fields. Quick templates and time filters also deliberately remain technical admin functions.
+Existing accounts can be edited, deactivated, or reactivated there. Application support cannot deactivate or demote their own account. The product UI does not permanently delete accounts: deactivation is the regular lifecycle; permanent deletion remains a reviewed technical exception. `super_admin`, bootstrap, and emergency work stay under **Anlaufstelle Core > Users** in the Django admin; there, a `super_admin` can also toggle **2FA required** for these accounts; the field sits in the same form and is therefore also visible when an application support edits a regular account of their own facility (in addition to the Management > Access route). Each such change appears in the audit log as `USER_ACCESS_UPDATED` with `mfa_required` among the changed fields. Quick templates and time filters also deliberately remain technical admin functions.
 
 #### Token Invite Flow (Refs #528)
 
 New accounts are created **without** a clear-text password. Instead, the application sends an **invitation email** containing a personalized setup link (`/invite/<uid>/<token>/`) to the email address on file. The link takes the new user to the same password-setting form as the password reset, where they set a password themselves.
 
-1. The application manager creates the account with an email address under **Administration > Access**.
+1. The application support creates the account with an email address under **Management > Access**.
 2. The system calls [`send_invite_email`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/invite.py) and generates a setup token (a dedicated `invite_token_generator`, based on `uidb64` + token hash).
 3. The user receives the email, clicks the link, and sets a password. This does **not** log them in automatically -- the confirmation page leads to the sign-in form via "Zur Anmeldung" ("Go to sign-in"), where they sign in with the new password for the first time.
 
@@ -690,7 +690,7 @@ New accounts are created **without** a clear-text password. Instead, the applica
 
 Both generators are additionally separated by their own `key_salt` (a reset token is not valid on `/invite/` and vice versa) and invalidate the token automatically once the user has set their first password.
 
-**Resend the setup link:** If the email did not arrive or the token has expired, the application manager can issue a fresh token from the access detail view via **Resend invitation**. The button is only shown while account setup is still pending. For `super_admin` accounts and technical exceptions, the system administrator instead selects the relevant accounts under **Core → Users** in the Django admin and chooses the **Einladung erneut senden (Setup-Link)** action. The action only processes accounts that have an email address and whose setup is still pending; any initial password that may still be usable is revoked.
+**Resend the setup link:** If the email did not arrive or the token has expired, the application support can issue a fresh token from the access detail view via **Resend invitation**. The button is only shown while account setup is still pending. For `super_admin` accounts and technical exceptions, the system administrator instead selects the relevant accounts under **Anlaufstelle Core → Users** in the Django admin and chooses the **Einladung erneut senden (Setup-Link)** action. The action only processes accounts that have an email address and whose setup is still pending; any initial password that may still be usable is revoked.
 
 **SMTP requirements and troubleshooting:** None of these values is technically
 required — without any set, the application in the Compose stack starts with an
@@ -737,18 +737,18 @@ Anlaufstelle has five roles -- four facility-bound, one facility-spanning:
 | Role | Title | Scope | Permissions |
 |---|---|---|---|
 | `super_admin` | System administration | facility-spanning (`/system/`) | Bootstrap, create facilities, pre-auth audit logs, backup access. Created via `manage.py create_super_admin` -- **not** through the admin UI. Every `/system/` view access generates a `SYSTEM_VIEW` AuditLog entry. |
-| `facility_admin` | Application manager | one facility | Full access within their own facility: user management, type/sensitivity configuration, audit log (`/audit/`), GDPR package. **Cannot** view other facilities. |
-| `lead` | Lead / Manager | one facility | Reports, approve deletion requests, view all cases in the facility, data export |
-| `staff` | Staff / Social worker | one facility | Record and edit contacts, cases, and documentation |
+| `facility_admin` | Application support | one facility | Full access within their own facility: user management, type/sensitivity configuration, audit log (`/audit/`), GDPR package. **Cannot** view other facilities. |
+| `lead` | Manager | one facility | Reports, approve deletion requests, view all cases in the facility, data export |
+| `staff` | Social worker | one facility | Record and edit contacts, cases, and documentation |
 | `assistant` | Assistant | one facility | Limited data entry; view people at either contact stage, additional fields only at effective sensitivity "Normal"; no internal person notes |
 
 > **System ↔ application separation:** `super_admin` manages hosting and bootstrap; `facility_admin` manages configuration and users **within** a facility. This separation is GDPR-relevant: the super-admin cannot view the substantive content of a facility without this being logged in the AuditLog (`SYSTEM_VIEW`). Architecture decision: [ADR-018](../adr/018-rollenmodell-superadmin.md).
 
 ### 2.5 Configure Documentation Types
 
-> **Starting point:** A facility created via `setup_facility` **or** in the Django admin under **Core > Facilities** ([§ 2.2](#22-create-a-facility-and-application-manager)) already ships with the bundled **default catalog** -- it is ready for documentation without any further step. The list is empty only if the catalog was declined with `--no-default-package` during setup, or if the facility predates #1970. Either state persists until you change it explicitly -- saving the facility in the admin does **not** pull the catalog in (that would silently override the opt-out). In that case run `manage.py load_package --default --facility <uuid>` (the command including the role override is in [§ 2.2](#22-create-a-facility-and-application-manager)). The structure, field reference, and maintenance rules of a configuration package -- including one of your own instead of the bundled one -- are described in [docs/packages.md](../packages.md) (German). The sections below describe how to adjust the resulting set.
+> **Starting point:** A facility created via `setup_facility` **or** in the Django admin under **Anlaufstelle Core > Facilities** ([§ 2.2](#22-create-a-facility-and-application-support)) already ships with the bundled **default catalog** -- it is ready for documentation without any further step. The list is empty only if the catalog was declined with `--no-default-package` during setup, or if the facility predates #1970. Either state persists until you change it explicitly -- saving the facility in the admin does **not** pull the catalog in (that would silently override the opt-out). In that case run `manage.py load_package --default --facility <uuid>` (the command including the role override is in [§ 2.2](#22-create-a-facility-and-application-support)). The structure, field reference, and maintenance rules of a configuration package -- including one of your own instead of the bundled one -- are described in [docs/packages.md](../packages.md) (German). The sections below describe how to adjust the resulting set.
 
-Under **Administration > Documentation types** (`/config/document-types/`), you define which kinds of documentation can be recorded in the facility. The matching **Core > Documentation types** view in the Django admin remains available as a technical fallback, but is not the regular configuration path. Each type consists of:
+Under **Management > Documentation types** (`/config/document-types/`), you define which kinds of documentation can be recorded in the facility. The matching **Anlaufstelle Core > Documentation types** view in the Django admin remains available as a technical fallback, but is not the regular configuration path. Each type consists of:
 
 - **Name and description**
 - **Field templates** (free-text fields, selection fields, etc.)
@@ -769,12 +769,12 @@ The sensitivity level controls which roles can access entries of this type:
 | Level | Access | Usage |
 |-------|--------|-------|
 | **Normal** | All roles (including assistants) | General contacts, services |
-| **Elevated** | Staff, lead, application manager | Counseling sessions, medical care |
-| **High** | Lead and application manager | Crisis interventions, highly sensitive data |
+| **Elevated** | Social worker, lead, application support | Counseling sessions, medical care |
+| **High** | Manager and application support | Crisis interventions, highly sensitive data |
 
 #### Tally
 
-Under **Administration > Documentation types**, open the relevant type and select **Edit**. The **"Include in tally"** checkbox explicitly enables it for the tally in the Zeitstrom; the detail view then shows the saved state. New types are not enabled by default. The setting takes effect only for active **event** types without a minimum contact stage; for person or case types the option is hidden and cleared when the type is saved.
+Under **Management > Documentation types**, open the relevant type and select **Edit**. The **"Include in tally"** checkbox explicitly enables it for the tally in the Zeitstrom; the detail view then shows the saved state. New types are not enabled by default. The setting takes effect only for active **event** types without a minimum contact stage; for person or case types the option is hidden and cleared when the type is saved.
 
 - If the type has no required fields, `+1` directly creates an anonymous contact.
 - If every required field is a number, `+1` opens a compact value form; the entered values are stored with exactly one anonymous contact. Optional fields are not captured in this workflow.
@@ -884,7 +884,7 @@ In addition to the document type's sensitivity, each individual field of a field
 **Encryption and visibility have separate effects** (Refs #356): `is_encrypted` controls at-rest encryption of the field value, while `sensitivity` controls UI visibility; however, a field template with its own **High** level enforces encryption:
 
 - A field may be stored encrypted on disk while still being visible in the UI at `NORMAL` sensitivity (e.g. contact data that all roles are allowed to see but that should not be stored in clear text).
-- A non-encrypted field can still be restricted to Lead/Admin (e.g. statistical markers that are sensitive, but do not need to be stored encrypted).
+- A non-encrypted field can still be restricted to Manager/Admin (e.g. statistical markers that are sensitive, but do not need to be stored encrypted).
 
 #### Protection display and sensitivity changes
 
@@ -1050,8 +1050,8 @@ Anlaufstelle supports TOTP-based 2FA via [`django-otp`](https://django-otp-offic
 
 | Level | Field | Admin location | Effect |
 |---|---|---|---|
-| **Single user** | `User.mfa_required` | Administration > Access > *Account* > "2FA erforderlich" (2FA required) field | 2FA mandatory immediately for this user, disabling is blocked |
-| **Facility-wide** | `Settings.mfa_enforced_facility_wide` | Administration > Settings (`/verwaltung/einstellungen/`) > "2FA-Pflicht für alle Nutzer" (2FA mandatory for all users) field | 2FA mandatory immediately for **all** users of this facility |
+| **Single user** | `User.mfa_required` | Management > Access > *Account* > "2FA erforderlich" (2FA required) field | 2FA mandatory immediately for this user, disabling is blocked |
+| **Facility-wide** | `Settings.mfa_enforced_facility_wide` | Management > Settings (`/verwaltung/einstellungen/`) > "2FA-Pflicht für alle Nutzer" (2FA mandatory for all users) field | 2FA mandatory immediately for **all** users of this facility |
 | **Role default** | `MFA_ENFORCE_PRIVILEGED_ROLES` (settings module) + `MFA_ENFORCED_ROLES_IMMEDIATE` / `MFA_ENFORCED_ROLES_GRACE` (environment variables) | Deployment | 2FA mandatory by role alone -- enabled by default in production for all five roles |
 
 Evaluation happens via [`User.is_mfa_enforced`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) -- a user is considered enforced if **any** level applies. The MFA middleware blocks access to protected areas until the second factor (TOTP code, passkey or backup code) has been verified in the session.
@@ -1063,20 +1063,20 @@ Evaluation happens via [`User.is_mfa_enforced`](https://github.com/anlaufstelle/
 | `MFA_ENFORCED_ROLES_IMMEDIATE` | `super_admin,facility_admin` | 2FA required **immediately** (no grace) -- without a second factor, an immediate redirect to `/mfa/setup/` |
 | `MFA_ENFORCED_ROLES_GRACE` | `lead,staff,assistant` | 2FA required, but only **after a 30-day transition period** from the first sign-in (reminder banner from 14 days remaining); afterwards every sign-in without a second factor leads to `/mfa/setup/` |
 
-The **Lead** role (`lead`) is mandatory by default (in the grace set) -- if staff/assistant are enforced, so is the hierarchically higher lead. Valid role names are `super_admin`, `facility_admin`, `lead`, `staff`, `assistant`; an **empty** list deliberately disables that level. An **unknown role name** or an **overlap** between the two lists aborts startup fail-closed with `ImproperlyConfigured` (no silent misconfiguration).
+The **Manager** role (`lead`) is mandatory by default (in the grace set) -- if staff/assistant are enforced, so is the hierarchically higher lead. Valid role names are `super_admin`, `facility_admin`, `lead`, `staff`, `assistant`; an **empty** list deliberately disables that level. An **unknown role name** or an **overlap** between the two lists aborts startup fail-closed with `ImproperlyConfigured` (no silent misconfiguration).
 
 #### Reset 2FA for a User
 
-If a person has lost their authenticator device and has no backup codes left, the application manager or the system administration resets their second factor in the application (#2469):
+If a person has lost their authenticator device and has no backup codes left, the application support or the system administration resets their second factor in the application (#2469):
 
-- **Application manager (`facility_admin`):** **Administration > Access** > *Account* > under "Sicherheitsaktionen" (security actions) **Zweiten Faktor zurücksetzen** (reset second factor) (`/verwaltung/zugaenge/<id>/zweiter-faktor/`). The confirmation page lists the consequences; only submitting it performs the reset. The action is shown only while the account still has a factor.
-- **System administration (`super_admin`):** Django admin (`/admin-mgmt/`) > **Core > Users** > select accounts > action **Zweiten Faktor zurücksetzen (Authenticator-App, Passkeys, Backup-Codes)**. Every selected account is checked individually; refused accounts are reported and skipped.
+- **Application support (`facility_admin`):** **Management > Access** > *Account* > under "Sicherheitsaktionen" (security actions) **Zweiten Faktor zurücksetzen** (reset second factor) (`/verwaltung/zugaenge/<id>/zweiter-faktor/`). The confirmation page lists the consequences; only submitting it performs the reset. The action is shown only while the account still has a factor.
+- **System administration (`super_admin`):** Django admin (`/admin-mgmt/`) > **Anlaufstelle Core > Users** > select accounts > action **Zweiten Faktor zurücksetzen (Authenticator-App, Passkeys, Backup-Codes)**. Every selected account is checked individually; refused accounts are reported and skipped.
 
 Rules (in [`src/core/services/user_access.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/user_access.py), `reset_user_mfa`):
 
 - **Sudo required:** Both paths require an open sudo window; without sudo the request first leads to the sudo page (password, plus a code if the acting account has a TOTP device) and then back to the confirmation.
-- **Facility boundary:** An application manager reaches only accounts of their own facility; an account of another facility cannot be found for them. The system administration reaches every account.
-- **Role hierarchy:** An application manager does not reset a `super_admin` account. The own account cannot be reset this way -- disabling under `/mfa/settings/` with its own rules applies there.
+- **Facility boundary:** An application support reaches only accounts of their own facility; an account of another facility cannot be found for them. The system administration reaches every account.
+- **Role hierarchy:** An application support does not reset a `super_admin` account. The own account cannot be reset this way -- disabling under `/mfa/settings/` with its own rules applies there.
 - **Effect:** All TOTP devices (including unconfirmed ones), all passkeys and all backup codes of the account are removed, and all sessions of the account end with their next request -- independently of `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT`, because the stored password hash is rewritten and Django signs out every session bound to the old hash. The password stays valid. If the sessions cannot be ended safely, nothing is removed and nothing is recorded.
 - **Setting up again:** If 2FA is mandatory for the account, the next sign-in leads to `/mfa/setup/` -- immediately for single-user, facility-wide and immediate role enforcement, and for role enforcement with a transition period only once that period has expired. Without an obligation the person signs in with the password only until they set up 2FA again themselves.
 - **Audit:** Every reset writes exactly one `MFA_RESET_BY_ADMIN` entry ("2FA durch Administration zurückgesetzt") with the target account (user and target fields), the acting person, the facility and the source IP. The detail holds the target account's username (`username`), the acting person's ID and username (`actor_id`, `actor_username`) and the number of removed TOTP devices, passkeys and backup codes (`totp_devices_removed`, `passkeys_removed`, `backup_codes_removed`), no key material. If the account had no factor left, no entry is written.
@@ -1105,13 +1105,13 @@ The lockout ([`src/core/services/security/login_lockout.py`](https://github.com/
 
 The recovery paths below therefore apply to facility-bound accounts:
 
-**Path A -- UI (for facility-bound users):** The application manager (`facility_admin`) of the facility can unlock the accounts of their own users:
+**Path A -- UI (for facility-bound users):** The application support (`facility_admin`) of the facility can unlock the accounts of their own users:
 
-1. **Administration > Access** -- select the affected user in their own facility.
+1. **Management > Access** -- select the affected user in their own facility.
 2. Under "Security actions" click **Unlock account**.
 3. The unlock is recorded in the AuditLog as `LOGIN_UNLOCK` (the `LOGIN_FAILED` log itself is immutable thanks to the `auditlog_immutable` DB trigger).
 
-The action requires an open sudo window. The system administration unlocks across facilities under **System > Sperrkonten** (locked accounts, `/system/lockouts/`, also with sudo). In the Django admin (**Core > Users**) the same unlock remains available only as the list action "Account-Sperre aufheben (Login freigeben)" as a fallback.
+The action requires an open sudo window. The system administration unlocks across facilities under **System > Sperrkonten** (locked accounts, `/system/lockouts/`, also with sudo). In the Django admin (**Anlaufstelle Core > Users**) the same unlock remains available only as the list action "Account-Sperre aufheben (Login freigeben)" as a fallback.
 
 **Path B -- CLI (for recovery):** If no other user has access to Path A (a locked `facility_admin` with no second `facility_admin`), the hosting operator unlocks the account directly on the server:
 
@@ -1152,13 +1152,13 @@ Requests rejected by the rate limit (HTTP 429) write at most one `RATE_LIMITED` 
 
 ### 2.8 Quick Templates
 
-**Quick templates** are pre-filled documentation templates that speed up recurring documentation patterns (e.g. "Counseling 30 min", "Standard check-in"). Staff can apply them with one click on the "Document contact" page.
+**Quick templates** are pre-filled documentation templates that speed up recurring documentation patterns (e.g. "Counseling 30 min", "Standard check-in"). Social worker can apply them with one click on the "Document contact" page.
 
 **User-facing documentation:** [User Guide § 3 -- Quick Templates](user-guide.md#quick-templates).
 
 #### Manage Templates
 
-Templates are maintained in the Django admin under **Core > Quick Templates**.
+Templates are maintained in the Django admin under **Anlaufstelle Core > Quick Templates**.
 
 | Field | Description |
 |---|---|
@@ -1279,7 +1279,7 @@ The upload limit above applies **per file**. Refs #2129 adds a cap on the **sum*
 
 | Knob | Where | Meaning |
 |---|---|---|
-| `Settings.max_storage_mb` | Administration → Settings, group "Files" | Quota of **this** facility in MB. Empty = no facility-specific quota. |
+| `Settings.max_storage_mb` | Management → Settings, group "Files" | Quota of **this** facility in MB. Empty = no facility-specific quota. |
 | `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB` | ENV (default **2048**) | Operator backstop for every facility without its own quota. `0` = no backstop. |
 
 The **stricter** of the two always applies. If both are empty or `0`, the facility is unlimited.
@@ -1974,7 +1974,7 @@ Pseudonymisation is the intended workflow: the application has no required field
 
 - Persons are referenced by internal IDs.
 - Display names in the interface are configurable pseudonyms.
-- Who sees which data depends not on the contact stage but on sensitivity (the higher level of the documentation type and the field) and on the role: Assistant sees "Normal", Staff up to "Elevated", Lead and Application manager all levels. The person detail page is open from Assistant upwards, also at "With additional details"; there the assistant sees, for example, contacts including their note, but no crisis conversation. The contact stage governs permitted documentation types, four-eyes deletion, the audit entry when the person is opened (`VIEW_QUALIFIED`), and retention periods.
+- Who sees which data depends not on the contact stage but on sensitivity (the higher level of the documentation type and the field) and on the role: Assistant sees "Normal", Social worker up to "Elevated", Manager and Application support all levels. The person detail page is open from Assistant upwards, also at "With additional details"; there the assistant sees, for example, contacts including their note, but no crisis conversation. The contact stage governs permitted documentation types, four-eyes deletion, the audit entry when the person is opened (`VIEW_QUALIFIED`), and retention periods.
 - The system administration (`super_admin`) reads across facilities through the `/system/` area and the admin interface (`/admin-mgmt/`, sudo required), there persons, cases, events, work items and attachments of all facilities. Row Level Security lets these sessions through via `app.is_super_admin` (§ 7.9). The AuditLog records these reads as `SYSTEM_VIEW` for all registered administrative models, including deletion requests, users and configuration; if logging fails, content is denied with HTTP 403. Event and event-history admin pages show metadata only, without field contents.
 
 ### 7.3 Retention Periods and `enforce_retention`
@@ -2030,7 +2030,7 @@ Every execution that deletes records is automatically logged in the audit log.
 
 #### Retention Dashboard
 
-A **retention dashboard** is available under [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/views/retention.py) where Lead and Admin roles process deletion proposals. Refs #514, #515, #2425.
+A **retention dashboard** is available under [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/views/retention.py) where Manager and Admin roles process deletion proposals. Refs #514, #515, #2425.
 
 > **Regular run:** Anonymous and pseudonym-only events are deleted automatically.
 > Events with additional details receive proposals; only approved proposals
@@ -2039,7 +2039,7 @@ A **retention dashboard** is available under [`/retention/`](https://github.com/
 
 | Dashboard action | Effect |
 |---|---|
-| **Approve** | Another person with deletion confirmation permission; next run deletes unless hold/Art. 18 protects the target |
+| **Release** | Another person with deletion confirmation permission; next run deletes unless hold/Art. 18 protects the target |
 | **Defer** | Protects until deferred_until, then reopens. Automatic approval after maximum deferrals remains opt-in |
 | **Reject** | Deletes nothing; new proposal no earlier than retention_rejected_retry_days (default 365 days) |
 
@@ -2049,7 +2049,7 @@ and progress; key rotation does not count.
 
 #### Legal Hold
 
-Lead and facility admin create and lift holds directly in person, case and event
+Manager and facility admin create and lift holds directly in person, case and event
 records (Legal Hold verwalten), with a reason, optional expiry and audit trail.
 Person/case holds also protect their events. System administration can lift holds
 at `/system/legal-holds/`. Proposal cards remain an additional path; no separate
@@ -2151,7 +2151,7 @@ retention -- the standard 24-month period described below applies.
 
 **View in the admin:**
 
-Under **Privacy → Audit log** (or `/audit/`), logs can be filtered by action, user, and time period; there is no facility filter. The application manager (`facility_admin`) has access for their own facility. Pre-auth audit logs without a facility reference (e.g. `LOGIN_FAILED` for an unknown username) are visible exclusively to the system administration (`super_admin`) in the `/system/` area -- see [ADR-007 Update 2026-05-10](../adr/007-auditlog-append-only.md).
+Under **Privacy → Audit log** (or `/audit/`), logs can be filtered by action, user, and time period; there is no facility filter. The application support (`facility_admin`) has access for their own facility. Pre-auth audit logs without a facility reference (e.g. `LOGIN_FAILED` for an unknown username) are visible exclusively to the system administration (`super_admin`) in the `/system/` area -- see [ADR-007 Update 2026-05-10](../adr/007-auditlog-append-only.md).
 
 > ⚠️ **Operator note for your own queries: attachments carry two `target_type` strings** (Refs #1738, [ADR-039](../adr/039-owner-generische-dateianhaenge.md), German). The model is called `Attachment` (formerly `EventAttachment`). The audit log is append-only and secured by an HMAC chain — **older rows are therefore never rewritten**. Anyone evaluating attachment actions (downloads, rejected uploads, deletions) must query both strings:
 >
@@ -2188,7 +2188,7 @@ Completed requests remain visible for the configured period (default 1095 days).
 
 Deletion requests for personal data are processed using the four-eyes principle (dual approval): a request must be approved by a **second authorized person** before data is permanently deleted. This protects against accidental or unauthorized deletion — including by privileged roles themselves.
 
-**Approver pool — "deletion confirmation" permission** (Refs #1053): Who may approve is not derived from the user's role; instead, approvers are curated via the individually assignable user permission *deletion confirmation* (`can_confirm_deletion`). The first account created by `setup_facility` holds the permission. When an account is created under **Administration > Access** or in the Django admin, "Löschbestätigung" is set to "Nach Rolle" (by role): leads and facility admins receive the permission, other roles do not; "Ja" (yes) and "Nein" (no) override the preset. Make sure **at least two active people** hold the permission so that a second person is available for every request; under **Administration > Access** it can also be revoked or granted to, for example, an experienced staff member. The compliance dashboard (`/system/compliance/`) shows the number of active approvers per facility in the card "Genehmiger für Löschanträge" (approvers for deletion requests): none = critical, exactly one = warning (that person's own requests stay open), two or more = OK. A permission holder can never approve their own requests; the view, service, and database layers all enforce **requester ≠ approver**.
+**Approver pool — "deletion confirmation" permission** (Refs #1053): Who may approve is not derived from the user's role; instead, approvers are curated via the individually assignable user permission *deletion confirmation* (`can_confirm_deletion`). The first account created by `setup_facility` holds the permission. When an account is created under **Management > Access** or in the Django admin, "Löschbestätigung" is set to "Nach Rolle" (by role): leads and facility admins receive the permission, other roles do not; "Ja" (yes) and "Nein" (no) override the preset. Make sure **at least two active people** hold the permission so that a second person is available for every request; under **Management > Access** it can also be revoked or granted to, for example, an experienced staff member. The compliance dashboard (`/system/compliance/`) shows the number of active approvers per facility in the card "Genehmiger für Löschanträge" (approvers for deletion requests): none = critical, exactly one = warning (that person's own requests stay open), two or more = OK. A permission holder can never approve their own requests; the view, service, and database layers all enforce **requester ≠ approver**.
 
 The immutable audit log tracks the permission from account creation on: the creation entry (`USER_CREATED`) records the initial value (`can_confirm_deletion` yes/no) — with the acting person when the account is created via Management → Access or the Django admin, as a system entry for the initial setup with `setup_facility`. Every later change (grant or revocation) is recorded as a separate `DELETION_CONFIRMER_CHANGED` entry with the old and new value, as is every approval. If an open request has no active approver other than the requester, the deletion request list displays a prominent warning ("No possible approver") — grant the permission to an additional person to resolve this.
 
@@ -2198,7 +2198,7 @@ Deletion requests live in the **"Deletion requests"** tab of the **"Privacy"** a
 
 | Who | Sees the tab | Sees in the list |
 |---|---|---|
-| Lead, facility admin | yes | **all** requests of the facility |
+| Manager, facility admin | yes | **all** requests of the facility |
 | Holder of the *deletion confirmation* permission (without a lead role) | yes | **all** requests of the facility |
 | Requester with at least one **open** request of their own | yes, while the request is open | **only their own** requests |
 | Everyone else | no | — |
@@ -2263,8 +2263,8 @@ The following administrative capabilities are available for handling requests fr
 
 | Right | Action |
 |---|---|
-| Access (Art. 15) | Generate the data access record as JSON or PDF from the client view (lead or application manager, re-authentication required) -- scope see below |
-| Rectification (Art. 16) | File a rectification request in the person record (section "Berichtigung (Art. 16 DSGVO)" → "Berichtigung beantragen", Staff and above); a Lead or Application manager reviews it under **Berichtigungen** ([ADR-041](../adr/041-berichtigungsworkflow-intern.md)). The admin interface shows persons, cases, events and work items read-only |
+| Access (Art. 15) | Generate the data access record as JSON or PDF from the client view (lead or application support, re-authentication required) -- scope see below |
+| Rectification (Art. 16) | File a rectification request in the person record (section "Berichtigung (Art. 16 DSGVO)" → "Berichtigung beantragen", Social worker and above); a Manager or Application support reviews it under **Berichtigungen** ([ADR-041](../adr/041-berichtigungsworkflow-intern.md)). The admin interface shows persons, cases, events and work items read-only |
 | Erasure (Art. 17) | Submit a deletion request through the application (four-eyes principle) |
 | Restriction (Art. 18) | Set a **restriction marker** on the client record — see below |
 | Data portability (Art. 20) | Export function in the application |
@@ -2278,7 +2278,7 @@ Where a client contests the accuracy of their data, or where any other ground un
 | **What remains permitted?** | **Storage** (Art. 18(2)). The record is not deleted, not hidden, and stays in the access record and in statistics. |
 | **What is blocked?** | Substantive work: the client can no longer be edited, nor assigned to a new contact, case or task. |
 | **What is exempt?** | The **rectification workflow** (Art. 16, § 7.6). It is the path on which the contested accuracy is examined — a restriction that blocked it too would be a dead end. |
-| **Who sets it?** | Staff and above, from the client record. When a rectification request is filed, the marker is additionally **offered** (opt-in, not pre-selected). |
+| **Who sets it?** | Social worker and above, from the client record. When a rectification request is filed, the marker is additionally **offered** (opt-in, not pre-selected). |
 | **Who lifts it?** | A **second** authorised person or a **manager**. Whoever set the marker does not lift it alone. |
 | **Visibility** | A permanent banner on the client record showing legal ground, timestamp and the person who set it; a "restricted" marker in the client list. |
 | **Trail** | Audit entries `PROCESSING_RESTRICTED` and `PROCESSING_RESTRICTION_LIFTED`, each carrying the legal ground — never the contested matter itself. |
@@ -2289,13 +2289,13 @@ Where a client contests the accuracy of their data, or where any other ground un
 
 #### History Diff: Decryption for Authorized Roles
 
-On an event's detail page, **Change history** shows the stored before/after states. Encrypted fields are decrypted at display time if the current role may see the field according to the documentation type and field sensitivity: assistants up to **Normal**, social workers up to **Elevated**, and leads and application managers up to **High**. Above the role boundary the value remains `[Eingeschränkt]`; without an authenticated user, an encrypted value stays fail-closed as `●●●●●`. File markers always appear as `[Anhang]`, never as a technical ID. These fixed history placeholders are currently displayed in German in both interface languages.
+On an event's detail page, **Change history** shows the stored before/after states. Encrypted fields are decrypted at display time if the current role may see the field according to the documentation type and field sensitivity: assistants up to **Normal**, social workers up to **Elevated**, and leads and application support up to **High**. Above the role boundary the value remains `[Eingeschränkt]`; without an authenticated user, an encrypted value stays fail-closed as `●●●●●`. File markers always appear as `[Anhang]`, never as a technical ID. These fixed history placeholders are currently displayed in German in both interface languages.
 
 This display rule applies **retroactively to the entire existing history**. Authorized roles can therefore also read earlier values that were later rectified or removed. Before implementation, this access was explicitly approved for the same roles that can already see those values in the detail/edit views and in the Art. 15 access record (#1961); take it into account when assigning roles, maintaining the data-protection impact assessment, and handling access requests. A redacted deletion-history entry contains no old value and therefore only shows `– (gelöscht)`.
 
 #### Scope of the Access Record (Art. 15)
 
-The access record is generated from the client view as **JSON** (machine-readable, Art. 20) or as **PDF** (human-readable document). Both formats cover the same scope; the PDF summarizes but omits no category. Only roles with export permission (lead, application manager) may trigger it; the request requires re-authentication (sudo mode), is rate-limited, and is itself recorded in the audit log.
+The access record is generated from the client view as **JSON** (machine-readable, Art. 20) or as **PDF** (human-readable document). Both formats cover the same scope; the PDF summarizes but omits no category. Only roles with export permission (lead, application support) may trigger it; the request requires re-authentication (sudo mode), is rate-limited, and is itself recorded in the audit log.
 
 Included (Refs #1752):
 
@@ -2332,7 +2332,7 @@ Included (Refs #1752):
 
 **Deliberately excluded -- review as a manual supplementary step:**
 
-1. **Names of the accessing staff members in the access log.** The log carries action, timestamp and reference, but no actor identity: "who accessed what and when" is simultaneously an access log about employees and therefore third-party data (Art. 15(4) GDPR). The same applies to the recently-viewed list. If the data subject requests these details as well, a case-by-case assessment is required -- the raw data is available to the application manager under `/audit/`.
+1. **Names of the accessing staff members in the access log.** The log carries action, timestamp and reference, but no actor identity: "who accessed what and when" is simultaneously an access log about employees and therefore third-party data (Art. 15(4) GDPR). The same applies to the recently-viewed list. If the data subject requests these details as well, a case-by-case assessment is required -- the raw data is available to the application support under `/audit/`.
 2. **Binary contents** of any kind (files, images). The record names every file but does not ship it; release the file itself via the regular download from the detail view if required.
 
 The PDF notice box states both points explicitly to the data subject -- the record does not claim a completeness it does not have.
@@ -2529,4 +2529,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: d60513b77184cba659b11f3322fffb0335a670a0 -->
+<!-- source-hash: 4381bdcb3cf92d9c1d609d6ae4150487198ade12 -->

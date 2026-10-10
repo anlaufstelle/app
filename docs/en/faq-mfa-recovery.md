@@ -9,4 +9,4 @@ Earlier codes with SHA digests and the old input format are invalid; changing `S
 <!-- translation-source: docs/faq.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 17f819d44b84c5acc9d3eb3b8208a0271f87b773 -->
+<!-- source-hash: 3aa2f7436b1b28450f01f39a6d036f480b8470ff -->

@@ -273,7 +273,7 @@ All other roles are redirected from `/start/` straight to their own workplace:
 - **Application support** (`facility_admin`) -- to the administration overview (`/verwaltung/`).
 - **System administration** (`super_admin`) -- to the system area (`/system/`).
 
-**Manager** -- title "Lead work center", GDPR workflows, retention, and statistics:
+**Manager** -- title "Manager work center", GDPR workflows, retention, and statistics:
 
 - **Deletion requests** -- pending requests (links to the deletion-request list)
 - **Retention proposals** -- pending retention proposals (links to the retention dashboard)
@@ -752,7 +752,7 @@ Clicking a time period does not discard your report selection -- the card and pr
 
 > **Note:** Every download is recorded in the audit log; the preview is not. An empty period looks like suppression in the preview -- when in doubt, check the selected time period.
 
-### Releases (Lead / Admin)
+### Releases (Manager / Admin)
 
 The **Releases** tab shows no statistics, but your facility's marked releases: timestamp, artifact, format, reporting period, recipient and purpose. Display is limited to **50 entries per page**, regardless of the selected statistics period. That period is kept when switching tabs.
 
@@ -774,7 +774,7 @@ When a social worker, manager or application support wants to delete a contact b
 
 1. View open deletion requests at `/deletion-requests/`.
 2. Click on a request to view its reason and the available information about the affected record. **View record (new tab)** opens the event, person record or case in a new tab; the review page stays open in the original tab. A merge has separate links for the source and destination records.
-3. Click **Approve** or **Reject** and confirm.
+3. Click **Release** or **Reject** and confirm.
 
 The review page does not extend your reading permissions: event information and links follow sensitivity and your role; case information and links require at least the social worker role and an available case belonging to an active person outside the trash. Hidden, deleted or missing targets receive a neutral notice without a link; hidden events also omit the document type, timestamp and pseudonym. You can still review the request based on the requester and reason. A withdrawn request keeps links to targets that remain visible; the withdrawal notice stays visible and a decision is no longer possible.
 
@@ -1111,7 +1111,7 @@ Each episode shows its status:
 
 ## Retention and holds
 
-Lead and facility admin open **Legal Hold verwalten** in a person, case or
+Manager and facility admin open **Legal Hold verwalten** in a person, case or
 event record, enter a reason and optional expiry, and create the hold. They
 can lift it there; both actions are audited. Person/case holds protect related
 events and audit rows of protected targets. System administration can lift

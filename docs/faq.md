@@ -239,7 +239,7 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 | Bereich | Inhalt | Zeitscope |
 |---------|--------|-----------|
 | **Statistik-Grid** | Kontakte, neue Aufgaben, neue Personen | Nur innerhalb der Schicht |
-| **Wichtige Vorkommnisse** | Krisengespräche (gelb), Hausverbote (rot), dringende Aufgaben (blau) | Nur innerhalb der Schicht |
+| **Wichtige Vorkommnisse** | Krisengespräche, Hausverbote und dringende Aufgaben werden farblich hervorgehoben | Nur innerhalb der Schicht |
 | **Übergabenotiz** | Notiz der letzten abgeschlossenen Schicht und Eingabe für die laufende Schicht; ohne Schichten gestern/heute | Eigene Schichtzeiträume |
 | **Event-Aufschlüsselung** | Kontakte nach Dokumentationstyp mit farbigen Badges | Nur innerhalb der Schicht |
 

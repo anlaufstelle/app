@@ -508,7 +508,7 @@ Das Skript fragt interaktiv nach:
 2. **E-Mail-Adresse** (Pflicht — wird für Recovery-Mails genutzt)
 3. **Passwort** (zweimal eingeben — keinen Default, keinen Demo-Wert)
 
-Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. Mit diesem Account melden Sie sich anschließend unter `/login/` an. Die in Produktion sofort verlangte 2FA-Ersteinrichtung ist erst abgeschlossen, nachdem die Backup-Codes sicher verwahrt und über die Pflicht-Checkbox bestätigt wurden; ein vorzeitiges Verlassen führt beim nächsten Aufruf wieder zu `/mfa/setup/`. Danach legen Sie die erste Einrichtung und den ersten `facility_admin` an — im Django-Admin (`/admin-mgmt/`, **Core → Einrichtungen**) oder mit dem Setup-Skript aus [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen). Beim ersten Aufruf von `/admin-mgmt/` verlangt der Sudo-Modus eine erneute Passwortbestätigung. Der `/system/`-Bereich zeigt Organisation und Einrichtungen nur an; angelegt wird dort nichts.
+Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. Mit diesem Account melden Sie sich anschließend unter `/login/` an. Die in Produktion sofort verlangte 2FA-Ersteinrichtung ist erst abgeschlossen, nachdem die Backup-Codes sicher verwahrt und über die Pflicht-Checkbox bestätigt wurden; ein vorzeitiges Verlassen führt beim nächsten Aufruf wieder zu `/mfa/setup/`. Danach legen Sie die erste Einrichtung und den ersten `facility_admin` an — im Django-Admin (`/admin-mgmt/`, **Anlaufstelle Core → Einrichtungen**) oder mit dem Setup-Skript aus [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen). Beim ersten Aufruf von `/admin-mgmt/` verlangt der Sudo-Modus eine erneute Passwortbestätigung. Der `/system/`-Bereich zeigt Organisation und Einrichtungen nur an; angelegt wird dort nichts.
 
 > **Wichtig — kein Default-Passwort:** Aus DSGVO- und Sicherheits-Gründen liefert die Anwendung **kein** Default-Passwort und keinen Default-Benutzernamen aus (anders als der frühere `make seed`-Workflow für Entwicklungs-Demos). Wer den Befehl überspringt, erhält **keinen** anmeldungsfähigen Account.
 
@@ -527,7 +527,7 @@ Der Befehl entsperrt den angegebenen User und schreibt einen `LOGIN_UNLOCK`-Audi
 
 ### 2.2 Einrichtung und Anwendungsbetreuung anlegen
 
-Nach dem Login als `super_admin` legen Sie die erste Einrichtung und einen `facility_admin` (Anwendungsbetreuung) für sie im Django-Admin an (`/admin-mgmt/`, **Core → Einrichtungen** bzw. **Core → Benutzer**). Alternativ steht das interaktive Setup-Skript zur Verfügung — geeignet für reine Single-Tenant-Installationen, in denen Systemadministration und Anwendungsbetreuung dieselbe Person sind:
+Nach dem Login als `super_admin` legen Sie die erste Einrichtung und einen `facility_admin` (Anwendungsbetreuung) für sie im Django-Admin an (`/admin-mgmt/`, **Anlaufstelle Core → Einrichtungen** bzw. **Anlaufstelle Core → Benutzer**). Alternativ steht das interaktive Setup-Skript zur Verfügung — geeignet für reine Single-Tenant-Installationen, in denen Systemadministration und Anwendungsbetreuung dieselbe Person sind:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
@@ -563,18 +563,18 @@ Anschließend sind Organisation, Einrichtung, Standardeinstellungen, der **Stand
 
 > ⚠️ **Domänen-Pakete sind Ersatz, nicht Zusatz.** Laden Sie ein Domänen-Paket mit `setup_facility --package <name>` gegen eine frische Einrichtung. `load_package --package <name>` bricht bei Typ- oder Feld-Slugs ab, die nicht zum gewählten Paket gehören — auch im Dry-Run. Ein erneuter Lauf desselben Pakets bleibt erlaubt. Der Standardkatalog ist der Bestandsfall: `--default` beziehungsweise `--package default` synchronisiert seine Paketwerte zurück.
 
-> **Bereits bestehende Einrichtung nachrüsten:** Für eine Einrichtung, die es schon gibt — im Django-Admin unter **Core → Einrichtungen** angelegt oder mit `--no-default-package` bewusst leer gestartet — spielt derselbe Standardkatalog nachträglich ein:
+> **Bereits bestehende Einrichtung nachrüsten:** Für eine Einrichtung, die es schon gibt — im Django-Admin unter **Anlaufstelle Core → Einrichtungen** angelegt oder mit `--no-default-package` bewusst leer gestartet — spielt derselbe Standardkatalog nachträglich ein:
 >
 > ```bash
 > docker compose -f docker-compose.prod.yml run --rm maintenance \
 >   load_package --default --facility <uuid> --dry-run
 > ```
 >
-> `--dry-run` zeigt erst nur an, was passieren würde; ohne den Schalter wird angewendet. Der Lauf löscht nie etwas, **schreibt aber die Katalog-Eigenschaften bestehender Typen und Feldvorlagen auf den Auslieferungsstand zurück** (Name, Sortierung, Farbe, Symbol, Sichtbarkeit) — anders als die Ersteinrichtung, die einen vorhandenen Katalog gar nicht anfasst. Deshalb zuerst mit `--dry-run` ansehen; die vollständige Rücksync-Tabelle steht in [docs/packages.md § 4](packages.md). Die UUID der Einrichtung steht im Django-Admin unter **Core → Einrichtungen** in der Adresszeile der Detailseite.
+> `--dry-run` zeigt erst nur an, was passieren würde; ohne den Schalter wird angewendet. Der Lauf löscht nie etwas, **schreibt aber die Katalog-Eigenschaften bestehender Typen und Feldvorlagen auf den Auslieferungsstand zurück** (Name, Sortierung, Farbe, Symbol, Sichtbarkeit) — anders als die Ersteinrichtung, die einen vorhandenen Katalog gar nicht anfasst. Deshalb zuerst mit `--dry-run` ansehen; die vollständige Rücksync-Tabelle steht in [docs/packages.md § 4](packages.md). Die UUID der Einrichtung steht im Django-Admin unter **Anlaufstelle Core → Einrichtungen** in der Adresszeile der Detailseite.
 
 > **Hinweis:** Sollte eine Organisation oder Einrichtung mit dem angegebenen Namen bereits existieren, wird sie wiederverwendet. Ein bestehender Benutzername wird nicht überschrieben.
 
-> **Zweite Einrichtung im Django-Admin (#1970):** Weitere Einrichtungen legen Sie im laufenden Betrieb unter **Core → Einrichtungen → Einrichtung hinzufügen** an — das ist der einzige Weg an der Oberfläche und `super_admin` vorbehalten. Im Feld **„Paket"** wählen Sie den mitgelieferten Katalog; ohne Änderung ist `default` vorausgewählt. Das Speichern erzeugt **dieselbe paketbezogene Grundausstattung** wie `setup_facility --package <name>`: Einstellungssatz, gewählter Katalog, passende Zeitfenster und die für dieses Paket deklarierten Schnellvorlagen. Die neue Einrichtung ist damit sofort dokumentierbar; zu tun bleibt nur noch, ihr unter **Core → Benutzer** mindestens ein Konto zuzuordnen. Der Startbestand entsteht **genau einmal, beim Anlegen**: Beim späteren Ändern fehlt das Paketfeld, und ein Speichern (z. B. Umbenennen oder „Aktiv" umschalten) rührt den Bestand nicht an — auch dann nicht, wenn er leer ist. Im Admin angelegte, leer gebliebene Einrichtungen rüsten Sie deshalb ausdrücklich nach: den Standardkatalog mit `manage.py load_package --default --facility <uuid>` (Befehl samt Rollen-Override oben), Zeitfenster und Schnellvorlagen von Hand unter **Anlaufstelle Core → Zeitfilter** (technische Pflege) bzw. **Core → Quick-Templates**.
+> **Zweite Einrichtung im Django-Admin (#1970):** Weitere Einrichtungen legen Sie im laufenden Betrieb unter **Anlaufstelle Core → Einrichtungen → Einrichtung hinzufügen** an — das ist der einzige Weg an der Oberfläche und `super_admin` vorbehalten. Im Feld **„Paket"** wählen Sie den mitgelieferten Katalog; ohne Änderung ist `default` vorausgewählt. Das Speichern erzeugt **dieselbe paketbezogene Grundausstattung** wie `setup_facility --package <name>`: Einstellungssatz, gewählter Katalog, passende Zeitfenster und die für dieses Paket deklarierten Schnellvorlagen. Die neue Einrichtung ist damit sofort dokumentierbar; zu tun bleibt nur noch, ihr unter **Anlaufstelle Core → Benutzer** mindestens ein Konto zuzuordnen. Der Startbestand entsteht **genau einmal, beim Anlegen**: Beim späteren Ändern fehlt das Paketfeld, und ein Speichern (z. B. Umbenennen oder „Aktiv" umschalten) rührt den Bestand nicht an — auch dann nicht, wenn er leer ist. Im Admin angelegte, leer gebliebene Einrichtungen rüsten Sie deshalb ausdrücklich nach: den Standardkatalog mit `manage.py load_package --default --facility <uuid>` (Befehl samt Rollen-Override oben), Zeitfenster und Schnellvorlagen von Hand unter **Anlaufstelle Core → Zeitfilter** (technische Pflege) bzw. **Anlaufstelle Core → Quick-Templates**.
 
 > **Organization als Branding-Hülse:** Die Organisation dient nur dem Träger-Branding (Logo, Name in Berichten). Es gibt keinen Org-Admin und keinen Cross-Facility-Effekt durch sie — facility-übergreifender Zugriff läuft ausschließlich über `super_admin` und `/system/`. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md).
 
@@ -592,17 +592,17 @@ Hier können Sie verwalten:
 
 | Bereich | Pfad im Admin | Beschreibung |
 |---|---|---|
-| Organisationen | Core → Organisationen | Träger (Mandantenebene) |
-| Einrichtungen | Core → Einrichtungen | Standorte einer Organisation |
-| Einstellungen | Core → Einstellungen | Konfiguration pro Einrichtung |
-| Benutzer | Core → Benutzer | Technischer Fallback; primäre Pflege unter Verwaltung → Zugänge |
-| Dokumentationstypen | Core → Dokumentationstypen | Technischer Fallback; primäre Pflege unter Verwaltung → Dokumentationstypen |
+| Organisationen | Anlaufstelle Core → Organisationen | Träger (Mandantenebene) |
+| Einrichtungen | Anlaufstelle Core → Einrichtungen | Standorte einer Organisation |
+| Einstellungen | Anlaufstelle Core → Einstellungen | Konfiguration pro Einrichtung |
+| Benutzer | Anlaufstelle Core → Benutzer | Technischer Fallback; primäre Pflege unter Verwaltung → Zugänge |
+| Dokumentationstypen | Anlaufstelle Core → Dokumentationstypen | Technischer Fallback; primäre Pflege unter Verwaltung → Dokumentationstypen |
 | Zeitfilter | Anlaufstelle Core → Zeitfilter | Benannte Zeiträume für Auswertungen. **Ein Zeitfilter, zu dem noch Übergabenotizen gespeichert sind, lässt sich nicht löschen** (#2042) — der Admin meldet die Schutzverletzung. Andernfalls verschwänden die Notizen dieser Schicht still, an ihrer Aufbewahrungsfrist und am Audit-Log vorbei. Umbenennen und Umsortieren bleiben jederzeit möglich; zum Löschen warten Sie das Ende der Frist **Aufbewahrung Übergabenotizen (Tage)** ab oder deaktivieren das Fenster statt es zu entfernen |
-| Audit-Log | Core → Audit-Logs | Unveränderliches Protokoll |
+| Audit-Log | Anlaufstelle Core → Audit-Logs | Unveränderliches Protokoll |
 
 ### 2.2c Einrichtung stilllegen: archivieren statt löschen
 
-Schließt ein Standort, ist **Archivieren** der vorgesehene Weg, nicht das Löschen. Entfernen Sie unter **Core → Einrichtungen** den Haken bei **Aktiv** und speichern Sie. Nur `super_admin` darf das — die Einrichtungsverwaltung ist dieser Rolle vorbehalten.
+Schließt ein Standort, ist **Archivieren** der vorgesehene Weg, nicht das Löschen. Entfernen Sie unter **Anlaufstelle Core → Einrichtungen** den Haken bei **Aktiv** und speichern Sie. Nur `super_admin` darf das — die Einrichtungsverwaltung ist dieser Rolle vorbehalten.
 
 **Was das Archivieren bewirkt (ab #2067):**
 
@@ -629,7 +629,7 @@ Schließt ein Standort, ist **Archivieren** der vorgesehene Weg, nicht das Lösc
 
 ### 2.3 Einstellungen pro Einrichtung
 
-Unter **Verwaltung → Einstellungen** (Gruppen „Allgemein und Komfort“, „Sicherheit“ sowie „Datenschutz und Fristen“) können Sie unter anderem die folgenden wichtigsten Felder konfigurieren; die vollständige Feldliste steht direkt im Adminformular:
+Unter **Verwaltung → Einstellungen** (Gruppen „Allgemein und Komfort“, „Sicherheit“ sowie „Datenschutz und Fristen“) können Sie unter anderem die folgenden wichtigsten Felder konfigurieren; die vollständige Feldliste steht direkt im Einstellungsformular:
 
 | Feld | Standardwert | Beschreibung |
 |---|---|---|
@@ -657,11 +657,11 @@ Unter **Verwaltung → Einstellungen** (Gruppen „Allgemein und Komfort“, „
 > |---|---|---|
 > | Standardkatalog der Dokumentationstypen | Verwaltung → Dokumentationstypen | **Blockierend:** Ohne Ereignistyp bleibt die Typ-Auswahl in „Kontakt dokumentieren" leer, es lässt sich nichts dokumentieren |
 > | Standardschichten Frühdienst (08–16), Spätdienst (16–22), Nachtdienst (22–08) | Anlaufstelle Core → Zeitfilter (technische Pflege) | Komfort: Der Zeitstrom wertet dann den vollen Tag aus statt ein Schichtfenster; Übergabe-Ansicht und Live-Zähler haben keinen Schichtbezug |
-> | Schnellvorlagen „Kurzkontakt" und „Beratungskontakt" am Typ „Kontakt" | Core → Quick-Templates | Komfort: Wiederkehrende Kontakte werden von Hand ausgefüllt (siehe [§ 2.8](#28-schnell-vorlagen-quick-templates)) |
+> | Schnellvorlagen „Kurzkontakt" und „Beratungskontakt" am Typ „Kontakt" | Anlaufstelle Core → Quick-Templates | Komfort: Wiederkehrende Kontakte werden von Hand ausgefüllt (siehe [§ 2.8](#28-schnell-vorlagen-quick-templates)) |
 >
-> **Einmalig beim Anlegen, nicht bei jedem Speichern:** Bringt eine Einrichtung im Moment des Anlegens bereits eigene Dokumentationstypen, Zeitfenster oder Schnellvorlagen mit, bleibt die jeweilige Gruppe **unangetastet** — geprüft wird je Gruppe, ein einziges vorhandenes Objekt genügt. Jedes spätere Speichern der Einrichtung im Admin lässt alle drei Gruppen ohnehin unberührt: Im Admin gepflegte Bezeichnungen und Sortierungen werden nie still auf den Auslieferungsstand zurückgesetzt, und gelöschte Standardschichten kommen nicht von selbst zurück. Nachziehen ist ausdrücklich: den Auslieferungsstand des Katalogs holt `manage.py load_package --default` (siehe [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)); Zeitfenster und Schnellvorlagen legen Sie unter **Anlaufstelle Core → Zeitfilter** (technische Pflege) bzw. **Core → Quick-Templates** selbst an. Einzige Ausnahme: Ein erneuter Lauf der Ersteinrichtung `setup_facility` mit **denselben** Namen für Organisation und Einrichtung stattet aus, was zu diesem Zeitpunkt leer ist — wer alle Zeitfenster gelöscht hat, bekommt dort die drei Standardschichten wieder; der Befehl schreibt zu jedem Bestand hin, ob er ihn angelegt oder unberührt gelassen hat.
+> **Einmalig beim Anlegen, nicht bei jedem Speichern:** Bringt eine Einrichtung im Moment des Anlegens bereits eigene Dokumentationstypen, Zeitfenster oder Schnellvorlagen mit, bleibt die jeweilige Gruppe **unangetastet** — geprüft wird je Gruppe, ein einziges vorhandenes Objekt genügt. Jedes spätere Speichern der Einrichtung im Admin lässt alle drei Gruppen ohnehin unberührt: Im Admin gepflegte Bezeichnungen und Sortierungen werden nie still auf den Auslieferungsstand zurückgesetzt, und gelöschte Standardschichten kommen nicht von selbst zurück. Nachziehen ist ausdrücklich: den Auslieferungsstand des Katalogs holt `manage.py load_package --default` (siehe [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)); Zeitfenster und Schnellvorlagen legen Sie unter **Anlaufstelle Core → Zeitfilter** (technische Pflege) bzw. **Anlaufstelle Core → Quick-Templates** selbst an. Einzige Ausnahme: Ein erneuter Lauf der Ersteinrichtung `setup_facility` mit **denselben** Namen für Organisation und Einrichtung stattet aus, was zu diesem Zeitpunkt leer ist — wer alle Zeitfenster gelöscht hat, bekommt dort die drei Standardschichten wieder; der Befehl schreibt zu jedem Bestand hin, ob er ihn angelegt oder unberührt gelassen hat.
 
-> **Jede Einrichtung hat genau einen Einstellungssatz.** Die Zeile entsteht automatisch, sobald die Einrichtung angelegt wird — beim interaktiven `setup_facility`, beim Anlegen im Admin unter **Core → Einrichtungen** und (nachträglich, für Altbestände) bei jedem `migrate`-Lauf. Das ist keine Formsache: `enforce_retention` und `create_statistics_snapshots` **überspringen** eine Einrichtung ohne Einstellungssatz — für sie würde also keine Aufbewahrungsfrist durchgesetzt und es entstünden keine Statistik-Snapshots. Beide Jobs protokollieren einen solchen Fall auf `WARNING`-Ebene (`No settings for …, skipping.`); taucht die Meldung im Log auf, ist das ein Betriebsfehler und kein Rauschen.
+> **Jede Einrichtung hat genau einen Einstellungssatz.** Die Zeile entsteht automatisch, sobald die Einrichtung angelegt wird — beim interaktiven `setup_facility`, beim Anlegen im Admin unter **Anlaufstelle Core → Einrichtungen** und (nachträglich, für Altbestände) bei jedem `migrate`-Lauf. Das ist keine Formsache: `enforce_retention` und `create_statistics_snapshots` **überspringen** eine Einrichtung ohne Einstellungssatz — für sie würde also keine Aufbewahrungsfrist durchgesetzt und es entstünden keine Statistik-Snapshots. Beide Jobs protokollieren einen solchen Fall auf `WARNING`-Ebene (`No settings for …, skipping.`); taucht die Meldung im Log auf, ist das ein Betriebsfehler und kein Rauschen.
 
 ### 2.4 Weitere Benutzer anlegen
 
@@ -674,7 +674,7 @@ Der reguläre Weg für die Anwendungsbetreuung ist **Verwaltung → Zugänge →
 - **2FA erforderlich:** erzwingt einen zweiten Faktor für dieses einzelne Konto
 - **Löschbestätigung:** nimmt das Konto in den Genehmiger-Pool für Löschanträge auf
 
-Bestehende Zugänge lassen sich dort bearbeiten, deaktivieren oder reaktivieren. Der eigene Administrationszugang kann weder deaktiviert noch herabgestuft werden. Die Fach-UI löscht Konten nicht endgültig: Deaktivieren ist der reguläre Lebenszyklus; eine endgültige Löschung bleibt ein geprüfter technischer Sonderfall. `super_admin`, Bootstrap und Notfälle verbleiben unter **Core → Benutzer** im Django-Admin; dort kann ein `super_admin` auch das Feld **MFA erforderlich** für diese Konten umschalten; das Feld liegt im selben Formular und ist damit auch beim regulären Bearbeiten eines Kontos der eigenen Einrichtung durch eine Anwendungsbetreuung sichtbar (zusätzlich zum Weg über Verwaltung → Zugänge). Jede solche Änderung erscheint im Audit-Log als `USER_ACCESS_UPDATED` mit `mfa_required` in den geänderten Feldern. Quick-Templates und Zeitfenster bleiben ebenfalls bewusst technische Admin-Funktionen.
+Bestehende Zugänge lassen sich dort bearbeiten, deaktivieren oder reaktivieren. Der eigene Administrationszugang kann weder deaktiviert noch herabgestuft werden. Die Fach-UI löscht Konten nicht endgültig: Deaktivieren ist der reguläre Lebenszyklus; eine endgültige Löschung bleibt ein geprüfter technischer Sonderfall. `super_admin`, Bootstrap und Notfälle verbleiben unter **Anlaufstelle Core → Benutzer** im Django-Admin; dort kann ein `super_admin` auch das Feld **2FA erforderlich** für diese Konten umschalten; das Feld liegt im selben Formular und ist damit auch beim regulären Bearbeiten eines Kontos der eigenen Einrichtung durch eine Anwendungsbetreuung sichtbar (zusätzlich zum Weg über Verwaltung → Zugänge). Jede solche Änderung erscheint im Audit-Log als `USER_ACCESS_UPDATED` mit `mfa_required` in den geänderten Feldern. Quick-Templates und Zeitfenster bleiben ebenfalls bewusst technische Admin-Funktionen.
 
 #### Token-Invite-Flow (Refs #528)
 
@@ -691,7 +691,7 @@ Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet di
 
 Beide Generatoren sind zudem über ein eigenes `key_salt` getrennt (ein Reset-Token gilt nicht auf `/invite/` und umgekehrt) und invalidieren den Token automatisch, sobald der Nutzer sein erstes Passwort gesetzt hat.
 
-**Setup-Link erneut senden:** Ist die Mail nicht angekommen oder der Token abgelaufen, kann die Anwendungsbetreuung in der Zugangs-Detailansicht über **Einladung erneut senden** einen neuen Token ausstellen und eine frische Mail verschicken lassen. Der Button erscheint nur, solange die Einrichtung des Kontos aussteht. Für `super_admin`-Konten und technische Sonderfälle markiert die Systemadministration stattdessen die betreffenden Konten unter **Core → Benutzer** im Django-Admin und wählt die Aktion **Einladung erneut senden (Setup-Link)**. Die Aktion verarbeitet nur Konten mit hinterlegter E-Mail und noch ausstehender Einrichtung; ein gegebenenfalls noch nutzbares Initialpasswort wird dabei entwertet.
+**Setup-Link erneut senden:** Ist die Mail nicht angekommen oder der Token abgelaufen, kann die Anwendungsbetreuung in der Zugangs-Detailansicht über **Einladung erneut senden** einen neuen Token ausstellen und eine frische Mail verschicken lassen. Der Button erscheint nur, solange die Einrichtung des Kontos aussteht. Für `super_admin`-Konten und technische Sonderfälle markiert die Systemadministration stattdessen die betreffenden Konten unter **Anlaufstelle Core → Benutzer** im Django-Admin und wählt die Aktion **Einladung erneut senden (Setup-Link)**. Die Aktion verarbeitet nur Konten mit hinterlegter E-Mail und noch ausstehender Einrichtung; ein gegebenenfalls noch nutzbares Initialpasswort wird dabei entwertet.
 
 **SMTP-Voraussetzungen und Fehlersuche:** Technisch ist keiner dieser Werte
 Pflicht — ohne Angabe startet die Anwendung im Compose-Stack mit leerem
@@ -748,9 +748,9 @@ Anlaufstelle kennt fünf Rollen — vier facility-gebunden, eine facility-überg
 
 ### 2.5 Dokumentationstypen konfigurieren
 
-> **Ausgangslage:** Eine über `setup_facility` **oder** im Django-Admin unter **Core → Einrichtungen** ([§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)) angelegte Einrichtung bringt den mitgelieferten **Standardkatalog** bereits mit — sie ist ohne weiteren Schritt dokumentierbar. Leer ist die Liste nur, wenn der Katalog bei der Ersteinrichtung per `--no-default-package` abgewählt wurde oder die Einrichtung aus einer Version vor #1970 stammt. Beides bleibt so, bis Sie es ausdrücklich ändern — ein Speichern der Einrichtung im Admin holt den Katalog **nicht** nach (das würde die Abwahl still übergehen). Führen Sie dann `manage.py load_package --default --facility <uuid>` aus (Befehl samt Rollen-Override in [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)). Aufbau, Feld-Referenz und Pflege-Regeln eines Konfigurationspakets — auch eines eigenen statt des mitgelieferten — beschreibt [docs/packages.md](packages.md). Die folgenden Abschnitte beschreiben, wie Sie den Bestand danach anpassen.
+> **Ausgangslage:** Eine über `setup_facility` **oder** im Django-Admin unter **Anlaufstelle Core → Einrichtungen** ([§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)) angelegte Einrichtung bringt den mitgelieferten **Standardkatalog** bereits mit — sie ist ohne weiteren Schritt dokumentierbar. Leer ist die Liste nur, wenn der Katalog bei der Ersteinrichtung per `--no-default-package` abgewählt wurde oder die Einrichtung aus einer Version vor #1970 stammt. Beides bleibt so, bis Sie es ausdrücklich ändern — ein Speichern der Einrichtung im Admin holt den Katalog **nicht** nach (das würde die Abwahl still übergehen). Führen Sie dann `manage.py load_package --default --facility <uuid>` aus (Befehl samt Rollen-Override in [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)). Aufbau, Feld-Referenz und Pflege-Regeln eines Konfigurationspakets — auch eines eigenen statt des mitgelieferten — beschreibt [docs/packages.md](packages.md). Die folgenden Abschnitte beschreiben, wie Sie den Bestand danach anpassen.
 
-Unter **Verwaltung → Dokumentationstypen** (`/config/document-types/`) legen Sie fest, welche Arten von Dokumentation in der Einrichtung erfasst werden können. Die gleichnamige Ansicht unter **Core → Dokumentationstypen** im Django-Admin bleibt als technischer Fallback erhalten, ist aber nicht der reguläre Pflegeweg. Jeder Typ besteht aus:
+Unter **Verwaltung → Dokumentationstypen** (`/config/document-types/`) legen Sie fest, welche Arten von Dokumentation in der Einrichtung erfasst werden können. Die gleichnamige Ansicht unter **Anlaufstelle Core → Dokumentationstypen** im Django-Admin bleibt als technischer Fallback erhalten, ist aber nicht der reguläre Pflegeweg. Jeder Typ besteht aus:
 
 - **Name und Beschreibung**
 - **Feldvorlagen** (Freitextfelder, Auswahlfelder etc.)
@@ -1071,7 +1071,7 @@ Die Rolle **Leitung** (`lead`) ist per Default pflichtig (im Grace-Set) — wer 
 Hat eine Person ihr Authenticator-Gerät verloren und keine Backup-Codes mehr, setzt die Anwendungsbetreuung oder die Systemadministration ihren zweiten Faktor in der Anwendung zurück (#2469):
 
 - **Anwendungsbetreuung (`facility_admin`):** **Verwaltung → Zugänge** → *Zugang* → unter „Sicherheitsaktionen" **Zweiten Faktor zurücksetzen** (`/verwaltung/zugaenge/<id>/zweiter-faktor/`). Die Bestätigungsseite nennt die Folgen; erst das Absenden setzt zurück. Die Aktion erscheint nur, wenn der Zugang noch einen Faktor hat.
-- **Systemadministration (`super_admin`):** Django-Admin (`/admin-mgmt/`) → **Core → Benutzer** → Konten auswählen → Aktion **Zweiten Faktor zurücksetzen (Authenticator-App, Passkeys, Backup-Codes)**. Jedes ausgewählte Konto wird einzeln geprüft; abgelehnte Konten meldet die Seite und überspringt sie.
+- **Systemadministration (`super_admin`):** Django-Admin (`/admin-mgmt/`) → **Anlaufstelle Core → Benutzer** → Konten auswählen → Aktion **Zweiten Faktor zurücksetzen (Authenticator-App, Passkeys, Backup-Codes)**. Jedes ausgewählte Konto wird einzeln geprüft; abgelehnte Konten meldet die Seite und überspringt sie.
 
 Regeln (in [`src/core/services/user_access.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/user_access.py), `reset_user_mfa`):
 
@@ -1112,7 +1112,7 @@ Die folgenden Recovery-Pfade gelten deshalb für facility-gebundene Konten:
 2. Unter „Sicherheitsaktionen" auf **Account-Sperre aufheben** klicken.
 3. Cleanup wird im AuditLog als `LOGIN_UNLOCK` protokolliert (das `LOGIN_FAILED`-Log selbst ist dank `auditlog_immutable`-DB-Trigger unveränderbar).
 
-Die Aktion verlangt ein laufendes Sudo-Fenster. Die Systemadministration entsperrt einrichtungsübergreifend unter **System → Sperrkonten** (`/system/lockouts/`, ebenfalls mit Sudo). Im Django-Admin (**Core → Benutzer**) steht dieselbe Entsperrung nur noch als Listenaktion „Account-Sperre aufheben (Login freigeben)" als Ausweichweg bereit.
+Die Aktion verlangt ein laufendes Sudo-Fenster. Die Systemadministration entsperrt einrichtungsübergreifend unter **System → Sperrkonten** (`/system/lockouts/`, ebenfalls mit Sudo). Im Django-Admin (**Anlaufstelle Core → Benutzer**) steht dieselbe Entsperrung nur noch als Listenaktion „Account-Sperre aufheben (Login freigeben)" als Ausweichweg bereit.
 
 **Pfad B — CLI (für Recovery):** Wenn kein anderer User Zugriff auf Pfad A hat (gesperrter `facility_admin` und kein zweiter `facility_admin`), entsperrt der Hosting-Operator den Account direkt am Server:
 
@@ -1159,7 +1159,7 @@ Vom Ratelimit abgewiesene Anfragen (HTTP 429) schreiben höchstens eine `RATE_LI
 
 #### Vorlagen verwalten
 
-Vorlagen werden im Django-Admin unter **Core → Quick-Templates** gepflegt.
+Vorlagen werden im Django-Admin unter **Anlaufstelle Core → Quick-Templates** gepflegt.
 
 | Feld | Beschreibung |
 |---|---|

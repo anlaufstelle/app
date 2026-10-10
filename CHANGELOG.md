@@ -58,6 +58,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Verbliebene Handbuchbezeichnungen abgeglichen** (#2455) — Technische Adminpfade und 2FA-Feldnamen entsprechen der Oberfläche, die FAQ beschreibt Hervorhebungen ohne feste Farben und die englischen Rollen-, Menü- und Freigabebezeichnungen sowie die Aufbewahrungserklärung sind korrigiert.
+
 - **Kontaktstufen und Assistenzrechte präzisiert** (#2517) — Die Handbücher und das Fachkonzept unterscheiden Personen-Kontaktstufen, wirksame Sensibilität, Feldverschlüsselung und die Sperre interner Personennotizen; „Anonym“ ist keine Personen-Kontaktstufe.
 
 ## [0.99.6] - 2026-10-08
