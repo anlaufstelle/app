@@ -22,6 +22,9 @@
             <p class="text-[13px] text-ink">
                 {% if report_bindings %}{{ report_bindings|join:" · " }}{% else %}{% trans "Erscheint in keinem Bericht." %}{% endif %}
             </p>
+            {% for warning in report_binding_warnings %}
+            <p class="mt-2 rounded-md border border-yellow-300 bg-yellow-100 p-3 text-[13px] text-ink" data-testid="report-binding-warning" role="status">{{ warning }}</p>
+            {% endfor %}
             <p class="mt-1 text-[12px] text-ink-muted">{% trans "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen." %}</p>
         </div>
         {% endif %}
@@ -74,7 +77,7 @@
             {% include "components/_form_field.html" with field=form.report_key inline_help=help_report_key_inline deep_help_effect=help_report_key_effect deep_help_change=help_report_key_change deep_help_example=help_report_key_example %}
             {% if not is_edit %}
             <div class="rounded-md border border-subtle bg-canvas p-3" data-entity-scoped-extra data-testid="doctype-report-key-preview">
-                <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Erscheint in" %}</p>
+                <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Mögliche Berichte nach vollständiger Zuordnung" %}</p>
                 <p class="text-[13px] text-ink" data-report-key-bindings-output aria-live="polite"></p>
                 <p class="mt-1 text-[12px] text-ink-muted">{% trans "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen." %}</p>
             </div>

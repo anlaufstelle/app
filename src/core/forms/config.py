@@ -22,7 +22,12 @@ from core.forms.mixins import TailwindFormMixin
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
 from core.models.report_key import EXCLUDED
 from core.models.slug import _RESERVED_SLUGS, _SLUG_RE, slug_base
-from core.reporting.registry import backends_for_report_key, get_field_key_vocabulary, get_report_key_vocabulary
+from core.reporting.registry import (
+    backends_for_report_key,
+    diagnose_type_bindings,
+    get_field_key_vocabulary,
+    get_report_key_vocabulary,
+)
 from core.services.compliance.sensitivity import validate_explicit_high_field
 from core.services.conditions import (
     ALLOWED_SOURCE_FIELD_TYPES,
@@ -408,10 +413,12 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
 
     @property
     def report_key_bindings_json(self) -> str:
-        """Registry-Zuordnung für die Live-Auskunft beim Anlegen (Refs #1903)."""
-        bindings = {
-            key: [str(backend.name) for backend in backends_for_report_key(key)] for key in get_report_key_vocabulary()
-        }
+        """Show candidate reports and incomplete requirements before creation."""
+        bindings = {}
+        for key in get_report_key_vocabulary():
+            candidate = DocumentType(facility=self.facility, report_key=key)
+            bindings[key] = [str(backend.name) for backend in backends_for_report_key(key)]
+            bindings[key].extend(diagnose_type_bindings(candidate, self.facility))
         return json.dumps(bindings, ensure_ascii=False, separators=(",", ":"))
 
     @property

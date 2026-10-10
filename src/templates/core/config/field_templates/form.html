@@ -23,6 +23,9 @@
             <p class="text-[13px] text-ink">
                 {% if field_bindings %}{{ field_bindings|join:" · " }}{% else %}{% trans "Erscheint in keinem Bericht." %}{% endif %}
             </p>
+            {% for warning in report_binding_warnings %}
+            <p class="mt-2 rounded-md border border-yellow-300 bg-yellow-100 p-3 text-[13px] text-ink" data-testid="report-binding-warning" role="status">{{ warning }}</p>
+            {% endfor %}
             <p class="mt-1 text-[12px] text-ink-muted">{% trans "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen." %}</p>
         </div>
         {% endif %}

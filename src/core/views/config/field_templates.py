@@ -20,7 +20,7 @@ from django.views import View
 
 from core.forms.config import FieldTemplateForm
 from core.models import FieldTemplate
-from core.reporting.registry import describe_field_bindings
+from core.reporting.registry import describe_field_bindings, diagnose_field_bindings
 from core.services import config as config_service
 from core.services.compliance.sensitivity import field_protection
 from core.services.config import ConfigDeleteBlocked
@@ -128,6 +128,7 @@ class ConfigFieldTemplateUpdateView(FacilityAdminRequiredMixin, View):
             # facility durchgereicht (Review-Befund): nur verfügbare Backends
             # dürfen genannt werden, sonst 404-Widerspruch zu Panel/Export.
             "field_bindings": describe_field_bindings(field_template, request.current_facility),
+            "report_binding_warnings": diagnose_field_bindings(field_template, request.current_facility),
         }
         return render(request, FORM_TEMPLATE, context)
 
@@ -154,6 +155,7 @@ class ConfigFieldTemplateUpdateView(FacilityAdminRequiredMixin, View):
             "field_template": field_template,
             "is_edit": True,
             "field_bindings": describe_field_bindings(field_template, request.current_facility),
+            "report_binding_warnings": diagnose_field_bindings(field_template, request.current_facility),
         }
         return render(request, FORM_TEMPLATE, context)
 

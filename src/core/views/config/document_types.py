@@ -30,7 +30,7 @@ from core.models import (
     FieldGroup,
     QuickTemplate,
 )
-from core.reporting.registry import describe_type_bindings
+from core.reporting.registry import describe_type_bindings, diagnose_type_bindings
 from core.services import config as config_service
 from core.services.config import ConfigDeleteBlocked
 from core.services.events import evaluate_tally_eligibility
@@ -101,23 +101,13 @@ def _field_add_error_response(request, doc_type, message):
 
 
 def report_bindings_context(doc_type, facility):
-    """„Erscheint in …" (E2, Refs #1848) — Context-Fragment, NUR für Ereignis-Typen.
-
-    An Personen-/Fall-Typen ist die Berichtsfrage gegenstandslos (der
-    Sachbericht und seine Geschwister zählen Ereignisse, keine Personen/Fälle)
-    — der Context-Schlüssel ``report_bindings`` wird für sie bewusst GAR NICHT
-    gesetzt (leeres Dict, kein ``[]``-Wert): „keine Aussage" (Key fehlt) und
-    „keine Bindung" (Liste leer) sollen sich im Context nicht vermischen. Das
-    Template-``{% if %}`` bleibt die zweite, unabhängige Sicherung.
-
-    ``facility`` wird durchgereicht an :func:`~core.reporting.registry.describe_type_bindings`
-    (Review-Befund #1848): nur *verfügbare* Backends dürfen genannt werden,
-    sonst behauptete die Auskunft „erscheint in X" für ein Backend, das Panel/
-    Export mit 404 quittieren würden.
-    """
+    """Describe local report contributions and incomplete event-type requirements."""
     if doc_type.entity_type != DocumentType.EntityType.EVENT:
         return {}
-    return {"report_bindings": describe_type_bindings(doc_type, facility)}
+    return {
+        "report_bindings": describe_type_bindings(doc_type, facility),
+        "report_binding_warnings": diagnose_type_bindings(doc_type, facility),
+    }
 
 
 def _count_sub(qs, group_field="document_type"):

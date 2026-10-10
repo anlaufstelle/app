@@ -25,6 +25,7 @@ import re
 from collections.abc import Callable
 
 from django.core.exceptions import ImproperlyConfigured
+from django.utils.translation import gettext as _
 
 from core.reporting.base import EXCLUDED_KEY, DatasetBackend, feld_bindungen, typ_bindungen
 
@@ -330,43 +331,123 @@ def backends_for_field_key(key: str) -> list[DatasetBackend]:
     return [backend for backend in get_backends() if any(key in b.vokabular() for b in sammler(backend))]
 
 
-def describe_type_bindings(document_type, facility) -> list[str]:
-    """„Erscheint in …" fuer einen Dokumentationstyp (E2, Refs #1848).
+def _belongs_to_facility(obj, facility) -> bool:
+    """Reject foreign model instances while retaining declaration-only callers."""
+    return not hasattr(obj, "facility_id") or obj.facility_id == getattr(facility, "pk", None)
 
-    Je **verfuegbarem** Backend mit Treffer eine Zeile ``"Backend-Name
-    (Label)"`` — die Konfigurations-UI verkettet die Liste mit ``" · "``.
-    Baut AUSSCHLIESSLICH auf der E1-API auf
-    (:meth:`~core.reporting.base.TypBindung.resolve_key`,
-    :meth:`~core.reporting.base.TypBindung.vokabular`,
-    :func:`get_available_backends`): keine eigene Aufloesungslogik, dieselbe
-    Entscheidung wie ``build_dataset``.
 
-    **Nur verfuegbare Backends** (Review-Befund #1848): gefiltert ueber
-    :func:`get_available_backends` — nicht :func:`get_backends`. Ohne den
-    Filter behauptete die Auskunft „erscheint in X" auch fuer ein Backend,
-    dessen ``is_available(facility)`` False ist (z. B. ``needle-exchange-
-    balance`` ohne die dafuer noetigen ``ausgabe``-/``rueckgabe``-
-    Feldvorlagen am Typ) — Panel und Export liefern fuer ein nicht
-    verfuegbares Backend 404 (:func:`get_available_backends` ist dieselbe
-    Praedikat-Quelle wie dort). ``facility`` ist deshalb Pflichtargument, kein
-    optionaler Zusatz.
+def _requirement_state(requirement, document_type, facility):
+    """Return relevance and missing bindings for one local AND requirement."""
+    from core.models import DocumentType
 
-    Iteriert bewusst je **Backend** (nicht je Registry-Schluessel): zwei
-    Backends koennen denselben ``system_type`` unterschiedlich (nicht) binden
-    (z. B. ``needle_exchange`` kennt ``counseling_hours`` nicht) — nur die
-    eigene Deklaration eines Backends darf ueber seinen Treffer entscheiden.
-    ``monthly_trend`` importiert die Bindung von ``sample_report_1`` und
-    erzeugt deshalb bewusst eine zweite Zeile (Konzept #1847 §3,
-    Mehrfach-Deklaration).
+    if not _belongs_to_facility(document_type, facility) or not getattr(document_type, "is_active", True):
+        return False, None
+    if requirement.entity_type is not None and document_type.entity_type != requirement.entity_type:
+        return False, None
+    missing = []
+    matched = False
+    if requirement.typ_bindung is not None:
+        binding = requirement.typ_bindung
+        matched = binding.resolve_key(*_typ_werte(document_type, binding)) is not None
+        if not matched:
+            missing.append(_("Typ-Schlüssel: %(keys)s") % {"keys": _binding_labels(binding)})
+    for binding in requirement.feld_bindungen:
+        types = DocumentType.objects.for_facility(facility).filter(pk=getattr(document_type, "pk", None))
+        # Each binding gets its own query: different fields satisfy the AND.
+        present = (
+            facility is not None
+            and types.filter(binding.template_q(), fields__field_template__facility=facility).exists()
+        )
+        matched = matched or present
+        if not present:
+            missing.append(_("Feld-Schlüssel: %(keys)s") % {"keys": _binding_labels(binding)})
+    return matched, missing
+
+
+def _binding_labels(binding) -> str:
+    """Keep alternatives within a binding distinct from required bindings."""
+    return _(" oder ").join(f"{label} ({key})" for key, label in binding.vokabular().items())
+
+
+def _locally_available(backend, document_type, facility) -> bool:
+    """Availability requirements are OR alternatives, evaluated on this type."""
+    return not backend.verfuegbarkeit or any(
+        missing == [] for _, missing in (_requirement_state(a, document_type, facility) for a in backend.verfuegbarkeit)
+    )
+
+
+def _diagnose_backend(backend, document_type, facility) -> str | None:
+    states = [_requirement_state(a, document_type, facility) for a in backend.verfuegbarkeit]
+    if any(missing == [] for _, missing in states):
+        return None
+    alternatives = ["; ".join(missing) for matched, missing in states if matched and missing]
+    if not alternatives:
+        return None
+    return _("Für „%(report)s“ fehlen an diesem Typ noch Zuordnungen: %(requirements)s.") % {
+        "report": backend.name,
+        "requirements": _(" oder ").join(alternatives),
+    }
+
+
+def diagnose_type_bindings(document_type, facility) -> list[str]:
+    """Warn about relevant, incomplete OR alternatives without blocking saves.
+
+    Names come only from backend declarations and the supplied local type.
+    Facility-wide availability never suppresses a local configuration warning.
     """
-    beschreibungen: list[str] = []
+    return [warning for backend in get_backends() if (warning := _diagnose_backend(backend, document_type, facility))]
+
+
+def _linked_types(field_template, facility):
+    from core.models import DocumentType
+
+    return (
+        DocumentType.objects.for_facility(facility)
+        .filter(fields__field_template=field_template, fields__field_template__facility=facility, is_active=True)
+        .distinct()
+    )
+
+
+def diagnose_field_bindings(field_template, facility) -> list[str]:
+    """Diagnose only local active types using this relevant field template."""
+    if not _belongs_to_facility(field_template, facility):
+        return []
+    relevant = [
+        backend
+        for backend in get_backends()
+        if any(binding.key_for_template(field_template) is not None for binding in feld_bindungen(backend))
+    ]
+    warnings = []
+    for document_type in _linked_types(field_template, facility):
+        for backend in relevant:
+            if warning := _diagnose_backend(backend, document_type, facility):
+                warnings.append(_("Typ „%(type)s“: %(warning)s") % {"type": document_type.name, "warning": warning})
+    return warnings
+
+
+def describe_type_bindings(document_type, facility) -> list[str]:
+    """List available reports whose requirements this local type fulfills."""
+    if not _belongs_to_facility(document_type, facility):
+        return []
+    descriptions: list[str] = []
     for backend in get_available_backends(facility):
-        for bindung in typ_bindungen(backend):
-            key = bindung.resolve_key(*_typ_werte(document_type, bindung))
-            if key is None:
-                continue
-            beschreibungen.append(f"{backend.name} ({bindung.vokabular()[key]})")
-    return beschreibungen
+        if not _locally_available(backend, document_type, facility):
+            continue
+        before = len(descriptions)
+        for binding in typ_bindungen(backend):
+            key = binding.resolve_key(*_typ_werte(document_type, binding))
+            if key is not None:
+                descriptions.append(f"{backend.name} ({binding.vokabular()[key]})")
+        if len(descriptions) == before and backend.verfuegbarkeit:
+            field_alternative = any(
+                requirement.typ_bindung is None
+                and requirement.feld_bindungen
+                and _requirement_state(requirement, document_type, facility)[1] == []
+                for requirement in backend.verfuegbarkeit
+            )
+            if not typ_bindungen(backend) or field_alternative:
+                descriptions.append(str(backend.name))
+    return descriptions
 
 
 def _typ_werte(document_type, bindung) -> tuple:
@@ -383,29 +464,36 @@ def _typ_werte(document_type, bindung) -> tuple:
     return tuple(getattr(document_type, feld) for feld in bindung.values_fields())
 
 
+def _field_contributes(backend, field_template, document_type, facility) -> bool:
+    """The assigned field must belong to a locally completed alternative."""
+    if not backend.verfuegbarkeit:
+        return True
+    return any(
+        _requirement_state(requirement, document_type, facility)[1] == []
+        and (
+            not requirement.feld_bindungen
+            or any(binding.key_for_template(field_template) is not None for binding in requirement.feld_bindungen)
+        )
+        for requirement in backend.verfuegbarkeit
+    )
+
+
 def describe_field_bindings(field_template, facility) -> list[str]:
-    """„Erscheint in …" fuer eine Feldvorlage (E2, Refs #1848) — Entsprechung auf Feld-Ebene.
-
-    Wie :func:`describe_type_bindings`, aber ueber
-    :meth:`~core.reporting.base.FeldBindung.key_for_template` (der Rueckweg von
-    der Feldvorlage zu ihrem Feld-Berichtsschluessel) und ebenso NUR ueber
-    :func:`get_available_backends` gefiltert (dieselbe Begruendung: eine
-    Zeile fuer ein nicht verfuegbares Backend waere eine falsche Zusage).
-
-    **Verbleibende Grenze.** Seit E3 (Refs #1849) traegt die Feldvorlage ihren
-    Berichtsschluessel selbst; der Treffer prueft aber weiterhin nur die
-    **Vorlage**, nicht ob GENAU DIESE Vorlage einem Dokumentationstyp zugeordnet
-    ist, der die Berichtsbedingung des Backends erfuellt. ``is_available``
-    prueft nur, dass *irgendeine* passende Kombination aus Typ und Feldvorlage
-    in der Einrichtung existiert. Eine facility-weit vorhandene, aber nirgends
-    zugeordnete Vorlage mit passendem Schluessel kann deshalb als „erscheint in
-    …" auftauchen, obwohl sie faktisch nichts beitraegt.
-    """
-    beschreibungen: list[str] = []
+    """List reports to which this specific assigned template can contribute."""
+    if not _belongs_to_facility(field_template, facility):
+        return []
+    descriptions: list[str] = []
     for backend in get_available_backends(facility):
-        for bindung in feld_bindungen(backend):
-            key = bindung.key_for_template(field_template)
-            if key is None:
+        if backend.verfuegbarkeit or hasattr(field_template, "facility_id"):
+            if not field_template.is_active:
                 continue
-            beschreibungen.append(f"{backend.name} ({bindung.vokabular()[key]})")
-    return beschreibungen
+            if not any(
+                _field_contributes(backend, field_template, doc_type, facility)
+                for doc_type in _linked_types(field_template, facility)
+            ):
+                continue
+        for binding in feld_bindungen(backend):
+            key = binding.key_for_template(field_template)
+            if key is not None:
+                descriptions.append(f"{backend.name} ({binding.vokabular()[key]})")
+    return descriptions
