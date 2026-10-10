@@ -1,74 +1,15 @@
-"""Schluessel-Allowlist fuer den ``AuditLog.detail``-Payload (Refs #1944).
+"""Audit detail key allowlist and release metadata validation.
 
-Warum ueberhaupt
-================
-
-Das AuditLog ist append-only (Trigger ``auditlog_immutable``, Migration 0024)
-und HMAC-verkettet (Refs #1070) — nachtraegliche Redaktion ist strukturell
-ausgeschlossen. **Minimierung beim Schreiben ist der einzige Hebel**; was nie
-ins ``detail`` geschrieben wird, ueberlebt auch keine Anonymisierung
-(Refs #1751, #1753).
-
-Bis hierher war diese Minimierung reine Call-Site-Konvention: der
-Architekturtest ``TestAuditLogCreationAllowlist`` prueft nur, **wo** Audit-
-Zeilen entstehen duerfen, nie **was** in ihnen steht. Ein neuer Service-Aufruf
-mit ``detail={"pseudonym": ...}`` lief durch kein Gate.
-
-Warum Schluessel-Allowlist statt Werte-Blacklist
-================================================
-
-Eine Blacklist verdaechtiger Schluessel (``pseudonym``, ``notes``, ``email``,
-``phone``) ist billig zu bauen, faengt aber genau den Fall **nicht**, der
-wehtut: einen Freitextwert unter einem unverdaechtigen Schluessel
-(``{"info": name}``, ``{"filename": ...}``). Eine Allowlist dreht die
-Beweislast um — jeder neue Schluessel muss hier mit Begruendung eingetragen
-werden, sonst schlaegt der Schreibvorgang im Entwicklungs- und CI-Lauf fehl.
-
-Warum Laufzeit statt nur statischer AST-Guard
-=============================================
-
-Ein rein statischer Guard sieht nur literale ``detail={...}``-Dicts. Rund ein
-Dutzend Schreibpunkte bauen ihr ``detail`` dynamisch auf (``**kwargs`` in
-``core/admin/mixins.py``, Zaehler-Dicts in
-``management/commands/export_facility.py``, ``**release_detail(...)`` in
-``core/views/mixins.py``) — ausgerechnet dort waere die Kontrolle am
-schwaechsten. Der statische Guard bleibt zusaetzlich bestehen
-(``TestAuditDetailKeyInventory``), damit ein neuer literaler Schreibpunkt
-schon ohne Testausfuehrung auffaellt.
-
-Fail-Verhalten (bewusste Wahl)
-==============================
-
-**Strikt in Tests/DEBUG, meldend im Betrieb.** Ein unbekannter Schluessel
-bricht den Schreibvorgang nur ab, wenn ``settings.AUDIT_DETAIL_STRICT`` gesetzt
-ist (Default: ``DEBUG``; in ``settings/test.py`` hart an). Im Betrieb wird der
-Verstoss auf ``ERROR`` gemeldet und die Zeile trotzdem geschrieben.
-
-Begruendung: ein **fehlender** Audit-Eintrag ist schlimmer als ein zu breiter.
-Das Log ist der Rechenschaftsnachweis (Art. 5 Abs. 2 DSGVO), und die
-schaerfsten Schreibpunkte laufen genau dann, wenn ohnehin etwas schiefgeht
-(``SECURITY_VIOLATION`` bei Virenfund, ``LOGIN_FAILED`` unter Angriff). Eine
-Exception dort verwandelte einen Datenminimierungs-Mangel in einen
-Nachweis-Ausfall — und bei ``audit_admin_view`` (dort faengt der Aufrufer
-``Exception`` defensiv ab) sogar in ein stilles Loch. Umgekehrt ist der
-Strikt-Modus in Tests/CI scharf genug: jeder neue Schreibpunkt wird von der
-zugehoerigen Test-Abdeckung ausgefuehrt und faellt vor dem Deploy auf.
-
-Die Meldung nennt **nur die Schluesselnamen**, nie die Werte — sonst truege sie
-die PII in das Anwendungs-Log weiter, das genau diese Minimierung vermeiden
-soll.
-
-Fuer neue Schreibpunkte
-=======================
-
-Neue ``AuditLog.Action``-Werte bringen fast immer neue ``detail``-Schluessel
-mit. Sie gehoeren hier hinein — mit Begruendung, warum der Wert keine
-Klienten-PII traegt (oder warum der Freitext ausnahmsweise bleiben muss).
+Unknown keys obey ``AUDIT_DETAIL_STRICT``; recipient/purpose value violations
+always fail before the append-only write. Messages contain field names only.
+The name-pair heuristic reduces accidental disclosure; it cannot prove that
+arbitrary free text is free of personal data.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 
 from django.conf import settings
 
@@ -330,20 +271,38 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
         "selbst eingegeben, ueber einen Klientenbezug gibt es dort keinen Anlass; die Minimierung "
         "ist hier Betreiber-Obliegenheit (Admin-Handbuch), keine technische Zusicherung."
     ),
-    "recipient": (
-        "Empfaenger einer Berichts-Freigabe (Refs #1770). Organisation, nicht Person des Falls; "
-        "der Wert ist der Zweck der Freigabe-Uebersicht. Freitext-Minimierung ist Betreiber-Obliegenheit "
-        "(dokumentiert in docs/security-notes.md § Audit-Log-Restdaten)."
-    ),
-    "purpose": (
-        "Zweck einer Berichts-Freigabe (Refs #1770). Wie recipient: fuer die Rechenschaft ueber die "
-        "Herausgabe unverzichtbar, Minimierung ist Betreiber-Obliegenheit."
-    ),
+    "recipient": "Release recipient: bounded text, contact patterns and probable personal names rejected",
+    "purpose": "Release purpose: same mandatory value validation as recipient",
     "message": (
         "Feste deutsche Klartextmeldung der Login-Signale ('Fehlgeschlagener Login-Versuch', "
         "'Login blockiert durch Account-Lockout'). Konstante aus dem Code, kein Nutzereingabe-Kanal."
     ),
 }
+
+
+RELEASE_FIELD_MAX_LENGTH = 200
+_RELEASE_CONTACT_PATTERN = re.compile(r"[^\s@]+@[^\s@]+|\+?\d[\d ()/.-]{5,}\d")
+_RELEASE_NAME_PATTERN = re.compile(r"\b([A-ZÄÖÜ][a-zäöüß]+)\s+([A-ZÄÖÜ][a-zäöüß]+)\b")
+_INSTITUTION_PREFIXES = frozenset({"Stadt", "Landkreis", "Gemeinde", "Land", "Region", "Stiftung", "Verein"})
+
+
+class InvalidAuditDetailValueError(ValueError):
+    """Release metadata contains an invalid value; never include it in errors."""
+
+
+def validate_release_metadata(detail):
+    """Reject oversized, non-text or recognisably personal release metadata."""
+    for field in ("recipient", "purpose"):
+        if field not in detail:
+            continue
+        value = detail[field]
+        if not isinstance(value, str) or len(value) > RELEASE_FIELD_MAX_LENGTH:
+            raise InvalidAuditDetailValueError(f"Invalid release metadata: {field}")
+        if _RELEASE_CONTACT_PATTERN.search(value) or any(
+            match.group(1) not in _INSTITUTION_PREFIXES for match in _RELEASE_NAME_PATTERN.finditer(value)
+        ):
+            raise InvalidAuditDetailValueError(f"Invalid release metadata: {field}")
+    return detail
 
 
 def _strict() -> bool:
@@ -372,6 +331,7 @@ def validate_audit_detail(detail, *, source: str):
     if not detail:
         return detail
 
+    validate_release_metadata(detail)
     unknown = sorted(str(key) for key in detail if key not in AUDIT_DETAIL_KEYS)
     if not unknown:
         return detail

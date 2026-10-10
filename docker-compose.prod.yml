@@ -247,7 +247,7 @@ services:
       # Refs #2470: further settings the HTTP runtime reads (audit detail
       # strictness, session scan cap of a credential revocation, statement
       # timeout of report queries); defaults equal the code defaults.
-      DJANGO_AUDIT_DETAIL_STRICT: ${DJANGO_AUDIT_DETAIL_STRICT:-false}
+      DJANGO_AUDIT_DETAIL_STRICT: ${DJANGO_AUDIT_DETAIL_STRICT:-true}
       OFFLINE_REVOCATION_SESSION_SCAN_LIMIT: ${OFFLINE_REVOCATION_SESSION_SCAN_LIMIT:-10000}
       REPORTING_BACKEND_STATEMENT_TIMEOUT_MS: ${REPORTING_BACKEND_STATEMENT_TIMEOUT_MS:-10000}
       MAINTENANCE_FLAG_FILE: ${MAINTENANCE_FLAG_FILE:-/media/anlaufstelle.maintenance}

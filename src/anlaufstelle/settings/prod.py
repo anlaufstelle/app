@@ -22,6 +22,9 @@ from .base import LOGGING  # noqa: F401
 # sonst grundlos abbrechen und sind daher waehrend collectstatic ausgesetzt.
 _IS_COLLECTSTATIC = "collectstatic" in sys.argv
 
+# Reject undeclared audit keys by default in production (Refs #2529).
+AUDIT_DETAIL_STRICT = env_bool_strict("DJANGO_AUDIT_DETAIL_STRICT", default=True)
+
 # --- Logging-Override für Produktion ---
 # base.py setzt den ``core``-Logger auf DEBUG (dev-freundlich). In Produktion
 # konservativer: INFO, damit keine Verbose-Detail-Statements mit potenzieller

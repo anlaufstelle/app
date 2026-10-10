@@ -434,8 +434,20 @@ class ExportRangeMixin:
         from django.http import HttpResponse
         from django.utils.translation import gettext as _
 
+        from core.services.audit.detail_policy import InvalidAuditDetailValueError, validate_release_metadata
         from core.services.dashboard import InvalidStatisticsPeriodError, validate_statistics_range
         from core.utils.formatting import parse_date
+
+        try:
+            validate_release_metadata({field: request.GET.get(field, "") for field in ("recipient", "purpose")})
+        except InvalidAuditDetailValueError:
+            return HttpResponse(
+                _(
+                    "Empfänger und Zweck dürfen höchstens 200 Zeichen und keine E-Mail-Adressen, "
+                    "Telefonnummern oder Klarnamen enthalten."
+                ),
+                status=400,
+            )
 
         date_from = parse_date(request.GET.get("date_from"), None)
         date_to = parse_date(request.GET.get("date_to"), None)

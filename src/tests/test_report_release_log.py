@@ -140,12 +140,10 @@ class TestEmpfaengerUndZweckfeld:
             "purpose": "Nachweis",
         }
 
-    def test_freitext_wird_gekappt(self):
-        """Der Audit-Log ist append-only und überlebt seit K4a die Löschfristen —
-        eine unbedachte Eingabe ist nachträglich nicht redigierbar."""
-        detail = release_detail({"recipient": "x" * 500}, artifact_released=False)
-
-        assert len(detail["recipient"]) == RELEASE_FIELD_MAX_LENGTH
+    def test_oversized_release_metadata_is_rejected(self):
+        """Reject rather than silently truncate immutable metadata (Refs #2529)."""
+        with pytest.raises(ValueError):
+            release_detail({"recipient": "x" * (RELEASE_FIELD_MAX_LENGTH + 1)}, artifact_released=False)
 
     def test_der_freigabe_marker_ist_ein_pflicht_keyword(self):
         """Ohne Default: jede EXPORT-auditierende Aufrufstelle muss ausdrücklich

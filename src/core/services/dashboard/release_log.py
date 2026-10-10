@@ -88,6 +88,8 @@ from datetime import date
 from django.db.models import Q
 
 from core.models import AuditLog
+from core.services.audit.detail_policy import RELEASE_FIELD_MAX_LENGTH as RELEASE_FIELD_MAX_LENGTH
+from core.services.audit.detail_policy import validate_release_metadata
 from core.utils.formatting import parse_date
 
 # Wie viele Herausgaben die Übersicht höchstens auswertet. Die Überlappungs-
@@ -95,13 +97,6 @@ from core.utils.formatting import parse_date
 # Tabelle berechenbar. Sie ist bewusst großzügig — drei Jahre monatlicher
 # Träger-Berichte über mehrere Formate liegen deutlich darunter.
 RELEASE_LOG_LIMIT = 500
-
-# Maximale Länge der Freitextfelder. Sie sind ein **Nachweis**, kein Fließtext:
-# „Stadt Musterstadt, Verwendungsnachweis 2026". Die Kappung begrenzt zugleich,
-# wie viel eine unbedachte Eingabe in den append-only Audit-Log tragen kann —
-# der überlebt die Löschfristen (siehe Modul-Docstring) und ist nachträglich
-# nicht redigierbar.
-RELEASE_FIELD_MAX_LENGTH = 200
 
 # Freitextfelder am Export. Bewusst **optional**: ein Pflichtfeld erzwänge eine
 # Angabe auch dort, wo der Export gar keine Herausgabe ist (Probelauf,
@@ -189,9 +184,10 @@ def release_detail(query_params, *, artifact_released: bool) -> dict[str, object
     Der Audit-Log ist append-only und hash-verkettet — jede Schema-Migration
     darauf wäre teuer und hier unnötig.
     """
+    validate_release_metadata({field: query_params.get(field, "") for field in RELEASE_FIELDS})
     detail: dict[str, object] = {RELEASE_ARTIFACT_KEY: True} if artifact_released else {}
     for field in RELEASE_FIELDS:
-        value = (query_params.get(field) or "").strip()[:RELEASE_FIELD_MAX_LENGTH]
+        value = (query_params.get(field) or "").strip()
         if value:
             detail[field] = value
     return detail
