@@ -57,6 +57,11 @@ APPROVED_RECOVERY_SENTENCES = frozenset(
         "im 60-Sekunden-Intervall, bei Rückkehr in den Tab, tab-übergreifend): Liegt ungesendete Arbeit vor, wird "
         "nur der Schlüssel gelöscht (Sperre); der verschlüsselte Bestand bleibt erhalten und wird nach erneuter "
         "Anmeldung nur wieder lesbar, wenn Passwort und Offline-Salt des Kontos unverändert sind.",
+        # Absolute offline key lifetime (toms.md and dsfa.md; crypto.js derives the same key from the
+        # unchanged password and salt, otherwise decryption fails on the GCM tag)
+        "Am Ablauf entzieht sie den Schlüssel und zeigt „Offline-Schlüssel abgelaufen — bitte online anmelden“; "
+        "ungesendete Arbeit bleibt verschlüsselt erhalten und wird nach erneutem Online-Login mit unverändertem "
+        "Passwort und Salt wieder lesbar.",
         # Domain concept (docs/fachkonzept-anlaufstelle.md)
         "Ist die Leerlaufzeit überschritten und liegt ungesendete Arbeit vor, verwirft sie nur den Schlüssel "
         "(Sperre): der verschlüsselte Bestand bleibt erhalten und wird nach erneutem Login nur wieder lesbar, wenn "
