@@ -7,7 +7,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from core.models.document_type import DocumentType
-from core.models.managers import FacilityScopedManager
+from core.models.field_template_manager import FieldTemplateManager
 from core.models.mixins import SluggedModel
 from core.models.report_key import ReportKeyMixin
 from core.models.slug import _RESERVED_SLUGS, _SLUG_RE
@@ -27,7 +27,7 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
         MULTI_SELECT = "multi_select", _("Mehrfachauswahl")
         FILE = "file", _("Datei")
 
-    objects = FacilityScopedManager()
+    objects = FieldTemplateManager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     facility = models.ForeignKey(
@@ -134,8 +134,23 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
                 {"slug": _("Der Slug „%(slug)s“ kollidiert mit einem festen Formularfeld.") % {"slug": self.slug}}
             )
         self._validate_number_range()
+        self._validate_option_changes()
         self._validate_default_value()
         self._validate_high_sensitivity_requires_encryption()
+
+    def _validate_option_changes(self, *, update_fields=None):
+        """Validate only options and defaults that this write will persist."""
+        from core.services.option_usage import validate_option_changes
+
+        if update_fields is not None and "options_json" not in update_fields:
+            return
+        previous = type(self).objects.filter(pk=self.pk).first()
+        if previous is None:
+            return
+        default_value = self.default_value
+        if update_fields is not None and "default_value" not in update_fields:
+            default_value = previous.default_value
+        validate_option_changes(previous, self.options_json, default_value=default_value)
 
     def _validate_number_range(self):
         """Wertebereiche gelten ausschließlich für ganze Zahlenfelder."""
@@ -226,7 +241,11 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
         validate_configuration_facility(self, self.facility_id)
         self._validate_number_range()
         self._validate_persisted_number_default_range()
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = frozenset(kwargs["update_fields"])
         with configuration_write(self.facility_id):
+            # Refs #2519: check used option slugs while the configuration lock holds.
+            self._validate_option_changes(update_fields=kwargs.get("update_fields"))
             previous = FieldTemplate.objects.for_facility(self.facility_id).filter(pk=self.pk).first()
             # Refs #1270, #2525: normalize before persistence and the rewrite.
             if self.field_type == self.FieldType.FILE or self.sensitivity == DocumentType.Sensitivity.HIGH:

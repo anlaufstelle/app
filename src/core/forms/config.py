@@ -645,7 +645,7 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         """
         value = self.cleaned_data.get("options_json")
         if value in (None, ""):
-            return []
+            value = []
         if not isinstance(value, list):
             raise ValidationError(_("Optionen müssen eine JSON-Liste sein."))
         if value and self.cleaned_data.get("field_type") not in {
@@ -681,6 +681,13 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
 
             seen.add(slug)
             normalized.append({"slug": slug, "label": label.strip(), "is_active": active})
+        if not self.instance._state.adding:
+            from core.services.option_usage import validate_option_changes
+
+            try:
+                validate_option_changes(self.instance, normalized, default_value=self.data.get("default_value", ""))
+            except ValidationError as error:
+                raise ValidationError(error.error_dict["options_json"]) from error
         return normalized
 
 

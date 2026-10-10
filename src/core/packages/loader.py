@@ -283,7 +283,8 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
         existing = FieldTemplate.objects.filter(**lookup).first()
 
         if existing is not None:
-            _warn_on_disappearing_options(existing, desired["options_json"], report, identifier)
+            if not _check_disappearing_options(existing, desired, report, identifier):
+                continue
             _warn_on_field_sensitivity_downgrade(existing, desired["sensitivity"], report, identifier)
             _note_preserved_number_range(existing, template_def, report, identifier)
             conflicts = _immutable_conflicts(existing, desired, _TEMPLATE_IMMUTABLES)
@@ -764,21 +765,20 @@ def _warn_on_normalized_report_keys(definition, report: PackageReport, identifie
         )
 
 
-def _warn_on_disappearing_options(
-    existing: FieldTemplate, desired_options: list[dict[str, Any]], report: PackageReport, identifier: str
-) -> None:
-    """Warnen, wenn das Paket bestehende Options-Slugs nicht mehr enthält (E14).
+def _check_disappearing_options(
+    existing: FieldTemplate, desired: dict[str, Any], report: PackageReport, identifier: str
+) -> bool:
+    """Block removal of referenced options; warn only for unused removals."""
+    from core.services.option_usage import option_slugs, validate_option_changes
 
-    Kein Fehler: das Paket darf Optionen streichen. Aber bereits erfasste
-    Ereignisse tragen den Slug weiter in ``data_json`` und würden ihr Label
-    verlieren — deshalb die Empfehlung, ``is_active: false`` zu setzen statt zu
-    löschen.
-    """
-    existing_slugs = {option.get("slug") for option in (existing.options_json or []) if isinstance(option, dict)}
-    desired_slugs = {option["slug"] for option in desired_options}
-    missing = sorted(slug for slug in existing_slugs - desired_slugs if slug)
+    missing = sorted(option_slugs(existing.options_json) - option_slugs(desired["options_json"]))
     if not missing:
-        return
+        return True
+    try:
+        validate_option_changes(existing, desired["options_json"], default_value=desired["default_value"])
+    except ValidationError as error:
+        report.errors.append((identifier, _validation_message(error)))
+        return False
     report.warnings.append(
         (
             identifier,
@@ -792,6 +792,7 @@ def _warn_on_disappearing_options(
             ),
         )
     )
+    return True
 
 
 def _warn_on_field_sensitivity_downgrade(
