@@ -74,6 +74,7 @@ from core.models.field_group import FieldGroup
 from core.models.field_template import FieldTemplate
 from core.models.organization import Facility
 from core.packages.schema import KEY_MISSING, ConditionDef, DocumentTypeDef, FieldTemplateDef, PackageV1
+from core.services.compliance.sensitivity import validate_explicit_high_field
 from core.services.config import conflicting_report_key_field
 
 if TYPE_CHECKING:
@@ -217,6 +218,24 @@ def _apply_package(facility: Facility, package: PackageV1, report: PackageReport
         groups = _apply_groups(doc_type, doc_def, report)
         fields = _apply_field_refs(doc_type, doc_def, templates, groups, report)
         _apply_conditions(doc_type, doc_def, fields, report)
+    # Validate the final configuration, including assignments omitted from the package.
+    affected_types = (
+        DocumentType.objects.for_facility(facility)
+        .filter(
+            models.Q(slug__in=[definition.slug for definition in package.document_types])
+            | models.Q(fields__field_template__slug__in=templates),
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        .distinct()
+        .prefetch_related("fields__field_template")
+    )
+    for doc_type in affected_types:
+        for assignment in doc_type.fields.all():
+            template = assignment.field_template
+            try:
+                validate_explicit_high_field(doc_type.sensitivity, template.sensitivity, template.name)
+            except ValidationError as error:
+                report.errors.append((f"{doc_type.slug}/{template.slug}", _validation_message(error)))
 
 
 def _upsert[ModelT: models.Model](
@@ -405,6 +424,11 @@ def _apply_field_refs(
             report.errors.append(
                 (identifier, str(_("Feldvorlage konnte nicht angelegt werden — Zuordnung übersprungen.")))
             )
+            continue
+        try:
+            validate_explicit_high_field(doc_type.sensitivity, template.sensitivity, template.name)
+        except ValidationError as error:
+            report.errors.append((identifier, _validation_message(error)))
             continue
         group = None
         if ref_def.group_slug is not None:

@@ -107,7 +107,7 @@ field_templates:
     report_key: art_der_krise
     field_type: select
     is_encrypted: false
-    sensitivity: ""
+    sensitivity: elevated
     options:
       - {slug: aktuelle-eskalation, label: Aktuelle Eskalation, is_active: true}
       - {slug: drohlage, label: Drohlage, is_active: true}
@@ -125,8 +125,8 @@ field_templates:
   - slug: eskalationskanal
     name: Eskalationskanal
     field_type: select
-    is_encrypted: false
-    sensitivity: ""
+    is_encrypted: true
+    sensitivity: high
     options:
       - {slug: polizei, label: Polizei, is_active: true}
       - {slug: jugendamt, label: Jugendamt, is_active: true}

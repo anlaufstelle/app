@@ -660,6 +660,8 @@ def _test_seed_large_facility_matches_its_package_catalog_exactly(_large_seed, i
     # geladenen FieldTemplate-Zeilen dieser Einrichtung (nicht aus einem
     # anderen Paket), damit Fallback-generierte Werte (Index 2-4) genauso
     # geprueft werden wie handgeschriebene Pools (Index 0/1).
+    from core.services.file_vault import decrypt_field, is_encrypted_value
+
     field_options: dict[str, tuple[str, set]] = {}
     for ft in FieldTemplate.objects.filter(facility=facility):
         if ft.field_type in ("select", "multi_select") and ft.options_json:
@@ -669,7 +671,8 @@ def _test_seed_large_facility_matches_its_package_catalog_exactly(_large_seed, i
             )
 
     for event in event_model.objects.filter(facility=facility):
-        for key, value in event.data_json.items():
+        for key, stored_value in event.data_json.items():
+            value = decrypt_field(stored_value) if is_encrypted_value(stored_value) else stored_value
             if key not in field_options:
                 continue
             field_type, valid_options = field_options[key]

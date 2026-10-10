@@ -593,6 +593,9 @@ class TestSensitivityDowngradeWarning:
     def test_warns_on_document_type_downgrade(self, facility):
         raw = _raw()
         raw["document_types"][0]["sensitivity"] = "high"
+        # High types require explicit field levels (Refs #2525).
+        for template in raw["field_templates"]:
+            template["sensitivity"] = "normal"
         _load(facility, raw)
 
         raw["document_types"][0]["sensitivity"] = "normal"

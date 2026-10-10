@@ -56,12 +56,15 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from django.core.exceptions import ValidationError
+
 from core.constants import CONTACT_STAGE_CHOICES
 from core.models.document_type import DocumentType
 from core.models.field_condition import FieldCondition
 from core.models.field_template import FieldTemplate
 from core.models.report_key import EXCLUDED
 from core.models.slug import _RESERVED_SLUGS, _SLUG_RE
+from core.services.compliance.sensitivity import validate_explicit_high_field
 
 SCHEMA_VERSION = 1
 
@@ -1054,6 +1057,10 @@ def _cross_check_document_type(
                 )
             )
             continue
+        try:
+            validate_explicit_high_field(doc_type.sensitivity, template.sensitivity, template.name)
+        except ValidationError as error:
+            errors.append((f"{ref_path}.template_slug", "; ".join(error.messages)))
         referenced.add(ref.template_slug)
         if ref.group_slug is not None and ref.group_slug not in group_slugs:
             errors.append(

@@ -146,8 +146,8 @@ field_templates:
   - slug: art-der-versorgung
     name: Art der Versorgung
     field_type: select
-    is_encrypted: false
-    sensitivity: ""
+    is_encrypted: true
+    sensitivity: high
     options:
       - {slug: wundversorgung, label: Wundversorgung, is_active: true}
       - {slug: medikamentenausgabe, label: Medikamentenausgabe, is_active: true}
@@ -163,8 +163,8 @@ field_templates:
   - slug: krankenhaus
     name: Krankenhaus
     field_type: boolean
-    is_encrypted: false
-    sensitivity: ""
+    is_encrypted: true
+    sensitivity: high
 
   # --- Spritzentausch ------------------------------------------------------
   - slug: ausgabe

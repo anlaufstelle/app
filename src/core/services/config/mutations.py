@@ -19,6 +19,7 @@ from core.models import (
 )
 from core.models.slug import _RESERVED_SLUGS
 from core.services.audit import log_audit_event
+from core.services.compliance.sensitivity import validate_explicit_high_field
 from core.services.config.block_order import _compact_block_positions, _next_block_position
 
 
@@ -232,6 +233,7 @@ def add_field_to_doctype(
     entfallen — es gibt heute **keine** Schicht mehr, die FILE-Feldvorlagen an
     Personen-/Fall-Typen abweist.
     """
+    validate_explicit_high_field(doc_type.sensitivity, field_template.sensitivity, field_template.name)
     # Befund A (Refs #1056): Zugehörigkeit der Ziel-Gruppe hier prüfen, weil
     # .create() den Modell-clean()-Guard umgeht. Fehlerklasse konsistent zu
     # move_field (ValueError → HTTP 400).

@@ -5,10 +5,11 @@ a field or event based on document-type sensitivity and field-level
 sensitivity override.
 """
 
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import CharField, Count, IntegerField, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.http import Http404
+from django.utils.translation import gettext_lazy as _
 
 from core.models import Attachment, DocumentType, Event
 from core.models.user import User
@@ -89,6 +90,18 @@ def effective_sensitivity(doc_type_sensitivity, field_sensitivity=""):
     if field_sensitivity:
         return max(base, sensitivity_rank(field_sensitivity))
     return base
+
+
+def validate_explicit_high_field(doc_type_sensitivity: str, field_sensitivity: str, field_name: str) -> None:
+    """Reject inheriting fields in High types across configuration entry points."""
+    if doc_type_sensitivity == DocumentType.Sensitivity.HIGH and field_sensitivity == "":
+        raise ValidationError(
+            _(
+                "Feldvorlage „%(field)s“ darf in einem Dokumentationstyp mit Stufe „Hoch“ nicht erben. "
+                "Wählen Sie eine ausdrückliche Feldstufe: „Erhöht“ für Berichtsfelder, sonst „Hoch“."
+            )
+            % {"field": field_name}
+        )
 
 
 def user_can_see_field(user, doc_type_sensitivity, field_sensitivity=""):

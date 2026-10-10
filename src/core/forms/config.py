@@ -23,6 +23,7 @@ from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGr
 from core.models.report_key import EXCLUDED
 from core.models.slug import _RESERVED_SLUGS, _SLUG_RE, slug_base
 from core.reporting.registry import backends_for_report_key, get_field_key_vocabulary, get_report_key_vocabulary
+from core.services.compliance.sensitivity import validate_explicit_high_field
 from core.services.conditions import (
     ALLOWED_SOURCE_FIELD_TYPES,
     OPERATORS_BY_FIELD_TYPE,
@@ -469,6 +470,14 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
             # den kanonischen, deaktivierten Zustand ueberfuehrt.
             cleaned["tally_enabled"] = False
 
+        if cleaned.get("sensitivity") == DocumentType.Sensitivity.HIGH and not self.instance._state.adding:
+            for assignment in self.instance.fields.select_related("field_template"):
+                field = assignment.field_template
+                try:
+                    validate_explicit_high_field(DocumentType.Sensitivity.HIGH, field.sensitivity, field.name)
+                except ValidationError as error:
+                    self.add_error("sensitivity", error)
+
         # Refs #1749 (ADR-040): Vorpruefung der Unique-Regel, seit dem Wegfall
         # von ``category`` auf ``(facility, name)``.
         name = cleaned.get("name")
@@ -556,6 +565,18 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         from core.services.config import conflicting_report_key_assignment
 
         cleaned = super().clean() or {}
+        if cleaned.get("sensitivity") == "" and not self.instance._state.adding:
+            for assignment in self.instance.document_type_fields.filter(
+                document_type__facility=self.instance.facility,
+                document_type__sensitivity=DocumentType.Sensitivity.HIGH,
+            ).select_related("document_type"):
+                try:
+                    validate_explicit_high_field(
+                        assignment.document_type.sensitivity, "", cleaned.get("name") or self.instance.name
+                    )
+                except ValidationError as error:
+                    self.add_error("sensitivity", error)
+                    break
         konflikt = conflicting_report_key_assignment(
             self.instance,
             cleaned.get("report_key"),
@@ -744,6 +765,7 @@ class DocumentTypeFieldAddForm(TailwindFormMixin, forms.Form):
         field_template = self.cleaned_data["field_template"]
         if self.doc_type is None:
             return field_template
+        validate_explicit_high_field(self.doc_type.sensitivity, field_template.sensitivity, field_template.name)
         konflikt = conflicting_report_key_field(self.doc_type, field_template)
         if konflikt is not None:
             raise ValidationError(
