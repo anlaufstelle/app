@@ -950,8 +950,10 @@ class TestRetentionExceptionsAreNamed:
     def test_processing_register_template_names_eventless_inactivity(self, facility):
         content = _flat(render_document("verarbeitungsverzeichnis", facility)[0])
 
-        assert "Ohne Ereignis anonymisiert der Lauf nach" in content
-        assert "Tagen ab letzter Änderung" in content
+        assert "Ohne Ereignis anonymisiert der Lauf nur Personen „Nur Pseudonym“ ohne offene Fälle" in content
+        assert "Tagen ab dem jüngsten Zeitpunkt" in content
+        assert "Fallaktivität" in content and "Aufgabenänderung" in content and "Anhangsänderung" in content
+        assert "Mit Zusatzangaben“ ohne Ereignis sind von der automatischen Anonymisierung ausgenommen" in content
         assert "Hold und Art. 18" in content
 
     def test_deletion_concept_does_not_wait_for_trash_period(self, facility):

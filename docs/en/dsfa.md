@@ -1,6 +1,6 @@
 # Data protection impact assessment — offline key lifetime
 
-This excerpt translates the offline key persistence and revocation item in section 4.1 of the German DPIA template; it is not a rendered GDPR document.
+This excerpt translates the person anonymization item in section 2.3 and the offline key persistence and revocation item in section 4.1 of the German DPIA template; it is not a rendered GDPR document.
 
 **Offline key and revocation check** (#2528). The non-extractable `CryptoKey` derived from the password and server salt remains stored in browser IndexedDB across tab, browser and device restarts. “Non-extractable” prevents export through WebCrypto; protecting the stored key against access to the browser profile depends on **device encryption and screen locking**, which are mandatory for offline devices. Derivation freezes an absolute deadline using the facility's `session_absolute_hours` (default 12 hours). Activity and navigation never extend it. The app checks on load, before decryption/storage/replay, on tab return and every 60 seconds. At expiry it removes the key and displays “Offline key expired — please sign in online”; unsent work stays encrypted and becomes readable after another online sign-in with the same password and salt. The idle window still applies separately. Missing or invalid expiry metadata blocks access; bundles without valid `expiresAt` are expired. An observed backwards device clock locks the key, but clock manipulation remains a residual risk. A powered-off app cannot remotely delete the key.
 
@@ -20,7 +20,7 @@ The German template now lists **eleven configurable retention periods**, populat
 
 The regular daily `enforce_retention` run automatically deletes anonymous and pseudonym-only events. Events with additional details receive proposals; normally another person with deletion confirmation permission must approve before deletion. A facility may explicitly enable auto-approval (opt-in, off by default): after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Holds and Art. 18 restrictions protect both paths.
 
-Deferral protects until its date. Rejection allows a new proposal no earlier than `retention_rejected_retry_days`; `--propose` additionally creates proposals for all strategies. A person is anonymized after all their events have been deleted; without events, after `retention_identified_days` from their last change. Active holds and Art. 18 protect both paths.
+Deferral protects until its date. Rejection allows a new proposal no earlier than `retention_rejected_retry_days`; `--propose` additionally creates proposals for all strategies. After all events are deleted, the person is anonymized. Without events, automatic anonymization applies only to “Pseudonym only” persons without open cases, after the configured identified inactivity period from the latest person change, business case activity, task change or person/case attachment change (creation, replacement or removal). Eventless persons “With additional details” are excluded: the proposal and approval workflow supports events only, leaving no automatic deadline enforcement for these persons. Active holds and Art. 18 restrictions protect both paths.
 
 Manager and Application support create and lift legal holds directly in person, case and event records; System administration can lift them in the system list. Person and case holds also protect their events and associated audit entries with a facility. Art. 18 additionally protects event contents, person and case anonymization, and history redaction during the run.
 
@@ -37,4 +37,4 @@ PostgreSQL row-level security protects facility-bound sessions against cross-fac
 <!-- translation-source: src/core/dsgvo_templates/dsfa.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: b3b55883974e6e6c6631c89f2f35195a3ee406c6 -->
+<!-- source-hash: 2f1632ddc008f81a704952bce1fdfd49298698b1 -->

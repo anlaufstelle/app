@@ -71,8 +71,14 @@ Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
   bei vorhandenen Ereignissen ebenfalls Antrag und zweite berechtigte Person.
   Datei-Sofortlöschung bleibt eine Einzelentscheidung (§ 3.2).
 - Sind alle Ereignisse einer Person gelöscht, anonymisiert derselbe Lauf die
-  Person; er wartet nicht auf die Papierkorb-Frist. Ohne Ereignis gilt {{ retention_identified_days }} Tage Inaktivität
-  ab `updated_at`. Personen unter Hold oder Art.-18-Sperrvermerk werden
+  Person; er wartet nicht auf die Papierkorb-Frist. Ohne Ereignis gilt die Inaktivitätsfrist
+  von {{ retention_identified_days }} Tagen nur für „Nur Pseudonym“ ohne offene Fälle.
+  Der Anker ist der jüngste Zeitpunkt aus Personenänderung (`updated_at`), fachlicher
+  Fallaktivität (`last_activity_at`), Aufgabenänderung und Anhangsänderung an Person
+  oder Fall (Anlage, Ersetzung oder Entfernung). Personen „Mit Zusatzangaben“ ohne Ereignis
+  sind von der automatischen Anonymisierung ausgenommen; der Vorschlagsweg unterstützt
+  bisher nur Ereignisse, für diese Personen fehlt eine automatische Fristvollstreckung.
+  Personen unter Hold oder Art.-18-Sperrvermerk werden
   zurückgestellt. Personen und Fälle im Papierkorb haben zusätzlich die
   Papierkorb-Frist; Episoden, Ziele, Meilensteine und Aufgaben folgen ihrer Akte.
 - Leitung und Anwendungsbetreuung setzen und lösen Legal Holds direkt in
@@ -92,7 +98,9 @@ Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
 | „Mit Zusatzangaben“, ohne Fall | Ereignisdatum | min(Stufenfrist, Typ-Höchstfrist) | ja | ja / ja | nach Freigabe |
 | „Mit Zusatzangaben“, offen | letzte fachliche Fallaktivität, Fallback Anlage | frühester Stufen-/Typ-Stichtag | ja | ja / ja | nach Freigabe |
 | Person mit Ereignissen | letztes Ereignis gelöscht | abgeleitet | nein | ja / ja | anonymisiert |
-| Person ohne Ereignis | letzte Änderung | Frist „Nur Pseudonym“ | nein | ja / ja | anonymisiert |
+| Person „Nur Pseudonym“ ohne Ereignis und ohne offene Fälle | jüngste Personen-, Fallaktivitäts-, Aufgaben- oder Anhangsänderung | Frist „Nur Pseudonym“ | nein | ja / ja | anonymisiert |
+| Person „Nur Pseudonym“ ohne Ereignis mit offenem Fall | — | vom Inaktivitätszweig ausgenommen | — | ja / ja | bleibt erhalten |
+| Person „Mit Zusatzangaben“ ohne Ereignis | — | automatische Fristvollstreckung fehlt; Vorschlagsweg bisher nur für Ereignisse | erforderlich, bisher kein Personen-Vorschlagsweg | ja / ja | bleibt erhalten |
 | Audit mit Einrichtung | Zeitstempel | Audit-Frist | nein | ja, Ziel / keine eigene Art.-18-Prüfung | hart gelöscht, Ausnahmen § 3.3 |
 | Audit ohne Einrichtung | Zeitstempel | installationsweite Frist | nein | kein Fachziel / keine eigene Art.-18-Prüfung | hart gelöscht, Ausnahmen § 3.3 |
 | Abgeschlossener Antrag | Abschluss | Antragsfrist | nein | keine eigene Prüfung | hart gelöscht, Audit bleibt seiner Frist unterworfen |

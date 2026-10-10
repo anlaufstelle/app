@@ -183,13 +183,14 @@ def test_proposer_cannot_approve_own_proposal(make_event, facility, periods, clo
 
 
 @pytest.mark.parametrize("stage", [Client.ContactStage.IDENTIFIED, Client.ContactStage.QUALIFIED])
-def test_inactive_client_without_events_is_anonymized(facility, periods, clock, stage):
+def test_inactive_eventless_client_requires_identified_stage(facility, periods, clock, stage):
     client = Client.objects.create(facility=facility, pseudonym="Inactive", contact_stage=stage)
     Client.objects.filter(facility=facility, pk=client.pk).update(updated_at=clock - timedelta(days=21))
+    expected_count = int(stage == Client.ContactStage.IDENTIFIED)
     with patch("django.utils.timezone.now", return_value=clock):
-        assert anonymize_clients(facility, dry_run=False)["count"] == 1
+        assert anonymize_clients(facility, dry_run=False)["count"] == expected_count
     client.refresh_from_db()
-    assert client.anonymized_at is not None
+    assert (client.anonymized_at is not None) == bool(expected_count)
 
 
 @pytest.mark.parametrize("source", ["case", "event", "task", "activity"])

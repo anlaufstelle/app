@@ -93,6 +93,8 @@ def test_restricted_anonymization_defers_person(expired_event, facility, setting
         expired_event.save(update_fields=["is_deleted"])
     else:
         expired_event.delete()
+        person.contact_stage = Client.ContactStage.IDENTIFIED
+        person.save(update_fields=["contact_stage"])
     Client.objects.filter(pk=person.pk).update(
         processing_restricted=True, updated_at=timezone.now() - timedelta(days=4000)
     )

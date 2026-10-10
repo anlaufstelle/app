@@ -80,7 +80,12 @@ PROCESSING_ACTIVITIES = [
                 "schützt bis zum Datum, Ablehnen bis zu einer neuen Vorlage frühestens nach "
                 "der konfigurierten Wiedervorlagefrist (Vorgabe 365 Tage). Auto-Freigabe ist Opt-in. "
                 "Personen werden anonymisiert, sobald alle Ereignisse gelöscht sind; ohne Ereignis "
-                "nach {identified_days} Tagen ab letzter Änderung. Hold und Art. 18 stellen zurück."
+                "nur für „Nur Pseudonym“ ohne offene Fälle nach {identified_days} Tagen ab dem "
+                "jüngsten Zeitpunkt aus Personenänderung, fachlicher Fallaktivität, Aufgabenänderung "
+                "und Anhangsänderung an Person oder Fall (Anlage, Ersetzung oder Entfernung). "
+                "Personen „Mit Zusatzangaben“ ohne Ereignis sind von der automatischen Anonymisierung "
+                "ausgenommen; der Vorschlagsweg unterstützt bisher nur Ereignisse, eine automatische "
+                "Fristvollstreckung für diese Personen fehlt. Hold und Art. 18 stellen zurück."
             ),
             anonymous_days=DEFAULT_RETENTION_ANONYMOUS_DAYS,
             identified_days=DEFAULT_RETENTION_IDENTIFIED_DAYS,

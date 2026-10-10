@@ -58,8 +58,13 @@ Dokumentationstyp ergänzt den Stichtag; eine längere Frist verlängert nichts.
 Der Standardlauf erzeugt für „Mit Zusatzangaben“ Vorschläge und löscht im Regelfall erst nach
 Freigabe durch eine andere Person mit „Löschbestätigung“. Zurückstellen schützt
 bis zum Datum; Ablehnen erlaubt frühestens nach {{ retention_rejected_retry_days }}
-Tagen eine neue Vorlage. Ohne Ereignis anonymisiert der Lauf nach
-{{ retention_identified_days }} Tagen ab letzter Änderung. Hold und Art. 18
+Tagen eine neue Vorlage. Ohne Ereignis anonymisiert der Lauf nur Personen „Nur Pseudonym“
+ohne offene Fälle nach {{ retention_identified_days }} Tagen ab dem jüngsten Zeitpunkt aus
+Personenänderung, fachlicher Fallaktivität, Aufgabenänderung und Anhangsänderung an Person
+oder Fall (Anlage, Ersetzung oder Entfernung). Personen „Mit Zusatzangaben“ ohne Ereignis
+sind von der automatischen Anonymisierung ausgenommen; der Vorschlagsweg unterstützt
+bisher nur Ereignisse, eine automatische Fristvollstreckung für diese Personen fehlt.
+Hold und Art. 18
 schützen im Lauf Ereignisse, Person und Historieninhalte. Die Soll-Matrix und
 weitere Fristen (Aktivitäten, Papierkorb, Audit-Log, Ereignis-Historie und
 Übergabenotizen) stehen im Löschkonzept.

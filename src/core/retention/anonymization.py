@@ -33,11 +33,12 @@ import logging
 from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce, Greatest
 from django.utils import timezone
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
-from core.models import AuditLog, Client, Settings
+from core.models import Attachment, AuditLog, Case, Client, Settings, WorkItem
 from core.models.settings import K_ANONYMITY_MIN
 from core.retention.legal_holds import client_has_active_hold, exclude_clients_with_active_holds
 from core.services.audit import audit_retention_decision
@@ -154,12 +155,47 @@ def _k_anonymize_with_cascade(client):
         _delete_owned_attachments_for_client(client, case_ids)
 
 
+def _with_inactivity_state(clients):
+    """Read eventless activity without multiplying event rows through joins."""
+    cases = Case.objects.filter(facility_id=OuterRef("facility_id"), client_id=OuterRef("pk"))
+    tasks = WorkItem.objects.filter(facility_id=OuterRef("facility_id"), client_id=OuterRef("pk"))
+    attachments = Attachment.objects.filter(facility_id=OuterRef("facility_id")).filter(
+        Q(client_id=OuterRef("pk")) | Q(case__client_id=OuterRef("pk"))
+    )
+    return clients.annotate(
+        has_open_case=Exists(cases.filter(status=Case.Status.OPEN, is_deleted=False)),
+        last_case_activity=Subquery(
+            cases.filter(last_activity_at__isnull=False).order_by("-last_activity_at").values("last_activity_at")[:1]
+        ),
+        last_task_activity=Subquery(tasks.order_by("-updated_at").values("updated_at")[:1]),
+        last_attachment_activity=Subquery(
+            attachments.annotate(
+                changed_at=Greatest(
+                    "created_at", Coalesce("deleted_at", "created_at"), Coalesce("superseded_at", "created_at")
+                )
+            )
+            .order_by("-changed_at")
+            .values("changed_at")[:1]
+        ),
+    ).annotate(
+        inactivity_anchor=Greatest(
+            "updated_at",
+            Coalesce("last_case_activity", "updated_at"),
+            Coalesce("last_task_activity", "updated_at"),
+            Coalesce("last_attachment_activity", "updated_at"),
+        )
+    )
+
+
 def anonymize_clients(facility, dry_run, *, deferred_ids=None):
     """Anonymize clients after final event deletion or eventless inactivity.
 
     With events, every event must have ``is_deleted=True``. Without events,
-    the identified inactivity period starts at ``updated_at``. Active holds
-    and processing restrictions defer both paths. Already anonymized clients (pseudonym starts with
+    only identified clients without open cases qualify. Their inactivity period
+    starts at the latest person, case, task or attachment change. Qualified
+    clients without events are excluded: proposals currently target events only
+    (Refs #2524). Active holds and processing restrictions defer both paths.
+    Already anonymized clients (pseudonym starts with
     ``Gelöscht-`` or ``k_anonymized=True``) are skipped.
 
     Refs #1756: Klienten mit **aktivem Legal Hold** — auf der Person selbst
@@ -214,10 +250,18 @@ def anonymize_clients(facility, dry_run, *, deferred_ids=None):
         else None
     )
     eligible = Q(total_events__gt=0, active_events=0)
+    clients = Client.objects.filter(facility=facility)
     if idle_cutoff is not None:
-        eligible |= Q(total_events=0, updated_at__lt=idle_cutoff, is_deleted=False)
+        clients = _with_inactivity_state(clients)
+        eligible |= Q(
+            total_events=0,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            has_open_case=False,
+            inactivity_anchor__lt=idle_cutoff,
+            is_deleted=False,
+        )
     candidates = (
-        exclude_clients_with_active_holds(Client.objects.filter(facility=facility), facility)
+        exclude_clients_with_active_holds(clients, facility)
         .exclude(Q(pseudonym__startswith="Gelöscht-") | Q(k_anonymized=True))
         .annotate(
             total_events=Count("events"),
@@ -297,7 +341,18 @@ def anonymize_clients(facility, dry_run, *, deferred_ids=None):
             events = locked.events.all()
             if events.filter(is_deleted=False).exists():
                 continue
-            if not events.exists() and (idle_cutoff is None or locked.is_deleted or locked.updated_at >= idle_cutoff):
+            # Re-read the same eligibility under Person -> Case -> Event locks.
+            if not events.exists() and (
+                idle_cutoff is None
+                or not _with_inactivity_state(Client.objects.filter(pk=client_pk, facility=facility))
+                .filter(
+                    contact_stage=Client.ContactStage.IDENTIFIED,
+                    is_deleted=False,
+                    has_open_case=False,
+                    inactivity_anchor__lt=idle_cutoff,
+                )
+                .exists()
+            ):
                 continue
             if locked.processing_restricted:
                 restricted_count += 1

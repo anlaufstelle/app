@@ -29,21 +29,32 @@ def test_rendered_packages_explain_review_and_explicit_auto_approval_exception(f
     assert "Der automatische Aufbewahrungslauf fällt nicht unter dieses Prinzip" not in flat
 
 
-def test_rendered_package_hash_changes_with_template_content(facility, settings_obj, monkeypatch):
+@pytest.mark.parametrize("slug", ["informationspflichten", "loeschkonzept", "dsfa"])
+def test_rendered_package_hash_changes_with_template_content(facility, settings_obj, monkeypatch, slug):
     from pathlib import Path
 
     from core.services.client import dsgvo_package
 
-    before, _ = render_document("informationspflichten", facility)
+    before, _ = render_document(slug, facility)
     original_read = Path.read_bytes
 
     def changed_template(path):
         content = original_read(path)
-        if path == dsgvo_package.TEMPLATE_DIR / "informationspflichten.md":
+        if path == dsgvo_package.TEMPLATE_DIR / f"{slug}.md":
             return content + b"\nUpdated retention statement\n"
         return content
 
     monkeypatch.setattr(Path, "read_bytes", changed_template)
-    after, _ = render_document("informationspflichten", facility)
+    after, _ = render_document(slug, facility)
     pattern = r"Settings-Hash: ([a-f0-9]{8})"
     assert re.search(pattern, before).group(1) != re.search(pattern, after).group(1)
+
+
+@pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept", "verarbeitungsverzeichnis"])
+def test_eventless_retention_wording_limits_automatic_anonymization(facility, settings_obj, slug):
+    content, _ = render_document(slug, facility)
+    flat = " ".join(content.split())
+    assert "ohne offene Fälle" in flat
+    assert "Fallaktivität" in flat and "Aufgaben" in flat and "Anhang" in flat
+    assert "Mit Zusatzangaben“ ohne Ereignis" in flat
+    assert "automatischen Anonymisierung ausgenommen" in flat
