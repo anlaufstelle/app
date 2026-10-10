@@ -59,7 +59,6 @@ Die Anwendung kennt elf konfigurierbare Aufbewahrungsfristen. Alle elf sind unte
 | 8 | Inhalte früherer Fassungen eines Ereignisses | {{ eventhistory_detail_months }} Monate | `eventhistory_detail_months` | Die Werte der Fassung werden gelöscht (Redaktion), die Fassung selbst (Zeitpunkt, handelnde Person, Feldnamen) bleibt; die jüngste Fassung eines nicht gelöschten Ereignisses behält ihre Werte. Bei gelöschten Ereignissen und bei Ereignissen anonymisierter Personen geschieht dasselbe für alle Fassungen unabhängig von dieser Frist mit dem nächsten Aufbewahrungslauf. Fassungen unter einer Aufbewahrungssperre oder Art. 18 stellt der Lauf zurück. `0` schaltet diese Frist ab |
 | 9 | Chronologie früherer Fassungen (nach ihrer Redaktion) | {{ eventhistory_chronicle_months }} Monate | `eventhistory_chronicle_months` | Die redigierte Fassung wird gelöscht, gemessen ab ihrer Redaktion. `0` schaltet die Löschung ab — dann bleibt die Chronologie unbefristet |
 | 10 | Übergabenotizen (Schichtnotizen) | {{ retention_handover_notes_days }} Tage | `retention_handover_notes_days` | Die Notiz wird endgültig gelöscht (Frist ab ihrer letzten Änderung); kein Legal Hold — verfahrensrelevanter Inhalt ist vorher als Vermerk am Fall zu dokumentieren |
-
 | 11 | Abgeschlossene Lösch-, Zusammenführungs- und Herabstufungsanträge | {{ deletion_request_retention_days }} Tage | `deletion_request_retention_days` | Harte Löschung ab Abschluss; offene Anträge bleiben |
 
 Ergänzende Regeln:

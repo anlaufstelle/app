@@ -9,4 +9,4 @@ An HTTP/network/processing error fetching revocations (including 500/429), or an
 <!-- translation-source: src/core/dsgvo_templates/dsfa.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 9103bd0133dd3cc94bbabf9802fe1d2d9e717642 -->
+<!-- source-hash: e2244d10068a215c0e1912d58ed5d80d21abcd7d -->
