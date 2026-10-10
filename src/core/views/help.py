@@ -95,8 +95,34 @@ HELP_PAGES = {
             nav_key="statistics",
             intro=_("Die Statistik verdichtet dokumentierte Arbeit für Auswertung und Berichte."),
             topics=(
-                _("Der gewählte Zeitraum gilt beim Wechsel zwischen den Statistik-Reitern weiter."),
-                _("Freigaben halten fest, welche Berichtsstände tatsächlich herausgegeben wurden."),
+                _(
+                    "„Übersicht“ ist der interne Blick: Kennzahlen, Diagramme und Tabellen, "
+                    "ohne Kleinstfall-Unterdrückung, mit Pseudonymen bei den Top-Personen."
+                ),
+                _(
+                    "„Datensatz-Berichte“ bietet Auswertungen wie „Allgemeine Kennzahlen“ und "
+                    "„Summe von Zahlenfeldern“ mit Vorschau und CSV-, JSON-, XML- oder PDF-Download; "
+                    "Kleinstfallzahlen werden unterdrückt, Personen-Pseudonyme fehlen."
+                ),
+                _(
+                    "Die Ereignisliste (intern) in der Übersicht enthält Einzelereignisse mit "
+                    "Pseudonymen; diese bleiben personenbezogen. Unterdrückte Berichtszahlen "
+                    "allein garantieren ebenfalls keine Anonymität."
+                ),
+                _(
+                    "„Freigaben“ listet markierte Datei-Herausgaben mit Berichtszeitraum und warnt "
+                    "bei nicht identischen, überlappenden Zeiträumen desselben Berichts; "
+                    "Vorschauen und Weitergaben außerhalb der Anwendung fehlen dort."
+                ),
+                _(
+                    "Der gewählte Zeitraum gilt beim Wechsel zwischen den Statistik-Reitern weiter; "
+                    "Freigaben zeigt Herausgaben unabhängig davon."
+                ),
+                _(
+                    "Zahlen können wegen Unterdrückung, Grundgesamtheit und Datenquelle abweichen. "
+                    "Beachten Sie die Angaben je Bericht und Format: Der Beispiel-Sachbericht "
+                    "liest nur im PDF aus Monats-Aggregaten mit Live-Fallback, sonst live."
+                ),
             ),
         ),
         HelpPage(

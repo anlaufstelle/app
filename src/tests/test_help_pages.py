@@ -48,6 +48,20 @@ class TestHelpPages:
         assert response.status_code == 200
         assert "die Zeile „Speicher“ zur Seite „Dateien“." in response.content.decode()
 
+    def test_statistics_help_explains_all_current_tabs(self, client, lead_user):
+        """Explain the current statistics navigation through the help view."""
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:help_page", kwargs={"slug": "statistik"}))
+
+        assert response.status_code == 200
+        body = response.content.decode()
+        for tab_name in ("„Übersicht“", "„Datensatz-Berichte“", "„Freigaben“"):
+            assert tab_name in body
+        assert "Allgemeine Kennzahlen" in body
+        assert "Ereignisliste (intern)" in body
+        assert "Unterdrückung, Grundgesamtheit und Datenquelle" in body
+
     def test_help_page_is_login_required(self, client):
         response = client.get(reverse("core:help_page", kwargs={"slug": "personen"}))
 
