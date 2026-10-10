@@ -147,6 +147,7 @@ class _RequireVerifiedSessionAndTOTPMixin:
             )
 
 
+@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="dispatch")
 class WebAuthnRegistrationBeginView(_RequireVerifiedSessionAndTOTPMixin, BeginCredentialRegistrationView):
     """Registrierungs-Options — nur in verifizierter Session mit bestaetigtem TOTP-Geraet."""
 

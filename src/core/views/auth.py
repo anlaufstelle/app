@@ -56,6 +56,8 @@ def _login_username_key(group, request):
     return (request.POST.get("username") or "").lower().strip()
 
 
+@method_decorator(ratelimit(key="ip", rate="5/m", method=("POST", "PUT"), block=True), name="dispatch")
+@method_decorator(ratelimit(key=_login_username_key, rate="10/h", method=("POST", "PUT"), block=True), name="dispatch")
 class CustomLoginView(auth_views.LoginView):
     """Login with session timeout from facility settings.
 
@@ -68,8 +70,6 @@ class CustomLoginView(auth_views.LoginView):
 
     template_name = "auth/login.html"
 
-    @method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))
-    @method_decorator(ratelimit(key=_login_username_key, rate="10/h", method="POST", block=True))
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
@@ -255,10 +255,10 @@ class CustomLogoutView(auth_views.LogoutView):
 # Refs #2391: the request writes an audit row for the account of the entered
 # address, possibly in another facility; a signed-in session gets a notice.
 @method_decorator(anonymous_session_required, name="dispatch")
+@method_decorator(ratelimit(key="ip", rate="5/m", method=("POST", "PUT"), block=True), name="dispatch")
 class RateLimitedPasswordResetView(auth_views.PasswordResetView):
     """Password reset with rate limiting and audit logging."""
 
-    @method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
@@ -320,7 +320,7 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
 # or rotated; ``login_not_required`` stays outermost and keeps its marker.
 @method_decorator(login_not_required, name="dispatch")
 @method_decorator(anonymous_session_required, name="dispatch")
-@method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True), name="post")
+@method_decorator(ratelimit(key="ip", rate="5/m", method=("POST", "PUT"), block=True), name="dispatch")
 class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
     """Password-Reset, der zugleich einen aktiven Account-Lockout aufhebt (Refs #869).
 
@@ -412,7 +412,7 @@ class InviteConfirmView(CustomPasswordResetConfirmView):
     revocation_reason = RevocationReason.INVITE_SETUP
 
 
-@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
+@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method=("POST", "PUT"), block=True), name="dispatch")
 class CustomPasswordChangeView(auth_views.PasswordChangeView):
     """Password change with must_change_password reset and offline-salt rotation."""
 

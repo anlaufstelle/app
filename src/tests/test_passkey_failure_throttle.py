@@ -75,3 +75,18 @@ def test_unsupported_method_does_not_consume_a_ceremony_or_log_factor_failure(cl
     assert "otp_webauthn_authentication_state" in client.session
     assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.WEBAUTHN_FAILED).exists()
     assert client.session.get("mfa_verified") is not True
+
+
+def test_registration_begin_is_limited_before_parsing(client, staff_user, ratelimit_enabled):
+    client.force_login(staff_user)
+    session = client.session
+    session["mfa_verified"] = True
+    session.save()
+    url = "/webauthn/registration/begin/"
+    for attempt in range(60):
+        body = "{}" if attempt % 2 == 0 else "{"
+        assert client.post(url, body, content_type="application/json").status_code == 400
+    assert client.post(url, "{", content_type="application/json").status_code == 429
+    assert client.post(url, "{}", content_type="application/json").status_code == 429
+    assert "otp_webauthn_register_state" not in client.session
+    assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.WEBAUTHN_REGISTERED).exists()

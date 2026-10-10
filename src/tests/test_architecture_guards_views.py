@@ -1,7 +1,10 @@
 """Architecture-Guards — View-Guards (Rate-Limit, Redirect-Hygiene, Routes, ProdSettings) (Refs #929)."""
 
 import ast
+import builtins
 import difflib
+import importlib
+import inspect
 import re
 from pathlib import Path
 
@@ -15,162 +18,271 @@ class TestRateLimitOnAllMutations:
 
     _VIEWS_DIR = Path("src/core/views")
     _ALLOWLIST = {
-        "clients.py:ClientRenameWarningView": (
+        "auth.py:CustomLogoutView.post": (
+            "Logout must always flush the session, including quick exit on shared devices; "
+            "it exposes no factor verification or data mutation beyond ending that session (Refs #2529)."
+        ),
+        "clients.py:ClientRenameWarningView.post": (
             "Read-only pseudonym warning probe; must not consume the actual update quota (Refs #2044)."
         ),
-    }
-    _GENERIC_MUTATIONS = {
-        "CreateView",
-        "UpdateView",
-        "DeleteView",
-        "FormView",
-        "LoginView",
-        "PasswordResetView",
-        "PasswordChangeView",
-        "PasswordResetConfirmView",
     }
     _METHODS = {"post", "put", "patch", "delete"}
 
     def test_all_post_handlers_have_ratelimit(self):
+        from django.views import generic
+        from django_ratelimit import ALL
+        from django_ratelimit.core import _split_rate
+
         assert self._VIEWS_DIR.exists(), f"Missing view directory: {self._VIEWS_DIR}"
         modules = {}
         classes = {}
+        external_mros = {}
+
+        def load(path):
+            path = path.resolve()
+            if path not in modules:
+                tree = ast.parse(path.read_text())
+                imports = {}
+                for node in tree.body:
+                    if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                        for alias in node.names:
+                            imports[alias.asname or alias.name] = (node.module, alias.name)
+                    elif isinstance(node, ast.Import):
+                        for alias in node.names:
+                            imports[alias.asname or alias.name.split(".")[0]] = (
+                                alias.name if alias.asname else alias.name.split(".")[0],
+                                "",
+                            )
+                modules[path] = tree, imports
+                for node in tree.body:
+                    if isinstance(node, ast.ClassDef):
+                        classes[path, node.name] = node
+            return path
+
         for path in sorted(self._VIEWS_DIR.rglob("*.py")):
-            relative = path.relative_to(self._VIEWS_DIR).as_posix()
-            tree = ast.parse(path.read_text())
-            aliases = {
-                alias.asname or alias.name: alias.name
-                for node in ast.walk(tree)
-                if isinstance(node, ast.ImportFrom)
-                for alias in node.names
-            }
-            modules[relative] = (tree, aliases)
-            for node in tree.body:
-                if isinstance(node, ast.ClassDef):
-                    classes[(relative, node.name)] = node
+            load(path)
+        endpoints = list(classes)
+        view_fallbacks = {name: getattr(generic, name) for name in dir(generic) if name.endswith("View")}
 
-        def name(node, aliases):
-            raw = node.id if isinstance(node, ast.Name) else node.attr if isinstance(node, ast.Attribute) else ""
-            return aliases.get(raw, raw)
+        def imported(path, node):
+            if isinstance(node, ast.Name):
+                module, attribute = modules[path][1][node.id]
+                return (
+                    getattr(importlib.import_module(module), attribute)
+                    if attribute
+                    else importlib.import_module(module)
+                )
+            if isinstance(node, ast.Attribute):
+                return getattr(imported(path, node.value), node.attr)
+            raise ValueError("Unsupported imported expression")
 
-        def limited(decorators, aliases, method, *, class_level=False, target_method=None):
+        def symbol(path, node):
+            if isinstance(node, ast.Name):
+                return modules[path][1].get(node.id, ("", node.id))[1]
+            return node.attr if isinstance(node, ast.Attribute) else ""
+
+        def value(path, node):
+            try:
+                return ast.literal_eval(node)
+            except (ValueError, TypeError):
+                if isinstance(node, ast.Name):
+                    for statement in modules[path][0].body:
+                        targets = statement.targets if isinstance(statement, ast.Assign) else []
+                        if any(isinstance(target, ast.Name) and target.id == node.id for target in targets):
+                            return value(path, statement.value)
+                try:
+                    return imported(path, node)
+                except (KeyError, AttributeError, ValueError):
+                    return None
+
+        def limited(path, decorators, method, *, target=None):
             for decorator in decorators:
-                if class_level:
-                    if not isinstance(decorator, ast.Call) or name(decorator.func, aliases) != "method_decorator":
+                if target:
+                    if not isinstance(decorator, ast.Call) or symbol(path, decorator.func) != "method_decorator":
                         continue
-                    target = next((kw.value for kw in decorator.keywords if kw.arg == "name"), None)
-                    if not isinstance(target, ast.Constant) or target.value not in (
-                        {target_method} if target_method else {method, "dispatch"}
-                    ):
+                    if not any(kw.arg == "name" and value(path, kw.value) == target for kw in decorator.keywords):
                         continue
-                for call in ast.walk(decorator):
-                    if not isinstance(call, ast.Call) or name(call.func, aliases) != "ratelimit":
+                applied = (
+                    decorator.args[:1]
+                    if (isinstance(decorator, ast.Call) and symbol(path, decorator.func) == "method_decorator")
+                    else [decorator]
+                )
+                calls = [
+                    item
+                    for node in applied
+                    for item in (node.elts if isinstance(node, (ast.List, ast.Tuple)) else [node])
+                ]
+                for call in calls:
+                    if not isinstance(call, ast.Call) or symbol(path, call.func) != "ratelimit":
                         continue
                     options = {kw.arg: kw.value for kw in call.keywords}
-                    block = options.get("block")
-                    methods = options.get("method")
-                    if not isinstance(block, ast.Constant) or block.value is not True:
+                    if value(path, options.get("block")) is not True:
                         continue
-                    if methods is None:
+                    rate = value(path, options.get("rate"))
+                    try:
+                        count, seconds = _split_rate(rate)
+                        if not isinstance(count, int) or not isinstance(seconds, int) or count < 0 or seconds <= 0:
+                            continue
+                    except (TypeError, ValueError, AttributeError):
+                        continue
+                    methods = value(path, options["method"]) if "method" in options else ALL
+                    if methods == ALL:
                         return True
-                    allowed = (
-                        [methods.value]
-                        if isinstance(methods, ast.Constant)
-                        else [item.value for item in getattr(methods, "elts", []) if isinstance(item, ast.Constant)]
-                    )
-                    if method.upper() in allowed or "ALL" in allowed:
+                    if isinstance(methods, str):
+                        methods = [methods]
+                    if isinstance(methods, (list, tuple)) and any(
+                        isinstance(item, str) and item.upper() == method.upper() for item in methods
+                    ):
                         return True
             return False
 
-        def bases(key):
-            relative, _ = key
-            aliases = modules[relative][1]
-            for base in classes[key].bases:
-                base_name = name(base, aliases)
-                local = (relative, base_name)
-                if local in classes:
-                    yield local
-                    continue
-                matches = [candidate for candidate in classes if candidate[1] == base_name]
-                if len(matches) == 1:
-                    yield matches[0]
-
-        def handler(key, method, seen=None):
-            seen = set() if seen is None else seen
-            if key in seen:
+        def external(cls):
+            if cls.__module__ == "builtins":
                 return None
-            seen.add(key)
-            for child in classes[key].body:
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name == method:
-                    return key, child
-            for parent in bases(key):
-                if found := handler(parent, method, seen):
-                    return found
+            key = load(Path(inspect.getfile(cls))), cls.__name__
+            assert key in classes, f"Cannot inspect external base: {cls}"
+            if key not in external_mros:
+                external_mros[key] = [
+                    parent_key for base in cls.__mro__[1:] if (parent_key := external(base)) is not None
+                ]
+            return key
+
+        def base_key(path, node):
+            if isinstance(node, ast.Name) and (path, node.id) in classes:
+                return path, node.id
+            try:
+                return external(imported(path, node))
+            except KeyError:
+                if isinstance(node, ast.Name) and node.id in view_fallbacks:
+                    return external(view_fallbacks[node.id])
+                if isinstance(node, ast.Name) and isinstance(getattr(builtins, node.id, None), type):
+                    return None
+                raise AssertionError(f"Unresolved base in {path.name}: {ast.unparse(node)}") from None
+
+        mros = {}
+
+        def mro(key):
+            if key in external_mros:
+                return [key, *external_mros[key]]
+            if key not in mros:
+                parents = [parent for node in classes[key].bases if (parent := base_key(key[0], node))]
+                sequences = [mro(parent).copy() for parent in parents] + [parents.copy()]
+                result = [key]
+                while sequences := [seq for seq in sequences if seq]:
+                    candidate = next(
+                        (seq[0] for seq in sequences if all(seq[0] not in other[1:] for other in sequences)), None
+                    )
+                    assert candidate is not None, f"Inconsistent MRO: {key}"
+                    result.append(candidate)
+                    for seq in sequences:
+                        if seq[0] == candidate:
+                            seq.pop(0)
+                mros[key] = result
+            return mros[key]
+
+        def handler(chain, method):
+            for index, key in enumerate(chain):
+                for node in classes[key].body:
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == method:
+                        return index, node
             return None
 
-        def inherited_class_limit(key, method, target, seen=None):
-            seen = set() if seen is None else seen
-            if key in seen:
+        def handler_limit(chain, target, method):
+            found = handler(chain, target)
+            if found is None:
                 return False
-            seen.add(key)
-            if limited(classes[key].decorator_list, modules[key[0]][1], method, class_level=True, target_method=target):
-                return True
-            # An override replaces the parent's decorated handler entirely.
-            if any(
-                isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name == target
-                for child in classes[key].body
-            ):
-                return False
-            return any(inherited_class_limit(parent, method, target, seen) for parent in bases(key))
-
-        def class_limit(key, method):
-            dispatch = handler(key, "dispatch")
-            return (
-                inherited_class_limit(key, method, method)
-                or inherited_class_limit(key, method, "dispatch")
-                or bool(dispatch and limited(dispatch[1].decorator_list, modules[dispatch[0][0]][1], method))
+            index, node = found
+            return limited(chain[index][0], node.decorator_list, method) or any(
+                limited(key[0], classes[key].decorator_list, method, target=target) for key in chain[: index + 1]
             )
 
-        def generic_mutation(key, seen=None):
-            seen = set() if seen is None else seen
-            if key in seen:
-                return False
-            seen.add(key)
-            return any(name(base, modules[key[0]][1]) in self._GENERIC_MUTATIONS for base in classes[key].bases) or any(
-                generic_mutation(parent, seen) for parent in bases(key)
-            )
+        def dispatch_routes(chain):
+            # Only Django's terminal dispatcher is trusted to select request.method.
+            routes = []
+            for key in chain:
+                found = handler([key], "dispatch")
+                if found is None or key == external(generic.View):
+                    continue
+                for node in ast.walk(found[1]):
+                    if isinstance(node, ast.Attribute) and node.attr in self._METHODS | {
+                        "get",
+                        "head",
+                        "options",
+                        "dispatch",
+                    }:
+                        receiver = node.value
+                        uses_self = isinstance(receiver, ast.Name) and receiver.id == "self"
+                        uses_super = (
+                            isinstance(receiver, ast.Call)
+                            and isinstance(receiver.func, ast.Name)
+                            and receiver.func.id == "super"
+                        )
+                        uses_base = isinstance(receiver, ast.Name) and symbol(key[0], receiver) in {
+                            owner[1] for owner in chain
+                        }
+                        if not (uses_self or uses_super or uses_base):
+                            continue
+                        if (
+                            node.attr == "dispatch"
+                            and isinstance(receiver, ast.Call)
+                            and isinstance(receiver.func, ast.Name)
+                            and receiver.func.id == "super"
+                        ):
+                            continue
+                        routes.append((node.attr, isinstance(receiver, ast.Name) and receiver.id == "self"))
+                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "getattr":
+                        if node.args and isinstance(node.args[0], ast.Name) and node.args[0].id == "self":
+                            routes.append(("dynamic", False))
+            return routes
 
         violations = []
-        for key in classes:
-            identifier = f"{key[0]}:{key[1]}"
-            if self._ALLOWLIST.get(identifier, "").strip():
-                continue
+        for key in endpoints:
+            identifier = f"{key[0].relative_to(self._VIEWS_DIR.resolve()).as_posix()}:{key[1]}"
+            chain = mro(key)
+            routes = dispatch_routes(chain)
+            allowed_methods = None
+            for owner in chain:
+                for statement in classes[owner].body:
+                    if isinstance(statement, ast.Assign) and any(
+                        isinstance(target, ast.Name) and target.id == "http_method_names"
+                        for target in statement.targets
+                    ):
+                        allowed_methods = value(owner[0], statement.value)
+                        break
+                if allowed_methods is not None:
+                    break
             for method in self._METHODS:
-                found = handler(key, method)
-                if found is None and not (method == "post" and generic_mutation(key)):
+                if self._ALLOWLIST.get(f"{identifier}.{method}", "").strip():
                     continue
-                if class_limit(key, method) or (
-                    found and limited(found[1].decorator_list, modules[found[0][0]][1], method)
+                if not routes and allowed_methods is not None and method not in allowed_methods:
+                    continue
+                if not routes and handler(chain, method) is None:
+                    continue
+                if handler_limit(chain, "dispatch", method):
+                    continue
+                if all(target == method and uses_self for target, uses_self in routes) and handler_limit(
+                    chain, method, method
                 ):
                     continue
                 violations.append(f"{identifier}.{method}")
-        for relative, (tree, aliases) in modules.items():
-            for node in tree.body:
+        for path in sorted(self._VIEWS_DIR.rglob("*.py")):
+            path = path.resolve()
+            for node in modules[path][0].body:
                 if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
                 methods = set()
                 for decorator in node.decorator_list:
-                    if name(decorator, aliases) == "require_POST":
+                    if symbol(path, decorator) == "require_POST":
                         methods.add("post")
-                    if isinstance(decorator, ast.Call) and name(decorator.func, aliases) == "require_http_methods":
+                    if isinstance(decorator, ast.Call) and symbol(path, decorator.func) == "require_http_methods":
                         methods.update(
                             str(item.value).lower()
                             for item in ast.walk(decorator)
                             if isinstance(item, ast.Constant) and str(item.value).lower() in self._METHODS
                         )
                 for method in methods:
-                    if not limited(node.decorator_list, aliases, method):
-                        violations.append(f"{relative}:{node.name}.{method}")
+                    if not limited(path, node.decorator_list, method):
+                        violations.append(f"{path.relative_to(self._VIEWS_DIR.resolve())}:{node.name}.{method}")
         assert not violations, f"Mutation handlers without a blocking rate limit: {sorted(violations)}"
 
 

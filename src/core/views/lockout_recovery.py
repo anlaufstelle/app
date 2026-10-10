@@ -58,6 +58,7 @@ class _RecoveryEmailForm(forms.Form):
 # Refs #2391: the request writes an audit row for the account of the entered
 # address, possibly in another facility; a signed-in session gets a notice.
 @method_decorator(anonymous_session_required, name="dispatch")
+@method_decorator(ratelimit(key="ip", rate="5/m", method=("POST", "PUT"), block=True), name="dispatch")
 class LockoutRecoveryRequestView(FormView):
     """Form: E-Mail eingeben, Recovery-Token-Mail versenden (Anti-Enumeration)."""
 
@@ -65,7 +66,6 @@ class LockoutRecoveryRequestView(FormView):
     form_class = _RecoveryEmailForm
     success_url = reverse_lazy("core:lockout_recovery_sent")
 
-    @method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))
     def post(self, request: HttpRequest, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
@@ -178,14 +178,14 @@ class _BackupCodeForm(forms.Form):
 # Refs #2391: a valid code switches the database context to the account it
 # belongs to; a signed-in session gets a notice instead.
 @method_decorator(anonymous_session_required, name="dispatch")
+@method_decorator(ratelimit(key="ip", rate="5/m", method=("POST", "PUT"), block=True), name="dispatch")
+@method_decorator(ratelimit(key=_login_username_key, rate="10/h", method=("POST", "PUT"), block=True), name="dispatch")
 class LockoutRecoveryBackupCodeView(FormView):
     """User + MFA-Backup-Code -> LOGIN_UNLOCK + BACKUP_CODES_USED (Refs #869, Var. C)."""
 
     template_name = "auth/lockout_recovery_backup_code.html"
     form_class = _BackupCodeForm
 
-    @method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))
-    @method_decorator(ratelimit(key=_login_username_key, rate="10/h", method="POST", block=True))
     def post(self, request: HttpRequest, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
