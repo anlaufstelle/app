@@ -5,7 +5,7 @@
     <div class="flex-1 px-3.5 py-3 min-w-0">
         <div class="flex flex-wrap items-center gap-2">
             <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ event.occurred_at|time:"H:i" }}</span>
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-ban-soft text-ban-deep">{% trans "Hausverbot" %}</span>
+            <span data-testid="feed-kind-badge" class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-ban-soft text-ban-deep">{% trans "Hausverbot" %}</span>
             {% if event.client %}
             <span class="text-[13px] font-semibold text-ban-deep truncate">{{ event.client.pseudonym }}</span>
             {% else %}

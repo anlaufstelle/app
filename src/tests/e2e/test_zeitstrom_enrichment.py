@@ -1,12 +1,103 @@
 """E2E-Tests: Zeitstrom-Vorschaufelder, Badge-Farben, Übergabe.
 
 Refs #411 — Zeitstrom aufwerten.
+
+The feed-card tests run against one fixed past day (``FEED_DAY``) that the
+module builds itself. A day picked out of the random seed would make every
+assertion depend on which verbs, shifts and kinds the seed happened to land
+there; a past day outside the seed window holds exactly the cards created here.
 """
+
+import json
+import re
 
 import pytest
 from playwright.sync_api import expect
 
+from ._helpers import django_shell
+
 pytestmark = pytest.mark.e2e
+
+PREFIX = "E2E Zeitstrom"
+FEED_DAY = "2019-04-16"
+
+_KIND_BADGE = "#feed-list [data-testid='feed-kind-badge']"
+_ACTIVITY_VERB = "#feed-list [data-testid='feed-activity-verb']"
+
+_CLEANUP = f"""
+from core.models import Activity, Client, DocumentType, Event, Facility, WorkItem
+
+facility = Facility.objects.get(name='Hauptstelle')
+Activity.objects.for_facility(facility).filter(context__feed_fixture='{PREFIX}').delete()
+WorkItem.objects.filter(title__startswith='{PREFIX}').delete()
+Event.objects.filter(document_type__name__startswith='{PREFIX}').delete()
+DocumentType.objects.filter(name__startswith='{PREFIX}').delete()
+Client.objects.filter(pseudonym__startswith='{PREFIX}').delete()
+"""
+
+# One person, one contact, one task and two activities (created, qualified) on FEED_DAY.
+_SETUP = f"""
+import json
+from datetime import datetime
+from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
+from core.models import Activity, Client, DocumentType, Event, Facility, User, WorkItem
+
+facility = Facility.objects.get(name='Hauptstelle')
+actor = User.objects.get(username='miriam')
+person = Client.objects.create(
+    facility=facility, contact_stage='qualified', pseudonym='{PREFIX}-Person', created_by=actor
+)
+doc_type = DocumentType.objects.create(
+    facility=facility,
+    name='{PREFIX} Kontakt',
+    entity_type=DocumentType.EntityType.EVENT,
+    sensitivity=DocumentType.Sensitivity.NORMAL,
+)
+
+
+def at(hour):
+    return timezone.make_aware(datetime(2019, 4, 16, hour, 0))
+
+
+client_ct = ContentType.objects.get_for_model(Client)
+
+
+def activity(verb, action, hour):
+    return Activity.objects.create(
+        facility=facility, actor=actor, verb=verb, target_type=client_ct, target_id=person.pk,
+        context={{'schema': 1, 'action': action, 'feed_fixture': '{PREFIX}'}}, occurred_at=at(hour),
+    )
+
+
+activity(Activity.Verb.CREATED, Activity.Action.CLIENT_CREATED, 9)
+activity(Activity.Verb.QUALIFIED, Activity.Action.CLIENT_QUALIFIED, 10)
+Event.objects.create(
+    facility=facility, document_type=doc_type, client=person, occurred_at=at(11), data_json={{}}, created_by=actor
+)
+task = WorkItem.objects.create(facility=facility, client=person, created_by=actor, title='{PREFIX} Aufgabe')
+WorkItem.objects.filter(pk=task.pk).update(created_at=at(12))
+print('FEED_FIXTURE ' + json.dumps({{'client': str(person.pk)}}))
+"""
+
+
+@pytest.fixture(scope="module")
+def feed_fixture(e2e_env):
+    """Build the cards of ``FEED_DAY`` and return their target keys; remove them afterwards."""
+    django_shell(e2e_env, _CLEANUP)
+    lines = django_shell(e2e_env, _SETUP)
+    payload = next((line[len("FEED_FIXTURE ") :] for line in lines if line.startswith("FEED_FIXTURE ")), None)
+    assert payload, f"Feed fixture setup did not report its keys: {lines}"
+    yield json.loads(payload)
+    django_shell(e2e_env, _CLEANUP)
+
+
+def _verbs(page, base_url, **params):
+    """Open ``FEED_DAY`` with the given feed filter and return the activity verb labels shown."""
+    query = "&".join(f"{key}={value}" for key, value in {"date": FEED_DAY, **params}.items())
+    page.goto(f"{base_url}/?{query}", wait_until="domcontentloaded")
+    page.locator("#feed-list").wait_for(state="attached", timeout=10000)
+    return [text.strip() for text in page.locator(_ACTIVITY_VERB).all_inner_texts()]
 
 
 class TestEventCardPreview:
@@ -22,119 +113,67 @@ class TestEventCardPreview:
         event_cards = page.locator("a[href*='/events/']")
         assert event_cards.count() > 0, "No event cards found in Zeitstrom"
 
-    def test_badge_colors_vary_by_doc_type(self, authenticated_page, base_url):
-        """Badges should not all be indigo — different doc types get different colors."""
+    def test_kind_badges_differ_in_color_by_card_kind(self, authenticated_page, base_url, feed_fixture):
+        """Contact, activity and task cards carry kind badges in three different colors.
+
+        Since the visual refresh the document type is a neutral badge; the color
+        only distinguishes the card kind (contact, activity, task, ban).
+        """
         page = authenticated_page
-        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/?date={FEED_DAY}", wait_until="domcontentloaded")
+        expect(page.locator(_KIND_BADGE).first).to_be_visible()
 
-        # Check that at least one non-indigo badge class exists
-        # Seed data creates Kontakt (indigo), Krisengespräch (amber), etc.
-        badges = page.locator(".rounded.text-xs.font-medium")
-        badge_count = badges.count()
-        if badge_count > 1:
-            classes_set = set()
-            for i in range(min(badge_count, 10)):
-                cls = badges.nth(i).get_attribute("class") or ""
-                classes_set.add(cls)
-            # If seed creates multiple doc types, classes should differ.
-            # Soft check: the collected badge classes are present (badge_count > 1
-            # here already guarantees the badges rendered).
-            assert classes_set
+        classes_by_kind = {}
+        for badge in page.locator(_KIND_BADGE).all():
+            classes_by_kind.setdefault(badge.inner_text().strip(), set()).add(badge.get_attribute("class"))
 
-
-def _find_date_with_activities(page, base_url, verb=None):
-    """Navigate backwards from today until a date with activities is found.
-
-    Returns True if a date with activities was found and the page is on that date.
-    Tries up to 60 days back.
-    """
-    from datetime import date, timedelta
-
-    today = date.today()
-    for offset in range(60):
-        d = today - timedelta(days=offset)
-        date_str = d.isoformat()
-        page.goto(
-            f"{base_url}/?date={date_str}&type=activities",
-            wait_until="domcontentloaded",
-        )
-        # Only check badges within the feed list area
-        badges = page.locator("#feed-list .rounded.text-xs.font-medium")
-        if badges.count() > 0:
-            if verb is None:
-                return True
-            texts = [badges.nth(i).inner_text().strip() for i in range(badges.count())]
-            if verb in texts:
-                return True
-    return False
+        assert {"Kontakt", "Aktivität", "Aufgabe"} <= set(classes_by_kind), classes_by_kind
+        for kind in ("Kontakt", "Aktivität", "Aufgabe"):
+            assert len(classes_by_kind[kind]) == 1, f"{kind} badges are not uniform: {classes_by_kind[kind]}"
+        colors = {kind: next(iter(classes_by_kind[kind])) for kind in ("Kontakt", "Aktivität", "Aufgabe")}
+        assert len(set(colors.values())) == 3, f"Kind badges share a color: {colors}"
 
 
 class TestActivityCards:
     """Activity-Karten: Keine created-Duplikate, farbige Badges, klickbare Links."""
 
-    def test_no_created_activity_duplicates(self, authenticated_page, base_url):
+    def test_no_created_activity_duplicates(self, authenticated_page, base_url, feed_fixture):
         """Mixed feed should not show 'erstellt' activities (redundant with object cards)."""
         page = authenticated_page
-        # Navigate to a date that has 'erstellt' activities in the activities-only view
-        found = _find_date_with_activities(page, base_url, verb="erstellt")
-        if not found:
-            pytest.skip("No seed date with 'erstellt' activities found")
+        # Precondition, proven on the page: the activity-only view carries the 'erstellt' row.
+        assert "erstellt" in _verbs(page, base_url, type="activities")
 
-        # Extract the date from the current URL
-        import re
+        verbs = _verbs(page, base_url)
+        assert "erstellt" not in verbs, f"'erstellt' activity badge in mixed feed: {verbs}"
+        # The mixed feed still shows the other activity of that day, so the
+        # assertion above is not satisfied by an empty feed.
+        assert "qualifiziert" in verbs, verbs
 
-        date_match = re.search(r"date=(\d{4}-\d{2}-\d{2})", page.url)
-        date_str = date_match.group(1) if date_match else ""
-
-        # Now load the mixed feed (type=all) for this date
-        page.goto(f"{base_url}/?date={date_str}", wait_until="domcontentloaded")
-
-        # In the mixed feed, no badge should show "erstellt"
-        badges = page.locator("#feed-list .rounded.text-xs.font-medium")
-        badge_count = badges.count()
-        for i in range(min(badge_count, 20)):
-            text = badges.nth(i).inner_text().strip()
-            if text in ("erstellt", "aktualisiert", "gelöscht", "qualifiziert", "erledigt", "wiedereröffnet"):
-                assert text != "erstellt", "Found 'erstellt' activity badge in mixed feed"
-
-    def test_activities_filter_shows_created(self, authenticated_page, base_url):
+    def test_activities_filter_shows_created(self, authenticated_page, base_url, feed_fixture):
         """When filtering by 'Aktivitäten', created activities should be visible."""
-        page = authenticated_page
-        found = _find_date_with_activities(page, base_url, verb="erstellt")
-        if not found:
-            pytest.skip("No seed date with 'erstellt' activities found")
+        verbs = _verbs(authenticated_page, base_url, type="activities")
+        assert sorted(verbs) == ["erstellt", "qualifiziert"], verbs
 
-        # Page is already on the date with activities + type=activities
-        badges = page.locator("#feed-list .rounded.text-xs.font-medium")
-        badge_texts = [badges.nth(i).inner_text().strip() for i in range(badges.count())]
-        assert "erstellt" in badge_texts, "Expected 'erstellt' badges in activities filter"
-
-    def test_activity_card_has_badge(self, authenticated_page, base_url):
+    def test_activity_card_has_badge(self, authenticated_page, base_url, feed_fixture):
         """Activity cards should display a colored verb badge."""
         page = authenticated_page
-        found = _find_date_with_activities(page, base_url)
-        if not found:
-            pytest.skip("No seed date with activities found")
+        verbs = _verbs(page, base_url, type="activities")
+        assert len(verbs) == 2, verbs
+        assert all(verbs), verbs
+        cards = page.locator("#feed-list [data-testid='feed-activity-card']")
+        expect(cards).to_have_count(2)
+        for card in cards.all():
+            expect(card.locator("[data-testid='feed-kind-badge']")).to_have_text("Aktivität")
 
-        badges = page.locator("#feed-list .rounded.text-xs.font-medium")
-        assert badges.count() > 0, "No activity badges found"
-
-    def test_activity_card_links_to_target(self, authenticated_page, base_url):
+    def test_activity_card_links_to_target(self, authenticated_page, base_url, feed_fixture):
         """Non-deleted activity cards should link to their target detail page."""
         page = authenticated_page
-        found = _find_date_with_activities(page, base_url)
-        if not found:
-            pytest.skip("No seed date with activities found")
+        _verbs(page, base_url, type="activities")
 
-        # Look for activity cards that are links (non-deleted targets)
-        selector = (
-            "#feed-list a[href*='/clients/'],"
-            " #feed-list a[href*='/events/'],"
-            " #feed-list a[href*='/workitems/'],"
-            " #feed-list a[href*='/cases/']"
-        )
-        activity_links = page.locator(selector)
-        assert activity_links.count() > 0, "No clickable activity cards found"
+        # Both cards point at the person the activities were written for.
+        target = f"/clients/{feed_fixture['client']}/"
+        links = page.locator(f"#feed-list [data-testid='feed-activity-card'] a[href='{target}']")
+        expect(links).to_have_count(2)
 
 
 class TestHandoverPage:
@@ -222,20 +261,12 @@ class TestFeedCardHeaderToggle:
 
     _SEL = "#feed-list button[aria-controls^='event-detail-'], #feed-list button[aria-controls^='activity-detail-']"
 
-    def test_clicking_header_text_toggles_details(self, authenticated_page, base_url):
+    def test_clicking_header_text_toggles_details(self, authenticated_page, base_url, feed_fixture):
         """Klick auf den Zeit-Text der Kopfzeile (nicht den Chevron) klappt auf und wieder zu."""
-        import re
-
         page = authenticated_page
-        page.goto(f"{base_url}/", wait_until="domcontentloaded")
-        if page.locator(self._SEL).count() == 0:
-            # Fallback: ein Datum mit Aktivitäten suchen, dann gemischter Feed.
-            if not _find_date_with_activities(page, base_url):
-                pytest.skip("Kein Seed-Datum mit aufklappbaren Feed-Karten gefunden")
-            date_str = re.search(r"date=(\d{4}-\d{2}-\d{2})", page.url).group(1)
-            page.goto(f"{base_url}/?date={date_str}", wait_until="domcontentloaded")
-            if page.locator(self._SEL).count() == 0:
-                pytest.skip("Kein aufklappbarer Feed-Eintrag im gemischten Feed")
+        page.goto(f"{base_url}/?date={FEED_DAY}", wait_until="domcontentloaded")
+        # The fixed day holds expandable event and activity cards (precondition, not a skip).
+        expect(page.locator(self._SEL)).not_to_have_count(0)
 
         header = page.locator(self._SEL).first
         header.wait_for(state="visible", timeout=10000)
