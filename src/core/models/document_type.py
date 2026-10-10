@@ -1,6 +1,7 @@
 """Dokumentationstyp — konfigurierbarer Typ fuer Ereignisse/Personen/Faelle."""
 
 import uuid
+from contextlib import contextmanager
 
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
@@ -157,12 +158,14 @@ class DocumentType(ReportKeyMixin, SluggedModel):
         """Slug ist je Facility eindeutig (Muster FieldTemplate)."""
         return DocumentType.objects.filter(facility=self.facility).exclude(pk=self.pk)
 
-    def save(self, *args, **kwargs):
+    @contextmanager
+    def _save_context(self):
+        """Serialize shared slug persistence and sensitivity rewrites (Refs #2525)."""
         from core.services.dynamic_protection import configuration_write, rewrite_dynamic_records
 
         with configuration_write(self.facility_id):
             previous = DocumentType.objects.for_facility(self.facility_id).filter(pk=self.pk).first()
-            super().save(*args, **kwargs)
+            yield
             if previous is not None and previous.sensitivity != self.sensitivity:
                 rewrite_dynamic_records([self])
 

@@ -1,5 +1,7 @@
 """Reusable abstract model mixins."""
 
+from contextlib import nullcontext
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
@@ -30,9 +32,9 @@ class SluggedModel(models.Model):
       :meth:`_check_immutable_fields` (weitere Unveränderbarkeits-Guards
       beim Update, z. B. ``system_type``/``entity_type``).
 
-    Modelle mit eigener Save-Normalisierung (``FieldTemplate``: FILE/HIGH ⇒
-    ``is_encrypted``) behalten ein schlankes ``save()``, das die
-    Normalisierung erledigt und dann ``super().save()`` aufruft.
+    Subclasses can wrap the shared save through ``_save_context`` for atomic
+    configuration changes and rewrites. Models with normalization, such as
+    ``FieldTemplate``, may keep a thin override calling ``super().save()``.
     """
 
     _SLUG_RETRY_LIMIT = 3
@@ -57,37 +59,40 @@ class SluggedModel(models.Model):
     def _check_immutable_fields(self, orig):
         """Hook: weitere Unveränderbarkeits-Guards beim Update (Default: keine)."""
 
+    def _save_context(self):
+        """Wrap shared slug persistence and any subclass rewrite in one context."""
+        return nullcontext()
+
     def save(self, *args, **kwargs):
-        if self._state.adding:
-            auto_slug = not self.slug
-            if auto_slug:
-                self.slug = self._generate_unique_slug()
-            elif not _SLUG_RE.fullmatch(self.slug):
-                raise ValidationError(_("Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."))
-            self._check_new_slug()
-            if not auto_slug:
-                super().save(*args, **kwargs)
-                return
-            # Race-Condition (paralleles Anlegen desselben Namens): der
-            # Unique-Constraint schlägt zu, der Slug wird neu generiert.
-            # Nur für auto-generierte Slugs — ein explizit gesetzter Slug
-            # darf nicht hinter dem Rücken der Aufruferin umbenannt werden.
-            for attempt in range(self._SLUG_RETRY_LIMIT):
-                try:
-                    with transaction.atomic():
-                        super().save(*args, **kwargs)
-                    return
-                except IntegrityError:
-                    if attempt >= self._SLUG_RETRY_LIMIT - 1:
-                        raise
+        with self._save_context():
+            if self._state.adding:
+                auto_slug = not self.slug
+                if auto_slug:
                     self.slug = self._generate_unique_slug()
-        else:
-            orig = type(self)._default_manager.filter(pk=self.pk).first()
-            if orig:
-                self._check_immutable_fields(orig)
-                if orig.slug and orig.slug != self.slug:
-                    raise ValidationError(_("Slug kann nach Erstellung nicht geändert werden."))
-            super().save(*args, **kwargs)
+                elif not _SLUG_RE.fullmatch(self.slug):
+                    raise ValidationError(_("Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."))
+                self._check_new_slug()
+                if not auto_slug:
+                    super().save(*args, **kwargs)
+                    return
+                # Retry auto-generated slug collisions from concurrent inserts.
+                # Explicit slugs must never be silently renamed.
+                for attempt in range(self._SLUG_RETRY_LIMIT):
+                    try:
+                        with transaction.atomic():
+                            super().save(*args, **kwargs)
+                        return
+                    except IntegrityError:
+                        if attempt >= self._SLUG_RETRY_LIMIT - 1:
+                            raise
+                        self.slug = self._generate_unique_slug()
+            else:
+                orig = type(self)._default_manager.filter(pk=self.pk).first()
+                if orig:
+                    self._check_immutable_fields(orig)
+                    if orig.slug and orig.slug != self.slug:
+                        raise ValidationError(_("Slug kann nach Erstellung nicht geändert werden."))
+                super().save(*args, **kwargs)
 
 
 class SoftDeletableModel(models.Model):
