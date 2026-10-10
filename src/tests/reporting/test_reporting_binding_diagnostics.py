@@ -1,5 +1,6 @@
 """Local configuration diagnostics for report requirements."""
 
+import json
 from datetime import timedelta
 
 import pytest
@@ -62,9 +63,9 @@ def test_other_complete_type_does_not_mask_local_gap(partial_type, facility, sta
     )
     assert result.summary["events"] == 1
     assert result.summary["events_ohne_werte"] == 1
+    assert not any("Spritzentausch-Bilanz" in line for line in registry.describe_field_bindings(field, facility))
     assert any("rueckgabe_stueck" in warning for warning in registry.diagnose_type_bindings(doc_type, facility))
     assert any("Spritzentausch-Bilanz" in line for line in registry.describe_type_bindings(doc_type, facility))
-    assert not any("Spritzentausch-Bilanz" in line for line in registry.describe_field_bindings(field, facility))
 
 
 def test_inactive_field_does_not_complete_requirement(partial_type, facility):
@@ -117,7 +118,7 @@ def test_create_preview_warns_about_required_fields(facility):
     from core.forms.config import DocumentTypeForm
 
     form = DocumentTypeForm(facility=facility)
-    assert "rueckgabe_stueck" in form.report_key_bindings_json
+    assert "rueckgabe_stueck" in form.report_key_warnings_json
 
 
 def test_field_only_contributes_through_its_completed_alternative(partial_type, facility, monkeypatch):
@@ -200,3 +201,31 @@ def test_inactive_type_with_counted_values_remains_listed(partial_type, facility
     assert result.summary["summe_ausgabe"] == 3
     assert registry.diagnose_type_bindings(doc_type, facility) == []
     assert any("Spritzentausch-Bilanz" in line for line in registry.describe_type_bindings(doc_type, facility))
+
+
+def test_detail_view_renders_configuration_warning(client, admin_user, partial_type):
+    client.force_login(admin_user)
+    response = client.get(reverse("core:config_doctype_detail", args=[partial_type[0].pk]))
+    assert response.status_code == 200
+    assert b"rueckgabe_stueck" in response.content
+    assert b"report-binding-warning" in response.content
+
+
+def test_create_preview_separates_reports_and_warnings_without_queries(facility, django_assert_num_queries):
+    from core.forms.config import DocumentTypeForm
+
+    form = DocumentTypeForm(facility=facility)
+    with django_assert_num_queries(0):
+        reports = json.loads(form.report_key_bindings_json)
+        warnings = json.loads(form.report_key_warnings_json)
+    assert any("Spritzentausch-Bilanz" in name for name in reports["needle_exchange"])
+    assert all("fehlen" not in name for name in reports["needle_exchange"])
+    assert any("rueckgabe_stueck" in warning for warning in warnings["needle_exchange"])
+
+
+def test_create_view_has_separate_warning_heading(client, admin_user):
+    client.force_login(admin_user)
+    response = client.get(reverse("core:config_doctype_create"))
+    assert response.status_code == 200
+    assert b"data-report-key-warnings-output" in response.content
+    assert "Fehlende Zuordnungen" in response.content.decode()

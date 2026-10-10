@@ -358,6 +358,7 @@ def _requirement_state(requirement, document_type, facility, *, active_only=True
         # Each binding gets its own query: different fields satisfy the AND.
         present = (
             facility is not None
+            and not getattr(getattr(document_type, "_state", None), "adding", False)
             and types.filter(binding.template_q(), fields__field_template__facility=facility).exists()
         )
         matched = matched or present

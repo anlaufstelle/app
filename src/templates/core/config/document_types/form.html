@@ -50,6 +50,7 @@
              data-entity-scoped-fields="{{ form.event_only_fields_attr }}"
              data-report-key-defaults="{{ form.report_key_defaults_attr }}"
              data-report-key-bindings="{{ form.report_key_bindings_json }}"
+             data-report-key-warnings="{{ form.report_key_warnings_json }}"
              data-report-key-excluded-value="{{ form.report_key_excluded_value }}"
              data-report-key-empty-label="{% trans 'Noch kein Berichtsschlüssel gewählt.' %}"
              data-report-key-excluded-label="{% trans 'Gehört ausdrücklich in keinen Bericht.' %}"
@@ -79,6 +80,10 @@
             <div class="rounded-md border border-subtle bg-canvas p-3" data-entity-scoped-extra data-testid="doctype-report-key-preview">
                 <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Mögliche Berichte nach vollständiger Zuordnung" %}</p>
                 <p class="text-[13px] text-ink" data-report-key-bindings-output aria-live="polite"></p>
+                <div data-report-key-warnings-container hidden>
+                    <p class="mt-2 text-[12px] font-bold text-ink-soft">{% trans "Fehlende Zuordnungen" %}</p>
+                    <p class="text-[13px] text-ink" data-report-key-warnings-output aria-live="polite"></p>
+                </div>
                 <p class="mt-1 text-[12px] text-ink-muted">{% trans "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen." %}</p>
             </div>
             {% endif %}

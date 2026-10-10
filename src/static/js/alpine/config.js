@@ -67,6 +67,9 @@ document.addEventListener("alpine:init", () => {
         reportKeyTouched: false,
         reportKeyBindings: {},
         reportKeyBindingsOutput: null,
+        reportKeyWarnings: {},
+        reportKeyWarningsOutput: null,
+        reportKeyWarningsContainer: null,
         reportKeyExcludedValue: "",
         reportKeyEmptyLabel: "",
         reportKeyExcludedLabel: "",
@@ -115,6 +118,8 @@ document.addEventListener("alpine:init", () => {
             this.systemTypeSelect = root.querySelector("select[name='system_type']");
             this.reportKeySelect = root.querySelector("select[name='report_key']");
             this.reportKeyBindingsOutput = root.querySelector("[data-report-key-bindings-output]");
+            this.reportKeyWarningsOutput = root.querySelector("[data-report-key-warnings-output]");
+            this.reportKeyWarningsContainer = root.querySelector("[data-report-key-warnings-container]");
             this.reportKeyExcludedValue = root.dataset.reportKeyExcludedValue || "";
             this.reportKeyEmptyLabel = root.dataset.reportKeyEmptyLabel || "";
             this.reportKeyExcludedLabel = root.dataset.reportKeyExcludedLabel || "";
@@ -126,6 +131,12 @@ document.addEventListener("alpine:init", () => {
                 // Defektes oder altes Markup darf weder das Formular noch die
                 // übrige Entity-Scope-Komponente lahmlegen.
                 this.reportKeyBindings = {};
+            }
+            try {
+                const parsed = JSON.parse(root.dataset.reportKeyWarnings || "{}");
+                this.reportKeyWarnings = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+            } catch (_error) {
+                this.reportKeyWarnings = {};
             }
             if (!this.reportKeySelect) {
                 return;
@@ -164,6 +175,14 @@ document.addEventListener("alpine:init", () => {
                 return;
             }
             const key = this.reportKeySelect.value;
+            const warnings = key && key !== this.reportKeyExcludedValue ? this.reportKeyWarnings[key] : [];
+            const warningText = Array.isArray(warnings) ? warnings.join(" · ") : "";
+            if (this.reportKeyWarningsOutput) {
+                this.reportKeyWarningsOutput.textContent = warningText;
+            }
+            if (this.reportKeyWarningsContainer) {
+                this.reportKeyWarningsContainer.hidden = !warningText;
+            }
             if (!key) {
                 this.reportKeyBindingsOutput.textContent = this.reportKeyEmptyLabel;
                 return;

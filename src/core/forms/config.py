@@ -413,13 +413,20 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
 
     @property
     def report_key_bindings_json(self) -> str:
-        """Show candidate reports and incomplete requirements before creation."""
+        """Show candidate report names before creation."""
         bindings = {}
         for key in get_report_key_vocabulary():
-            candidate = DocumentType(facility=self.facility, report_key=key)
             bindings[key] = [str(backend.name) for backend in backends_for_report_key(key)]
-            bindings[key].extend(diagnose_type_bindings(candidate, self.facility))
         return json.dumps(bindings, ensure_ascii=False, separators=(",", ":"))
+
+    @property
+    def report_key_warnings_json(self) -> str:
+        """Keep missing mappings separate from candidate report names."""
+        warnings = {
+            key: diagnose_type_bindings(DocumentType(facility=self.facility, report_key=key), self.facility)
+            for key in get_report_key_vocabulary()
+        }
+        return json.dumps(warnings, ensure_ascii=False, separators=(",", ":"))
 
     @property
     def report_key_excluded_value(self) -> str:
