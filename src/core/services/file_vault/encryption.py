@@ -92,16 +92,19 @@ setting_changed.connect(_reset_fernet_cache)
 # Version and type are inside the Fernet payload and therefore authenticated.
 _FIELD_FORMAT_MAGIC = b"\x89ANLAUFSTELLE-FIELD\x00"
 _LIST_FIELD_V1_PREFIX = _FIELD_FORMAT_MAGIC + b"1:list\x00"
+_SCALAR_FIELD_V1_PREFIX = _FIELD_FORMAT_MAGIC + b"1:scalar\x00"
 
 
 def encrypt_field(value):
-    """Encrypt text as before and non-empty lists as a versioned typed payload."""
-    if not value:
+    """Encrypt scalar values and non-empty lists; preserve empty values."""
+    if value is None or value == "" or value == [] or value == {}:
         return value
     try:
         f = get_fernet()
         if isinstance(value, list):
             plaintext = _LIST_FIELD_V1_PREFIX + json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        elif isinstance(value, (bool, int)):
+            plaintext = _SCALAR_FIELD_V1_PREFIX + json.dumps(value).encode("utf-8")
         else:
             plaintext = str(value).encode("utf-8")
         token = f.encrypt(plaintext).decode("utf-8")
@@ -115,7 +118,7 @@ def encrypt_field(value):
 
 
 def decrypt_field(value):
-    """Restore typed lists; legacy UTF-8 tokens always remain text."""
+    """Restore typed lists, booleans and integers; legacy UTF-8 tokens remain text."""
     if not is_encrypted_value(value):
         return value
     try:
@@ -123,6 +126,14 @@ def decrypt_field(value):
         plaintext = f.decrypt(value["value"].encode("utf-8"))
         if not plaintext.startswith(_FIELD_FORMAT_MAGIC):
             return plaintext.decode("utf-8")
+        if plaintext.startswith(_SCALAR_FIELD_V1_PREFIX):
+            try:
+                decoded_scalar = json.loads(plaintext[len(_SCALAR_FIELD_V1_PREFIX) :].decode("utf-8"))
+            except ValueError as exc:
+                raise EncryptionError("Invalid encrypted scalar payload") from exc
+            if type(decoded_scalar) not in (bool, int):
+                raise EncryptionError("Encrypted scalar payload must contain a boolean or integer")
+            return decoded_scalar
         if not plaintext.startswith(_LIST_FIELD_V1_PREFIX):
             raise EncryptionError("Unsupported encrypted field format")
         try:
@@ -200,7 +211,7 @@ def encrypt_dynamic_data(document_type: DocumentType, data_json: dict[str, Any] 
     result = data_json.copy()
     for key in encrypted_slugs:
         value = result.get(key)
-        if value and not is_encrypted_value(value) and not _is_file_marker(value):
+        if value is not None and value != "" and not is_encrypted_value(value) and not _is_file_marker(value):
             result[key] = encrypt_field(value)
     return result
 

@@ -40,7 +40,7 @@ from collections.abc import Callable
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import Case, Client, Event, EventHistory, RectificationRequest, ShiftHandoverNote
+from core.models import Case, Client, Event, EventHistory, FieldTemplate, RectificationRequest, ShiftHandoverNote
 from core.models.attachment import Attachment
 from core.services.file_vault.encryption import encrypt_dynamic_data, encrypt_field, is_encrypted_value, safe_decrypt
 
@@ -61,6 +61,26 @@ def _reencrypt_data_json(payload):
             if decrypted != "[verschlüsselt]":
                 new_payload[key] = encrypt_field(decrypted)
                 changed = True
+    return new_payload, changed
+
+
+def _reencrypt_history_payload(payload, encrypted_slugs):
+    """Rotate tokens and encrypt newly protected history values without altering markers."""
+    from core.services.events.history_diff import is_redaction_marker
+
+    new_payload, changed = _reencrypt_data_json(payload)
+    if not isinstance(new_payload, dict) or is_redaction_marker(new_payload):
+        return new_payload, changed
+    for key in encrypted_slugs:
+        value = new_payload.get(key)
+        if value is None or is_encrypted_value(value):
+            continue
+        if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
+            continue
+        encrypted = encrypt_field(value)
+        if encrypted != value:
+            new_payload[key] = encrypted
+            changed = True
     return new_payload, changed
 
 
@@ -324,11 +344,23 @@ def _reencrypt_event_history(dry_run: bool, *, on_contended: Callable[[], None] 
     updated = 0
     pks = list(EventHistory.objects.values_list("pk", flat=True))
     for pk in pks:
-        hist = EventHistory.objects.filter(pk=pk).first()
+        hist = EventHistory.objects.select_related("event__facility").filter(pk=pk).first()
         if hist is None:
             continue
-        before, before_changed = _reencrypt_data_json(hist.data_before)
-        after, after_changed = _reencrypt_data_json(hist.data_after)
+        # Current facility templates also protect historical, no longer assigned fields.
+        encrypted_slugs = set(
+            FieldTemplate.objects.for_facility(hist.event.facility)
+            .filter(is_encrypted=True)
+            .values_list("slug", flat=True)
+        )
+        # Keep snapshot protection when a template has been removed or downgraded.
+        encrypted_slugs.update(
+            slug
+            for slug, metadata in hist.field_metadata.items()
+            if isinstance(metadata, dict) and metadata.get("is_encrypted") is True
+        )
+        before, before_changed = _reencrypt_history_payload(hist.data_before, encrypted_slugs)
+        after, after_changed = _reencrypt_history_payload(hist.data_after, encrypted_slugs)
         if not (before_changed or after_changed):
             continue
         if dry_run:

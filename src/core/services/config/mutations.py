@@ -23,16 +23,26 @@ from core.services.compliance.sensitivity import validate_explicit_high_field
 from core.services.config.block_order import _compact_block_positions, _next_block_position
 
 
+def _rewrite_document_type_records(doc_type: DocumentType) -> None:
+    """Rewrite scoped values and event indexes inside the configuration transaction."""
+    for model in (Event, Client, Case):
+        records = (
+            model.objects.for_facility(doc_type.facility)
+            .filter(document_type=doc_type)
+            .select_related("document_type")
+            .select_for_update(of=("self",))
+        )
+        for record in records.iterator(chunk_size=500):
+            fields = ["data_json", "search_text"] if isinstance(record, Event) else ["data_json"]
+            record.save(update_fields=fields)
+
+
 def save_document_type(request, form, *, creating: bool) -> DocumentType:
-    """Speichert einen DocumentType und schreibt CONFIG_CREATE/CONFIG_UPDATE."""
+    """Save a type and atomically rewrite records when its sensitivity changes."""
     changed_fields = list(form.changed_data)
     previous_sensitivity = form.initial.get("sensitivity", "")
     with transaction.atomic():
         obj = form.save()
-        # Refs #1917: Konfig-Änderungen an einem Ban-Typ (is_active gated die
-        # Banner-Query, sensitivity die Grund-Sichtbarkeit) müssen die
-        # Hausverbots-Revision im selben Commit bumpen. Beim Anlegen gibt es
-        # noch keine Events, also keine Banner-Wirkung.
         if not creating:
             from core.services.system.ban_revision import bump_ban_revision_for_document_type_change
 
@@ -41,50 +51,54 @@ def save_document_type(request, form, *, creating: bool) -> DocumentType:
                 changed_fields,
                 previous_sensitivity=previous_sensitivity,
             )
-    action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
-    log_audit_event(
-        request,
-        action,
-        target_obj=obj,
-        detail={"name": obj.name, "changed_fields": changed_fields},
-    )
+            if obj.sensitivity != previous_sensitivity:
+                _rewrite_document_type_records(obj)
+        action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
+        log_audit_event(
+            request,
+            action,
+            target_obj=obj,
+            detail={"name": obj.name, "changed_fields": changed_fields},
+        )
     return obj
 
 
 def save_field_template(request, form, *, creating: bool, facility) -> FieldTemplate:
-    """Speichert eine FieldTemplate und schreibt CONFIG_CREATE/CONFIG_UPDATE.
-
-    Beim Anlegen wird die ``facility`` gesetzt (die kommt aus dem Request-Scope,
-    nicht aus dem Formular).
-    """
+    """Save a scoped template and atomically apply protection changes to its records."""
     changed_fields = list(form.changed_data)
     obj = form.save(commit=False)
     if creating:
         obj.facility = facility
-    # E-J (Refs #1849), vierter Weg: der Schluessel kann auch NACHTRAEGLICH
-    # gesetzt werden, ohne dass eine Zuordnung stattfindet. Das Formular faengt
-    # das ab; hier steht die Regel ein zweites Mal, weil dieser Pfad auch ohne
-    # Formular erreichbar ist (Skript, kuenftiger API-Aufruf) und der entstehende
-    # Zustand irreparabel waere.
-    konflikt = conflicting_report_key_assignment(obj, obj.report_key, is_active=obj.is_active)
-    if konflikt is not None:
-        _doc_type, bestand = konflikt
+    # Validate the report binding even for callers outside the configuration UI.
+    conflict = conflicting_report_key_assignment(obj, obj.report_key, is_active=obj.is_active)
+    if conflict is not None:
+        _doc_type, existing = conflict
         raise ValidationError(
             _(
                 "„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
                 "„%(bestand)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
                 "zulässig — sonst zählt der Bericht keine von beiden."
             )
-            % {"neu": obj.name, "bestand": bestand.name}
+            % {"neu": obj.name, "bestand": existing.name}
         )
-    obj.save()
-    action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
-    log_audit_event(
-        request,
-        action,
-        target_obj=obj,
-        detail={"name": obj.name, "changed_fields": changed_fields},
-    )
+    with transaction.atomic():
+        obj.save()
+        if not creating and (
+            obj.sensitivity != form.initial.get("sensitivity", "")
+            or obj.is_encrypted != form.initial.get("is_encrypted", False)
+        ):
+            document_types = (
+                DocumentType.objects.for_facility(facility).filter(fields__field_template=obj).distinct().order_by("pk")
+            )
+            for doc_type in document_types:
+                _rewrite_document_type_records(doc_type)
+        action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
+        log_audit_event(
+            request,
+            action,
+            target_obj=obj,
+            detail={"name": obj.name, "changed_fields": changed_fields},
+        )
     return obj
 
 
