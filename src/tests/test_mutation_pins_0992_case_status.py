@@ -262,7 +262,10 @@ class TestAbfrageBudgetDerStatuswechsel:
     The phase discovers the facility from the person PK, obtains its shared
     gate and verifies the facility before entity rows without configuration
     scans (Refs #2525). Warm ContentType separately; its one-time lookup is not
-    part of these workflow budgets. Keep every budget exact.
+    part of these workflow budgets. Keep every budget exact. Closing and
+    reopening also record business case activity (Refs #2524): one snapshot
+    read of the case fields and two scoped ``last_activity_at`` updates (status
+    save and activity entry), so their exact count is 16 + 3.
     """
 
     def _assert_gate_before_rows_without_configuration_scans(self, captured):
@@ -281,13 +284,13 @@ class TestAbfrageBudgetDerStatuswechsel:
     def test_close_case_budget(self, case_open, staff_user):
         with CaptureQueriesContext(connection) as captured:
             close_case(case_open, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 16
+        assert len(_fachliche_abfragen(captured)) == 19
         self._assert_gate_before_rows_without_configuration_scans(captured)
 
     def test_reopen_case_budget(self, case_closed, staff_user):
         with CaptureQueriesContext(connection) as captured:
             reopen_case(case_closed, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 16
+        assert len(_fachliche_abfragen(captured)) == 19
         self._assert_gate_before_rows_without_configuration_scans(captured)
 
     def test_achieve_goal_budget(self, outcome_goal, staff_user):
