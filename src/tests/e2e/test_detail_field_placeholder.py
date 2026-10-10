@@ -38,7 +38,12 @@ def placeholder_event_pk(e2e_env):
     verifiziert gegen ``_widget_multi_select``/``FieldTemplateForm.
     clean_options_json``) — der reale Weg ist eine Feldvorlage, deren Optionen
     NACH dem Erfassen entfernt wurden (Bestandsdaten, #2243-Ticket-Notiz); die
-    ORM-Erstellung hier bildet exakt diesen Endzustand ab.
+    ORM-Erstellung hier bildet exakt diesen Endzustand ab. Das Ereignis wird
+    mit gueltigen Optionen gespeichert (der Schreibpfad prueft Optionsbezuege);
+    die Optionen entfernt ein direktes SQL-Update, weil Vorlagen-Speichern und
+    Queryset-Updates verwendete Optionen schuetzen — der Zustand ist nur noch
+    als Altbestand (Import, Direktzugriff) erreichbar, das Rendering muss ihn
+    dennoch lesbar darstellen.
     """
     script = (
         "from django.utils import timezone;"
@@ -52,12 +57,17 @@ def placeholder_event_pk(e2e_env):
         "field_type=FieldTemplate.FieldType.TEXT);"
         "ms_ft = FieldTemplate.objects.create(facility=facility, "
         "name='E2E Mehrfachauswahl ohne Optionen', "
-        "field_type=FieldTemplate.FieldType.MULTI_SELECT, options_json=[]);"
+        "field_type=FieldTemplate.FieldType.MULTI_SELECT, "
+        "options_json=[{'slug': 'a', 'label': 'A'}, {'slug': 'b', 'label': 'B'}]);"
         "DocumentTypeField.objects.create(document_type=doc_type, field_template=text_ft, sort_order=0);"
         "DocumentTypeField.objects.create(document_type=doc_type, field_template=ms_ft, sort_order=1);"
         "event = Event.objects.create(facility=facility, client=client, document_type=doc_type, "
         "occurred_at=timezone.now(), data_json={text_ft.slug: '', ms_ft.slug: ['a', 'b']}, "
         "created_by=creator);"
+        "from django.db import connection;"
+        "meta = FieldTemplate._meta;"
+        "connection.cursor().execute('UPDATE ' + meta.db_table + ' SET options_json = %s WHERE ' "
+        "+ meta.pk.column + ' = %s', ['[]', str(ms_ft.pk)]);"
         "print('event', event.pk)"
     )
     for line in django_shell(e2e_env, script):

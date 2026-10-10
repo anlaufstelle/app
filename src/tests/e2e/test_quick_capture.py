@@ -14,7 +14,7 @@ import time
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import wait_until_htmx_bound
+from ._helpers import wait_until, wait_until_htmx_bound
 
 pytestmark = pytest.mark.e2e
 
@@ -411,9 +411,12 @@ class TestAutoSave:
         dauer_value = page.locator("input[name='dauer']").input_value()
         assert dauer_value == "77", f"Server-Prefill (77) sollte den Draft (11) ueberschreiben, ist: {dauer_value!r}"
 
-        # 3) Draft muss aus IndexedDB entfernt sein
-        stored = page.evaluate(self._JS_GET)
-        assert stored is None, "Draft sollte beim Server-Prefill geloescht sein"
+        # 3) Draft muss aus IndexedDB entfernt sein. Das Entfernen laeuft im
+        # asynchronen Autosave-Start (hinter dem Boot-Lauf des Sync-Orchestrators),
+        # daher pollen statt einmal direkt nach domcontentloaded zu lesen.
+        assert wait_until(page, lambda: page.evaluate(self._JS_GET) is None, timeout_ms=15000), (
+            "Draft sollte beim Server-Prefill geloescht sein"
+        )
 
         page.evaluate(self._JS_CLEAR)
 
