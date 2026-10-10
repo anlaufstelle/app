@@ -42,6 +42,14 @@ TRANSLATED_FILES = [
     "docs/en/glossary.md",
     "docs/en/data-protection.md",
     "docs/en/reporting-plugins.md",
+    "docs/en/adr/022-offline-snapshot-keys.md",
+    "docs/en/adr/030-offline-sync-orchestration-replay-contract.md",
+    "docs/en/disaster-recovery.md",
+    "docs/en/dsfa.md",
+    "docs/en/faq.md",
+    "docs/en/security-notes.md",
+    "docs/en/threat-model.md",
+    "docs/en/toms.md",
 ]
 
 
