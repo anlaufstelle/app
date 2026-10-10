@@ -26,7 +26,7 @@ The data model distinguishes personless events from two contact stages for peopl
 
 - **Personless contact** -- No linked person record. The event has no person in the data model (one visit, one service). That does not make it anonymous by content: depending on the documentation type it can carry free text, locations or attachments (for example the personless incident capture of the awareness package) that make a person identifiable. Most contacts at a drop-in center remain at this level.
 - **Pseudonym only** (`identified`) -- The team assigns a pseudonym (e.g. "Maus"). Under this pseudonym, the system tracks a contact history and a timeline. The intended workflow keeps the mapping from pseudonym to real person in the minds of staff, and there is no required field for real names. The software does not technically prevent real names: pseudonyms, notes, free-text fields and attachments contain whatever the team enters.
-- **With additional details** (`qualified`) -- Additional personal details are stored in dynamic fields. Field encryption and role-based visibility are separate rules. Social workers and above may raise the contact stage; only Manager and Application support may lower it. Stage changes are logged.
+- **With additional details** (`qualified`) -- Additional personal details are stored in dynamic fields. Field encryption and role-based visibility are separate rules. Social workers and above may raise the contact stage. Without existing events, Manager and Application support may directly lower it to "Pseudonym only". With existing events, direct lowering is blocked: Manager or Application support must submit a downgrade request. Approval requires another active person in the same facility with deletion confirmation permission; this may also be an Assistant or Social worker. Stage changes are logged.
 
 Contact stages affect permitted [documentation types](glossary.md), deletion workflows, detail-view auditing and retention. Assistants may open person detail pages at either stage. Dynamic fields are visible only when the higher sensitivity of type and field is permitted for the role: Normal for Assistant, up to Elevated for Social worker, all levels for Manager and Application support. Internal person notes are visible only to Social worker and above. Encryption does not itself impose a role restriction.
 
@@ -349,4 +349,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 61c2ef05de8dad5b9fbb710b82ff9b1a365514f6 -->
+<!-- source-hash: 2b0f373664dfe7a7f9b603b390f85b84559508df -->
