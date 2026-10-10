@@ -200,7 +200,7 @@ class TestFieldTemplateBulkAtomicity:
         sperren = [
             query["sql"]
             for query in ctx.captured_queries
-            if "FOR UPDATE" in query["sql"].upper() and "core_fieldtemplate" in query["sql"].lower()
+            if "FOR NO KEY UPDATE" in query["sql"].upper() and "core_fieldtemplate" in query["sql"].lower()
         ]
         assert sperren, "Der Vorfilter muss die betroffenen Vorlagen per select_for_update sperren"
 

@@ -33,7 +33,9 @@ def save_document_type(request, form, *, creating: bool) -> DocumentType:
             previous_sensitivity = ""
         else:
             current = (
-                DocumentType.objects.for_facility(request.current_facility).select_for_update().get(pk=form.instance.pk)
+                DocumentType.objects.for_facility(request.current_facility)
+                .select_for_update(no_key=True, of=("self",))
+                .get(pk=form.instance.pk)
             )
             previous_sensitivity = current.sensitivity
             # Preserve fresh protection when a partial form does not edit it.
@@ -71,13 +73,15 @@ def save_field_template(request, form, *, creating: bool, facility) -> FieldTemp
         lock_dynamic_protection(facility.pk, exclusive=True)
         document_types = []
         if not creating:
-            current = FieldTemplate.objects.for_facility(facility).select_for_update().get(pk=obj.pk)
+            current = (
+                FieldTemplate.objects.for_facility(facility).select_for_update(no_key=True, of=("self",)).get(pk=obj.pk)
+            )
             assigned_type_ids = DocumentTypeField.objects.filter(field_template=current).values("document_type_id")
             document_types = list(
                 DocumentType.objects.for_facility(facility)
                 .filter(pk__in=assigned_type_ids)
                 .order_by("pk")
-                .select_for_update()
+                .select_for_update(no_key=True, of=("self",))
             )
             for doc_type in document_types:
                 validate_explicit_high_field(doc_type.sensitivity, obj.sensitivity, obj.name)
@@ -254,9 +258,15 @@ def add_field_to_doctype(
     # Refs #2525: lock configuration before checking current protection.
     lock_dynamic_protection(doc_type.facility_id, exclusive=True)
     field_template = (
-        FieldTemplate.objects.for_facility(doc_type.facility_id).select_for_update().get(pk=field_template.pk)
+        FieldTemplate.objects.for_facility(doc_type.facility_id)
+        .select_for_update(no_key=True, of=("self",))
+        .get(pk=field_template.pk)
     )
-    doc_type = DocumentType.objects.for_facility(doc_type.facility_id).select_for_update().get(pk=doc_type.pk)
+    doc_type = (
+        DocumentType.objects.for_facility(doc_type.facility_id)
+        .select_for_update(no_key=True, of=("self",))
+        .get(pk=doc_type.pk)
+    )
     validate_explicit_high_field(doc_type.sensitivity, field_template.sensitivity, field_template.name)
     # Befund A (Refs #1056): Zugehörigkeit der Ziel-Gruppe hier prüfen, weil
     # .create() den Modell-clean()-Guard umgeht. Fehlerklasse konsistent zu

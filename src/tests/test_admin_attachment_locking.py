@@ -95,7 +95,11 @@ def test_admin_bulk_configuration_takes_all_gates_before_rows(facility, admin_us
         else:
             model_admin.delete_queryset(_request(RequestFactory(), admin_user), queryset)
     queries = [query["sql"] for query in captured.captured_queries]
-    first_row_lock = next(index for index, sql in enumerate(queries) if "FOR UPDATE" in sql)
+    first_row_lock = next(
+        index for index, sql in enumerate(queries) if "FOR UPDATE" in sql or "FOR NO KEY UPDATE" in sql
+    )
+    # Toggles change no key column; deletions keep the full row lock.
+    assert ("FOR NO KEY UPDATE" in queries[first_row_lock]) is (operation == "activate")
     gates = [sql for sql in queries[:first_row_lock] if "pg_advisory_xact_lock(2525," in sql]
     assert len(gates) == 2
     assert [next(fid for fid in expected if fid in sql) for sql in gates] == expected

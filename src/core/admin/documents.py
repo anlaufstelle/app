@@ -238,11 +238,17 @@ class FieldTemplateAdmin(ConfigurationSelectionAdminMixin, ModelAdmin):
 
         Audit locks have their own namespace. Sort their acquisition by their
         actual keys, retaining row order within each facility for hash ties.
+        The row lock stays ``FOR NO KEY UPDATE``: the toggle changes no key
+        column, so referencing inserts keep their deferred FK checks free.
         """
         with transaction.atomic():
             facility_ids = queryset.order_by().values_list("facility_id", flat=True).distinct()
             lock_dynamic_protection_many(facility_ids, exclusive=True)
-            affected = list(queryset.select_for_update().filter(is_active=not is_active).order_by("facility_id", "pk"))
+            affected = list(
+                queryset.select_for_update(no_key=True, of=("self",))
+                .filter(is_active=not is_active)
+                .order_by("facility_id", "pk")
+            )
             if not affected:
                 return 0
             lock_ids = {fid: (advisory_lock_id(fid) or 0) for fid in {obj.facility_id for obj in affected}}
