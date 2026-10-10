@@ -256,9 +256,12 @@ class TestEventDetailMultiSelectWithoutOptions:
             client=client_identified,
             document_type=doc_type,
             occurred_at=timezone.now(),
-            data_json={ft.slug: ["a", "b"]},
+            data_json={},
             created_by=staff_user,
         )
+
+        # Unconfigured or invalid slugs are historical values, not new selections.
+        type(event).objects.filter(pk=event.pk).update(data_json={ft.slug: ["a", "b"]})
 
         content = detail_content(client, staff_user, event)
         dd_html = field_value_html(content, "Freie Mehrfachauswahl")
@@ -283,9 +286,12 @@ class TestEventDetailMultiSelectWithoutOptions:
             client=client_identified,
             document_type=doc_type,
             occurred_at=timezone.now(),
-            data_json={ft.slug: ["<script>alert(1)</script>"]},
+            data_json={},
             created_by=staff_user,
         )
+
+        # Unconfigured or invalid slugs are historical values, not new selections.
+        type(event).objects.filter(pk=event.pk).update(data_json={ft.slug: ["<script>alert(1)</script>"]})
 
         content = detail_content(client, staff_user, event)
         dd_html = field_value_html(content, "Escaping-Feld")

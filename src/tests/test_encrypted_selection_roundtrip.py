@@ -34,6 +34,7 @@ from core.services.file_vault import decrypt_field, encrypt_dynamic_data, genera
 )
 def test_encrypted_values_survive_persistence_paths(entity_type, path, value, facility, client_identified, staff_user):
     old_key, new_key = generate_key(), generate_key()
+    legacy = isinstance(value, list) and any(item not in {"a", "b", "c"} for item in value)
     document_type = DocumentType.objects.create(
         facility=facility,
         name="Typed fields",
@@ -49,6 +50,7 @@ def test_encrypted_values_survive_persistence_paths(entity_type, path, value, fa
             if isinstance(value, list)
             else FieldTemplate.FieldType.TEXT,
             is_encrypted=encrypted,
+            options_json=[{"slug": slug, "label": slug} for slug in ("a", "b", "c")] if isinstance(value, list) else [],
         )
         DocumentTypeField.objects.create(document_type=document_type, field_template=template)
     kwargs = {
@@ -65,11 +67,26 @@ def test_encrypted_values_survive_persistence_paths(entity_type, path, value, fa
         obj = Event(client=client_identified, occurred_at=timezone.now(), **kwargs)
 
     with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        if legacy:
+            # Invalid slugs can only be historical values, never a new selection.
+            # Inject plaintext history, then exercise real encryption on save/bulk/rotation.
+            original_data = obj.data_json.copy()
+            obj.data_json = {}
+            if path == "bulk":
+                type(obj).objects.bulk_create([obj])
+            else:
+                obj.save()
+            type(obj).objects.filter(pk=obj.pk).update(data_json=original_data)
+            obj.refresh_from_db()
         if path == "bulk":
             original_data = obj.data_json.copy()
             obj.data_json = encrypt_dynamic_data(document_type, obj.data_json)
             assert original_data == {"private": value, "public": value}
-            type(obj).objects.bulk_create([obj])
+            if legacy:
+                # Existing legacy selections use the protected bulk update path.
+                type(obj).objects.bulk_update([obj], ["data_json"])
+            else:
+                type(obj).objects.bulk_create([obj])
         else:
             obj.save()
             first_stored = obj.data_json["private"]

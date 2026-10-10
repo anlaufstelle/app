@@ -37,54 +37,68 @@ def backend():
     return registry.get_backend("service-distribution")
 
 
-def _typ_mit_feld(facility, name, *, report_key, feld_name, feld_typ, anhaengen=True):
-    """Der ``report_key`` ist die Achse, auf der dieses Backend bindet (E3/E4)."""
+def _type_with_field(facility, name, *, report_key, field_name, field_type, attach=True):
+    """Bind the backend by report key and configure valid selection options."""
     doc_type = DocumentType.objects.create(
         facility=facility,
         name=name,
         report_key=report_key,
     )
-    if anhaengen:
-        feld, _created = FieldTemplate.objects.get_or_create(
+    if attach:
+        field, _created = FieldTemplate.objects.get_or_create(
             facility=facility,
-            name=feld_name,
-            defaults={"field_type": feld_typ, "report_key": feld_report_key_fuer(feld_name)},
+            name=field_name,
+            defaults={
+                "field_type": field_type,
+                "report_key": feld_report_key_fuer(field_name),
+                "options_json": [
+                    {"slug": slug, "label": slug}
+                    for slug in (
+                        ("essen", "duschen", "beratung", "sachspenden")
+                        if field_type == FieldTemplate.FieldType.MULTI_SELECT
+                        else ("gewalt", "suizidal", "sucht")
+                    )
+                ],
+            },
         )
-        DocumentTypeField.objects.create(document_type=doc_type, field_template=feld)
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=field)
     return doc_type
 
 
 @pytest.fixture
 def kontakt_typ(facility):
-    return _typ_mit_feld(
+    return _type_with_field(
         facility,
         "Kontakt",
         report_key="contact",
-        feld_name="Leistungen",
-        feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+        field_name="Leistungen",
+        field_type=FieldTemplate.FieldType.MULTI_SELECT,
     )
 
 
 @pytest.fixture
 def krise_typ(facility):
-    return _typ_mit_feld(
+    return _type_with_field(
         facility,
         "Krisengespräch",
         report_key="crisis",
-        feld_name="Art der Krise",
-        feld_typ=FieldTemplate.FieldType.SELECT,
+        field_name="Art der Krise",
+        field_type=FieldTemplate.FieldType.SELECT,
     )
 
 
-def _events(facility, doc_type, user, anzahl, data):
-    for _index in range(anzahl):
-        Event.objects.create(
+def _events(facility, doc_type, user, count, data, *, legacy=False):
+    for _index in range(count):
+        event = Event.objects.create(
             facility=facility,
             document_type=doc_type,
             occurred_at=timezone.now(),
-            data_json=dict(data),
+            data_json={} if legacy else dict(data),
             created_by=user,
         )
+        if legacy:
+            # Historical malformed or removed selections predate write validation.
+            Event.objects.filter(pk=event.pk).update(data_json=dict(data))
 
 
 class TestDiscoveryUndMetadaten:
@@ -151,7 +165,7 @@ class TestBuildDataset:
         """Altwert-Robustheit: aeltere/fremde Schreibpfade legen einen blanken
         String ab, wo heute eine Liste steht.
         """
-        _events(facility, kontakt_typ, admin_user, 2, {LEISTUNGEN_SLUG: "beratung"})
+        _events(facility, kontakt_typ, admin_user, 2, {LEISTUNGEN_SLUG: "beratung"}, legacy=True)
 
         result = backend.build_dataset(facility, *date_range)
 
@@ -159,8 +173,8 @@ class TestBuildDataset:
         assert result.summary["events_leistungen"] == 2
 
     def test_muellwerte_sind_kein_absturz(self, backend, facility, admin_user, kontakt_typ, date_range):
-        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: 42})
-        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["", "   ", None, 7]})
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: 42}, legacy=True)
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["", "   ", None, 7]}, legacy=True)
         _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["essen"]})
 
         result = backend.build_dataset(facility, *date_range)
@@ -176,7 +190,7 @@ class TestBuildDataset:
         """Options-Keys kommen roh aus ``data_json`` — auch inaktive oder
         geloeschte Optionen bleiben so sichtbar, wie sie dokumentiert wurden.
         """
-        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["sachspenden", "gibt-es-nicht"]})
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["sachspenden", "gibt-es-nicht"]}, legacy=True)
 
         result = backend.build_dataset(facility, *date_range)
 
@@ -219,12 +233,12 @@ class TestBuildDataset:
     def test_fremde_einrichtung_zaehlt_nicht(
         self, backend, facility, kontakt_typ, second_facility, second_facility_user, date_range
     ):
-        fremd = _typ_mit_feld(
+        fremd = _type_with_field(
             second_facility,
             "Kontakt",
             report_key="contact",
-            feld_name="Leistungen",
-            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+            field_name="Leistungen",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
         )
         _events(second_facility, fremd, second_facility_user, 3, {LEISTUNGEN_SLUG: ["essen"]})
 
@@ -236,12 +250,12 @@ class TestBuildDataset:
 class TestTypaufloesung:
     def test_typ_zaehlt_ueber_den_report_key(self, backend, facility, admin_user, date_range):
         """Die Zuordnung kommt allein aus dem Schluessel (Entscheid E-D)."""
-        typ = _typ_mit_feld(
+        typ = _type_with_field(
             facility,
             "Kontakt",
             report_key="contact",
-            feld_name="Leistungen",
-            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+            field_name="Leistungen",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
         )
         assert typ.slug == "kontakt"
         _events(facility, typ, admin_user, 1, {LEISTUNGEN_SLUG: ["essen"]})
@@ -252,12 +266,12 @@ class TestTypaufloesung:
 
     def test_der_slug_allein_zaehlt_nicht_mehr(self, backend, facility, admin_user, date_range):
         """Entscheid E-E (Refs #1849): der Paket-Slug ordnet nichts mehr zu."""
-        typ = _typ_mit_feld(
+        typ = _type_with_field(
             facility,
             "Kontakt",
             report_key=None,
-            feld_name="Leistungen",
-            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+            field_name="Leistungen",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
         )
         assert typ.slug == "kontakt"
         _events(facility, typ, admin_user, 1, {LEISTUNGEN_SLUG: ["essen"]})
@@ -276,12 +290,12 @@ class TestTypaufloesung:
         Ausschluss im ``system_type=note``; heute steht er da, wo die
         Zuordnung selbst steht.
         """
-        echter_kontakt = _typ_mit_feld(
+        echter_kontakt = _type_with_field(
             facility,
             "Kontaktdokumentation",
             report_key="contact",
-            feld_name="Leistungen",
-            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+            field_name="Leistungen",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
         )
         notiz = DocumentType.objects.create(
             facility=facility,
@@ -549,12 +563,12 @@ class TestIsAvailable:
         assert backend.is_available(facility) is False
 
     def test_feld_am_falschen_typ(self, backend, facility):
-        _typ_mit_feld(
+        _type_with_field(
             facility,
             "Spritzentausch",
             report_key="needle_exchange",
-            feld_name="Leistungen",
-            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+            field_name="Leistungen",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
         )
 
         assert backend.is_available(facility) is False
@@ -565,12 +579,12 @@ class TestIsAvailable:
         assert backend.is_available(facility) is False
 
     def test_fremde_einrichtung_macht_nicht_verfuegbar(self, backend, facility, second_facility):
-        _typ_mit_feld(
+        _type_with_field(
             second_facility,
             "Kontakt",
             report_key="contact",
-            feld_name="Leistungen",
-            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+            field_name="Leistungen",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
         )
 
         assert backend.is_available(facility) is False

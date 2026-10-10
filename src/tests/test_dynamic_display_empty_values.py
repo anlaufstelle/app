@@ -330,14 +330,17 @@ class TestClientExportPdfEmptyValues:
                 )
                 stored_value_set.add(semantic_value)
 
-        make_event(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type,
             occurred_at=timezone.now(),
-            data_json=stored_data,
+            data_json={},
             created_by=staff_user,
         )
+
+        # Unconfigured choices represent historical values that must remain readable.
+        type(event).objects.filter(pk=event.pk).update(data_json=stored_data)
 
         from core.services.client import export_client_data
 
@@ -385,8 +388,10 @@ class TestClientDetailMultiSelectWithoutOptions:
         )
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
         client_identified.document_type = doc_type
-        client_identified.data_json = {ft.slug: ["a", "b"]}
+        client_identified.data_json = {}
         client_identified.save()
+        # A selection without options is historical data, not a permitted new write.
+        type(client_identified).objects.filter(pk=client_identified.pk).update(data_json={ft.slug: ["a", "b"]})
 
         content = detail_content(client, lead_user, "core:client_detail", client_identified.pk)
         dd_html = field_value_html(content, "Freie Mehrfachauswahl")
