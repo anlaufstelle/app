@@ -2201,3 +2201,117 @@ def test_configuration_row_locks_leave_fk_checks_free_outside_deletions():
 )
 def test_configuration_lock_strength_guard_cases(source, expected):
     assert find_key_strength_configuration_locks(source) == expected
+
+
+def _configuration_update_fields(node, aliases):
+    """Resolve literal field lists and their local aliases without executing code."""
+    if isinstance(node, ast.Name):
+        return aliases.get(node.id)
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return {item.value for item in node.elts if isinstance(item, ast.Constant) and isinstance(item.value, str)}
+    return set()
+
+
+def find_configuration_facility_updates(source):
+    """Find type/template facility moves that bypass the model save guard.
+
+    An exclusive gate does not make a facility move valid (Refs #2525).
+    Resolve direct model receivers, imported aliases, annotated local queryset
+    aliases and literal field lists. Nested functions have separate scopes;
+    rebinding a local alias clears its previous meaning. Dynamic receivers,
+    returned querysets, raw SQL and computed field lists require separate review.
+    """
+    tree = ast.parse(source)
+    models = {"DocumentType", "FieldTemplate"}
+    models.update(
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+        if alias.name in {"DocumentType", "FieldTemplate"}
+    )
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    violations = []
+    for function in (node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))):
+        query_aliases = set(models)
+        field_aliases = {}
+        for node in sorted(ast.walk(function), key=lambda item: getattr(item, "lineno", 0)):
+            owner = node
+            while owner is not function and owner in parents:
+                owner = parents[owner]
+                if isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    break
+            if owner is not function:
+                continue
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                names = {target.id for target in targets if isinstance(target, ast.Name)}
+                is_configuration = _configuration_root(node.value) in query_aliases
+                fields = _configuration_update_fields(node.value, field_aliases)
+                query_aliases.difference_update(names)
+                if is_configuration:
+                    query_aliases.update(names)
+                for name in names:
+                    field_aliases[name] = fields
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if _configuration_root(node.func.value) not in query_aliases:
+                continue
+            fields = set()
+            if node.func.attr == "update":
+                fields = {keyword.arg for keyword in node.keywords}
+            elif node.func.attr == "bulk_update":
+                argument = next((keyword.value for keyword in node.keywords if keyword.arg == "fields"), None)
+                if argument is None and len(node.args) > 1:
+                    argument = node.args[1]
+                fields = _configuration_update_fields(argument, field_aliases)
+            if fields and fields.intersection({"facility", "facility_id"}):
+                violations.append((function.name, node.lineno))
+    return violations
+
+
+def test_runtime_configuration_facilities_are_not_updated_through_querysets():
+    root = Path(__file__).resolve().parents[1] / "core"
+    violations = [
+        (path.relative_to(root).as_posix(), function, line)
+        for path in sorted(root.rglob("*.py"))
+        if "migrations" not in path.relative_to(root).parts
+        for function, line in find_configuration_facility_updates(path.read_text())
+    ]
+    assert not violations, f"Type/template facility moves bypass their save guard: {violations}"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "def write(facility):\n    DocumentType.objects.update(facility=facility)\n",
+        "def write(facility):\n    FieldTemplate.objects.update(facility_id=facility.pk)\n",
+        "def write(rows):\n    DocumentType.objects.bulk_update(rows, ['name', 'facility'])\n",
+        "def write(rows):\n    FieldTemplate.objects.bulk_update(rows, fields=['facility_id'])\n",
+        "from core.models import FieldTemplate as Template\n"
+        "def write(rows):\n    selected: object = Template.objects.all()\n"
+        "    fields = ['name', 'facility']\n    selected.bulk_update(rows, fields)\n",
+        "def write(facility):\n    with configuration_write(facility.pk):\n"
+        "        DocumentType.objects.update(facility=facility)\n",
+    ],
+)
+def test_configuration_facility_update_guard_rejects_model_bypasses(source):
+    assert find_configuration_facility_updates(source)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "def write(facility):\n    Event.objects.update(facility=facility)\n",
+        "def write(facility):\n    DocumentType.objects.filter(facility=facility).update(name='Renamed')\n",
+        "def write(rows):\n    FieldTemplate.objects.bulk_update(rows, ['name'])\n",
+        "def write(facility):\n    selected = DocumentType.objects.all()\n"
+        "    selected = Event.objects.all()\n    selected.update(facility=facility)\n",
+        "def write(rows):\n    fields = ['facility']\n    fields = ['name']\n"
+        "    FieldTemplate.objects.bulk_update(rows, fields)\n",
+        "def write(rows):\n    fields = ['facility']\n"
+        "    def inner():\n        FieldTemplate.objects.bulk_update(rows, ['name'])\n",
+    ],
+)
+def test_configuration_facility_update_guard_preserves_unrelated_writes(source):
+    assert not find_configuration_facility_updates(source)
