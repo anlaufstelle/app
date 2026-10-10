@@ -2,12 +2,9 @@
 
 Two rows of the STRIDE tables are coupled to code here (Refs #2445):
 
-* **D Login-Flood / Bot-Spam** — the POST rate-limit guard
-  (``TestRateLimitOnAllMutations``) scans only class-based ``post()`` methods
-  in ``src/core/views/*.py`` (not recursive) and has an allowlist. The row must
-  not promise a rate limit on *all* POST handlers, must name every allowlisted
-  view and every views subpackage with ``post()`` handlers that the guard does
-  not scan.
+* **D Login-Flood / Bot-Spam** — the mutation guard scans view modules
+  recursively, including POST functions and inherited handlers, and requires
+  method-specific blocking limits. The row names each allowlisted view.
 * **D ClamAV-Outage** — ``/health/`` answers 503 on a database failure *and*
   on a failed encryption-key roundtrip (behaviour pinned in
   ``test_health.py``); the row must name both causes.
@@ -38,26 +35,7 @@ def table_row(text: str, prefix: str) -> str:
     return rows[0]
 
 
-def unscanned_view_packages(views_dir: Path) -> list[str]:
-    """Subpackages of ``views_dir`` that define ``post()`` handlers; the POST
-    rate-limit guard globs ``*.py`` non-recursively and never reads them."""
-    found: list[str] = []
-    for sub in sorted(p for p in views_dir.iterdir() if p.is_dir() and (p / "__init__.py").is_file()):
-        if any("def post(" in f.read_text(encoding="utf-8") for f in sub.rglob("*.py")):
-            found.append(f"src/core/views/{sub.name}/")
-    return found
-
-
 class TestHelpers:
-    def test_unscanned_packages_only_lists_packages_with_post(self, tmp_path: Path) -> None:
-        for name, body in (("with_post", "class V:\n    def post(self):\n        pass\n"), ("read_only", "x = 1\n")):
-            pkg = tmp_path / name
-            pkg.mkdir()
-            (pkg / "__init__.py").write_text("", encoding="utf-8")
-            (pkg / "views.py").write_text(body, encoding="utf-8")
-        (tmp_path / "top.py").write_text("def post(self):\n    pass\n", encoding="utf-8")
-        assert unscanned_view_packages(tmp_path) == ["src/core/views/with_post/"]
-
     def test_table_row_requires_exactly_one_match(self) -> None:
         with pytest.raises(AssertionError):
             table_row("| a |\n| a |", "| a |")
@@ -78,12 +56,14 @@ class TestRateLimitRow:
         )
         assert missing == [], f"threat-model.md does not name POST views exempt from the rate limit: {missing}"
 
-    def test_row_names_view_packages_the_guard_does_not_scan(self) -> None:
+    def test_row_describes_recursive_blocking_guard(self) -> None:
         row = table_row(THREAT_MODEL.read_text(encoding="utf-8"), RATE_LIMIT_ROW)
-        packages = unscanned_view_packages(VIEWS_DIR)
-        assert packages, "expected views subpackages with post() handlers"
-        missing = [pkg for pkg in packages if pkg not in row]
-        assert missing == [], f"threat-model.md does not name views packages outside the POST guard: {missing}"
+        assert "rekursiv" in row
+        assert "block=True" in row
+        assert "require_POST" in row
+        assert "geerbten Mutationshandlern" in row
+        assert "Formularviews" in row
+        assert "nicht rekursiv" not in row
 
 
 class TestClamavRow:

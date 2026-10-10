@@ -11,7 +11,13 @@ This excerpt translates the key rotation assessment in [TB5 of the German threat
 
 An HTTP/network/processing error fetching revocations (including 500/429), or an invalid response structure, pauses queue and edit replay: “Synchronization is waiting for the revocation check”. The blocking state is stored in local IndexedDB. Each replay run also requires its own fresh, structurally valid, successfully applied and persisted revocation check; an earlier approval never authorizes a later run or another tab, even when metadata writes and fallback deletion both fail. Missing or unreadable metadata blocks replay; recovery from a read failure also requires another successful check. The next sync sequence checks again, as does a direct save from the offline client record. A failed check preserves unsent work in encrypted form. Existing idempotency keys remain intact, and the server gates (422 for revoked people, 409 for status conflicts) remain authoritative. Device encryption does not replace these server checks.
 
+## Authentication and application limits
+
+Backup codes are purpose-separated 96-bit HMAC prefixes derived from `SECRET_KEY`, with 128-bit random input. Database digests alone provide no offline verification oracle without the server key. Earlier codes and codes issued before a `SECRET_KEY` change are invalid. Anonymous recovery limits are 5/min per IP and 10/h per normalized username without increasing the victim device throttle. A local passkey cancellation without a server completion request remains unobservable.
+
+The recursive mutation guard includes view subpackages, POST functions, inherited handlers and form views and checks method-specific blocking limits. Configuration POSTs use 60/h per user. `ClientRenameWarningView` remains a documented read-only exception. Caddy provides no edge rate limit; application limits do not prevent all resource consumption before the application checks. Installed Django-admin/Unfold templates are covered by the markup inventory with specific exceptions, and package Python by the CSRF guard; the inline/Alpine guard remains project-only.
+
 <!-- translation-source: docs/threat-model.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 6ba3f0f9359cd62a6008bb13212e38ef83889d7e -->
+<!-- source-hash: c529495386f36beab8a8d5a7562dc5200c17bf05 -->

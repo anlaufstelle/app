@@ -3,7 +3,7 @@
 ``AUDIT_DETAIL_KEYS`` in ``core/services/audit/detail_policy.py`` lists, below
 the comment "Bewusst zugelassener Freitext", the ``AuditLog.detail`` keys that
 carry real free text (e.g. ``recipient``/``purpose`` of a report release,
-written trimmed but unchecked). A client name typed there stays in the
+validated with a heuristic that cannot guarantee PII-free values). A client name typed there stays in the
 append-only log. The security notes must therefore name these keys and must
 not claim that audit entries contain no client PII (Refs #2486).
 """

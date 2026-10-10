@@ -92,6 +92,10 @@ Bei der 2FA-Einrichtung erhalten Sie **10 einmalig nutzbare Backup-Codes**. Bewa
 
 > **Alle Codes verbraucht oder verloren?** Wenden Sie sich an die Anwendungsbetreuung Ihrer Einrichtung. Sie kann Ihren zweiten Faktor zurücksetzen: Dabei werden alle Authenticator-Apps, Passkeys und Backup-Codes Ihres Zugangs entfernt, und Sie werden überall abgemeldet. Ihr Passwort bleibt gültig. Ist 2FA für Sie verpflichtend, richten Sie bei der nächsten Anmeldung 2FA und neue Backup-Codes ein.
 
+**Neues Authenticator-Gerät einrichten:** Nach der Anmeldung mit TOTP oder Backup-Code unter `/mfa/settings/` **Neues Gerät einrichten** wählen. Wenn Sudo verlangt wird, Passwort und einen aktuellen TOTP- oder weiteren unbenutzten Backup-Code eingeben. Den neuen QR-Code scannen, den Code der neuen App bestätigen, die neuen Backup-Codes speichern und quittieren. Erst die Quittung ersetzt die bisherigen bestätigten Authenticator-Geräte; Ihre Passkeys bleiben erhalten. Das funktioniert auch bei verpflichtender 2FA. Ein Backup-Code-Login allein ersetzt das Gerät nicht.
+
+**Bisherige Backup-Codes ersetzen:** Vor dieser Härtung erzeugte Codes sind ungültig. Erzeugen Sie mit Ihrer funktionierenden Authenticator-App neue Codes; ohne nutzbaren Faktor wenden Sie sich an die Anwendungsbetreuung. Auch nach einer Änderung des Serverschlüssels (`SECRET_KEY`) brauchen Sie neue Codes.
+
 **Passkey / Sicherheitsschlüssel (optional, zusätzlich zur Authenticator-App):**
 
 Ergänzend zur Authenticator-App können Sie einen **Passkey** als zweiten Faktor hinterlegen — z. B. die Biometrie Ihres Geräts (Fingerabdruck/Gesicht), ein Smartphone oder einen USB-Sicherheitsschlüssel (FIDO2). Ein Passkey ist phishing-resistent, weil er an die Adresse der Anwendung gebunden ist.

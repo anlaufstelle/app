@@ -1,4 +1,4 @@
-# ADR-015: MFA-Verfahren — TOTP + Hash-gespeicherte Backup-Codes
+# ADR-015: MFA-Verfahren — TOTP + HMAC-gespeicherte Backup-Codes
 
 - **Status:** Accepted
 - **Date:** 2026-05-01
@@ -16,15 +16,15 @@ Sozialarbeit verarbeitet besonders schutzbedürftige Personendaten (DSGVO Art. 9
 ## Decision
 
 - **TOTP (RFC 6238)** als primärer zweiter Faktor — Standard auf jeder Authenticator-App (Google Authenticator, Authy, FreeOTP, Bitwarden), kein Vendor-Lock-in. Implementierung über `django-otp` mit TOTPDevice — Setup in [`src/core/views/mfa.py`](../../src/core/views/mfa.py). Das TOTP-Secret liegt **at rest Fernet-verschlüsselt** vor ([ADR-031](031-totp-secret-at-rest.md), Refs #1362).
-- **Backup-Codes** als sekundärer Faktor: 10 zufällige 128-Bit-Codes (Base32-kodiert), serverseitig **nur als Hash** (`bcrypt`-äquivalent über `StaticDevice.token`) gespeichert. Verbrauchte Codes werden gelöscht; nach 3 verbleibenden Codes nervt das UI bis zum Re-Generate (Refs #790).
+- **Backup-Codes** als sekundärer Faktor: zehn zufällige 128-Bit-Codes (22 Base64url-Zeichen), gespeichert als zweckgebundene 96-Bit-HMAC-Präfixe mit aus `SECRET_KEY` abgeleitetem Schlüssel. Verbrauchte Codes werden gelöscht; alte SHA-Digests und das schwache Altformat sind ungültig (#2529).
 - **Rollenbasierte Pflicht:** `Admin` und `Lead` haben `is_mfa_enforced=True` per Rolle. Pro Facility lässt sich das auf alle Rollen ausweiten (`Settings.mfa_enforced_facility_wide=True`). Mitarbeitende erhalten die `setup`-Aufforderung beim ersten Login nach Aktivierung.
-- **Sudo-Mode für sensible Operationen** (DSGVO-Pakete, Löschungen) verlangt MFA-Verifizierung in den letzten 15 Minuten — ein langlebiger Session-Cookie reicht für die DSGVO-Wirkungs­operationen nicht.
-- **Recovery-Flow** läuft über Backup-Codes: ein verifiziertes Backup-Code-Login reaktiviert den Setup-Pfad, alte TOTP-Devices werden invalidiert.
+- **Sudo-Mode für sensible Operationen** verlangt eine erneute Bestätigung mit Passwort und bei bestätigtem TOTP-Gerät zusätzlich TOTP oder Backup-Code; das Fenster gilt standardmäßig 15 Minuten.
+- **Recovery-Flow:** Ein Backup-Code bestätigt den zweiten Faktor, ersetzt aber kein Gerät. „Neues Gerät einrichten“ verlangt Bestands-MFA und Sudo; erst die Quittung der neuen Backup-Codes ersetzt bestätigte TOTP-Geräte, Passkeys bleiben.
 
 ## Consequences
 
 - **+** TOTP funktioniert offline; das Streetwork-Gerät kann ohne Netz authentisieren.
-- **+** Hash-only-Backup-Codes machen einen DB-Dump für den Angreifer wertlos — er müsste 128 Bit Brute-Force gegen den Hash gewinnen.
+- **+** Ein Datenbank-Digest allein ist ohne den getrennten Serverschlüssel kein Offline-Prüforakel; 128 Bit Eingabezufall und 96 Bit HMAC-Präfix sind unterschiedliche Größen.
 - **+** Sudo-Mode entkoppelt den langen App-Session-Lebenslauf von der schmalen Berechtigung für DSGVO-Aktionen.
 - **+** `django-otp` ist eine etablierte Library — keine eigene Krypto, kein eigenes Replay-Window.
 - **−** Keine Hardware-Token-Unterstützung im Default. WebAuthn/FIDO2 wäre stärker (phishing-resistent), aber für die Zielnutzergruppen aktuell zu hohe Onboarding-Hürde.
@@ -44,15 +44,15 @@ Die Entscheidung oben bleibt als historischer Stand erhalten. Mehrere ihrer Auss
 
 **Backup-Codes (ersetzt den zweiten Punkt unter „Decision" und die Hash-Aussage unter „Consequences"):**
 
-- **Format:** Ein Code ist `secrets.token_urlsafe(16)` — 22 Zeichen aus dem URL-sicheren Base64-Alphabet, keine Base32-Kodierung ([`src/core/services/security/mfa.py`](../../src/core/services/security/mfa.py), `_generate_code`). Codes im älteren Format `xxxx-xxxx` werden weiter angenommen.
-- **Entropie und Speicherung:** Der Code trägt 128 Bit Zufall. Gespeichert wird nur `sha256(code).hexdigest()[:16]` in `StaticToken.token`, ungesalzen und ohne Arbeitsfaktor (`_hash_code`); eine bcrypt-äquivalente Speicherung gibt es nicht. Der gespeicherte Wert ist ein 64-Bit-Digest: Wer einen Datenbank-Dump besitzt, muss gegen den gespeicherten Wert rund 2^64 Versuche aufwenden, nicht 2^128. Für einmalig nutzbare, bei Verdacht neu erzeugbare Codes ist das weiterhin nicht praktikabel; die Aussage „128 Bit Brute-Force gegen den Hash" gilt aber nicht.
+- **Format:** Ein Code ist `secrets.token_urlsafe(16)` — 22 Zeichen aus dem URL-sicheren Base64-Alphabet, keine Base32-Kodierung ([`src/core/services/security/mfa.py`](../../src/core/services/security/mfa.py), `_generate_code`). Das ältere Format `xxxx-xxxx` wird abgewiesen.
+- **Entropie und Speicherung:** 128 Bit Eingabezufall; gespeichert wird `base64url(HMAC-SHA256(server_key, code))[:16]` (96 Bit). Der zweckgebundene Schlüssel wird aus `SECRET_KEY` abgeleitet. Frühere Codes mit SHA-Digest und das Altformat sind ungültig; auch eine `SECRET_KEY`-Rotation erfordert neue Codes. Ohne nutzbaren Faktor bleibt der Admin-Reset. Keine Altbestands-Migration (#2529).
 - **Verbrauch:** Ein verwendeter Code wird gelöscht. Ab drei verbleibenden Codes weisen die 2FA-Einstellungen auf das Neuerzeugen hin.
 
 **Backup-Code-Anmeldung und Gerätewechsel (ersetzt den Punkt „Recovery-Flow"):**
 
 - Ein Backup-Code am 2FA-Prompt verbraucht den Code, erneuert die Sitzungskennung und meldet mit dem **bestehenden** TOTP-Gerät an ([`src/core/views/mfa.py`](../../src/core/views/mfa.py), `MFAVerifyView`; Audit `BACKUP_CODES_USED`). Er invalidiert kein Gerät und startet keine Neueinrichtung.
-- Serverseitig nimmt `MFASetupView` bei bestehendem Faktor nach dem Sudo-Modus ein Absenden (POST) an, legt ein neues TOTP-Gerät an und ersetzt den Backup-Code-Satz; nach der Quittung der neuen Codes gilt nur noch das neue Gerät, Passkeys bleiben erhalten ([`src/core/views/mfa.py`](../../src/core/views/mfa.py), `MFASetupView`). Über die Oberfläche ist dieser Pfad bei bestehendem TOTP-Gerät nicht erreichbar: Ein Aufruf (GET) von `/mfa/setup/` leitet auf `/mfa/settings/` um, und die Einstellungsseite bietet „2FA einrichten“ nur ohne Gerät an. Einen Gerätewechsel gibt es deshalb nur als Deaktivieren und Neueinrichten (ohne 2FA-Pflicht, Sudo-geschützt) oder als Reset durch die Administration (mit 2FA-Pflicht, siehe unten). Beim Deaktivieren ohne laufendes Sudo-Fenster leitet der Sudo-Schritt per GET auf `/mfa/disable/` zurück; `MFADisableView` nimmt nur POST an und antwortet mit 405, der Faktor bleibt. Erst ein zweiter Klick auf „2FA deaktivieren“ im laufenden Sudo-Fenster entfernt ihn. Die Bedienschritte stehen im Admin-Handbuch, Abschnitt „Wechsel des TOTP-Geräts“; Verhaltensbeleg [`src/tests/test_mfa_recovery_and_revocation_contract.py`](../../src/tests/test_mfa_recovery_and_revocation_contract.py).
-- Ein Backup-Code hebt außerdem eine Konto-Sperre auf (`/account/recovery/backup-code/`, `LOGIN_UNLOCK` mit Trigger `backup_code`).
+- Der erreichbare Wechsel startet über „Neues Gerät einrichten“ unter `/mfa/settings/` (`/mfa/change-device/`), auch bei 2FA-Pflicht. Er verlangt eine MFA-verifizierte Sitzung und Sudo mit Passwort plus TOTP oder Backup-Code. Erst die Quittung der neuen Backup-Codes ersetzt die bisher bestätigten TOTP-Geräte; Passkeys bleiben, Audit `MFA_ENABLED` zählt die ersetzten Geräte. Die freiwillige Deaktivierung führt nach Sudo auf eine Bestätigungsseite statt HTTP 405; deren GET entfernt nichts, der geschützte POST deaktiviert. [Verhaltensbeleg](../../src/tests/test_mfa_device_change_flow.py).
+- Ein Backup-Code hebt außerdem eine Konto-Sperre auf (`/account/recovery/backup-code/`, `LOGIN_UNLOCK` mit Trigger `backup_code`). Anonyme Fehlversuche erhöhen die Gerätedrossel nicht; 5/min je IP und 10/h je normalisiertem Benutzernamen begrenzen den Pfad. Die authentifizierte Gerätedrossel bleibt bestehen.
 
 **Recovery durch die Administration (ergänzt die Anforderung „Recovery ohne Klartext-Speicher"):** Sind alle Backup-Codes verbraucht oder verloren, setzt die Anwendungsbetreuung (`facility_admin`, nur Konten der eigenen Einrichtung, keine `super_admin`-Konten) oder die Systemadministration (`super_admin`) den zweiten Faktor zurück — nie für das eigene Konto und immer im Sudo-Modus ([`src/core/services/user_access.py`](../../src/core/services/user_access.py), `reset_user_mfa`). Der Reset entfernt alle TOTP-Geräte, Passkeys und Backup-Codes, beendet alle Sitzungen des Kontos und schreibt einen Audit-Eintrag `MFA_RESET_BY_ADMIN` ohne Schlüsselmaterial. Ist 2FA für das Konto verpflichtend, folgt die Neueinrichtung bei der nächsten Anmeldung. Die Administration sieht dabei weder Secret noch Codes.
 

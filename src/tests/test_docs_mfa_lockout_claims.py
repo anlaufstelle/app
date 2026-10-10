@@ -11,8 +11,8 @@ Each forbidden claim below promised more than the implementation delivers:
   (``core.services.security.credentials.flush_user_sessions``);
 - not every 2FA event writes an audit entry (a successful TOTP verification
   does not, ``core.views.mfa.MFAVerifyView.post``);
-- an existing TOTP device cannot be swapped through the UI
-  (``core.views.mfa.MFASetupView.get`` redirects to the settings page);
+- a backup-code sign-in alone does not swap the existing TOTP device;
+  the explicit replacement uses ``MFADeviceChangeView`` with MFA and sudo;
 - the reset audit detail carries account identifiers besides the counters
   (``core.services.user_access.reset_user_mfa``);
 - the factor reset does not depend on the session scan limit
@@ -75,11 +75,11 @@ FORBIDDEN_CLAIMS = (
     re.compile(r"All 2FA events are recorded"),
     re.compile(r"alle Versuche während der Sperrphase"),
     re.compile(r"any attempts during the lock window"),
-    # Swapping an existing TOTP device through the UI.
-    re.compile(r"ein neues TOTP-Gerät und neue Backup-Codes ein"),
-    re.compile(r"Der Wechsel des TOTP-Geräts ist ein eigener Schritt"),
-    re.compile(r"landet danach wieder auf `/mfa/setup/`"),
-    re.compile(r"then returns to `/mfa/setup/`"),
+    # The old device-change workaround is no longer the documented contract.
+    re.compile(r"bietet die Oberfläche keinen Schritt"),
+    re.compile(r"the interface offers no step to set up a new device"),
+    re.compile(r"Weiterleitung endet mit HTTP 405"),
+    re.compile(r"redirect that follows ends with HTTP 405"),
     # Reset audit detail without the account identifiers.
     re.compile(r"nur die Anzahl der entfernten"),
     re.compile(r"only the number of removed"),

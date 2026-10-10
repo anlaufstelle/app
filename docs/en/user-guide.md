@@ -94,6 +94,10 @@ When setting up 2FA, you receive **10 single-use backup codes**. Store them safe
 
 > **All codes used up or lost?** Contact the application support of your facility. They can reset your second factor: this removes all authenticator apps, passkeys and backup codes of your account and signs you out everywhere. Your password stays valid. If 2FA is mandatory for you, you set up 2FA and new backup codes at your next sign-in.
 
+**Set up a new authenticator device:** After signing in with TOTP or a backup code, choose **Neues Gerät einrichten** (set up a new device) at `/mfa/settings/`. If sudo is requested, enter your password and a current TOTP or another unused backup code. Scan the new QR code, confirm the new app's code, store the new backup codes and acknowledge them. Only acknowledgement replaces the previously confirmed authenticator devices; your passkeys remain. This works even with mandatory 2FA. A backup-code sign-in alone does not replace the device.
+
+**Replace earlier backup codes:** Codes generated before this hardening are invalid. Generate new codes using your working authenticator app; without a usable factor, contact application support. A change of the server key (`SECRET_KEY`) also requires new codes.
+
 **Passkey / security key (optional, in addition to the authenticator app):**
 
 In addition to the authenticator app, you can register a **passkey** as a second factor -- e.g., your device's biometrics (fingerprint/face), a smartphone, or a USB security key (FIDO2). A passkey is phishing-resistant because it is bound to the application's address.
@@ -1048,5 +1052,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 806d1c44c997e2ed42ff256d03c43f51f66354dc -->
-<!-- translation-date: 2026-10-09 -->
+<!-- source-hash: b3c5d377dffd8e2f11c8fb6998b5c34c83dcf7ba -->

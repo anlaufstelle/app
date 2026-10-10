@@ -86,9 +86,9 @@ Die saubere Alternative wäre Option 2 aus dem Issue: 20+ Unfold-Templates in [`
 
 **Was wir behalten:**
 - `script-src` bleibt `'self'` — kein Remote-Script-Loading
-- Architektur-Tests für die **eigenen** Templates und den eigenen Python-Code (die gevendorten Unfold-Templates prüft keiner):
+- Architektur-Tests für die eigenen Templates und den eigenen Python-Code; die Markup-/CSRF-Guards beziehen zusätzlich die installierten Django-Admin-/Unfold-Pakete ein:
   - [`test_architecture_guards_templates.py`](../src/tests/test_architecture_guards_templates.py): Inline-`<script>`, Inline-Event-Attribute, `javascript:`-URIs, Inline-`x-data`-Objekte, unsichere Alpine-/htmx-Ausdrücke, Inline-Styles.
-  - [`test_architecture_guards_safe_markup.py`](../src/tests/test_architecture_guards_safe_markup.py) (#2468): `|safe`, `|safeseq`, `{% autoescape off %}` und `mark_safe()`/`SafeString` nur mit begründetem Allowlist-Eintrag (leere Begründung gibt nichts frei; Kommentarblöcke enden wie in Django am ersten `{% endcomment %}`; nur statisch erkennbare Verwendungen, keine dynamischen `getattr`-Zugriffe). Erlaubt sind die zwei Klartext-Mailvorlagen `registration/invite_email.html` und `registration/password_reset_email.html` (Versand ohne HTML-Teil); im Python-Code gibt es keine Ausnahme. `mark_safe` meldet zusätzlich Ruff `S308`.
+  - [`test_architecture_guards_safe_markup.py`](../src/tests/test_architecture_guards_safe_markup.py) (#2468): `|safe`, `|safeseq`, `{% autoescape off %}` und `mark_safe()`/`SafeString` nur mit begründetem Allowlist-Eintrag (leere Begründung gibt nichts frei; Kommentarblöcke enden wie in Django am ersten `{% endcomment %}`; nur statisch erkennbare Verwendungen, keine dynamischen `getattr`-Zugriffe). Erlaubt sind die zwei Klartext-Mailvorlagen `registration/invite_email.html` und `registration/password_reset_email.html` (Versand ohne HTML-Teil); im eigenen Python-Code gibt es keine Markup-Ausnahme. Django-Admin-/Unfold-Templates werden vom installierten Paketpfad inventarisiert; 14 konkrete Pfad-/Konstrukt-Ausnahmen begründen 20 Escaping-Treffer, ohne pauschalen Vendor-Ausschluss. `mark_safe` meldet zusätzlich Ruff `S308`.
   - [`test_architecture_guards_csrf_exempt.py`](../src/tests/test_architecture_guards_csrf_exempt.py) (#2468): `csrf_exempt` und `_dont_enforce_csrf_checks` nur mit begründetem Allowlist-Eintrag. Bewusste Ausnahme ist der CSP-Report-Endpunkt [`CSPReportView`](../src/core/views/csp_report.py): Browser-Reports tragen kein Token, der Endpunkt nimmt nur POST an, loggt bereinigt, ist auf `10/m` je IP limitiert und ändert keinen Anwendungszustand.
 - Hinter dem Login ist `/admin-mgmt/` nur fuer Rollen `super_admin` und `facility_admin` erreichbar (Custom `AnlaufstelleAdminSite`, `_has_admin_role`, Refs #785). `lead`/`staff`/`assistant` werden geblockt — auch wenn `is_staff=True` gesetzt ist. Sudo-Mode-Pflicht: erster Zugriff redirected zu `/sudo/?next=/admin-mgmt/`. Facility-Scoping in ModelAdmin: `facility_admin` sieht nur Daten der eigenen Facility, `super_admin` sieht alle; RLS gegen Cross-Facility-Leaks. MFA: In Produktion müssen beide Admin-Rollen MFA sofort einrichten (`MFA_ENFORCED_ROLES_IMMEDIATE`, Standard `super_admin,facility_admin`; #788 ist umgesetzt).
 - Ratelimit nur am Admin-Login-POST (`5/m` je IP, `10/h` je Benutzername, `AnlaufstelleAdminSite.login`, #2020); die Admin-Change-Views selbst sind nicht limitiert.
@@ -98,9 +98,9 @@ Die saubere Alternative wäre Option 2 aus dem Issue: 20+ Unfold-Templates in [`
 
 Wer kann von der CSP-Lockerung profitieren?
 
-1. **Externer Angreifer ohne Session** — erreicht von `/admin-mgmt/` nur die Login-Seite. Sie läuft bereits mit der gelockerten CSP, rendert aber keine Nutzdaten; dahinter halten Rollen-Gate, Sudo, Login-Ratelimit, Account-Lockout und MFA ([Threat Model TB1](threat-model.md#tb1--browser--caddydjango)). Eine Injektionslücke **auf der Login-Seite** fände die gelockerte CSP vor. Die Seite ist ein Unfold-Template; es gilt Djangos Autoescaping, die eigenen Guards prüfen sie aber nicht.
+1. **Externer Angreifer ohne Session** — erreicht von `/admin-mgmt/` nur die Login-Seite. Sie läuft bereits mit der gelockerten CSP, rendert aber keine Nutzdaten; dahinter halten Rollen-Gate, Sudo, Login-Ratelimit, Account-Lockout und MFA ([Threat Model TB1](threat-model.md#tb1--browser--caddydjango)). Eine Injektionslücke **auf der Login-Seite** fände die gelockerte CSP vor. Die Seite ist ein Unfold-Template; es gilt Djangos Autoescaping, der Markup-Guard prüft auch die installierten Admin-Pakettemplates mit konkreten, begründeten Ausnahmen. Der Inline-/Alpine-Guard bleibt auf eigene Templates beschränkt.
 2. **Externer Angreifer mit valider Admin-Session** — hat ohnehin Vollzugriff; `'unsafe-eval'` ändert sein Schadenspotenzial nicht
-3. **XSS in Admin-Template** — der einzige Pfad mit zusätzlichem Schaden. Für die eigenen Templates und den eigenen Python-Code sperren die Guards oben die typischen Injection-Punkte (`|safe`, `autoescape off`, `mark_safe`, Inline-Script); Djangos Autoescaping gilt überall sonst. Nicht abgedeckt sind die gevendorten Unfold-Templates und Ausgaben, die Unfold selbst als sicher markiert. Eine Lücke dort fände die gelockerte CSP vor; „nicht ausnutzbar“ ist deshalb nicht belegt, nur die bekannten Einfallstore im eigenen Code sind gesperrt.
+3. **XSS in Admin-Template** — die gelockerte CSP bleibt ein Restrisiko. Der Markup-Guard prüft eigene und installierte Django-Admin-/Unfold-Templates auf statisch erkennbares `|safe`, `safeseq` und `autoescape off`; der CSRF-Guard inventarisiert Python-Code derselben Pakete. Konkrete Ausnahmen tragen Einzelbegründungen. Der Inline-/Alpine-Guard bleibt auf eigene Templates beschränkt; dynamische Zugriffe und die semantische Sicherheit jeder zugelassenen Ausgabe sind dadurch nicht bewiesen. Eine beliebige XSS-Lücke ist damit nicht ausgeschlossen.
 4. **Malicious Insider mit Admin-Rolle** — braucht keinen CSP-Bypass
 
 ### Trigger für Re-Evaluation (dann Option 2 oder Option 4 angehen)
@@ -173,7 +173,7 @@ Diese Freitext-Felder folgen **nicht** dem Sensitivity/Encryption/Retention-Mode
 | [`Case.description`](../src/core/models/case.py) | `Case` | Fall-Beschreibung | mittel |
 | [`Episode.description`](../src/core/models/episode.py) | `Episode` | Episoden-Verlauf | mittel |
 | [`WorkItem.description`](../src/core/models/workitem.py) | `WorkItem` | Aufgaben-Beschreibung | mittel |
-| [`AuditLog.detail`](../src/core/models/audit.py) | `AuditLog` | JSON mit `changed_fields` (nur Feldnamen), technischen Metadaten und den in [`AUDIT_DETAIL_KEYS`](../src/core/services/audit/detail_policy.py) zugelassenen Freitext-Schlüsseln `name`, `username`, `actor_username`, `note`, `recipient`, `purpose` (`message` ist eine feste Codekonstante) | mittel: Dateiname, Meilenstein-Titel und Pseudonym schreibt die Anwendung nicht (#1751); den Inhalt der Freitext-Schlüssel prüft sie nicht — ein Klientenname etwa im `purpose` einer Berichts-Freigabe bleibt im Klartext stehen, die Minimierung dort ist Betreiber-Obliegenheit |
+| [`AuditLog.detail`](../src/core/models/audit.py) | `AuditLog` | JSON mit `changed_fields` (nur Feldnamen), technischen Metadaten und den in [`AUDIT_DETAIL_KEYS`](../src/core/services/audit/detail_policy.py) zugelassenen Freitext-Schlüsseln `name`, `username`, `actor_username`, `note`, `recipient`, `purpose` (`message` ist eine feste Codekonstante) | mittel: Dateiname, Meilenstein-Titel und Pseudonym schreibt die Anwendung nicht (#1751); nur `recipient`/`purpose` unterliegen einer zusätzlichen Werteheuristik; die übrigen Freitextwerte prüft sie nicht — ein Klientenname etwa im `purpose` einer Berichts-Freigabe bleibt im Klartext stehen, die Minimierung dort ist Betreiber-Obliegenheit |
 
 ### Was bereits umgesetzt ist (Audit-Item 16)
 
@@ -246,8 +246,8 @@ Deshalb gilt eine **Schlüssel-Allowlist**: [`src/core/services/audit/detail_pol
 
 - **Laufzeit-Prüfung** in `audit_event` / `log_audit_event` (und damit in allen typed Helpern, die darauf aufsetzen) sowie an den beiden allowlisteten Direktschreibern in [`signals/audit.py`](../src/core/signals/audit.py) und [`services/system/settings.py`](../src/core/services/system/settings.py). Sie greift auch dort, wo das `detail` dynamisch entsteht (`**kwargs`, Zähler-Dicts) — rund ein Dutzend Stellen, an denen ein rein statischer Guard blind wäre.
 - **Statisches Gegenstück** `TestAuditDetailKeyInventory` in [`test_architecture_guards_audit.py`](../src/tests/test_architecture_guards_audit.py): liest die literalen `detail={…}`-Dicts unter `src/core` und meldet einen undeklarierten Schlüssel schon ohne Testausführung. Die dynamischen Schreibpunkte sind dort namentlich mit Anzahl geführt.
-- **Fail-Verhalten:** `AUDIT_DETAIL_STRICT` bricht den Schreibvorgang ab — Default `True` in dev/test, `False` im Betrieb (dort ERROR-Meldung, Zeile wird trotzdem geschrieben). Ein **fehlender** Audit-Eintrag wäre schlimmer als ein zu breiter: das Log ist der Rechenschaftsnachweis, und die schärfsten Schreibpunkte (`SECURITY_VIOLATION`, `LOGIN_FAILED`) laufen genau dann, wenn ohnehin etwas schiefgeht. Die Meldung nennt nur Schlüsselnamen, nie Werte.
-- **Bewusst zugelassener Freitext** steht in derselben Liste, jeweils mit Begründung: `name` (Konfigurationsbezeichner, keine Klienten-PII), `username`/`actor_username` (Beschäftigten-Kennung, siehe oben), `note` (Betriebsnotiz), `recipient`/`purpose` (Berichts-Freigabe, Betreiber-Obliegenheit), `message` (feste Codekonstante). Ihren Inhalt prüft die Anwendung nicht: [`release_detail`](../src/core/services/dashboard/release_log.py) übernimmt `recipient`/`purpose` nur ohne Leerraum am Rand und auf eine Höchstlänge begrenzt; ein dort eingetragener Klientenname steht im append-only Log.
+- **Fail-Verhalten:** `AUDIT_DETAIL_STRICT` weist unbekannte Schlüssel zurück — Default `True` in dev/test und Produktion (einschließlich `docker-compose.prod.yml`). Ein explizites `DJANGO_AUDIT_DETAIL_STRICT=false` schreibt unbekannte Schlüssel mit ERROR-Meldung; die Meldung nennt nur Schlüssel, nie Werte. Die Wertprüfung für Empfänger/Zweck bleibt unabhängig davon aktiv und weist Verstöße zurück.
+- **Bewusst zugelassener Freitext** bleibt deklariert: `name`, `username`/`actor_username`, `note`, `recipient`/`purpose`; `message` ist eine feste Codekonstante. Für `recipient`/`purpose` weist [`validate_release_metadata`](../src/core/services/audit/detail_policy.py) nicht-textuelle oder über 200 Zeichen lange Werte, erkannte E-Mail-/Telefonmuster und typische Namenspaare zurück. Die Export-Views antworten vor der Herausgabe mit HTTP 400 und spiegeln abgewiesene Werte nicht zurück. Institutionelle Präfixe wie „Stadt Musterstadt“ bleiben erlaubt. Die Heuristik garantiert keine PII-Freiheit; akzeptierte Freitexte bleiben im append-only Log und erfordern weiterhin Datenminimierung durch die Einrichtung.
 
 ### Restfläche (akzeptiert)
 
@@ -2064,38 +2064,36 @@ Passkeys werden über [`django-otp-webauthn`](https://github.com/Stormbase/djang
 
 ---
 
+## Passkey-Fehlversuche und Mutationslimits (#2529)
+
+Die Passkey-Abschlussanfrage wird vor dem JSON-Parser auf 60/h je Benutzer begrenzt. Kryptographische Fehler und beim Server ankommende, durch fehlerhaftes JSON unterbrochene Abschlussanfragen zählen in dieses Limit. Bei einer unterbrochenen begonnenen Verifikation wird die Challenge verbraucht, kein MFA-/OTP-Sitzungsmarker gesetzt, und `WEBAUTHN_FAILED` enthält feste Ereignis-/Fehlercodes ohne Assertion. Ein rein lokaler Browserabbruch ohne Abschlussanfrage ist für den Server nicht beobachtbar.
+
+Der AST-Guard `TestRateLimitOnAllMutations` prüft View-Module rekursiv unter `src/core/views/`, einschließlich Unterpaketen, `require_POST`-/`require_http_methods`-Funktionen, geerbten Mutationshandlern und Formularviews. Er verlangt wirksame methodengerechte Limits mit `block=True`; begründete Ausnahmen bleiben ausdrücklich geführt. Die Konfigurations-POSTs unter `views/config/` verwenden `RATELIMIT_MUTATION` (60/h je Benutzer), wie die Fach-Views. Passwortänderung: 60/h je Benutzer; anonyme Passwort-/Einladungseinrichtung: 5/min je IP; Sprachwahl: 60/h je Benutzer oder IP. Caddy bleibt ohne Edge-Rate-Limit; die Anwendung liefert bei Überschreitung HTTP 429.
+
+---
+
 ## MFA-Backup-Codes: Speicher- und Migrationsvertrag (Issues #2294, #2287, #2327)
 
 **Status:** umgesetzt. Der Abschnitt hält fest, was in der Datenbank wirklich steht, welche Eingaben überhaupt als Geheimnis in Frage kommen und warum kein Wert aus der Datenbank als Code gilt.
 
 ### Was gespeichert wird
 
-`generate_backup_codes` ([`src/core/services/security/mfa.py`](../src/core/services/security/mfa.py)) erzeugt je Konto zehn Codes aus `secrets.token_urlsafe(16)` — 22 Zeichen, 128 Bit Entropie — und legt in `StaticToken.token` **nur** deren SHA-256-Hex-Digest ab, auf 16 Zeichen gekürzt (die Spalte von django-otp ist `CharField(max_length=16)`; 64 Bit Bild-Entropie bei 128-Bit-Eingabe sind für Pre-Image-Angriffe infeasibel). Der Klartext existiert genau einmal: in der Antwort an die einrichtende Person, zwischengelagert Fernet-verschlüsselt in der Sitzung (#1375).
+[`generate_backup_codes`](../src/core/services/security/mfa.py) erzeugt zehn Codes aus `secrets.token_urlsafe(16)` (22 Zeichen, 128 Bit Zufall). `StaticToken.token` enthält nur `base64url(HMAC-SHA256(server_key, code))[:16]` (96 Bit); der zweckgebundene Schlüssel wird aus `SECRET_KEY` abgeleitet. Ohne diesen Serverschlüssel ist ein Datenbank-Digest kein Offline-Prüforakel. Die vorübergehende Codeanzeige wird Fernet-verschlüsselt in der Sitzung gehalten.
 
-### Warum es keinen Direktvergleich gibt
+### Gültigkeit, Wiederherstellung und Gerätewechsel
 
-`verify_backup_code` sucht ausschließlich den Hash der Eingabe (#2327). Ein Vergleich der Eingabe mit dem gespeicherten Wert selbst würde einen aus der Datenbank gelesenen Token-Wert zum gültigen Geheimnis machen: wer eine noch unbenutzte Zeile lesen kann, käme mit ihr durch den zweiten Faktor — über die Zwei-Faktor-Abfrage, die Sudo-Re-Authentifizierung und die Lockout-Selbsthilfe gleichermaßen. Der Schutz der gehashten Speicherung (#790) wäre damit aufgehoben, auch wenn der Einmalverbrauch weiter griffe. Zusätzlich gelten der atomare Einmalverbrauch aus #2110 und der eine Throttle-Schritt je Fehlversuch aus #790.
+`verify_backup_code` akzeptiert nur das neue 22-Zeichen-Eingabeformat und vergleicht dessen HMAC, nie den gespeicherten Wert direkt. Einmalverbrauch bleibt atomar. Das schwache Altformat `xxxx-xxxx` und alle früheren SHA-Digests (auch für moderne Codes) sind ungültig; die historische Migration `0181` erzeugt keine heute gültigen Codes. Es gibt keine Altbestands-Migration. Vor Geräteverlust neue Codes mit gültigem TOTP erzeugen; ohne nutzbaren Faktor gilt der Admin-MFA-Reset. Auch eine `SECRET_KEY`-Rotation entwertet die Codes.
 
-### Klartext-Zeilen im Backup-Gerät
+Anonyme Fehlversuche auf `/account/recovery/backup-code/` erhöhen die Gerätedrossel nicht. Der Pfad begrenzt mit 5/min je IP und 10/h je normalisiertem Benutzernamen; das Benutzerlimit bleibt bei wechselnden IPs wirksam. Die authentifizierte Gerätedrossel bleibt erhalten. Ein eingelöster Code entsperrt das Konto bzw. bestätigt den zweiten Faktor, ersetzt aber kein TOTP-Gerät.
 
-Klartext-Backup-Codes hatten das Erzeugungsformat `f"{secrets.token_hex(2)}-{secrets.token_hex(2)}"`, also genau zweimal vier Kleinbuchstaben-Hex mit Bindestrich. Für sie gilt:
-
-- Die Datenmigration `0181_hash_cleartext_backup_codes` ersetzt jede Zeile des Backup-Geräts (`StaticDevice.name == "backup"`) im Format `^[0-9a-f]{4}-[0-9a-f]{4}$` durch den SHA-256-Präfix des Klartexts. Sie ist idempotent (ein Hash erfüllt das Altformat nie) und schreibt die Zahl der gehashten Zeilen in den `migrate`-Output (`[0181_hash_cleartext_backup_codes] <n> Klartext-Backup-Code(s) gehasht.`). Tokens anderer statischer Geräte fasst sie nicht an: die vergleicht django-otp selbst im Klartext.
-- Ein alter Code verifiziert danach unverändert über den Hash-Kandidaten; für betroffene Konten ändert sich nichts. Die Eingabe ohne Bindestrich normalisiert die Zwei-Faktor-Abfrage weiterhin auf `xxxx-xxxx`.
-- Formatprüfung und Direktvergleich sind in `verify_backup_code` **ersatzlos entfallen**. Die Zusage „kein Wert aus der Datenbank ist ein Anmeldecode" gilt damit uneingeschränkt: auch eine Klartext-Zeile, die am Migrationsweg vorbei in die Tabelle gelangt, ist kein gültiger Code (sie wird abgelehnt, bleibt liegen und zählt als Fehlversuch).
-- Ein Restore aus einem Dump von vor `0181` durchläuft die Migration beim nächsten `migrate` erneut. Die Migration hat keinen Rückweg (ein Hash ist nicht umkehrbar); ein älterer Anwendungsstand verifiziert die gehashten Zeilen trotzdem, weil er den Hash-Kandidaten immer mitsucht.
-
-### Flankierend: erneute Einrichtung verlangt den Bestandsfaktor
-
-Zum selben Schutzgut gehört #2287: Die Einrichtungsseite gatete den erneuten Einstieg nur im `GET`-Zweig. Eine bloß passwortauthentifizierte Sitzung konnte den Einrichtungsvorgang deshalb per `POST` erneut durchlaufen — und dabei den vorhandenen Backup-Code-Satz ersetzen, also den Recovery-Anker des Kontos austauschen, ohne den bestehenden zweiten Faktor zu kennen. `MFASetupView.dispatch` prüft die Berechtigung jetzt für alle HTTP-Methoden gemeinsam; bei bestätigtem Bestandsfaktor (TOTP **oder** Passkey) und nicht verifizierter Sitzung geht es vor dem Kontextaufbau nach `/mfa/verify/`. Der Abschluss der Einrichtung hängt zusätzlich am Primärschlüssel des konkret autorisierten, unbestätigten Geräts statt an „irgendeinem" unbestätigten Gerät des Kontos.
+**Neues Gerät einrichten** unter `/mfa/settings/` führt nach bereits bestätigter MFA und Sudo mit Passwort plus TOTP oder Backup-Code auf `/mfa/change-device/`. Erst die Quittung der neuen Backup-Codes entfernt die bisher bestätigten TOTP-Geräte; Passkeys bleiben. Der Abschluss schreibt `MFA_ENABLED` mit der Anzahl ersetzter TOTP-Geräte. Nach Sudo führt die freiwillige Deaktivierung auf eine GET-Bestätigungsseite, ihr POST deaktiviert den Faktor.
 
 ### Verifikation
 
-- Format- und Einstiegs-Guard (Service, Zwei-Faktor-Abfrage, Sudo, Lockout-Selbsthilfe): [`src/tests/test_mfa_backup_code_format_guard.py`](../src/tests/test_mfa_backup_code_format_guard.py)
-- Einrichtungs-Gate und Gerätebindung: [`src/tests/test_mfa_setup_reauth_guard.py`](../src/tests/test_mfa_setup_reauth_guard.py)
-- Hash-Speicherung, migrierter Alt-Code, Einmalverbrauch und Parallelverbrauch: [`src/tests/test_mfa_backup_codes.py`](../src/tests/test_mfa_backup_codes.py)
-- Abschaltung des Klartext-Vergleichs (Service und alle drei Einstiege): [`src/tests/test_mfa_backup_code_cleartext_removed_guard.py`](../src/tests/test_mfa_backup_code_cleartext_removed_guard.py)
-- Datenmigration `0181` (Hash, Umfang, Idempotenz, Zählzeile, eingefrorene Hash-Funktion): [`src/tests/migrations/test_0181_hash_cleartext_backup_codes.py`](../src/tests/migrations/test_0181_hash_cleartext_backup_codes.py)
+- [Backup-Code-Härtung und anonyme Recovery](../src/tests/test_backup_code_hardening.py)
+- [Gerätewechsel und Deaktivierungsbestätigung](../src/tests/test_mfa_device_change_flow.py)
+- [Einmalverbrauch und Parallelverbrauch](../src/tests/test_mfa_backup_codes.py)
+- [Einrichtungs-Gate und Gerätebindung](../src/tests/test_mfa_setup_reauth_guard.py)
 
 ---
 
