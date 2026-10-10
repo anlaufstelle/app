@@ -130,8 +130,8 @@ class TestAuditLogCreationAllowlist:
             # Refs #2042: +9 Zeilen durch ``retention_handover_notes_days`` in
             # denselben beiden Listen (164 -> 173, 193 -> 202). Reine Zeilen-
             # Nachfuehrung, keine neue Schreibstelle.
-            # Refs #2525: +1 Zeile durch die Schutzsperre vor dem Versionscheck
-            # in ``update_settings`` (173 -> 174, 202 -> 203).
+            # Refs #2525: +1 line for the protection gate before the version
+            # check in ``update_settings`` (173 -> 174, 202 -> 203).
             174: "update_settings-Body — Settings-Diff-Helper",
             203: "log_settings_change-Body — zweite create-Stelle",
         },
