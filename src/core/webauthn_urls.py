@@ -10,9 +10,9 @@ der ``mfa_verified``-Glue und der „nur neben TOTP"-Guard. Der Namespace bleibt
 
 from django.urls import path
 from django.views.i18n import JavaScriptCatalog
-from django_otp_webauthn.views import BeginCredentialAuthenticationView
 
 from core.views.mfa_webauthn import (
+    WebAuthnAuthenticationBeginView,
     WebAuthnAuthenticationCompleteView,
     WebAuthnRegistrationBeginView,
     WebAuthnRegistrationCompleteView,
@@ -33,7 +33,7 @@ urlpatterns = [
     ),
     path(
         "authentication/begin/",
-        BeginCredentialAuthenticationView.as_view(),
+        WebAuthnAuthenticationBeginView.as_view(),
         name="credential-authentication-begin",
     ),
     path(

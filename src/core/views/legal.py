@@ -9,8 +9,10 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.http import Http404
+from django.utils.decorators import method_decorator
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
 
 logger = logging.getLogger(__name__)
@@ -214,6 +216,7 @@ class ConfigurableLegalView(TemplateView):
         return context
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class DemoImprintView(ConfigurableLegalView):
     """GET /impressum/ — Demo- oder Betreiber-Impressum, oeffentlich."""
 
@@ -222,6 +225,7 @@ class DemoImprintView(ConfigurableLegalView):
     page_title = _("Impressum")
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class DemoPrivacyView(ConfigurableLegalView):
     """GET /datenschutzerklaerung/ — Demo- oder Betreiber-Datenschutztext."""
 

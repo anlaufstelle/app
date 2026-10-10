@@ -1,12 +1,15 @@
 """SystemOrganizationView — Read-Only-Ansicht der Organisation."""
 
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
 
 from core.models import Facility, Organization
 from core.views.system.mixins import SystemAuditMixin
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class SystemOrganizationView(SystemAuditMixin, TemplateView):
     """Read-Only-Ansicht der Organisation und ihrer Einrichtungen.
 

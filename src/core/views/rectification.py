@@ -23,7 +23,6 @@ from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.rectification import RectificationRequestForm
@@ -38,6 +37,7 @@ from core.services.client.rectification import (
 )
 from core.services.client.restriction import restrict_processing
 from core.services.scoping import get_scoped_object
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import LeadOrAdminRequiredMixin, StaffRequiredMixin
 from core.views.utils import object_back_link
 

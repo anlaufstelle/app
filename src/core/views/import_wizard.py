@@ -31,13 +31,13 @@ from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_BULK_ACTION, RATELIMIT_MUTATION
 from core.forms.import_data import ImportUploadForm
 from core.models import ImportJob
 from core.services import import_engine
 from core.services.scoping import get_scoped_object
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import FacilityAdminRequiredMixin, PaginatedListMixin
 
 logger = logging.getLogger(__name__)

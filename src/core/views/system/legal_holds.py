@@ -2,6 +2,8 @@
 
 from urllib.parse import urlencode
 
+from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
 
 from core.constants import DEFAULT_PAGE_SIZE
@@ -11,6 +13,7 @@ from core.views.mixins import PaginatedListMixin
 from core.views.system.mixins import SystemAuditMixin
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class SystemLegalHoldListView(SystemAuditMixin, PaginatedListMixin, TemplateView):
     """Cross-Facility-Liste der ``LegalHold``-Eintraege.
 

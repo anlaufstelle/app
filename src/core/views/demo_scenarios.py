@@ -40,6 +40,8 @@ Modelle mehr direkt an.
 
 from __future__ import annotations
 
+from functools import wraps
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login as auth_login
@@ -49,7 +51,8 @@ from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
+from django.views.decorators.http import require_http_methods
+from django_ratelimit import UNSAFE
 
 from core.constants import RATELIMIT_FREQUENT
 from core.demo import DEMO_OFFLINE_BOOTSTRAP_ERROR, DEMO_OFFLINE_BOOTSTRAP_PENDING, DEMO_PASSWORD
@@ -57,6 +60,7 @@ from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY, LAST_RENEWAL_KEY
 from core.models import User
 from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
 from core.services.demo_scenarios import account_for, facility_for_scenario
+from core.utils.ratelimit import ratelimit
 
 #: Refs #573/#1065 (``CustomLogoutView``, ``core/views/auth.py``, dort als
 #: Vorbild; die bestehende Abmeldung bleibt unveraendert). Gleicher Wert wie
@@ -94,6 +98,17 @@ def _lookup_scenario(key):
 def _demo_mode_or_404():
     if not getattr(settings, "DEMO_MODE", False):
         raise Http404
+
+
+def require_demo_mode(view):
+    """Keep disabled demos at 404 before method filters or quotas (Refs #2350, #2529)."""
+
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        _demo_mode_or_404()
+        return view(request, *args, **kwargs)
+
+    return wrapper
 
 
 def _default_role(scenario):
@@ -165,16 +180,12 @@ def _stamp_session_timeout(request, facility):
     request.session["mfa_verified"] = False
 
 
+@method_decorator(require_demo_mode, name="dispatch")
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class DemoScenarioSelectView(View):
     """GET /demo/ — Bereichsauswahl (Ticket-Punkt 1/2/8)."""
 
     template_name = "auth/demo_scenario_select.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        # Refs #2350: vor der Methodenverteilung, damit ausserhalb DEMO_MODE auch
-        # OPTIONS/PUT/DELETE/... mit 404 statt 200 bzw. 405 (mit ``Allow``) antworten.
-        _demo_mode_or_404()
-        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request):
         preselect_scenario = _lookup_scenario(request.GET.get("bereich", ""))
@@ -188,17 +199,23 @@ class DemoScenarioSelectView(View):
         return render(request, self.template_name, context)
 
 
-@method_decorator(ratelimit(key="ip", rate=RATELIMIT_FREQUENT, method="POST", block=True), name="post")
+@method_decorator(require_demo_mode, name="dispatch")
+@method_decorator(
+    ratelimit(
+        key="ip",
+        rate=RATELIMIT_FREQUENT,
+        method=UNSAFE,
+        block=True,
+        group="core.views.demo_scenarios.DemoScenarioStartView.post",
+    ),
+    name="dispatch",
+)
 class DemoScenarioStartView(View):
     """POST /demo/start/ — Demo-Start bzw. Bereichs-/Rollenwechsel.
 
     GET existiert nur als harmloser Redirect zurueck zur Auswahl (kein Login
     per GET/Deep-Link, Ticket-Punkt 8).
     """
-
-    def dispatch(self, request, *args, **kwargs):
-        _demo_mode_or_404()  # Refs #2350, s. DemoScenarioSelectView.dispatch
-        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request):
         return redirect(SCENARIO_SELECT_URL_NAME)

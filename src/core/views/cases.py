@@ -15,7 +15,6 @@ from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.cases import CaseForm, DynamicCaseDataForm
@@ -56,6 +55,7 @@ from core.services.dynamic_data import (
 )
 from core.services.events import split_file_and_text_data
 from core.services.scoping import get_scoped_object
+from core.utils.ratelimit import ratelimit
 from core.views._dynamic_errors import add_dynamic_service_errors
 from core.views.case_goals import _abgelehnt as case_goals_abgelehnt
 from core.views.mixins import (

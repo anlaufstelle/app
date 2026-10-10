@@ -24,12 +24,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.config import FieldConditionForm
 from core.models import DocumentType, DocumentTypeField, FieldCondition
 from core.services import config as config_service
+from core.utils.ratelimit import ratelimit
 from core.views.config._context import (
     _operator_input_context,
     _value_for_input,

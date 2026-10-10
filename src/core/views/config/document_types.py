@@ -19,7 +19,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.config import DocumentTypeFieldAddForm, DocumentTypeForm
@@ -37,6 +36,7 @@ from core.reporting.registry import describe_type_bindings, diagnose_type_bindin
 from core.services import config as config_service
 from core.services.config import ConfigDeleteBlocked
 from core.services.events import evaluate_tally_eligibility
+from core.utils.ratelimit import ratelimit
 from core.views.config._context import board_context, condition_board_context
 from core.views.mixins import (
     FacilityAdminRequiredMixin,

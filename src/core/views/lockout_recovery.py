@@ -22,8 +22,9 @@ from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.http import require_http_methods
 from django.views.generic import FormView, TemplateView, View
-from django_ratelimit.decorators import ratelimit
+from django_ratelimit import UNSAFE
 
 from core.models import AuditLog, User
 from core.services.audit import log_audit_event
@@ -36,6 +37,7 @@ from core.services.security import unlock as unlock_user
 from core.services.security.lockout_recovery import consume_recovery_token
 from core.services.security.origin import build_external_url
 from core.signals.audit import _set_session_vars, get_client_ip
+from core.utils.ratelimit import ratelimit
 from core.views.auth import _login_username_key
 from core.views.mixins import anonymous_session_required
 
@@ -57,8 +59,8 @@ class _RecoveryEmailForm(forms.Form):
 
 # Refs #2391: the request writes an audit row for the account of the entered
 # address, possibly in another facility; a signed-in session gets a notice.
+@method_decorator(ratelimit(key="ip", rate="5/m", method=UNSAFE, block=True), name="dispatch")
 @method_decorator(anonymous_session_required, name="dispatch")
-@method_decorator(ratelimit(key="ip", rate="5/m", method=("POST", "PUT"), block=True), name="dispatch")
 class LockoutRecoveryRequestView(FormView):
     """Form: E-Mail eingeben, Recovery-Token-Mail versenden (Anti-Enumeration)."""
 
@@ -106,6 +108,7 @@ class LockoutRecoveryRequestView(FormView):
 
 # Refs #2391: the confirmation belongs to the request above; a signed-in
 # session gets the same notice there as on every other unlock page.
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 @method_decorator(anonymous_session_required, name="dispatch")
 class LockoutRecoverySentView(TemplateView):
     template_name = "auth/lockout_recovery_sent.html"
@@ -113,6 +116,16 @@ class LockoutRecoverySentView(TemplateView):
 
 # Refs #2391: a valid token switches the database context to the account of
 # the link (already on GET); a signed-in session gets a notice instead.
+@method_decorator(
+    ratelimit(
+        key="ip",
+        rate="10/m",
+        method=UNSAFE,
+        block=True,
+        group="core.views.lockout_recovery.LockoutRecoveryConfirmView.post",
+    ),
+    name="dispatch",
+)
 @method_decorator(anonymous_session_required, name="dispatch")
 class LockoutRecoveryConfirmView(View):
     """Token-Klick: GET zeigt eine Bestaetigungsseite, POST entsperrt (Refs #1273).
@@ -134,7 +147,6 @@ class LockoutRecoveryConfirmView(View):
             render_to_string("auth/lockout_recovery_confirm.html", {"token": token}, request=request),
         )
 
-    @method_decorator(ratelimit(key="ip", rate="10/m", method="POST", block=True))
     def post(self, request: HttpRequest, token: str, *args, **kwargs) -> HttpResponse:
         user = consume_recovery_token(token, ip_address=get_client_ip(request))
         if user is None:
@@ -177,9 +189,9 @@ class _BackupCodeForm(forms.Form):
 
 # Refs #2391: a valid code switches the database context to the account it
 # belongs to; a signed-in session gets a notice instead.
+@method_decorator(ratelimit(key="ip", rate="5/m", method=UNSAFE, block=True), name="dispatch")
+@method_decorator(ratelimit(key=_login_username_key, rate="10/h", method=UNSAFE, block=True), name="dispatch")
 @method_decorator(anonymous_session_required, name="dispatch")
-@method_decorator(ratelimit(key="ip", rate="5/m", method=("POST", "PUT"), block=True), name="dispatch")
-@method_decorator(ratelimit(key=_login_username_key, rate="10/h", method=("POST", "PUT"), block=True), name="dispatch")
 class LockoutRecoveryBackupCodeView(FormView):
     """User + MFA-Backup-Code -> LOGIN_UNLOCK + BACKUP_CODES_USED (Refs #869, Var. C)."""
 

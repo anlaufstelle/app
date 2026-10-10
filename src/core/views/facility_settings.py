@@ -8,7 +8,7 @@ from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
+from django_ratelimit import UNSAFE
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.facility_settings import FacilitySettingsForm
@@ -16,6 +16,7 @@ from core.models import Settings
 from core.services.facility import ensure_settings_for_facility
 from core.services.security import RequireSudoModeMixin
 from core.services.system import update_settings
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import FacilityAdminRequiredMixin
 
 # Fehlercodes aus ``check_version_conflict``, die ohne Speichern auf den
@@ -24,8 +25,14 @@ _TOKEN_ERROR_CODES = frozenset({"missing_token", "invalid_token", "version_confl
 
 
 @method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
+    ratelimit(
+        key="user",
+        rate=RATELIMIT_MUTATION,
+        method=UNSAFE,
+        block=True,
+        group="core.views.facility_settings.FacilitySettingsView.post",
+    ),
+    name="dispatch",
 )
 class FacilitySettingsView(FacilityAdminRequiredMixin, RequireSudoModeMixin, View):
     """Pflege der eigenen Facility-Settings ueber den auditierten Service."""

@@ -11,7 +11,6 @@ from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_BULK_ACTION, RATELIMIT_MUTATION
 from core.models import LegalHold, RetentionProposal
@@ -27,6 +26,7 @@ from core.services.retention import (
     dismiss_legal_hold,
 )
 from core.services.scoping import get_scoped_object
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin, htmx_absage
 
 

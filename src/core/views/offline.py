@@ -21,7 +21,6 @@ from django.utils.http import parse_etags
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import TemplateView
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_OFFLINE_BUNDLE, RATELIMIT_OFFLINE_REVOCATIONS
 from core.models import AuditLog, Client
@@ -33,6 +32,7 @@ from core.services.system import (
     build_facility_offline_bundle,
     list_offline_client_revocations,
 )
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 # Refs #1410 (a): volatile Bundle-Metadaten, die sich pro Request aendern und

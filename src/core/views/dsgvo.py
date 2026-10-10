@@ -6,13 +6,13 @@ from django.http import Http404
 from django.shortcuts import render
 from django.utils.decorators import method_decorator
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_BULK_ACTION
 from core.models import AuditLog
 from core.services.audit import log_audit_event
 from core.services.client import DOCUMENTS, get_document_list, render_document
 from core.utils.downloads import safe_download_response
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import FacilityAdminRequiredMixin
 
 logger = logging.getLogger(__name__)

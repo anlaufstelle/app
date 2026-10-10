@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
-from django_ratelimit.decorators import ratelimit
+from django.views.decorators.http import require_http_methods
 
 from core.constants import AUDIT_PAGE_SIZE, RATELIMIT_BULK_ACTION
 from core.models import AuditLog, Facility
@@ -25,10 +25,12 @@ from core.services.system import _sanitize_csv_cell
 from core.signals.audit import _set_session_vars
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import parse_date
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import HTMXPartialMixin, PaginatedListMixin
 from core.views.system.mixins import SystemAuditMixin
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class SystemAuditLogListView(SystemAuditMixin, PaginatedListMixin, HTMXPartialMixin, View):
     """Cross-Facility-Audit-Log fuer super_admin.
 
@@ -79,6 +81,7 @@ class SystemAuditLogListView(SystemAuditMixin, PaginatedListMixin, HTMXPartialMi
         return self.render_htmx_or_full(context)
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class SystemAuditLogDetailView(SystemAuditMixin, View):
     """Detail-Ansicht eines AuditLog-Eintrags inkl. Facility-Spalte.
 
@@ -177,6 +180,7 @@ class _CsvEcho:
         return value
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class SystemAuditLogExportView(SystemAuditMixin, RequireSudoModeMixin, View):
     """Streaming CSV/JSON Export des Cross-Facility-AuditLogs.
 

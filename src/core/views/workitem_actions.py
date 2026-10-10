@@ -17,7 +17,6 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT, RATELIMIT_MUTATION, WORKITEM_INBOX_CAP
 from core.forms.workitems import WorkItemForm
@@ -35,6 +34,7 @@ from core.services.case.workitems import workitem_form_state_token
 from core.services.client import resolve_writable_client
 from core.services.scoping import get_scoped_object
 from core.utils.formatting import isoformat_or_none
+from core.utils.ratelimit import ratelimit
 from core.views._json_contracts import (
     _conflict_response,
     _invalid_form_response,

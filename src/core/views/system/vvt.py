@@ -1,11 +1,14 @@
 """Verzeichnis Verarbeitungstaetigkeiten (Art. 30 DSGVO) fuer super_admin (Refs #876)."""
 
+from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
 
 from core.services.compliance import get_processing_activities
 from core.views.system.mixins import SystemAuditMixin
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class SystemVVTView(SystemAuditMixin, TemplateView):
     """Read-Only Verzeichnis aller Verarbeitungstaetigkeiten der Installation.
 

@@ -12,7 +12,6 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
 from core.models import DocumentType
@@ -40,6 +39,7 @@ from core.services.dashboard import (
 from core.services.dashboard.release_log import RELEASE_PAGE_SIZE, release_queryset
 from core.services.system import export_events_csv
 from core.utils.downloads import safe_download_response
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import ExportRangeMixin, HTMXPartialMixin, LeadOrAdminRequiredMixin, htmx_absage, log_export
 
 logger = logging.getLogger(__name__)

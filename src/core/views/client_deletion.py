@@ -18,7 +18,6 @@ from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.models import Client
@@ -30,6 +29,7 @@ from core.services.client import (
 )
 from core.services.deletion import eligible_deletion_confirmers
 from core.services.scoping import get_scoped_object
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import (
     FacilityAdminRequiredMixin,
     StaffRequiredMixin,

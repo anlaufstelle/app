@@ -18,7 +18,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.config import FieldTemplateForm
@@ -28,6 +27,7 @@ from core.services import config as config_service
 from core.services.compliance.sensitivity import field_protection
 from core.services.config import ConfigDeleteBlocked
 from core.services.option_usage import option_slugs_in_use
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import (
     FacilityAdminRequiredMixin,
     HTMXPartialMixin,

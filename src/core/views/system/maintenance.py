@@ -11,18 +11,29 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
+from django_ratelimit import UNSAFE
 
 from core.constants import RATELIMIT_MUTATION
 from core.models import AuditLog
 from core.services.audit import audit_system_view
 from core.services.security import RequireSudoModeMixin
 from core.signals.audit import _set_session_vars
+from core.utils.ratelimit import ratelimit
 from core.views.system.mixins import SystemAuditMixin
 
 logger = logging.getLogger(__name__)
 
 
+@method_decorator(
+    ratelimit(
+        key="user",
+        rate=RATELIMIT_MUTATION,
+        method=UNSAFE,
+        block=True,
+        group="core.views.system.maintenance.SystemMaintenanceView.post",
+    ),
+    name="dispatch",
+)
 class SystemMaintenanceView(SystemAuditMixin, RequireSudoModeMixin, View):
     """Wartungsmodus aktivieren/deaktivieren ueber den Systembereich.
 
@@ -42,7 +53,6 @@ class SystemMaintenanceView(SystemAuditMixin, RequireSudoModeMixin, View):
     def get(self, request):
         return render(request, self.template_name, self._build_context())
 
-    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request):
         flag_path = getattr(settings, "MAINTENANCE_FLAG_FILE", None)
         if not flag_path:

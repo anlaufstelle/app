@@ -59,10 +59,11 @@ from django.http import HttpResponse, HttpResponseBadRequest
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from django_ratelimit.decorators import ratelimit
+from django_ratelimit import UNSAFE
 
 from core.logging import mask_url
 from core.signals.audit import get_client_ip
+from core.utils.ratelimit import ratelimit
 
 # Eigener Logger-Namespace ausserhalb von `core` — die Django-Log-Config in
 # settings/base.py setzt fuer `core` ``propagate=False``, was Tests via
@@ -193,11 +194,14 @@ def _sanitize_violation(violation):
     return sanitized
 
 
+@method_decorator(
+    ratelimit(key="ip", rate="10/m", method=UNSAFE, block=True, group="core.views.csp_report.CSPReportView.post"),
+    name="dispatch",
+)
 @method_decorator(csrf_exempt, name="dispatch")
 class CSPReportView(View):
     """Empfaengt CSP-Violation-Reports vom Browser und loggt sie."""
 
-    @method_decorator(ratelimit(key="ip", rate="10/m", method="POST", block=True))
     def post(self, request):
         content_type = (request.content_type or "").split(";", 1)[0].strip().lower()
         if content_type not in _VALID_CONTENT_TYPES:

@@ -24,15 +24,17 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.shortcuts import redirect
-from django.urls import URLPattern, reverse
+from django.urls import URLPattern, URLResolver, reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
-from django_ratelimit.decorators import ratelimit
+from django.views.decorators.http import require_http_methods
+from django_ratelimit import UNSAFE
 from unfold.forms import AuthenticationForm as UnfoldAuthenticationForm
 from unfold.sites import UnfoldAdminSite
 
 from core.services.security import is_in_sudo
 from core.services.security.sudo_mode import sudo_url
+from core.utils.ratelimit import ratelimit
 
 
 def _admin_login_username_key(group, request):
@@ -192,7 +194,33 @@ class AnlaufstelleAdminSite(UnfoldAdminSite):
         for route in routes:
             if isinstance(route, URLPattern) and route.name not in self.audit_exempt_site_routes:
                 route.callback = self._audited_site_view(route.callback, route.name)
+        self._limit_registered_routes(routes)
         return routes
+
+    def _limit_registered_routes(self, routes):
+        """Limit each concrete admin entry, including ModelAdmin URLs (Refs #2529)."""
+        for route in routes:
+            if isinstance(route, URLResolver):
+                self._limit_registered_routes(route.url_patterns)
+            elif isinstance(route, URLPattern):
+                if route.name == "logout":
+                    route.callback = require_http_methods(["GET", "HEAD", "POST", "OPTIONS"])(route.callback)
+                    continue
+                if route.name == "login":
+                    route.callback = ratelimit(
+                        group="admin.login.username",
+                        key=_admin_login_username_key,
+                        rate="10/h",
+                        method=UNSAFE,
+                        block=True,
+                    )(route.callback)
+                route.callback = ratelimit(
+                    group=f"admin.{route.name or 'fallback'}",
+                    key="ip" if route.name == "login" else "user_or_ip",
+                    rate="5/m" if route.name == "login" else "60/h",
+                    method=UNSAFE,
+                    block=True,
+                )(route.callback)
 
     @transaction.atomic
     def password_change(self, request, extra_context=None):

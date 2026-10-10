@@ -9,7 +9,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.episodes import EpisodeForm
@@ -18,6 +17,7 @@ from core.models.episode import Episode
 from core.services.case import cases_with_live_client, update_episode
 from core.services.case.episodes import close_episode, create_episode
 from core.services.scoping import get_scoped_object
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import StaffRequiredMixin, htmx_absage
 from core.views.utils import object_back_link
 

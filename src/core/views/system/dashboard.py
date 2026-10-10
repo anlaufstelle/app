@@ -1,5 +1,7 @@
 """SystemDashboardView — Cross-Facility-Dashboard fuer super_admin."""
 
+from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
 
 import core.services.system.health as system_health
@@ -10,6 +12,7 @@ from core.services.dashboard import super_admin_dashboard_context
 from core.views.system.mixins import SystemAuditMixin
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class SystemDashboardView(SystemAuditMixin, TemplateView):
     """Cross-facility-Dashboard fuer super_admin.
 

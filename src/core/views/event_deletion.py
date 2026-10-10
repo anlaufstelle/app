@@ -21,7 +21,6 @@ from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.models import Client, DeletionRequest
@@ -41,6 +40,7 @@ from core.services.deletion import (
 )
 from core.services.events import approve_deletion, reject_deletion
 from core.services.scoping import get_scoped_object
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import DeletionConfirmerRequiredMixin, DeletionRequestListAccessMixin
 from core.views.utils import safe_redirect_path
 

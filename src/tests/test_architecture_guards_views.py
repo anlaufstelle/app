@@ -1,9 +1,7 @@
 """Architecture-Guards — View-Guards (Rate-Limit, Redirect-Hygiene, Routes, ProdSettings) (Refs #929)."""
 
 import ast
-import builtins
 import difflib
-import importlib
 import inspect
 import re
 from pathlib import Path
@@ -14,276 +12,249 @@ pytestmark = pytest.mark.architecture
 
 
 class TestRateLimitOnAllMutations:
-    """Scan every view module, including inherited handlers and POST functions."""
+    """Fail closed on every callback registered in the active URL resolver."""
 
-    _VIEWS_DIR = Path("src/core/views")
     _ALLOWLIST = {
-        "auth.py:CustomLogoutView.post": (
-            "Logout must always flush the session, including quick exit on shared devices; "
-            "it exposes no factor verification or data mutation beyond ending that session (Refs #2529)."
+        "logout": (
+            "core.views.auth.CustomLogoutView",
+            {"POST"},
+            "CustomLogoutView.post must end the session even after quick exit or repeated requests (Refs #2529).",
         ),
-        "clients.py:ClientRenameWarningView.post": (
-            "Read-only pseudonym warning probe; must not consume the actual update quota (Refs #2044)."
+        "core:client_rename_warning": (
+            "core.views.clients.ClientRenameWarningView",
+            {"POST"},
+            "ClientRenameWarningView.post is a read-only warning probe, separate from the update quota (Refs #2044).",
+        ),
+        "admin:logout": (
+            "django.contrib.admin.sites.AdminSite:logout",
+            {"POST"},
+            "Admin logout must remain available to end the current session (Refs #2529).",
         ),
     }
-    _METHODS = {"post", "put", "patch", "delete"}
+    _METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
     def test_all_post_handlers_have_ratelimit(self):
-        from django.views import generic
-        from django_ratelimit import ALL
-        from django_ratelimit.core import _split_rate
+        from types import FunctionType, MethodType
 
-        assert self._VIEWS_DIR.exists(), f"Missing view directory: {self._VIEWS_DIR}"
-        modules = {}
-        classes = {}
-        external_mros = {}
+        from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin, UserPassesTestMixin
+        from django.contrib.auth.views import PasswordResetCompleteView, PasswordResetDoneView
+        from django.urls import URLResolver, get_resolver
+        from django.utils.decorators import method_decorator
+        from django.utils.module_loading import import_string
+        from django.views import View
+        from django.views.decorators.http import require_http_methods
+        from django.views.generic.base import RedirectView
 
-        def load(path):
-            path = path.resolve()
-            if path not in modules:
-                tree = ast.parse(path.read_text())
-                imports = {}
-                for node in tree.body:
-                    if isinstance(node, ast.ImportFrom) and node.module and not node.level:
-                        for alias in node.names:
-                            imports[alias.asname or alias.name] = (node.module, alias.name)
-                    elif isinstance(node, ast.Import):
-                        for alias in node.names:
-                            imports[alias.asname or alias.name.split(".")[0]] = (
-                                alias.name if alias.asname else alias.name.split(".")[0],
-                                "",
-                            )
-                modules[path] = tree, imports
-                for node in tree.body:
-                    if isinstance(node, ast.ClassDef):
-                        classes[path, node.name] = node
-            return path
+        from core.utils.ratelimit import RATE_LIMIT_WRAPPER_CODE, AppliedRateLimit, RateLimit
+        from core.views.demo_scenarios import require_demo_mode
 
-        for path in sorted(self._VIEWS_DIR.rglob("*.py")):
-            load(path)
-        endpoints = list(classes)
-        view_fallbacks = {name: getattr(generic, name) for name in dir(generic) if name.endswith("View")}
+        def dummy(*args, **kwargs):
+            pass
 
-        def imported(path, node):
-            if isinstance(node, ast.Name):
-                module, attribute = modules[path][1][node.id]
-                return (
-                    getattr(importlib.import_module(module), attribute)
-                    if attribute
-                    else importlib.import_module(module)
-                )
-            if isinstance(node, ast.Attribute):
-                return getattr(imported(path, node.value), node.attr)
-            raise ValueError("Unsupported imported expression")
+        method_wrapper_code = method_decorator(lambda fn: fn)(dummy).__code__
+        http_wrapper_code = require_http_methods(["GET"])(dummy).__code__
+        http_decorator_code = require_http_methods(["GET"]).__code__
+        as_view_code = View.as_view().__code__
+        forwarding_dispatches = {
+            LoginRequiredMixin.dispatch: LoginRequiredMixin,
+            UserPassesTestMixin.dispatch: UserPassesTestMixin,
+            PermissionRequiredMixin.dispatch: PermissionRequiredMixin,
+            PasswordResetDoneView.dispatch: PasswordResetDoneView,
+            PasswordResetCompleteView.dispatch: PasswordResetCompleteView,
+        }
 
-        def symbol(path, node):
-            if isinstance(node, ast.Name):
-                return modules[path][1].get(node.id, ("", node.id))[1]
-            return node.attr if isinstance(node, ast.Attribute) else ""
+        def function(fn):
+            return fn.__func__ if type(fn) is MethodType else fn
 
-        def value(path, node):
-            try:
-                return ast.literal_eval(node)
-            except (ValueError, TypeError):
-                if isinstance(node, ast.Name):
-                    for statement in modules[path][0].body:
-                        targets = statement.targets if isinstance(statement, ast.Assign) else []
-                        if any(isinstance(target, ast.Name) and target.id == node.id for target in targets):
-                            return value(path, statement.value)
-                try:
-                    return imported(path, node)
-                except (KeyError, AttributeError, ValueError):
-                    return None
+        def closure(fn):
+            return {
+                key: cell.cell_contents for key, cell in zip(fn.__code__.co_freevars, fn.__closure__ or (), strict=True)
+            }
 
-        def limited(path, decorators, method, *, target=None):
-            for decorator in decorators:
-                if target:
-                    if not isinstance(decorator, ast.Call) or symbol(path, decorator.func) != "method_decorator":
-                        continue
-                    if not any(kw.arg == "name" and value(path, kw.value) == target for kw in decorator.keywords):
-                        continue
-                applied = (
-                    decorator.args[:1]
-                    if (isinstance(decorator, ast.Call) and symbol(path, decorator.func) == "method_decorator")
-                    else [decorator]
-                )
-                calls = [
-                    item
-                    for node in applied
-                    for item in (node.elts if isinstance(node, (ast.List, ast.Tuple)) else [node])
-                ]
-                for call in calls:
-                    if not isinstance(call, ast.Call) or symbol(path, call.func) != "ratelimit":
-                        continue
-                    options = {kw.arg: kw.value for kw in call.keywords}
-                    if value(path, options.get("block")) is not True:
-                        continue
-                    rate = value(path, options.get("rate"))
-                    try:
-                        count, seconds = _split_rate(rate)
-                        if not isinstance(count, int) or not isinstance(seconds, int) or count < 0 or seconds <= 0:
-                            continue
-                    except (TypeError, ValueError, AttributeError):
-                        continue
-                    methods = value(path, options["method"]) if "method" in options else ALL
-                    if methods == ALL:
-                        return True
-                    if isinstance(methods, str):
-                        methods = [methods]
-                    if isinstance(methods, (list, tuple)) and any(
-                        isinstance(item, str) and item.upper() == method.upper() for item in methods
-                    ):
-                        return True
-            return False
-
-        def external(cls):
-            if cls.__module__ == "builtins":
-                return None
-            key = load(Path(inspect.getfile(cls))), cls.__name__
-            assert key in classes, f"Cannot inspect external base: {cls}"
-            if key not in external_mros:
-                external_mros[key] = [
-                    parent_key for base in cls.__mro__[1:] if (parent_key := external(base)) is not None
-                ]
-            return key
-
-        def base_key(path, node):
-            if isinstance(node, ast.Name) and (path, node.id) in classes:
-                return path, node.id
-            try:
-                return external(imported(path, node))
-            except KeyError:
-                if isinstance(node, ast.Name) and node.id in view_fallbacks:
-                    return external(view_fallbacks[node.id])
-                if isinstance(node, ast.Name) and isinstance(getattr(builtins, node.id, None), type):
-                    return None
-                raise AssertionError(f"Unresolved base in {path.name}: {ast.unparse(node)}") from None
-
-        mros = {}
-
-        def mro(key):
-            if key in external_mros:
-                return [key, *external_mros[key]]
-            if key not in mros:
-                parents = [parent for node in classes[key].bases if (parent := base_key(key[0], node))]
-                sequences = [mro(parent).copy() for parent in parents] + [parents.copy()]
-                result = [key]
-                while sequences := [seq for seq in sequences if seq]:
-                    candidate = next(
-                        (seq[0] for seq in sequences if all(seq[0] not in other[1:] for other in sequences)), None
-                    )
-                    assert candidate is not None, f"Inconsistent MRO: {key}"
-                    result.append(candidate)
-                    for seq in sequences:
-                        if seq[0] == candidate:
-                            seq.pop(0)
-                mros[key] = result
-            return mros[key]
-
-        def handler(chain, method):
-            for index, key in enumerate(chain):
-                for node in classes[key].body:
-                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == method:
-                        return index, node
+        def limit_binding(fn):
+            proof = getattr(fn, "_blocking_rate_limit", None)
+            if (
+                type(fn) is FunctionType
+                and type(proof) is AppliedRateLimit
+                and type(proof.limit) is RateLimit
+                and proof.handler is fn
+                and proof.code is fn.__code__ is RATE_LIMIT_WRAPPER_CODE
+            ):
+                bound = closure(fn)
+                if all(
+                    bound.get(key) is getattr(proof.limit, key) for key in ("group", "key", "rate", "method", "block")
+                ):
+                    return proof.limit, bound["fn"]
             return None
 
-        def handler_limit(chain, target, method):
-            found = handler(chain, target)
-            if found is None:
-                return False
-            index, node = found
-            return limited(chain[index][0], node.decorator_list, method) or any(
-                limited(key[0], classes[key].decorator_list, method, target=target) for key in chain[: index + 1]
-            )
+        def evidence(fn, method):
+            """Read only actual decorator bindings, never a copied __wrapped__ attribute."""
+            fn = function(fn)
+            if type(fn) is not FunctionType:
+                return None
+            if binding := limit_binding(fn):
+                limit, target = binding
+                return "limited" if limit.covers(method) else evidence(target, method)
+            code = getattr(fn, "__code__", None)
+            if code is http_wrapper_code:
+                bound = closure(fn)
+                methods = bound["request_method_list"]
+                if not isinstance(methods, (list, tuple)) or not all(isinstance(m, str) for m in methods):
+                    return None
+                return "safe" if method not in methods else evidence(bound["func"], method)
+            if code is method_wrapper_code:
+                bound = closure(fn)
+                # The closure stores construction order; execution order is reversed.
+                for decorator in reversed(bound["decorators"]):
+                    if type(decorator) is RateLimit:
+                        if decorator.covers(method):
+                            return "limited"
+                    elif type(decorator) is FunctionType and decorator.__code__ is http_decorator_code:
+                        if evidence(decorator(dummy), method) == "safe":
+                            return "safe"
+                    elif decorator is not require_demo_mode:
+                        return None
+                return evidence(bound["method"], method)
+            return None
 
-        def dispatch_routes(chain):
-            # Only Django's terminal dispatcher is trusted to select request.method.
-            routes = []
-            for key in chain:
-                found = handler([key], "dispatch")
-                if found is None or key == external(generic.View):
+        def transparent_target(fn):
+            """Peel only verified wrappers when they do not limit the current method."""
+            fn = function(fn)
+            if type(fn) is not FunctionType:
+                return None
+            if binding := limit_binding(fn):
+                return binding[1]
+            if getattr(fn, "__code__", None) is method_wrapper_code:
+                bound = closure(fn)
+                if all(
+                    type(decorator) is RateLimit
+                    or (type(decorator) is FunctionType and decorator.__code__ is http_decorator_code)
+                    or decorator is require_demo_mode
+                    for decorator in bound["decorators"]
+                ):
+                    return bound["method"]
+            if getattr(fn, "__code__", None) is http_wrapper_code:
+                return closure(fn)["func"]
+            return None
+
+        def source_label(fn):
+            cls = getattr(fn, "view_class", getattr(fn, "cls", None))
+            target = cls if cls is not None else function(inspect.unwrap(fn))
+            try:
+                file = inspect.getfile(target)
+            except (TypeError, OSError):
+                file = getattr(target, "__module__", "unknown")
+            return f"{Path(file).name}:{getattr(target, '__name__', type(target).__name__)}"
+
+        def class_evidence(callback, method):
+            cls = getattr(callback, "view_class", getattr(callback, "cls", None))
+            if (
+                type(callback) is not FunctionType
+                or type(cls) is not type
+                or not issubclass(cls, View)
+                or callback.__code__ is not as_view_code
+            ):
+                return None
+            binding = closure(callback)
+            kwargs = getattr(callback, "view_initkwargs", {})
+            if binding.get("cls") is not cls or binding.get("initkwargs") is not kwargs:
+                return None
+            if (
+                inspect.getattr_static(cls, "__init__") is not View.__init__
+                or cls.__new__ is not View.__new__
+                or inspect.getattr_static(cls, "setup") is not View.setup
+                or cls.__getattribute__ is not object.__getattribute__
+                or cls.__setattr__ is not object.__setattr__
+                or "setup" in kwargs
+                or any(hasattr(inspect.getattr_static(cls, key), "__set__") for key in kwargs)
+                or "__getattr__" in {key for owner in cls.__mro__ for key in vars(owner)}
+            ):
+                return None
+            chain = cls.__mro__
+            dispatch = kwargs.get("dispatch", inspect.getattr_static(cls, "dispatch"))
+            if type(dispatch) is not FunctionType:
+                return None
+            visited = set()
+            while dispatch not in visited:
+                visited.add(dispatch)
+                if result := evidence(dispatch, method):
+                    return result
+                target = transparent_target(dispatch)
+                if target is not None:
+                    dispatch = target
                     continue
-                for node in ast.walk(found[1]):
-                    if isinstance(node, ast.Attribute) and node.attr in self._METHODS | {
-                        "get",
-                        "head",
-                        "options",
-                        "dispatch",
-                    }:
-                        receiver = node.value
-                        uses_self = isinstance(receiver, ast.Name) and receiver.id == "self"
-                        uses_super = (
-                            isinstance(receiver, ast.Call)
-                            and isinstance(receiver.func, ast.Name)
-                            and receiver.func.id == "super"
+                if dispatch is View.dispatch:
+                    methods = kwargs.get("http_method_names", inspect.getattr_static(cls, "http_method_names"))
+                    if not isinstance(methods, (list, tuple)) or not all(isinstance(m, str) for m in methods):
+                        return None
+                    if method.lower() not in methods or not hasattr(cls, method.lower()):
+                        return (
+                            "safe"
+                            if cls.http_method_not_allowed is View.http_method_not_allowed
+                            and cls._allowed_methods is View._allowed_methods
+                            and "http_method_not_allowed" not in kwargs
+                            and "_allowed_methods" not in kwargs
+                            else None
                         )
-                        uses_base = isinstance(receiver, ast.Name) and symbol(key[0], receiver) in {
-                            owner[1] for owner in chain
-                        }
-                        if not (uses_self or uses_super or uses_base):
-                            continue
-                        if (
-                            node.attr == "dispatch"
-                            and isinstance(receiver, ast.Call)
-                            and isinstance(receiver.func, ast.Name)
-                            and receiver.func.id == "super"
-                        ):
-                            continue
-                        routes.append((node.attr, isinstance(receiver, ast.Name) and receiver.id == "self"))
-                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "getattr":
-                        if node.args and isinstance(node.args[0], ast.Name) and node.args[0].id == "self":
-                            routes.append(("dynamic", False))
-            return routes
+                    if cls is RedirectView:
+                        return (
+                            "safe"
+                            if kwargs.keys() <= {"url", "pattern_name", "permanent", "query_string"}
+                            and all(value is None or type(value) in {str, bool} for value in kwargs.values())
+                            else None
+                        )
+                    handler = kwargs.get(method.lower(), inspect.getattr_static(cls, method.lower()))
+                    return evidence(handler, method) if type(handler) is FunctionType else None
+                owner = forwarding_dispatches.get(dispatch)
+                if owner is None or owner not in chain:
+                    return None
+                # super() advances after its defining class, even when assigned in a child.
+                dispatch = next(
+                    (vars(base)["dispatch"] for base in chain[chain.index(owner) + 1 :] if "dispatch" in vars(base)),
+                    None,
+                )
+            return None
 
         violations = []
-        for key in endpoints:
-            identifier = f"{key[0].relative_to(self._VIEWS_DIR.resolve()).as_posix()}:{key[1]}"
-            chain = mro(key)
-            routes = dispatch_routes(chain)
-            allowed_methods = None
-            for owner in chain:
-                for statement in classes[owner].body:
-                    if isinstance(statement, ast.Assign) and any(
-                        isinstance(target, ast.Name) and target.id == "http_method_names"
-                        for target in statement.targets
-                    ):
-                        allowed_methods = value(owner[0], statement.value)
-                        break
-                if allowed_methods is not None:
-                    break
-            for method in self._METHODS:
-                if self._ALLOWLIST.get(f"{identifier}.{method}", "").strip():
+        endpoint_count = 0
+
+        def scan(patterns, namespace=""):
+            nonlocal endpoint_count
+            for pattern in patterns:
+                if isinstance(pattern, URLResolver):
+                    scan(pattern.url_patterns, namespace + (f"{pattern.namespace}:" if pattern.namespace else ""))
                     continue
-                if not routes and allowed_methods is not None and method not in allowed_methods:
-                    continue
-                if not routes and handler(chain, method) is None:
-                    continue
-                if handler_limit(chain, "dispatch", method):
-                    continue
-                if all(target == method and uses_self for target, uses_self in routes) and handler_limit(
-                    chain, method, method
-                ):
-                    continue
-                violations.append(f"{identifier}.{method}")
-        for path in sorted(self._VIEWS_DIR.rglob("*.py")):
-            path = path.resolve()
-            for node in modules[path][0].body:
-                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                methods = set()
-                for decorator in node.decorator_list:
-                    if symbol(path, decorator) == "require_POST":
-                        methods.add("post")
-                    if isinstance(decorator, ast.Call) and symbol(path, decorator.func) == "require_http_methods":
-                        methods.update(
-                            str(item.value).lower()
-                            for item in ast.walk(decorator)
-                            if isinstance(item, ast.Constant) and str(item.value).lower() in self._METHODS
+                endpoint_count += 1
+                callback = pattern.callback
+                name = namespace + str(pattern.name)
+                label = source_label(callback)
+                for method in sorted(self._METHODS):
+                    try:
+                        result = evidence(callback, method) or class_evidence(callback, method)
+                    except (AttributeError, KeyError, TypeError, ValueError, RecursionError):
+                        result = None
+                    if result:
+                        continue
+                    exception = self._ALLOWLIST.get(name)
+                    if exception and method in exception[1]:
+                        owner, _, attribute = exception[0].partition(":")
+                        expected = import_string(owner)
+                        if attribute:
+                            expected = getattr(expected, attribute)
+                        target = (
+                            closure(callback).get("cls")
+                            if getattr(callback, "__code__", None) is as_view_code
+                            else function(inspect.unwrap(callback))
                         )
-                for method in methods:
-                    if not limited(path, node.decorator_list, method):
-                        violations.append(f"{path.relative_to(self._VIEWS_DIR.resolve())}:{node.name}.{method}")
-        assert not violations, f"Mutation handlers without a blocking rate limit: {sorted(violations)}"
+                        if target is expected and exception[2].strip():
+                            continue
+                    violations.append(
+                        f"{name} ({label}.{method.lower()}): no proven blocking limit or method rejection"
+                    )
+
+        scan(get_resolver().url_patterns)
+        assert endpoint_count, "The URL resolver contains no registered endpoints"
+        assert not violations, "Unproven mutation paths (fail closed):\n" + "\n".join(violations)
 
 
 class TestRateLimitOnSensitiveGetEndpoints:

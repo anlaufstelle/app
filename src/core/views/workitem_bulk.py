@@ -18,7 +18,6 @@ from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_BULK_ACTION, WORKITEM_BULK_MAX_IDS
 from core.models import WorkItem
@@ -29,6 +28,7 @@ from core.services.case import (
     bulk_update_workitem_status,
 )
 from core.services.case.workitems import WorkItemBatchForbiddenError
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import AssistantOrAboveRequiredMixin
 from core.views.workitems import can_user_mutate_workitem
 

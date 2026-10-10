@@ -11,9 +11,9 @@ from django.utils.decorators import method_decorator
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 from django.views.i18n import set_language
-from django_ratelimit.decorators import ratelimit
+from django_ratelimit import UNSAFE
 
 from core.constants import RATELIMIT_MUTATION
 from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY, LAST_RENEWAL_KEY
@@ -24,6 +24,7 @@ from core.services.security import RevocationReason, invite_token_generator, is_
 from core.services.security.origin import external_link_context
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
 from core.signals.audit import get_client_ip
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import anonymous_session_required
 
 logger = logging.getLogger(__name__)
@@ -56,8 +57,8 @@ def _login_username_key(group, request):
     return (request.POST.get("username") or "").lower().strip()
 
 
-@method_decorator(ratelimit(key="ip", rate="5/m", method=("POST", "PUT"), block=True), name="dispatch")
-@method_decorator(ratelimit(key=_login_username_key, rate="10/h", method=("POST", "PUT"), block=True), name="dispatch")
+@method_decorator(ratelimit(key="ip", rate="5/m", method=UNSAFE, block=True), name="dispatch")
+@method_decorator(ratelimit(key=_login_username_key, rate="10/h", method=UNSAFE, block=True), name="dispatch")
 class CustomLoginView(auth_views.LoginView):
     """Login with session timeout from facility settings.
 
@@ -239,6 +240,7 @@ class CustomLoginView(auth_views.LoginView):
         return response
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "POST", "OPTIONS"]), name="dispatch")
 class CustomLogoutView(auth_views.LogoutView):
     """Standard logout with redirect to login and site data clearing."""
 
@@ -254,8 +256,8 @@ class CustomLogoutView(auth_views.LogoutView):
 
 # Refs #2391: the request writes an audit row for the account of the entered
 # address, possibly in another facility; a signed-in session gets a notice.
+@method_decorator(ratelimit(key="ip", rate="5/m", method=UNSAFE, block=True), name="dispatch")
 @method_decorator(anonymous_session_required, name="dispatch")
-@method_decorator(ratelimit(key="ip", rate="5/m", method=("POST", "PUT"), block=True), name="dispatch")
 class RateLimitedPasswordResetView(auth_views.PasswordResetView):
     """Password reset with rate limiting and audit logging."""
 
@@ -317,10 +319,10 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
 # ``super()``-Aufruf und brauchen keine Wiederholung.
 # Refs #2391: the inner decorator wraps the own ``dispatch`` below, so a
 # signed-in session gets its notice before the session token is read, stored
-# or rotated; ``login_not_required`` stays outermost and keeps its marker.
+# or rotated; the outer limit preserves the ``login_not_required`` marker.
+@method_decorator(ratelimit(key="ip", rate="5/m", method=UNSAFE, block=True), name="dispatch")
 @method_decorator(login_not_required, name="dispatch")
 @method_decorator(anonymous_session_required, name="dispatch")
-@method_decorator(ratelimit(key="ip", rate="5/m", method=("POST", "PUT"), block=True), name="dispatch")
 class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
     """Password-Reset, der zugleich einen aktiven Account-Lockout aufhebt (Refs #869).
 
@@ -412,7 +414,7 @@ class InviteConfirmView(CustomPasswordResetConfirmView):
     revocation_reason = RevocationReason.INVITE_SETUP
 
 
-@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method=("POST", "PUT"), block=True), name="dispatch")
+@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method=UNSAFE, block=True), name="dispatch")
 class CustomPasswordChangeView(auth_views.PasswordChangeView):
     """Password change with must_change_password reset and offline-salt rotation."""
 

@@ -6,7 +6,6 @@ from urllib.parse import urlencode
 from django.shortcuts import render
 from django.utils.decorators import method_decorator
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.services.dashboard import (
     MIN_QUERY_LENGTH,
@@ -16,6 +15,7 @@ from core.services.dashboard import (
     search_result_counts,
     search_similar_clients,
 )
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin, PaginatedListMixin
 
 logger = logging.getLogger(__name__)

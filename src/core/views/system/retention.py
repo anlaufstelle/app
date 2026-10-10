@@ -2,6 +2,8 @@
 
 from django.db.models import Count, Min, Q
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
 
 from core.models import Facility
@@ -9,6 +11,7 @@ from core.models.retention import RetentionProposal
 from core.views.system.mixins import SystemAuditMixin
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class SystemRetentionView(SystemAuditMixin, TemplateView):
     """Cross-Facility-Aggregation der ``RetentionProposal``-Statistik.
 

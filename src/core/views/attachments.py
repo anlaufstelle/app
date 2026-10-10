@@ -13,7 +13,6 @@ from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT, RATELIMIT_MUTATION
 from core.models import AuditLog, Client, DocumentType, FieldTemplate
@@ -44,6 +43,7 @@ from core.services.file_vault import (
 from core.services.scoping import get_scoped_object
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import format_file_size
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
     HTMXPartialMixin,

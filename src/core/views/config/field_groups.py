@@ -17,12 +17,12 @@ from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.config import FieldGroupForm
 from core.models import DocumentType, FieldGroup
 from core.services import config as config_service
+from core.utils.ratelimit import ratelimit
 from core.views.config.document_types import board_response
 from core.views.mixins import FacilityAdminRequiredMixin
 

@@ -32,9 +32,10 @@ from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
 from django_otp import login as otp_login
-from django_ratelimit.decorators import ratelimit
+from django_ratelimit import UNSAFE
 
 from core.constants import RATELIMIT_MUTATION
 
@@ -54,6 +55,7 @@ from core.services.security import (
 )
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
 from core.services.security.sudo_mode import is_sudo_required, sudo_redirect_if_required, sudo_url
+from core.utils.ratelimit import ratelimit
 from core.views.auth import resolve_post_login_url
 from core.views.utils import object_back_link, safe_redirect_path
 
@@ -124,6 +126,10 @@ def _get_unconfirmed_device(user) -> TOTPDevice:
     return device
 
 
+@method_decorator(
+    ratelimit(key="user", rate="10/m", method=UNSAFE, block=True, group="core.views.mfa.MFASetupView.post"),
+    name="dispatch",
+)
 class MFASetupView(LoginRequiredMixin, TemplateView):
     """Initial TOTP-Setup: QR-Code anzeigen und ersten Code bestätigen."""
 
@@ -194,7 +200,6 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
         context["issuer"] = django_settings.OTP_TOTP_ISSUER
         return context
 
-    @method_decorator(ratelimit(key="user", rate="10/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
         token = (request.POST.get("token") or "").strip().replace(" ", "")
         device = _get_unconfirmed_device(request.user)
@@ -351,6 +356,7 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
         return self.render_to_response(self.get_context_data(token_error=True, last_mode=mode))
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class MFASettingsView(LoginRequiredMixin, TemplateView):
     """Account-Seite für Aktivieren/Deaktivieren der 2FA."""
 
@@ -404,6 +410,10 @@ class MFASettingsView(LoginRequiredMixin, TemplateView):
         return context
 
 
+@method_decorator(
+    ratelimit(key="user", rate="10/m", method=UNSAFE, block=True, group="core.views.mfa.MFABackupCodesView.post"),
+    name="dispatch",
+)
 class MFABackupCodesView(LoginRequiredMixin, TemplateView):
     """Anzeige + verbindliche Quittung frisch generierter Backup-Codes (Refs #588, #1118).
 
@@ -462,7 +472,6 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
         )
         return self.render_to_response(context)
 
-    @method_decorator(ratelimit(key="user", rate="10/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
         codes = _read_session_backup_codes(request)
         if not codes:
@@ -540,6 +549,12 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
         return redirect("mfa_settings")
 
 
+@method_decorator(
+    ratelimit(
+        key="user", rate="5/m", method=UNSAFE, block=True, group="core.views.mfa.MFARegenerateBackupCodesView.post"
+    ),
+    name="dispatch",
+)
 class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
     """Neue Backup-Codes erzeugen — alter Satz wird invalidiert.
 
@@ -580,7 +595,6 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
             facility=getattr(request.user, "facility", None),
         )
 
-    @method_decorator(ratelimit(key="user", rate="5/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
         user = request.user
         if not user.has_confirmed_totp_device:
@@ -616,8 +630,10 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
 
 
 @method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
+    ratelimit(
+        key="user", rate=RATELIMIT_MUTATION, method=UNSAFE, block=True, group="core.views.mfa.MFADisableView.post"
+    ),
+    name="dispatch",
 )
 class MFADisableView(LoginRequiredMixin, RequireSudoModeMixin, TemplateView):
     """Deaktiviert 2FA für den aktuellen Nutzer, sofern nicht erzwungen.
@@ -666,8 +682,10 @@ class MFADisableView(LoginRequiredMixin, RequireSudoModeMixin, TemplateView):
 
 
 @method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
+    ratelimit(
+        key="user", rate=RATELIMIT_MUTATION, method=UNSAFE, block=True, group="core.views.mfa.MFAPasskeyDeleteView.post"
+    ),
+    name="dispatch",
 )
 class MFAPasskeyDeleteView(LoginRequiredMixin, RequireSudoModeMixin, View):
     """Entfernt einen einzelnen Passkey des aktuellen Nutzers (ADR-032, Refs #1492).

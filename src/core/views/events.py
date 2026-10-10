@@ -16,7 +16,7 @@ from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import gettext_noop
 from django.views import View
-from django_ratelimit.decorators import ratelimit
+from django_ratelimit import UNSAFE
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
@@ -79,6 +79,7 @@ from core.services.events.fields import file_marker_slugs
 from core.services.scoping import get_scoped_object
 from core.services.zeitstrom_filters import zeitstrom_filter_state
 from core.utils.formatting import isoformat_or_none
+from core.utils.ratelimit import ratelimit
 from core.views._dynamic_errors import add_dynamic_service_errors
 from core.views._json_contracts import (
     _conflict_response,
@@ -1090,8 +1091,10 @@ class EventDetailView(AssistantOrAboveRequiredMixin, View):
 
 
 @method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
+    ratelimit(
+        key="user", rate=RATELIMIT_MUTATION, method=UNSAFE, block=True, group="core.views.events.EventUpdateView.post"
+    ),
+    name="dispatch",
 )
 class EventUpdateView(AssistantOrAboveRequiredMixin, View):
     """Edit an event."""
@@ -1363,8 +1366,10 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
 
 
 @method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
+    ratelimit(
+        key="user", rate=RATELIMIT_MUTATION, method=UNSAFE, block=True, group="core.views.events.EventDeleteView.post"
+    ),
+    name="dispatch",
 )
 class EventDeleteView(StaffRequiredMixin, View):
     """Delete an event (with four-eyes principle for qualified data)."""

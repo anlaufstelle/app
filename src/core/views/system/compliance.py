@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
 
+from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
 
 from core.services.compliance import ComplianceStatus, aggregate_checks
@@ -23,6 +25,7 @@ _CATEGORY_ORDER = (
 )
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class SystemComplianceView(SystemAuditMixin, TemplateView):
     """Read-Only Compliance-Dashboard fuer super_admin.
 

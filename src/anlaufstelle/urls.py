@@ -33,7 +33,7 @@ from core.views.sudo_mode import SudoModeView
 urlpatterns = [
     path("admin-mgmt/", anlaufstelle_admin_site.urls),
     path("i18n/setlang/", set_user_language, name="set_language"),
-    path("i18n/", include("django.conf.urls.i18n")),
+    path("i18n/", include([path("setlang/", set_user_language, name="set_language")])),
     path("health/", HealthView.as_view(), name="health"),
     path("robots.txt", RobotsTxtView.as_view(), name="robots_txt"),
     path("csp-report/", CSPReportView.as_view(), name="csp_report"),

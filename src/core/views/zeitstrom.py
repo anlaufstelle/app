@@ -20,8 +20,8 @@ from django.utils.decorators import method_decorator
 from django.utils.http import parse_etags
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
-from django_ratelimit.decorators import ratelimit
 
 from core import nav
 from core.constants import RATELIMIT_MUTATION
@@ -55,6 +55,7 @@ from core.services.zeitstrom_watch import (
     build_zeitstrom_watch_snapshot,
     zeitstrom_page_scope_matches,
 )
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 
 ZEITSTROM_FILTER_TRANSITION_HEADER = "X-Zeitstrom-Filter-Transition"
@@ -617,6 +618,7 @@ class ZeitstromWatchFollowupMixin:
         return _watch_cache_headers(response)
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, TemplateView):
     """HTMX partial: feed list for the Zeitstrom."""
 
@@ -734,6 +736,7 @@ def _watch_cache_headers(response):
     return response
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class ZeitstromWatchView(View):
     """PII-free conditional JSON endpoint for multi-user Zeitstrom updates."""
 
@@ -793,6 +796,7 @@ class ZeitstromWatchView(View):
         return _watch_cache_headers(response)
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class ZeitstromTallyCountsPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
     """Authoritative live counts only; never rows, actions, or forms."""
 
@@ -814,6 +818,7 @@ class ZeitstromTallyCountsPartialView(AssistantOrAboveRequiredMixin, ZeitstromWa
             )
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class ZeitstromCurrentShiftPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
     template_name = "core/zeitstrom/partials/current_shift_slot.html"
     watch_component = "current_shift"
@@ -831,6 +836,7 @@ class ZeitstromCurrentShiftPartialView(AssistantOrAboveRequiredMixin, ZeitstromW
             return self.render_watch_followup(request, self.template_name, context, state)
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class ZeitstromFocusBoxPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
     template_name = "core/zeitstrom/partials/focus_box_slot.html"
     watch_component = "focus_box"
@@ -842,6 +848,7 @@ class ZeitstromFocusBoxPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatch
             return self.render_watch_followup(request, self.template_name, context, state)
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class ZeitstromBansPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
     """Autoritatives Hausverbots-Banner als Watch-Follow-up (Refs #1917).
 

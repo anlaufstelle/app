@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
+from django.views.decorators.http import require_http_methods
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.clients import ClientForm, ClientInlineCreateForm, DynamicClientDataForm
@@ -59,6 +59,7 @@ from core.services.scoping import get_scoped_object
 from core.services.security import RequireSudoModeMixin
 from core.services.system import get_active_bans_for_client
 from core.utils.downloads import safe_download_response
+from core.utils.ratelimit import ratelimit
 from core.views._dynamic_errors import add_dynamic_service_errors
 from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
@@ -1090,6 +1091,7 @@ class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):
         return JsonResponse(data, safe=False)
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class ClientDataExportJSONView(LeadOrAdminRequiredMixin, RequireSudoModeMixin, View):
     """JSON export of all client data (Art. 20 DSGVO).
 
@@ -1121,6 +1123,7 @@ class ClientDataExportJSONView(LeadOrAdminRequiredMixin, RequireSudoModeMixin, V
         )
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class ClientDataExportPDFView(LeadOrAdminRequiredMixin, RequireSudoModeMixin, View):
     """PDF export of all client data (Art. 15 DSGVO).
 

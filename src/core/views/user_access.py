@@ -8,8 +8,9 @@ from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
-from django_ratelimit.decorators import ratelimit
+from django_ratelimit import UNSAFE
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.user_access import UserAccessCreateForm, UserAccessUpdateForm
@@ -26,6 +27,7 @@ from core.services.user_access import (
     update_user_access,
 )
 from core.signals.audit import get_client_ip
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import FacilityAdminRequiredMixin
 
 
@@ -36,6 +38,7 @@ class _NoStoreMixin:
         return response
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class UserAccessListView(FacilityAdminRequiredMixin, _NoStoreMixin, TemplateView):
     template_name = "core/user_access/list.html"
 
@@ -45,7 +48,16 @@ class UserAccessListView(FacilityAdminRequiredMixin, _NoStoreMixin, TemplateView
         return context
 
 
-@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
+@method_decorator(
+    ratelimit(
+        key="user",
+        rate=RATELIMIT_MUTATION,
+        method=UNSAFE,
+        block=True,
+        group="core.views.user_access.UserAccessCreateView.post",
+    ),
+    name="dispatch",
+)
 class UserAccessCreateView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _NoStoreMixin, View):
     template_name = "core/user_access/form.html"
 
@@ -75,7 +87,16 @@ class UserAccessCreateView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
         return redirect("core:user_access_update", pk=result.user.pk)
 
 
-@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
+@method_decorator(
+    ratelimit(
+        key="user",
+        rate=RATELIMIT_MUTATION,
+        method=UNSAFE,
+        block=True,
+        group="core.views.user_access.UserAccessUpdateView.post",
+    ),
+    name="dispatch",
+)
 class UserAccessUpdateView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _NoStoreMixin, View):
     template_name = "core/user_access/form.html"
 
@@ -122,7 +143,16 @@ class UserAccessUpdateView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
         return redirect("core:user_access_update", pk=updated.pk)
 
 
-@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
+@method_decorator(
+    ratelimit(
+        key="user",
+        rate=RATELIMIT_MUTATION,
+        method=UNSAFE,
+        block=True,
+        group="core.views.user_access.UserAccessInviteView.post",
+    ),
+    name="dispatch",
+)
 class UserAccessInviteView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _NoStoreMixin, View):
     def post(self, request, pk):
         target = get_manageable_user(request.current_facility, pk)
@@ -143,7 +173,16 @@ class UserAccessInviteView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
         return redirect("core:user_access_update", pk=target.pk)
 
 
-@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
+@method_decorator(
+    ratelimit(
+        key="user",
+        rate=RATELIMIT_MUTATION,
+        method=UNSAFE,
+        block=True,
+        group="core.views.user_access.UserAccessUnlockView.post",
+    ),
+    name="dispatch",
+)
 class UserAccessUnlockView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _NoStoreMixin, View):
     def post(self, request, pk):
         target = get_manageable_user(request.current_facility, pk)
@@ -159,7 +198,16 @@ class UserAccessUnlockView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
         return redirect("core:user_access_update", pk=target.pk)
 
 
-@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
+@method_decorator(
+    ratelimit(
+        key="user",
+        rate=RATELIMIT_MUTATION,
+        method=UNSAFE,
+        block=True,
+        group="core.views.user_access.UserAccessMFAResetView.post",
+    ),
+    name="dispatch",
+)
 class UserAccessMFAResetView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _NoStoreMixin, View):
     """Reset the second factor of another account of the facility (Refs #2469).
 

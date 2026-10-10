@@ -6,11 +6,11 @@ from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog
 from core.services.audit import log_audit_event
 from core.services.security import enter_sudo, verify_totp_or_backup
+from core.utils.ratelimit import ratelimit
 from core.views.utils import safe_redirect_path
 
 

@@ -34,17 +34,19 @@ from __future__ import annotations
 from django.utils.decorators import method_decorator
 from django_otp_webauthn import exceptions
 from django_otp_webauthn.views import (
+    BeginCredentialAuthenticationView,
     BeginCredentialRegistrationView,
     CompleteCredentialAuthenticationView,
     CompleteCredentialRegistrationView,
 )
-from django_ratelimit.decorators import ratelimit
+from django_ratelimit import UNSAFE
 
 from core.constants import RATELIMIT_MUTATION
 from core.models import AuditLog
 from core.services.audit import log_audit_event
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
 from core.services.security.sudo_mode import is_sudo_required
+from core.utils.ratelimit import ratelimit
 from core.views.auth import resolve_post_login_url
 
 
@@ -147,14 +149,25 @@ class _RequireVerifiedSessionAndTOTPMixin:
             )
 
 
-@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="dispatch")
+@method_decorator(ratelimit(key="user_or_ip", rate=RATELIMIT_MUTATION, method=UNSAFE, block=True), name="dispatch")
+class WebAuthnAuthenticationBeginView(BeginCredentialAuthenticationView):
+    """Bound authentication options before the upstream parser and challenge storage."""
+
+
+@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method=UNSAFE, block=True), name="dispatch")
 class WebAuthnRegistrationBeginView(_RequireVerifiedSessionAndTOTPMixin, BeginCredentialRegistrationView):
     """Registrierungs-Options — nur in verifizierter Session mit bestaetigtem TOTP-Geraet."""
 
 
 @method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
+    ratelimit(
+        key="user",
+        rate=RATELIMIT_MUTATION,
+        method=UNSAFE,
+        block=True,
+        group="core.views.mfa_webauthn.WebAuthnRegistrationCompleteView.post",
+    ),
+    name="dispatch",
 )
 class WebAuthnRegistrationCompleteView(_RequireVerifiedSessionAndTOTPMixin, CompleteCredentialRegistrationView):
     """Registrierung abschliessen und auditieren.
@@ -180,10 +193,7 @@ class WebAuthnRegistrationCompleteView(_RequireVerifiedSessionAndTOTPMixin, Comp
         return response
 
 
-@method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="dispatch",
-)
+@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method=UNSAFE, block=True), name="dispatch")
 class WebAuthnAuthenticationCompleteView(CompleteCredentialAuthenticationView):
     """Assertion abschliessen — setzt ``mfa_verified`` und auditiert Erfolg/Fehler.
 

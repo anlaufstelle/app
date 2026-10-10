@@ -7,17 +7,20 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
-from django_ratelimit.decorators import ratelimit
+from django_ratelimit import UNSAFE
 
 from core.constants import RATELIMIT_MUTATION
 from core.models import AuditLog
 from core.models.user import User
 from core.services.security import RequireSudoModeMixin, login_lockout
 from core.signals.audit import _set_session_vars, get_client_ip
+from core.utils.ratelimit import ratelimit
 from core.views.system.mixins import SystemAuditMixin
 
 
+@method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
 class SystemLockoutListView(SystemAuditMixin, TemplateView):
     """Cross-Facility-Uebersicht der gesperrten Konten.
 
@@ -128,6 +131,16 @@ class SystemLockoutListView(SystemAuditMixin, TemplateView):
         return context
 
 
+@method_decorator(
+    ratelimit(
+        key="user",
+        rate=RATELIMIT_MUTATION,
+        method=UNSAFE,
+        block=True,
+        group="core.views.system.lockouts.SystemUnlockView.post",
+    ),
+    name="dispatch",
+)
 class SystemUnlockView(SystemAuditMixin, RequireSudoModeMixin, View):
     """POST-Handler: hebt die Sperre eines Users auf (Refs #872).
 
@@ -142,7 +155,6 @@ class SystemUnlockView(SystemAuditMixin, RequireSudoModeMixin, View):
 
     http_method_names = ["post"]
 
-    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request):
         username = request.POST.get("username", "").strip()
         if not username:

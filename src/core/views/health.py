@@ -20,7 +20,6 @@ from django.http import JsonResponse
 from django.utils.crypto import constant_time_compare
 from django.utils.decorators import method_decorator
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.services import ops_thresholds
 from core.services.compliance import ComplianceStatus, cron_job_checks
@@ -28,6 +27,7 @@ from core.services.file_vault import ping as clamav_ping
 from core.services.security.session_state import session_fully_authenticated
 from core.services.system import rls_bypass_for_read
 from core.services.system.health import last_backup_info
+from core.utils.ratelimit import ratelimit
 
 logger = logging.getLogger(__name__)
 
