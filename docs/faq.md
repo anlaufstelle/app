@@ -36,6 +36,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 18. [Welche automatisierten Scripts gibt es?](#18-welche-automatisierten-scripts-gibt-es)
 18a. [Wo finde ich eine Anleitung zu den Berichten (Reports)?](#18a-wo-finde-ich-eine-anleitung-zu-den-berichten-reports)
 18b. [Wie importiere ich Personen oder Ereignisse aus einer CSV-Datei?](#18b-wie-importiere-ich-personen-oder-ereignisse-aus-einer-csv-datei)
+18c. [Warum gibt es unter Statistik drei Reiter — und warum zeigen sie unterschiedliche Zahlen?](#18c-warum-gibt-es-unter-statistik-drei-reiter--und-warum-zeigen-sie-unterschiedliche-zahlen)
 
 **E. Fehlermeldungen**
 19. [Was bedeutet „Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."?](#19-was-bedeutet-der-datensatz-wurde-zwischenzeitlich-bearbeitet-bitte-laden-sie-die-seite-neu)
@@ -670,13 +671,15 @@ Die Doku liegt auf drei Ebenen — je nachdem, ob Sie Berichte **erzeugen**, **b
 
 | Abschnitt | Inhalt |
 |---|---|
+| [Die drei Reiter im Überblick](https://github.com/anlaufstelle/app/blob/main/docs/user-guide.md#die-drei-reiter-im-überblick) | Aufgaben, gemeinsamer Zeitraum und Gründe für abweichende Zahlen |
 | Statistik-Dashboard | Zeitraumwahl, Jahresnavigation, Trend-Charts, Dokumentationstyp-Filter |
-| CSV-Export / PDF-Export | Ereignisliste bzw. Statistikbericht zum gewählten Zeitraum |
+| Ereignisliste / PDF-Export | Personenbezogene Ereignis-CSV in der Übersicht; Berichts-PDFs in den Datensatz-Berichten |
 | Beispiel-Sachbericht | Vorlage im festen Layout — ausdrücklich **kein** verbindlicher Behördennachweis |
 | **Datensatz-Berichte (CSV / JSON / XML / PDF)** | Reiter „Datensatz-Berichte" → Berichtskarte wählen → Vorschau → Download; Vollständigkeitshinweise + K-Anonymität |
-| Externe Berichte | `/statistics/external/` — datensparsames Profil für die Weitergabe nach außen |
+| Allgemeine Kennzahlen | Karte in den Datensatz-Berichten; Live-Auswertung mit Kleinstfall-Unterdrückung |
+| [Freigaben](https://github.com/anlaufstelle/app/blob/main/docs/user-guide.md#freigaben-leitung--admin) | Markierte Datei-Herausgaben und Überschneidungswarnung |
 
-**Der wichtigste Stolperstein: zwei Datenquellen.** Die Sachbericht-PDFs lesen aus den gespeicherten **Monats-Auswertungen** (Zahlen bleiben nach Ablauf von Löschfristen erhalten; Monatswerte werden addiert, Personen also mehrfach gezählt). Die Berichte des Reiters „Datensatz-Berichte" (CSV/JSON/XML) rechnen dagegen **live**. Derselbe Zeitraum kann deshalb unterschiedliche Zahlen liefern — welche Quelle gilt, steht jeweils im Bericht selbst (PDF-Fußzeile bzw. Feld `data_source`).
+**Der wichtigste Stolperstein: zwei Datenquellen.** Das Beispiel-Sachbericht-PDF liest Monats-Aggregate mit Live-Fallback; Vorschau und CSV/JSON/XML sowie die anderen Berichte rechnen live. Monats-Aggregate können Ereigniszahlen nach Löschfristen erhalten, unterschiedliche Personen werden jedoch live über den Gesamtzeitraum gezählt, nicht monatlich addiert. Quelle und Grundgesamtheit stehen am Bericht, Formatunterschiede an der Berichtskarte.
 
 #### 2. Berichte betreiben (Administration)
 
@@ -706,6 +709,22 @@ Die Design-Entscheidung dahinter: [ADR-038 — Reporting-Backends als Plugin-Sys
 ### 18b. Wie importiere ich Personen oder Ereignisse aus einer CSV-Datei?
 
 Der CSV-Import ist ausschließlich für die Rolle **Anwendungsbetreuung** verfügbar. [Admin-Handbuch § 2.12 „Import-Assistent"](admin-guide.md#212-import-assistent) erklärt Dateiformat und Grenzen sowie die Schritte Datei, Zuordnung, Probelauf, Übernahme und Abbruch. Prüfen Sie die Fehlerliste vollständig, bevor Sie einen fehlerfreien Lauf übernehmen.
+
+### 18c. Warum gibt es unter Statistik drei Reiter — und warum zeigen sie unterschiedliche Zahlen?
+
+Die drei Reiter erfüllen unterschiedliche Aufgaben:
+
+- **Übersicht:** interner Blick auf Kennzahlen, Diagramme und Tabellen ohne Kleinstfall-Unterdrückung; Top-Personen werden mit Pseudonym gezeigt. Die **Ereignisliste (CSV, intern, mit Pseudonymen)** enthält personenbezogene Einzelereignisse.
+- **Datensatz-Berichte:** fachliche Auswertungen mit Vorschau und CSV/JSON/XML/PDF, darunter **Allgemeine Kennzahlen** und **Summe von Zahlenfeldern**. Kleinstfallzahlen werden unterdrückt, Personen-Pseudonyme fehlen; daraus folgt allein keine Anonymitätsgarantie.
+- **Freigaben:** markierte Datei-Herausgaben mit Berichtszeitraum und Warnungen bei nicht identischen, überlappenden Zeiträumen desselben Berichts. Vorschauen und Weitergaben außerhalb der Anwendung fehlen.
+
+Ein Reiterwechsel behält den Zeitraum. Freigaben zeigt Herausgaben unabhängig davon; der Dokumentationstyp-Filter wirkt nur in der Übersicht und deren Ereignisliste.
+
+Zahlen können durch **Unterdrückung**, unterschiedliche **Grundgesamtheiten** und **Datenquellen** abweichen. Live-Abfragen sehen nur den aktuellen Bestand. Monats-Aggregate können gelöschte Ereigniszahlen erhalten; das Beispiel-Sachbericht-PDF nutzt sie mit Live-Fallback, seine Vorschau und anderen Formate rechnen live. Unterschiedliche Personen werden live über den Gesamtzeitraum gezählt, nicht aus Monatswerten addiert. Beachten Sie Quelle und Grundgesamtheit je Bericht und Format.
+
+Die Freigabenanzeige hat 50 Einträge je Seite; die Warnprüfung berücksichtigt alle noch protokollierten passenden Herausgaben desselben Artefakts. Identische Zeiträume lösen keine Warnung aus, können aber bei verändertem Bestand andere Inhalte haben. Verschiedene Empfänger sind nur dann organisatorisch weniger riskant, wenn keine Zusammenführung stattfindet. Die Historie ist kein vollständiger Nachweis aller Weitergaben.
+
+Entscheidungshilfe: [Benutzerhandbuch § 7 „Die drei Reiter im Überblick“](https://github.com/anlaufstelle/app/blob/main/docs/user-guide.md#die-drei-reiter-im-überblick). Details: [Freigaben](https://github.com/anlaufstelle/app/blob/main/docs/user-guide.md#freigaben-leitung--admin). Regeln zur Herausgabe: [Admin-Handbuch § 8](https://github.com/anlaufstelle/app/blob/main/docs/admin-guide.md#herausgabe-von-berichten-was-sie-wissen-müssen).
 
 ---
 

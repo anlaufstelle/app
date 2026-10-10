@@ -608,6 +608,33 @@ Technically this is based on trigram similarity in the PostgreSQL database (pg_t
 
 > **Access:** Statistics and exports are only available to **managers** and **application support**.
 
+### The Three Tabs at a Glance
+
+The **Statistics** area has three tabs. They differ by task, protection of the figures and data source. All concern your own facility; access is restricted to managers and application support.
+
+| Tab | Purpose / audience | Small counts and pseudonyms | Data source |
+|---|---|---|---|
+| **Overview** | Internal view of key figures, charts and tables | no small-count suppression on screen; top persons shown by pseudonym | monthly aggregates with live fallback; person metrics live across the entire period; fully live with a documentation type filter |
+| **Dataset reports** | Preview and files for a specific question, such as **General key figures**, example activity report, counselling hours, needle exchange or **Sum of number fields** | small counts suppressed, no person pseudonyms | live; exception: the example activity report PDF uses monthly aggregates with live fallback and live counts of distinct persons |
+| **Releases** | Internal check of released reporting periods | no statistics | marked releases in the audit log |
+
+**Shared period:** Overview and Dataset reports use the same period bar; switching tabs keeps the period. Releases lists releases regardless of that period and passes it on to the other tabs. The documentation type filter applies only to the Overview and its event list, not to Dataset reports.
+
+**Why figures can differ:**
+
+1. **Suppression:** Dataset reports suppress small values according to the facility's k-anonymity threshold (default 5); additional values may be removed to prevent reconstruction. The Overview shows unsuppressed internal figures. Suppression alone does not guarantee that a release is anonymous.
+2. **Population:** The Overview counts events regardless of their report mapping. Reports count, for example, mapped events, events linked to a person, persons or contributions to a numeric-field sum, depending on their definition. Report cards and tables state the population; explicitly excluded types can therefore appear in the Overview but be absent from a report evaluation.
+3. **Data source:** Live queries see the current records and lose deleted events. Stored monthly aggregates can preserve past event counts; missing snapshots and partial months are queried live. Distinct persons are counted live across the entire period, **not** by adding monthly person counts. Check the source statement for each format.
+
+| You want to … | Location |
+|---|---|
+| view the course of the work internally | **Overview** |
+| process individual events with pseudonyms internally | **Overview → Event list** |
+| release key figures or a specialist evaluation as a file | **Dataset reports**, for example **General key figures** |
+| check earlier releases and overlapping periods | **Releases** |
+
+> **Tip:** Use Dataset reports for figures intended for outside parties. Enter recipient and purpose in the export bar and check [Releases](#releases-lead--admin). The preview is not a release; file downloads are logged. Sharing requires a professional and data-protection assessment even with suppression.
+
 ### Import CSV Data
 
 The import wizard for people and events is available only to **application support**. See [Admin Guide § 2.12 "Data import"](admin-guide.md#212-import-wizard) for the complete step-by-step instructions covering file limits, mapping, dry run, commit, and abort.
@@ -651,25 +678,21 @@ The charts update automatically when the time period is changed.
 
 **Documentation Type Filter:** Use the "All document types" dropdown above the charts to filter the view to a specific documentation type.
 
-> **Note:** Charts are not shown when printing. Use the PDF or CSV export functions for reports.
+> **Note:** Charts are not shown when printing. Use the Dataset reports tab for report files.
 
-### CSV Export
+### Event List (CSV, Internal)
 
-The CSV export contains all events from the selected time period. Fields whose sensitivity level exceeds the exporting user's role permissions are shown as "[Restricted]".
+The Overview offers **“Event list (CSV, internal, with pseudonyms)”**. The file contains individual events in the selected period, restricted to the selected documentation type if one is chosen. Static columns are date, time, documentation type, person, contact stage and age group, followed by the dynamic fields visible to your role. The **“Person”** column can contain a pseudonym. Pseudonyms remain personal data: this is **not anonymised statistics**. Sharing requires an appropriate legal basis; use Dataset reports for figures intended for outside parties.
 
-1. Open the statistics dashboard and select the desired time period.
-2. Click **CSV export**.
-3. The file is downloaded immediately (filename: `export_YYYY-MM-DD_YYYY-MM-DD.csv`).
+1. In the statistics dashboard select the period and, if applicable, documentation type.
+2. Optionally enter **recipient** and **purpose** in the export bar.
+3. Click **Event list (CSV, internal, with pseudonyms)**. The filename is `export_YYYY-MM-DD_YYYY-MM-DD.csv`.
 
-> **Note:** Every export is recorded in the audit log.
+A successful download is recorded as a release in the audit log and appears under **Releases**.
 
 ### PDF Export
 
-The PDF export generates a structured statistics report for the period selected at the top of the dashboard, for internal documentation.
-
-1. Select the time period in the statistics dashboard.
-2. Click **PDF Export**.
-3. The PDF file is downloaded (filename: `bericht_YYYY-MM-DD_YYYY-MM-DD.pdf`).
+PDF files are available on the **Dataset reports** tab: every report card offers CSV, JSON, XML and PDF in the shared export bar. Select the report and check its preview, population, suppression and data source; optionally enter recipient and purpose, then click **PDF Export**. The download contains the suppressed report data prepared for that format, without person pseudonyms. The example activity report uses a different data source from its live preview (see below). The Overview itself has no PDF export; `internal=1` does not provide an internal PDF mode either.
 
 ### Example Activity Report
 
@@ -681,7 +704,7 @@ The example activity report generates a structured report based on a fixed examp
 
 > **Tip:** For semi-annual reports, select "Custom period" and set the start and end dates to 01/01 and 06/30 (or 07/01 -- 12/31). "Last 180 days" is a rolling window and never lines up exactly with a calendar half-year.
 
-**Data source: monthly aggregates.** The footer of the PDF states where the figures come from. The activity report PDFs -- both the example activity report and the semi-annual report export -- read from the stored **monthly aggregates**. Two consequences: periods whose events were removed after the retention deadlines still show figures in the PDF -- and across several months the monthly values are added up, so anyone who appeared in two months is counted twice under "Unique persons". The reports in the "Dataset Reports" tab (CSV/JSON/XML, see below) are calculated live and can therefore show different figures for the same period.
+**Example activity report PDF source: monthly aggregates with live fallback.** Complete past months are read from available monthly evaluations; missing snapshots and partial months are calculated live. Stored event counts can therefore survive retention deadlines. “Unique persons”, however, is counted live across the entire period, not added up month by month. The footer states the source and, where applicable, the timestamp of the monthly aggregates used. This report's preview and CSV/JSON/XML are calculated live and can therefore differ from its PDF for the same period.
 
 ### Dataset Reports (CSV / JSON / XML / PDF)
 
@@ -689,27 +712,33 @@ The **Dataset Reports** tab lists every reporting standard configured for your f
 
 1. Pick the **card** of the report you want. Each card states in one sentence what the report shows, which population it evaluates, and whether it is calculated live or read from monthly aggregates.
 2. A **preview** with the figures for the selected period appears below. The address remembers your choice (`?ansicht=datensaetze&bericht=…`), so bookmarks and the back button work.
-3. Use the **CSV export**, **JSON export**, and **XML export** buttons to download the same data as a file. CSV suits spreadsheets; JSON and XML are meant for further processing in other systems. The example activity report adds **PDF export**.
+3. Use the shared export bar with optional **recipient** and **purpose** to download **CSV**, **JSON**, **XML** or **PDF**. CSV suits spreadsheets, JSON and XML other systems. Each file is generated anew; only the example activity report PDF reads from monthly aggregates with live fallback, its other formats read live.
 
 Clicking a time period does not discard your report selection -- the card and preview stay in place and the figures update.
 
-**Completeness notices:** Above the preview you can see what the report does *not* show -- for example events whose documentation type maps to no report category, or events without a person reference. A yellow **Note** badge means data is missing, so the figures are too low. A grey **Info** badge means the data is included but missing from individual sub-analyses. If it says "No completeness issues detected", the report has no gaps.
+**Completeness notices:** Above the preview you can see what the report does *not* show -- for example events whose documentation type maps to no report category, or events without a person reference. A yellow **Note** badge means data is missing, so the figures are too low. A grey **Info** badge means the data is included but missing from individual sub-analyses. If it says "No completeness issues detected", the built-in checks detected no problems; this does not guarantee complete capture.
 
-**Small case numbers are suppressed:** The preview *and* the download show the same privacy-friendly data -- values below your facility's k-anonymity threshold (default 5) are removed, so that no individual person can be derived from a report. How a removed value is **displayed** depends on the format: as a dash in the preview, as an empty cell in the CSV (the metadata line at the top of the file points out the suppression), as `null` in JSON, and as an empty element in XML. Occasionally a second, larger value is dropped as well -- this is intentional, because otherwise the suppressed value could be calculated back. For the same reason, completeness notices contain no digits at all when the numbers are very small.
+**Small case numbers are suppressed:** The preview and downloads apply small-count protection -- values below your facility's k-anonymity threshold (default 5) are removed, to make inferences about individual persons harder. Suppression alone does not guarantee anonymity. How a removed value is **displayed** depends on the format: as a dash in the preview, as an empty cell in the CSV (the metadata line at the top of the file points out the suppression), as `null` in JSON, and as an empty element in XML. Occasionally a second, larger value is dropped as well -- this is intentional, because otherwise the suppressed value could be calculated back. For the same reason, completeness notices contain no digits at all when the numbers are very small.
 
-**Data source: live query.** Below the preview you can see where the figures come from. The preview *and* the download recalculate the figures from the event data on **every request**. Periods whose events were removed after the retention deadlines therefore appear empty -- unlike the example activity report PDF, which reads from the monthly aggregates. The file formats carry the same statement in machine-readable form: in the CSV metadata line at the top of the file, and in JSON and XML as the field `data_source` (value `live`).
+**Data source: live query.** Below the preview you can see where the figures come from. The preview and CSV/JSON/XML recalculate the figures from event data on **every request**; this also applies to other reports' PDFs. Periods whose events were removed after the retention deadlines therefore appear empty -- unlike the example activity report PDF, which reads from the monthly aggregates. The file formats carry the same statement in machine-readable form: in the CSV metadata line at the top of the file, and in JSON and XML as the field `data_source` (value `live`).
 
 > **Note:** Every download is recorded in the audit log; the preview is not. An empty period looks like suppression in the preview -- when in doubt, check the selected time period.
 
-### Privacy-friendly External Reports (Manager / Application support)
+### Releases (Lead / Admin)
 
-For sharing data with external parties (e.g., funding bodies or municipal authorities), an **external report with a privacy profile** is available at `/statistics/external/`. It uses the same time-period filters as the statistics dashboard but is deliberately data-minimal:
+The **Releases** tab shows no statistics, but your facility's marked releases: timestamp, artifact, format, reporting period, recipient and purpose. Display is limited to **50 entries per page**, regardless of the selected statistics period. That period is kept when switching tabs.
 
-- **No pseudonym ranking** -- the top-persons list from the internal dashboard is omitted entirely.
-- **K-anonymization** -- aggregates with fewer than *k* records (threshold from the facility settings, default 5) are shown as **"suppressed"** rather than as a concrete number. This applies to "Unique persons", "By documentation type", and "By age group".
-- **Privacy profile header** -- facility, profile (`external`), time period, k-anonymity threshold, generation timestamp, and **data source** appear at the top of the report. This report is calculated live as well; in the JSON version the statement appears as `metadata.data_source` (value `live`).
+**A release is** a successful download of the internal event list or a dataset report as CSV, JSON, XML or PDF with a reporting period and a release marker in the audit log. **Not recorded here** are report previews or sharing outside the application, such as forwarded files and screenshots. The `/statistics/external/` address redirects to the **General key figures** card even with `?format=json`; this request is not a release and creates no export audit entry.
 
-Via **"Export as JSON"** (or by appending `?format=json` to the URL) you receive the same data in machine-readable form. Every request is logged as an `EXPORT` event in the audit log. The external report is accessible to **managers** and **application support** only.
+**Overlap warning:** The page marks distinct, overlapping reporting periods of the same artifact. For Dataset reports, the artifact is the backend key regardless of file format; older entries without a key are grouped by format, falling back to target. Checks consider **all matching releases still recorded** for the facility, including those outside the displayed page and beyond 500 entries. The notice at the top counts only affected releases on the current page. `RELEASE_LOG_LIMIT = 500` is a service-call default, neither the page size nor a limit on this period check.
+
+The warning does not prevent a release. Differences between overlapping files can reveal suppressed information, even without visible suppression. Identical periods are excluded from the warning algorithm; changes in records or source timestamps can still produce different contents. Check recipients and possible combination: different recipients reduce the risk only under the **organisational assumption** that they do not combine the files; the application does not guarantee this.
+
+Enter the **organisation as recipient**, not a contact person. Recipient and purpose are optional; each allows at most 200 characters. Detected email/phone patterns and typical personal-name pairs are rejected before download. The check is heuristic and cannot detect every personal detail.
+
+The list contains only entries with a release marker; unmarked exports are absent and are not added retroactively. Marked report files are exempt from normal audit retention deadlines; screen views are not. This does not guarantee a permanently complete history: unmarked entries and sharing outside the application remain invisible.
+
+Further organisational rules are in [Admin Guide § 8 “Releasing Reports”](admin-guide.md#releasing-reports-what-you-need-to-know), particularly on short periods and combining files from different sources.
 
 ### Reviewing Deletion Requests (“Deletion confirmation” Right)
 
@@ -1077,4 +1106,4 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 03231bcf5408cadc34f4cc6b46e199a2916b35e9 -->
+<!-- source-hash: 7d16ee922ac685830e339817a6522a618b7e8f88 -->

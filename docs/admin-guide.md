@@ -1895,7 +1895,7 @@ docker system df -v | grep pgdata
 
 1. **Die Schwelle ist ein eigenes Setting, kein Nebeneffekt der Aufbewahrung.** Sie steht je Einrichtung unter **Verwaltung → Einstellungen** (Gruppe „Datenschutz und Fristen“, Feld `k_anonymity_threshold`, Standard 5) und wirkt auf **jedes Berichts-Artefakt, das das Haus verlässt** — unabhängig davon, ob die K-Anonymisierung im Aufbewahrungslauf aktiviert ist. [§ 7.3](#73-löschfristen-und-enforce_retention) dokumentiert beide Felder gemeinsam im Retention-Kontext; sie hängen aber nicht voneinander ab.
 
-2. **Zwei Ansichten sind bewusst nicht unterdrückt** und taugen deshalb zur Gegenprobe, ob überhaupt Daten vorhanden sind: die **Statistik-Übersicht am Bildschirm** und der PDF-Export im internen Modus (`?internal=1`, mit „INTERN"-Banner; beides nur Leitung/Administration). Dass die Übersicht andere Zahlen zeigt als der Bericht, ist erwartet. Was aus diesen internen Ansichten weitergegeben wird, verlässt die Zusicherung.
+2. **Die interne Statistik-Übersicht ist bewusst nicht unterdrückt** und kann deshalb helfen zu prüfen, ob überhaupt Daten vorhanden sind (nur Leitung/Anwendungsbetreuung). Die interne Ereignisliste enthält Pseudonyme und ist keine anonymisierte Statistik. Einen internen PDF-Modus gibt es nicht. Abweichende Zahlen gegenüber Datensatz-Berichten sind zu erwarten; Inhalte aus internen Sichten brauchen vor einer Weitergabe eine eigene Prüfung.
 
 3. **Auch ohne sichtbare Unterdrückung bleibt eine Grenze:** Die Zusicherung gilt je Artefakt und je Zeitraum, nicht über mehrere Herausgaben hinweg — siehe [§ 8, „Herausgabe von Berichten: was Sie wissen müssen"](#8-statistik-snapshots--materialized-view).
 
@@ -2436,7 +2436,7 @@ Anlaufstelle berechnet Statistiken (Dashboard, Halbjahresberichte, Beispiel-Sach
 
 **Statistik-Snapshots** halten monatliche Aggregate fest, die auch vom Aufbewahrungslauf gelöschte Events weiter zählen. Die Auswertungen nutzen eine Hybrid-Logik: gespeicherte Snapshots für vergangene Monate, Live-Daten (aus der Materialized View) für den aktuellen Monat.
 
-> **Wichtig: Der Snapshot-Schutz gilt nicht für jeden Bericht.** Gesichert werden die **Monats-Aggregate** — aus ihnen speisen sich die Statistik-Übersicht (Kennzahlen, Tabellen, Zeitverlauf), ihr PDF-Export und die Sachbericht-PDFs. Von den Berichten des Reiters **„Datensatz-Berichte"** ist dagegen allein der **Beispiel-Sachbericht** snapshot-fähig, und auch bei ihm nur das **PDF**: seine CSV-/JSON-/XML-Dateien rechnen — wie die aller übrigen Berichte dieses Reiters — bei **jedem** Aufruf neu aus dem aktuellen Datenbestand. Sobald `enforce_retention` einen vergangenen Zeitraum bereinigt hat, fallen deren Zahlen für diesen Zeitraum niedriger aus als beim ersten Abruf — bis auf null, und ohne Fehlermeldung, weil das kein Fehler ist. Wie stark, hängt am einzelnen Bericht: Er wertet Ereignisse, Fälle oder Personen aus und ändert sich erst, wenn die Datensätze **seiner** Grundgesamtheit gelöscht bzw. anonymisiert werden; welche das ist, benennt er über der Vorschau selbst. **Wer solche Dateien an Träger oder Kostenträger weitergibt, bewahrt die erzeugte Datei selbst auf** — identisch reproduzieren lässt sie sich später nicht. Woher ein Bericht liest, steht jeweils am Bericht selbst („Datenquelle: …"); was bei der Weitergabe sonst zu beachten ist, steht unten unter [„Herausgabe von Berichten"](#herausgabe-von-berichten-was-sie-wissen-müssen).
+> **Wichtig: Der Snapshot-Schutz gilt nicht für jeden Bericht.** Die Übersicht liest Ereigniszahlen hybrid aus Monats-Aggregaten mit Live-Fallback; Personenkennzahlen bleiben live. Die Übersicht hat keinen PDF-Export. Im Reiter **„Datensatz-Berichte“** liest nur das PDF des **Beispiel-Sachberichts** hybrid aus Monats-Aggregaten, mit Live-Fallback für fehlende Snapshots und Teilmonate; unterschiedliche Personen werden auch dort live über den Gesamtzeitraum gezählt. Vorschau, CSV/JSON/XML und alle Formate der anderen Berichte rechnen live. Nach einer Bereinigung durch `enforce_retention` können Live-Zahlen daher niedriger sein, bis auf null. Die Wirkung hängt an der jeweiligen Grundgesamtheit. **Bewahren Sie herausgegebene Dateien selbst auf:** Sie lassen sich später nicht notwendig identisch reproduzieren. Beachten Sie den Quellenausweis je Format und die Regeln unter [„Herausgabe von Berichten“](#herausgabe-von-berichten-was-sie-wissen-müssen).
 
 ### Automatische Sicherung
 
@@ -2486,11 +2486,11 @@ docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics
 
 ### Herausgabe von Berichten: was Sie wissen müssen
 
-Statistik-Artefakte sind k-anonymisiert (Werte unter der Schwelle werden unterdrückt). Diese Zusicherung gilt **je Artefakt und je Zeitraum** — nicht über mehrere Herausgaben hinweg. Daraus folgen drei Betriebsregeln.
+Datensatz-Berichte unterdrücken Kleinstfallzahlen. Der Schutz gilt **je Artefakt und je Zeitraum** und ist allein keine Anonymitätsgarantie, insbesondere nicht über mehrere Herausgaben hinweg. Die interne Ereignisliste enthält dagegen personenbezogene Pseudonyme. Für Berichtsdateien gelten folgende Betriebsregeln.
 
 **1. Sachbericht-PDF und Live-Export desselben Zeitraums nicht an denselben Empfänger geben.**
 
-Die PDFs lesen aus den **Monats-Aggregaten** (Snapshots), der externe Bericht und die CSV-/JSON-/XML-Exporte fragen **live** die Ereignisse ab. Beide Wege sind gewollt: die Aggregate überdauern die Löschfristen, die Live-Abfrage zählt über den Gesamtzeitraum genauer. Genau deshalb sind sie aber nicht identisch — und **die Differenz beider Zahlen ist ein Fingerabdruck dessen, was zwischenzeitlich gelöscht wurde**. Wer beide Artefakte desselben Zeitraums nebeneinanderlegt, kann daraus auf einzelne gelöschte Datensätze schließen; k-Anonymität schützt davor nicht, weil beide Artefakte für sich vollständig anonym sind.
+Nur das Beispiel-Sachbericht-PDF liest hybrid aus **Monats-Aggregaten** mit Live-Fallback; seine unterschiedlichen Personen werden live gezählt. Seine Vorschau und CSV/JSON/XML sowie alle Formate der anderen Datensatz-Berichte rechnen **live**. Unterschiede zwischen gespeicherten Ereigniszahlen und aktuellem Bestand können Informationen über inzwischen gelöschte Datensätze offenlegen. Auch jede für sich unterdrückte Datei schützt deshalb nicht automatisch vor Rückschlüssen aus der gemeinsamen Auswertung.
 
 Jedes Artefakt weist deshalb **Quelle und Stand** aus („Datenquelle: Monats-Aggregate", „Stand der Monats-Aggregate: …"). Prüfen Sie diese Zeile, bevor Sie zwei Berichte in dieselbe Mappe legen.
 
@@ -2498,14 +2498,14 @@ Jedes Artefakt weist deshalb **Quelle und Stand** aus („Datenquelle: Monats-Ag
 
 Werden für dieselbe Einrichtung Berichte über Teilzeiträume **und** über deren Vereinigung herausgegeben (zwölf Monatsberichte plus ein Jahresbericht), lässt sich jede in einem Teilbericht unterdrückte Zelle aus der Summe der übrigen exakt zurückrechnen — auch dann, wenn in **keinem** der beteiligten Berichte eine einzige Zelle unterdrückt wurde. Das ist eine Eigenschaft des Verfahrens, kein Fehler: k-Anonymität ist eine Eigenschaft *einer* Tabelle über *einer* Grundgesamtheit.
 
-Die **Freigabe-Übersicht** (Statistik → Reiter „Freigaben", Rolle: Leitung/Anwendungsbetreuung) listet die bereits herausgegebenen Berichtszeiträume aus der Audit-Spur und markiert Überschneidungen. Sie verhindert nichts — sie zeigt Ihnen, wo Sie hinsehen müssen. Damit die Meldung bewertbar bleibt, erfassen Sie beim Export die optionalen Felder **Empfänger** und **Zweck**; überlappende Zeiträume an *verschiedene* Empfänger sind unkritisch, an denselben nicht.
+Die **Freigabe-Übersicht** (Statistik → Reiter „Freigaben", Rolle: Leitung/Anwendungsbetreuung) listet die bereits herausgegebenen Berichtszeiträume aus der Audit-Spur und markiert Überschneidungen. Sie verhindert nichts — sie zeigt Ihnen, wo Sie hinsehen müssen. Damit die Meldung bewertbar bleibt, erfassen Sie beim Export die optionalen Felder **Empfänger** und **Zweck**; prüfen Sie auch eine mögliche Zusammenführung bei verschiedenen Empfängern. Verschiedene Empfänger verringern das Risiko nur unter der organisatorischen Annahme, dass sie die Dateien nicht zusammenführen; die Anwendung garantiert dies nicht.
 
 > **Aufbewahrung — drei Klassen, nicht zwei.** Unter der Audit-Aktion „Export" laufen drei verschiedene Dinge, und nur das erste ist eine Herausgabe im Sinne dieser Übersicht:
 >
 > | Klasse | Beispiel | Aufbewahrung | In der Übersicht? |
 > |---|---|---|---|
 > | **Herausgegebene Berichtsdatei** | CSV-/PDF-/JSON-/XML-Download mit Berichtszeitraum | **unbefristet** (nicht von `auditlog_retention_months` gekappt) | ja |
-> | Bericht am **Bildschirm** angesehen | Aufruf des externen Berichts im Browser — auch mit Zeitraum, auch bei jedem Neuladen | normale Frist | nein |
+> | Bericht am **Bildschirm** angesehen | Protokollierte HTML-/JSON-Bildschirmabrufe des externen Berichts; die Adresse leitet ohne Export-Audit zur Berichtskarte weiter | normale Frist | nein |
 > | Auskunft/Download **ohne** Berichtszeitraum | Datenauskunft zu einer Person (Art. 15), DSGVO-Dokumente | normale Frist | nein |
 >
 > Ein Berichtszeitraum allein genügt also **nicht** — es muss auch eine Datei herausgegeben worden sein. Ohne die unbefristete Aufbewahrung der ersten Klasse täuschte die Übersicht Vollständigkeit vor; ohne die Befristung der zweiten wüchse das Audit-Log mit jedem Seitenaufruf unbegrenzt.

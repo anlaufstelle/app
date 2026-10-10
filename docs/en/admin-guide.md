@@ -1896,7 +1896,7 @@ docker system df -v | grep pgdata
 
 1. **The threshold is a setting of its own, not a side effect of retention.** It is configured per facility under **Management → Settings** (group "Data protection and retention periods", `k_anonymity_threshold`, default 5) and applies to **every report artifact that leaves the organization** -- regardless of whether k-anonymization is enabled for the retention run. [§ 7.3](#73-retention-periods-and-enforce_retention) documents both fields together in the retention context, but they are independent.
 
-2. **Two views are deliberately not suppressed** and can therefore be used to check whether any data exists at all: the on-screen **statistics overview** and the PDF export in internal mode (`?internal=1`, with an "INTERNAL" banner; both restricted to lead/administration roles). It is expected that the overview may show different figures from a report. Forwarding content from these internal views falls outside the guarantee.
+2. **The internal statistics Overview is deliberately not suppressed** and can therefore help check whether any data exists (managers/application support only). The internal event list contains pseudonyms and is not anonymised statistics. There is no internal PDF mode. Figures may differ from Dataset reports; content from internal views requires a separate assessment before sharing.
 
 3. **A boundary remains even when no suppression is visible:** the guarantee applies per artifact and period, not across multiple releases -- see [§ 8, "Releasing Reports: What You Need to Know"](#8-statistics-snapshots--materialized-view).
 
@@ -2435,7 +2435,7 @@ Anlaufstelle computes statistics (dashboard, half-year reports, example activity
 
 **Statistics snapshots** persist monthly aggregates that keep counting events deleted by the retention run. Reports use hybrid logic: stored snapshots for past months, live data (from the materialized view) for the current month.
 
-> **Important: snapshot protection does not cover every report.** It preserves the **monthly aggregates** that feed the statistics overview (key figures, tables and timeline), its PDF export and the activity-report PDFs. Of the reports on the **"Dataset reports"** tab, only the **example activity report** is snapshot-enabled, and even there only its **PDF**: its CSV/JSON/XML files -- like every other report on that tab -- recalculate from the current data on **every** request. Once `enforce_retention` has cleaned up a past period, their figures for that period will be lower than on the first download -- potentially zero, without an error message, because that is not a defect. The extent depends on the report: it evaluates events, cases or people and changes only when records in **its** population are deleted or anonymized; the population is stated above each preview. **If you give such a file to a funding body or other recipient, retain the generated file yourself** -- it cannot be reproduced identically later. Each report states where it reads from ("Data source: …"); the other considerations for external release are explained below under ["Releasing Reports"](#releasing-reports-what-you-need-to-know).
+> **Important: snapshot protection does not cover every report.** The Overview reads event counts from monthly aggregates with live fallback; person metrics remain live. The Overview has no PDF export. On **Dataset reports**, only the **example activity report PDF** reads monthly aggregates with live fallback for missing snapshots and partial months; distinct persons are counted live across the entire period there too. Its preview and CSV/JSON/XML, and all formats of other reports, are live. After `enforce_retention` cleans up records, live figures can therefore be lower, down to zero. The effect depends on the population. **Retain released files yourself:** they cannot necessarily be reproduced identically later. Check the source for each format and the rules under [“Releasing Reports”](#releasing-reports-what-you-need-to-know).
 
 ### Automatic Capture
 
@@ -2485,11 +2485,11 @@ docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics
 
 ### Releasing Reports: What You Need to Know
 
-Statistics artefacts are k-anonymised (values below the threshold are suppressed). That assurance holds **per artefact and per period** — not across several releases. Three operating rules follow from this.
+Dataset reports suppress small counts. Protection applies **per artifact and per period** and alone does not guarantee anonymity, particularly across several releases. The internal event list, in contrast, contains personal pseudonyms. The following operating rules apply to report files.
 
 **1. Do not give the activity report PDF and a live export of the same period to the same recipient.**
 
-The PDFs read from the **monthly aggregates** (snapshots); the external report and the CSV/JSON/XML exports query the events **live**. Both routes are intentional: the aggregates outlive the retention deadlines, the live query counts more accurately across the whole period. Precisely for that reason they are not identical — and **the difference between the two figures is a fingerprint of what has been deleted in the meantime**. Anyone who puts both artefacts for the same period side by side can infer individual deleted records from it; k-anonymity does not protect against this, because each artefact on its own is fully anonymous.
+Only the example activity report PDF reads **monthly aggregates** with live fallback; its distinct persons are counted live. Its preview and CSV/JSON/XML, and all formats of other Dataset reports, are **live**. Differences between stored event counts and current records can reveal information about records deleted in the meantime. Even individually suppressed files therefore do not automatically protect against inferences from their combined evaluation.
 
 Every artefact therefore states **source and as-of date** ("Data source: monthly aggregates", "Monthly aggregates as of: …"). Check that line before you put two reports into the same folder.
 
@@ -2497,14 +2497,14 @@ Every artefact therefore states **source and as-of date** ("Data source: monthly
 
 If reports are released for the same facility covering sub-periods **and** their union (twelve monthly reports plus one annual report), every cell suppressed in a sub-report can be recomputed exactly from the sum of the others — even if **not a single** cell was suppressed in any of the reports involved. This is a property of the method, not a defect: k-anonymity is a property of *one* table over *one* population.
 
-The **release overview** (Statistics → "Releases" tab, role: lead/application support) lists the reporting periods already released, taken from the audit trail, and marks overlaps. It prevents nothing — it shows you where to look. To keep the warning meaningful, fill in the optional **Recipient** and **Purpose** fields on export; overlapping periods sent to *different* recipients are harmless, sent to the same one they are not.
+The **release overview** (Statistics → "Releases" tab, role: lead/application support) lists the reporting periods already released, taken from the audit trail, and marks overlaps. It prevents nothing — it shows you where to look. To keep the warning meaningful, fill in the optional **Recipient** and **Purpose** fields on export; also check possible combination by different recipients. Different recipients reduce the risk only under the organisational assumption that they do not combine the files; the application does not guarantee this.
 
 > **Retention — three classes, not two.** Three different things are logged under the "Export" audit action, and only the first is a release in the sense of this overview:
 >
 > | Class | Example | Retention | In the overview? |
 > |---|---|---|---|
 > | **Released report file** | CSV/PDF/JSON/XML download with a reporting period | **indefinite** (not truncated by `auditlog_retention_months`) | yes |
-> | Report viewed **on screen** | opening the external report in the browser — even with a period, and on every reload | normal deadline | no |
+> | Report viewed **on screen** | Recorded HTML/JSON screen views of the external report; the address redirects to the report card without an export audit | normal deadline | no |
 > | Access request/download **without** a reporting period | data subject access request for a person (Art. 15), GDPR documents | normal deadline | no |
 >
 > A reporting period alone is therefore **not** enough — a file must actually have been released. Without the indefinite retention of the first class the overview would pretend to be complete; without the deadline on the second the audit log would grow without limit on every page view.
@@ -2529,4 +2529,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: adc6d99b453874edef52819ef96f257680b50c53 -->
+<!-- source-hash: 27506712649571a299126d89d8cd34d4da32907f -->

@@ -606,6 +606,33 @@ Technisch basiert das auf einer Trigramm-Ähnlichkeit der PostgreSQL-Datenbank (
 
 > **Zugriff:** Statistik und Exporte sind nur für **Leitungen** und **Administratoren** verfügbar.
 
+### Die drei Reiter im Überblick
+
+Der Bereich **Statistik** hat drei Reiter. Sie unterscheiden sich nach Aufgabe, Schutz der Zahlen und Datenquelle. Alle beziehen sich auf die eigene Einrichtung; Zugriff haben Leitung und Anwendungsbetreuung.
+
+| Reiter | Wofür / für wen | Kleinstfallzahlen und Pseudonyme | Datenquelle |
+|---|---|---|---|
+| **Übersicht** | Interner Blick auf Kennzahlen, Diagramme und Tabellen | am Bildschirm keine Kleinstfall-Unterdrückung; Top-Personen mit Pseudonym | Monats-Aggregate mit Live-Fallback; Personenkennzahlen live über den Gesamtzeitraum; mit Dokumentationstyp-Filter vollständig live |
+| **Datensatz-Berichte** | Vorschau und Dateien für eine bestimmte Frage, etwa **Allgemeine Kennzahlen**, Beispiel-Sachbericht, Beratungsstunden, Spritzentausch oder **Summe von Zahlenfeldern** | Kleinstfallzahlen unterdrückt, keine Personen-Pseudonyme | live; Ausnahme: PDF des Beispiel-Sachberichts hybrid aus Monats-Aggregaten mit Live-Fallback und live gezählten unterschiedlichen Personen |
+| **Freigaben** | Interne Kontrolle herausgegebener Berichtszeiträume | keine Statistik | markierte Herausgaben im Audit-Log |
+
+**Gemeinsamer Zeitraum:** Übersicht und Datensatz-Berichte nutzen dieselbe Zeitraum-Leiste; ein Reiterwechsel behält den Zeitraum. Freigaben zeigt die Herausgaben unabhängig davon und reicht den Zeitraum an die anderen Reiter weiter. Der Dokumentationstyp-Filter gilt nur für die Übersicht und deren Ereignisliste, nicht für die Datensatz-Berichte.
+
+**Warum Zahlen abweichen können:**
+
+1. **Unterdrückung:** Datensatz-Berichte unterdrücken kleine Werte nach der K-Anonymitäts-Schwelle der Einrichtung (Standard 5); zusätzliche Werte können zum Schutz vor Rückrechnung entfallen. Die Übersicht zeigt intern die ununterdrückten Zahlen. Unterdrückung allein ist keine Zusicherung, dass eine Herausgabe anonym ist.
+2. **Grundgesamtheit:** Die Übersicht zählt Ereignisse unabhängig von ihrer Berichtszuordnung. Berichte zählen je nach Definition beispielsweise zugeordnete Ereignisse, Ereignisse mit Personenbezug, Personen oder Beiträge zu einer Zahlenfeld-Summe. Berichtskarten und Tabellen benennen die jeweilige Menge; ausdrücklich ausgeschlossene Typen können deshalb in der Übersicht, aber nicht in einer Berichtsauswertung enthalten sein.
+3. **Datenquelle:** Live-Abfragen sehen den aktuellen Bestand und verlieren gelöschte Ereignisse. Gespeicherte Monats-Aggregate können vergangene Ereigniszahlen erhalten; fehlende Snapshots und Teilmonate werden live abgefragt. Unterschiedliche Personen werden live über den gesamten Zeitraum gezählt, **nicht** als Summe monatlicher Personenzahlen. Beachten Sie den Quellenausweis je Format.
+
+| Sie möchten … | Ort |
+|---|---|
+| intern den Verlauf der Arbeit ansehen | **Übersicht** |
+| Einzelereignisse mit Pseudonymen intern weiterverarbeiten | **Übersicht → Ereignisliste** |
+| Eckzahlen oder eine fachliche Auswertung als Datei herausgeben | **Datensatz-Berichte**, etwa **Allgemeine Kennzahlen** |
+| frühere Herausgaben und überschneidende Zeiträume prüfen | **Freigaben** |
+
+> **Tipp:** Nutzen Sie für Zahlen nach außen die Datensatz-Berichte. Geben Sie in der Exportleiste Empfänger und Zweck an und prüfen Sie [Freigaben](#freigaben-leitung--admin). Die Vorschau ist keine Herausgabe; der Datei-Download wird protokolliert. Eine Weitergabe braucht auch mit Unterdrückung eine fachliche und datenschutzrechtliche Prüfung.
+
 ### CSV-Daten importieren
 
 Der Import-Assistent für Personen und Ereignisse ist nur für die **Anwendungsbetreuung** verfügbar. Sie finden die vollständige Schritt-für-Schritt-Anleitung mit Dateigrenzen, Zuordnung, Probelauf, Übernahme und Abbruch im [Admin-Handbuch § 2.12 „Import-Assistent"](admin-guide.md#212-import-assistent).
@@ -649,25 +676,21 @@ Die Charts aktualisieren sich automatisch beim Wechsel des Zeitraums.
 
 **Dokumentationstyp-Filter:** Über das Dropdown „Alle Dokumentationstypen" oberhalb der Charts können Sie die Ansicht auf einen bestimmten Dokumentationstyp einschränken.
 
-> **Hinweis:** Die Charts werden beim Drucken nicht angezeigt. Nutzen Sie für Berichte die PDF- oder CSV-Exportfunktionen.
+> **Hinweis:** Die Charts werden beim Drucken nicht angezeigt. Nutzen Sie für Berichtsdateien den Reiter „Datensatz-Berichte“.
 
-### CSV-Export
+### Ereignisliste (CSV, intern)
 
-Der CSV-Export enthält alle Ereignisse des gewählten Zeitraums. Felder, deren Sensitivitätsstufe die Berechtigung des exportierenden Benutzers übersteigt, werden als „[Eingeschränkt]" angezeigt.
+Die Übersicht bietet **„Ereignisliste (CSV, intern, mit Pseudonymen)“**. Die Datei enthält Einzelereignisse des gewählten Zeitraums, bei gewähltem Dokumentationstyp nur diesen Typ. Statische Spalten sind Datum, Uhrzeit, Dokumentationstyp, Person, Kontaktstufe und Altersgruppe; hinzu kommen die für Ihre Rolle sichtbaren dynamischen Felder. Die Spalte **„Person“** kann ein Pseudonym enthalten. Pseudonyme bleiben personenbezogen: Dies ist **keine anonymisierte Statistik**. Eine Weitergabe setzt eine passende Rechtsgrundlage voraus; für Zahlen nach außen nutzen Sie die Datensatz-Berichte.
 
-1. Öffnen Sie das Statistik-Dashboard und wählen Sie den gewünschten Zeitraum.
-2. Klicken Sie auf **CSV-Export**.
-3. Die Datei wird sofort heruntergeladen (Dateiname: `export_YYYY-MM-DD_YYYY-MM-DD.csv`).
+1. Wählen Sie im Statistik-Dashboard Zeitraum und gegebenenfalls Dokumentationstyp.
+2. Tragen Sie optional **Empfänger** und **Zweck** in der Exportleiste ein.
+3. Klicken Sie auf **Ereignisliste (CSV, intern, mit Pseudonymen)**. Die Datei heißt `export_YYYY-MM-DD_YYYY-MM-DD.csv`.
 
-> **Hinweis:** Jeder Export wird im Audit-Log protokolliert.
+Der erfolgreiche Download wird im Audit-Log als Herausgabe geführt und erscheint unter **Freigaben**.
 
 ### PDF-Export
 
-Der PDF-Export erstellt einen strukturierten Statistikbericht für den oben im Dashboard gewählten Zeitraum, zur internen Dokumentation.
-
-1. Wählen Sie im Statistik-Dashboard den Zeitraum.
-2. Klicken Sie auf **PDF-Export**.
-3. Die PDF-Datei wird heruntergeladen (Dateiname: `bericht_YYYY-MM-DD_YYYY-MM-DD.pdf`).
+PDF-Dateien erhalten Sie im Reiter **Datensatz-Berichte**: Jede Berichtskarte bietet CSV, JSON, XML und PDF in der gemeinsamen Exportleiste. Wählen Sie den Bericht und prüfen Sie Vorschau, Grundgesamtheit, Unterdrückung und Datenquelle; geben Sie optional Empfänger und Zweck an und klicken Sie auf **PDF-Export**. Der Download enthält die für dieses Format vorbereiteten, unterdrückten Berichtsdaten ohne Personen-Pseudonyme. Der Beispiel-Sachbericht hat dabei eine andere Datenquelle als seine Live-Vorschau (siehe unten). Die Übersicht selbst bietet keinen PDF-Export; auch `internal=1` ist kein interner PDF-Modus.
 
 ### Beispiel-Sachbericht
 
@@ -679,7 +702,7 @@ Der Beispiel-Sachbericht erstellt einen strukturierten Sachbericht nach einem fe
 
 > **Tipp:** Für Halbjahresberichte wählen Sie „Eigener Zeitraum" und setzen Start- und Enddatum auf den 01.01. bzw. 30.06. (oder 01.07. – 31.12.). „Letzte 180 Tage" ist ein rollierendes Fenster und trifft nie exakt ein Kalenderhalbjahr.
 
-**Datenquelle: Monats-Aggregate.** In der Fußzeile des PDFs steht, woher die Zahlen kommen. Die Sachbericht-PDFs — der Beispiel-Sachbericht wie auch der Halbjahresbericht-Export — lesen aus den gespeicherten **Monats-Auswertungen**. Zwei Folgen: Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, zeigt das PDF weiterhin mit Zahlen — und über mehrere Monate hinweg werden die Monatswerte addiert, wer in zwei Monaten erschienen ist, zählt bei „Einzigartige Personen" zweimal. Die Berichte des Reiters „Datensatz-Berichte" (CSV/JSON/XML, siehe unten) rechnen dagegen live und können deshalb im selben Zeitraum andere Zahlen zeigen.
+**Datenquelle des Beispiel-Sachbericht-PDFs: Monats-Aggregate mit Live-Fallback.** Vollständige vergangene Monate werden aus vorhandenen Monats-Auswertungen gelesen; fehlende Snapshots und Teilmonate werden live berechnet. So können gespeicherte Ereigniszahlen nach Ablauf der Löschfristen erhalten bleiben. „Unterschiedliche Personen“ wird dagegen live über den Gesamtzeitraum gezählt, nicht monatlich addiert. Die Fußzeile nennt die Quelle und gegebenenfalls den Stand der verwendeten Monats-Aggregate. Vorschau und CSV/JSON/XML dieses Berichts rechnen live; sie können deshalb vom PDF desselben Zeitraums abweichen.
 
 ### Datensatz-Berichte (CSV / JSON / XML / PDF)
 
@@ -689,27 +712,33 @@ Der Reiter **Datensatz-Berichte** listet alle Berichtsstandards, die für Ihre E
 
 1. Wählen Sie die **Karte** des gewünschten Berichts. Jede Karte nennt in einem Satz, was der Bericht zeigt, welche Grundgesamtheit er auswertet und ob er live rechnet oder aus Monats-Auswertungen liest.
 2. Darunter erscheint eine **Vorschau** mit den Zahlen des gewählten Zeitraums. Die Adresse merkt sich die Auswahl (`?ansicht=datensaetze&bericht=…`), Lesezeichen und Zurück-Taste funktionieren.
-3. Über die Schaltflächen **CSV-Export**, **JSON-Export** und **XML-Export** laden Sie denselben Datenstand als Datei herunter. CSV eignet sich für Tabellenkalkulationen, JSON und XML für die Weiterverarbeitung in anderen Systemen. Beim Beispiel-Sachbericht kommt **PDF-Export** hinzu.
+3. Über die gemeinsame Exportleiste mit optionalem **Empfänger** und **Zweck** laden Sie **CSV**, **JSON**, **XML** oder **PDF** herunter. CSV eignet sich für Tabellenkalkulationen, JSON und XML für andere Systeme. Jede Datei wird neu erzeugt; beim Beispiel-Sachbericht liest nur das PDF hybrid aus Monats-Aggregaten, die anderen Formate live.
 
 Ein Zeitraum-Klick verwirft die Berichtsauswahl nicht — Karte und Vorschau bleiben stehen, die Zahlen aktualisieren sich.
 
-**Vollständigkeitshinweise:** Über der Vorschau steht, was der Bericht *nicht* zeigt — zum Beispiel Ereignisse, deren Dokumentationstyp keiner Berichtskategorie zugeordnet ist, oder Ereignisse ohne Personenbezug. Eine gelbe **Hinweis**-Markierung bedeutet: Es fehlen Daten, die Zahlen sind also zu niedrig. Eine graue **Info**-Markierung bedeutet: Die Daten sind enthalten, fehlen aber in einzelnen Teilauswertungen. Steht dort „Keine Vollständigkeitsprobleme erkannt", ist der Bericht lückenlos.
+**Vollständigkeitshinweise:** Über der Vorschau steht, was der Bericht *nicht* zeigt — zum Beispiel Ereignisse, deren Dokumentationstyp keiner Berichtskategorie zugeordnet ist, oder Ereignisse ohne Personenbezug. Eine gelbe **Hinweis**-Markierung bedeutet: Es fehlen Daten, die Zahlen sind also zu niedrig. Eine graue **Info**-Markierung bedeutet: Die Daten sind enthalten, fehlen aber in einzelnen Teilauswertungen. Steht dort „Keine Vollständigkeitsprobleme erkannt", wurden bei den eingebauten Prüfungen keine Probleme erkannt; das garantiert keine vollständige Erfassung.
 
-**Kleinstfallzahlen werden unterdrückt:** Vorschau *und* Download zeigen denselben datenschutzfreundlichen Datenstand — Werte unterhalb der K-Anonymitäts-Schwelle Ihrer Einrichtung (Standard 5) werden entfernt, damit sich aus einem Bericht keine einzelnen Personen ableiten lassen. **Dargestellt** wird ein entfernter Wert je nach Format unterschiedlich: in der Vorschau als Gedankenstrich („—"), im CSV als leere Zelle (die Metadatenzeile am Dateianfang weist auf die Unterdrückung hin), im JSON als `null`, im XML als leeres Element. Gelegentlich fällt zusätzlich ein zweiter, größerer Wert weg — das ist beabsichtigt, sonst ließe sich der unterdrückte Wert zurückrechnen. Aus demselben Grund enthalten Vollständigkeitshinweise bei sehr kleinen Zahlen gar keine Ziffer mehr.
+**Kleinstfallzahlen werden unterdrückt:** Vorschau und Downloads wenden den Schutz vor Kleinstfallzahlen an — Werte unterhalb der K-Anonymitäts-Schwelle Ihrer Einrichtung (Standard 5) werden entfernt, um Rückschlüsse auf einzelne Personen zu erschweren. Unterdrückung allein garantiert keine Anonymität. **Dargestellt** wird ein entfernter Wert je nach Format unterschiedlich: in der Vorschau als Gedankenstrich („—"), im CSV als leere Zelle (die Metadatenzeile am Dateianfang weist auf die Unterdrückung hin), im JSON als `null`, im XML als leeres Element. Gelegentlich fällt zusätzlich ein zweiter, größerer Wert weg — das ist beabsichtigt, sonst ließe sich der unterdrückte Wert zurückrechnen. Aus demselben Grund enthalten Vollständigkeitshinweise bei sehr kleinen Zahlen gar keine Ziffer mehr.
 
-**Datenquelle: Live-Abfrage.** Unter der Vorschau steht, woher die Zahlen kommen. Vorschau und Download rechnen die Zahlen bei **jedem Aufruf neu** aus den Ereignisdaten. Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, erscheinen deshalb leer — anders als im Beispiel-Sachbericht-PDF, das aus den Monats-Auswertungen liest. In den Dateiformaten steht dieselbe Angabe maschinenlesbar: im CSV in der Metadatenzeile am Dateianfang, in JSON und XML als Feld `data_source` (Wert `live`).
+**Datenquelle: Live-Abfrage.** Unter der Vorschau steht, woher die Zahlen kommen. Vorschau und CSV/JSON/XML rechnen die Zahlen bei **jedem Aufruf neu** aus den Ereignisdaten; das gilt auch für die PDFs der anderen Berichte. Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, erscheinen deshalb leer — anders als im Beispiel-Sachbericht-PDF, das aus den Monats-Auswertungen liest. In den Dateiformaten steht dieselbe Angabe maschinenlesbar: im CSV in der Metadatenzeile am Dateianfang, in JSON und XML als Feld `data_source` (Wert `live`).
 
 > **Hinweis:** Jeder Download wird im Audit-Log protokolliert; die Vorschau nicht. Ein leerer Zeitraum sieht in der Vorschau aus wie eine Unterdrückung — prüfen Sie im Zweifel den gewählten Zeitraum.
 
-### Datenschutzfreundliche externe Berichte (Leitung / Admin)
+### Freigaben (Leitung / Admin)
 
-Für die Weitergabe an externe Stellen (z. B. Fördermittelgeber oder Kommune) gibt es unter `/statistics/external/` einen **externen Bericht mit Datenschutzprofil**. Er nutzt dieselben Zeitraum-Filter wie das Statistik-Dashboard, ist aber bewusst datensparsam:
+Der Reiter **Freigaben** zeigt keine Statistik, sondern die markierten Herausgaben Ihrer Einrichtung: Zeitpunkt, Artefakt, Format, Berichtszeitraum, Empfänger und Zweck. Die Anzeige umfasst **50 Einträge je Seite**, unabhängig vom gewählten Statistik-Zeitraum. Beim Reiterwechsel bleibt dieser Zeitraum erhalten.
 
-- **Kein Pseudonym-Ranking** — die Top-Personen-Liste des internen Dashboards entfällt vollständig.
-- **K-Anonymität** — Aggregate mit weniger als *k* Datensätzen (Schwelle aus den Einrichtungs-Settings, Standard 5) werden als **„unterdrückt"** ausgewiesen statt mit konkreter Zahl. Das betrifft „Unterschiedliche Personen", „Nach Dokumentationstyp" und „Nach Altersgruppe".
-- **Datenschutzprofil-Kopf** — Einrichtung, Profil (`external`), Zeitraum, K-Anonymität-Schwelle, Erzeugungs-Zeitpunkt und **Datenquelle** stehen oben im Bericht. Auch dieser Bericht rechnet live; in der JSON-Fassung steht die Angabe als `metadata.data_source` (Wert `live`).
+**Als Herausgabe zählt** der erfolgreiche Download der internen Ereignisliste sowie eines Datensatz-Berichts als CSV, JSON, XML oder PDF mit Berichtszeitraum und Herausgabe-Markierung im Audit-Log. **Nicht erfasst** sind Berichtsvorschauen oder Weitergaben außerhalb der Anwendung, etwa weitergeleitete Dateien und Bildschirmfotos. Die Adresse `/statistics/external/` leitet auch mit `?format=json` zur Karte **Allgemeine Kennzahlen** weiter; dieser Aufruf ist keine Herausgabe und erzeugt keinen Export-Audit-Eintrag.
 
-Über **„Als JSON exportieren"** (bzw. `?format=json` an der URL) erhalten Sie dieselben Daten maschinenlesbar. Jeder Aufruf wird als `EXPORT` im Audit-Log protokolliert. Der externe Bericht ist nur für **Leitung** und **Administration** zugänglich.
+**Überschneidungswarnung:** Die Seite markiert nicht identische, überlappende Berichtszeiträume desselben Artefakts. Bei Datensatz-Berichten ist das der Backend-Schlüssel unabhängig vom Dateiformat; bei älteren Einträgen ohne Schlüssel wird nach Format, ersatzweise Ziel gruppiert. Geprüft wird gegen **alle noch protokollierten passenden Herausgaben** der Einrichtung, auch außerhalb der angezeigten Seite und jenseits von 500 Einträgen. Der Hinweis oben zählt nur betroffene Herausgaben auf der aktuellen Seite. `RELEASE_LOG_LIMIT = 500` ist der Standard eines Service-Aufrufs, weder die Seitengröße noch eine Grenze dieser Zeitraumprüfung.
+
+Die Warnung verhindert keine Herausgabe. Überlappende Dateien können durch Differenzbildung unterdrückte Informationen offenlegen, auch ohne sichtbare Unterdrückung. Identische Zeiträume sind vom Warnalgorithmus ausgenommen; bei verändertem Bestand oder Quellenstand können sie trotzdem unterschiedliche Inhalte liefern. Prüfen Sie Empfänger und mögliche Zusammenführung: Verschiedene Empfänger senken das Risiko nur unter der **organisatorischen Annahme**, dass sie die Dateien nicht zusammenführen; die Anwendung garantiert das nicht.
+
+Tragen Sie als **Empfänger die Organisation**, nicht eine Ansprechperson ein. Empfänger und Zweck sind optional; je Feld sind höchstens 200 Zeichen erlaubt. Erkannte E-Mail-/Telefonmuster und typische Namenspaare werden vor dem Download abgewiesen. Die Prüfung ist heuristisch und erkennt nicht jede personenbezogene Angabe.
+
+Die Liste enthält nur Einträge mit Herausgabe-Markierung; unmarkierte Exporte fehlen und werden nicht nachgetragen. Markierte Berichtsdateien sind von der normalen Audit-Löschfrist ausgenommen, Bildschirmabrufe nicht. Daraus folgt keine Zusage einer dauerhaft vollständigen Historie: Unmarkierte Einträge und Weitergaben außerhalb der Anwendung bleiben unsichtbar.
+
+Weitere organisatorische Regeln stehen im [Admin-Handbuch § 8 „Herausgabe von Berichten“](admin-guide.md#herausgabe-von-berichten-was-sie-wissen-müssen), insbesondere zu kurzen Zeiträumen und dem Zusammenführen von Dateien aus unterschiedlichen Quellen.
 
 ### Löschanträge prüfen (Recht „Löschbestätigung“)
 
