@@ -70,9 +70,8 @@ E-Mail-/``must_change_password``-Guards -- reiner i18n-UI-String, kein Pin
 in dieser Datei ruft diesen Zweig auf (am Ende gegen die fertige Pin-Datei
 unter ``MUTANT_UNDER_TEST`` verifiziert, ``killmap.tsv``).
 
-``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum
-(``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEY``.
+``_encryption_key`` is provided module-wide: ``mutants/`` has no ``.env``
+and therefore no ``ENCRYPTION_KEY``.
 """
 
 from __future__ import annotations
