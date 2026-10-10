@@ -14,9 +14,12 @@ zur Detailseite.
 import logging
 
 from django.shortcuts import get_object_or_404, render
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_MUTATION
 from core.forms.config import FieldGroupForm
 from core.models import DocumentType, FieldGroup
 from core.services import config as config_service
@@ -40,6 +43,7 @@ class ConfigFieldGroupCreateView(FacilityAdminRequiredMixin, View):
             {"form": form, "doc_type": doc_type, "is_edit": False},
         )
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         # Prefix "group-new" konsistent zu GET/Board-Render: das Neu-Formular
@@ -68,6 +72,7 @@ class ConfigFieldGroupUpdateView(FacilityAdminRequiredMixin, View):
             {"form": form, "doc_type": doc_type, "group": group, "is_edit": True},
         )
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk, group_pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         group = get_object_or_404(FieldGroup, pk=group_pk, document_type=doc_type)
@@ -98,6 +103,7 @@ class ConfigFieldGroupUpdateView(FacilityAdminRequiredMixin, View):
 class ConfigFieldGroupDeleteView(FacilityAdminRequiredMixin, View):
     """Löscht eine Feldgruppe — zugeordnete Felder werden gruppenlos (SET_NULL)."""
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk, group_pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         group = get_object_or_404(FieldGroup, pk=group_pk, document_type=doc_type)

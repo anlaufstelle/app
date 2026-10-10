@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST
 from django.views.i18n import set_language
 from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_MUTATION
 from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY, LAST_RENEWAL_KEY
 from core.models import AuditLog, User
 from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
@@ -319,6 +320,7 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
 # or rotated; ``login_not_required`` stays outermost and keeps its marker.
 @method_decorator(login_not_required, name="dispatch")
 @method_decorator(anonymous_session_required, name="dispatch")
+@method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True), name="post")
 class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
     """Password-Reset, der zugleich einen aktiven Account-Lockout aufhebt (Refs #869).
 
@@ -410,6 +412,7 @@ class InviteConfirmView(CustomPasswordResetConfirmView):
     revocation_reason = RevocationReason.INVITE_SETUP
 
 
+@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
 class CustomPasswordChangeView(auth_views.PasswordChangeView):
     """Password change with must_change_password reset and offline-salt rotation."""
 
@@ -470,6 +473,7 @@ class OfflineKeySaltView(LoginRequiredMixin, View):
 
 
 @require_POST
+@ratelimit(key="user_or_ip", rate=RATELIMIT_MUTATION, method="POST", block=True)
 def set_user_language(request):
     """Save language preference to user model, then delegate to Django's set_language."""
     language = request.POST.get("language")

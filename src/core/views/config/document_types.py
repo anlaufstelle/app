@@ -16,9 +16,12 @@ from django.core.exceptions import ValidationError
 from django.db.models import Count, IntegerField, OuterRef, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_MUTATION
 from core.forms.config import DocumentTypeFieldAddForm, DocumentTypeForm
 from core.models import (
     Case,
@@ -182,6 +185,7 @@ class ConfigDocumentTypeCreateView(FacilityAdminRequiredMixin, View):
         form = DocumentTypeForm(facility=request.current_facility)
         return render(request, FORM_TEMPLATE, {"form": form, "is_edit": False})
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request):
         form = DocumentTypeForm(request.POST, facility=request.current_facility)
         if form.is_valid():
@@ -229,6 +233,7 @@ class ConfigDocumentTypeUpdateView(FacilityAdminRequiredMixin, View):
         }
         return render(request, FORM_TEMPLATE, context)
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         form = DocumentTypeForm(request.POST, instance=doc_type, facility=request.current_facility)
@@ -292,6 +297,7 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
             },
         )
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         name = doc_type.name
@@ -313,6 +319,7 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
 class ConfigDocTypeFieldAddView(FacilityAdminRequiredMixin, View):
     """Ordnet eine Feldvorlage dem Dokumentationstyp zu (Board-Mutation)."""
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
 
@@ -367,6 +374,7 @@ class ConfigDocTypeFieldAddView(FacilityAdminRequiredMixin, View):
 class ConfigDocTypeFieldRemoveView(FacilityAdminRequiredMixin, View):
     """Entfernt eine Feld-Zuordnung vom Dokumentationstyp (Board-Mutation)."""
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk, dtf_pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         dtf = get_object_or_404(DocumentTypeField, pk=dtf_pk, document_type=doc_type)

@@ -21,9 +21,12 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_MUTATION
 from core.forms.config import FieldConditionForm
 from core.models import DocumentType, DocumentTypeField, FieldCondition
 from core.services import config as config_service
@@ -148,6 +151,7 @@ class ConditionCreateView(FacilityAdminRequiredMixin, View):
             },
         )
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         form = FieldConditionForm(request.POST, document_type=doc_type)
@@ -211,6 +215,7 @@ class ConditionUpdateView(FacilityAdminRequiredMixin, View):
         }
         return render(request, FORM_TEMPLATE, context)
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk, condition_pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         condition = get_object_or_404(FieldCondition, pk=condition_pk, target_field__document_type=doc_type)
@@ -256,6 +261,7 @@ class ConditionUpdateView(FacilityAdminRequiredMixin, View):
 class ConditionDeleteView(FacilityAdminRequiredMixin, View):
     """Löscht eine Feldbedingung (Board-Mutation)."""
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk, condition_pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         condition = get_object_or_404(FieldCondition, pk=condition_pk, target_field__document_type=doc_type)

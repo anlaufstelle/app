@@ -33,9 +33,12 @@ import logging
 import uuid
 
 from django.shortcuts import get_object_or_404
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_MUTATION
 from core.models import DocumentType
 from core.services import config as config_service
 from core.views.config.document_types import board_response
@@ -86,6 +89,7 @@ class ConfigReorderBlocksView(FacilityAdminRequiredMixin, View):
     Felder gemischt, DOM-Reihenfolge).
     """
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         try:
@@ -104,6 +108,7 @@ class ConfigReorderBlocksView(FacilityAdminRequiredMixin, View):
 class ConfigReorderFieldsView(FacilityAdminRequiredMixin, View):
     """Setzt die Feld-Reihenfolge innerhalb einer Gruppe/„Ohne Gruppe" neu (Batch)."""
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         try:
@@ -129,6 +134,7 @@ class ConfigMoveFieldView(FacilityAdminRequiredMixin, View):
       Blockreihenfolge (``kind:uuid``, inkl. des bewegten, nun freien Felds).
     """
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         moved_raw = request.POST.get("moved")

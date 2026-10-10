@@ -11,70 +11,167 @@ pytestmark = pytest.mark.architecture
 
 
 class TestRateLimitOnAllMutations:
-    """Jede CBV-Klasse mit ``def post(...)`` in ``src/core/views/`` muss
-    einen ``@ratelimit``-Decorator (per ``method_decorator`` oder direkt) tragen.
-
-    Hintergrund: Brute-Force-/Spray-Schutz auf Mutationen ist Pflicht. Der
-    Audit (Refs #670) hat 19 ungeschuetzte Handler gezeigt — von
-    ``MFADisableView`` ueber ``ClientCreateView`` bis ``RetentionApproveView``.
-
-    Ausnahmen muessen in der Allowlist stehen und mit Begruendung dokumentiert
-    sein.
-    """
+    """Scan every view module, including inherited handlers and POST functions."""
 
     _VIEWS_DIR = Path("src/core/views")
     _ALLOWLIST = {
-        # Refs #2044: POST haelt das Pseudonym der read-only Warnprobe aus
-        # URL-/Access-Logs. Der Handler mutiert nichts und darf gerade nicht
-        # den 60/h-Eimer des eigentlichen Client-Updates verbrauchen.
-        "clients.py:ClientRenameWarningView",
+        "clients.py:ClientRenameWarningView": (
+            "Read-only pseudonym warning probe; must not consume the actual update quota (Refs #2044)."
+        ),
     }
+    _GENERIC_MUTATIONS = {
+        "CreateView",
+        "UpdateView",
+        "DeleteView",
+        "FormView",
+        "LoginView",
+        "PasswordResetView",
+        "PasswordChangeView",
+        "PasswordResetConfirmView",
+    }
+    _METHODS = {"post", "put", "patch", "delete"}
 
     def test_all_post_handlers_have_ratelimit(self):
-        if not self._VIEWS_DIR.exists():
-            pytest.skip(f"{self._VIEWS_DIR} nicht vorhanden")
+        assert self._VIEWS_DIR.exists(), f"Missing view directory: {self._VIEWS_DIR}"
+        modules = {}
+        classes = {}
+        for path in sorted(self._VIEWS_DIR.rglob("*.py")):
+            relative = path.relative_to(self._VIEWS_DIR).as_posix()
+            tree = ast.parse(path.read_text())
+            aliases = {
+                alias.asname or alias.name: alias.name
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom)
+                for alias in node.names
+            }
+            modules[relative] = (tree, aliases)
+            for node in tree.body:
+                if isinstance(node, ast.ClassDef):
+                    classes[(relative, node.name)] = node
+
+        def name(node, aliases):
+            raw = node.id if isinstance(node, ast.Name) else node.attr if isinstance(node, ast.Attribute) else ""
+            return aliases.get(raw, raw)
+
+        def limited(decorators, aliases, method, *, class_level=False, target_method=None):
+            for decorator in decorators:
+                if class_level:
+                    if not isinstance(decorator, ast.Call) or name(decorator.func, aliases) != "method_decorator":
+                        continue
+                    target = next((kw.value for kw in decorator.keywords if kw.arg == "name"), None)
+                    if not isinstance(target, ast.Constant) or target.value not in (
+                        {target_method} if target_method else {method, "dispatch"}
+                    ):
+                        continue
+                for call in ast.walk(decorator):
+                    if not isinstance(call, ast.Call) or name(call.func, aliases) != "ratelimit":
+                        continue
+                    options = {kw.arg: kw.value for kw in call.keywords}
+                    block = options.get("block")
+                    methods = options.get("method")
+                    if not isinstance(block, ast.Constant) or block.value is not True:
+                        continue
+                    if methods is None:
+                        return True
+                    allowed = (
+                        [methods.value]
+                        if isinstance(methods, ast.Constant)
+                        else [item.value for item in getattr(methods, "elts", []) if isinstance(item, ast.Constant)]
+                    )
+                    if method.upper() in allowed or "ALL" in allowed:
+                        return True
+            return False
+
+        def bases(key):
+            relative, _ = key
+            aliases = modules[relative][1]
+            for base in classes[key].bases:
+                base_name = name(base, aliases)
+                local = (relative, base_name)
+                if local in classes:
+                    yield local
+                    continue
+                matches = [candidate for candidate in classes if candidate[1] == base_name]
+                if len(matches) == 1:
+                    yield matches[0]
+
+        def handler(key, method, seen=None):
+            seen = set() if seen is None else seen
+            if key in seen:
+                return None
+            seen.add(key)
+            for child in classes[key].body:
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name == method:
+                    return key, child
+            for parent in bases(key):
+                if found := handler(parent, method, seen):
+                    return found
+            return None
+
+        def inherited_class_limit(key, method, target, seen=None):
+            seen = set() if seen is None else seen
+            if key in seen:
+                return False
+            seen.add(key)
+            if limited(classes[key].decorator_list, modules[key[0]][1], method, class_level=True, target_method=target):
+                return True
+            # An override replaces the parent's decorated handler entirely.
+            if any(
+                isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name == target
+                for child in classes[key].body
+            ):
+                return False
+            return any(inherited_class_limit(parent, method, target, seen) for parent in bases(key))
+
+        def class_limit(key, method):
+            dispatch = handler(key, "dispatch")
+            return (
+                inherited_class_limit(key, method, method)
+                or inherited_class_limit(key, method, "dispatch")
+                or bool(dispatch and limited(dispatch[1].decorator_list, modules[dispatch[0][0]][1], method))
+            )
+
+        def generic_mutation(key, seen=None):
+            seen = set() if seen is None else seen
+            if key in seen:
+                return False
+            seen.add(key)
+            return any(name(base, modules[key[0]][1]) in self._GENERIC_MUTATIONS for base in classes[key].bases) or any(
+                generic_mutation(parent, seen) for parent in bases(key)
+            )
+
         violations = []
-        for py_file in sorted(self._VIEWS_DIR.glob("*.py")):
-            if py_file.name == "__init__.py":
+        for key in classes:
+            identifier = f"{key[0]}:{key[1]}"
+            if self._ALLOWLIST.get(identifier, "").strip():
                 continue
-            source = py_file.read_text()
-            for cls_match in re.finditer(r"^class (\w+)\(", source, re.MULTILINE):
-                cls_name = cls_match.group(1)
-                cls_body_start = cls_match.end()
-                next_cls = re.search(r"^class \w+\(", source[cls_body_start:], re.MULTILINE)
-                cls_body = source[cls_body_start : cls_body_start + (next_cls.start() if next_cls else 10**9)]
-                # Capture decorator block above ``def post(self, ...)``
-                post_match = re.search(
-                    r"((?:^    @[^\n]+\n)*)^    def post\(self",
-                    cls_body,
-                    re.MULTILINE,
-                )
-                if not post_match:
+            for method in self._METHODS:
+                found = handler(key, method)
+                if found is None and not (method == "post" and generic_mutation(key)):
                     continue
-                decorators = post_match.group(1) or ""
-                # Class-level decorators above the ``class`` line. Multi-line
-                # decorators (``@method_decorator(\n    ratelimit(...),\n)``)
-                # erstrecken sich ueber mehrere Zeilen; daher den ganzen
-                # Block ab der ersten ``@``-Zeile bis zur class-Zeile lesen.
-                pre = source[: cls_match.start()]
-                last_block = pre.rsplit("\n\n", 1)[-1] if "\n\n" in pre else pre
-                class_decos = last_block if "@" in last_block else ""
-                if "ratelimit" in decorators or "ratelimit" in class_decos:
+                if class_limit(key, method) or (
+                    found and limited(found[1].decorator_list, modules[found[0][0]][1], method)
+                ):
                     continue
-                identifier = f"{py_file.name}:{cls_name}"
-                if identifier in self._ALLOWLIST:
+                violations.append(f"{identifier}.{method}")
+        for relative, (tree, aliases) in modules.items():
+            for node in tree.body:
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
-                violations.append(identifier)
-        assert not violations, (
-            "POST-Handler ohne @ratelimit-Decorator. Bitte "
-            "@method_decorator(ratelimit(key='user', rate=RATELIMIT_MUTATION, "
-            "method='POST', block=True)) ergaenzen — fuer Bulk-Aktionen "
-            "RATELIMIT_BULK_ACTION (30/h) verwenden, sonst RATELIMIT_MUTATION "
-            "(60/h). Echte Ausnahmen in TestRateLimitOnAllMutations._ALLOWLIST "
-            "mit Begruendung eintragen.\n"
-            "Refs #669 (Phase F), #670.\n"
-            f"Betroffen: {violations}"
-        )
+                methods = set()
+                for decorator in node.decorator_list:
+                    if name(decorator, aliases) == "require_POST":
+                        methods.add("post")
+                    if isinstance(decorator, ast.Call) and name(decorator.func, aliases) == "require_http_methods":
+                        methods.update(
+                            str(item.value).lower()
+                            for item in ast.walk(decorator)
+                            if isinstance(item, ast.Constant) and str(item.value).lower() in self._METHODS
+                        )
+                for method in methods:
+                    if not limited(node.decorator_list, aliases, method):
+                        violations.append(f"{relative}:{node.name}.{method}")
+        assert not violations, f"Mutation handlers without a blocking rate limit: {sorted(violations)}"
 
 
 class TestRateLimitOnSensitiveGetEndpoints:

@@ -15,9 +15,12 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_MUTATION
 from core.forms.config import FieldTemplateForm
 from core.models import FieldTemplate
 from core.reporting.registry import describe_field_bindings, diagnose_field_bindings
@@ -99,6 +102,7 @@ class ConfigFieldTemplateCreateView(FacilityAdminRequiredMixin, View):
         form = FieldTemplateForm(facility=request.current_facility)
         return render(request, FORM_TEMPLATE, {"form": form, "is_edit": False})
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request):
         form = FieldTemplateForm(request.POST, facility=request.current_facility)
         if form.is_valid():
@@ -132,6 +136,7 @@ class ConfigFieldTemplateUpdateView(FacilityAdminRequiredMixin, View):
         }
         return render(request, FORM_TEMPLATE, context)
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         field_template = get_object_or_404(FieldTemplate, pk=pk, facility=request.current_facility)
         form = FieldTemplateForm(
@@ -179,6 +184,7 @@ class ConfigFieldTemplateDeleteView(FacilityAdminRequiredMixin, View):
             },
         )
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         field_template = get_object_or_404(FieldTemplate, pk=pk, facility=request.current_facility)
         name = field_template.name
@@ -195,6 +201,7 @@ class ConfigFieldTemplateDeleteView(FacilityAdminRequiredMixin, View):
 class ConfigFieldTemplateToggleActiveView(FacilityAdminRequiredMixin, View):
     """Aktiviert/deaktiviert eine Feldvorlage (Soft-Delete-Alternative)."""
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         field_template = get_object_or_404(FieldTemplate, pk=pk, facility=request.current_facility)
         new_state = not field_template.is_active
