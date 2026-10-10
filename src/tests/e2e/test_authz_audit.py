@@ -4,7 +4,9 @@ Manuell ausgeführt (nicht Teil normaler Läufe):
 
     AUTHZ_AUDIT=1 .venv/bin/python -m pytest src/tests/e2e/test_authz_audit.py -m authz_audit -v
 
-Schreibt den Report nach docs/archive/audits/2026-06-12-a1-laufzeit-authz-matrix.md.
+Schreibt den Report nach docs/archive/audits/<Datum>-live-authz-matrix.md
+(bei Wiederholung am selben Tag mit Zähler-Suffix; eine vorhandene Datei wird nie
+überschrieben). ``AUTHZ_AUDIT_REPORT_PATH=<datei.md>`` legt das Ziel fest.
 Mutationen durch erlaubte POSTs sind akzeptiert — die E2E-DB ist wegwerfbar.
 
 Der Test failt NICHT bei Abweichungen (Befunde gehören in Report + Issues;

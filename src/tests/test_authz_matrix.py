@@ -206,6 +206,40 @@ class TestLiveAuditHarvestQueriesRunAgainstTheSchema:
             cursor.execute(helpers._ENSURE_CONFIG_CONDITION, self._PARAMS)
             assert cursor.rowcount == 0, "Platzhalter-Facility duerfte keine Bedingung erzeugen"
 
+class TestAuditReportPath:
+    """Der Audit darf keinen versionierten Bericht überschreiben."""
+
+    def test_default_is_dated_next_to_the_archived_audits(self, monkeypatch, tmp_path):
+        import datetime
+
+        monkeypatch.delenv(helpers.REPORT_PATH_ENV, raising=False)
+        monkeypatch.setattr(helpers, "REPORT_DIR", tmp_path)
+
+        path = helpers.report_path(datetime.date(2026, 10, 10))
+
+        assert path == tmp_path / "2026-10-10-live-authz-matrix.md"
+
+    def test_existing_report_is_never_reused(self, monkeypatch, tmp_path):
+        import datetime
+
+        monkeypatch.delenv(helpers.REPORT_PATH_ENV, raising=False)
+        monkeypatch.setattr(helpers, "REPORT_DIR", tmp_path)
+        day = datetime.date(2026, 10, 10)
+        (tmp_path / "2026-10-10-live-authz-matrix.md").write_text("kept", encoding="utf-8")
+
+        first = helpers.report_path(day)
+        first.write_text("also kept", encoding="utf-8")
+        second = helpers.report_path(day)
+
+        assert first == tmp_path / "2026-10-10-live-authz-matrix-2.md"
+        assert second == tmp_path / "2026-10-10-live-authz-matrix-3.md"
+
+    def test_environment_variable_sets_the_target(self, monkeypatch, tmp_path):
+        target = tmp_path / "custom.md"
+        monkeypatch.setenv(helpers.REPORT_PATH_ENV, str(target))
+
+        assert helpers.report_path() == target
+
 
 # ---- Vertikale Matrix: Endpoint × Methode × Akteur (Test-Client) ----------
 

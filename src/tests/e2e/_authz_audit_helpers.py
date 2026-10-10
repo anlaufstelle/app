@@ -1,5 +1,6 @@
 """Helfer für den Live-AuthZ-Audit (Refs #1055): Logins, ID-Harvesting, Report."""
 
+import datetime
 import os
 from pathlib import Path
 
@@ -10,7 +11,9 @@ from ._helpers import SEED_PASSWORD
 
 PASSWORD = SEED_PASSWORD
 REPO_ROOT = Path(__file__).resolve().parents[3]
-REPORT_PATH = REPO_ROOT / "docs" / "archive" / "audits" / "2026-06-12-a1-laufzeit-authz-matrix.md"
+REPORT_DIR = REPO_ROOT / "docs" / "archive" / "audits"
+#: Explicit report target; without it :func:`report_path` picks a dated name.
+REPORT_PATH_ENV = "AUTHZ_AUDIT_REPORT_PATH"
 
 # Seed-Logins (CLAUDE.md): Facility 1 ohne Suffix, Facility 2 mit _1.
 ACTOR_LOGINS = {
@@ -21,6 +24,26 @@ ACTOR_LOGINS = {
     "super_admin": "superadmin",
 }
 FOREIGN_ADMIN = "admin_1"
+
+
+def report_path(today=None):
+    """Target file of the audit report; never an existing file.
+
+    ``AUTHZ_AUDIT_REPORT_PATH`` wins when set (the caller owns that choice).
+    Otherwise the report lands next to the other archived audits as
+    ``<date>-live-authz-matrix.md``; a second run on the same day gets a
+    ``-2``, ``-3``, ... suffix so that no versioned report is ever overwritten.
+    """
+    explicit = os.environ.get(REPORT_PATH_ENV)
+    if explicit:
+        return Path(explicit)
+    day = (today or datetime.date.today()).isoformat()
+    candidate = REPORT_DIR / f"{day}-live-authz-matrix.md"
+    counter = 2
+    while candidate.exists():
+        candidate = REPORT_DIR / f"{day}-live-authz-matrix-{counter}.md"
+        counter += 1
+    return candidate
 
 
 def login(base_url, username):
@@ -799,8 +822,11 @@ def harvest_ids(conn, fac_id):
     return out
 
 
-def write_report(rows, header_findings, meta):
-    """Markdown-Report nach REPORT_PATH schreiben; gibt den Pfad zurück.
+def write_report(rows, header_findings, meta, path=None):
+    """Markdown-Report schreiben; gibt den Pfad zurück.
+
+    ``path`` default: :func:`report_path` (datiert, überschreibt nie eine
+    vorhandene Datei).
 
     ``rows``: Dicts mit url_name, category, method, actor, expected, status,
     verdict ("OK"/"ABWEICHUNG"/"SETUP-ERROR"/"ERROR") und optional ``known``
@@ -907,6 +933,7 @@ def write_report(rows, header_findings, meta):
         "Vom Repo-Root, seriell (kein xdist).",
     ]
 
-    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return REPORT_PATH
+    target = Path(path) if path is not None else report_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return target
