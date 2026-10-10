@@ -117,7 +117,7 @@ class TestRestoreChecksUnknownBranch:
         assert check.label == "Restore-Test"
         assert check.category == ComplianceCategory.BACKUP
         assert check.message == "Noch nie ein Restore-Test dokumentiert."
-        assert check.action_hint == ("manage.py mark_restore_verified --note '...' nach jedem Test ausfuehren.")
+        assert check.action_hint == ("manage.py mark_restore_verified --note '...' nach jedem Test ausführen.")
 
 
 class TestRestoreChecksOkBranch:
@@ -180,7 +180,7 @@ class TestRestoreChecksWarningBranch:
         assert check.category == ComplianceCategory.BACKUP
         assert check.message == "Letzter Test vor 120 Tagen — Auffrischung empfohlen."
         assert check.detail == f"Letzter Restore-Test: {entry.timestamp:%Y-%m-%d}; Notiz: —"
-        assert check.action_hint == ("Restore gegen frische DB testen, dann mark_restore_verified ausfuehren.")
+        assert check.action_hint == ("Restore gegen frische DB testen, dann mark_restore_verified ausführen.")
 
 
 class TestRestoreChecksCriticalBranch:

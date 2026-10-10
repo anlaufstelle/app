@@ -86,7 +86,7 @@ class TestRetentionCardWithoutDemoMode:
 
         assert card.status == ComplianceStatus.UNKNOWN
         assert card.message == "Noch kein RETENTION_RUN_COMPLETED-Eintrag — Cron lief vielleicht nie."
-        assert card.action_hint == "enforce_retention-Cron pruefen (Ops-Runbook §6)."
+        assert card.action_hint == "enforce_retention-Cron prüfen (Ops-Runbook §6)."
 
     def test_fresh_run_turns_the_card_green(self, settings):
         settings.DEMO_MODE = False

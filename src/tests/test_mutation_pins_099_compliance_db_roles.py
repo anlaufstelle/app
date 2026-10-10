@@ -129,7 +129,7 @@ def test_check_db_roles_ohne_default_alias_liefert_konfigurationsfehler_statt_cr
     assert checks == []
     assert config_errors == [
         "App-Rolle nicht bestimmbar (weder POSTGRES_APP_USER noch settings.DATABASES['default']['USER'] gesetzt).",
-        "POSTGRES_ADMIN_USER ist nicht gesetzt — Admin-/Maintenance-Rolle nicht pruefbar. "
+        "POSTGRES_ADMIN_USER ist nicht gesetzt — Admin-/Maintenance-Rolle nicht prüfbar. "
         "Refs #902: Drei-Rollen-Modell in docker-compose.prod.yml.",
     ]
 

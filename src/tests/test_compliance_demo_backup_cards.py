@@ -62,7 +62,7 @@ class TestBackupCardInDemoMode:
 
         assert card.status == ComplianceStatus.UNKNOWN
         assert card.message == "Kein Backup gefunden oder BACKUP_DIR nicht konfiguriert."
-        assert card.action_hint == "settings.BACKUP_DIR pruefen, Cron-Job 'backup.sh' aktivieren."
+        assert card.action_hint == "settings.BACKUP_DIR prüfen, Cron-Job 'backup.sh' aktivieren."
 
     def test_without_demo_mode_fresh_backup_stays_green(self, settings):
         settings.DEMO_MODE = False
@@ -100,7 +100,7 @@ class TestRestoreCardInDemoMode:
 
         assert card.status == ComplianceStatus.UNKNOWN
         assert card.message == "Noch nie ein Restore-Test dokumentiert."
-        assert card.action_hint == "manage.py mark_restore_verified --note '...' nach jedem Test ausfuehren."
+        assert card.action_hint == "manage.py mark_restore_verified --note '...' nach jedem Test ausführen."
 
     def test_without_demo_mode_marker_turns_restore_card_green(self, settings):
         settings.DEMO_MODE = False

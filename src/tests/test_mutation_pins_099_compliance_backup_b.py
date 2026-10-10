@@ -94,7 +94,7 @@ class TestBackupChecksUnknownBranch:
         assert check.category == ComplianceCategory.BACKUP
         assert check.status == ComplianceStatus.UNKNOWN
         assert check.detail is None
-        assert check.action_hint == "settings.BACKUP_DIR pruefen, Cron-Job 'backup.sh' aktivieren."
+        assert check.action_hint == "settings.BACKUP_DIR prüfen, Cron-Job 'backup.sh' aktivieren."
 
 
 class TestBackupChecksOkBranch:
@@ -153,7 +153,7 @@ class TestBackupChecksWarningBranch:
         assert check.status == ComplianceStatus.WARNING
         assert check.message == "Backup ist 40h alt — ein Tageslauf fehlt."
         assert check.detail == "/var/backups/x.sql (Alter: 40.0h)"
-        assert check.action_hint == "Backup-Cron pruefen, evtl. manuell ausloesen."
+        assert check.action_hint == "Backup-Cron prüfen, evtl. manuell auslösen."
 
 
 class TestBackupChecksCriticalBranch:
@@ -186,9 +186,9 @@ class TestBackupChecksCriticalBranch:
         assert check.label == "Letztes Backup"
         assert check.category == ComplianceCategory.BACKUP
         assert check.status == ComplianceStatus.CRITICAL
-        assert check.message == "Backup ist 60h alt — mindestens zwei Laeufe ausgefallen."
+        assert check.message == "Backup ist 60h alt — mindestens zwei Läufe ausgefallen."
         assert check.detail == "/var/backups/x.sql (Alter: 60.0h)"
-        assert check.action_hint == "Backup-Cron + Disk-Speicher pruefen, Restore-Test nachholen."
+        assert check.action_hint == "Backup-Cron + Disk-Speicher prüfen, Restore-Test nachholen."
 
 
 class TestCheckStaleJobsSurfacesCriticalBackupKey:

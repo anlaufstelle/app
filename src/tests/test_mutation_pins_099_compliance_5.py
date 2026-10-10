@@ -149,7 +149,7 @@ class TestMigrationChecksCriticalFewPending:
         assert check.status == ComplianceStatus.CRITICAL
         assert check.message == "3 ausstehende Migration(en)."
         assert check.detail == "core.0201_test, core.0202_test, core.0203_test"
-        assert check.action_hint == "docker compose exec web python manage.py migrate ausfuehren."
+        assert check.action_hint == "docker compose exec web python manage.py migrate ausführen."
 
 
 class TestMigrationChecksBoundaryFivePending:
@@ -248,7 +248,7 @@ class TestAppSuperuserChecksOkNoOffenders:
         assert check.label == "App-User kein Django-Superuser"
         assert check.category == ComplianceCategory.PERMISSIONS
         assert check.status == ComplianceStatus.OK
-        assert check.message == "Kein App-User traegt Djangos is_superuser-Flag."
+        assert check.message == "Kein App-User trägt Djangos is_superuser-Flag."
         assert check.detail is None
         assert check.action_hint is None
 
@@ -280,8 +280,8 @@ class TestAppSuperuserChecksCriticalFewOffenders:
         assert check.message == "3 App-User mit is_superuser=True."
         assert check.detail == ", ".join(offenders)
         assert check.action_hint == (
-            "is_superuser dieser User auf False setzen — Autorisierung laeuft "
-            "ueber die Rolle, nie ueber das Django-Flag (Refs #1271)."
+            "is_superuser dieser User auf False setzen — Autorisierung läuft "
+            "über die Rolle, nie über das Django-Flag (Refs #1271)."
         )
 
 

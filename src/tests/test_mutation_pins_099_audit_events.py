@@ -97,7 +97,7 @@ class TestWarningBranchFullWording:
         assert checks[0].detail == (
             "Im System-Audit-Log (/system/audit/) auf SECURITY_VIOLATION / MFA_FAILED / USER_DEACTIVATED filtern."
         )
-        assert checks[0].action_hint == "Pro Eintrag den Kontext pruefen, ggf. Issue mit Label security eroeffnen."
+        assert checks[0].action_hint == "Pro Eintrag den Kontext prüfen, ggf. Issue mit Label security eröffnen."
 
 
 class TestCriticalBranchFullWording:
@@ -128,6 +128,6 @@ class TestCriticalBranchFullWording:
         assert checks[0].label == "Kritische Audit-Events (24h)"
         assert checks[0].category == ComplianceCategory.AUDIT
         assert checks[0].status == ComplianceStatus.CRITICAL
-        assert checks[0].message == "7 kritische Event(s) in 24h — moeglicher Vorfall."
-        assert checks[0].detail == "Im System-Audit-Log dringend pruefen."
-        assert checks[0].action_hint == ("Vorfall-Triage starten, ggf. DSGVO Art. 33 Meldung an Aufsichtsbehoerde.")
+        assert checks[0].message == "7 kritische Event(s) in 24h — möglicher Vorfall."
+        assert checks[0].detail == "Im System-Audit-Log dringend prüfen."
+        assert checks[0].action_hint == ("Vorfall-Triage starten, ggf. DSGVO Art. 33 Meldung an Aufsichtsbehörde.")

@@ -28,6 +28,7 @@ import logging
 from dataclasses import replace
 
 from django.conf import settings
+from django.utils.translation import gettext as _
 
 from core.services.compliance._types import (
     _CRITICAL_AUDIT_ACTIONS,
@@ -124,12 +125,12 @@ def _run_helpers(helpers) -> list[ComplianceCheck]:
             checks.append(
                 ComplianceCheck(
                     key=f"_internal_{name}",
-                    label=f"Interner Fehler: {name}",
+                    label=_("Interner Fehler: %(name)s") % {"name": name},
                     category=ComplianceCategory.SYSTEM,  # pragma: no mutate
                     status=ComplianceStatus.UNKNOWN,
-                    message="Check konnte nicht ausgefuehrt werden.",  # pragma: no mutate
+                    message=_("Check konnte nicht ausgeführt werden."),  # pragma: no mutate
                     detail=str(exc),
-                    action_hint="Server-Log einsehen.",  # pragma: no mutate
+                    action_hint=_("Server-Log einsehen."),  # pragma: no mutate
                 )
             )
     return checks

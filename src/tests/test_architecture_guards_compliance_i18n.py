@@ -53,7 +53,7 @@ def test_guard_accepts_translated_text_and_category_keys():
 
 
 @pytest.mark.architecture
-@pytest.mark.xfail(strict=True, reason="#2530: texts migrated in stage 2")
+@pytest.mark.xfail(strict=True, reason="#2530: technical ClamAV command remains a raw literal")
 def test_compliance_card_keywords_use_gettext():
     root = Path(__file__).resolve().parents[1] / "core/services/compliance"
     findings = {path.name: _raw_card_literals(path.read_text()) for path in sorted(root.glob("*.py"))}

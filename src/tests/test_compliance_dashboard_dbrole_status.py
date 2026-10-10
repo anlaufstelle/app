@@ -30,7 +30,7 @@ from core.services.compliance import ComplianceStatus, db_roles
 
 # Wortlaut wie ``check_db_roles`` ihn erzeugt, wenn POSTGRES_ADMIN_USER fehlt.
 _CONFIG_ERROR = (
-    "POSTGRES_ADMIN_USER ist nicht gesetzt — Admin-/Maintenance-Rolle nicht pruefbar. "
+    "POSTGRES_ADMIN_USER ist nicht gesetzt — Admin-/Maintenance-Rolle nicht prüfbar. "
     "Refs #902: Drei-Rollen-Modell in docker-compose.prod.yml."
 )
 

@@ -22,6 +22,8 @@ Dieser Check betrachtet ausschliesslich das Django-``User.is_superuser``-Feld
 
 from __future__ import annotations
 
+from django.utils.translation import gettext as _
+
 from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 
 
@@ -34,26 +36,29 @@ def _app_superuser_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="app_user_no_django_superuser",
-                label="App-User kein Django-Superuser",  # pragma: no mutate
+                label=_("App-User kein Django-Superuser"),  # pragma: no mutate
                 category=ComplianceCategory.PERMISSIONS,  # pragma: no mutate
                 status=ComplianceStatus.OK,
-                message="Kein App-User traegt Djangos is_superuser-Flag.",  # pragma: no mutate
+                message=_("Kein App-User trägt Djangos is_superuser-Flag."),  # pragma: no mutate
             )
         ]
     listing = ", ".join(offenders[:5])
     if len(offenders) > 5:
-        listing += f" (+ {len(offenders) - 5} weitere)"
+        listing += _(" (+ %(len_offenders_5)s weitere)") % {"len_offenders_5": len(offenders) - 5}
     return [
         ComplianceCheck(
             key="app_user_no_django_superuser",
-            label="App-User kein Django-Superuser",  # pragma: no mutate
+            label=_("App-User kein Django-Superuser"),  # pragma: no mutate
             category=ComplianceCategory.PERMISSIONS,  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
-            message=f"{len(offenders)} App-User mit is_superuser=True.",  # pragma: no mutate
+            message=_("%(len_offenders)s App-User mit is_superuser=True.")
+            % {"len_offenders": len(offenders)},  # pragma: no mutate
             detail=listing,
             action_hint=(
-                "is_superuser dieser User auf False setzen — Autorisierung laeuft "
-                "ueber die Rolle, nie ueber das Django-Flag (Refs #1271)."
+                _(
+                    "is_superuser dieser User auf False setzen — Autorisierung läuft über die Rolle, "
+                    "nie über das Django-Flag (Refs #1271)."
+                )
             ),  # pragma: no mutate
         )
     ]

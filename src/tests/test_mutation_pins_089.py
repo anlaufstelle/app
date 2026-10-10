@@ -353,7 +353,7 @@ class TestRetentionCheckCarriesMessageAndActionHint:
 
         assert check.status == ComplianceStatus.WARNING
         assert check.message == "Letzter Lauf vor 40h — ein Tageslauf fehlt."
-        assert check.action_hint == "Cron muss taeglich laufen (deploy/crontab: 0 3 * * *)."
+        assert check.action_hint == "Cron muss täglich laufen (deploy/crontab: 0 3 * * *)."
 
     def test_critical_states_the_age_and_the_remedy(self):
         """Zweite Haelfte des Nachweises fuer ``__mutmut_64``.
@@ -368,5 +368,5 @@ class TestRetentionCheckCarriesMessageAndActionHint:
         check = _retention_checks()[0]
 
         assert check.status == ComplianceStatus.CRITICAL
-        assert check.message == "Letzter Lauf vor 60h — mindestens zwei Laeufe ausgefallen."
-        assert check.action_hint == "Cron-Status im Container pruefen + manuell ausfuehren."
+        assert check.message == "Letzter Lauf vor 60h — mindestens zwei Läufe ausgefallen."
+        assert check.action_hint == "Cron-Status im Container prüfen + manuell ausführen."

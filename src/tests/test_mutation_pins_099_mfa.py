@@ -148,7 +148,7 @@ class TestWarningBranchFullWording:
         assert checks[0].label == "MFA-Quote (MFA-pflichtige Rollen)"
         assert checks[0].category == ComplianceCategory.MFA
         assert checks[0].status == ComplianceStatus.WARNING
-        assert checks[0].message == "80 % MFA-Quote — Lücke schliessen."
+        assert checks[0].message == "80 % MFA-Quote — Lücke schließen."
         assert checks[0].detail == "4 von 5 MFA-pflichtigen Usern haben MFA aktiv."
         assert checks[0].action_hint == "Verbleibende User per Admin-UI zur MFA-Aktivierung anhalten."
 

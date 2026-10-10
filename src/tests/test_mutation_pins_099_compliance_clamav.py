@@ -101,7 +101,7 @@ class TestReachableOkSignatureUnknownPingOk:
         assert signature.category == ComplianceCategory.VIRUS_SCAN
         assert signature.status == ComplianceStatus.UNKNOWN
         assert signature.message == "Signatur-Daten nicht abrufbar."
-        assert signature.action_hint == "ClamAV-Container neu starten, dann erneut pruefen."
+        assert signature.action_hint == "ClamAV-Container neu starten, dann erneut prüfen."
 
 
 class TestReachableCriticalSignatureUnknownPingDown:
@@ -131,7 +131,7 @@ class TestReachableCriticalSignatureUnknownPingDown:
         assert reachability.category == ComplianceCategory.VIRUS_SCAN
         assert reachability.status == ComplianceStatus.CRITICAL
         assert reachability.message == "Daemon nicht erreichbar oder deaktiviert."
-        assert reachability.action_hint == "docker compose ps clamav; CLAMAV_ENABLED in .env pruefen."
+        assert reachability.action_hint == "docker compose ps clamav; CLAMAV_ENABLED in .env prüfen."
 
         assert signature.key == "clamav_signature"
         assert signature.status == ComplianceStatus.UNKNOWN
@@ -211,4 +211,4 @@ class TestSignatureStale:
         assert signature.status == ComplianceStatus.WARNING
         assert signature.message == "Signatur ist 30 Tage alt (Schwelle: 7)."
         assert signature.detail == "Version: 1.4.2"
-        assert signature.action_hint == "freshclam-Cron im ClamAV-Container pruefen."
+        assert signature.action_hint == "freshclam-Cron im ClamAV-Container prüfen."

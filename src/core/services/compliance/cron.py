@@ -12,13 +12,18 @@ Jobs unter der Kategorie „Hintergrundjobs".
 
 from __future__ import annotations
 
+from django.utils.translation import gettext as _
+
 from core.models import AuditLog
 from core.services import ops_thresholds
 from core.services.compliance import _clock
 from core.services.compliance._types import ComplianceCategory, ComplianceCheck, ComplianceStatus
 
 _CATEGORY = ComplianceCategory.BACKGROUND_JOBS
-_CRON_ACTION_HINT = "docker compose -f docker-compose.prod.yml logs cron prüfen (Ops-Runbook § 3.2)."
+
+
+def _cron_action_hint() -> str:
+    return _("docker compose -f docker-compose.prod.yml logs cron prüfen (Ops-Runbook § 3.2).")
 
 
 def _latest(action: str) -> AuditLog | None:
@@ -31,7 +36,7 @@ def _age_hours(entry: AuditLog) -> float:
 
 def _snapshot_checks() -> list[ComplianceCheck]:
     """Statistik-Snapshots — monatlicher Cron (1. des Monats)."""
-    key, label = "snapshot_last_run", "Statistik-Snapshots"
+    key, label = "snapshot_last_run", _("Statistik-Snapshots")
     entry = _latest(AuditLog.Action.SNAPSHOT_RUN_COMPLETED)
     if entry is None:
         return [
@@ -40,12 +45,12 @@ def _snapshot_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.UNKNOWN,
-                message="Noch kein Snapshot-Lauf — Cron lief vielleicht nie.",  # pragma: no mutate
-                action_hint=_CRON_ACTION_HINT,
+                message=_("Noch kein Snapshot-Lauf — Cron lief vielleicht nie."),  # pragma: no mutate
+                action_hint=_cron_action_hint(),
             )
         ]
     age_days = (_clock.now() - entry.timestamp).days
-    detail = f"Letzter Lauf: {entry.timestamp:%Y-%m-%d %H:%M}"
+    detail = _("Letzter Lauf: %(entry_timestamp)s") % {"entry_timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
     if age_days <= 35:
         return [
             ComplianceCheck(
@@ -53,7 +58,7 @@ def _snapshot_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.OK,
-                message=f"Letzter Lauf vor {age_days} Tag(en).",  # pragma: no mutate
+                message=_("Letzter Lauf vor %(age_days)s Tag(en).") % {"age_days": age_days},  # pragma: no mutate
                 detail=detail,
             )
         ]
@@ -64,9 +69,10 @@ def _snapshot_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.WARNING,
-                message=f"Letzter Lauf vor {age_days} Tagen — Monats-Cron prüfen.",  # pragma: no mutate
+                message=_("Letzter Lauf vor %(age_days)s Tagen — Monats-Cron prüfen.")
+                % {"age_days": age_days},  # pragma: no mutate
                 detail=detail,
-                action_hint="Cron muss monatlich laufen (1. des Monats).",  # pragma: no mutate
+                action_hint=_("Cron muss monatlich laufen (1. des Monats)."),  # pragma: no mutate
             )
         ]
     return [
@@ -75,16 +81,17 @@ def _snapshot_checks() -> list[ComplianceCheck]:
             label=label,
             category=_CATEGORY,
             status=ComplianceStatus.CRITICAL,
-            message=f"Letzter Lauf vor {age_days} Tagen — Cron ausgefallen?",  # pragma: no mutate
+            message=_("Letzter Lauf vor %(age_days)s Tagen — Cron ausgefallen?")
+            % {"age_days": age_days},  # pragma: no mutate
             detail=detail,
-            action_hint=_CRON_ACTION_HINT,
+            action_hint=_cron_action_hint(),
         )
     ]
 
 
 def _breach_scan_checks() -> list[ComplianceCheck]:
     """Breach-Detection — stündlicher Cron."""
-    key, label = "breach_scan_last_run", "Breach-Detection-Scan"
+    key, label = "breach_scan_last_run", _("Breach-Detection-Scan")
     entry = _latest(AuditLog.Action.BREACH_SCAN_COMPLETED)
     if entry is None:
         return [
@@ -93,12 +100,12 @@ def _breach_scan_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.UNKNOWN,
-                message="Noch kein Breach-Scan — Cron lief vielleicht nie.",  # pragma: no mutate
-                action_hint=_CRON_ACTION_HINT,
+                message=_("Noch kein Breach-Scan — Cron lief vielleicht nie."),  # pragma: no mutate
+                action_hint=_cron_action_hint(),
             )
         ]
     age = _age_hours(entry)
-    detail = f"Letzter Scan: {entry.timestamp:%Y-%m-%d %H:%M}"
+    detail = _("Letzter Scan: %(entry_timestamp)s") % {"entry_timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
     if age <= 3:
         return [
             ComplianceCheck(
@@ -106,7 +113,7 @@ def _breach_scan_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.OK,
-                message=f"Letzter Scan vor {age:.0f}h.",  # pragma: no mutate
+                message=_("Letzter Scan vor %(age)sh.") % {"age": f"{age:.0f}"},  # pragma: no mutate
                 detail=detail,
             )
         ]
@@ -117,9 +124,9 @@ def _breach_scan_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.WARNING,
-                message=f"Letzter Scan vor {age:.0f}h — Cron prüfen.",  # pragma: no mutate
+                message=_("Letzter Scan vor %(age)sh — Cron prüfen.") % {"age": f"{age:.0f}"},  # pragma: no mutate
                 detail=detail,
-                action_hint="Cron muss stündlich laufen.",  # pragma: no mutate
+                action_hint=_("Cron muss stündlich laufen."),  # pragma: no mutate
             )
         ]
     return [
@@ -128,16 +135,16 @@ def _breach_scan_checks() -> list[ComplianceCheck]:
             label=label,
             category=_CATEGORY,
             status=ComplianceStatus.CRITICAL,
-            message=f"Letzter Scan vor {age:.0f}h — Cron ausgefallen?",  # pragma: no mutate
+            message=_("Letzter Scan vor %(age)sh — Cron ausgefallen?") % {"age": f"{age:.0f}"},  # pragma: no mutate
             detail=detail,
-            action_hint=_CRON_ACTION_HINT,
+            action_hint=_cron_action_hint(),
         )
     ]
 
 
 def _mv_refresh_checks() -> list[ComplianceCheck]:
     """Statistik-Materialized-View — stündlicher Refresh."""
-    key, label = "mv_refresh_last_run", "Statistik-View-Refresh"
+    key, label = "mv_refresh_last_run", _("Statistik-View-Refresh")
     entry = _latest(AuditLog.Action.MV_REFRESH_COMPLETED)
     if entry is None:
         return [
@@ -146,12 +153,12 @@ def _mv_refresh_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.UNKNOWN,
-                message="Noch kein View-Refresh — Cron lief vielleicht nie.",  # pragma: no mutate
-                action_hint=_CRON_ACTION_HINT,
+                message=_("Noch kein View-Refresh — Cron lief vielleicht nie."),  # pragma: no mutate
+                action_hint=_cron_action_hint(),
             )
         ]
     age = _age_hours(entry)
-    detail = f"Letzter Refresh: {entry.timestamp:%Y-%m-%d %H:%M}"
+    detail = _("Letzter Refresh: %(entry_timestamp)s") % {"entry_timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
     if age <= 2:
         return [
             ComplianceCheck(
@@ -159,7 +166,7 @@ def _mv_refresh_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.OK,
-                message=f"Letzter Refresh vor {age:.0f}h.",  # pragma: no mutate
+                message=_("Letzter Refresh vor %(age)sh.") % {"age": f"{age:.0f}"},  # pragma: no mutate
                 detail=detail,
             )
         ]
@@ -170,9 +177,10 @@ def _mv_refresh_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.WARNING,
-                message=f"Letzter Refresh vor {age:.0f}h — Dashboard evtl. veraltet.",  # pragma: no mutate
+                message=_("Letzter Refresh vor %(age)sh — Dashboard evtl. veraltet.")
+                % {"age": f"{age:.0f}"},  # pragma: no mutate
                 detail=detail,
-                action_hint="Cron muss stündlich laufen.",  # pragma: no mutate
+                action_hint=_("Cron muss stündlich laufen."),  # pragma: no mutate
             )
         ]
     return [
@@ -181,9 +189,9 @@ def _mv_refresh_checks() -> list[ComplianceCheck]:
             label=label,
             category=_CATEGORY,
             status=ComplianceStatus.CRITICAL,
-            message=f"Letzter Refresh vor {age:.0f}h — Cron ausgefallen?",  # pragma: no mutate
+            message=_("Letzter Refresh vor %(age)sh — Cron ausgefallen?") % {"age": f"{age:.0f}"},  # pragma: no mutate
             detail=detail,
-            action_hint=_CRON_ACTION_HINT,
+            action_hint=_cron_action_hint(),
         )
     ]
 
@@ -204,7 +212,7 @@ def _audit_chain_checks() -> list[ComplianceCheck]:
     wachsender Kette in den Gateway-Timeout (siehe ``services/hubs.py``); eine
     Job-Queue gibt es im Projekt nicht.
     """
-    key, label = "audit_chain_last_run", "Audit-Ketten-Pruefung"
+    key, label = "audit_chain_last_run", _("Audit-Ketten-Prüfung")
     entry = _latest(AuditLog.Action.AUDIT_CHAIN_VERIFIED)
     if entry is None:
         return [
@@ -213,12 +221,12 @@ def _audit_chain_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.UNKNOWN,
-                message="Noch keine Ketten-Pruefung — Cron lief vielleicht nie.",  # pragma: no mutate
-                action_hint=_CRON_ACTION_HINT,
+                message=_("Noch keine Ketten-Prüfung — Cron lief vielleicht nie."),  # pragma: no mutate
+                action_hint=_cron_action_hint(),
             )
         ]
     age = _age_hours(entry)
-    detail = f"Letzte Pruefung: {entry.timestamp:%Y-%m-%d %H:%M}"
+    detail = _("Letzte Prüfung: %(entry_timestamp)s") % {"entry_timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
     if age <= ops_thresholds.AUDIT_CHAIN_WARN_HOURS:
         return [
             ComplianceCheck(
@@ -226,7 +234,7 @@ def _audit_chain_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.OK,
-                message=f"Letzte Pruefung vor {age:.0f}h.",  # pragma: no mutate
+                message=_("Letzte Prüfung vor %(age)sh.") % {"age": f"{age:.0f}"},  # pragma: no mutate
                 detail=detail,
             )
         ]
@@ -237,9 +245,10 @@ def _audit_chain_checks() -> list[ComplianceCheck]:
                 label=label,
                 category=_CATEGORY,
                 status=ComplianceStatus.WARNING,
-                message=f"Letzte Pruefung vor {age:.0f}h — ein Tageslauf fehlt.",  # pragma: no mutate
+                message=_("Letzte Prüfung vor %(age)sh — ein Tageslauf fehlt.")
+                % {"age": f"{age:.0f}"},  # pragma: no mutate
                 detail=detail,
-                action_hint=_CRON_ACTION_HINT,
+                action_hint=_cron_action_hint(),
             )
         ]
     return [
@@ -248,8 +257,9 @@ def _audit_chain_checks() -> list[ComplianceCheck]:
             label=label,
             category=_CATEGORY,
             status=ComplianceStatus.CRITICAL,
-            message=f"Letzte Pruefung vor {age:.0f}h — Cron aus oder Lauf bricht rot ab.",  # pragma: no mutate
+            message=_("Letzte Prüfung vor %(age)sh — Cron aus oder Lauf bricht rot ab.")
+            % {"age": f"{age:.0f}"},  # pragma: no mutate
             detail=detail,
-            action_hint=_CRON_ACTION_HINT,
+            action_hint=_cron_action_hint(),
         )
     ]

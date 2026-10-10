@@ -55,13 +55,28 @@ class RoleCheck:
 
     def problems(self) -> list[str]:
         if not self.exists:
-            return [f"Rolle {self.role!r} existiert nicht in pg_roles."]
+            return [_("Rolle %(self_role)s existiert nicht in pg_roles.") % {"self_role": f"{self.role!r}"}]
         issues = []
         if self.actual_super != self.expected_super:
-            issues.append(f"Rolle {self.role!r}: rolsuper={self.actual_super} (erwartet: {self.expected_super}).")
+            issues.append(
+                _("Rolle %(self_role)s: rolsuper=%(self_actual_super)s (erwartet: %(self_expected_super)s).")
+                % {
+                    "self_role": f"{self.role!r}",
+                    "self_actual_super": self.actual_super,
+                    "self_expected_super": self.expected_super,
+                }
+            )
         if self.actual_bypassrls != self.expected_bypassrls:
             issues.append(
-                f"Rolle {self.role!r}: rolbypassrls={self.actual_bypassrls} (erwartet: {self.expected_bypassrls})."
+                _(
+                    "Rolle %(self_role)s: rolbypassrls=%(self_actual_bypassrls)s (erwartet: "
+                    "%(self_expected_bypassrls)s)."
+                )
+                % {
+                    "self_role": f"{self.role!r}",
+                    "self_actual_bypassrls": self.actual_bypassrls,
+                    "self_expected_bypassrls": self.expected_bypassrls,
+                }
             )
         return issues
 
@@ -226,7 +241,10 @@ def check_db_roles() -> tuple[list[RoleCheck], list[str]]:
     app_role = os.environ.get("POSTGRES_APP_USER") or settings.DATABASES.get("default", {}).get("USER")
     if not app_role:
         config_errors.append(
-            "App-Rolle nicht bestimmbar (weder POSTGRES_APP_USER noch settings.DATABASES['default']['USER'] gesetzt)."
+            _(
+                "App-Rolle nicht bestimmbar (weder POSTGRES_APP_USER noch "
+                "settings.DATABASES['default']['USER'] gesetzt)."
+            )
         )
     else:
         actual_super, actual_bypass = _query_role(app_role)
@@ -244,8 +262,10 @@ def check_db_roles() -> tuple[list[RoleCheck], list[str]]:
     admin_role = os.environ.get("POSTGRES_ADMIN_USER") or ""
     if not admin_role:
         config_errors.append(
-            "POSTGRES_ADMIN_USER ist nicht gesetzt — Admin-/Maintenance-Rolle nicht pruefbar. "
-            "Refs #902: Drei-Rollen-Modell in docker-compose.prod.yml."
+            _(
+                "POSTGRES_ADMIN_USER ist nicht gesetzt — Admin-/Maintenance-Rolle nicht prüfbar. "
+                "Refs #902: Drei-Rollen-Modell in docker-compose.prod.yml."
+            )
         )
     else:
         actual_super, actual_bypass = _query_role(admin_role)
@@ -411,7 +431,7 @@ def _db_role_marker_check(entry) -> ComplianceCheck:
         if age <= timedelta(days=ops_thresholds.DB_ROLES_CHECK_WARN_DAYS):
             return ComplianceCheck(
                 key="db_role_admin",
-                label="Admin-DB-Rolle",  # pragma: no mutate
+                label=_("Admin-DB-Rolle"),  # pragma: no mutate
                 category=ComplianceCategory.DATABASE,  # pragma: no mutate
                 status=ComplianceStatus.OK,
                 message=_("Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS), App-Rolle und Ownership ebenfalls."),
@@ -419,7 +439,7 @@ def _db_role_marker_check(entry) -> ComplianceCheck:
             )
         return ComplianceCheck(
             key="db_role_admin",
-            label="Admin-DB-Rolle",  # pragma: no mutate
+            label=_("Admin-DB-Rolle"),  # pragma: no mutate
             category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.WARNING,
             message=_("Letzte Rollenprüfung ist älter als %(days)s Tage.")
@@ -430,7 +450,7 @@ def _db_role_marker_check(entry) -> ComplianceCheck:
     if result == DB_ROLES_RESULT_INCOMPLETE and codes_readable:
         return ComplianceCheck(
             key="db_role_admin",
-            label="Admin-DB-Rolle",  # pragma: no mutate
+            label=_("Admin-DB-Rolle"),  # pragma: no mutate
             category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.WARNING,
             message=_("Rollenprüfung unvollständig: nicht jede Rolle ist konfiguriert."),
@@ -442,7 +462,7 @@ def _db_role_marker_check(entry) -> ComplianceCheck:
         )
     return ComplianceCheck(
         key="db_role_admin",
-        label="Admin-DB-Rolle",  # pragma: no mutate
+        label=_("Admin-DB-Rolle"),  # pragma: no mutate
         category=ComplianceCategory.DATABASE,  # pragma: no mutate
         status=ComplianceStatus.CRITICAL,
         message=_("Letzte Rollenprüfung meldet Befunde."),
@@ -459,9 +479,13 @@ def _db_role_checks() -> list[ComplianceCheck]:
     for rc in role_checks:
         if rc.label == "App":
             # Zwei Checks aus einer Rolle (rolsuper, rolbypassrls).
-            out.append(_db_role_attribute_check(rc, "rolsuper", "db_role_app_nosuperuser", "App-DB-Rolle NOSUPERUSER"))
             out.append(
-                _db_role_attribute_check(rc, "rolbypassrls", "db_role_app_nobypassrls", "App-DB-Rolle kein BYPASSRLS")
+                _db_role_attribute_check(rc, "rolsuper", "db_role_app_nosuperuser", _("App-DB-Rolle NOSUPERUSER"))
+            )
+            out.append(
+                _db_role_attribute_check(
+                    rc, "rolbypassrls", "db_role_app_nobypassrls", _("App-DB-Rolle kein BYPASSRLS")
+                )
             )
         elif rc.label == "Admin":
             out.append(_db_role_admin_check(rc))
@@ -517,26 +541,30 @@ def _db_role_admin_missing_check(config_errors: list[str]) -> ComplianceCheck:
     if _runs_as_maintenance_process():
         return ComplianceCheck(
             key="db_role_admin_missing",
-            label="Admin-DB-Rolle",  # pragma: no mutate
+            label=_("Admin-DB-Rolle"),  # pragma: no mutate
             category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.WARNING,
-            message="Admin-/Maintenance-Rolle nicht konfiguriert.",  # pragma: no mutate
+            message=_("Admin-/Maintenance-Rolle nicht konfiguriert."),  # pragma: no mutate
             detail="; ".join(config_errors),
             action_hint=(
-                "POSTGRES_ADMIN_USER und POSTGRES_ADMIN_PASSWORD in der .env setzen "
-                "(Drei-Rollen-Modell, docs/ops-runbook.md § 9)."
+                _(
+                    "POSTGRES_ADMIN_USER und POSTGRES_ADMIN_PASSWORD in der .env setzen "
+                    "(Drei-Rollen-Modell, docs/ops-runbook.md § 9)."
+                )
             ),  # pragma: no mutate
         )
     return ComplianceCheck(
         key="db_role_admin_missing",
-        label="Admin-DB-Rolle",  # pragma: no mutate
+        label=_("Admin-DB-Rolle"),  # pragma: no mutate
         category=ComplianceCategory.DATABASE,  # pragma: no mutate
         status=ComplianceStatus.UNKNOWN,
-        message="Im Web-Container nicht prüfbar — Prüfung über den Wartungsdienst.",  # pragma: no mutate
+        message=_("Im Web-Container nicht prüfbar — Prüfung über den Wartungsdienst."),  # pragma: no mutate
         detail="; ".join(config_errors),
         action_hint=(
-            "Im web-Container nicht pruefbar — Prüfung über "
-            "docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles."
+            _(
+                "Im web-Container nicht prüfbar — Prüfung über docker compose -f "
+                "docker-compose.prod.yml run --rm maintenance check_db_roles."
+            )
         ),  # pragma: no mutate
     )
 
@@ -551,8 +579,9 @@ def _db_role_attribute_check(role_check, attr: str, key: str, label: str) -> Com
             label=label,
             category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
-            message=f"Rolle '{role_check.role}' nicht in pg_roles gefunden.",  # pragma: no mutate
-            action_hint="DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh.",  # pragma: no mutate
+            message=_("Rolle '%(role_check_role)s' nicht in pg_roles gefunden.")
+            % {"role_check_role": role_check.role},  # pragma: no mutate
+            action_hint=_("DB-Rollen-Setup prüfen — siehe deploy/postgres-init/01-app-role.sh."),  # pragma: no mutate
         )
     if actual == expected:
         return ComplianceCheck(
@@ -560,17 +589,20 @@ def _db_role_attribute_check(role_check, attr: str, key: str, label: str) -> Com
             label=label,
             category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.OK,
-            message="Korrekt konfiguriert.",  # pragma: no mutate
-            detail=f"{role_check.role}: {attr}={actual}",
+            message=_("Korrekt konfiguriert."),  # pragma: no mutate
+            detail=_("%(role_check_role)s: %(attr)s=%(actual)s")
+            % {"role_check_role": role_check.role, "attr": attr, "actual": actual},
         )
     return ComplianceCheck(
         key=key,
         label=label,
         category=ComplianceCategory.DATABASE,  # pragma: no mutate
         status=ComplianceStatus.CRITICAL,
-        message=f"Rolle '{role_check.role}' hat falsches Attributprofil.",  # pragma: no mutate
-        detail=f"{attr}={actual} (erwartet: {expected})",
-        action_hint="manage.py check_db_roles + Rollen-Init-Script pruefen (Refs #902).",  # pragma: no mutate
+        message=_("Rolle '%(role_check_role)s' hat falsches Attributprofil.")
+        % {"role_check_role": role_check.role},  # pragma: no mutate
+        detail=_("%(attr)s=%(actual)s (erwartet: %(expected)s)")
+        % {"attr": attr, "actual": actual, "expected": expected},
+        action_hint=_("manage.py check_db_roles + Rollen-Init-Script prüfen (Refs #902)."),  # pragma: no mutate
     )
 
 
@@ -579,27 +611,36 @@ def _db_role_admin_check(role_check) -> ComplianceCheck:
     if role_check.actual_super is None:
         return ComplianceCheck(
             key="db_role_admin",
-            label="Admin-DB-Rolle",  # pragma: no mutate
+            label=_("Admin-DB-Rolle"),  # pragma: no mutate
             category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
-            message=f"Admin-Rolle '{role_check.role}' nicht in pg_roles gefunden.",  # pragma: no mutate
-            action_hint="DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh.",  # pragma: no mutate
+            message=_("Admin-Rolle '%(role_check_role)s' nicht in pg_roles gefunden.")
+            % {"role_check_role": role_check.role},  # pragma: no mutate
+            action_hint=_("DB-Rollen-Setup prüfen — siehe deploy/postgres-init/01-app-role.sh."),  # pragma: no mutate
         )
     if role_check.ok:
         return ComplianceCheck(
             key="db_role_admin",
-            label="Admin-DB-Rolle",  # pragma: no mutate
+            label=_("Admin-DB-Rolle"),  # pragma: no mutate
             category=ComplianceCategory.DATABASE,  # pragma: no mutate
             status=ComplianceStatus.OK,
-            message="Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS).",  # pragma: no mutate
-            detail=f"{role_check.role}: rolsuper={role_check.actual_super}, rolbypassrls={role_check.actual_bypassrls}",
+            message=_("Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS)."),  # pragma: no mutate
+            detail=_(
+                "%(role_check_role)s: rolsuper=%(role_check_actual_super)s, "
+                "rolbypassrls=%(role_check_actual_bypassrls)s"
+            )
+            % {
+                "role_check_role": role_check.role,
+                "role_check_actual_super": role_check.actual_super,
+                "role_check_actual_bypassrls": role_check.actual_bypassrls,
+            },
         )
     return ComplianceCheck(
         key="db_role_admin",
-        label="Admin-DB-Rolle",  # pragma: no mutate
+        label=_("Admin-DB-Rolle"),  # pragma: no mutate
         category=ComplianceCategory.DATABASE,  # pragma: no mutate
         status=ComplianceStatus.CRITICAL,
-        message="Admin-Rolle hat falsches Attributprofil.",  # pragma: no mutate
+        message=_("Admin-Rolle hat falsches Attributprofil."),  # pragma: no mutate
         detail="; ".join(role_check.problems()),
-        action_hint="deploy/postgres-init/01-app-role.sh pruefen (Refs #902).",  # pragma: no mutate
+        action_hint=_("deploy/postgres-init/01-app-role.sh prüfen (Refs #902)."),  # pragma: no mutate
     )

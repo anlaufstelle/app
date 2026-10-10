@@ -33,6 +33,6 @@ class TestBackupChecksZukunft:
             status=ComplianceStatus.WARNING,
             message="Zeitstempel der letzten Sicherung liegt in der Zukunft — das Alter ist nicht messbar.",
             detail="/backups/anlaufstelle-2031.sql.gz (Zeitstempel: 2031-05-04 03:02 UTC)",
-            action_hint="Systemuhr/Zeitsynchronisation des Hosts und den Dateizeitstempel der Sicherung pruefen.",
+            action_hint="Systemuhr/Zeitsynchronisation des Hosts und den Dateizeitstempel der Sicherung prüfen.",
         )
         assert karte.status.value == "warning"

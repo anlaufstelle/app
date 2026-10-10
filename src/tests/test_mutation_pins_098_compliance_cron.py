@@ -53,7 +53,7 @@ from core.services.compliance import (
     _snapshot_checks,
 )
 from core.services.compliance._types import ComplianceCategory
-from core.services.compliance.cron import _CRON_ACTION_HINT, _age_hours
+from core.services.compliance.cron import _age_hours, _cron_action_hint
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -173,7 +173,7 @@ class TestSnapshotUnknownBranch:
         assert check.status == ComplianceStatus.UNKNOWN
         assert check.label == "Statistik-Snapshots"
         assert check.message == "Noch kein Snapshot-Lauf — Cron lief vielleicht nie."
-        assert check.action_hint == _CRON_ACTION_HINT
+        assert check.action_hint == _cron_action_hint()
 
 
 class TestSnapshotOkBranch:
@@ -269,7 +269,7 @@ class TestSnapshotCriticalBranch:
         assert check.category == ComplianceCategory.BACKGROUND_JOBS
         assert check.message == "Letzter Lauf vor 100 Tagen — Cron ausgefallen?"
         assert check.detail == f"Letzter Lauf: {entry.timestamp:%Y-%m-%d %H:%M}"
-        assert check.action_hint == _CRON_ACTION_HINT
+        assert check.action_hint == _cron_action_hint()
 
 
 # ============================================================================
@@ -392,7 +392,7 @@ class TestBreachScanCriticalBranch:
         assert check.category == ComplianceCategory.BACKGROUND_JOBS
         assert check.message == "Letzter Scan vor 48h — Cron ausgefallen?"
         assert check.detail == f"Letzter Scan: {entry.timestamp:%Y-%m-%d %H:%M}"
-        assert check.action_hint == _CRON_ACTION_HINT
+        assert check.action_hint == _cron_action_hint()
 
 
 # ============================================================================
@@ -508,7 +508,7 @@ class TestMvRefreshCriticalBranch:
         assert check.category == ComplianceCategory.BACKGROUND_JOBS
         assert check.message == "Letzter Refresh vor 48h — Cron ausgefallen?"
         assert check.detail == f"Letzter Refresh: {entry.timestamp:%Y-%m-%d %H:%M}"
-        assert check.action_hint == _CRON_ACTION_HINT
+        assert check.action_hint == _cron_action_hint()
 
 
 # ============================================================================
@@ -526,7 +526,7 @@ class TestAuditChainLabelIsVerbatim:
 
         checks = _audit_chain_checks()
 
-        assert checks[0].label == "Audit-Ketten-Pruefung"
+        assert checks[0].label == "Audit-Ketten-Prüfung"
 
 
 class TestAuditChainUnknownBranch:
@@ -540,8 +540,8 @@ class TestAuditChainUnknownBranch:
         check = checks[0]
 
         assert check.status == ComplianceStatus.UNKNOWN
-        assert check.label == "Audit-Ketten-Pruefung"
-        assert check.message == "Noch keine Ketten-Pruefung — Cron lief vielleicht nie."
+        assert check.label == "Audit-Ketten-Prüfung"
+        assert check.message == "Noch keine Ketten-Prüfung — Cron lief vielleicht nie."
 
 
 class TestAuditChainOkBranch:
@@ -566,10 +566,10 @@ class TestAuditChainOkBranch:
 
         assert check.status == ComplianceStatus.OK
         assert check.key == "audit_chain_last_run"
-        assert check.label == "Audit-Ketten-Pruefung"
+        assert check.label == "Audit-Ketten-Prüfung"
         assert check.category == ComplianceCategory.BACKGROUND_JOBS
-        assert check.message == f"Letzte Pruefung vor {warn_hours}h."
-        assert check.detail == f"Letzte Pruefung: {entry.timestamp:%Y-%m-%d %H:%M}"
+        assert check.message == f"Letzte Prüfung vor {warn_hours}h."
+        assert check.detail == f"Letzte Prüfung: {entry.timestamp:%Y-%m-%d %H:%M}"
 
 
 class TestAuditChainWarningBranch:
@@ -595,11 +595,11 @@ class TestAuditChainWarningBranch:
 
         assert check.status == ComplianceStatus.WARNING
         assert check.key == "audit_chain_last_run"
-        assert check.label == "Audit-Ketten-Pruefung"
+        assert check.label == "Audit-Ketten-Prüfung"
         assert check.category == ComplianceCategory.BACKGROUND_JOBS
-        assert check.message == f"Letzte Pruefung vor {critical_hours}h — ein Tageslauf fehlt."
-        assert check.detail == f"Letzte Pruefung: {entry.timestamp:%Y-%m-%d %H:%M}"
-        assert check.action_hint == _CRON_ACTION_HINT
+        assert check.message == f"Letzte Prüfung vor {critical_hours}h — ein Tageslauf fehlt."
+        assert check.detail == f"Letzte Prüfung: {entry.timestamp:%Y-%m-%d %H:%M}"
+        assert check.action_hint == _cron_action_hint()
 
 
 class TestAuditChainCriticalBranch:
@@ -619,8 +619,8 @@ class TestAuditChainCriticalBranch:
 
         assert check.status == ComplianceStatus.CRITICAL
         assert check.key == "audit_chain_last_run"
-        assert check.label == "Audit-Ketten-Pruefung"
+        assert check.label == "Audit-Ketten-Prüfung"
         assert check.category == ComplianceCategory.BACKGROUND_JOBS
-        assert check.message == f"Letzte Pruefung vor {age_hours}h — Cron aus oder Lauf bricht rot ab."
-        assert check.detail == f"Letzte Pruefung: {entry.timestamp:%Y-%m-%d %H:%M}"
-        assert check.action_hint == _CRON_ACTION_HINT
+        assert check.message == f"Letzte Prüfung vor {age_hours}h — Cron aus oder Lauf bricht rot ab."
+        assert check.detail == f"Letzte Prüfung: {entry.timestamp:%Y-%m-%d %H:%M}"
+        assert check.action_hint == _cron_action_hint()

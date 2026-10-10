@@ -303,13 +303,15 @@ def dashboard_scenario(request, settings, monkeypatch, facility, super_admin_use
         stack.enter_context(
             patch(
                 "core.services.system.health.app_versions",
-                **(
-                    {"side_effect": RuntimeError("Example failure")}
-                    if options.get("helper_error")
-                    else {"return_value": {"app_version": "1.0", "django_version": "6.1", "python_version": "3.14"}}
-                ),
+                return_value={"app_version": "1.0", "django_version": "6.1", "python_version": "3.14"},
             )
         )
+        if options.get("helper_error"):
+
+            def _version_checks():
+                raise RuntimeError("Example failure")
+
+            stack.enter_context(patch.object(compliance, "_version_checks", _version_checks))
         yield scenario
 
 
@@ -364,10 +366,29 @@ def test_english_request_renders_all_expected_cards(english_dashboard_response, 
 
 
 @pytest.mark.django_db
-@pytest.mark.xfail(strict=True, reason="#2530: texts migrated in stage 2")
+@pytest.mark.xfail(strict=True, reason="#2530: English catalog pending")
 def test_english_request_has_no_german_card_text(english_dashboard_response):
     content = english_dashboard_response.content.decode()
     sections = re.findall(r'<section[^>]+data-testid="compliance-group-[^\"]+"[^>]*>(.*?)</section>', content, re.S)
     assert sections
     text = html.unescape(re.sub(r"<[^>]+>", " ", " ".join(sections)))
     assert not GERMAN_WORDS.findall(text), GERMAN_WORDS.findall(text)
+
+
+@pytest.mark.django_db
+def test_card_text_uses_active_translation_backend(dashboard_scenario):
+    """Exercise all branches without depending on the pending English catalog."""
+
+    def translate(message):
+        return "Translated " + " ".join(re.findall(r"%\([a-zA-Z0-9_]+\)s", message))
+
+    with translation.override("en"), patch("django.utils.translation._trans.gettext", side_effect=translate):
+        checks = compliance.aggregate_checks()
+        for check in checks:
+            text = " ".join(
+                str(value)
+                for value in (check.label, check.message, check.detail, check.action_hint)
+                if value is not None
+            )
+            assert not GERMAN_WORDS.findall(text), (check.key, text)
+    assert {check.key: check.status.value for check in checks} == _expected_statuses(dashboard_scenario)

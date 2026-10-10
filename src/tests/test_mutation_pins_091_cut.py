@@ -693,7 +693,7 @@ class TestRlsBypassKontextUnterNichtBypassRolle:
 #   which propagated through every import and dropped this whole file.
 #   Auch modulweite Skips gibt es hier aus demselben Grund nicht.
 
-_ROLE_SETUP_HINT = "DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh."
+_ROLE_SETUP_HINT = "DB-Rollen-Setup prüfen — siehe deploy/postgres-init/01-app-role.sh."
 _APP_ROLE = "anlaufstelle_app"
 _ADMIN_ROLE = "anlaufstelle_admin"
 
@@ -803,7 +803,7 @@ class TestAttributeCheckKeepsItsDisplayFields:
         assert result.status == ComplianceStatus.CRITICAL
         assert result.label == "App-DB-Rolle NOSUPERUSER"
         assert result.category == ComplianceCategory.DATABASE
-        assert result.action_hint == "manage.py check_db_roles + Rollen-Init-Script pruefen (Refs #902)."
+        assert result.action_hint == "manage.py check_db_roles + Rollen-Init-Script prüfen (Refs #902)."
 
 
 class TestAttributeCheckStatesWhatIsWrong:
@@ -926,7 +926,7 @@ class TestAdminCheckKeepsItsDisplayFields:
         assert result.status == ComplianceStatus.CRITICAL
         assert result.label == "Admin-DB-Rolle"
         assert result.category == ComplianceCategory.DATABASE
-        assert result.action_hint == "deploy/postgres-init/01-app-role.sh pruefen (Refs #902)."
+        assert result.action_hint == "deploy/postgres-init/01-app-role.sh prüfen (Refs #902)."
 
 
 class TestAdminCheckStatesWhatIsWrong:
@@ -1042,7 +1042,7 @@ class TestDbRoleChecksBuildsCompleteCards:
         assert card.message == "Im Web-Container nicht prüfbar — Prüfung über den Wartungsdienst."
         assert card.detail == "erster Konfigurationshinweis; zweiter Konfigurationshinweis"
         assert card.action_hint == (
-            "Im web-Container nicht pruefbar — Prüfung über docker compose -f "
+            "Im web-Container nicht prüfbar — Prüfung über docker compose -f "
             "docker-compose.prod.yml run --rm maintenance check_db_roles."
         )
 

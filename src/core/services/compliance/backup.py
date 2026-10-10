@@ -44,7 +44,7 @@ def _demo_card(key: str, label: str) -> ComplianceCheck:
 def _backup_checks() -> list[ComplianceCheck]:
     """Letzter Backup-Zeitpunkt aus settings.BACKUP_DIR."""
     if _demo_mode():
-        return [_demo_card("backup_age", "Letztes Backup")]
+        return [_demo_card("backup_age", _("Letztes Backup"))]
     # Lazy import (Refs #959): siehe compliance/system_info.py.
     from core.services.system.health import last_backup_info
 
@@ -53,11 +53,11 @@ def _backup_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="backup_age",
-                label="Letztes Backup",  # pragma: no mutate
+                label=_("Letztes Backup"),  # pragma: no mutate
                 category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
-                message="Kein Backup gefunden oder BACKUP_DIR nicht konfiguriert.",  # pragma: no mutate
-                action_hint="settings.BACKUP_DIR pruefen, Cron-Job 'backup.sh' aktivieren.",  # pragma: no mutate
+                message=_("Kein Backup gefunden oder BACKUP_DIR nicht konfiguriert."),  # pragma: no mutate
+                action_hint=_("settings.BACKUP_DIR prüfen, Cron-Job 'backup.sh' aktivieren."),  # pragma: no mutate
             )
         ]
     if info.get("in_future"):
@@ -67,16 +67,21 @@ def _backup_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="backup_age",
-                label="Letztes Backup",  # pragma: no mutate
+                label=_("Letztes Backup"),  # pragma: no mutate
                 category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
-                message="Zeitstempel der letzten Sicherung liegt in der Zukunft — das Alter ist nicht messbar.",  # pragma: no mutate  # noqa: E501
-                detail=f"{info['path']} (Zeitstempel: {info['mtime']:%Y-%m-%d %H:%M UTC})",
-                action_hint="Systemuhr/Zeitsynchronisation des Hosts und den Dateizeitstempel der Sicherung pruefen.",  # pragma: no mutate  # noqa: E501
+                message=_(
+                    "Zeitstempel der letzten Sicherung liegt in der Zukunft — das Alter ist nicht messbar."
+                ),  # pragma: no mutate  # noqa: E501
+                detail=_("%(info_path)s (Zeitstempel: %(info_mtime)s)")
+                % {"info_path": info["path"], "info_mtime": f"{info['mtime']:%Y-%m-%d %H:%M UTC}"},
+                action_hint=_(
+                    "Systemuhr/Zeitsynchronisation des Hosts und den Dateizeitstempel der Sicherung prüfen."
+                ),  # pragma: no mutate  # noqa: E501
             )
         ]
     age_hours = info["age_hours"]
-    detail = f"{info['path']} (Alter: {age_hours:.1f}h)"
+    detail = _("%(info_path)s (Alter: %(age_hours)sh)") % {"info_path": info["path"], "age_hours": f"{age_hours:.1f}"}
     # Refs #1872: Schwellen aus ``ops_thresholds`` (36 h / 48 h = 1,5 x / 2 x
     # Tagesintervall des Host-Cron) statt der frueheren, hier lokal gesetzten
     # 24 h / 72 h — dieselbe Backup-Zeile meldete sonst je nach Ansicht anderes.
@@ -84,10 +89,14 @@ def _backup_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="backup_age",
-                label="Letztes Backup",  # pragma: no mutate
+                label=_("Letztes Backup"),  # pragma: no mutate
                 category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.OK,
-                message=f"Backup ist {age_hours:.0f}h alt (Schwelle: {ops_thresholds.BACKUP_WARN_HOURS}h).",  # pragma: no mutate  # noqa: E501
+                message=_("Backup ist %(age_hours)sh alt (Schwelle: %(ops_thresholds_BACKUP_WARN_HOURS)sh).")
+                % {
+                    "age_hours": f"{age_hours:.0f}",
+                    "ops_thresholds_BACKUP_WARN_HOURS": ops_thresholds.BACKUP_WARN_HOURS,
+                },  # pragma: no mutate  # noqa: E501
                 detail=detail,
             )
         ]
@@ -95,23 +104,25 @@ def _backup_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="backup_age",
-                label="Letztes Backup",  # pragma: no mutate
+                label=_("Letztes Backup"),  # pragma: no mutate
                 category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
-                message=f"Backup ist {age_hours:.0f}h alt — ein Tageslauf fehlt.",  # pragma: no mutate
+                message=_("Backup ist %(age_hours)sh alt — ein Tageslauf fehlt.")
+                % {"age_hours": f"{age_hours:.0f}"},  # pragma: no mutate
                 detail=detail,
-                action_hint="Backup-Cron pruefen, evtl. manuell ausloesen.",  # pragma: no mutate
+                action_hint=_("Backup-Cron prüfen, evtl. manuell auslösen."),  # pragma: no mutate
             )
         ]
     return [
         ComplianceCheck(
             key="backup_age",
-            label="Letztes Backup",  # pragma: no mutate
+            label=_("Letztes Backup"),  # pragma: no mutate
             category=ComplianceCategory.BACKUP,  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
-            message=f"Backup ist {age_hours:.0f}h alt — mindestens zwei Laeufe ausgefallen.",  # pragma: no mutate
+            message=_("Backup ist %(age_hours)sh alt — mindestens zwei Läufe ausgefallen.")
+            % {"age_hours": f"{age_hours:.0f}"},  # pragma: no mutate
             detail=detail,
-            action_hint="Backup-Cron + Disk-Speicher pruefen, Restore-Test nachholen.",  # pragma: no mutate
+            action_hint=_("Backup-Cron + Disk-Speicher prüfen, Restore-Test nachholen."),  # pragma: no mutate
         )
     ]
 
@@ -119,7 +130,7 @@ def _backup_checks() -> list[ComplianceCheck]:
 def _restore_checks() -> list[ComplianceCheck]:
     """Letzter dokumentierter Restore-Test (AuditLog ``RESTORE_VERIFIED``)."""
     if _demo_mode():
-        return [_demo_card("restore_verified", "Restore-Test")]
+        return [_demo_card("restore_verified", _("Restore-Test"))]
     entry = (
         AuditLog.objects.filter(action=AuditLog.Action.RESTORE_VERIFIED)
         .order_by("-timestamp")
@@ -130,23 +141,28 @@ def _restore_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="restore_verified",
-                label="Restore-Test",  # pragma: no mutate
+                label=_("Restore-Test"),  # pragma: no mutate
                 category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
-                message="Noch nie ein Restore-Test dokumentiert.",  # pragma: no mutate
-                action_hint="manage.py mark_restore_verified --note '...' nach jedem Test ausfuehren.",  # pragma: no mutate # noqa: E501
+                message=_("Noch nie ein Restore-Test dokumentiert."),  # pragma: no mutate
+                action_hint=_(
+                    "manage.py mark_restore_verified --note '...' nach jedem Test ausführen."
+                ),  # pragma: no mutate # noqa: E501
             )
         ]
     age_days = (_clock.now() - entry.timestamp).days
-    detail = f"Letzter Restore-Test: {entry.timestamp:%Y-%m-%d}; Notiz: {entry.detail.get('note') or '—'}"
+    detail = _("Letzter Restore-Test: %(entry_timestamp)s; Notiz: %(entry_detail_get_note_or)s") % {
+        "entry_timestamp": f"{entry.timestamp:%Y-%m-%d}",
+        "entry_detail_get_note_or": entry.detail.get("note") or "—",
+    }
     if age_days <= 90:
         return [
             ComplianceCheck(
                 key="restore_verified",
-                label="Restore-Test",  # pragma: no mutate
+                label=_("Restore-Test"),  # pragma: no mutate
                 category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.OK,
-                message=f"Letzter Test vor {age_days} Tagen.",  # pragma: no mutate
+                message=_("Letzter Test vor %(age_days)s Tagen.") % {"age_days": age_days},  # pragma: no mutate
                 detail=detail,
             )
         ]
@@ -154,22 +170,26 @@ def _restore_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="restore_verified",
-                label="Restore-Test",  # pragma: no mutate
+                label=_("Restore-Test"),  # pragma: no mutate
                 category=ComplianceCategory.BACKUP,  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
-                message=f"Letzter Test vor {age_days} Tagen — Auffrischung empfohlen.",  # pragma: no mutate
+                message=_("Letzter Test vor %(age_days)s Tagen — Auffrischung empfohlen.")
+                % {"age_days": age_days},  # pragma: no mutate
                 detail=detail,
-                action_hint="Restore gegen frische DB testen, dann mark_restore_verified ausfuehren.",  # pragma: no mutate # noqa: E501
+                action_hint=_(
+                    "Restore gegen frische DB testen, dann mark_restore_verified ausführen."
+                ),  # pragma: no mutate # noqa: E501
             )
         ]
     return [
         ComplianceCheck(
             key="restore_verified",
-            label="Restore-Test",  # pragma: no mutate
+            label=_("Restore-Test"),  # pragma: no mutate
             category=ComplianceCategory.BACKUP,  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
-            message=f"Letzter Test vor {age_days} Tagen — DSGVO Art. 32 verletzt.",  # pragma: no mutate
+            message=_("Letzter Test vor %(age_days)s Tagen — DSGVO Art. 32 verletzt.")
+            % {"age_days": age_days},  # pragma: no mutate
             detail=detail,
-            action_hint="Restore-Test sofort nachholen und dokumentieren.",  # pragma: no mutate
+            action_hint=_("Restore-Test sofort nachholen und dokumentieren."),  # pragma: no mutate
         )
     ]

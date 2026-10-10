@@ -137,7 +137,7 @@ class TestRunHelpersFehlerCheck:
                 label="Interner Fehler: boom",
                 category=ComplianceCategory.SYSTEM,
                 status=ComplianceStatus.UNKNOWN,
-                message="Check konnte nicht ausgefuehrt werden.",
+                message="Check konnte nicht ausgeführt werden.",
                 detail=BOOM_DETAIL,
                 action_hint="Server-Log einsehen.",
             )
@@ -164,7 +164,7 @@ class TestRunHelpersFehlerCheck:
                 label="Interner Fehler: unknown_helper",
                 category=ComplianceCategory.SYSTEM,
                 status=ComplianceStatus.UNKNOWN,
-                message="Check konnte nicht ausgefuehrt werden.",
+                message="Check konnte nicht ausgeführt werden.",
                 detail="kaputt ohne Namen",
                 action_hint="Server-Log einsehen.",
             )

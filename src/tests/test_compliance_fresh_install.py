@@ -28,6 +28,6 @@ def test_missing_admin_role_points_to_the_maintenance_service() -> None:
     ):
         check = db_roles._db_role_checks()[0]
     assert check.action_hint is not None
-    assert "web-Container nicht pruefbar" in check.action_hint
+    assert "web-Container nicht prüfbar" in check.action_hint
     assert "docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles" in check.action_hint
     assert "POSTGRES_ADMIN_PASSWORD in .env setzen" not in check.action_hint

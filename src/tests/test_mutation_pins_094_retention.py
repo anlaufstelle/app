@@ -198,7 +198,7 @@ class TestRetentionCheckUnknownBranchIsSelfExplaining:
         assert check.status == ComplianceStatus.UNKNOWN
         assert check.label == "Retention-Lauf"
         assert check.message == "Noch kein RETENTION_RUN_COMPLETED-Eintrag — Cron lief vielleicht nie."
-        assert check.action_hint == "enforce_retention-Cron pruefen (Ops-Runbook §6)."
+        assert check.action_hint == "enforce_retention-Cron prüfen (Ops-Runbook §6)."
 
 
 # ============================================================================
