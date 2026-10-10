@@ -985,7 +985,7 @@ Wenn eine Option nicht mehr benötigt wird, setzen Sie `is_active` auf `false` s
 | CSV-Export | Label wird weiterhin korrekt aufgelöst |
 | Statistik | Bestehende Werte fließen weiterhin in Auswertungen ein |
 
-> **Wichtig:** Wenn ein Options-Slug bereits verwendet wird, können Sie ihn nicht umbenennen oder entfernen. Setzen Sie stattdessen `"is_active": false`; die Bezeichnung darf weiterhin geändert werden. Nicht verwendete Options-Slugs können entfernt werden.
+> **Wichtig:** Wenn ein Options-Slug in auswertbaren gespeicherten Werten einschließlich Papierkorb und Ereignishistorie, Feldbedingungen, Schnellvorlagen oder einem weiterhin gültigen Default verwendet wird, weisen Konfigurationsformular, Modell-Save, Django-Admin und Paketlader sein Umbenennen oder Entfernen ab. Setzen Sie stattdessen `"is_active": false`; die Bezeichnung darf weiterhin geändert werden. Nicht verwendete Options-Slugs können entfernt werden. Ereignis-, Personen- und Fall-Schreibpfade einschließlich der geschützten Modell- und Bulkwege, Schnellvorlagen beim Modell-Save sowie Feldbedingungen über die Konfigurationsservices und den Modell-Save prüfen neue Auswahlreferenzen unter einer gemeinsamen Konfigurationssperre gegen den aktuellen Optionsbestand; unveränderte bestehende Auswahlwerte bleiben speicherbar. Direkte `QuerySet.update`- und Bulk-Schreibwege für Schnellvorlagen und Feldbedingungen sowie beliebige SQL-Updates sind davon nicht abgesichert; beschädigte verschlüsselte Werte können nicht als Verwendung ausgewertet werden.
 
 #### Zahlenbereichsgrenzen (`Minimalwert`/`Maximalwert`)
 

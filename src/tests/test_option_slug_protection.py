@@ -289,6 +289,9 @@ def test_saved_references_block_removal_including_trash_and_encrypted_lists(
                 is_deleted=True,
             )
         elif source == "condition":
+            # Preserve malformed legacy values without creating a new invalid selection reference.
+            template.field_type = FieldTemplate.FieldType.TEXT
+            template.save(update_fields=["field_type"])
             dependency = DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=template)
             target = FieldTemplate.objects.create(facility=template.facility, name="Target")
             target_ref = DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=target)
@@ -298,6 +301,8 @@ def test_saved_references_block_removal_including_trash_and_encrypted_lists(
                 operator=FieldCondition.Operator.CONTAINS,
                 value=value,
             )
+            template.field_type = FieldTemplate.FieldType.MULTI_SELECT
+            template.save(update_fields=["field_type"])
         else:
             event = Event.objects.create(
                 facility=template.facility,

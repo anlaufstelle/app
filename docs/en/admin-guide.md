@@ -984,7 +984,7 @@ When an option is no longer needed, set `is_active` to `false` instead of removi
 | CSV export | Label continues to be resolved correctly |
 | Statistics | Existing values continue to be included in reports |
 
-> **Important:** An option slug that is already in use cannot be renamed or removed. Set `"is_active": false` instead; you can still change its label. Unused option slugs can be removed.
+> **Important:** If an option slug is used in readable stored values including trash and event history, field conditions, quick templates, or a default that remains valid, the configuration form, model save, Django admin, and package loader reject renaming or removing it. Set `"is_active": false` instead; you can still change its label. Unused option slugs can be removed. Event, person, and case writes including the protected model and bulk paths, quick templates through model save, and field conditions through configuration services and model save check new selection references against current options under a shared configuration lock; unchanged existing selection values remain saveable. Direct `QuerySet.update` and bulk writes for quick templates and field conditions, and arbitrary SQL updates, are outside this protection; corrupted encrypted values cannot be counted as usage.
 
 #### Numeric Range Bounds (`Minimum Value`/`Maximum Value`)
 
@@ -2528,6 +2528,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: b6db56ddc945a1d26f23f50ae52ba19f9f3e4441 -->
-<!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 1d7251ac011bec82fddb9b870b0b4d50bbba76d4 -->
+<!-- translation-date: 2026-10-10 -->
+<!-- source-hash: adc6d99b453874edef52819ef96f257680b50c53 -->

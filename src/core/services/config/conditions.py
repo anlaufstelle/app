@@ -19,6 +19,7 @@ def _condition_detail(condition: FieldCondition) -> dict:
     }
 
 
+@transaction.atomic
 def create_field_condition(
     request,
     document_type: DocumentType,
@@ -54,6 +55,7 @@ def create_field_condition(
         return condition
 
 
+@transaction.atomic
 def update_field_condition(
     request,
     condition: FieldCondition,

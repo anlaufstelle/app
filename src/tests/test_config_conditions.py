@@ -493,13 +493,16 @@ class TestBoardDisplayValue:
             doc_type_contact,
             facility,
             "Status",
-            FieldTemplate.FieldType.SELECT,
+            FieldTemplate.FieldType.TEXT,
             options_json=[{"slug": "rot", "label": "Rot"}],
             sort_order=6,
         )
         FieldCondition.objects.create(
             target_field=notiz, depends_on_field=select_dtf, operator="equals", value="verschwunden", group_index=0
         )
+        # Build a legacy reference before introducing the selection constraint.
+        select_dtf.field_template.field_type = FieldTemplate.FieldType.SELECT
+        select_dtf.field_template.save(update_fields=["field_type"])
         client.force_login(admin_user)
         body = self._board(client, doc_type_contact)
         assert '<span class="font-medium">verschwunden</span>' in body

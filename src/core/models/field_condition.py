@@ -1,21 +1,10 @@
-"""Bedingte Feld-zu-Feld-Sichtbarkeit innerhalb eines Dokumentationstyps (M1, Refs #1057).
+"""Conditional field visibility within one document type (Refs #1057).
 
-``FieldCondition`` verknuepft zwei :class:`~core.models.document_type_field.DocumentTypeField`
-desselben :class:`~core.models.document_type.DocumentType`: ``target_field`` wird ein-
-oder ausgeblendet, je nachdem, ob ``depends_on_field`` (die Quelle) den ``operator``
-gegen ``value`` erfuellt. Die eigentliche Auswertungssemantik (Operator x Typ-Matrix,
-Leer-Definition, Kaskade) lebt zentral in ``core.services.conditions`` (ADR-035) —
-dieses Modell validiert in ``clean()`` gegen genau dieselben Konstanten, damit
-Modell- und Evaluator-Regeln nicht auseinanderlaufen.
-
-Kein eigener ``facility``-FK — der Scope ergibt sich transitiv ueber
-``target_field.document_type.facility`` (wie bei :class:`FieldGroup`), RLS via
-doppelt-transitive JOIN-Policy (Migration 0114, P3). Kein ``full_clean()``-Zwang in
-``save()``: die Validierung laeuft ueber den Config-Service (P6) und die Tests hier —
-direkte ``.save()``-Aufrufe (z.B. Fixtures) umgehen ``clean()`` bewusst, die
-DB-``CheckConstraint`` gegen Selbstreferenz bleibt als harte Grenze bestehen.
-``FieldCondition`` wird NICHT im Django-Admin registriert (Pflege ausschliesslich
-ueber die Config-UI, Abschnitt 9 des M1-Plans).
+The facility scope follows target_field.document_type, with a transitive RLS
+policy. Config services run full_clean(); direct save() only validates selection
+references under the shared configuration lock (Refs #2519). Operator, cycle and
+other clean() checks remain the service's responsibility. Conditions are managed
+through the configuration UI and are not registered in the Django admin.
 """
 
 from __future__ import annotations
@@ -24,7 +13,7 @@ import uuid
 from typing import Any
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 
 from core.models.document_type_field import DocumentTypeField
@@ -94,6 +83,26 @@ class FieldCondition(models.Model):
     def __str__(self) -> str:
         return f"{self.target_field} ← {self.depends_on_field} {self.operator}"
 
+    def save(self, *args, **kwargs):
+        """Recheck selection references while configuration changes cannot commit."""
+        from core.services.dynamic_protection import lock_dynamic_protection
+
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            update_fields = kwargs["update_fields"] = frozenset(update_fields)
+            if not update_fields:
+                return super().save(*args, **kwargs)
+        with transaction.atomic():
+            lock_dynamic_protection(self.target_field.document_type.facility_id)
+            previous = (
+                FieldCondition.objects.filter(pk=self.pk)
+                .select_for_update(of=("self",))
+                .values("depends_on_field_id", "operator", "value")
+                .first()
+            )
+            self._validate_option_reference(previous, update_fields)
+            return super().save(*args, **kwargs)
+
     def clean(self) -> None:
         super().clean()
         if not self.target_field_id or not self.depends_on_field_id:
@@ -147,15 +156,42 @@ class FieldCondition(models.Model):
         if source_template.field_type == BOOLEAN and self.value not in (True, False):
             raise ValidationError({"value": _("Der Vergleichswert muss „wahr“ oder „falsch“ sein.")})
         if source_template.field_type in (SELECT, MULTI_SELECT):
-            self._validate_option_slug_value(source_template.options_json, self.value)
+            previous = (
+                FieldCondition.objects.filter(pk=self.pk).values("depends_on_field_id", "operator", "value").first()
+            )
+            self._validate_option_reference(previous)
+
+    def _validate_option_reference(self, previous, update_fields=None) -> None:
+        """Validate the persisted candidate against fresh options, preserving old references."""
+        from core.services.conditions import MULTI_SELECT, SELECT, VALUELESS_OPERATORS
+
+        source_id, operator, value = self.depends_on_field_id, self.operator, self.value
+        if previous is not None and update_fields is not None:
+            if not {"depends_on_field", "depends_on_field_id"}.intersection(update_fields):
+                source_id = previous["depends_on_field_id"]
+            if "operator" not in update_fields:
+                operator = previous["operator"]
+            if "value" not in update_fields:
+                value = previous["value"]
+        if operator in VALUELESS_OPERATORS or value is None:
+            return
+        source_template = DocumentTypeField.objects.select_related("field_template").get(pk=source_id).field_template
+        if source_template.field_type not in (SELECT, MULTI_SELECT):
+            return
+        if (
+            previous is not None
+            and previous["depends_on_field_id"] == source_id
+            and previous["operator"] not in VALUELESS_OPERATORS
+            and previous["value"] == value
+        ):
+            return
+        self._validate_option_slug_value(source_template.options_json, value)
 
     @staticmethod
     def _validate_option_slug_value(options_json: list[dict[str, Any]], value: Any) -> None:
-        # Inaktive Slugs sind zulaessig (Bestandsdaten), analog
-        # forms/events.py:176-183 — nur die Existenz des Slugs zaehlt,
-        # ``is_active`` wird hier bewusst nicht geprueft.
+        # Inactive options remain valid references; only slug existence matters.
         known_slugs = {option.get("slug") for option in options_json}
-        if value not in known_slugs:
+        if not isinstance(value, str) or value not in known_slugs:
             raise ValidationError({"value": _("Der Vergleichswert muss ein gültiger Options-Slug sein.")})
 
     def _validate_no_cycle(self) -> None:
