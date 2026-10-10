@@ -193,6 +193,14 @@ def scan_history_markers(
 # einen Anker, dessen Umbenennung eine ausserhalb des Sweep-Scopes liegende
 # Datei gebrochen haette. Format: relpath -> [(Teilstring der Zeile, Begruendung)].
 _ALLOWLIST: dict[str, list[tuple[str, str]]] = {
+    "docs/en/security-notes.md": [
+        (
+            "Legacy bare SHA-256 values",
+            "Names a data format (idempotency fingerprint without the "
+            "'h1:' prefix), not a pre-1.0 installation state; English "
+            "excerpt of the allowlisted German 'Legacy-Wert' passage. Refs #2205.",
+        ),
+    ],
     "docs/security-notes.md": [
         (
             "Legacy-Wert",

@@ -648,7 +648,7 @@ Under **Management → Settings** (groups "General and convenience", "Security" 
 >
 > **Unsaved input is lost** when someone triggers the action -- the sign-out clears the local drafts as always (`Clear-Site-Data`). This is stated in the user guide and in the button tooltip.
 >
-> **Limits you have to flank organizationally** (in full in [threat-model.md](../threat-model.md), § "Restrisiken des Mitschauen-Schutzes"): the action only replaces the **last** history entry -- earlier page views of the same session stay in the browser history with path and **page title**, and the title of a client page contains the **pseudonym**. Instruct the team to clear the history at the end of the shift or to work in a private window on shared devices. The button also acts per window; if the connection drops at the moment of triggering, the server session only ends via the session timeout or the maximum session duration; and the deletion of the local offline key is capped at 500 ms -- if it does not succeed, the key remains until the next sign-out, the idle wipe or the expiry of the 48-hour offline authorization. Therefore also: close second windows and do not leave the device unattended after quitting.
+> **Limits you have to flank organizationally** (in full in (DE: [threat-model.md](../threat-model.md)), § "Restrisiken des Mitschauen-Schutzes"): the action only replaces the **last** history entry -- earlier page views of the same session stay in the browser history with path and **page title**, and the title of a client page contains the **pseudonym**. Instruct the team to clear the history at the end of the shift or to work in a private window on shared devices. The button also acts per window; if the connection drops at the moment of triggering, the server session only ends via the session timeout or the maximum session duration; and the deletion of the local offline key is capped at 500 ms -- if it does not succeed, the key remains until the next sign-out, the idle wipe or the expiry of the 48-hour offline authorization. Therefore also: close second windows and do not leave the device unattended after quitting.
 
 > **Baseline of a new facility (#1970).** Besides the settings record, creating a facility -- in the Django admin as well as via `setup_facility` -- produces a deliberately small starting stock that you are free to overwrite afterwards:
 >
@@ -1359,7 +1359,7 @@ docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_c
 docker compose -f docker-compose.prod.yml exec -T cron test -s /data/audit_hwm.json
 ```
 
-The second command exits with code 0 as soon as the anchor is present. A complete backup set then consists of **seven** files: database dump and media archive with one `.hmac` sidecar each, the signed `.manifest` plus its `.hmac`, and `audit_hwm-<timestamp>.json`. If the anchor is missing, empty or unreadable through `cron`, backup exits with code 1 before publication — and the recovery step “restore the audit anchor and verify the chain” ([Disaster Recovery § 6 Step 4b](../disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen)) cannot be performed with such a set.
+The second command exits with code 0 as soon as the anchor is present. A complete backup set then consists of **seven** files: database dump and media archive with one `.hmac` sidecar each, the signed `.manifest` plus its `.hmac`, and `audit_hwm-<timestamp>.json`. If the anchor is missing, empty or unreadable through `cron`, backup exits with code 1 before publication — and the recovery step “restore the audit anchor and verify the chain” ((DE: [Disaster Recovery § 6 Step 4b](../disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen))) cannot be performed with such a set.
 
 The anchor lives on a separate volume mounted read-only by `web`. This separation does not protect against host/Docker access or the maintenance/owner role. The volume is created on first start; preserve and transfer an existing signed anchor as described in [Ops Runbook § 6.7](ops-runbook.md#67-back-up-and-verify-the-audit-high-water-mark-refs-2022) when updating an instance. The “Last backup” card checks the existence and size of the copy next to the manifest; it does not read the live anchor.
 
@@ -1412,7 +1412,7 @@ The verification run selects the most recent **set** through its signed manifest
 
 Copying only the dump, the media archive and their sidecars is not enough to restore.
 
-1. Schedule a maintenance window, block public access, and prepare an empty target database with the same role names as the backed-up system. The application role (`POSTGRES_USER`, `NOBYPASSRLS`) and the admin/owner role (`POSTGRES_ADMIN_USER`, `BYPASSRLS`) must exist before data is loaded. The complete destructive procedure for a new host is in [Disaster Recovery § 6](../disaster-recovery.md#6-wiederherstellung-auf-einem-fabrikfrischen-host).
+1. Schedule a maintenance window, block public access, and prepare an empty target database with the same role names as the backed-up system. The application role (`POSTGRES_USER`, `NOBYPASSRLS`) and the admin/owner role (`POSTGRES_ADMIN_USER`, `BYPASSRLS`) must exist before data is loaded. The complete destructive procedure for a new host is in (DE: [Disaster Recovery § 6](../disaster-recovery.md#6-wiederherstellung-auf-einem-fabrikfrischen-host)).
 
 2. Ensure that the DB and web containers are running for the database and media restore while Caddy and cron remain stopped.
 
@@ -1428,7 +1428,7 @@ sudo ./scripts/ops/restore.sh \
   "$BACKUP_HOST_DIR/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc"
 ```
 
-Before even asking for confirmation, the script first verifies the manifest (HMAC), then the set binding (set ID, dump hash, media hash including an existing sidecar), then the database HMAC and, when the second argument was supplied, the media HMAC. It rejects a media archive the manifest does not bind. The script checks the set's audit anchor (`audit_hwm-<timestamp>.json` next to the dump) using the configured path or the Compose default: a missing or empty copy, or a hash that differs from the manifest, aborts the restore. After restoring the database it imports the anchor onto its own volume. Only `--skip-audit-anchor` on a host without a custom path explicitly permits a restore without anchor validation or import; such a run does not prove an anchored chain ([Disaster Recovery § 6 Step 4b](../disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen), German). Only after all preflight checks succeed and the operator enters `ja` does it restore the database; it repeats the corresponding check immediately before each archive is used, then replaces and extracts the media contents. The SQL dump is deliberately loaded through the local bootstrap superuser (`POSTGRES_SUPERUSER`, default `postgres`): only that role can reliably restore the included owner/`FORCE RLS` statements and data copies. If media extraction aborts, the media contents are incomplete and the full media restore must be repeated.
+Before even asking for confirmation, the script first verifies the manifest (HMAC), then the set binding (set ID, dump hash, media hash including an existing sidecar), then the database HMAC and, when the second argument was supplied, the media HMAC. It rejects a media archive the manifest does not bind. The script checks the set's audit anchor (`audit_hwm-<timestamp>.json` next to the dump) using the configured path or the Compose default: a missing or empty copy, or a hash that differs from the manifest, aborts the restore. After restoring the database it imports the anchor onto its own volume. Only `--skip-audit-anchor` on a host without a custom path explicitly permits a restore without anchor validation or import; such a run does not prove an anchored chain ((DE: [Disaster Recovery § 6 Step 4b](../disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen)), German). Only after all preflight checks succeed and the operator enters `ja` does it restore the database; it repeats the corresponding check immediately before each archive is used, then replaces and extracts the media contents. The SQL dump is deliberately loaded through the local bootstrap superuser (`POSTGRES_SUPERUSER`, default `postgres`): only that role can reliably restore the included owner/`FORCE RLS` statements and data copies. If media extraction aborts, the media contents are incomplete and the full media restore must be repeated.
 
 4. Run migrations with the admin role, then start the stack:
 
@@ -1441,7 +1441,7 @@ compose_files=(-f docker-compose.prod.yml)
 docker compose "${compose_files[@]}" up -d
 ```
 
-5. Check database roles, health, and samples from both the database **and** file vault. See [Section 5](#5-monitoring), [Ops Runbook § 9](ops-runbook.md#9-row-level-security-rls), and the [disaster-recovery smoke verification](../disaster-recovery.md#7-smoke-verifikation-nach-restore).
+5. Check database roles, health, and samples from both the database **and** file vault. See [Section 5](#5-monitoring), [Ops Runbook § 9](ops-runbook.md#9-row-level-security-rls), and the (DE: [disaster-recovery smoke verification](../disaster-recovery.md#7-smoke-verifikation-nach-restore)).
 
 ---
 
@@ -1956,7 +1956,7 @@ The management command `enforce_retention` enforces the configured periods. Depe
 
 Persons whose events are then all deleted are anonymized in the same run. The other fields of the group "Datenschutz und Fristen" are not periods: `retention_auto_approve_after_defer` and `retention_max_defer_count` control how deferred deletion proposals are handled in the retention dashboard, `retention_use_k_anonymization` and `k_anonymity_threshold` control k-anonymization (both below).
 
-> **The handover note is hard-deleted, not soft-deleted** (Refs #2042) -- like activities. What counts is the date of the last change (`updated_at`), not creation; key rotation deliberately does not advance that timestamp and therefore does not extend the period. There is **no** legal hold for handover notes: holds protect client, case and event records for ongoing proceedings, whereas the shift note is a duty note with no personal reference in the data model (see [security-notes.md](../security-notes.md)). Every run with matches writes an audit row (`DELETE`, category `handover_notes`) carrying the count and the period -- never any text.
+> **The handover note is hard-deleted, not soft-deleted** (Refs #2042) -- like activities. What counts is the date of the last change (`updated_at`), not creation; key rotation deliberately does not advance that timestamp and therefore does not extend the period. There is **no** legal hold for handover notes: holds protect client, case and event records for ongoing proceedings, whereas the shift note is a duty note with no personal reference in the data model (see (DE: [security-notes.md](../security-notes.md))). Every run with matches writes an audit row (`DELETE`, category `handover_notes`) carrying the count and the period -- never any text.
 
 **Manual execution:**
 
@@ -2123,7 +2123,7 @@ On top of that — **regardless of the action** — comes the fifth class: entri
 
 > **Important:** the period only takes effect if `enforce_retention` actually runs (see [§ 7.3](#73-retention-periods-and-enforce_retention)). Deleted entries are gone for good — if you need longer evidence retention, define an **external** archiving strategy (e.g. following BSI recommendations or your Data Protection Impact Assessment) and export the log before the period kicks in.
 >
-> **Residual data-protection risk:** because the log is append-only, anonymising a person does **not** redact it — details and countermeasures in [`security-notes.md` § Audit-Log-Restdaten überleben die Art.-17-Löschung](../security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753) (German).
+> **Residual data-protection risk:** because the log is append-only, anonymising a person does **not** redact it — details and countermeasures in (DE: [`security-notes.md` § Audit-Log-Restdaten überleben die Art.-17-Löschung](../security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753)) (German).
 
 ### 7.5 Deletion Requests (Four-Eyes Principle / Dual Approval)
 

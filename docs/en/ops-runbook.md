@@ -1511,7 +1511,7 @@ before any change (“the mandatory manifest of the backup set is missing”). T
 option to bypass this check. `backup.sh --verify` and `restore-drill.sh --prod` require
 the manifest just the same. If it is missing, obtain the complete set (dump, media
 archive and manifest, each with its `.hmac` sidecar;
-[Disaster Recovery §5](../disaster-recovery.md#5-off-site-backup-beschaffen)) (German).
+(DE: [Disaster Recovery §5](../disaster-recovery.md#5-off-site-backup-beschaffen))) (German).
 
 `backup.sh` creates the files with `0600` (only the manifest `0640`, directories `0750`, no permission for others); they belong to the account it runs as, in the recommended setup root — the drill therefore reads them **as root**. Without a flag, the script auto-detects the format; explicitly via `--dev`/`--prod` (or `DRILL_FORMAT=dev|prod`). The prod branch reads `BACKUP_HOST_DIR` exclusively from the `.env` file in the Compose directory; a value of the same name in the `sudo env` prefix is overwritten when that file is loaded and is therefore not an override. If the installation is not under the default `/opt/anlaufstelle`, `COMPOSE_DIR` must point to the directory containing `.env` and `docker-compose.prod.yml`:
 
@@ -1671,7 +1671,7 @@ aborts; only then may `verify_audit_chain` run, and jobs may start **only after
 it succeeds**. Software treats a missing operational anchor as a first run, so
 this check before chain verification is mandatory. The first green run advances
 the operational file, so retain the off-site original separately and unchanged. The executable sequence is in
-[disaster-recovery.md § 6 step 4b](../disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen).
+(DE: [disaster-recovery.md § 6 step 4b](../disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen)).
 
 ---
 
@@ -2133,7 +2133,7 @@ and a single transaction.
 | `maintenance` / [`docker-migrate.sh`](../../docker-migrate.sh) | Admin | Run after the DB recreate as a short-lived one-shot with the new env. This checks `check_db_roles`, migrations, and the ownership normalization from #1085. |
 | `db` | Bootstrap (`POSTGRES_BOOTSTRAP_PASSWORD`) | Change all three roles in one transaction; then **recreate** the container with the unchanged data volume, so its container env also no longer holds the old bootstrap secret. |
 | [`scripts/ops/backup.sh`](../../scripts/ops/backup.sh) | Admin | No daemon restart: the host script reads `.env` on every new run. Therefore do not start it in parallel during the rotation. |
-| Restore path (`restore.sh`, `restore-drill.sh`, [Disaster Recovery](../disaster-recovery.md) (German)) | Bootstrap/Admin | No persistent consumer; every later run reads the new `.env`. Escrow/emergency documents must be updated immediately. |
+| Restore path (`restore.sh`, `restore-drill.sh`, (DE: [Disaster Recovery](../disaster-recovery.md)) (German)) | Bootstrap/Admin | No persistent consumer; every later run reads the new `.env`. Escrow/emergency documents must be updated immediately. |
 
 
 The script first writes a mode-identical env file in the same directory,
@@ -2381,7 +2381,7 @@ Operational rules that follow from this:
 
 #### File rotation and old-key removal
 
-One `ENCRYPTION_KEYS` ring serves **the entire installation**, not each facility. Prepend the new key, retain old keys initially, and recreate every process that uses the keys with the new ring. Plain `docker compose restart` does not reload changed `.env` values; for the shipped services use `docker compose -f docker-compose.prod.yml up -d --force-recreate web cron`. Fresh maintenance containers read the current configuration. Do not put keys into shell logs or reports.
+One `ENCRYPTION_KEYS` ring serves **the entire installation**, not each facility. Prepend the new key, retain old keys initially, and recreate every process that uses the keys with the new ring. Plain `docker compose restart` does not reload changed `.env` values; for the shipped services use `docker compose "${compose_files[@]}" up -d --force-recreate web cron` (build the `compose_files` series as for an update, i.e. including `compose.legal.yml`/`compose.override.yml` if present). Fresh maintenance containers read the current configuration. Do not put keys into shell logs or reports.
 
 **Required sequence** (#2526):
 
@@ -2390,7 +2390,7 @@ One `ENCRYPTION_KEYS` ring serves **the entire installation**, not each facility
 3. **Unfiltered primary-only verification:** `docker compose -f docker-compose.prod.yml run --rm maintenance reencrypt_files --verify`, **without `--facility`**. Every referenced version is fully authenticated with the first key alone, including the chunk binding provided by its file format. Missing keys, missing referenced files, old or damaged ciphertext cause a nonzero exit with UUID/reason or a run diagnostic. Retain old keys, resolve the cause, rotate and verify again. Verification changes neither ciphertext nor manifest, but writes an audit summary.
 4. **Resolve files outside its scope and let backups expire:** ImportJob temporary files under `imports/` are not Attachments and are neither rotated nor verified. Complete or abort pending imports through the regular import workflow before removal; also check existing import metadata and encrypted remnants for key dependencies. Encrypted `.rotate-*.tmp` staging remnants without surviving DB rows are not collected globally; full verification does not report them. Inspect such remnants in a maintenance window and clean up only after establishing their ownership; never treat them as rotation evidence. Keep the old key while any needed ciphertext still depends on it. Then **every local and off-site backup set containing old ciphertext must actually expire**: the longest local tier uses `-mtime +90` (91 full days, deletion at the next successful rotation run); off-site expiry follows the maximum retention configured at the destination, including versions/object locks and other copies. The current `backup.sh` sync does not delete remote copies; without effective destination retention no expiry has been established. Rotation does not change existing backups. Keep keys for retained older sets in separate escrow ([Disaster recovery § 4](disaster-recovery.md)).
 5. **Remove the old key:** Only remove it from `ENCRYPTION_KEYS` after these checks. Do not remove it while old backup sets remain or import/staging dependencies are unresolved. Elapsed time does not replace checking which sets actually remain.
-6. **Restart with the new configuration:** recreate every process that uses the keys (`docker compose -f docker-compose.prod.yml up -d --force-recreate web cron`; handle any additional custom processes accordingly). Processes that have not restarted may still use the previous ring.
+6. **Restart with the new configuration:** recreate every process that uses the keys (`docker compose "${compose_files[@]}" up -d --force-recreate web cron`; handle any additional custom processes accordingly). Processes that have not restarted may still use the previous ring.
 7. **Verify again without filtering:** `docker compose -f docker-compose.prod.yml run --rm maintenance reencrypt_files --verify`, without `--facility`, now using the shortened ring. Acceptance requires exit 0, no errors, readable domain fields/attachments and working MFA. File verification alone proves no field/import/backup readability. On failure restore the required ring, recreate processes with it, and resolve the cause.
 
 **Interruption and concurrency:** Only ciphertext goes into the temporary file in the same directory, never temporary plaintext. The service synchronises the file, replaces it atomically with `os.replace` and synchronises the directory. Interruption before replacement leaves the original intact; after replacement the new file may exist before manifest/audit completion. Resolve the cause and repeat the command: already-primary files remain byte-identical, and each actual file is authenticated again. `MEDIA_ROOT/.reencrypt-files.jsonl` records **progress, not integrity**; a torn final line is repaired, invalid complete records cause a hard error. An installation-wide run lock rejects parallel rotations; row/file locks protect the short replacement window against cooperating deletion paths. A deleted DB row is not resurrected; changed references/file snapshots are not blindly overwritten. This does not guarantee protection against arbitrary external file tampering or hardware faults. Pause writes and background writers for key retirement so verification and the decision concern the same dataset.
@@ -3286,4 +3286,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 7389b142365e652f30ec1f5b3dfcd48b47e78d34 -->
+<!-- source-hash: 9d3b7d30b9ed9184db4772fd622cbd342d35514b -->
