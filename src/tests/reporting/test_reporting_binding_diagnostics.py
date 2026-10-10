@@ -13,7 +13,7 @@ from core.models import DocumentTypeField, FieldTemplate
 from core.reporting import registry
 from core.reporting.backends.needle_exchange_balance import NeedleExchangeBalanceBackend
 from core.reporting.backends.service_distribution import ServiceDistributionBackend
-from core.reporting.base import Anforderung, BindungsEintrag, FeldBindung, TypBindung
+from core.reporting.base import Anforderung, BindungsEintrag, DatasetBackend, FeldBindung, TypBindung
 from tests._factories import make_document_type, make_event
 
 pytestmark = pytest.mark.django_db
@@ -358,3 +358,32 @@ def test_configured_group_without_local_field_warns_instead_of_listing(client, a
     call_command("inventory_report_bindings", "--facility", str(facility.pk), "--format", "json", stdout=out)
     bound = {entry["id"]: entry["appears_in"] for entry in json.loads(out.getvalue())["document_types"]["bound"]}
     assert not any("Krisenarten-Verteilung" in name for name in bound[str(incomplete.pk)])
+
+
+class FieldOnlyBackend(DatasetBackend):
+    slug = "field-only"
+    name = "Field-only report"
+    feld_bindungen = (FeldBindung((BindungsEintrag("ausgabe_stueck", "Output"),), bindet="report_key"),)
+
+    def get_field_specs(self):
+        return []
+
+    def build_dataset(self, facility, date_from, date_to):
+        raise NotImplementedError
+
+
+def test_field_only_backend_lists_its_read_field_and_type(partial_type, facility, monkeypatch):
+    doc_type, field = partial_type
+    backend = FieldOnlyBackend()
+    monkeypatch.setattr(registry, "get_backends", lambda: [backend])
+    assert backend.is_available(facility)
+    assert registry.describe_field_bindings(field, facility) == ["Field-only report (Output)"]
+    assert registry.describe_type_bindings(doc_type, facility) == ["Field-only report"]
+    out = StringIO()
+    call_command("inventory_report_bindings", "--facility", str(facility.pk), "--format", "json", stdout=out)
+    result = json.loads(out.getvalue())
+    assert result["field_templates"]["bound"][0]["appears_in"] == ["Field-only report (Output)"]
+    field.is_active = False
+    field.save()
+    assert registry.describe_field_bindings(field, facility) == []
+    assert registry.describe_type_bindings(doc_type, facility) == []

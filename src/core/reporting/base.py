@@ -648,6 +648,8 @@ class DatasetBackend(ABC):
                 Anforderung(self.typ_bindung, self.feld_bindungen),
                 *(a for a in self.verfuegbarkeit if a.typ_bindung is None and a.erfuellt(facility)),
             )
+        if not self.verfuegbarkeit and self.feld_bindungen:
+            return (Anforderung(None, self.feld_bindungen),)
         return tuple(a for a in self.verfuegbarkeit if a.erfuellt(facility))
 
     def contributions_for_type(self, document_type, facility) -> tuple[Anforderung, ...]:
