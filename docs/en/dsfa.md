@@ -6,6 +6,34 @@ This excerpt translates the offline key persistence and revocation item in secti
 
 An HTTP/network/processing error fetching revocations (including 500/429), or an invalid response structure, pauses queue and edit replay: “Synchronization is waiting for the revocation check”. The blocking state is stored in local IndexedDB. Each replay run also requires its own fresh, structurally valid, successfully applied and persisted revocation check; an earlier approval never authorizes a later run or another tab, even when metadata writes and fallback deletion both fail. Missing or unreadable metadata blocks replay; recovery from a read failure also requires another successful check. The next sync sequence checks again, as does a direct save from the offline client record. A failed check preserves unsent work in encrypted form. Existing idempotency keys remain intact, and the server gates (422 for revoked people, 409 for status conflicts) remain authoritative. Device encryption does not replace these server checks.
 
+## Retention, deletion approval and residual risks
+
+The German template now lists **eleven configurable retention periods**, populated with the facility's actual configured values. The following updates translate its changed retention provisions; the complete table remains in [section 2.3 of the source](../../src/core/dsgvo_templates/dsfa.md).
+
+| Item | Configuration | Current rule |
+|---|---|---|
+| 3 — Events with additional details | `retention_qualified_days` | From case closure; without a case, from the event date; in an open case, from the last professional case activity, falling back to case creation. A proposal and normally approval by another person with deletion confirmation permission precede deletion. |
+| 4 — Documentation-type maximum period | `DocumentType.retention_days` | An additional period from the event date can only shorten retention: whichever period expires first applies. A longer type period does not extend periods 1–3. |
+| 7 — Audit log | `auditlog_retention_months`; `auditlog_system_retention_months` | Entries without a facility follow the installation-wide period (0 disables deletion). Active legal holds protect audit targets with a facility. Security violations, system markers, evidence of released reporting periods and history-redaction evidence remain permanently. |
+| 8 — Earlier event-version contents | `eventhistory_detail_months` | Values are redacted; timestamp, actor and field names remain. The latest version of a live event keeps its values. Deleted events and events of anonymized people have all version values redacted by the next retention run regardless of this period. Holds and Art. 18 restrictions defer redaction; 0 disables this period. |
+| 11 — Completed deletion, merge and contact-stage downgrade requests | `deletion_request_retention_days` | Hard deletion from completion; open requests remain. |
+
+The regular daily `enforce_retention` run automatically deletes anonymous and pseudonym-only events. Events with additional details receive proposals; normally another person with deletion confirmation permission must approve before deletion. A facility may explicitly enable auto-approval (opt-in, off by default): after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Holds and Art. 18 restrictions protect both paths.
+
+Deferral protects until its date. Rejection allows a new proposal no earlier than `retention_rejected_retry_days`; `--propose` additionally creates proposals for all strategies. A person is anonymized after all their events have been deleted; without events, after `retention_identified_days` from their last change. Active holds and Art. 18 protect both paths.
+
+Manager and Application support create and lift legal holds directly in person, case and event records; System administration can lift them in the system list. Person and case holds also protect their events and associated audit entries with a facility. Art. 18 additionally protects event contents, person and case anonymization, and history redaction during the run.
+
+Manual person deletion always requires a second authorized person; event and case deletion requires one when the linked person is at "With additional details". Immediate file erasure remains a single authorized decision by Manager or Application support, subject to the hold and Art. 18 safeguards described in section 2.4 of the source. The normal qualified-event retention path also needs a second person; explicitly enabled auto-approval is the exception.
+
+Anonymization does not redact the audit log. Entries without a facility follow the installation-wide audit period; entries protected by a target hold, a zero period or a permanent exception remain. Reporting-period evidence contains the initiating person; recipient and purpose are unchecked free text. Without the daily retention job, none of the eleven periods is enforced.
+
+## Authentication and system-administration access
+
+Account lockout follows ten failed attempts within fifteen minutes per account and source IP, alongside sign-in rate limits (five attempts per minute per IP, ten per hour per username). System administration is exempt from account lockout; authentication alerts and retry guidance apply without introducing a new account lock (see TOM section 1.2).
+
+PostgreSQL row-level security protects facility-bound sessions against cross-facility access even if the ORM layer is faulty. System-administration sessions set `app.is_super_admin` and permit cross-facility access. `SYSTEM_VIEW` records system-area calls and list/detail views for all registered admin models, including deletion requests, users, settings, audit logs, snapshots, templates, organization and facilities. If audit recording fails, output is blocked with HTTP 403. Events and event history show only metadata in the admin, without field contents.
+
 <!-- translation-source: src/core/dsgvo_templates/dsfa.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
