@@ -1433,7 +1433,13 @@ class EventDeleteView(StaffRequiredMixin, View):
                 # (er liefert den bestehenden Antrag zurueck). Race und
                 # Nicht-Race fuehren damit zur identischen Antwort — das ist
                 # die Idempotenz-Zusage, und ein Antrag steht nach beiden Wegen.
-            messages.info(request, _("Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."))
+            messages.info(
+                request,
+                _(
+                    "Löschantrag wurde gestellt und muss von einer anderen Person mit dem Recht "
+                    "„Löschbestätigung“ genehmigt werden."
+                ),
+            )
         else:
             # Art.-18-Vorabpruefung (Refs #2045) — freundliche Meldung, NICHT
             # das Gate. Die verbindliche Grenze zieht inzwischen

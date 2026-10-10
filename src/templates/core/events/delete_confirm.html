@@ -12,7 +12,7 @@
     <div class="bg-red-50 border border-red-200 rounded-[10px] p-4 mb-6">
         <p class="text-sm text-red-800">
             {% if event.client and event.client.contact_stage == "qualified" %}
-            {% trans "Dieses Ereignis gehört zu einer Person mit qualifizierter Dokumentation. Es wird ein Löschantrag erstellt, der von einer Leitung genehmigt werden muss (4-Augen-Prinzip)." %}
+            {% trans "Dieses Ereignis gehört zu einer Person der Stufe „Mit Zusatzangaben“. Es wird ein Löschantrag erstellt, der von einer anderen Person mit dem Recht „Löschbestätigung“ genehmigt werden muss (Vier-Augen-Prinzip)." %}
             {% else %}
             {% trans "Möchten Sie dieses Ereignis wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden." %}
             {% endif %}

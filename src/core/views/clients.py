@@ -44,6 +44,7 @@ from core.services.client import (
     track_client_visit,
     update_client,
 )
+from core.services.client.history_status import pending_history_count
 from core.services.compliance import user_can_see_document_type
 from core.services.dynamic_data import (
     build_dynamic_data_context,
@@ -357,6 +358,7 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
             "events": events,
             "workitems": workitems,
             "active_bans": active_bans,
+            "history_deferred": pending_history_count(client),
             "open_cases": open_cases,
             "hide_qualified_details": not request.user.is_staff_or_above,
             # Refs #1736 (A): ein laufender Vier-Augen-Löschantrag war am

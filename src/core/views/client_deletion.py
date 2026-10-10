@@ -228,6 +228,10 @@ class ClientTrashView(FacilityAdminRequiredMixin, View):
             .select_related("deleted_by", "merged_into")
             .order_by("-deleted_at")
         )
+        from core.services.client.history_status import pending_history_count
+
+        for person in clients:
+            person.history_deferred = pending_history_count(person)
         return render(
             request,
             "core/clients/trash.html",

@@ -27,6 +27,7 @@
                 <tr class="border-t border-subtle">
                     <td class="px-3 py-2 font-medium">
                         {{ client.pseudonym }}
+                        {% include "core/clients/partials/_history_status.html" with history_deferred=client.history_deferred %}
                         {% comment %}Refs #1876: ein Merge-Tombstone ist keine
                         gewoehnliche Loeschung — die Betreuung muss sehen,
                         WOHIN die Akte ging (ADR-045, Entscheid 2).{% endcomment %}

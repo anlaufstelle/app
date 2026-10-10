@@ -4,6 +4,7 @@
 {% block title %}{{ client.pseudonym }} – Anlaufstelle{% endblock %}
 
 {% block content %}
+{% include "core/clients/partials/_history_status.html" %}
 {% if request.user.is_lead_or_admin and client.contact_stage == "qualified" and client.is_active %}
 <a href="{% url 'core:client_stage_downgrade' client.pk %}" class="px-4 py-2 rounded-md text-sm font-medium border border-subtle text-ink-soft hover:bg-canvas">{% trans "Herabstufung beantragen" %}</a>
 {% endif %}

@@ -329,10 +329,7 @@ def _event_form_state_unchanged(event, expected_form_state):
     return constant_time_compare(_event_form_state_token_from_values(event.pk, current), expected_form_state)
 
 
-#: Das Ereignis liegt inzwischen im Papierkorb. Seine Inhalte sind dort
-#: bereits geleert (``soft_delete_event``); eine Bearbeitung schriebe neuen
-#: Inhalt in einen geloeschten Datensatz. Der Weg zurueck ist das
-#: Wiederherstellen.
+#: Deleted events have no restore path: deletion already wipes their content.
 EVENT_EDIT_DELETED_MESSAGE = _("Dieses Ereignis wurde gelöscht — es kann nicht mehr bearbeitet werden.")
 
 
@@ -819,7 +816,6 @@ def soft_delete_event(event, user, *, source=None, rows_locked=False):
     event.deleted_at = timezone.now()
     event.deleted_by = user
     event.data_json = {}
-    delete_attachments_for(event)
     # ``update_fields`` statt eines vollen ``save()``: die Instanz stammt
     # womoeglich aus einem aelteren Lesevorgang, und ein Voll-Save schriebe
     # jedes Feld daraus zurueck — inklusive eines ``client_id``, den ein
@@ -828,6 +824,11 @@ def soft_delete_event(event, user, *, source=None, rows_locked=False):
     # berechneten Leerwert nicht und der Klartext-PII bliebe im Suchindex
     # stehen (Refs #1092) — dieselbe Liste wie im Retention-Loeschpfad.
     event.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "data_json", "search_text", "updated_at"])
+    # Preserve anonymous monthly counts before the irreversible file cleanup.
+    from core.services.dashboard.snapshot import carry_deleted_event
+
+    carry_deleted_event(event.facility, event)
+    delete_attachments_for(event)
     EventHistory.objects.create(
         event=event,
         changed_by=user,

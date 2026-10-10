@@ -144,14 +144,9 @@ class TestMintTokenSerialisierungIstDeterministisch:
 
 
 class TestUndoLaedtDenDokumentationstypInDerGleichenAbfrage:
-    def test_dokumentationstyp_kommt_ohne_zusatzabfrage_mit(self, facility, staff_user, doc_type_contact):
-        """Pins ``x_undo_tally_event__mutmut_5``: ``select_related("document_type")``
-        -> ``select_related(None)``. Rueckgabewert und Loeschergebnis bleiben
-        gleich (Djangos FK-Lazy-Load haengt ``event.document_type`` bei Bedarf
-        nach) — beobachtbar ist ausschliesslich die Abfragezahl (bindende
-        Aequivalenzregel dieser Welle: eine zusaetzliche Abfrage zaehlt NICHT
-        als kosmetisch). Ohne den JOIN reisst die gesperrte Event-Zeile und ihr
-        Dokumentationstyp in zwei Roundtrips auseinander."""
+    def test_document_type_is_joined_without_an_extra_query(self, facility, staff_user, doc_type_contact, monkeypatch):
+        """Pin eager loading while isolating the independently tested monthly carry."""
+        monkeypatch.setattr("core.services.dashboard.snapshot.carry_deleted_event", lambda facility, event: None)
         event = _tally_event(facility, staff_user, doc_type_contact, key="pin-099-events5-queries")
         token = mint_tally_undo_token(event)
 

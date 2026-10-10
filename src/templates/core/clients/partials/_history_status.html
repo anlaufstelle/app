@@ -1,0 +1,11 @@
+{% load i18n %}
+{% if client.anonymized_at %}
+<div role="status" class="mb-4 rounded-md border border-subtle p-4" data-testid="client-history-status">
+    {% if history_deferred %}
+    <p>{% trans "Personen- und Live-Inhalte wurden anonymisiert. Historie wird im Nachtlauf redigiert; Aufbewahrungssperren, Art. 18 oder gleichzeitige Bearbeitung können die Redaktion zurückstellen." %}</p>
+    <p>{% blocktrans count counter=history_deferred %}Noch offene Historienfassung: {{ counter }} (zurückgestellt).{% plural %}Noch offene Historienfassungen: {{ counter }} (zurückgestellt).{% endblocktrans %}</p>
+    {% else %}
+    <p>{% trans "Personen- und Live-Inhalte wurden anonymisiert. Keine offenen Historieninhalte." %}</p>
+    {% endif %}
+</div>
+{% endif %}
