@@ -682,7 +682,7 @@ The charts update automatically when the time period is changed.
 
 ### Event List (CSV, Internal)
 
-The Overview offers **“Event list (CSV, internal, with pseudonyms)”**. The file contains individual events in the selected period, restricted to the selected documentation type if one is chosen. Static columns are date, time, documentation type, person, contact stage and age group, followed by the dynamic fields visible to your role. The **“Person”** column can contain a pseudonym. Pseudonyms remain personal data: this is **not anonymised statistics**. Sharing requires an appropriate legal basis; use Dataset reports for figures intended for outside parties.
+The Overview offers **“Event list (CSV, internal, with pseudonyms)”**. The file contains individual events in the selected period, restricted to the selected documentation type if one is chosen. Static columns are date, time, documentation type, person, contact stage and age group, followed by the dynamic fields visible to your role, except file fields (attachments stay in the protected file download). The **“Person”** column can contain a pseudonym. Pseudonyms remain personal data: this is **not anonymised statistics**. Sharing requires an appropriate legal basis; use Dataset reports for figures intended for outside parties.
 
 1. In the statistics dashboard select the period and, if applicable, documentation type.
 2. Optionally enter **recipient** and **purpose** in the export bar.
@@ -720,7 +720,7 @@ Clicking a time period does not discard your report selection -- the card and pr
 
 **Small case numbers are suppressed:** The preview and downloads apply small-count protection -- values below your facility's k-anonymity threshold (default 5) are removed, to make inferences about individual persons harder. Suppression alone does not guarantee anonymity. How a removed value is **displayed** depends on the format: as a dash in the preview, as an empty cell in the CSV (the metadata line at the top of the file points out the suppression), as `null` in JSON, and as an empty element in XML. Occasionally a second, larger value is dropped as well -- this is intentional, because otherwise the suppressed value could be calculated back. For the same reason, completeness notices contain no digits at all when the numbers are very small.
 
-**Data source: live query.** Below the preview you can see where the figures come from. The preview and CSV/JSON/XML recalculate the figures from event data on **every request**; this also applies to other reports' PDFs. Periods whose events were removed after the retention deadlines therefore appear empty -- unlike the example activity report PDF, which reads from the monthly aggregates. The file formats carry the same statement in machine-readable form: in the CSV metadata line at the top of the file, and in JSON and XML as the field `data_source` (value `live`).
+**Data source: live query.** Below the preview you can see where the figures come from. The preview and CSV/JSON/XML recalculate the figures from the current data on **every request**; this also applies to other reports' PDFs. Depending on the report, that data is events, cases or persons. Values based on events therefore appear empty for periods whose events were removed after the retention deadlines -- unlike the example activity report PDF, which reads from the monthly aggregates. Figures that count cases or persons themselves (such as “Example: case key figures” or the new intakes in “Example: person key figures”) do not change when events are deleted. The file formats carry the same statement in machine-readable form: in the CSV metadata line at the top of the file, and in JSON and XML as the field `data_source` (value `live`).
 
 > **Note:** Every download is recorded in the audit log; the preview is not. An empty period looks like suppression in the preview -- when in doubt, check the selected time period.
 
@@ -1106,4 +1106,4 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 7d16ee922ac685830e339817a6522a618b7e8f88 -->
+<!-- source-hash: a0368ec441f7950b1c94da3658bb1eaa03098b5f -->
