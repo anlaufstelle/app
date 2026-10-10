@@ -309,7 +309,7 @@
 
     function _signalAuthPending(pending, kind) {
         const active = Boolean(pending);
-        _countLocalPending()
+        return _countLocalPending()
             .then((count) => {
                 window.dispatchEvent(
                     new CustomEvent("offline-auth-pending", {
@@ -1049,6 +1049,7 @@
         replayAllModifiedEvents: replayAllModifiedEvents,
         enqueueConflictForReview: enqueueConflictForReview,
         refreshCounts: _fireCountEvent,
+        signalAuthPending: _signalAuthPending,
         // Refs #2289 (TST, Muster wie offlineQueue._backoffFor/_isReady): die
         // sicherheitskritischen Klassifikations-Praedikate isoliert testbar —
         // tests/js/offline-replay-auth.test.mjs haelt sie deckungsgleich mit

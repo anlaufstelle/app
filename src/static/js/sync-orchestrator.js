@@ -171,8 +171,10 @@
             result = { status: "error" };
         }
         _revocationPending = !result || result.status !== "ok";
+        const authPending = result?.status === "auth-pending";
+        await window.offlineEdit?.signalAuthPending?.(authPending, result?.kind);
         document.querySelectorAll("[data-offline-revocation-pending]").forEach(function (node) {
-            node.hidden = !_revocationPending;
+            node.hidden = !_revocationPending || authPending;
         });
         return !_revocationPending;
     }

@@ -27,6 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Anmeldung bei ausstehender Offline-Synchronisation sichtbar** (#2528) — Führt die Widerrufsprüfung zur Anmeldung oder zum zweiten Faktor, erscheint „Anmeldung erforderlich“ statt des Widerrufshinweises; ungesendete Arbeit bleibt erhalten und die Übertragung bis zu einer erfolgreichen erneuten Widerrufsprüfung gesperrt.
+
 - **Offline-Schlüssel nach Demo-Start aktivieren** (#2511) — Im Demo-Modus leitet die Zielseite nach dem Start einmalig den Offline-Schlüssel aus dem gemeinsamen Demo-Passwort mit der geltenden Höchstdauer ab und zeigt Bootstrap-Fehler sichtbar an; bei abweichendem Kontopasswort bleibt der bestehende Browserspeicher erhalten.
 
 - **Unvollständige Berichtszuordnung sichtbar machen** (#2514) — Typ- und Feldvorlagen-Bearbeitung sowie Typ-Detail warnen vor fehlenden Schlüsseln, die Anlege-Vorschau trennt mögliche Berichte von nötigen Ergänzungen und „Erscheint in“ samt `inventory_report_bindings` listet in verfügbaren Berichten weiter gezählte Typen auch bei Deaktivierung oder fehlenden Feldern; Feldvorlagen mit tatsächlich gelesenen Werten bleiben auch an unvollständigen oder deaktivierten Typen gebunden, unzugeordnete oder nicht gelesene Vorlagen bleiben im Inventar ungebunden, unabhängige Gruppen werden nur mit den am Typ tatsächlich lesbaren Pflichtfeldern genannt, Feldhinweise betreffen nur Ereignistypen und zur geöffneten Vorlage passende Anforderungen und respektieren bereits gesetzte Typ-Schlüssel einschließlich Ausschluss, Speichern bleibt erlaubt und gesetzte Schlüssel bleiben unverändert.

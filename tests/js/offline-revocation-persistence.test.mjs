@@ -10,10 +10,10 @@ const scripts = ["url-patterns", "crypto", "offline-db", "offline-bundles", "off
     .map((name) => readFileSync(`src/static/js/${name}.js`, "utf8"));
 const eventPk = "33333333-3333-4333-8333-333333333333";
 const validPayload = () => ({ revocations: [], server_time: new Date().toISOString(), retention_seconds: 345600 });
-let pages, status, payload, writes, checks, lockTail, channels;
+let pages, status, payload, writes, checks, lockTail, channels, responseOverrides;
 
 function page(online = true) {
-    const dom = new JSDOM('<body data-offline-key-max-age="43200"><div data-offline-revocation-pending hidden></div></body>', {
+    const dom = new JSDOM('<body data-offline-key-max-age="43200"><div data-offline-revocation-pending hidden></div><div data-offline-auth-pending data-auth-pending-text="Sign in to sync {count} entries" hidden></div></body>', {
         url: "https://example.test/", runScripts: "outside-only",
     });
     pages.push(dom);
@@ -44,7 +44,7 @@ function page(online = true) {
             return { status, ok: status === 200, json: async () => {
                 if (payload === "not-json") throw new SyntaxError("Invalid JSON");
                 return payload;
-            } };
+            }, ...responseOverrides };
         }
         if (options.method === "POST") writes.push({ url, options });
         return { status: 201, ok: true, headers: { get: (name) => name.toLowerCase() === "x-offline-replay-result" ? "saved" : null } };
@@ -90,6 +90,7 @@ beforeEach(() => {
     Dexie.dependencies.IDBKeyRange = IDBKeyRange;
     pages = []; channels = []; writes = []; checks = 0; status = 500; payload = validPayload();
     lockTail = Promise.resolve();
+    responseOverrides = {};
 });
 
 afterEach(async () => {
@@ -384,5 +385,74 @@ describe("revocation response validation", () => {
         payload = validPayload();
         await w.syncOrchestrator.requestSync("valid-retry");
         expect(writes).toHaveLength(2);
+    });
+});
+
+const authResponses = [
+    ["followed login", "login", { redirected: true, url: "https://example.test/login/?next=/" }],
+    ["followed MFA setup", "mfa", { redirected: true, url: "https://example.test/mfa/setup/" }],
+    ["followed MFA verify", "mfa", { redirected: true, url: "https://example.test/mfa/verify/" }],
+    ["login target", "login", { url: "https://example.test/login/" }],
+    ["MFA target", "mfa", { url: "https://example.test/mfa" }],
+    ["redirected HTML", "login", { redirected: true, url: "https://example.test/auth/", headers: { get: () => "text/html; charset=utf-8" } }],
+];
+
+describe("revocation authentication notice", () => {
+    it.each(authResponses)("preserves work and requests authentication for %s", async (_name, kind, response) => {
+        const w = page();
+        const record = await seed(w);
+        const beforeQueue = await w.offlineStore.db.queue.toArray();
+        const beforeEvents = await w.offlineStore.db.events.toArray();
+        status = 200; payload = "not-json"; responseOverrides = response;
+        const result = await w.offlineStore.applyClientRevocations();
+        expect(result).toMatchObject({ status: "auth-pending", kind, purgedClients: 0, purgedQueueEntries: 0, purgedDrafts: 0 });
+        const authEvents = [];
+        w.addEventListener("offline-auth-pending", (event) => authEvents.push(event.detail));
+        await w.syncOrchestrator.requestSync("authentication-required");
+        await vi.waitFor(() => expect(authEvents).toContainEqual({ pending: true, count: 2, kind }));
+        expect(w.document.querySelector("[data-offline-auth-pending]").hidden).toBe(false);
+        expect(w.document.querySelector("[data-offline-auth-pending]").textContent).toBe("Sign in to sync 2 entries");
+        await directReplay(w, record);
+        expect(await w.offlineStore.isRevocationPending()).toBe(true);
+        expect(w.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(true);
+        expect(writes).toHaveLength(0);
+        expect(await w.offlineStore.db.queue.toArray()).toEqual(beforeQueue);
+        expect(await w.offlineStore.db.events.toArray()).toEqual(beforeEvents);
+        expect((await w.offlineStore.db.meta.get("revocationReplayState")).value.pending).toBe(true);
+        const next = page();
+        await directReplay(next, record);
+        expect(writes).toHaveLength(0);
+        expect(await next.offlineStore.isRevocationPending()).toBe(true);
+        status = 200; payload = validPayload(); responseOverrides = {};
+        await w.syncOrchestrator.requestSync("authenticated-retry");
+        await vi.waitFor(() => expect(w.document.querySelector("[data-offline-auth-pending]").hidden).toBe(true));
+        await w.syncOrchestrator.requestSync("repeat-authenticated-retry");
+        expect(writes).toHaveLength(2);
+        expect(writes.find(({ url }) => url.includes("tally")).options.headers["X-Idempotency-Key"]).toBe(beforeQueue[0].idempotencyKey);
+        expect(writes.find(({ url }) => url.includes("events")).options.headers["X-Idempotency-Key"]).toBe("stable-edit-key");
+    });
+
+    it.each([
+        ["server failure", 500, validPayload(), {}, "error"],
+        ["rate limit", 429, validPayload(), {}, "ratelimited"],
+        ["invalid structure", 200, {}, {}, "error"],
+        ["invalid JSON", 200, "not-json", {}, "error"],
+        ["unredirected HTML", 200, "not-json", { headers: { get: () => "text/html" } }, "error"],
+        ["redirected invalid JSON", 200, "not-json", { redirected: true, url: "https://example.test/unexpected/", headers: { get: () => "application/json" } }, "error"],
+    ])("keeps the revocation notice for %s after an authentication pause", async (_name, code, body, response, expectedStatus) => {
+        const w = page();
+        const record = await seed(w);
+        status = 200; payload = "not-json"; responseOverrides = authResponses[0][2];
+        await w.syncOrchestrator.requestSync("authentication-required");
+        await vi.waitFor(() => expect(w.document.querySelector("[data-offline-auth-pending]").hidden).toBe(false));
+        status = code; payload = body; responseOverrides = response;
+        expect((await w.offlineStore.applyClientRevocations()).status).toBe(expectedStatus);
+        await w.syncOrchestrator.requestSync("failed-check");
+        await directReplay(w, record);
+        await vi.waitFor(() => expect(w.document.querySelector("[data-offline-auth-pending]").hidden).toBe(true));
+        expect(w.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(false);
+        expect(writes).toHaveLength(0);
+        expect(await w.offlineStore.db.queue.count()).toBe(1);
+        expect(await w.offlineStore.db.events.count()).toBe(1);
     });
 });

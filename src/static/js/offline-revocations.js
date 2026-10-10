@@ -157,14 +157,25 @@
         return { purgedQueueEntries: purgedQueueEntries, purgedDrafts: purgedDrafts };
     }
 
+    // Authentication pages cannot provide a usable revocation list.
+    function _revocationAuthKind(response) {
+        let path = "";
+        try {
+            path = new URL(response.url, window.location.origin).pathname;
+        } catch (_e) {
+            // Missing or invalid URLs do not identify an authentication target.
+        }
+        if (path === "/mfa" || path.startsWith("/mfa/")) return "mfa";
+        if (path === "/login" || path.startsWith("/login/")) return "login";
+        const contentType = response.headers?.get?.("Content-Type") || "";
+        if (response.redirected && /^text\/html(?:;|$)/i.test(contentType)) return "login";
+        return null;
+    }
+
     /*
-     * Holt die Widerrufsliste und wendet sie an. Rueckgabe:
-     *   {status: "ok"|"error"|"ratelimited", purgedClients, purgedQueueEntries,
-     *    purgedDrafts}
-     * `error`/`ratelimited` lassen den Bestand UNANGETASTET (fail-open beim
-     * Transport — ohne verlaessliche Liste darf nichts geloescht werden; der
-     * naechste Sync/Boot wiederholt den Abruf, und die 48h-TTL bleibt fuer ein
-     * dauerhaft offline gebliebenes Geraet die letzte Verteidigungslinie).
+     * Fetch and apply a fully validated list. Authentication, transport and
+     * validation failures preserve local work and cannot authorize replay.
+     * Results: ok, error, ratelimited, or auth-pending with kind login/mfa.
      */
     async function _applyClientRevocations() {
         const empty = { purgedClients: 0, purgedQueueEntries: 0, purgedDrafts: 0 };
@@ -184,12 +195,13 @@
         if (!response.ok) {
             return { status: "error", ...empty };
         }
+        const kind = _revocationAuthKind(response);
+        if (kind) return { status: "auth-pending", kind, ...empty };
         let payload;
         try {
             payload = await response.json();
         } catch (_e) {
-            // Login-Redirect (der `fetch` folgt ihm) liefert eine HTML-Seite —
-            // kein Widerrufssignal, also nichts loeschen.
+            // Invalid JSON cannot authorize deletion or replay.
             return { status: "error", ...empty };
         }
         // Validate the complete server contract before applying any deletion.
@@ -236,6 +248,7 @@
     const REVOCATION_STATE_KEY = "revocationReplayState";
     let _storageFailure = false;
     let _approval = null;
+    let _authPending = false;
 
     async function isRevocationPending() {
         let pending = true;
@@ -252,7 +265,7 @@
         }
         if (typeof document !== "undefined") {
             document.querySelectorAll("[data-offline-revocation-pending]").forEach((node) => {
-                node.hidden = !pending;
+                node.hidden = !pending || _authPending;
             });
         }
         return pending;
@@ -268,6 +281,7 @@
         let marked = false;
         _storageFailure = true;
         _approval = null;
+        _authPending = false;
         const run = window.syncOrchestrator?.getCurrentRun?.();
         try {
             const attempt = window.crypto.randomUUID();
@@ -277,6 +291,7 @@
             _storageFailure = false;
             await _notifyRevocationState();
             const result = await _applyClientRevocations();
+            _authPending = result.status === "auth-pending";
             if (result.status !== "ok") return result;
             const released = await db.transaction("rw", db.meta, async () => {
                 const row = await db.meta.get(REVOCATION_STATE_KEY);
