@@ -795,6 +795,8 @@ If an event was edited online (by someone else) and offline (by you) at the same
 - **Use server version** -- the online edit wins, your offline version is discarded.
 - **Merge manually** -- you decide field by field which content is kept.
 
+“Keep my version” and “Merge manually” check the revocation list again before sending, within the same exclusive run. If that check or its local storage fails, the form stays usable and shows “Synchronization is waiting for the revocation check”; the selection remains stored in encrypted form. Clicking again performs a fresh check and sends only after valid approval has been successfully stored. If the new list removed the local record, it is not sent and the dialog asks you to reload the conflict overview.
+
 **Managing conflicts and undeliverable entries:**
 
 **`/offline/conflicts/`** shows every entry that needs a decision -- the page opens even without a network connection (#1396). Two sections:
@@ -1046,5 +1048,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 54f687bbf56c5cb97fb35a9c311e7e90ffb6fb46 -->
+<!-- source-hash: 6401b5306cd6ce5ba3c35e65dba2a1cda2bb0a7a -->
 <!-- translation-date: 2026-10-09 -->

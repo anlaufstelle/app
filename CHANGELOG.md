@@ -31,7 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
-- **Offline-Schlüsseldauer und Widerrufsprüfung begrenzt** (#2528) — Offline-Schlüssel laufen unabhängig von Aktivität nach der absoluten Sitzungsdauer ab, ungesendete Arbeit bleibt verschlüsselt erhalten, und jeder Queue- und Edit-Replay braucht im aktuellen Lauf eine frische, gültige, erfolgreich angewandte und persistierte Widerrufsprüfung, sodass auch bei vollständigem Metadaten-Schreibausfall keine alte Freigabe nach Navigation, Browserneustart oder in weiteren Tabs genutzt wird.
+- **Offline-Schlüsseldauer und Widerrufsprüfung begrenzt** (#2528) — Offline-Schlüssel laufen unabhängig von Aktivität nach der absoluten Sitzungsdauer ab, ungesendete Arbeit bleibt verschlüsselt erhalten, und jeder Queue- und Edit-Replay braucht im aktuellen Lauf eine frische, gültige, erfolgreich angewandte und persistierte Widerrufsprüfung, sodass auch bei vollständigem Metadaten-Schreibausfall keine alte Freigabe nach Navigation, Browserneustart oder in weiteren Tabs genutzt wird; „Meine Version behalten“ und „Manuell mergen“ prüfen und übertragen im selben Lauf und lassen bei ausstehender Widerrufsprüfung das Formular mit zutreffendem Status bedienbar.
 
 - **Prüfseiten respektieren die Leserechte des Ziels** (#2516) — Ereignis-, Personen-, Fall- und Zusammenführungs-Prüfungen verlinken einsehbare Datensätze in einem neuen Tab; unsichtbare, gelöschte oder fehlende Ziele bleiben neutral und ohne Link, Ereignismetadaten werden nur nach der Sichtbarkeitsprüfung angezeigt und Merge-Fallzahlen zählen ausschließlich Fälle aktiver, nicht gelöschter Personen.
 ### Added

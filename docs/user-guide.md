@@ -795,6 +795,8 @@ Wurde ein Ereignis gleichzeitig online (durch jemand anderen) und offline (durch
 - **Server-Version übernehmen** — die Online-Änderung gewinnt, Ihre offline-Version wird verworfen.
 - **Manuell mergen** — Sie entscheiden Feld für Feld, welche Inhalte übernommen werden.
 
+„Meine Version behalten“ und „Manuell mergen“ prüfen vor der Übertragung die Widerrufsliste erneut im selben exklusiven Lauf. Scheitert diese Prüfung oder ihre lokale Speicherung, bleibt das Formular bedienbar und zeigt „Synchronisation wartet auf Widerrufsprüfung“; die Auswahl bleibt verschlüsselt gespeichert. Ein erneuter Klick prüft frisch und überträgt erst nach gültiger, erfolgreich gespeicherter Freigabe. Hat die neue Liste den lokalen Datensatz entfernt, wird er nicht übertragen und der Dialog bittet darum, die Konfliktübersicht neu zu laden.
+
 **Konflikte und nicht übertragbare Einträge verwalten:**
 
 Unter **`/offline/conflicts/`** sehen Sie alle Einträge, die eine Entscheidung erfordern — die Seite öffnet sich auch ohne Netzverbindung (#1396). Zwei Bereiche:

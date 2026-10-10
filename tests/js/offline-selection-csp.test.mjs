@@ -63,7 +63,7 @@ describe("Selection changes through the shipped Alpine CSP build", () => {
         parsed.window.close();
         const { dom, win, errors } = createPage(html, ["conflict-resolver.js"]);
         try {
-            const record = {
+            let record = {
                 pk: "selection-event", localStatus: "conflict",
                 data: {
                     formData: { [slug]: ["local-option"] },
@@ -72,9 +72,12 @@ describe("Selection changes through the shipped Alpine CSP build", () => {
             };
             win.offlineStore = {
                 getOfflineEvent: vi.fn(async () => structuredClone(record)),
-                saveOfflineEdit: vi.fn(async () => {}),
+                saveOfflineEdit: vi.fn(async (saved) => { record = JSON.parse(JSON.stringify(saved)); }),
+                applyClientRevocations: vi.fn(async () => ({ status: "ok" })),
+                isRevocationPending: vi.fn(async () => false),
             };
             win.offlineEdit = { replayModifiedEvent: vi.fn(async () => ({ status: "synced" })) };
+            win.syncOrchestrator = { runExclusive: vi.fn(async (fn) => fn()) };
             await startAlpine(win);
             await vi.waitFor(() => expect(win.document.querySelector('[data-testid="conflict-choice"]')).not.toBeNull());
             const select = win.document.querySelector('[data-testid="conflict-choice"]');
@@ -88,6 +91,51 @@ describe("Selection changes through the shipped Alpine CSP build", () => {
             expect(JSON.parse(JSON.stringify(replayed.data.formData))).toEqual({ [slug]: ["server-option"] });
             expect(Array.isArray(replayed.data.formData[slug])).toBe(true);
             expect(replayed.data.expectedUpdatedAt).toBe("fresh-token");
+            expect(errors).toEqual([]);
+        } finally {
+            dom.window.close();
+        }
+    });
+
+    it.each(["conflict-keep-local", "conflict-merge"])("keeps %s usable with the waiting status until a fresh retry succeeds", async (buttonId) => {
+        const parsed = new JSDOM(templates["core/events/conflict_review.html"]);
+        const html = parsed.window.document.querySelector('[data-testid="conflict-resolver-view"]').outerHTML;
+        parsed.window.close();
+        const { dom, win, errors } = createPage(html, ["conflict-resolver.js"]);
+        try {
+            let record = {
+                pk: "selection-event", localStatus: "conflict",
+                data: {
+                    formData: { selection: ["local-option"] },
+                    serverState: { data_json: { selection: ["server-option"] }, updated_at: "fresh-token" },
+                },
+            };
+            win.offlineStore = {
+                getOfflineEvent: vi.fn(async () => structuredClone(record)),
+                saveOfflineEdit: vi.fn(async (saved) => { record = JSON.parse(JSON.stringify(saved)); }),
+                applyClientRevocations: vi.fn(async () => ({ status: "error" })),
+                isRevocationPending: vi.fn(async () => false),
+            };
+            win.offlineEdit = { replayModifiedEvent: vi.fn(async () => ({ status: "synced" })) };
+            win.syncOrchestrator = { runExclusive: vi.fn(async (fn) => fn()) };
+            await startAlpine(win);
+            await vi.waitFor(() => expect(win.document.querySelector('[data-testid="conflict-choice"]')).not.toBeNull());
+            const button = win.document.querySelector(`[data-testid="${buttonId}"]`);
+            button.click();
+            await vi.waitFor(() => {
+                const status = win.document.querySelector('[data-testid="conflict-status"]');
+                expect(status.textContent).toBe("Synchronisation wartet auf Widerrufsprüfung");
+                expect(status.style.display).not.toBe("none");
+                expect(button.disabled).toBe(false);
+            });
+            expect(win.document.querySelector('[data-testid="conflict-choice"]')).not.toBeNull();
+            expect(win.document.querySelector('[data-testid="conflict-error"]')).toBeNull();
+            expect(win.offlineEdit.replayModifiedEvent).not.toHaveBeenCalled();
+            win.offlineStore.applyClientRevocations.mockResolvedValue({ status: "ok" });
+            button.click();
+            await vi.waitFor(() => expect(win.document.querySelector('[data-testid="conflict-resolved"]')).not.toBeNull());
+            expect(win.offlineEdit.replayModifiedEvent).toHaveBeenCalledOnce();
+            expect(win.offlineStore.applyClientRevocations).toHaveBeenCalledTimes(2);
             expect(errors).toEqual([]);
         } finally {
             dom.window.close();

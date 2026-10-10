@@ -81,6 +81,7 @@
         return {
             loading: true,
             error: "",
+            statusMessage: "",
             eventPk: "",
             localData: {},
             serverData: {},
@@ -171,17 +172,48 @@
             },
 
             async keepLocal() {
+                return this._keepChoice(this.localData);
+            },
+
+            // Refs #2528: approval and POST must belong to the same exclusive run.
+            async _keepChoice(formData) {
+                if (this.resolving || this.resolved) return;
                 this.resolving = true;
+                this.statusMessage = "";
                 try {
-                    const record = await window.offlineStore.getOfflineEvent(this.eventPk);
-                    if (!record) return;
-                    const data = record.data || {};
-                    data.expectedUpdatedAt = this.updatedAt;
-                    data.formData = this.localData;
-                    record.data = data;
-                    record.localStatus = "modified";
-                    await window.offlineStore.saveOfflineEdit(record);
-                    const result = await window.offlineEdit.replayModifiedEvent(record);
+                    const resolve = async () => {
+                        const record = await window.offlineStore.getOfflineEvent(this.eventPk);
+                        if (!record) return { status: "missing" };
+                        const data = record.data || {};
+                        data.expectedUpdatedAt = this.updatedAt;
+                        data.formData = formData;
+                        record.data = data;
+                        record.localStatus = "modified";
+                        await window.offlineStore.saveOfflineEdit(record);
+                        let current;
+                        try {
+                            const check = await window.offlineStore.applyClientRevocations?.();
+                            if (check?.status !== "ok" ||
+                                await window.offlineStore.isRevocationPending?.() !== false) {
+                                return { status: "revocation-pending" };
+                            }
+                            // The fresh list may have purged the captured record.
+                            current = await window.offlineStore.getOfflineEvent(this.eventPk);
+                            if (!current) return { status: "missing" };
+                        } catch (_e) {
+                            return { status: "revocation-pending" };
+                        }
+                        const replay = await window.offlineEdit.replayModifiedEvent(current);
+                        // A metadata failure at the POST gate is not a network failure.
+                        if (replay?.status === "network-error" &&
+                            await window.offlineStore.isRevocationPending()) {
+                            return { status: "revocation-pending" };
+                        }
+                        return replay;
+                    };
+                    const result = window.syncOrchestrator?.runExclusive
+                        ? await window.syncOrchestrator.runExclusive(resolve)
+                        : await resolve();
                     this._markResult(result);
                 } finally {
                     this.resolving = false;
@@ -205,32 +237,27 @@
             },
 
             async keepMerged() {
-                this.resolving = true;
-                try {
-                    const choices = Object.fromEntries(this.diffRows.map((row) => [row.key, row.choice]));
-                    const merged = _mergeByChoice(this.diffKeys, choices, this.localData, this.serverData);
-                    const record = await window.offlineStore.getOfflineEvent(this.eventPk);
-                    if (!record) return;
-                    const data = record.data || {};
-                    data.expectedUpdatedAt = this.updatedAt;
-                    data.formData = merged;
-                    record.data = data;
-                    record.localStatus = "modified";
-                    await window.offlineStore.saveOfflineEdit(record);
-                    const result = await window.offlineEdit.replayModifiedEvent(record);
-                    this._markResult(result);
-                } finally {
-                    this.resolving = false;
-                }
+                const choices = Object.fromEntries(this.diffRows.map((row) => [row.key, row.choice]));
+                const merged = _mergeByChoice(this.diffKeys, choices, this.localData, this.serverData);
+                return this._keepChoice(merged);
             },
 
             _markResult(result) {
+                const gettext = window.gettext || ((message) => message);
                 if (!result) {
                     this.error = "Unbekannter Fehler beim Replay.";
                     return;
                 }
                 if (result.status === "synced") {
                     this.resolved = true;
+                    return;
+                }
+                if (result.status === "revocation-pending") {
+                    this.statusMessage = gettext("Synchronisation wartet auf Widerrufsprüfung");
+                    return;
+                }
+                if (result.status === "missing") {
+                    this.statusMessage = gettext("Der lokale Datensatz ist nicht mehr verfügbar. Bitte die Konfliktübersicht neu laden.");
                     return;
                 }
                 if (result.status === "conflict") {

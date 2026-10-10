@@ -34,8 +34,11 @@ beforeEach(() => {
         getOfflineEvent: vi.fn(async () => JSON.parse(JSON.stringify(record))),
         saveOfflineEdit: vi.fn(async (saved) => { record = JSON.parse(JSON.stringify(saved)); }),
         clearOfflineEdit: vi.fn(async () => {}),
+        applyClientRevocations: vi.fn(async () => ({ status: "ok" })),
+        isRevocationPending: vi.fn(async () => false),
     };
     window.offlineEdit = { replayModifiedEvent: vi.fn(async () => ({ status: "synced" })) };
+    window.syncOrchestrator = { runExclusive: vi.fn(async (fn) => fn()) };
 });
 
 describe("Selection conflict rendering and resolution", () => {
