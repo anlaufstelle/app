@@ -69,7 +69,7 @@ def configuration_write(facility_id):
 def validate_configuration_facility(record, facility_id, *, facility_lookup="facility_id"):
     """Reject moves before acquiring a gate for the wrong facility (Refs #2525)."""
     previous = type(record)._default_manager.filter(pk=record.pk).values_list(facility_lookup, flat=True).first()
-    if previous is not None and previous != facility_id:
+    if previous is not None and (facility_id is None or previous != UUID(str(facility_id))):
         raise ValidationError(_("Die Einrichtung kann nach der Erstellung nicht geändert werden."))
 
 

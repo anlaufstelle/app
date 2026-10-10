@@ -62,6 +62,16 @@ def test_assignment_can_change_type_within_its_facility(facility):
     assert assignment.document_type_id == destination.pk
 
 
+@pytest.mark.parametrize("model", [DocumentType, FieldTemplate])
+def test_existing_configuration_accepts_its_facility_uuid_as_a_string(facility, model):
+    obj = model.objects.create(facility=facility, name="Same facility")
+    obj.facility_id = str(facility.pk)
+    obj.clean()
+    obj.save()
+    obj.refresh_from_db()
+    assert obj.facility_id == facility.pk
+
+
 @pytest.mark.parametrize("model,admin_class", [(DocumentType, DocumentTypeAdmin), (FieldTemplate, FieldTemplateAdmin)])
 def test_existing_admin_facility_is_readonly(facility, super_admin_user, model, admin_class):
     obj = model.objects.create(facility=facility, name="Admin ownership")
