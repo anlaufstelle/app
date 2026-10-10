@@ -723,6 +723,11 @@ describe("cold tally acknowledgement boundaries", () => {
             expect(form.elements.quantity.value).toBe("");
         }
 
+        // Replay requires a valid revocation check before testing a lost response.
+        global.fetch = vi.fn(async () => new Response(JSON.stringify({
+            revocations: [], server_time: new Date().toISOString(), retention_seconds: 345600,
+        }), { status: 200 }));
+        expect((await store.applyClientRevocations()).status).toBe("ok");
         // Losing a replay response must preserve the original request and key.
         vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
         window.csrfUtils = { fromMeta: () => "replay-token" };

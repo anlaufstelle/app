@@ -10,6 +10,8 @@ let offlineQueue;
 function makeStore(records) {
     const rows = records.map((r) => ({ ...r }));
     return {
+        // Replay classification assumes a previously validated revocation list.
+        isRevocationPending: async () => false,
         _rows: rows,
         countQueueByStatus: async () => ({ total: rows.length, pending: rows.length, blocked: 0 }),
         count: async () => rows.length,

@@ -14,6 +14,8 @@ beforeAll(async () => {
         refresh: vi.fn(async () => "fresh-csrf-token"),
     };
     offlineStore = {
+        // Replay classification assumes a previously validated revocation list.
+        isRevocationPending: async () => false,
         updateEventLocalStatus: vi.fn(async () => {}),
         saveConflictState: vi.fn(async () => {}),
         countUnsyncedEvents: vi.fn(async () => 1),

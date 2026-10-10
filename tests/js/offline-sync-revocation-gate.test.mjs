@@ -37,11 +37,15 @@ beforeEach(async () => {
     fetchSpy = vi.fn(async (url) => {
         if (String(url).includes("/revocations/")) {
             if (failure === "network") throw new TypeError("Network failed");
-            return { status: failure || 200, ok: !failure, json: async () => ({ revocations: [] }) };
+            return { status: failure || 200, ok: !failure, json: async () => ({ revocations: [], server_time: new Date().toISOString(), retention_seconds: 345600 }) };
         }
         return { status: 201, ok: true, headers: { get: (name) => name.toLowerCase() === "x-offline-replay-result" ? "saved" : null } };
     });
     vi.stubGlobal("fetch", fetchSpy);
+    failure = null;
+    await store.applyClientRevocations();
+    fetchSpy.mockClear();
+    failure = 500;
     await window.offlineQueue.enqueueRequest("/partials/tally/increment/", "POST", "contact=1", {});
 });
 

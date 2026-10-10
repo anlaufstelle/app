@@ -47,6 +47,7 @@ const EXPECTED_FACADE_KEYS = [
     "getOfflineFacility",
     "revalidateCachedFacility",
     "applyClientRevocations",
+    "isRevocationPending",
     "saveOfflineEdit",
     "getOfflineEvent",
     "listModifiedEvents",

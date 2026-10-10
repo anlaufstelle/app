@@ -381,8 +381,9 @@
             err.name = "NoSessionKeyError";
             throw err;
         }
-        // A manual retry must not bypass a failed coordinated revocation check.
-        if (window.syncOrchestrator?.isRevocationPending?.()) {
+        // Read the shared decision immediately before every write, including retries.
+        if (typeof window.offlineStore?.isRevocationPending !== "function" ||
+            await window.offlineStore.isRevocationPending()) {
             const err = new Error("RevocationPending");
             err.name = "RevocationPendingError";
             throw err;

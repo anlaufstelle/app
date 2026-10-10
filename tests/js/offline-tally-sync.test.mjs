@@ -44,6 +44,8 @@ beforeAll(async () => {
     window.offlineQueue = { replayQueue };
     window.offlineEdit = { replayAllModifiedEvents: vi.fn(async () => {}) };
     window.offlineStore = {
+        applyClientRevocations: vi.fn(async () => ({ status: "ok" })),
+        isRevocationPending: async () => false,
         getOfflineFacility,
         listTallyQueueState: async () => ({
             byDocumentType: { [TYPE_ID]: { pending, blocked: 0 } },

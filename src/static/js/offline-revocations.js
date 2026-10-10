@@ -166,7 +166,7 @@
      * naechste Sync/Boot wiederholt den Abruf, und die 48h-TTL bleibt fuer ein
      * dauerhaft offline gebliebenes Geraet die letzte Verteidigungslinie).
      */
-    async function applyClientRevocations() {
+    async function _applyClientRevocations() {
         const empty = { purgedClients: 0, purgedQueueEntries: 0, purgedDrafts: 0 };
         let response;
         try {
@@ -192,11 +192,20 @@
             // kein Widerrufssignal, also nichts loeschen.
             return { status: "error", ...empty };
         }
-        const pks = (payload && payload.revocations) || [];
-        if (!Array.isArray(pks) || pks.length === 0) {
-            return { status: "ok", ...empty };
+        // Validate the complete server contract before applying any deletion.
+        const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
+            !Array.isArray(payload.revocations) ||
+            !payload.revocations.every((pk) => typeof pk === "string" && uuid.test(pk)) ||
+            typeof payload.server_time !== "string" ||
+            !/^\d{4}-\d{2}-\d{2}T/.test(payload.server_time) ||
+            !Number.isFinite(Date.parse(payload.server_time)) ||
+            !Number.isSafeInteger(payload.retention_seconds) || payload.retention_seconds <= 0) {
+            return { status: "error", ...empty };
         }
-        const revokedLower = pks.map((p) => String(p).toLowerCase());
+        const pks = payload.revocations;
+        if (pks.length === 0) return { status: "ok", ...empty };
+        const revokedLower = pks.map((pk) => pk.toLowerCase());
 
         // Refs #1774: Ereignis->Person ZUERST aufloesen — der Bundle-Purge
         // unten loescht genau die events-Rows, die diese Zuordnung tragen.
@@ -221,6 +230,64 @@
         const result = { status: "ok", purgedClients: purgedClients, ...extra };
         _fireRevocationEvent(result);
         return result;
+    }
+
+    // Refs #2528: shared, non-personal metadata survives page and browser restarts.
+    const REVOCATION_STATE_KEY = "revocationReplayState";
+    let _storageFailure = false;
+
+    async function isRevocationPending() {
+        let pending = true;
+        try {
+            const row = await db.meta.get(REVOCATION_STATE_KEY);
+            pending = _storageFailure || !row || !row.value || row.value.pending !== false;
+        } catch (_e) {
+            // Unreadable state never authorizes a write.
+        }
+        if (typeof document !== "undefined") {
+            document.querySelectorAll("[data-offline-revocation-pending]").forEach((node) => {
+                node.hidden = !pending;
+            });
+        }
+        return pending;
+    }
+
+    async function _notifyRevocationState() {
+        await isRevocationPending();
+        window.syncOrchestrator?.broadcast?.({ type: "revocation-state-changed" });
+    }
+
+    async function applyClientRevocations() {
+        const empty = { purgedClients: 0, purgedQueueEntries: 0, purgedDrafts: 0 };
+        let marked = false;
+        _storageFailure = true;
+        try {
+            const attempt = window.crypto.randomUUID();
+            // Persist before fetching; interrupted checks leave replay suspended.
+            await db.meta.put({ key: REVOCATION_STATE_KEY, value: { pending: true, attempt } });
+            marked = true;
+            _storageFailure = false;
+            await _notifyRevocationState();
+            const result = await _applyClientRevocations();
+            if (result.status !== "ok") return result;
+            const released = await db.transaction("rw", db.meta, async () => {
+                const row = await db.meta.get(REVOCATION_STATE_KEY);
+                // An older concurrent success cannot release a newer failed check.
+                if (!row || row.value?.attempt !== attempt) return false;
+                await db.meta.put({ key: REVOCATION_STATE_KEY, value: { pending: false, attempt } });
+                return true;
+            });
+            return released ? result : { status: "error", ...empty };
+        } catch (_e) {
+            if (!marked) {
+                // Quota failures must not leave an earlier approval usable on reload.
+                // Only invalidate control metadata; encrypted work remains intact.
+                try { await db.meta.delete(REVOCATION_STATE_KEY); } catch (_ignored) {}
+            }
+            return { status: "error", ...empty };
+        } finally {
+            await _notifyRevocationState();
+        }
     }
 
     /*
@@ -261,5 +328,6 @@
     window.offlineStore = Object.assign(window.offlineStore || {}, {
         // Refs #1760 — personen-genaue Widerrufsliste (Sync + Boot-Check)
         applyClientRevocations: applyClientRevocations,
+        isRevocationPending: isRevocationPending,
     });
 })();

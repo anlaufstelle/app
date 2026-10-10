@@ -178,7 +178,7 @@
         const q = window.offlineQueue;
         const ed = window.offlineEdit;
         const st = window.offlineStore;
-        if (st && st.applyClientRevocations && !(await _checkClientRevocations(st))) {
+        if (!st || !st.applyClientRevocations || !(await _checkClientRevocations(st))) {
             return "revocation-pending";
         }
         if (q && q.replayQueue) {
@@ -386,6 +386,7 @@
     }
 
     function _onBoot() {
+        window.offlineStore?.isRevocationPending?.();
         _startupDrain();
         _startupRevocationCheck();
     }
@@ -400,7 +401,12 @@
 
     window.syncOrchestrator = {
         requestSync: requestSync,
-        isRevocationPending: function () { return _revocationPending; },
+        isRevocationPending: async function () {
+            if (typeof window.offlineStore?.isRevocationPending === "function") {
+                return window.offlineStore.isRevocationPending();
+            }
+            return true;
+        },
         runExclusive: runExclusive,
         isLockHeld: isLockHeld,
         broadcast: broadcast,
@@ -415,6 +421,13 @@
         _BOOT_REVOCATION_MIN_INTERVAL_MS: BOOT_REVOCATION_MIN_INTERVAL_MS,
         SYNC_FINISHED_EVENT: SYNC_FINISHED_EVENT,
     };
+
+    onMessage(function (message) {
+        if (message?.type === "revocation-state-changed") {
+            window.offlineStore?.isRevocationPending?.();
+        }
+    });
+    window.offlineStore?.isRevocationPending?.();
 
     // Refs #1828: Vor dem Sync-Orchestrator geladene Module (base.html: crypto.js,
     // offline-queue.js, offline-edit.js) koennen ihren Cross-Tab-Empfaenger

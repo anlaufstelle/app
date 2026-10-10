@@ -19,6 +19,8 @@ let rows;
 function makeStore() {
     rows = new Map();
     return {
+        // Replay classification assumes a previously validated revocation list.
+        isRevocationPending: async () => false,
         saveOfflineEdit: vi.fn(async (record) => {
             rows.set(record.pk, JSON.parse(JSON.stringify(record)));
         }),
