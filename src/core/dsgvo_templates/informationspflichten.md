@@ -72,14 +72,19 @@ Eingesetzte Dienste: [keine / Dienst, Land und geeignete Garantie eintragen].
 | Nur Pseudonym | {{ retention_identified_days }} Tage | ab dem jeweiligen Kontakt |
 | Mit Zusatzangaben | {{ retention_qualified_days }} Tage | ab Fallabschluss; ohne Fall ab Kontakt; offener Fall ab letzter fachlicher Aktivität (ersatzweise Anlage) |
 
-Jeder dokumentierte Kontakt hat seine eigene Frist; ein späterer Kontakt
-verlängert die Frist früherer Kontakte nicht. Für einzelne Arten von Kontakten
-kann die Einrichtung eine kürzere Frist festlegen.
+Bei anonymen Kontakten und „Nur Pseudonym“ hat jeder Kontakt seine eigene
+Frist; ein späterer Kontakt verlängert frühere Fristen nicht. Bei „Mit
+Zusatzangaben“ gilt im offenen Fall die letzte fachliche Fallaktivität als
+gemeinsamer Fristbeginn. Ein neuer Kontakt im offenen Fall kann deshalb auch
+die Frist älterer Kontakte verschieben. Eine kürzere Typ-Höchstfrist ab dem
+jeweiligen Kontakt bleibt wirksam.
 
 Für die Stufe „Mit Zusatzangaben“ schlägt der tägliche Lauf eine Löschung vor.
-Erst eine andere Person mit dem Recht „Löschbestätigung“ gibt sie frei; auch eine
+Im Regelfall gibt eine andere Person mit dem Recht „Löschbestätigung“ sie frei; auch eine
 kürzere Typ-Frist ersetzt diese Freigabe nicht. Zurückstellen oder Ablehnen
 schützt vor der Löschung, bis der Vorschlag erneut geprüft wird.
+
+Abweichend davon kann die Einrichtung die Auto-Freigabe ausdrücklich aktivieren (Opt-in, standardmäßig aus): Nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf den Vorschlag ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg.
 
 Bei anonymen Kontakten und „Nur Pseudonym“ entfernt der Lauf die Inhalte nach
 Fristablauf automatisch. Sind alle Kontakte gelöscht, werden die Angaben zu

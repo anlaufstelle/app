@@ -55,7 +55,7 @@ siehe AVV § 6.
 
 Die Fristen gelten je Ereignis. „Höchstfrist (verkürzt nur)“ am
 Dokumentationstyp ergänzt den Stichtag; eine längere Frist verlängert nichts.
-Der Standardlauf erzeugt für „Mit Zusatzangaben“ Vorschläge und löscht erst nach
+Der Standardlauf erzeugt für „Mit Zusatzangaben“ Vorschläge und löscht im Regelfall erst nach
 Freigabe durch eine andere Person mit „Löschbestätigung“. Zurückstellen schützt
 bis zum Datum; Ablehnen erlaubt frühestens nach {{ retention_rejected_retry_days }}
 Tagen eine neue Vorlage. Ohne Ereignis anonymisiert der Lauf nach
@@ -63,6 +63,8 @@ Tagen eine neue Vorlage. Ohne Ereignis anonymisiert der Lauf nach
 schützen im Lauf Ereignisse, Person und Historieninhalte. Die Soll-Matrix und
 weitere Fristen (Aktivitäten, Papierkorb, Audit-Log, Ereignis-Historie und
 Übergabenotizen) stehen im Löschkonzept.
+
+Abweichend davon kann die Einrichtung die Auto-Freigabe ausdrücklich aktivieren (Opt-in, standardmäßig aus): Nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf den Vorschlag ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg.
 
 ### 1.8 Technische und organisatorische Maßnahmen
 Siehe separates TOM-Dokument.

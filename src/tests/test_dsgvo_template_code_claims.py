@@ -567,13 +567,30 @@ class TestDomainConceptRetentionAndRls:
         for required in ("EXPECTED_TABLES", "core_user", "core_facility", "core_organization", "BYPASSRLS"):
             assert required in privacy, required
 
-    def test_retention_bullets_name_open_case_gap_and_hold_record(self):
+    def test_retention_bullets_describe_current_deadlines_approval_and_holds(self):
         de = _bullet(DOMAIN_CONCEPT_DE.read_text(encoding="utf-8"), "Löschfristen.")
-        for required in ("offenen Fall", "zuerst ablaufende", "ohne Freigabe", "Person oder Fall"):
+        for required in (
+            "bei offenem Fall",
+            "letzte fachliche Fallaktivität",
+            "Löschvorschläge",
+            "Löschbestätigung",
+            "standardmäßig aus",
+            "Ereignis, Person oder Fall",
+            "Art.-18-Sperrvermerk",
+        ):
             assert required in de, required
+        assert "Der tägliche Lauf löscht ohne Freigabe" not in de
         en = _bullet(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8"), "Retention periods.")
-        for required in ("open case", "expires first", "without approval", "person or case"):
+        for required in (
+            "open cases",
+            "last business activity",
+            "without bypassing approval",
+            "retention proposal and approval",
+            "events, persons or cases",
+            "Art. 18 restriction",
+        ):
             assert required in en, required
+        assert "The daily run deletes without approval" not in en
 
     def test_audit_trail_glossary_row_names_entries_without_facility(self):
         row = next(
@@ -588,10 +605,14 @@ class TestDomainConceptRetentionAndRls:
         """``carry_deleted_event`` adds every deleted event to its month's snapshot."""
         de = _bullet(DOMAIN_CONCEPT_DE.read_text(encoding="utf-8"), "Löschfristen.")
         assert "nicht zu einer verbleibenden Zählung" not in de
-        assert "Statistik-Aggregat ihres Monats" in de
+        assert "Monatsaggregat" in de
+        assert "automatischer wie manueller Löschung" in de
+        assert "in derselben Transaktion" in de
         en = _bullet(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8"), "Retention periods.")
         assert "not aggregation that preserves anonymous counts" not in en
-        assert "monthly statistics aggregate" in en
+        assert "monthly aggregate" in en
+        assert "both automatic and manual deletion" in en
+        assert "in the same transaction" in en
 
 
 # ---------------------------------------------------------------------------

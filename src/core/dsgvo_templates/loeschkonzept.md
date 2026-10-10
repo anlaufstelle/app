@@ -20,7 +20,7 @@ jeder Änderung ihrer Einstellungen oder Backup-Rotation.
 |----------------|-------|--------|--------------------|
 | Kontakte anonymer Personen | {{ retention_anonymous_days }} Tage | `retention_anonymous_days` | Ereignis wird soft-gelöscht (Frist ab dem Zeitpunkt des Ereignisses) |
 | Kontakte der Stufe „Nur Pseudonym" | {{ retention_identified_days }} Tage | `retention_identified_days` | Ereignis wird soft-gelöscht (Frist ab dem Zeitpunkt des jeweiligen Ereignisses; ein neuer Kontakt verlängert ältere Ereignisse nicht) |
-| Ereignisse der Stufe „Mit Zusatzangaben" | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Frist ab Fallabschluss, ohne Fall ab Ereignisdatum, im offenen Fall ab letzter fachlicher Fallaktivität (ersatzweise Anlage); Vorschlag und Freigabe durch eine andere Person mit „Löschbestätigung“ vor der Löschung |
+| Ereignisse der Stufe „Mit Zusatzangaben" | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Frist ab Fallabschluss, ohne Fall ab Ereignisdatum, im offenen Fall ab letzter fachlicher Fallaktivität (ersatzweise Anlage); Vorschlag und im Regelfall Freigabe durch eine andere Person mit „Löschbestätigung“ vor der Löschung |
 | Höchstfrist (verkürzt nur) einzelner Dokumentationstypen | {{ retention_document_type_overrides }} | `DocumentType.retention_days` | Zusätzliche Frist für Ereignisse dieses Typs (ab Zeitpunkt des Ereignisses): Es gilt die zuerst ablaufende Frist. Eine längere Typ-Frist verlängert die kontaktstufenbezogene Frist nicht |
 | Aktivitäten / Zeitstrom-Einträge | {{ retention_activities_days }} Tage | `retention_activities_days` | Harte Löschung |
 | Papierkorb für gelöschte Personen und Fälle | {{ client_trash_days }} Tage | `client_trash_days` | Automatische Anonymisierung; bis dahin Wiederherstellung möglich |
@@ -51,14 +51,14 @@ Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
 
 - Der tägliche Standardlauf (`enforce_retention`) löscht abgelaufene anonyme
   Ereignisse und Ereignisse der Stufe „Nur Pseudonym“ automatisch. Für „Mit
-  Zusatzangaben“ legt er Vorschläge an; gelöscht wird erst nach Freigabe durch
+  Zusatzangaben“ legt er Vorschläge an; im Regelfall wird erst nach Freigabe durch
   eine andere Person mit dem Recht „Löschbestätigung“. Auch eine Typ-Höchstfrist
   umgeht diesen Freigabeschritt nicht.
 - Zurückstellen schützt bis zum gesetzten Datum. Ablehnen löscht nichts;
   frühestens nach {{ retention_rejected_retry_days }} Tagen kann ein neuer
-  Vorschlag entstehen. Auto-Freigabe nach maximalen Zurückstellungen ist
-  standardmäßig ausgeschaltet und muss ausdrücklich aktiviert werden.
+  Vorschlag entstehen.
   `--propose` bleibt ein zusätzlicher Vorschlagslauf für alle Strategien.
+- Abweichend davon kann die Einrichtung die Auto-Freigabe ausdrücklich aktivieren (Opt-in, standardmäßig aus): Nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf den Vorschlag ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg.
 - Ereignisinhalte und Suchtext werden bei der Löschung sofort geleert, Dateien
   endgültig gelöscht. Die Ereignishülle bleibt; Ereignisse haben keinen
   Wiederherstellungsweg. Frühere Historienfassungen redigiert regulär der

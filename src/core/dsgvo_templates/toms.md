@@ -66,7 +66,8 @@ Maßgeblich für das Lesen ist die höhere Sensitivität aus Dokumentationstyp u
 **Technische Umsetzung:**
 - [x] Serverseitige Berechtigungsprüfung
 - [x] Template-seitige Sichtbarkeitssteuerung
-- [x] 4-Augen-Prinzip für manuelle Löschungen von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“ (der automatische Aufbewahrungslauf löscht ohne Freigabe); Dateien vernichten Leitung und Anwendungsbetreuung über den Sofortlöschweg ohne zweite Person, ein aktiver Legal Hold oder ein Sperrvermerk nach Art. 18 DSGVO an der Person sperrt ihn
+- [x] 4-Augen-Prinzip für manuelle Löschungen von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“ (auch der automatische Aufbewahrungslauf verlangt für „Mit Zusatzangaben“ im Regelfall eine Freigabe durch eine andere Person mit „Löschbestätigung“); Dateien vernichten Leitung und Anwendungsbetreuung über den Sofortlöschweg ohne zweite Person, ein aktiver Legal Hold oder ein Sperrvermerk nach Art. 18 DSGVO an der Person sperrt ihn
+- Abweichend davon kann die Einrichtung die Auto-Freigabe ausdrücklich aktivieren (Opt-in, standardmäßig aus): Nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf den Vorschlag ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg.
 - [x] Sensitivitätsstufen pro Dokumentationstyp und Feld; ein Feld kann die Stufe seines Dokumentationstyps nur anheben
 - [x] PostgreSQL Row Level Security (RLS) als Defense-in-Depth für alle direkt oder über Beziehungen einrichtungsbezogenen Tabellen; Policies verwenden `app.current_facility_id` und arbeiten ohne gesetzten Kontext fail-closed. Ausnahme: In Sitzungen der Systemadministration setzt die Anwendung zusätzlich `app.is_super_admin`; die Policies lassen dann einrichtungsübergreifende Zugriffe zu
 
