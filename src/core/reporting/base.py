@@ -644,8 +644,13 @@ class DatasetBackend(ABC):
         The dataset contract tests pin both policies against actual results.
         """
         if self.typ_bindung is not None:
+            requirements = tuple(
+                Anforderung(self.typ_bindung, self.feld_bindungen, a.entity_type)
+                for a in self.verfuegbarkeit
+                if a.typ_bindung is self.typ_bindung
+            ) or (Anforderung(self.typ_bindung, self.feld_bindungen),)
             return (
-                Anforderung(self.typ_bindung, self.feld_bindungen),
+                *requirements,
                 *(a for a in self.verfuegbarkeit if a.typ_bindung is None and a.erfuellt(facility)),
             )
         if not self.verfuegbarkeit and self.feld_bindungen:
@@ -658,6 +663,8 @@ class DatasetBackend(ABC):
             return ()
         contributions = []
         for requirement in self.counting_requirements(facility):
+            if requirement.entity_type is not None and document_type.entity_type != requirement.entity_type:
+                continue
             binding = requirement.typ_bindung
             if binding is not None:
                 values = (getattr(document_type, field) for field in binding.values_fields())

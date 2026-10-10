@@ -375,10 +375,17 @@ def _binding_labels(binding) -> str:
     return _(" oder ").join(f"{label} ({key})" for key, label in binding.vokabular().items())
 
 
-def _diagnose_backend(backend, document_type, facility) -> str | None:
+def _diagnose_backend(backend, document_type, facility, *, field_template=None) -> str | None:
     states = [_requirement_state(a, document_type, facility) for a in backend.verfuegbarkeit]
     if any(missing == [] for _, missing in states):
         return None
+    if field_template is not None:
+        # Preserve complete local OR alternatives before limiting missing-field feedback.
+        states = [
+            state
+            for requirement, state in zip(backend.verfuegbarkeit, states, strict=True)
+            if any(binding.key_for_template(field_template) is not None for binding in requirement.feld_bindungen)
+        ]
     alternatives = ["; ".join(missing) for matched, missing in states if matched and missing]
     if not alternatives:
         return None
@@ -420,7 +427,7 @@ def diagnose_field_bindings(field_template, facility) -> list[str]:
     warnings = []
     for document_type in _linked_types(field_template, facility):
         for backend in relevant:
-            if warning := _diagnose_backend(backend, document_type, facility):
+            if warning := _diagnose_backend(backend, document_type, facility, field_template=field_template):
                 warnings.append(_("Typ „%(type)s“: %(warning)s") % {"type": document_type.name, "warning": warning})
     return warnings
 

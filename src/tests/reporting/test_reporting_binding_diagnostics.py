@@ -387,3 +387,41 @@ def test_field_only_backend_lists_its_read_field_and_type(partial_type, facility
     field.save()
     assert registry.describe_field_bindings(field, facility) == []
     assert registry.describe_type_bindings(doc_type, facility) == []
+
+
+@pytest.mark.parametrize("single_binding", [False, True], ids=["group-binding", "single-binding"])
+def test_type_description_respects_requirement_entity_type(facility, monkeypatch, single_binding):
+    event_type = make_type(facility, "Event type", "contact")
+    add_field(event_type, "ausgabe_stueck")
+    person_type = make_document_type(facility=facility, name="Person type", entity_type="client", report_key="contact")
+    add_field(person_type, "ausgabe_stueck")
+    backend = FieldOnlyBackend()
+    binding = TypBindung((BindungsEintrag("contact", "Contact"),))
+    backend.typ_bindung = binding if single_binding else None
+    backend.verfuegbarkeit = (Anforderung(binding, backend.feld_bindungen, entity_type="event"),)
+    monkeypatch.setattr(registry, "get_backends", lambda: [backend])
+    assert backend.is_available(facility)
+    assert registry.describe_type_bindings(person_type, facility) == []
+    assert registry.describe_type_bindings(event_type, facility) == ["Field-only report (Contact)"]
+
+
+def test_field_view_does_not_diagnose_an_unrelated_group(client, admin_user, facility):
+    crisis = make_type(facility, "Crisis with unrelated field", "crisis")
+    field = add_field(crisis, "leistungen")
+    assert any("art_der_krise" in warning for warning in registry.diagnose_type_bindings(crisis, facility))
+    client.force_login(admin_user)
+    response = client.get(reverse("core:config_fieldtemplate_update", args=[field.pk]))
+    assert response.status_code == 200
+    assert response.context["report_binding_warnings"] == []
+    assert b"report-binding-warning" not in response.content
+
+
+def test_field_warning_preserves_local_complete_or_alternative(partial_type, facility, monkeypatch):
+    doc_type, field = partial_type
+    add_field(doc_type, "alternative_units")
+    backend = FieldOnlyBackend()
+    missing = FeldBindung((BindungsEintrag("quantity_units", "Units"),), bindet="report_key")
+    alternate = FeldBindung((BindungsEintrag("alternative_units", "Alternative"),), bindet="report_key")
+    backend.verfuegbarkeit = (Anforderung(None, (*backend.feld_bindungen, missing)), Anforderung(None, (alternate,)))
+    monkeypatch.setattr(registry, "get_backends", lambda: [backend])
+    assert registry.diagnose_field_bindings(field, facility) == []
