@@ -14,6 +14,7 @@ from datetime import timedelta
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben. Nach den Submodul-Schnitten
@@ -192,7 +193,7 @@ class _CarryFailure:
         return True
 
 
-def _soft_delete_events(qs, facility, category, retention_days, extra_detail=None):
+def _soft_delete_events(qs, facility, category, retention_days, extra_detail=None, *, now=None, settings_obj=None):
     """Soft-delete every event in ``qs``, write ``EventHistory`` + ``AuditLog``,
     and clean up approved proposals. Returns ``(count, deleted_ids)``.
 
@@ -245,6 +246,22 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
                 deferred_count += 1
             if event is None:
                 continue
+            if event.client_id and event.client.contact_stage == Client.ContactStage.QUALIFIED:
+                latest = (
+                    RetentionProposal.objects.filter(facility=facility, target_type="Event", target_id=event.pk)
+                    .select_for_update()
+                    .order_by("-proposed_at", "-pk")
+                    .first()
+                )
+                if latest is None or latest.status != RetentionProposal.Status.APPROVED:
+                    continue
+                # A business change after approval can move the deadline forward.
+                if (
+                    not collect_doomed_events(facility, settings_obj or facility.settings, now or timezone.now())
+                    .filter(pk=event.pk)
+                    .exists()
+                ):
+                    continue
             # Refs #714: Beide Soft-Delete-Pfade muessen redaktiert sein — frueher
             # kopierte Retention den Klartext in EventHistory und die append-only-
             # Trigger machten ihn unloeschbar (DSGVO-Blocker). Payload + Metadaten
@@ -327,7 +344,7 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
     return len(deleted_event_ids), deleted_event_ids
 
 
-def _enforce(qs, *, facility, category, retention_days, dry_run, extra_detail=None):
+def _enforce(qs, *, facility, category, retention_days, dry_run, extra_detail=None, now=None, settings_obj=None):
     """Zaehlen, bei Bedarf loeschen, Result-Dict — gemeinsamer Rumpf der vier
     ``enforce_*``-Strategien (Refs #1827).
 
@@ -341,8 +358,14 @@ def _enforce(qs, *, facility, category, retention_days, dry_run, extra_detail=No
     """
     count = qs.count()
     if count and not dry_run:
-        _soft_delete_events(
-            qs, facility=facility, category=category, retention_days=retention_days, extra_detail=extra_detail
+        count, _ = _soft_delete_events(
+            qs,
+            facility=facility,
+            category=category,
+            retention_days=retention_days,
+            extra_detail=extra_detail,
+            now=now,
+            settings_obj=settings_obj,
         )
     return {"count": count}
 
@@ -375,8 +398,8 @@ def enforce_anonymous(facility, settings_obj, now, dry_run):
     held_case_ids = get_active_hold_target_ids(facility, "Case")
     qs = (
         Event.objects.filter(
+            Q(is_anonymous=True) | Q(client__isnull=True),
             facility=facility,
-            is_anonymous=True,
             is_deleted=False,
             occurred_at__lt=cutoff,
         )
@@ -390,6 +413,8 @@ def enforce_anonymous(facility, settings_obj, now, dry_run):
         category="anonymous",
         retention_days=settings_obj.retention_anonymous_days,
         dry_run=dry_run,
+        now=now,
+        settings_obj=settings_obj,
     )
 
 
@@ -436,11 +461,13 @@ def enforce_identified(facility, settings_obj, now, dry_run):
         category="identified",
         retention_days=settings_obj.retention_identified_days,
         dry_run=dry_run,
+        now=now,
+        settings_obj=settings_obj,
     )
 
 
 def enforce_qualified(facility, settings_obj, now, dry_run):
-    """Soft-delete events from QUALIFIED clients whose linked closed case has exceeded retention.
+    """Propose expired qualified events and delete only approved ones.
 
     Returns ``{"count": N}``.
     """
@@ -460,36 +487,24 @@ def enforce_qualified(facility, settings_obj, now, dry_run):
     # sperrte sie und meldete sie als ``deferred``: Dauerrauschen im
     # Lauf-Protokoll, das die Zurueckstellung als Signal entwertet.
     held_case_ids = get_active_hold_target_ids(facility, "Case")
-    qualified_clients = Client.objects.filter(
-        facility=facility,
-        contact_stage=Client.ContactStage.QUALIFIED,
-    )
+    from core.retention.proposals import create_proposals_for_facility
 
-    case_cutoff = now - timedelta(days=settings_obj.retention_qualified_days)
-    expired_cases = Case.objects.filter(
-        facility=facility,
-        client__in=qualified_clients,
-        status=Case.Status.CLOSED,
-        closed_at__lt=case_cutoff,
+    qs = next(
+        strategy.queryset
+        for strategy in iter_strategies(facility, settings_obj, now)
+        if strategy.category == "qualified"
     )
-
-    qs = (
-        Event.objects.filter(
-            facility=facility,
-            client__in=qualified_clients,
-            case__in=expired_cases,
-            is_deleted=False,
-        )
-        .exclude(pk__in=held_ids)
-        .exclude(client_id__in=held_client_ids)
-        .exclude(case_id__in=held_case_ids)
-    )
+    qs = qs.exclude(pk__in=held_ids).exclude(client_id__in=held_client_ids).exclude(case_id__in=held_case_ids)
+    if not dry_run:
+        create_proposals_for_facility(facility, settings_obj, now, qualified_only=True)
     return _enforce(
         qs,
         facility=facility,
         category="qualified",
         retention_days=settings_obj.retention_qualified_days,
         dry_run=dry_run,
+        now=now,
+        settings_obj=settings_obj,
     )
 
 
@@ -555,6 +570,7 @@ def enforce_document_type_retention(facility, now, dry_run):
             retention_days=dt.retention_days,
             dry_run=dry_run,
             extra_detail={"document_type": dt.name},
+            now=now,
         )["count"]
 
     return {"count": count}
@@ -771,6 +787,11 @@ def process_facility_retention(facility, settings_obj, now, dry_run):
 
     Returns ``{"count": N}`` — total events affected.
     """
+    if dry_run:
+        return {"count": collect_doomed_events(facility, settings_obj, now).count()}
+    from core.retention.proposals import create_proposals_for_facility
+
+    create_proposals_for_facility(facility, settings_obj, now, qualified_only=True)
     count = 0
     count += enforce_anonymous(facility, settings_obj, now, dry_run)["count"]
     count += enforce_identified(facility, settings_obj, now, dry_run)["count"]

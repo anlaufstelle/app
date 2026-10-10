@@ -293,6 +293,12 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         # system_type) — als Formfeld bewusst optional, damit ein POST ohne
         # den Schlüssel (Bestand) nicht am „Pflichtfeld"-Fehler scheitert;
         # ``clean_entity_type`` liefert den Bestandsdefault EVENT nach.
+        self.fields["retention_days"].label = _("Höchstfrist (verkürzt nur)")
+        self.fields["retention_days"].help_text = _(
+            "Diese Höchstfrist in Tagen verkürzt nur die Frist der Kontaktstufe; "
+            "eine längere Höchstfrist verlängert sie nicht. "
+            "Die Typ-Höchstfrist beginnt am Ereignisdatum. Leer lässt die Stufenfrist gelten."
+        )
         self.fields["entity_type"].required = False
         # Kompatibel mit bestehenden Ohne-JS-/API-Posts, die das neue Feld aus
         # #1886 noch nicht senden: Anlage nutzt den Modell-Default, Bearbeitung

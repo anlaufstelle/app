@@ -19,6 +19,17 @@
     </a>
 </div>
 
+{% if inactive_cases %}
+<div class="bg-yellow-50 border border-yellow-200 rounded-[10px] p-4 mb-6">
+    <h2 class="text-sm font-semibold mb-2">{% trans "Ruhende Fälle" %}</h2>
+    <ul>
+    {% for case in inactive_cases %}
+        <li><a href="{% url 'core:case_detail' case.pk %}" class="underline">{{ case.title }}</a> · {% blocktrans with days=case.inactive_days %}Fall seit {{ days }} Tagen ohne Aktivität{% endblocktrans %}</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
 {# Retention settings info #}
 <div class="bg-blue-50 border border-blue-200 rounded-[10px] p-4 mb-6">
     <h3 class="text-sm font-semibold text-blue-800 mb-2">{% trans "Aufbewahrungsfristen" %}</h3>

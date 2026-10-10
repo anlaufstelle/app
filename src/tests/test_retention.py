@@ -8,7 +8,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Case, Client, Event, Facility, LegalHold, Settings
+from core.models import Activity, AuditLog, Case, Client, Event, Facility, LegalHold, RetentionProposal, Settings
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ def identified_event_recent(facility_with_settings, client_identified, doc_type_
 
 @pytest.fixture
 def qualified_event_open_case(facility_with_settings, client_qualified, doc_type_contact, staff_user):
-    """Event from QUALIFIED client with OPEN case → should stay."""
+    """Recent case activity protects an old qualified event in an open case."""
     case = Case.objects.create(
         facility=facility_with_settings,
         client=client_qualified,
@@ -218,8 +218,8 @@ def test_identified_event_client_hold_stays(identified_event_expired, client_ide
 
 
 @pytest.mark.django_db
-def test_qualified_event_open_case_stays(qualified_event_open_case):
-    """Event from QUALIFIED client with open case is not deleted, even if very old."""
+def test_qualified_event_with_recent_case_activity_stays(qualified_event_open_case):
+    """Recent open-case activity protects even a very old qualified event."""
     call_command("enforce_retention")
 
     qualified_event_open_case.refresh_from_db()
@@ -227,13 +227,18 @@ def test_qualified_event_open_case_stays(qualified_event_open_case):
 
 
 @pytest.mark.django_db
-def test_qualified_event_closed_case_expired_gets_deleted(qualified_event_closed_case_expired):
-    """Event from QUALIFIED client with closed + expired case is soft-deleted."""
+def test_qualified_event_closed_case_expired_gets_proposed(qualified_event_closed_case_expired):
+    """An expired qualified event in a closed case awaits approval."""
     call_command("enforce_retention")
 
     qualified_event_closed_case_expired.refresh_from_db()
-    assert qualified_event_closed_case_expired.is_deleted is True
-    assert qualified_event_closed_case_expired.data_json == {}
+    assert qualified_event_closed_case_expired.is_deleted is False
+    assert qualified_event_closed_case_expired.data_json
+    assert RetentionProposal.objects.filter(
+        facility=qualified_event_closed_case_expired.facility,
+        target_id=qualified_event_closed_case_expired.pk,
+        status=RetentionProposal.Status.PENDING,
+    ).exists()
 
 
 @pytest.mark.django_db

@@ -226,6 +226,16 @@ class Settings(models.Model):
             "erzwungen oder (bei Auto-Freigabe) automatisch freigegeben wird."
         ),
     )
+    retention_rejected_retry_days = models.PositiveIntegerField(
+        default=365,
+        validators=[MinValueValidator(1)],
+        verbose_name=_("Wiedervorlage nach Ablehnung (Tage)"),
+    )
+    retention_open_case_inactive_days = models.PositiveIntegerField(
+        default=365,
+        validators=[MinValueValidator(1)],
+        verbose_name=_("Hinweis bei ruhenden Fällen (Tage)"),
+    )
     retention_use_k_anonymization = models.BooleanField(
         default=False,
         verbose_name=_("K-Anonymisierung statt Hard-Delete"),
@@ -295,6 +305,12 @@ class Settings(models.Model):
         verbose_name = _("Einstellungen")
         verbose_name_plural = _("Einstellungen")
         constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(retention_rejected_retry_days__gte=1) & models.Q(retention_open_case_inactive_days__gte=1)
+                ),
+                name="settings_retention_review_min_1",
+            ),
             models.CheckConstraint(
                 condition=models.Q(search_trigram_threshold__gte=0.0) & models.Q(search_trigram_threshold__lte=1.0),
                 name="settings_trigram_threshold_range",

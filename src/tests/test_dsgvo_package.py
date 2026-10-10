@@ -875,12 +875,12 @@ class TestQualifiedPeriodNeedsClosedCase:
 
         assert "ohne Fall oder in offenen Fällen" in retention
 
-    def test_qualified_event_without_case_does_not_expire(self, facility, client_qualified, staff_user):
+    def test_qualified_event_without_case_gets_proposed(self, facility, client_qualified, staff_user):
         from datetime import timedelta
 
         from django.utils import timezone
 
-        from core.models import DocumentType, Event
+        from core.models import DocumentType, Event, RetentionProposal
         from core.retention.enforcement import process_facility_retention
 
         doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
@@ -898,6 +898,12 @@ class TestQualifiedPeriodNeedsClosedCase:
 
         event.refresh_from_db()
         assert event.is_deleted is False
+
+        assert RetentionProposal.objects.filter(
+            facility=facility,
+            target_id=event.pk,
+            status=RetentionProposal.Status.PENDING,
+        ).exists()
 
 
 @pytest.mark.django_db

@@ -90,7 +90,7 @@ class DocumentType(ReportKeyMixin, SluggedModel):
         # erzeugt in core.retention.strategies einen Cutoff >= jetzt. None (keine
         # Frist) bleibt zulaessig; gesetzte Werte muessen >= 1 sein.
         validators=[MinValueValidator(1)],
-        verbose_name=_("Aufbewahrungsfrist (Tage)"),
+        verbose_name=_("Höchstfrist (verkürzt nur)"),
     )
     icon = models.CharField(max_length=50, blank=True, verbose_name=_("Icon"))
     color = models.CharField(max_length=20, blank=True, verbose_name=_("Farbe"))

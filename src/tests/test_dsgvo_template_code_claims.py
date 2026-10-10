@@ -681,7 +681,10 @@ def _settings_retention_fields() -> list[str]:
     return [
         field.name
         for field in Settings._meta.get_fields()
-        if isinstance(field, dj_models.IntegerField) and field.name.endswith(("_days", "_months"))
+        if isinstance(field, dj_models.IntegerField)
+        and field.name.endswith(("_days", "_months"))
+        # Refs #2524: review/reminder intervals neither retain nor purge data.
+        and field.name not in {"retention_rejected_retry_days", "retention_open_case_inactive_days"}
     ]
 
 

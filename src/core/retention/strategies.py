@@ -1,152 +1,87 @@
-"""Gemeinsame Strategie-Datacontainer fuer Retention (Refs #778).
-
-Die vier Retention-Strategien (anonymous, identified, qualified,
-document_type) werden frueher dreifach kopiert: in
-:func:`core.retention.enforcement.collect_doomed_events`, in den vier
-``enforce_*``-Funktionen und in
-:func:`core.retention.proposals.create_proposals_for_facility`. Drift
-zwischen den drei Stellen ist ein latenter DSGVO-Bug — wenn die
-Schwellen je nach Eintrittspunkt unterschiedlich greifen, leben Events
-laenger als sie duerften.
-
-Dieses Modul exportiert :func:`iter_strategies`, das Kern-QuerySets +
-Metadaten liefert. Die Konsumenten-Module sind dafuer zustaendig,
-``held_ids`` (Legal Holds) auszuschliessen und ihre eigene Aktion
-auszufuehren (Soft-Delete, Proposal-Anlage usw.).
-"""
-
-from __future__ import annotations
+"""Shared expiry queries for preview, proposal and enforcement (Refs #2524)."""
 
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-# Refs #818 — Inline-Imports an Modulkopf gehoben.
+from django.db.models import DateTimeField, ExpressionWrapper, F, Q, QuerySet, Value
+from django.db.models.functions import Coalesce
+
 from core.models import Case, Client, DocumentType, Event
 
 
 @dataclass(frozen=True)
 class RetentionStrategy:
-    """Single retention strategy materialized for one facility/now-tuple.
-
-    ``category`` taggt den Audit-Log und die ``RetentionProposal``-Zeile —
-    Werte: ``anonymous``, ``identified``, ``qualified``, ``document_type``.
-
-    ``cutoff`` ist der Schwellenwert (datetime), unterhalb dessen Events
-    geloescht werden duerfen. ``queryset`` ist der gefilterte Event-
-    QuerySet; Aufrufer sollten ``.exclude(pk__in=held_ids)`` ergaenzen.
-    """
+    """Expired events with their individual deadline and audit category."""
 
     category: str
     cutoff: datetime
-    queryset: object  # Event QuerySet
+    queryset: QuerySet
+
+
+def _with_deadline(queryset, anchor, days):
+    return queryset.annotate(
+        retention_due_at=ExpressionWrapper(anchor + Value(timedelta(days=days)), output_field=DateTimeField())
+    )
 
 
 def iter_strategies(facility, settings_obj, now: datetime) -> Iterator[RetentionStrategy]:
-    """Yield :class:`RetentionStrategy` pro aktivem Retention-Pfad.
-
-    Die Reihenfolge entspricht :func:`core.retention.enforcement.process_facility_retention`:
-    anonymous -> identified -> qualified -> document_type. Damit landet
-    ein Event, das mehrere Kategorien matcht, in der hoechstpriorisierten
-    (anonymous schlaegt identified usw.) — wichtig fuer die deterministische
-    Categorisierung im Audit-Log.
-
-    Die ``document_type``-Strategie ist **event-only** (Refs #1738, s. u.).
-    Denselben ``entity_type``-Filter fuehrt
-    :func:`core.retention.enforcement.enforce_document_type_retention` noch
-    einmal fuer sich — bewusst doppelt (Defense in Depth): der direkte
-    Loeschpfad laeuft nicht ueber dieses Modul und darf sich nicht darauf
-    verlassen, dass die Regel anderswo steht.
-    """
-    # Security N8 (Refs #1445): 0/negative Fristen erzeugen einen Cutoff
-    # >= jetzt (``now - timedelta(days=-5) == now + 5d``) und wuerden den
-    # Gesamtbestand zum Loeschen vorschlagen. Validator + DB-Constraint
-    # verhindern das ab jetzt beim Speichern; defensiv (Alt-Daten,
-    # Direkt-Writes ueber .update()/raw SQL) ueberspringen wir solche
-    # Strategien hier zusaetzlich.
+    """Yield all enabled deadlines; the earliest expiry wins, including type caps."""
+    events = Event.objects.filter(facility=facility, is_deleted=False)
     if settings_obj.retention_anonymous_days >= 1:
-        cutoff_anon = now - timedelta(days=settings_obj.retention_anonymous_days)
+        days = settings_obj.retention_anonymous_days
+        cutoff = now - timedelta(days=days)
         yield RetentionStrategy(
-            category="anonymous",
-            cutoff=cutoff_anon,
-            queryset=Event.objects.filter(
-                facility=facility,
-                is_anonymous=True,
-                is_deleted=False,
-                occurred_at__lt=cutoff_anon,
+            "anonymous",
+            cutoff,
+            _with_deadline(
+                events.filter(Q(is_anonymous=True) | Q(client__isnull=True), occurred_at__lt=cutoff),
+                F("occurred_at"),
+                days,
             ),
         )
-
     if settings_obj.retention_identified_days >= 1:
-        cutoff_ident = now - timedelta(days=settings_obj.retention_identified_days)
-        identified_clients = Client.objects.filter(
-            facility=facility,
-            contact_stage=Client.ContactStage.IDENTIFIED,
-        )
+        days = settings_obj.retention_identified_days
+        cutoff = now - timedelta(days=days)
         yield RetentionStrategy(
-            category="identified",
-            cutoff=cutoff_ident,
-            queryset=Event.objects.filter(
-                facility=facility,
-                client__in=identified_clients,
-                is_deleted=False,
-                occurred_at__lt=cutoff_ident,
+            "identified",
+            cutoff,
+            _with_deadline(
+                events.filter(client__contact_stage=Client.ContactStage.IDENTIFIED, occurred_at__lt=cutoff),
+                F("occurred_at"),
+                days,
             ),
         )
-
     if settings_obj.retention_qualified_days >= 1:
-        case_cutoff = now - timedelta(days=settings_obj.retention_qualified_days)
-        qualified_clients = Client.objects.filter(
-            facility=facility,
-            contact_stage=Client.ContactStage.QUALIFIED,
-        )
-        expired_cases = Case.objects.filter(
-            facility=facility,
-            client__in=qualified_clients,
-            status=Case.Status.CLOSED,
-            closed_at__lt=case_cutoff,
-        )
-        yield RetentionStrategy(
-            category="qualified",
-            cutoff=case_cutoff,
-            queryset=Event.objects.filter(
-                facility=facility,
-                client__in=qualified_clients,
-                case__in=expired_cases,
-                is_deleted=False,
-            ),
-        )
+        days = settings_obj.retention_qualified_days
+        cutoff = now - timedelta(days=days)
+        # A missing closing timestamp falls back to business activity/creation.
+        from django.db.models import Case as ConditionalCase
+        from django.db.models import When
 
-    # Refs #1738 (M24, ADR-039): ``retention_days`` ist **event-only** — fuer
-    # Personen- und Fall-Typen gilt der Owner-Lebenszyklus (ihre Daten und
-    # Anhaenge fallen mit der Klienten-Anonymisierung), eine eigene Zeitfrist
-    # gibt es in v1 nicht. Der Filter gehoert an DIESE Quelle: ``iter_strategies``
-    # speist ``collect_doomed_events`` (Dry-Run/Vorschau) UND
-    # ``create_proposals_for_facility`` (RetentionProposal). Ohne ihn blieb die
-    # Frist eines Personen-Typs nur deshalb folgenlos, weil ein ``Event`` nie
-    # einen Personen-Typ traegt — eine stille Kopplung statt einer erklaerten
-    # Regel (Negativtest: ``test_neg_client_entity_doctype_yields_no_strategy``).
-    #
-    # Security N8 (Refs #1445): retention_days >= 1 defensiv erzwingen (der
-    # Filter greift beim DB-Lesen — In-Memory nicht testbar; die eigentliche
-    # Absicherung ist der DB-CheckConstraint documenttype_retention_days_min_1).
-    doc_types_with_retention = DocumentType.objects.filter(
+        anchor = ConditionalCase(
+            When(case__isnull=True, then=F("occurred_at")),
+            When(
+                case__status=Case.Status.CLOSED,
+                then=Coalesce("case__closed_at", "case__last_activity_at", "case__created_at"),
+            ),
+            default=Coalesce("case__last_activity_at", "case__created_at"),
+            output_field=DateTimeField(),
+        )
+        qualified = events.filter(client__contact_stage=Client.ContactStage.QUALIFIED).annotate(retention_anchor=anchor)
+        yield RetentionStrategy(
+            "qualified", cutoff, _with_deadline(qualified.filter(retention_anchor__lt=cutoff), anchor, days)
+        )
+    for document_type in DocumentType.objects.filter(
         facility=facility,
         entity_type=DocumentType.EntityType.EVENT,
-        retention_days__isnull=False,
         retention_days__gte=1,
-    )
-    for dt in doc_types_with_retention:
-        # retention_days__isnull=False im Filter — None ist hier ausgeschlossen.
-        assert dt.retention_days is not None  # noqa: S101
-        cutoff_dt = now - timedelta(days=dt.retention_days)
+    ):
+        days = document_type.retention_days
+        assert days is not None  # noqa: S101 — the database filter excludes NULL.
+        cutoff = now - timedelta(days=days)
         yield RetentionStrategy(
-            category="document_type",
-            cutoff=cutoff_dt,
-            queryset=Event.objects.filter(
-                facility=facility,
-                document_type=dt,
-                is_deleted=False,
-                occurred_at__lt=cutoff_dt,
-            ),
+            "document_type",
+            cutoff,
+            _with_deadline(events.filter(document_type=document_type, occurred_at__lt=cutoff), F("occurred_at"), days),
         )

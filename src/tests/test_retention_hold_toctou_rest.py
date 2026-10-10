@@ -88,6 +88,7 @@ def _committed_bestand(*, mit_fall=False, im_papierkorb=False, events=5):
         password="x" * 40,
         facility=facility,
         role=User.Role.FACILITY_ADMIN,
+        can_confirm_deletion=True,
     )
     doc_type = make_document_type(
         facility=facility,
@@ -1139,6 +1140,7 @@ def _committed_purge_bestand(owner_art="ereignis", *, mit_person=True):
         password="x" * 40,
         facility=facility,
         role=User.Role.FACILITY_ADMIN,
+        can_confirm_deletion=True,
     )
     doc_type = make_document_type(
         facility=facility,

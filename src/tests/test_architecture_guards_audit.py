@@ -132,8 +132,10 @@ class TestAuditLogCreationAllowlist:
             # Nachfuehrung, keine neue Schreibstelle.
             # Refs #2525: +1 line for the protection gate before the version
             # check in ``update_settings`` (173 -> 174, 202 -> 203).
-            174: "update_settings-Body — Settings-Diff-Helper",
-            203: "log_settings_change-Body — zweite create-Stelle",
+            # Refs #2524: two review settings in both audit field lists shift
+            # the existing helpers by four lines; no new write site is allowed.
+            178: "update_settings body — settings diff helper",
+            207: "log_settings_change body — second create call",
         },
         # Signal-Handler: kein Request, RLS-Session-State explizit gesetzt.
         "core/signals/audit.py": {

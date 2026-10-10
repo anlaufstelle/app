@@ -630,7 +630,7 @@ def _sharpen_retention(facility):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("table", RETENTION_TABLES)
-def test_no_residue_after_enforce_retention(maximal_pii_graph, table):
+def test_no_residue_after_enforce_retention(maximal_pii_graph, table, lead_user):
     from datetime import timedelta
 
     from django.core.management import call_command
@@ -651,6 +651,12 @@ def test_no_residue_after_enforce_retention(maximal_pii_graph, table):
     g.client.deleted_at = timezone.now() - timedelta(days=10)
     g.client.save(update_fields=["deleted_at"])
 
+    # Refs #2524: exercise the destructive path with its required approval.
+    from core.models import RetentionProposal
+    from core.retention.proposals import approve_proposal
+
+    proposal = RetentionProposal.objects.get(facility=g.facility, target_type="Event", target_id=g.event.pk)
+    approve_proposal(proposal, lead_user)
     call_command("enforce_retention", "--facility", g.facility.name)
 
     hits = [h for h in undeclared_hits(g.facility.id) if h.table == table]
@@ -658,7 +664,7 @@ def test_no_residue_after_enforce_retention(maximal_pii_graph, table):
 
 
 @pytest.mark.django_db
-def test_enforce_retention_acts_on_the_graph(maximal_pii_graph):
+def test_enforce_retention_acts_on_the_graph(maximal_pii_graph, lead_user):
     """Positiv-Kontrolle: die Pipeline agiert real (Event soft-deletet, Client
     anonymisiert, Activities hart geloescht) — sonst waeren die Residue-Tests
     wertlos (gruen, weil nichts passiert)."""
@@ -678,6 +684,12 @@ def test_enforce_retention_acts_on_the_graph(maximal_pii_graph):
 
     assert Activity.objects.filter(facility=g.facility).exists()  # vor dem Lauf
 
+    # Refs #2524: exercise the destructive path with its required approval.
+    from core.models import RetentionProposal
+    from core.retention.proposals import approve_proposal
+
+    proposal = RetentionProposal.objects.get(facility=g.facility, target_type="Event", target_id=g.event.pk)
+    approve_proposal(proposal, lead_user)
     call_command("enforce_retention", "--facility", g.facility.name)
 
     g.client.refresh_from_db()

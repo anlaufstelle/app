@@ -12,6 +12,7 @@ from datetime import timedelta
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import F
+from django.db.models.functions import Coalesce
 from django.db.utils import IntegrityError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -19,7 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from core.constants import RETENTION_URGENCY_RED_DAYS, RETENTION_URGENCY_YELLOW_DAYS
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
-from core.models import AuditLog, Client, Event, LegalHold, RetentionProposal
+from core.models import AuditLog, Case, Client, Event, LegalHold, RetentionProposal
 from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold
 from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
@@ -167,7 +168,26 @@ def build_retention_dashboard_context(facility, user=None):
     accepted for future role-based filtering and kept in the signature so
     callers don't have to change when it becomes relevant.
     """
-    del user  # currently unused; see docstring
+    inactive_cases = []
+    try:
+        settings_obj = facility.settings
+    except facility._meta.model.settings.RelatedObjectDoesNotExist:
+        settings_obj = None
+    now = timezone.now()
+    inactivity_days = settings_obj.retention_open_case_inactive_days if settings_obj else 365
+    for case in (
+        Case.objects.filter(
+            facility=facility,
+            status=Case.Status.OPEN,
+            is_deleted=False,
+            client__contact_stage=Client.ContactStage.QUALIFIED,
+            anonymized_at__isnull=True,
+        )
+        .annotate(activity_at=Coalesce("last_activity_at", "created_at"))
+        .filter(activity_at__lte=now - timedelta(days=max(1, inactivity_days)))
+    ):
+        case.inactive_days = (now - case.activity_at).days
+        inactive_cases.append(case)
     proposals_by_category = get_dashboard_proposals(facility)
     today = timezone.localdate()
 
@@ -175,6 +195,7 @@ def build_retention_dashboard_context(facility, user=None):
     counts = _status_counts(proposals_by_category)
 
     return {
+        "inactive_cases": inactive_cases,
         "categories": _category_cards(proposals_by_category),
         "pending_count": counts["pending"],
         "held_count": counts["held"],
@@ -187,12 +208,14 @@ def build_retention_dashboard_context(facility, user=None):
     }
 
 
-def create_proposal(facility, target_type, target_id, deletion_due_at, details, category):
+def create_proposal(facility, target_type, target_id, deletion_due_at, details, category, *, user=None):
     """Create a retention proposal idempotently (skip if active proposal exists).
 
     „Aktiv" umfasst PENDING, HELD und DEFERRED — dieselbe Menge, die die
     `unique_active_retention_proposal`-Constraint im Model abbildet (Refs #585).
     """
+    if user is not None:
+        _assert_actor_facility(RetentionProposal(facility=facility), user)
     active_statuses = [
         RetentionProposal.Status.PENDING,
         RetentionProposal.Status.HELD,
@@ -205,6 +228,7 @@ def create_proposal(facility, target_type, target_id, deletion_due_at, details, 
             target_id=target_id,
             status__in=active_statuses,
             defaults={
+                "proposed_by": user,
                 "deletion_due_at": deletion_due_at,
                 "details": details,
                 "retention_category": category,
@@ -380,9 +404,16 @@ def _assert_target_has_no_active_hold(proposal, client_id):
         raise ValidationError(LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE)
     if client_id and has_active_hold(proposal.facility, "Client", client_id):
         raise ValidationError(LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE)
+    case_id = (
+        Event.objects.filter(facility=proposal.facility_id, pk=proposal.target_id)
+        .values_list("case_id", flat=True)
+        .first()
+    )
+    if case_id and has_active_hold(proposal.facility, "Case", case_id):
+        raise ValidationError(LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE)
 
 
-def _lock_check_and_mark_approved(proposal):
+def _lock_check_and_mark_approved(proposal, *, user=None):
     """Die Sperr-/Check-/Schreib-Sequenz der Genehmigung — die EINE Stelle.
 
     Refs #2122: Der Auto-Approve-Zweig in
@@ -409,8 +440,15 @@ def _lock_check_and_mark_approved(proposal):
         raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
     _assert_target_has_no_active_hold(locked, client_id)
 
+    if user is not None:
+        if not user.is_active or not user.can_confirm_deletion:
+            raise ValidationError(_("Für die Freigabe ist das Recht „Löschbestätigung“ erforderlich."))
+        if locked.proposed_by_id == user.pk:
+            raise ValidationError(_("Sie können Ihren eigenen Löschvorschlag nicht freigeben."))
     locked.status = RetentionProposal.Status.APPROVED
-    locked.save(update_fields=["status"])
+    locked.approved_at = timezone.now()
+    locked.approved_by = user
+    locked.save(update_fields=["status", "approved_at", "approved_by"])
     return locked
 
 
@@ -443,11 +481,11 @@ def approve_proposal(proposal, user):
     _assert_actor_facility(proposal, user)
     # Refs #2122: Sperre, Re-Checks und der Statuswechsel liegen im gemeinsamen
     # Helfer — der Auto-Approve-Zweig fuhr sie frueher gar nicht.
-    locked = _lock_check_and_mark_approved(proposal)
-    # Die Instanz des Aufrufers mitziehen: die View rendert sie unmittelbar
-    # danach als Karte, und ein Refetch waere eine zweite Abfrage fuer eine
-    # Aussage, die hier schon feststeht.
+    locked = _lock_check_and_mark_approved(proposal, user=user)
+    # Synchronize the caller's instance for immediate rendering without a refetch.
     proposal.status = locked.status
+    proposal.approved_by_id = locked.approved_by_id
+    proposal.approved_at = locked.approved_at
     audit_retention_decision(
         proposal.facility,
         target_type=proposal.target_type,
@@ -508,9 +546,11 @@ def reject_proposal(proposal, user):
     """
     locked = _lock_open_proposal(proposal, user)
     locked.status = RetentionProposal.Status.REJECTED
-    locked.save(update_fields=["status"])
-    # Die Instanz des Aufrufers mitziehen (Muster :func:`approve_proposal`).
+    locked.rejected_at = timezone.now()
+    locked.save(update_fields=["status", "rejected_at"])
+    # Synchronize the caller's decision metadata, as in approve_proposal.
     proposal.status = locked.status
+    proposal.rejected_at = locked.rejected_at
     audit_retention_decision(
         proposal.facility,
         target_type=proposal.target_type,
@@ -944,33 +984,72 @@ def build_proposal_details(event):
     return details
 
 
-def create_proposals_for_facility(facility, settings_obj, now):
-    """Create RetentionProposal entries for events that would be deleted under the four strategies.
+def create_proposals_for_facility(facility, settings_obj, now, *, qualified_only=False):
+    """Propose each expired event once, with its earliest actual deadline.
 
-    Refs #778: nutzt :func:`core.retention.strategies.iter_strategies`, damit
-    die Strategie-Definitionen mit ``enforcement.collect_doomed_events`` synchron
-    bleiben. ``create_proposal`` ist idempotent ueber ``unique_active_retention_proposal``,
-    sodass ein Event, das mehrere Kategorien matcht, genau einen Vorschlag bekommt
-    (Cross-Strategy-Deduplikation).
-
-    Returns ``{"count": N}`` — number of newly created proposals.
+    Lock order matches approval/enforcement: person, event, proposal. Recheck
+    holds and the latest decision after acquiring the shared target locks.
+    A rejection stays final; a fresh proposal is allowed after the retry period.
     """
     held_ids = get_active_hold_target_ids(facility, "Event")
-    created_count = 0
-
+    held_client_ids = get_active_hold_target_ids(facility, "Client")
+    held_case_ids = get_active_hold_target_ids(facility, "Case")
+    due = {}
     for strategy in iter_strategies(facility, settings_obj, now):
-        qs = strategy.queryset.exclude(pk__in=held_ids).select_related("client", "document_type")
+        qs = (
+            strategy.queryset.exclude(pk__in=held_ids)
+            .exclude(client_id__in=held_client_ids)
+            .exclude(case_id__in=held_case_ids)
+            .select_related("client", "document_type")
+        )
+        if qualified_only:
+            qs = qs.filter(client__contact_stage=Client.ContactStage.QUALIFIED)
         for event in qs.iterator():
-            details = build_proposal_details(event)
-            _, was_created = create_proposal(
+            previous = due.get(event.pk)
+            if previous is None or event.retention_due_at < previous[0].retention_due_at:
+                due[event.pk] = (event, strategy.category)
+
+    created_count = 0
+    retry_days = max(1, settings_obj.retention_rejected_retry_days)
+    for event, category in due.values():
+        with transaction.atomic():
+            # The shared target lock serializes concurrent generation and approval.
+            binding = RetentionProposal(facility=facility, target_type="Event", target_id=event.pk)
+            try:
+                client_id = _lock_target_rows_for_approval(binding)
+                _assert_target_has_no_active_hold(binding, client_id)
+            except ValidationError:
+                continue
+            # A concurrent business edit can postpone expiry while locks are awaited.
+            current = []
+            for strategy in iter_strategies(facility, settings_obj, now):
+                qs = strategy.queryset.filter(pk=event.pk).select_related("client", "document_type")
+                if qualified_only:
+                    qs = qs.filter(client__contact_stage=Client.ContactStage.QUALIFIED)
+                fresh = qs.first()
+                if fresh is not None:
+                    current.append((fresh, strategy.category))
+            if not current:
+                continue
+            event, category = min(current, key=lambda candidate: candidate[0].retention_due_at)
+            latest = (
+                RetentionProposal.objects.filter(facility=facility, target_type="Event", target_id=event.pk)
+                .select_for_update()
+                .order_by("-proposed_at", "-pk")
+                .first()
+            )
+            if latest is not None:
+                if latest.status != RetentionProposal.Status.REJECTED:
+                    continue
+                if latest.rejected_at is None or now < latest.rejected_at + timedelta(days=retry_days):
+                    continue
+            _, created = create_proposal(
                 facility=facility,
                 target_type="Event",
                 target_id=event.pk,
-                deletion_due_at=strategy.cutoff.date(),
-                details=details,
-                category=strategy.category,
+                deletion_due_at=timezone.localdate(event.retention_due_at),
+                details=build_proposal_details(event),
+                category=category,
             )
-            if was_created:
-                created_count += 1
-
+            created_count += int(created)
     return {"count": created_count}

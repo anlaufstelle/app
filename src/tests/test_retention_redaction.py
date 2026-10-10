@@ -13,9 +13,19 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
-from core.models import Attachment, AuditLog, DocumentType, Event, EventHistory, FieldTemplate
+from core.models import (
+    Attachment,
+    AuditLog,
+    DocumentType,
+    Event,
+    EventHistory,
+    FieldTemplate,
+    RetentionProposal,
+    Settings,
+)
 from core.retention import enforcement as enforcement_mod
 from core.retention.legal_holds import create_hold_for_target
+from core.retention.proposals import approve_proposal, create_proposals_for_facility
 from core.services.events import build_redacted_delete_history, soft_delete_event
 from core.services.file_vault import store_encrypted_file
 from core.services.file_vault.storage import get_attachment_path
@@ -365,6 +375,16 @@ class TestRetentionSoftDeleteHoldRace:
     diese Tests pinnen ihn fuer den Batch-Pfad.
     """
 
+    @staticmethod
+    def _approve_stale_qualified_event(event, user):
+        """Keep the hold-race control deletable under the approval requirement."""
+        settings_obj, _ = Settings.objects.get_or_create(facility=event.facility)
+        settings_obj.retention_qualified_days = 30
+        settings_obj.save(update_fields=["retention_qualified_days"])
+        create_proposals_for_facility(event.facility, settings_obj, timezone.now(), qualified_only=True)
+        proposal = RetentionProposal.objects.get(facility=event.facility, target_id=event.pk)
+        approve_proposal(proposal, user)
+
     def _stale_event(self, facility, doc_type, admin_user, person, days=400):
         return Event.objects.create(
             facility=facility,
@@ -432,6 +452,7 @@ class TestRetentionSoftDeleteHoldRace:
         now = timezone.now()
         first = self._stale_event(facility, normal_doc_type, admin_user, client_identified, days=500)
         second = self._stale_event(facility, normal_doc_type, admin_user, client_qualified, days=400)
+        self._approve_stale_qualified_event(second, admin_user)
         assert first.occurred_at < second.occurred_at < now
 
         qs = Event.objects.filter(pk__in=[first.pk, second.pk]).order_by("occurred_at")
@@ -467,6 +488,7 @@ class TestRetentionSoftDeleteHoldRace:
         die zurueckgestellten erscheinen als eigene Zahl im ``detail``."""
         held = self._stale_event(facility, normal_doc_type, admin_user, client_identified, days=500)
         free = self._stale_event(facility, normal_doc_type, admin_user, client_qualified, days=400)
+        self._approve_stale_qualified_event(free, admin_user)
         qs_t0 = Event.objects.filter(pk__in=[held.pk, free.pk])
 
         create_hold_for_target(

@@ -519,6 +519,7 @@ class TestRetentionProposalLocaldateBoundary:
             mock.patch("core.retention.proposals.get_dashboard_proposals", return_value={}),
         ):
             mock_timezone.localdate.return_value = _BERLIN_DATE
+            mock_timezone.now.return_value = _BOUNDARY_INSTANT
             context = build_retention_dashboard_context(facility)
 
         assert context["today"] == _BERLIN_DATE
@@ -638,14 +639,16 @@ class TestRetentionDashboardView:
         assert 'id="summary-held"' in content
         assert 'id="summary-approved"' in content
 
-    def test_help_text_does_not_promise_approval_before_deletion(self, client, lead_user, facility, proposal):
-        """Refs #2425: the regular run deletes without approval; only a legal hold protects."""
+    def test_help_text_explains_qualified_approval(self, client, lead_user, facility, proposal):
+        """Refs #2524: qualified events need approval; shorter stages stay automatic."""
         client.force_login(lead_user)
         content = " ".join(client.get(reverse("core:retention_dashboard")).content.decode().split())
-        assert "Erst eine berechtigte Entscheidung gibt eine Löschung frei" not in content
-        assert "löscht abgelaufene Ereignisse ohne Freigabe" in content
-        assert "Aufbewahrungssperre (Legal Hold)" in content
-        assert "enforce_retention --propose" in content
+        assert "für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge" in content
+        assert "Erst nach Freigabe durch eine andere Person" in content
+        assert "Löschbestätigung" in content
+        assert "Zurückstellen schützt bis zur Wiedervorlage" in content
+        assert "Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht" in content
+        assert "Aufbewahrungssperren (Legal Holds) verhindern die Löschung" in content
 
     def test_category_sections_have_ids(self, client, lead_user, facility, proposal):
         """Each category section gets an id so it can be linked to from elsewhere."""

@@ -93,6 +93,12 @@ class Case(DynamicDataEncryptionMixin, SoftDeletableModel):
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Aktualisiert am"))
+    # Refs #2524: business activity must survive feed pruning and key rotation.
+    last_activity_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Letzte Fallaktivität"),
+    )
     closed_at = models.DateTimeField(
         null=True,
         blank=True,

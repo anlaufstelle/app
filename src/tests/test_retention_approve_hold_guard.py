@@ -264,6 +264,7 @@ class TestZweiParalleleApproves:
             password="x" * 40,
             facility=facility,
             role=User.Role.LEAD,
+            can_confirm_deletion=True,
         )
         doc_type = DocumentType.objects.create(
             facility=facility,
@@ -354,6 +355,7 @@ class TestApproveKoordiniertMitDerHoldAnlage:
             password="x" * 40,
             facility=facility,
             role=User.Role.LEAD,
+            can_confirm_deletion=True,
         )
         doc_type = DocumentType.objects.create(
             facility=facility,

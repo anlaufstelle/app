@@ -30,9 +30,11 @@ nicht erneut unbemerkt fehlt.
 """
 
 import logging
+from datetime import timedelta
 
 from django.db import transaction
 from django.db.models import Count, Q
+from django.utils import timezone
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
 from core.models import AuditLog, Client, Settings
@@ -200,6 +202,19 @@ def anonymize_clients(facility, dry_run):
     zurueckgestellten. „Nicht geloescht" und „nicht angeschaut" muessen fuer
     die Spoliationsfrage unterscheidbar bleiben (Muster ADR-050 D5.3).
     """
+    now = timezone.now()
+    try:
+        settings_obj = facility.settings
+    except Settings.DoesNotExist:
+        settings_obj = None
+    idle_cutoff = (
+        now - timedelta(days=settings_obj.retention_identified_days)
+        if settings_obj and settings_obj.retention_identified_days >= 1
+        else None
+    )
+    eligible = Q(total_events__gt=0, active_events=0)
+    if idle_cutoff is not None:
+        eligible |= Q(total_events=0, updated_at__lt=idle_cutoff, is_deleted=False)
     candidates = (
         exclude_clients_with_active_holds(Client.objects.filter(facility=facility), facility)
         .exclude(Q(pseudonym__startswith="Gelöscht-") | Q(k_anonymized=True))
@@ -207,7 +222,7 @@ def anonymize_clients(facility, dry_run):
             total_events=Count("events"),
             active_events=Count("events", filter=Q(events__is_deleted=False)),
         )
-        .filter(total_events__gt=0, active_events=0)
+        .filter(eligible)
     )
 
     if dry_run:
@@ -268,7 +283,9 @@ def anonymize_clients(facility, dry_run):
             # Ereignis macht die Person zum Nicht-Kandidaten, und die Bridge
             # redigierte sonst eine Person mit lebender Dokumentation.
             events = locked.events.all()
-            if not events.exists() or events.filter(is_deleted=False).exists():
+            if events.filter(is_deleted=False).exists():
+                continue
+            if not events.exists() and (idle_cutoff is None or locked.is_deleted or locked.updated_at >= idle_cutoff):
                 continue
             if client_has_active_hold(locked):
                 # Nur aufgeschoben — ein spaeterer Lauf holt es nach, sobald der

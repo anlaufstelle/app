@@ -40,6 +40,8 @@ EDITABLE_FIELDS = {
     "mfa_enforced_facility_wide",
     "retention_auto_approve_after_defer",
     "retention_max_defer_count",
+    "retention_rejected_retry_days",
+    "retention_open_case_inactive_days",
     "retention_use_k_anonymization",
     "k_anonymity_threshold",
     "search_trigram_threshold",
