@@ -392,6 +392,8 @@ def seed_events_bulk(
     if batch:
         for event in batch:
             event.data_json = encrypt_dynamic_data(event.document_type, event.data_json)
+            # Refs #2525: refresh protection at insertion, not batch construction.
+            event.search_text = compute_event_search_text(event.data_json, event.document_type)
         Event.objects.bulk_create(batch, batch_size=1000)
 
     return len(batch)

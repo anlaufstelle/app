@@ -76,23 +76,28 @@ def compute_event_search_text(data_json, document_type):
     """
     if not data_json:
         return ""
-    if document_type is None:
+    if document_type is None or document_type.pk is None:
         return ""
 
-    # Load field metadata once for this document type.
     from core.services.compliance.sensitivity import field_is_search_indexed
 
+    # Refs #2525: read type and field protection in one current DB snapshot.
+    # A loaded event/type relation may predate a configuration transaction.
+    # Missing scoped types yield no assignments and therefore an empty index.
     field_meta = {
-        dtf.field_template.slug: dtf.field_template
-        for dtf in document_type.fields.select_related("field_template").all()
+        dtf.field_template.slug: (dtf.document_type.sensitivity, dtf.field_template)
+        for dtf in document_type.fields.filter(document_type__facility_id=document_type.facility_id).select_related(
+            "document_type", "field_template"
+        )
     }
 
     parts: list[str] = []
     for slug, value in data_json.items():
-        ft = field_meta.get(slug)
-        if ft is None:
+        metadata = field_meta.get(slug)
+        if metadata is None:
             continue
-        if not field_is_search_indexed(document_type.sensitivity, ft):
+        current_sensitivity, ft = metadata
+        if not field_is_search_indexed(current_sensitivity, ft):
             continue
         if isinstance(value, dict):
             # Exclude file markers and legacy encrypted marker dictionaries.
