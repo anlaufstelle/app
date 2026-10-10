@@ -147,8 +147,7 @@ class TestBulkAssign:
         lead_option = page.locator(
             "#bulk-assign option:has-text('Leitung'), #bulk-assign option:has-text('emma')"
         ).first
-        if lead_option.count() == 0:
-            pytest.skip("Lead-User im Bulk-Assign-Select nicht gefunden — Seed-Variation.")
+        assert lead_option.count() > 0, "Lead-User im Bulk-Assign-Select nicht gefunden."
         lead_id = lead_option.get_attribute("value")
         assert lead_id, "Lead-User-Option hat keinen Wert."
 
@@ -386,8 +385,7 @@ class TestBulkManualSelectionUI:
         _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-Swap-{tag}-2", assignee_label="Lena Weber")
 
         lena_id = _filter_option_value(page, base_url, "Lena Weber")
-        if not lena_id:
-            pytest.skip("Lena Weber im Personenfilter nicht gefunden — Seed-Variation.")
+        assert lena_id, "Lena Weber im Personenfilter nicht gefunden."
 
         # UUID eines frisch erzeugten Items über den Personenfilter abgreifen —
         # dient unten als swap-spezifischer Marker (Refs #1201): Miriams Default-
@@ -442,8 +440,7 @@ class TestBulkManualSelectionUI:
         _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-PFDesel-{tag}-3", assignee_label="Lena Weber")
 
         lena_id = _filter_option_value(page, base_url, "Lena Weber")
-        if not lena_id:
-            pytest.skip("Lena Weber im Personenfilter nicht gefunden — Seed-Variation.")
+        assert lena_id, "Lena Weber im Personenfilter nicht gefunden."
 
         # Direkt mit gesetztem Personenfilter laden — alle Boxen existieren beim Init.
         page.goto(f"{base_url}/workitems/?assigned_to={lena_id}", wait_until="domcontentloaded")
@@ -528,8 +525,7 @@ class TestBulkPreservesFilterUI:
         _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-PFKeep-{tag}", assignee_label="Lena Weber")
 
         lena_id = _filter_option_value(page, base_url, "Lena Weber")
-        if not lena_id:
-            pytest.skip("Lena Weber im Personenfilter nicht gefunden — Seed-Variation.")
+        assert lena_id, "Lena Weber im Personenfilter nicht gefunden."
 
         # Mit gesetztem Personenfilter laden, damit das fremd-zugewiesene Item
         # sichtbar/auswählbar ist.
@@ -867,8 +863,7 @@ class TestCreatorFindsForeignAssignedTask:
         _create_workitem_assigned_no_default_wait(page, base_url, title, assignee_label="Emma Müller")
 
         emma_id = _filter_option_value(page, base_url, "Emma Müller")
-        if not emma_id:
-            pytest.skip("Emma-User im Personenfilter nicht gefunden — Seed-Variation.")
+        assert emma_id, "Emma-User im Personenfilter nicht gefunden."
 
         page.goto(f"{base_url}/workitems/?assigned_to={emma_id}", wait_until="domcontentloaded")
         page.wait_for_selector("#inbox-content", timeout=5000)
