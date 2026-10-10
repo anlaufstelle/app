@@ -49,6 +49,8 @@ def counted_events(backend, result):
         return result.summary["aktive_personen"]
     if backend.slug == "case-metrics":
         return result.summary["neue_faelle"]
+    if backend.slug == "quantity-sum":
+        return result.summary["events_total"]
     assert backend.slug == "general-key-figures", "A new registered backend needs a dataset contract."
     return result.summary["total_contacts"]
 
@@ -58,6 +60,8 @@ def counted_field_values(backend, result, key):
         return result.summary[{"ausgabe_stueck": "summe_ausgabe", "rueckgabe_stueck": "summe_rueckgabe"}[key]]
     if backend.slug == "counseling-hours":
         return result.summary["minuten_gesamt"]
+    if backend.slug == "quantity-sum":
+        return result.summary["quantity_total"] or 0
     assert backend.slug == "service-distribution", "A new value backend needs a dataset contract."
     return result.summary.get(f"events_{key}", 0)
 
@@ -120,6 +124,8 @@ def test_binding_information_matches_actual_dataset(
     if declared and scenario == "excluded" and backend.slug != "ban-overview":
         expected = 0
     if backend.slug == "service-distribution" and scenario in {"other-group", "incomplete-in-configured-group"}:
+        expected = 0
+    if backend.slug == "quantity-sum" and scenario == "incomplete-in-configured-group":
         expected = 0
     if backend.slug == "general-key-figures" and scenario == "foreign":
         expected = None  # The exported zero remains suppressed by the existing privacy pipeline.

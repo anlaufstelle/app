@@ -14,6 +14,8 @@ Praktische Folge: **ein neuer Bericht ist eine Datei.** Ein Modul unter [`src/co
 
 Das Backend **„Summe von Zahlenfeldern“** (`quantity-sum`) wertet Ereignisse je Dokumentationstyp über den gewählten Zeitraum aus. Es bindet ausschließlich an den Berichtsschlüssel `quantity_units` („Stückzahl“), liest Zahlenfelder und bildet eine Zeitraum-Summe ohne Monatsaufteilung oder Monats-Snapshots. Die Tabelle zeigt je Typ **Ereignisse**, **beitragende Ereignisse** (mit verwertbarer Stückzahl) und **Stückzahl im Zeitraum**. Fehlende, ungültige oder nicht lesbare Werte tragen nicht zur Summe bei; ein Lückenhinweis meldet, dass solche Stückzahlen oder Summen unberücksichtigt bleiben.
 
+Zur Population gehören nur Ereignistypen mit einem aktiven, gebundenen Zahlenfeld; Typen ohne solches Feld oder mit Typ-Berichtsschlüssel `excluded` bleiben außerhalb der Zählung und der Auskunft „Erscheint in“. Ausgeschlossene Typen schalten den Bericht auch nicht frei und erzeugen keine Hinweise zu fehlenden Feldzuordnungen oder Doppelbindungen. Die Verfügbarkeit braucht mindestens einen aktiven, nicht ausgeschlossenen Ereignistyp mit passendem Zahlenfeld; bei einem inzwischen deaktivierten Typ mit weiterhin aktivem Feld werden historische Ereignisse weiter berücksichtigt.
+
 Die K-Anonymitäts-Schwelle *k* gilt für Ereignis- und Beitragszahlen je Typ. Eine Summe wird nur zusammen mit mindestens *k* beitragenden Ereignissen gezeigt. Auch Gesamtsummen und Randsummen werden unterdrückt, sobald sie eine verborgene Zeile oder eine kleine Fehlmenge rückrechenbar machen könnten. Vorschau, CSV und PDF verwenden dieselben freigegebenen Werte.
 
 ---

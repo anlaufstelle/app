@@ -18,6 +18,8 @@ The practical consequence: **a new report is a single file.** A module under [`s
 
 The **Sum of number fields** backend (`quantity-sum`) evaluates events by documentation type over the selected period. It binds only to the `quantity_units` report key ("Quantity") and reads number fields, producing one period total without monthly breakdowns or snapshots. The table shows **events**, **contributing events** (with a usable quantity), and **quantity in period** for each type. Missing, invalid, or unreadable values do not contribute; a completeness notice reports that such values or sums were excluded.
 
+The population includes only event types with an active, bound number field; types without that field or with the type report key `excluded` remain outside the counts and the “Appears in” information. Excluded types do not make the report available and do not generate missing-field or duplicate-binding notices. Availability requires at least one active, non-excluded event type with a matching number field; historical events of a subsequently deactivated type are still included while its field remains active.
+
 The k-anonymity threshold *k* applies to event and contributor counts for each type. A sum is shown only with at least *k* contributing events. Totals and margins are also suppressed whenever they could reveal a hidden row or a small missing-value gap. The preview, CSV, and PDF use the same released values.
 
 ---
@@ -683,4 +685,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 8f22699c91a1ec9373f0e2dd1e4592ca32392202 -->
+<!-- source-hash: a2bca454112004e9042874055f5d138ba0fe64c4 -->

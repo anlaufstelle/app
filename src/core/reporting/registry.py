@@ -346,6 +346,12 @@ def _requirement_state(requirement, document_type, facility, *, active_only=True
         return False, None
     if requirement.entity_type is not None and document_type.entity_type != requirement.entity_type:
         return False, None
+    if (
+        requirement.typ_bindung is None
+        and requirement.feld_bindungen
+        and getattr(document_type, "report_key", None) == EXCLUDED_KEY
+    ):
+        return False, None
     missing = []
     matched = False
     if requirement.typ_bindung is not None:

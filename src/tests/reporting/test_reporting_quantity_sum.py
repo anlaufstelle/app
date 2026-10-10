@@ -72,6 +72,60 @@ def test_period_sums_are_type_independent_and_ordered(backend, facility, admin_u
     assert result.summary["events_total"] == result.summary["contributors_total"] == 6
 
 
+@pytest.fixture(params=["exclusive", "other-type", "shared-field", "duplicate"])
+def excluded_configuration(request, facility, admin_user):
+    excluded, field = make_type(facility, "Excluded counter", report_key="excluded")
+    add_events(facility, admin_user, excluded, field, [999] * 5)
+    included = None
+    included_field = None
+    if request.param in {"other-type", "shared-field", "duplicate"}:
+        included, included_field = make_type(facility, "Included counter", report_key="contact")
+        if request.param == "shared-field":
+            DocumentTypeField.objects.filter(document_type=included).delete()
+            DocumentTypeField.objects.create(document_type=included, field_template=field)
+            included_field = field
+        add_events(facility, admin_user, included, included_field, [7] * 5)
+    if request.param == "duplicate":
+        other = FieldTemplate.objects.create(facility=facility, name="Duplicate quantity", field_type="number")
+        DocumentTypeField.objects.create(document_type=excluded, field_template=other)
+        FieldTemplate.objects.filter(pk=other.pk).update(report_key="quantity_units")
+    return excluded, field, included, included_field
+
+
+def test_excluded_type_does_not_contribute_to_dataset(backend, facility, date_range, excluded_configuration):
+    _, _, included, _ = excluded_configuration
+    result = backend.build_dataset(facility, *date_range)
+    assert result.summary == {
+        "events_total": 5 if included else 0,
+        "contributors_total": 5 if included else 0,
+        "quantity_total": 35 if included else 0,
+    }
+    assert result.records == (
+        [{"document_type": included.name, "events": 5, "contributors": 5, "quantity": 35}] if included else []
+    )
+    assert result.completeness == []
+    if included:
+        assert "duplicate_field_binding" not in {
+            issue.code for issue in prepared(backend, facility, date_range).completeness
+        }
+
+
+def test_excluded_type_has_consistent_binding_information(backend, facility, excluded_configuration):
+    excluded, field, included, included_field = excluded_configuration
+    assert backend.is_available(facility) is bool(included)
+    assert not any(str(backend.name) in name for name in registry.describe_type_bindings(excluded, facility))
+    assert backend.contributions_for_type(excluded, facility) == ()
+    assert not backend.uses_field_template(field, excluded, facility, backend.feld_bindungen[0])
+    assert any(str(backend.name) in name for name in registry.describe_field_bindings(field, facility)) is (
+        included_field is field
+    )
+    assert registry.diagnose_type_bindings(excluded, facility) == []
+    assert registry.diagnose_field_bindings(field, facility) == []
+    if included:
+        assert any(str(backend.name) in name for name in registry.describe_type_bindings(included, facility))
+        assert backend.uses_field_template(included_field, included, facility, backend.feld_bindungen[0])
+
+
 @pytest.mark.parametrize("value", [None, "", True, False, "NaN", "Infinity", "-Infinity", "invalid", [], {}])
 def test_invalid_values_do_not_contribute(backend, facility, admin_user, date_range, value):
     doc_type, field = make_type(facility)

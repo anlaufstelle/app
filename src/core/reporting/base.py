@@ -400,14 +400,11 @@ class FeldBindung:
         Formularen nicht mehr angeboten und ist dieselbe Konfigurationsfrage,
         die :meth:`template_q` stellt.
 
-        ``typ_bindung`` schraenkt auf die Dokumentationstypen ein, die dieser
-        Bericht ueberhaupt zaehlt — **Pflicht, sobald das Ergebnis eine Meldung
-        traegt**: die Doppelbindungs-Menge waere sonst einrichtungsweit, und ein
-        ausdruecklich ausgeschlossener Typ mit zwei gleich geschluesselten
-        Vorlagen erzeugte einen Hinweis in einem Bericht, den er nichts angeht
-        (dieselbe Vermengung, die Refs #1819 fuer den Vollstaendigkeitshinweis
-        beseitigt hat). Ohne Angabe bleibt die Menge einrichtungsweit — fuer
-        Aufrufer ohne Typ-Bindung.
+        ``typ_bindung`` limits the read path and duplicate-binding diagnostics
+        to the types counted by this report. Without a type binding, the read
+        path spans the facility but still excludes types whose report key is
+        ``excluded``. Unrelated types must not create duplicate-field notices
+        in a report they do not contribute to (Refs #1819, #2515).
         """
         # Lokaler Import wie in ``Anforderung.erfuellt``: ``core.models`` zur
         # Modul-Importzeit zoege den Reporting-Vertrag in den Model-Importgraphen.
@@ -423,6 +420,8 @@ class FeldBindung:
             zuordnungen = zuordnungen.filter(document_type__entity_type=entity_type)
         if typ_bindung is not None:
             zuordnungen = zuordnungen.filter(typ_bindung.matching_q("document_type__"))
+        else:
+            zuordnungen = zuordnungen.exclude(document_type__report_key=EXCLUDED_KEY)
         for document_type_id, slug, field_type in zuordnungen.values_list(
             "document_type_id", "field_template__slug", "field_template__field_type"
         ):
@@ -525,6 +524,8 @@ class Anforderung:
             typen = typen.filter(entity_type=self.entity_type)
         if self.typ_bindung is not None:
             typen = typen.filter(self.typ_bindung.matching_q())
+        elif self.feld_bindungen:
+            typen = typen.exclude(report_key=EXCLUDED_KEY)
         for bindung in self.feld_bindungen:
             typen = typen.filter(bindung.template_q())
         return typen.exists()

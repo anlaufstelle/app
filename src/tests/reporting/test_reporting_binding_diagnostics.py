@@ -425,3 +425,18 @@ def test_field_warning_preserves_local_complete_or_alternative(partial_type, fac
     backend.verfuegbarkeit = (Anforderung(None, (*backend.feld_bindungen, missing)), Anforderung(None, (alternate,)))
     monkeypatch.setattr(registry, "get_backends", lambda: [backend])
     assert registry.diagnose_field_bindings(field, facility) == []
+
+
+def test_excluded_type_has_no_incomplete_field_only_requirement_warning(facility, monkeypatch):
+    excluded = make_type(facility, "Excluded", "excluded")
+    field = add_field(excluded, "ausgabe_stueck")
+    configured = make_type(facility, "Configured", "contact")
+    add_field(configured, "ausgabe_stueck")
+    add_field(configured, "quantity_units")
+    backend = FieldOnlyBackend()
+    units = FeldBindung((BindungsEintrag("quantity_units", "Units"),), bindet="report_key")
+    backend.verfuegbarkeit = (Anforderung(None, (*backend.feld_bindungen, units)),)
+    monkeypatch.setattr(registry, "get_backends", lambda: [backend])
+    assert backend.is_available(facility)
+    assert registry.diagnose_type_bindings(excluded, facility) == []
+    assert registry.diagnose_field_bindings(field, facility) == []
