@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-_FIELDS = {"label", "category", "message", "action_hint"}
+_FIELDS = {"label", "category", "message", "detail", "action_hint"}
 
 # Pure technical values without natural language. An entry matches one file, one
 # keyword and the exact literal, so a changed command or any new raw text fails.
@@ -21,13 +21,28 @@ _ALLOWED_LITERALS = {
 def _raw_card_literals(source):
     findings = []
     tree = ast.parse(source)
-    # Names bound to text in the module, so ``message=text`` cannot hide a literal.
+    # Follow assignments and arguments passed to local card-building helpers.
     assigned = {}
+
+    def bind(target, value):
+        if isinstance(target, ast.Name):
+            assigned.setdefault(target.id, []).append(value)
+        elif isinstance(target, (ast.Tuple, ast.List)) and isinstance(value, (ast.Tuple, ast.List)):
+            for item, expression in zip(target.elts, value.elts, strict=False):
+                bind(item, expression)
+
+    helpers = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name):
-                    assigned.setdefault(target.id, []).append(node.value)
+                bind(target, node.value)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in helpers:
+            parameters = helpers[node.func.id].args
+            for parameter, value in zip(parameters.posonlyargs + parameters.args, node.args, strict=False):
+                assigned.setdefault(parameter.arg, []).append(value)
+            for keyword in node.keywords:
+                if keyword.arg:
+                    assigned.setdefault(keyword.arg, []).append(keyword.value)
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -37,25 +52,41 @@ def _raw_card_literals(source):
         for keyword in node.keywords:
             if keyword.arg not in _FIELDS:
                 continue
-            # Calls are handled by request regressions; literals nested in formatting
-            # or conditional expressions remain visible to this guard.
             pending = [keyword.value]
+            seen = set()
             while pending:
                 value = pending.pop()
-                if isinstance(value, ast.Call):
+                if id(value) in seen:
                     continue
-                if isinstance(value, ast.JoinedStr) or isinstance(value, ast.Constant) and isinstance(value.value, str):
+                seen.add(id(value))
+                if isinstance(value, ast.Call):
+                    name = value.func.id if isinstance(value.func, ast.Name) else getattr(value.func, "attr", None)
+                    if name in {"_", "gettext", "gettext_lazy", "ngettext"}:
+                        continue
+                    if isinstance(value.func, ast.Attribute) and name in {"format", "join"}:
+                        receiver = value.func.value
+                        # Punctuation separators are technical formatting, not prose.
+                        if (
+                            name != "join"
+                            or not isinstance(receiver, ast.Constant)
+                            or any(character.isalpha() for character in str(receiver.value))
+                        ):
+                            pending.append(receiver)
+                    pending.extend(value.args)
+                    pending.extend(item.value for item in value.keywords)
+                elif (
+                    isinstance(value, ast.JoinedStr) or isinstance(value, ast.Constant) and isinstance(value.value, str)
+                ):
                     text = value.value if isinstance(value, ast.Constant) else None
                     findings.append((keyword.arg, value.lineno, text))
-                else:
-                    if isinstance(value, ast.BinOp):
-                        pending.append(value.left)
-                    elif isinstance(value, ast.IfExp):
-                        pending.extend((value.body, value.orelse))
-                    elif isinstance(value, ast.BoolOp):
-                        pending.extend(value.values)
-                    elif isinstance(value, ast.Name):
-                        pending.extend(assigned.get(value.id, ()))
+                elif isinstance(value, ast.BinOp):
+                    pending.append(value.left)
+                elif isinstance(value, ast.IfExp):
+                    pending.extend((value.body, value.orelse))
+                elif isinstance(value, ast.BoolOp):
+                    pending.extend(value.values)
+                elif isinstance(value, ast.Name):
+                    pending.extend(assigned.get(value.id, ()))
     return findings
 
 
@@ -108,3 +139,24 @@ def test_allowlist_is_bound_to_file_and_exact_literal():
     source = f'ComplianceCheck(action_hint="{command} --extra")'
     assert [(f, t) for f, _l, t in _raw_card_literals(source)] == [("action_hint", f"{command} --extra")]
     assert ("backup.py", "action_hint", command) not in _ALLOWED_LITERALS
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'key, label = "k", "Raw"\nComplianceCheck(label=label)',
+        'ComplianceCheck(detail="Raw text")',
+        'ComplianceCheck(message="Raw {}".format(value))',
+        'def helper(label):\n    return ComplianceCheck(label=label)\nhelper("Raw")',
+        'text = "Raw"\nlabel = text\nComplianceCheck(label=label)',
+        'ComplianceCheck(message=str("Raw"))',
+        'ComplianceCheck(message="Raw".join(values))',
+        'def helper(label):\n    return ComplianceCheck(label=label)\nhelper(label="Raw")',
+        "text = other\nother = text\nComplianceCheck(label=text)",
+    ],
+)
+def test_guard_tracks_raw_text_paths(source):
+    if source.startswith("text = other"):
+        assert not _raw_card_literals(source)
+    else:
+        assert _raw_card_literals(source)
