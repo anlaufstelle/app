@@ -396,7 +396,7 @@ def test_restricted_trash_person_is_deferred_by_command(client_identified, facil
     call_command("enforce_retention", facility=facility.name, dry_run=dry_run, stdout=output)
     client_identified.refresh_from_db()
     assert client_identified.anonymized_at is None
-    assert "Deferred 1 event/person target(s)" in output.getvalue()
+    assert "Deferred 1 event/person/case target(s)" in output.getvalue()
     if dry_run:
         assert "Would anonymize 0 trash-expired client(s)" in output.getvalue()
 

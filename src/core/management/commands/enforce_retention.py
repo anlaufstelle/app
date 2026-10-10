@@ -203,7 +203,11 @@ class Command(BaseCommand):
         # geloeschten.
         from core.services.case.deletion import anonymize_eligible_soft_deleted_cases
 
-        totals.trash_anonymized_cases += anonymize_eligible_soft_deleted_cases(facility, settings_obj, dry_run=dry_run)
+        deferred_case_ids: set[UUID] = set()
+        totals.trash_anonymized_cases += anonymize_eligible_soft_deleted_cases(
+            facility, settings_obj, dry_run=dry_run, deferred_ids=deferred_case_ids
+        )
+        totals.deferred += len(deferred_case_ids)
         # Refs #2065 (ADR-050): NACH ``process_facility_retention`` — die in
         # diesem Lauf soft-geloeschten Ereignisse tragen ``is_deleted = True``
         # und werden damit noch im selben Durchgang redigiert, statt ein
@@ -246,7 +250,7 @@ class Command(BaseCommand):
         """
         prefix = "[dry-run] Would prune" if dry_run else "Pruned"
         self.stdout.write(f"{prefix} {totals.requests_pruned} completed request(s).")
-        self.stdout.write(f"Deferred {totals.deferred} event/person target(s) due to retention protection.")
+        self.stdout.write(f"Deferred {totals.deferred} event/person/case target(s) due to retention protection.")
         if dry_run:
             self.stdout.write(self.style.WARNING(f"[dry-run] Would soft-delete {totals.deleted} event(s) in total."))
             self.stdout.write(

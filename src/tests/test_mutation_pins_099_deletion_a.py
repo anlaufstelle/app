@@ -545,36 +545,20 @@ class TestAnonymizeEligibleSoftDeletedCasesDryRunFilter:
 
 
 class TestAnonymizeEligibleSoftDeletedCasesDeferredSignal:
-    def test_keine_zurueckstellungs_meldung_ohne_gehaltene_faelle(self, facility, settings_obj, caplog):
-        """Pins ``x_anonymize_eligible_soft_deleted_cases__mutmut_22``: der
-        Startwert ``0`` wird zu ``1`` — ohne einen einzigen faelligen Fall
-        (die Schleife laeuft null Mal) loggt der Lauf trotzdem eine
-        Rueckstellungsmeldung, weil ``if deferred:`` faelschlich wahr wird."""
+    def test_no_deferred_message_without_protected_cases(self, facility, settings_obj, caplog):
+        """No protected candidates must produce neither erasure nor a deferred log."""
         with caplog.at_level(logging.INFO, logger="core.services.case.deletion"):
             count = anonymize_eligible_soft_deleted_cases(facility, settings_obj)
 
         assert count == 0
-        assert not any("zurueckgestellt" in r.getMessage() for r in caplog.records)
+        assert not any("Case erasure:" in r.getMessage() for r in caplog.records)
 
-    def test_zurueckstellungs_zaehler_und_facility_stimmen_exakt(
-        self, facility, client_identified, staff_user, settings_obj, caplog
-    ):
-        """Pins ``x_anonymize_eligible_soft_deleted_cases__mutmut_43``
-        (Zuweisung ``deferred = 1`` statt Akkumulation), ``_44``
-        (``deferred -= 1``), ``_45`` (``deferred += 2``), ``_58``
-        (``deferred`` -> ``None`` im Log-Argument) und ``_59``
-        (``facility.pk`` -> ``None`` im Log-Argument): zwei Faelle muessen die
-        Meldung mit dem exakten Zaehler ``2`` und der exakten ``facility``-PK
-        tragen.
+    def test_deferred_count_and_facility_are_exact(self, facility, client_identified, staff_user, settings_obj, caplog):
+        """Two late holds must log the exact count and facility, without erasing.
 
-        ``case_has_active_hold`` wird gemockt statt ueber einen echten
-        ``LegalHold`` erzwungen: ein VOR dem Lauf angelegter Hold wuerde die
-        Faelle schon aus dem Ausgangsfilter (``exclude_cases_with_active_holds``,
-        Queryset-Bau) herausnehmen — die Schleife saehe sie dann nie, und
-        ``deferred`` bliebe 0. Der Mock modelliert stattdessen genau den vom
-        Docstring beschriebenen Wettlauf (Refs #2123): ein Hold, der ERST NACH
-        der qs-Materialisierung ankommt und nur noch der per-Fall-Recheck AUF
-        DER GESPERRTEN Zeile sieht."""
+        The mock represents holds arriving after candidate selection. The
+        initial filter cannot see them, but both locked rechecks must defer.
+        """
         old = timezone.now() - timedelta(days=settings_obj.client_trash_days + 5)
         case_a = _case(facility, client_identified, staff_user, title="Hold A", is_deleted=True, deleted_at=old)
         case_b = _case(facility, client_identified, staff_user, title="Hold B", is_deleted=True, deleted_at=old)
@@ -585,11 +569,9 @@ class TestAnonymizeEligibleSoftDeletedCasesDeferredSignal:
 
         assert patched_hold.call_count == 2
         assert count == 0
-        messages = [r.getMessage() for r in caplog.records if "zurueckgestellt" in r.getMessage()]
+        messages = [r.getMessage() for r in caplog.records if "Case erasure:" in r.getMessage()]
         assert len(messages) == 1, messages
-        assert messages[0] == (
-            f"Fall-Tilgung: 2 Fall/Faelle wegen aktiver Aufbewahrungssperre zurueckgestellt (facility={facility.pk})"
-        )
+        assert messages[0] == (f"Case erasure: 2 case(s) deferred due to retention protection (facility={facility.pk})")
         case_a.refresh_from_db()
         case_b.refresh_from_db()
         assert case_a.anonymized_at is None

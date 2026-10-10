@@ -681,6 +681,9 @@ def anonymize_case_now(case, user):
             raise ValidationError(_("Nur Fälle im Papierkorb können anonymisiert werden."))
         if locked.anonymized_at is not None:
             raise ValidationError(_("Der Fall wurde bereits endgültig anonymisiert."))
+        from core.services.client.restriction import assert_processing_allowed
+
+        assert_processing_allowed(locked.client_id, lock=True)
         if case_has_active_hold(locked):
             raise ValidationError(
                 _("Für diesen Fall besteht eine Aufbewahrungssperre (Legal Hold) — Anonymisierung nicht möglich.")
@@ -695,71 +698,45 @@ def anonymize_case_now(case, user):
         return case
 
 
-def anonymize_eligible_soft_deleted_cases(facility, settings_obj, *, dry_run=False) -> int:
-    """Tilgt Faelle, deren Papierkorb-Frist abgelaufen ist. Aufruf aus ``enforce_retention``.
+def anonymize_eligible_soft_deleted_cases(facility, settings_obj, *, dry_run=False, deferred_ids=None) -> int:
+    """Erase trash-expired cases, deferring active holds and Art. 18 restrictions.
 
-    P2(b): die Frist ist ``Settings.client_trash_days`` — bewusst **keine**
-    eigene ``case_trash_days``. Ein zweiter Fristbegriff muesste in
-    Datenschutzerklaerung und DSFA erklaert werden, ohne dass ihn irgendetwas
-    fachlich traegt: der Papierkorb ist in beiden Faellen die Frist zwischen
-    „geloescht" und „unwiderruflich".
-
-    P4: Faelle mit aktivem Legal Hold sind ausgeschlossen — die Tilgung wird
-    dadurch nur **aufgeschoben**, ein spaeterer Lauf holt sie nach.
-
-    ``anonymized_at__isnull=True`` ist die Abbruchbedingung: der Fall bleibt
-    nach der Tilgung soft-geloescht und erfuellt ``deleted_at__lt=cutoff``
-    weiter. Ohne den Filter faende ihn JEDER naechtliche Lauf erneut, redigierte
-    den bereits leeren Rest noch einmal und schriebe jedes Mal eine neue
-    ``CASE_ANONYMIZED``-Zeile in das append-only, HMAC-verkettete AuditLog —
-    unbegrenztes Wachstum, und der Zaehler „Anonymized N trash-expired case(s)"
-    bliebe dauerhaft von Null verschieden und damit als Betriebssignal
-    wertlos.
-
-    Returns: Anzahl der getilgten Faelle.
+    Use the same trash deadline as persons. Preview filters protected targets;
+    execution rechecks protection after locking person, case and events. Add
+    protected case IDs to the optional set without changing the integer result.
+    Already anonymized cases remain excluded to avoid repeated erasure/audits.
     """
     cutoff = timezone.now() - timedelta(days=settings_obj.client_trash_days)
-    qs = exclude_cases_with_active_holds(
-        Case.objects.for_facility(facility).filter(is_deleted=True, deleted_at__lt=cutoff, anonymized_at__isnull=True),
-        facility,
+    candidates = Case.objects.for_facility(facility).filter(
+        is_deleted=True, deleted_at__lt=cutoff, anonymized_at__isnull=True
     )
+    qs = exclude_cases_with_active_holds(candidates, facility).exclude(client__processing_restricted=True)
+    deferred = set(candidates.exclude(pk__in=qs.values("pk")).values_list("pk", flat=True))
+    if deferred_ids is not None:
+        deferred_ids.update(deferred)
     if dry_run:
         return qs.count()
 
-    # Refs #2123 (Muster ``anonymize_eligible_soft_deleted_clients``, #2013/#2108):
-    # Der Hold-Ausschluss oben lief EINMAL beim Queryset-Bau. Ueber einen Lauf
-    # mit vielen Faellen liegen dazwischen Minuten — ein in dieser Zeit
-    # angeordneter Hold erreichte die bereits gesammelten Faelle nicht mehr.
-    # Deshalb je Fall: eigene Transaktion, Sperrkette in kanonischer Ordnung,
-    # und alle Bedingungen ein zweites Mal AUF DER GESPERRTEN Zeile. Die
-    # pk-Liste wird vorab materialisiert — der Lauf veraendert genau die
-    # Spalten, nach denen die Queryset-Bedingung filtert.
+    # Recheck on the locked rows: protection may change after selection (Refs #2524).
     count = 0
-    deferred = 0
     for case_pk in list(qs.values_list("pk", flat=True)):
         with transaction.atomic():
             locked = _lock_case_chain(facility.pk, case_pk)
             if locked is None or not locked.is_deleted or locked.anonymized_at is not None:
-                # Ein paralleler Lauf war schneller, der Fall wurde
-                # wiederhergestellt oder haengt inzwischen an einer anderen
-                # Person — nichts zu tun.
                 continue
-            if case_has_active_hold(locked):
-                # Nur AUFGESCHOBEN: ein spaeterer Lauf holt die Tilgung nach,
-                # sobald der Hold aufgehoben oder abgelaufen ist.
-                deferred += 1
+            if Client.objects.for_facility(facility).filter(
+                pk=locked.client_id, processing_restricted=True
+            ).exists() or case_has_active_hold(locked):
+                deferred.add(case_pk)
+                if deferred_ids is not None:
+                    deferred_ids.add(case_pk)
                 continue
             anonymize_case(locked, user=None, trigger="trash_days_expired")
             count += 1
     if deferred:
-        # Der Batch hat keine Meldungsflaeche; „nicht getilgt" und „nicht
-        # angeschaut" muessen fuer die Spoliationsfrage trotzdem
-        # unterscheidbar bleiben (dieselbe Zaehl-Semantik wie ``deferred`` am
-        # Ereignis-Sweep). Die Signatur bleibt ``int`` — die Aufrufer
-        # (``enforce_retention``/``_RetentionTotals``) zaehlen getilgte Faelle.
         logger.info(
-            "Fall-Tilgung: %s Fall/Faelle wegen aktiver Aufbewahrungssperre zurueckgestellt (facility=%s)",
-            deferred,
+            "Case erasure: %s case(s) deferred due to retention protection (facility=%s)",
+            len(deferred),
             facility.pk,
         )
     return count
