@@ -159,17 +159,13 @@ class TestUndoLaedtDenDokumentationstypInDerGleichenAbfrage:
             result = undo_tally_event(facility, staff_user, token)
 
         assert result.pk == event.pk
-        # Empirisch bestimmtes Budget des unveraenderten Pfads (JOIN inklusive
-        # document_type in der Event-Fetch-Query): eine zusaetzliche Abfrage
-        # ohne den JOIN ueberschreitet dieses Budget. Seit der einrichtungs-
-        # weiten Sperr-Reihenfolge der Anhangspfade (Refs #2260) nimmt
-        # ``delete_attachments_for`` im Loeschpfad EINE zusaetzliche, nach
-        # ``pk``-ordered pre-lock query — even without attachments.
-        # Since the delete path also reads the deletion state at the locked
-        # event row (Refs #2374), the budget follows that deliberate read as
-        # well (25). The mutant without the JOIN lands at 26 and stays killed
-        # (checked by hand).
-        assert len(captured.captured_queries) <= 25, [q["sql"] for q in captured.captured_queries]
+        # Business-activity tracking adds two required queries (Refs #2524).
+        # Pin the eager join directly as well as the total query budget.
+        queries = [row["sql"] for row in captured.captured_queries]
+        event_joins = [sql for sql in queries if 'FROM "core_event"' in sql and 'JOIN "core_documenttype"' in sql]
+        assert len(event_joins) == 1, queries
+        assert not any('FROM "core_documenttype"' in sql for sql in queries), queries
+        assert len(queries) <= 27, queries
 
 
 class TestReplayNachweisPrueftAktionUndZieltyp:

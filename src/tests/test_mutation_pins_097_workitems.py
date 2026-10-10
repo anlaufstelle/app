@@ -312,10 +312,12 @@ class TestUpdateWorkitemStatusFacilityScope:
             update_workitem_status(workitem, WorkItem.Status.IN_PROGRESS, staff_user)
 
         unlocked, locked = _selects_on(captured, "core_workitem")
-        assert len(unlocked) == 1, f"erwartet GENAU ein ungesperrtes Vorab-Lesen, war: {unlocked}"
+        # Business-activity tracking adds a second scoped read (Refs #2524).
+        assert len(unlocked) == 2, f"Expected exactly two unlocked reads, got: {unlocked}"
         assert len(locked) == 1, f"erwartet GENAU eine WorkItem-Sperre, war: {locked}"
         facility_literal = _pk_literal(facility)
-        assert facility_literal in unlocked[0], unlocked[0]
+        for query in unlocked:
+            assert facility_literal in query, query
         assert facility_literal in locked[0], locked[0]
 
 

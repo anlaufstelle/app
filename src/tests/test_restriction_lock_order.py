@@ -215,9 +215,20 @@ class TestGateQueryCost:
         # hätte eine zurückkehrende Redundanz erst gemeldet, wenn sie das
         # Budget sprengt. Ändert sich die Zahl, ist das eine bewusste
         # Entscheidung — nach oben wie nach unten.
-        assert len(captured.captured_queries) == EXPECTED_UPDATE_WORKITEM_QUERIES, [
-            q["sql"] for q in captured.captured_queries
+        queries = [q["sql"] for q in captured.captured_queries]
+        # Business activity adds one snapshot read, one feed lookup and two
+        # scoped case updates; the original gate budget stays fixed (Refs #2524).
+        snapshots = [sql for sql in queries if 'FROM "core_workitem"' in sql and 'AS "priority"' in sql]
+        feed_lookups = [
+            sql for sql in queries if 'FROM "core_workitem"' in sql and 'AS "client_id"' in sql and "LIMIT" not in sql
         ]
+        case_updates = [sql for sql in queries if sql.startswith('UPDATE "core_case"')]
+        assert len(snapshots) == 1, queries
+        assert len(feed_lookups) == 1, queries
+        assert len(case_updates) == 2, queries
+        for sql in snapshots + feed_lookups + case_updates:
+            assert facility.pk.hex in sql.replace("-", ""), sql
+        assert len(queries) == EXPECTED_UPDATE_WORKITEM_QUERIES, queries
 
     def test_gate_costs_no_query_without_a_client(self, facility, staff_user):
         """Eine personenlose Aufgabe darf das Gate nichts kosten — ``None`` ist
