@@ -647,9 +647,9 @@ Alle `uses:`-Referenzen in allen Workflows zeigen auf **40-stellige Commit-SHAs*
 
 ### Branch-Schutz und Maintainer-Nachweis
 
-Branch-Schutz/Rulesets stehen für das private Dev-Repo ohne GitHub Pro nicht zur Verfügung; Ersatz sind lokale Gates, signierte Tags und der Release-Dry-Run. Für das öffentliche app-Repo gilt ein Ruleset (kein Force-Push, keine Löschung).
+Branch-Schutz/Rulesets stehen für das private Dev-Repo ohne GitHub Pro nicht zur Verfügung; Ersatz sind lokale Gates, signierte Tags und der Release-Dry-Run. Für das öffentliche app-Repo ist ein Ruleset vorgesehen: kein Force-Push, keine Löschung.
 
-Den Nachweis für das öffentliche Repository liefert die Maintainer-Checkliste #1597. Der lokale Quellbaum belegt keine aktive GitHub-Einstellung; diese Dokumentation behauptet keine eigene Prüfung des Rulesets. Weitere empfohlene Regeln für den Default-Branch:
+Der Nachweis der aktiven Einstellung erfolgt über die Maintainer-Checkliste #1597. Der lokale Quellbaum belegt keine aktive GitHub-Einstellung; diese Dokumentation behauptet keine eigene Prüfung des Rulesets. Weitere empfohlene Regeln für den Default-Branch:
 
 | Regel | Wert |
 |---|---|

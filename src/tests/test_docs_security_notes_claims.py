@@ -78,9 +78,17 @@ def test_branch_protection_contract_names_the_maintainer_evidence() -> None:
     assert (
         "Branch-Schutz/Rulesets stehen für das private Dev-Repo ohne GitHub Pro nicht zur Verfügung; "
         "Ersatz sind lokale Gates, signierte Tags und der Release-Dry-Run. "
-        "Für das öffentliche app-Repo gilt ein Ruleset (kein Force-Push, keine Löschung)."
+        "Für das öffentliche app-Repo ist ein Ruleset vorgesehen: kein Force-Push, keine Löschung."
     ) in text
     assert "#1597" in text
+
+
+def test_branch_protection_is_a_requirement_without_an_active_settings_claim() -> None:
+    text = SECURITY_NOTES.read_text(encoding="utf-8")
+    section = text.split("### Branch-Schutz und Maintainer-Nachweis", 1)[1].split("\n### ", 1)[0]
+    assert "Für das öffentliche app-Repo gilt ein Ruleset" not in section
+    assert "Der Nachweis der aktiven Einstellung erfolgt über die" in section
+    assert "keine aktive GitHub-Einstellung" in section
 
 
 def test_english_branch_protection_excerpt_preserves_the_evidence_boundary() -> None:

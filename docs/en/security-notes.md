@@ -23,4 +23,4 @@ Branch protection/rulesets are unavailable for the private development repositor
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 19791d4e724003637ac40870586a8a5a62662d92 -->
+<!-- source-hash: 00d744fd5b409eb0c605960b7459aff2089cce54 -->
