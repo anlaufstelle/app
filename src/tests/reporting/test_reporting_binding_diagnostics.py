@@ -328,3 +328,17 @@ def test_assigned_type_key_does_not_claim_a_missing_type_key(facility, key):
     add_field(doc_type, "rueckgabe_stueck")
     assert not any("Typ-Schlüssel" in warning for warning in registry.diagnose_type_bindings(doc_type, facility))
     assert not any("Typ-Schlüssel" in warning for warning in registry.diagnose_field_bindings(output, facility))
+
+
+@pytest.mark.parametrize("entity_type", ["client", "case"])
+def test_shared_field_view_ignores_non_event_types(client, admin_user, partial_type, facility, entity_type):
+    event_type, field = partial_type
+    add_field(event_type, "rueckgabe_stueck")
+    other_type = make_document_type(facility=facility, name="Additional type", entity_type=entity_type)
+    DocumentTypeField.objects.create(document_type=other_type, field_template=field)
+    client.force_login(admin_user)
+    response = client.get(reverse("core:config_fieldtemplate_update", args=[field.pk]))
+    assert response.status_code == 200
+    assert response.context["report_binding_warnings"] == []
+    assert b"report-binding-warning" not in response.content
+    assert any("Spritzentausch-Bilanz" in line for line in response.context["field_bindings"])

@@ -401,7 +401,7 @@ def _linked_types(field_template, facility, *, active_only=True):
     from core.models import DocumentType
 
     types = DocumentType.objects.for_facility(facility).filter(
-        fields__field_template=field_template, fields__field_template__facility=facility
+        entity_type="event", fields__field_template=field_template, fields__field_template__facility=facility
     )
     if active_only:
         types = types.filter(is_active=True)
