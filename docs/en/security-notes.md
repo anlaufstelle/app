@@ -8,5 +8,5 @@ Old idempotency fingerprints cannot be rewrapped because the original request pa
 
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 0658e8090737f0af4b0b66aaf4594fb5a82c8762 -->
+<!-- translation-date: 2026-10-10 -->
+<!-- source-hash: 8a1ec917bc6580fe52e10d1b6b737bb35eeb617b -->

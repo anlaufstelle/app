@@ -71,3 +71,13 @@ def test_audit_row_names_every_free_text_key() -> None:
     keys = free_text_keys(DETAIL_POLICY.read_text(encoding="utf-8"))
     missing = [key for key in keys if f"`{key}`" not in rows[0]]
     assert missing == [], f"security-notes.md AuditLog.detail row does not name free-text keys: {missing}"
+
+
+def test_branch_protection_contract_names_the_maintainer_evidence() -> None:
+    text = SECURITY_NOTES.read_text(encoding="utf-8")
+    assert (
+        "Branch-Schutz/Rulesets stehen für das private Dev-Repo ohne GitHub Pro nicht zur Verfügung; "
+        "Ersatz sind lokale Gates, signierte Tags und der Release-Dry-Run. "
+        "Für das öffentliche app-Repo gilt ein Ruleset (kein Force-Push, keine Löschung)."
+    ) in text
+    assert "#1597" in text

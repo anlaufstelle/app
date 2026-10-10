@@ -645,9 +645,11 @@ Alle `uses:`-Referenzen in allen Workflows zeigen auf **40-stellige Commit-SHAs*
 
 **Warum:** Tags sind mutierbar. Bei einer Übernahme eines Action-Repositorys könnte ein Angreifer einen Tag auf einen bösartigen Commit verschieben — der nächste CI-Lauf würde dann den bösartigen Code ausführen. SHA-Pinning blockt diesen Vektor; Dependabot übernimmt das laufende Update.
 
-### Nicht aus dem Repository belegbar: Branch-Protection-Ruleset
+### Branch-Schutz und Maintainer-Nachweis
 
-Ob für einen Branch ein Ruleset oder Branch-Schutz aktiv ist, steht in den GitHub-Einstellungen des jeweiligen Repositorys, nicht im Code. Dieses Dokument sichert deshalb keinen Branch-Schutz zu. Empfohlene Regeln für den Default-Branch:
+Branch-Schutz/Rulesets stehen für das private Dev-Repo ohne GitHub Pro nicht zur Verfügung; Ersatz sind lokale Gates, signierte Tags und der Release-Dry-Run. Für das öffentliche app-Repo gilt ein Ruleset (kein Force-Push, keine Löschung).
+
+Den Nachweis für das öffentliche Repository liefert die Maintainer-Checkliste #1597. Der lokale Quellbaum belegt keine aktive GitHub-Einstellung; diese Dokumentation behauptet keine eigene Prüfung des Rulesets. Weitere empfohlene Regeln für den Default-Branch:
 
 | Regel | Wert |
 |---|---|
