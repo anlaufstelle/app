@@ -103,29 +103,21 @@ class QuickTemplate(models.Model):
         if type_facility_id is not None and type_facility_id != self.facility_id:
             raise ValidationError({"document_type": _("Der Dokumentationstyp gehört nicht zu dieser Einrichtung.")})
 
-    def save(self, *args, **kwargs):
-        """Take the shared protection gate before persistence and deferred FK checks."""
-        from core.services.dynamic_protection import lock_dynamic_protection
-
-        with transaction.atomic():
-            lock_dynamic_protection(self.facility_id)
-            return super().save(*args, **kwargs)
-
     def __str__(self):
         return f"{self.name} ({self.document_type.name})"
 
     def save(self, *args, **kwargs):
-        """Serialize new option references with configuration changes."""
+        """Take the shared gate before persistence and FK checks; recheck new option references under it."""
         from core.services.dynamic_protection import lock_dynamic_protection
         from core.services.option_usage import validate_option_references
 
         update_fields = kwargs.get("update_fields")
         if update_fields is not None:
             update_fields = kwargs["update_fields"] = frozenset(update_fields)
-        if update_fields is not None and "prefilled_data" not in update_fields:
-            return super().save(*args, **kwargs)
         with transaction.atomic():
             lock_dynamic_protection(self.facility_id)
+            if update_fields is not None and "prefilled_data" not in update_fields:
+                return super().save(*args, **kwargs)
             previous = (
                 QuickTemplate.objects.for_facility(self.facility_id)
                 .filter(pk=self.pk)
