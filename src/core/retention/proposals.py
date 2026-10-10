@@ -418,7 +418,7 @@ def _assert_target_has_no_active_hold(proposal, client_id):
         raise ValidationError(LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE)
 
 
-def _lock_check_and_mark_approved(proposal, *, user=None):
+def _lock_check_and_mark_approved(proposal, *, user=None, auto_approve_max_defer_count=None):
     """Die Sperr-/Check-/Schreib-Sequenz der Genehmigung — die EINE Stelle.
 
     Refs #2122: Der Auto-Approve-Zweig in
@@ -442,6 +442,15 @@ def _lock_check_and_mark_approved(proposal, *, user=None):
     client_id = _lock_target_rows_for_approval(proposal)
     locked = RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=proposal.facility_id).first()
     if locked is None or locked.status not in _APPROVABLE_STATUSES:
+        raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
+    # Automatic approval must recheck eligibility after both locks (Refs #2524).
+    # Manual approval may still override a future deferral explicitly.
+    if auto_approve_max_defer_count is not None and (
+        locked.status != RetentionProposal.Status.DEFERRED
+        or locked.deferred_until is None
+        or locked.deferred_until > timezone.localdate()
+        or locked.defer_count < auto_approve_max_defer_count
+    ):
         raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
     _assert_target_has_no_active_hold(locked, client_id)
 
@@ -830,7 +839,7 @@ def reactivate_deferred_proposals(facility):
                 with transaction.atomic():
                     if proposal.pk in binding_changed:
                         raise ValidationError(TARGET_BINDING_CHANGED_MESSAGE)
-                    _lock_check_and_mark_approved(proposal)
+                    _lock_check_and_mark_approved(proposal, auto_approve_max_defer_count=max_defer_count)
             except ValidationError:
                 # Der Vorschlag bleibt DEFERRED (Status unveraendert, keine
                 # Approve-Audit-Zeile) und wird beim naechsten Lauf erneut
@@ -839,7 +848,7 @@ def reactivate_deferred_proposals(facility):
                 # Spoliationsfrage unterscheidbar bleiben (ADR-050 D5.3).
                 auto_approve_skipped += 1
                 logger.warning(
-                    "Auto-Approve: Vorschlag %s zurueckgestellt (Aufbewahrungssperre oder Status, Refs #2122)",
+                    "Auto-approval: proposal %s skipped (retention protection, status or deferral eligibility)",
                     proposal.pk,
                 )
                 audit_retention_decision(
@@ -896,7 +905,7 @@ def reactivate_deferred_proposals(facility):
         # Refs #2122: Die Lauf-Summe gehoert ins Protokoll des Cron-Laufs — die
         # Rueckgabe bleibt bewusst zweistellig (s. Docstring).
         logger.warning(
-            "Auto-Approve: %d Loeschvorschlag/-vorschlaege zurueckgestellt (Aufbewahrungssperre oder Status)",
+            "Auto-approval: %d proposal(s) skipped (retention protection, status or deferral eligibility)",
             auto_approve_skipped,
         )
 
