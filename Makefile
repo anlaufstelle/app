@@ -544,9 +544,12 @@ worktree-rm:
 	bash scripts/dev/worktree.sh rm "$(NAME)"
 
 # ShellCheck uses the locked development tool from the Python environment.
+# A bare interpreter name (PYTHON=python3) has no directory of its own; then
+# PATH stays untouched instead of gaining the working directory.
+SHELLCHECK_PATH_PREFIX = $(if $(filter ./,$(dir $(PYTHON))),,$(abspath $(dir $(PYTHON))):)
 .PHONY: shellcheck
 shellcheck:
-	PATH="$(dir $(PYTHON)):$$PATH" $(PYTHON) scripts/check_shell_scripts.py
+	PATH="$(SHELLCHECK_PATH_PREFIX)$$PATH" $(PYTHON) scripts/check_shell_scripts.py
 
 # ── Release-Helfer (dev-only, Refs #1078/#1051): Skripte liegen unter
 #    dev-ops/release/ und sind nicht im Public-Snapshot — analog `make mutation`.

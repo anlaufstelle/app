@@ -1,6 +1,7 @@
 """ShellCheck is a required prerequisite, never a successful no-op."""
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -27,6 +28,26 @@ def test_shellcheck_target_calls_required_guard():
     result = subprocess.run(["make", "-n", "shellcheck"], cwd=ROOT, capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
     assert "scripts/check_shell_scripts.py" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("python", "expected"),
+    [
+        # A bare name has no directory; the working directory must not end up on PATH.
+        ("python3", []),
+        (".venv/bin/python", [str(ROOT / ".venv/bin")]),
+        ("/opt/venv/bin/python", ["/opt/venv/bin"]),
+    ],
+)
+def test_shellcheck_target_puts_only_the_interpreter_directory_on_path(python, expected):
+    result = subprocess.run(
+        ["make", "-n", "shellcheck", f"PYTHON={python}"], cwd=ROOT, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    assignment = re.search(r'PATH="([^"]*)"', result.stdout)
+    assert assignment, result.stdout
+    entries = [os.path.realpath(entry) for entry in assignment.group(1).split(":") if entry != "$PATH"]
+    assert entries == [os.path.realpath(entry) for entry in expected], assignment.group(0)
 
 
 def test_shellcheck_reports_script_errors(tmp_path):
