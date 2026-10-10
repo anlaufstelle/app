@@ -843,6 +843,9 @@ The example activity report is a customizable example or template -- not a bindi
 
 **Report keys on field templates.** Reports that evaluate **field values** (minute totals, needle-exchange balance, distribution of selection fields) additionally need to know **which field** to read. For that, the field template carries its own report key (e.g. "Minutes") and the field name is free -- a numeric field called "Session duration" instead of "Duration" still reports its minutes. The field template has no free-text field "Statistics category"; no evaluation would read it.
 
+
+The **Sum of number fields** report uses the `quantity_units` key ("Quantity") for a number field on event types. A field already carrying `ausgabe_stueck` cannot be changed to `quantity_units`, because a set report key is immutable. Create a new field template with the `quantity_units` key; existing event values are not migrated by this.
+
 > **At most one field template per report key and documentation type.** Two fields with the key "Minutes" on the same type would mean double-counted minutes. The assignment is therefore rejected -- as is setting a key later that is already taken on a shared type; if the duplication arises anyway (e.g. through a configuration package), the report counts **neither** field and says so. The same field template on **different** types is fine, as are two similarly named fields with **different** keys.
 >
 > **A deliberate gap:** If a **field template** carries a key that no report knows, the report does *not* say so separately -- unlike for a documentation type. The reason is that no meaningful figure could be given there: a field with an unknown key simply yields no values, and nobody knows how many there should have been. The state stays visible through "Appears in …" on the field template itself, which then reads "Does not appear in any report."
@@ -2490,4 +2493,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: c787165ba37af28f3c3ac22ad91f51b28b619906 -->
+<!-- source-hash: 4c674498bcc629cd04fa98518a1fb3be4a1192ed -->

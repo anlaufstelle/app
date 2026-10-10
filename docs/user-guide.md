@@ -679,6 +679,8 @@ Der Beispiel-Sachbericht erstellt einen strukturierten Sachbericht nach einem fe
 
 ### Datensatz-Berichte (CSV / JSON / XML / PDF)
 
+Der Bericht **„Summe von Zahlenfeldern“** erscheint im Reiter **Datensatz-Berichte**, sobald passende Ereignis-Typen mit einem Zahlenfeld zum Berichtsschlüssel `quantity_units` vorhanden sind. Er zeigt je Typ Ereignisse, beitragende Ereignisse und die Stückzahl-Summe des gewählten Zeitraums. Vorschau und CSV/PDF geben dieselben unterdrückten Werte aus; wenn weniger als *k* Ereignisse zur Summe beitragen, bleibt die Summe verborgen.
+
 Der Reiter **Datensatz-Berichte** listet alle Berichtsstandards, die für Ihre Einrichtung eingerichtet sind — der Beispiel-Sachbericht ebenso wie weitere, die Ihre Administration ergänzt hat.
 
 1. Wählen Sie die **Karte** des gewünschten Berichts. Jede Karte nennt in einem Satz, was der Bericht zeigt, welche Grundgesamtheit er auswertet und ob er live rechnet oder aus Monats-Auswertungen liest.

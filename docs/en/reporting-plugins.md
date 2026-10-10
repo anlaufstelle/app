@@ -13,6 +13,13 @@ The practical consequence: **a new report is a single file.** A module under [`s
 
 > **The most important rule up front.** Everything a backend returns from `build_dataset()` is **raw**. Everything that leaves the building (download **and** panel preview) passes through `prepare_export()` first. If you produce numbers that circulate externally, you must implement that hook — see [§ 6](#6-k-anonymity--the-prepare_export-hook).
 
+
+### Quantity sum report
+
+The **Sum of number fields** backend (`quantity-sum`) evaluates events by documentation type over the selected period. It binds only to the `quantity_units` report key ("Quantity") and reads number fields, producing one period total without monthly breakdowns or snapshots. The table shows **events**, **contributing events** (with a usable quantity), and **quantity in period** for each type. Missing, invalid, or unreadable values do not contribute; a completeness notice reports that such values or sums were excluded.
+
+The k-anonymity threshold *k* applies to event and contributor counts for each type. A sum is shown only with at least *k* contributing events. Totals and margins are also suppressed whenever they could reveal a hidden row or a small missing-value gap. The preview, CSV, and PDF use the same released values.
+
 ---
 
 ## 1. Architecture Overview
@@ -673,5 +680,5 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-06 -->
-<!-- source-hash: d9c977227f5fa5781df753d142006894947cc5e1 -->
+<!-- translation-date: 2026-10-10 -->
+<!-- source-hash: 5af954e5c5ba91d13d3e7d969a91798608225966 -->
