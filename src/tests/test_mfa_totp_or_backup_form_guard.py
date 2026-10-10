@@ -1,27 +1,4 @@
-"""Guard: Sudo prueft eine Eingabe nur auf dem Weg, dessen Form sie hat (Refs #2328).
-
-``verify_totp_or_backup`` (Sudo-Schritt) nimmt in EINEM Feld einen TOTP-Code
-oder einen Backup-Code an. Bisher ging jede Eingabe zuerst an das TOTP-Geraet
-und danach an die Backup-Codes. Ein Backup-Code ist fuer das TOTP-Geraet aber
-nie gueltig: ``TOTPDevice.verify_token`` zaehlte ihn trotzdem als Fehlversuch.
-Wer den Sudo-Schritt mit Backup-Codes bestaetigte, trieb so die Drossel seines
-TOTP-Geraets hoch und sperrte sich den naechsten gueltigen Code (django-otp
-sperrt nach n Fehlversuchen 2^(n-1) Sekunden). Umgekehrt zaehlte ein falscher
-TOTP-Code zusaetzlich an den Backup-Codes.
-
-Vertrag:
-
-* Die Form der Eingabe entscheidet vor jedem Pruefversuch. TOTP-Form = so
-  viele ASCII-Ziffern, wie das Geraet Stellen hat. Backup-Code-Form = der
-  22-stellige URL-safe-Code (``generate_backup_codes``) oder das historische
-  ``xxxx-xxxx``-Format, dessen Hash die Migration 0181 abgelegt hat.
-* Jede Eingabe geht an genau EINEN Pruefweg; ein Fehlversuch zaehlt nur dort.
-* Eine Eingabe ohne eine der beiden Formen kann keiner der beiden Wege
-  annehmen; sie wird abgewiesen, ohne ein Geraet zu beruehren.
-* Beide Drosseln wirken weiter (Gegenproben): ein falscher TOTP-Code zaehlt am
-  TOTP-Geraet, ein falscher Backup-Code an den Backup-Codes, und ein
-  gedrosseltes Geraet lehnt auch den gueltigen Wert seiner Form ab.
-"""
+"""Fresh TOTP and strong backup codes follow separate verification paths."""
 
 from __future__ import annotations
 
@@ -103,10 +80,11 @@ class TestBackupCodeFormNeverTouchesTheTotpDevice:
         assert _failures(totp) == 0
         assert _failures(backup) == 1
 
-    def test_historic_backup_code_leaves_the_totp_throttle_untouched(self, staff_user, konto):
+    def test_historic_backup_code_is_rejected_without_throttling_totp(self, staff_user, konto):
         totp, backup, _codes = konto
         StaticToken.objects.create(device=backup, token=_hash_code(HISTORIC_CODE))
-        assert verify_totp_or_backup(staff_user, HISTORIC_CODE) is True
+        assert verify_totp_or_backup(staff_user, HISTORIC_CODE) is False
+        assert backup.token_set.filter(token=_hash_code(HISTORIC_CODE)).exists()
         assert _failures(totp) == 0
 
     def test_backup_code_still_works_while_the_totp_device_is_throttled(self, staff_user, konto):

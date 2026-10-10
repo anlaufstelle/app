@@ -1,31 +1,9 @@
-"""Direkte Testabdeckung der RunPython-Datenmigration 0181 (Refs #2327).
-
-``0181_hash_cleartext_backup_codes`` hasht den Restbestand an Backup-Codes, die
-noch aus der Zeit vor der Hash-Speicherung (Refs #790) im Klartext in
-``otp_static_statictoken`` liegen — historisches Erzeugungsformat
-``^[0-9a-f]{4}-[0-9a-f]{4}$``. Erst danach darf ``verify_backup_code`` den
-Klartext-Vergleich ersatzlos verlieren, ohne dass ein Konto mit alten Codes
-seinen Recovery-Kanal verliert.
-
-Zusagen, die hier haengen:
-
-1. Altformat-Zeilen des Backup-Geraets tragen danach ``_hash_code(<klartext>)``;
-   bereits gehashte Zeilen bleiben byte-gleich, die Zeilenzahl je Geraet auch.
-2. Nur das Backup-Geraet (Name ``backup``) wird angefasst — ein anderes
-   statisches Geraet vergleicht seine Tokens ueber django-otp im Klartext und
-   waere nach einem Hash unbrauchbar.
-3. Ein zweiter Lauf aendert nichts (Idempotenz), die Zaehlzeile im
-   migrate-Output nennt die Zahl der gehashten Zeilen.
-4. Ein alter Klartext-Code verifiziert danach ueber den Hash-Pfad.
-5. Die eingefrorene Hash-Funktion der Migration ist identisch mit
-   ``_hash_code`` des Service-Moduls.
-
-Muster: ``test_0145_backfill_report_key`` / ``test_0120_…`` (Idempotenz).
-"""
+"""The historical cleartext migration stays frozen; legacy codes are now rejected."""
 
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib
 import io
 import re
@@ -34,8 +12,6 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django_test_migrations.contrib.unittest_case import MigratorTestCase
-
-from core.services.security.mfa import _hash_code
 
 _MIGRATION_NAME = "0181_hash_cleartext_backup_codes"
 
@@ -77,12 +53,14 @@ class TestMigrate0181HashLegacyBackupCodes(MigratorTestCase):
         self.backup_a_pk = backup_a.pk
         self.alt_1_pk = StaticToken.objects.create(device=backup_a, token=_ALT_CODE_1).pk
         self.alt_2_pk = StaticToken.objects.create(device=backup_a, token=_ALT_CODE_2).pk
-        self.gehasht_a_pk = StaticToken.objects.create(device=backup_a, token=_hash_code(_NEU_CODE)).pk
+        self.hashed_a_pk = StaticToken.objects.create(device=backup_a, token=_migration()._hash_code(_NEU_CODE)).pk
 
         # Zweites Konto: ein bereits gehashter Backup-Code — bleibt unangetastet.
         backup_b = StaticDevice.objects.create(user=konto_b, name="backup", confirmed=True)
         self.backup_b_pk = backup_b.pk
-        self.gehasht_b_pk = StaticToken.objects.create(device=backup_b, token=_hash_code("Bbbbbbbbbbbbbbbbbbbbb2")).pk
+        self.hashed_b_pk = StaticToken.objects.create(
+            device=backup_b, token=_migration()._hash_code("Bbbbbbbbbbbbbbbbbbbbb2")
+        ).pk
         # Fremdes statisches Geraet mit einem Token in Altform: django-otp
         # vergleicht es im Klartext, ein Hash machte es unbrauchbar.
         fremd_b = StaticDevice.objects.create(user=konto_b, name="other", confirmed=True)
@@ -99,12 +77,12 @@ class TestMigrate0181HashLegacyBackupCodes(MigratorTestCase):
         return dict(self._tokens().objects.values_list("pk", "token"))
 
     def test_altformat_zeilen_tragen_den_hash(self):
-        assert self._token(self.alt_1_pk) == _hash_code(_ALT_CODE_1)
-        assert self._token(self.alt_2_pk) == _hash_code(_ALT_CODE_2)
+        assert self._token(self.alt_1_pk) == _migration()._hash_code(_ALT_CODE_1)
+        assert self._token(self.alt_2_pk) == _migration()._hash_code(_ALT_CODE_2)
 
     def test_gehashte_zeilen_bleiben_unveraendert(self):
-        assert self._token(self.gehasht_a_pk) == _hash_code(_NEU_CODE)
-        assert self._token(self.gehasht_b_pk) == _hash_code("Bbbbbbbbbbbbbbbbbbbbb2")
+        assert self._token(self.hashed_a_pk) == _migration()._hash_code(_NEU_CODE)
+        assert self._token(self.hashed_b_pk) == _migration()._hash_code("Bbbbbbbbbbbbbbbbbbbbb2")
 
     def test_fremdes_statisches_geraet_bleibt_im_klartext(self):
         assert self._token(self.fremd_token_pk) == _ALT_CODE_1
@@ -134,29 +112,21 @@ class TestMigrate0181HashLegacyBackupCodes(MigratorTestCase):
         assert self._stand() == vorher
         assert _ZAEHLZEILE_RE.findall(buffer.getvalue()) == ["0"], buffer.getvalue()
 
-    def test_alter_klartext_code_verifiziert_ueber_den_hash_pfad(self):
-        """Der Konto-Nutzer tippt seinen alten Code ein — nach der Migration
-        liegt nur noch dessen Hash in der Tabelle, ein Treffer kann also nur
-        ueber den Hash-Kandidaten zustande kommen. Danach ist er verbraucht."""
+    def test_migrated_legacy_code_is_rejected_by_current_service(self):
+        """Historical hashes remain stored, but weak codes no longer authenticate."""
         from core.services.security import remaining_backup_codes, verify_backup_code
 
         assert not self._tokens().objects.filter(token=_ALT_CODE_1, device_id=self.backup_a_pk).exists()
-        konto = get_user_model().objects.get(pk=self.konto_a_pk)
-
-        assert verify_backup_code(konto, _ALT_CODE_1) is True
-        assert remaining_backup_codes(konto) == 2
-        assert verify_backup_code(konto, _ALT_CODE_1) is False
+        user = get_user_model().objects.get(pk=self.konto_a_pk)
+        assert remaining_backup_codes(user) == 3
+        assert verify_backup_code(user, _ALT_CODE_1) is False
+        assert remaining_backup_codes(user) == 3
 
 
 @pytest.mark.parametrize(
     "code",
     [_ALT_CODE_1, _ALT_CODE_2, "0000-0000", "ffff-ffff", _NEU_CODE, "", "Ä-ß"],
 )
-def test_eingefrorene_hashfunktion_entspricht_dem_service(code):
-    """Die Migration friert die Hash-Bildung ein, statt den Service zu importieren.
-
-    Aendert sich ``_hash_code`` spaeter, faellt das hier auf — dann braucht der
-    Restbestand eine eigene Folgemigration, und 0181 bleibt der historische
-    Stand, der zum Zeitpunkt ihres Laufs galt.
-    """
-    assert _migration()._hash_code(code) == _hash_code(code)
+def test_frozen_hash_function_keeps_historical_sha256_contract(code):
+    """The historical migration keeps SHA-256 despite the new keyed service."""
+    assert _migration()._hash_code(code) == hashlib.sha256(code.encode("utf-8")).hexdigest()[:16]

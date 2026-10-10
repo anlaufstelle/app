@@ -1,24 +1,4 @@
-"""Guard: der Klartext-Vergleich fuer Backup-Codes ist abgeschaltet (Refs #2327).
-
-Die Datenmigration ``0181_hash_cleartext_backup_codes`` hasht den Restbestand an
-Klartext-Zeilen im historischen Format ``xxxx-xxxx``. Danach vergleicht
-``verify_backup_code`` ausschliesslich den Hash des Eingabewerts; eine
-Klartext-Zeile, die am Migrationsweg vorbei in der Tabelle liegt (Restore eines
-Alt-Dumps, Direktschreibzugriff), ist kein gueltiger Code mehr:
-
-* der Aufruf liefert ``False``,
-* die Zeile bleibt liegen (nichts wird verbraucht),
-* der Fehlversuch zaehlt in die Drosselung des Geraets.
-
-Abgedeckt sind der Service und alle drei Einstiege, die ihn erreichen
-(``grep -rn 'verify_backup_code\\|verify_totp_or_backup' src/core``):
-``MFAVerifyView.post`` (``mode=backup``), ``SudoModeView.post`` ueber
-``verify_totp_or_backup`` und ``LockoutRecoveryBackupCodeView``.
-
-Gegenprobe: derselbe alte Code als Hash-Zeile — der Zustand nach der
-Migration — verifiziert weiterhin, auch in der bindestrichlosen
-Eingabeform, die ``MFAVerifyView`` normalisiert.
-"""
+"""Cleartext rows are not credentials; modern keyed digests verify under RLS."""
 
 from __future__ import annotations
 
@@ -36,6 +16,7 @@ from tests.test_rls_functional import (  # noqa: F401
 )
 
 ALT_CODE = "abcd-1234"
+MODERN_CODE = "Abcdefghijklmnopqrstu1"
 
 
 def _backup_device(user, token: str) -> StaticDevice:
@@ -78,11 +59,11 @@ class TestCleartextRowIsNoCredential:
         assert device.throttling_failure_count == 1
         assert device.last_used_at is None
 
-    def test_migrated_row_verifies_exactly_once(self, staff_user):
-        """Gegenprobe: nach der Migration liegt der Hash — der alte Code gilt."""
-        device = _backup_device(staff_user, _hash_code(ALT_CODE))
-        assert verify_backup_code(staff_user, ALT_CODE) is True
-        assert verify_backup_code(staff_user, ALT_CODE) is False
+    def test_modern_digest_verifies_exactly_once(self, staff_user):
+        """A modern code verifies once against its keyed digest."""
+        device = _backup_device(staff_user, _hash_code(MODERN_CODE))
+        assert verify_backup_code(staff_user, MODERN_CODE) is True
+        assert verify_backup_code(staff_user, MODERN_CODE) is False
         assert device.token_set.count() == 0
 
 
@@ -103,14 +84,14 @@ class TestCleartextRowRejectedInMfaVerifyView:
         assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.BACKUP_CODES_USED).exists()
         assert AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_FAILED).exists()
 
-    @pytest.mark.parametrize("eingabe", [ALT_CODE, "abcd1234", "ABCD1234"])
-    def test_migrated_row_verifies_session(self, client, staff_user, eingabe):
-        """Gegenprobe inkl. Normalisierung der View (``abcd1234`` -> ``abcd-1234``)."""
+    @pytest.mark.parametrize("token", [MODERN_CODE, f" {MODERN_CODE} "])
+    def test_modern_digest_verifies_session(self, client, staff_user, token):
+        """Modern input remains case-sensitive and permits surrounding whitespace."""
         _confirmed_totp(staff_user)
-        device = _backup_device(staff_user, _hash_code(ALT_CODE))
+        device = _backup_device(staff_user, _hash_code(MODERN_CODE))
         assert client.login(username="teststaff", password="testpass123")
 
-        response = client.post("/mfa/verify/", {"mode": "backup", "token": eingabe})
+        response = client.post("/mfa/verify/", {"mode": "backup", "token": token})
 
         assert response.status_code == 302
         assert client.session.get("mfa_verified") is True
@@ -161,26 +142,20 @@ class TestCleartextRowRejectedInLockoutRecovery:
 
 @pytest.mark.django_db
 class TestBackupCodeWritePathsUnderRlsRole:
-    """Die Schreibpfade der Backup-Code-Pruefung unter NOSUPERUSER/NOBYPASSRLS.
+    """Modern backup-code verification writes account-scoped audit rows under RLS."""
 
-    Beide Einstiege laufen ohne vollwertig angemeldete Sitzung: ``/mfa/verify/``
-    nach dem Passwort-Login (``mfa_verified`` fehlt noch), die Lockout-Recovery
-    ganz anonym. Sie schreiben AuditLog-Zeilen — mit dem migrierten Code als
-    Hash-Zeile, dem Zustand nach der Datenmigration.
-    """
-
-    def test_verify_with_migrated_code_writes_audit_with_account_facility(
+    def test_verify_with_modern_code_writes_audit_with_account_facility(
         self,
         client,
         staff_user,
         rls_test_role,  # noqa: F811
     ):
         _confirmed_totp(staff_user)
-        device = _backup_device(staff_user, _hash_code(ALT_CODE))
+        device = _backup_device(staff_user, _hash_code(MODERN_CODE))
         client.force_login(staff_user)
 
         with as_rls_role(rls_test_role, facility_id=staff_user.facility_id):
-            response = client.post("/mfa/verify/", {"mode": "backup", "token": ALT_CODE})
+            response = client.post("/mfa/verify/", {"mode": "backup", "token": MODERN_CODE})
 
         assert response.status_code == 302
         assert client.session.get("mfa_verified") is True
@@ -188,18 +163,18 @@ class TestBackupCodeWritePathsUnderRlsRole:
         entry = AuditLog.objects.get(user=staff_user, action=AuditLog.Action.BACKUP_CODES_USED)
         assert entry.facility_id == staff_user.facility_id
 
-    def test_verify_with_migrated_code_writes_audit_for_account_without_facility(
+    def test_verify_with_modern_code_writes_audit_for_account_without_facility(
         self,
         client,
         super_admin_user,
         rls_test_role,  # noqa: F811
     ):
         _confirmed_totp(super_admin_user)
-        _backup_device(super_admin_user, _hash_code(ALT_CODE))
+        _backup_device(super_admin_user, _hash_code(MODERN_CODE))
         client.force_login(super_admin_user)
 
         with as_rls_role(rls_test_role, facility_id=""):
-            response = client.post("/mfa/verify/", {"mode": "backup", "token": ALT_CODE})
+            response = client.post("/mfa/verify/", {"mode": "backup", "token": MODERN_CODE})
 
         assert response.status_code == 302
         assert client.session.get("mfa_verified") is True
@@ -225,19 +200,19 @@ class TestBackupCodeWritePathsUnderRlsRole:
         entry = AuditLog.objects.get(user=staff_user, action=AuditLog.Action.MFA_FAILED)
         assert entry.facility_id == staff_user.facility_id
 
-    def test_lockout_recovery_with_migrated_code_writes_unlock_anonymously(
+    def test_lockout_recovery_with_modern_code_writes_unlock_anonymously(
         self,
         client,
         staff_user,
         rls_test_role,  # noqa: F811
     ):
-        device = _backup_device(staff_user, _hash_code(ALT_CODE))
+        device = _backup_device(staff_user, _hash_code(MODERN_CODE))
         _lock_account(staff_user)
 
         with as_rls_role(rls_test_role, facility_id=""):
             response = client.post(
                 reverse("core:lockout_recovery_backup_code"),
-                {"username": staff_user.username, "backup_code": ALT_CODE},
+                {"username": staff_user.username, "backup_code": MODERN_CODE},
             )
 
         assert response.status_code == 302

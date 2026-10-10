@@ -1,18 +1,4 @@
-"""Guard: ein gespeicherter Backup-Code-Hash ist kein Anmeldecode (Refs #2294).
-
-``verify_backup_code`` suchte den Eingabewert unveraendert in derselben
-Token-Spalte, in der die SHA-256-Praefixe der Codes liegen (Legacy-Fallback aus
-Refs #790). Ein aus der Datenbank gelesener Token-Wert galt damit selbst als
-gueltiges Geheimnis — der zugesagte Schutz der gehashten Speicherung war
-aufgehoben.
-
-Abgedeckt sind alle drei Einstiege, die ``verify_backup_code`` erreichen
-(``grep -rn 'verify_backup_code\\|verify_totp_or_backup' src``):
-
-* ``core.views.mfa.MFAVerifyView.post`` (``mode=backup``),
-* ``core.views.sudo_mode.SudoModeView.post`` ueber ``verify_totp_or_backup``,
-* ``core.views.lockout_recovery.LockoutRecoveryBackupCodeView.form_valid``.
-"""
+"""Stored 96-bit keyed digests are not usable as backup-code credentials."""
 
 from __future__ import annotations
 
@@ -32,8 +18,8 @@ from core.services.security import (
     verify_backup_code,
 )
 
-# Was in der DB steht: 16 Hex-Zeichen (SHA-256-Praefix, Refs #790).
-STORED_TOKEN_FORMAT = re.compile(r"^[0-9a-f]{16}$")
+# Stored tokens are 16 base64url characters of a server-keyed digest.
+STORED_TOKEN_FORMAT = re.compile(r"^[A-Za-z0-9_-]{16}$")
 
 
 def _confirmed_totp(user):

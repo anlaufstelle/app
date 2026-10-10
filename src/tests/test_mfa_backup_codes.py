@@ -45,41 +45,27 @@ class TestBackupCodesService:
                 f"Backup-Code '{c}' hat nur {entropy_bits:.0f} Bit Entropie, mind. 128 Bit erwartet."
             )
 
-    def test_db_only_stores_hashes_not_clear_codes(self, staff_user):
-        """Refs #790 (C-22): DB-Leak darf nicht aequivalent zur Code-Kompromittierung sein.
-        StaticToken.token speichert SHA-256-Prefix (16 Hex-Zeichen, getruncated
-        wegen django-otps CharField(max_length=16)) — kein Klartext.
-        """
+    def test_codes_stored_as_keyed_digests(self, staff_user):
+        """Storage uses 16 base64url characters and contains no cleartext codes."""
+        from core.services.security.mfa import _hash_code
+
         codes = generate_backup_codes(staff_user)
         device = StaticDevice.objects.get(user=staff_user, name="backup")
-        stored_tokens = list(device.token_set.values_list("token", flat=True))
-        assert all(len(t) == 16 and all(c in "0123456789abcdef" for c in t) for t in stored_tokens), (
-            f"DB-Tokens sollen SHA-256-Prefix sein (16 Hex-Zeichen), gemessen: {stored_tokens}"
-        )
-        # Keiner der Klartext-Codes darf in der DB stehen.
-        for code in codes:
-            assert code not in stored_tokens, (
-                "Klartext-Backup-Code im DB-Token-Field gefunden — Hash-Storage greift nicht."
-            )
+        stored_tokens = set(device.token_set.values_list("token", flat=True))
+        assert stored_tokens == {_hash_code(code) for code in codes}
+        assert all(len(value) == 16 for value in stored_tokens)
+        assert stored_tokens.isdisjoint(codes)
 
-    def test_migrated_legacy_codes_still_verify(self, staff_user):
-        """Refs #790, #2327: Codes aus der Zeit vor der Hash-Speicherung
-        (xxxx-xxxx) muessen weiterhin verifizieren, damit Konten mit alten
-        Codes nicht ausgesperrt sind. Die Datenmigration 0181 hat ihre
-        Klartext-Zeilen gehasht — der alte Code trifft den Hash-Kandidaten.
-        Die Ablehnung einer ungehashten Klartext-Zeile pinnt
-        ``test_mfa_backup_code_cleartext_removed_guard.py``."""
+    def test_legacy_codes_are_rejected(self, staff_user):
+        """The security requirement removes support for weak legacy codes."""
         from django_otp.plugins.otp_static.models import StaticToken
 
         from core.services.security.mfa import _hash_code
 
         device = StaticDevice.objects.create(user=staff_user, name="backup", confirmed=True)
-        # Alt-Code im Zustand nach der Migration 0181.
         StaticToken.objects.create(device=device, token=_hash_code("abcd-1234"))
-
-        assert verify_backup_code(staff_user, "abcd-1234") is True
-        # Single-use bleibt erhalten.
         assert verify_backup_code(staff_user, "abcd-1234") is False
+        assert device.token_set.count() == 1
 
     def test_generate_replaces_existing_codes(self, staff_user):
         first = generate_backup_codes(staff_user)
@@ -235,30 +221,21 @@ class TestMFAVerifyWithBackupCode:
         assert remaining_backup_codes(staff_user) == BACKUP_CODES_COUNT - 1
         assert AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.BACKUP_CODES_USED).exists()
 
-    def test_legacy_8hex_without_dash_normalised(self, client, staff_user):
-        """Legacy-Codes (8-Zeichen-Hex ohne Bindestrich) werden zu xxxx-xxxx
-        normalisiert — Refs #790 erhaelt diese Convenience nur fuer Codes,
-        die das alte Format zweifellos erfuellen. Refs #2327: der alte Code
-        liegt nach der Migration 0181 gehasht vor; die Normalisierung muss
-        genau die Form treffen, deren Hash gespeichert ist.
-        """
+    @pytest.mark.parametrize("token", ["abcd1234", "ABCD1234", "abcd-1234"])
+    def test_legacy_input_never_verifies(self, client, staff_user, token):
+        """Legacy input has no normalization or fallback verification path."""
         from django_otp.plugins.otp_static.models import StaticToken
 
         from core.services.security.mfa import _hash_code
 
         self._setup_confirmed_totp(staff_user)
-        # Alt-Code (Pre-#790-Aera) im Zustand nach der Migration 0181.
-        device = StaticDevice.objects.get_or_create(user=staff_user, name="backup", defaults={"confirmed": True})[0]
-        device.confirmed = True
-        device.save(update_fields=["confirmed"])
+        device = StaticDevice.objects.create(user=staff_user, name="backup", confirmed=True)
         StaticToken.objects.create(device=device, token=_hash_code("abcd-1234"))
         client.login(username="teststaff", password="testpass123")
-
-        response = client.post(
-            "/mfa/verify/",
-            {"mode": "backup", "token": "abcd1234"},  # ohne Dash, klein
-        )
-        assert response.status_code == 302
+        response = client.post("/mfa/verify/", {"mode": "backup", "token": token})
+        assert response.status_code == 200
+        assert client.session.get("mfa_verified") is not True
+        assert device.token_set.count() == 1
 
     def test_totp_path_still_works_when_not_in_backup_mode(self, client, staff_user):
         device = self._setup_confirmed_totp(staff_user)
@@ -398,7 +375,7 @@ class TestMFARegenerate:
         # Ungültiger Token → Redirect zurück in die Settings ohne Neugenerierung.
         assert response.status_code == 302
         assert response.url == "/mfa/settings/"
-        # Refs #790: DB speichert SHA-256-Prefixes, ``first`` enthaelt Klartext-Codes.
+        # Storage contains keyed digests; ``first`` contains the cleartext codes.
         from core.services.security import _hash_code
 
         still = StaticDevice.objects.get(user=staff_user, name="backup").token_set.values_list("token", flat=True)

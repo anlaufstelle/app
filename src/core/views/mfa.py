@@ -292,17 +292,8 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
         facility = getattr(request.user, "facility", None)
 
         if mode == "backup":
-            # Backup-Code-Eingabe: Refs #790 — neue Codes sind 22 Zeichen
-            # URL-safe Base64 (case-sensitive!). Legacy-Codes waren ``xxxx-xxxx``
-            # (8 Hex-Chars + Dash) — fuer die ist Lowercase+Dash-Reinsertion
-            # tolerant. Wir behandeln beide Formate hier.
-            candidate = token
-            # Legacy-Heuristik: rein-hex und 8-9 Zeichen -> alter Code, normalisieren.
-            stripped = candidate.replace("-", "")
-            if stripped and len(stripped) == 8 and all(c in "0123456789abcdefABCDEF" for c in stripped):
-                candidate = f"{stripped[:4]}-{stripped[4:]}".lower()
-            # Neue 22-Zeichen-Codes bleiben unveraendert (case-sensitive!).
-            if candidate and verify_backup_code(request.user, candidate):
+            # Backup codes are case-sensitive; weak legacy formats are rejected.
+            if token and verify_backup_code(request.user, token):
                 # Refs #2034: erst rotieren, dann anheben — ein vor dem Verify
                 # entwendetes ``sessionid``-Cookie erbt die verifizierte Sitzung
                 # sonst mit.

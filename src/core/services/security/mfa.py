@@ -1,34 +1,14 @@
-"""2FA-Recovery via Backup-Codes (Refs #588).
-
-Nutzt django-otps Standard-`StaticDevice`/`StaticToken`:
-`StaticDevice.verify_token(token)` löscht den Token nach erfolgreicher
-Verifikation automatisch — dadurch ist jeder Code einmalig. Wir legen pro
-User genau ein `StaticDevice` an (Name "backup"); Regenerieren = Device
-neu befüllen, nicht mehrere Devices erzeugen.
-
-Refs #790 (C-22): Backup-Codes haben jetzt 128-Bit Entropie
-(``secrets.token_urlsafe(16)``) statt 32 Bit, und die DB speichert nur
-SHA-256-Hashes der Codes. Damit ist ein DB-Leak nicht mehr aequivalent
-zur Kompromittierung der Backup-Codes (Pre-Image-Angriffe gegen 128-Bit-
-Eingaben sind infeasibel).
-
-Klartext-Altbestand (Refs #2294, #2327): Codes aus der Zeit vor der
-Hash-Speicherung lagen im historischen ``xxxx-xxxx``-Format im Klartext in der
-Token-Spalte. Die Datenmigration ``0181_hash_cleartext_backup_codes`` hat diesen
-Restbestand durch die Hashes ersetzt; ein alter Code verifiziert seither ueber
-denselben Hash-Kandidaten wie ein neuer. Einen Klartext-Vergleich gibt es
-nicht mehr — weder fuer den Eingabewert noch fuer einen aus der Datenbank
-gelesenen Token-Wert. Speicher- und Migrationsvertrag stehen in
-``docs/security-notes.md``.
-"""
+"""Single-use, server-keyed backup codes and second-factor verification."""
 
 from __future__ import annotations
 
-import hashlib
+import base64
+import hmac
 import re
 import secrets
 
 from django.db import transaction
+from django.utils.crypto import salted_hmac
 from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 
 # TOTP-Zugriff ueber das Proxy-Modell mit at-rest verschluesseltem Secret
@@ -37,37 +17,24 @@ from core.models import EncryptedTOTPDevice as TOTPDevice
 
 BACKUP_CODES_COUNT = 10
 BACKUP_DEVICE_NAME = "backup"
-# Refs #790: token_urlsafe(16) liefert 22 Zeichen, 128 Bit Entropie. Format
-# bleibt unsegmentiert (kein xxxx-xxxx) — neue Codes sind "Geheimnis-Strings"
-# zum Copy-Paste. Wer Lesbarkeit will, kann beim Display-Layer formatieren.
+# The 128-bit input has 22 URL-safe characters; legacy 32-bit codes are rejected.
 _CODE_BYTES = 16
-# Refs #2328: die Formen, in denen ein Backup-Code gueltig sein kann. Der
-# aktuelle Code ist ``token_urlsafe(_CODE_BYTES)`` (22 Zeichen aus dem
-# URL-safe-Alphabet); das historische Format ``xxxx-xxxx`` hat die Migration
-# 0181 als Hash abgelegt. Keine der beiden Formen ist eine reine Ziffernfolge —
-# ``verify_totp_or_backup`` trennt daran TOTP-Code und Backup-Code.
-_BACKUP_CODE_FORMS = (
-    re.compile(r"[A-Za-z0-9_-]{22}"),
-    re.compile(r"[0-9a-f]{4}-[0-9a-f]{4}"),
-)
+_BACKUP_CODE_FORM = re.compile(r"[A-Za-z0-9_-]{22}")
 
 
 def _generate_code() -> str:
-    """Liefert einen 128-Bit Backup-Code als URL-safe Base64-String (22 Zeichen)."""
+    """Return a 128-bit backup code as an unpadded base64url string."""
     return secrets.token_urlsafe(_CODE_BYTES)
 
 
 def _hash_code(code: str) -> str:
-    """SHA-256-Hex-Digest des Codes (truncated auf 16 Hex-Zeichen).
+    """Return a purpose-separated, 96-bit HMAC fitting StaticToken's field.
 
-    ``StaticToken.token`` aus django-otp ist ein CharField(max_length=16).
-    Wir koennten die Spalte per Migration eines Drittanbieter-Modells
-    vergroessern, das ist aber ein Wartungs-Risiko bei django-otp-Updates.
-    Truncation auf 16 Hex-Zeichen liefert 64-Bit Image-Entropie — bei
-    128-Bit-Eingabe ist das fuer Pre-Image-Angriffe weiterhin 2^64
-    Versuche, also infeasibel. Kein Salt noetig (Input hat selbst 128 Bit).
+    The key derives from SECRET_KEY. Changing it invalidates issued codes;
+    a database digest alone is neither a credential nor an offline guessing oracle.
     """
-    return hashlib.sha256(code.encode("utf-8")).hexdigest()[:16]
+    key = salted_hmac("core.security.backup_codes", "storage", algorithm="sha256").digest()
+    return base64.urlsafe_b64encode(hmac.digest(key, code.encode("utf-8"), "sha256")).decode("ascii")[:16]
 
 
 def _get_or_create_device(user) -> StaticDevice:
@@ -90,7 +57,7 @@ def generate_backup_codes(user) -> list[str]:
 
     Replaces any previously issued codes. Returns the codes in clear text —
     the caller must display them exactly once and not persist them anywhere
-    else. In der Datenbank wird nur der SHA-256-Hash gespeichert (Refs #790).
+    else. Only server-keyed digests are stored in the database.
     """
     device = _get_or_create_device(user)
     device.token_set.all().delete()
@@ -107,19 +74,11 @@ def remaining_backup_codes(user) -> int:
     return device.token_set.count()
 
 
-def verify_backup_code(user, token: str) -> bool:
-    """Consume a backup code. Returns True on success.
+def verify_backup_code(user, token: str, *, throttle_failures: bool = True) -> bool:
+    """Consume one valid-format code atomically, returning whether it matched.
 
-    Refs #790: der Eingabewert wird ausschliesslich ueber seinen Hash
-    gesucht, in EINER DB-Query — ein Fehlversuch kostet genau einen
-    Throttle-Increment. Single-use bleibt erhalten, indem der Treffer direkt
-    geloescht wird.
-
-    Refs #2294, #2327: Es gibt keinen Klartext-Vergleich. Der Altbestand im
-    ``xxxx-xxxx``-Format ist durch die Datenmigration ``0181`` gehasht; eine
-    Klartext-Zeile, die am Migrationsweg vorbei in der Tabelle liegt, ist kein
-    gueltiger Code, und ein aus der Datenbank gelesener Token-Wert faellt als
-    Eingabe ebenfalls durch (sein Hash steht nirgends).
+    Anonymous recovery uses endpoint limits instead of increasing the victim's
+    device throttle. Authenticated verification keeps the device throttle.
     """
     if not token:
         return False
@@ -135,9 +94,12 @@ def verify_backup_code(user, token: str) -> bool:
     # parallele Aufruf gewinnt. ``generate_backup_codes`` ersetzt das Set
     # vollstaendig und ein Satz enthaelt jeden Code nur einmal; der Filter
     # trifft also hoechstens eine Zeile.
-    deleted, _ = device.token_set.filter(token=_hash_code(token)).delete()
+    deleted = 0
+    if _has_backup_code_form(token):
+        deleted, _ = device.token_set.filter(token=_hash_code(token)).delete()
     if deleted == 0:
-        device.throttle_increment()
+        if throttle_failures:
+            device.throttle_increment()
         return False
 
     device.throttle_reset(commit=False)
@@ -176,7 +138,7 @@ def _has_totp_form(token: str, device: TOTPDevice) -> bool:
 
 
 def _has_backup_code_form(token: str) -> bool:
-    return any(form.fullmatch(token) for form in _BACKUP_CODE_FORMS)
+    return _BACKUP_CODE_FORM.fullmatch(token) is not None
 
 
 def verify_totp_or_backup(user, token: str) -> bool:

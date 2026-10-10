@@ -36,6 +36,7 @@ from core.services.security import unlock as unlock_user
 from core.services.security.lockout_recovery import consume_recovery_token
 from core.services.security.origin import build_external_url
 from core.signals.audit import _set_session_vars, get_client_ip
+from core.views.auth import _login_username_key
 from core.views.mixins import anonymous_session_required
 
 logger = logging.getLogger(__name__)
@@ -184,6 +185,7 @@ class LockoutRecoveryBackupCodeView(FormView):
     form_class = _BackupCodeForm
 
     @method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))
+    @method_decorator(ratelimit(key=_login_username_key, rate="10/h", method="POST", block=True))
     def post(self, request: HttpRequest, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
@@ -191,7 +193,7 @@ class LockoutRecoveryBackupCodeView(FormView):
         username = form.cleaned_data["username"]
         code = form.cleaned_data["backup_code"]
         user = User.objects.filter(username=username, is_active=True).first()
-        if user is not None and verify_backup_code(user, code):
+        if user is not None and verify_backup_code(user, code, throttle_failures=False):
             _set_session_vars(getattr(user, "facility", None), is_super_admin=False)
             unlock_user(
                 user,
