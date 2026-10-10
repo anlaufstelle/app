@@ -1,0 +1,300 @@
+"""Public reporting paths for period quantity sums (Refs #2515)."""
+
+import csv
+import json
+from datetime import timedelta
+from types import SimpleNamespace
+
+import pytest
+import weasyprint
+from django.urls import reverse
+from django.utils import timezone
+
+from core.forms.config import FieldTemplateForm
+from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
+from core.reporting import registry
+from core.reporting.export import export_dataset
+from core.views.statistics import build_report_panel_context
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def backend():
+    return registry.get_backend("quantity-sum")
+
+
+def make_type(facility, name="Counter", *, key="quantity_units", field_type="number", **kwargs):
+    document_type = DocumentType.objects.create(facility=facility, name=name, **kwargs)
+    field = FieldTemplate.objects.create(
+        facility=facility, name=f"{name} quantity", field_type=field_type, report_key=key
+    )
+    DocumentTypeField.objects.create(document_type=document_type, field_template=field)
+    return document_type, field
+
+
+def add_events(facility, user, document_type, field, values):
+    for value in values:
+        Event.objects.create(
+            facility=facility,
+            created_by=user,
+            document_type=document_type,
+            occurred_at=timezone.now(),
+            data_json={} if value is None else {field.slug: value},
+        )
+
+
+def prepared(backend, facility, date_range):
+    return backend.prepare_export(facility, backend.build_dataset(facility, *date_range))
+
+
+def test_registry_vocabulary_and_field_select(facility):
+    assert "quantity-sum" in {item.slug for item in registry.get_backends()}
+    assert str(registry.get_field_key_vocabulary()["quantity_units"]) == "Stückzahl"
+    assert "quantity_units" not in registry.get_report_key_vocabulary()
+    assert [item.slug for item in registry.backends_for_field_key("quantity_units")] == ["quantity-sum"]
+    assert "quantity_units" in dict(FieldTemplateForm(facility=facility).fields["report_key"].choices)
+    assert registry.get_backend("quantity-sum").snapshot_enabled is False
+
+
+def test_period_sums_are_type_independent_and_ordered(backend, facility, admin_user, date_range):
+    Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 1})
+    second, second_field = make_type(facility, "Zulu", report_key="contact")
+    first, first_field = make_type(facility, "Alpha")
+    add_events(facility, admin_user, second, second_field, [8, 7, 0])
+    add_events(facility, admin_user, first, first_field, [1, 2, 7])
+    result = prepared(backend, facility, date_range)
+    assert result.records == [
+        {"document_type": "Alpha", "events": 3, "contributors": 3, "quantity": 10},
+        {"document_type": "Zulu", "events": 3, "contributors": 3, "quantity": 15},
+    ]
+    assert result.summary["quantity_total"] == 25
+    assert result.summary["events_total"] == result.summary["contributors_total"] == 6
+
+
+@pytest.mark.parametrize("value", [None, "", True, False, "NaN", "Infinity", "-Infinity", "invalid", [], {}])
+def test_invalid_values_do_not_contribute(backend, facility, admin_user, date_range, value):
+    doc_type, field = make_type(facility)
+    add_events(facility, admin_user, doc_type, field, [0, "2.5", value])
+    result = backend.build_dataset(facility, *date_range)
+    assert result.records[0]["events"] == 3
+    assert result.records[0]["contributors"] == 2
+    assert result.records[0]["quantity"] == 2.5
+    assert [(issue.code, issue.count) for issue in result.completeness] == [("missing_field_values", 1)]
+    exported = export_dataset(backend, facility, *date_range, format="json")
+    json.loads(exported.content, parse_constant=lambda value: pytest.fail(f"Invalid JSON number: {value}"))
+
+
+def test_encrypted_values_and_unreadable_ciphertext(backend, facility, admin_user, date_range):
+    doc_type, field = make_type(facility)
+    field.is_encrypted = True
+    field.save()
+    add_events(facility, admin_user, doc_type, field, ["12.5"])
+    event = Event.objects.get(document_type=doc_type)
+    assert event.data_json[field.slug]["__encrypted__"] is True
+    add_events(facility, admin_user, doc_type, field, [None])
+    Event.objects.filter(document_type=doc_type, data_json={}).update(
+        data_json={field.slug: {"__encrypted__": True, "value": "unreadable"}}
+    )
+    result = backend.build_dataset(facility, *date_range)
+    assert result.records[0]["quantity"] == 12.5
+    assert result.records[0]["contributors"] == 1
+    assert result.completeness[0].count == 1
+
+
+def test_duplicate_binding_never_sums_either_field(backend, facility, admin_user, date_range):
+    doc_type, field = make_type(facility)
+    other = FieldTemplate.objects.create(facility=facility, name="Other quantity", field_type="number")
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=other)
+    FieldTemplate.objects.filter(pk=other.pk).update(report_key="quantity_units")
+    add_events(facility, admin_user, doc_type, field, [100] * 6)
+    Event.objects.filter(document_type=doc_type).update(data_json={field.slug: 100, other.slug: 200})
+    raw = backend.build_dataset(facility, *date_range)
+    assert raw.records[0]["contributors"] == 0
+    assert raw.records[0]["quantity"] is None
+    assert "duplicate_field_binding" in {issue.code for issue in raw.completeness}
+    assert prepared(backend, facility, date_range).summary["quantity_total"] is None
+
+
+@pytest.mark.parametrize(
+    ("field_type", "entity_type", "active_type", "active_field", "available"),
+    [
+        ("number", "event", True, True, True),
+        ("text", "event", True, True, False),
+        ("number", "case", True, True, False),
+        ("number", "event", False, True, False),
+        ("number", "event", True, False, False),
+    ],
+)
+def test_availability_requires_active_event_number_field(
+    backend, facility, field_type, entity_type, active_type, active_field, available
+):
+    _, field = make_type(facility, field_type=field_type, entity_type=entity_type, is_active=active_type)
+    FieldTemplate.objects.filter(pk=field.pk).update(is_active=active_field)
+    assert backend.is_available(facility) is available
+
+
+def test_read_path_excludes_other_units_inactive_and_non_number_fields(backend, facility, admin_user, date_range):
+    doc_type, field = make_type(facility)
+    add_events(facility, admin_user, doc_type, field, [3])
+    for name, key, field_type, entity_type in [
+        ("Exchange", "ausgabe_stueck", "number", "event"),
+        ("Duration", "dauer_minuten", "number", "event"),
+        ("Text", "quantity_units", "text", "event"),
+        ("Case", "quantity_units", "number", "case"),
+    ]:
+        other_type, other_field = make_type(facility, name, key=key, field_type=field_type, entity_type=entity_type)
+        add_events(facility, admin_user, other_type, other_field, [999])
+    inactive_type, inactive_field = make_type(facility, "Inactive field")
+    add_events(facility, admin_user, inactive_type, inactive_field, [999])
+    FieldTemplate.objects.filter(pk=inactive_field.pk).update(is_active=False)
+    raw = backend.build_dataset(facility, *date_range)
+    assert len(raw.records) == 1
+    assert raw.summary["quantity_total"] == 3
+    assert raw.summary["events_total"] == 1
+
+
+def test_scope_deleted_and_outside_period(
+    backend, facility, second_facility, admin_user, second_facility_user, date_range
+):
+    doc_type, field = make_type(facility)
+    add_events(facility, admin_user, doc_type, field, [7])
+    foreign_type, foreign_field = make_type(second_facility)
+    add_events(second_facility, second_facility_user, foreign_type, foreign_field, [900])
+    assert backend.is_available(second_facility)
+    add_events(facility, admin_user, doc_type, field, [88, 99])
+    Event.objects.filter(document_type=doc_type, data_json={field.slug: 88}).update(is_deleted=True)
+    Event.objects.filter(document_type=doc_type, data_json={field.slug: 99}).update(
+        occurred_at=timezone.now() - timedelta(days=100)
+    )
+    assert backend.build_dataset(facility, *date_range).summary["quantity_total"] == 7
+    assert (
+        backend.build_dataset(facility, date_range[0] - timedelta(days=20), date_range[0] - timedelta(days=10)).records
+        == []
+    )
+
+
+@pytest.mark.parametrize("quantity", [0, 100000])
+def test_sum_threshold_uses_contributing_events(backend, facility, admin_user, date_range, quantity):
+    doc_type, field = make_type(facility)
+    add_events(facility, admin_user, doc_type, field, [quantity] * 4 + [None] * 5)
+    result = prepared(backend, facility, date_range)
+    assert result.records == [{"document_type": "Counter", "events": 9, "contributors": None, "quantity": None}]
+    assert result.summary["quantity_total"] is None
+    assert result.summary["contributors_total"] is None
+    assert all(issue.count is None for issue in result.completeness)
+
+
+def test_zero_counts_as_contribution_at_threshold(backend, facility, admin_user, date_range):
+    doc_type, field = make_type(facility)
+    add_events(facility, admin_user, doc_type, field, [0] * 5)
+    assert prepared(backend, facility, date_range).records == [
+        {"document_type": "Counter", "events": 5, "contributors": 5, "quantity": 0}
+    ]
+
+
+def test_residual_guard_and_quantity_margin(backend, facility, admin_user, date_range):
+    for name, values in [("Alpha", [11] * 20), ("Beta", [23] * 9), ("Gamma", [97] * 2)]:
+        doc_type, field = make_type(facility, name)
+        add_events(facility, admin_user, doc_type, field, values)
+    result = prepared(backend, facility, date_range)
+    rows = {row["document_type"]: row for row in result.records}
+    assert rows["Gamma"]["events"] is None
+    assert sum(row["events"] is None for row in rows.values()) >= 2
+    assert rows["Gamma"]["contributors"] is None
+    assert rows["Gamma"]["quantity"] is None
+    assert result.summary["quantity_total"] is None
+    assert result.summary["contributors_total"] is None
+    assert result.summary["events_total"] == 31
+
+
+@pytest.mark.parametrize("small", [False, True])
+def test_panel_csv_pdf_share_published_values(backend, facility, admin_user, date_range, monkeypatch, small):
+    doc_type, field = make_type(facility)
+    add_events(facility, admin_user, doc_type, field, [37] * (2 if small else 6))
+    context = build_report_panel_context(
+        facility, backend, SimpleNamespace(date_from=date_range[0], date_to=date_range[1])
+    )
+    csv_response = export_dataset(backend, facility, *date_range, format="csv")
+    csv_rows = list(csv.reader(b"".join(csv_response.streaming_content).decode().splitlines()))
+    pdf_text = []
+
+    def write_pdf(html, *args, **kwargs):
+        document = html.render()
+        pdf_text.append(
+            " ".join(
+                box.text for page in document.pages for box in page._page_box.descendants() if hasattr(box, "text")
+            )
+        )
+        return document.write_pdf(*args, **kwargs)
+
+    monkeypatch.setattr(weasyprint.HTML, "write_pdf", write_pdf)
+    response = export_dataset(backend, facility, *date_range, format="pdf")
+    assert response.content.startswith(b"%PDF-")
+    expected = ["Counter", None, None, None] if small else ["Counter", 6, 6, 222]
+    assert context["preview_rows"] == [expected]
+    data_row = next(row for row in csv_rows if row and row[0] == "Counter")
+    assert data_row == [str(value) if value is not None else "" for value in expected]
+    expected_pdf_row = "Counter — — —" if small else "Counter 6 6 222"
+    assert expected_pdf_row in pdf_text[-1]
+    assert ("222" in pdf_text[-1]) is (not small)
+    assert "74" not in pdf_text[-1]
+    assert all(issue.count is None for issue in context["result"].completeness)
+
+
+def test_download_uses_existing_release_and_audit_path(client, backend, facility, admin_user, date_range):
+    doc_type, field = make_type(facility)
+    add_events(facility, admin_user, doc_type, field, [2] * 6)
+    client.force_login(admin_user)
+    response = client.get(
+        reverse("core:statistics_report_export"),
+        {
+            "backend": backend.slug,
+            "format": "csv",
+            "date_from": str(date_range[0]),
+            "date_to": str(date_range[1]),
+            "recipient": "Reviewer",
+            "purpose": "Review",
+        },
+    )
+    assert response.status_code == 200
+    entry = AuditLog.objects.get(action=AuditLog.Action.EXPORT)
+    assert entry.facility_id == facility.pk
+    assert entry.detail["backend"] == "quantity-sum"
+    assert entry.detail["recipient"] == "Reviewer"
+    assert entry.detail["purpose"] == "Review"
+
+
+def test_large_finite_quantities_sum_exactly_without_nonfinite_json(backend, facility, admin_user, date_range):
+    Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 1})
+    doc_type, field = make_type(facility)
+    value = 123456789012345678901234567890123456789
+    add_events(facility, admin_user, doc_type, field, [value, value])
+    result = prepared(backend, facility, date_range)
+    assert result.records[0]["quantity"] == value * 2
+    assert result.summary["quantity_total"] == value * 2
+    payload = json.loads(export_dataset(backend, facility, *date_range, format="json").content)
+    assert payload["records"][0]["quantity"] == value * 2
+
+
+def test_sum_stays_hidden_when_contributor_count_exposes_small_missing_gap(backend, facility, admin_user, date_range):
+    doc_type, field = make_type(facility)
+    add_events(facility, admin_user, doc_type, field, [3] * 5 + [None])
+    result = prepared(backend, facility, date_range)
+    assert result.records[0]["events"] == 6
+    assert result.records[0]["contributors"] is None
+    assert result.records[0]["quantity"] is None
+    assert result.summary["contributors_total"] is None
+    assert result.summary["quantity_total"] is None
+
+
+def test_duplicate_key_on_text_field_also_blocks_numeric_sum(backend, facility, admin_user, date_range):
+    doc_type, field = make_type(facility)
+    other = FieldTemplate.objects.create(facility=facility, name="Text quantity", field_type="text")
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=other)
+    FieldTemplate.objects.filter(pk=other.pk).update(report_key="quantity_units")
+    add_events(facility, admin_user, doc_type, field, [100] * 6)
+    result = backend.build_dataset(facility, *date_range)
+    assert result.records[0]["quantity"] is None
+    assert result.records[0]["contributors"] == 0
+    assert "duplicate_field_binding" in {issue.code for issue in result.completeness}

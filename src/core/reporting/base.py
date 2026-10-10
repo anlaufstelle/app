@@ -304,6 +304,8 @@ class FeldBindung:
 
     eintraege: tuple[BindungsEintrag, ...]
     bindet: Literal["report_key", "slug"] = "slug"
+    # Optional numeric/type constraint; unset bindings retain their behavior.
+    field_type: str | None = None
 
     def _erststufe(self) -> str:
         """Der Modellfeldname der Erststufe — der Schalter der Feld-Ebene.
@@ -342,6 +344,8 @@ class FeldBindung:
         Bindungsschluessel vorbei. Bindet die Deklaration ueber ``report_key``,
         ist der Schluessel der Wert selbst, sofern er deklariert ist.
         """
+        if self.field_type is not None and field_template.field_type != self.field_type:
+            return None
         wert = getattr(field_template, self._erststufe())
         if self._erststufe() == "report_key":
             return wert if wert in self.keys() else None
@@ -351,7 +355,7 @@ class FeldBindung:
         """Die Werte, gegen die :meth:`template_q` filtert — passend zur Erststufe."""
         return self.keys() if self._erststufe() == "report_key" else self.slugs()
 
-    def template_q(self, prefix: str = "fields__field_template__") -> Q:
+    def template_q(self, prefix: str = "fields__field_template__", *, include_field_type: bool = True) -> Q:
         """„Diese Feldvorlage haengt aktiv am Typ" — ein ``filter()``-Argument.
 
         Feldname UND Werte kommen aus :meth:`_erststufe`; „slug" steht hier
@@ -364,14 +368,17 @@ class FeldBindung:
         einem Aufruf muesste dieselbe Zeile beide Slugs zugleich tragen — nie
         erfuellbar.
         """
-        return Q(
-            **{
-                f"{prefix}{self._erststufe()}__in": self._erststufen_werte(),
-                f"{prefix}is_active": True,
-            }
-        )
+        criteria = {
+            f"{prefix}{self._erststufe()}__in": self._erststufen_werte(),
+            f"{prefix}is_active": True,
+        }
+        if include_field_type and self.field_type is not None:
+            criteria[f"{prefix}field_type"] = self.field_type
+        return Q(**criteria)
 
-    def leseschluessel(self, facility, typ_bindung: "TypBindung | None" = None) -> "Leseschluessel":
+    def leseschluessel(
+        self, facility, typ_bindung: "TypBindung | None" = None, *, entity_type: str | None = None
+    ) -> "Leseschluessel":
         """Der ``data_json``-Lesepfad dieser Bindung, aufgeloest **je Dokumentationstyp**.
 
         ``data_json`` ist nach dem Feldvorlagen-**Slug** indiziert, gebunden wird
@@ -407,15 +414,24 @@ class FeldBindung:
         from core.models import DocumentTypeField
 
         treffer: dict[object, set[str]] = {}
+        eligible: set[object] = set()
         zuordnungen = DocumentTypeField.objects.filter(
+            self.template_q("field_template__", include_field_type=False),
             document_type__facility=facility,
-            field_template__is_active=True,
-            **{f"field_template__{self._erststufe()}__in": self._erststufen_werte()},
         )
+        if entity_type is not None:
+            zuordnungen = zuordnungen.filter(document_type__entity_type=entity_type)
         if typ_bindung is not None:
             zuordnungen = zuordnungen.filter(typ_bindung.matching_q("document_type__"))
-        for document_type_id, slug in zuordnungen.values_list("document_type_id", "field_template__slug"):
+        for document_type_id, slug, field_type in zuordnungen.values_list(
+            "document_type_id", "field_template__slug", "field_template__field_type"
+        ):
             treffer.setdefault(document_type_id, set()).add(slug)
+            if self.field_type is None or field_type == self.field_type:
+                eligible.add(document_type_id)
+        # Every active matching key participates in cardinality checks, even
+        # when the second template has the wrong field type (Refs #2515).
+        treffer = {type_id: slugs for type_id, slugs in treffer.items() if type_id in eligible}
 
         je_typ = {typ_id: next(iter(slugs)) for typ_id, slugs in treffer.items() if len(slugs) == 1}
         doppelt = tuple(sorted((typ_id for typ_id, slugs in treffer.items() if len(slugs) > 1), key=str))

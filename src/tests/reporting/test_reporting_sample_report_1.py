@@ -1380,6 +1380,7 @@ class TestDiscovery:
             "general-key-figures",
             "monthly-trend",
             "needle-exchange-balance",
+            "quantity-sum",
             "sample-report-1",
             "service-distribution",
         ]
