@@ -392,3 +392,12 @@ class TestTitleH1Coupling:
         )
         for url_name, grund in TITLE_H1_EXCEPTIONS.items():
             assert grund.strip(), f"TITLE_H1_EXCEPTIONS[{url_name!r}] braucht eine Begründung."
+
+
+def test_contacts_list_is_its_own_home_without_a_self_backlink():
+    assert nav._family_back_link("event_list").url_name == "core:event_list"
+    assert "event_list" in nav.BACKLINK_EXEMPT
+    assert nav.back_link_for("event_list") is None
+    for name in ("event_detail", "event_legal_hold", "event_create", "event_update", "event_delete"):
+        assert name in nav.ZEITSTROM.family
+        assert nav._family_back_link(name).url_name == "core:zeitstrom"

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from itertools import combinations
 
+import pytest
 from django.urls import reverse
 from django.urls.resolvers import URLResolver
 
@@ -264,3 +265,45 @@ def test_section_gate_is_union_of_tab_gates():
         assert set(nav.section_gates(section)) == expected, (
             f"Section {section.key!r}: Gates sind nicht die Vereinigung der Reiter-Gates."
         )
+
+
+def test_contacts_has_its_own_family_and_navigation_entries():
+    assert nav.CONTACTS.family == frozenset({"event_list"})
+    assert "event_list" not in nav.ZEITSTROM.family
+    assert nav.SIDEBAR[nav.SIDEBAR.index(nav.ZEITSTROM) + 1] is nav.CONTACTS
+    assert nav.CONTACTS in nav.MOBILE_MORE
+    assert "event_list" in nav.mobile_more_catalog()
+    assert nav.CONTACTS.icon == "contacts"
+
+
+@pytest.mark.parametrize("role", [*User.Role.values, ""])
+def test_contacts_visibility_matches_assistant_gate(role):
+    user = User(role=role)
+    assert nav.is_visible(nav.CONTACTS, user) == (role in {"assistant", "staff", "lead", "facility_admin"})
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("role", ["assistant", "staff", "lead", "admin", "super_admin"])
+def test_contacts_sidebar_and_mobile_entry_visibility(client, request, role):
+    user = request.getfixturevalue(f"{role}_user")
+    client.force_login(user)
+    route = "core:system_dashboard" if role == "super_admin" else "core:event_list"
+    response = client.get(reverse(route))
+    assert response.status_code == 200
+    html = response.content.decode()
+    visible = role != "super_admin"
+    assert ('data-testid="nav-contacts"' in html) == visible
+    assert ('data-testid="mobile-nav-contacts"' in html) == visible
+    if visible:
+        start = html.index('data-testid="nav-items"')
+        sidebar = html[start : html.index("</div>", start)]
+        assert sidebar.count('aria-current="page"') == 1
+        marker = sidebar.index('data-testid="nav-contacts"')
+        anchor = sidebar[sidebar.rindex("<a", 0, marker) :]
+        assert 'href="/events/" aria-current="page"' in anchor.split(">", 1)[0]
+        assert sidebar.index('href="/"') < sidebar.index('href="/events/"') < sidebar.index('href="/workitems/"')
+        assert '<svg aria-hidden="true"' in anchor
+        mobile = html[html.index('aria-label="Mobile Navigation"') :]
+        marker = mobile.index('data-testid="mobile-nav-more"')
+        assert 'aria-current="true"' in mobile[mobile.rindex("<button", 0, marker) : marker]
+        assert 'href="/" aria-current="page"' not in mobile

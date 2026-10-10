@@ -99,17 +99,17 @@ class TestMoreMenuPerRole:
     """Konzept §5.2 — die Ziel-Liste, Zeile für Zeile, je Rolle."""
 
     def test_assistant(self, client, assistant_user):
-        """Assistenz: Suche · Dateien ┊ Profil · DE/EN · Abmelden."""
+        """Assistants see contacts before files in the complete mobile menu."""
         entries = _more_entries(_render(client, assistant_user))
-        assert entries == [SUCHE, "/attachments/", HILFE, PROFIL, SPRACHE, ABMELDEN]
+        assert entries == [SUCHE, "/events/", "/attachments/", HILFE, PROFIL, SPRACHE, ABMELDEN]
 
     def test_staff(self, client, staff_user):
-        """Fachkraft: zusätzlich Fälle — Datenschutz nur mit eigenem Antrag."""
+        """Staff see contacts before cases; privacy needs an own pending request."""
         entries = _more_entries(_render(client, staff_user))
-        assert entries == [SUCHE, "/cases/", "/attachments/", HILFE, PROFIL, SPRACHE, ABMELDEN]
+        assert entries == [SUCHE, "/events/", "/cases/", "/attachments/", HILFE, PROFIL, SPRACHE, ABMELDEN]
 
     def test_staff_with_own_pending_deletion_request(self, client, facility, staff_user):
-        """Regel N2 mobil: der Hub taucht auf, sobald genau ein Reiter sichtbar ist."""
+        """The privacy hub appears when at least one tab is visible."""
         DeletionRequest.objects.create(
             facility=facility,
             target_type=DeletionRequest.TargetType.CLIENT,
@@ -121,6 +121,7 @@ class TestMoreMenuPerRole:
         entries = _more_entries(_render(client, staff_user))
         assert entries == [
             SUCHE,
+            "/events/",
             "/cases/",
             "/attachments/",
             "/datenschutz/",
@@ -131,11 +132,12 @@ class TestMoreMenuPerRole:
         ]
 
     def test_lead(self, client, lead_user):
-        """Leitung: mit Arbeitszentrale (die mobile Lücke aus Konzept §5.3) und Statistik."""
+        """Leads see the dashboard, contacts and statistics in the complete menu."""
         entries = _more_entries(_render(client, lead_user))
         assert entries == [
             SUCHE,
             "/start/",
+            "/events/",
             "/cases/",
             "/attachments/",
             "/statistics/",
@@ -147,15 +149,14 @@ class TestMoreMenuPerRole:
         ]
 
     def test_facility_admin(self, client, admin_user):
-        """Anwendungsbetreuung: beide Hubs, **keine** Arbeitszentrale (Regel N3).
+        """Facility admins see contacts and both hubs without a dashboard entry.
 
-        Auch kein „Administration ↗": der Django-Admin ist für diese Rolle eine
-        Zeile auf der Verwaltungs-Übersicht (Konzept §3.1) — mobil wäre er ein
-        Absprung in eine fremde Anwendungshülle mit eigener Navigation.
+        Django administration remains a link on the administration overview.
         """
         entries = _more_entries(_render(client, admin_user))
         assert entries == [
             SUCHE,
+            "/events/",
             "/cases/",
             "/attachments/",
             "/statistics/",
