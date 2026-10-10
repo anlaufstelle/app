@@ -158,11 +158,22 @@ class DocumentType(ReportKeyMixin, SluggedModel):
         """Slug ist je Facility eindeutig (Muster FieldTemplate)."""
         return DocumentType.objects.filter(facility=self.facility).exclude(pk=self.pk)
 
+    def clean(self):
+        from core.services.dynamic_protection import validate_configuration_facility
+
+        super().clean()
+        validate_configuration_facility(self, self.facility_id)
+
     @contextmanager
     def _save_context(self):
         """Serialize shared slug persistence and sensitivity rewrites (Refs #2525)."""
-        from core.services.dynamic_protection import configuration_write, rewrite_dynamic_records
+        from core.services.dynamic_protection import (
+            configuration_write,
+            rewrite_dynamic_records,
+            validate_configuration_facility,
+        )
 
+        validate_configuration_facility(self, self.facility_id)
         with configuration_write(self.facility_id):
             previous = DocumentType.objects.for_facility(self.facility_id).filter(pk=self.pk).first()
             yield

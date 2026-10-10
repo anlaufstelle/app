@@ -119,7 +119,10 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
         return FieldTemplate.objects.filter(facility=self.facility).exclude(pk=self.pk)
 
     def clean(self):
+        from core.services.dynamic_protection import validate_configuration_facility
+
         super().clean()
+        validate_configuration_facility(self, self.facility_id)
         if self.slug and not _SLUG_RE.fullmatch(self.slug):
             raise ValidationError({"slug": _("Nur a-z, 0-9 und Bindestriche erlaubt.")})
         # Refs #1726: reservierter Slug (fester Formularfeld-Name) — nur beim
@@ -214,8 +217,13 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
 
     def save(self, *args, **kwargs):
         """Normalize protection and atomically rewrite assigned records."""
-        from core.services.dynamic_protection import configuration_write, rewrite_dynamic_records
+        from core.services.dynamic_protection import (
+            configuration_write,
+            rewrite_dynamic_records,
+            validate_configuration_facility,
+        )
 
+        validate_configuration_facility(self, self.facility_id)
         self._validate_number_range()
         self._validate_persisted_number_default_range()
         with configuration_write(self.facility_id):

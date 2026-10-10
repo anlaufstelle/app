@@ -65,7 +65,13 @@ class DocumentTypeField(models.Model):
         ]
 
     def clean(self):
+        from core.services.dynamic_protection import validate_configuration_facility
+
         super().clean()
+        if self.document_type_id:
+            validate_configuration_facility(
+                self, self.document_type.facility_id, facility_lookup="document_type__facility_id"
+            )
         # M0 (Refs #1056): Eine zugeordnete Feldgruppe muss zum selben
         # Dokumentationstyp gehoeren — sonst wuerde ein Feld unter einer Gruppe
         # eines fremden DocumentType (ggf. sogar fremder Facility) einsortiert.
@@ -73,8 +79,15 @@ class DocumentTypeField(models.Model):
             raise ValidationError({"field_group": _("Die Feldgruppe muss zum selben Dokumentationstyp gehören.")})
 
     def save(self, *args, **kwargs):
-        from core.services.dynamic_protection import configuration_write, rewrite_dynamic_records
+        from core.services.dynamic_protection import (
+            configuration_write,
+            rewrite_dynamic_records,
+            validate_configuration_facility,
+        )
 
+        validate_configuration_facility(
+            self, self.document_type.facility_id, facility_lookup="document_type__facility_id"
+        )
         with configuration_write(self.document_type.facility_id):
             previous = type(self).objects.filter(pk=self.pk).first()
             if (

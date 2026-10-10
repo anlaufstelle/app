@@ -66,6 +66,13 @@ def configuration_write(facility_id):
         yield
 
 
+def validate_configuration_facility(record, facility_id, *, facility_lookup="facility_id"):
+    """Reject moves before acquiring a gate for the wrong facility (Refs #2525)."""
+    previous = type(record)._default_manager.filter(pk=record.pk).values_list(facility_lookup, flat=True).first()
+    if previous is not None and previous != facility_id:
+        raise ValidationError(_("Die Einrichtung kann nach der Erstellung nicht geändert werden."))
+
+
 @contextmanager
 def dynamic_data_write(record, update_fields=None):
     """Reject incomplete type changes and keep protection stable until persistence."""

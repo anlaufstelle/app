@@ -82,7 +82,7 @@ class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
             # (dieselbe Mechanik wie system_type oben), also kann eine
             # Aenderung ueber die Admin-UI den Guard gar nicht mehr erreichen
             # und den vormals unabgefangenen ValidationError->HTTP-500 ausloesen.
-            readonly = (*readonly, "slug", "entity_type")
+            readonly = (*readonly, "facility", "slug", "entity_type")
         return readonly
 
     def save_model(self, request, obj, form, change):
@@ -196,7 +196,7 @@ class FieldTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
     def get_readonly_fields(self, request, obj=None):
         readonly = self.readonly_fields
         if obj:
-            readonly = (*readonly, "slug")
+            readonly = (*readonly, "facility", "slug")
         # E3 (Refs #1849), Entscheid E-K — dieselbe Regel wie am
         # Dokumentationstyp: gesperrt erst, wenn ein Wert dasteht.
         if obj and obj.report_key:
