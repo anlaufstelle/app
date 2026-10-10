@@ -55,6 +55,24 @@ def _boot_with_key(page, base_url):
     )
 
 
+def _wait_for_boot_activity_to_settle(page, timeout=15):
+    """Block until no Web Lock is held or pending and the key hydration is done.
+
+    The page boots with background work that reads and writes the key row: the
+    revocation check runs under the sync lock, and every ``_loadKey`` rewrites
+    the row (``checkedAt``) after reading it. A test that wipes the key while
+    that read-modify-write is in flight gets the row written back and sees a
+    key that "was cleared".
+    """
+    page.evaluate("async () => { await window.crypto_session.ready(); }")
+    deadline = time.monotonic() + timeout
+    while page.evaluate(
+        "async () => { const q = await navigator.locks.query(); return q.held.length + q.pending.length; }"
+    ):
+        assert time.monotonic() < deadline, "Boot-time lock activity did not settle"
+        time.sleep(0.2)
+
+
 def _attach_to_shared_store(page, base_url):
     """Zweiten Tab auf denselben Origin laden — er liest den bereits abgeleiteten
     Key aus der GETEILTEN IndexedDB (nicht neu ableiten, sonst wuerde der Store
@@ -465,12 +483,7 @@ class TestSyncOrchestrator:
             page.wait_for_function("() => !!(window.syncOrchestrator && window.syncOrchestrator.isLockHeld)")
             # The boot-time revocation check runs under the same lock. Measure only
             # once the page is idle, otherwise "before" reports that boot run.
-            deadline = time.monotonic() + 15
-            while page.evaluate(
-                "async () => { const q = await navigator.locks.query(); return q.held.length + q.pending.length; }"
-            ):
-                assert time.monotonic() < deadline, "Boot-time lock activity did not settle"
-                time.sleep(0.2)
+            _wait_for_boot_activity_to_settle(page)
             result = page.evaluate(
                 """async () => {
                     const o = window.syncOrchestrator;
@@ -513,6 +526,9 @@ class TestSyncOrchestrator:
         page.set_default_timeout(30000)
         try:
             _boot_with_key(page, base_url)
+            # Without this the wipe below can race the boot-time revocation
+            # check, whose key-row rewrite resurrects the key ("encrypted").
+            _wait_for_boot_activity_to_settle(page)
             outcome = page.evaluate(
                 """async () => {
                     const o = window.syncOrchestrator;
