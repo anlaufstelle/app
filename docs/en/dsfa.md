@@ -26,7 +26,7 @@ Manager and Application support create and lift legal holds directly in person, 
 
 Manual person deletion always requires a second authorized person; event and case deletion requires one when the linked person is at "With additional details". Immediate file erasure remains a single authorized decision by Manager or Application support, subject to the hold and Art. 18 safeguards described in section 2.4 of the source. The normal qualified-event retention path also needs a second person; explicitly enabled auto-approval is the exception.
 
-Anonymization does not redact the audit log. Entries without a facility follow the installation-wide audit period; entries protected by a target hold, a zero period or a permanent exception remain. Reporting-period evidence contains the initiating person; recipient and purpose are unchecked free text. Without the daily retention job, none of the eleven periods is enforced.
+Anonymization does not redact the audit log. Entries without a facility follow the installation-wide audit period; entries protected by a target hold, a zero period or a permanent exception remain. Reporting-period evidence contains the initiating person; recipient and purpose are free-text fields limited to 200 characters each. The application rejects email and telephone patterns and probable personal names through a heuristic check. Complete detection of personal details and factual accuracy still require organizational review. Without the daily retention job, none of the eleven periods is enforced.
 
 ## Authentication and system-administration access
 
@@ -37,4 +37,4 @@ PostgreSQL row-level security protects facility-bound sessions against cross-fac
 <!-- translation-source: src/core/dsgvo_templates/dsfa.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: e2244d10068a215c0e1912d58ed5d80d21abcd7d -->
+<!-- source-hash: b3b55883974e6e6c6631c89f2f35195a3ee406c6 -->

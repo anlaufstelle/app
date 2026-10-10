@@ -340,9 +340,17 @@ class TestVerarbeitungsverzeichnisAuditLogFrist:
         vvt, _ = render_document("verarbeitungsverzeichnis", facility)
         dsfa, _ = render_document("dsfa", facility)
 
-        for begriff in ("Sicherheitsverstöße", "Berichtszeiträume", "ungeprüfter Freitext"):
-            assert begriff in vvt, f"VVT nennt die Ausnahme nicht: {begriff}"
-            assert begriff in dsfa
+        for term in ("Sicherheitsverstöße", "Berichtszeiträume"):
+            assert term in vvt, f"VVT does not name the exception: {term}"
+            assert term in dsfa
+        assert "ungeprüfter Freitext" in vvt
+        for claim in (
+            "höchstens 200 Zeichen",
+            "E-Mail- und Telefonmuster",
+            "wahrscheinliche Personennamen",
+            "organisatorisch zu prüfen",
+        ):
+            assert claim in dsfa
 
     def test_beide_dokumente_nennen_dieselbe_frist(self, facility):
         """Der eigentliche Befund: ein ZIP, zwei Aussagen."""
