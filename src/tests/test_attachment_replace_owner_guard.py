@@ -106,7 +106,7 @@ def _ketten_lock_mitschnitt():
     aufrufe: list[str] = []
 
     def wrapper(execute, sql, params, many, context):
-        if "pg_advisory_xact_lock" in sql:
+        if "pg_advisory_xact_lock(" in sql:
             aufrufe.append(sql)
         return execute(sql, params, many, context)
 

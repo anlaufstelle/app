@@ -3,7 +3,7 @@
 import uuid
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 
 
@@ -84,7 +84,36 @@ class EventHistory(models.Model):
         """Prevent updates — only inserts are allowed."""
         if self.pk and type(self).objects.filter(pk=self.pk).exists():
             raise ValueError("EventHistory records are append-only and cannot be updated.")
-        super().save(*args, **kwargs)
+        from core.models import FieldTemplate
+        from core.services.dynamic_protection import lock_dynamic_protection
+        from core.services.events.history_diff import is_redaction_marker
+        from core.services.file_vault import encrypt_field, is_encrypted_value
+
+        payloads = (self.data_before, self.data_after)
+        with transaction.atomic():
+            if any(isinstance(payload, dict) and payload and not is_redaction_marker(payload) for payload in payloads):
+                lock_dynamic_protection(self.event.facility_id)
+                encrypted_slugs = set(
+                    FieldTemplate.objects.for_facility(self.event.facility_id)
+                    .filter(is_encrypted=True)
+                    .values_list("slug", flat=True)
+                )
+                encrypted_slugs.update(
+                    slug
+                    for slug, metadata in self.field_metadata.items()
+                    if isinstance(metadata, dict) and metadata.get("is_encrypted") is True
+                )
+                for payload in payloads:
+                    if not isinstance(payload, dict) or is_redaction_marker(payload):
+                        continue
+                    for slug in encrypted_slugs:
+                        value = payload.get(slug)
+                        if value is None or value == "" or is_encrypted_value(value):
+                            continue
+                        if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
+                            continue
+                        payload[slug] = encrypt_field(value)
+            super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         """Prevent deletion of history records."""

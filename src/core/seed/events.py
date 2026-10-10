@@ -9,8 +9,7 @@ from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, Facility, User
 from core.seed.constants import EVENT_DATA_POOLS, EVENT_TYPE_WEIGHTS
-from core.services.events.fields import compute_event_search_text, stage_index
-from core.services.file_vault import encrypt_dynamic_data
+from core.services.events.fields import stage_index
 
 logger = logging.getLogger(__name__)
 
@@ -347,16 +346,9 @@ def seed_events_bulk(
             document_type=doc_type,
             occurred_at=occurred,
             data_json=data_json,
-            # Refs #2271: ``bulk_create`` loest KEIN ``pre_save``-Signal aus
-            # (``core.signals.event_search`` greift nur bei ``Event.save()``)
-            # — der GIN-trgm-Suchindex bliebe sonst leer. Die zentrale
-            # Berechnung deshalb hier direkt vorab, auf dem noch
-            # UNVERSCHLUESSELTEN ``data_json`` (dieselbe Reihenfolge wie in
-            # ``create_event``). ``compute_event_search_text`` schliesst
-            # verschluesselte/erhoehte Felder selbst ueber die
-            # ``FieldTemplate``-Metadaten aus — unabhaengig davon, ob der
-            # Wert zu diesem Zeitpunkt schon verschluesselt ist.
-            search_text=compute_event_search_text(data_json, doc_type),
+            # Refs #2271, #2525: the bulk manager encrypts and indexes under
+            # the same protection locks as ordinary event writes.
+            search_text="",
             is_anonymous=is_anonymous,
             created_by=staff_users[idx % len(staff_users)],
         )
@@ -390,10 +382,6 @@ def seed_events_bulk(
         idx += 1
 
     if batch:
-        for event in batch:
-            event.data_json = encrypt_dynamic_data(event.document_type, event.data_json)
-            # Refs #2525: refresh protection at insertion, not batch construction.
-            event.search_text = compute_event_search_text(event.data_json, event.document_type)
         Event.objects.bulk_create(batch, batch_size=1000)
 
     return len(batch)

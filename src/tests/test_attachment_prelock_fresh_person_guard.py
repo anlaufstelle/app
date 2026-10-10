@@ -215,10 +215,10 @@ class TestBindungswechselWaehrendDerVorsperre:
         assert andere.pk.hex not in personensperren[0]
 
 
-class TestZaehlprobeStabileBindung:
-    """Stabile Bindung: dieselben Zeilensperren wie ohne Frischlesung, eine Lesung mehr."""
+class TestStableBindingQueryCount:
+    """Keep one binding read and two entity locks after the protection phase."""
 
-    def test_zwei_sperren_und_eine_lesung(self, facility, staff_user):
+    def test_two_entity_locks_and_one_binding_read(self, facility, staff_user):
         person = _person(facility, staff_user, "Zaehl-X")
         case = Case.objects.create(facility=facility, client=person, title="Fall", created_by=staff_user)
 
@@ -228,11 +228,13 @@ class TestZaehlprobeStabileBindung:
         sqls = [q["sql"] for q in ctx.captured_queries if "SAVEPOINT" not in q["sql"]]
         sperren = _zeilensperren(ctx.captured_queries)
         assert [tabelle for tabelle, _sql in sperren] == ["core_client", "core_case"]
-        lesungen = [sql for sql in sqls if "FOR UPDATE" not in sql.upper()]
-        assert len(lesungen) == 1, lesungen
-        assert lesungen[0].startswith('SELECT "core_case"."client_id"')
-        assert 'FROM "core_case"' in lesungen[0]
-        assert len(sqls) == 3
+        binding_reads = [sql for sql in sqls if "core_case" in sql and "FOR UPDATE" not in sql.upper()]
+        assert len(binding_reads) == 1, binding_reads
+        assert len([sql for sql in sqls if "pg_advisory_xact_lock_shared(2525," in sql]) == 1
+        assert len([sql for sql in sqls if "FOR SHARE" in sql.upper()]) == 2
+        assert binding_reads[0].startswith('SELECT "core_case"."client_id"')
+        assert 'FROM "core_case"' in binding_reads[0]
+        assert len(sqls) == 8
 
 
 class TestFallBearbeitungNachZusammenfuehrung:

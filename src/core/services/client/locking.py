@@ -63,4 +63,12 @@ def lock_clients(client_refs, *, facility=None) -> dict[Any, Client]:
     if not pks:
         return {}
     rows = Client.objects.for_facility(facility) if facility is not None else Client.objects.all()
+    from core.services.dynamic_protection import lock_dynamic_protection_many
+
+    facility_ids = (
+        [getattr(facility, "pk", facility)]
+        if facility is not None
+        else sorted(set(rows.filter(pk__in=pks).values_list("facility_id", flat=True)))
+    )
+    lock_dynamic_protection_many(facility_ids)
     return {row.pk: row for row in rows.filter(pk__in=pks).select_for_update().order_by("pk")}

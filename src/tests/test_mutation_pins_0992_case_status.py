@@ -257,28 +257,11 @@ class TestUebergebeneInstanzBleibtDerRueckgabewert:
 
 @pytest.mark.django_db
 class TestAbfrageBudgetDerStatuswechsel:
-    """Die Sperrkette kostet Abfragen — die Zahl steht fest.
+    """Pin status-workflow budgets including the six-query protection phase.
 
-    Fallpfad (12): Personenbezug vorlesen · Personensperre (Art.-18-Gate) ·
-    Widerrufsspalten der Person · Fallzeile sperren · ``UPDATE core_case`` ·
-    Einrichtung fuer Audit und Zeitstrom · drei Abfragen der Audit-Kette
-    (Existenz, ``pg_advisory_xact_lock``, Vorgaengerzeile) · ``INSERT`` der
-    Audit-Zeile · ``INSERT`` der Aktivitaet · ``refresh_from_db`` der
-    uebergebenen Instanz.
-
-    Zielpfad (8): Einrichtung der Akte vorlesen (Grenze der handelnden
-    Person, ungesperrt) · Kette vorlesen · Personensperre · Widerrufsspalten ·
-    Fallzeile sperren · Zielzeile sperren · ``UPDATE`` · ``refresh_from_db``.
-    Der Meilenstein (9) sperrt die Zielzeile zusaetzlich.
-
-    Die ``ContentType``-Abfrage des Zeitstroms wird vorher aufgewaermt: sie
-    faellt je Prozess nur EINMAL an und gehoert nicht zum Budget des Pfades.
-
-    Die Zahl 12 gilt fuer einen **typlosen** Fall (die Fixtures tragen keinen
-    Dokumentationstyp): ``Case.save()`` ruft ``_encrypt_sensitive_fields()``,
-    das bei gesetztem ``document_type_id`` und nicht-leerem ``data_json``
-    zusaetzlich die Feldliste des Typs liest. Der Pin ist damit konservativ
-    und fixture-gebunden — er misst die Sperrkette, nicht die Verschluesselung.
+    The phase discovers the facility from the person PK, obtains its shared
+    gate and locks scoped types/templates before entity rows. Warm ContentType
+    separately; its one-time lookup is not part of these workflow budgets.
     """
 
     @pytest.fixture(autouse=True)
@@ -290,24 +273,24 @@ class TestAbfrageBudgetDerStatuswechsel:
     def test_close_case_budget(self, case_open, staff_user):
         with CaptureQueriesContext(connection) as captured:
             close_case(case_open, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 12
+        assert len(_fachliche_abfragen(captured)) == 18
 
     def test_reopen_case_budget(self, case_closed, staff_user):
         with CaptureQueriesContext(connection) as captured:
             reopen_case(case_closed, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 12
+        assert len(_fachliche_abfragen(captured)) == 18
 
     def test_achieve_goal_budget(self, outcome_goal, staff_user):
         with CaptureQueriesContext(connection) as captured:
             achieve_goal(outcome_goal, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 8
+        assert len(_fachliche_abfragen(captured)) == 14
 
     def test_unachieve_goal_budget(self, outcome_goal, staff_user):
         with CaptureQueriesContext(connection) as captured:
             unachieve_goal(outcome_goal, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 8
+        assert len(_fachliche_abfragen(captured)) == 14
 
     def test_toggle_milestone_budget(self, milestone, staff_user):
         with CaptureQueriesContext(connection) as captured:
             toggle_milestone(milestone, staff_user)
-        assert len(_fachliche_abfragen(captured)) == 9
+        assert len(_fachliche_abfragen(captured)) == 15

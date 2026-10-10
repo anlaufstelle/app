@@ -118,6 +118,9 @@ def rebuild_event_search_text(facility: Facility, *, dry_run: bool = False) -> t
     cannot be overwritten by an index computed from an older payload.
     Return the checked and changed (or would-change) event counts.
     """
+    from core.services.dynamic_protection import lock_dynamic_protection
+
+    lock_dynamic_protection(facility.pk)
     events = Event.objects.for_facility(facility).select_related("document_type")
     if not dry_run:
         events = events.select_for_update(of=("self",))

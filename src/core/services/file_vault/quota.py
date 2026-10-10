@@ -306,6 +306,11 @@ def lock_facility_storage(facility_id) -> None:
             "lock_facility_storage() ausserhalb einer Transaktion — die Xact-Sperre "
             "waere sofort wieder frei und wuerde nichts serialisieren."
         )
+    from core.services.dynamic_protection import lock_dynamic_protection_gate
+
+    # The quota key is also the audit-chain key. Acquire protection before it
+    # so a batch cannot request configuration locks after its first audit write.
+    lock_dynamic_protection_gate(facility_id)
     with connection.cursor() as cur:
         cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [storage_lock_name(facility_id)])
 

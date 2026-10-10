@@ -114,6 +114,11 @@ class AdminWriteAuditMixin:
 
     @transaction.atomic
     def delete_model(self, request, obj):
+        from core.models import DocumentType, FieldTemplate
+        from core.services.dynamic_protection import lock_dynamic_protection
+
+        if isinstance(obj, (DocumentType, FieldTemplate)):
+            lock_dynamic_protection(obj.facility_id, exclusive=True)
         target_id = str(obj.pk)
         # Record the target before deletion clears its primary key.
         # The transaction rolls this entry back if deletion is rejected.
@@ -125,6 +130,12 @@ class AdminWriteAuditMixin:
         from core.services.audit.chain import advisory_lock_id
 
         objects = list(queryset.order_by("pk"))
+        from core.models import DocumentType, FieldTemplate
+        from core.services.dynamic_protection import lock_dynamic_protection_many
+
+        protection_facilities = {obj.facility_id for obj in objects if isinstance(obj, (DocumentType, FieldTemplate))}
+        if protection_facilities:
+            lock_dynamic_protection_many(protection_facilities, exclusive=True)
         facility_ids = {obj.pk if isinstance(obj, Facility) else getattr(obj, "facility_id", None) for obj in objects}
         lock_ids = {fid: advisory_lock_id(fid) or 0 for fid in facility_ids}
         objects.sort(

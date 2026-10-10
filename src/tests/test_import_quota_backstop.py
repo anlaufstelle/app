@@ -449,7 +449,7 @@ class TestAuditRandUndSperrfolge:
             )
 
         sql = [q["sql"] for q in ctx.captured_queries]
-        lock_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock" in s]
+        lock_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock(" in s]
         insert_at = [i for i, s in enumerate(sql) if "INSERT INTO" in s and "core_importjob" in s]
         assert lock_at, f"keine Einrichtungs-Sperre im Import-Speicherpfad: {sql!r}"
         assert insert_at, f"kein ImportJob-Insert im Speicherpfad: {sql!r}"
@@ -607,7 +607,7 @@ class _Sperrmitschnitt(CaptureQueriesContext):
     def _wrapper(self, execute, sql, params, many, context):
         if self._aktiv or many:
             return execute(sql, params, many, context)
-        if "pg_advisory_xact_lock" in sql:
+        if "pg_advisory_xact_lock(" in sql:
             self.ereignisse.append((CHAIN, None))
             return execute(sql, params, many, context)
         abfrage = _treffer_abfrage(sql)
@@ -807,7 +807,7 @@ class TestSperrfolgeDerJobzeile:
 
         assert not mitschnitt.unaufloesbar, f"Treffermenge nicht ermittelbar: {mitschnitt.unaufloesbar}"
         sql = [q["sql"] for q in mitschnitt.captured_queries]
-        kette_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock" in s]
+        kette_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock(" in s]
         insert_at = [i for i, s in enumerate(sql) if "INSERT INTO" in s and "core_importjob" in s]
         assert kette_at, f"keine Einrichtungs-Sperre im Import-Speicherpfad: {sql!r}"
         assert insert_at, f"kein ImportJob-Insert im Speicherpfad: {sql!r}"

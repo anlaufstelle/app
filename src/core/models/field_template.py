@@ -213,28 +213,34 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
             )
 
     def save(self, *args, **kwargs):
-        """Verschlüsselungs-Normalisierung; die Slug-Mechanik liegt in ``SluggedModel``."""
-        # Refs #1914: Nicht-Form-Pfade (Seed/Bulk/Programme) umgehen
-        # ``full_clean()``. Die Bereichs-Restriktion darf dadurch nicht zu
-        # einer Konfiguration an einem Nicht-Zahlenfeld werden.
+        """Normalize protection and atomically rewrite assigned records."""
+        from core.services.dynamic_protection import configuration_write, rewrite_dynamic_records
+
         self._validate_number_range()
         self._validate_persisted_number_default_range()
+        with configuration_write(self.facility_id):
+            previous = FieldTemplate.objects.for_facility(self.facility_id).filter(pk=self.pk).first()
+            # Refs #1270, #2525: normalize before persistence and the rewrite.
+            if self.field_type == self.FieldType.FILE or self.sensitivity == DocumentType.Sensitivity.HIGH:
+                self.is_encrypted = True
+                if kwargs.get("update_fields") is not None:
+                    kwargs["update_fields"] = {*kwargs["update_fields"], "is_encrypted"}
+            super().save(*args, **kwargs)
+            if previous is not None and (previous.sensitivity, previous.is_encrypted) != (
+                self.sensitivity,
+                self.is_encrypted,
+            ):
+                rewrite_dynamic_records(
+                    DocumentType.objects.for_facility(self.facility_id)
+                    .filter(fields__field_template=self)
+                    .order_by("pk")
+                )
 
-        # FILE fields are always encrypted at rest
-        if self.field_type == self.FieldType.FILE:
-            self.is_encrypted = True
+    def delete(self, *args, **kwargs):
+        from core.services.dynamic_protection import configuration_write
 
-        # Refs #1270 (T5): HIGH⇒verschlüsselt-Invariante auf save()-Ebene
-        # erzwingen. clean()/full_clean() (ModelForm) blockiert HIGH ohne
-        # Verschlüsselung bereits mit einer ValidationError (UX-Feedback); ein
-        # direktes .save() (Seed/Bulk/Migration) umgeht das aber. Wie beim
-        # FILE-Zwang oben setzen wir is_encrypted hier als sichere Backstop-
-        # Maßnahme, damit Art.-9-relevanter Klartext nicht über einen
-        # Nicht-Form-Pfad ins JSONB/Backup gerät.
-        if self.sensitivity == DocumentType.Sensitivity.HIGH:
-            self.is_encrypted = True
-
-        super().save(*args, **kwargs)
+        with configuration_write(self.facility_id):
+            return super().delete(*args, **kwargs)
 
     @property
     def choices(self):

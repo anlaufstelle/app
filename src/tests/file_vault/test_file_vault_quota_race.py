@@ -396,11 +396,9 @@ class TestKontingentSperre:
     """Die Mechanik der Sperre — Reihenfolge und Namensraum."""
 
     def test_sperre_wird_vor_dem_insert_genommen(self, quota_facility, upload_target, staff_user, stage):
-        """Ein Nachrechnen NACH dem Insert reicht unter READ COMMITTED nicht:
-        jede Transaktion sieht ihre eigene unbestaetigte Zeile, aber keine
-        fremde. Die Summe muss deshalb unter der Sperre und VOR dem Insert
-        gelesen werden.
-        """
+        """Quota usage is checked under its exclusive lock before insertion.
+
+        The shared dynamic-protection gate is a separate lock namespace."""
         event, ft_file = upload_target
         staged = stage(1)[0]
 
@@ -408,7 +406,7 @@ class TestKontingentSperre:
             commit_staged_upload(event, ft_file, staged, staff_user)
 
         sql = [q["sql"] for q in ctx.captured_queries]
-        lock_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock" in s]
+        lock_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock(" in s]
         insert_at = [i for i, s in enumerate(sql) if "INSERT INTO" in s and "core_attachment" in s]
         assert lock_at, f"keine Einrichtungs-Sperre im Commit-Pfad: {sql!r}"
         assert insert_at, f"kein Attachment-Insert im Commit-Pfad: {sql!r}"
@@ -430,12 +428,9 @@ class TestKontingentSperre:
         assert storage_lock_name(quota_facility.pk) == advisory_lock_name(quota_facility.pk)
 
     def test_ohne_kontingent_weder_sperre_noch_summe(self, quota_facility, upload_target, staff_user, stage, settings):
-        """Einrichtungen ohne wirksames Kontingent zahlen fuer den Backstop nur
-        die Konfigurationsfrage — keine zweite Sperre, keine Summen-Query.
+        """Without a quota, only the audit-chain exclusive lock and no sum remain.
 
-        Uebrig bleibt genau der Lock-Aufruf, den die AuditLog-Hashkette ohnehin
-        nimmt; er faellt NACH dem Insert an.
-        """
+        Dynamic protection additionally requires its shared gate before insertion."""
         event, ft_file = upload_target
         staged = stage(1)[0]
         Settings.objects.filter(facility=quota_facility).update(max_storage_mb=None)
@@ -445,15 +440,17 @@ class TestKontingentSperre:
             commit_staged_upload(event, ft_file, staged, staff_user)
 
         sql = [q["sql"] for q in ctx.captured_queries]
-        lock_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock" in s]
+        lock_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock(" in s]
         insert_at = [i for i, s in enumerate(sql) if "INSERT INTO" in s and "core_attachment" in s]
         assert len(lock_at) == 1, f"ohne Kontingent bleibt nur die Ketten-Sperre uebrig: {sql!r}"
         assert lock_at[0] > insert_at[0], "die verbliebene Sperre ist die der Hashkette (nach dem Insert)"
+        protection_at = [i for i, query in enumerate(sql) if "pg_advisory_xact_lock_shared(2525," in query]
+        assert len(protection_at) == 1
+        assert protection_at[0] < insert_at[0]
         assert not [s for s in sql if "SUM(" in s.upper() and "core_attachment" in s]
 
     def test_mit_kontingent_genau_eine_zusaetzliche_sperre(self, quota_facility, upload_target, staff_user, stage):
-        """Mit Kontingent kommt genau EIN Lock-Aufruf hinzu (vor dem Insert) —
-        derselbe Schluessel, den die Hashkette danach ohnehin haelt."""
+        """An enabled quota adds exactly one exclusive chain/quota lock before insertion."""
         event, ft_file = upload_target
         staged = stage(1)[0]
 
@@ -461,7 +458,7 @@ class TestKontingentSperre:
             commit_staged_upload(event, ft_file, staged, staff_user)
 
         sql = [q["sql"] for q in ctx.captured_queries]
-        assert len([s for s in sql if "pg_advisory_xact_lock" in s]) == 2
+        assert len([s for s in sql if "pg_advisory_xact_lock(" in s]) == 2
 
     def test_ohne_postgres_entfaellt_die_sperre(self, quota_facility):
         """Auf SQLite gibt es keinen Advisory-Lock — wie in ``assign_chain_fields``.
@@ -578,8 +575,7 @@ class TestSperrReihenfolge:
     def test_replace_sperrt_die_vorgaengerzeile_vor_dem_advisory_lock(
         self, quota_facility, upload_target, staff_user, occupy, stage
     ):
-        """Die Reihenfolge selbst, ohne Nebenlaeufigkeit: ``FOR UPDATE`` auf der
-        abzuloesenden Zeile steht VOR dem ersten ``pg_advisory_xact_lock``."""
+        """The replaced attachment row precedes the exclusive chain/quota advisory lock."""
         owner, ft_file = upload_target
         alt = occupy(CHUNK)
         staged = stage(1)[0]
@@ -589,7 +585,7 @@ class TestSperrReihenfolge:
 
         sql = [q["sql"] for q in ctx.captured_queries]
         row_lock_at = [i for i, s in enumerate(sql) if "FOR UPDATE" in s.upper() and "core_attachment" in s]
-        advisory_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock" in s]
+        advisory_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock(" in s]
         assert row_lock_at, f"keine Zeilensperre auf der Vorgaengerzeile: {sql!r}"
         assert advisory_at, f"kein Advisory-Lock im Commit-Pfad: {sql!r}"
         assert row_lock_at[0] < advisory_at[0], "Reihenfolge verletzt: Zeile muss vor dem Advisory-Lock kommen"
@@ -677,11 +673,7 @@ class TestKontingentAuditImViewPfad:
 @pytest.mark.django_db
 @pytest.mark.postgres
 class TestQueryBudget:
-    """Refs #2178: der Zuwachs wird als GESAMTZAHL festgenagelt.
-
-    Referenz ist der Commit-Pfad mit stillgelegtem Backstop (Kontingent-Pruefung
-    UND Zeilensperre) — also der Stand vor #2178.
-    """
+    """Pin exact quota overhead relative to a disabled quota backstop."""
 
     @staticmethod
     @contextlib.contextmanager
@@ -701,39 +693,32 @@ class TestQueryBudget:
             commit(1)
         return len(gemessen.captured_queries) - len(referenz.captured_queries)
 
-    @pytest.mark.parametrize(("mit_kontingent", "erwartet"), [(True, 4), (False, 1)])
-    def test_zuwachs_beim_hinzufuegen(
-        self, mit_kontingent, erwartet, quota_facility, upload_target, staff_user, stage, settings
+    @pytest.mark.parametrize(("with_quota", "expected"), [(True, 5), (False, 1)])
+    def test_query_growth_when_adding(
+        self, with_quota, expected, quota_facility, upload_target, staff_user, stage, settings
     ):
-        """Mit Kontingent: Konfigurationsfrage + Sperre + Anhangs-Summe + offene
-        Importdateien. Ohne: nur die Konfigurationsfrage — Einrichtungen ohne
-        Kontingent zahlen fast nichts.
+        """With quota: protection gate, configuration, quota lock and both usage sums.
 
-        Die vierte Query ist der gemeinsame Verbrauchsrechner (Refs #2259):
-        seit der Backstop auch die offenen ``ImportJob``-Quelldateien mitzaehlt,
-        liest er sie unter derselben Sperre mit. Ohne Kontingent faellt sie
-        nicht an — die Konfigurationsfrage kommt davor."""
+        Without quota, only the configuration query is added."""
         event, ft_file = upload_target
         staged_list = stage(2)
-        if not mit_kontingent:
+        if not with_quota:
             Settings.objects.filter(facility=quota_facility).update(max_storage_mb=None)
             settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
 
         delta = self._messen(lambda i: commit_staged_upload(event, ft_file, staged_list[i], staff_user, sort_order=i))
 
-        assert delta == erwartet, f"Query-Zuwachs im Add-Pfad: {delta} statt {erwartet}"
+        assert delta == expected, f"Query growth when adding: {delta} instead of {expected}"
 
-    @pytest.mark.parametrize(("mit_kontingent", "erwartet"), [(True, 5), (False, 2)])
-    def test_zuwachs_beim_ersetzen(
-        self, mit_kontingent, erwartet, quota_facility, upload_target, staff_user, occupy, stage, settings
+    @pytest.mark.parametrize(("with_quota", "expected"), [(True, 6), (False, 2)])
+    def test_query_growth_when_replacing(
+        self, with_quota, expected, quota_facility, upload_target, staff_user, occupy, stage, settings
     ):
-        """Im Replace-Pfad kommt die Zeilensperre der Vorgaengerzeile hinzu —
-        der Preis der einheitlichen Sperr-Reihenfolge; dazu die Query des
-        gemeinsamen Verbrauchsrechners (Refs #2259)."""
+        """Replacement also locks the predecessor row before the quota/audit key."""
         event, ft_file = upload_target
         vorgaenger = [occupy(CHUNK), occupy(CHUNK)]
         staged_list = stage(2)
-        if not mit_kontingent:
+        if not with_quota:
             Settings.objects.filter(facility=quota_facility).update(max_storage_mb=None)
             settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
 
@@ -741,7 +726,7 @@ class TestQueryBudget:
             lambda i: commit_staged_upload(event, ft_file, staged_list[i], staff_user, supersedes=vorgaenger[i])
         )
 
-        assert delta == erwartet, f"Query-Zuwachs im Replace-Pfad: {delta} statt {erwartet}"
+        assert delta == expected, f"Query growth when replacing: {delta} instead of {expected}"
 
 
 VIEW_MODULE_NAMES = ("events.py", "clients.py", "cases.py")
@@ -948,7 +933,7 @@ class TestBatchSperrReihenfolge:
 
         sql = [q["sql"] for q in ctx.captured_queries]
         batch_locks = [i for i, s in enumerate(sql) if "FOR UPDATE" in s.upper() and "core_attachment" in s]
-        advisory_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock" in s]
+        advisory_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock(" in s]
         assert batch_locks, f"keine Batch-Zeilensperre: {sql!r}"
         assert advisory_at, f"kein Advisory-Lock im Batch: {sql!r}"
         assert batch_locks[0] < advisory_at[0], "die Batch-Sperre muss VOR dem ersten Advisory-Lock liegen"

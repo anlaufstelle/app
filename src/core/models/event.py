@@ -162,5 +162,26 @@ class Event(DynamicDataEncryptionMixin):
         return f"{self.document_type} – {self.occurred_at:%d.%m.%Y %H:%M}"
 
     def save(self, *args, **kwargs):
-        self._encrypt_sensitive_fields()
-        super().save(*args, **kwargs)
+        from core.services.dynamic_protection import dynamic_data_write
+
+        update_fields = kwargs.get("update_fields")
+        with dynamic_data_write(self, update_fields):
+            if update_fields is None or "data_json" in update_fields:
+                self._encrypt_sensitive_fields()
+                if update_fields is not None and "search_text" not in update_fields:
+                    from core.services.dynamic_data import _is_file_marker
+
+                    current = (
+                        Event.objects.for_facility(self.facility_id)
+                        .filter(pk=self.pk)
+                        .values_list("data_json", flat=True)
+                        .first()
+                    )
+                    # Refs #2525: file-marker-only writes cannot affect the index.
+                    # Preserve independent index writes while still encrypting
+                    # stale source values and indexing every non-marker change.
+                    before = {key: value for key, value in (current or {}).items() if not _is_file_marker(value)}
+                    after = {key: value for key, value in (self.data_json or {}).items() if not _is_file_marker(value)}
+                    if current is None or before != after:
+                        kwargs["update_fields"] = {*update_fields, "search_text"}
+            super().save(*args, **kwargs)

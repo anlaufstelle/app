@@ -175,6 +175,7 @@ class DynamicDataEncryptionMixin(models.Model):
         # Read current protection on every save, including reused model instances.
         encrypted_field_names = self.document_type.fields.filter(
             field_template__is_encrypted=True,
+            document_type__facility_id=self.facility_id,
         ).values_list("field_template__slug", flat=True)
         for key in encrypted_field_names:
             value = self.data_json.get(key)

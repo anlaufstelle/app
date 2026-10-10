@@ -21,6 +21,7 @@ from core.services.case.state_contract import (
 from core.services.compliance import user_can_see_event
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
+from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.security import check_version_conflict
 
 logger = logging.getLogger(__name__)
@@ -112,6 +113,7 @@ def create_case(facility, user, client, title, description="", lead_user=None, d
 
     # Art.-18-Gate (Refs #2045): ein neuer Fall ist neue inhaltliche
     # Verarbeitung, nicht Speicherung des Bestands.
+    lock_dynamic_protection(facility.pk)
     assert_processing_allowed(client, lock=True)
     # Widerruf der Person auf der eben gesperrten Zeile: die Instanz stammt
     # aus einem Lesevorgang vor der Sperre. Eine Person im Papierkorb (auch
@@ -252,6 +254,7 @@ def update_case(case, user, *, expected_updated_at=None, expected_form_state=Non
     # neuen Inhalt in eine Akte, die parallel geschlossen und in den
     # Papierkorb gelegt wurde (der Papierkorb hebt ``updated_at`` nicht an und
     # aendert keine Formularspalte).
+    lock_dynamic_protection(case.facility_id)
     lock_case_for_write(case)
     try:
         check_version_conflict(case, expected_updated_at)

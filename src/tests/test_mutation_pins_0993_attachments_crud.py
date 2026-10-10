@@ -197,14 +197,15 @@ class TestLockOwnerRowsInFacilityOrder:
             ("core_event.facility_id", anonym.facility_id.hex),
         }
 
-    def test_owner_ohne_client_attribut_bricht_nicht_ab(self, sample_event):
-        """x_lock_owner_rows_in_facility_order__mutmut_17: ``getattr`` ohne
-        Default wirft ``AttributeError`` fuer einen Owner ohne ``client_id``;
-        erwartet ist nur die Owner-Zeilensperre, keine Personenzeile."""
+    def test_owner_without_client_attribute_still_locks_owner(self, sample_event):
+        """Without a client binding, lock protection and the owner but no client row."""
         with CaptureQueriesContext(connection) as ctx:
             assert crud.lock_owner_rows_in_facility_order(_OwnerOhnePersonenbezug(sample_event)) is None
-        tabellen = [q["sql"].split(" FROM ", 1)[1].split(" ", 1)[0] for q in ctx.captured_queries]
-        assert tabellen == ['"core_event"']
+        queries = [query["sql"] for query in ctx.captured_queries]
+        owner_tables = [sql.split(" FROM ", 1)[1].split(" ", 1)[0] for sql in queries if "FOR UPDATE" in sql]
+        assert owner_tables == ['"core_event"']
+        assert len([sql for sql in queries if "pg_advisory_xact_lock_shared(2525," in sql]) == 1
+        assert len([sql for sql in queries if "FOR SHARE" in sql]) == 2
 
 
 class TestPurgeAttachmentChain:

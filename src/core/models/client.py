@@ -229,11 +229,12 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         return self.pseudonym
 
     def save(self, *args, **kwargs):
-        # E5: Der Mixin ueberschreibt ``save()`` bewusst NICHT (MRO-Kollision mit
-        # ``SoftDeletableModel``) — jedes Modell ruft die Verschluesselung explizit
-        # auf, direkt vor dem Persistieren. Muster: ``Event.save()``.
-        self._encrypt_sensitive_fields()
-        super().save(*args, **kwargs)
+        from core.services.dynamic_protection import dynamic_data_write
+
+        with dynamic_data_write(self, kwargs.get("update_fields")):
+            if kwargs.get("update_fields") is None or "data_json" in kwargs["update_fields"]:
+                self._encrypt_sensitive_fields()
+            super().save(*args, **kwargs)
 
     def anonymize(self, user=None):
         """DSGVO Art. 17 Aggregat-Anonymisierung — Wrapper auf Service.

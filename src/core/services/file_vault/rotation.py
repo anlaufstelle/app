@@ -97,6 +97,23 @@ def _locked_compare_and_swap(model, pk, *, expected: dict, updates: dict) -> boo
     row lock before each bounded attempt.
     """
     with transaction.atomic():
+        if model in (Event, Client, Case):
+            from core.services.dynamic_protection import lock_dynamic_protection
+            from core.services.events.fields import compute_event_search_text
+
+            facility_id = model.objects.filter(pk=pk).values_list("facility_id", flat=True).first()
+            if facility_id is None:
+                return False
+            lock_dynamic_protection(facility_id)
+            locked = model.objects.for_facility(facility_id).select_for_update().filter(pk=pk).first()
+            if locked is None:
+                return False
+            updates = updates.copy()
+            if "data_json" in updates and locked.document_type_id:
+                updates["data_json"] = encrypt_dynamic_data(locked.document_type, updates["data_json"])
+                if model is Event:
+                    updates["search_text"] = compute_event_search_text(updates["data_json"], locked.document_type)
+            return bool(model.objects.for_facility(facility_id).filter(pk=pk, **expected).update(**updates))
         locked = model.objects.select_for_update().filter(pk=pk).only("pk").first()
         if locked is None:
             return False
@@ -344,45 +361,48 @@ def _reencrypt_event_history(dry_run: bool, *, on_contended: Callable[[], None] 
     updated = 0
     pks = list(EventHistory.objects.values_list("pk", flat=True))
     for pk in pks:
-        hist = EventHistory.objects.select_related("event__facility").filter(pk=pk).first()
-        if hist is None:
-            continue
-        # Current facility templates also protect historical, no longer assigned fields.
-        encrypted_slugs = set(
-            FieldTemplate.objects.for_facility(hist.event.facility)
-            .filter(is_encrypted=True)
-            .values_list("slug", flat=True)
-        )
-        # Keep snapshot protection when a template has been removed or downgraded.
-        encrypted_slugs.update(
-            slug
-            for slug, metadata in hist.field_metadata.items()
-            if isinstance(metadata, dict) and metadata.get("is_encrypted") is True
-        )
-        before, before_changed = _reencrypt_history_payload(hist.data_before, encrypted_slugs)
-        after, after_changed = _reencrypt_history_payload(hist.data_after, encrypted_slugs)
-        if not (before_changed or after_changed):
-            continue
-        if dry_run:
-            updated += 1
-            continue
-        # Nur die tatsaechlich zu rotierenden Spalten binden: eine leere oder
-        # ``NULL``-Spalte aendert sich nie und wuerde als Erwartungswert nur
-        # falsche Kontention erzeugen (JSON-``null`` vs. SQL-``NULL``).
-        expected = {}
-        updates = {}
-        if before_changed:
-            expected["data_before"] = hist.data_before
-            updates["data_before"] = before
-        if after_changed:
-            expected["data_after"] = hist.data_after
-            updates["data_after"] = after
-        with bypass_replication_triggers(tables=("core_eventhistory",)):
-            swapped = _locked_compare_and_swap(EventHistory, pk, expected=expected, updates=updates)
-        if swapped:
-            updated += 1
-        elif on_contended is not None:
-            on_contended()
+        with transaction.atomic():
+            hist = EventHistory.objects.select_related("event__facility").filter(pk=pk).first()
+            if hist is None:
+                continue
+            from core.services.dynamic_protection import lock_dynamic_protection
+
+            lock_dynamic_protection(hist.event.facility_id)
+            # Current facility templates also protect historical, no longer assigned fields.
+            encrypted_slugs = set(
+                FieldTemplate.objects.for_facility(hist.event.facility)
+                .filter(is_encrypted=True)
+                .values_list("slug", flat=True)
+            )
+            # Keep snapshot protection when a template has been removed or downgraded.
+            encrypted_slugs.update(
+                slug
+                for slug, metadata in hist.field_metadata.items()
+                if isinstance(metadata, dict) and metadata.get("is_encrypted") is True
+            )
+            before, before_changed = _reencrypt_history_payload(hist.data_before, encrypted_slugs)
+            after, after_changed = _reencrypt_history_payload(hist.data_after, encrypted_slugs)
+            if not (before_changed or after_changed):
+                continue
+            if dry_run:
+                updated += 1
+                continue
+            # Bind only changed columns: empty/NULL payloads do not rotate
+            # and would cause spurious contention (JSON null versus SQL NULL).
+            expected = {}
+            updates = {}
+            if before_changed:
+                expected["data_before"] = hist.data_before
+                updates["data_before"] = before
+            if after_changed:
+                expected["data_after"] = hist.data_after
+                updates["data_after"] = after
+            with bypass_replication_triggers(tables=("core_eventhistory",)):
+                swapped = _locked_compare_and_swap(EventHistory, pk, expected=expected, updates=updates)
+            if swapped:
+                updated += 1
+            elif on_contended is not None:
+                on_contended()
     return updated
 
 

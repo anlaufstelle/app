@@ -655,6 +655,9 @@ def lock_owner_rows_in_facility_order(owner) -> None:
 
     if not connection.in_atomic_block:
         return
+    from core.services.dynamic_protection import lock_dynamic_protection
+
+    lock_dynamic_protection(owner.facility_id)
     facility_id = owner.facility_id
     if owner.__class__.__name__ == "Client":
         Client.objects.for_facility(facility_id).filter(pk=owner.pk).select_for_update().only("pk").first()

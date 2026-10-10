@@ -30,6 +30,7 @@ from core.services.audit import audit_event, changed_data_json_slugs
 from core.services.compliance import user_can_see_document_type
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import check_document_type
+from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.events.fields import (
     _snapshot_field_metadata,
     _validate_data_json,
@@ -176,6 +177,7 @@ def create_event(
     # The facility of the acting person comes first — before the person row
     # lock of the gate below and before any target is compared with the facility.
     _assert_actor_in_facility(user, facility.pk)
+    lock_dynamic_protection(facility.pk)
     assert_processing_allowed(client, lock=True)
     # Refs #1058 (Review-Haertung, Defense-in-Depth): analog zum Guard in
     # ``create_client``/``create_case`` (core.services.client.main /
@@ -374,6 +376,7 @@ def lock_event_for_edit(event):
     from core.services.case.state_contract import EVENT_WRITE_GONE_MESSAGE, _raise_if_clients_revoked
     from core.services.client.restriction import assert_processing_allowed
 
+    lock_dynamic_protection(event.facility_id)
     binding = Event._base_manager.filter(pk=event.pk, facility_id=event.facility_id).values_list("client_id").first()
     if binding is None:
         raise ValidationError(EVENT_WRITE_GONE_MESSAGE)

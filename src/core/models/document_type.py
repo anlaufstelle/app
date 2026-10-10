@@ -157,6 +157,21 @@ class DocumentType(ReportKeyMixin, SluggedModel):
         """Slug ist je Facility eindeutig (Muster FieldTemplate)."""
         return DocumentType.objects.filter(facility=self.facility).exclude(pk=self.pk)
 
+    def save(self, *args, **kwargs):
+        from core.services.dynamic_protection import configuration_write, rewrite_dynamic_records
+
+        with configuration_write(self.facility_id):
+            previous = DocumentType.objects.for_facility(self.facility_id).filter(pk=self.pk).first()
+            super().save(*args, **kwargs)
+            if previous is not None and previous.sensitivity != self.sensitivity:
+                rewrite_dynamic_records([self])
+
+    def delete(self, *args, **kwargs):
+        from core.services.dynamic_protection import configuration_write
+
+        with configuration_write(self.facility_id):
+            return super().delete(*args, **kwargs)
+
     def _check_immutable_fields(self, orig):
         # E3 (Refs #1849): Der ``report_key``-Guard wird explizit aufgerufen
         # (Vertrag von ``ReportKeyMixin``) — er steht vor den beiden

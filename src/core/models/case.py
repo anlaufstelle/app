@@ -128,11 +128,12 @@ class Case(DynamicDataEncryptionMixin, SoftDeletableModel):
         return f"{self.title} ({self.get_status_display()})"
 
     def save(self, *args, **kwargs):
-        # E5: Der Mixin ueberschreibt ``save()`` bewusst NICHT (MRO-Kollision mit
-        # ``SoftDeletableModel``) — jedes Modell ruft die Verschluesselung explizit
-        # auf, direkt vor dem Persistieren. Muster: ``Client.save()``/``Event.save()``.
-        self._encrypt_sensitive_fields()
-        super().save(*args, **kwargs)
+        from core.services.dynamic_protection import dynamic_data_write
+
+        with dynamic_data_write(self, kwargs.get("update_fields")):
+            if kwargs.get("update_fields") is None or "data_json" in kwargs["update_fields"]:
+                self._encrypt_sensitive_fields()
+            super().save(*args, **kwargs)
 
     def create_episode(self, *, user, title, description="", started_at=None):
         """Create an :class:`Episode` for this case.

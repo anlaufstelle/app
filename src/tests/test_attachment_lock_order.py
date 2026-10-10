@@ -102,7 +102,7 @@ def _lock_sequence(captured) -> list[str]:
     sequence: list[str] = []
     for query in captured.captured_queries:
         sql = query["sql"]
-        if "pg_advisory_xact_lock" in sql:
+        if "pg_advisory_xact_lock(" in sql:
             sequence.append(CHAIN)
             continue
         match = _FOR_UPDATE_RE.search(sql)
@@ -236,7 +236,7 @@ class _Sperrmitschnitt(CaptureQueriesContext):
     def _wrapper(self, execute, sql, params, many, context):
         if self._aktiv or many:
             return execute(sql, params, many, context)
-        if "pg_advisory_xact_lock" in sql:
+        if "pg_advisory_xact_lock(" in sql:
             self.ereignisse.append((CHAIN, None, False))
             return execute(sql, params, many, context)
         abfrage = _treffer_abfrage(sql)
@@ -671,7 +671,7 @@ class TestSequenzReihenfolge:
             if _ORDERED_ATTACHMENT_LOCK_RE.search(query["sql"])
         ]
         update_at = _statement_index(captured, lambda sql: sql.startswith('UPDATE "core_attachment"'))
-        chain_at = _statement_index(captured, lambda sql: "pg_advisory_xact_lock" in sql)
+        chain_at = _statement_index(captured, lambda sql: "pg_advisory_xact_lock(" in sql)
         assert len(vorsperren) == 3, (
             f"erwartet: 1 gebuendelte Vorsperre + 1 Re-Lock je Kette (2), gemessen: {len(vorsperren)}"
         )
@@ -835,7 +835,7 @@ class TestSequenzReihenfolge:
 
         lock_at = _ordered_attachment_lock_index(captured)
         update_at = _statement_index(captured, lambda sql: sql.startswith('UPDATE "core_attachment"'))
-        chain_at = _statement_index(captured, lambda sql: "pg_advisory_xact_lock" in sql)
+        chain_at = _statement_index(captured, lambda sql: "pg_advisory_xact_lock(" in sql)
         assert lock_at is not None, "keine nach PK geordnete Vorsperre vor dem Soft-Delete"
         assert update_at is not None, "kein Soft-Delete-UPDATE im Pfad"
         assert chain_at is not None, "kein Ketten-Lock im Pfad"

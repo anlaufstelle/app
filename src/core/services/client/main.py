@@ -26,6 +26,7 @@ from core.services.client.restriction import assert_processing_allowed
 from core.services.client.targets import client_activity_targets_q, client_legal_hold_targets_q
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
+from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.events.history_diff import build_anonymization_marker
 from core.services.security import check_version_conflict
 from core.services.system import bypass_replication_triggers, current_connection_owns
@@ -826,6 +827,7 @@ def create_client(facility, user, **data):
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != facility.pk:
         raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
+    lock_dynamic_protection(facility.pk)
     document_type = _normalize_document_type_kwarg(data)
     data["data_json"] = clean_dynamic_data(
         facility,
@@ -916,6 +918,7 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != client.facility_id:
         raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
+    lock_dynamic_protection(actor_facility_id)
     locked = lock_clients([client.pk], facility=actor_facility_id).get(client.pk)
     if locked is None:
         raise Client.DoesNotExist("Client matching query does not exist.")

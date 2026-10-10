@@ -245,28 +245,31 @@ class _WechselVorDerPersonensperre:
 class TestVorsperreOwnerMitPerson:
     """Refs #2379: Owner mit Person — Bindung einmal lesen, Person, dann Owner mit Bindung sperren."""
 
-    def test_lesung_personensperre_owner_sperre_exakt(self, sample_event):
-        """Reihenfolge und Bedingungen exakt: (1) Bindungslesung mit ``pk`` +
-        Einrichtung, ungesperrt; (2) Personensperre mit ``pk`` + Einrichtung;
-        (3) Owner-Sperre mit ``pk``, Einrichtung UND ``client_id``.
-
-        Toetet u. a.: Wegfall von ``pk``/Einrichtung in Lesung, Personensperre
-        oder Owner-Sperre, Wegfall der Bindungsbedingung, Owner vor Person."""
+    def test_protection_then_binding_client_and_owner_locks_are_exact(self, sample_event):
+        """Pin the shared protection phase before the unchanged entity conditions."""
         with CaptureQueriesContext(connection) as ctx, transaction.atomic():
             crud.lock_owner_rows_in_facility_order(sample_event)
-        abfragen = _abfragen(ctx)
-        assert [(tabelle, sperrt) for tabelle, sperrt, _sql in abfragen] == [
+        queries = _abfragen(ctx)
+        assert [(table, locks) for table, locks, _sql in queries] == [
+            ("core_facility", False),
+            ("core_documenttype", False),
+            ("core_fieldtemplate", False),
             ("core_event", False),
             ("core_client", True),
             ("core_event", True),
         ]
-        lesung, person, owner = (sql for _t, _s, sql in abfragen)
-        assert lesung.startswith('SELECT "core_event"."client_id"')
-        assert _bedingungen(lesung) == {
+        assert all(sql.endswith("FOR SHARE") for _table, _locks, sql in queries[1:3])
+        gate = [query["sql"] for query in ctx.captured_queries if "pg_advisory_xact_lock_shared(2525," in query["sql"]]
+        assert len(gate) == 1
+        sqls = [query["sql"] for query in ctx.captured_queries]
+        assert sqls.index(gate[0]) < sqls.index(queries[0][2])
+        binding, client, owner = (sql for _table, _locks, sql in queries[3:])
+        assert binding.startswith('SELECT "core_event"."client_id"')
+        assert _bedingungen(binding) == {
             ("core_event.id", sample_event.pk.hex),
             ("core_event.facility_id", sample_event.facility_id.hex),
         }
-        assert _bedingungen(person) == {
+        assert _bedingungen(client) == {
             ("core_client.id", sample_event.client_id.hex),
             ("core_client.facility_id", sample_event.facility_id.hex),
         }

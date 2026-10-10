@@ -180,36 +180,26 @@ class TestApplyAttachmentChangesCreatesRows:
     einzige Information, die das an ``lock_batch_attachment_rows`` meldet.
     """
 
-    def test_reiner_add_batch_sperrt_owner_zeile(self, sample_event, ft_file, dt_file, staff_user):
-        """Pin: ``x_apply_attachment_changes__mutmut_27`` (``creates_rows=None``
-        statt ``creates_rows=_batch_legt_zeilen_an(...)``) und ``…__mutmut_30``
-        (das Schluesselargument entfaellt ganz, Default ``False``).
+    def test_add_only_batch_locks_the_owner_before_upload(self, sample_event, ft_file, dt_file, staff_user):
+        """Keep the early batch owner lock in addition to upload/model locks.
 
-        Ein reiner ADD-Batch (kein REMOVE/REPLACE) unter ``ft_file`` haelt
-        keine Bestandszeile in ``entry_ids`` — die Owner-Sperre kommt
-        ausschliesslich ueber ``creates_rows=True``.
-
-        Abweichung beim Mutanten: ``creates_rows`` wird ``None``/``False`` und
-        ``lock_batch_attachment_rows`` kehrt vor jeder Abfrage zurueck — die
-        mitgeschnittene ``FOR UPDATE``-Liste ist leer statt genau EINE
-        Owner-Sperre (``core_event``, Parameter ``sample_event.pk``) zu
-        enthalten.
+        An ADD-only batch has no existing attachment entry IDs. Its explicit
+        creates_rows flag must still trigger the owner prelock. The model's
+        current-type read under shared protection adds one later owner lock.
         """
         staged = prepare_encrypted_upload(sample_event.facility, _upload(), staff_user, owner=sample_event)
         staged_by_key = {ft_file.slug: [staged]}
 
-        mitschnitt = _Mitschnitt()
-        with connection.execute_wrapper(mitschnitt.wrapper), transaction.atomic():
+        capture = _Mitschnitt()
+        with connection.execute_wrapper(capture.wrapper), transaction.atomic():
             apply_attachment_changes(sample_event, staff_user, {}, {}, {}, dt_file, staged_by_key=staged_by_key)
 
-        sperrend = _for_update_queries(mitschnitt, table="core_event")
-        # Zwei Sperrabfragen: die Vorsperre aus ``lock_batch_attachment_rows``
-        # (der gepinnte Aufruf) UND die eigene, unbedingte Sperre von
-        # ``commit_staged_upload`` (idempotent, deckt nur den EINEN
-        # Schreibvorgang ab). Der Mutant entfernt genau die erste — mit ihm
-        # bleibt nur die zweite uebrig.
-        assert len(sperrend) == 2
-        for _sql, params in sperrend:
+        owner_locks = _for_update_queries(capture, table="core_event")
+        # Refs #2525: batch prelock, upload prelock and the model's current-type
+        # read all lock the owner. Removing the batch prelock still removes
+        # exactly one query; the later locks do not replace that early guard.
+        assert len(owner_locks) == 3
+        for _sql, params in owner_locks:
             assert str(sample_event.pk) in [str(p) for p in params]
         assert sample_event.attachments.count() == 1
 

@@ -21,26 +21,14 @@ from core.models.slug import _RESERVED_SLUGS
 from core.services.audit import log_audit_event
 from core.services.compliance.sensitivity import validate_explicit_high_field
 from core.services.config.block_order import _compact_block_positions, _next_block_position
-
-
-def _rewrite_document_type_records(doc_type: DocumentType) -> None:
-    """Rewrite scoped values and event indexes inside the configuration transaction."""
-    for model in (Event, Client, Case):
-        records = (
-            model.objects.for_facility(doc_type.facility)
-            .filter(document_type=doc_type)
-            .select_related("document_type")
-            .select_for_update(of=("self",))
-        )
-        for record in records.iterator(chunk_size=500):
-            fields = ["data_json", "search_text"] if isinstance(record, Event) else ["data_json"]
-            record.save(update_fields=fields)
+from core.services.dynamic_protection import lock_dynamic_protection
 
 
 def save_document_type(request, form, *, creating: bool) -> DocumentType:
     """Save a type and atomically rewrite records when its sensitivity changes."""
     changed_fields = list(form.changed_data)
     with transaction.atomic():
+        lock_dynamic_protection(request.current_facility.pk, exclusive=True)
         if creating:
             previous_sensitivity = ""
         else:
@@ -61,8 +49,6 @@ def save_document_type(request, form, *, creating: bool) -> DocumentType:
                 changed_fields,
                 previous_sensitivity=previous_sensitivity,
             )
-            if obj.sensitivity != previous_sensitivity:
-                _rewrite_document_type_records(obj)
         action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
         log_audit_event(
             request,
@@ -80,14 +66,10 @@ def save_field_template(request, form, *, creating: bool, facility) -> FieldTemp
     if creating:
         obj.facility = facility
     with transaction.atomic():
+        lock_dynamic_protection(facility.pk, exclusive=True)
         document_types = []
-        previous_sensitivity = ""
-        previous_encrypted = False
         if not creating:
-            # Lock templates before types, as in assignment and package loading.
             current = FieldTemplate.objects.for_facility(facility).select_for_update().get(pk=obj.pk)
-            previous_sensitivity = current.sensitivity
-            previous_encrypted = current.is_encrypted
             assigned_type_ids = DocumentTypeField.objects.filter(field_template=current).values("document_type_id")
             document_types = list(
                 DocumentType.objects.for_facility(facility)
@@ -110,9 +92,6 @@ def save_field_template(request, form, *, creating: bool, facility) -> FieldTemp
                 % {"neu": obj.name, "bestand": existing.name}
             )
         obj.save()
-        if not creating and (obj.sensitivity != previous_sensitivity or obj.is_encrypted != previous_encrypted):
-            for doc_type in document_types:
-                _rewrite_document_type_records(doc_type)
         action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
         log_audit_event(
             request,
@@ -269,7 +248,8 @@ def add_field_to_doctype(
     entfallen — es gibt heute **keine** Schicht mehr, die FILE-Feldvorlagen an
     Personen-/Fall-Typen abweist.
     """
-    # Refs #2525: share configuration locks and recheck both current policies.
+    # Refs #2525: lock configuration before checking current protection.
+    lock_dynamic_protection(doc_type.facility_id, exclusive=True)
     field_template = (
         FieldTemplate.objects.for_facility(doc_type.facility_id).select_for_update().get(pk=field_template.pk)
     )
@@ -343,9 +323,6 @@ def add_field_to_doctype(
             )
     except IntegrityError as exc:
         raise ValidationError(_("Diese Feldvorlage ist dem Dokumentationstyp bereits zugeordnet.")) from exc
-    # Retained values can predate the assignment or its current protection.
-    # Refs #2525: apply the same atomic rewrite as for sensitivity changes.
-    _rewrite_document_type_records(doc_type)
     log_audit_event(
         request,
         AuditLog.Action.CONFIG_CREATE,
