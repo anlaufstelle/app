@@ -123,15 +123,21 @@ class TestEventCardPreview:
         page.goto(f"{base_url}/?date={FEED_DAY}", wait_until="domcontentloaded")
         expect(page.locator(_KIND_BADGE).first).to_be_visible()
 
-        classes_by_kind = {}
+        # Computed colors, not class strings: two kinds sharing their color
+        # classes must fail even when other classes keep the strings apart.
+        colors_by_kind = {}
         for badge in page.locator(_KIND_BADGE).all():
-            classes_by_kind.setdefault(badge.inner_text().strip(), set()).add(badge.get_attribute("class"))
+            colors = badge.evaluate("(el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).color]")
+            colors_by_kind.setdefault(badge.inner_text().strip(), set()).add(tuple(colors))
 
-        assert {"Kontakt", "Aktivität", "Aufgabe"} <= set(classes_by_kind), classes_by_kind
-        for kind in ("Kontakt", "Aktivität", "Aufgabe"):
-            assert len(classes_by_kind[kind]) == 1, f"{kind} badges are not uniform: {classes_by_kind[kind]}"
-        colors = {kind: next(iter(classes_by_kind[kind])) for kind in ("Kontakt", "Aktivität", "Aufgabe")}
-        assert len(set(colors.values())) == 3, f"Kind badges share a color: {colors}"
+        kinds = ("Kontakt", "Aktivität", "Aufgabe")
+        assert set(kinds) <= set(colors_by_kind), colors_by_kind
+        for kind in kinds:
+            assert len(colors_by_kind[kind]) == 1, f"{kind} badges are not uniform: {colors_by_kind[kind]}"
+        background = {kind: next(iter(colors_by_kind[kind]))[0] for kind in kinds}
+        text = {kind: next(iter(colors_by_kind[kind]))[1] for kind in kinds}
+        assert len(set(background.values())) == 3, f"Kind badges share a background color: {background}"
+        assert len(set(text.values())) == 3, f"Kind badges share a text color: {text}"
 
 
 class TestActivityCards:
