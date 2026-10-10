@@ -101,7 +101,9 @@ def undo_tally_event(facility, user, token):
     try:
         event = (
             Event.objects.for_facility(facility)
-            .select_for_update()
+            # Deletion clears values; locking the joined type would invert
+            # configuration's type -> event order (Refs #2525).
+            .select_for_update(of=("self",))
             .select_related("document_type")
             .get(pk=payload.get("event"))
         )

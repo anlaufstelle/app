@@ -248,3 +248,17 @@ class TestCurrentTallyWindow:
             window_start, window_end = current_tally_window(facility)
 
         assert timezone.localtime(window_end).time() == time(12, 0)
+
+
+def test_tally_undo_locks_only_the_event_row(facility, staff_user, doc_type_contact):
+    event = _tally_event(facility, staff_user, doc_type_contact, key="undo-row-lock-target")
+    token = mint_tally_undo_token(event)
+    with CaptureQueriesContext(connection) as captured:
+        undo_tally_event(facility, staff_user, token)
+    joined_locks = [
+        query["sql"]
+        for query in captured.captured_queries
+        if "FOR UPDATE" in query["sql"] and 'JOIN "core_documenttype"' in query["sql"]
+    ]
+    assert len(joined_locks) == 1, joined_locks
+    assert 'FOR UPDATE OF "core_event"' in joined_locks[0], joined_locks

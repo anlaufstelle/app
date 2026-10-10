@@ -51,13 +51,10 @@ def _first_index(sequence, table):
     return sequence.index(table) if table in sequence else None
 
 
-#: Abfragen eines ``update_workitem``-Laufs ohne ``client``-Kwarg. Der Wert
-#: wird vom Test selbst ermittelt und hier festgeschrieben; er ist kein
-#: Budget, sondern eine Aussage über den Pfad. Zwei Lesungen unter bereits
-#: gehaltener Sperre gehören dazu: der Widerrufszustand der gesperrten Person
-#: (Papierkorb, deaktiviert, zusammengeführt) und der Löschzustand der
-#: gesperrten Aufgabe.
-EXPECTED_UPDATE_WORKITEM_QUERIES = 16
+#: Exact query count for an update without a new client assignment.
+#: Refs #2525 adds facility discovery, advisory-key ordering, the shared gate
+#: and facility existence validation before the unchanged person/task locks.
+EXPECTED_UPDATE_WORKITEM_QUERIES = 20
 
 
 @pytest.mark.django_db(transaction=False)

@@ -321,3 +321,65 @@ def test_protection_change_does_not_deadlock_with_an_audit_commit(facility, lead
         changer.result(timeout=12)
     record.refresh_from_db()
     assert record.search_text == ""
+
+
+def test_shared_protection_gate_keeps_configuration_rows_unlocked(facility):
+    from django.db import connection, transaction
+    from django.test.utils import CaptureQueriesContext
+
+    from core.services.dynamic_protection import lock_dynamic_protection
+
+    with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+        lock_dynamic_protection(facility.pk)
+    queries = [query["sql"] for query in captured.captured_queries]
+    assert any("pg_advisory_xact_lock_shared" in sql for sql in queries)
+    assert not any("FOR SHARE" in sql or "FOR UPDATE" in sql for sql in queries), queries
+
+
+@pytest.mark.parametrize("change", ["type", "field"])
+def test_configuration_change_blocks_writer_before_record_locks(facility, lead_user, change):
+    from django.db import transaction
+
+    record, field = make_record(facility, lead_user, "event")
+    ready, resume, writing = ThreadEvent(), ThreadEvent(), ThreadEvent()
+    pids, lock_queries = {}, []
+
+    def configure():
+        with transaction.atomic():
+            if change == "type":
+                record.document_type.sensitivity = "high"
+                record.document_type.save()
+            else:
+                field.sensitivity = "high"
+                field.save()
+            ready.set()
+            assert resume.wait(10), "Configuration transaction was not released"
+
+    def write():
+        pids["writer"] = connections["default"].connection.info.backend_pid
+        writing.set()
+
+        def capture_locks(execute, sql, params, many, context):
+            if "FOR UPDATE" in sql or "FOR SHARE" in sql:
+                lock_queries.append(sql)
+            return execute(sql, params, many, context)
+
+        with connections["default"].execute_wrapper(capture_locks):
+            update_event(event=record, user=lead_user, data_json={field.slug: "AfterChange"})
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        changer = pool.submit(run_connection, configure)
+        try:
+            assert ready.wait(5), "Configuration change did not reach persistence"
+            writer = pool.submit(run_connection, write)
+            assert writing.wait(5)
+            assert wait_for_completion_or_lock(writer, pids["writer"])
+            assert lock_queries == [], "Writer took a row lock before the protection gate"
+        finally:
+            resume.set()
+        changer.result(timeout=12)
+        writer.result(timeout=12)
+    record.refresh_from_db()
+    assert record.search_text == ""
+    assert is_encrypted_value(record.data_json[field.slug]) is (change == "field")
+    assert safe_decrypt(record.data_json[field.slug]) == "AfterChange"

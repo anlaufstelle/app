@@ -9,19 +9,18 @@ from django.utils.translation import gettext_lazy as _
 
 
 def lock_dynamic_protection(facility_id, *, exclusive=False):
-    """Lock the facility gate, types by PK, then templates by PK until commit.
+    """Keep protection stable through commit without reordering data row locks.
 
-    The facility gate prevents assignments/new types from changing the set of
-    affected rows during discovery. Use a separate transaction advisory-lock
-    namespace for the gate: locking the facility row exclusively would invert
-    its deferred foreign-key checks against an unrelated audit-chain lock.
-    Writers SHARE the same type/template rows that protection changes UPDATE.
-    Shared writers can proceed concurrently.
+    Shared writers take only the facility advisory gate before person, case or
+    event locks. Configuration writers take the exclusive gate, then types and
+    templates by PK, then affected records in person, case, event order. The
+    conflicting gates serialize these paths before either side holds rows, so
+    shared configuration row locks would add cost without additional safety.
 
-    Lock the whole scoped configuration to avoid reversing the order when a
-    template is shared across types or a batch supplies types in reverse order.
-    Call this before locking any person, case or event, and before deciding
-    encryption/index protection. Never acquire these locks in autocommit.
+    The gate also stabilizes assignments and newly created configuration rows.
+    Its separate namespace avoids the facility FK/audit-chain inversion.
+    Acquire gates before any data, quota or audit lock; never upgrade a shared
+    gate to exclusive after locking records. Do not use this in autocommit.
     """
     lock_dynamic_protection_many([facility_id], exclusive=exclusive)
 
@@ -44,20 +43,21 @@ def lock_dynamic_protection_many(facility_ids, *, exclusive=False):
             cursor.execute("SELECT id FROM core_facility WHERE id = %s", [facility_id])
             if cursor.fetchone() is None:
                 raise ValidationError(_("Die Einrichtung ist nicht mehr vorhanden."))
-        for query in (
-            "SELECT id FROM core_documenttype WHERE facility_id = %s ORDER BY id FOR SHARE",
-            "SELECT id FROM core_fieldtemplate WHERE facility_id = %s ORDER BY id FOR SHARE",
-        ):
-            for facility_id in facility_ids:
-                cursor.execute(query.replace("FOR SHARE", "FOR UPDATE") if exclusive else query, [facility_id])
-                cursor.fetchall()
+        if exclusive:
+            for query in (
+                "SELECT id FROM core_documenttype WHERE facility_id = %s ORDER BY id FOR UPDATE",
+                "SELECT id FROM core_fieldtemplate WHERE facility_id = %s ORDER BY id FOR UPDATE",
+            ):
+                for facility_id in facility_ids:
+                    cursor.execute(query, [facility_id])
+                    cursor.fetchall()
 
 
 def lock_dynamic_protection_gate(facility_id):
     """Take the shared gate before an ancillary audit/quota lock.
 
-    This phase makes subsequent type/template locks safe; it does not decide
-    encryption or write values. The actual writer still locks protection rows.
+    This gate stabilizes configuration for subsequent protection decisions.
+    Data writers need no additional configuration row locks.
     """
     if not connection.in_atomic_block:
         raise transaction.TransactionManagementError("Dynamic protection requires an enclosing transaction")
