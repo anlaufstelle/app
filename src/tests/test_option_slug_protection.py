@@ -2,6 +2,7 @@
 
 import copy
 import json
+import re
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -380,3 +381,87 @@ def test_iterable_update_fields_persists_safe_changes(option_template):
     option_template.refresh_from_db()
     assert option_template.options_json == []
     assert option_template.is_active is False
+
+
+@pytest.mark.parametrize("source", ["event", "quick_active", "quick_inactive", "default_single", "default_multiple"])
+def test_editor_renders_protected_and_removable_rows(
+    client, admin_user, option_template, doc_type_contact, client_identified, staff_user, source
+):
+    if source == "event":
+        from tests._factories import make_event
+
+        make_event(
+            facility=option_template.facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            created_by=staff_user,
+            occurred_at=timezone.now(),
+            data_json={option_template.slug: ["used"]},
+        )
+    elif source.startswith("quick"):
+        QuickTemplate.objects.create(
+            facility=option_template.facility,
+            document_type=doc_type_contact,
+            name="Editor reference",
+            is_active=source == "quick_active",
+            prefilled_data={option_template.slug: ["used"]},
+        )
+    else:
+        option_template.field_type = "select" if source == "default_single" else "multi_select"
+        option_template.default_value = "used"
+        option_template.save()
+    client.force_login(admin_user)
+
+    response = client.get(reverse("core:config_fieldtemplate_update", args=[option_template.pk]))
+    rows = re.findall(r"<div data-option-row\b.*?</div>", response.content.decode(), re.DOTALL)
+    used_row = next((row for row in rows if 'value="used"' in row), "")
+    unused_row = next((row for row in rows if 'value="unused"' in row), "")
+
+    assert response.status_code == 200
+    assert re.search(r"<input[^>]*data-option-slug[^>]*readonly", used_row)
+    assert "Deaktivieren" in used_row
+    assert "Entfernen" not in used_row
+    assert 'value="unused"' in unused_row
+    assert "readonly" not in unused_row
+    assert "Entfernen" in unused_row
+
+
+@pytest.mark.parametrize("replacement", [[], [{"slug": "renamed", "label": "Changed"}]])
+def test_editor_manipulated_post_keeps_protected_row_with_server_error(
+    client, admin_user, referenced_template, replacement
+):
+    client.force_login(admin_user)
+    before = copy.deepcopy(referenced_template.options_json)
+    audit_before = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_UPDATE).count()
+
+    response = client.post(
+        reverse("core:config_fieldtemplate_update", args=[referenced_template.pk]),
+        _post(referenced_template, replacement),
+    )
+    rows = re.findall(r"<div data-option-row\b.*?</div>", response.content.decode(), re.DOTALL)
+    affected_row = next((row for row in rows if 'value="used"' in row), "")
+
+    assert response.status_code == 200
+    assert "options_json" in response.context["form"].errors
+    assert "data-option-error" in affected_row
+    assert "Verwendete Options-Slugs" in affected_row
+    assert "deaktivieren" in affected_row
+    assert "readonly" in affected_row
+    assert "Deaktivieren" in affected_row
+    referenced_template.refresh_from_db()
+    assert referenced_template.options_json == before
+    assert AuditLog.objects.filter(action=AuditLog.Action.CONFIG_UPDATE).count() == audit_before
+
+
+def test_editor_deactivation_post_preserves_slug(client, admin_user, referenced_template):
+    client.force_login(admin_user)
+    options = [{"slug": "used", "label": "Changed label", "is_active": False}]
+
+    response = client.post(
+        reverse("core:config_fieldtemplate_update", args=[referenced_template.pk]),
+        _post(referenced_template, options),
+    )
+
+    assert response.status_code == 302
+    referenced_template.refresh_from_db()
+    assert referenced_template.options_json == options

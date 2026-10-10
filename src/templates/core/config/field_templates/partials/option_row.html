@@ -1,0 +1,19 @@
+{% load i18n %}
+<div data-option-row data-option-used="{{ option.is_used|yesno:'true,false' }}" role="group" class="grid grid-cols-1 gap-3 rounded-md border border-subtle bg-surface p-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end">
+    <label class="text-[12px] font-medium text-ink-soft">
+        {% trans "Bezeichnung" %}
+        <input type="text" data-option-label value="{{ option.label }}" class="mt-1 w-full rounded-md border-subtle text-sm">
+    </label>
+    <label class="text-[12px] font-medium text-ink-soft">
+        {% trans "Slug" %}
+        <input type="text" data-option-slug value="{{ option.slug }}" {% if option.is_used %}readonly{% endif %} {% if option.error %}aria-invalid="true" aria-describedby="{{ field.id_for_label }}-option-error-{{ row_index }}"{% endif %} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" class="mt-1 w-full rounded-md border-subtle font-mono text-sm">
+    </label>
+    <label class="inline-flex min-h-[44px] items-center gap-2 text-[13px] text-ink">
+        <input type="checkbox" data-option-active {% if option.is_active %}checked{% endif %} class="rounded border-subtle">
+        {% trans "Aktiv" %}
+    </label>
+    <button type="button" data-option-remove class="inline-flex min-h-[44px] items-center justify-center px-3 py-2 text-[13px] font-medium text-red-700 hover:underline">
+        {% if option.is_used %}{% trans "Deaktivieren" %}{% else %}{% trans "Entfernen" %}{% endif %}
+    </button>
+    <p data-option-error id="{{ field.id_for_label }}-option-error-{{ row_index }}" {% if not option.error %}hidden{% endif %} role="alert" class="text-sm text-red-600 sm:col-span-2">{{ option.error }}</p>
+</div>

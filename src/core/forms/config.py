@@ -559,9 +559,11 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
     def __init__(self, *args, facility=None, used_option_slugs=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.facility = facility
-        # Nur Slugs, keine Werte/Zaehler: der Browser braucht sie, um beim
-        # Entfernen/Umbenennen einer verwendeten Option zu warnen (#1875).
-        self.used_option_slugs_attr = " ".join(sorted(used_option_slugs or ()))
+        # The editor receives only identifiers from the shared usage service.
+        self.used_option_slugs = set(used_option_slugs or ())
+        self.used_option_slugs_attr = " ".join(sorted(self.used_option_slugs))
+        self._original_options = list(self.instance.options_json or [])
+        self.option_editor_errors: dict[str, str] = {}
         self._setup_report_key(get_field_key_vocabulary())
         # Refs #2381: ``sensitivity`` ist am Modell ``blank=True`` — Django
         # erzeugt daraus ein ``TypedChoiceField`` mit einer Leer-Option, deren
@@ -569,6 +571,38 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         # ("- Select an option -") faellt. Leer heisst hier "erbt vom
         # Dokumentationstyp" (Modell-Hilfetext) — der Platzhalter sagt das.
         label_blank_choice(self.fields["sensitivity"], _("— Vom Dokumentationstyp erben —"))
+
+    @property
+    def options_editor_rows(self):
+        """Render submitted rows and retain blocked options with their server error."""
+        _ = self.errors  # Populate entry errors before reading the bound JSON value.
+        raw = self["options_json"].value()
+        try:
+            options = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            return []
+        if not isinstance(options, list):
+            return []
+        options = [dict(option) for option in options if isinstance(option, dict)]
+        present = {option.get("slug") for option in options if isinstance(option.get("slug"), str)}
+        options.extend(
+            dict(option)
+            for option in self._original_options
+            if option.get("slug") in self.option_editor_errors and option.get("slug") not in present
+        )
+        rows = []
+        for option in options:
+            slug = option.get("slug") if isinstance(option.get("slug"), str) else ""
+            rows.append(
+                {
+                    "slug": slug,
+                    "label": option.get("label") if isinstance(option.get("label"), str) else "",
+                    "is_active": option.get("is_active") is not False,
+                    "is_used": slug in self.used_option_slugs,
+                    "error": self.option_editor_errors.get(slug, ""),
+                }
+            )
+        return rows
 
     def clean(self):
         """E-J (Refs #1849), vierter Weg: der Schlüssel wird NACHTRÄGLICH gesetzt.
@@ -687,6 +721,10 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
             try:
                 validate_option_changes(self.instance, normalized, default_value=self.data.get("default_value", ""))
             except ValidationError as error:
+                for detail in error.error_dict["options_json"]:
+                    if detail.code == "used_option_slugs" and detail.params:
+                        for slug in detail.params["blocked_slugs"]:
+                            self.option_editor_errors[slug] = detail.messages[0]
                 raise ValidationError(error.error_dict["options_json"]) from error
         return normalized
 

@@ -253,6 +253,7 @@ document.addEventListener("alpine:init", () => {
         fieldTypeSelect: null,
         options: [],
         usedSlugs: new Set(),
+        rowErrors: new Map(),
         canEnhance: false,
         expertOpen: false,
         init() {
@@ -280,7 +281,13 @@ document.addEventListener("alpine:init", () => {
 
             const parsed = this.parseTextarea();
             if (parsed !== null) {
-                this.options = parsed;
+                const serverRows = Array.from(this.list.querySelectorAll("[data-option-row]"));
+                this.options = serverRows.length ? serverRows.map((row) => this.readRow(row)) : parsed;
+                this.rowErrors = new Map(
+                    serverRows
+                        .filter((row) => row.querySelector("[data-option-error]")?.textContent.trim())
+                        .map((row) => [this.readRow(row).slug, row.querySelector("[data-option-error]").textContent.trim()]),
+                );
                 this.canEnhance = true;
                 this.renderRows();
             }
@@ -331,22 +338,42 @@ document.addEventListener("alpine:init", () => {
                 label.value = option.label;
                 slug.value = option.slug;
                 active.checked = option.is_active;
+                const used = this.usedSlugs.has(option.slug);
+                row.dataset.optionUsed = String(used);
+                slug.readOnly = used;
+                const remove = row.querySelector("[data-option-remove]");
+                if (used) remove.textContent = this.$el.dataset.deactivateLabel;
+                const error = row.querySelector("[data-option-error]");
+                const message = this.rowErrors.get(option.slug) || "";
+                if (error) {
+                    error.textContent = message;
+                    error.hidden = !message;
+                    error.id = `${this.textarea.id || "options_json"}-option-error-${index + 1}`;
+                    if (message) {
+                        slug.setAttribute("aria-invalid", "true");
+                        slug.setAttribute("aria-describedby", error.id);
+                    }
+                }
                 [label, slug].forEach((input) => input.addEventListener("input", () => this.syncFromRows()));
                 active.addEventListener("change", () => this.syncFromRows());
-                row.querySelector("[data-option-remove]").addEventListener("click", () => {
-                    row.remove();
+                remove.addEventListener("click", () => {
+                    if (used) active.checked = false;
+                    else row.remove();
                     this.syncFromRows();
                 });
                 this.list.append(row);
             });
             this.updateUsageWarning();
         },
-        syncFromRows() {
-            this.options = Array.from(this.list.querySelectorAll("[data-option-row]")).map((row) => ({
+        readRow(row) {
+            return {
                 slug: row.querySelector("[data-option-slug]").value.trim(),
                 label: row.querySelector("[data-option-label]").value.trim(),
                 is_active: row.querySelector("[data-option-active]").checked,
-            }));
+            };
+        },
+        syncFromRows() {
+            this.options = Array.from(this.list.querySelectorAll("[data-option-row]")).map((row) => this.readRow(row));
             this.textarea.value = JSON.stringify(this.options, null, 2);
             this.updateUsageWarning();
         },

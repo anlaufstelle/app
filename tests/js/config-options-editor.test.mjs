@@ -28,7 +28,7 @@ function buildEditor({
                 <option value="select" ${fieldType === "select" ? "selected" : ""}>Auswahl</option>
                 <option value="multi_select" ${fieldType === "multi_select" ? "selected" : ""}>Mehrfach</option>
             </select>
-            <div id="root" x-data="fieldTemplateOptionsEditor" data-used-option-slugs="${used}">
+            <div id="root" x-data="fieldTemplateOptionsEditor" data-used-option-slugs="${used}" data-deactivate-label="Deaktivieren">
                 <div data-options-editor hidden>
                     <div data-options-list></div>
                     <button type="button" data-options-add>Option hinzufügen</button>
@@ -43,6 +43,7 @@ function buildEditor({
                         <label>Slug <input data-option-slug></label>
                         <label><input type="checkbox" data-option-active> Aktiv</label>
                         <button type="button" data-option-remove>Entfernen</button>
+                        <p data-option-error hidden></p>
                     </div>
                 </template>
             </div>
@@ -91,9 +92,11 @@ describe("fieldTemplateOptionsEditor", () => {
         ]);
     });
 
-    it("warnt nach Entfernen oder Umbenennen eines verwendeten Slugs", () => {
+    it("keeps a warning for used slugs removed through expert JSON", () => {
         mount(buildEditor({ used: "offen" }));
-        click("[data-option-remove]");
+        click("[data-options-expert-toggle]");
+        document.querySelector("textarea").value = "[]";
+        click("[data-options-expert-toggle]");
 
         const warning = document.querySelector("[data-options-usage-warning]");
         expect(warning.hidden).toBe(false);
@@ -130,5 +133,75 @@ describe("fieldTemplateOptionsEditor", () => {
         fieldType.dispatchEvent(new Event("change"));
         expect(document.querySelector("[data-options-editor]").hidden).toBe(false);
         expect(document.querySelector("[data-options-json-wrapper]").hidden).toBe(true);
+    });
+});
+
+
+describe("protected option rows", () => {
+    it("makes only used slugs readonly while keeping labels editable", () => {
+        mount(buildEditor({
+            used: "offen",
+            json: '[{"slug":"offen","label":"Offen"},{"slug":"frei","label":"Frei"}]',
+        }));
+        const rows = document.querySelectorAll("[data-option-row]");
+        expect(rows[0].querySelector("[data-option-slug]").readOnly).toBe(true);
+        expect(rows[0].querySelector("[data-option-label]").readOnly).toBe(false);
+        expect(rows[0].querySelector("[data-option-remove]").textContent).toBe("Deaktivieren");
+        expect(rows[1].querySelector("[data-option-slug]").readOnly).toBe(false);
+        expect(rows[1].querySelector("[data-option-remove]").textContent).toBe("Entfernen");
+    });
+
+    it("deactivates a used option without removing its slug or label", () => {
+        mount(buildEditor({ used: "offen" }));
+        click("[data-option-remove]");
+        expect(document.querySelectorAll("[data-option-row]")).toHaveLength(1);
+        expect(document.querySelector("[data-option-active]").checked).toBe(false);
+        expect(JSON.parse(document.querySelector("textarea").value)).toEqual([
+            { slug: "offen", label: "Offen", is_active: false },
+        ]);
+        expect(document.querySelector("[data-options-usage-warning]").hidden).toBe(true);
+        click("[data-option-remove]");
+        expect(JSON.parse(document.querySelector("textarea").value)).toHaveLength(1);
+    });
+
+    it("removes an unused option", () => {
+        mount(buildEditor());
+        click("[data-option-remove]");
+        expect(document.querySelectorAll("[data-option-row]")).toHaveLength(0);
+        expect(JSON.parse(document.querySelector("textarea").value)).toEqual([]);
+    });
+
+    it("applies protection again after expert JSON and adding rows", () => {
+        mount(buildEditor({ used: "offen" }));
+        click("[data-options-expert-toggle]");
+        document.querySelector("textarea").value = '[{"slug":"offen","label":"Updated","is_active":false}]';
+        click("[data-options-expert-toggle]");
+        click("[data-options-add]");
+        const rows = document.querySelectorAll("[data-option-row]");
+        expect(rows[0].querySelector("[data-option-slug]").readOnly).toBe(true);
+        expect(rows[0].querySelector("[data-option-active]").checked).toBe(false);
+        expect(rows[1].querySelector("[data-option-slug]").readOnly).toBe(false);
+    });
+
+    it("keeps the server error on the retained option when rows are rebuilt", () => {
+        const root = buildEditor({ used: "offen", json: "[]" });
+        root.querySelector("[data-options-list]").innerHTML = `
+            <div data-option-row>
+                <input data-option-label value="Offen">
+                <input data-option-slug value="offen" readonly>
+                <input data-option-active type="checkbox" checked>
+                <button data-option-remove>Deaktivieren</button>
+                <p data-option-error>Verwendete Options-Slugs dürfen nicht entfernt werden: offen.</p>
+            </div>`;
+        mount(root);
+        expect(document.querySelector("[data-option-error]").hidden).toBe(false);
+        expect(document.querySelector("[data-option-error]").textContent).toContain("offen");
+        click("[data-options-add]");
+        expect(document.querySelector("[data-option-error]").hidden).toBe(false);
+        expect(document.querySelector("[data-option-slug]").readOnly).toBe(true);
+        click("[data-option-remove]");
+        expect(JSON.parse(document.querySelector("textarea").value)[0]).toEqual({
+            slug: "offen", label: "Offen", is_active: false,
+        });
     });
 });

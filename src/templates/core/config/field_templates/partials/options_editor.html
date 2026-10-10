@@ -1,13 +1,12 @@
 {% load core_tags i18n %}
 {% comment %}
-Progressive Enhancement fuer FieldTemplate.options_json (#1875): Das echte
-Textarea bleibt immer im DOM, traegt den einzigen POST-Namen und ist ohne JS
-sichtbar. Die Alpine-Komponente blendet den Zeileneditor nur fuer select /
-multi_select ein und synchronisiert jede Aenderung zurueck ins Textarea.
+Progressively enhance the real options_json textarea. Server-rendered rows
+keep referenced identifiers readonly; the server validates every write.
 {% endcomment %}
 <div x-data="fieldTemplateOptionsEditor"
      data-used-option-slugs="{{ form.used_option_slugs_attr }}"
-     data-used-warning-prefix="{% trans 'Achtung: Diese verwendeten Slugs würden entfernt oder umbenannt:' %}"
+     data-used-warning-prefix="{% trans 'Diese verwendeten Slugs fehlen im JSON und können nicht entfernt oder umbenannt werden:' %}"
+     data-deactivate-label="{% trans 'Deaktivieren' %}"
      data-invalid-json-message="{% trans 'Das JSON ist noch ungültig und kann nicht in Zeilen übernommen werden.' %}"
      data-expert-show-label="{% trans 'JSON bearbeiten' %}"
      data-expert-hide-label="{% trans 'Zeileneditor übernehmen' %}">
@@ -16,7 +15,11 @@ multi_select ein und synchronisiert jede Aenderung zurueck ins Textarea.
             <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft">{% trans "Auswahloptionen" %}</p>
             <p class="mt-1 text-[12px] text-ink-muted">{% trans "Bezeichnung ist der sichtbare Text. Der stabile Slug wird in Bestandsdaten und Bedingungen gespeichert." %}</p>
         </div>
-        <div data-options-list class="space-y-3"></div>
+        <div data-options-list class="space-y-3">
+            {% for option in form.options_editor_rows %}
+                {% include "core/config/field_templates/partials/option_row.html" with option=option row_index=forloop.counter %}
+            {% endfor %}
+        </div>
         <button type="button" data-options-add class="inline-flex min-h-[44px] items-center px-3 py-2 btn-secondary">
             {% trans "Option hinzufügen" %}
         </button>
@@ -29,8 +32,8 @@ multi_select ein und synchronisiert jede Aenderung zurueck ins Textarea.
     </button>
 
     {% if field.errors %}
-    {# Muss ausserhalb des per JavaScript versteckten Textarea-Wrappers bleiben. #}
-    {# Refs #2154: role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. #}
+    {# Keep field errors outside the textarea wrapper hidden by JavaScript. #}
+    {# Keep the list role within the alert container (Refs #2154). #}
     <div role="alert">
         <ul data-options-field-errors id="{{ field.id_for_label }}-error" role="list" class="mt-1 text-sm text-red-600">
             {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
@@ -47,22 +50,6 @@ multi_select ein und synchronisiert jede Aenderung zurueck ins Textarea.
     <p data-options-json-error hidden role="alert" class="mt-1 text-sm text-red-600"></p>
 
     <template data-options-row-template>
-        <div data-option-row role="group" class="grid grid-cols-1 gap-3 rounded-md border border-subtle bg-surface p-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end">
-            <label class="text-[12px] font-medium text-ink-soft">
-                {% trans "Bezeichnung" %}
-                <input type="text" data-option-label class="mt-1 w-full rounded-md border-subtle text-sm">
-            </label>
-            <label class="text-[12px] font-medium text-ink-soft">
-                {% trans "Slug" %}
-                <input type="text" data-option-slug pattern="[a-z0-9]+(?:-[a-z0-9]+)*" class="mt-1 w-full rounded-md border-subtle font-mono text-sm">
-            </label>
-            <label class="inline-flex min-h-[44px] items-center gap-2 text-[13px] text-ink">
-                <input type="checkbox" data-option-active class="rounded border-subtle">
-                {% trans "Aktiv" %}
-            </label>
-            <button type="button" data-option-remove class="inline-flex min-h-[44px] items-center justify-center px-3 py-2 text-[13px] font-medium text-red-700 hover:underline">
-                {% trans "Entfernen" %}
-            </button>
-        </div>
+        {% include "core/config/field_templates/partials/option_row.html" with option=None row_index="new" %}
     </template>
 </div>

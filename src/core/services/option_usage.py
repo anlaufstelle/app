@@ -113,10 +113,13 @@ def validate_option_changes(template: FieldTemplate, desired_options: Any, *, de
     if blocked:
         raise ValidationError(
             {
-                "options_json": _(
-                    "Verwendete Options-Slugs dürfen nicht entfernt oder umbenannt werden: %(slugs)s. "
-                    "Bitte die Option deaktivieren statt entfernen oder umbenennen."
+                "options_json": ValidationError(
+                    _(
+                        "Verwendete Options-Slugs dürfen nicht entfernt oder umbenannt werden: %(slugs)s. "
+                        "Bitte die Option deaktivieren statt entfernen oder umbenennen."
+                    ),
+                    code="used_option_slugs",
+                    params={"slugs": ", ".join(blocked), "blocked_slugs": blocked},
                 )
-                % {"slugs": ", ".join(blocked)}
             }
         )
