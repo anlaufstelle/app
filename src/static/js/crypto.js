@@ -97,6 +97,7 @@
 
     let cachedKey = null;
     let cachedLifetime = null;
+    let keyGeneration = 0; // Invalidates pending key writes and memory hydration on clear (#2528).
     let initialLoad = null; // Promise<void> that resolves once cachedKey reflects IndexedDB
     let lastActivityWrite = 0; // in-memory throttle marker for _touchActivity
 
@@ -188,8 +189,20 @@
         });
     }
 
-    function _idbPut(record) {
+    function _assertKeyGeneration(generation) {
+        if (generation !== keyGeneration) {
+            const err = new Error("NoSessionKey");
+            err.name = "NoSessionKeyError";
+            throw err;
+        }
+    }
+
+    function _idbPut(record, generation) {
         return _openDb().then(function (db) {
+            if (generation !== undefined && generation !== keyGeneration) {
+                db.close();
+                _assertKeyGeneration(generation);
+            }
             return new Promise(function (resolve, reject) {
                 const tx = db.transaction(META_TABLE, "readwrite");
                 tx.objectStore(META_TABLE).put(record);
@@ -269,16 +282,53 @@
         });
     }
 
+    // Refs #2528: keep the read and high-water update in one transaction.
+    // A delete from any connection is ordered before or after this transaction;
+    // no stale row can be inserted again after the delete has completed.
+    function _checkKeyLifetime(generation) {
+        return _openDb().then(function (db) {
+            return new Promise(function (resolve, reject) {
+                const tx = db.transaction(META_TABLE, "readwrite");
+                const store = tx.objectStore(META_TABLE);
+                const req = store.get(KEY_NAME);
+                let row = null;
+                let expired = false;
+                req.onsuccess = function () {
+                    if (generation !== keyGeneration) return;
+                    row = req.result || null;
+                    if (!row || !row.cryptoKey) return;
+                    const now = Date.now();
+                    expired = !_keyLifetimeValid(row, now);
+                    if (!expired) {
+                        row.checkedAt = now;
+                        store.put(row);
+                    }
+                };
+                tx.oncomplete = function () {
+                    db.close();
+                    resolve({ row, expired });
+                };
+                tx.onerror = tx.onabort = function () {
+                    db.close();
+                    reject(tx.error || new Error("KeyLifetimeTransactionAborted"));
+                };
+            });
+        });
+    }
+
     async function _enforceAbsoluteKeyExpiry() {
-        const row = await _idbGet(KEY_NAME);
+        const generation = keyGeneration;
+        const { row, expired } = await _checkKeyLifetime(generation);
+        // clearSessionKey drops memory immediately, without waiting for the
+        // sync lock. A completed check must never undo that local revocation.
+        if (generation !== keyGeneration) return false;
         if (!row || !row.cryptoKey) {
             cachedKey = null;
             cachedLifetime = null;
             _showKeyExpired(!!(await _idbGet(EXPIRED_KEY)));
             return false;
         }
-        const now = Date.now();
-        if (!_keyLifetimeValid(row, now)) {
+        if (expired) {
             // Refs #2528: retain all ciphertext, including unsent work. Keep
             // invalid metadata if deletion fails so the next check retries.
             await clearSessionKey();
@@ -290,10 +340,6 @@
             }
             return true;
         }
-        // Persist the high-water mark across navigation/restarts. A detected
-        // backwards clock locks rather than granting additional lifetime.
-        row.checkedAt = now;
-        await _idbPut(row);
         cachedKey = row.cryptoKey;
         cachedLifetime = row;
         return false;
@@ -389,11 +435,13 @@
     // abgeleiteten Key wegraeumen. Erst wenn die Grundlage nachweislich fehlt,
     // faellt cachedKey und das UI-Refresh feuert.
     async function _applyKeyCleared() {
+        const generation = keyGeneration;
         try {
             const row = await _idbGet(KEY_NAME);
+            if (generation !== keyGeneration) return;
             if (row && row.cryptoKey && _keyLifetimeValid(row, Date.now())) {
-                // Geteilter Key-Zustand NICHT (mehr) fehlend -> re-verankern,
-                // kein Drop, kein Sequenz-Abbruch.
+                // A newly logged-in tab restored the shared key; retain it
+                // unless a concurrent local clear invalidated this read.
                 cachedKey = row.cryptoKey;
                 cachedLifetime = row;
                 return;
@@ -602,6 +650,7 @@
     }
 
     async function deriveSessionKey(password, saltB64Url) {
+        const generation = keyGeneration;
         if (!isSupported()) {
             throw new Error("WebCrypto not supported");
         }
@@ -629,12 +678,15 @@
         );
         // Stamp BEFORE storing the key so a stale pre-login stamp can never
         // race the new key into an immediate idle wipe (#1065).
+        _assertKeyGeneration(generation);
         await _touchActivity(true);
         const row = { key: KEY_NAME, cryptoKey: key, createdAt, expiresAt, checkedAt: createdAt };
-        await _idbPut(row);
+        await _idbPut(row, generation);
+        _assertKeyGeneration(generation);
         cachedKey = key;
         cachedLifetime = row;
         await _idbDelete(EXPIRED_KEY);
+        _assertKeyGeneration(generation);
         _showKeyExpired(false);
     }
 
@@ -720,57 +772,28 @@
         return JSON.parse(new TextDecoder().decode(plainBuffer));
     }
 
-    /** Sitzungsschluessel verwerfen.
+    /** Drop the session key without waiting for the sync lock.
      *
-     * Refs #2136 (R-L3-13): Die Funktion **wirft weiterhin nicht** — jeder
-     * bestehende Aufrufer (``wipeOfflineState``, ``_enforceIdleWipeLocked``,
-     * der Passwortwechsel in auth-bootstrap.js, die Offline-E2E) ``await``et
-     * sie und wuerde von einer Rejection unvermittelt abbrechen; beim Logout
-     * waere ein abgebrochener Wipe schlimmer als ein stiller. Stattdessen
-     * MELDET sie den Ausgang: ``{persisted: true}`` heisst „die persistente
-     * Zeile ist nachweislich weg", ``{persisted: false}`` heisst „der
-     * IndexedDB-Delete ist gescheitert, die Zeile kann noch da sein".
-     *
-     * Vorher verschluckte der ``catch`` beide Delete-Fehler und erfuellte das
-     * Promise trotzdem — ein Aufrufer konnte einen Fehlschlag nicht von einem
-     * Erfolg unterscheiden. Fuer den Normalfall (Logout mit
-     * ``Clear-Site-Data``) war das folgenlos; fuer „Schnell verlassen" ist es
-     * das nicht: dort ist die Loeschung offline der einzige Riegel, und ein
-     * faelschlich als Erfolg gewerteter Fehlschlag loeste einen
-     * ``key-cleared``-Broadcast aus, der in einem Fremd-Tab den Schluessel
-     * ueber ``_applyKeyCleared`` sogar wieder verankert haette.
-     *
-     * Der Memory-Key faellt in JEDEM Fall — daran aendert sich nichts. Der
-     * Aktivitaetsstempel dagegen faellt NUR mit einem nachweislich geloeschten
-     * Schluessel (R-L3-14): Er ist der Ausloeser des naechsten Idle-Laufs, und
-     * ein ueberlebender Schluessel braucht genau den.
+     * Refs #2136, #2528: report persistent deletion without throwing, so
+     * logout/quick-exit can still navigate on IndexedDB failure. Memory is
+     * cleared immediately and pending writers/hydrators are invalidated.
+     * Keep the activity stamp on key deletion failure for the next idle retry.
      */
     async function clearSessionKey() {
+        keyGeneration += 1;
         cachedKey = null;
         cachedLifetime = null;
         try {
             await _idbDelete(KEY_NAME);
         } catch (_e) {
-            // R-L3-14: Der Aktivitaetsstempel bleibt hier BEWUSST stehen.
-            // Scheitert der Delete der Schluesselzeile, liegt der Schluessel
-            // weiterhin auf dem Geraet — und dann ist der alte, laengst
-            // ueberfaellige Stempel genau das, was den naechsten Idle-Lauf
-            // erneut ausloest. Wuerde er mitgeloescht, faende
-            // ``_enforceIdleWipeLocked`` kein ``ts`` mehr, startete ein FRISCHES
-            // Zeitfenster (siehe dort) und verschoebe die naechste
-            // Loeschprobe um eine volle Sitzungsdauer — ausgerechnet in dem
-            // Fall, in dem sie noetig ist.
+            // A surviving key still needs the original idle deadline.
             return { persisted: false };
         }
         try {
-            // Drop the activity stamp with the key: the next idle check
-            // starts a fresh window instead of re-wiping forever (#1065).
-            // Erst HIER, wo der Schluessel nachweislich weg ist — dann gibt es
-            // auch nichts mehr, was ein erneuter Wipe holen muesste.
+            // Only a successful key deletion permits a fresh idle window.
             await _idbDelete(ACTIVITY_KEY);
         } catch (_e) {
-            // Der Stempel ist kein Geheimnis und ohne Key wirkungslos — sein
-            // Fehlschlag entwertet die Schluessel-Loeschung nicht.
+            // The stamp is not secret and has no effect without the key.
         }
         return { persisted: true };
     }
