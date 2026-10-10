@@ -255,7 +255,11 @@ def demo(request):
     from core.demo import DEMO_OFFLINE_BOOTSTRAP_ERROR, DEMO_OFFLINE_BOOTSTRAP_PENDING, DEMO_PASSWORD
 
     session = getattr(request, "session", {})
-    bootstrap_pending = request.user.is_authenticated and session.pop(DEMO_OFFLINE_BOOTSTRAP_PENDING, False)
+    # Error pages and bare requests may render without the authentication middleware.
+    user = getattr(request, "user", None)
+    bootstrap_pending = bool(user is not None and user.is_authenticated) and session.pop(
+        DEMO_OFFLINE_BOOTSTRAP_PENDING, False
+    )
     now = timezone.localtime()
     next_reset = now.replace(minute=0, second=0, microsecond=0) + datetime.timedelta(hours=1)
     return {
