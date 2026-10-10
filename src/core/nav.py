@@ -319,7 +319,9 @@ ZEITSTROM = NavItem(
     # Ereignis-Vollseiten gehören zum Zeitstrom-Anker (Verify-Befund #1813,
     # dieselbe Klasse wie der audit_detail-Fix): Detail, Neu, Edit und die
     # GET-Lösch-Bestätigung sind "du bist hier"-Zustände.
-    family=frozenset({"zeitstrom", "event_list", "event_detail", "event_create", "event_update", "event_delete"}),
+    family=frozenset(
+        {"zeitstrom", "event_list", "event_detail", "event_legal_hold", "event_create", "event_update", "event_delete"}
+    ),
     gates=("is_assistant_or_above",),
     icon="zeitstrom",
 )
@@ -344,7 +346,16 @@ PERSONEN = NavItem(
     key="clients",
     label=_("Personen"),
     url_name="core:client_list",
-    family=frozenset({"client_list", "client_detail", "client_create", "client_update"}),
+    family=frozenset(
+        {
+            "client_list",
+            "client_detail",
+            "client_create",
+            "client_update",
+            "client_legal_hold",
+            "client_stage_downgrade",
+        }
+    ),
     gates=("is_assistant_or_above",),
     icon="clients",
 )
@@ -352,7 +363,7 @@ FAELLE = NavItem(
     key="cases",
     label=_("Fälle"),
     url_name="core:case_list",
-    family=frozenset({"case_list", "case_detail", "case_create", "case_update"}),
+    family=frozenset({"case_list", "case_detail", "case_legal_hold", "case_create", "case_update"}),
     gates=("is_staff_or_above",),
     icon="cases",
 )
@@ -745,6 +756,8 @@ def mobile_more_catalog() -> frozenset[str]:
 # Routen unter einem Navigations-Präfix, die strukturell keinen Nav-Zustand
 # haben. Guard: src/tests/test_nav_registry.py.
 KNOWN_NON_NAV_ROUTES: dict[str, str] = {
+    "event_legal_hold_dismiss": "POST-only protection dismissal from the event record.",
+    "system_legal_hold_dismiss": "POST-only protection dismissal from the installation-wide list.",
     # /system/
     "system_audit_export": "Download-Endpunkt (CSV/JSON via ?format=) hinter dem Audit-Reiter, keine eigene Seite.",
     # /statistics/

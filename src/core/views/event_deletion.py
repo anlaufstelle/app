@@ -11,6 +11,7 @@ Ort fuer dieselbe Entscheidung; die Loeschantragsliste ist eine Flaeche.
 
 import logging
 from contextlib import suppress
+from functools import partial
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -31,6 +32,7 @@ from core.services.client import (
     reject_client_deletion,
     reject_client_merge,
 )
+from core.services.client.stage_downgrade import review_stage_downgrade
 from core.services.compliance import get_visible_event_or_404
 from core.services.deletion import (
     annotate_deletion_targets,
@@ -155,6 +157,8 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
             if client is None:
                 dr.target_url = ""
             context["client"] = client
+            if dr.stage_downgrade:
+                return render(request, "core/clients/stage_downgrade_review.html", context)
             if dr.merge_into_id is not None:
                 merge_target = (
                     Client.objects.for_facility(request.current_facility)
@@ -244,6 +248,9 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
         approve, reject = approvers.get(dr.target_type, (approve_deletion, reject_deletion))
         if is_merge:
             approve, reject = approve_client_merge, reject_client_merge
+        if dr.stage_downgrade:
+            approve = partial(review_stage_downgrade, approve=True)
+            reject = partial(review_stage_downgrade, approve=False)
 
         # ValidationError → Meldung statt 500: beim Merge kann die Ausfuehrung
         # an spaeter entstandenen Zustaenden scheitern (Legal Hold, Ziel im
@@ -254,7 +261,9 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
                 approve(dr, request.user)
                 messages.success(
                     request,
-                    _("Zusammenführungs-Antrag wurde genehmigt — die Akten sind zusammengeführt.")
+                    _("Herabstufung wurde freigegeben.")
+                    if dr.stage_downgrade
+                    else _("Zusammenführungs-Antrag wurde genehmigt — die Akten sind zusammengeführt.")
                     if is_merge
                     else _("Löschantrag wurde genehmigt."),
                 )
@@ -262,7 +271,11 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
                 reject(dr, request.user)
                 messages.info(
                     request,
-                    _("Zusammenführungs-Antrag wurde abgelehnt.") if is_merge else _("Löschantrag wurde abgelehnt."),
+                    _("Herabstufungsantrag wurde abgelehnt.")
+                    if dr.stage_downgrade
+                    else _("Zusammenführungs-Antrag wurde abgelehnt.")
+                    if is_merge
+                    else _("Löschantrag wurde abgelehnt."),
                 )
         except ValidationError as exc:
             messages.error(request, exc.messages[0] if exc.messages else str(exc))

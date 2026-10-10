@@ -23,8 +23,12 @@ from core.views.system import (
     SystemUnlockView,
     SystemVVTView,
 )
+from core.views.system.legal_holds import SystemLegalHoldDismissView
 
 urlpatterns = [
+    path(
+        "system/legal-holds/<uuid:pk>/dismiss/", SystemLegalHoldDismissView.as_view(), name="system_legal_hold_dismiss"
+    ),
     # System (super_admin / installations-weit, Refs #867)
     path("system/", SystemDashboardView.as_view(), name="system_dashboard"),
     path("system/audit/", SystemAuditLogListView.as_view(), name="system_audit_list"),

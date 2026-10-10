@@ -400,6 +400,11 @@ def _assert_target_has_no_active_hold(proposal, client_id):
     Ist die Ereigniszeile hart entfernt, ist ``client_id`` ``None`` und es
     bleibt beim Ereignis-Hold.
     """
+    if (
+        client_id
+        and Client.objects.filter(facility=proposal.facility_id, pk=client_id, processing_restricted=True).exists()
+    ):
+        raise ValidationError(_("Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt."))
     if has_active_hold(proposal.facility, "Event", proposal.target_id):
         raise ValidationError(LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE)
     if client_id and has_active_hold(proposal.facility, "Client", client_id):
@@ -1000,6 +1005,7 @@ def create_proposals_for_facility(facility, settings_obj, now, *, qualified_only
             strategy.queryset.exclude(pk__in=held_ids)
             .exclude(client_id__in=held_client_ids)
             .exclude(case_id__in=held_case_ids)
+            .exclude(client__processing_restricted=True)
             .select_related("client", "document_type")
         )
         if qualified_only:

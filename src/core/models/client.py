@@ -7,7 +7,7 @@ from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from core.models.managers import FacilityScopedManager
+from core.models.managers import ClientManager
 from core.models.mixins import DynamicDataEncryptionMixin, SoftDeletableModel
 
 
@@ -47,7 +47,7 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         LEGAL_CLAIMS = "legal_claims", _("Für Rechtsansprüche weiter benötigt (lit. c)")
         OBJECTION_PENDING = "objection_pending", _("Widerspruch in Prüfung (Art. 18 Abs. 1 lit. d)")
 
-    objects = FacilityScopedManager()
+    objects = ClientManager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     facility = models.ForeignKey(

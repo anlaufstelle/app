@@ -154,7 +154,7 @@ def _k_anonymize_with_cascade(client):
         _delete_owned_attachments_for_client(client, case_ids)
 
 
-def anonymize_clients(facility, dry_run):
+def anonymize_clients(facility, dry_run, *, deferred_ids=None):
     """Anonymize clients whose events have all been soft-deleted.
 
     A client is anonymized when they have at least one event and all of them have
@@ -225,15 +225,26 @@ def anonymize_clients(facility, dry_run):
         .filter(eligible)
     )
 
+    restricted_pks = set(candidates.filter(processing_restricted=True).values_list("pk", flat=True))
+    restricted_count = len(restricted_pks)
+    if deferred_ids is not None:
+        deferred_ids.update(restricted_pks)
+    candidates = candidates.filter(processing_restricted=False)
     if dry_run:
-        return {"count": candidates.count(), "skipped_holds": 0}
+        result = {"count": candidates.count(), "skipped_holds": 0}
+        if restricted_count:
+            result["deferred"] = restricted_count
+        return result
 
     # Die pk-Liste wird vorab materialisiert: der Lauf veraendert genau die
     # Spalten, nach denen die Kandidatenbedingung filtert (Muster
     # ``anonymize_eligible_soft_deleted_clients``).
     candidate_pks = list(candidates.values_list("pk", flat=True))
     if not candidate_pks:
-        return {"count": 0, "skipped_holds": 0}
+        result = {"count": 0, "skipped_holds": 0}
+        if restricted_count:
+            result["deferred"] = restricted_count
+        return result
 
     try:
         settings_obj = facility.settings
@@ -287,10 +298,17 @@ def anonymize_clients(facility, dry_run):
                 continue
             if not events.exists() and (idle_cutoff is None or locked.is_deleted or locked.updated_at >= idle_cutoff):
                 continue
+            if locked.processing_restricted:
+                restricted_count += 1
+                if deferred_ids is not None:
+                    deferred_ids.add(client_pk)
+                continue
             if client_has_active_hold(locked):
                 # Nur aufgeschoben — ein spaeterer Lauf holt es nach, sobald der
                 # Hold aufgehoben oder abgelaufen ist. Kein Abbruch des Laufs.
                 skipped_holds += 1
+                if deferred_ids is not None:
+                    deferred_ids.add(client_pk)
                 logger.warning(
                     "K-Anon-Bridge: Person %s wegen aktivem Legal Hold zurueckgestellt (Refs #2122)",
                     client_pk,
@@ -329,4 +347,7 @@ def anonymize_clients(facility, dry_run):
             command="enforce_retention",
             count=hard_count,
         )
-    return {"count": k_count + hard_count, "skipped_holds": skipped_holds}
+    result = {"count": k_count + hard_count, "skipped_holds": skipped_holds}
+    if restricted_count or skipped_holds:
+        result["deferred"] = restricted_count + skipped_holds
+    return result

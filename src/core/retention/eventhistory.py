@@ -192,10 +192,16 @@ def _held_by_active_hold(assignments, holds):
     #2188).
     """
     held_events, held_clients, held_cases = holds
+    restricted_clients = set(
+        Client.objects.filter(
+            pk__in={client_id for client_id, _case_id in assignments.values() if client_id is not None},
+            processing_restricted=True,
+        ).values_list("pk", flat=True)
+    )
     return {
         pk
         for pk, (client_id, case_id) in assignments.items()
-        if pk in held_events or client_id in held_clients or case_id in held_cases
+        if pk in held_events or client_id in held_clients or case_id in held_cases or client_id in restricted_clients
     }
 
 
@@ -558,8 +564,6 @@ def _held_event_ids_unlocked(facility, event_ids):
     # Same hold kinds and same rule as the real run — a case hold included.
     # Assignments are read without locks; nothing is written here.
     holds = _active_hold_sets({facility.pk})
-    if not any(holds):
-        return set()
     assignments = {
         pk: (client_id, case_id)
         for pk, client_id, case_id in Event.objects.filter(pk__in=event_ids).values_list("pk", "client_id", "case_id")

@@ -125,6 +125,21 @@ class ClientForm(_FacilityScopedPseudonymMixin, TailwindFormMixin, forms.ModelFo
             ),
         }
 
+    def clean_contact_stage(self):
+        stage = self.cleaned_data["contact_stage"]
+        if not self.instance._state.adding and self.facility is not None:
+            current = Client.objects.for_facility(self.facility).filter(pk=self.instance.pk).first()
+            if (
+                current is not None
+                and current.contact_stage == Client.ContactStage.QUALIFIED
+                and stage != current.contact_stage
+                and current.events.exists()
+            ):
+                raise forms.ValidationError(
+                    _("Bei vorhandenen Ereignissen ist ein Herabstufungsantrag mit Vier-Augen-Freigabe erforderlich.")
+                )
+        return stage
+
     def __init__(self, *args, facility=None, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.facility = facility

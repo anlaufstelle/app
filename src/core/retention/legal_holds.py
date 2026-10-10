@@ -617,19 +617,15 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
 
 @transaction.atomic
 def dismiss_legal_hold(hold, user):
-    """Hebt einen Legal Hold auf und stellt den gehaltenen Vorschlag auf ``pending`` zurueck.
+    """Dismiss a hold once and reactivate its held proposal, with an audit proof.
 
-    Refs #2374: Die Einrichtungsgrenze der handelnden Person wird vor jeder
-    Sperre geprueft (fail-closed ohne Einrichtung), danach wird die Hold-Zeile
-    gesperrt und innerhalb dieser Einrichtung neu gelesen. Die mitgegebene
-    Instanz kann aus einer Uebersicht von vor Minuten stammen: ist der Hold
-    inzwischen aufgehoben, endet der Aufruf mit einer Meldung. Akteur und
-    Zeitpunkt der ersten Aufhebung bleiben dann stehen, es entsteht keine
-    zweite Audit-Zeile — und ein Vorschlag, den inzwischen ein NEUER Hold
-    haelt, wird nicht zurueckgestellt.
+    Facility actors must belong to the hold's facility. An active installation
+    administrator may dismiss the explicitly selected hold across facilities.
+    Re-read the hold under its row lock; repeated dismissal preserves the first
+    actor and timestamp and creates no second decision audit row.
     """
-    actor_facility_id = getattr(user, "facility_id", None)
-    if actor_facility_id is None or actor_facility_id != hold.facility_id:
+    actor_facility_id = hold.facility_id if user.is_super_admin else getattr(user, "facility_id", None)
+    if not user.is_active or actor_facility_id is None or actor_facility_id != hold.facility_id:
         raise ValidationError(LEGAL_HOLD_OTHER_FACILITY_MESSAGE)
     locked = LegalHold.objects.select_for_update().filter(pk=hold.pk, facility_id=actor_facility_id).first()
     if locked is None:

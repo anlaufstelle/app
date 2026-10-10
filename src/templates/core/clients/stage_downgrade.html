@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+{% block title %}{% trans "Herabstufung beantragen" %}: {{ client.pseudonym }} – Anlaufstelle{% endblock %}
+{% block content %}
+{% back_link %}
+<h1 class="text-xl font-bold mb-4">{% trans "Herabstufung beantragen" %}: {{ client.pseudonym }}</h1>
+<p>{% trans "Die Kontaktstufe wird erst nach Freigabe durch eine andere Person mit Löschbestätigung auf „Nur Pseudonym“ geändert. Dadurch gelten kürzere Aufbewahrungsfristen für vorhandene Ereignisse." %}</p>
+<form method="post" class="card p-4 my-4 space-y-4">
+    {% csrf_token %}{{ form.as_p }}
+    <button type="submit" class="px-4 py-2 rounded-md text-sm font-semibold bg-accent text-white">{% trans "Herabstufung beantragen" %}</button>
+</form>
+{% endblock %}

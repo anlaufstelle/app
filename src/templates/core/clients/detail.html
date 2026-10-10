@@ -4,6 +4,14 @@
 {% block title %}{{ client.pseudonym }} – Anlaufstelle{% endblock %}
 
 {% block content %}
+{% if request.user.is_lead_or_admin and client.contact_stage == "qualified" and client.is_active %}
+<a href="{% url 'core:client_stage_downgrade' client.pk %}" class="px-4 py-2 rounded-md text-sm font-medium border border-subtle text-ink-soft hover:bg-canvas">{% trans "Herabstufung beantragen" %}</a>
+{% endif %}
+
+{% if request.user.is_lead_or_admin %}
+<a href="{% url 'core:client_legal_hold' client.pk %}" class="px-4 py-2 rounded-md text-sm font-medium border border-subtle text-ink-soft hover:bg-canvas">{% trans "Legal Hold verwalten" %}</a>
+{% endif %}
+
 {# Rücklink-Konvention (§7.3, Refs #1813 T4, #1802): Ziel und Label kommen aus core.nav. #}
 {% back_link %}
 
@@ -28,7 +36,7 @@
                 {# Refs #1736 (A): laufender Vier-Augen-Löschantrag am Datensatz. #}
                 {% if pending_deletion_request %}
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
-                      data-testid="{% if pending_deletion_request.merge_into_id %}client-merge-pending-badge{% else %}client-deletion-pending-badge{% endif %}">{% if pending_deletion_request.merge_into_id %}{% trans "Zusammenführung beantragt" %}{% else %}{% trans "Löschung beantragt" %}{% endif %}</span>
+                      data-testid="{% if pending_deletion_request.merge_into_id %}client-merge-pending-badge{% else %}client-deletion-pending-badge{% endif %}">{% if pending_deletion_request.merge_into_id %}{% trans "Zusammenführung beantragt" %}{% elif pending_deletion_request.stage_downgrade %}{% trans "Herabstufung beantragt" %}{% else %}{% trans "Löschung beantragt" %}{% endif %}</span>
                 {% endif %}
                 {# Refs #2045: Art.-18-Sperrvermerk — Kennzeichnung am Kopf. #}
                 {% if client.processing_restricted %}
@@ -122,7 +130,9 @@ und Badge sagen, WAS beantragt ist (und wohin zusammengeführt würde).{% endcom
      role="status"
      data-testid="{% if pending_deletion_request.merge_into_id %}client-merge-pending-banner{% else %}client-deletion-pending-banner{% endif %}">
     <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-    {% if pending_deletion_request.merge_into_id %}
+    {% if pending_deletion_request.stage_downgrade %}
+    <span class="font-semibold">{% trans "Herabstufung beantragt" %}</span>
+    {% elif pending_deletion_request.merge_into_id %}
     <span class="font-semibold">{% blocktrans with target=pending_deletion_request.merge_into.pseudonym %}Zusammenführung in „{{ target }}“ beantragt{% endblocktrans %}</span>
     {% else %}
     <span class="font-semibold">{% trans "Löschung beantragt" %}</span>

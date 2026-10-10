@@ -4,6 +4,10 @@
 {% block title %}{{ event.document_type.name }} – {{ event.occurred_at|date:"DATETIME_FORMAT" }} – Anlaufstelle{% endblock %}
 
 {% block content %}
+{% if request.user.is_lead_or_admin %}
+<a href="{% url 'core:event_legal_hold' event.pk %}" class="px-4 py-2 rounded-md text-sm font-medium border border-subtle text-ink-soft hover:bg-canvas">{% trans "Legal Hold verwalten" %}</a>
+{% endif %}
+
 <div class="max-w-2xl">
     {# Rücklink-Konvention (§7.3, Refs #1813 T4, #1802): Ziel und Label kommen aus core.nav. #}
     {% back_link %}

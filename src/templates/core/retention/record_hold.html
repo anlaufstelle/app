@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+{% block title %}{% trans "Legal Hold" %}: {{ target }} – Anlaufstelle{% endblock %}
+{% block content %}
+{% back_link %}
+<h1 class="text-xl font-bold mb-4">{% trans "Legal Hold" %}: {{ target }}</h1>
+<form method="post" class="card p-4 my-4 space-y-4">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="px-4 py-2 rounded-md text-sm font-semibold bg-accent text-white">{% trans "Legal Hold setzen" %}</button>
+</form>
+{% for hold in holds %}
+<div class="card p-4 mb-3">
+    <p>{{ hold.reason }}</p>
+    <p>{% trans "Gesetzt von" %}: {{ hold.created_by }} · {{ hold.created_at }}</p>
+    {% if hold.expires_at %}<p>{% trans "Ablaufdatum" %}: {{ hold.expires_at }}</p>{% endif %}
+    {% if hold.dismissed_at %}
+    <p>{% trans "Aufgehoben" %}: {{ hold.dismissed_at }} · {{ hold.dismissed_by }}</p>
+    {% else %}
+    <p>{% if hold.is_active %}{% trans "Aktiv" %}{% else %}{% trans "Abgelaufen" %}{% endif %}</p>
+    <form method="post" action="{% url dismiss_url_name target.pk hold.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="px-4 py-2 rounded-md text-sm font-medium border border-subtle text-ink-soft hover:bg-canvas">{% trans "Aufheben" %}</button>
+    </form>
+    {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

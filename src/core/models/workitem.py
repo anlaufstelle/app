@@ -227,6 +227,7 @@ class DeletionRequest(models.Model):
         related_name="incoming_merge_requests",
         verbose_name=_("Zusammenführungs-Ziel"),
     )
+    stage_downgrade = models.BooleanField(default=False, verbose_name=_("Herabstufungsantrag"))
     reason = models.TextField(verbose_name=_("Begründung"))
     status = models.CharField(
         max_length=20,
@@ -265,6 +266,10 @@ class DeletionRequest(models.Model):
         verbose_name_plural = _("Löschanträge")
         ordering = ["-created_at"]
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(stage_downgrade=False) | models.Q(target_type="Client", merge_into__isnull=True),
+                name="deletion_request_downgrade_client_only",
+            ),
             models.CheckConstraint(
                 condition=~models.Q(requested_by=models.F("reviewed_by")),
                 name="deletion_request_different_reviewer",

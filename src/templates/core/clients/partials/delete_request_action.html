@@ -13,9 +13,9 @@
 ein Merge-Antrag (gesetztes ``merge_into``) blockt denselben Slot.{% endcomment %}
 <span class="{{ action_class }} opacity-60 cursor-not-allowed"
       aria-disabled="true"
-      title="{% if pending_deletion_request.merge_into_id %}{% trans 'Ein Zusammenführungs-Antrag wartet bereits auf Bestätigung.' %}{% else %}{% trans 'Ein Löschantrag wartet bereits auf Bestätigung.' %}{% endif %}"
+      title="{% if pending_deletion_request.merge_into_id %}{% trans 'Ein Zusammenführungs-Antrag wartet bereits auf Bestätigung.' %}{% elif pending_deletion_request.stage_downgrade %}{% trans 'Ein Herabstufungsantrag wartet bereits auf Bestätigung.' %}{% else %}{% trans 'Ein Löschantrag wartet bereits auf Bestätigung.' %}{% endif %}"
       data-testid="client-delete-request-pending">
-    {% if pending_deletion_request.merge_into_id %}{% trans "Zusammenführungs-Antrag läuft" %}{% else %}{% trans "Löschantrag läuft" %}{% endif %}
+    {% if pending_deletion_request.merge_into_id %}{% trans "Zusammenführungs-Antrag läuft" %}{% elif pending_deletion_request.stage_downgrade %}{% trans "Herabstufungsantrag läuft" %}{% else %}{% trans "Löschantrag läuft" %}{% endif %}
 </span>
 {% else %}
 <a href="{% url 'core:client_delete_request' client.pk %}"

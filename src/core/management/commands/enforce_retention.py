@@ -7,6 +7,7 @@ and ``stdout``/``stderr`` formatting.
 
 import logging
 from dataclasses import dataclass
+from uuid import UUID
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -43,6 +44,7 @@ class _RetentionTotals:
     without threading five integers through the call.
     """
 
+    deferred: int = 0
     deleted: int = 0
     anonymized: int = 0
     trash_anonymized: int = 0
@@ -173,15 +175,22 @@ class Command(BaseCommand):
 
         # Refs #2425: each deleted event is carried into its monthly snapshot in
         # the transaction that deletes it (``core.retention.enforcement``).
-        totals.deleted += process_facility_retention(facility, settings_obj, now, dry_run)["count"]
+        events_result = process_facility_retention(facility, settings_obj, now, dry_run)
+        totals.deleted += events_result["count"]
+        totals.deferred += events_result.get("deferred", 0)
         totals.activities += enforce_activities(facility, settings_obj, now, dry_run)["count"]
         totals.handover_notes += enforce_handover_notes(facility, settings_obj, now, dry_run)["count"]
-        totals.anonymized += anonymize_clients(facility, dry_run)["count"]
+        deferred_client_ids: set[UUID] = set()
+        clients_result = anonymize_clients(facility, dry_run, deferred_ids=deferred_client_ids)
+        totals.anonymized += clients_result["count"]
         # Refs #626: Soft-deletete Personen aus dem Papierkorb anonymisieren,
         # sobald die client_trash_days-Frist abgelaufen ist.
         from core.services.client import anonymize_eligible_soft_deleted_clients
 
-        totals.trash_anonymized += anonymize_eligible_soft_deleted_clients(facility, settings_obj, dry_run=dry_run)
+        totals.trash_anonymized += anonymize_eligible_soft_deleted_clients(
+            facility, settings_obj, dry_run=dry_run, deferred_ids=deferred_client_ids
+        )
+        totals.deferred += len(deferred_client_ids)
         # Refs #1818: Faelle aus dem Papierkorb tilgen, sobald dieselbe
         # client_trash_days-Frist abgelaufen ist. Bewusst NACH dem Personen-Lauf:
         # anonymisiert der eine Schritt die ganze Person, sind ihre Faelle
@@ -229,6 +238,7 @@ class Command(BaseCommand):
         Would …`` block and writes no audit marker; a real pass prints the
         ``Soft-deleted …`` block and records the installation-wide LastRun event.
         """
+        self.stdout.write(f"Deferred {totals.deferred} event/person target(s) due to retention protection.")
         if dry_run:
             self.stdout.write(self.style.WARNING(f"[dry-run] Would soft-delete {totals.deleted} event(s) in total."))
             self.stdout.write(
@@ -288,6 +298,7 @@ class Command(BaseCommand):
             target_type="RetentionRun",
             detail={
                 "facilities": facilities.count(),
+                "deferred": totals.deferred,
                 "soft_deleted_events": totals.deleted,
                 "hard_deleted_activities": totals.activities,
                 "hard_deleted_handover_notes": totals.handover_notes,

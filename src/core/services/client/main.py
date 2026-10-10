@@ -931,20 +931,15 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     if old_stage is None:
         old_stage = client.contact_stage
 
-    # Security N2: Die Vier-Augen-Löschung qualifizierter (Art.-9-naher)
-    # Dokumentation (``EventDeleteView`` → ``request_deletion``) greift nur,
-    # solange der Klient ``QUALIFIED`` ist. Ein Herabstufen QUALIFIED→IDENTIFIED
-    # würde diese Eintrittsbedingung aushebeln — danach löschte eine einzelne
-    # Kraft das Event allein. Nur Leitung/Admin darf daher herabstufen; der
-    # Guard sitzt im Service-Layer (SSOT) und deckt so auch Nicht-Formular-
-    # Aufrufer (z.B. Offline-Replay) ab, nicht nur ``ClientUpdateView``.
-    new_contact_stage = fields.get("contact_stage", old_stage)
-    if (
-        old_stage == Client.ContactStage.QUALIFIED
-        and new_contact_stage != Client.ContactStage.QUALIFIED
-        and not user.is_lead_or_admin
-    ):
-        raise ValidationError(_("Nur die Leitung darf eine qualifizierte Person herabstufen."))
+    # Read the stage from the locked record, never from a caller's stale form.
+    new_contact_stage = fields.get("contact_stage", locked.contact_stage)
+    if locked.contact_stage == Client.ContactStage.QUALIFIED and new_contact_stage != locked.contact_stage:
+        if locked.events.exists():
+            raise ValidationError(
+                _("Bei vorhandenen Ereignissen ist ein Herabstufungsantrag mit Vier-Augen-Freigabe erforderlich.")
+            )
+        if not user.is_lead_or_admin:
+            raise ValidationError(_("Nur die Leitung darf eine qualifizierte Person herabstufen."))
 
     # Allowlist (Refs #734): Verhindert Mass-Assignment durch versehentlich
     # durchgereichte Felder (z.B. ``facility``, ``id``, ``created_at``). Liste
@@ -1351,6 +1346,8 @@ def approve_client_deletion(deletion_request, reviewer):
     # blosser Loeschantrag genehmigt werden — die Quelle landete im
     # Papierkorb, ohne dass irgendetwas zum Ziel wandert. Genehmigung nur
     # ueber ``approve_client_merge`` (services/client/merge.py).
+    if deletion_request.stage_downgrade:
+        raise ValidationError(_("Dies ist ein Herabstufungsantrag — bitte den Herabstufungs-Weg verwenden."))
     if deletion_request.merge_into_id is not None:
         raise ValidationError(
             _("Dies ist ein Zusammenführungs-Antrag — er wird über den Zusammenführungs-Weg entschieden.")
@@ -1435,6 +1432,8 @@ def reject_client_deletion(deletion_request, reviewer):
     # Refs #1876: Merge-Antraege werden ueber ``reject_client_merge``
     # abgelehnt — jener Weg schreibt die ``DELETION_REJECTED``-Zeile mit
     # Merge-Kontext; hier fiele sie still unter den Tisch.
+    if deletion_request.stage_downgrade:
+        raise ValidationError(_("Dies ist ein Herabstufungsantrag — bitte den Herabstufungs-Weg verwenden."))
     if deletion_request.merge_into_id is not None:
         raise ValidationError(
             _("Dies ist ein Zusammenführungs-Antrag — er wird über den Zusammenführungs-Weg entschieden.")
@@ -1640,6 +1639,7 @@ def anonymize_client_now(client, user):
     _lock_client_case_rows(locked)
     _lock_client_event_rows(locked)
 
+    assert_processing_allowed(locked, lock=True)
     if client_has_active_hold(locked):
         raise ValidationError(
             _("Für diese Person besteht eine Aufbewahrungssperre (Legal Hold) — Anonymisierung nicht möglich.")
@@ -1656,7 +1656,7 @@ def anonymize_client_now(client, user):
     return locked
 
 
-def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=False):
+def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=False, deferred_ids=None):
     """Anonymisiert soft-deletete Personen, deren Papierkorb-Frist abgelaufen ist.
 
     Aufruf aus enforce_retention. Findet alle Clients in dieser Facility
@@ -1694,6 +1694,9 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
         ),
         facility,
     )
+    if deferred_ids is not None:
+        deferred_ids.update(qs.filter(processing_restricted=True).values_list("pk", flat=True))
+    qs = qs.filter(processing_restricted=False)
     if dry_run:
         return qs.count()
 
@@ -1736,6 +1739,10 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
             # (``_lock_client_case_rows``).
             _lock_client_case_rows(client)
             _lock_client_event_rows(client)
+            if client.processing_restricted:
+                if deferred_ids is not None:
+                    deferred_ids.add(client.pk)
+                continue
             if client_has_active_hold(client):
                 continue
             anonymize_client(client, user=None)

@@ -58,6 +58,7 @@ from core.views.client_deletion import (
     ClientTrashView,
 )
 from core.views.client_merge import ClientMergeView, ClientSimilarHintView, ClientUnmergeView
+from core.views.client_stage_downgrade import ClientStageDowngradeView
 from core.views.clients import (
     ClientAutocompleteView,
     ClientCreateView,
@@ -100,6 +101,7 @@ from core.views.import_wizard import (
     ImportMappingView,
     ImportPreviewView,
 )
+from core.views.legal_holds import RecordLegalHoldView
 from core.views.lockout_recovery import (
     LockoutRecoveryBackupCodeView,
     LockoutRecoveryConfirmView,
@@ -166,6 +168,25 @@ from core.views.zeitstrom import (
 app_name = "core"
 
 urlpatterns = [
+    path("clients/<uuid:pk>/stage-downgrade/", ClientStageDowngradeView.as_view(), name="client_stage_downgrade"),
+    path("clients/<uuid:pk>/legal-hold/", RecordLegalHoldView.as_view(target_type="Client"), name="client_legal_hold"),
+    path(
+        "clients/<uuid:pk>/legal-hold/<uuid:hold_pk>/dismiss/",
+        RecordLegalHoldView.as_view(target_type="Client", dismiss=True),
+        name="client_legal_hold_dismiss",
+    ),
+    path("cases/<uuid:pk>/legal-hold/", RecordLegalHoldView.as_view(target_type="Case"), name="case_legal_hold"),
+    path(
+        "cases/<uuid:pk>/legal-hold/<uuid:hold_pk>/dismiss/",
+        RecordLegalHoldView.as_view(target_type="Case", dismiss=True),
+        name="case_legal_hold_dismiss",
+    ),
+    path("events/<uuid:pk>/legal-hold/", RecordLegalHoldView.as_view(target_type="Event"), name="event_legal_hold"),
+    path(
+        "events/<uuid:pk>/legal-hold/<uuid:hold_pk>/dismiss/",
+        RecordLegalHoldView.as_view(target_type="Event", dismiss=True),
+        name="event_legal_hold_dismiss",
+    ),
     # Zeitstrom (Startseite)
     path("", ZeitstromView.as_view(), name="zeitstrom"),
     # Rollenbezogene Arbeitszentrale (Refs #920)

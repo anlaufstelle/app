@@ -13,10 +13,7 @@
 {% include "core/system/_subnav.html" %}
 
 <section class="mb-4 card p-4 text-[13px] text-ink-muted">
-    {% blocktrans %}
-    Cross-Facility-Übersicht aller Legal Holds. Read-Only — Anlegen und Aufheben von Legal
-    Holds erfolgt im Facility-Kontext der jeweiligen Einrichtung.
-    {% endblocktrans %}
+    {% trans "Übersicht aller Legal Holds. Aufheben ist hier durch die Systemverwaltung möglich; Setzen erfolgt in der jeweiligen Akte." %}
 </section>
 
 {# Filter form #}
@@ -89,6 +86,8 @@
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-800">
                             {% trans "Aufgehoben" %}
                         </span>
+                    {% elif not hold.is_active %}
+                        <span>{% trans "Abgelaufen" %}</span>
                     {% else %}
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-blue-100 text-blue-800">
                             {% trans "Aktiv" %}
@@ -100,6 +99,11 @@
                         {{ hold.expires_at|date:"DATE_FORMAT" }}
                     {% else %}
                         <span class="text-ink-muted">–</span>
+                    {% endif %}
+                    {% if not hold.dismissed_at %}
+                    <form method="post" action="{% url 'core:system_legal_hold_dismiss' hold.pk %}">
+                        {% csrf_token %}<button type="submit" class="px-4 py-2 rounded-md text-sm font-medium border border-subtle text-ink-soft hover:bg-canvas">{% trans "Aufheben" %}</button>
+                    </form>
                     {% endif %}
                 </td>
             </tr>

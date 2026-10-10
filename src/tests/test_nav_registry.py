@@ -74,7 +74,8 @@ NAV_ROUTE_PREFIXES = (
 # #2040 ergänzt die Withdraw-Route des eigenen Löschantrags: 173 -> 174.
 # #2505 removes the two statistics PDF special routes: 176 -> 174.
 # #2521 adds the contact list route core:event_list: 174 -> 175.
-_EXPECTED_TOTAL_PATTERNS = 175
+# #2524 adds record protection and downgrade routes: 175 -> 183.
+_EXPECTED_TOTAL_PATTERNS = 183
 
 
 def _prefixed_route_names() -> dict[str, str]:

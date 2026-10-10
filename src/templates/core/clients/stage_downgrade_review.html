@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+{% block title %}{% trans "Herabstufungsantrag prüfen" %} – Anlaufstelle{% endblock %}
+{% block content %}
+{% back_link %}
+<h1 class="text-xl font-bold mb-4">{% trans "Herabstufungsantrag prüfen" %}</h1>
+{% if client %}<p>{{ client.pseudonym }}</p>{% endif %}
+<p>{% trans "Beantragt von" %}: {{ deletion_request.requested_by }}</p>
+<p>{{ deletion_request.reason }}</p>
+<p>{% trans "Die Freigabe ändert die Kontaktstufe auf „Nur Pseudonym“. Dadurch gelten kürzere Aufbewahrungsfristen für vorhandene Ereignisse." %}</p>
+{% if deletion_request.status == "pending" %}
+<form method="post" class="my-4 flex gap-3">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <button name="action" value="approve" class="px-4 py-2 rounded-md text-sm font-semibold bg-accent text-white">{% trans "Freigeben" %}</button>
+    <button name="action" value="reject" class="px-4 py-2 rounded-md text-sm font-medium border border-subtle text-ink-soft hover:bg-canvas">{% trans "Ablehnen" %}</button>
+</form>
+{% else %}<p>{{ deletion_request.get_status_display }}</p>{% endif %}
+{% endblock %}

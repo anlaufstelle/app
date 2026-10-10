@@ -137,6 +137,71 @@ class FacilityScopedManager(models.Manager):
         return self.get_queryset().deleted()
 
 
+class ClientQuerySet(FacilityScopedQuerySet):
+    """Prevent bulk writes from bypassing the four-eyes contact-stage workflow."""
+
+    def bulk_create(
+        self,
+        objs,
+        batch_size=None,
+        ignore_conflicts=False,
+        update_conflicts=False,
+        update_fields=None,
+        unique_fields=None,
+    ):
+        if update_conflicts and "contact_stage" in (update_fields or ()):
+            raise ValidationError(_("Kontaktstufen dürfen nicht über einen Bulk-Upsert geändert werden."))
+        return super().bulk_create(
+            objs,
+            batch_size=batch_size,
+            ignore_conflicts=ignore_conflicts,
+            update_conflicts=update_conflicts,
+            update_fields=update_fields,
+            unique_fields=unique_fields,
+        )
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        if "contact_stage" not in fields:
+            return super().bulk_update(objs, fields, batch_size=batch_size)
+        # Keep every batch in the same global person-lock order.
+        objs = sorted(objs, key=lambda obj: str(obj.pk))
+        # Django uses savepoint=False internally; contain a refused batch here.
+        with transaction.atomic(using=self.db):
+            return super().bulk_update(objs, fields, batch_size=batch_size)
+
+    def update(self, **kwargs):
+        if "contact_stage" not in kwargs:
+            return super().update(**kwargs)
+        stage = kwargs["contact_stage"]
+        expression = stage if hasattr(stage, "resolve_expression") else models.Value(stage)
+        with transaction.atomic(using=self.db):
+            # Use a plain outer query to lock person rows without joined children.
+            locked_ids = list(
+                self.model._base_manager.using(self.db)
+                .filter(pk__in=self.values("pk"))
+                .order_by("pk")
+                .select_for_update()
+                .values_list("pk", flat=True)
+            )
+            if (
+                self.filter(pk__in=locked_ids, contact_stage="qualified", events__isnull=False)
+                .annotate(requested_stage=expression)
+                .exclude(requested_stage=models.F("contact_stage"))
+                .exists()
+            ):
+                raise ValidationError(
+                    _("Bei vorhandenen Ereignissen ist ein Herabstufungsantrag mit Vier-Augen-Freigabe erforderlich.")
+                )
+            return super().update(**kwargs)
+
+
+class ClientManager(FacilityScopedManager):
+    """Facility scoping plus the guard for bulk contact-stage changes."""
+
+    def get_queryset(self):
+        return ClientQuerySet(self.model, using=self._db)
+
+
 class AttachmentQuerySet(FacilityScopedQuerySet):
     """QuerySet fuer ``Attachment`` — Soft-Delete via ``deleted_at``.
 
