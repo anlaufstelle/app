@@ -240,11 +240,11 @@ _CASE_OPEN = """
 # ``get_object_or_404(..., document_type=doc_type)``). Deshalb wird der Typ
 # zuerst geerntet und die Kind-Queries pinnen sich per %(doc_type_contact)s.
 #
-# Die vier Bedingungen sind NICHT kosmetisch:
+# Die Bedingungen sind NICHT kosmetisch:
 #
-# * ``core_fieldgroup``/mindestens 3 Feld-Zuordnungen — sonst haetten
-#   ``field_group`` bzw. ``doc_type_field`` kein Objekt (zwei DTFs traegt schon
-#   die Bedingung, die dritte ist die frei konsumierbare Zuordnung).
+# * mindestens 3 Feld-Zuordnungen — sonst haetten ``field_group`` bzw.
+#   ``doc_type_field`` kein Objekt (zwei DTFs traegt schon die Bedingung, die
+#   dritte ist die frei konsumierbare Zuordnung).
 # * mindestens ein Ereignis — ``config_doctype_delete`` POST laeuft in der
 #   Matrix als ERLAUBTE Zelle (facility_admin steht in ``ROLES`` an erster
 #   Stelle). Nur mit Bestandsreferenz greift der PROTECT-Blocker
@@ -253,10 +253,16 @@ _CASE_OPEN = """
 #   der Report waere voller Falschmeldungen.
 # * mindestens ein zulaessiges Quellfeld — Voraussetzung fuer die Bedingung,
 #   die ``prepare_audit_objects`` anlegt (der Seed-Katalog kennt keine).
+#
+# Eine Feldgruppe ist KEINE Auswahlbedingung mehr: nur das Paket ``default``
+# deklariert Gruppen, die zweite Einrichtung (``beratungsstelle``) keine —
+# mit der Bedingung als Filter fand der Anker dort nie einen Typ und alle
+# ``config_*``-IDOR-Zellen blieben ungemessen. Stattdessen bevorzugt die
+# Sortierung einen Typ MIT Gruppe, und ``_ENSURE_CONFIG_FIELD_GROUP`` legt dem
+# gewaehlten Typ bei Bedarf eine an.
 _CONFIG_DOC_TYPE = """
     SELECT dt.id FROM core_documenttype dt
     WHERE dt.facility_id = %(fac)s
-      AND EXISTS (SELECT 1 FROM core_fieldgroup g WHERE g.document_type_id = dt.id)
       AND EXISTS (SELECT 1 FROM core_event e WHERE e.document_type_id = dt.id)
       AND (SELECT count(*) FROM core_documenttypefield f WHERE f.document_type_id = dt.id) >= 3
       AND EXISTS (
@@ -264,7 +270,8 @@ _CONFIG_DOC_TYPE = """
           JOIN core_fieldtemplate t ON t.id = f.field_template_id
           WHERE f.document_type_id = dt.id AND t.field_type <> 'file' AND NOT t.is_encrypted
       )
-    ORDER BY dt.id LIMIT 1
+    ORDER BY EXISTS (SELECT 1 FROM core_fieldgroup g WHERE g.document_type_id = dt.id) DESC, dt.id
+    LIMIT 1
 """
 
 # Quell-/Zielfeld der Audit-Bedingung: das Quellfeld muss ein zulaessiger
@@ -284,6 +291,18 @@ _CONDITION_TARGET_FIELD = f"""
     WHERE f.document_type_id = ({_CONFIG_DOC_TYPE})
       AND f.id <> ({_CONDITION_SOURCE_FIELD})
     ORDER BY f.id LIMIT 1
+"""  # noqa: S608 — nur statische Fragmente, keine Userdaten.
+
+# Nur das Paket ``default`` traegt Feldgruppen. Fehlt dem Anker die Gruppe
+# (zweite Einrichtung), entstuende fuer ``field_group`` nie ein Objekt und die
+# ``config_fieldgroup_*``-IDOR-Zellen blieben ungemessen. Idempotent ueber
+# NOT EXISTS auf denselben Dokumentationstyp; die Feld-Zuordnungen bleiben
+# unveraendert ohne Gruppe.
+_ENSURE_CONFIG_FIELD_GROUP = f"""
+    INSERT INTO core_fieldgroup (id, document_type_id, name, slug, sort_order, is_collapsible)
+    SELECT gen_random_uuid(), anchor.id, 'Audit-Gruppe', 'audit-gruppe', 0, false
+    FROM ({_CONFIG_DOC_TYPE}) AS anchor(id)
+    WHERE NOT EXISTS (SELECT 1 FROM core_fieldgroup g WHERE g.document_type_id = anchor.id)
 """  # noqa: S608 — nur statische Fragmente, keine Userdaten.
 
 # Der Seed-Katalog (core/packages/default.yaml) deklariert KEINE ``conditions``
@@ -330,6 +349,32 @@ _ENSURE_RECTIFICATION_REQUEST = """
         SELECT 1 FROM core_rectificationrequest
         WHERE facility_id = %(fac)s AND status = 'pending'
     )
+"""
+
+
+# Import-Lauf (core:import_*): der Seed legt keinen an, ohne diesen Schritt
+# waeren alle sieben Import-Endpoints samt IDOR-Probe unerntbar. Der Lauf steht
+# bewusst auf ``uploaded`` ohne Quelldatei (``storage_filename`` leer): die
+# Zuordnungs-/Vorschau-/Uebernahme-Views passieren damit Rollen-Gate und
+# Objekt-Scope und antworten dann mit der fachlichen Fehlermeldung (Redirect auf
+# die Detailseite) — es entsteht weder Klartext noch eine Datei auf der Disk.
+# Anleger ist der erste facility_admin der Einrichtung (``created_by`` ist
+# nullable, die Subquery darf also auch leer bleiben). Idempotent: nur wenn die
+# Einrichtung keinen offenen Lauf hat.
+_ENSURE_IMPORT_JOB = """
+    INSERT INTO core_importjob
+        (id, facility_id, created_by_id, target_type, document_type_id, status,
+         storage_filename, original_filename_encrypted, mapping_json, result_json,
+         created_at, updated_at)
+    SELECT gen_random_uuid(), %(fac)s,
+           (SELECT u.id FROM core_user u
+            WHERE u.facility_id = %(fac)s AND u.role = 'facility_admin' ORDER BY u.id LIMIT 1),
+           'client', NULL, 'uploaded', '', '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, now(), now()
+    WHERE EXISTS (SELECT 1 FROM core_facility WHERE id = %(fac)s)
+      AND NOT EXISTS (
+          SELECT 1 FROM core_importjob
+          WHERE facility_id = %(fac)s AND status NOT IN ('committed', 'aborted')
+      )
 """
 
 
@@ -405,10 +450,14 @@ def prepare_audit_objects(conn, fac_id):
        fail-closed 404, ADR-039 §12 Stufe 2), dann den Anhang umhängen —
        Muster von Schritt 3. Idempotent: nach dem ersten Lauf sind Quelle und
        Ziel identisch, beide UPDATEs werden zu No-ops.
-    9. Eine ``FieldCondition`` am Konfigurations-Anker (M24-Folge, Refs #1783):
-       der Seed-Katalog deklariert keine ``conditions``, die vier
-       Regel-Editor-Endpoints wären ohne diesen Schritt dauerhaft
-       unerntbar. Siehe ``_ENSURE_CONFIG_CONDITION``.
+    9. Eine ``FieldGroup`` (falls der Anker keine trägt) und eine
+       ``FieldCondition`` am Konfigurations-Anker (M24-Folge, Refs #1783):
+       der Seed-Katalog deklariert keine ``conditions`` und nur das Paket
+       ``default`` Gruppen — die Regel-Editor- und Gruppen-Endpoints wären
+       ohne diesen Schritt dauerhaft unerntbar. Siehe
+       ``_ENSURE_CONFIG_FIELD_GROUP``/``_ENSURE_CONFIG_CONDITION``.
+    10./11. Ein offener Berichtigungsantrag und ein offener Importlauf
+       (``_ENSURE_RECTIFICATION_REQUEST``/``_ENSURE_IMPORT_JOB``).
     """
     cur = _superuser_cursor(conn)
     params = {"fac": fac_id}
@@ -567,10 +616,14 @@ def prepare_audit_objects(conn, fac_id):
             """,  # noqa: S608
             params,
         )
-    # 9. Feldbedingung am Konfigurations-Anker (Refs #1783).
+    # 9. Feldgruppe und Feldbedingung am Konfigurations-Anker (Refs #1783).
+    #    Die Gruppe zuerst: nur das Paket ``default`` traegt welche.
+    cur.execute(_ENSURE_CONFIG_FIELD_GROUP, params)
     cur.execute(_ENSURE_CONFIG_CONDITION, params)
     # 10. Offener Berichtigungsantrag (M4, Refs #1060).
     cur.execute(_ENSURE_RECTIFICATION_REQUEST, params)
+    # 11. Offener Importlauf (core:import_*).
+    cur.execute(_ENSURE_IMPORT_JOB, params)
 
 
 # SQL pro Fixture-Name aus der Erwartungs-Tabelle. %(fac)s = Facility-ID.
@@ -733,10 +786,10 @@ HARVEST_SQL = {
         "SELECT id FROM core_deletionrequest WHERE facility_id = %(fac)s AND status = 'pending' ORDER BY id LIMIT 1"
     ),
     # --- M4 Import (Refs #1060) -------------------------------------------
-    # Ein noch nicht abgeschlossener Lauf; der Seed legt keinen an, die Query
-    # liefert dann ``None`` (SETUP-ERROR-Zelle im Live-Audit) — der Eintrag ist
-    # trotzdem Pflicht, sonst zeigen die sieben import_*-Erwartungen ins Leere
-    # (``test_every_fixture_reference_is_live_harvestable``).
+    # Ein noch nicht abgeschlossener Lauf; der Seed legt keinen an —
+    # ``prepare_audit_objects`` Schritt 11 (``_ENSURE_IMPORT_JOB``) garantiert
+    # ihn. Der Eintrag ist Pflicht, sonst zeigen die sieben import_*-Erwartungen
+    # ins Leere (``test_every_fixture_reference_is_live_harvestable``).
     "import_job": (
         "SELECT id FROM core_importjob WHERE facility_id = %(fac)s "
         "AND status NOT IN ('committed', 'aborted') ORDER BY id LIMIT 1"

@@ -116,6 +116,25 @@ def medium_seed(request, base_url):
     if result.returncode != 0:
         raise RuntimeError(f"seed --scale medium fehlgeschlagen:\n{result.stdout}\n{result.stderr}")
 
+    # Owner attachments for facilities whose catalog has no ``anhang`` template
+    # (second facility): the cross-facility download probes need real objects.
+    owner_files = subprocess.run(
+        [
+            python,
+            "src/manage.py",
+            "shell",
+            "-c",
+            "from tests.e2e._authz_audit_owner_files import ensure_owner_attachments; ensure_owner_attachments()",
+        ],
+        cwd=helpers.REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if owner_files.returncode != 0:
+        raise RuntimeError(f"owner attachments failed:\n{owner_files.stdout}\n{owner_files.stderr}")
+
 
 @pytest.fixture(scope="module")
 def audit_context(base_url, medium_seed):

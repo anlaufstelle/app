@@ -206,6 +206,60 @@ class TestLiveAuditHarvestQueriesRunAgainstTheSchema:
             cursor.execute(helpers._ENSURE_CONFIG_CONDITION, self._PARAMS)
             assert cursor.rowcount == 0, "Platzhalter-Facility duerfte keine Bedingung erzeugen"
 
+    def test_ensure_group_and_import_job_are_valid_sql(self):
+        """Die beiden weiteren INSERTs von ``prepare_audit_objects``."""
+        for name in ("_ENSURE_CONFIG_FIELD_GROUP", "_ENSURE_IMPORT_JOB"):
+            with connection.cursor() as cursor:
+                cursor.execute(getattr(helpers, name), self._PARAMS)
+                assert cursor.rowcount == 0, f"{name}: Platzhalter-Facility duerfte nichts erzeugen"
+
+
+@pytest.mark.django_db
+class TestPrepareAuditObjectsEnsuresTheAnchors:
+    """Der Live-Audit misst Import- und Konfigurations-Zellen nur mit Objekten.
+
+    Die zweite Einrichtung des ``medium``-Seeds nutzt ein Paket ohne
+    Feldgruppen und legt keinen Importlauf an; ohne diese Schritte blieben
+    ``core:import_*`` und die ``config_*``-IDOR-Zellen ungemessen.
+    """
+
+    def _prepare(self, facility):
+        helpers.prepare_audit_objects(connection, facility.pk)
+        return helpers.harvest_ids(connection, facility.pk)
+
+    def test_creates_one_open_import_job_for_the_facility(self, facility, admin_user):
+        from core.models import ImportJob
+
+        ids = self._prepare(facility)
+        self._prepare(facility)
+
+        jobs = list(ImportJob.objects.for_facility(facility))
+        assert [job.pk for job in jobs] == [ids["import_job"]]
+        assert jobs[0].status == ImportJob.Status.UPLOADED
+        assert jobs[0].storage_filename == ""
+        assert jobs[0].created_by_id == admin_user.pk
+
+    def test_adds_a_field_group_when_the_anchor_has_none(self, facility, sample_event, doc_type_field):
+        from core.models import FieldGroup
+
+        assert not FieldGroup.objects.filter(document_type=doc_type_field.document_type).exists()
+        ids = self._prepare(facility)
+        self._prepare(facility)
+
+        groups = FieldGroup.objects.filter(document_type=doc_type_field.document_type)
+        assert [group.pk for group in groups] == [ids["field_group"]]
+        assert ids["doc_type_contact"] == doc_type_field.document_type_id
+        assert ids["field_condition"] is not None
+
+    def test_keeps_an_existing_field_group(self, facility, sample_event, doc_type_field, field_group):
+        from core.models import FieldGroup
+
+        ids = self._prepare(facility)
+
+        assert list(FieldGroup.objects.filter(document_type=field_group.document_type)) == [field_group]
+        assert ids["field_group"] == field_group.pk
+
+
 class TestAuditReportPath:
     """Der Audit darf keinen versionierten Bericht überschreiben."""
 
