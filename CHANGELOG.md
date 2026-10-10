@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **Testprämissen und Release-Testprofile** (#2531) — Leere Parametersätze und fehlendes ShellCheck scheitern ausdrücklich; das gepinnte Dev-Werkzeug, Demo-Gate, xfail-feste Public-Skip-Zuordnung und eintragsbezogene Archivprüfung samt CHANGELOG-Abgleich sichern die Testabnahme.
+- **Testprämissen und Release-Testprofile** (#2531) — Leere Parametersätze und fehlendes ShellCheck scheitern ausdrücklich; das gepinnte Dev-Werkzeug, Demo-Gate, xfail-feste Public-Skip-Zuordnung und eintragsbezogene Archivprüfung samt CHANGELOG-Abgleich sichern die Testabnahme. Die Browser-Specs für Zeitstrom-Aktivitätskarten, mobilen Ziel-Umschalter, Audit-Paginierung und Sammelaktionen stellen ihre Vorbedingung selbst her oder scheitern hart, statt bei fehlendem Seed-Treffer zu überspringen; Karten tragen dafür stabile `data-testid`-Attribute. Das Demo-Gate läuft mit neun Tests grün.
 - **Solo-Demo ohne Zeitfenster** (#2506) — Die Beratungspraxis Lindenhof wird ohne Zeitfenster geseedet; die Zeitfenster der übrigen Demo-Einrichtungen bleiben erhalten.
 
 ### Added
