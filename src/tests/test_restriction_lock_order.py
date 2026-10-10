@@ -54,7 +54,9 @@ def _first_index(sequence, table):
 #: Exact query count for an update without a new client assignment.
 #: Refs #2525 adds facility discovery, advisory-key ordering, the shared gate
 #: and facility existence validation before the unchanged person/task locks.
-EXPECTED_UPDATE_WORKITEM_QUERIES = 20
+#: Refs #2524 adds business activity: one snapshot read, one feed lookup and
+#: two scoped case updates (16 + 4 + 4 = 24).
+EXPECTED_UPDATE_WORKITEM_QUERIES = 24
 
 
 @pytest.mark.django_db(transaction=False)
