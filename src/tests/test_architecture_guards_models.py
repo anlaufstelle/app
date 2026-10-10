@@ -1745,7 +1745,15 @@ class TestFacilityBaselineGuard:
 
 
 _CONFIGURATION_MODELS = {"DocumentType", "FieldTemplate", "DocumentTypeField", "FieldGroup"}
-_CONFIGURATION_OPERATIONS = {"select_for_update", "update", "bulk_update", "bulk_create", "delete"}
+_CONFIGURATION_OPERATIONS = {
+    "select_for_update",
+    "update",
+    "bulk_update",
+    "bulk_create",
+    "delete",
+    "update_or_create",
+    "get_or_create",
+}
 
 
 def _configuration_root(node):
@@ -1755,11 +1763,11 @@ def _configuration_root(node):
     return node.id if isinstance(node, ast.Name) else None
 
 
-def _is_exclusive_configuration_gate(node):
+def _is_exclusive_configuration_gate(node, *, entered=False):
     if not isinstance(node, ast.Call):
         return False
     name = node.func.id if isinstance(node.func, ast.Name) else None
-    return name == "configuration_write" or (
+    return (entered and name == "configuration_write") or (
         name in {"lock_dynamic_protection", "lock_dynamic_protection_many"}
         and any(
             keyword.arg == "exclusive" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True
@@ -1768,12 +1776,55 @@ def _is_exclusive_configuration_gate(node):
     )
 
 
+def _configuration_call_is_gated(node, function, parents):
+    """Require an enclosing entered context or an earlier immediate lock."""
+    current = node
+    while current is not function:
+        parent = parents[current]
+        if isinstance(parent, (ast.With, ast.AsyncWith)) and current in parent.body:
+            if any(_is_exclusive_configuration_gate(item.context_expr, entered=True) for item in parent.items):
+                return True
+        for attribute in ("body", "orelse", "finalbody"):
+            siblings = getattr(parent, attribute, [])
+            if current in siblings and any(
+                isinstance(previous, ast.Expr) and _is_exclusive_configuration_gate(previous.value)
+                for previous in siblings[: siblings.index(current)]
+            ):
+                return True
+        current = parent
+    return False
+
+
+def _configuration_local_sql(node, constants):
+    """Resolve string literals, local constant aliases and literal concatenation."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return constants.get(node.id)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _configuration_local_sql(node.left, constants)
+        right = _configuration_local_sql(node.right, constants)
+        if left is not None and right is not None:
+            return left + right
+    return None
+
+
 def find_ungated_configuration_writes(source):
     """Find direct ORM/SQL configuration writes outside an exclusive gate.
 
     Model save hooks are a separate contract. This guard covers low-level
-    operations that bypass those hooks, including local queryset aliases.
-    Private helpers delegated to a gated entry are checked at their callers.
+    operations that bypass or precede those hooks, including annotated local
+    queryset aliases, upserts and local literal SQL constants. Context managers
+    count only inside their entered ``with`` body; immediate lock calls must
+    precede the write in the same enclosing statement block. Private helpers
+    delegated to a gated entry are checked at their callers.
+
+    This is a lexical guard, not a control-flow or interprocedural proof. It
+    cannot resolve dynamically constructed model/SQL/gate names, returned
+    querysets or arbitrary wrappers, nor prove facility arguments, transaction
+    lifetime, conditional exits or lock upgrades. Runtime races cover those
+    contracts. Qualified model/gate receivers and module-level SQL constants
+    also need separate review. Nested functions keep separate local alias scopes.
     """
     tree = ast.parse(source)
     aliases = set(_CONFIGURATION_MODELS)
@@ -1784,9 +1835,28 @@ def find_ungated_configuration_writes(source):
     writes = []
     for function in (node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))):
         query_aliases = set(aliases)
+        sql_constants = {}
         for node in sorted(ast.walk(function), key=lambda item: getattr(item, "lineno", 0)):
-            if isinstance(node, ast.Assign) and _configuration_root(node.value) in query_aliases:
-                query_aliases.update(target.id for target in node.targets if isinstance(target, ast.Name))
+            owner = node
+            while owner is not function and owner in parents:
+                owner = parents[owner]
+                if isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    break
+            if owner is not function:
+                continue
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                names = {target.id for target in targets if isinstance(target, ast.Name)}
+                is_configuration = _configuration_root(node.value) in query_aliases
+                constant = _configuration_local_sql(node.value, sql_constants)
+                query_aliases.difference_update(names)
+                if is_configuration:
+                    query_aliases.update(names)
+                for name in names:
+                    if constant is None:
+                        sql_constants.pop(name, None)
+                    else:
+                        sql_constants[name] = constant
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
                 continue
             direct_orm = (
@@ -1796,58 +1866,92 @@ def find_ungated_configuration_writes(source):
                 node.func.attr in {"execute", "executemany"}
                 and node.args
                 and any(
-                    isinstance(part, ast.Constant)
-                    and isinstance(part.value, str)
-                    and re.search(r"\b(?:UPDATE|INSERT|DELETE|FOR\s+UPDATE)\b", part.value, re.I)
-                    and re.search(
-                        r"\bcore_(?:documenttype|fieldtemplate|documenttypefield|fieldgroup)\b", part.value, re.I
-                    )
+                    (sql := _configuration_local_sql(part, sql_constants)) is not None
+                    and re.search(r"\b(?:UPDATE|INSERT|DELETE|FOR\s+UPDATE)\b", sql, re.I)
+                    and re.search(r"\bcore_(?:documenttype|fieldtemplate|documenttypefield|fieldgroup)\b", sql, re.I)
                     for part in ast.walk(node.args[0])
                 )
             )
             if not (direct_orm or raw_sql):
                 continue
-            current = node
-            gated = False
-            while current is not function:
-                parent = parents[current]
-                if isinstance(parent, ast.With) and current in parent.body:
-                    gated |= any(_is_exclusive_configuration_gate(item.context_expr) for item in parent.items)
-                for attribute in ("body", "orelse", "finalbody"):
-                    siblings = getattr(parent, attribute, [])
-                    if current in siblings:
-                        gated |= any(
-                            isinstance(previous, ast.Expr) and _is_exclusive_configuration_gate(previous.value)
-                            for previous in siblings[: siblings.index(current)]
-                        )
-                current = parent
-            if not gated:
+            if not _configuration_call_is_gated(node, function, parents):
                 writes.append((function.name, node.lineno))
     return writes
 
 
+def find_hook_gated_configuration_upserts(source, hook_sources):
+    """Verify explicitly registered get-or-create delegates against save hooks.
+
+    Get-or-create reads before creation; its create path enters the model save
+    hook without an earlier row lock. Update-or-create locks first and is never
+    covered here. Ordinary source snippets still require a visible outer gate.
+    """
+    gated_models = set()
+    for model, hook_source in hook_sources.items():
+        tree = ast.parse(hook_source)
+        function = tree.body[0]
+        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+        persistence = [
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Yield)
+            or (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "save"
+                and _configuration_root(node.func.value) == "super"
+            )
+        ]
+        if persistence and all(_configuration_call_is_gated(node, function, parents) for node in persistence):
+            gated_models.add(model)
+    return [
+        (function.name, node.lineno)
+        for function in ast.walk(ast.parse(source))
+        if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef))
+        for node in ast.walk(function)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "get_or_create"
+        and _configuration_root(node.func.value) in gated_models
+    ]
+
+
 def test_runtime_configuration_writers_require_an_exclusive_gate():
+    import inspect
+    from textwrap import dedent
+
+    from core.models import DocumentType, DocumentTypeField
+
     root = Path(__file__).resolve().parents[1] / "core"
     delegated = {
         ("packages/loader.py", "_apply_conditions"): ("load_package", "_apply_package"),
         ("seed/doc_types.py", "_delete_orphan_field_groups"): ("seed_document_types",),
     }
+    hook_delegates = {
+        ("seed/attachments.py", "_owner_doc_type"): {
+            "DocumentType": dedent(inspect.getsource(DocumentType._save_context)),
+            "DocumentTypeField": dedent(inspect.getsource(DocumentTypeField.save)),
+        },
+    }
     violations = []
     for path in sorted(root.rglob("*.py")):
         if "migrations" in path.relative_to(root).parts or path == root / "services/dynamic_protection.py":
-            # Historical migrations have no live writers; the canonical gate
-            # itself owns the raw configuration row locks after all gates.
+            # Historical migrations have no live writers. The canonical gate's
+            # lock acquisition is checked separately by real database races.
             continue
         source = path.read_text()
         relative = path.relative_to(root).as_posix()
         for function, line in find_ungated_configuration_writes(source):
+            hooks = hook_delegates.get((relative, function))
+            if hooks and (function, line) in find_hook_gated_configuration_upserts(source, hooks):
+                continue
             callers = delegated.get((relative, function))
             if callers:
                 tree = ast.parse(source)
                 entry = next(
                     node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == callers[0]
                 )
-                gate_calls = [node for node in ast.walk(entry) if _is_exclusive_configuration_gate(node)]
+                parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
                 called = [
                     node
                     for node in ast.walk(entry)
@@ -1855,11 +1959,7 @@ def test_runtime_configuration_writers_require_an_exclusive_gate():
                     and isinstance(node.func, ast.Name)
                     and node.func.id == (callers[1] if len(callers) > 1 else function)
                 ]
-                if (
-                    gate_calls
-                    and called
-                    and min(node.lineno for node in gate_calls) < min(node.lineno for node in called)
-                ):
+                if called and all(_configuration_call_is_gated(node, entry, parents) for node in called):
                     continue
             violations.append(f"{relative}:{line}: {function}")
     assert not violations, "Configuration writes without an exclusive gate:\n" + "\n".join(violations)
@@ -1881,3 +1981,111 @@ def test_configuration_guard_detects_raw_sql_and_rejects_shared_gates():
     cursor.execute("UPDATE core_documenttype SET is_active = false")
 """
     assert find_ungated_configuration_writes(source) == [("write", 3)]
+
+
+def test_configuration_guard_rejects_ordinary_ungated_writers():
+    cases = {
+        "annotated_queryset_update": (
+            "def write():\n    rows: QuerySet = FieldTemplate.objects.all()\n    rows.update(is_active=False)\n",
+            3,
+        ),
+        "annotated_queryset_lock": (
+            "def write():\n    rows: QuerySet = DocumentType.objects.all()\n    rows.select_for_update().get()\n",
+            3,
+        ),
+        "unentered_context_manager": (
+            "def write():\n    configuration_write(facility_id)\n    FieldTemplate.objects.update(is_active=False)\n",
+            3,
+        ),
+        "assignment_update_or_create": (
+            "def write():\n    DocumentTypeField.objects.update_or_create(pk=pk, defaults=values)\n",
+            2,
+        ),
+        "literal_sql_variable": (
+            "def write():\n    sql = 'UPDATE core_fieldtemplate SET is_active = false'\n    cursor.execute(sql)\n",
+            3,
+        ),
+    }
+    misses = {}
+    for name, (source, line) in cases.items():
+        actual = find_ungated_configuration_writes(source)
+        if actual != [("write", line)]:
+            misses[name] = actual
+    assert not misses, f"Unprotected writers accepted by the guard: {misses}"
+
+
+@pytest.mark.parametrize("model", ["DocumentType", "FieldTemplate", "DocumentTypeField"])
+@pytest.mark.parametrize("operation", ["get_or_create", "update_or_create"])
+def test_configuration_guard_requires_entered_gate_for_upserts(model, operation):
+    write = f"{model}.objects.{operation}(pk=pk, defaults=values)"
+    assert find_ungated_configuration_writes(f"def write():\n    {write}\n") == [("write", 2)]
+    assert (
+        find_ungated_configuration_writes(
+            f"def write():\n    with configuration_write(facility_id):\n        {write}\n"
+        )
+        == []
+    )
+
+
+def test_configuration_guard_rejects_context_outside_the_write_scope():
+    source = """def write():
+    with configuration_write(facility_id):
+        pass
+    FieldTemplate.objects.update(is_active=False)
+"""
+    assert find_ungated_configuration_writes(source) == [("write", 4)]
+
+
+def test_configuration_guard_keeps_function_aliases_separate():
+    source = """def configuration():
+    rows: QuerySet = FieldTemplate.objects.all()
+    with configuration_write(facility_id):
+        rows.update(is_active=False)
+
+def unrelated():
+    rows: QuerySet = User.objects.all()
+    rows.update(is_active=False)
+"""
+    assert find_ungated_configuration_writes(source) == []
+
+
+def test_configuration_guard_resolves_annotated_sql_constants_and_aliases():
+    source = """def write():
+    sql: str = 'UPDATE core_' + 'fieldtemplate SET is_active = false'
+    statement = sql
+    cursor.execute(statement)
+"""
+    assert find_ungated_configuration_writes(source) == [("write", 4)]
+
+
+def test_configuration_guard_rejects_late_gates_and_accepts_immediate_exclusive_locks():
+    source = """def write():
+    DocumentType.objects.select_for_update().get()
+    lock_dynamic_protection(facility_id, exclusive=True)
+"""
+    assert find_ungated_configuration_writes(source) == [("write", 2)]
+    source = """def write():
+    lock_dynamic_protection(facility_id, exclusive=True)
+    DocumentType.objects.select_for_update().get()
+"""
+    assert find_ungated_configuration_writes(source) == []
+
+
+def test_configuration_hook_delegate_requires_an_entered_save_gate():
+    source = "def write():\n    DocumentType.objects.get_or_create(pk=pk)\n"
+    hooks = {
+        "DocumentType": "def _save_context(self):\n    with configuration_write(self.facility_id):\n        yield\n"
+    }
+    assert find_hook_gated_configuration_upserts(source, hooks) == [("write", 2)]
+    hooks = {"DocumentType": "def _save_context(self):\n    configuration_write(self.facility_id)\n    yield\n"}
+    assert find_hook_gated_configuration_upserts(source, hooks) == []
+
+
+@pytest.mark.parametrize("operation", ["update_or_create", "update", "select_for_update"])
+def test_configuration_hook_delegate_never_covers_operations_before_save(operation):
+    source = f"def write():\n    DocumentType.objects.{operation}(pk=pk)\n"
+    hooks = {
+        "DocumentType": "def _save_context(self):\n    with configuration_write(self.facility_id):\n        yield\n"
+    }
+    assert find_hook_gated_configuration_upserts(source, hooks) == []
+    assert find_ungated_configuration_writes(source) == [("write", 2)]
