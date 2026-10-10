@@ -43,7 +43,7 @@
                         {% endif %}
                     </td>
                     <td class="px-3 py-2">{{ client.deleted_at|date:"DATETIME_FORMAT" }}</td>
-                    <td class="px-3 py-2">{{ client.deleted_by.display_name|default:client.deleted_by.username|default:"–" }}</td>
+                    <td class="px-3 py-2">{% if client.deleted_by %}{{ client.deleted_by.display_name|default:client.deleted_by.username }}{% else %}–{% endif %}</td>
                     <td class="px-3 py-2 text-right whitespace-nowrap">
                         {% if client.merged_into_id %}
                         {% comment %}Kein „Wiederherstellen" fuer Tombstones —

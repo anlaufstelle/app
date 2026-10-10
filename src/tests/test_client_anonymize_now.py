@@ -151,6 +151,16 @@ class TestTrashTemplateAction:
         assert "data-confirm=" in body
         assert reverse("core:client_anonymize", args=[trashed_client.pk]) in body
 
+    def test_person_without_a_recorded_deleter_still_renders(self, client, admin_user, trashed_client):
+        """Automated or account-less removals leave ``deleted_by`` empty."""
+        Client.objects.filter(pk=trashed_client.pk).update(deleted_by=None)
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:client_trash"))
+
+        assert response.status_code == 200
+        assert reverse("core:client_anonymize", args=[trashed_client.pk]) in response.content.decode()
+
 
 # ---------------------------------------------------------------------------
 # Refs #2085: Der Webprozess ist NICHT Table-Owner

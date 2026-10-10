@@ -29,7 +29,7 @@
                     <td class="px-3 py-2 font-medium">{{ case.title }}</td>
                     <td class="px-3 py-2">{{ case.client.pseudonym|default:"–" }}</td>
                     <td class="px-3 py-2">{{ case.deleted_at|date:"DATETIME_FORMAT" }}</td>
-                    <td class="px-3 py-2">{{ case.deleted_by.display_name|default:case.deleted_by.username|default:"–" }}</td>
+                    <td class="px-3 py-2">{% if case.deleted_by %}{{ case.deleted_by.display_name|default:case.deleted_by.username }}{% else %}–{% endif %}</td>
                     <td class="px-3 py-2 text-right whitespace-nowrap">
                         {# Refs #1818: „wiederherstellbar" und „endgültig getilgt" sind #}
                         {# zwei Zustände. Ohne ``anonymized_at`` böte die Zeile einen  #}

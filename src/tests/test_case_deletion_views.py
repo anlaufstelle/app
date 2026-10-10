@@ -236,6 +236,16 @@ class TestTrashView:
         assert 'data-testid="case-restore-btn"' not in body
         assert 'data-testid="case-anonymize-now-btn"' not in body
 
+    def test_case_without_a_recorded_deleter_still_renders(self, client, admin_user, case_open):
+        """Automated or account-less removals leave ``deleted_by`` empty."""
+        case_open.soft_delete()
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:case_trash"))
+
+        assert response.status_code == 200
+        assert case_open.title in response.content.decode()
+
     def test_live_cases_do_not_appear(self, client, admin_user, case_open):
         client.force_login(admin_user)
         assert case_open.title not in client.get(reverse("core:case_trash")).content.decode()
