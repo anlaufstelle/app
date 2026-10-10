@@ -821,6 +821,8 @@ The choices come from the reports themselves: what a report evaluates is declare
 
 > The keys **Violent incident**, **Protective measure**, **Group activity** and **Supply (need)** come from the bundled domain packages for awareness work, women's shelters and youth work (package overview #2133, German). They are offered to **every** facility, regardless of which package is loaded: the value range comes from the report, not from the catalogue. A new row in the example activity report only appears once a type carrying the matching key has events; the figures of existing reports do not change.
 
+For a **partial report mapping**, the documentation type and field template edit forms warn about missing type or field keys. For example, the syringe exchange balance needs the active fields “Total issued” (`ausgabe_stueck`) **and** “Total returned” (`rueckgabe_stueck`) on the same active type. A different complete type does not remove the notice for this type. Alternative report requirements are evaluated separately; one fully satisfied alternative is sufficient. “Appears in” lists only reports whose requirements are met locally; for field templates, this template must be assigned to the matching type. When creating a type, the live preview lists candidate reports and missing mappings. Notices do not block saving or change keys; a key that has already been set remains immutable.
+
 > **The report key does not affect the overview.** The key figures, charts and tables on the "Overview" tab (contacts over time, documentation types, age groups) count the events in the period **regardless of their report key** -- including events that no report evaluates. A type set to "Explicitly belongs in no report" is therefore omitted from reports that assign data through the report key (such as the example activity report), but it remains visible and continues to count in the overview. The "External report" tab does not use the report key either.
 >
 > **Two details belong with that rule.** First, reports about **application behaviour** continue to bind through the system type rather than the report key: the example entry-ban overview therefore shows entry-ban events even if their type is set to "Explicitly belongs in no report" -- and that is exactly how the bundled default catalogue is configured ([ADR-042](../adr/042-report-key-berichtszuordnung.md), *Implementation E4*, German). Second, the overview normally reads completed months from stored monthly aggregates, while dataset reports may calculate live; that can also make their figures diverge ([User Guide § 7](user-guide.md#7-statistics-and-export)).
@@ -2497,5 +2499,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 3c36230b01696eb3f4eeff45baeddd9a16856ce1 -->
+<!-- source-hash: 9bc30e32f24f7c07422d6e2b5d76579bd038ffb8 -->
 <!-- translation-date: 2026-10-09 -->
