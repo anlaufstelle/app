@@ -1483,7 +1483,7 @@ class TestQueueReplayClassification:
                         lastError: '', idempotencyKey: 'idem-a2',
                         data: {method: 'POST', body: 'notiz=y', headers: {'hx-request': 'true'}},
                     });
-                    await window.offlineQueue.replayQueue();
+                    await replayInCheckedRun(() => window.offlineQueue.replayQueue());
                     const rows = await s.listDecrypted('queue');
                     return rows.map((r) => ({url: r.url, localStatus: r.localStatus, deadReason: r.deadReason}));
                 }""",
@@ -1529,9 +1529,9 @@ class TestQueueReplayClassification:
                         url, createdAt: Date.now(), attempts: 0, retryAfter: 0, lastError: '',
                         idempotencyKey: 'idem-b1', data: {method: 'POST', body: 'x=1', headers: {}},
                     });
-                    await window.offlineQueue.replayQueue();
+                    await replayInCheckedRun(() => window.offlineQueue.replayQueue());
                     const afterFirst = await s.listDecrypted('queue');
-                    await window.offlineQueue.replayQueue();
+                    await replayInCheckedRun(() => window.offlineQueue.replayQueue());
                     const afterSecondCount = await s.count('queue');
                     return {
                         afterFirstStatus: afterFirst[0] && afterFirst[0].localStatus,
@@ -1591,7 +1591,7 @@ class TestQueueReplayClassification:
                         data: {method: 'POST', body: 'status=done&expected_updated_at=x',
                                headers: {'hx-request': 'true'}},
                     });
-                    await window.offlineQueue.replayQueue();
+                    await replayInCheckedRun(() => window.offlineQueue.replayQueue());
                     const rows = await s.listDecrypted('queue');
                     return { count: rows.length, localStatus: rows[0] && rows[0].localStatus };
                 }""",
@@ -1643,7 +1643,7 @@ class TestQueueReplayClassification:
                             'hx-request': 'true',
                         }},
                     });
-                    await window.offlineQueue.replayQueue();
+                    await replayInCheckedRun(() => window.offlineQueue.replayQueue());
                     const meta = document.querySelector('meta[name="csrf-token"]');
                     return meta ? meta.content : '';
                 }""",
@@ -1692,7 +1692,7 @@ class TestQueueReplayClassification:
                         lastError: '', idempotencyKey: 'idem-c2', data: {method: 'POST', body: 'b', headers: {}},
                     });
                     const before = Date.now();
-                    await window.offlineQueue.replayQueue();
+                    await replayInCheckedRun(() => window.offlineQueue.replayQueue());
                     const rows = await s.listDecrypted('queue');
                     return {
                         before,
@@ -1747,7 +1747,7 @@ class TestQueueReplayClassification:
                     """async (id) => {
                         await window.offlineStore.db.queue.update(id, {retryAfter: 0});
                         const before = Date.now();
-                        await window.offlineQueue.replayQueue();
+                        await replayInCheckedRun(() => window.offlineQueue.replayQueue());
                         const row = (await window.offlineStore.listDecrypted('queue'))[0];
                         return {
                             before, retryAfter: row.retryAfter, attempts: row.attempts, localStatus: row.localStatus,
@@ -1795,7 +1795,7 @@ class TestQueueReplayClassification:
                         lastError: '', idempotencyKey: 'idem-5b', data: {method: 'POST', body: 'b', headers: {}},
                     });
                     const before = Date.now();
-                    await window.offlineQueue.replayQueue();
+                    await replayInCheckedRun(() => window.offlineQueue.replayQueue());
                     const rows = await s.listDecrypted('queue');
                     return {before, rows: rows.map((r) => ({url: r.url, retryAfter: r.retryAfter,
                         attempts: r.attempts, localStatus: r.localStatus, lastError: r.lastError}))};
@@ -1837,7 +1837,7 @@ class TestQueueReplayClassification:
                         lastError: '', idempotencyKey: 'idem-ra', data: {method: 'POST', body: 'a', headers: {}},
                     });
                     const before = Date.now();
-                    await window.offlineQueue.replayQueue();
+                    await replayInCheckedRun(() => window.offlineQueue.replayQueue());
                     const row = (await window.offlineStore.listDecrypted('queue'))[0];
                     return {before, retryAfter: row.retryAfter};
                 }""",
@@ -1875,7 +1875,7 @@ class TestQueueReplayClassification:
                         idempotencyKey: 'idem-d1', data: {method: 'POST', body: 'x=1', headers: {}},
                     });
                     const before = await s.count('queue');
-                    await window.offlineQueue.replayQueue();
+                    await replayInCheckedRun(() => window.offlineQueue.replayQueue());
                     const after = await s.count('queue');
                     const rows = await s.listDecrypted('queue');
                     return {

@@ -118,7 +118,7 @@ def test_dead_event_shows_not_found_reason_and_discard_removes_it(browser, base_
                         documentTypeName: 'Kontakt',
                     },
                 });
-                await window.offlineEdit.replayAllModifiedEvents();
+                await replayInCheckedRun(() => window.offlineEdit.replayAllModifiedEvents());
             }""",
             {"eventPk": event_pk, "clientPk": client_pk},
         )
@@ -210,7 +210,7 @@ def test_dead_create_shows_in_deadletter_list_and_discard_removes_it(browser, ba
                         { occurredAt: '2026-01-01T09:00', documentTypeName: 'Kontakt' })
                     : await window.offlineEdit.markWorkItemNew('c1', {
                         item_type: 'task', title: 'Aufgabe-offline-404', priority: 'normal' });
-                await window.offlineEdit.replayAllModifiedEvents();
+                await replayInCheckedRun(() => window.offlineEdit.replayAllModifiedEvents());
                 return rec.pk;
             }""",
             track,
@@ -221,7 +221,7 @@ def test_dead_create_shows_in_deadletter_list_and_discard_removes_it(browser, ba
         assert after["data"]["deadReason"] == "not-found"
 
         # Kein Auto-Retry: der naechste Batch-Lauf ueberspringt den dead-Record.
-        page.evaluate("async () => { await window.offlineEdit.replayAllModifiedEvents(); }")
+        page.evaluate("async () => { await replayInCheckedRun(() => window.offlineEdit.replayAllModifiedEvents()); }")
         assert hits["n"] == 1, f"dead-Record darf nicht erneut gesendet werden: {hits['n']}"
 
         page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
@@ -347,7 +347,7 @@ def test_retry_dead_event_reactivates_and_next_replay_resends(browser, base_url,
         ), "Retry hat das Dead-Event nicht wieder auf localStatus='modified' gesetzt"
 
         assert hits["n"] == 0, "Retry allein darf noch KEINEN Netzwerk-Request ausloesen"
-        page.evaluate("async () => { await window.offlineEdit.replayAllModifiedEvents(); }")
+        page.evaluate("async () => { await replayInCheckedRun(() => window.offlineEdit.replayAllModifiedEvents()); }")
         assert hits["n"] == 1, "Der naechste Replay-Lauf muss das reaktivierte Event erneut senden"
     finally:
         with suppress(Exception):

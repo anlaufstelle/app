@@ -26,6 +26,7 @@ E2E seriell ausfuehren (RAM-Limit der Container) — nicht parallelisieren.
 from __future__ import annotations
 
 import re
+import time
 from contextlib import suppress
 
 import pytest
@@ -462,6 +463,14 @@ class TestSyncOrchestrator:
         try:
             page.goto(base_url, wait_until="domcontentloaded")
             page.wait_for_function("() => !!(window.syncOrchestrator && window.syncOrchestrator.isLockHeld)")
+            # The boot-time revocation check runs under the same lock. Measure only
+            # once the page is idle, otherwise "before" reports that boot run.
+            deadline = time.monotonic() + 15
+            while page.evaluate(
+                "async () => { const q = await navigator.locks.query(); return q.held.length + q.pending.length; }"
+            ):
+                assert time.monotonic() < deadline, "Boot-time lock activity did not settle"
+                time.sleep(0.2)
             result = page.evaluate(
                 """async () => {
                     const o = window.syncOrchestrator;

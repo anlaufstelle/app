@@ -219,7 +219,7 @@ class TestOfflineCreate:
                         { notiz: 'Offline neu erfasst', dauer: '5' },
                         { occurredAt: '2026-01-02T09:30', documentTypeName: 'Kontakt' }
                     );
-                    return await window.offlineEdit.replayModifiedEvent(rec);
+                    return await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(rec));
                 }""",
                 {"clientPk": client_pk, "docTypePk": doc_type_pk},
             )
@@ -893,7 +893,7 @@ def test_transient_key_loss_during_replay_skips_without_tokenless_post(authentic
             });
             let replayResult;
             try {
-                replayResult = await window.offlineEdit.replayModifiedEvent(record);
+                replayResult = await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(record));
             } finally {
                 Object.defineProperty(window, 'crypto_session', {
                     value: orig, configurable: true, writable: false, enumerable: true,
@@ -949,7 +949,7 @@ class TestOfflineEditReplayRobustness:
                         occurredAt: '2026-01-01T00:00:00Z', localStatus: 'modified',
                         data: {formData: {notiz: 'b'}, expectedUpdatedAt: 'etag-2'},
                     });
-                    await window.offlineEdit.replayAllModifiedEvents();
+                    await replayInCheckedRun(() => window.offlineEdit.replayAllModifiedEvents());
                     return {
                         first: await s.getOfflineEvent('11111111-1111-4111-8111-111111111111'),
                         second: await s.getOfflineEvent('22222222-2222-4222-8222-222222222222'),
@@ -990,10 +990,10 @@ class TestOfflineEditReplayRobustness:
                         occurredAt: '2026-01-01T00:00:00Z', localStatus: 'modified',
                         data: {formData: {notiz: 'weg'}, expectedUpdatedAt: 'etag-3'},
                     });
-                    await window.offlineEdit.replayAllModifiedEvents();
+                    await replayInCheckedRun(() => window.offlineEdit.replayAllModifiedEvents());
                     const afterFirst = await s.getOfflineEvent('33333333-3333-4333-8333-333333333333');
                     // Zweiter Lauf: darf NICHT erneut senden (kein Auto-Retry fuer dead).
-                    await window.offlineEdit.replayAllModifiedEvents();
+                    await replayInCheckedRun(() => window.offlineEdit.replayAllModifiedEvents());
                     return { afterFirst };
                 }"""
             )

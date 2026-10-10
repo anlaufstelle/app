@@ -563,7 +563,7 @@ class TestOfflineConflictResolverCluster:
             rows = page.evaluate("async () => await window.offlineStore.listQueueEntries()")
             assert len(rows) == 1, f"Zwei Status-Enqueues fuer dieselbe pk muessen coalescen: {rows!r}"
 
-            page.evaluate("async () => { await window.offlineQueue.replayQueue(); }")
+            page.evaluate("async () => { await replayInCheckedRun(() => window.offlineQueue.replayQueue()); }")
             status = _poll_server_field(e2e_env, wi_pk, "status", "done")
             assert status == "done", f"Finaler Status nicht angewendet (Phantom-Konflikt?): {status}"
             leftover = page.evaluate("async () => await window.offlineStore.listQueueEntries()")

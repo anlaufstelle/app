@@ -316,7 +316,7 @@ def test_offline_queue_replay_syncs_despite_stale_csrf(browser, base_url):
         )
 
         # Replay vollständig abwarten (page.evaluate awaited das Promise).
-        page.evaluate("() => window.offlineQueue.replayQueue()")
+        page.evaluate("() => replayInCheckedRun(() => window.offlineQueue.replayQueue())")
 
         # Erfolg: der Record wurde serverseitig akzeptiert (2xx) und aus der
         # Queue geloescht → count 0. Bei stale Token ohne Fix bleibt er nach

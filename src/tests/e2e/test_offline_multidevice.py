@@ -64,7 +64,7 @@ def _device_enqueue_same_key_and_replay(browser, base_url, body, idem_key):
                     'hx-request': 'true',
                     'x-idempotency-key': args.key,
                 });
-                await window.offlineQueue.replayQueue();
+                await replayInCheckedRun(() => window.offlineQueue.replayQueue());
             }""",
             {"body": body, "key": idem_key},
         )

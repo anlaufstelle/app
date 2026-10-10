@@ -295,6 +295,33 @@ def enforced_base_url(request, base_url):
     proc.wait(timeout=10)
 
 
+# Replay is released only inside an orchestrator run whose revocation check
+# succeeded (``offlineStore.isRevocationPending``). Specs that call
+# ``replayQueue`` / ``replayModifiedEvent`` / ``replayAllModifiedEvents``
+# directly use ``replayInCheckedRun(() => ...)`` to follow the production
+# sequence (check, then replay) instead of bypassing the gate. A failed check
+# is not turned into an error here: the replay itself then reports the pending
+# revocation, exactly as it does for the orchestrator.
+_CHECKED_REPLAY_INIT_SCRIPT = """
+window.replayInCheckedRun = (replay) => window.syncOrchestrator.runExclusive(async () => {
+    await window.offlineStore.applyClientRevocations();
+    return replay();
+});
+"""
+
+
+def _install_checked_replay_helper(browser) -> None:
+    """Add ``window.replayInCheckedRun`` to every context created from ``browser``."""
+    create_context = browser.new_context
+
+    def new_context(*args, **kwargs):
+        context = create_context(*args, **kwargs)
+        context.add_init_script(_CHECKED_REPLAY_INIT_SCRIPT)
+        return context
+
+    browser.new_context = new_context
+
+
 @pytest.fixture(scope="module")
 def browser(launch_browser):
     """Ein Chromium-Prozess je Testdatei statt je Session (Refs #1787).
@@ -315,6 +342,7 @@ def browser(launch_browser):
     kurzlebigen eigenen Browser (siehe ``_create_storage_state``).
     """
     browser = launch_browser()
+    _install_checked_replay_helper(browser)
     yield browser
     browser.close()
 

@@ -112,7 +112,7 @@ class TestIdempotencyKeyBridge:
                 f"nicht neu minten: {stored_key!r} != {shared_key!r}"
             )
 
-            page.evaluate("async () => { await window.offlineQueue.replayQueue(); }")
+            page.evaluate("async () => { await replayInCheckedRun(() => window.offlineQueue.replayQueue()); }")
             assert seen_keys == [shared_key], f"Der Replay muss denselben Key wie der Erstversuch tragen: {seen_keys!r}"
         finally:
             _purge(page)
@@ -163,7 +163,7 @@ class TestIdempotencyKeyBridge:
                 }""",
                 {"url": wi_url, "key": shared_key},
             )
-            page.evaluate("async () => { await window.offlineQueue.replayQueue(); }")
+            page.evaluate("async () => { await replayInCheckedRun(() => window.offlineQueue.replayQueue()); }")
             assert seen_keys == [shared_key], (
                 f"Der Replay muss GENAU EINEN sauberen X-Idempotency-Key senden "
                 f"(kein 'KEY, KEY' aus doppelten Case-Varianten): {seen_keys!r}"
@@ -273,7 +273,7 @@ class TestSessionExpiryReplay:
                           occurredAt: '2026-01-01T09:00', documentTypeName: 'Kontakt',
                           documentTypePk: 'dt1' }
                     );
-                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const r = await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(rec));
                     const row = await window.offlineStore.getOfflineEvent(pk);
                     return { status: r.status, localStatus: row && row.localStatus };
                 }""",
@@ -303,7 +303,7 @@ class TestSessionExpiryReplay:
                         'c1', 'dt1', { notiz: 'Offline neu' },
                         { occurredAt: '2026-01-01T09:00', documentTypeName: 'Kontakt' }
                     );
-                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const r = await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(rec));
                     const row = await window.offlineStore.getOfflineEvent(rec.pk);
                     return { status: r.status, localStatus: row && row.localStatus };
                 }"""
@@ -341,7 +341,7 @@ class TestSessionExpiryReplay:
                               documentTypePk: 'dt1' }
                         );
                     }
-                    await window.offlineEdit.replayAllModifiedEvents();
+                    await replayInCheckedRun(() => window.offlineEdit.replayAllModifiedEvents());
                     const ra = await window.offlineStore.getOfflineEvent(args.a);
                     const rb = await window.offlineStore.getOfflineEvent(args.b);
                     return [ra && ra.localStatus, rb && rb.localStatus];
@@ -386,7 +386,7 @@ class TestReplayMarker:
                         idempotencyKey: 'idem-x',
                         data: { method: 'POST', body: 'title=x', headers: { 'hx-request': 'true' } },
                     });
-                    await window.offlineQueue.replayQueue();
+                    await replayInCheckedRun(() => window.offlineQueue.replayQueue());
                 }""",
                 wi_url,
             )
@@ -487,7 +487,7 @@ class TestReplayContractRegression:
                           occurredAt: '2026-01-01T09:00', documentTypeName: 'Kontakt',
                           documentTypePk: 'dt1' }
                     );
-                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const r = await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(rec));
                     const row = await window.offlineStore.getOfflineEvent(pk);
                     return { status: r.status, present: !!row };
                 }""",
@@ -522,7 +522,7 @@ class TestReplayContractRegression:
                         'c1', 'dt1', { notiz: '' },
                         { occurredAt: '2026-01-01T09:00', documentTypeName: 'Kontakt' }
                     );
-                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const r = await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(rec));
                     const row = await window.offlineStore.getOfflineEvent(rec.pk);
                     return { status: r.status, localStatus: row && row.localStatus };
                 }"""
@@ -560,7 +560,7 @@ class TestOfflineCreateCaseAssignment:
                         args.client, args.dt, { notiz: 'x' },
                         { occurredAt: '2026-07-04T10:00', casePk: args.casePk }
                     );
-                    await window.offlineEdit.replayModifiedEvent(rec);
+                    await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(rec));
                 }""",
                 {"client": str(uuid.uuid4()), "dt": str(uuid.uuid4()), "casePk": case_pk},
             )
@@ -590,7 +590,7 @@ class TestOfflineCreateCaseAssignment:
                         args.client, args.dt, { notiz: 'x' },
                         { occurredAt: '2026-07-04T10:00' }
                     );
-                    await window.offlineEdit.replayModifiedEvent(rec);
+                    await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(rec));
                 }""",
                 {"client": str(uuid.uuid4()), "dt": str(uuid.uuid4())},
             )
@@ -663,7 +663,7 @@ class TestWorkItemReplayContract:
                         priority: 'important', due_date: '2026-08-01', remind_at: '2026-07-20',
                         recurrence: 'weekly', assigned_to: args.userPk,
                     });
-                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const r = await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(rec));
                     const row = await window.offlineStore.getOfflineEvent(rec.pk);
                     return { status: r.status, rowPresent: !!row, idemKey: rec.data.idempotencyKey };
                 }""",
@@ -705,7 +705,9 @@ class TestWorkItemReplayContract:
                     const rec = await window.offlineEdit.markWorkItemNew(args.clientPk, {
                         item_type: 'task', title: 'Ohne-Bestaetigung', priority: 'normal',
                     });
-                    const r = await window.offlineEdit.replayModifiedEvent(rec, { replay: true });
+                    const r = await replayInCheckedRun(
+                        () => window.offlineEdit.replayModifiedEvent(rec, { replay: true }),
+                    );
                     const row = await window.offlineStore.getOfflineEvent(rec.pk);
                     return {
                         status: r.status,
@@ -774,7 +776,7 @@ class TestWorkItemReplayContract:
                         { item_type: 'task', title: 'Neuer-Titel', priority: 'normal', recurrence: 'none' },
                         { clientPk: 'c1', expectedUpdatedAt: '2026-01-01T00:00:00Z' }
                     );
-                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const r = await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(rec));
                     const row = await window.offlineStore.getOfflineEvent(pk);
                     return { status: r.status, localStatus: row && row.localStatus };
                 }""",
@@ -806,7 +808,9 @@ class TestWorkItemReplayContract:
                         { item_type: 'task', title: 'Ohne-Bestaetigung', priority: 'normal', recurrence: 'none' },
                         { clientPk: 'c1', expectedUpdatedAt: '2026-01-01T00:00:00Z' }
                     );
-                    const r = await window.offlineEdit.replayModifiedEvent(rec, { replay: true });
+                    const r = await replayInCheckedRun(
+                        () => window.offlineEdit.replayModifiedEvent(rec, { replay: true }),
+                    );
                     const row = await window.offlineStore.getOfflineEvent(pk);
                     return {
                         status: r.status,
@@ -856,7 +860,7 @@ class TestWorkItemReplayContract:
                         { item_type: 'task', title: 'Lokal-Titel', priority: 'normal', recurrence: 'none' },
                         { clientPk: 'c1', expectedUpdatedAt: '2026-01-01T00:00:00Z' }
                     );
-                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const r = await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(rec));
                     const row = await window.offlineStore.getOfflineEvent(pk);
                     return {
                         status: r.status,
@@ -898,7 +902,7 @@ class TestWorkItemReplayContract:
                         { item_type: 'task', title: '', priority: 'normal', recurrence: 'none' },
                         { clientPk: 'c1', expectedUpdatedAt: '2026-01-01T00:00:00Z' }
                     );
-                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const r = await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(rec));
                     const row = await window.offlineStore.getOfflineEvent(pk);
                     return { status: r.status, errors: r.errors, localStatus: row && row.localStatus };
                 }""",
@@ -944,7 +948,7 @@ class TestWorkItemReplayContract:
                         { item_type: 'task', title: 'Editiert-offline', priority: 'normal' },
                         { clientPk: 'c1', expectedUpdatedAt: '2026-01-01T00:00:00Z' }
                     );
-                    await window.offlineEdit.replayAllModifiedEvents();
+                    await replayInCheckedRun(() => window.offlineEdit.replayAllModifiedEvents());
                     const rowNew = await window.offlineStore.getOfflineEvent(recNew.pk);
                     const rowMod = await window.offlineStore.getOfflineEvent(pk);
                     return [rowNew && rowNew.localStatus, rowMod && rowMod.localStatus];
@@ -1017,7 +1021,7 @@ class TestWorkItemReplayContract:
                         { clientPk: clientPk }
                     );
                     const afterReedit = await window.offlineStore.getOfflineEvent(created.pk);
-                    const r = await window.offlineEdit.replayModifiedEvent(reedited);
+                    const r = await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(reedited));
                     return {
                         originalIdemKey: beforeReedit.data.idempotencyKey,
                         afterLocalStatus: afterReedit.localStatus,
@@ -1062,7 +1066,9 @@ class TestWorkItemReplayContract:
                         { item_type: 'task', title: 'Ohne-Bestaetigung, korrigiert', priority: 'important' },
                         { clientPk: clientPk }
                     );
-                    const r = await window.offlineEdit.replayModifiedEvent(reedited, { replay: true });
+                    const r = await replayInCheckedRun(
+                        () => window.offlineEdit.replayModifiedEvent(reedited, { replay: true }),
+                    );
                     const row = await window.offlineStore.getOfflineEvent(created.pk);
                     return {
                         replayStatus: r.status,
@@ -1129,9 +1135,9 @@ class TestCreateDeadLetterContract:
                             { occurredAt: '2026-01-01T09:00', documentTypeName: 'Kontakt' })
                         : await window.offlineEdit.markWorkItemNew('c1', {
                             item_type: 'task', title: 'x', priority: 'normal' });
-                    await window.offlineEdit.replayAllModifiedEvents();
+                    await replayInCheckedRun(() => window.offlineEdit.replayAllModifiedEvents());
                     const row = await window.offlineStore.getOfflineEvent(rec.pk);
-                    await window.offlineEdit.replayAllModifiedEvents();
+                    await replayInCheckedRun(() => window.offlineEdit.replayAllModifiedEvents());
                     const rowAfter = await window.offlineStore.getOfflineEvent(rec.pk);
                     return {
                         localStatus: row && row.localStatus,
