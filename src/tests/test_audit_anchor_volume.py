@@ -31,6 +31,12 @@ def test_anchor_volume_is_read_only_for_web_and_writable_only_for_maintenance(co
     )
     if compose_name == "barbara" and not compose_path.is_file():
         pytest.skip("dev-ops/deploy/barbara/docker-compose.barbara.yml not in the public snapshot — dev repo only")
+    if compose_name == "dev" and not compose_path.is_file():
+        pytest.skip("docker-compose.dev.yml not in the public snapshot — dev repo only")
+    if compose_name == "staging" and not compose_path.is_file():
+        pytest.skip("docker-compose.staging.yml not in the public snapshot — dev repo only")
+    if compose_name == "demo" and not compose_path.is_file():
+        pytest.skip("docker-compose.demo.yml not in the public snapshot — dev repo only")
     compose = yaml.safe_load(compose_path.read_text())
     assert "audit-anchor" in compose["volumes"]
     mounts = {}
@@ -145,3 +151,17 @@ def test_deploy_check_recommends_the_writable_media_volume(settings):
     errors = run_checks(include_deployment_checks=True, databases=[])
     error = next(error for error in errors if error.id == "core.E002")
     assert "MEDIA_ROOT=/media/media" in error.hint
+
+
+@pytest.mark.architecture
+@pytest.mark.parametrize("compose_name", ["prod", "staging", "dev", "demo", "barbara"])
+def test_missing_compose_files_follow_the_public_profile(compose_name, tmp_path, monkeypatch):
+    import sys
+
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
+    if compose_name == "prod":
+        with pytest.raises(FileNotFoundError):
+            test_anchor_volume_is_read_only_for_web_and_writable_only_for_maintenance(compose_name)
+    else:
+        with pytest.raises(pytest.skip.Exception, match="not in the public snapshot"):
+            test_anchor_volume_is_read_only_for_web_and_writable_only_for_maintenance(compose_name)
