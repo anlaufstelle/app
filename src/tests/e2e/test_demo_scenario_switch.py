@@ -121,8 +121,7 @@ class TestScenarioSwitchFromBanner:
         try:
             page.goto(f"{base_url}/demo/")
             cards = page.locator("[data-testid='demo-scenario-card']")
-            if cards.count() < 2:
-                pytest.skip("Weniger als zwei Demo-Bereiche im Katalog — Wechsel nicht pruefbar.")
+            assert cards.count() >= 2, "The demo catalog must offer at least two scenarios to switch between."
 
             first_key = cards.nth(0).get_attribute("data-scenario-key")
             cards.nth(0).locator("[data-testid='demo-scenario-start']").click()
@@ -207,12 +206,18 @@ class TestOldTabAfterSwitch:
             page_old_tab = context.new_page()
             page_old_tab.goto(f"{base_url}/demo/")
             cards = page_old_tab.locator("[data-testid='demo-scenario-card']")
-            if cards.count() < 2:
-                pytest.skip("Weniger als zwei Demo-Bereiche im Katalog — Wechsel nicht pruefbar.")
+            assert cards.count() >= 2, "The demo catalog must offer at least two scenarios to switch between."
             first_key = cards.nth(0).get_attribute("data-scenario-key")
             first_name = cards.nth(0).locator("h2").inner_text().strip()
             cards.nth(0).locator("[data-testid='demo-scenario-start']").click()
             page_old_tab.wait_for_url(lambda url: "/demo/" not in url, timeout=10000)
+
+            # The old tab has to be at rest before the switch: right after the
+            # load its service worker still fetches the offline shells with the
+            # old session key, and a response to a request with a session that
+            # the switch has just replaced deletes the new session cookie.
+            page_old_tab.wait_for_load_state("networkidle")
+            page_old_tab.evaluate("() => navigator.serviceWorker.ready.then(() => true)")
 
             # "Alter Tab": bleibt auf der App-Seite von Bereich 1 stehen,
             # WAEHREND ein neuer Tab (gleiche Sitzung/Cookies) den Wechsel
