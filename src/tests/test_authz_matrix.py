@@ -251,6 +251,23 @@ class TestPrepareAuditObjectsEnsuresTheAnchors:
         assert ids["doc_type_contact"] == doc_type_field.document_type_id
         assert ids["field_condition"] is not None
 
+    def test_case_event_hangs_on_the_harvested_open_case(self, facility, lead_user, case_open, sample_event):
+        """``case_remove_event`` binds case AND event in the URL (404 otherwise)."""
+        from core.models import Case, Event
+
+        # The event starts on another open case; preparation must re-bind it.
+        other = Case.objects.create(
+            facility=facility, client=case_open.client, title="Anderer Fall", status=Case.Status.OPEN
+        )
+        Event.objects.filter(pk=sample_event.pk).update(case=other)
+
+        ids = self._prepare(facility)
+
+        assert ids["case_event"] is not None
+        bound = Event.objects.get(pk=ids["case_event"])
+        assert bound.case_id == ids["case_open"]
+        assert bound.created_by_id == lead_user.pk
+
     def test_keeps_an_existing_field_group(self, facility, sample_event, doc_type_field, field_group):
         from core.models import FieldGroup
 

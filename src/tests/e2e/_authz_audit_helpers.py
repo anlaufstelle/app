@@ -433,9 +433,10 @@ def prepare_audit_objects(conn, fac_id):
        auf einem NORMAL-Event. Daher: erstes aktuelles Attachment der Facility
        auf das vertragskonforme Event aus Schritt 2 umhängen (rein relational;
        Download entschlüsselt die Datei unabhängig vom Parent-Event).
-    4. Vertragskonformes case_event: falls kein NORMAL-Event an einem Fall
-       hängt, erst einem NORMAL-Event einen Fall zuweisen; dann Owner des
-       ersten NORMAL-Case-Events auf lead setzen.
+    4. Vertragskonformes case_event: falls kein NORMAL-Event am geernteten
+       ``case_open`` hängt, erst einem NORMAL-Event diesen Fall zuweisen
+       (``case_remove_event`` bindet Fall UND Event in der URL); dann Owner
+       des ersten NORMAL-Events dieses Falls auf lead setzen.
     5. Vertragskonformes sample_workitem (core:workitem_update LEAD_PLUS):
        erstes WorkItem auf created_by = lead, assigned_to = NULL setzen —
        weder created_by noch assigned_to dürfen staff/assistant sein.
@@ -524,28 +525,32 @@ def prepare_audit_objects(conn, fac_id):
         """,  # noqa: S608
         params,
     )
-    # 4a. Falls kein NORMAL-Case-Event existiert: erstem fall-losen
-    #     NORMAL-Event den ersten Fall der Facility zuweisen.
+    # 4a. Falls am geernteten ``case_open`` kein vertragskonformes Event haengt:
+    #     eines zuweisen (fall-lose bevorzugt, dann das der Person des Falls).
+    #     Die URL von ``case_remove_event`` kombiniert case_open.pk mit
+    #     case_event.pk, und die View antwortet 404, sobald das Event an einem
+    #     ANDEREN Fall haengt (Refs #2364) — ein Event irgendeines Falls der
+    #     Einrichtung genuegt deshalb nicht.
     cur.execute(
         f"""
-        UPDATE core_event SET case_id = (
-            SELECT c.id FROM core_case c
-            WHERE c.facility_id = %(fac)s AND c.is_deleted = false
-            ORDER BY c.id LIMIT 1
-        )
+        UPDATE core_event SET case_id = ({_CASE_OPEN})
         WHERE id = (
             SELECT e.id FROM core_event e
             JOIN core_documenttype dt ON dt.id = e.document_type_id
             LEFT JOIN core_client cl ON cl.id = e.client_id
-            WHERE e.facility_id = %(fac)s AND e.case_id IS NULL AND {_EVENT_CONTRACT_WHERE}
-            ORDER BY e.id LIMIT 1
+            WHERE e.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
+            ORDER BY (e.case_id IS NULL) DESC,
+                     (e.client_id IS NOT DISTINCT FROM (
+                         SELECT client_id FROM core_case WHERE id = ({_CASE_OPEN})
+                     )) DESC,
+                     e.id
+            LIMIT 1
         )
         AND NOT EXISTS (
             SELECT 1 FROM core_event e
-            JOIN core_case c ON c.id = e.case_id
             JOIN core_documenttype dt ON dt.id = e.document_type_id
             LEFT JOIN core_client cl ON cl.id = e.client_id
-            WHERE c.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
+            WHERE e.case_id = ({_CASE_OPEN}) AND {_EVENT_CONTRACT_WHERE}
         )
         """,  # noqa: S608
         params,
@@ -556,10 +561,9 @@ def prepare_audit_objects(conn, fac_id):
         UPDATE core_event SET created_by_id = {_LEAD_OF_FACILITY}
         WHERE id = (
             SELECT e.id FROM core_event e
-            JOIN core_case c ON c.id = e.case_id
             JOIN core_documenttype dt ON dt.id = e.document_type_id
             LEFT JOIN core_client cl ON cl.id = e.client_id
-            WHERE c.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
+            WHERE e.case_id = ({_CASE_OPEN}) AND {_EVENT_CONTRACT_WHERE}
             ORDER BY e.id LIMIT 1
         )
         """,  # noqa: S608
@@ -657,12 +661,13 @@ HARVEST_SQL = {
         "SELECT id FROM core_case WHERE facility_id = %(fac)s AND status = 'closed' AND is_deleted = false "
         "ORDER BY id LIMIT 1"
     ),
+    # %(case_open)s: das Event MUSS am geernteten case_open haengen — die View
+    # antwortet 404, wenn event.case_id vom Fall der URL abweicht (Refs #2364).
     "case_event": f"""
         SELECT e.id FROM core_event e
-        JOIN core_case c ON c.id = e.case_id
         JOIN core_documenttype dt ON dt.id = e.document_type_id
         LEFT JOIN core_client cl ON cl.id = e.client_id
-        WHERE c.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
+        WHERE e.case_id = %(case_open)s AND {_EVENT_CONTRACT_WHERE}
           AND e.created_by_id IN (SELECT u.id FROM core_user u WHERE u.role = 'lead' AND u.facility_id = %(fac)s)
         ORDER BY e.id LIMIT 1
     """,  # noqa: S608
@@ -806,7 +811,7 @@ HARVEST_SQL = {
 # on-the-fly). Werte: die Kind-Queries, die den Parameter referenzieren — der
 # Drift-Guard darunter pinnt die Reihenfolge im Dict.
 _CHAINED_PARENTS = {
-    "case_open": ("episode", "outcome_goal", "milestone", "authz_case_attachment"),
+    "case_open": ("case_event", "episode", "outcome_goal", "milestone", "authz_case_attachment"),
     # Refs #1783: die drei Kinder des Konfigurations-Ankers.
     "doc_type_contact": ("doc_type_field", "field_group", "field_condition"),
 }

@@ -155,6 +155,7 @@ def audit_context(base_url, medium_seed):
         ids_fac2 = helpers.harvest_ids(conn, fac2)
         milestone_snapshot = _snapshot_milestone(conn, ids_fac1["milestone"])
         attachment_snapshot = _snapshot_attachment_chain(conn, ids_fac1["authz_attachment"])
+        case_event_case_id = _snapshot_case_event_case(conn, ids_fac1["case_event"])
 
     yield {
         "sessions": sessions,
@@ -162,6 +163,7 @@ def audit_context(base_url, medium_seed):
         "ids_fac2": ids_fac2,
         "milestone_snapshot": milestone_snapshot,
         "attachment_snapshot": attachment_snapshot,
+        "case_event_case_id": case_event_case_id,
     }
 
     for session in sessions.values():
@@ -250,6 +252,64 @@ def _reset_anonymized_case(conn, ctx):
         "UPDATE core_case SET anonymized_at = NULL, is_deleted = true, "
         "deleted_at = COALESCE(deleted_at, now()) WHERE id = %s",
         (ctx["ids_fac1"]["case_trashed"],),
+    )
+
+
+def _reset_trashed_client(conn, ctx):
+    """``client_trashed`` after an allowed restore back into the trash.
+
+    ``client_restore`` precedes ``client_anonymize`` and ``client_unmerge`` in
+    the expectation table and all three aim at the same person. Without this
+    hook the restoring facility admin (the only allowed actor) leaves a live
+    person behind, and both following views — scoped to ``is_deleted=True`` —
+    answer 404 on their allow cell.
+    """
+    cur = helpers._superuser_cursor(conn)
+    cur.execute(
+        "UPDATE core_client SET is_deleted = true, deleted_at = COALESCE(deleted_at, now()) WHERE id = %s",
+        (ctx["ids_fac1"]["client_trashed"],),
+    )
+
+
+def _reset_anonymized_client(conn, ctx):
+    """``client_trashed`` after an allowed instant anonymization re-anonymizable.
+
+    The stamp ``anonymized_at`` is terminal: the service rejects a second run.
+    Only the state stamp is reset (the content stays redacted); for the access
+    matrix the row just has to be a valid trash target again.
+    """
+    cur = helpers._superuser_cursor(conn)
+    cur.execute(
+        "UPDATE core_client SET anonymized_at = NULL, is_deleted = true, "
+        "deleted_at = COALESCE(deleted_at, now()) WHERE id = %s",
+        (ctx["ids_fac1"]["client_trashed"],),
+    )
+
+
+def _snapshot_case_event_case(conn, event_id):
+    """``case_id`` of the matrix case event, restored after ``case_remove_event``."""
+    if event_id is None:
+        return None
+    cur = helpers._superuser_cursor(conn)
+    cur.execute("SELECT case_id FROM core_event WHERE id = %s", (event_id,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def _reset_case_event_binding(conn, ctx):
+    """Re-attach the matrix event to its case after an allowed removal.
+
+    ``core:case_remove_event`` clears ``event.case_id``; the view then answers
+    404 for every later actor (``event.case_id != case.pk``), so lead and staff
+    would be measured against a binding the first actor already consumed.
+    """
+    case_id = ctx["case_event_case_id"]
+    if case_id is None:
+        return
+    cur = helpers._superuser_cursor(conn)
+    cur.execute(
+        "UPDATE core_event SET case_id = %s WHERE id = %s",
+        (case_id, ctx["ids_fac1"]["case_event"]),
     )
 
 
@@ -446,6 +506,12 @@ DESTRUCTIVE_RESET = {
     # Refs #1818: die Sofort-Tilgung ist unwiderruflich — ohne Reset trifft der
     # zweite erlaubte Akteur den ValidationError-Zweig statt des Loeschpfads.
     "core:case_anonymize": _reset_anonymized_case,
+    # Restore lifts the trash state that client_anonymize/client_unmerge (same
+    # row, later in the table) scope on; anonymize is terminal as well.
+    "core:client_restore": _reset_trashed_client,
+    "core:client_anonymize": _reset_anonymized_client,
+    # Unbinds the event from the case the later actors address.
+    "core:case_remove_event": _reset_case_event_binding,
     "core:milestone_delete": _reset_milestone,  # Hard-Delete
     # Refs #1874: Hard-Delete inkl. Disk — der erste physische Löschpfad in der
     # Matrix. Ohne Reset bekäme die zweite erlaubte Rolle (lead nach
