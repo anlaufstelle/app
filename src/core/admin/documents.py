@@ -11,6 +11,7 @@ from core.admin_site import anlaufstelle_admin_site
 from core.models import AuditLog, DocumentType, DocumentTypeField, FieldGroup, FieldTemplate, QuickTemplate, TimeFilter
 from core.services.audit import log_audit_event
 from core.services.audit.chain import advisory_lock_id
+from core.services.dynamic_protection import lock_dynamic_protection_many
 
 logger = logging.getLogger(__name__)
 
@@ -212,101 +213,46 @@ class FieldTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
             messages.error(request, str(exc.args[0]))
 
     def _bulk_set_active(self, request, queryset, *, is_active: bool) -> int:
-        """``is_active`` sammelumstellen und JE tatsaechlich geaenderter Vorlage
-        eine ``CONFIG_UPDATE``-Zeile schreiben (Refs #2023).
+        """Toggle selected templates atomically and audit only real changes.
 
-        Eine Feldvorlage zu deaktivieren nimmt sie aus **allen**
-        Erfassungsformularen der Einrichtung — bis hierher geschah das per
-        rohem ``QuerySet.update()`` und damit ohne jede Spur im append-only
-        AuditLog, waehrend derselbe Schalter ueber die Config-UI eine
-        ``CONFIG_UPDATE``-Zeile erzeugt (``services/config/mutations.py``).
+        Take every facility gate in advisory-key order before any type/template
+        row or audit lock (Refs #2525). Read the changed rows after acquiring the
+        gates so concurrent toggles cannot produce stale counts or audit entries.
+        Keep the conditional bulk update: activation does not need the model's
+        unrelated validation/normalization (Refs #2023).
 
-        Das ``update()`` bleibt bewusst erhalten (Entscheid des Tickets:
-        „Service-Layer **oder** eigene Audit-Zeilen"): ``FieldTemplate.save()``
-        traegt Normalisierungs- und Validierungslogik (Zahlenbereiche,
-        HIGH⇒verschluesselt), die eine reine Aktiv/Inaktiv-Umschaltung nicht
-        braucht und die an Alt-Bestand scheitern koennte; am Modell haengt nur
-        ein ``pre_delete``-Receiver, also geht durch das Bulk-Update kein
-        Signal verloren.
-
-        Vorgefiltert wird auf die Zeilen, die sich wirklich aendern — sonst
-        erzeugte jeder Sammelklick eine Zeile je unveraenderter Vorlage und
-        deckte die echten Aenderungen unter Rauschen zu. Die Erfolgsmeldung
-        zaehlt damit ebenfalls die echten Aenderungen.
-
-        Cross-Review — **Transaktionsklammer, Zeilensperren,
-        Rueckgabezahl**: Vorher standen Snapshot, unbedingtes ``update()`` und
-        Audit-Writes ungeschuetzt nebeneinander. Moeglich waren dadurch eine
-        Umschaltung ohne Audit (Fehler beim Write), doppelte Auditzeilen bei
-        parallelen gleichgerichteten Aktionen und Auditzeilen fuer
-        zwischenzeitlich geaenderte Vorlagen. Jetzt sperrt der Vorfilter die
-        Zeilen (``select_for_update``, ``order_by("pk")`` gegen Deadlocks —
-        Muster #1022 B2), das ``update()`` bleibt auf den unveraenderten
-        Zustand konditioniert, und seine Rueckgabezahl ist die gemeldete
-        Wahrheit. Unter der Sperre muss sie mit dem Snapshot uebereinstimmen;
-        weicht sie ab, wird das laut geloggt, statt es stillschweigend
-        wegzuwerfen.
-
-        Re-Review — **Ordnung nach dem tatsaechlichen
-        Advisory-Lock-Key**: Jeder Audit-Insert nimmt in
-        ``services/audit/chain.py`` einen **transaktionsweiten** Advisory-Lock
-        PRO FACILITY, der bis zum Commit gehalten wird — in dieser Klammer
-        sammeln sich also die Facility-Locks aller auditierten Vorlagen an. Ein
-        super_admin sieht einrichtungsuebergreifend
-        (``admin_site.scope_to_facility``), sein Lauf kann somit mehrere
-        Facility-Locks halten; ohne feste Erwerbsreihenfolge deadlocken zwei
-        parallele Laeufe selbst ueber disjunkte Vorlagenmengen.
-
-        Nach ``facility_id`` zu ordnen reicht **nicht**: gesperrt wird
-        ``hashtext(name)``, eine 32-Bit- und damit nicht injektive Abbildung.
-        Bei ``h(A) = h(C) = X``, ``h(B) = Y`` mit ``A < B < C`` naehme ein Lauf
-        ueber ``{A, B}`` die Keys ``X -> Y``, ein Lauf ueber ``{B, C}`` dagegen
-        ``Y -> X``. Sortiert wird deshalb nach
-        ``(advisory_lock_id, facility_id)`` — echter Lock-Key, facility_id als
-        deterministischer Tie-Break bei Kollision.
-
-        **Invariante:** ueber mehrere Facilities immer nach
-        ``advisory_lock_id`` ordnen. Die SQL-Ordnung ``(facility_id, pk)``
-        darunter bleibt fuer die ZEILENsperren zustaendig; Pythons stabile
-        Sortierung erhaelt sie innerhalb einer Facility.
+        Audit locks have their own namespace. Sort their acquisition by their
+        actual keys, retaining row order within each facility for hash ties.
         """
         with transaction.atomic():
-            betroffen = list(queryset.select_for_update().filter(is_active=not is_active).order_by("facility_id", "pk"))
-            if not betroffen:
+            facility_ids = queryset.order_by().values_list("facility_id", flat=True).distinct()
+            lock_dynamic_protection_many(facility_ids, exclusive=True)
+            affected = list(queryset.select_for_update().filter(is_active=not is_active).order_by("facility_id", "pk"))
+            if not affected:
                 return 0
-            # Umsortieren auf die Lock-Key-Ordnung: je Facility EIN Lookup.
-            # ``None`` (Nicht-PostgreSQL) faellt auf 0 — dort nimmt
-            # ``assign_chain_fields`` gar keinen Lock.
-            lock_ids = {fid: (advisory_lock_id(fid) or 0) for fid in {obj.facility_id for obj in betroffen}}
-            betroffen.sort(key=lambda obj: (lock_ids[obj.facility_id], str(obj.facility_id)))
-            geaendert = FieldTemplate.objects.filter(
-                pk__in=[obj.pk for obj in betroffen],
-                # Konditioniert statt unbedingt: das UPDATE fasst nur an, was
-                # sich wirklich noch im Ausgangszustand befindet.
+            lock_ids = {fid: (advisory_lock_id(fid) or 0) for fid in {obj.facility_id for obj in affected}}
+            affected.sort(key=lambda obj: (lock_ids[obj.facility_id], str(obj.facility_id)))
+            updated = FieldTemplate.objects.filter(
+                pk__in=[obj.pk for obj in affected],
                 is_active=not is_active,
             ).update(is_active=is_active)
-            if geaendert != len(betroffen):
+            if updated != len(affected):
                 logger.error(
-                    "FieldTemplate-Bulk (%s): %d gesperrte Vorlagen, aber %d geaenderte Zeilen — "
-                    "Audit und Zustand koennten auseinanderlaufen.",
-                    "aktivieren" if is_active else "deaktivieren",
-                    len(betroffen),
-                    geaendert,
+                    "FieldTemplate bulk %s: %d locked templates but %d updated rows; audit and state may diverge",
+                    "activation" if is_active else "deactivation",
+                    len(affected),
+                    updated,
                 )
-            for obj in betroffen:
+            for obj in affected:
                 log_audit_event(
                     request,
                     AuditLog.Action.CONFIG_UPDATE,
                     target_obj=obj,
-                    # Dieselbe Form wie ``save_field_template`` (Config-UI), plus
-                    # ``bulk`` als Kennzeichen der Sammelaenderung. ``name`` ist
-                    # Einrichtungs-Konfiguration, keine Klienten-PII (Allowlist
-                    # ``AUDIT_DETAIL_KEYS``, Refs #1944).
                     actor=request.user,
                     detail={"name": obj.name, "changed_fields": ["is_active"], "bulk": True},
                     facility=obj.facility,
                 )
-        return geaendert
+        return updated
 
     @admin.action(description="Ausgewählte Feldvorlagen deaktivieren")
     def deactivate_selected(self, request, queryset):

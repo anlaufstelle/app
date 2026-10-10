@@ -136,6 +136,8 @@ class AdminWriteAuditMixin:
         protection_facilities = {obj.facility_id for obj in objects if isinstance(obj, (DocumentType, FieldTemplate))}
         if protection_facilities:
             lock_dynamic_protection_many(protection_facilities, exclusive=True)
+            # Configuration may have changed while waiting for the gates.
+            objects = list(queryset.order_by("pk"))
         facility_ids = {obj.pk if isinstance(obj, Facility) else getattr(obj, "facility_id", None) for obj in objects}
         lock_ids = {fid: advisory_lock_id(fid) or 0 for fid in facility_ids}
         objects.sort(
