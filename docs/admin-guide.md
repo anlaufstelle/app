@@ -966,6 +966,8 @@ Vorrangregel beim Neu-Anlegen: **Quick-Template > Default-Wert > leer**. Ungült
 | `label` | Anzeigename in Formularen und Exporten |
 | `is_active` | `true` = wählbar, `false` = deaktiviert |
 
+Jedes Optionsobjekt darf nur `slug`, `label` und optional `is_active` enthalten; unbekannte Schlüssel werden abgewiesen.
+
 #### Option deaktivieren statt löschen
 
 Wenn eine Option nicht mehr benötigt wird, setzen Sie `is_active` auf `false` statt die Option zu entfernen:

@@ -965,6 +965,8 @@ Precedence on create: **Quick template > Default value > empty**. Invalid values
 | `label` | Display name in forms and exports |
 | `is_active` | `true` = selectable, `false` = deactivated |
 
+Each option object may contain only `slug`, `label`, and the optional `is_active`; unknown keys are rejected.
+
 #### Deactivate Options Instead of Deleting Them
 
 When an option is no longer needed, set `is_active` to `false` instead of removing the option:
@@ -2526,5 +2528,6 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
+<!-- source-hash: b6db56ddc945a1d26f23f50ae52ba19f9f3e4441 -->
 <!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 7a0fc56dd8751ceb75b22b4334484713d609e258 -->
+<!-- source-hash: 1d7251ac011bec82fddb9b870b0b4d50bbba76d4 -->

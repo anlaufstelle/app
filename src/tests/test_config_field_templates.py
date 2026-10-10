@@ -10,6 +10,8 @@ und Blocker-Mechanik selbst prüft ``test_config_service.py``.
 
 from __future__ import annotations
 
+from html import unescape
+
 import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
@@ -262,6 +264,19 @@ class TestValidation:
 
 @pytest.mark.django_db
 class TestOptionsEditor:
+    def test_options_help_is_visible_outside_the_collapsible_json_wrapper(self, client, admin_user):
+        client.force_login(admin_user)
+
+        body = client.get(reverse("core:config_fieldtemplate_create")).content.decode()
+        help_start = body.index("Für Auswahl- und Mehrfachauswahl-Felder")
+        wrapper_start = body.index("data-options-json-wrapper")
+        editor_end = body.index("data-options-usage-warning")
+
+        assert help_start < wrapper_start
+        assert help_start > editor_end
+        assert '[{"slug": "beratung", "label": "Beratung"}]' in unescape(body)
+        assert "deaktivieren statt entfernen" in unescape(body)
+
     def test_form_keeps_real_textarea_and_renders_progressive_editor(self, client, admin_user):
         client.force_login(admin_user)
 

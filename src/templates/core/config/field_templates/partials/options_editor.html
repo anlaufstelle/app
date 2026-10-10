@@ -27,6 +27,8 @@ keep referenced identifiers readonly; the server validates every write.
         <p data-options-usage-warning hidden role="alert" class="rounded-md border border-orange-300 bg-orange-50 p-3 text-[13px] text-orange-900"></p>
     </div>
 
+    {% if field.help_text %}<p id="{{ field.id_for_label }}-help" class="mt-2 text-[12px] text-ink-muted">{{ field.help_text }}</p>{% endif %}
+
     <button type="button" data-options-expert-toggle data-testid="options-expert-toggle" hidden
             aria-expanded="false" class="mt-2 inline-flex min-h-[44px] items-center text-[13px] font-medium text-accent hover:underline">
         {% trans "JSON bearbeiten" %}
@@ -46,7 +48,6 @@ keep referenced identifiers readonly; the server validates every write.
             {{ field.label }}{% if field.field.required %} *{% endif %}
         </label>
         {% aria_field field %}
-        {% if field.help_text %}<p id="{{ field.id_for_label }}-help" class="mt-1 text-[12px] text-ink-muted">{{ field.help_text }}</p>{% endif %}
     </div>
     <p data-options-json-error hidden role="alert" class="mt-1 text-sm text-red-600"></p>
 

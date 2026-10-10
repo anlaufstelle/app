@@ -26,6 +26,7 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.db import connection
 from django.forms.models import model_to_dict
 from django.test.utils import CaptureQueriesContext
+from django.urls import reverse
 
 from core.admin import documents as documents_admin
 from core.admin.documents import DocumentTypeAdmin, FieldTemplateAdmin
@@ -63,6 +64,14 @@ def _config_entries(obj, action=CONFIG_UPDATE):
 
 
 class TestFieldTemplateBulkActionAudit:
+    def test_admin_add_form_renders_options_json_help_text(self, client, super_admin_user):
+        client.force_login(super_admin_user)
+
+        response = client.get(reverse("admin:core_fieldtemplate_add"))
+
+        assert response.status_code == 200
+        assert "Für Auswahl- und Mehrfachauswahl-Felder" in response.content.decode()
+
     def test_deactivate_selected_writes_entry_per_template(self, rf, admin_user, facility):
         ft_a = _field_template(facility, "Bulk-A")
         ft_b = _field_template(facility, "Bulk-B")
