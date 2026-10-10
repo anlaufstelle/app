@@ -162,6 +162,64 @@ class TestEnrichEventsWithPreview:
         assert len(event.preview_fields) == 1
         assert event.preview_fields[0]["label"] == "Geheim"
 
+    def test_encrypted_select_value_previews_as_its_label(self, facility, admin_user, client_identified):
+        """An encrypted select value is stored as an envelope, not as the option slug."""
+        dt = make_document_type(facility=facility, name="EncryptedSelect")
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Versorgung",
+            field_type="select",
+            is_encrypted=True,
+            options_json=[
+                {"slug": "wunde", "label": "Wundversorgung", "is_active": True},
+                {"slug": "beratung", "label": "Beratung", "is_active": True},
+            ],
+        )
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
+        event = make_event(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={"versorgung": "wunde"},
+            created_by=admin_user,
+        )
+        event.refresh_from_db()
+        assert isinstance(event.data_json["versorgung"], dict)  # stored as an envelope
+        feed_items = [{"type": "event", "occurred_at": event.occurred_at, "object": event}]
+
+        enrich_events_with_preview(feed_items, admin_user)
+
+        assert event.preview_fields[0]["value"] == "Wundversorgung"
+
+    def test_encrypted_multi_select_value_previews_as_labels(self, facility, admin_user, client_identified):
+        dt = make_document_type(facility=facility, name="EncryptedMultiSelect")
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Hilfen",
+            field_type="multi_select",
+            is_encrypted=True,
+            options_json=[
+                {"slug": "a", "label": "Alpha", "is_active": True},
+                {"slug": "b", "label": "Beta", "is_active": True},
+            ],
+        )
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
+        event = make_event(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={"hilfen": ["a", "b"]},
+            created_by=admin_user,
+        )
+        event.refresh_from_db()
+        feed_items = [{"type": "event", "occurred_at": event.occurred_at, "object": event}]
+
+        enrich_events_with_preview(feed_items, admin_user)
+
+        assert event.preview_fields[0]["value"] == "Alpha, Beta"
+
     def test_boolean_formatting(self, facility, staff_user, client_identified):
         dt = make_document_type(facility=facility, name="BoolTest")
         ft = FieldTemplate.objects.create(facility=facility, name="Aktiv", field_type="boolean")

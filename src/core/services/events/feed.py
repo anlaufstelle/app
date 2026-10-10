@@ -12,7 +12,7 @@ from core.models import Activity, Case, Event, WorkItem
 from core.services.compliance import user_can_see_field
 from core.services.config import iter_fields_in_block_order
 from core.services.dynamic_data import option_label_map
-from core.services.file_vault import safe_decrypt
+from core.services.file_vault import is_encrypted_value, safe_decrypt
 
 
 def _is_imaginary(naive_dt, tzinfo):
@@ -298,8 +298,12 @@ def _format_preview_value(value, ft):
     if ft.field_type == "boolean":
         return "Ja" if value else "Nein"
 
-    if ft.field_type == "select" and ft.options_json:
-        return option_label_map(ft.options_json).get(value, str(value))
+    # Encrypted selections are stored as an envelope; unwrap before mapping labels.
+    if ft.field_type in ("select", "multi_select") and ft.options_json and is_encrypted_value(value):
+        value = safe_decrypt(value)
+
+    if ft.field_type == "select" and ft.options_json and isinstance(value, str):
+        return option_label_map(ft.options_json).get(value, value)
 
     if ft.field_type == "multi_select" and ft.options_json and isinstance(value, list):
         label_map = option_label_map(ft.options_json)
