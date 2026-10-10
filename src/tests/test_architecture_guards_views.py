@@ -1056,3 +1056,39 @@ class TestClientCaseViewMirrorParity:
     def test_every_expected_divergence_carries_a_reason(self):
         thin = [key for key, (_count, reason) in self._EXPECTED_DIVERGENCES.items() if len(reason.strip()) < 40]
         assert not thin, f"Diese Ausnahmen tragen keine belastbare Begruendung: {sorted(thin)}"
+
+
+class TestSystemMutationsRequireSudo:
+    """Every registered system mutation requires reauthentication after its role gate."""
+
+    def test_system_mutations_require_sudo(self):
+        from django.urls import URLResolver, get_resolver
+
+        from core.services.security import RequireSudoModeMixin
+        from core.views.system.mixins import SystemAuditMixin
+
+        mutations = []
+
+        def visit(resolver, prefix=""):
+            for pattern in resolver.url_patterns:
+                route = prefix + str(pattern.pattern)
+                if isinstance(pattern, URLResolver):
+                    visit(pattern, route)
+                    continue
+                if not route.startswith("system/"):
+                    continue
+                view = getattr(pattern.callback, "view_class", None)
+                assert view is not None, f"System route must expose its view class: {route}"
+                methods = {
+                    method
+                    for method in ("post", "put", "patch", "delete")
+                    if method in view.http_method_names and hasattr(view, method)
+                }
+                if not methods:
+                    continue
+                mutations.append(route)
+                assert issubclass(view, RequireSudoModeMixin), f"System mutation requires sudo: {route}"
+                assert view.__mro__.index(SystemAuditMixin) < view.__mro__.index(RequireSudoModeMixin), route
+
+        visit(get_resolver())
+        assert mutations, "Expected registered system mutations"

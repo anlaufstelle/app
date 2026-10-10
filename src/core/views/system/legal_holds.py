@@ -18,6 +18,7 @@ from core.constants import DEFAULT_PAGE_SIZE, RATELIMIT_MUTATION
 from core.models import Facility
 from core.models.retention import LegalHold
 from core.retention.legal_holds import dismiss_legal_hold
+from core.services.security import RequireSudoModeMixin
 from core.utils.ratelimit import ratelimit
 from core.views.mixins import PaginatedListMixin
 from core.views.system.mixins import SystemAuditMixin
@@ -77,7 +78,7 @@ class SystemLegalHoldListView(SystemAuditMixin, PaginatedListMixin, TemplateView
 
 
 @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method=UNSAFE, block=True), name="dispatch")
-class SystemLegalHoldDismissView(SystemAuditMixin, View):
+class SystemLegalHoldDismissView(SystemAuditMixin, RequireSudoModeMixin, View):
     """Dismiss an explicitly selected hold as the installation administrator."""
 
     http_method_names = ["post"]

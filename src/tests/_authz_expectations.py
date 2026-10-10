@@ -68,6 +68,7 @@ EXPECTATIONS = (
     E(
         "core:system_legal_hold_dismiss",
         "system",
+        sudo=True,
         post=SUPER_ONLY,
         url_kwargs=(("pk", "legal_hold.pk"),),
         idor_exempt="Installation administrator explicitly selects a hold across facilities.",

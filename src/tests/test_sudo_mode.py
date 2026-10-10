@@ -379,3 +379,37 @@ class TestSystemViewsRequireSudo:
         client.force_login(admin_user)
         response = client.get(reverse("core:system_audit_export"))
         assert response.status_code == 403
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("sudo", [False, True])
+def test_system_hold_dismissal_requires_sudo(
+    client, super_admin_user, lead_user, client_identified, facility, settings, sudo
+):
+    from core.models import AuditLog, LegalHold
+
+    settings.SUDO_MODE_ENABLED = True
+    hold = LegalHold.objects.create(
+        facility=facility,
+        target_type="Client",
+        target_id=client_identified.pk,
+        reason="Preserve evidence",
+        created_by=lead_user,
+    )
+    client.force_login(super_admin_user)
+    session = client.session
+    session["mfa_verified"] = True
+    session.save()
+    if sudo:
+        TestSystemViewsRequireSudo._enter_sudo(client)
+    response = client.post(reverse("core:system_legal_hold_dismiss", args=[hold.pk]))
+    assert response.status_code == 302
+    hold.refresh_from_db()
+    if sudo:
+        assert response.url == reverse("core:system_legal_hold_list")
+        assert hold.dismissed_by_id == super_admin_user.pk
+        assert AuditLog.objects.filter(action=AuditLog.Action.LEGAL_HOLD, target_id=hold.target_id).exists()
+    else:
+        assert response.url.startswith(reverse("sudo_mode") + "?next=")
+        assert hold.dismissed_at is None
+        assert not AuditLog.objects.filter(action=AuditLog.Action.LEGAL_HOLD, target_id=hold.target_id).exists()
