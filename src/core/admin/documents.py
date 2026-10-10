@@ -11,7 +11,7 @@ from core.admin_site import anlaufstelle_admin_site
 from core.models import AuditLog, DocumentType, DocumentTypeField, FieldGroup, FieldTemplate, QuickTemplate, TimeFilter
 from core.services.audit import log_audit_event
 from core.services.audit.chain import advisory_lock_id
-from core.services.dynamic_protection import lock_dynamic_protection_many
+from core.services.dynamic_protection import lock_dynamic_protection, lock_dynamic_protection_many
 
 logger = logging.getLogger(__name__)
 
@@ -267,12 +267,7 @@ class FieldTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
 
 @admin.register(QuickTemplate, site=anlaufstelle_admin_site)
 class QuickTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
-    """Admin für Quick-Templates (vorbefüllte Event-Vorlagen).
-
-    ``prefilled_data`` wird beim Speichern über den Service auf NORMAL-Felder
-    gefiltert (Whitelist). So kann der Admin-User Werte pflegen, ohne die
-    Sensitivitäts-Regeln zu umgehen.
-    """
+    """Filter prefilled values using fresh configuration before persistence and audit."""
 
     list_display = ("name", "document_type", "facility", "is_active", "sort_order")
     list_filter = ("is_active", "facility", "document_type")
@@ -280,9 +275,14 @@ class QuickTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
     autocomplete_fields = ("document_type",)
     readonly_fields = ("created_at",)
 
+    @transaction.atomic
     def save_model(self, request, obj, form, change):
         from core.services.dashboard import filter_prefilled_data
 
+        if not request.user.is_super_admin and (facility := getattr(request, "current_facility", None)) is not None:
+            obj.facility = facility
+        lock_dynamic_protection(obj.facility_id)
+        obj.document_type = DocumentType.objects.for_facility(obj.facility_id).get(pk=obj.document_type_id)
         obj.prefilled_data = filter_prefilled_data(obj.document_type, obj.prefilled_data or {})
         if not change and obj.created_by_id is None:
             obj.created_by = request.user

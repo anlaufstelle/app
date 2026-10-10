@@ -12,10 +12,11 @@ def lock_dynamic_protection(facility_id, *, exclusive=False):
     """Keep protection stable through commit without reordering data row locks.
 
     Shared writers take only the facility advisory gate before person, case or
-    event locks. Configuration writers take the exclusive gate, then types and
-    templates by PK, then affected records in person, case, event order. The
+    event locks. Configuration writers take the exclusive gate before their
+    target rows, then affected records in person, case, event order. The
     conflicting gates serialize these paths before either side holds rows, so
-    shared configuration row locks would add cost without additional safety.
+    configuration row scans would add cost without additional safety and can
+    conflict with deferred FK checks under an audit lock.
 
     The gate also stabilizes assignments and newly created configuration rows.
     Its separate namespace avoids the facility FK/audit-chain inversion.
@@ -26,7 +27,7 @@ def lock_dynamic_protection(facility_id, *, exclusive=False):
 
 
 def lock_dynamic_protection_many(facility_ids, *, exclusive=False):
-    """Acquire all gates by actual advisory key before any configuration rows."""
+    """Acquire all gates by actual advisory key without locking FK target rows."""
     if not connection.in_atomic_block:
         raise transaction.TransactionManagementError("Dynamic protection requires an enclosing transaction")
     facility_ids = sorted({UUID(str(value)) for value in facility_ids})
@@ -43,14 +44,6 @@ def lock_dynamic_protection_many(facility_ids, *, exclusive=False):
             cursor.execute("SELECT id FROM core_facility WHERE id = %s", [facility_id])
             if cursor.fetchone() is None:
                 raise ValidationError(_("Die Einrichtung ist nicht mehr vorhanden."))
-        if exclusive:
-            for query in (
-                "SELECT id FROM core_documenttype WHERE facility_id = %s ORDER BY id FOR UPDATE",
-                "SELECT id FROM core_fieldtemplate WHERE facility_id = %s ORDER BY id FOR UPDATE",
-            ):
-                for facility_id in facility_ids:
-                    cursor.execute(query, [facility_id])
-                    cursor.fetchall()
 
 
 def lock_dynamic_protection_gate(facility_id):

@@ -6,7 +6,7 @@ Refs #494.
 import uuid
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import FacilityScopedManager
@@ -87,6 +87,14 @@ class QuickTemplate(models.Model):
         indexes = [
             models.Index(fields=["facility", "document_type", "is_active"]),
         ]
+
+    def save(self, *args, **kwargs):
+        """Take the shared protection gate before persistence and deferred FK checks."""
+        from core.services.dynamic_protection import lock_dynamic_protection
+
+        with transaction.atomic():
+            lock_dynamic_protection(self.facility_id)
+            return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} ({self.document_type.name})"
