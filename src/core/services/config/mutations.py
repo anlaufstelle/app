@@ -36,10 +36,12 @@ def save_document_type(request, form, *, creating: bool) -> DocumentType:
                 DocumentType.objects.for_facility(request.current_facility).select_for_update().get(pk=form.instance.pk)
             )
             previous_sensitivity = current.sensitivity
+            # Preserve fresh protection when a partial form does not edit it.
+            form.instance.sensitivity = form.cleaned_data.get("sensitivity", current.sensitivity)
             # Refs #2525: validation may predate a concurrent field assignment.
             for assignment in current.fields.select_related("field_template"):
                 field = assignment.field_template
-                validate_explicit_high_field(form.cleaned_data["sensitivity"], field.sensitivity, field.name)
+                validate_explicit_high_field(form.instance.sensitivity, field.sensitivity, field.name)
         obj = form.save()
         if not creating:
             from core.services.system.ban_revision import bump_ban_revision_for_document_type_change

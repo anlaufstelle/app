@@ -747,3 +747,17 @@ class TestBlockOrderedQuerysetParity:
         # Explizite Erwartung: Gruppe-vor-Frei-Tie-Break bei Position 0/1 und Interleaving.
         names = [dtf.field_template.name for dtf in block_ordered_dtf_queryset(doc_type)]
         assert names == ["A1", "A2", "Frei Mitte", "B1", "Frei Ende"]
+
+
+@pytest.mark.django_db
+def test_partial_type_form_preserves_fresh_sensitivity(req, facility):
+    document_type = DocumentType.objects.create(facility=facility, name="Original type")
+    form_class = modelform_factory(DocumentType, fields=["name"])
+    form = form_class(data={"name": "Renamed type"}, instance=document_type)
+    assert form.is_valid(), form.errors
+    # Simulate protection changing after the form instance was read.
+    DocumentType.objects.filter(pk=document_type.pk).update(sensitivity=DocumentType.Sensitivity.HIGH)
+    saved = save_document_type(req, form, creating=False)
+    saved.refresh_from_db()
+    assert saved.name == "Renamed type"
+    assert saved.sensitivity == DocumentType.Sensitivity.HIGH
