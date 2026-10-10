@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
+from uuid import UUID
 
 from django.core.exceptions import ValidationError
 from django.db.models import Q
@@ -18,7 +19,7 @@ def _collect_option_values(used: set[str], value: Any) -> None:
     value = safe_decrypt(value, default=None)
     if isinstance(value, str):
         used.add(value)
-    elif isinstance(value, list):
+    elif isinstance(value, (list, tuple)):
         used.update(item for item in value if isinstance(item, str))
 
 
@@ -78,6 +79,41 @@ def option_slugs(options: Any) -> set[str]:
     if not isinstance(options, list):
         return set()
     return {option["slug"] for option in options if isinstance(option, dict) and isinstance(option.get("slug"), str)}
+
+
+def validate_option_references(
+    facility_id: UUID | str,
+    data: Mapping[str, Any] | None,
+    *,
+    previous_data: Mapping[str, Any] | None = None,
+) -> None:
+    """Check new selection references against the current locked configuration.
+
+    Callers hold the shared dynamic protection gate through persistence. Read
+    templates afresh, including orphan fields, rather than using cached form
+    or model instances. Saved selections may be retained even if their option
+    is inactive or missing from legacy configuration.
+    """
+    if not data:
+        return
+    previous_data = previous_data or {}
+    templates = FieldTemplate.objects.for_facility(facility_id).filter(
+        slug__in=data,
+        field_type__in=[FieldTemplate.FieldType.SELECT, FieldTemplate.FieldType.MULTI_SELECT],
+    )
+    errors = {}
+    for template in templates:
+        selected: set[str] = set()
+        previous: set[str] = set()
+        _collect_option_values(selected, data[template.slug])
+        _collect_option_values(previous, previous_data.get(template.slug))
+        if selected - {""} - previous - option_slugs(template.options_json):
+            errors[template.slug] = ValidationError(
+                _("Die gewählte Option ist nicht mehr verfügbar. Bitte wählen Sie erneut."),
+                code="unavailable_option",
+            )
+    if errors:
+        raise ValidationError(errors)
 
 
 def _default_slugs(template: FieldTemplate, raw: str) -> set[str]:

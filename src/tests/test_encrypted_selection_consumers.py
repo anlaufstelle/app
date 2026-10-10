@@ -223,9 +223,13 @@ def test_disclosure_selection_breaks_keep_labels_and_unknown_slugs_escaped(selec
 
     person, template = selection_entity
     template.options_json = [{"slug": "a", "label": "First <label>"}, {"slug": "b", "label": "Second & label"}]
-    template.save(update_fields=["options_json"])
+    # Legacy unknown slugs predate selection validation at persistence.
+    template.field_type = FieldTemplate.FieldType.TEXT
+    template.save(update_fields=["options_json", "field_type"])
     person.data_json = {template.slug: ["a", "b", "missing<&>"]}
     person.save(update_fields=["data_json"])
+    template.field_type = FieldTemplate.FieldType.MULTI_SELECT
+    template.save(update_fields=["field_type"])
     html = render_client_export_html(person, facility, staff_user)
     assert "First &lt;label&gt;<br>Second &amp; label<br>missing&lt;&amp;&gt;" in html
     assert "<label>" not in html

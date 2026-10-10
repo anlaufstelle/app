@@ -96,28 +96,40 @@ def dynamic_data_write(record, update_fields=None):
         lock_dynamic_protection(record.facility_id)
         from core.models import DocumentType
 
+        # Read the stored state under the gate: type reconciliation and the
+        # option re-check both need the committed values (Refs #2519).
+        current = None
+        if not record._state.adding:
+            current = (
+                type(record)
+                .objects.for_facility(record.facility_id)
+                .filter(pk=record.pk)
+                .select_for_update(of=("self",))
+                .values("document_type_id", "data_json")
+                .first()
+            )
         if (
             not record._state.adding
             and update_fields is not None
             and "document_type" not in update_fields
             and "document_type_id" not in update_fields
         ):
-            current = (
-                type(record)
-                .objects.for_facility(record.facility_id)
-                .filter(pk=record.pk)
-                .select_for_update(of=("self",))
-                .values_list("document_type_id")
-                .first()
-            )
             if current is None:
                 raise ValidationError(_("Der Datensatz ist nicht mehr vorhanden."))
-            record.document_type_id = current[0]
+            record.document_type_id = current["document_type_id"]
         if (
             record.document_type_id is not None
             and not DocumentType.objects.for_facility(record.facility_id).filter(pk=record.document_type_id).exists()
         ):
             raise ValidationError(_("Dynamische Daten benötigen einen Dokumentationstyp derselben Einrichtung."))
+        if writes_data:
+            from core.services.option_usage import validate_option_references
+
+            validate_option_references(
+                record.facility_id,
+                record.data_json,
+                previous_data=current["data_json"] if current else None,
+            )
         yield
 
 

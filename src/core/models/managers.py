@@ -29,19 +29,22 @@ class FacilityScopedQuerySet(models.QuerySet):
         from core.models import DocumentType
         from core.services.dynamic_protection import lock_dynamic_protection_many
         from core.services.events.fields import compute_event_search_text
+        from core.services.option_usage import validate_option_references
 
         lock_dynamic_protection_many({obj.facility_id for obj in objects})
+        current_rows = {}
         if fields is not None:
-            current_types = dict(
-                self.filter(pk__in=[obj.pk for obj in objects])
+            current_rows = {
+                row["pk"]: row
+                for row in self.filter(pk__in=[obj.pk for obj in objects])
                 .order_by("facility_id", "pk")
                 .select_for_update(of=("self",))
-                .values_list("pk", "document_type_id")
-            )
+                .values("pk", "facility_id", "document_type_id", "data_json")
+            }
             if "document_type" not in fields and "document_type_id" not in fields:
                 for obj in objects:
-                    if obj.pk in current_types:
-                        obj.document_type_id = current_types[obj.pk]
+                    if obj.pk in current_rows:
+                        obj.document_type_id = current_rows[obj.pk]["document_type_id"]
         for obj in objects:
             if (
                 obj.data_json
@@ -49,6 +52,15 @@ class FacilityScopedQuerySet(models.QuerySet):
                 and not DocumentType.objects.for_facility(obj.facility_id).filter(pk=obj.document_type_id).exists()
             ):
                 raise ValidationError(_("Dynamische Daten benötigen einen Dokumentationstyp derselben Einrichtung."))
+            if fields is None or {"data_json", "document_type", "document_type_id"}.intersection(fields):
+                current = current_rows.get(obj.pk)
+                validate_option_references(
+                    obj.facility_id,
+                    obj.data_json,
+                    previous_data=current["data_json"]
+                    if current and current["facility_id"] == obj.facility_id
+                    else None,
+                )
             obj._encrypt_sensitive_fields()
             if hasattr(obj, "search_text"):
                 obj.search_text = compute_event_search_text(obj.data_json, obj.document_type)
