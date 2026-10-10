@@ -215,7 +215,7 @@ class TestMobileStreetworkCaseUpdate:
     """Refs Matrix SMK-A-MOBI-02 (reduzierter Scope — siehe Modul-Docstring)."""
 
     def test_goal_toggle_via_tap_persists(self, mobile_authenticated_page, base_url, open_case_with_goal):
-        """Tap auf Goal-Toggle-Button ändert den Zustand und persistiert."""
+        """Tapping the goal toggle changes the state and persists it."""
         page = mobile_authenticated_page
         toggle = _goal_toggle(page, base_url, open_case_with_goal)
         goal_card = page.locator("#goals-section .card", has=toggle)

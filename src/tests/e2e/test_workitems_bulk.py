@@ -147,7 +147,7 @@ class TestBulkAssign:
         lead_option = page.locator(
             "#bulk-assign option:has-text('Leitung'), #bulk-assign option:has-text('emma')"
         ).first
-        assert lead_option.count() > 0, "Lead-User im Bulk-Assign-Select nicht gefunden."
+        assert lead_option.count() > 0, "Lead user not found in the bulk-assign select."
         lead_id = lead_option.get_attribute("value")
         assert lead_id, "Lead-User-Option hat keinen Wert."
 
@@ -385,7 +385,7 @@ class TestBulkManualSelectionUI:
         _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-Swap-{tag}-2", assignee_label="Lena Weber")
 
         lena_id = _filter_option_value(page, base_url, "Lena Weber")
-        assert lena_id, "Lena Weber im Personenfilter nicht gefunden."
+        assert lena_id, "Lena Weber not found in the person filter."
 
         # UUID eines frisch erzeugten Items über den Personenfilter abgreifen —
         # dient unten als swap-spezifischer Marker (Refs #1201): Miriams Default-
@@ -440,7 +440,7 @@ class TestBulkManualSelectionUI:
         _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-PFDesel-{tag}-3", assignee_label="Lena Weber")
 
         lena_id = _filter_option_value(page, base_url, "Lena Weber")
-        assert lena_id, "Lena Weber im Personenfilter nicht gefunden."
+        assert lena_id, "Lena Weber not found in the person filter."
 
         # Direkt mit gesetztem Personenfilter laden — alle Boxen existieren beim Init.
         page.goto(f"{base_url}/workitems/?assigned_to={lena_id}", wait_until="domcontentloaded")
@@ -525,7 +525,7 @@ class TestBulkPreservesFilterUI:
         _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-PFKeep-{tag}", assignee_label="Lena Weber")
 
         lena_id = _filter_option_value(page, base_url, "Lena Weber")
-        assert lena_id, "Lena Weber im Personenfilter nicht gefunden."
+        assert lena_id, "Lena Weber not found in the person filter."
 
         # Mit gesetztem Personenfilter laden, damit das fremd-zugewiesene Item
         # sichtbar/auswählbar ist.
@@ -863,7 +863,7 @@ class TestCreatorFindsForeignAssignedTask:
         _create_workitem_assigned_no_default_wait(page, base_url, title, assignee_label="Emma Müller")
 
         emma_id = _filter_option_value(page, base_url, "Emma Müller")
-        assert emma_id, "Emma-User im Personenfilter nicht gefunden."
+        assert emma_id, "Emma user not found in the person filter."
 
         page.goto(f"{base_url}/workitems/?assigned_to={emma_id}", wait_until="domcontentloaded")
         page.wait_for_selector("#inbox-content", timeout=5000)

@@ -54,7 +54,7 @@ class TestAuditPagination:
 
         # Pagination-Container: "X–Y von Z Einträgen" + Seitennavigation
         expect(page.locator("text=/\\d+–\\d+ von \\d+ Einträgen/")).to_be_visible()
-        # Seitennummer-Anzeige (z.B. "1 / 3")
+        # Page counter, e.g. "1 / 3"
         expect(page.locator("text=/\\d+ \\/ \\d+/")).to_be_visible()
 
     def test_audit_pagination_navigates(self, authenticated_page, base_url, paginated_audit_log):
@@ -112,5 +112,5 @@ class TestAuditPagination:
 
         start, end, total = int(match.group(1)), int(match.group(2)), int(match.group(3))
         assert start == 1, f"Erste Seite sollte bei 1 starten, nicht {start}"
-        assert end == 50, f"Erste Seite sollte genau 50 Einträge zeigen, nicht {end}"
-        assert total > 50, f"Gesamtanzahl sollte > 50 sein, nicht {total}"
+        assert end == 50, f"The first page should show exactly 50 entries, not {end}"
+        assert total > 50, f"The total should be above 50, not {total}"
