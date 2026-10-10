@@ -231,10 +231,11 @@ class TestStableBindingQueryCount:
         binding_reads = [sql for sql in sqls if "core_case" in sql and "FOR UPDATE" not in sql.upper()]
         assert len(binding_reads) == 1, binding_reads
         assert len([sql for sql in sqls if "pg_advisory_xact_lock_shared(2525," in sql]) == 1
-        assert len([sql for sql in sqls if "FOR SHARE" in sql.upper()]) == 2
+        # Shared protection uses the gate alone; configuration takes EXCLUSIVE (Refs #2525).
+        assert len([sql for sql in sqls if "FOR SHARE" in sql.upper()]) == 0
         assert binding_reads[0].startswith('SELECT "core_case"."client_id"')
         assert 'FROM "core_case"' in binding_reads[0]
-        assert len(sqls) == 8
+        assert len(sqls) == 6
 
 
 class TestFallBearbeitungNachZusammenfuehrung:

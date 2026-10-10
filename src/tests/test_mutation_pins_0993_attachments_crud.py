@@ -205,7 +205,8 @@ class TestLockOwnerRowsInFacilityOrder:
         owner_tables = [sql.split(" FROM ", 1)[1].split(" ", 1)[0] for sql in queries if "FOR UPDATE" in sql]
         assert owner_tables == ['"core_event"']
         assert len([sql for sql in queries if "pg_advisory_xact_lock_shared(2525," in sql]) == 1
-        assert len([sql for sql in queries if "FOR SHARE" in sql]) == 2
+        # Shared protection uses only the advisory gate (Refs #2525).
+        assert len([sql for sql in queries if "FOR SHARE" in sql]) == 0
 
 
 class TestPurgeAttachmentChain:

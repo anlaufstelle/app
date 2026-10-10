@@ -252,18 +252,17 @@ class TestVorsperreOwnerMitPerson:
         queries = _abfragen(ctx)
         assert [(table, locks) for table, locks, _sql in queries] == [
             ("core_facility", False),
-            ("core_documenttype", False),
-            ("core_fieldtemplate", False),
             ("core_event", False),
             ("core_client", True),
             ("core_event", True),
         ]
-        assert all(sql.endswith("FOR SHARE") for _table, _locks, sql in queries[1:3])
+        # Shared protection uses only the advisory gate (Refs #2525).
+        assert not any("FOR SHARE" in query["sql"] for query in ctx.captured_queries)
         gate = [query["sql"] for query in ctx.captured_queries if "pg_advisory_xact_lock_shared(2525," in query["sql"]]
         assert len(gate) == 1
         sqls = [query["sql"] for query in ctx.captured_queries]
         assert sqls.index(gate[0]) < sqls.index(queries[0][2])
-        binding, client, owner = (sql for _table, _locks, sql in queries[3:])
+        binding, client, owner = (sql for _table, _locks, sql in queries[1:])
         assert binding.startswith('SELECT "core_event"."client_id"')
         assert _bedingungen(binding) == {
             ("core_event.id", sample_event.pk.hex),
