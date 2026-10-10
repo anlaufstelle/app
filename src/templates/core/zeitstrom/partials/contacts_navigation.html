@@ -1,7 +1,7 @@
 {% load i18n %}
 {% if contacts_navigation %}
 <nav id="contacts-navigation" aria-label="{% translate 'Kontakt-Navigation' %}" class="mb-5" {% if contacts_navigation_oob %}hx-swap-oob="outerHTML"{% endif %}>
-    <a href="{% url contacts_navigation.url_name %}?{{ contacts_list_params }}" data-testid="{{ contacts_navigation.testid }}"
+    <a href="{% url contacts_navigation.url_name %}?{{ contacts_list_params }}" data-testid="zeitstrom-contacts-list"
        class="inline-flex items-center min-h-[44px] text-sm text-accent hover:underline">{{ contacts_navigation.label }}</a>
 </nav>
 {% endif %}

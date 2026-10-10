@@ -316,22 +316,22 @@ ZEITSTROM = NavItem(
     key="zeitstrom",
     label=_("Zeitstrom"),
     url_name="core:zeitstrom",
-    # Ereignis-Vollseiten gehören zum Zeitstrom-Anker (Verify-Befund #1813,
-    # dieselbe Klasse wie der audit_detail-Fix): Detail, Neu, Edit und die
-    # GET-Lösch-Bestätigung sind "du bist hier"-Zustände.
-    family=frozenset(
-        {"zeitstrom", "event_list", "event_detail", "event_legal_hold", "event_create", "event_update", "event_delete"}
-    ),
+    # Event record pages stay at the Zeitstrom anchor; only the contact list
+    # has its own navigation family (Refs #2521).
+    family=frozenset({"zeitstrom", "event_detail", "event_legal_hold", "event_create", "event_update", "event_delete"}),
     gates=("is_assistant_or_above",),
     icon="zeitstrom",
 )
-# Local contacts entry at the existing Zeitstrom anchor.
+# Shared contacts entry for the sidebar, mobile menu and local Zeitstrom link.
 CONTACTS = NavItem(
     key="contacts",
     label=_("Kontakte"),
     url_name="core:event_list",
     gates=("is_assistant_or_above",),
-    testid="zeitstrom-contacts-list",
+    family=frozenset({"event_list"}),
+    testid="nav-contacts",
+    mobile_testid="mobile-nav-contacts",
+    icon="contacts",
 )
 AUFGABEN = NavItem(
     key="workitems",
@@ -664,6 +664,7 @@ VERWALTUNG_HUB = NavItem(
 SIDEBAR: tuple[NavItem, ...] = (
     ARBEITSZENTRALE,
     ZEITSTROM,
+    CONTACTS,
     AUFGABEN,
     PERSONEN,
     FAELLE,
@@ -706,6 +707,7 @@ SIDEBAR: tuple[NavItem, ...] = (
 #   leuchten zu lassen.
 MOBILE_MORE: tuple[NavItem, ...] = (
     ARBEITSZENTRALE,
+    CONTACTS,
     FAELLE,
     DATEIEN,
     STATISTIK,
@@ -884,6 +886,7 @@ BACKLINK_EXEMPT: frozenset[str] = frozenset(
         "dsgvo_package",
         # Operative Listen (die Heimat selbst — ein Rücklink zeigte auf sich)
         "zeitstrom",
+        "event_list",
         "workitem_inbox",
         "client_list",
         "client_trash",
