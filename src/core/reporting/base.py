@@ -403,8 +403,9 @@ class FeldBindung:
         ``typ_bindung`` limits the read path and duplicate-binding diagnostics
         to the types counted by this report. Without a type binding, the read
         path spans the facility but still excludes types whose report key is
-        ``excluded``. Unrelated types must not create duplicate-field notices
-        in a report they do not contribute to (Refs #1819, #2515).
+        ``excluded``. Duplicate-binding notices derived from this read path
+        therefore only consider types the report can count; notices computed
+        elsewhere by a backend are not covered (Refs #1819, #2515).
         """
         # Lokaler Import wie in ``Anforderung.erfuellt``: ``core.models`` zur
         # Modul-Importzeit zoege den Reporting-Vertrag in den Model-Importgraphen.

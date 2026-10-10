@@ -681,7 +681,7 @@ The example activity report generates a structured report based on a fixed examp
 
 ### Dataset Reports (CSV / JSON / XML / PDF)
 
-The **Dataset Reports** tab lists every reporting standard configured for your facility -- the example activity report as well as any others your administrator has added. The **Sum of number fields** report appears when at least one active, non-excluded event type has an active number field bound to the `quantity_units` report key. Types without a bound number field or with the type report key `excluded` (explicitly excluded) are neither counted nor listed for this report under “Appears in”. It shows events, contributing events, and the quantity total for the selected period by type. The preview and CSV/PDF use the same suppressed values; if fewer than *k* events contribute to a sum, that sum remains hidden.
+The **Dataset Reports** tab lists every reporting standard configured for your facility -- the example activity report as well as any others your administrator has added. The **Sum of number fields** report appears when at least one active, non-excluded event type has an active number field bound to the `quantity_units` report key. Types without a bound number field or with the type report key `excluded` (“Explicitly belongs in no report”) are neither counted nor listed for this report under “Appears in”. It shows events, contributing events, and the quantity total for the selected period by type. The preview and CSV/PDF use the same suppressed values; if fewer than *k* events contribute to a sum, that sum remains hidden.
 
 1. Pick the **card** of the report you want. Each card states in one sentence what the report shows, which population it evaluates, and whether it is calculated live or read from monthly aggregates.
 2. A **preview** with the figures for the selected period appears below. The address remembers your choice (`?ansicht=datensaetze&bericht=…`), so bookmarks and the back button work.
@@ -1048,5 +1048,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 6cf19cb0313e0d604f7951325c70172f9f1bcbce -->
+<!-- source-hash: 806d1c44c997e2ed42ff256d03c43f51f66354dc -->
 <!-- translation-date: 2026-10-09 -->
