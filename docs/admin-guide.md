@@ -878,10 +878,29 @@ Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Erei
 
 Neben der Sensibilität des Dokumentationstyps kann jedes einzelne Feld einer Feldvorlage eine **eigene** Sensibilitätsstufe erhalten (`FieldTemplate.sensitivity`). Effektiv gilt für die Sichtbarkeit des Feldes das **Maximum** aus Dokumentationstyp- und Feld-Sensibilität — ein als `HIGH` markiertes Feld bleibt für Fachkräfte unsichtbar, auch wenn der Dokumentationstyp selbst nur `NORMAL` ist.
 
-**Entkopplung Verschlüsselung ↔ Sichtbarkeit** (Refs #356): Die beiden Flags `is_encrypted` (Ruhe-Verschlüsselung des Werts in der Datenbank) und `sensitivity` (Sichtbarkeit im UI) sind **unabhängig** voneinander konfigurierbar:
+**Verschlüsselung und Sichtbarkeit haben getrennte Wirkungen** (Refs #356): `is_encrypted` steuert die Ruhe-Verschlüsselung des Feldwerts, `sensitivity` die Sichtbarkeit im UI; eine Feldvorlage mit eigener Stufe **Hoch** erzwingt jedoch Verschlüsselung:
 
 - Ein Feld kann verschlüsselt auf der Platte liegen, aber für `NORMAL`-Sensibilität im UI sichtbar sein (z. B. Kontaktdaten, die alle Rollen sehen dürfen, die aber nicht im Klartext gespeichert werden sollen).
 - Ein nicht-verschlüsseltes Feld kann trotzdem auf Leitung/Admin beschränkt werden (z. B. statistische Marker, die sensitiv sind, aber nicht verschlüsselt gespeichert werden müssen).
+
+#### Schutzanzeige und Stufenwechsel
+
+Im **Feld-Board** eines Dokumentationstyps zeigt jede Feldzeile die wirksame Stufe, die zugelassenen Rollen, **Verschlüsselt** oder **Klartext** sowie **Im Suchindex** oder **Nicht im Suchindex**. Bei Vererbung steht **wie Typ**, bei einer höheren Feldstufe **Feldvorlage:** mit der Eigenstufe; die Detailseite zählt höher eingestufte Felder. Die Feldvorlagen-Liste zeigt die Eigenstufe und Speicherung sowie den Indexstatus je zugeordnetem Typ; ohne Zuordnung gibt es keinen Suchindex.
+
+Ein Typ mit Stufe **Hoch** darf keine erbende Feldvorlage enthalten: Jede Zuordnung braucht eine ausdrückliche Feldstufe. Die Konfiguration und der Paket-Loader weisen Vererbung in Hoch-Typen ab. In den ausgelieferten Paketen erhalten Berichtsfelder in Hoch-Typen die Feldstufe **Erhöht** und bleiben für die Statistik unverschlüsselt; die übrigen Felder erhalten **Hoch** und werden verschlüsselt. Eine hohe **Typstufe** allein verschlüsselt nicht sämtliche Feldwerte.
+
+Beim Speichern einer geänderten Typstufe oder einer geänderten Feldstufe/Verschlüsselung **über die Verwaltungsformulare** werden die betroffenen Ereignisse, Personen und Fälle derselben Einrichtung neu gespeichert, einschließlich Datensätzen im Papierkorb. Konfiguration, Feldverschlüsselung und Ereignis-Suchindex ändern sich in **derselben Transaktion**; scheitert das Neuschreiben, bleibt kein halber Wechsel zurück. Eine gemeinsam verwendete Feldvorlage wirkt dabei auf alle zugeordneten Typen der Einrichtung. Verschlüsselte Felder speichern auch **Nein (`False`)** und **0** verschlüsselt; neu verschlüsselte Boolean- und Ganzzahlwerte behalten beim Entschlüsseln ihren Datentyp. Bloßes Herabstufen entschlüsselt keine bereits verschlüsselten Werte; bleibt die Verschlüsselung der Vorlage aktiviert, bleiben auch neue Werte verschlüsselt.
+
+Der Ereignisindex enthält nur unverschlüsselte Felder, die nach Typ- **und** Feldstufe wirksam **Normal** sind. Ein Wechsel auf Erhöht/Hoch entfernt die betroffenen Feldwerte aus dem Index, auch wenn sie für Berichte weiter im Klartext gespeichert werden. Die Pseudonymsuche bleibt im Rahmen der Rollenrechte erhalten.
+
+Gespeicherte Vorher-/Nachher-Fassungen werden getrennt mit **`reencrypt_fields`** nachverschlüsselt: Maßgeblich sind verschlüsselte Feldvorlagen derselben Einrichtung oder der gespeicherte Verschlüsselungsstatus in den Historienmetadaten, auch bei nicht mehr zugeordneten Feldern. Redaktionsmarker und Datei-Metadaten bleiben erhalten; `--dry-run` schreibt nichts. Der Lauf kann wiederholt werden, ohne Werte doppelt zu verschlüsseln; vorhandene Chiffrate werden weiterhin rotiert. Ausführung mit der Admin-DB-Rolle: siehe § 2.9 „Schlüssel-Rotation“.
+
+**Suchtext separat wiederaufbauen:** `rebuild_search_text` schreibt ausschließlich den abgeleiteten Ereignisindex, keine Feldwerte, Zeitstempel oder Historie. Ohne `--facility` verarbeitet es alle Einrichtungen, mit `--facility <UUID>` nur die genannte; `--dry-run` zeigt die Anzahl der Änderungen ohne zu schreiben. Ein weiterer Schreibdurchlauf meldet bei unveränderten Daten keine Indexänderungen. Wie die Feldrotation benötigt der Befehl einen RLS-Bypass-Kontext; im Produktivstack verwenden Sie den Wartungsservice:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm maintenance rebuild_search_text --dry-run
+docker compose -f docker-compose.prod.yml run --rm maintenance rebuild_search_text --facility <UUID>
+```
 
 #### Löschschutz bei bestehenden Daten
 
@@ -1911,7 +1930,7 @@ Anlaufstelle wurde nach dem Prinzip **Privacy by Design** (Art. 25 DSGVO) entwic
 
 Sensible Felder in der Datenbank werden mit dem `ENCRYPTION_KEY` verschlüsselt gespeichert. Dies gilt als zusätzliche Schutzmaßnahme über die allgemeine Datenbankzugriffskontrolle hinaus.
 
-**Sichtbarkeit vs. Verschlüsselung:** Die Verschlüsselung (`is_encrypted`) und die Sichtbarkeitsstufe (`sensitivity`) eines Feldes sind unabhängig voneinander konfigurierbar. Ein verschlüsseltes Feld kann für alle Rollen sichtbar sein, und ein nicht-verschlüsseltes Feld kann auf bestimmte Rollen eingeschränkt werden.
+**Sichtbarkeit vs. Verschlüsselung:** Die Verschlüsselung (`is_encrypted`) und Sichtbarkeitsstufe (`sensitivity`) eines Feldes haben getrennte Wirkungen; eine eigene Feldstufe Hoch erzwingt jedoch Verschlüsselung. Ein verschlüsseltes Feld kann für alle Rollen sichtbar sein, und ein nicht-verschlüsseltes Feld kann auf bestimmte Rollen eingeschränkt werden.
 
 - Der Schlüssel wird über die Umgebungsvariable `ENCRYPTION_KEY` bereitgestellt.
 - In der Produktion verweigert die Anwendung den Start, wenn kein Schlüssel gesetzt ist.

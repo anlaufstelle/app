@@ -876,10 +876,29 @@ Defines the minimum contact stage a person must have for an event of this type t
 
 In addition to the document type's sensitivity, each individual field of a field template can receive its **own** sensitivity level (`FieldTemplate.sensitivity`). For field visibility the **maximum** of the document-type and field sensitivity applies -- a field flagged `HIGH` stays invisible to staff even if the document type itself is only `NORMAL`.
 
-**Decoupling Encryption ↔ Visibility** (Refs #356): The two flags `is_encrypted` (at-rest encryption of the value in the database) and `sensitivity` (visibility in the UI) are configurable **independently**:
+**Encryption and visibility have separate effects** (Refs #356): `is_encrypted` controls at-rest encryption of the field value, while `sensitivity` controls UI visibility; however, a field template with its own **High** level enforces encryption:
 
 - A field may be stored encrypted on disk while still being visible in the UI at `NORMAL` sensitivity (e.g. contact data that all roles are allowed to see but that should not be stored in clear text).
 - A non-encrypted field can still be restricted to Lead/Admin (e.g. statistical markers that are sensitive, but do not need to be stored encrypted).
+
+#### Protection display and sensitivity changes
+
+In a documentation type's **field board**, every field row shows the effective level, permitted roles, **Encrypted** or **Plaintext**, and **In search index** or **Not in search index**. Inherited fields show **same as type**; a higher field level shows **Field template:** with its own level, and the detail page counts fields with higher levels. The field-template list shows each template's own level and storage mode, plus its index status for each assigned type; without an assignment there is no search index.
+
+A **High** type may not contain an inheriting field template: each assignment requires an explicit field level. Configuration and the package loader reject inheritance in High types. In the shipped packages, reporting fields in High types receive the **Elevated** field level and remain unencrypted for statistics; other fields receive **High** and are encrypted. A high **type level** alone does not encrypt every field value.
+
+When a changed type level or changed field level/encryption setting is saved **through the administration forms**, affected events, clients and cases in the same facility are rewritten, including records in the trash. Configuration, field encryption and the event search index change in **one transaction**; a failed rewrite leaves no partial transition. A shared field template affects all assigned types within the facility. Encrypted fields also store **No (`False`)** and **0** as ciphertext; newly encrypted booleans and integers retain their types after decryption. Merely lowering sensitivity does not decrypt existing ciphertext; if the template's encryption remains enabled, new values remain encrypted as well.
+
+The event index contains only unencrypted fields whose effective level is **Normal** after combining type **and** field sensitivity. Changing to Elevated/High removes affected field values from the index, even when they remain stored as plaintext for reporting. Pseudonym search remains available within role permissions.
+
+Stored before/after versions are encrypted separately with **`reencrypt_fields`**, using encrypted field templates in the same facility or the encryption status saved in history metadata, including fields that are no longer assigned. Redaction markers and file metadata are preserved; `--dry-run` writes nothing. The command can be repeated without double-encrypting values; existing ciphertext continues to rotate. Use the admin database role as described in § 2.9 "Key Rotation".
+
+**Rebuild search text separately:** `rebuild_search_text` writes only the derived event index, leaving field values, timestamps and history intact. Without `--facility` it processes all facilities; `--facility <UUID>` selects one facility, and `--dry-run` reports the number of changes without writing. Another write run reports no index changes if source data has not changed. Like field rotation, the command requires an RLS bypass context; use the maintenance service in production:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm maintenance rebuild_search_text --dry-run
+docker compose -f docker-compose.prod.yml run --rm maintenance rebuild_search_text --facility <UUID>
+```
 
 #### Deletion Protection for Existing Data
 
@@ -1912,7 +1931,7 @@ Anlaufstelle was developed following the principle of **Privacy by Design** (Art
 
 Sensitive fields in the database are stored encrypted using the `ENCRYPTION_KEY`. This serves as an additional protective measure beyond general database access controls.
 
-**Visibility vs. encryption:** A field's encryption (`is_encrypted`) and sensitivity level (`sensitivity`) are configurable independently. An encrypted field may be visible to all roles, and a non-encrypted field can be restricted to certain roles.
+**Visibility vs. encryption:** Field encryption (`is_encrypted`) and sensitivity (`sensitivity`) have separate effects; a field's own High level nevertheless enforces encryption. An encrypted field may be visible to all roles, and a non-encrypted field can be restricted to certain roles.
 
 - The key is provided via the `ENCRYPTION_KEY` environment variable.
 - In production, the application refuses to start if no key is set.
@@ -2468,5 +2487,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-09 -->
-<!-- source-hash: 957548448201298f93837539e19757a32c68dec6 -->
+<!-- translation-date: 2026-10-10 -->
+<!-- source-hash: 955c7250c6d2ccd97c17b111e5724543c21f834b -->
