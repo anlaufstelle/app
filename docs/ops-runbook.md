@@ -1501,6 +1501,20 @@ Installation fest.
 
 **Sentry-Hook (optional):** Wenn `SENTRY_DSN` UND ein `BACKUP_SENTRY_HOOK`-Skript gesetzt sind, ruft `backup.sh` den Hook bei jedem Off-Site-Fehler auf (Argumente: Beschreibung, Off-Site-Ziel). Der Hook ist freie Operator-Wahl — z.B. `sentry-cli send-event` oder ein eigenes `curl`-Skript. Ohne Hook bleibt es bei Log + Exit-Code.
 
+#### Off-Site-Aufbewahrung
+
+Die Einrichtung legt am Ziel eine **Höchstfrist von 12 Monaten ab Erstellung des Sicherungsstands** fest (eine kürzere Frist ist möglich) und dokumentiert die konfigurierte Frist im **Löschkonzept und in den Informationspflichten**. Gelöschte Daten können bis zum tatsächlichen Ablauf der Sicherungen darin überleben. `backup.sh` setzt diese Höchstfrist nicht durch: Ohne wirksame Zielregel bleiben Off-Site-Kopien unbegrenzt erhalten.
+
+Die Lifecycle-Regel wird **am Ziel** eingerichtet und kontrolliert:
+
+- **S3 Lifecycle:** Ablauf für alle Backup-Präfixe (`daily/`, `weekly/`, `monthly/`) konfigurieren; bei Versionierung auch nicht aktuelle Objektversionen und Löschmarker berücksichtigen. Object-Lock-Fristen müssen mit der Höchstfrist vereinbar sein.
+- **Storage-Box-Snapshots:** Snapshot-Aufbewahrung und Ablauf der zugrunde liegenden Dateien getrennt konfigurieren; abgelaufene Dateien dürfen nicht über länger erhaltene Snapshots die Höchstfrist überschreiten.
+- **Separater Prune-Zugang auf einem anderen Host:** Für Ziele ohne geeigneten Lifecycle löscht ein unabhängig betriebener Job die abgelaufenen vollständigen Sätze. Seine Löschzugangsdaten liegen nicht auf dem App-Host.
+
+Die Regel umfasst Dump, Medienarchiv, Manifest, HMAC-Sidecars und Audit-Anker sowie Versionen, Snapshots und weitere Kopien. Den tatsächlichen Ablauf am Ziel nachweisen; ein erfolgreicher Upload ist kein Löschbeleg. Der App-Host bekommt keine Löschrechte für die Off-Site-Sätze: Bei einer Ransomware-Kompromittierung sollen weder die Wiederherstellungspunkte noch der Anker-Verlauf vom Angreifer entfernt werden können. Object Lock ergänzt diese Trennung, ersetzt aber keine Ablaufregel.
+
+**Bezug zur lokalen Rotation:** `backup.sh` löscht lokal ab 8/29/91 vollen Tagen (täglich/wöchentlich/monatlich, `find -mtime +7/+28/+90`) erst beim nächsten erfolgreichen Rotationslauf. Schon ein fehlgeschlagener Off-Site-Abgleich setzt diese Rotation aus. Diese Altersgrenzen sind keine garantierten Höchstfristen und bewirken keine Löschung am Off-Site-Ziel; die dortige 12-Monats-Grenze muss die Zielkonfiguration unabhängig durchsetzen.
+
 ### 6.6 Backup-Restore-Drill (Refs #720, #739)
 
 Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und die Verteidigungslinien (RLS, AuditLog-Immutability-Trigger) erhalten bleiben. Die konkrete quartalsweise Host-Cron-Empfehlung steht unten.

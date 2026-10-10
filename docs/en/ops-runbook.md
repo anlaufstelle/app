@@ -1486,6 +1486,20 @@ credentials. The installation determines which account executes the script.
 
 **Sentry hook (optional):** If `SENTRY_DSN` AND a `BACKUP_SENTRY_HOOK` script are set, `backup.sh` calls the hook on every off-site failure (arguments: description, off-site target). The hook is a free operator choice — e.g. `sentry-cli send-event` or a custom `curl` script. Without a hook, it stays at log + exit code.
 
+#### Off-Site Retention
+
+The facility sets a **maximum retention period of 12 months from creation of the backup set** at the destination (a shorter period is possible) and records the configured period in its **deletion concept and information obligations**. Deleted data may survive in backups until their actual expiry. `backup.sh` does not enforce this maximum: without an effective destination policy, off-site copies remain indefinitely.
+
+Configure and check the lifecycle rule **at the destination**:
+
+- **S3 Lifecycle:** Configure expiry for all backup prefixes (`daily/`, `weekly/`, `monthly/`); with versioning, account for noncurrent object versions and delete markers too. Object Lock periods must be compatible with the maximum retention period.
+- **Storage Box snapshots:** Configure snapshot retention and expiry of the underlying files separately; expired files must not outlive the maximum period through longer-lived snapshots.
+- **Separate prune credentials on another host:** For destinations without a suitable lifecycle, an independently operated job deletes expired complete sets. Its deletion credentials are not stored on the app host.
+
+The rule covers the dump, media archive, manifest, HMAC sidecars and audit anchor, including versions, snapshots and further copies. Verify actual expiry at the destination; a successful upload is no evidence of deletion. Give the app host no deletion rights for off-site sets: a ransomware compromise must not allow the attacker to remove recovery points or anchor history. Object Lock supplements this separation but does not replace an expiry policy.
+
+**Relation to local rotation:** `backup.sh` deletes locally from 8/29/91 full days (daily/weekly/monthly, `find -mtime +7/+28/+90`), only at the next successful rotation run. Even one failed off-site sync suspends this rotation. These age thresholds are no guaranteed maximum periods and do not delete anything at the off-site destination; the destination configuration must independently enforce its 12-month limit.
+
 ### 6.6 Backup Restore Drill (Refs #720, #739)
 
 Verifies that the latest backup is fully restorable and that the lines of defense (RLS, AuditLog immutability trigger) are preserved. The concrete quarterly host-cron recommendation is below.
@@ -3286,4 +3300,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 44dff7d51642b9b2444e9660be9fcc63ffabfa3b -->
+<!-- source-hash: c6c58dd4e2ea05fed6cf24805315306475054c55 -->
