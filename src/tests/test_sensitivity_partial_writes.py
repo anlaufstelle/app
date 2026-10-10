@@ -92,3 +92,32 @@ def test_complete_type_change_persists_protected_values(facility, lead_user, ent
     assert is_encrypted_value(record.data_json[protected.slug])
     assert safe_decrypt(record.data_json[protected.slug]) == "CompleteSecret"
     assert getattr(record, "search_text", "") == ""
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="Deferred type changes can persist a stale plaintext search index (Refs #2525).",
+)
+@pytest.mark.parametrize("loading", ["defer_index", "only_type"])
+def test_implicit_partial_type_write_never_retains_plaintext_index(facility, lead_user, loading):
+    record, field = make_record(facility, lead_user, "event", value="DeferredSecret")
+    target = high_target(facility, field)
+    before = stored_state(record)
+    assert before["search_text"] == "DeferredSecret"
+    query = type(record).objects.for_facility(facility)
+    if loading == "defer_index":
+        query = query.defer("search_text")
+    else:
+        query = query.only("document_type")
+    deferred = query.get(pk=record.pk)
+    assert "search_text" in deferred.get_deferred_fields()
+    deferred.document_type = target
+    try:
+        deferred.save()
+    except ValueError:
+        assert stored_state(record) == before
+    else:
+        after = stored_state(record)
+        assert after["document_type_id"] == target.pk
+        assert after["search_text"] == ""
