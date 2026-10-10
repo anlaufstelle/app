@@ -883,7 +883,7 @@ Anlaufstelle distinguishes five roles. Your role is assigned by the application 
 
 | Role | Display Name | Brief Description |
 |---|---|---|
-| `assistant` | Assistant | Limited data entry without access to person data at the "With additional details" level |
+| `assistant` | Assistant | Limited data entry; view people at either contact stage, additional fields only at effective sensitivity "Normal"; no internal person notes |
 | `staff` | Social worker | Default role for employees doing documentation |
 | `lead` | Manager | All social worker functions plus reports and management tasks |
 | `facility_admin` | Application support | Full access to all areas and settings **of your facility** (audit log, GDPR package, user management) |
@@ -902,9 +902,10 @@ Table covers the four facility-bound roles only -- `super_admin` is excluded her
 | Case filter and case display in Contacts list | No | Yes | Yes | Yes |
 | Document anonymous contacts | Yes | Yes | Yes | Yes |
 | Document contacts for people at the "Pseudonym only" level | Yes | Yes | Yes | Yes |
-| View and search for people | Yes (without additional details) | Yes | Yes | Yes |
+| View and search for people | Yes (both contact stages) | Yes | Yes | Yes |
 | Create and edit people | No | Yes | Yes | Yes |
-| View person details at the "With additional details" level | No | Yes (own facility) | Yes | Yes |
+| View additional fields on people | Effective "Normal" only | Up to effective "Elevated" | All levels | All levels |
+| View internal person notes | No | Yes | Yes | Yes |
 | Edit own events | Yes | Yes | Yes | Yes |
 | Edit other users' events | No | Yes | Yes | Yes |
 | Create and edit work items | No | Yes | Yes | Yes |
@@ -920,6 +921,8 @@ Table covers the four facility-bound roles only -- `super_admin` is excluded her
 | Case management (cases, episodes, goals) | No | Yes | Yes | Yes |
 | Close / reopen cases | No | No | Yes | Yes |
 | Manage users and settings | No | No | No | Yes |
+
+Effective sensitivity is the higher level of documentation type and field. Field encryption is independent of visibility.
 
 > **Note:** Access is always restricted to your own facility. Employees of one facility cannot see data from other facilities within the same organization -- this applies to the Application support (`facility_admin`) as well.
 
@@ -1005,7 +1008,7 @@ A case created by mistake can be deleted. "Closing" is **not** the right tool fo
 1. Open the case detail page.
 2. In the **More actions** menu (⋮), click **Delete**.
 3. The next page tells you which of the two paths applies:
-   - **Straight to the trash** — for people at contact stage "Anonymous" or "Pseudonym only".
+   - **Straight to the trash** — for people at contact stage "Pseudonym only".
    - **Deletion request with confirmation** — for a person at stage "With additional details". Enter a reason; the page also names who can confirm the request. Confirmation happens under **Privacy → Deletion requests**, just like for people and contacts. While the request is pending, the case stays fully usable and is flagged as "deletion requested".
 4. Confirm.
 
@@ -1136,4 +1139,4 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 6a624a2778e90361ad9394858f6192a878a958ef -->
+<!-- source-hash: 49b69cd9db43f16cbf00235032048e5c088363c6 -->

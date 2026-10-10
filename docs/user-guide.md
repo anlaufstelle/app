@@ -883,7 +883,7 @@ Anlaufstelle unterscheidet fünf Rollen. Ihre Rolle wird von der Anwendungsbetre
 
 | Rolle | Anzeigename | Kurzbeschreibung |
 |---|---|---|
-| `assistant` | Assistenz | Eingeschränkte Erfassung ohne Zugriff auf Personendaten der Stufe „Mit Zusatzangaben" |
+| `assistant` | Assistenz | Eingeschränkte Erfassung; Personen beider Kontaktstufen einsehen, Zusatzfelder nur bei wirksamer Sensibilität „Normal“; keine internen Personennotizen |
 | `staff` | Fachkraft | Standardrolle für Mitarbeitende in der Dokumentation |
 | `lead` | Leitung | Alle Fachkraft-Funktionen plus Auswertungen und Leitungsaufgaben |
 | `facility_admin` | Anwendungsbetreuung | Vollzugriff auf alle Bereiche und Einstellungen **Ihrer Einrichtung** (Audit-Log, DSGVO-Paket, Benutzerverwaltung) |
@@ -902,9 +902,10 @@ Tabelle nur für die vier facility-gebundenen Rollen — `super_admin` ist hier 
 | Fallfilter und Fallanzeige in der Kontakte-Liste | Nein | Ja | Ja | Ja |
 | Anonyme Kontakte dokumentieren | Ja | Ja | Ja | Ja |
 | Kontakte zu Personen der Stufe „Nur Pseudonym" dokumentieren | Ja | Ja | Ja | Ja |
-| Personen einsehen und suchen | Ja (ohne Zusatzangaben) | Ja | Ja | Ja |
+| Personen einsehen und suchen | Ja (beide Kontaktstufen) | Ja | Ja | Ja |
 | Personen anlegen und bearbeiten | Nein | Ja | Ja | Ja |
-| Personendaten der Stufe „Mit Zusatzangaben" einsehen | Nein | Ja (eigene Einrichtung) | Ja | Ja |
+| Zusatzfelder an Personen einsehen | Nur wirksam „Normal“ | Bis wirksam „Erhöht“ | Alle Stufen | Alle Stufen |
+| Interne Personennotizen einsehen | Nein | Ja | Ja | Ja |
 | Eigene Ereignisse bearbeiten | Ja | Ja | Ja | Ja |
 | Fremde Ereignisse bearbeiten | Nein | Ja | Ja | Ja |
 | WorkItems erstellen und bearbeiten | Nein | Ja | Ja | Ja |
@@ -920,6 +921,8 @@ Tabelle nur für die vier facility-gebundenen Rollen — `super_admin` ist hier 
 | Fallmanagement (Fälle, Episoden, Ziele) | Nein | Ja | Ja | Ja |
 | Fälle schließen / wiedereröffnen | Nein | Nein | Ja | Ja |
 | Benutzer und Einstellungen verwalten | Nein | Nein | Nein | Ja |
+
+Die wirksame Sensibilität ist die höhere Stufe aus Dokumentationstyp und Feld. Die Feldverschlüsselung ist davon unabhängig.
 
 > **Hinweis:** Der Zugriff ist immer auf die eigene Einrichtung beschränkt. Mitarbeitende einer Einrichtung können keine Daten anderer Einrichtungen derselben Organisation sehen — auch die Anwendungsbetreuung (`facility_admin`) sieht nur die eigene Einrichtung.
 
@@ -1005,7 +1008,7 @@ Ein versehentlich angelegter Fall lässt sich löschen. „Schließen" ist dafü
 1. Öffnen Sie die Fall-Detailseite.
 2. Klicken Sie im Menü **Weitere Aktionen** (⋮) auf **Löschen**.
 3. Die folgende Seite sagt Ihnen, welcher der beiden Wege gilt:
-   - **Direkt in den Papierkorb** — bei Personen der Kontaktstufe „Anonym" oder „Nur Pseudonym".
+   - **Direkt in den Papierkorb** — bei Personen der Kontaktstufe „Nur Pseudonym".
    - **Löschantrag mit Bestätigung** — bei einer Person der Stufe „Mit Zusatzangaben". Geben Sie eine Begründung ein; die Seite nennt gleich, wer den Antrag bestätigen kann. Bestätigt wird er über **Datenschutz → Löschanträge**, wie bei Personen und Kontakten. Solange der Antrag läuft, bleibt der Fall unverändert nutzbar und ist als „Löschung beantragt" gekennzeichnet.
 4. Bestätigen Sie.
 

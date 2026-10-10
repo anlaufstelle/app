@@ -20,15 +20,15 @@ Beyond the original domain of low-threshold substance-use and homelessness servi
 
 ## Core Domain Concepts
 
-### Contact Stages (Kontaktstufen)
+### Personless Contacts and Contact Stages (Kontaktstufen)
 
-Anlaufstelle uses a three-tier model that reflects how relationships develop in low-threshold settings:
+Relationships in low-threshold settings may develop from personless contacts to documentation under a pseudonym and then with additional details. The data model distinguishes personless events from two contact stages for people:
 
-- **Anonymous** -- No pseudonym, no record. The event has no person in the data model (one visit, one service). That does not make it anonymous by content: depending on the documentation type it can carry free text, locations or attachments (for example the personless incident capture of the awareness package) that make a person identifiable. Most contacts at a drop-in center remain at this level.
-- **Identified** -- The team assigns a pseudonym (e.g. "Maus"). Under this pseudonym, the system tracks a contact history and a timeline. The intended workflow keeps the mapping from pseudonym to real person in the minds of staff, and there is no required field for real names. The software does not technically prevent real names: pseudonyms, notes, free-text fields and attachments contain whatever the team enters.
-- **Qualified** -- The person is in an active counseling or support process. Additional sensitive data (health information, counseling notes) may be recorded, subject to stricter access rules and encryption. The transition to this level is a deliberate decision by facility leadership and is logged by the system.
+- **Personless contact** -- No linked person record. The event has no person in the data model (one visit, one service). That does not make it anonymous by content: depending on the documentation type it can carry free text, locations or attachments (for example the personless incident capture of the awareness package) that make a person identifiable. Most contacts at a drop-in center remain at this level.
+- **Pseudonym only** (`identified`) -- The team assigns a pseudonym (e.g. "Maus"). Under this pseudonym, the system tracks a contact history and a timeline. The intended workflow keeps the mapping from pseudonym to real person in the minds of staff, and there is no required field for real names. The software does not technically prevent real names: pseudonyms, notes, free-text fields and attachments contain whatever the team enters.
+- **With additional details** (`qualified`) -- Additional personal details are stored in dynamic fields. Field encryption and role-based visibility are separate rules. Social workers and above may raise the contact stage; only Manager and Application support may lower it. Stage changes are logged.
 
-Contact stages govern which [documentation types](glossary.md) can be used, who may access the data, and how long records are retained.
+Contact stages affect permitted [documentation types](glossary.md), deletion workflows, detail-view auditing and retention. Assistants may open person detail pages at either stage. Dynamic fields are visible only when the higher sensitivity of type and field is permitted for the role: Normal for Assistant, up to Elevated for Social worker, all levels for Manager and Application support. Internal person notes are visible only to Social worker and above. Encryption does not itself impose a role restriction.
 
 ### Timeline (Zeitstrom)
 
@@ -349,4 +349,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 06ea58664869877211206dea6a103d5bbb61124c -->
+<!-- source-hash: a1e70f7cf9dfa34125803871242a4b17c456b18b -->

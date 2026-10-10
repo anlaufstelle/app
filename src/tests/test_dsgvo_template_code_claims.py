@@ -1334,7 +1334,7 @@ class TestRealNamePromises:
         assert "Pflichtfeld" in text
 
     def test_english_summary_separates_personless_from_anonymous_content(self):
-        text = _section(_read_flat(DOMAIN_SUMMARY_EN), "- **Anonymous** --", "- **Qualified**")
+        text = _section(_read_flat(DOMAIN_SUMMARY_EN), "- **Personless contact** --", "- **With additional details**")
         assert "stores no personal data" not in text
         assert "No real name enters the database" not in text
         assert "does not make it anonymous by content" in text

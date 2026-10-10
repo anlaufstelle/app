@@ -740,7 +740,7 @@ Anlaufstelle has five roles -- four facility-bound, one facility-spanning:
 | `facility_admin` | Application manager | one facility | Full access within their own facility: user management, type/sensitivity configuration, audit log (`/audit/`), GDPR package. **Cannot** view other facilities. |
 | `lead` | Lead / Manager | one facility | Reports, approve deletion requests, view all cases in the facility, data export |
 | `staff` | Staff / Social worker | one facility | Record and edit contacts, cases, and documentation |
-| `assistant` | Assistant | one facility | Limited data entry, no access to client data at the "With additional details" level |
+| `assistant` | Assistant | one facility | Limited data entry; view people at either contact stage, additional fields only at effective sensitivity "Normal"; no internal person notes |
 
 > **System ↔ application separation:** `super_admin` manages hosting and bootstrap; `facility_admin` manages configuration and users **within** a facility. This separation is GDPR-relevant: the super-admin cannot view the substantive content of a facility without this being logged in the AuditLog (`SYSTEM_VIEW`). Architecture decision: [ADR-018](../adr/018-rollenmodell-superadmin.md).
 
@@ -2529,4 +2529,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 27506712649571a299126d89d8cd34d4da32907f -->
+<!-- source-hash: d60513b77184cba659b11f3322fffb0335a670a0 -->
