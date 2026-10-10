@@ -343,6 +343,9 @@ def add_field_to_doctype(
             )
     except IntegrityError as exc:
         raise ValidationError(_("Diese Feldvorlage ist dem Dokumentationstyp bereits zugeordnet.")) from exc
+    # Retained values can predate the assignment or its current protection.
+    # Refs #2525: apply the same atomic rewrite as for sensitivity changes.
+    _rewrite_document_type_records(doc_type)
     log_audit_event(
         request,
         AuditLog.Action.CONFIG_CREATE,
