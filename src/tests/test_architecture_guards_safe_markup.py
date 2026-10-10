@@ -34,7 +34,8 @@ from __future__ import annotations
 import ast
 import fnmatch
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from importlib import import_module
 from pathlib import Path
 
 import pytest
@@ -46,6 +47,9 @@ pytestmark = pytest.mark.architecture
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATES_SUBDIR = "src/templates"
+
+# Explicit admin dependencies whose installed assets are delivered to browsers.
+VENDOR_PACKAGES = ("django.contrib.admin", "unfold")
 
 UNSAFE_FILTERS = frozenset({"safe", "safeseq"})
 AUTOESCAPE_OFF = "autoescape off"
@@ -63,6 +67,95 @@ TEMPLATE_ALLOWLIST: dict[tuple[str, str], str] = {
         "no html_email_template_name configured); escaping would break the reset link."
     ),
 }
+
+# Every installed-template exception is tied to a concrete path and construct.
+TEMPLATE_ALLOWLIST.update(
+    {
+        (
+            "vendor/django.contrib.admin/templates/admin/auth/user/change_password.html",
+            "filter:safe",
+        ): (
+            "Django password-form help text comes from built-in validators and static form definitions; "
+            "no submitted values."
+        ),
+        (
+            "vendor/django.contrib.admin/templates/admin/includes/fieldset.html",
+            "filter:safe",
+        ): (
+            "Fieldset descriptions and field help text are model/admin declarations, not field values. "
+            "Registered admin forms do not substitute stored configuration into these slots."
+        ),
+        (
+            "vendor/django.contrib.admin/templates/registration/password_change_form.html",
+            "filter:safe",
+        ): "Built-in password validators supply help text, never the entered password or user metadata.",
+        (
+            "vendor/django.contrib.admin/templates/registration/password_reset_email.html",
+            AUTOESCAPE_OFF,
+        ): "Django PasswordResetForm renders a plain-text message; no HTML email template is configured.",
+        (
+            "vendor/unfold/templates/admin/includes/fieldset.html",
+            "filter:safe",
+        ): (
+            "Fieldset descriptions are static ModelAdmin declarations; registered admin classes do not "
+            "read them from submitted or stored data."
+        ),
+        (
+            "vendor/unfold/templates/unfold/helpers/app_list.html",
+            "filter:safe",
+        ): (
+            "Default sidebar titles are app/model verbose labels. settings.UNFOLD configures no dynamic "
+            "title callbacks; these slots do not receive submitted values."
+        ),
+        (
+            "vendor/unfold/templates/unfold/helpers/help_text.html",
+            "filter:safe",
+        ): (
+            "Admin form help text comes from schema/form declarations. Stored FieldTemplate.help_text is "
+            "an editable field value, not substituted into these admin help-text slots."
+        ),
+        (
+            "vendor/unfold/templates/unfold_crispy/layout/button.html",
+            "filter:safe",
+        ): (
+            "Crispy integration is not installed or used by this application; button content is a "
+            "developer-defined layout label if enabled."
+        ),
+        (
+            "vendor/unfold/templates/unfold_crispy/layout/buttonholder.html",
+            "filter:safe",
+        ): (
+            "Unused crispy integration; fields_output is rendered widget markup whose input values are "
+            "escaped by Django widgets."
+        ),
+        (
+            "vendor/unfold/templates/unfold_crispy/layout/column.html",
+            "filter:safe",
+        ): "Unused crispy integration; fields is already-rendered widget markup, not raw field values.",
+        (
+            "vendor/unfold/templates/unfold_crispy/layout/div.html",
+            "filter:safe",
+        ): "Unused crispy integration; fields is rendered Django widget markup with escaped input values.",
+        (
+            "vendor/unfold/templates/unfold_crispy/layout/fieldset.html",
+            "filter:safe",
+        ): (
+            "Unused crispy integration; legend is a developer-defined layout label and fields is rendered "
+            "widget markup."
+        ),
+        (
+            "vendor/unfold/templates/unfold_crispy/layout/help_text.html",
+            "filter:safe",
+        ): (
+            "Unused crispy integration; help text is schema-defined. No application layout feeds user "
+            "content into this slot."
+        ),
+        (
+            "vendor/unfold/templates/unfold_crispy/layout/row.html",
+            "filter:safe",
+        ): "Unused crispy integration; fields is already-rendered Django widget markup with escaped input values.",
+    }
+)
 
 #: Python call sites of ``mark_safe``/``SafeString``, with the reason. Empty:
 #: the application builds markup only via templates and ``format_html``.
@@ -103,6 +196,27 @@ def tracked_files(root: Path, *pathspecs: str) -> list[Path]:
 def production_python_files(root: Path) -> list[Path]:
     """All tracked Python files under ``src/`` except the test suite."""
     return [p for p in tracked_files(root, "src/*.py") if not p.relative_to(root).as_posix().startswith("src/tests/")]
+
+
+def vendor_roots() -> list[tuple[str, Path]]:
+    """Missing installed admin dependencies fail the guard, never silently skip."""
+    roots = []
+    for package in VENDOR_PACKAGES:
+        module = import_module(package)
+        assert module.__file__, f"Missing vendor package location: {package}"
+        root = Path(module.__file__).resolve().parent
+        assert (root / "templates").is_dir(), f"Missing vendor templates: {package}"
+        roots.append((f"vendor/{package}", root))
+    return roots
+
+
+def vendor_python_findings(names: frozenset[str]) -> list[Finding]:
+    """Inventory Python in the same admin packages for CSRF bypasses."""
+    return [
+        replace(finding, relpath=f"{prefix}/{finding.relpath}")
+        for prefix, root in vendor_roots()
+        for finding in scan_python(root, names)
+    ]
 
 
 # --- templates -----------------------------------------------------------------
@@ -279,7 +393,19 @@ def stale_entries(findings: list[Finding], allowlist: dict[tuple[str, str], str]
 def _repo_template_findings() -> list[Finding]:
     root = REPO_ROOT / TEMPLATES_SUBDIR
     files = tracked_files(REPO_ROOT, f"{TEMPLATES_SUBDIR}/*.html", f"{TEMPLATES_SUBDIR}/*.txt")
-    return scan_templates(root, files)
+    findings = scan_templates(root, files)
+    for prefix, package_root in vendor_roots():
+        vendor_files = sorted(
+            path
+            for path in (package_root / "templates").rglob("*")
+            if path.is_file() and path.suffix in {".html", ".txt"}
+        )
+        assert vendor_files, f"Empty vendor template inventory: {prefix}"
+        findings.extend(
+            replace(finding, relpath=f"{prefix}/{finding.relpath}")
+            for finding in scan_templates(package_root, vendor_files)
+        )
+    return findings
 
 
 def _repo_py_findings(names: frozenset[str]) -> list[Finding]:

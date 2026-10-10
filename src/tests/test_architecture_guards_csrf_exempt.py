@@ -27,6 +27,7 @@ from tests.test_architecture_guards_safe_markup import (
     production_python_files,
     scan_python,
     stale_entries,
+    vendor_python_findings,
     violations,
 )
 
@@ -45,7 +46,9 @@ CSRF_EXEMPT_ALLOWLIST: dict[tuple[str, str], str] = {
 
 
 def _repo_findings():
-    return scan_python(REPO_ROOT, CSRF_BYPASS_NAMES, production_python_files(REPO_ROOT))
+    return scan_python(REPO_ROOT, CSRF_BYPASS_NAMES, production_python_files(REPO_ROOT)) + vendor_python_findings(
+        CSRF_BYPASS_NAMES
+    )
 
 
 class TestCsrfExemptAllowlist:
