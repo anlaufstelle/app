@@ -42,8 +42,23 @@ class DocumentTypeFieldInline(TabularInline):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
+class ConfigurationSelectionAdminMixin(FacilityScopedAdminMixin):
+    """Lock the selected rows after all gates, before deletion audit (Refs #2525)."""
+
+    @transaction.atomic
+    def delete_queryset(self, request, queryset):
+        selection = list(queryset.order_by("pk").values_list("pk", "facility_id"))
+        lock_dynamic_protection_many({facility_id for _pk, facility_id in selection}, exclusive=True)
+        locked = list(
+            queryset.filter(pk__in=[pk for pk, _facility_id in selection])
+            .order_by("pk")
+            .select_for_update(of=("self",))
+        )
+        super().delete_queryset(request, queryset.filter(pk__in=[obj.pk for obj in locked]))
+
+
 @admin.register(DocumentType, site=anlaufstelle_admin_site)
-class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
+class DocumentTypeAdmin(ConfigurationSelectionAdminMixin, ModelAdmin):
     # Existing save audit also accompanies the banner revision hook.
     admin_audit_save_actions = ()
 
@@ -164,7 +179,7 @@ class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
 
 
 @admin.register(FieldTemplate, site=anlaufstelle_admin_site)
-class FieldTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
+class FieldTemplateAdmin(ConfigurationSelectionAdminMixin, ModelAdmin):
     list_display = (
         "name",
         "slug",

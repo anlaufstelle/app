@@ -129,6 +129,23 @@ def test_admin_bulk_change_reads_fresh_state_after_waiting(facility, admin_user)
     assert field.is_active is False
 
 
+@pytest.mark.parametrize("model,admin_class", [(DocumentType, DocumentTypeAdmin), (FieldTemplate, FieldTemplateAdmin)])
+def test_admin_deletion_locks_only_its_selected_configuration_rows(facility, admin_user, model, admin_class):
+    selected = model.objects.create(facility=facility, name="Selected deletion")
+    remaining = model.objects.create(facility=facility, name="Unselected configuration")
+    with CaptureQueriesContext(connection) as captured:
+        admin_class(model, anlaufstelle_admin_site).delete_queryset(
+            _request(RequestFactory(), admin_user), model.objects.filter(pk=selected.pk)
+        )
+    locks = [query["sql"] for query in captured.captured_queries if "FOR UPDATE" in query["sql"]]
+    assert len(locks) == 1
+    assert selected.pk.hex in locks[0].replace("-", "")
+    assert remaining.pk.hex not in locks[0].replace("-", "")
+    assert "WHERE" in locks[0] and '"id" IN' in locks[0]
+    assert model.objects.filter(pk=remaining.pk).exists()
+    assert not model.objects.filter(pk=selected.pk).exists()
+
+
 @pytest.mark.parametrize("model_admin_class", [FacilityAdmin, OrganizationAdmin])
 def test_admin_cascade_deletion_waits_before_config_rows(facility, admin_user, model_admin_class):
     organization = Organization.objects.create(name="Cascade gate organization")
