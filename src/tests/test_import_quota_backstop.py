@@ -688,24 +688,12 @@ def _bewerte_db_fehler(fehler, *, kontext) -> None:
 
 
 def _warte_auf_gegenseite(sonde, facility_id, worker_pid, deadline_ends_at) -> str:
-    """Beobachtet den Upload-Pfad von aussen — ohne unbegrenztes Warten.
+    """Observe this worker blocking before it takes the facility audit lock.
 
-    Die Sonde laeuft auf einer EIGENEN Verbindung und probt genau zwei
-    Zustaende:
-
-    * ``"kette"`` — der Ketten-Advisory-Lock GENAU DIESER Einrichtung ist
-      vergeben. Der Upload haelt ihn also schon, bevor er die Typzeile
-      angefasst hat: die verkehrte Folge, der Zyklus steht. Geprobt wird mit
-      ``pg_try_advisory_xact_lock`` auf demselben Schluessel; die
-      Probe-Transaktion wird sofort zurueckgerollt und haelt selbst nichts.
-    * ``"blockiert"`` — GENAU das Backend des Uploads wartet auf die
-      Transaktion eines anderen (``locktype='transactionid'``), haengt also an
-      der gehaltenen Typzeile, BEVOR es den Ketten-Lock genommen hat: die
-      geforderte Richtung. Die Probe ist an ``worker_pid`` gebunden; eine
-      beliebige andere Sitzung darf den Test nicht gruen faerben.
-
-    ``"deadline"`` heisst „nichts davon beobachtet" — unschluessig, und der
-    Aufrufer laesst den Test dann nicht stillschweigend gruen werden.
+    The worker can wait at the FK row or at the earlier SHARED protection gate.
+    A gate wait must match its PID, the protection namespace, shared mode and
+    this facility's actual advisory key. The audit-lock availability probe and
+    the bounded wait still reject reversed order, unrelated waits and timeouts.
     """
     from core.services.audit.chain import advisory_lock_name
 
@@ -714,8 +702,11 @@ def _warte_auf_gegenseite(sonde, facility_id, worker_pid, deadline_ends_at) -> s
             cur.execute("SELECT pg_try_advisory_xact_lock(hashtext(%s))", [advisory_lock_name(facility_id)])
             frei = bool(cur.fetchone()[0])
             cur.execute(
-                "SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid' AND pid = %s",
-                [worker_pid],
+                "SELECT count(*) FROM pg_locks WHERE NOT granted AND pid = %s "
+                "AND (locktype = 'transactionid' OR (locktype = 'advisory' "
+                "AND classid = 2525 AND objsubid = 2 AND mode = 'ShareLock' "
+                "AND objid = (hashtext(%s)::bigint & 4294967295)))",
+                [worker_pid, str(facility_id)],
             )
             wartet = cur.fetchone()[0]
         sonde.rollback()

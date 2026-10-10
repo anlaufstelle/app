@@ -391,44 +391,18 @@ def _parse_csv(text: str, delimiter: str) -> tuple[list[str], list[list[str]]]:
 
 
 def _lock_job_fk_rows(job) -> None:
-    """Sichert die FK-Zielzeilen der Jobzeile — VOR dem Ketten-Lock (Refs #2259).
+    """Take SHARED before FK targets and the quota/audit lock (Refs #2259, #2525).
 
-    Django legt Fremdschluessel auf PostgreSQL ``DEFERRABLE INITIALLY
-    DEFERRED`` an: die Pruefung des Inserts laeuft erst beim COMMIT und nimmt
-    dort auf jede referenzierte Zeile eine ``FOR KEY SHARE``-Sperre. Ohne
-    Vorsperre faellt diese ERSTE Zeilensperre mitten in den bereits gehaltenen
-    Ketten-/Kontingent-Lock der Einrichtung — und dreht damit die
-    einrichtungsweite Ordnung „Zeilen vor Ketten-Lock" um (Refs #2260). Ein
-    Pfad, der eine dieser Zeilen schluesselaendernd haelt und danach seine
-    Rechenschaftszeile schreiben will (der Dokumentationstyp-Fallback im
-    Django-Admin: ``super().save_model()``, dann ``log_audit_event``),
-    schliesst so einen Zyklus, den PostgreSQL mit ``40P01`` aufloest.
-
-    Gesperrt wird deshalb hier — vor dem Ketten-Lock, in derselben Transaktion
-    wie der Insert, und zwar:
-
-    * **alle** FK-Ziele der Jobzeile, aus dem Modell abgeleitet statt
-      aufgezaehlt: Einrichtung, Dokumentationstyp und anlegende Person heute,
-      ein spaeter hinzukommender Fremdschluessel automatisch mit. Genau die
-      Zeilen, die die aufgeschobene Pruefung anfassen wird;
-    * in genau der Staerke, die der Insert braucht — ``FOR KEY SHARE`` per
-      Roh-SQL. ``select_for_update(no_key=True)`` waere ``FOR NO KEY UPDATE``
-      und damit staerker als noetig: zwei gleichzeitige Uploads desselben
-      Dokumentationstyps wuerden sich an der Typzeile gegenseitig aufhalten,
-      obwohl keiner von beiden sie aendert. ``FOR KEY SHARE`` vertraegt sich
-      mit sich selbst und blockiert nur gegen eine schluesselaendernde
-      Aenderung — dieselbe Aenderung, mit der auch der COMMIT kollidieren
-      wuerde;
-    * in fester Reihenfolge (Tabelle, PK), damit zwei Pfade mit
-      ueberlappenden Zielmengen sie nie gegenlaeufig nehmen.
-
-    Auf Nicht-PostgreSQL (SQLite) entfaellt die Sperre, wie der Advisory-Lock
-    in ``file_vault.quota.lock_facility_storage``.
+    Deferred FK checks require KEY SHARE through commit. Taking the protection
+    gate after those row locks can deadlock with a gated type rename, even if
+    the gate itself locks no rows. Derive all targets from model metadata and
+    preserve their table/PK order and KEY SHARE strength (Refs #2337).
     """
     if connection.vendor != "postgresql":
         return
-    # Ableitung und Sperre liegen im gemeinsamen Helfer (Refs #2337): der
-    # Anhangspfad nimmt dieselben Ziele auf demselben Weg.
+    from core.services.dynamic_protection import lock_dynamic_protection
+
+    lock_dynamic_protection(job.facility_id)
     lock_fk_targets(fk_lock_targets(ImportJob, fk_values_of(job)))
 
 
@@ -1139,6 +1113,9 @@ def _lock_job(job: ImportJob) -> None:
     und RLS-Isolation greifen. Der Aufrufer MUSS in ``transaction.atomic``
     stehen (sonst ist ``select_for_update`` wirkungslos bzw. ein Fehler).
     """
+    from core.services.dynamic_protection import lock_dynamic_protection
+
+    lock_dynamic_protection(job.facility_id)
     locked = ImportJob.objects.select_for_update().get(pk=job.pk, facility_id=job.facility_id)
     job.status = locked.status
     job.result_json = locked.result_json
