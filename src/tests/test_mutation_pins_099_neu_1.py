@@ -450,23 +450,15 @@ class TestLockFacilityStorage:
             "waere sofort wieder frei und wuerde nichts serialisieren."
         )
 
-    def test_derives_the_lock_name_from_the_given_facility_id(self, monkeypatch):
-        """Toetet ``mutmut_18`` (``storage_lock_name(None)`` statt
-        ``storage_lock_name(facility_id)``): OHNE den echten
-        Mandanten-Bezug wuerden ALLE Einrichtungen unter EINEM
-        Advisory-Lock-Schluessel serialisieren statt je Einrichtung
-        eigenstaendig (Sperr-Mutant, #2178). ``mutmut_16`` (SQL-Keyword
-        ``select`` statt ``SELECT``) ist ``equivalent`` (PostgreSQL ist
-        keyword-case-insensitiv) und nicht hier gepinnt."""
+    def test_derives_the_lock_name_from_the_given_facility_id(self, monkeypatch, facility):
+        """Keep the quota key scoped to the actual facility UUID (Refs #2178, #2525)."""
         calls = []
         monkeypatch.setattr(
             quota_module, "storage_lock_name", lambda facility_id: calls.append(facility_id) or "irrelevant"
         )
-
         with transaction.atomic():
-            lock_facility_storage(4242)
-
-        assert calls == [4242]
+            lock_facility_storage(facility.pk)
+        assert calls == [facility.pk]
 
 
 # ---------------------------------------------------------------------------
