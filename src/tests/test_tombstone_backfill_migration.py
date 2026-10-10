@@ -26,6 +26,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pytest
+from django.db import connection
+from django.db.migrations.loader import MigrationLoader
 from django.utils import timezone
 
 from core.models import Client, Event
@@ -38,24 +40,19 @@ def _aware(year, month, day, hour=0, minute=0):
 
 
 def _run_backfill():
-    """Die Backfill-Funktion der Migration 0171 gegen die echten Modelle.
+    """Run migration 0171 with its historical models against the fixture rows.
 
-    Geprüft wird die **echte** Funktion aus dem Migrationsmodul (per
-    ``importlib``, weil der Modulname mit einer Ziffer beginnt) — nicht eine
-    nachgebaute Kopie, die auseinanderlaufen könnte. Der Stub bildet nur die
-    beiden historischen Modelle auf die echten ab. Der RLS-Rollen-Guard sitzt
-    im ``RunPython``-Einstieg und bleibt dem echten Migrationslauf vorbehalten.
+    The real migration predates the four-eyes downgrade guard (Refs #2524).
+    Passing today's models would incorrectly apply that guard to this
+    historical tombstone cleanup. Use Django's migration state instead of
+    bypassing the guard or replacing the migration's implementation.
+    The RunPython entry point retains its separate database-role check.
     """
     import importlib
 
     module = importlib.import_module("core.migrations.0171_generalize_existing_tombstones")
-
-    class _Apps:
-        @staticmethod
-        def get_model(app_label, name):
-            return {"Client": Client, "Event": Event}[name]
-
-    module.generalize_existing_tombstones(_Apps())
+    apps = MigrationLoader(connection).project_state([("core", "0171_generalize_existing_tombstones")]).apps
+    module.generalize_existing_tombstones(apps)
 
 
 def _make_tombstone(facility, staff_user, doc_type, *, k_anon=False, stage=Client.ContactStage.QUALIFIED):
