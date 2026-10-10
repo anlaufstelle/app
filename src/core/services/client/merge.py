@@ -799,10 +799,9 @@ def unmerge_client(source, user):
     * Die Besuchs-Zeilen (``RecentClientVisit``) werden NICHT rekonstruiert —
       der Dedup hat ihre Quell-Werte verworfen; das Widget baut sich beim
       naechsten Besuch neu auf.
-    * Die Kontaktstufe des Ziels faellt auf ihren Vor-Merge-Wert zurueck, wenn
-      die Hochstufung vom Merge kam — zusammen mit dem Entfernen der
-      uebernommenen Zusatzangaben ist das die sachlich richtige Einstufung,
-      kein verdeckter Downgrade (N2: nur Leitung darf diesen Weg gehen).
+    * Restore the target's previous contact stage only when no events remain
+      there. Otherwise retain the qualified stage and its approval requirement;
+      a downgrade must use the separate request and approval workflow.
 
     Nach der Redaktion des Tombstones ist nichts mehr umkehrbar — die
     Stammdaten der Quelle sind getilgt, ein „Restore" ergaebe eine leere
@@ -931,7 +930,24 @@ def unmerge_client(source, user):
         target.data_json = data
         target.save(update_fields=["document_type", "data_json", "updated_at"])
 
-    if target_stage_before == Client.ContactStage.IDENTIFIED and target.contact_stage == Client.ContactStage.QUALIFIED:
+    # Returned case events also keep the qualified approval requirement,
+    # including events created at the target after the merge (Refs #2524).
+    if (
+        target.contact_stage == Client.ContactStage.QUALIFIED
+        and source.contact_stage != Client.ContactStage.QUALIFIED
+        and source.events.exists()
+    ):
+        old_source_stage = source.contact_stage
+        source.contact_stage = Client.ContactStage.QUALIFIED
+        source.save(update_fields=["contact_stage", "updated_at"])
+        update_client_stage(source, old_source_stage, Client.ContactStage.QUALIFIED, user)
+
+    # Retained events must keep their deletion approval requirement (Refs #2524).
+    if (
+        target_stage_before == Client.ContactStage.IDENTIFIED
+        and target.contact_stage == Client.ContactStage.QUALIFIED
+        and not target.events.exists()
+    ):
         target.contact_stage = Client.ContactStage.IDENTIFIED
         target.save(update_fields=["contact_stage", "updated_at"])
         update_client_stage(target, Client.ContactStage.QUALIFIED, Client.ContactStage.IDENTIFIED, user)
