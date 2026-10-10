@@ -36,6 +36,14 @@ The [event](glossary.md) is the fundamental unit of documentation: a timestamped
 
 The start page shows events as a chronological stream, optionally filtered by a named [time filter](glossary.md). Time filters are saved time windows with a label (e.g. "Night shift 21:30--09:00") used by the timeline, handover and tally views, not statistics. Events do not reference them; shift handover notes do, with deletion protection and frozen window boundaries.
 
+### Contacts list
+
+The working list `/events/` complements the daily Timeline with combined period, documentation type, person, creator, own-entry, shift and anonymity filters. Assistant and higher can see other team members’ entries within the same facility and sensitivity limits as the Timeline. Case filtering and display require Social worker or higher. Deleted contacts and contacts in the trash are excluded. Results show metadata only, newest first, with pagination and mobile cards; filters remain in the URL across Back/Forward.
+
+**Contacts** appears directly below **Timeline** in the sidebar and in the mobile More menu. Only the list route activates it; event detail pages remain assigned to Timeline. The local Timeline link also remains and carries over day, documentation type and shift.
+
+Search stays limited to pseudonym and `Event.search_text`: only unencrypted fields with effective Normal sensitivity, excluding case titles and file contents. A search term also excludes events belonging to people in the trash. There is no autocomplete, export or bulk action, and list/filter requests create no audit entry. See [ADR-043](../adr/043-suchraum-volltextsuche.md), [ADR-016](../adr/016-search-postgres-only.md), #2521 and the [user guide](user-guide.md#contacts-list).
+
 ### Documentation Types (Dokumentationstypen)
 
 Each facility configures its own set of documentation types (e.g. "Contact", "Crisis conversation", "Needle exchange", "Referral"). Each type defines which fields appear in the form, with every field carrying metadata:
@@ -341,4 +349,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: c88bc221145a5f670bbd672c7f00b77b37b24ae3 -->
+<!-- source-hash: 06ea58664869877211206dea6a103d5bbb61124c -->

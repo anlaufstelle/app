@@ -235,6 +235,34 @@ If there are active entry bans in your facility, they are displayed as a red ban
 
 ---
 
+### Contacts list
+
+The **Contacts list** (`/events/`) is a working list spanning multiple days, for example “all crisis conversations last month” or “my entries this week”. The Timeline remains the daily view with activities, tasks and entry bans.
+
+**Open it:** Select **Contacts** directly below **Timeline** in the sidebar, or **More → Contacts** on mobile. This entry is active only on `/events/`; contact detail pages remain assigned to the Timeline. A local **Contacts** link on the Timeline page also opens the list, carrying over the selected day, documentation type and shift.
+
+**Combine filters:** Choose the criteria, then select **Filter**. The form also works without JavaScript.
+
+| Filter | Use |
+|---|---|
+| **From / To** | Period based on the contact timestamp; no bounds means all remaining contacts |
+| **Quick selection** | **This week** or **Last month** sets the period; select **All** again to use your own dates |
+| **Type** | Documentation type within your role's visibility |
+| **Person** | Select an active person by pseudonym; no autocomplete search |
+| **Case** | Select a case; the filter and case display are available from Social worker upwards |
+| **Created by / Only mine** | Other team members' contacts or your own; both filters apply together |
+| **Shift** | The configured time window on every day of the period; an overnight shift belongs to its start day |
+| **Anonymous** | All, only anonymous or only non-anonymous contacts |
+| **Search term** | Search pseudonym and event search text from two characters onwards |
+
+The search scope matches global search (#1862, [ADR-043](../adr/043-suchraum-volltextsuche.md)): event search text contains only unencrypted fields with effective **Normal** sensitivity. Encrypted, elevated or high field values, case titles and file contents are excluded. There are no search suggestions. Contacts belonging to people in the trash are excluded when a search term is used. **Reset filters** opens the unfiltered list again.
+
+**Visibility:** Assistant, Social worker, Manager and Application support see contacts within their own facility, including entries by other team members, with the same sensitivity limit as the Timeline: Assistant sees **Normal**, Social worker up to **Elevated**, Manager and Application support also **High**. Deleted contacts and contacts in the trash are absent. System administration has no access to this working list.
+
+**Results:** Newest contacts appear first, with 25 entries per page. The table shows timestamp, type, person or “Anonymous”, case from Social worker upwards, and “Created by”; mobile uses cards. Field values are available in the detail view opened via the timestamp. Filters remain in the address when sharing, changing pages and using Back/Forward, including the form values.
+
+The list offers **no export or bulk actions**. Export options remain under [Statistics and Export](#7-statistics-and-export). List and filter requests create **no audit entry**; opening a detail view follows that view's access rules.
+
 ## 2a. Work Center
 
 The **Work Center** (`/start/`) is the landing page of the **Manager** role -- an overview page that condenses existing data into compact tiles. The sidebar link **"Work Center"** (above the Timeline) therefore only appears for Managers. The Timeline at `/` remains unchanged.
@@ -870,6 +898,8 @@ Table covers the four facility-bound roles only -- `super_admin` is excluded her
 | Function | Assistant | Social worker | Manager | Application support |
 |---|---|---|---|---|
 | View Timeline / home page | Yes | Yes | Yes | Yes |
+| Filter Contacts list (including others’ entries) | Yes (Normal) | Yes (up to Elevated) | Yes (including High) | Yes (including High) |
+| Case filter and case display in Contacts list | No | Yes | Yes | Yes |
 | Document anonymous contacts | Yes | Yes | Yes | Yes |
 | Document contacts for people at the "Pseudonym only" level | Yes | Yes | Yes | Yes |
 | View and search for people | Yes (without additional details) | Yes | Yes | Yes |
@@ -1106,4 +1136,4 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: a0368ec441f7950b1c94da3658bb1eaa03098b5f -->
+<!-- source-hash: 6a624a2778e90361ad9394858f6192a878a958ef -->

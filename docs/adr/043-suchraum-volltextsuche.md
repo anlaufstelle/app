@@ -107,6 +107,12 @@ Die Art.-15-Auskunft zieht mit: `_gather_audit_trail` in [`services/client/expor
 - **`visible_to()` auf `Case` jetzt nachziehen.** Verworfen/vertagt: Aufwand und Regressionsfläche ohne heutigen Nutzen, weil der Fall-Titel nicht in der globalen Suche steht. Wiedervorlage ist #1842.
 - **Nur den VVT korrigieren, ohne ADR.** Verworfen: Der VVT ist eine Zustandsbeschreibung, keine Begründung. Ohne ADR wäre die Offenheit des Fall-Rahmens weiterhin nirgends als *Entscheidung* dokumentiert — und die nächste Diskussion begänne wieder bei null.
 
+## Kontakte-Liste: Anwendung des bestehenden Suchraums
+
+Die Kontakte-Liste `/events/` (#2521) verwendet bei `?q=` dieselbe Ereignissuche wie `/search/`, ab zwei Zeichen: Pseudonym oder `Event.search_text`, mit Einrichtungsscope, rollenabhängiger Typ-Sichtbarkeit und Ausschluss gelöschter Kontakte sowie der Kontakte von Personen im Papierkorb. Sie erweitert den Suchraum nicht um Falltitel, Dateiinhalte oder geschützte Feldwerte und bietet keine Autocomplete-Suche. Person und Fall sind Auswahlfilter, der Fall erst ab Fachkraft. Die Feldindex-Invariante aus [ADR-016](016-search-postgres-only.md) gilt unverändert.
+
+Listen- und Filteraufrufe erzeugen keinen Audit-Eintrag. Die Ausgabe enthält nur Metadaten, keine Feldwerte; Export und Massenaktionen fehlen. Navigation, Filter-Erhalt und Rollenmatrix sind im [User-Guide „Kontakte-Liste“](../user-guide.md#kontakte-liste) beschrieben. Belege: [`EventListView`](../../src/core/views/event_list.py), [`list_filters.py`](../../src/core/services/events/list_filters.py) und [`event_search_queryset`](../../src/core/services/dashboard/search.py).
+
 ## References
 
 - [ADR-016: Volltextsuche bleibt in PostgreSQL](016-search-postgres-only.md) — Backend und Sensitivity-Invariante

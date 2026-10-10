@@ -62,6 +62,25 @@ class TestHelpPages:
         assert "Ereignisliste (intern)" in body
         assert "Unterdrückung, Grundgesamtheit und Datenquelle" in body
 
+    def test_timeline_help_explains_contacts_list_and_search_limits(self, client, staff_user):
+        """Explain the contacts entry and its limited search scope (Refs #2521)."""
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:help_page", kwargs={"slug": "zeitstrom"}))
+
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert 'id="kontakte-liste"' in body
+        for guidance in (
+            "Kontakte-Liste",
+            "direkt unter „Zeitstrom“",
+            "Mehr → Kontakte",
+            "Pseudonym und Ereignis-Suchtext",
+            "keine Suchvorschläge",
+            "keinen Export und keine Massenaktionen",
+        ):
+            assert guidance in body
+
     def test_help_page_is_login_required(self, client):
         response = client.get(reverse("core:help_page", kwargs={"slug": "personen"}))
 

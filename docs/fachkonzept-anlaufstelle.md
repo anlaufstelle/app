@@ -626,6 +626,14 @@ Das Ereignis ist der zentrale Baustein der Dokumentation. Es ist ein zeitgestemp
 
 Die Daten eines Ereignisses sind strukturiert nach den Feldern seines Dokumentationstyps. Ein Ereignis vom Typ „Kontakt" hat andere Felder als eines vom Typ „Krisengespräch". Die Feldwerte werden zusammen mit dem Ereignis gespeichert.
 
+#### Kontakte-Liste — Ereignisse über mehrere Tage
+
+Die Arbeitsliste `/events/` ergänzt den Tages-Zeitstrom um kombinierbare Filter für Zeitraum, Dokumentationstyp, Person, Erfassungsperson, eigene Erfassungen, Schicht und Anonymität; Fallfilter und Fallanzeige sind erst ab Fachkraft verfügbar. Ab Assistenz gelten Einrichtungsscope und Sensibilitätsgrenze des Zeitstroms, ohne Beschränkung auf eigene Erfassungen. Gelöschte Kontakte und Kontakte im Papierkorb sind ausgeschlossen. Die Liste zeigt ausschließlich Metadaten, neueste Ereignisse zuerst, mit Seitenaufteilung und mobilen Karten. Filter sind über die Adresse teilbar und bleiben über Zurück/Vorwärts erhalten.
+
+Der Eintrag **Kontakte** steht direkt unter **Zeitstrom** in der Seitenleiste und mobil im Mehr-Menü. Nur die Listenroute aktiviert ihn; Ereignis-Unterseiten bleiben dem Zeitstrom zugeordnet. Der zusätzliche lokale Zeitstrom-Link übernimmt Tag, Dokumentationstyp und Schicht.
+
+Freitext bleibt auf Pseudonym und `Event.search_text` begrenzt: nur unverschlüsselte Felder mit wirksamer Sensibilität Normal, keine Suche in Falltiteln oder Dateiinhalten, keine Autocomplete-Suche. Die Suchbegriffsabfrage schließt Kontakte von Personen im Papierkorb aus. Listen-/Filteraufrufe erzeugen keinen Audit-Eintrag; es gibt weder Export noch Massenaktionen. Grundlage: [ADR-043](adr/043-suchraum-volltextsuche.md) und [ADR-016](adr/016-search-postgres-only.md), Umsetzung #2521. Bedienung und Rollenmatrix: [User-Guide „Kontakte-Liste“](user-guide.md#kontakte-liste) und [§ 9](user-guide.md#9-rollen-und-berechtigungen).
+
 #### DocumentType — Der Dokumentationstyp
 
 Ein Dokumentationstyp definiert eine Kategorie von Ereignissen: „Kontakt", „Krisengespräch", „Spritzentausch", „Begleitung". Jeder Typ hat einen Namen, eine Beschreibung, eine optionale Mindestkontaktstufe (ab welcher Stufe dieser Typ zugeordnet werden kann), eine Aufbewahrungsfrist und eine Sensitivitätsstufe.

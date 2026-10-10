@@ -1,8 +1,16 @@
 # FAQ — retention, erasure, offline work and statistics
 
-This English FAQ covers the updated retention topic, the offline key lifetime
+This English FAQ covers the Contacts list, the updated retention topic, the offline key lifetime
 and revocation check addendum and the statistics guidance. Other topics remain in the
 [German FAQ](../faq.md); see the [English user guide](user-guide.md) for daily work.
+
+## Contacts list
+
+### Where is the list, and what can it not do?
+
+Select **Contacts** directly below **Timeline** in the sidebar, or **More → Contacts** on mobile (`/events/`). The local Timeline link carries over day, documentation type and shift. From Assistant upwards, the list supports periods across multiple days and other team members’ entries, with the same facility scope and sensitivity limits as the Timeline. Case selection and display require Social worker or higher.
+
+Search covers only **pseudonym and event search text**, from two characters onwards. Encrypted or effectively elevated/high field values, case titles and file contents are excluded. Person and case filters use selection fields without autocomplete or search suggestions. The list shows no field values and offers no export or bulk actions. List and filter requests create no audit entry. Filters stay in the address across pagination and Back/Forward. See the [Contacts list user guide](user-guide.md#contacts-list) and its [permissions table](user-guide.md#who-can-do-what).
 
 ## Retention and erasure
 
@@ -75,4 +83,4 @@ Decision aid: [User Guide § 7 “The Three Tabs at a Glance”](https://github.
 <!-- translation-source: docs/faq.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: dea2f2cf1dedee36a3b5d934524359fe087ccf2f -->
+<!-- source-hash: 17f819d44b84c5acc9d3eb3b8208a0271f87b773 -->

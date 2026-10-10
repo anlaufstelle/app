@@ -53,6 +53,38 @@ HELP_PAGES = {
                 _("Filter grenzen Zeitraum, Dokumentationstyp und Darstellungsform ein."),
                 _("Neue Kontakte werden über „Neu“ angelegt und erscheinen danach im Zeitstrom."),
             ),
+            sections=(
+                HelpSection(
+                    anchor="kontakte-liste",
+                    heading=_("Kontakte-Liste"),
+                    paragraphs=(
+                        _(
+                            "„Kontakte“ steht direkt unter „Zeitstrom“ in der Seitenleiste, mobil unter "
+                            "„Mehr → Kontakte“. Der lokale Kontakte-Link im Zeitstrom übernimmt Tag, "
+                            "Dokumentationstyp und Schicht."
+                        ),
+                        _(
+                            "Die Liste filtert Kontakte über mehrere Tage, auch Erfassungen anderer Mitarbeitender. "
+                            "Ab Assistenz gelten dieselben Sichtbarkeitsgrenzen wie im Zeitstrom; "
+                            "Fallfilter und Fallanzeige gibt es erst ab Fachkraft. "
+                            "Die Filter bleiben in der Adresse, beim Seitenwechsel und über Zurück/Vorwärts erhalten."
+                        ),
+                    ),
+                    items=(
+                        _(
+                            "Die Suche umfasst nur Pseudonym und Ereignis-Suchtext ab zwei Zeichen, keine "
+                            "verschlüsselten oder wirksam erhöht/hoch eingestuften Feldwerte, "
+                            "Falltitel oder Dateiinhalte."
+                        ),
+                        _(
+                            "Person und Fall werden ausgewählt; "
+                            "es gibt keine Autocomplete-Suche und keine Suchvorschläge."
+                        ),
+                        _("Die Liste zeigt keine Feldwerte und bietet keinen Export und keine Massenaktionen."),
+                        _("Listen- und Filteraufrufe erzeugen keinen Audit-Eintrag."),
+                    ),
+                ),
+            ),
         ),
         HelpPage(
             slug="aufgaben",

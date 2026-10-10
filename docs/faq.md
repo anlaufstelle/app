@@ -183,6 +183,12 @@ Oberhalb des Feeds steht dauerhaft **Aktueller Dienst** mit Kontakten, neuen Auf
 
 In der rechten Seitenspalte steht die Team-Fokusbox **„Team-Aufgaben mit Handlungsbedarf“** mit bis zu **8 Einträgen**, unabhängig von der Zuweisung. Sie gruppiert nach **Überfällig**, **Heute fällig**, **Dringend · Wichtig** und **In Bearbeitung**; jede Aufgabe erscheint nur in der höchsten zutreffenden Druckstufe. Innerhalb der Gruppen wird nach Fälligkeit, Priorität und Erstellzeit sortiert. Offene normale Aufgaben ohne Frist bleiben über **Zur Aufgabenübersicht** erreichbar.
 
+#### Wo finde ich die Kontakte-Liste, und was kann sie nicht?
+
+**Kontakte** steht direkt unter **Zeitstrom** in der Seitenleiste, mobil unter **Mehr → Kontakte** (`/events/`). Der lokale Kontakte-Link im Zeitstrom übernimmt Tag, Dokumentationstyp und Schicht. Ab Assistenz können Sie über mehrere Tage filtern und auch Erfassungen anderer Mitarbeitender sehen; Sichtbarkeit und Sensibilitätsgrenze entsprechen dem Zeitstrom, Fallfilter und Fallanzeige beginnen erst ab Fachkraft.
+
+Die Liste durchsucht nur **Pseudonym und Ereignis-Suchtext** ab zwei Zeichen, keine verschlüsselten oder wirksam erhöht/hoch eingestuften Feldwerte, Falltitel oder Dateiinhalte. Personen und Fälle werden ausgewählt, ohne Autocomplete-Suche oder Suchvorschläge. Feldwerte, Export und Massenaktionen fehlen in der Liste; Listen- und Filteraufrufe erzeugen keinen Audit-Eintrag. Filter bleiben in der Adresse, beim Seitenwechsel und über Zurück/Vorwärts erhalten. Anleitung: [User-Guide „Kontakte-Liste“](user-guide.md#kontakte-liste).
+
 #### Wie funktioniert die HTMX-Interaktion?
 
 Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request aus. Nur der Feed-Container wird ersetzt — kein Full-Page-Reload.
@@ -400,6 +406,8 @@ Jeder User mit Rolle `assistant` / `staff` / `lead` / `facility_admin` gehört z
 | Bereich | Aktion | Mindestrolle |
 |---------|--------|--------------|
 | Zeitstrom, Übergabe | Anzeigen | Assistenz |
+| Kontakte-Liste | Anzeigen, Filtern, auch fremde Erfassungen; Sensibilität wie Zeitstrom | Assistenz |
+| Kontakte-Liste | Fallfilter und Fallanzeige | Fachkraft |
 | Suche | Volltextsuche | Assistenz |
 | Personen | Anzeigen, Suchen | Assistenz |
 | Personen | Anlegen, Bearbeiten | Fachkraft |
