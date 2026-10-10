@@ -133,7 +133,7 @@ def test_german_board_keeps_protection_wording(client, admin_user, facility):
         assert expected in blocks[0]
 
 
-@pytest.mark.xfail(strict=True, reason="#2530: English catalog pending")
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="#2530: English catalog pending")
 def test_english_board_has_no_german_protection_text(client, admin_user, facility):
     admin_user.preferred_language = "en"
     admin_user.save(update_fields=["preferred_language"])
@@ -144,3 +144,14 @@ def test_english_board_has_no_german_protection_text(client, admin_user, facilit
         blocks = _protection_blocks(client, admin_user, doc_type)
     assert blocks
     assert not GERMAN_WORDS.findall(" ".join(blocks))
+
+
+def test_english_board_renders_protection_card(client, admin_user, facility):
+    admin_user.preferred_language = "en"
+    admin_user.save(update_fields=["preferred_language"])
+    doc_type = make_document_type(facility=facility, name="Board type", sensitivity="elevated")
+    field = FieldTemplate.objects.create(facility=facility, name="Restricted", sensitivity="high")
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=field)
+    with translation.override("en"):
+        blocks = _protection_blocks(client, admin_user, doc_type)
+    assert len(blocks) == 1

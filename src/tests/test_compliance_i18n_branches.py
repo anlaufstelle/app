@@ -366,7 +366,7 @@ def test_english_request_renders_all_expected_cards(english_dashboard_response, 
 
 
 @pytest.mark.django_db
-@pytest.mark.xfail(strict=True, reason="#2530: English catalog pending")
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="#2530: English catalog pending")
 def test_english_request_has_no_german_card_text(english_dashboard_response):
     content = english_dashboard_response.content.decode()
     sections = re.findall(r'<section[^>]+data-testid="compliance-group-[^\"]+"[^>]*>(.*?)</section>', content, re.S)
