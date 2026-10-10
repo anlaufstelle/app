@@ -140,7 +140,8 @@ HELP_PAGES = {
                         _(
                             "Der Standardlauf erzeugt für „Mit Zusatzangaben“ einen Löschvorschlag und löscht "
                             "erst nach "
-                            "Freigabe durch eine andere Person mit „Löschbestätigung“. Anonym und „Nur Pseudonym“ "
+                            "Freigabe durch eine andere Person mit „Löschbestätigung“ (Ausnahme: die standardmäßig "
+                            "ausgeschaltete Auto-Freigabe nach mehrfacher Zurückstellung). Anonym und „Nur Pseudonym“ "
                             "werden automatisch gelöscht; Legal Hold und Art. 18 stellen den Lauf zurück."
                         ),
                     ),
