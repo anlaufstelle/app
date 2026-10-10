@@ -295,13 +295,13 @@ def enforced_base_url(request, base_url):
     proc.wait(timeout=10)
 
 
-# Replay is released only inside an orchestrator run whose revocation check
+# Replay is released only inside a sync-orchestrator run whose revocation check
 # succeeded (``offlineStore.isRevocationPending``). Specs that call
 # ``replayQueue`` / ``replayModifiedEvent`` / ``replayAllModifiedEvents``
 # directly use ``replayInCheckedRun(() => ...)`` to follow the production
 # sequence (check, then replay) instead of bypassing the gate. A failed check
 # is not turned into an error here: the replay itself then reports the pending
-# revocation, exactly as it does for the orchestrator.
+# revocation, exactly as it does for the sync-orchestrator.
 _CHECKED_REPLAY_INIT_SCRIPT = """
 window.replayInCheckedRun = (replay) => window.syncOrchestrator.runExclusive(async () => {
     await window.offlineStore.applyClientRevocations();
