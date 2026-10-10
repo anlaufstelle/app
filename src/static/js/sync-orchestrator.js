@@ -120,6 +120,7 @@
     // Lock laeuft und so nicht mehr mit einer laufenden Fremd-Tab-Sequenz
     // verschraenkt.
     let _lockHeldDepth = 0;
+    let _currentRun = null;
 
     // Fuehrt ``fn`` unter dem origin-weiten exklusiven Lock aus und gibt dessen
     // Ergebnis zurueck. navigator.locks serialisiert konkurrierende Anforderungen
@@ -133,11 +134,15 @@
     // Boot-Idle-Gate nie wieder gesperrt (echter Deadlock des Fix-Effekts).
     function runExclusive(fn) {
         const guarded = async function () {
+            const previousRun = _currentRun;
+            // Refs #2528: each invocation needs its own fresh revocation approval.
+            _currentRun = {};
             _lockHeldDepth += 1;
             try {
                 return await fn();
             } finally {
                 _lockHeldDepth -= 1;
+                _currentRun = previousRun;
             }
         };
         if (!_hasLocks) {
@@ -409,6 +414,7 @@
         },
         runExclusive: runExclusive,
         isLockHeld: isLockHeld,
+        getCurrentRun: function () { return _currentRun; },
         broadcast: broadcast,
         onMessage: onMessage,
         // Refs #1760 (Muster offline-queue.js): reine Export-Oberflaeche fuer den

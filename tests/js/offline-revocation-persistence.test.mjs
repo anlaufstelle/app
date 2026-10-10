@@ -70,6 +70,21 @@ async function directReplay(w, record) {
     });
 }
 
+function clientComponent(w) {
+    let factory;
+    w.Alpine = { data: (_name, create) => { factory = create; } };
+    for (const name of ["offline-form-fields", "offline-client-view"]) {
+        w.eval(readFileSync(`src/static/js/${name}.js`, "utf8"));
+    }
+    w.document.dispatchEvent(new w.Event("alpine:init"));
+    const component = factory();
+    component.wiValues = { title: "New task", item_type: "task", priority: "normal" };
+    // Isolate rendering from the public save operation and its real replay.
+    component.load = async () => {};
+    component._reconcile = async () => {};
+    return component;
+}
+
 beforeEach(() => {
     Dexie.dependencies.indexedDB = new IDBFactory();
     Dexie.dependencies.IDBKeyRange = IDBKeyRange;
@@ -85,6 +100,164 @@ afterEach(async () => {
 });
 
 describe("persistent revocation gate", () => {
+    it.each(["same page", "approved second tab", "navigation", "demo bootstrap"])("blocks both replay paths after all metadata writes fail across %s", async (mode) => {
+        const a = page();
+        const record = await seed(a);
+        const b = mode === "approved second tab" ? page() : null;
+        status = 200;
+        await a.syncOrchestrator.runExclusive(async () => {
+            expect((await a.offlineStore.applyClientRevocations()).status).toBe("ok");
+        });
+        if (b) {
+            await b.crypto_session.ready();
+            await b.syncOrchestrator.runExclusive(async () => {
+                expect((await b.offlineStore.applyClientRevocations()).status).toBe("ok");
+            });
+        }
+        const beforeQueue = await a.offlineStore.db.queue.toArray();
+        const beforeEvents = await a.offlineStore.db.events.toArray();
+        // Lost cross-tab notifications must not make an old approval reusable.
+        for (const channel of channels) channel.onmessage = null;
+        const put = vi.spyOn(a.offlineStore.db.meta, "put").mockRejectedValue(new Error("Metadata storage unavailable"));
+        const remove = vi.spyOn(a.offlineStore.db.meta, "delete").mockRejectedValue(new Error("Metadata storage unavailable"));
+        expect((await a.offlineStore.applyClientRevocations()).status).toBe("error");
+        put.mockRestore(); remove.mockRestore();
+        const next = mode === "same page" ? a : b || page();
+        if (mode === "demo bootstrap") {
+            const originalFetch = next.fetch;
+            next.fetch = (url, options) => String(url).includes("/offline-key-salt/")
+                ? Promise.resolve({ ok: true, json: async () => ({ salt: "c2FsdHNhbHRzYWx0", offline_key_max_age: 43200 }) })
+                : originalFetch(url, options);
+            next.document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-password="correct horse battery"></div>');
+            const warm = vi.spyOn(next.offlineStore, "revalidateCachedFacility").mockResolvedValue({ ok: true });
+            next.eval(readFileSync("src/static/js/auth-bootstrap.js", "utf8"));
+            await vi.waitFor(() => expect(warm).toHaveBeenCalledTimes(1));
+            expect(next.crypto_session.hasSessionKey()).toBe(true);
+            expect(next.document.querySelector("[data-demo-offline-password]")).toBeNull();
+        }
+        await directReplay(a, record);
+        await directReplay(next, record);
+        expect(writes).toHaveLength(0);
+        expect(await next.offlineStore.isRevocationPending()).toBe(true);
+        expect(await next.offlineStore.db.queue.toArray()).toEqual(beforeQueue);
+        expect(await next.offlineStore.db.events.toArray()).toEqual(beforeEvents);
+        status = 500;
+        await next.syncOrchestrator.requestSync("failed-follow-up");
+        expect(writes).toHaveLength(0);
+        status = 200; payload = {};
+        await next.syncOrchestrator.requestSync("invalid-follow-up");
+        expect(writes).toHaveLength(0);
+        payload = validPayload();
+        await next.syncOrchestrator.requestSync("fresh-valid-follow-up");
+        expect(writes).toHaveLength(2);
+        expect(writes.find(({ url }) => url.includes("tally")).options.headers["X-Idempotency-Key"]).toBe(beforeQueue[0].idempotencyKey);
+        expect(writes.find(({ url }) => url.includes("events")).options.headers["X-Idempotency-Key"]).toBe("stable-edit-key");
+        await next.syncOrchestrator.requestSync("repeat-follow-up");
+        expect(writes).toHaveLength(2);
+    });
+
+    it("checks a fresh list under the lock when saving directly from the client view", async () => {
+        const w = page();
+        await seed(w);
+        status = 200;
+        await w.syncOrchestrator.runExclusive(() => w.offlineStore.applyClientRevocations());
+        const before = checks;
+        await clientComponent(w).saveCreateWorkItem();
+        expect(checks).toBe(before + 1);
+        expect(writes).toHaveLength(1);
+        expect(writes[0].url).toBe("/workitems/new/");
+    });
+
+    it("does not replay a captured client record purged by the fresh revocation check", async () => {
+        const w = page();
+        await seed(w);
+        status = 200;
+        const component = clientComponent(w);
+        component._pk = "11111111-1111-4111-8111-111111111111";
+        payload = { ...validPayload(), revocations: [component._pk] };
+        await component.saveCreateWorkItem();
+        expect(writes).toHaveLength(0);
+        expect(await w.offlineStore.db.events.where("clientPk").equals(component._pk).count()).toBe(0);
+        expect(await w.offlineStore.db.queue.count()).toBe(1);
+    });
+
+    it("blocks a direct client save when all metadata writes fail in an approved second tab", async () => {
+        const a = page();
+        await seed(a);
+        const b = page();
+        await b.crypto_session.ready();
+        status = 200;
+        await b.syncOrchestrator.runExclusive(() => b.offlineStore.applyClientRevocations());
+        const put = vi.spyOn(b.offlineStore.db.meta, "put").mockRejectedValue(new Error("Metadata storage unavailable"));
+        const remove = vi.spyOn(b.offlineStore.db.meta, "delete").mockRejectedValue(new Error("Metadata storage unavailable"));
+        const component = clientComponent(b);
+        await component.saveCreateWorkItem();
+        expect(writes).toHaveLength(0);
+        expect(component.lastSyncResult).toBe("pending");
+        expect(await b.offlineStore.db.queue.count()).toBe(1);
+        expect(await b.offlineStore.db.events.count()).toBe(2);
+        put.mockRestore(); remove.mockRestore();
+        await b.syncOrchestrator.requestSync("fresh-retry-after-direct-save");
+        expect(writes).toHaveLength(3);
+    });
+
+    it("does not reuse a successful check in a later exclusive replay run", async () => {
+        const w = page();
+        const record = await seed(w);
+        status = 200;
+        await w.syncOrchestrator.runExclusive(async () => {
+            expect((await w.offlineStore.applyClientRevocations()).status).toBe("ok");
+        });
+        await directReplay(w, record);
+        expect(writes).toHaveLength(0);
+        await w.syncOrchestrator.runExclusive(async () => {
+            expect((await w.offlineStore.applyClientRevocations()).status).toBe("ok");
+            await w.offlineQueue.replayQueue();
+            await w.offlineEdit.replayModifiedEvent(record, { replay: true });
+        });
+        expect(writes).toHaveLength(2);
+    });
+
+    it("keeps replay blocked when persisting the successful decision fails", async () => {
+        const w = page();
+        const record = await seed(w);
+        status = 200;
+        const originalPut = w.offlineStore.db.meta.put.bind(w.offlineStore.db.meta);
+        const put = vi.spyOn(w.offlineStore.db.meta, "put").mockImplementation((row) => {
+            if (row.value.pending === false) throw new Error("Approval storage unavailable");
+            return originalPut(row);
+        });
+        await w.syncOrchestrator.requestSync("approval-storage-failure");
+        await directReplay(w, record);
+        expect(writes).toHaveLength(0);
+        expect(await w.offlineStore.db.queue.count()).toBe(1);
+        expect(await w.offlineStore.db.events.count()).toBe(1);
+        put.mockRestore();
+        await w.syncOrchestrator.requestSync("persisted-retry");
+        expect(writes).toHaveLength(2);
+    });
+
+    it("requires a fresh check after a metadata read failure in the approved run", async () => {
+        const w = page();
+        const record = await seed(w);
+        status = 200;
+        await w.syncOrchestrator.runExclusive(async () => {
+            expect((await w.offlineStore.applyClientRevocations()).status).toBe("ok");
+            const get = vi.spyOn(w.offlineStore.db.meta, "get").mockRejectedValue(new Error("Metadata read unavailable"));
+            await w.offlineQueue.replayQueue();
+            await w.offlineEdit.replayModifiedEvent(record, { replay: true });
+            expect(writes).toHaveLength(0);
+            get.mockRestore();
+            await w.offlineQueue.replayQueue();
+            await w.offlineEdit.replayModifiedEvent(record, { replay: true });
+            expect(writes).toHaveLength(0);
+            expect((await w.offlineStore.applyClientRevocations()).status).toBe("ok");
+            await w.offlineQueue.replayQueue();
+            await w.offlineEdit.replayModifiedEvent(record, { replay: true });
+            expect(writes).toHaveLength(2);
+        });
+    });
+
     it.each(["navigation", "second tab"])("blocks direct queue and edit replay after failure across %s", async (mode) => {
         const a = page();
         const record = await seed(a);

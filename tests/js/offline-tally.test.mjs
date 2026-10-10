@@ -723,27 +723,42 @@ describe("cold tally acknowledgement boundaries", () => {
             expect(form.elements.quantity.value).toBe("");
         }
 
-        // Replay requires a valid revocation check before testing a lost response.
-        global.fetch = vi.fn(async () => new Response(JSON.stringify({
+        // Every replay run needs a fresh check, including retries after a lost response.
+        const checkFetch = vi.fn(async () => new Response(JSON.stringify({
             revocations: [], server_time: new Date().toISOString(), retention_seconds: 345600,
         }), { status: 200 }));
-        expect((await store.applyClientRevocations()).status).toBe("ok");
         // Losing a replay response must preserve the original request and key.
         vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
         window.csrfUtils = { fromMeta: () => "replay-token" };
-        global.fetch = vi.fn()
+        const replayFetch = vi.fn()
             .mockRejectedValueOnce(new TypeError("Replay response lost"))
             .mockResolvedValueOnce(new Response("saved", { status: 200 }));
-        await window.offlineQueue.replayQueue();
-        expect(await store.count("queue")).toBe(1);
-        await window.offlineQueue.replayQueue();
-        expect(await store.count("queue")).toBe(0);
-        await window.offlineQueue.replayQueue();
-        expect(global.fetch).toHaveBeenCalledTimes(2);
-        for (const [, options] of global.fetch.mock.calls) {
-            expect(options.body).toBe(records[0].data.body);
-            expect(new Headers(options.headers).get("X-Idempotency-Key")).toBe(records[0].idempotencyKey);
-            expect(new Headers(options.headers).get("X-Offline-Replay")).toBeTruthy();
+        const previousCoordinator = window.syncOrchestrator;
+        vi.resetModules();
+        const readyState = vi.spyOn(document, "readyState", "get").mockReturnValue("loading");
+        await import("../../src/static/js/sync-orchestrator.js");
+        readyState.mockRestore();
+        const coordinator = window.syncOrchestrator;
+        const replay = () => coordinator.runExclusive(async () => {
+            global.fetch = checkFetch;
+            expect((await store.applyClientRevocations()).status).toBe("ok");
+            global.fetch = replayFetch;
+            await window.offlineQueue.replayQueue();
+        });
+        try {
+            await replay();
+            expect(await store.count("queue")).toBe(1);
+            await replay();
+            expect(await store.count("queue")).toBe(0);
+            await replay();
+            expect(global.fetch).toHaveBeenCalledTimes(2);
+            for (const [, options] of global.fetch.mock.calls) {
+                expect(options.body).toBe(records[0].data.body);
+                expect(new Headers(options.headers).get("X-Idempotency-Key")).toBe(records[0].idempotencyKey);
+                expect(new Headers(options.headers).get("X-Offline-Replay")).toBeTruthy();
+            }
+        } finally {
+            window.syncOrchestrator = previousCoordinator;
         }
     });
 

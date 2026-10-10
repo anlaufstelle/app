@@ -235,14 +235,20 @@
     // Refs #2528: shared, non-personal metadata survives page and browser restarts.
     const REVOCATION_STATE_KEY = "revocationReplayState";
     let _storageFailure = false;
+    let _approval = null;
 
     async function isRevocationPending() {
         let pending = true;
         try {
             const row = await db.meta.get(REVOCATION_STATE_KEY);
-            pending = _storageFailure || !row || !row.value || row.value.pending !== false;
+            const run = window.syncOrchestrator?.getCurrentRun?.();
+            // Stored approval alone cannot authorize another page or replay run.
+            pending = _storageFailure || !run || !_approval || _approval.run !== run ||
+                !row || row.value?.pending !== false || row.value.attempt !== _approval.attempt;
         } catch (_e) {
-            // Unreadable state never authorizes a write.
+            // Recovery from a read failure also requires a fresh persisted check.
+            _storageFailure = true;
+            _approval = null;
         }
         if (typeof document !== "undefined") {
             document.querySelectorAll("[data-offline-revocation-pending]").forEach((node) => {
@@ -261,6 +267,8 @@
         const empty = { purgedClients: 0, purgedQueueEntries: 0, purgedDrafts: 0 };
         let marked = false;
         _storageFailure = true;
+        _approval = null;
+        const run = window.syncOrchestrator?.getCurrentRun?.();
         try {
             const attempt = window.crypto.randomUUID();
             // Persist before fetching; interrupted checks leave replay suspended.
@@ -277,6 +285,7 @@
                 await db.meta.put({ key: REVOCATION_STATE_KEY, value: { pending: false, attempt } });
                 return true;
             });
+            if (released && run) _approval = { attempt, run };
             return released ? result : { status: "error", ...empty };
         } catch (_e) {
             if (!marked) {

@@ -99,8 +99,13 @@ describe("revocation gate", () => {
             now += 12 * 3600_000;
             return "fresh-token";
         } };
-        fetchSpy.mockImplementation(async () => ({ status: 403, ok: false }));
-        await editApi.replayModifiedEvent(record, { replay: true });
+        await window.syncOrchestrator.runExclusive(async () => {
+            failure = null;
+            expect((await store.applyClientRevocations()).status).toBe("ok");
+            fetchSpy.mockClear();
+            fetchSpy.mockImplementation(async () => ({ status: 403, ok: false }));
+            await editApi.replayModifiedEvent(record, { replay: true });
+        });
         expect(fetchSpy).toHaveBeenCalledTimes(1);
         expect(await window.crypto_session.hasPersistedSessionKey()).toBe(false);
         expect(await store.db.events.count()).toBe(1);

@@ -290,6 +290,10 @@ describe("Refs #2385 — a later-arriving replay result no longer overwrites 'di
             markEventModified: vi.fn(async () => ({ pk: "event-1" })),
             replayModifiedEvent: vi.fn(() => replayPromise),
         };
+        window.offlineStore = {
+            applyClientRevocations: vi.fn(async () => ({ status: "ok" })),
+            getOfflineEvent: vi.fn(async () => ({ pk: "event-1" })),
+        };
         Object.defineProperty(window.navigator, "onLine", { configurable: true, value: true });
 
         const ev = {

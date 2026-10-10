@@ -768,15 +768,22 @@
                 }
                 return parts.join(" ") || "Eingabe ungültig.";
             },
-            // M6 (Refs #1351/#1383): Einzel-Replay aus saveEdit/saveCreate unter
-            // denselben origin-weiten Web Lock wie der online-getriebene Sync legen
-            // — verhindert, dass dieser Direkt-Replay mit einem parallelen
-            // requestSync-Lauf (anderer Tab / online-Event) kollidiert und ein
-            // Record doppelt gespielt wird. runExclusive reicht den Rueckgabewert
-            // durch, sodass das lastSyncResult-Feedback (_reflectReplay) erhalten
-            // bleibt. Fallback ohne Sync-Orchestrator: direkter Aufruf wie bisher.
+            // Refs #2528, #1351: check revocations inside the same origin-wide
+            // lock as this direct replay; no earlier run can authorize it.
             async _replayExclusive(record) {
-                const replay = () => window.offlineEdit.replayModifiedEvent(record);
+                const replay = async () => {
+                    let currentRecord;
+                    try {
+                        const result = await window.offlineStore?.applyClientRevocations?.();
+                        if (result?.status !== "ok") return { status: "network-error" };
+                        // Applying the fresh list may have purged the captured record.
+                        currentRecord = await window.offlineStore.getOfflineEvent(record.pk);
+                        if (!currentRecord) return { status: "network-error" };
+                    } catch (_e) {
+                        return { status: "network-error" };
+                    }
+                    return window.offlineEdit.replayModifiedEvent(currentRecord);
+                };
                 if (window.syncOrchestrator && window.syncOrchestrator.runExclusive) {
                     return window.syncOrchestrator.runExclusive(replay);
                 }

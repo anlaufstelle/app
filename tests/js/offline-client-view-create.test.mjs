@@ -91,6 +91,10 @@ describe("Offline-Akten-Create", () => {
             markEventNew: vi.fn(async () => record),
             replayModifiedEvent: vi.fn(async () => ({ status: "invalid", errors })),
         };
+        window.offlineStore = {
+            applyClientRevocations: vi.fn(async () => ({ status: "ok" })),
+            getOfflineEvent: vi.fn(async () => record),
+        };
 
         await component.saveCreate();
 
