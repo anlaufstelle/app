@@ -1624,6 +1624,7 @@ def anonymize_client_now(client, user):
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != client.facility_id:
         raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
+    lock_dynamic_protection(actor_facility_id)
     locked = Client.objects.select_for_update().filter(pk=client.pk, facility=client.facility_id).first()
     if locked is None:
         # Die Zeile ist verschwunden (harte Loeschung, fremde Einrichtung) —
@@ -1715,6 +1716,7 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
     count = 0
     for client_pk in list(qs.values_list("pk", flat=True)):
         with transaction.atomic():
+            lock_dynamic_protection(facility.pk)
             client = (
                 Client.objects.select_for_update()
                 .filter(pk=client_pk, anonymized_at__isnull=True, is_deleted=True)

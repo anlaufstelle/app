@@ -27,6 +27,7 @@ from core.constants import DATA_JSON_PREFIX
 from core.models import AuditLog, Client, FieldTemplate, RectificationRequest
 from core.services.audit import audit_event
 from core.services.compliance import user_can_see_field
+from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.events.fields import _serialize_json_value
 from core.services.file_vault import encrypt_field, safe_decrypt
 
@@ -236,7 +237,7 @@ def _guard_reviewer_facility(rr: RectificationRequest, reviewer: Any) -> None:
 
 
 def _lock_client_then_request(rr: RectificationRequest, reviewer: Any, clients) -> tuple[RectificationRequest, Client]:
-    """Lock the person row, then the request row, and run guards 0-3 on the locked request.
+    """Take the shared gate, lock person then request, and run guards 0-3.
 
     The anonymisation and the redaction repair lock the person first and write
     the person's requests afterwards; taking the request first here could
@@ -244,7 +245,9 @@ def _lock_client_then_request(rr: RectificationRequest, reviewer: Any, clients) 
     keeps the answer for an unknown request (``DoesNotExist``) and lets the
     reviewer's facility be refused before any row is locked, like the other
     four-eyes services; :func:`_guard_reviewable` repeats that check on the
-    locked row.
+    locked row. Acquire shared after the facility check and before either row
+    (Refs #2525), including rejection: a delegated writer must never wait for
+    the gate while holding a person that a protection rewrite needs.
     """
     target_client_id = (
         RectificationRequest.objects.for_facility(rr.facility)
@@ -253,6 +256,7 @@ def _lock_client_then_request(rr: RectificationRequest, reviewer: Any, clients) 
         .get()
     )
     _guard_reviewer_facility(rr, reviewer)
+    lock_dynamic_protection(rr.facility_id)
     client = clients.select_for_update(of=("self",)).get(pk=target_client_id, facility=rr.facility)
     rr = RectificationRequest.objects.select_for_update().get(pk=rr.pk, facility=rr.facility)
     _guard_reviewable(rr, reviewer)
