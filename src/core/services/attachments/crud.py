@@ -1042,6 +1042,7 @@ def purge_attachment_chain(owner, entry_id):
     """
     from core.retention.legal_holds import owner_has_active_hold
     from core.services.client.restriction import assert_processing_allowed
+    from core.services.dynamic_protection import lock_dynamic_protection_gate
     from core.services.file_vault import delete_attachment_file
 
     chain = list(owner.attachments.filter(entry_id=entry_id))
@@ -1061,6 +1062,8 @@ def purge_attachment_chain(owner, entry_id):
     # und der Lock muss bis nach dem ``delete()`` halten. Ruft die View schon
     # in einem ``atomic``, ist dies ein Savepoint — kein zweiter Commit.
     with transaction.atomic():
+        # Refs #2525: anonymous owners also need the gate before marker updates.
+        lock_dynamic_protection_gate(owner.facility_id)
         try:
             assert_processing_allowed(owner_client_id, lock=True)
         except ValidationError as exc:
