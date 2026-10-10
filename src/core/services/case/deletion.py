@@ -724,6 +724,8 @@ def anonymize_eligible_soft_deleted_cases(facility, settings_obj, *, dry_run=Fal
     count = 0
     for case_pk in list(qs.values_list("pk", flat=True)):
         with transaction.atomic():
+            # Refs #2525: serialize each erasure before locking its data rows.
+            lock_dynamic_protection_gate(facility.pk)
             locked = _lock_case_chain(facility.pk, case_pk)
             if locked is None or not locked.is_deleted or locked.anonymized_at is not None:
                 continue
