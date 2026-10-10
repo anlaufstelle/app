@@ -9,7 +9,6 @@ from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
-from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.legal_holds import LegalHoldForm
@@ -18,6 +17,7 @@ from core.retention.legal_holds import create_hold_for_target, dismiss_legal_hol
 from core.services.case import cases_with_live_client
 from core.services.compliance import get_visible_event_or_404
 from core.services.scoping import get_scoped_object
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import LeadOrAdminRequiredMixin
 
 

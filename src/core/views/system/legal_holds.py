@@ -12,12 +12,13 @@ from django.utils.translation import gettext as _
 from django.views import View
 from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
-from django_ratelimit.decorators import ratelimit
+from django_ratelimit import UNSAFE
 
 from core.constants import DEFAULT_PAGE_SIZE, RATELIMIT_MUTATION
 from core.models import Facility
 from core.models.retention import LegalHold
 from core.retention.legal_holds import dismiss_legal_hold
+from core.utils.ratelimit import ratelimit
 from core.views.mixins import PaginatedListMixin
 from core.views.system.mixins import SystemAuditMixin
 
@@ -75,7 +76,7 @@ class SystemLegalHoldListView(SystemAuditMixin, PaginatedListMixin, TemplateView
         return context
 
 
-@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
+@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method=UNSAFE, block=True), name="dispatch")
 class SystemLegalHoldDismissView(SystemAuditMixin, View):
     """Dismiss an explicitly selected hold as the installation administrator."""
 
