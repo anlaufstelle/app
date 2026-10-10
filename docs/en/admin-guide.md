@@ -923,6 +923,10 @@ To finally **remove** orphaned values (data minimisation, once they are no longe
 
 Under **Management → Field templates**, you can edit the options of selection and multi-selection fields (Select / Multi-Select). Options are stored in the **Options (JSON)** field as a JSON array.
 
+**Slug format:** Option slugs use lowercase letters `a–z`, digits `0–9`, and single hyphens between character groups, for example `beratung`, `18-26`, or `beratung-2`. Invalid examples are `-beratung` (leading hyphen), `beratung--hilfe` (double hyphens), and `beratung-` (trailing hyphen). Option slugs must be unique within a field. Documentation types and field templates get their slugs from their names automatically; field groups do as well. Umlauts become `ae`, `oe`, `ue`, and `ss`, underscores become hyphens, repeated hyphens collapse, and slugs are limited to 120 characters. A suffix such as `-2` is added on collision. Names that produce no slug are rejected; names made only of digits, such as `18-26`, are valid. Field templates also cannot use reserved slugs for fixed form fields. Documentation type and field template slugs are unique per facility; field group slugs are unique per documentation type. See the [package documentation](../packages.md) for details of the package format.
+
+You can enter option slugs directly in the options editor. Use only `a–z`, `0–9`, and single hyphens.
+
 **Encrypted selection fields:** For newly saved multiple selections, the list of option slugs survives encryption, reading and saving again. Previously selected inactive options remain checked in the edit forms for clients, cases and events and can be saved unchanged; unselected inactive options are not offered there. Encryption does not change role-based visibility.
 
 Detail views show each multiple-selection label on its own line. The event CSV export uses comma-separated labels; the Article 15 PDF disclosure also shows labels, while event JSON in the Article 20 export contains an actual list of option slugs. Unknown slugs without a matching label remain readable as raw values. Existing text tokens are not reinterpreted as lists; no conversion of old data takes place. Refs #2520.
@@ -957,7 +961,7 @@ Precedence on create: **Quick template > Default value > empty**. Invalid values
 
 | Field | Description |
 |---|---|
-| `slug` | Technical identifier (immutable after creation) |
+| `slug` | Technical identifier; unique within this field |
 | `label` | Display name in forms and exports |
 | `is_active` | `true` = selectable, `false` = deactivated |
 
@@ -978,7 +982,7 @@ When an option is no longer needed, set `is_active` to `false` instead of removi
 | CSV export | Label continues to be resolved correctly |
 | Statistics | Existing values continue to be included in reports |
 
-> **Important:** Do not remove options from the JSON if events with that value already exist. Use `"is_active": false` instead. This keeps historical data consistent and exports complete.
+> **Important:** An option slug that is already in use cannot be renamed or removed. Set `"is_active": false` instead; you can still change its label. Unused option slugs can be removed.
 
 #### Numeric Range Bounds (`Minimum Value`/`Maximum Value`)
 
@@ -2522,4 +2526,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-10 -->
-<!-- source-hash: bf7564d29b8d916c3c9ca874f4532c8c25fb3979 -->
+<!-- translation-date: 2026-10-09 -->
+<!-- source-hash: 7a0fc56dd8751ceb75b22b4334484713d609e258 -->

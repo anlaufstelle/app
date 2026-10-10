@@ -924,6 +924,10 @@ Sollen verwaiste Werte endgültig **entfernt** werden (Datenminimierung, sobald 
 
 Unter **Verwaltung → Feldvorlagen** können Sie die Optionen von Auswahl- und Mehrfachauswahl-Feldern (Select / Multi-Select) bearbeiten. Die Optionen werden im Feld **Optionen (JSON)** als JSON-Array gespeichert.
 
+**Slug-Format:** Options-Slugs bestehen aus Kleinbuchstaben `a–z`, Ziffern `0–9` und einzelnen Bindestrichen zwischen Zeichenfolgen, zum Beispiel `beratung`, `18-26` oder `beratung-2`. Ungültig sind `-beratung` (führender Bindestrich), `beratung--hilfe` (doppelte Bindestriche) und `beratung-` (abschließender Bindestrich). Options-Slugs müssen innerhalb eines Feldes eindeutig sein. Dokumentationstypen und Feldvorlagen erhalten ihren Slug automatisch aus dem Namen; Feldgruppen ebenfalls. Umlaute werden zu `ae`, `oe`, `ue` und `ss`, Unterstriche zu Bindestrichen, mehrfach aufeinanderfolgende Bindestriche zusammengezogen und der Slug auf höchstens 120 Zeichen gekürzt. Bei Kollisionen wird ein Suffix wie `-2` angehängt. Namen, aus denen kein Slug entsteht, werden abgewiesen; reine Ziffernnamen wie `18-26` sind gültig. Feldvorlagen dürfen außerdem keine reservierten Slugs fester Formularfelder verwenden. Slugs von Dokumentationstypen und Feldvorlagen sind je Einrichtung eindeutig; Feldgruppen sind je Dokumentationstyp eindeutig. Details zum Paketformat stehen in der [Paketdokumentation](packages.md).
+
+Im Options-Editor können Sie Slugs direkt eingeben. Verwenden Sie nur `a–z`, `0–9` und einzelne Bindestriche.
+
 **Verschlüsselte Auswahlfelder:** Bei neu gespeicherten Mehrfachauswahlen bleibt die Liste der Options-Slugs beim Verschlüsseln, Lesen und erneuten Speichern erhalten. Bereits ausgewählte deaktivierte Optionen bleiben im Bearbeitungsformular von Personen, Fällen und Ereignissen angehakt und können unverändert gespeichert werden; nicht ausgewählte deaktivierte Optionen werden dort nicht angeboten. Die Verschlüsselung ändert die rollenabhängige Sichtbarkeit nicht.
 
 Die Detailansichten zeigen die Bezeichnungen einer Mehrfachauswahl jeweils auf einer eigenen Zeile. Der Ereignis-CSV-Export verwendet kommagetrennte Bezeichnungen; die Art.-15-PDF-Auskunft zeigt ebenfalls Bezeichnungen, während das Ereignis-JSON der Art.-20-Auskunft eine echte Liste der Options-Slugs enthält. Unbekannte Slugs ohne passende Bezeichnung bleiben als Rohwert lesbar. Bestehende Texttokens werden nicht nachträglich als Listen interpretiert; eine Umwandlung alter Daten erfolgt nicht. Refs #2520.
@@ -958,7 +962,7 @@ Vorrangregel beim Neu-Anlegen: **Quick-Template > Default-Wert > leer**. Ungült
 
 | Feld | Beschreibung |
 |---|---|
-| `slug` | Technischer Bezeichner (unveränderlich nach Erstellung) |
+| `slug` | Technischer Bezeichner; innerhalb dieses Feldes eindeutig |
 | `label` | Anzeigename in Formularen und Exporten |
 | `is_active` | `true` = wählbar, `false` = deaktiviert |
 
@@ -979,7 +983,7 @@ Wenn eine Option nicht mehr benötigt wird, setzen Sie `is_active` auf `false` s
 | CSV-Export | Label wird weiterhin korrekt aufgelöst |
 | Statistik | Bestehende Werte fließen weiterhin in Auswertungen ein |
 
-> **Wichtig:** Entfernen Sie Optionen nicht aus dem JSON, wenn bereits Ereignisse mit diesem Wert existieren. Nutzen Sie stattdessen `"is_active": false`. So bleiben historische Daten konsistent und Exporte vollständig.
+> **Wichtig:** Wenn ein Options-Slug bereits verwendet wird, können Sie ihn nicht umbenennen oder entfernen. Setzen Sie stattdessen `"is_active": false`; die Bezeichnung darf weiterhin geändert werden. Nicht verwendete Options-Slugs können entfernt werden.
 
 #### Zahlenbereichsgrenzen (`Minimalwert`/`Maximalwert`)
 

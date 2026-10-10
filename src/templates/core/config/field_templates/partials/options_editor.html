@@ -14,6 +14,7 @@ keep referenced identifiers readonly; the server validates every write.
         <div>
             <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft">{% trans "Auswahloptionen" %}</p>
             <p class="mt-1 text-[12px] text-ink-muted">{% trans "Bezeichnung ist der sichtbare Text. Der stabile Slug wird in Bestandsdaten und Bedingungen gespeichert." %}</p>
+            <p class="mt-1 text-[12px] text-ink-muted">{% trans "Slug: nur a–z, 0–9 und einzelne Bindestriche" %}</p>
         </div>
         <div data-options-list class="space-y-3">
             {% for option in form.options_editor_rows %}
