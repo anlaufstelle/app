@@ -16,11 +16,11 @@ The practical consequence: **a new report is a single file.** A module under [`s
 
 ### Quantity sum report
 
-The **Sum of number fields** backend (`quantity-sum`) evaluates events by documentation type over the selected period. It binds only to the `quantity_units` report key ("Quantity") and reads number fields, producing one period total without monthly breakdowns or snapshots. The table shows **events**, **contributing events** (with a usable quantity), and **quantity in period** for each type. Missing, invalid, or unreadable values do not contribute; a completeness notice reports that such values or sums were excluded.
+The **Sum of number fields** backend (`quantity-sum`) evaluates events by documentation type over the selected period. It binds only to the `quantity_units` report key ("Quantity") and reads number fields, producing one period total without monthly breakdowns or snapshots. The table shows **contributing events** (with a usable quantity) and **quantity in period** for each type; it publishes no separate event counts or bound-event subtotal. Missing, invalid, or unreadable values do not contribute; a completeness notice reports that such values or sums were excluded.
 
 The population includes only event types with an active, bound number field; types without that field or with the type report key `excluded` remain outside the counts and the “Appears in” information. Excluded types do not make the report available and do not generate missing-field or duplicate-binding notices. Availability requires at least one active, non-excluded event type with a matching number field; historical events of a subsequently deactivated type are still included while its field remains active.
 
-The k-anonymity threshold *k* applies to event and contributor counts for each type. A sum is shown only with at least *k* contributing events. Totals and margins are also suppressed whenever they could reveal a hidden row or a small missing-value gap. The preview, CSV, and PDF use the same released values.
+The k-anonymity threshold *k* applies to contributing event counts. A sum is shown only with at least *k* contributing events. Every type suppressed by **General key figures** for the same period is also suppressed here, including secondary suppression; both backends use `build_external_report()` in `core/services/dashboard/external_report.py`. If a row or a small missing-value gap is hidden, contributor and quantity totals are withheld. Preview and downloads use the same published values.
 
 ---
 
@@ -481,6 +481,8 @@ A `multi_select` field **does not partition** — one event can carry several op
 
 ### K4a — the guarantee holds per artefact, not across artefacts
 
+**Rule for new backends:** A dimension already published by another backend may be output only with the same suppression decision, including secondary suppression and whole-table removal. Reuse the shared function for that dimension; an independent threshold check is insufficient. Declare shared dimensions in the disclosure overview’s artifact family so identical and overlapping periods across the related reports are also compared. This is implemented for `general-key-figures` and `quantity-sum`; the other cross-report relationships below have not been converted.
+
 Everything in this section reasons **within one report**. Two reports for the same facility and the same period can unlock each other without either of them breaking a rule:
 
 - **Refinement.** `monthly-trend` decomposes exactly the category figures of the activity report by month. A category cell suppressed there is summable from the visible monthly rows — and vice versa. This holds even when *neither* report suppressed a single cell: the finer resolution is itself the gain.
@@ -488,7 +490,7 @@ Everything in this section reasons **within one report**. Two reports for the sa
 - **Reproduction.** The category rows of `counseling-hours` (`contact`/`counseling`/`crisis`) reproduce the categories of the activity report — same maps, same base set, same count measure, only refined by the minutes column. This also lifts the **secondary** suppression there: a category that falls in the activity report only so that the primarily suppressed neighbouring cell cannot be back-calculated shows its event count here (which passed its own k-check). No small case count becomes visible, but a correct suppression rationale loses its effect — secondary suppression is table-local by construction.
 - **Reporting date.** `ban-overview` (`aktiv_aktuell`) and `case-metrics` (`offene_faelle_aktuell`) each carry one figure tied to the **creation day**, not to the reporting period. Two releases of the same period at different points in time differ in exactly this figure; the difference is the net change between the two days and passes through no suppression rule. The metrics stay (maintainer decision 2026-08-05) — both artefacts carry a `CompletenessIssue` naming the snapshot for it.
 
-This is an **accepted definitional boundary, not an omission**: there is no cell an artefact-local rule could attach to, and a cross-artefact guard would have to know which reports went to the same recipient — knowledge that does not exist in the generation path. As a flanking measure, the **release overview** (`ReportReleaseLogView`, [`core/services/dashboard/release_log.py`](../../src/core/services/dashboard/release_log.py)) makes overlapping releases visible so the facility can decide.
+For these other relationships, the **existing definitional boundary** remains: there is no cell an artefact-local rule could attach to, and a cross-artefact guard would have to know which reports went to the same recipient — knowledge that does not exist in the generation path. As a flanking measure, the **release overview** (`ReportReleaseLogView`, [`core/services/dashboard/release_log.py`](../../src/core/services/dashboard/release_log.py)) makes overlapping releases visible so the facility can decide.
 
 > **Obligation for imitators** (from [`monthly_trend.py`](../../src/core/reporting/backends/monthly_trend.py)): anyone who breaks an existing population down more finely is building a refinement. Three questions — **the same maps? the same base set (filters, period semantics)? the same counted quantity?** Three times "yes" and it is one, and the relationship belongs **in the module docstring**. It is visible nowhere else, neither in the code nor in the artefact, and release practice can only take into account what somebody wrote down.
 
@@ -684,5 +686,5 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- source-hash: a2bca454112004e9042874055f5d138ba0fe64c4 -->
+<!-- translation-date: 2026-10-11 -->
+<!-- source-hash: 63262ae8f8e94b5aef1f781ad0869efd005a8903 -->
