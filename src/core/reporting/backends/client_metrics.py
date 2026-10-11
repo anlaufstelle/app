@@ -195,6 +195,7 @@ class ClientMetricsBackend(DatasetBackend):
     """Aktive Personen, Neuaufnahmen und Altersverteilung im Zeitraum."""
 
     name = _("Beispiel: Personen-Kennzahlen")
+    disclosure_dimensions = frozenset({"person_counts"})
     description = _("Zählt die Personen mit mindestens einem Ereignis im Zeitraum, aufgeschlüsselt nach Altersgruppe.")
     snapshot_enabled = False
     # K3-A3 (Refs #1770): Grundgesamtheit sind **Personen** mit mindestens einem

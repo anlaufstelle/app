@@ -489,3 +489,16 @@ def describe_field_bindings(field_template, facility) -> list[str]:
                 continue
             descriptions.append(f"{backend.name} ({binding.vokabular()[key]})")
     return descriptions
+
+
+def related_report_slugs(slug: str) -> frozenset[str]:
+    """Derive disclosure relationships from every registered backend's units.
+
+    Related populations can be subsets or refinements, not equal partitions.
+    Unknown historical artifacts still compare against their own periods.
+    """
+    backends = get_backends()
+    dimensions = next((backend.disclosure_dimensions for backend in backends if backend.slug == slug), frozenset())
+    return frozenset({slug}) | frozenset(
+        backend.slug for backend in backends if dimensions & backend.disclosure_dimensions
+    )

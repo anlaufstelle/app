@@ -154,6 +154,7 @@ class MonthlyTrendBackend(DatasetBackend):
     """Ereignisse je Monat und Berichtskategorie — Zeitreihe aus Modellfeldern."""
 
     name = _("Beispiel: Monatsverlauf nach Kategorie")
+    disclosure_dimensions = frozenset({"event_counts"})
     description = _("Zählt die Ereignisse mit Berichtszuordnung Monat für Monat, aufgeschlüsselt nach Kategorie.")
     snapshot_enabled = False
     # K3-A3 (Refs #1770): gezaehlt werden nur Ereignisse **mit**

@@ -31,10 +31,6 @@ from core.services.dashboard.statistics import PERSONS_KEY, get_statistics
 
 logger = logging.getLogger(__name__)
 
-# Reports sharing the event-by-document-type dimension must use the same
-# disclosure decision and be compared as one family in release history.
-DOCUMENT_TYPE_REPORT_FAMILY = frozenset({"general-key-figures", "quantity-sum"})
-
 DEFAULT_K_THRESHOLD = 5
 
 # --- K3-A1 (Refs #1770): Restzeile „ohne Personenbezug" ---------------------

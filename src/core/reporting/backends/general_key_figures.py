@@ -11,6 +11,7 @@ from core.services.dashboard.external_report import build_external_report
 @register_backend("general-key-figures")
 class GeneralKeyFiguresBackend(DatasetBackend):
     name = _("Allgemeine Kennzahlen")
+    disclosure_dimensions = frozenset({"event_counts", "person_counts"})
     population = TABLE_SPECIFIC
     description = _("Zeigt Kontakte und Personen nach Kontaktstufe, Dokumentationstyp und Altersgruppe.")
 

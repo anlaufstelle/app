@@ -168,6 +168,7 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
     """Ausgabe/Ruecknahme und Saldo je Zeitraum — Referenz fuer Feldwert-Berichte."""
 
     name = _("Beispiel: Spritzentausch-Bilanz")
+    disclosure_dimensions = frozenset({"event_counts"})
     description = _("Summiert Ausgabe und Rückgabe des Spritzentauschs im Zeitraum und bildet den Saldo.")
     snapshot_enabled = False
     # K3-A3 (Refs #1770/#1754): ``events`` zaehlt NICHT alle Ereignisse des

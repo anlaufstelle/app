@@ -88,7 +88,7 @@ Filterfehler.
     {% blocktrans %}Erfasst wird außerdem nur, was als Datei herausgegeben wurde. Das Betrachten eines Berichts am Bildschirm ist keine Herausgabe — auch nicht in der maschinenlesbaren Fassung. Weitergaben auf anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm — erscheinen hier ebenfalls nicht.{% endblocktrans %}
 </p>
 <p class="text-[12px] text-ink-muted mt-2 max-w-3xl" data-testid="release-history-note">
-    {% blocktrans %}Die Anzeige ist auf Seiten aufgeteilt. Überschneidungen werden mit allen protokollierten Herausgaben desselben Berichts oder derselben Artefaktfamilie geprüft. „Allgemeine Kennzahlen“ und „Summe von Zahlenfeldern“ teilen die Dimension „Ereignisse je Dokumentationstyp“.{% endblocktrans %}
+    {% blocktrans %}Die Anzeige ist auf Seiten aufgeteilt. Überschneidungen werden mit allen protokollierten Herausgaben desselben Berichts oder derselben Artefaktfamilie geprüft. Zur Ereignisfamilie gehören auch Beispiel-, Sach-, Summen- und Teilpopulationsberichte. Allgemeine Kennzahlen und Personen-Kennzahlen teilen zusätzlich die Personendimension. Diese Beziehungen setzen unterschiedliche Grundgesamtheiten oder Einheiten nicht gleich.{% endblocktrans %}
 </p>
 {% include "components/_pagination.html" with page=page_obj extra_params=pagination_params %}
 {% comment %}

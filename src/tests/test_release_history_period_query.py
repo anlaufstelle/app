@@ -1,7 +1,10 @@
 """Overlap warnings include older releases; display pagination has no analysis cap."""
 
+from itertools import combinations
+
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
 from core.models import AuditLog
 from core.services.dashboard.release_log import build_release_overview
@@ -77,3 +80,71 @@ def test_shared_dimension_warns_across_backends(client, facility, lead_user, sec
     assert "auch identische Zeiträume gemeldet" in response.content.decode()
     assert "derselben Artefaktfamilie" in response.content.decode()
     assert all(release.overlaps for release in response.context["releases"])
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("backends", [("example", "general-key-figures"), ("sample-report-1", "quantity-sum")])
+def test_public_downloads_warn_for_shared_event_dimensions(client, facility, lead_user, backends):
+    from tests.reporting.test_reporting_quantity_sum import make_type
+
+    make_type(facility, "Counter", report_key="contact")
+    day = str(timezone.localdate())
+    client.force_login(lead_user)
+    for slug in backends:
+        response = client.get(
+            reverse("core:statistics_report_export"),
+            {"backend": slug, "format": "json", "date_from": day, "date_to": day},
+        )
+        assert response.status_code == 200
+    releases = build_release_overview(facility)
+    assert len(releases) == 2
+    assert all(release.overlaps for release in releases)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("backends", [("example", "general-key-figures"), ("sample-report-1", "quantity-sum")])
+@pytest.mark.parametrize("second_period", [("2026-01-01", "2026-12-31"), ("2026-02-01", "2026-02-28")])
+def test_related_period_warnings_reach_outside_display(facility, lead_user, backends, second_period):
+    _export(facility, lead_user, "2026-01-01", "2026-12-31", backend=backends[0])
+    _export(facility, lead_user, *second_period, backend=backends[1])
+    releases = build_release_overview(facility, limit=1)
+    assert releases[0].overlaps == (f"{backends[0]} 2026-01-01 – 2026-12-31",)
+
+
+@pytest.mark.django_db
+def test_registered_event_dimensions_are_compared_in_release_history(facility, lead_user):
+    from core.reporting.data_source import ALL_EVENTS, BANS_IN_PERIOD, MAPPED_EVENTS, TABLE_SPECIFIC, TYPED_EVENTS
+    from core.reporting.registry import get_backends
+
+    # Inventory derived from counting populations, including category and bound
+    # subsets. Cases and people retain separate counting units.
+    event_backends = [
+        backend
+        for backend in get_backends()
+        if backend.population in {ALL_EVENTS, BANS_IN_PERIOD, MAPPED_EVENTS, TABLE_SPECIFIC, TYPED_EVENTS}
+    ]
+    assert len(event_backends) >= 9
+    for first, second in combinations(event_backends, 2):
+        _export(facility, lead_user, "2026-01-01", "2026-12-31", backend=first.slug)
+        _export(facility, lead_user, "2026-02-01", "2026-02-28", backend=second.slug)
+        releases = build_release_overview(facility, limit=2)
+        assert f"{first.slug} 2026-01-01 – 2026-12-31" in releases[0].overlaps
+        assert f"{second.slug} 2026-02-01 – 2026-02-28" in releases[1].overlaps
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "first,second,warns",
+    [
+        ("client-metrics", "general-key-figures", True),
+        ("client-metrics", "quantity-sum", False),
+        ("case-metrics", "general-key-figures", False),
+        ("case-metrics", "quantity-sum", False),
+    ],
+)
+def test_release_relationships_respect_distinct_counting_units(facility, lead_user, first, second, warns):
+    _export(facility, lead_user, "2026-01-01", "2026-12-31", backend=first)
+    _export(facility, lead_user, "2026-01-01", "2026-12-31", backend=second)
+    releases = build_release_overview(facility)
+    assert len(releases) == 2
+    assert [bool(release.overlaps) for release in releases] == [warns, warns]

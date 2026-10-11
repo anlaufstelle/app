@@ -34,6 +34,7 @@ class ExampleBackend(DatasetBackend):
     """Ereignisse je Dokumentationstyp im Zeitraum — kleinstmoegliches Referenz-Backend."""
 
     name = _("Beispiel: Ereignisse je Dokumentationstyp")
+    disclosure_dimensions = frozenset({"event_counts"})
     description = _("Zählt die Ereignisse des Zeitraums je Dokumentationstyp.")
     snapshot_enabled = False
 

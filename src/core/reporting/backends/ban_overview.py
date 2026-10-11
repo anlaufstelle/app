@@ -213,6 +213,7 @@ class BanOverviewBackend(DatasetBackend):
     """Ausgesprochene, aktuell geltende und im Zeitraum abgelaufene Hausverbote."""
 
     name = _("Beispiel: Hausverbots-Übersicht")
+    disclosure_dimensions = frozenset({"event_counts"})
     description = _("Zählt die im Zeitraum ausgesprochenen und abgelaufenen Hausverbote sowie den Bestand am Stichtag.")
     snapshot_enabled = False
     # K3-A3 (Refs #1770): gezaehlt werden Hausverbots-Ereignisse, nicht Personen

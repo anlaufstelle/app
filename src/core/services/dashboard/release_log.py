@@ -17,9 +17,9 @@ from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Coalesce, NullIf
 
 from core.models import AuditLog
+from core.reporting.registry import related_report_slugs
 from core.services.audit.detail_policy import RELEASE_FIELD_MAX_LENGTH as RELEASE_FIELD_MAX_LENGTH
 from core.services.audit.detail_policy import validate_release_metadata
-from core.services.dashboard.external_report import DOCUMENT_TYPE_REPORT_FAMILY
 from core.utils.formatting import parse_date
 
 # Default service display window; the view paginates independently.
@@ -186,7 +186,7 @@ def _overlaps(first: Release, second: Release) -> bool:
     Repeated downloads of one report for an identical period remain excluded.
     Output format and recipient do not change the shared dimension.
     """
-    same_family = first.backend in DOCUMENT_TYPE_REPORT_FAMILY and second.backend in DOCUMENT_TYPE_REPORT_FAMILY
+    same_family = bool(first.backend and second.backend and second.backend in related_report_slugs(first.backend))
     if first.artifact != second.artifact and not same_family:
         return False
     if not (first.has_period and second.has_period):
@@ -224,9 +224,7 @@ def build_release_overview(facility, limit: int = RELEASE_LOG_LIMIT, *, offset: 
         if release.date_from is None or release.date_to is None:
             result.append(release)
             continue
-        artifacts = (
-            DOCUMENT_TYPE_REPORT_FAMILY if release.backend in DOCUMENT_TYPE_REPORT_FAMILY else {release.artifact}
-        )
+        artifacts = related_report_slugs(release.backend) if release.backend else {release.artifact}
         candidates = (
             history.annotate(
                 release_artifact=Coalesce(

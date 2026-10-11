@@ -604,6 +604,9 @@ class DatasetBackend(ABC):
     # Leserin hat keine Chance zu erkennen, warum. Der Default ist die weiteste
     # und haeufigste Menge; ein Backend, das enger zaehlt, MUSS ihn ueberschreiben.
     population: str = ALL_EVENTS
+    # Counting units shared with other reports, including subsets/refinements.
+    # Used for disclosure warnings, without equating their populations or sums.
+    disclosure_dimensions: frozenset[str] = frozenset()
     # E1 (Refs #1824): die deklarative Bindung. **Deklaration und Verfuegbarkeit
     # sind bewusst getrennt** — ``sample_report_1`` deklariert eine Bindung
     # (sie speist Aufloesung, Unmapped-Filter und Vokabular), hat aber

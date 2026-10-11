@@ -169,6 +169,7 @@ class CaseMetricsBackend(DatasetBackend):
     """Neue, geschlossene und offene Faelle sowie betroffene Personen."""
 
     name = _("Beispiel: Fall-Kennzahlen")
+    disclosure_dimensions = frozenset({"case_counts"})
     description = _("Zählt die im Zeitraum angelegten und abgeschlossenen Fälle sowie den Fallbestand am Stichtag.")
     snapshot_enabled = False
     # K3-A3 (Refs #1770): Die Grundgesamtheit sind **Faelle**, nicht Ereignisse

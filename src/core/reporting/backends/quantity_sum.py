@@ -67,6 +67,7 @@ class QuantitySumBackend(DatasetBackend):
     """One quantity sum per documentation type, without monthly snapshots."""
 
     name = _("Summe von Zahlenfeldern")
+    disclosure_dimensions = frozenset({"event_counts"})
     description = _("Summiert dokumentierte Stückzahlen je Dokumentationstyp im Zeitraum.")
     population = TYPED_EVENTS
     snapshot_enabled = False
