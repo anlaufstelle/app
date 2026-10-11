@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 20:21+0200\n"
+"POT-Creation-Date: 2026-10-11 10:21+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1523,10 +1523,6 @@ msgstr ""
 "Defines how much must be known about a person before this document type may "
 "be used. If left empty, the type can also be used for anonymous contacts "
 "without an assigned person."
-
-#: src/core/models/document_type.py:93
-msgid "Aufbewahrungsfrist (Tage)"
-msgstr "Retention period (days)"
 
 #: src/core/models/document_type.py:95
 msgid "Icon"
@@ -3417,15 +3413,6 @@ msgstr "Live query at the time of creation"
 msgid "Monats-Aggregate"
 msgstr "Monthly aggregates"
 
-#: src/core/reporting/data_source.py:45
-msgid ""
-"Die Zahlen werden bei jedem Aufruf neu aus den Ereignisdaten berechnet; "
-"Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, "
-"erscheinen leer."
-msgstr ""
-"The figures are recalculated from the event data on every request; periods "
-"whose events were removed once the retention deadlines expired appear empty."
-
 #: src/core/reporting/data_source.py:49
 msgid ""
 "Die Zahlen stammen aus den gespeicherten Monats-Auswertungen und bleiben "
@@ -4898,10 +4885,6 @@ msgstr "This document type cannot be captured via the tally."
 #: src/core/views/events.py:815
 msgid "Ereignis wurde aktualisiert."
 msgstr "Event has been updated."
-
-#: src/core/views/events.py:879
-msgid "Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
-msgstr "Deletion request has been submitted and must be approved by a manager."
 
 #: src/core/views/events.py:882
 msgid "Ereignis wurde gelöscht."
@@ -7898,16 +7881,6 @@ msgstr "Save & next contact"
 msgid "Ereignis löschen"
 msgstr "Delete Event"
 
-#: src/templates/core/events/delete_confirm.html:15
-msgid ""
-"Dieses Ereignis gehört zu einer Person mit qualifizierter Dokumentation. Es "
-"wird ein Löschantrag erstellt, der von einer Leitung genehmigt werden muss "
-"(4-Augen-Prinzip)."
-msgstr ""
-"This event belongs to a person with qualified documentation. A deletion "
-"request will be created that must be approved by a lead (four-eyes "
-"principle)."
-
 #: src/templates/core/events/delete_confirm.html:17
 msgid ""
 "Möchten Sie dieses Ereignis wirklich löschen? Diese Aktion kann nicht "
@@ -8380,20 +8353,6 @@ msgstr "No merges on record."
 msgid "Erstellt am %(date)s · Anlaufstelle"
 msgstr "Generated on %(date)s · Anlaufstelle"
 
-#: src/templates/core/export/report_pdf.html:6
-#: src/templates/core/export/report_pdf.html:37
-msgid "Statistikbericht"
-msgstr "Statistics Report"
-
-#: src/templates/core/export/report_pdf.html:33
-msgid "INTERN — nicht zur Weitergabe. Enthält Pseudonym-Ranking."
-msgstr "INTERNAL — not for distribution. Contains pseudonym ranking."
-
-#: src/templates/core/export/report_pdf.html:45
-#, python-format
-msgid "Gefiltert nach Dokumentationstyp: %(name)s"
-msgstr "Filtered by documentation type: %(name)s"
-
 #: src/templates/core/export/report_pdf.html:48
 #: src/templates/core/export/sample_report_1_pdf.html:46
 msgid "Zusammenfassung"
@@ -8455,10 +8414,6 @@ msgstr "Contacts by Age Group"
 #: src/templates/core/statistics/external_report.html:187
 msgid "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
 msgstr "Age group figures suppressed (k-anonymity)."
-
-#: src/templates/core/export/report_pdf.html:126
-msgid "Top 5 Personen"
-msgstr "Top 5 people"
 
 #: src/templates/core/export/report_pdf.html:150
 #: src/templates/core/export/sample_report_1_pdf.html:114
@@ -9201,26 +9156,6 @@ msgstr "Previous year"
 msgid "Nächstes Jahr"
 msgstr "Next year"
 
-#: src/templates/core/statistics/external_report.html:14
-msgid "Externer Bericht (Datenschutzprofil)"
-msgstr "External report (privacy profile)"
-
-#: src/templates/core/statistics/external_report.html:27
-msgid "Als JSON exportieren"
-msgstr "Export as JSON"
-
-#: src/templates/core/statistics/external_report.html:43
-msgid ""
-"Dieselben Zahlen wie die Übersicht, aber für außen: Kleinstfallzahlen "
-"unterdrückt, keine Pseudonyme."
-msgstr ""
-"The same figures as the overview, but for external use: small case numbers "
-"suppressed, no pseudonyms."
-
-#: src/templates/core/statistics/external_report.html:57
-msgid "Datenschutzprofil"
-msgstr "Privacy profile"
-
 #: src/templates/core/statistics/external_report.html:69
 #: src/templates/core/statistics/partials/dashboard_content.html:5
 #: src/templates/core/statistics/partials/full_content.html:27
@@ -9228,52 +9163,10 @@ msgstr "Privacy profile"
 msgid "Zeitraum"
 msgstr "Period"
 
-#: src/templates/core/statistics/external_report.html:73
-msgid "K-Anonymität-Schwelle"
-msgstr "K-anonymity threshold"
-
-#: src/templates/core/statistics/external_report.html:77
-msgid "Erzeugt am"
-msgstr "Generated on"
-
-#: src/templates/core/statistics/external_report.html:87
-#, python-format
-msgid ""
-"\n"
-"        Aggregate mit weniger als %(threshold)s Datensätzen werden zum "
-"Schutz der Anonymität unterdrückt (Anzeige als „unterdrückt\").\n"
-"        "
-msgstr ""
-"\n"
-"        Aggregates with fewer than %(threshold)s records are suppressed to "
-"protect anonymity (shown as \"suppressed\").\n"
-"        "
-
-#: src/templates/core/statistics/external_report.html:95
-msgid "Kennzahlen"
-msgstr "Key figures"
-
-#: src/templates/core/statistics/external_report.html:98
-msgid "Kontakte gesamt"
-msgstr "Total contacts"
-
 #: src/templates/core/statistics/external_report.html:108
 #: src/templates/core/statistics/partials/dashboard_content.html:36
 msgid "Unterschiedliche Personen"
 msgstr "Distinct people"
-
-#: src/templates/core/statistics/external_report.html:121
-msgid "Nach Dokumentationstyp"
-msgstr "By documentation type"
-
-#: src/templates/core/statistics/external_report.html:150
-#: src/templates/core/statistics/external_report.html:189
-msgid "Keine Daten im Zeitraum."
-msgstr "No data in the period."
-
-#: src/templates/core/statistics/external_report.html:160
-msgid "Nach Altersgruppe"
-msgstr "By age group"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:13
 msgid "Dokumentierte Einträge"
@@ -9348,10 +9241,6 @@ msgstr "e.g. 2026 funding report"
 #: src/templates/core/system/auditlog_list.html:16
 msgid "CSV-Export"
 msgstr "CSV export"
-
-#: src/templates/core/statistics/partials/dashboard_content.html:296
-msgid "Verwendet den oben gewählten Zeitraum als Berichtszeitraum."
-msgstr "Uses the period selected above as the reporting period."
 
 #: src/templates/core/statistics/partials/dashboard_content.html:298
 #: src/templates/core/statistics/partials/report_panel.html:123
@@ -9463,13 +9352,6 @@ msgstr ""
 "what a single report would have suppressed — even if nothing was suppressed "
 "in either of them."
 
-#: src/templates/core/statistics/report_releases.html:35
-#, python-format
-msgid "%(count)s Herausgabe mit überschneidendem Zeitraum"
-msgid_plural "%(count)s Herausgaben mit überschneidendem Zeitraum"
-msgstr[0] "%(count)s release with an overlapping period"
-msgstr[1] "%(count)s releases with an overlapping period"
-
 #: src/templates/core/statistics/report_releases.html:38
 msgid ""
 "Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen "
@@ -9532,17 +9414,6 @@ msgstr ""
 "not a release — not even in the machine-readable variant. Disclosures by "
 "other means — a forwarded PDF file, a photographed screen — do not appear "
 "here either."
-
-#: src/templates/core/statistics/report_releases.html:94
-#, python-format
-msgid ""
-"Ausgewertet werden die %(limit)s jüngsten Herausgaben. Ältere bleiben im "
-"Audit-Log, erscheinen aber nicht in dieser Übersicht und lösen keine "
-"Überschneidungswarnung mehr aus."
-msgstr ""
-"Only the %(limit)s most recent releases are evaluated. Older ones remain in "
-"the audit log but do not appear in this overview and no longer trigger an "
-"overlap warning."
 
 #: src/templates/core/system/_banner.html:12
 msgid ""
@@ -9619,14 +9490,6 @@ msgstr "Warning"
 #: src/templates/core/system/compliance.html:76
 msgid "Empfohlen"
 msgstr "Recommended"
-
-#: src/templates/core/system/compliance.html:87
-msgid ""
-"Quelle: <code>core/services/compliance.py</code>. Aktualisierung bei jedem "
-"Reload — kein Caching im MVP."
-msgstr ""
-"Source: <code>core/services/compliance.py</code>. Refreshed on every reload "
-"— no caching in the MVP."
 
 #: src/templates/core/system/dashboard.html:18
 msgid "System-Status"
@@ -9789,20 +9652,6 @@ msgstr "Legal holds (system)"
 #: src/templates/core/system/legal_holds.html:10
 msgid "Legal Holds (alle Einrichtungen)"
 msgstr "Legal holds (all facilities)"
-
-#: src/templates/core/system/legal_holds.html:16
-msgid ""
-"\n"
-"    Cross-Facility-Übersicht aller Legal Holds. Read-Only — Anlegen und "
-"Aufheben von Legal\n"
-"    Holds erfolgt im Facility-Kontext der jeweiligen Einrichtung.\n"
-"    "
-msgstr ""
-"\n"
-"    Cross-facility overview of all legal holds. Read-only — creating and "
-"lifting legal\n"
-"    holds happens in the facility context of the respective facility.\n"
-"    "
 
 #: src/templates/core/system/legal_holds.html:42
 #: src/templates/core/system/legal_holds.html:90
@@ -11072,10 +10921,6 @@ msgstr "Anonymized permanently on"
 msgid "Keine Fälle im Papierkorb."
 msgstr "No cases in the trash."
 
-#: src/templates/core/cases/deletion_review.html:38
-msgid "Die Angaben zum Fall sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Falldetails braucht, gibt die Bestätigung an eine Fachkraft ab."
-msgstr "The case details are not visible to your role. You can decide the request based on the requester and the reason given; anyone who needs the case details hands the confirmation over to a social worker."
-
 #: src/core/models/audit.py:58
 msgid "Person zusammengeführt"
 msgstr "Person merged"
@@ -11319,10 +11164,6 @@ msgstr "Upon approval, events, cases, tasks and adopted attachments move to the 
 msgid "Bestand der beiden Akten"
 msgstr "Contents of the two records"
 
-#: src/templates/core/clients/merge_review.html:59
-msgid "Die Bestandszahlen (Fälle, Ereignisse, Anhänge) sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Zahlen braucht, gibt die Bestätigung an eine Fachkraft ab."
-msgstr "The record counts (cases, events, attachments) are not visible to your role. You can decide the request based on the requester and the reason given; anyone who needs the numbers hands the confirmation over to a social worker."
-
 #: src/templates/core/clients/merge_review.html:106
 msgid "Sie haben diesen Antrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)."
 msgstr "You submitted this request yourself. Approval must be given by a second authorized person (four-eyes principle)."
@@ -11550,9 +11391,6 @@ msgstr "No default documentation type"
 
 msgid "Sicherheit"
 msgstr "Security"
-
-msgid "Achtung: Diese verwendeten Slugs würden entfernt oder umbenannt:"
-msgstr "Warning: These slugs are in use and would be removed or renamed:"
 
 msgid "Auswahloptionen"
 msgstr "Selection options"
@@ -12115,9 +11953,6 @@ msgstr "The system area shows installation-wide operational and compliance infor
 msgid "Der Zeitstrom zeigt dokumentierte Kontakte in zeitlicher Reihenfolge."
 msgstr "The timeline shows documented contacts in chronological order."
 
-msgid "Der gewählte Zeitraum gilt beim Wechsel zwischen den Statistik-Reitern weiter."
-msgstr "The selected period remains active when switching between statistics tabs."
-
 msgid "Die Arbeitszentrale bündelt die wichtigsten offenen Punkte für die Leitung."
 msgstr "The work center brings together the most important open items for management."
 
@@ -12159,9 +11994,6 @@ msgstr "Filters narrow the period, documentation type, and display format."
 
 msgid "Filter helfen, Dateien nach ihrem fachlichen Bezug zu finden."
 msgstr "Filters help find files by their professional context."
-
-msgid "Freigaben halten fest, welche Berichtsstände tatsächlich herausgegeben wurden."
-msgstr "Releases record which report versions were actually shared."
 
 msgid "Fälle bündeln länger laufende Begleitungen und die zugehörigen Kontakte."
 msgstr "Cases group longer-term support and its related contacts."
@@ -12879,11 +12711,6 @@ msgstr "Check the output of manage.py check_db_roles in the maintenance service 
 msgid "In der Demo nicht eingerichtet: der Löschlauf würde die stündlich neu erzeugten Beispieldaten löschen."
 msgstr "Not set up in the demo: the retention run would delete the sample data that is regenerated every hour."
 
-#: src/core/services/compliance/vvt.py:80
-#, python-brace-format
-msgid "Konfigurierbar pro Kontaktstufe; eine Frist am Dokumentationstyp gilt zusätzlich (es gilt die zuerst ablaufende). Standardfristen je Ereignis: Anonyme Kontakte: {anonymous_days} Tage ab dem jeweiligen Kontakt; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage ab dem jeweiligen Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage ab Abschluss des zugeordneten Falls; Ereignisse dieser Stufe ohne Fall oder in offenen Fällen verfallen nicht über diese Frist, nur über eine Frist am Dokumentationstyp. Der tägliche Aufbewahrungslauf löscht ohne Freigabeschritt; eine Person mit mindestens einem Ereignis anonymisiert er, sobald alle ihre Ereignisse gelöscht sind und keine Aufbewahrungssperre (Legal Hold) auf der Person, einem ihrer Fälle oder Ereignisse besteht."
-msgstr "Configurable per contact stage; a period set on the documentation type applies in addition (whichever expires first applies). Default periods per event: anonymous contacts: {anonymous_days} days from the respective contact; contacts at the “Pseudonym only” stage: {identified_days} days from the respective contact; contacts at the “With additional details” stage: {qualified_days} days from the close of the linked case; events at this stage without a case or in open cases do not expire through this period, only through a period set on the documentation type. The daily retention run deletes without an approval step; it anonymizes a person with at least one event once all of their events are deleted and no legal hold exists on the person, one of their cases or events."
-
 #: src/core/services/compliance/vvt.py:327
 msgid "Lokale Sicherungsstände entfernt backup.sh bei seinem ersten erfolgreichen Lauf, in dem sie mindestens 8 (täglich), 29 (wöchentlich) bzw. 91 volle Tage (monatlich) alt sind. Das ist eine Altersgrenze, keine feste Höchstfrist. Nach einem fehlgeschlagenen Off-Site-Abgleich ist die lokale Rotation ausgesetzt, bis ein Abgleich wieder gelingt. Off-Site-Kopien löscht backup.sh nicht; ihre Frist legt die Einrichtung über eine Aufbewahrungsregel am Speicherort fest."
 msgstr "backup.sh removes local backup sets in its first successful run in which they are at least 8 (daily), 29 (weekly) or 91 full days (monthly) old. This is an age limit, not a fixed maximum period. After a failed off-site sync the local rotation is suspended until a sync succeeds again. backup.sh does not delete off-site copies; the facility sets their retention through a retention rule at the storage location."
@@ -12977,14 +12804,6 @@ msgstr "If two-factor authentication is mandatory for the account, the person se
 msgid "Setze den zweiten Faktor nur zurück, wenn du sicher bist, dass die Anfrage von der Person selbst stammt."
 msgstr "Only reset the second factor if you are sure the request comes from the person themselves."
 
-#: src/core/services/compliance/vvt.py:260
-msgid "Standardmäßig 24 Monate rollierend, je Einrichtung einstellbar (0 schaltet die Löschung ab). Bereinigung durch den täglichen ``enforce_retention``-Lauf, je Einrichtung nur deren eigene Einträge. Ausgenommen bleiben Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs, Nachweise der Redaktion der Ereignis-Historie und Nachweise herausgegebener Berichtszeiträume. Einträge ohne Einrichtung (Systemadministration, Konten ohne Einrichtung, Anmeldeversuche unter unbekanntem Benutzernamen, installationsweite Lauf-Marker) löscht kein Lauf; sie bleiben unbefristet erhalten. Aufbewahrungssperren (Legal Hold) wirken nicht auf das Audit-Log."
-msgstr "24 months rolling by default, adjustable per facility (0 disables deletion). Pruned by the daily ``enforce_retention`` run, each facility only for its own entries. Security violations, system markers of the retention run, proofs of event history redaction and proofs of released reporting periods are exempt. Entries without a facility (system administration, accounts without a facility, login attempts with an unknown username, installation-wide run markers) are deleted by no run; they are kept indefinitely. Legal holds do not apply to the audit log."
-
-#: src/templates/core/retention/dashboard.html:9
-msgid "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus. Vorschläge erscheinen hier nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist. Zurückstellen oder Verwerfen hält die Löschung nicht auf."
-msgstr "The daily retention run deletes expired events without approval; only a legal hold exempts them. Proposals appear here only if the proposal run (enforce_retention --propose) is set up as well. Deferring or rejecting does not stop the deletion."
-
 #: src/core/forms/config.py:376
 msgid "In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-Kontaktstufe. Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder ohne Bedingung sein. Der Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
 msgstr "Only active event types without a minimum contact stage appear in the tally. If required fields exist, all of them must be number fields without a condition. The type and all required fields must be visible to the respective role."
@@ -13016,22 +12835,6 @@ msgstr "A withdrawn or rejected request deletes nothing; the data remains unchan
 #: src/core/views/help.py:127
 msgid "Löschfristen und Löschvorschläge"
 msgstr "Retention periods and deletion proposals"
-
-#: src/core/views/help.py:130
-msgid "Ereignisse haben eine Aufbewahrungsfrist. Sie ergibt sich aus der Kontaktstufe oder aus einer Frist am Dokumentationstyp."
-msgstr "Events have a retention period. It results from the contact stage or from a period set on the documentation type."
-
-#: src/core/views/help.py:134
-msgid "Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne Freigabe; nur eine Aufbewahrungssperre (Legal Hold) nimmt sie aus."
-msgstr "The daily retention run deletes expired events without approval; only a legal hold excludes them."
-
-#: src/core/views/help.py:140
-msgid "Löschvorschläge erscheinen in den Löschfristen nur, wenn zusätzlich der Vorschlagslauf (enforce_retention --propose) eingerichtet ist."
-msgstr "Deletion proposals appear in the retention periods only if the proposal run (enforce_retention --propose) is also set up."
-
-#: src/core/views/help.py:143
-msgid "Zurückstellen oder Verwerfen eines Löschvorschlags hält die Löschung nicht auf."
-msgstr "Postponing or discarding a deletion proposal does not stop the deletion."
 
 #: src/core/views/help.py:159
 msgid "Feldbedingungen (bedingte Sichtbarkeit)"
@@ -13219,17 +13022,9 @@ msgstr "Append-only through DB convention and RLS policies; the exception is the
 msgid "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert); der Aufbewahrungslauf umgeht den Trigger transaktional, um abgelaufene Einträge zu löschen, die Wartungsfunktion für die Hash-Kette, um nur deren Prüfwerte neu zu setzen; fachliche Inhalte ändert keiner der beiden Wege"
 msgstr "Immutability enforced by DB trigger (UPDATE/DELETE blocked); the retention run bypasses the trigger within a transaction to delete expired entries, the maintenance function for the hash chain to reset only its check values; neither path changes business content"
 
-#: src/core/services/compliance/vvt.py:349
-msgid "Konto-Stammdaten: bis zur Loeschung des Accounts. Login-Versuche und Kontosperren: als Audit-Einträge, aus denen die Sperre berechnet wird; sie folgen der Audit-Frist (siehe Verarbeitung 'Audit-Log'), Fehlversuche unter unbekanntem Benutzernamen und von Konten ohne Einrichtung bleiben unbefristet. Recovery-Codes bis zu deren Verbrauch oder Neuerstellung."
-msgstr "Account master data: until the account is deleted. Login attempts and account lockouts: as audit entries from which the lockout is computed; they follow the audit period (see processing 'Audit log'), failed attempts under an unknown username and of accounts without a facility are kept indefinitely. Recovery codes until they are used or regenerated."
-
 #: src/core/services/compliance/vvt.py:444
 msgid "Leitung der Einrichtung (4-Augen bei der Löschung von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“)"
 msgstr "Facility management (four eyes when deleting persons and events and cases at the “With additional details” stage)"
-
-#: src/core/services/compliance/vvt.py:458
-msgid "Bearbeitungsvorgänge: Die Anwendung löscht Lösch- und Berichtigungsanträge nicht; Status, beteiligte Personen und Zeitpunkte bleiben als Nachweis. Die Anonymisierung einer Person tilgt die Inhalte ihrer Berichtigungsanträge und ersetzt die Begründungen der Löschanträge und Aufbewahrungssperren zu ihr, ihren Fällen und Ereignissen durch „[Anonymisiert]“. Eine Frist (etwa 3 Jahre nach Abschluss als Nachweis der Erfüllung) legt die Einrichtung organisatorisch fest. Erzeugte Datenpakete: nach Abholung löschen. Berichtigungs- und Löschvorgänge: im AuditLog bis zum Ablauf der Audit-Frist (siehe Verarbeitung 'Audit-Log')."
-msgstr "Processing records: the application does not delete deletion or rectification requests; status, persons involved and timestamps remain as evidence. Anonymising a person removes the content of their rectification requests and replaces the reasons of the deletion requests and legal holds concerning them, their cases and events with “[Anonymisiert]”. The facility sets a period organisationally (e.g. 3 years after completion as proof of fulfilment). Generated data packages: delete after collection. Rectification and deletion records: in the audit log until the audit period expires (see processing 'Audit log')."
 
 #: src/core/services/compliance/vvt.py:476
 msgid "Vier-Augen-Prinzip für die Löschung von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“"
@@ -13336,3 +13131,1237 @@ msgstr "Permissions"
 #: src/core/services/dashboard/external_report.py:255
 msgid "Die k-Anonymitäts-Schwelle liegt unter 3. Bei k = 1 wird keine Zahl unterdrückt; auch Einzelfälle werden veröffentlicht und können Personen erkennbar machen. Empfohlen ist k = 5."
 msgstr "The k-anonymity threshold is below 3. At k = 1 no figure is suppressed; single cases are published as well and can make persons identifiable. k = 5 is recommended."
+
+#: src/core/demo.py:9
+msgid "Offline-Schlüssel konnte nicht aktiviert werden. Bitte regulär anmelden oder die Demo nach dem nächsten Reset erneut starten."
+msgstr "Offline key could not be activated. Please sign in normally or restart the demo after the next reset."
+
+#: src/core/forms/clients.py:139 src/core/models/managers.py:205
+#: src/core/services/client/main.py:939
+msgid "Bei vorhandenen Ereignissen ist ein Herabstufungsantrag mit Vier-Augen-Freigabe erforderlich."
+msgstr "When events exist, a downgrade request with four-eyes approval is required."
+
+#: src/core/forms/config.py:296 src/core/models/document_type.py:93
+msgid "Höchstfrist (verkürzt nur)"
+msgstr "Maximum period (shortens only)"
+
+#: src/core/forms/config.py:298
+msgid "Diese Höchstfrist in Tagen verkürzt nur die Frist der Kontaktstufe; eine längere Höchstfrist verlängert sie nicht. Die Typ-Höchstfrist beginnt am Ereignisdatum. Leer lässt die Stufenfrist gelten."
+msgstr "This maximum period in days only shortens the period of the contact stage; a longer maximum period does not extend it. The type maximum period starts on the event date. Empty lets the stage period apply."
+
+#: src/core/forms/config.py:552
+msgid "Für Auswahl- und Mehrfachauswahl-Felder enthält dieses Feld die wählbaren Werte. Beispiel: [{\"slug\": \"beratung\", \"label\": \"Beratung\"}]. Bei anderen Feldtypen leer lassen. Nicht mehr benötigte Optionen deaktivieren statt entfernen."
+msgstr "For single-select and multi-select fields, this field contains the selectable values. Example: [{\"slug\": \"beratung\", \"label\": \"Beratung\"}]. Leave empty for other field types. Deactivate options that are no longer needed instead of removing them."
+
+#: src/core/forms/legal_holds.py:13
+msgid "Bitte keine Klarnamen oder besonders schützenswerten Angaben eintragen."
+msgstr "Please do not enter real names or particularly sensitive information."
+
+#: src/core/models/audit.py:28 src/templates/core/clients/detail.html:40
+#: src/templates/core/clients/detail.html:136
+msgid "Herabstufung beantragt"
+msgstr "Downgrade requested"
+
+#: src/core/models/audit.py:29
+msgid "Herabstufung freigegeben"
+msgstr "Downgrade approved"
+
+#: src/core/models/audit.py:30
+msgid "Herabstufung abgelehnt"
+msgstr "Downgrade rejected"
+
+#: src/core/models/audit.py:143
+msgid "Anfrage gedrosselt"
+msgstr "Request throttled"
+
+#: src/core/models/audit.py:151
+msgid "2FA-Verifikation erfolgreich"
+msgstr "2FA verification successful"
+
+#: src/core/models/audit.py:152
+msgid "2FA-Backup-Code-Erneuerung abgelehnt"
+msgstr "2FA backup code renewal rejected"
+
+#: src/core/models/audit.py:184
+msgid "Datei-Umschlüsselung abgeschlossen"
+msgstr "File re-encryption completed"
+
+#: src/core/models/case.py:100
+msgid "Letzte Fallaktivität"
+msgstr "Last case activity"
+
+#: src/core/models/document_type_field.py:90
+#: src/core/models/document_type_field.py:140
+msgid "Die Feldvorlage gehört zu einer anderen Einrichtung."
+msgstr "The field template belongs to a different facility."
+
+#: src/core/models/field_template_manager.py:14
+msgid "Optionsänderungen über update, bulk_update oder Upsert sind nicht zulässig. Bitte die Feldvorlage einzeln speichern, damit verwendete Slugs geprüft werden."
+msgstr "Option changes via update, bulk_update or upsert are not permitted. Please save the field template individually so that slugs in use can be checked."
+
+#: src/core/models/managers.py:54 src/core/services/dynamic_protection.py:128
+msgid "Dynamische Daten benötigen einen Dokumentationstyp derselben Einrichtung."
+msgstr "Dynamic data requires a document type of the same facility."
+
+#: src/core/models/managers.py:165
+msgid "Kontaktstufen dürfen nicht über einen Bulk-Upsert geändert werden."
+msgstr "Contact stages must not be changed via a bulk upsert."
+
+#: src/core/models/retention.py:47
+msgid "Vorgeschlagen von"
+msgstr "Proposed by"
+
+#: src/core/models/retention.py:55
+msgid "Freigegeben von"
+msgstr "Released by"
+
+#: src/core/models/retention.py:57
+msgid "Freigegeben am"
+msgstr "Released on"
+
+#: src/core/models/retention.py:58
+msgid "Abgelehnt am"
+msgstr "Rejected on"
+
+#: src/core/models/settings.py:139
+msgid "Aufbewahrung abgeschlossener Anträge (Tage)"
+msgstr "Retention of completed requests (days)"
+
+#: src/core/models/settings.py:237
+msgid "Wiedervorlage nach Ablehnung (Tage)"
+msgstr "Follow-up after rejection (days)"
+
+#: src/core/models/settings.py:242
+msgid "Hinweis bei ruhenden Fällen (Tage)"
+msgstr "Notice for dormant cases (days)"
+
+#: src/core/models/workitem.py:230
+msgid "Herabstufungsantrag"
+msgstr "Downgrade request"
+
+#: src/core/reporting/backends/general_key_figures.py:13
+msgid "Allgemeine Kennzahlen"
+msgstr "General key figures"
+
+#: src/core/reporting/backends/general_key_figures.py:15
+msgid "Zeigt Kontakte und Personen nach Kontaktstufe, Dokumentationstyp und Altersgruppe."
+msgstr "Shows contacts and persons by contact stage, document type and age group."
+
+#: src/core/reporting/backends/general_key_figures.py:19
+msgid "Tabelle"
+msgstr "Table"
+
+#: src/core/reporting/backends/quantity_sum.py:35
+msgid "Stückzahl"
+msgstr "Quantity"
+
+#: src/core/reporting/backends/quantity_sum.py:40
+msgid "Nicht verwertbare Stückzahlen oder Summen bleiben in diesem Bericht unberücksichtigt"
+msgstr "Unusable quantities or totals are disregarded in this report"
+
+#: src/core/reporting/backends/quantity_sum.py:68
+msgid "Summe von Zahlenfeldern"
+msgstr "Sum of numeric fields"
+
+#: src/core/reporting/backends/quantity_sum.py:69
+msgid "Summiert dokumentierte Stückzahlen je Dokumentationstyp im Zeitraum."
+msgstr "Sums documented quantities per document type in the period."
+
+#: src/core/reporting/backends/quantity_sum.py:80
+msgid "Beitragende Ereignisse"
+msgstr "Contributing events"
+
+#: src/core/reporting/backends/quantity_sum.py:81
+msgid "Stückzahl im Zeitraum"
+msgstr "Quantity in the period"
+
+#: src/core/reporting/data_source.py:45
+msgid "Die Zahlen werden bei jedem Aufruf neu aus dem aktuellen Datenbestand berechnet; Werte aus Ereignissen, die nach Ablauf der Löschfristen entfernt wurden, fehlen deshalb."
+msgstr "The figures are recalculated from the current data on every request; values from events removed after the retention deadlines are therefore missing."
+
+#: src/core/reporting/data_source.py:107
+msgid "je Tabelle ausgewiesene Grundgesamtheit"
+msgstr "population shown per table"
+
+#: src/core/reporting/registry.py:364
+#, python-format
+msgid "Typ-Schlüssel: %(keys)s"
+msgstr "Type key: %(keys)s"
+
+#: src/core/reporting/registry.py:375
+#, python-format
+msgid "Feld-Schlüssel: %(keys)s"
+msgstr "Field key: %(keys)s"
+
+#: src/core/reporting/registry.py:381 src/core/reporting/registry.py:400
+msgid " oder "
+msgstr " or "
+
+#: src/core/reporting/registry.py:398
+#, python-format
+msgid "Für „%(report)s“ fehlen an diesem Typ noch Zuordnungen: %(requirements)s."
+msgstr "For \"%(report)s\", assignments are still missing on this type: %(requirements)s."
+
+#: src/core/reporting/registry.py:437
+#, python-format
+msgid "Typ „%(type)s“: %(warning)s"
+msgstr "Type \"%(type)s\": %(warning)s"
+
+#: src/core/retention/proposals.py:407
+msgid "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt."
+msgstr "Processing is restricted for this person under Art. 18 GDPR."
+
+#: src/core/retention/proposals.py:459
+#: src/core/services/client/stage_downgrade.py:64
+msgid "Für die Freigabe ist das Recht „Löschbestätigung“ erforderlich."
+msgstr "The \"Deletion confirmation\" right is required for approval."
+
+#: src/core/retention/proposals.py:461
+msgid "Sie können Ihren eigenen Löschvorschlag nicht freigeben."
+msgstr "You cannot approve your own deletion proposal."
+
+#: src/core/services/client/main.py:1350 src/core/services/client/main.py:1436
+msgid "Dies ist ein Herabstufungsantrag — bitte den Herabstufungs-Weg verwenden."
+msgstr "This is a downgrade request — please use the downgrade path."
+
+#: src/core/services/client/stage_downgrade.py:17
+msgid "Die Person gehört zu einer anderen Einrichtung."
+msgstr "The person belongs to a different facility."
+
+#: src/core/services/client/stage_downgrade.py:20
+msgid "Diese Person kann nicht herabgestuft werden."
+msgstr "This person cannot be downgraded."
+
+#: src/core/services/client/stage_downgrade.py:23
+msgid "Die Person hat bereits die Kontaktstufe „Nur Pseudonym“."
+msgstr "The person already has the contact stage \"Pseudonym only\"."
+
+#: src/core/services/client/stage_downgrade.py:25
+msgid "Die Person steht unter einem aktiven Legal Hold."
+msgstr "The person is under an active legal hold."
+
+#: src/core/services/client/stage_downgrade.py:33
+msgid "Nur Leitung und Anwendungsbetreuung dürfen eine Herabstufung beantragen."
+msgstr "Only managers and application support may request a downgrade."
+
+#: src/core/services/client/stage_downgrade.py:45
+msgid "Für diese Person liegt bereits ein anderer Antrag vor."
+msgstr "Another request already exists for this person."
+
+#: src/core/services/client/stage_downgrade.py:70
+msgid "Dies ist kein Herabstufungsantrag."
+msgstr "This is not a downgrade request."
+
+#: src/core/services/client/stage_downgrade.py:72
+msgid "Der Antrag wurde bereits bearbeitet."
+msgstr "The request has already been processed."
+
+#: src/core/services/client/stage_downgrade.py:74
+msgid "Die Freigabe erfordert eine andere Person als die antragstellende."
+msgstr "Approval requires a person other than the requester."
+
+#: src/core/services/client/stage_downgrade.py:76
+msgid "Die Person ist nicht mehr verfügbar."
+msgstr "The person is no longer available."
+
+#: src/core/services/compliance/__init__.py:128
+#, python-format
+msgid "Interner Fehler: %(name)s"
+msgstr "Internal error: %(name)s"
+
+#: src/core/services/compliance/__init__.py:131
+msgid "Check konnte nicht ausgeführt werden."
+msgstr "Check could not be run."
+
+#: src/core/services/compliance/__init__.py:133
+msgid "Server-Log einsehen."
+msgstr "View the server log."
+
+#: src/core/services/compliance/_types.py:38
+msgid "Backup"
+msgstr "Backup"
+
+#: src/core/services/compliance/_types.py:39
+msgid "Virus-Scan"
+msgstr "Virus scan"
+
+#: src/core/services/compliance/_types.py:42
+msgid "MFA"
+msgstr "MFA"
+
+#: src/core/services/compliance/_types.py:43
+msgid "Audit"
+msgstr "Audit"
+
+#: src/core/services/compliance/_types.py:44
+msgid "System"
+msgstr "System"
+
+#: src/core/services/compliance/app_superuser.py:39
+#: src/core/services/compliance/app_superuser.py:51
+msgid "App-User kein Django-Superuser"
+msgstr "App user is not a Django superuser"
+
+#: src/core/services/compliance/app_superuser.py:42
+msgid "Kein App-User trägt Djangos is_superuser-Flag."
+msgstr "No app user carries Django's is_superuser flag."
+
+#: src/core/services/compliance/app_superuser.py:47
+#: src/core/services/compliance/system_info.py:30
+#, python-format
+msgid "(+ %(extra)s weitere)"
+msgstr "(+ %(extra)s more)"
+
+#: src/core/services/compliance/app_superuser.py:54
+#, python-format
+msgid "%(count)s App-User mit is_superuser=True."
+msgstr "%(count)s app users with is_superuser=True."
+
+#: src/core/services/compliance/app_superuser.py:58
+msgid "is_superuser dieser User auf False setzen — Autorisierung läuft über die Rolle, nie über das Django-Flag (Refs #1271)."
+msgstr "Set is_superuser of this user to False — authorization runs via the role, never via the Django flag (Refs #1271)."
+
+#: src/core/services/compliance/audit_events.py:27
+#: src/core/services/compliance/audit_events.py:39
+#: src/core/services/compliance/audit_events.py:57
+msgid "Kritische Audit-Events (24h)"
+msgstr "Critical audit events (24h)"
+
+#: src/core/services/compliance/audit_events.py:30
+msgid "Keine kritischen Events in den letzten 24h."
+msgstr "No critical events in the last 24h."
+
+#: src/core/services/compliance/audit_events.py:31
+#, python-format
+msgid "Gemonitorte Aktionen: %(actions)s"
+msgstr "Monitored actions: %(actions)s"
+
+#: src/core/services/compliance/audit_events.py:42
+#, python-format
+msgid "%(count)s kritische Event(s) in 24h."
+msgstr "%(count)s critical event(s) in 24h."
+
+#: src/core/services/compliance/audit_events.py:45
+msgid "Im System-Audit-Log (/system/audit/) auf SECURITY_VIOLATION / MFA_FAILED / USER_DEACTIVATED filtern."
+msgstr "In the system audit log (/system/audit/), filter for SECURITY_VIOLATION / MFA_FAILED / USER_DEACTIVATED."
+
+#: src/core/services/compliance/audit_events.py:50
+msgid "Pro Eintrag den Kontext prüfen, ggf. Issue mit Label security eröffnen."
+msgstr "Check the context for each entry, open an issue with the label security if necessary."
+
+#: src/core/services/compliance/audit_events.py:60
+#, python-format
+msgid "%(count)s kritische Event(s) in 24h — möglicher Vorfall."
+msgstr "%(count)s critical event(s) in 24h — possible incident."
+
+#: src/core/services/compliance/audit_events.py:62
+msgid "Im System-Audit-Log dringend prüfen."
+msgstr "Review urgently in the system audit log."
+
+#: src/core/services/compliance/audit_events.py:64
+msgid "Vorfall-Triage starten, ggf. DSGVO Art. 33 Meldung an Aufsichtsbehörde."
+msgstr "Start incident triage, report to the supervisory authority under GDPR Art. 33 if necessary."
+
+#: src/core/services/compliance/backup.py:59
+msgid "Kein Backup gefunden oder BACKUP_DIR nicht konfiguriert."
+msgstr "No backup found or BACKUP_DIR not configured."
+
+#: src/core/services/compliance/backup.py:60
+msgid "settings.BACKUP_DIR prüfen, Cron-Job 'backup.sh' aktivieren."
+msgstr "Check settings.BACKUP_DIR, enable the cron job 'backup.sh'."
+
+#: src/core/services/compliance/backup.py:74
+msgid "Zeitstempel der letzten Sicherung liegt in der Zukunft — das Alter ist nicht messbar."
+msgstr "The timestamp of the last backup is in the future — the age cannot be measured."
+
+#: src/core/services/compliance/backup.py:76
+#, python-format
+msgid "%(path)s (Zeitstempel: %(timestamp)s)"
+msgstr "%(path)s (timestamp: %(timestamp)s)"
+
+#: src/core/services/compliance/backup.py:79
+msgid "Systemuhr/Zeitsynchronisation des Hosts und den Dateizeitstempel der Sicherung prüfen."
+msgstr "Check the system clock/time synchronization of the host and the file timestamp of the backup."
+
+#: src/core/services/compliance/backup.py:84
+#, python-format
+msgid "%(path)s (Alter: %(age_hours)sh)"
+msgstr "%(path)s (age: %(age_hours)sh)"
+
+#: src/core/services/compliance/backup.py:95
+#, python-format
+msgid "Backup ist %(age_hours)sh alt (Schwelle: %(hours)sh)."
+msgstr "Backup is %(age_hours)sh old (threshold: %(hours)sh)."
+
+#: src/core/services/compliance/backup.py:110
+#, python-format
+msgid "Backup ist %(age_hours)sh alt — ein Tageslauf fehlt."
+msgstr "Backup is %(age_hours)sh old — a daily run is missing."
+
+#: src/core/services/compliance/backup.py:113
+msgid "Backup-Cron prüfen, evtl. manuell auslösen."
+msgstr "Check the backup cron, trigger it manually if necessary."
+
+#: src/core/services/compliance/backup.py:122
+#, python-format
+msgid "Backup ist %(age_hours)sh alt — mindestens zwei Läufe ausgefallen."
+msgstr "Backup is %(age_hours)sh old — at least two runs failed."
+
+#: src/core/services/compliance/backup.py:125
+msgid "Backup-Cron + Disk-Speicher prüfen, Restore-Test nachholen."
+msgstr "Check the backup cron and disk space, catch up on the restore test."
+
+#: src/core/services/compliance/backup.py:133
+#: src/core/services/compliance/backup.py:144
+#: src/core/services/compliance/backup.py:162
+#: src/core/services/compliance/backup.py:173
+#: src/core/services/compliance/backup.py:187
+msgid "Restore-Test"
+msgstr "Restore test"
+
+#: src/core/services/compliance/backup.py:147
+msgid "Noch nie ein Restore-Test dokumentiert."
+msgstr "No restore test has ever been documented."
+
+#: src/core/services/compliance/backup.py:149
+msgid "manage.py mark_restore_verified --note '...' nach jedem Test ausführen."
+msgstr "Run manage.py mark_restore_verified --note '...' after every test."
+
+#: src/core/services/compliance/backup.py:154
+#, python-format
+msgid "Letzter Restore-Test: %(timestamp)s; Notiz: %(note)s"
+msgstr "Last restore test: %(timestamp)s; note: %(note)s"
+
+#: src/core/services/compliance/backup.py:165
+#, python-format
+msgid "Letzter Test vor %(age_days)s Tagen."
+msgstr "Last test %(age_days)s days ago."
+
+#: src/core/services/compliance/backup.py:176
+#, python-format
+msgid "Letzter Test vor %(age_days)s Tagen — Auffrischung empfohlen."
+msgstr "Last test %(age_days)s days ago — refresh recommended."
+
+#: src/core/services/compliance/backup.py:180
+msgid "Restore gegen frische DB testen, dann mark_restore_verified ausführen."
+msgstr "Test the restore against a fresh DB, then run mark_restore_verified."
+
+#: src/core/services/compliance/backup.py:190
+#, python-format
+msgid "Letzter Test vor %(age_days)s Tagen — DSGVO Art. 32 verletzt."
+msgstr "Last test %(age_days)s days ago — GDPR Art. 32 violated."
+
+#: src/core/services/compliance/backup.py:193
+msgid "Restore-Test sofort nachholen und dokumentieren."
+msgstr "Catch up on the restore test immediately and document it."
+
+#: src/core/services/compliance/clamav.py:16
+msgid "ClamAV erreichbar"
+msgstr "ClamAV reachable"
+
+#: src/core/services/compliance/clamav.py:19
+msgid "Daemon antwortet."
+msgstr "Daemon responds."
+
+#: src/core/services/compliance/clamav.py:19
+msgid "Daemon nicht erreichbar oder deaktiviert."
+msgstr "Daemon not reachable or disabled."
+
+#: src/core/services/compliance/clamav.py:20
+msgid "docker compose ps clamav; CLAMAV_ENABLED in .env prüfen."
+msgstr "docker compose ps clamav; check CLAMAV_ENABLED in .env."
+
+#: src/core/services/compliance/clamav.py:26
+#: src/core/services/compliance/clamav.py:38
+#: src/core/services/compliance/clamav.py:50
+#: src/core/services/compliance/clamav.py:59
+msgid "ClamAV-Signatur"
+msgstr "ClamAV signature"
+
+#: src/core/services/compliance/clamav.py:29
+msgid "Signatur-Daten nicht abrufbar."
+msgstr "Signature data cannot be retrieved."
+
+#: src/core/services/compliance/clamav.py:30
+msgid "ClamAV-Container neu starten, dann erneut prüfen."
+msgstr "Restart the ClamAV container, then check again."
+
+#: src/core/services/compliance/clamav.py:34
+msgid "unbekannt"
+msgstr "unknown"
+
+#: src/core/services/compliance/clamav.py:41
+msgid "Signatur-Datum nicht ermittelbar."
+msgstr "Signature date cannot be determined."
+
+#: src/core/services/compliance/clamav.py:42
+#: src/core/services/compliance/clamav.py:54
+#: src/core/services/compliance/clamav.py:63
+#, python-format
+msgid "Version: %(version)s"
+msgstr "Version: %(version)s"
+
+#: src/core/services/compliance/clamav.py:53
+#, python-format
+msgid "Signatur ist %(age)s Tag(e) alt."
+msgstr "Signature is %(age)s day(s) old."
+
+#: src/core/services/compliance/clamav.py:62
+#, python-format
+msgid "Signatur ist %(age)s Tage alt (Schwelle: 7)."
+msgstr "Signature is %(age)s days old (threshold: 7)."
+
+#: src/core/services/compliance/clamav.py:64
+msgid "freshclam-Cron im ClamAV-Container prüfen."
+msgstr "Check the freshclam cron in the ClamAV container."
+
+#: src/core/services/compliance/cron.py:26
+msgid "docker compose -f docker-compose.prod.yml logs cron prüfen (Ops-Runbook § 3.2)."
+msgstr "Check docker compose -f docker-compose.prod.yml logs cron (ops runbook § 3.2)."
+
+#: src/core/services/compliance/cron.py:48
+msgid "Noch kein Snapshot-Lauf — Cron lief vielleicht nie."
+msgstr "No snapshot run yet — cron may never have run."
+
+#: src/core/services/compliance/cron.py:53
+#: src/core/services/compliance/retention.py:111
+#, python-format
+msgid "Letzter Lauf: %(timestamp)s"
+msgstr "Last run: %(timestamp)s"
+
+#: src/core/services/compliance/cron.py:61
+#, python-format
+msgid "Letzter Lauf vor %(age_days)s Tag(en)."
+msgstr "Last run %(age_days)s day(s) ago."
+
+#: src/core/services/compliance/cron.py:72
+#, python-format
+msgid "Letzter Lauf vor %(age_days)s Tagen — Monats-Cron prüfen."
+msgstr "Last run %(age_days)s days ago — check the monthly cron."
+
+#: src/core/services/compliance/cron.py:75
+msgid "Cron muss monatlich laufen (1. des Monats)."
+msgstr "Cron must run monthly (1st of the month)."
+
+#: src/core/services/compliance/cron.py:84
+#, python-format
+msgid "Letzter Lauf vor %(age_days)s Tagen — Cron ausgefallen?"
+msgstr "Last run %(age_days)s days ago — cron failed?"
+
+#: src/core/services/compliance/cron.py:94
+msgid "Breach-Detection-Scan"
+msgstr "Breach detection scan"
+
+#: src/core/services/compliance/cron.py:103
+msgid "Noch kein Breach-Scan — Cron lief vielleicht nie."
+msgstr "No breach scan yet — cron may never have run."
+
+#: src/core/services/compliance/cron.py:108
+#, python-format
+msgid "Letzter Scan: %(timestamp)s"
+msgstr "Last scan: %(timestamp)s"
+
+#: src/core/services/compliance/cron.py:116
+#, python-format
+msgid "Letzter Scan vor %(age)sh."
+msgstr "Last scan %(age)sh ago."
+
+#: src/core/services/compliance/cron.py:127
+#, python-format
+msgid "Letzter Scan vor %(age)sh — Cron prüfen."
+msgstr "Last scan %(age)sh ago — check cron."
+
+#: src/core/services/compliance/cron.py:129
+#: src/core/services/compliance/cron.py:183
+msgid "Cron muss stündlich laufen."
+msgstr "Cron must run hourly."
+
+#: src/core/services/compliance/cron.py:138
+#, python-format
+msgid "Letzter Scan vor %(age)sh — Cron ausgefallen?"
+msgstr "Last scan %(age)sh ago — cron failed?"
+
+#: src/core/services/compliance/cron.py:147
+msgid "Statistik-View-Refresh"
+msgstr "Statistics view refresh"
+
+#: src/core/services/compliance/cron.py:156
+msgid "Noch kein View-Refresh — Cron lief vielleicht nie."
+msgstr "No view refresh yet — cron may never have run."
+
+#: src/core/services/compliance/cron.py:161
+#, python-format
+msgid "Letzter Refresh: %(timestamp)s"
+msgstr "Last refresh: %(timestamp)s"
+
+#: src/core/services/compliance/cron.py:169
+#, python-format
+msgid "Letzter Refresh vor %(age)sh."
+msgstr "Last refresh %(age)sh ago."
+
+#: src/core/services/compliance/cron.py:180
+#, python-format
+msgid "Letzter Refresh vor %(age)sh — Dashboard evtl. veraltet."
+msgstr "Last refresh %(age)sh ago — dashboard possibly outdated."
+
+#: src/core/services/compliance/cron.py:192
+#, python-format
+msgid "Letzter Refresh vor %(age)sh — Cron ausgefallen?"
+msgstr "Last refresh %(age)sh ago — cron failed?"
+
+#: src/core/services/compliance/cron.py:215
+msgid "Audit-Ketten-Prüfung"
+msgstr "Audit chain check"
+
+#: src/core/services/compliance/cron.py:224
+msgid "Noch keine Ketten-Prüfung — Cron lief vielleicht nie."
+msgstr "No chain check yet — cron may never have run."
+
+#: src/core/services/compliance/cron.py:229
+#, python-format
+msgid "Letzte Prüfung: %(timestamp)s"
+msgstr "Last check: %(timestamp)s"
+
+#: src/core/services/compliance/cron.py:237
+#, python-format
+msgid "Letzte Prüfung vor %(age)sh."
+msgstr "Last check %(age)sh ago."
+
+#: src/core/services/compliance/cron.py:248
+#, python-format
+msgid "Letzte Prüfung vor %(age)sh — ein Tageslauf fehlt."
+msgstr "Last check %(age)sh ago — a daily run is missing."
+
+#: src/core/services/compliance/cron.py:260
+#, python-format
+msgid "Letzte Prüfung vor %(age)sh — Cron aus oder Lauf bricht rot ab."
+msgstr "Last check %(age)sh ago — cron off or run fails."
+
+#: src/core/services/compliance/db_roles.py:58
+#, python-format
+msgid "Rolle %(role)s existiert nicht in pg_roles."
+msgstr "Role %(role)s does not exist in pg_roles."
+
+#: src/core/services/compliance/db_roles.py:62
+#, python-format
+msgid "Rolle %(role)s: rolsuper=%(actual_super)s (erwartet: %(expected_super)s)."
+msgstr "Role %(role)s: rolsuper=%(actual_super)s (expected: %(expected_super)s)."
+
+#: src/core/services/compliance/db_roles.py:71
+#, python-format
+msgid "Rolle %(role)s: rolbypassrls=%(actual_bypassrls)s (erwartet: %(expected_bypassrls)s)."
+msgstr "Role %(role)s: rolbypassrls=%(actual_bypassrls)s (expected: %(expected_bypassrls)s)."
+
+#: src/core/services/compliance/db_roles.py:242
+msgid "App-Rolle nicht bestimmbar (weder POSTGRES_APP_USER noch settings.DATABASES['default']['USER'] gesetzt)."
+msgstr "App role cannot be determined (neither POSTGRES_APP_USER nor settings.DATABASES['default']['USER'] is set)."
+
+#: src/core/services/compliance/db_roles.py:263
+msgid "POSTGRES_ADMIN_USER ist nicht gesetzt — Admin-/Maintenance-Rolle nicht prüfbar. Refs #902: Drei-Rollen-Modell in docker-compose.prod.yml."
+msgstr "POSTGRES_ADMIN_USER is not set — admin/maintenance role cannot be checked. Refs #902: three-role model in docker-compose.prod.yml."
+
+#: src/core/services/compliance/db_roles.py:431
+#: src/core/services/compliance/db_roles.py:439
+#: src/core/services/compliance/db_roles.py:450
+#: src/core/services/compliance/db_roles.py:462
+#: src/core/services/compliance/db_roles.py:541
+#: src/core/services/compliance/db_roles.py:555
+#: src/core/services/compliance/db_roles.py:608
+#: src/core/services/compliance/db_roles.py:618
+#: src/core/services/compliance/db_roles.py:631
+msgid "Admin-DB-Rolle"
+msgstr "Admin DB role"
+
+#: src/core/services/compliance/db_roles.py:480
+msgid "App-DB-Rolle NOSUPERUSER"
+msgstr "App DB role NOSUPERUSER"
+
+#: src/core/services/compliance/db_roles.py:484
+msgid "App-DB-Rolle kein BYPASSRLS"
+msgstr "App DB role no BYPASSRLS"
+
+#: src/core/services/compliance/db_roles.py:544
+msgid "Admin-/Maintenance-Rolle nicht konfiguriert."
+msgstr "Admin/maintenance role not configured."
+
+#: src/core/services/compliance/db_roles.py:558
+msgid "Im Web-Container nicht prüfbar — Prüfung über den Wartungsdienst."
+msgstr "Cannot be checked in the web container — check via the maintenance service."
+
+#: src/core/services/compliance/db_roles.py:562
+msgid "Im web-Container nicht prüfbar — Prüfung über docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles."
+msgstr "Cannot be checked in the web container — check via docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles."
+
+#: src/core/services/compliance/db_roles.py:579
+#, python-format
+msgid "Rolle '%(role)s' nicht in pg_roles gefunden."
+msgstr "Role '%(role)s' not found in pg_roles."
+
+#: src/core/services/compliance/db_roles.py:580
+#: src/core/services/compliance/db_roles.py:613
+msgid "DB-Rollen-Setup prüfen — siehe deploy/postgres-init/01-app-role.sh."
+msgstr "Check the DB role setup — see deploy/postgres-init/01-app-role.sh."
+
+#: src/core/services/compliance/db_roles.py:588
+msgid "Korrekt konfiguriert."
+msgstr "Configured correctly."
+
+#: src/core/services/compliance/db_roles.py:589
+#, python-format
+msgid "%(role)s: %(attr)s=%(actual)s"
+msgstr "%(role)s: %(attr)s=%(actual)s"
+
+#: src/core/services/compliance/db_roles.py:596
+#, python-format
+msgid "Rolle '%(role)s' hat falsches Attributprofil."
+msgstr "Role '%(role)s' has the wrong attribute profile."
+
+#: src/core/services/compliance/db_roles.py:597
+#, python-format
+msgid "%(attr)s=%(actual)s (erwartet: %(expected)s)"
+msgstr "%(attr)s=%(actual)s (expected: %(expected)s)"
+
+#: src/core/services/compliance/db_roles.py:599
+msgid "manage.py check_db_roles + Rollen-Init-Script prüfen (Refs #902)."
+msgstr "Check manage.py check_db_roles + role init script (Refs #902)."
+
+#: src/core/services/compliance/db_roles.py:611
+#, python-format
+msgid "Admin-Rolle '%(role)s' nicht in pg_roles gefunden."
+msgstr "Admin role '%(role)s' not found in pg_roles."
+
+#: src/core/services/compliance/db_roles.py:621
+msgid "Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS)."
+msgstr "Admin role correct (NOSUPERUSER, BYPASSRLS)."
+
+#: src/core/services/compliance/db_roles.py:622
+#, python-format
+msgid "%(role)s: rolsuper=%(actual_super)s, rolbypassrls=%(actual_bypassrls)s"
+msgstr "%(role)s: rolsuper=%(actual_super)s, rolbypassrls=%(actual_bypassrls)s"
+
+#: src/core/services/compliance/db_roles.py:634
+msgid "Admin-Rolle hat falsches Attributprofil."
+msgstr "Admin role has the wrong attribute profile."
+
+#: src/core/services/compliance/db_roles.py:636
+msgid "deploy/postgres-init/01-app-role.sh prüfen (Refs #902)."
+msgstr "Check deploy/postgres-init/01-app-role.sh (Refs #902)."
+
+#: src/core/services/compliance/mfa.py:35
+#: src/core/services/compliance/mfa.py:67
+msgid "MFA-Quote (MFA-pflichtige Rollen)"
+msgstr "MFA rate (roles required to use MFA)"
+
+#: src/core/services/compliance/mfa.py:38
+msgid "Keine MFA-pflichtigen User vorhanden."
+msgstr "No users required to use MFA."
+
+#: src/core/services/compliance/mfa.py:48
+#, python-format
+msgid "%(privileged_with_mfa)s von %(privileged_total)s MFA-pflichtigen Usern haben MFA aktiv."
+msgstr "%(privileged_with_mfa)s of %(privileged_total)s users required to use MFA have MFA enabled."
+
+#: src/core/services/compliance/mfa.py:54
+#, python-format
+msgid "%(percent)s %% der MFA-pflichtigen Rollen haben MFA aktiv."
+msgstr "%(percent)s %% of the roles required to use MFA have MFA enabled."
+
+#: src/core/services/compliance/mfa.py:58
+#, python-format
+msgid "%(percent)s %% MFA-Quote — Lücke schließen."
+msgstr "%(percent)s %% MFA rate — close the gap."
+
+#: src/core/services/compliance/mfa.py:59
+msgid "Verbleibende User per Admin-UI zur MFA-Aktivierung anhalten."
+msgstr "Remaining users: prompt them to enable MFA via the admin UI."
+
+#: src/core/services/compliance/mfa.py:62
+#, python-format
+msgid "Nur %(percent)s %% der MFA-pflichtigen Rollen haben MFA — Risiko."
+msgstr "Only %(percent)s %% of the roles required to use MFA have MFA — risk."
+
+#: src/core/services/compliance/mfa.py:63
+msgid "mfa_enforced_facility_wide aktivieren oder MFA pro User erzwingen."
+msgstr "Enable mfa_enforced_facility_wide or enforce MFA per user."
+
+#: src/core/services/compliance/retention.py:46
+#, python-format
+msgid "%(count)s von %(total)s Einrichtungen speichern das Audit-Log unbegrenzt (Aufbewahrung 0 Monate): %(names)s"
+msgstr "%(count)s of %(total)s facilities keep the audit log indefinitely (retention 0 months): %(names)s"
+
+#: src/core/services/compliance/retention.py:55
+msgid "Audit-Log-Aufbewahrung"
+msgstr "Audit log retention"
+
+#: src/core/services/compliance/retention.py:75
+#: src/core/services/compliance/retention.py:98
+#: src/core/services/compliance/retention.py:129
+msgid "Retention-Lauf"
+msgstr "Retention run"
+
+#: src/core/services/compliance/retention.py:101
+msgid "Noch kein RETENTION_RUN_COMPLETED-Eintrag — Cron lief vielleicht nie."
+msgstr "No RETENTION_RUN_COMPLETED entry yet — cron may never have run."
+
+#: src/core/services/compliance/retention.py:102
+msgid "enforce_retention-Cron prüfen (Ops-Runbook §6)."
+msgstr "Check the enforce_retention cron (ops runbook §6)."
+
+#: src/core/services/compliance/retention.py:114
+#, python-format
+msgid "Letzter Lauf vor %(age_hours)sh."
+msgstr "Last run %(age_hours)sh ago."
+
+#: src/core/services/compliance/retention.py:118
+#, python-format
+msgid "Letzter Lauf vor %(age_hours)sh — ein Tageslauf fehlt."
+msgstr "Last run %(age_hours)sh ago — a daily run is missing."
+
+#: src/core/services/compliance/retention.py:119
+msgid "Cron muss täglich laufen (deploy/crontab: 0 3 * * *)."
+msgstr "Cron must run daily (deploy/crontab: 0 3 * * *)."
+
+#: src/core/services/compliance/retention.py:122
+#, python-format
+msgid "Letzter Lauf vor %(age_hours)sh — mindestens zwei Läufe ausgefallen."
+msgstr "Last run %(age_hours)sh ago — at least two runs failed."
+
+#: src/core/services/compliance/retention.py:125
+msgid "Cron-Status im Container prüfen + manuell ausführen."
+msgstr "Check the cron status in the container and run it manually."
+
+#: src/core/services/compliance/sensitivity.py:107
+#: src/core/services/compliance/sensitivity.py:109
+msgid "Unbekannte Stufe"
+msgstr "Unknown level"
+
+#: src/core/services/compliance/sensitivity.py:111
+#: src/templates/core/config/partials/field_protection.html:11
+msgid "wie Typ"
+msgstr "like type"
+
+#: src/core/services/compliance/sensitivity.py:133
+#, python-format
+msgid "Feldvorlage „%(field)s“ darf in einem Dokumentationstyp mit Stufe „Hoch“ nicht erben. Wählen Sie eine ausdrückliche Feldstufe: „Erhöht“ für Berichtsfelder, sonst „Hoch“."
+msgstr "The field template \"%(field)s\" must not inherit in a document type with level \"High\". Choose an explicit field level: \"Elevated\" for report fields, otherwise \"High\"."
+
+#: src/core/services/compliance/system_info.py:25
+msgid "Alle Migrationen angewendet."
+msgstr "All migrations applied."
+
+#: src/core/services/compliance/system_info.py:37
+#, python-format
+msgid "%(count)s ausstehende Migration(en)."
+msgstr "%(count)s pending migration(s)."
+
+#: src/core/services/compliance/system_info.py:39
+msgid "docker compose exec web python manage.py migrate ausführen."
+msgstr "Run docker compose exec web python manage.py migrate."
+
+#: src/core/services/compliance/system_info.py:49
+#, python-format
+msgid "App %(app_version)s, Django %(django_version)s, Python %(python_version)s"
+msgstr "App %(app_version)s, Django %(django_version)s, Python %(python_version)s"
+
+#: src/core/services/compliance/vvt.py:73
+#, python-brace-format
+msgid "Konfigurierbare Ereignisfristen, ergänzt durch die Höchstfrist (verkürzt nur) am Dokumentationstyp. Anonym: {anonymous_days} Tage ab Ereignisdatum; Nur Pseudonym: {identified_days} Tage ab Ereignisdatum; Mit Zusatzangaben: {qualified_days} Tage ab Fallabschluss, ohne Fall ab Ereignisdatum, im offenen Fall ab letzter fachlicher Fallaktivität (Fallback Anlage). Der Standardlauf legt für Mit Zusatzangaben Vorschläge an und löscht erst nach Freigabe durch eine andere Person mit Löschbestätigung. Zurückstellen schützt bis zum Datum, Ablehnen bis zu einer neuen Vorlage frühestens nach der konfigurierten Wiedervorlagefrist (Vorgabe 365 Tage). Auto-Freigabe ist Opt-in. Personen werden anonymisiert, sobald alle Ereignisse gelöscht sind; ohne Ereignis nur für „Nur Pseudonym“ ohne offene Fälle nach {identified_days} Tagen ab dem jüngsten Zeitpunkt aus Personenänderung, fachlicher Fallaktivität, Aufgabenänderung und Anhangsänderung an Person oder Fall (Anlage, Ersetzung oder Entfernung). Personen „Mit Zusatzangaben“ ohne Ereignis sind von der automatischen Anonymisierung ausgenommen; der Vorschlagsweg unterstützt bisher nur Ereignisse, eine automatische Fristvollstreckung für diese Personen fehlt. Hold und Art. 18 stellen zurück."
+msgstr "Configurable event retention periods, supplemented by the maximum period (shortens only) on the document type. Anonymous: {anonymous_days} days from event date; Pseudonym only: {identified_days} days from event date; With additional details: {qualified_days} days from case closure, without a case from event date, in an open case from the last case activity of a professional nature (fallback creation). The standard run creates proposals for With additional details and deletes only after approval by another person with deletion confirmation. Deferring protects until the date; rejecting protects until a new submission, at the earliest after the configured follow-up period (default 365 days). Auto-release is opt-in. Persons are anonymized as soon as all events are deleted; without an event only for \"Pseudonym only\" without open cases after {identified_days} days from the most recent point in time among person change, case activity of a professional nature, task change and attachment change on person or case (creation, replacement or removal). Persons \"With additional details\" without an event are excluded from automatic anonymization; the proposal path so far supports only events, and automatic enforcement of the period for these persons is missing. Hold and Art. 18 defer."
+
+#: src/core/services/compliance/vvt.py:283
+msgid "Standardmäßig 24 Monate je Einrichtung; Einträge ohne Einrichtung ebenfalls 24 Monate installationsweit (AUDITLOG_SYSTEM_RETENTION_MONTHS). Jeweils 0 = aus. Der tägliche Aufbewahrungslauf lässt Audit-Zeilen mit Einrichtung zu Zielen unter aktivem Legal Hold stehen. Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs, Nachweise der Historien-Redaktion (Ereignis-Historie) und herausgegebener Berichtszeiträume bleiben dauerhaft. Die Audit-Frist gilt unabhängig von der Lebensdauer der Fachdaten; Anonymisierung redigiert die Audit-Zeilen nicht."
+msgstr "By default 24 months per facility; entries without a facility likewise 24 months installation-wide (AUDITLOG_SYSTEM_RETENTION_MONTHS). In each case 0 = off. The daily retention run leaves audit rows with a facility for targets under an active legal hold untouched. Security violations, system markers of the retention run, evidence of history redaction (event history) and disclosed reporting periods are kept permanently. The audit period applies independently of the lifetime of the case data; anonymization does not redact the audit rows."
+
+#: src/core/services/compliance/vvt.py:341
+msgid "Konto-Stammdaten: bis zur Loeschung des Accounts. Login-Versuche und Kontosperren: als Audit-Einträge, aus denen die Sperre berechnet wird; sie folgen der Audit-Frist (siehe Verarbeitung 'Audit-Log'), Fehlversuche unter unbekanntem Benutzernamen und von Konten ohne Einrichtung folgen der installationsweiten Audit-Frist (Vorgabe 24 Monate, 0 = aus). Recovery-Codes bis zu deren Verbrauch oder Neuerstellung."
+msgstr "Account master data: until the account is deleted. Login attempts and account lockouts: as audit entries from which the lockout is calculated; they follow the audit period (see processing 'Audit log'); failed attempts under unknown usernames and of accounts without a facility follow the installation-wide audit period (default 24 months, 0 = off). Recovery codes until they are used or regenerated."
+
+#: src/core/services/compliance/vvt.py:453
+msgid "Abgeschlossene Lösch-, Zusammenführungs- und Herabstufungsanträge werden nach deletion_request_retention_days (Vorgabe 1095 Tage) ab Abschluss hart gelöscht; offene Anträge bleiben. Berichtigungsanträge haben weiterhin keine technische Frist. Anonymisierung redigiert deren Inhalte und die Begründungen zugehöriger Löschanträge und Aufbewahrungssperren zu „[Anonymisiert]“. Audit-Nachweise folgen ihrer eigenen Audit-Frist. Erzeugte Datenpakete sind nach Abholung organisatorisch zu löschen. Monatsaggregate bleiben unbefristet als statistischer Restbestand erhalten."
+msgstr "Completed deletion, merge and downgrade requests are hard-deleted after deletion_request_retention_days (default 1095 days) from completion; open requests are kept. Rectification requests still have no technical deadline. Anonymization redacts their contents and the justifications of related deletion requests and retention holds to \"[Anonymized]\". Audit records follow their own audit retention period. Generated data packages must be deleted organizationally after collection. Monthly aggregates are kept indefinitely as a statistical remainder."
+
+#: src/core/services/dynamic_protection.py:46
+msgid "Die Einrichtung ist nicht mehr vorhanden."
+msgstr "The facility no longer exists."
+
+#: src/core/services/dynamic_protection.py:77
+msgid "Die Einrichtung kann nach der Erstellung nicht geändert werden."
+msgstr "The facility cannot be changed after creation."
+
+#: src/core/services/dynamic_protection.py:122
+msgid "Der Datensatz ist nicht mehr vorhanden."
+msgstr "The record no longer exists."
+
+#: src/core/services/option_usage.py:112
+msgid "Die gewählte Option ist nicht mehr verfügbar. Bitte wählen Sie erneut."
+msgstr "The selected option is no longer available. Please choose again."
+
+#: src/core/services/option_usage.py:154
+#, python-format
+msgid "Verwendete Options-Slugs dürfen nicht entfernt oder umbenannt werden: %(slugs)s. Bitte die Option deaktivieren statt entfernen oder umbenennen."
+msgstr "Option slugs in use must not be removed or renamed: %(slugs)s. Please deactivate the option instead of removing or renaming it."
+
+#: src/core/views/client_stage_downgrade.py:28 src/core/views/legal_holds.py:48
+msgid "Zurück zur Akte"
+msgstr "Back to record"
+
+#: src/core/views/client_stage_downgrade.py:45
+msgid "Herabstufung beantragt. Eine andere Person mit Löschbestätigung muss den Antrag prüfen."
+msgstr "Downgrade requested. Another person with deletion confirmation must review the request."
+
+#: src/core/views/event_deletion.py:264
+msgid "Herabstufung wurde freigegeben."
+msgstr "Downgrade was approved."
+
+#: src/core/views/event_deletion.py:274
+msgid "Herabstufungsantrag wurde abgelehnt."
+msgstr "Downgrade request was rejected."
+
+#: src/core/views/events.py:1439
+msgid "Löschantrag wurde gestellt und muss von einer anderen Person mit dem Recht „Löschbestätigung“ genehmigt werden."
+msgstr "Deletion request has been submitted and must be approved by another person with the \"Deletion confirmation\" right."
+
+#: src/core/views/help.py:59
+msgid "Kontakte-Liste"
+msgstr "Contacts list"
+
+#: src/core/views/help.py:62
+msgid "„Kontakte“ steht direkt unter „Zeitstrom“ in der Seitenleiste, mobil unter „Mehr → Kontakte“. Der lokale Kontakte-Link im Zeitstrom übernimmt Tag, Dokumentationstyp und Schicht."
+msgstr "\"Contacts\" sits directly below \"Timeline\" in the sidebar, on mobile under \"More → Contacts\". The local Contacts link in the timeline takes over day, document type and shift."
+
+#: src/core/views/help.py:67
+msgid "Die Liste filtert Kontakte über mehrere Tage, auch Erfassungen anderer Mitarbeitender. Ab Assistenz gelten dieselben Sichtbarkeitsgrenzen wie im Zeitstrom; Fallfilter und Fallanzeige gibt es erst ab Fachkraft. Die Filter bleiben in der Adresse, beim Seitenwechsel und über Zurück/Vorwärts erhalten."
+msgstr "The list filters contacts across several days, including entries by other staff members. From assistant level on, the same visibility limits apply as in the timeline; case filter and case display are available only from social worker level. The filters are kept in the address, when changing pages and when going back/forward."
+
+#: src/core/views/help.py:75
+msgid "Die Suche umfasst nur Pseudonym und Ereignis-Suchtext ab zwei Zeichen, keine verschlüsselten oder wirksam erhöht/hoch eingestuften Feldwerte, Falltitel oder Dateiinhalte."
+msgstr "The search covers only the pseudonym and the event search text from two characters on, no encrypted or effectively elevated/high-classified field values, case titles or file contents."
+
+#: src/core/views/help.py:80
+msgid "Person und Fall werden ausgewählt; es gibt keine Autocomplete-Suche und keine Suchvorschläge."
+msgstr "Person and case are selected; there is no autocomplete search and no search suggestions."
+
+#: src/core/views/help.py:83
+msgid "Die Liste zeigt keine Feldwerte und bietet keinen Export und keine Massenaktionen."
+msgstr "The list shows no field values and offers no export and no bulk actions."
+
+#: src/core/views/help.py:84
+msgid "Listen- und Filteraufrufe erzeugen keinen Audit-Eintrag."
+msgstr "List and filter views do not create an audit entry."
+
+#: src/core/views/help.py:131
+msgid "„Übersicht“ ist der interne Blick: Kennzahlen, Diagramme und Tabellen, ohne Kleinstfall-Unterdrückung, mit Pseudonymen bei den Top-Personen."
+msgstr "\"Overview\" is the internal view: key figures, charts and tables, without small-case suppression, with pseudonyms for the top persons."
+
+#: src/core/views/help.py:135
+msgid "„Datensatz-Berichte“ bietet Auswertungen wie „Allgemeine Kennzahlen“ und „Summe von Zahlenfeldern“ mit Vorschau und CSV-, JSON-, XML- oder PDF-Download; Kleinstfallzahlen werden unterdrückt, Personen-Pseudonyme fehlen."
+msgstr "\"Dataset reports\" offers evaluations such as \"General key figures\" and \"Sum of numeric fields\" with preview and CSV, JSON, XML or PDF download; very small case numbers are suppressed, person pseudonyms are absent."
+
+#: src/core/views/help.py:140
+msgid "Die Ereignisliste (intern) in der Übersicht enthält Einzelereignisse mit Pseudonymen; diese bleiben personenbezogen. Unterdrückte Berichtszahlen allein garantieren ebenfalls keine Anonymität."
+msgstr "The event list (internal) in the overview contains individual events with pseudonyms; these remain personal data. Suppressed report figures alone also do not guarantee anonymity."
+
+#: src/core/views/help.py:145
+msgid "„Freigaben“ listet markierte Datei-Herausgaben mit Berichtszeitraum und warnt bei nicht identischen, überlappenden Zeiträumen desselben Berichts; Vorschauen und Weitergaben außerhalb der Anwendung fehlen dort."
+msgstr "\"Releases\" lists marked file disclosures with reporting period and warns about non-identical, overlapping periods of the same report; previews and onward transfers outside the application are missing there."
+
+#: src/core/views/help.py:150
+msgid "Der gewählte Zeitraum gilt beim Wechsel zwischen den Statistik-Reitern weiter; Freigaben zeigt Herausgaben unabhängig davon."
+msgstr "The selected period remains in effect when switching between the statistics tabs; Releases shows disclosures independently of it."
+
+#: src/core/views/help.py:154
+msgid "Zahlen können wegen Unterdrückung, Grundgesamtheit und Datenquelle abweichen. Beachten Sie die Angaben je Bericht und Format: Der Beispiel-Sachbericht liest nur im PDF aus Monats-Aggregaten mit Live-Fallback, sonst live."
+msgstr "Figures may differ because of suppression, population and data source. Note the information per report and format: the example activity report reads from monthly aggregates with live fallback only in the PDF, otherwise live."
+
+#: src/core/views/help.py:183
+msgid "Auch die Herabstufung von „Mit Zusatzangaben“ auf „Nur Pseudonym“ braucht bei vorhandenen Ereignissen Antrag und Freigabe."
+msgstr "Downgrading from \"With additional details\" to \"Pseudonym only\" also requires a request and approval when events exist."
+
+#: src/core/views/help.py:195
+msgid "Ereignisse haben eine Aufbewahrungsfrist. Sie ergibt sich aus der Kontaktstufe und einer Höchstfrist (verkürzt nur) am Dokumentationstyp; der früheste Stichtag gewinnt."
+msgstr "Events have a retention period. It results from the contact stage and a maximum period (shortens only) on the document type; the earliest due date wins."
+
+#: src/core/views/help.py:199
+msgid "Der Standardlauf erzeugt für „Mit Zusatzangaben“ einen Löschvorschlag und löscht erst nach Freigabe durch eine andere Person mit „Löschbestätigung“ (Ausnahme: die standardmäßig ausgeschaltete Auto-Freigabe nach mehrfacher Zurückstellung). Anonym und „Nur Pseudonym“ werden automatisch gelöscht; Legal Hold und Art. 18 stellen den Lauf zurück."
+msgstr "The standard run creates a deletion proposal for \"With additional details\" and deletes only after approval by another person with \"Deletion confirmation\" (exception: auto-release after repeated deferrals, which is switched off by default). Anonymous and \"Pseudonym only\" are deleted automatically; legal hold and Art. 18 defer the run."
+
+#: src/core/views/help.py:208
+msgid "Ohne Fall beginnt die Frist am Ereignisdatum, im offenen Fall bei der letzten fachlichen Fallaktivität (ersatzweise Anlage), im geschlossenen Fall beim Abschluss."
+msgstr "Without a case, the period starts on the event date; in an open case at the last case activity of a professional nature (otherwise creation); in a closed case at closure."
+
+#: src/core/views/help.py:212
+msgid "Zurückstellen schützt bis zum Datum; Ablehnen erlaubt eine neue Vorlage erst nach der Wiedervorlagefrist."
+msgstr "Deferring protects until the date; rejecting allows a new submission only after the follow-up period."
+
+#: src/core/views/help.py:216
+msgid "Legal Hold setzen und aufheben: direkt in Personen-, Fall- und Ereignisakte, mit Grund und optionalem Ablaufdatum."
+msgstr "Set and lift legal hold: directly in the person, case and event record, with reason and optional expiry date."
+
+#: src/core/views/legal_holds.py:72 src/core/views/system/legal_holds.py:92
+msgid "Legal Hold wurde aufgehoben."
+msgstr "Legal hold was lifted."
+
+#: src/core/views/legal_holds.py:91
+msgid "Für diesen Datensatz besteht bereits ein nicht aufgehobener Legal Hold."
+msgstr "A legal hold that has not been lifted already exists for this record."
+
+#: src/core/views/legal_holds.py:95
+msgid "Legal Hold wurde gesetzt."
+msgstr "Legal hold was set."
+
+#: src/core/views/legal_holds.py:98
+msgid "Die Historie wurde bereits teilweise redigiert. Der Hold stellt sie nicht wieder her."
+msgstr "The history has already been partially redacted. The hold does not restore it."
+
+#: src/core/views/mfa.py:254 src/core/views/mfa.py:649
+msgid "2FA-Einstellungen"
+msgstr "2FA settings"
+
+#: src/core/views/mixins.py:446
+msgid "Empfänger und Zweck dürfen höchstens 200 Zeichen und keine E-Mail-Adressen, Telefonnummern oder Klarnamen enthalten."
+msgstr "Recipient and purpose may contain at most 200 characters and no email addresses, phone numbers or real names."
+
+#: src/templates/auth/mfa_disable_confirm.html:9
+msgid "Damit entfernst du deine Authenticator-Geräte und Passkeys. Dein Konto ist danach nur noch durch das Passwort geschützt."
+msgstr "This removes your authenticator devices and passkeys. Your account will then be protected by the password only."
+
+#: src/templates/auth/mfa_disable_confirm.html:15
+msgid "Deaktivierung bestätigen"
+msgstr "Confirm deactivation"
+
+#: src/templates/auth/mfa_settings.html:37 src/templates/auth/mfa_setup.html:7
+#: src/templates/auth/mfa_setup.html:18
+msgid "Neues Gerät einrichten"
+msgstr "Set up new device"
+
+#: src/templates/auth/mfa_setup.html:22
+msgid "Richte deine Authenticator-App auf dem neuen Gerät ein. Die bisherigen Authenticator-Geräte werden erst ersetzt, wenn du den neuen Code und die Sicherung der neuen Backup-Codes bestätigt hast."
+msgstr "Set up your authenticator app on the new device. Your previous authenticator devices are replaced only once you have confirmed the new code and saved the new backup codes."
+
+#: src/templates/components/_offline_security_status.html:6
+msgid "Offline-Schlüssel abgelaufen — bitte online anmelden"
+msgstr "Offline key expired — please sign in online"
+
+#: src/templates/components/_offline_security_status.html:11
+msgid "Synchronisation wartet auf Widerrufsprüfung"
+msgstr "Synchronization waiting for revocation check"
+
+#: src/templates/core/cases/deletion_review.html:39
+msgid "Die Angaben zum Fall sind nicht einsehbar oder nicht mehr verfügbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Falldetails braucht, gibt die Bestätigung an eine Fachkraft ab."
+msgstr "The case details are not viewable or no longer available. You can decide on the request based on the requester and the justification; whoever needs the case details hands the confirmation over to a social worker."
+
+#: src/templates/core/cases/detail.html:8
+#: src/templates/core/clients/detail.html:13
+#: src/templates/core/events/detail.html:8
+msgid "Legal Hold verwalten"
+msgstr "Manage legal hold"
+
+#: src/templates/core/clients/detail.html:9
+#: src/templates/core/clients/stage_downgrade.html:3
+#: src/templates/core/clients/stage_downgrade.html:6
+#: src/templates/core/clients/stage_downgrade.html:10
+msgid "Herabstufung beantragen"
+msgstr "Request downgrade"
+
+#: src/templates/core/clients/merge_review.html:71
+msgid "Die Bestandszahlen (Fälle, Ereignisse, Anhänge) sind nicht einsehbar oder nicht mehr verfügbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Zahlen braucht, gibt die Bestätigung an eine Fachkraft ab."
+msgstr "The inventory figures (cases, events, attachments) are not viewable or no longer available. You can decide on the request based on the requester and the justification; whoever needs the figures hands the confirmation over to a social worker."
+
+#: src/templates/core/clients/partials/_history_status.html:5
+msgid "Personen- und Live-Inhalte wurden anonymisiert. Historie wird im Nachtlauf redigiert; Aufbewahrungssperren, Art. 18 oder gleichzeitige Bearbeitung können die Redaktion zurückstellen."
+msgstr "Person and live content were anonymized. History is redacted in the nightly run; retention holds, Art. 18 or concurrent editing may defer the redaction."
+
+#: src/templates/core/clients/partials/_history_status.html:8
+msgid "Personen- und Live-Inhalte wurden anonymisiert. Keine offenen Historieninhalte."
+msgstr "Person and live content were anonymized. No open history content."
+
+#: src/templates/core/clients/partials/delete_request_action.html:17
+msgid "Ein Herabstufungsantrag wartet bereits auf Bestätigung."
+msgstr "A downgrade request is already awaiting confirmation."
+
+#: src/templates/core/clients/partials/delete_request_action.html:19
+msgid "Herabstufungsantrag läuft"
+msgstr "Downgrade request pending"
+
+#: src/templates/core/clients/stage_downgrade.html:7
+msgid "Die Kontaktstufe wird erst nach Freigabe durch eine andere Person mit Löschbestätigung auf „Nur Pseudonym“ geändert. Dadurch gelten kürzere Aufbewahrungsfristen für vorhandene Ereignisse."
+msgstr "The contact stage is changed to \"Pseudonym only\" only after approval by another person with deletion confirmation. Shorter retention periods therefore apply to existing events."
+
+#: src/templates/core/clients/stage_downgrade_review.html:3
+#: src/templates/core/clients/stage_downgrade_review.html:6
+msgid "Herabstufungsantrag prüfen"
+msgstr "Review downgrade request"
+
+#: src/templates/core/clients/stage_downgrade_review.html:10
+msgid "Die Freigabe ändert die Kontaktstufe auf „Nur Pseudonym“. Dadurch gelten kürzere Aufbewahrungsfristen für vorhandene Ereignisse."
+msgstr "Approval changes the contact stage to \"Pseudonym only\". Shorter retention periods therefore apply to existing events."
+
+#: src/templates/core/config/document_types/form.html:82
+msgid "Mögliche Berichte nach vollständiger Zuordnung"
+msgstr "Possible reports after complete assignment"
+
+#: src/templates/core/config/document_types/form.html:85
+msgid "Fehlende Zuordnungen"
+msgstr "Missing assignments"
+
+#: src/templates/core/config/field_templates/partials/options_editor.html:8
+msgid "Diese verwendeten Slugs fehlen im JSON und können nicht entfernt oder umbenannt werden:"
+msgstr "These slugs in use are missing from the JSON and cannot be removed or renamed:"
+
+#: src/templates/core/config/field_templates/partials/options_editor.html:17
+msgid "Slug: nur a–z, 0–9 und einzelne Bindestriche"
+msgstr "Slug: only a–z, 0–9 and single hyphens"
+
+#: src/templates/core/config/field_templates/partials/table.html:29
+#: src/templates/core/config/partials/field_protection.html:16
+msgid "Im Suchindex"
+msgstr "In the search index"
+
+#: src/templates/core/config/field_templates/partials/table.html:29
+#: src/templates/core/config/partials/field_protection.html:16
+msgid "Nicht im Suchindex"
+msgstr "Not in the search index"
+
+#: src/templates/core/config/field_templates/partials/table.html:31
+msgid "Nicht zugeordnet; kein Suchindex"
+msgstr "Not assigned; no search index"
+
+#: src/templates/core/config/partials/field_protection.html:8
+msgid "Klartext"
+msgstr "Plain text"
+
+#: src/templates/core/config/partials/field_protection.html:12
+msgid "Feldvorlage:"
+msgstr "Field template:"
+
+#: src/templates/core/config/partials/field_protection.html:19
+msgid "Sichtbar für:"
+msgstr "Visible to:"
+
+#: src/templates/core/config/partials/field_protection.html:19
+msgid "Keine Rolle"
+msgstr "No role"
+
+#: src/templates/core/deletion_requests/partials/target.html:32
+msgid "Herabstufung"
+msgstr "Downgrade"
+
+#: src/templates/core/events/delete_confirm.html:15
+msgid "Dieses Ereignis gehört zu einer Person der Stufe „Mit Zusatzangaben“. Es wird ein Löschantrag erstellt, der von einer anderen Person mit dem Recht „Löschbestätigung“ genehmigt werden muss (Vier-Augen-Prinzip)."
+msgstr "This event belongs to a person at the \"With additional details\" level. A deletion request is created that must be approved by another person with the \"Deletion confirmation\" right (four-eyes principle)."
+
+#: src/templates/core/events/partials/filter_form.html:17
+msgid "Schnellwahl"
+msgstr "Quick select"
+
+#: src/templates/core/events/partials/filter_form.html:20
+msgid "Diese Woche"
+msgstr "This week"
+
+#: src/templates/core/events/partials/filter_form.html:21
+msgid "Letzter Monat"
+msgstr "Last month"
+
+#: src/templates/core/events/partials/filter_form.html:52
+#: src/templates/core/events/partials/table.html:11
+#: src/templates/core/events/partials/table.html:30
+msgid "Erfasst von"
+msgstr "Recorded by"
+
+#: src/templates/core/events/partials/filter_form.html:67
+msgid "Nur meine"
+msgstr "Only mine"
+
+#: src/templates/core/events/partials/table.html:37
+msgid "Keine Kontakte gefunden."
+msgstr "No contacts found."
+
+#: src/templates/core/partials/_deletion_target_link.html:3
+msgid "Datensatz ansehen (neuer Tab)"
+msgstr "View record (new tab)"
+
+#: src/templates/core/partials/_deletion_target_unavailable.html:2
+msgid "Der Datensatz ist nicht einsehbar oder nicht mehr verfügbar."
+msgstr "The record is not viewable or no longer available."
+
+#: src/templates/core/retention/dashboard.html:9
+msgid "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge an. Erst nach Freigabe durch eine andere Person mit dem Recht „Löschbestätigung“ wird gelöscht; nur wenn die Einrichtung die Auto-Freigabe nach mehrfacher Zurückstellung eingeschaltet hat, gibt der Lauf einen Vorschlag nach Überschreiten der maximalen Zurückstellungszahl selbst frei. Zurückstellen schützt bis zur Wiedervorlage; nach einer Ablehnung ist erneut eine Freigabe erforderlich. Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht. Aufbewahrungssperren (Legal Holds) verhindern die Löschung."
+msgstr "The daily retention run creates deletion proposals for expired \"With additional details\" events. Deletion happens only after approval by another person with the \"Deletion confirmation\" right; only if the facility has enabled auto-release after repeated deferrals does the run itself release a proposal after the maximum number of deferrals has been exceeded. Deferring protects until the follow-up date; after a rejection, approval is required again. Anonymous events and \"Pseudonym only\" are deleted automatically. Retention holds (legal holds) prevent deletion."
+
+#: src/templates/core/retention/partials/dashboard_content.html:24
+msgid "Ruhende Fälle"
+msgstr "Dormant cases"
+
+#: src/templates/core/retention/partials/dashboard_content.html:27
+#, python-format
+msgid "Fall seit %(days)s Tagen ohne Aktivität"
+msgstr "Case without activity for %(days)s days"
+
+#: src/templates/core/retention/record_hold.html:10
+msgid "Legal Hold setzen"
+msgstr "Set legal hold"
+
+#: src/templates/core/retention/record_hold.html:20
+#: src/templates/core/system/legal_holds.html:90
+msgid "Abgelaufen"
+msgstr "Expired"
+
+#: src/templates/core/retention/record_hold.html:23
+#: src/templates/core/system/legal_holds.html:105
+msgid "Aufheben"
+msgstr "Lift"
+
+#: src/templates/core/search/partials/results.html:62
+msgid "Alle Treffer als Liste"
+msgstr "All results as a list"
+
+#: src/templates/core/statistics/partials/_export_bar.html:28
+msgid "Enthält Einzelereignisse mit Pseudonym — keine anonymisierte Statistik. Für Zahlen nach außen nutzen Sie die Datensatz-Berichte."
+msgstr "Contains individual events with pseudonyms — not an anonymized statistic. For figures to be shared externally, use the dataset reports."
+
+#: src/templates/core/statistics/partials/_export_bar.html:49
+msgid "Ereignisliste (CSV, intern, mit Pseudonymen)"
+msgstr "Event list (CSV, internal, with pseudonyms)"
+
+#: src/templates/core/statistics/partials/_export_bar.html:51
+#: src/templates/core/statistics/partials/_export_bar.html:101
+msgid "Jeder Download wird protokolliert und erscheint unter „Freigaben“. Tragen Sie als Empfänger die Organisation ein, nicht eine Person."
+msgstr "Every download is logged and appears under \"Releases\". Enter the organization as recipient, not a person."
+
+#: src/templates/core/statistics/partials/_export_bar.html:105
+msgid "Quelle je Format"
+msgstr "Source per format"
+
+#: src/templates/core/statistics/report_releases.html:94
+msgid "Die Anzeige ist auf Seiten aufgeteilt. Überschneidungen werden mit allen protokollierten Herausgaben desselben Berichts geprüft, deren Berichtszeitraum die angezeigte Herausgabe berührt."
+msgstr "The display is split into pages. Overlaps are checked against all logged disclosures of the same report whose reporting period touches the displayed disclosure."
+
+#: src/templates/core/system/compliance.html:87
+msgid "Quelle: <code>core/services/compliance/</code>. Aktualisierung bei jedem Reload — kein Caching im MVP."
+msgstr "Source: <code>core/services/compliance/</code>. Updated on every reload — no caching in the MVP."
+
+#: src/templates/core/system/legal_holds.html:16
+msgid "Übersicht aller Legal Holds. Aufheben ist hier durch die Systemverwaltung möglich; Setzen erfolgt in der jeweiligen Akte."
+msgstr "Overview of all legal holds. Lifting is possible here through system administration; setting is done in the respective record."
+
+#: src/templates/core/zeitstrom/partials/contacts_navigation.html:3
+msgid "Kontakt-Navigation"
+msgstr "Contact navigation"
+
+#, python-format
+msgid "Noch offene Historienfassung: %(counter)s (zurückgestellt)."
+msgid_plural "Noch offene Historienfassungen: %(counter)s (zurückgestellt)."
+msgstr[0] "Open history version still pending: %(counter)s (deferred)."
+msgstr[1] "Open history versions still pending: %(counter)s (deferred)."
+
+#, python-format
+msgid "%(n)s Feld ist höher eingestuft."
+msgid_plural "%(n)s Felder sind höher eingestuft."
+msgstr[0] "%(n)s field is classified higher."
+msgstr[1] "%(n)s fields are classified higher."
+
+#, python-format
+msgid "%(count)s Herausgabe auf dieser Seite mit überschneidendem Zeitraum"
+msgid_plural "%(count)s Herausgaben auf dieser Seite mit überschneidendem Zeitraum"
+msgstr[0] "%(count)s disclosure on this page with an overlapping period"
+msgstr[1] "%(count)s disclosures on this page with an overlapping period"
