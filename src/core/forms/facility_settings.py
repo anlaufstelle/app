@@ -60,6 +60,14 @@ _FIELD_GROUPS = (
 )
 
 
+# Corrected wording on the form instead of the model, so no help_text migration is needed.
+AUTO_APPROVE_AFTER_DEFER_HELP = _(
+    "Wenn aktiv, werden Löschvorschläge nach Erreichen der maximalen "
+    "Zurückstellungszahl und Ablauf der Wiedervorlage automatisch freigegeben, statt manuelle Entscheidung "
+    "zu erzwingen."
+)
+
+
 # Retention periods of the settings the audit log period is compared with:
 # field name -> (days per unit, whether 0 means "kept without limit").
 _DAYS_PER_MONTH = 30
@@ -84,6 +92,7 @@ class FacilitySettingsForm(TailwindFormMixin, forms.ModelForm):
     class Meta:
         model = Settings
         fields = tuple(field for _title, fields in _FIELD_GROUPS for field in fields)
+        help_texts = {"retention_auto_approve_after_defer": AUTO_APPROVE_AFTER_DEFER_HELP}
 
     def __init__(self, *args, facility, **kwargs):
         super().__init__(*args, **kwargs)

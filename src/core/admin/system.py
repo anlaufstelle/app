@@ -59,6 +59,14 @@ class SettingsAdmin(FacilityScopedAdminMixin, ModelAdmin):
         "max_file_size_mb",
     )
 
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        from core.forms.facility_settings import AUTO_APPROVE_AFTER_DEFER_HELP
+
+        field = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if field is not None and db_field.name == "retention_auto_approve_after_defer":
+            field.help_text = AUTO_APPROVE_AFTER_DEFER_HELP
+        return field
+
     def has_add_permission(self, request):
         # Only allow if there are facilities without settings
         from core.models import Facility

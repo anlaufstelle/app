@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-11 11:08+0200\n"
+"POT-Creation-Date: 2026-10-11 11:59+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14360,3 +14360,7 @@ msgstr "If active, deletion proposals are auto-released after the maximum deferr
 #: src/templates/core/retention/dashboard.html:9
 msgid "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge an. Erst nach Freigabe durch eine Person mit dem Recht „Löschbestätigung“ wird gelöscht; nur wenn die Einrichtung die Auto-Freigabe nach mehrfacher Zurückstellung eingeschaltet hat, gibt der Lauf einen Vorschlag nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage selbst frei. Zurückstellen schützt bis zur Wiedervorlage; nach einer Ablehnung ist erneut eine Freigabe erforderlich. Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht. Aufbewahrungssperren (Legal Holds) verhindern die Löschung. Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“; ohne besetzte Freigabe wird bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte „Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann."
 msgstr "The daily retention run creates deletion proposals for expired events with additional details. Deletion occurs only after approval by a person with deletion confirmation permission; only if the facility has enabled auto-approval after repeated deferrals does the run approve a proposal itself after the maximum number of deferrals is reached and the follow-up date has expired. Deferral protects until follow-up; rejection requires approval again. Anonymous and pseudonym-only events are deleted automatically. Legal holds prevent deletion. The run creates the proposal. The facility must designate at least one active account in its own facility with the Manager or Application support role and deletion confirmation permission; without an approver, deletion does not occur when auto-approval is disabled. This permission is assigned independently of the role, but the retention interface is restricted to Manager and Application support. The “Approvers” compliance card counts active deletion-request approvers regardless of role; it does not establish that an account can operate the retention workflow."
+
+#: src/core/models/settings.py:221
+msgid "Wenn aktiv, werden Löschvorschläge nach Überschreiten der maximalen Zurückstellungszahl automatisch freigegeben, statt manuelle Entscheidung zu erzwingen."
+msgstr "If active, deletion proposals are auto-released after exceeding the maximum deferral count, instead of forcing manual decision."

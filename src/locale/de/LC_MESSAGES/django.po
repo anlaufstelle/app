@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-11 11:08+0200\n"
+"POT-Creation-Date: 2026-10-11 11:59+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14453,3 +14453,7 @@ msgstr "Wenn aktiv, werden Löschvorschläge nach Erreichen der maximalen Zurüc
 #: src/templates/core/retention/dashboard.html:9
 msgid "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge an. Erst nach Freigabe durch eine Person mit dem Recht „Löschbestätigung“ wird gelöscht; nur wenn die Einrichtung die Auto-Freigabe nach mehrfacher Zurückstellung eingeschaltet hat, gibt der Lauf einen Vorschlag nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage selbst frei. Zurückstellen schützt bis zur Wiedervorlage; nach einer Ablehnung ist erneut eine Freigabe erforderlich. Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht. Aufbewahrungssperren (Legal Holds) verhindern die Löschung. Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“; ohne besetzte Freigabe wird bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte „Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann."
 msgstr "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge an. Erst nach Freigabe durch eine Person mit dem Recht „Löschbestätigung“ wird gelöscht; nur wenn die Einrichtung die Auto-Freigabe nach mehrfacher Zurückstellung eingeschaltet hat, gibt der Lauf einen Vorschlag nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage selbst frei. Zurückstellen schützt bis zur Wiedervorlage; nach einer Ablehnung ist erneut eine Freigabe erforderlich. Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht. Aufbewahrungssperren (Legal Holds) verhindern die Löschung. Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“; ohne besetzte Freigabe wird bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte „Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann."
+
+#: src/core/models/settings.py:221
+msgid "Wenn aktiv, werden Löschvorschläge nach Überschreiten der maximalen Zurückstellungszahl automatisch freigegeben, statt manuelle Entscheidung zu erzwingen."
+msgstr "Wenn aktiv, werden Löschvorschläge nach Überschreiten der maximalen Zurückstellungszahl automatisch freigegeben, statt manuelle Entscheidung zu erzwingen."

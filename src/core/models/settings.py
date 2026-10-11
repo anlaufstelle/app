@@ -218,8 +218,8 @@ class Settings(models.Model):
         default=False,
         verbose_name=_("Auto-Freigabe nach mehrfacher Zurückstellung"),
         help_text=_(
-            "Wenn aktiv, werden Löschvorschläge nach Erreichen der maximalen "
-            "Zurückstellungszahl und Ablauf der Wiedervorlage automatisch freigegeben, statt manuelle Entscheidung "
+            "Wenn aktiv, werden Löschvorschläge nach Überschreiten der maximalen "
+            "Zurückstellungszahl automatisch freigegeben, statt manuelle Entscheidung "
             "zu erzwingen."
         ),
     )

@@ -85,6 +85,20 @@ class TestFacilitySettingsForm:
         assert set(form.fields) == EDITABLE_FIELDS
         assert editable_model_fields == EDITABLE_FIELDS
 
+    def test_auto_approve_help_matches_reached_defer_limit(self, facility, settings_obj):
+        from core.admin.system import SettingsAdmin
+        from core.admin_site import anlaufstelle_admin_site
+
+        form = FacilitySettingsForm(instance=settings_obj, facility=facility)
+        model_admin = SettingsAdmin(Settings, anlaufstelle_admin_site)
+        admin_field = model_admin.formfield_for_dbfield(
+            Settings._meta.get_field("retention_auto_approve_after_defer"), request=None
+        )
+
+        for help_text in (form.fields["retention_auto_approve_after_defer"].help_text, admin_field.help_text):
+            assert "nach Erreichen der maximalen" in str(help_text)
+            assert "Ablauf der Wiedervorlage" in str(help_text)
+
     def test_default_document_type_choices_are_facility_scoped(
         self, facility, second_facility, settings_obj, doc_type_contact
     ):
