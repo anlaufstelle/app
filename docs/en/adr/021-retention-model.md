@@ -58,4 +58,4 @@ from 2026-10-06 is superseded:
 <!-- translation-source: docs/adr/021-retention-modell.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-11 -->
-<!-- source-hash: 5e4f8bdd1252c7c370a1c932ad6c8a6f09b7250b -->
+<!-- source-hash: 07e85a1eec925531dacbb5b079c62d3b02a94ee9 -->
