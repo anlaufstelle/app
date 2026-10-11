@@ -15,6 +15,7 @@ from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldT
 from core.reporting import registry
 from core.reporting.export import export_dataset
 from core.views.statistics import build_report_panel_context
+from tests._factories import make_document_type
 
 pytestmark = pytest.mark.django_db
 
@@ -442,7 +443,7 @@ def test_quantity_category_exports_keep_hidden_cell_ambiguous(
     doc_type, field = make_type(facility, "Alpha", report_key=contact_key)
     add_events(facility, lead_user, doc_type, field, [1] * 7)
     for name, key, count in [("Bravo", other_key, 1), ("Charlie", "excluded", 4)]:
-        other = DocumentType.objects.create(facility=facility, name=name, report_key=key)
+        other = make_document_type(facility=facility, name=name, report_key=key)
         for _ in range(count):
             Event.objects.create(
                 facility=facility, document_type=other, created_by=lead_user, occurred_at=timezone.now()
@@ -481,7 +482,7 @@ def test_category_total_cannot_unlock_hidden_quantity_type(client, facility, lea
     for name, key, count in [("Alpha", "counseling", 7), ("Bravo", "crisis", 1)]:
         doc_type, field = make_type(facility, name, report_key=key)
         add_events(facility, lead_user, doc_type, field, [1] * count)
-    outside = DocumentType.objects.create(facility=facility, name="Charlie", report_key="excluded")
+    outside = make_document_type(facility=facility, name="Charlie", report_key="excluded")
     for _ in range(4):
         Event.objects.create(facility=facility, document_type=outside, created_by=lead_user, occurred_at=timezone.now())
     client.force_login(lead_user)
