@@ -28,7 +28,7 @@ from core.services.dashboard.external_report import (
     _get_threshold,
     _suppress_small,
     apply_residual_guard,
-    build_external_report,
+    build_shared_document_type_counts,
 )
 from core.services.file_vault import safe_decrypt
 
@@ -108,10 +108,9 @@ class QuantitySumBackend(DatasetBackend):
             row["quantity"] += value
             row["contributors"] += 1
 
-        # Reuse the complete general-figures decision, including secondary
-        # suppression and any whole-table removal by the residual guard.
-        disclosure = build_external_report(facility, date_from, date_to)
-        published_counts = {row["name"]: row["count"] for row in disclosure.get("by_document_type", [])}
+        # Respect both the full type population and mapped category subsets,
+        # including secondary suppression and whole-table removal.
+        published_counts = build_shared_document_type_counts(facility, date_from, date_to)
         total = sum((row["quantity"] for row in rows.values()), Fraction(0))
         records = []
         for row in rows.values():

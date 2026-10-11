@@ -1066,6 +1066,48 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
     return _finalize_report(report, raw["unique_clients"], age_rows, threshold, _EXTERNAL_REPORT_BREAKDOWNS)
 
 
+def build_shared_document_type_counts(facility, date_from: date, date_to: date) -> dict[str, int | None]:
+    """Intersect type and category decisions before publishing event lower bounds.
+
+    A quantity contributor is an event, not a quantity unit. All types belonging
+    to a hidden sample-report category must remain hidden, even if the broader
+    general-figures population permits their counts. A visible category total
+    must not unlock a hidden member type either: block all its type lower bounds.
+    Include the hybrid PDF
+    decision as well as live categories; combining either file must stay safe.
+    """
+    from core.models import DocumentType
+    from core.reporting.registry import get_backend
+
+    general = build_external_report(facility, date_from, date_to)
+    counts = {row["name"]: row["count"] for row in general.get("by_document_type", [])}
+    sample = get_backend("sample-report-1")
+    binding = sample.typ_bindung
+    if binding is None:
+        return dict.fromkeys(counts)
+    categories = {
+        row["name"]: binding.resolve_row(row)
+        for row in DocumentType.objects.for_facility(facility).values("name", *binding.values_fields())
+        if row["name"] in counts
+    }
+    if not any(category is not None for category in categories.values()):
+        return counts
+    blocked_categories = {
+        category for name, category in categories.items() if category is not None and counts[name] is None
+    }
+    for format_name in ("json", "pdf"):
+        raw = sample.build_format_dataset(facility, date_from, date_to, format=format_name)
+        protected = suppress_sample_report_1_stats(facility, raw.summary)
+        published = {row["name"]: row["count"] for row in protected.get("by_category", [])}
+        blocked_categories.update(
+            category for category in categories.values() if category is not None and published.get(category) is None
+        )
+    for name, category in categories.items():
+        if category in blocked_categories:
+            counts[name] = None
+    return counts
+
+
 def suppress_single_margin(
     facility, result, *, breakdown: _Breakdown, field_specs: Sequence[Any]
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:

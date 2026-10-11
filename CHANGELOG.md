@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
-- **Kleinzellen in Zeitraum-Summen geschützt** (#2515) — Der neue Bericht „Summe von Zahlenfeldern“ zeigt nur Stückzahl-Summen und Beitragszahlen, übernimmt die Unterdrückung je Dokumentationstyp aus „Allgemeine Kennzahlen“ und gibt keine eigene Ereigniszahl oder Ereignis-Gesamtsumme aus, sodass beide Berichte zusammen verborgene Kleinzellen nicht über diese Werte offenlegen.
+- **Kleinzellen in Zeitraum-Summen geschützt** (#2515) — Der neue Bericht „Summe von Zahlenfeldern“ zeigt nur Stückzahl-Summen und Beitragszahlen, übernimmt die Typ-Unterdrückung der allgemeinen Kennzahlen und die Kategorie-Unterdrückung des Sachberichts einschließlich sekundärer Unterdrückung und dessen PDF-Quelle und gibt keine eigene Ereigniszahl oder Ereignis-Gesamtsumme aus, sodass seine Beitragszahlen verborgene Typen oder Sachberichtskategorien nicht über diese Werte aufschließen.
 
 - **Offline-Schlüssel gegen überholte Ableitungen gesichert** (#2528) — Lebensdauerprüfungen aktualisieren die Hochwassermarke atomar; Ableitungs-, Login- und Demo-Versuche sind vor ihrem ersten asynchronen Schritt an einen bekannten Widerrufsstand gebunden und werden nach später festgestelltem Schlüsselentzug auch bei verzögerter DB-Initialisierung ohne Broadcast verworfen, ohne den Schlüssel erneut in IndexedDB oder Arbeitsspeicher zu schreiben; ein veralteter oder noch ungeprüfter Stand bei Beginn erfordert im Zweifel eine neue Anmeldung nach abgeschlossener Widerrufsprüfung.
 

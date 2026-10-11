@@ -430,3 +430,81 @@ def test_sum_export_hides_type_suppressed_by_general_figures(client, facility, l
     )
     assert payloads[1]["records"][0]["contributors"] is None
     assert payloads[1]["records"][0]["quantity"] is None
+
+
+@pytest.mark.parametrize("contact_key,other_key", [("contact", "counseling"), ("medical", "referral")])
+@pytest.mark.parametrize("download_order", [("quantity-sum", "sample-report-1"), ("sample-report-1", "quantity-sum")])
+def test_quantity_category_exports_keep_hidden_cell_ambiguous(
+    client, facility, lead_user, date_range, contact_key, other_key, download_order
+):
+    """A contributor lower bound must not unlock a hidden category subtotal."""
+    Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 5})
+    doc_type, field = make_type(facility, "Alpha", report_key=contact_key)
+    add_events(facility, lead_user, doc_type, field, [1] * 7)
+    for name, key, count in [("Bravo", other_key, 1), ("Charlie", "excluded", 4)]:
+        other = DocumentType.objects.create(facility=facility, name=name, report_key=key)
+        for _ in range(count):
+            Event.objects.create(
+                facility=facility, document_type=other, created_by=lead_user, occurred_at=timezone.now()
+            )
+    client.force_login(lead_user)
+    payloads = {}
+    for slug in download_order:
+        response = client.get(
+            reverse("core:statistics_report_export"),
+            {"backend": slug, "format": "json", "date_from": str(date_range[0]), "date_to": str(date_range[1])},
+        )
+        assert response.status_code == 200
+        payloads[slug] = json.loads(response.content)
+    category = payloads["sample-report-1"]
+    quantity = payloads["quantity-sum"]
+    assert len(category["records"]) == 2
+    assert all(row["count"] is None for row in category["records"])
+    # Both categories are positive. A total of eight and a lower bound of seven
+    # would force the other category to exactly one, even without equal units.
+    total = category["summary"]["total"]
+    lower_bound = quantity["records"][0]["contributors"]
+    possible_hidden_counts = range(1, 5) if total is None or lower_bound is None else range(1, total - lower_bound + 1)
+    assert len(possible_hidden_counts) > 1, "The hidden category must not be exactly recoverable from both downloads"
+    assert lower_bound is None
+    assert quantity["records"][0]["quantity"] is None
+    assert quantity["summary"]["contributors_total"] is None
+    assert quantity["summary"]["quantity_total"] is None
+    releases = AuditLog.objects.for_facility(facility).filter(action=AuditLog.Action.EXPORT)
+    assert releases.count() == 2
+    assert all(entry.detail["artifact_released"] is True for entry in releases)
+
+
+def test_category_total_cannot_unlock_hidden_quantity_type(client, facility, lead_user, date_range):
+    """Different type keys sharing one category must keep hidden types ambiguous."""
+    Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 5})
+    for name, key, count in [("Alpha", "counseling", 7), ("Bravo", "crisis", 1)]:
+        doc_type, field = make_type(facility, name, report_key=key)
+        add_events(facility, lead_user, doc_type, field, [1] * count)
+    outside = DocumentType.objects.create(facility=facility, name="Charlie", report_key="excluded")
+    for _ in range(4):
+        Event.objects.create(facility=facility, document_type=outside, created_by=lead_user, occurred_at=timezone.now())
+    client.force_login(lead_user)
+    payloads = {}
+    for slug in ("sample-report-1", "quantity-sum"):
+        response = client.get(
+            reverse("core:statistics_report_export"),
+            {"backend": slug, "format": "json", "date_from": str(date_range[0]), "date_to": str(date_range[1])},
+        )
+        assert response.status_code == 200
+        payloads[slug] = json.loads(response.content)
+    sample = payloads["sample-report-1"]
+    quantity = {row["document_type"]: row for row in payloads["quantity-sum"]["records"]}
+    assert sample["records"] == [{"category": "Beratung", "count": 8}]
+    assert quantity["Bravo"]["contributors"] is None
+    # Bravo's row proves at least one event exists. Both types exhaust the
+    # category, so eight minus an Alpha lower bound of seven would force one.
+    total = sample["summary"]["total"]
+    lower_bound = quantity["Alpha"]["contributors"]
+    possible_hidden_counts = range(1, 5) if lower_bound is None or total is None else range(1, total - lower_bound + 1)
+    assert len(possible_hidden_counts) > 1, "A category total must not pin the hidden type to one event"
+    assert lower_bound is None
+    assert quantity["Alpha"]["quantity"] is None
+    releases = AuditLog.objects.for_facility(facility).filter(action=AuditLog.Action.EXPORT)
+    assert releases.count() == 2
+    assert all(entry.detail["artifact_released"] is True for entry in releases)
