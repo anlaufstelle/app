@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.constants import CONTACT_STAGE_CHOICES
 from core.models.managers import FacilityScopedManager
-from core.models.mixins import SluggedModel
+from core.models.mixins import SluggedModel, validate_protection_literals
 from core.models.report_key import ReportKeyMixin
 
 
@@ -187,6 +187,7 @@ class DocumentType(ReportKeyMixin, SluggedModel):
             validate_configuration_facility,
         )
 
+        validate_protection_literals(self, "sensitivity")
         validate_configuration_facility(self, self.facility_id)
         with configuration_write(self.facility_id):
             previous = (

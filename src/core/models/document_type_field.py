@@ -78,6 +78,7 @@ class DocumentTypeField(models.Model):
             current_type = (
                 DocumentType.objects.for_facility(self.document_type.facility_id).get(pk=self.document_type_id)
                 if not self.document_type._state.adding
+                and getattr(self, "_validated_inline_parent", None) is not self.document_type
                 else self.document_type
             )
             field = (
@@ -87,7 +88,7 @@ class DocumentTypeField(models.Model):
             )
             if field is None:
                 raise ValidationError({"field_template": _("Die Feldvorlage gehört zu einer anderen Einrichtung.")})
-            # Inline validation must also consider a pending parent upgrade.
+            # Independent instances use fresh protection; admin inlines use the validated parent target.
             level = self.document_type.sensitivity
             if current_type.sensitivity == DocumentType.Sensitivity.HIGH:
                 level = current_type.sensitivity

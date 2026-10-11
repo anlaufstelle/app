@@ -20,8 +20,21 @@ from core.services.dynamic_protection import lock_dynamic_protection, lock_dynam
 logger = logging.getLogger(__name__)
 
 
+class DocumentTypeFieldInlineForm(forms.ModelForm):
+    """Validate against the parent target under the admin configuration lock."""
+
+    def _post_clean(self):
+        # The parent form has already validated this instance before the formset.
+        self.instance._validated_inline_parent = self.cleaned_data.get("document_type")
+        try:
+            super()._post_clean()
+        finally:
+            del self.instance._validated_inline_parent
+
+
 class DocumentTypeFieldInline(TabularInline):
     model = DocumentTypeField
+    form = DocumentTypeFieldInlineForm
     extra = 1
     autocomplete_fields = ("field_template",)
 

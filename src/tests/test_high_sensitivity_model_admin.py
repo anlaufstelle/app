@@ -6,6 +6,7 @@ Refs #2525
 import pytest
 from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
+from django.db.models import Case, F, Value, When
 from django.urls import reverse
 
 from core.admin.documents import DocumentTypeAdmin
@@ -265,3 +266,80 @@ def test_high_type_creation_accepts_an_unset_primary_key(facility):
     assert doc_type.pk is not None
     assert doc_type.sensitivity == "high"
     assert not doc_type.fields.exists()
+
+
+@pytest.mark.parametrize("initial,target,status", [("high", "normal", 302), ("normal", "high", 200)])
+def test_admin_inline_uses_parent_target_sensitivity(client, admin_user, facility, initial, target, status):
+    doc_type, field = configuration(facility, level=initial)
+    admin_user.user_permissions.add(*Permission.objects.filter(content_type__model="documenttypefield"))
+    client.force_login(admin_user)
+    url = reverse("admin:core_documenttype_change", args=[doc_type.pk])
+    page = client.get(url)
+    assert page.status_code == 200
+    data = admin_payload(page)
+    prefix = page.context_data["inline_admin_formsets"][0].formset.prefix
+    data.update({"sensitivity": target, f"{prefix}-0-field_template": str(field.pk), f"{prefix}-0-sort_order": "0"})
+    response = client.post(url, data)
+    assert response.status_code == status
+    doc_type.refresh_from_db()
+    assert doc_type.sensitivity == (target if status == 302 else initial)
+    assert doc_type.fields.filter(field_template=field).exists() == (status == 302)
+    if status == 200:
+        assert "erben" in response.content.decode()
+
+
+def test_independent_assignment_clean_rejects_stale_parent_downgrade(facility):
+    doc_type, field = configuration(facility, level="high")
+    doc_type.sensitivity = "normal"
+    assignment = DocumentTypeField(document_type=doc_type, field_template=field)
+    for validate in (assignment.clean, assignment.save):
+        with pytest.raises(ValidationError, match="Protected note.*erben"):
+            validate()
+    doc_type.refresh_from_db()
+    assert doc_type.sensitivity == "high"
+    assert not doc_type.fields.exists()
+
+
+@pytest.mark.parametrize("path", ["save", "partial", "create"])
+@pytest.mark.parametrize(
+    "model,attribute,expression",
+    [
+        ("field", "sensitivity", Value("high")),
+        ("field", "sensitivity", F("sensitivity")),
+        ("field", "sensitivity", Case(When(sensitivity="normal", then=Value("high")), default=Value("high"))),
+        ("field", "is_encrypted", Value(False)),
+        ("field", "is_encrypted", F("is_encrypted")),
+        ("type", "sensitivity", Value("high")),
+        ("type", "sensitivity", F("sensitivity")),
+        ("type", "sensitivity", Case(When(sensitivity="normal", then=Value("high")), default=Value("high"))),
+    ],
+    ids=[
+        "field-value",
+        "field-reference",
+        "field-case",
+        "encryption-value",
+        "encryption-reference",
+        "type-value",
+        "type-reference",
+        "type-case",
+    ],
+)
+def test_configuration_save_rejects_protection_expressions(facility, lead_user, model, attribute, expression, path):
+    record, field = make_record(facility, lead_user, "event")
+    doc_type = record.document_type
+    obj = field if model == "field" else doc_type
+    if path == "create":
+        obj = type(obj)(facility=facility, name="Expression configuration", sensitivity="normal")
+    setattr(obj, attribute, expression)
+    with pytest.raises(ValidationError) as error:
+        obj.save(**({"update_fields": [attribute]} if path == "partial" else {}))
+    assert attribute in error.value.message_dict
+    assert not type(obj).objects.filter(name="Expression configuration").exists()
+    field.refresh_from_db()
+    doc_type.refresh_from_db()
+    record.refresh_from_db()
+    assert field.sensitivity == "normal"
+    assert not field.is_encrypted
+    assert doc_type.sensitivity == "normal"
+    assert record.data_json == {field.slug: "SecretToken"}
+    assert record.search_text == "SecretToken"

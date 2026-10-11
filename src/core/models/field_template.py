@@ -8,7 +8,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models.document_type import DocumentType
 from core.models.field_template_manager import FieldTemplateManager
-from core.models.mixins import SluggedModel
+from core.models.mixins import SluggedModel, validate_protection_literals
 from core.models.report_key import ReportKeyMixin
 from core.models.slug import _RESERVED_SLUGS, _SLUG_RE
 
@@ -258,6 +258,7 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
             validate_configuration_facility,
         )
 
+        validate_protection_literals(self, "sensitivity", "is_encrypted")
         validate_configuration_facility(self, self.facility_id)
         self._validate_number_range()
         self._validate_persisted_number_default_range()

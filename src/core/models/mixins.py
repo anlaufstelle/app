@@ -11,6 +11,17 @@ from django.utils.translation import gettext_lazy as _
 from core.models.slug import _SLUG_RE, generate_unique_slug
 
 
+def validate_protection_literals(instance, *field_names):
+    """Reject unresolved ORM expressions before protection checks or normalization."""
+    errors = {
+        name: ValidationError(_("Ungültige Eingabe."), code="invalid")
+        for name in field_names
+        if hasattr(getattr(instance, name), "resolve_expression")
+    }
+    if errors:
+        raise ValidationError(errors)
+
+
 class SluggedModel(models.Model):
     """Abstrakte Basis für Modelle mit generiertem, unveränderbarem ``slug``.
 
