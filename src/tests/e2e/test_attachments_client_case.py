@@ -48,6 +48,10 @@ from core.models.document_type_field import DocumentTypeField
 from core.models.field_template import FieldTemplate
 u = User.objects.get(username="miriam"); fac = u.facility
 ft, _ = FieldTemplate.objects.get_or_create(facility=fac, name="E2E-M24-Nachweis", defaults={"field_type": "file"})
+# High types reject inheriting fields; a file field is no report field, so it needs "high".
+ft_high, _ = FieldTemplate.objects.get_or_create(
+    facility=fac, name="E2E-M24-Nachweis-Hoch", defaults={"field_type": "file", "sensitivity": "high"},
+)
 dts = {}
 for key, (name, entity, sens) in {
     "p": ("E2E-M24-P-Akte", "client", "normal"),
@@ -60,7 +64,8 @@ for key, (name, entity, sens) in {
         defaults={"entity_type": entity, "sensitivity": sens},
     )
     if key != "p2":
-        DocumentTypeField.objects.get_or_create(document_type=dt, field_template=ft, defaults={"sort_order": 0})
+        template = ft_high if key == "h" else ft
+        DocumentTypeField.objects.get_or_create(document_type=dt, field_template=template, defaults={"sort_order": 0})
     dts[key] = dt
 cli, _ = Client.objects.get_or_create(
     facility=fac, pseudonym="E2E-M24-Person",
@@ -110,12 +115,12 @@ def _test_pdf(tmp_path):
     return str(path)
 
 
-def _upload_on_edit(page, base_url, edit_path, pdf_path):
+def _upload_on_edit(page, base_url, edit_path, pdf_path, field_slug="e2e-m24-nachweis"):
     """Datei im Bearbeiten-Formular des Owners hochladen und speichern."""
     page.goto(f"{base_url}{edit_path}")
     page.wait_for_load_state("domcontentloaded")
-    page.wait_for_selector('input[name="e2e-m24-nachweis"]', timeout=10000)
-    page.set_input_files('input[name="e2e-m24-nachweis"]', pdf_path)
+    page.wait_for_selector(f'input[name="{field_slug}"]', timeout=10000)
+    page.set_input_files(f'input[name="{field_slug}"]', pdf_path)
     page.click('button:has-text("Speichern")')
     page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
 
@@ -230,7 +235,13 @@ class TestAssistantNegativeProbes:
     ):
         # Lead laedt an die HIGH-Person (STAFF darf max. ELEVATED sehen,
         # ROLE_MAX_SENSITIVITY - erster Lauf scheiterte genau daran)
-        _upload_on_edit(lead_page, base_url, f"/clients/{m24_data['client_h_pk']}/edit/", _test_pdf)
+        _upload_on_edit(
+            lead_page,
+            base_url,
+            f"/clients/{m24_data['client_h_pk']}/edit/",
+            _test_pdf,
+            field_slug="e2e-m24-nachweis-hoch",
+        )
 
         attachment_pk = _run_shell(
             "from core.models import Attachment; "
