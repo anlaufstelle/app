@@ -650,6 +650,8 @@ class TestRetentionDashboardView:
         assert "zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle" in content
         assert "sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann" in content
         assert "Löschbestätigung" in content
+        assert "nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage" in content
+        assert "nach Überschreiten der maximalen Zurückstellungszahl" not in content
         assert "Zurückstellen schützt bis zur Wiedervorlage" in content
         assert "Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht" in content
         assert "Aufbewahrungssperren (Legal Holds) verhindern die Löschung" in content
