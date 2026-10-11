@@ -2,9 +2,9 @@
 
 Only marked report artifacts satisfy ``RELEASE_EXPORT_Q``. Display windows
 are bounded; overlap candidates come from the entire matching period history.
-The warning compares the same artifact across distinct overlapping periods,
-never employee identities. Unmarked downloads and transfers outside the app
-remain outside this register; no historical audit entries are rewritten.
+The warning compares overlapping periods of the same artifact or reports
+sharing a dimension, never employee identities. Unmarked downloads and transfers
+outside the app remain outside this register; no historical audit entries are rewritten.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from django.db.models.functions import Coalesce, NullIf
 from core.models import AuditLog
 from core.services.audit.detail_policy import RELEASE_FIELD_MAX_LENGTH as RELEASE_FIELD_MAX_LENGTH
 from core.services.audit.detail_policy import validate_release_metadata
+from core.services.dashboard.external_report import DOCUMENT_TYPE_REPORT_FAMILY
 from core.utils.formatting import parse_date
 
 # Default service display window; the view paginates independently.
@@ -178,26 +179,15 @@ def _as_release(entry: AuditLog) -> Release:
 
 
 def _overlaps(first: Release, second: Release) -> bool:
-    """Überschneiden sich zwei Herausgaben **nicht-identisch**?
+    """Compare an artifact or shared dimension, including cross-report duplicates.
 
-    Identische Zeiträume sind bewusst **kein** Befund: aus zwei Berichten über
-    denselben Zeitraum lässt sich keine Differenz bilden, ganz gleich, an wen
-    sie gingen — der zweite ist typischerweise ein erneuter Download desselben
-    Artefakts. Der Kanal aus K4a lebt von *verschachtelten* oder *teilweise*
-    überlappenden Zeiträumen (A ⊊ B), und genau die bleiben stehen. Ohne diese
-    Einschränkung produzierte die Übersicht Alarme ohne Aussage.
-
-    **Gruppiert wird je Artefakt** (Refs #1754), also je Backend-Slug bzw. — wo
-    es keinen gibt — je Format/Ziel. Der Kanal ist eine *Differenz*, und die
-    setzt zwei Artefakte **derselben Definition** über verschiedene Zeiträume
-    voraus: Jahresbericht minus Monatsbericht desselben Berichts. Zwei
-    verschiedene Backends zählen verschiedene Größen; da ist nichts zu
-    subtrahieren, und eine Warnung darüber wäre Rauschen, das die echten Befunde
-    zudeckt. Das Ausgabe**format** ist dagegen kein Gruppenkriterium: derselbe
-    Bericht als CSV und als JSON ist derselbe Bericht (deshalb der Slug vor dem
-    Format in :func:`_as_release`).
+    Different backends can publish the same dimension. Their identical periods
+    must also warn: combining the files may expose cells hidden in either one.
+    Repeated downloads of one report for an identical period remain excluded.
+    Output format and recipient do not change the shared dimension.
     """
-    if first.artifact != second.artifact:
+    same_family = first.backend in DOCUMENT_TYPE_REPORT_FAMILY and second.backend in DOCUMENT_TYPE_REPORT_FAMILY
+    if first.artifact != second.artifact and not same_family:
         return False
     if not (first.has_period and second.has_period):
         return False
@@ -208,10 +198,9 @@ def _overlaps(first: Release, second: Release) -> bool:
         second.date_to,
     )
     if first_from is None or first_to is None or second_from is None or second_to is None:
-        # Kann bei erfuellter has_period-Pruefung nicht eintreten — hier nur,
-        # damit mypy die None-Faelle beweisbar ausschliesst.
+        # Keep optional dates narrowed for type checking.
         return False
-    if (first_from, first_to) == (second_from, second_to):
+    if first.artifact == second.artifact and (first_from, first_to) == (second_from, second_to):
         return False
     return first_from <= second_to and second_from <= first_to
 
@@ -222,12 +211,10 @@ def release_queryset(facility):
 
 
 def build_release_overview(facility, limit: int = RELEASE_LOG_LIMIT, *, offset: int = 0) -> list[Release]:
-    """Annotate a display window using every overlapping release of its artifact.
+    """Compare the display window with every matching artifact-family period.
 
-    Candidate queries are bounded by the report period rather than an entry
-    count. Artifact identity matches ``_as_release`` (backend, format, target).
-    Identical periods are excluded in SQL, so repeated downloads cannot hide
-    an older enclosing period or force an all-history pairwise comparison.
+    Bound queries by period, never display count. Identical periods of another
+    report remain candidates; repeated downloads of one artifact do not.
     """
     history = release_queryset(facility)
     entries = history.only("timestamp", "target_type", "detail")[offset : offset + limit]
@@ -237,6 +224,9 @@ def build_release_overview(facility, limit: int = RELEASE_LOG_LIMIT, *, offset: 
         if release.date_from is None or release.date_to is None:
             result.append(release)
             continue
+        artifacts = (
+            DOCUMENT_TYPE_REPORT_FAMILY if release.backend in DOCUMENT_TYPE_REPORT_FAMILY else {release.artifact}
+        )
         candidates = (
             history.annotate(
                 release_artifact=Coalesce(
@@ -247,11 +237,12 @@ def build_release_overview(facility, limit: int = RELEASE_LOG_LIMIT, *, offset: 
                 )
             )
             .filter(
-                release_artifact=release.artifact,
+                release_artifact__in=artifacts,
                 detail__date_from__lte=release.date_to.isoformat(),
                 detail__date_to__gte=release.date_from.isoformat(),
             )
             .exclude(
+                release_artifact=release.artifact,
                 detail__date_from=release.date_from.isoformat(),
                 detail__date_to=release.date_to.isoformat(),
             )

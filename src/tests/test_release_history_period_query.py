@@ -61,3 +61,19 @@ def test_non_release_views_cannot_displace_release_candidates(facility, lead_use
     releases = build_release_overview(facility, limit=1)
     assert len(releases) == 1
     assert not releases[0].overlaps
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("second_period", [("2026-01-01", "2026-12-31"), ("2026-02-01", "2026-02-28")])
+def test_shared_dimension_warns_across_backends(client, facility, lead_user, second_period):
+    _export(facility, lead_user, "2026-01-01", "2026-12-31", backend="general-key-figures")
+    _export(facility, lead_user, *second_period, backend="quantity-sum")
+    releases = build_release_overview(facility, limit=1)
+    assert releases[0].overlaps == ("general-key-figures 2026-01-01 – 2026-12-31",)
+    client.force_login(lead_user)
+    response = client.get(reverse("core:statistics_report_releases"))
+    assert response.status_code == 200
+    assert "release-overlap" in response.content.decode()
+    assert "auch identische Zeiträume gemeldet" in response.content.decode()
+    assert "derselben Artefaktfamilie" in response.content.decode()
+    assert all(release.overlaps for release in response.context["releases"])

@@ -2,10 +2,8 @@
 {% load i18n nav_tags %}
 
 {% comment %}
-Freigabe-Übersicht (K4a, Refs #1770): flankierende Maßnahme zu einer akzeptierten
-Definitionsgrenze — die k-Anonymitäts-Zusicherung gilt je Artefakt und je
-Zeitraum. Die Seite verhindert nichts, sie macht überlappende Herausgaben
-sichtbar. Quelle sind ausschließlich die ohnehin auditierten EXPORT-Einträge.
+Disclosure history compares overlapping periods of artifacts sharing a dimension.
+Only audited downloads enter the overview; warnings do not prevent disclosure.
 {% endcomment %}
 
 {% block title %}{% trans "Freigabe-Übersicht" %} – Anlaufstelle{% endblock %}
@@ -35,7 +33,7 @@ Filterfehler.
         {% blocktrans count count=overlap_count %}{{ count }} Herausgabe auf dieser Seite mit überschneidendem Zeitraum{% plural %}{{ count }} Herausgaben auf dieser Seite mit überschneidendem Zeitraum{% endblocktrans %}
     </p>
     <p class="text-[12px] text-amber-800">
-        {% blocktrans %}Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen sind. Identische Zeiträume sind unkritisch und werden nicht gemeldet.{% endblocktrans %}
+        {% blocktrans %}Prüfen Sie, ob die Berichte zusammengeführt werden können. Bei verschiedenen Berichten mit gemeinsamer Dimension werden auch identische Zeiträume gemeldet.{% endblocktrans %}
     </p>
 </div>
 {% endif %}
@@ -90,7 +88,7 @@ Filterfehler.
     {% blocktrans %}Erfasst wird außerdem nur, was als Datei herausgegeben wurde. Das Betrachten eines Berichts am Bildschirm ist keine Herausgabe — auch nicht in der maschinenlesbaren Fassung. Weitergaben auf anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm — erscheinen hier ebenfalls nicht.{% endblocktrans %}
 </p>
 <p class="text-[12px] text-ink-muted mt-2 max-w-3xl" data-testid="release-history-note">
-    {% blocktrans %}Die Anzeige ist auf Seiten aufgeteilt. Überschneidungen werden mit allen protokollierten Herausgaben desselben Berichts geprüft, deren Berichtszeitraum die angezeigte Herausgabe berührt.{% endblocktrans %}
+    {% blocktrans %}Die Anzeige ist auf Seiten aufgeteilt. Überschneidungen werden mit allen protokollierten Herausgaben desselben Berichts oder derselben Artefaktfamilie geprüft. „Allgemeine Kennzahlen“ und „Summe von Zahlenfeldern“ teilen die Dimension „Ereignisse je Dokumentationstyp“.{% endblocktrans %}
 </p>
 {% include "components/_pagination.html" with page=page_obj extra_params=pagination_params %}
 {% comment %}
