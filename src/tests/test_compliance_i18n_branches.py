@@ -329,7 +329,7 @@ GERMAN_WORDS = re.compile(
     r"Letzte[rsn]?|Lauf|Läufe|Laeufe|erwartet|Einrichtung\w*|Genehmiger|Lösch\w*|"
     r"pr[üu]e?fen|Pr[üu]e?fung|ausgef[üu]e?hrt|ausf[üu]e?hren|"
     r"Kein[ae]?|Keine|Noch|nicht|konfiguriert|vorhanden|gefunden|Rolle\w*|"
-    r"Attributprofil|erreichbar|Signatur\w*|Schwelle|Notiz|Gemonitorte|Aktionen|"
+    r"Attributprofil|erreichbar|Signatur(?!es?\b)\w*|Schwelle|Notiz|Gemonitorte|Aktionen|"
     r"kritische|Tag\w*|Tagen|Monat\w*|stündlich|taeglich|täglich|"
     r"angewendet|ausstehende|weitere|Versionen|Migrationen|Letztes|"
     r"Interner|Fehler|einsehen|Empfohlen|unbekannt|unbegrenzt|Aufbewahrung|"
@@ -366,7 +366,6 @@ def test_english_request_renders_all_expected_cards(english_dashboard_response, 
 
 
 @pytest.mark.django_db
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="#2530: English catalog pending")
 def test_english_request_has_no_german_card_text(english_dashboard_response):
     content = english_dashboard_response.content.decode()
     sections = re.findall(r'<section[^>]+data-testid="compliance-group-[^\"]+"[^>]*>(.*?)</section>', content, re.S)

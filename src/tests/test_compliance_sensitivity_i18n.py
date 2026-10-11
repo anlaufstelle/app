@@ -133,7 +133,6 @@ def test_german_board_keeps_protection_wording(client, admin_user, facility):
         assert expected in blocks[0]
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="#2530: English catalog pending")
 def test_english_board_has_no_german_protection_text(client, admin_user, facility):
     admin_user.preferred_language = "en"
     admin_user.save(update_fields=["preferred_language"])
