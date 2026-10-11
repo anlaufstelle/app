@@ -106,6 +106,10 @@ class TestKatalogFrische:
         for key, wert in sorted(geliefert.items(), key=repr):
             if not (isinstance(key, str) and key and wert):
                 continue
+            if "%" in key or "{" in key:
+                # ``msgfmt --check-format`` rejects a placeholder msgid paired with
+                # the control translation; the probe needs an entry without placeholders.
+                continue
             paar = f'msgid "{key}"\nmsgstr "{wert}"'
             if paar in quelle:
                 ziel_msgid, ziel_paar = key, paar
