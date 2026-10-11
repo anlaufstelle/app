@@ -141,7 +141,7 @@ class TestDatasetReportPanelView:
         assert response.status_code == 200
         content = response.content.decode()
         assert "Live-Abfrage zum Erstellungszeitpunkt" in content
-        assert "bei jedem Aufruf neu aus den Ereignisdaten berechnet" in content
+        assert "bei jedem Aufruf neu aus dem aktuellen Datenbestand berechnet" in content
 
     def test_unbekanntes_backend_404(self, client, lead_user):
         """Pflichtfall 3a."""

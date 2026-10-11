@@ -42,8 +42,8 @@ DATA_SOURCE_NOTES = {
 # Zeitraums verschiedene Zahlen zeigen koennen.
 DATA_SOURCE_EXPLANATIONS = {
     LIVE: _(
-        "Die Zahlen werden bei jedem Aufruf neu aus den Ereignisdaten berechnet; "
-        "Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, erscheinen leer."
+        "Die Zahlen werden bei jedem Aufruf neu aus dem aktuellen Datenbestand berechnet; "
+        "Werte aus Ereignissen, die nach Ablauf der Löschfristen entfernt wurden, fehlen deshalb."
     ),
     SNAPSHOT_HYBRID: _(
         "Die Zahlen stammen aus den gespeicherten Monats-Auswertungen und bleiben auch nach Ablauf "
