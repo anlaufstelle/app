@@ -1998,7 +1998,7 @@ The management command `enforce_retention` enforces the configured periods. Depe
 | Audit without a facility | `AUDITLOG_SYSTEM_RETENTION_MONTHS` (environment) | 24 months installation-wide | Same behavior; only in a run not restricted to one facility |
 | Completed deletion, merge and downgrade requests | `deletion_request_retention_days` | 1095 days from completion | Hard delete; pending requests remain, audit has its own period |
 
-Persons whose events are then all deleted are anonymized in the same run. Without events, the inactivity period is retention_identified_days from updated_at; holds and Art. 18 protect both paths. The other fields of the group "Datenschutz und Fristen" are not periods: `retention_auto_approve_after_defer` and `retention_max_defer_count` control how deferred deletion proposals are handled in the retention dashboard, `retention_use_k_anonymization` and `k_anonymity_threshold` control k-anonymization (both below).
+Persons whose events are then all deleted are anonymized in the same run. Without events, the `retention_identified_days` inactivity period applies only to pseudonym-only people without open cases. The anchor is the latest person change (`updated_at`), substantive case activity (`last_activity_at`), task change or attachment change on the person or case (creation, replacement or removal). People with additional details without events are excluded from automatic anonymization; the proposal path currently supports only events, and automatic retention enforcement for these people is missing. Pseudonym-only people without events but with an open case are excluded from the inactivity path. The facility regularly reviews people with additional details without events and submits a deletion request where necessary; it records the review interval in the deletion concept. See [`anonymization.py`](../../src/core/retention/anonymization.py). Holds and Art. 18 protect both paths. The other fields of the group "Datenschutz und Fristen" are not periods: `retention_auto_approve_after_defer` and `retention_max_defer_count` control how deferred deletion proposals are handled in the retention dashboard, `retention_use_k_anonymization` and `k_anonymity_threshold` control k-anonymization (both below).
 
 > **The handover note is hard-deleted, not soft-deleted** (Refs #2042) -- like activities. What counts is the date of the last change (`updated_at`), not creation; key rotation deliberately does not advance that timestamp and therefore does not extend the period. There is **no** legal hold for handover notes: holds protect client, case and event records for ongoing proceedings, whereas the shift note is a duty note with no personal reference in the data model (see (DE: [security-notes.md](../security-notes.md))). Every run with matches writes an audit row (`DELETE`, category `handover_notes`) carrying the count and the period -- never any text.
 
@@ -2527,6 +2527,6 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 4381bdcb3cf92d9c1d609d6ae4150487198ade12 -->
+<!-- translation-date: 2026-10-11 -->
+<!-- translation-date: 2026-10-11 -->
+<!-- source-hash: 7c629a13f7a481d3329492dffd8d98d39a739569 -->

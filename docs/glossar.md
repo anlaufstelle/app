@@ -140,9 +140,7 @@ und löscht erst nach Freigabe durch eine Person mit „Löschbestätigung“.
 
 Den Vorschlag legt der Lauf an. Die Einrichtung benennt eine Person mit dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben; die Compliance-Karte „Genehmiger“ zeigt die Besetzung.
 Zurückstellen schützt bis zum Datum; Ablehnen erlaubt eine neue Vorlage erst
-nach der Wiedervorlagefrist. Auto-Freigabe ist Opt-in. Personen ohne Ereignis
-werden nach Inaktivitätsfrist ab letzter Änderung anonymisiert; mit Ereignissen
-nach deren vollständiger Löschung. Hold und Art. 18 schützen im Lauf.
+nach der Wiedervorlagefrist. Auto-Freigabe ist Opt-in. Ohne Ereignis gilt die Inaktivitätsfrist `retention_identified_days` nur für „Nur Pseudonym“ ohne offene Fälle. Der Anker ist der jüngste Zeitpunkt aus Personenänderung (`updated_at`), fachlicher Fallaktivität (`last_activity_at`), Aufgabenänderung und Anhangsänderung an Person oder Fall (Anlage, Ersetzung oder Entfernung). Personen „Mit Zusatzangaben“ ohne Ereignis sind von der automatischen Anonymisierung ausgenommen; der Vorschlagsweg unterstützt bisher nur Ereignisse, für diese Personen fehlt eine automatische Fristvollstreckung. Personen „Nur Pseudonym“ ohne Ereignis mit offenem Fall sind vom Inaktivitätszweig ausgenommen. Die Einrichtung prüft ereignislose Personen „Mit Zusatzangaben“ regelmäßig und stellt bei Bedarf einen Löschantrag; das Prüfintervall hält sie im Löschkonzept fest. Maßgeblich ist [`anonymization.py`](../src/core/retention/anonymization.py). Mit Ereignissen werden Personen nach deren vollständiger Löschung anonymisiert. Hold und Art. 18 schützen im Lauf.
 
 **Legal Hold** — Eigener Aufbewahrungssperren-Eintrag auf Ereignis, Person oder
 Fall, kein Flag. Leitung/Anwendungsbetreuung setzen und lösen ihn in der Akte;

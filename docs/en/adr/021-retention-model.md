@@ -38,7 +38,7 @@ from 2026-10-06 is superseded:
   without a facility; each 0 disables pruning. Permanent exceptions remain.
   A facility-restricted run does not prune the system chain. Complete retention
   without routine audit pruning still requires 0; a hold protects its targets.
-- People without events are anonymized after inactivity from last update.
+- Without events, the `retention_identified_days` inactivity period applies only to pseudonym-only people without open cases. The anchor is the latest person change (`updated_at`), substantive case activity (`last_activity_at`), task change or attachment change on the person or case (creation, replacement or removal). People with additional details without events are excluded from automatic anonymization; the proposal path currently supports only events, and automatic retention enforcement for these people is missing. Pseudonym-only people without events but with an open case are excluded from the inactivity path. The facility regularly reviews people with additional details without events and submits a deletion request where necessary; it records the review interval in the deletion concept. See [`anonymization.py`](../../../src/core/retention/anonymization.py).
   Completed deletion, merge and downgrade requests expire after a configurable
   1095 days from completion. No legacy migration or cleanup is introduced.
 - Automatic and manual event deletion carry monthly counts in the same
@@ -58,4 +58,4 @@ from 2026-10-06 is superseded:
 <!-- translation-source: docs/adr/021-retention-modell.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-11 -->
-<!-- source-hash: 7825e53f6116346155200b6c2337d35c8295ef45 -->
+<!-- source-hash: eae124f9872592f3e071bd85662ea76b671b6597 -->

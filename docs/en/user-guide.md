@@ -1128,8 +1128,7 @@ period (shortens only)** cannot replace approval.
 The run creates the proposal. The facility must designate a person with deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role; the “Approvers” compliance card shows whether it is assigned.
 
 Downgrading additional details to pseudonym only with existing events also
-requires a request and another person with that permission. Without events the
-run anonymizes after the pseudonym-only inactivity period from last update.
+requires a request and another person with that permission. Without events, the `retention_identified_days` inactivity period applies only to pseudonym-only people without open cases. The anchor is the latest person change (`updated_at`), substantive case activity (`last_activity_at`), task change or attachment change on the person or case (creation, replacement or removal). People with additional details without events are excluded from automatic anonymization; the proposal path currently supports only events, and automatic retention enforcement for these people is missing. Pseudonym-only people without events but with an open case are excluded from the inactivity path. The facility regularly reviews people with additional details without events and submits a deletion request where necessary; it records the review interval in the deletion concept. See [`anonymization.py`](../../src/core/retention/anonymization.py).
 Holds and Art. 18 defer retention deletion, anonymization and history redaction.
 Person records and trash show pending history versions after anonymization;
 regular redaction happens in the nightly run. Completed deletion, merge and
@@ -1141,4 +1140,4 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-11 -->
-<!-- source-hash: 97f46239b881a0af77aefaf7a7ba4dc7b7ecf2dc -->
+<!-- source-hash: f53932e2c016b107949fac861575bf041ce2a7ae -->
