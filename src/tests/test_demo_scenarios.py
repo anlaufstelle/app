@@ -516,15 +516,17 @@ class TestStaleRequestAfterSwitch:
 
 
 class TestDemoOfflineBootstrap:
-    @pytest.mark.parametrize("role", TEAM_ROLES)
-    @pytest.mark.parametrize("scenario_key", ["kontaktladen", "solo"])
+    # Only the roles each scenario offers; a skip here would be unapproved in public runs.
+    @pytest.mark.parametrize(
+        ("scenario_key", "role"),
+        [("kontaktladen", role) for role in TEAM_ROLES] + [("solo", role) for role in SOLO_ROLES],
+    )
     def test_start_renders_one_time_password_data_after_clear_site_data(
         self, client, demo_mode, patched_catalog, kontaktladen_staff, solo_staff, role, scenario_key
     ):
         user = kontaktladen_staff if scenario_key == "kontaktladen" else solo_staff
         scenario = next(item for item in patched_catalog if item.key == scenario_key)
-        if role not in scenario.demo_roles:
-            pytest.skip("Role is not available in this scenario")
+        assert role in scenario.demo_roles
         user.role = role
         user.set_password(DEMO_PASSWORD)
         user.save()

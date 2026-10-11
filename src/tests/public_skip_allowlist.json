@@ -875,6 +875,55 @@
     "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
   },
   {
+    "nodeid": "src/tests/test_audit_anchor_volume.py::test_anchor_volume_is_read_only_for_web_and_writable_only_for_maintenance[barbara]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/barbara/docker-compose.barbara.yml not in the public snapshot — dev repo only",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_audit_anchor_volume.py::test_anchor_volume_is_read_only_for_web_and_writable_only_for_maintenance[demo]",
+    "profile": "public",
+    "reason": "docker-compose.demo.yml not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.demo.yml",
+    "rationale": "The release strip list excludes docker-compose.demo.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_audit_anchor_volume.py::test_anchor_volume_is_read_only_for_web_and_writable_only_for_maintenance[dev]",
+    "profile": "public",
+    "reason": "docker-compose.dev.yml not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.dev.yml",
+    "rationale": "The release strip list excludes docker-compose.dev.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_audit_anchor_volume.py::test_anchor_volume_is_read_only_for_web_and_writable_only_for_maintenance[staging]",
+    "profile": "public",
+    "reason": "docker-compose.staging.yml not in the public snapshot — dev repo only",
+    "exclusion": "docker-compose.staging.yml",
+    "rationale": "The release strip list excludes docker-compose.staging.yml; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_audit_media_upgrade_docs.py::test_active_deployment_docs_use_current_media_root[dev-ops/deploy/barbara/.env.barbara.example]",
+    "profile": "public",
+    "reason": "dev-ops/deploy/barbara/.env.barbara.example not in the public snapshot (docs/dev/, dev-ops/ stripped)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_audit_media_upgrade_docs.py::test_active_deployment_docs_use_current_media_root[docs/dev/dev-deployment.md]",
+    "profile": "public",
+    "reason": "docs/dev/dev-deployment.md not in the public snapshot (docs/dev/, dev-ops/ stripped)",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_audit_media_upgrade_docs.py::test_auth_hand_check_is_in_actual_unreleased_section",
+    "profile": "public",
+    "reason": "docs/dev/hand-checks.md not in the public snapshot — dev repo only",
+    "exclusion": "docs/dev",
+    "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
+  },
+  {
     "nodeid": "src/tests/test_check_dco.py::test_accepts_signed_commits_and_ignores_merge_commit",
     "profile": "public",
     "reason": "scripts/dev/ nicht im Public-Snapshot — Test nur im Dev-Repo relevant",
@@ -1248,7 +1297,7 @@
   {
     "nodeid": "src/tests/test_demo_gate.py::test_release_checklist_requires_demo_before_release_and_in_evidence",
     "profile": "public",
-    "reason": "Dev documentation is absent from public snapshots",
+    "reason": "docs/dev/release-checklist.md not in the public snapshot — guard only relevant in the dev repo",
     "exclusion": "docs/dev",
     "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
   },
