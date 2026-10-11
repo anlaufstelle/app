@@ -99,6 +99,10 @@
     let cachedKey = null;
     let cachedLifetime = null;
     let keyGeneration = 0; // Invalidates pending key writes and memory hydration on clear (#2528).
+    // A synchronous lower bound: a later marker read may update future attempts
+    // only. Before initialization, assume no revocation and fail closed if the
+    // persisted marker differs; never adopt that newer value for an old attempt.
+    let knownRevocation = 0;
     let initialLoad = null; // Promise<void> that resolves once cachedKey reflects IndexedDB
     let lastActivityWrite = 0; // in-memory throttle marker for _touchActivity
 
@@ -190,21 +194,37 @@
         });
     }
 
+    function _noSessionKeyError() {
+        const error = new Error("NoSessionKey");
+        error.name = "NoSessionKeyError";
+        return error;
+    }
+
     function _assertKeyGeneration(generation) {
-        if (generation !== keyGeneration) {
-            const err = new Error("NoSessionKey");
-            err.name = "NoSessionKeyError";
-            throw err;
+        if (generation !== keyGeneration) throw _noSessionKeyError();
+    }
+
+    function _observeRevocation(row) {
+        const current = row ? row.generation : 0;
+        if (Number.isSafeInteger(current)) {
+            knownRevocation = Math.max(knownRevocation, current);
         }
+        return current;
     }
 
     // Capture before the first async step of login/demo, not after the salt
     // response. The persistent marker also invalidates work in other tabs.
     function beginKeyDerivation() {
+        const revocation = knownRevocation;
         return {
             generation: keyGeneration,
             revocation: _idbGet(REVOCATION_KEY).then(
-                function (row) { return { value: row ? row.generation : 0 }; },
+                function (row) {
+                    const current = _observeRevocation(row);
+                    return current === revocation
+                        ? { value: revocation }
+                        : { error: _noSessionKeyError() };
+                },
                 function (error) { return { error }; }
             ),
         };
@@ -224,10 +244,9 @@
                     // Check and write atomically against deletion in any tab.
                     const req = store.get(REVOCATION_KEY);
                     req.onsuccess = function () {
-                        const current = req.result ? req.result.generation : 0;
+                        const current = _observeRevocation(req.result);
                         if (current !== revocation || generation !== keyGeneration) {
-                            failure = new Error("NoSessionKey");
-                            failure.name = "NoSessionKeyError";
+                            failure = _noSessionKeyError();
                             tx.abort();
                             return;
                         }
@@ -253,18 +272,21 @@
             return new Promise(function (resolve, reject) {
                 const tx = db.transaction(META_TABLE, "readwrite");
                 const store = tx.objectStore(META_TABLE);
+                let revokedGeneration;
                 store.delete(key);
                 if (revoke) {
                     const req = store.get(REVOCATION_KEY);
                     req.onsuccess = function () {
+                        revokedGeneration = (req.result ? req.result.generation : 0) + 1;
                         store.put({
                             key: REVOCATION_KEY,
-                            generation: (req.result ? req.result.generation : 0) + 1,
+                            generation: revokedGeneration,
                         });
                     };
                 }
                 tx.oncomplete = function () {
                     db.close();
+                    if (revoke) _observeRevocation({ generation: revokedGeneration });
                     resolve();
                 };
                 tx.onerror = tx.onabort = function () {
@@ -477,6 +499,7 @@
     async function _applyKeyCleared() {
         const generation = keyGeneration;
         try {
+            await _idbGet(REVOCATION_KEY).then(_observeRevocation);
             const row = await _idbGet(KEY_NAME);
             if (generation !== keyGeneration) return;
             if (row && row.cryptoKey && _keyLifetimeValid(row, Date.now())) {
@@ -623,7 +646,10 @@
     // contents once the page has finished its first tick. _loadKey() also
     // runs the idle gate, so an expired install is wiped on boot (#1065).
     if (typeof window !== "undefined" && "indexedDB" in window) {
-        initialLoad = _loadKey().catch(function () {
+        initialLoad = Promise.all([
+            _idbGet(REVOCATION_KEY).then(_observeRevocation),
+            _loadKey(),
+        ]).catch(function () {
             // Ignore — caller will retry via encrypt/decrypt
         });
 
@@ -699,7 +725,11 @@
         }
         const marker = await attempt.revocation;
         _assertKeyGeneration(generation);
-        if (marker.error) throw marker.error;
+        if (marker.error) {
+            cachedKey = null;
+            cachedLifetime = null;
+            throw marker.error;
+        }
         const createdAt = Date.now();
         const expiresAt = createdAt + _keyMaxAgeMs();
         const salt = b64UrlToBytes(saltB64Url);

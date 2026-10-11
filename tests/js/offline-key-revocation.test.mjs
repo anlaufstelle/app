@@ -16,7 +16,7 @@ function deferred() {
     return { promise, resolve };
 }
 
-async function newTab(indexedDB, mode) {
+async function newTab(indexedDB, mode, waitUntilReady = true) {
     const errorNode = { hidden: true };
     const demoNode = { getAttribute: () => PASSWORD, removeAttribute() {} };
     let submit;
@@ -50,9 +50,9 @@ async function newTab(indexedDB, mode) {
     });
     runInContext(cryptoSource, context);
     const session = window.crypto_session;
-    await session.ready();
+    if (waitUntilReady) await session.ready();
     return {
-        window, session, subtle, fetch, form, errorNode,
+        window, session, subtle, fetch, form, errorNode, context,
         bootstrap() {
             runInContext(bootstrapSource, context);
             if (mode === "login") return submit({ preventDefault() {} });
@@ -103,6 +103,117 @@ describe("pending derivation across tabs", () => {
         await b.session.deriveSessionKey(PASSWORD, SALT);
         expect(b.session.hasSessionKey()).toBe(true);
         expect(await a.session.hasPersistedSessionKey()).toBe(true);
+    });
+});
+
+function pauseDatabaseOpens(indexedDB) {
+    const paused = deferred();
+    const callbacks = [];
+    let holding = true;
+    return {
+        database: {
+            open(...args) {
+                const request = indexedDB.open(...args);
+                if (holding) {
+                    Object.defineProperty(request, "onsuccess", {
+                        set(handler) {
+                            request.addEventListener("success", (event) => {
+                                if (holding) {
+                                    callbacks.push(() => handler.call(request, event));
+                                    paused.resolve();
+                                } else handler.call(request, event);
+                            }, { once: true });
+                        },
+                    });
+                }
+                return request;
+            },
+        },
+        paused: paused.promise,
+        resume() {
+            holding = false;
+            for (const callback of callbacks.splice(0)) callback();
+        },
+    };
+}
+
+describe("revocation snapshot before database initialization", () => {
+    it.each(["direct", "demo", "login"])("rejects an old %s attempt when its first marker open resumes after remote clear", async (mode) => {
+        const database = new IDBFactory();
+        const clearing = await newTab(database);
+        await clearing.session.deriveSessionKey(PASSWORD, SALT);
+        const tab = await newTab(database, mode);
+        const delayed = pauseDatabaseOpens(database);
+        tab.context.indexedDB = delayed.database;
+        const saltResponse = deferred();
+        tab.fetch.mockImplementation(async (url) => {
+            if (url === "/login/") return { status: 302 };
+            if (url === "/") return { ok: true, text: async () => '<meta name="csrf-token" content="fresh">' };
+            if (url === "/auth/offline-key-salt/") return saltResponse.promise;
+            throw new Error("Unexpected URL");
+        });
+        const pending = mode === "direct"
+            ? tab.session.deriveSessionKey(PASSWORD, SALT).then(() => "derived", (error) => error.name)
+            : tab.bootstrap();
+        await delayed.paused;
+        if (mode !== "direct") {
+            await vi.waitFor(() => expect(tab.fetch.mock.calls.some(([url]) => url === "/auth/offline-key-salt/")).toBe(true));
+        }
+        expect(await clearing.session.clearSessionKey()).toEqual({ persisted: true });
+        expect(await clearing.session.hasPersistedSessionKey()).toBe(false);
+        // No broadcast is delivered to the tab whose first marker read is paused.
+        delayed.resume();
+        saltResponse.resolve({ ok: true, json: async () => ({ salt: SALT, offline_key_max_age: 3600, home_url: "/" }) });
+        if (mode === "direct") expect(await pending).toBe("NoSessionKeyError");
+        else if (pending) await pending;
+        else await vi.waitFor(() => {
+            expect(!tab.errorNode.hidden || tab.window.offlineStore.revalidateCachedFacility.mock.calls.length > 0).toBe(true);
+        });
+        expect(tab.session.hasSessionKey()).toBe(false);
+        expect(await clearing.session.hasPersistedSessionKey()).toBe(false);
+        expect(tab.window.offlineStore.revalidateCachedFacility).not.toHaveBeenCalled();
+        expect(tab.form.submit).not.toHaveBeenCalled();
+        expect(tab.window.location.href).toBeUndefined();
+        if (mode === "demo") expect(tab.errorNode.hidden).toBe(false);
+        // Only a new deliberate attempt may use the newly observed revocation.
+        await tab.session.deriveSessionKey(PASSWORD, SALT);
+        expect(tab.session.hasSessionKey()).toBe(true);
+        expect(await clearing.session.hasPersistedSessionKey()).toBe(true);
+    });
+
+    it.each(["direct", "demo"])("rejects %s started during cold initialization rather than adopting a later snapshot", async (mode) => {
+        const database = new IDBFactory();
+        const clearing = await newTab(database);
+        await clearing.session.deriveSessionKey(PASSWORD, SALT);
+        const delayed = pauseDatabaseOpens(database);
+        const tab = await newTab(delayed.database, mode, false);
+        tab.fetch.mockResolvedValue({ ok: true, json: async () => ({ salt: SALT, offline_key_max_age: 3600, home_url: "/" }) });
+        const pending = mode === "direct"
+            ? tab.session.deriveSessionKey(PASSWORD, SALT).then(() => "derived", (error) => error.name)
+            : tab.bootstrap();
+        await delayed.paused;
+        expect(await clearing.session.clearSessionKey()).toEqual({ persisted: true });
+        expect(await clearing.session.hasPersistedSessionKey()).toBe(false);
+        delayed.resume();
+        await tab.session.ready();
+        if (pending) expect(await pending).toBe("NoSessionKeyError");
+        else await vi.waitFor(() => {
+            expect(!tab.errorNode.hidden || tab.window.offlineStore.revalidateCachedFacility.mock.calls.length > 0).toBe(true);
+        });
+        expect(tab.session.hasSessionKey()).toBe(false);
+        expect(await clearing.session.hasPersistedSessionKey()).toBe(false);
+        expect(tab.window.offlineStore.revalidateCachedFacility).not.toHaveBeenCalled();
+        await tab.session.deriveSessionKey(PASSWORD, SALT);
+        expect(tab.session.hasSessionKey()).toBe(true);
+    });
+
+    it("bootstraps a cold profile with no prior revocation", async () => {
+        const tab = await newTab(new IDBFactory(), "demo", false);
+        tab.fetch.mockResolvedValue({ ok: true, json: async () => ({ salt: SALT, offline_key_max_age: 3600, home_url: "/" }) });
+        tab.bootstrap();
+        await vi.waitFor(() => expect(tab.window.offlineStore.revalidateCachedFacility).toHaveBeenCalledOnce());
+        expect(tab.session.hasSessionKey()).toBe(true);
+        expect(tab.errorNode.hidden).toBe(true);
     });
 });
 
