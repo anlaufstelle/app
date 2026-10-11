@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Erforderliche Betreiber-Aktionen
 
+- **Ältere Feldwerte und Historien nachverschlüsseln** (#2520, #2525) — Nach dem Update mit der Datenbank-Adminrolle (RLS-Bypass) zuerst `python manage.py reencrypt_fields --dry-run`, dann `python manage.py reencrypt_fields` ausführen, damit ältere Historienfassungen und Altwerte nach der aktuellen Feldkonfiguration verschlüsselt werden; übersprungene Zeilen erfordern einen erneuten Lauf ([Admin-Anleitung zur Schlüsselrotation](docs/admin-guide.md)).
+
+- **Suchindex nach dem Update neu aufbauen** (#2525) — Mit der Datenbank-Adminrolle (RLS-Bypass) zuerst `python manage.py rebuild_search_text --dry-run`, dann `python manage.py rebuild_search_text` ausführen, damit der Bestandsindex nur unverschlüsselte, wirksam normale Ereignisfelder enthält; optional begrenzt `--facility <UUID>` beide Aufrufe auf eine Einrichtung.
+
 - **Aufbewahrung des System-Audits prüfen** (#2524) — Vor dem ersten Aufbewahrungslauf die installationsweite Frist `AUDITLOG_SYSTEM_RETENTION_MONTHS` in der `.env` prüfen (Standard 24 Kalendermonate, `0` deaktiviert die Bereinigung), im Löschkonzept festhalten und die aktualisierten Compose-Dateien für Web- und Wartungsdienste übernehmen; Audit-Einträge ohne Einrichtung werden nur ohne `--facility` bereinigt, ausgenommene Nachweise bleiben erhalten ([Admin-Anleitung § 7.3](docs/admin-guide.md#73-löschfristen-und-enforce_retention)).
 
 - **Backup-Codes erneuern und Off-Site-Ablauf einrichten** (#2529) — Mit gültigem TOTP neue Backup-Codes erzeugen und sicher speichern (bisherige Codes und Codes vor einer `DJANGO_SECRET_KEY`-Rotation sind ungültig; ohne nutzbaren Faktor Admin-Reset); am Off-Site-Ziel einen Lifecycle mit höchstens 12 Monaten einschließlich Versionen/Snapshots einrichten, Frist im Löschkonzept und in den Informationspflichten dokumentieren und tatsächlichen Ablauf prüfen, ohne dem App-Host Löschrechte zu geben.
