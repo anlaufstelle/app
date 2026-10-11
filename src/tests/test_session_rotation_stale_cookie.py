@@ -6,13 +6,9 @@ example a service-worker precache fetch started before the rotating POST —
 reaches the app after the row is gone. These tests pin down what such a
 request gets back through the real middleware stack.
 
-Current behaviour (documented here, not endorsed): Django's
-``SessionMiddleware.process_response`` sees a session cookie in the request
-and an empty session, so it answers with ``Set-Cookie: sessionid=""`` and an
-expiry in 1970. A browser shares one cookie jar between the page and the
-service worker; if that answer is applied AFTER the rotation response, it
-deletes the NEW cookie and the user is signed out although the new session
-row still exists.
+A stale response must leave the cookie untouched. A browser shares one cookie
+jar between the page and the service worker; applying either response first
+must preserve the rotated session and keep the user signed in.
 
 The security side holds either way: the old cookie never inherits the raised
 privilege (A9) — the stale request is anonymous.
@@ -50,12 +46,9 @@ def _stale_client(old_key: str) -> Client:
     return stale
 
 
-def _assert_deletes_session_cookie(response) -> None:
-    morsel = response.cookies.get(COOKIE)
-    assert morsel is not None, "stale response carries no session cookie header"
-    assert morsel.value == ""
-    assert str(morsel["max-age"]) == "0"
-    assert morsel["expires"] == "Thu, 01 Jan 1970 00:00:00 GMT"
+def _assert_preserves_session_cookie(response) -> None:
+    assert COOKIE not in response.cookies, "a stale response must not overwrite the rotated cookie"
+    assert "Cookie" in response.get("Vary", "")
 
 
 def _session_exists(key: str) -> bool:
@@ -92,12 +85,12 @@ def _confirm_mfa_setup(client, staff_user):
 @pytest.mark.django_db
 class TestStaleCookieAfterSudoGrant:
     @pytest.mark.parametrize(("path", "headers"), STALE_REQUESTS)
-    def test_stale_request_answers_with_session_cookie_deletion(self, client, admin_user, path, headers):
+    def test_stale_request_preserves_session_cookie(self, client, admin_user, path, headers):
         old_key, new_key, _ = _grant_sudo(client, admin_user)
 
         stale_response = _stale_client(old_key).get(path, **headers)
 
-        _assert_deletes_session_cookie(stale_response)
+        _assert_preserves_session_cookie(stale_response)
         # The rotated session is untouched on the server side.
         assert _session_exists(new_key)
         assert not _session_exists(old_key)
@@ -110,9 +103,12 @@ class TestStaleCookieAfterSudoGrant:
 
         assert response.status_code == 302
         assert response.url.startswith("/login/")
-        assert SUDO_SESSION_KEY not in stale.session
+        assert response.wsgi_request.user.is_anonymous
+        assert SUDO_SESSION_KEY not in response.wsgi_request.session
+        assert "mfa_verified" not in response.wsgi_request.session
+        assert "_auth_user_id" not in response.wsgi_request.session
 
-    def test_deletion_applied_after_rotation_signs_browser_out(self, client, admin_user):
+    def test_stale_response_applied_after_rotation_keeps_browser_signed_in(self, client, admin_user):
         old_key, new_key, _ = _grant_sudo(client, admin_user)
         stale_response = _stale_client(old_key).get("/manifest.json")
 
@@ -120,11 +116,11 @@ class TestStaleCookieAfterSudoGrant:
         client.cookies.update(stale_response.cookies)
         response = client.get("/clients/")
 
-        assert response.status_code == 302
-        assert response.url.startswith("/login/")
+        assert response.status_code == 200
+        assert client.cookies[COOKIE].value == new_key
         assert _session_exists(new_key), "the server never ended the rotated session"
 
-    def test_deletion_applied_before_rotation_keeps_browser_signed_in(self, client, admin_user):
+    def test_stale_response_applied_before_rotation_keeps_browser_signed_in(self, client, admin_user):
         old_key, _, rotation_response = _grant_sudo(client, admin_user)
         stale_response = _stale_client(old_key).get("/manifest.json")
 
@@ -138,21 +134,36 @@ class TestStaleCookieAfterSudoGrant:
 @pytest.mark.django_db
 class TestStaleCookieAfterMfaSetupCompletion:
     @pytest.mark.parametrize(("path", "headers"), STALE_REQUESTS)
-    def test_stale_request_answers_with_session_cookie_deletion(self, client, staff_user, path, headers):
+    def test_stale_request_preserves_session_cookie(self, client, staff_user, path, headers):
         old_key, new_key, _ = _confirm_mfa_setup(client, staff_user)
 
         stale_response = _stale_client(old_key).get(path, **headers)
 
-        _assert_deletes_session_cookie(stale_response)
+        _assert_preserves_session_cookie(stale_response)
         assert _session_exists(new_key)
 
-    def test_deletion_applied_after_rotation_signs_browser_out(self, client, staff_user):
-        old_key, new_key, _ = _confirm_mfa_setup(client, staff_user)
+    @pytest.mark.parametrize("stale_response_last", [False, True])
+    def test_response_order_keeps_browser_signed_in(self, client, staff_user, stale_response_last):
+        old_key, new_key, rotation_response = _confirm_mfa_setup(client, staff_user)
         stale_response = _stale_client(old_key).get("/offline/")
 
-        client.cookies.update(stale_response.cookies)
+        responses = [rotation_response, stale_response] if stale_response_last else [stale_response, rotation_response]
+        for pending_response in responses:
+            client.cookies.update(pending_response.cookies)
         response = client.get("/")
+
+        assert response.status_code == 200
+        assert client.cookies[COOKIE].value == new_key
+        assert _session_exists(new_key)
+
+    def test_stale_request_stays_anonymous(self, client, staff_user):
+        old_key, _, _ = _confirm_mfa_setup(client, staff_user)
+
+        response = _stale_client(old_key).get("/")
 
         assert response.status_code == 302
         assert response.url.startswith("/login/")
-        assert _session_exists(new_key)
+        assert response.wsgi_request.user.is_anonymous
+        assert SUDO_SESSION_KEY not in response.wsgi_request.session
+        assert "mfa_verified" not in response.wsgi_request.session
+        assert "_auth_user_id" not in response.wsgi_request.session
