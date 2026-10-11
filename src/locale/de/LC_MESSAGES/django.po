@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-11 11:59+0200\n"
+"POT-Creation-Date: 2026-10-11 12:30+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -9428,14 +9428,6 @@ msgstr ""
 "Berichte rechnen, was ein einzelner Bericht unterdrückt hätte — auch dann, "
 "wenn in keinem der beiden etwas unterdrückt wurde."
 
-#: src/templates/core/statistics/report_releases.html:38
-msgid ""
-"Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen "
-"sind. Identische Zeiträume sind unkritisch und werden nicht gemeldet."
-msgstr ""
-"Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen "
-"sind. Identische Zeiträume sind unkritisch und werden nicht gemeldet."
-
 #: src/templates/core/statistics/report_releases.html:47
 msgid "Herausgegeben am"
 msgstr "Herausgegeben am"
@@ -14403,10 +14395,6 @@ msgstr "Jeder Download wird protokolliert und erscheint unter „Freigaben“. T
 msgid "Quelle je Format"
 msgstr "Quelle je Format"
 
-#: src/templates/core/statistics/report_releases.html:94
-msgid "Die Anzeige ist auf Seiten aufgeteilt. Überschneidungen werden mit allen protokollierten Herausgaben desselben Berichts geprüft, deren Berichtszeitraum die angezeigte Herausgabe berührt."
-msgstr "Die Anzeige ist auf Seiten aufgeteilt. Überschneidungen werden mit allen protokollierten Herausgaben desselben Berichts geprüft, deren Berichtszeitraum die angezeigte Herausgabe berührt."
-
 #: src/templates/core/system/compliance.html:87
 msgid "Quelle: <code>core/services/compliance/</code>. Aktualisierung bei jedem Reload — kein Caching im MVP."
 msgstr "Quelle: <code>core/services/compliance/</code>. Aktualisierung bei jedem Reload — kein Caching im MVP."
@@ -14457,3 +14445,11 @@ msgstr "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit 
 #: src/core/models/settings.py:221
 msgid "Wenn aktiv, werden Löschvorschläge nach Überschreiten der maximalen Zurückstellungszahl automatisch freigegeben, statt manuelle Entscheidung zu erzwingen."
 msgstr "Wenn aktiv, werden Löschvorschläge nach Überschreiten der maximalen Zurückstellungszahl automatisch freigegeben, statt manuelle Entscheidung zu erzwingen."
+
+#: src/templates/core/statistics/report_releases.html:36
+msgid "Prüfen Sie, ob die Berichte zusammengeführt werden können. Bei verschiedenen Berichten mit gemeinsamer Dimension werden auch identische Zeiträume gemeldet."
+msgstr "Prüfen Sie, ob die Berichte zusammengeführt werden können. Bei verschiedenen Berichten mit gemeinsamer Dimension werden auch identische Zeiträume gemeldet."
+
+#: src/templates/core/statistics/report_releases.html:92
+msgid "Die Anzeige ist auf Seiten aufgeteilt. Überschneidungen werden mit allen protokollierten Herausgaben desselben Berichts oder derselben Artefaktfamilie geprüft. Zur Ereignisfamilie gehören auch Beispiel-, Sach-, Summen- und Teilpopulationsberichte. Allgemeine Kennzahlen und Personen-Kennzahlen teilen zusätzlich die Personendimension. Diese Beziehungen setzen unterschiedliche Grundgesamtheiten oder Einheiten nicht gleich."
+msgstr "Die Anzeige ist auf Seiten aufgeteilt. Überschneidungen werden mit allen protokollierten Herausgaben desselben Berichts oder derselben Artefaktfamilie geprüft. Zur Ereignisfamilie gehören auch Beispiel-, Sach-, Summen- und Teilpopulationsberichte. Allgemeine Kennzahlen und Personen-Kennzahlen teilen zusätzlich die Personendimension. Diese Beziehungen setzen unterschiedliche Grundgesamtheiten oder Einheiten nicht gleich."
