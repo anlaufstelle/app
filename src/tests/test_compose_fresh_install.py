@@ -161,7 +161,13 @@ def test_every_compose_file_with_a_clamav_service_is_covered() -> None:
     } <= set(CLAMAV_COMPOSE_FILES)
 
 
-@pytest.mark.parametrize("name", CLAMAV_COMPOSE_FILES)
+@pytest.mark.parametrize(
+    "name",
+    CLAMAV_COMPOSE_FILES
+    # An empty list would fail at collection (``empty_parameter_set_mark``) and
+    # abort mutation runs, whose tree carries no compose files.
+    or [pytest.param(None, marks=pytest.mark.skip(reason="no compose files in this tree"))],
+)
 def test_clamav_service_reaches_update_servers_in_every_compose_file(name: str) -> None:
     assert _clamav_egress_violations(_load(REPO_ROOT / name)) == []
 
