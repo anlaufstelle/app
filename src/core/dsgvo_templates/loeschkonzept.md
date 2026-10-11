@@ -31,7 +31,7 @@ jeder Änderung ihrer Einstellungen oder Backup-Rotation.
 | Abgeschlossene Lösch-, Zusammenführungs- und Herabstufungsanträge | {{ deletion_request_retention_days }} Tage ab Abschluss | `deletion_request_retention_days` | Harte Löschung; offene Anträge bleiben, Audit folgt seiner eigenen Frist |
 | Monatliche Statistik-Aggregate | unbefristet | — | Bleiben bestehen: Der Aufbewahrungslauf rechnet die Zählwerte jedes gelöschten Ereignisses zusammen mit dessen Löschung dem Aggregat seines Monats hinzu, auch im laufenden Monat; spätere Neuberechnungen behalten sie (siehe § 3.5) |
 | Backup-Sicherungsstände | {{ backup_retention_days }} Tage (Altersgrenze, keine Höchstfrist) | Längste lokale Rotation im ausgelieferten `backup.sh` | Die Rotation entfernt ein lokales verschlüsseltes Archiv beim ersten erfolgreichen Lauf von `backup.sh`, in dem es mindestens 8 (täglich), 29 (wöchentlich) bzw. 91 volle Tage (monatlich) alt ist; keine feste Höchstfrist. Die Rotation ist ausgesetzt, solange der Off-Site-Abgleich fehlschlägt |
-| Off-Site-Kopien der Sicherungsstände | [eintragen] | Aufbewahrungsregel am Off-Site-Ziel (von der Einrichtung festzulegen) | `backup.sh` löscht am Off-Site-Ziel nichts; Kopien bleiben bis zur Löschung durch die Regel am Ziel bestehen |
+| Off-Site-Kopien der Sicherungsstände | [eintragen], höchstens 12 Monate ab Erstellung des Sicherungsstands | Aufbewahrungsregel am Off-Site-Ziel (von der Einrichtung festzulegen und nachzuweisen), mit einer Höchstfrist von 12 Monaten einschließlich Versionen und Snapshots | `backup.sh` löscht am Off-Site-Ziel nichts; Kopien bleiben bis zur Löschung durch die Regel am Ziel bestehen |
 
 Die Werte stammen beim Erzeugen dieses Dokuments aus den Einstellungen der
 Einrichtung. Der Backup-Wert ist die Altersgrenze der längsten lokalen
@@ -43,7 +43,7 @@ Weicht die betriebliche Rotation davon ab, muss die Einrichtung den Wert im
 freigegebenen Löschkonzept organisatorisch anpassen. Die Frist der
 Off-Site-Kopien trägt die Einrichtung selbst ein: `backup.sh` überträgt
 Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
-älteren Stände.
+älteren Stände. Die Einrichtung richtet am Ziel eine Höchstfrist von 12 Monaten ab Erstellung des Sicherungsstands einschließlich Versionen und Snapshots ein, dokumentiert die konkrete Frist hier und in den Informationspflichten und weist den tatsächlichen Ablauf nach. Der App-Host erhält keine Löschrechte am Off-Site-Ziel.
 
 ## 3. Technische Löschregeln
 

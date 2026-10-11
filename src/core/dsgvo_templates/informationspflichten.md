@@ -96,6 +96,8 @@ Ohne Kontakt gilt die Inaktivitätsfrist von {{ retention_identified_days }} Tag
 die automatische Löschung, Anonymisierung und Historien-Redaktion zurück.
 Frühere Historienfassungen werden regulär im Nachtlauf redigiert; offene
 Fassungen bleiben im Personenstatus als zurückgestellt sichtbar.
+In Off-Site-Sicherungen können gelöschte Daten bis zum tatsächlichen Ablauf der Sicherung erhalten bleiben. Die Einrichtung legt am Ziel eine Höchstfrist von 12 Monaten ab Erstellung des Sicherungsstands einschließlich Versionen und Snapshots fest und weist den Ablauf nach. Die konkret eingerichtete Frist beträgt [Off-Site-Aufbewahrungsfrist eintragen] (höchstens 12 Monate). `backup.sh` löscht am Off-Site-Ziel nichts; der App-Host erhält dort keine Löschrechte.
+
 Statistische Zählwerte ohne Bezug zu Ihrer Person bleiben erhalten. Die
 Monatsaggregate haben keine Frist. Abgeschlossene
 Löschanträge verfallen nach {{ deletion_request_retention_days }} Tagen; Audit

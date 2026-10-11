@@ -145,7 +145,7 @@ berücksichtigen.
 - [x] Betriebsskripte für konsistente Backups von Datenbank und Medien unter einer PostgreSQL-Administrationsrolle, die FORCE RLS vollständig sichern kann
 - [x] Datenbank- und Medienarchive werden mit AES-256-CBC/PBKDF2 verschlüsselt und durch ein getrenntes HMAC-SHA256-Sidecar vor Manipulation geschützt; Restore und Verifikation prüfen das HMAC vor der Entschlüsselung
 - [x] Lokale Rotation in tägliche, wöchentliche und monatliche Sicherungsstände: `backup.sh` entfernt einen Stand beim nächsten erfolgreichen Lauf, sobald er ein Alter von mindestens 8/29/91 vollen Tagen erreicht hat (Altersgrenze, keine feste Höchstfrist); nach einem fehlgeschlagenen Off-Site-Abgleich setzt `backup.sh` die lokale Rotation bis zum nächsten erfolgreichen Abgleich aus
-- [ ] Aufbewahrungsregel am Off-Site-Ziel festgelegt und eingerichtet — Off-Site-Kopien löscht `backup.sh` nicht
+- [ ] Aufbewahrungsregel am Off-Site-Ziel mit einer Höchstfrist von 12 Monaten ab Erstellung des Sicherungsstands einschließlich Versionen und Snapshots festgelegt und eingerichtet, im Löschkonzept und in den Informationspflichten dokumentiert und tatsächlichen Ablauf nachgewiesen — Off-Site-Kopien löscht `backup.sh` nicht; der App-Host erhält dort keine Löschrechte
 - [ ] Einrichtungsspezifische Zeitplanung, Offsite-Kopie und regelmäßige Restore-Übung dokumentiert und geprüft
 - [ ] Disaster-Recovery-Plan
 - [ ] Redundante Infrastruktur
