@@ -136,7 +136,9 @@ umgesetzt.
 Ereignisdatum, im offenen Fall ab letzter fachlicher Fallaktivität (Fallback
 Anlage). `document_type` ist die **Höchstfrist (verkürzt nur)**; der früheste
 Stichtag gewinnt. Der Standardlauf legt für „Mit Zusatzangaben“ Vorschläge an
-und löscht erst nach Freigabe durch eine andere Person mit „Löschbestätigung“.
+und löscht erst nach Freigabe durch eine Person mit „Löschbestätigung“.
+
+Den Vorschlag legt der Lauf an. Die Einrichtung benennt eine Person mit dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben; die Compliance-Karte „Genehmiger“ zeigt die Besetzung.
 Zurückstellen schützt bis zum Datum; Ablehnen erlaubt eine neue Vorlage erst
 nach der Wiedervorlagefrist. Auto-Freigabe ist Opt-in. Personen ohne Ereignis
 werden nach Inaktivitätsfrist ab letzter Änderung anonymisiert; mit Ereignissen

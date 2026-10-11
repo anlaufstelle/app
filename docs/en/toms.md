@@ -4,7 +4,11 @@ This excerpt translates the rotation and deletion approval items of the [German 
 
 Key rotation without data loss (MultiFernet) covers database fields (`reencrypt_fields`) and attachments (`reencrypt_files`). Remove old keys only after unfiltered primary-key verification (`reencrypt_files --verify`), resolving import/staging files outside its scope, and expiry of affected local/off-site backups. Restart processes and verify again without a facility filter. One ring serves the installation; there are no facility keys. The manifest records progress, not integrity. Follow [Ops Runbook § 9.5](ops-runbook.md#file-rotation-and-old-key-removal).
 
-Manual deletion requires a second authorized person for persons, and for events and cases at the qualified stage. The automatic retention run also requires approval by another person with deletion confirmation permission for qualified events as the default. The facility may explicitly enable auto-approval (opt-in, off by default): after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Active holds and Art. 18 restrictions still block this path. Immediate file erasure remains a single authorized decision, blocked by an active hold or Art. 18 restriction on the person.
+Manual deletion requires a second authorized person for persons, and for events and cases at the qualified stage.
+
+The automatic retention run requires approval by a person with deletion confirmation permission for qualified events as the default. The facility may explicitly enable auto-approval (opt-in, off by default): after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Active holds and Art. 18 restrictions still block this path. The run creates the proposal. The facility must designate a person with deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role; the “Approvers” compliance card shows whether it is assigned.
+
+Immediate file erasure remains a single authorized decision, blocked by an active hold or Art. 18 restriction on the person.
 
 ## Offline key persistence and revocation check
 
@@ -14,5 +18,5 @@ An HTTP/network/processing error fetching revocations (including 500/429), or an
 
 <!-- translation-source: src/core/dsgvo_templates/toms.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- source-hash: d045ce0a92a428b7a1240959564fbf24f726cb84 -->
+<!-- translation-date: 2026-10-11 -->
+<!-- source-hash: 255dd883ef4be56426b92c8077cbf5d62950776f -->

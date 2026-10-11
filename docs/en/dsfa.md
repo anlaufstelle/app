@@ -12,13 +12,15 @@ The German template now lists **eleven configurable retention periods**, populat
 
 | Item | Configuration | Current rule |
 |---|---|---|
-| 3 — Events with additional details | `retention_qualified_days` | From case closure; without a case, from the event date; in an open case, from the last professional case activity, falling back to case creation. A proposal and normally approval by another person with deletion confirmation permission precede deletion. |
+| 3 — Events with additional details | `retention_qualified_days` | From case closure; without a case, from the event date; in an open case, from the last professional case activity, falling back to case creation. A proposal and normally approval by a person with deletion confirmation permission precede deletion. |
 | 4 — Documentation-type maximum period | `DocumentType.retention_days` | An additional period from the event date can only shorten retention: whichever period expires first applies. A longer type period does not extend periods 1–3. |
 | 7 — Audit log | `auditlog_retention_months`; `auditlog_system_retention_months` | Entries without a facility follow the installation-wide period (0 disables deletion). Active legal holds protect audit targets with a facility. Security violations, system markers, evidence of released reporting periods and history-redaction evidence remain permanently. |
 | 8 — Earlier event-version contents | `eventhistory_detail_months` | Values are redacted; timestamp, actor and field names remain. The latest version of a live event keeps its values. Deleted events and events of anonymized people normally have all version values redacted by the next retention run regardless of this period. Holds and Art. 18 restrictions defer redaction. The run also skips events whose event or person row is locked by concurrent editing (`skip_locked`); a later run catches up once the protection or editing has ended. A value of 0 disables this period. |
 | 11 — Completed deletion, merge and contact-stage downgrade requests | `deletion_request_retention_days` | Hard deletion from completion; open requests remain. |
 
-The regular daily `enforce_retention` run automatically deletes anonymous and pseudonym-only events. Events with additional details receive proposals; normally another person with deletion confirmation permission must approve before deletion. A facility may explicitly enable auto-approval (opt-in, off by default): after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Holds and Art. 18 restrictions protect both paths.
+The regular daily `enforce_retention` run automatically deletes anonymous and pseudonym-only events. Events with additional details receive proposals; normally a person with deletion confirmation permission must approve before deletion. A facility may explicitly enable auto-approval (opt-in, off by default): after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Holds and Art. 18 restrictions protect both paths.
+
+The run creates the proposal. The facility must designate a person with deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role; the “Approvers” compliance card shows whether it is assigned.
 
 Deferral protects until its date. Rejection allows a new proposal no earlier than `retention_rejected_retry_days`; `--propose` additionally creates proposals for all strategies. After all events are deleted, the person is anonymized. Without events, automatic anonymization applies only to “Pseudonym only” persons without open cases, after the configured identified inactivity period from the latest person change, business case activity, task change or person/case attachment change (creation, replacement or removal). Eventless persons “With additional details” are excluded: the proposal and approval workflow supports events only, leaving no automatic deadline enforcement for these persons. Active holds and Art. 18 restrictions protect both paths.
 
@@ -36,5 +38,5 @@ PostgreSQL row-level security protects facility-bound sessions against cross-fac
 
 <!-- translation-source: src/core/dsgvo_templates/dsfa.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 2f1632ddc008f81a704952bce1fdfd49298698b1 -->
+<!-- translation-date: 2026-10-11 -->
+<!-- source-hash: dc95df01ecebffa694441a781d58cfdabe4b887c -->

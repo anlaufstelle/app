@@ -20,7 +20,7 @@ jeder Änderung ihrer Einstellungen oder Backup-Rotation.
 |----------------|-------|--------|--------------------|
 | Kontakte anonymer Personen | {{ retention_anonymous_days }} Tage | `retention_anonymous_days` | Ereignis wird soft-gelöscht (Frist ab dem Zeitpunkt des Ereignisses) |
 | Kontakte der Stufe „Nur Pseudonym" | {{ retention_identified_days }} Tage | `retention_identified_days` | Ereignis wird soft-gelöscht (Frist ab dem Zeitpunkt des jeweiligen Ereignisses; ein neuer Kontakt verlängert ältere Ereignisse nicht) |
-| Ereignisse der Stufe „Mit Zusatzangaben" | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Frist ab Fallabschluss, ohne Fall ab Ereignisdatum, im offenen Fall ab letzter fachlicher Fallaktivität (ersatzweise Anlage); Vorschlag und im Regelfall Freigabe durch eine andere Person mit „Löschbestätigung“ vor der Löschung |
+| Ereignisse der Stufe „Mit Zusatzangaben" | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Frist ab Fallabschluss, ohne Fall ab Ereignisdatum, im offenen Fall ab letzter fachlicher Fallaktivität (ersatzweise Anlage); Vorschlag und im Regelfall Freigabe durch eine Person mit „Löschbestätigung“ vor der Löschung |
 | Höchstfrist (verkürzt nur) einzelner Dokumentationstypen | {{ retention_document_type_overrides }} | `DocumentType.retention_days` | Zusätzliche Frist für Ereignisse dieses Typs (ab Zeitpunkt des Ereignisses): Es gilt die zuerst ablaufende Frist. Eine längere Typ-Frist verlängert die kontaktstufenbezogene Frist nicht |
 | Aktivitäten / Zeitstrom-Einträge | {{ retention_activities_days }} Tage | `retention_activities_days` | Harte Löschung |
 | Papierkorb für gelöschte Personen und Fälle | {{ client_trash_days }} Tage | `client_trash_days` | Automatische Anonymisierung; bis dahin Wiederherstellung möglich |
@@ -52,8 +52,10 @@ Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
 - Der tägliche Standardlauf (`enforce_retention`) löscht abgelaufene anonyme
   Ereignisse und Ereignisse der Stufe „Nur Pseudonym“ automatisch. Für „Mit
   Zusatzangaben“ legt er Vorschläge an; im Regelfall wird erst nach Freigabe durch
-  eine andere Person mit dem Recht „Löschbestätigung“. Auch eine Typ-Höchstfrist
+  eine Person mit dem Recht „Löschbestätigung“ gelöscht; den Vorschlag legt der Lauf an. Auch eine Typ-Höchstfrist
   umgeht diesen Freigabeschritt nicht.
+
+Den Vorschlag legt der Lauf an. Die Einrichtung benennt eine Person mit dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben; die Compliance-Karte „Genehmiger“ zeigt die Besetzung.
 - Zurückstellen schützt bis zum gesetzten Datum. Ablehnen löscht nichts;
   frühestens nach {{ retention_rejected_retry_days }} Tagen kann ein neuer
   Vorschlag entstehen.

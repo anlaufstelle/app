@@ -80,9 +80,11 @@ die Frist älterer Kontakte verschieben. Eine kürzere Typ-Höchstfrist ab dem
 jeweiligen Kontakt bleibt wirksam.
 
 Für die Stufe „Mit Zusatzangaben“ schlägt der tägliche Lauf eine Löschung vor.
-Im Regelfall gibt eine andere Person mit dem Recht „Löschbestätigung“ sie frei; auch eine
+Im Regelfall gibt eine Person mit dem Recht „Löschbestätigung“ sie frei; auch eine
 kürzere Typ-Frist ersetzt diese Freigabe nicht. Zurückstellen oder Ablehnen
 schützt vor der Löschung, bis der Vorschlag erneut geprüft wird.
+
+Den Vorschlag legt der Lauf an. Die Einrichtung benennt eine Person mit dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben; die Compliance-Karte „Genehmiger“ zeigt die Besetzung.
 
 Abweichend davon kann die Einrichtung die Auto-Freigabe ausdrücklich aktivieren (Opt-in, standardmäßig aus): Nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf den Vorschlag ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg.
 

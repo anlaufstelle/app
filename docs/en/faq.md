@@ -17,10 +17,12 @@ Search covers only **pseudonym and event search text**, from two characters onwa
 ### How do retention periods work?
 
 The regular daily `enforce_retention` run deletes anonymous and pseudonym-only
-events after expiry. Events with additional details receive proposals; another
+events after expiry. Events with additional details receive proposals; a
 person with deletion confirmation permission must approve deletion. Deferral
 protects until its date; rejection permits a new proposal no earlier than the
 retry interval (default 365 days). Automatic approval remains opt-in.
+
+The run creates the proposal. The facility must designate a person with deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role; the “Approvers” compliance card shows whether it is assigned.
 
 Without a case the period starts at the event date; in an open case at last
 substantive activity (fallback creation); in a closed case at closure. A document
@@ -82,5 +84,5 @@ Decision aid: [User Guide § 7 “The Three Tabs at a Glance”](https://github.
 
 <!-- translation-source: docs/faq.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 3aa2f7436b1b28450f01f39a6d036f480b8470ff -->
+<!-- translation-date: 2026-10-11 -->
+<!-- source-hash: 3e80a810b116641eef48e305f7f3da94319c1ea0 -->

@@ -70,7 +70,7 @@
 | Scope | Scope | Visibility boundary. Accessible data depends on facility, role and sensitivity. The contact stage affects permitted document types and deletion workflows. |
 | Sensitivität | Sensitivity | Classification of a document type or field regarding its protection level. Controls which roles may access field values. Configurable per document type and per field (`FieldTemplate.sensitivity`). Independent of field encryption (`is_encrypted`). |
 | Service Worker | Service worker | Browser script coordinating offline caching, queue replay, and PWA behavior. See `src/static/js/sw.js`. |
-| Soft-Delete-Strategie | Soft-delete strategy | Retention rules apply per event: `anonymous` and `identified` count from `occurred_at`; `qualified` counts from `occurred_at` without a case, from `closed_at` for a closed case, or from the last professional case activity for an open case (falling back to case creation, also when the closing timestamp is missing). A documentation-type period applies additionally; whichever expires first applies. The daily run deletes anonymous and pseudonym-only events automatically; qualified events receive proposals and require approval by another person with deletion confirmation permission before a later run deletes them. Auto-approval after repeated deferrals is opt-in and off by default. Active holds and Art. 18 restrictions block deletion. A person is anonymized once all their events are deleted; a person without events is anonymized after the pseudonym-only period from their last change. Holds and Art. 18 protect both paths. See [ADR-021](../adr/021-retention-modell.md). |
+| Soft-Delete-Strategie | Soft-delete strategy | Retention rules apply per event: `anonymous` and `identified` count from `occurred_at`; `qualified` counts from `occurred_at` without a case, from `closed_at` for a closed case, or from the last professional case activity for an open case (falling back to case creation, also when the closing timestamp is missing). A documentation-type period applies additionally; whichever expires first applies. The daily run deletes anonymous and pseudonym-only events automatically; qualified events receive proposals and require approval by a person with deletion confirmation permission before a later run deletes them. Auto-approval after repeated deferrals is opt-in and off by default. Active holds and Art. 18 restrictions block deletion. A person is anonymized once all their events are deleted; a person without events is anonymized after the pseudonym-only period from their last change. Holds and Art. 18 protect both paths. See [ADR-021](../adr/021-retention-modell.md). |
 | Speicherbegrenzung | Storage limitation | GDPR Art. 5(1)(e) principle: do not keep personal data longer than necessary for the purpose. Implemented via the retention model ([ADR-021](../adr/021-retention-modell.md)). |
 | TimeFilter | Time filter | Technical term for a named time filter. Belongs to a facility and defines a time window (start time, end time) with a label. |
 | Token-Einladung | Token invite | Token-based invitation flow: an administrator creates an account, the invited person receives an email with a one-time link and sets their own password. The link is valid for 3 days by default; configurable via `DJANGO_INVITE_TOKEN_TIMEOUT` (seconds). |
@@ -133,9 +133,11 @@ identified from the event date; qualified from case closure, without a case
 from the event date, in an open case from the last substantive activity
 (fallback creation). The document type setting is a **maximum period (shortens
 only)**; the earliest deadline wins. The regular run creates proposals for
-additional details and only deletes after approval by another person with
+additional details and only deletes after approval by a person with
 deletion confirmation permission. Deferral protects until its date; rejection
-allows a new proposal only after the retry interval. Automatic approval is
+allows a new proposal only after the retry interval.
+
+The run creates the proposal. The facility must designate a person with deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role; the “Approvers” compliance card shows whether it is assigned. Automatic approval is
 opt-in. People without events are anonymized after inactivity from the last
 update; people with events after all events are deleted. Holds and Art. 18
 protect these retention paths.
@@ -185,5 +187,5 @@ An HTTP/network/processing error fetching revocations (including 500/429), or an
 
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 4685a18f81a5d62a52eb62e6264a1491684338d0 -->
+<!-- translation-date: 2026-10-11 -->
+<!-- source-hash: eea591984c19ce4867981b9a339d6097c37cc5d5 -->

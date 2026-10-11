@@ -23,7 +23,7 @@ Anlaufstelle implementiert ein **mehrstufiges Retention-Modell** mit getrennten 
 - **Vier Soft-Delete-Strategien** statt Hard-Delete:
   - `anonymous` — datensparsame Eintraege werden sofort nach Frist soft-geloescht;
   - `identified` — identifizierte Klient-Eintraege werden nach Frist **anonymisiert** ([`anonymize_clients`](../../src/core/retention/anonymization.py)); *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
-  - `qualified` — fachlich qualifizierte Eintraege verlangen einen `RetentionProposal` mit Freigabe durch eine andere Person mit „Löschbestätigung“ vor Soft-Delete; *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
+  - `qualified` — fachlich qualifizierte Eintraege verlangen einen `RetentionProposal` mit Freigabe durch eine Person mit „Löschbestätigung“ vor Soft-Delete; *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
   - `document_type` — pro Dokumenttyp konfigurierbare Frist, ueberschreibt die globale Event-Frist. *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
 - **Legal-Hold als Einfrier-Marker.** [`LegalHold`](../../src/core/retention/legal_holds.py) setzt einen Marker pro Entitaet; `has_active_hold(target)` haelt jede Soft-Delete- und Anonymisierungs-Pipeline auf. Hold setzen darf nur Lead/Admin, Aufheben mit AuditLog-Spur.
 - **`RetentionProposal`-Vorschlagspipeline** fuer qualifizierte Eintraege: Cron erzeugt Vorschlaege, Dashboard ([`build_retention_dashboard_context`](../../src/core/retention/proposals.py)) zeigt sie, Lead/Admin entscheidet `approve`/`defer`/`reject`. Damit bleibt das Pruning bei juristisch sensiblen Datensaetzen eine bewusste menschliche Entscheidung. *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
@@ -54,7 +54,7 @@ Die Entscheidung oben formuliert *„Events, Cases, Clients, WorkItems und Audit
 
 | Entitaet | Eigene konfigurierbare Frist? | Mechanik |
 |---|---|---|
-| **Event** | **ja** — `retention_anonymous_days` (90), `retention_identified_days` (365), `retention_qualified_days` (3650), zusaetzlich `DocumentType.retention_days` als Typ-Override | Soft-Delete durch `enforce_retention`; `qualified` nur ueber `RetentionProposal` mit Freigabe durch eine andere Person mit „Löschbestätigung“ |
+| **Event** | **ja** — `retention_anonymous_days` (90), `retention_identified_days` (365), `retention_qualified_days` (3650), zusaetzlich `DocumentType.retention_days` als Typ-Override | Soft-Delete durch `enforce_retention`; `qualified` nur ueber `RetentionProposal` mit Freigabe durch eine Person mit „Löschbestätigung“ |
 | **Activity** (Zeitstrom) | **ja** — `retention_activities_days` (365) | **Hard**-Delete, kein Soft-Delete |
 | **AuditLog** | **ja** — `auditlog_retention_months` (24, `0` = aus) | `prune_auditlog`; drei prune-exempte Aktionen plus `EXPORT`-**Berichts-Freigaben** (Zeitraum + herausgegebenes Artefakt, Refs #1770 — Klienten-/DSGVO-Exporte und Bildschirm-Ansichten bleiben der Frist unterworfen), Checkpoint-Tombstone fuer die HMAC-Kette |
 | **Client** | **nein**, zwei *abgeleitete* Ausloeser | (a) `client_trash_days` (30) nach **manuellem** Soft-Delete → `anonymize_eligible_soft_deleted_clients`; (b) `anonymize_clients`, sobald **alle** Events der Person soft-geloescht sind. Beide Wege enden in `anonymize_client` |
@@ -72,9 +72,11 @@ Nachtrag ersetzt die Ist-Beschreibung vom 2026-10-06 und präzisiert die Audit-
 Fristkorrektur vom 2026-10-07:
 
 - „Mit Zusatzangaben“: Standardlauf erzeugt Vorschläge und löscht erst nach
-  Freigabe durch eine andere Person mit „Löschbestätigung“. Zurückstellen
+  Freigabe durch eine Person mit „Löschbestätigung“. Zurückstellen
   schützt bis zum Datum, Ablehnen erlaubt frühestens nach 365 Tagen
   (konfigurierbar) eine neue Vorlage. Auto-Freigabe bleibt Opt-in.
+
+Den Vorschlag legt der Lauf an. Die Einrichtung benennt eine Person mit dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben; die Compliance-Karte „Genehmiger“ zeigt die Besetzung.
 - Fristanker: Fallabschluss; ohne Fall Ereignisdatum; offen letzte fachliche
   Fallaktivität (Fallback Anlage). Fachliche Änderungen an Fall, Ereignissen,
   Aufgaben und Verlauf zählen, Umschlüsselung nicht.

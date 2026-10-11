@@ -76,7 +76,7 @@ PROCESSING_ACTIVITIES = [
                 "{qualified_days} Tage ab Fallabschluss, ohne Fall ab Ereignisdatum, "
                 "im offenen Fall ab letzter fachlicher Fallaktivität (Fallback Anlage). "
                 "Der Standardlauf legt für Mit Zusatzangaben Vorschläge an und löscht erst "
-                "nach Freigabe durch eine andere Person mit Löschbestätigung. Zurückstellen "
+                "nach Freigabe durch eine Person mit Löschbestätigung; den Vorschlag legt der Lauf an. Zurückstellen "
                 "schützt bis zum Datum, Ablehnen bis zu einer neuen Vorlage frühestens nach "
                 "der konfigurierten Wiedervorlagefrist (Vorgabe 365 Tage). Auto-Freigabe ist Opt-in. "
                 "Personen werden anonymisiert, sobald alle Ereignisse gelöscht sind; ohne Ereignis "
@@ -85,7 +85,10 @@ PROCESSING_ACTIVITIES = [
                 "und Anhangsänderung an Person oder Fall (Anlage, Ersetzung oder Entfernung). "
                 "Personen „Mit Zusatzangaben“ ohne Ereignis sind von der automatischen Anonymisierung "
                 "ausgenommen; der Vorschlagsweg unterstützt bisher nur Ereignisse, eine automatische "
-                "Fristvollstreckung für diese Personen fehlt. Hold und Art. 18 stellen zurück."
+                "Fristvollstreckung für diese Personen fehlt. Hold und Art. 18 stellen zurück. Die Einrichtung "
+                "benennt eine Person mit Löschbestätigung; ohne besetzte Freigabe wird bei ausgeschalteter "
+                "Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben; die "
+                "Compliance-Karte „Genehmiger“ zeigt die Besetzung."
             ),
             anonymous_days=DEFAULT_RETENTION_ANONYMOUS_DAYS,
             identified_days=DEFAULT_RETENTION_IDENTIFIED_DAYS,

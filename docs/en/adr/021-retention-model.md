@@ -11,13 +11,15 @@ Anonymous and pseudonym-only events expire from their own event date; a newer
 contact does not extend older events. A document-type setting is a **maximum
 period (shortens only)**: the earliest deadline wins, never an extension.
 
-Events with additional details require a proposal and approval by another person
+Events with additional details require a proposal and approval by a person
 with deletion confirmation permission before deletion. Their period starts at
 case closure, without a case at the event date, and in an open case at the last
 substantive activity (fallback creation). Changes to cases, events, tasks and
 progress count; key rotation does not. Deferral protects until its date;
 rejection permits a new proposal after a configurable 365 days. Automatic
 approval after maximum deferrals remains opt-in.
+
+The run creates the proposal. The facility must designate a person with deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role; the “Approvers” compliance card shows whether it is assigned.
 
 ## Addendum 2026-10-10
 
@@ -55,5 +57,5 @@ from 2026-10-06 is superseded:
 
 <!-- translation-source: docs/adr/021-retention-modell.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- source-hash: b9f9bb5d05c432ba2b4b4304941f7383c376c918 -->
+<!-- translation-date: 2026-10-11 -->
+<!-- source-hash: 7825e53f6116346155200b6c2337d35c8295ef45 -->

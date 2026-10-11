@@ -1117,13 +1117,15 @@ can lift it there; both actions are audited. Person/case holds protect related
 events and audit rows of protected targets. System administration can lift
 holds at `/system/legal-holds/`.
 
-The nightly run proposes expired events with additional details; another person
+The nightly run proposes expired events with additional details; a person
 with **deletion confirmation** permission must approve. Deferral protects until
 its date. Rejection deletes nothing; a new proposal can appear after the retry
 interval (default 365 days). Automatic approval remains opt-in. Without a case
 the stage period starts at the event date; in an open case at last substantive
 activity (fallback creation); in a closed case at closure. A type **maximum
 period (shortens only)** cannot replace approval.
+
+The run creates the proposal. The facility must designate a person with deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role; the “Approvers” compliance card shows whether it is assigned.
 
 Downgrading additional details to pseudonym only with existing events also
 requires a request and another person with that permission. Without events the
@@ -1138,5 +1140,5 @@ without expiry even after manual event deletion.
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 49b69cd9db43f16cbf00235032048e5c088363c6 -->
+<!-- translation-date: 2026-10-11 -->
+<!-- source-hash: 97f46239b881a0af77aefaf7a7ba4dc7b7ecf2dc -->
