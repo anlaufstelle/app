@@ -26,17 +26,25 @@ ACTOR_LOGINS = {
 FOREIGN_ADMIN = "admin_1"
 
 
-def report_path(today=None):
-    """Target file of the audit report; never an existing file.
-
-    ``AUTHZ_AUDIT_REPORT_PATH`` wins when set (the caller owns that choice).
-    Otherwise the report lands next to the other archived audits as
-    ``<date>-live-authz-matrix.md``; a second run on the same day gets a
-    ``-2``, ``-3``, ... suffix so that no versioned report is ever overwritten.
-    """
+def _explicit_report_target():
+    """Return the target pinned via ``AUTHZ_AUDIT_REPORT_PATH`` or ``None``."""
     explicit = os.environ.get(REPORT_PATH_ENV)
-    if explicit:
-        return Path(explicit)
+    return Path(explicit) if explicit else None
+
+
+def report_path(today=None):
+    """Return the target file the report is going to be written to.
+
+    ``AUTHZ_AUDIT_REPORT_PATH`` wins when set. Otherwise the report lands next
+    to the other archived audits as ``<date>-live-authz-matrix.md``; if that
+    name is taken, the first free ``-2``, ``-3``, ... suffix is chosen.
+
+    The selection alone protects nothing: :func:`write_report` creates the file
+    exclusively and therefore never truncates an existing report.
+    """
+    explicit = _explicit_report_target()
+    if explicit is not None:
+        return explicit
     day = (today or datetime.date.today()).isoformat()
     candidate = REPORT_DIR / f"{day}-live-authz-matrix.md"
     counter = 2
@@ -44,6 +52,45 @@ def report_path(today=None):
         candidate = REPORT_DIR / f"{day}-live-authz-matrix-{counter}.md"
         counter += 1
     return candidate
+
+
+def _create_exclusively(target, text):
+    """Create ``target`` with ``text``; ``FileExistsError`` if it already exists."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("x", encoding="utf-8") as handle:
+        handle.write(text)
+
+
+#: Upper bound of re-selections when the dated default name keeps being claimed.
+_MAX_DEFAULT_ATTEMPTS = 100
+
+
+def _write_report_file(text, path):
+    """Write ``text`` without ever replacing an existing file; return the path.
+
+    An explicit target (``path`` argument or ``AUTHZ_AUDIT_REPORT_PATH``) that
+    already exists aborts with ``FileExistsError``. The dated default name is
+    re-selected with the next suffix when it was claimed between selection and
+    creation.
+    """
+    explicit = Path(path) if path is not None else _explicit_report_target()
+    if explicit is not None:
+        try:
+            _create_exclusively(explicit, text)
+        except FileExistsError as exc:
+            raise FileExistsError(
+                f"Refusing to overwrite the existing audit report {explicit}; "
+                f"remove it or point {REPORT_PATH_ENV} to a new file."
+            ) from exc
+        return explicit
+    for _ in range(_MAX_DEFAULT_ATTEMPTS):
+        target = report_path()
+        try:
+            _create_exclusively(target, text)
+        except FileExistsError:
+            continue
+        return target
+    raise FileExistsError(f"No free audit report name found in {REPORT_DIR} after {_MAX_DEFAULT_ATTEMPTS} attempts.")
 
 
 def login(base_url, username):
@@ -240,11 +287,11 @@ _CASE_OPEN = """
 # ``get_object_or_404(..., document_type=doc_type)``). Deshalb wird der Typ
 # zuerst geerntet und die Kind-Queries pinnen sich per %(doc_type_contact)s.
 #
-# Die Bedingungen sind NICHT kosmetisch:
+# The conditions are NOT cosmetic:
 #
-# * mindestens 3 Feld-Zuordnungen — sonst haetten ``field_group`` bzw.
-#   ``doc_type_field`` kein Objekt (zwei DTFs traegt schon die Bedingung, die
-#   dritte ist die frei konsumierbare Zuordnung).
+# * at least 3 field assignments — otherwise ``field_group`` and
+#   ``doc_type_field`` would have no object (the condition already uses two
+#   DTFs, the third is the freely consumable assignment).
 # * mindestens ein Ereignis — ``config_doctype_delete`` POST laeuft in der
 #   Matrix als ERLAUBTE Zelle (facility_admin steht in ``ROLES`` an erster
 #   Stelle). Nur mit Bestandsreferenz greift der PROTECT-Blocker
@@ -254,12 +301,12 @@ _CASE_OPEN = """
 # * mindestens ein zulaessiges Quellfeld — Voraussetzung fuer die Bedingung,
 #   die ``prepare_audit_objects`` anlegt (der Seed-Katalog kennt keine).
 #
-# Eine Feldgruppe ist KEINE Auswahlbedingung mehr: nur das Paket ``default``
-# deklariert Gruppen, die zweite Einrichtung (``beratungsstelle``) keine —
-# mit der Bedingung als Filter fand der Anker dort nie einen Typ und alle
-# ``config_*``-IDOR-Zellen blieben ungemessen. Stattdessen bevorzugt die
-# Sortierung einen Typ MIT Gruppe, und ``_ENSURE_CONFIG_FIELD_GROUP`` legt dem
-# gewaehlten Typ bei Bedarf eine an.
+# A field group is NO LONGER a selection condition: only the ``default``
+# package declares groups, the second facility (``beratungsstelle``) none —
+# with the group as a filter the anchor never found a type there and all
+# ``config_*`` IDOR cells stayed unmeasured. Instead the ordering prefers a
+# type WITH a group, and ``_ENSURE_CONFIG_FIELD_GROUP`` creates one for the
+# chosen type when needed.
 _CONFIG_DOC_TYPE = """
     SELECT dt.id FROM core_documenttype dt
     WHERE dt.facility_id = %(fac)s
@@ -293,17 +340,17 @@ _CONDITION_TARGET_FIELD = f"""
     ORDER BY f.id LIMIT 1
 """  # noqa: S608 — nur statische Fragmente, keine Userdaten.
 
-# Nur das Paket ``default`` traegt Feldgruppen. Fehlt dem Anker die Gruppe
-# (zweite Einrichtung), entstuende fuer ``field_group`` nie ein Objekt und die
-# ``config_fieldgroup_*``-IDOR-Zellen blieben ungemessen. Idempotent ueber
-# NOT EXISTS auf denselben Dokumentationstyp; die Feld-Zuordnungen bleiben
-# unveraendert ohne Gruppe.
+# Only the ``default`` package carries field groups. If the anchor has none
+# (second facility), ``field_group`` would never have an object and the
+# ``config_fieldgroup_*`` IDOR cells would stay unmeasured. Idempotent via
+# NOT EXISTS on the same document type; the field assignments stay unchanged
+# and ungrouped.
 _ENSURE_CONFIG_FIELD_GROUP = f"""
     INSERT INTO core_fieldgroup (id, document_type_id, name, slug, sort_order, is_collapsible)
     SELECT gen_random_uuid(), anchor.id, 'Audit-Gruppe', 'audit-gruppe', 0, false
     FROM ({_CONFIG_DOC_TYPE}) AS anchor(id)
     WHERE NOT EXISTS (SELECT 1 FROM core_fieldgroup g WHERE g.document_type_id = anchor.id)
-"""  # noqa: S608 — nur statische Fragmente, keine Userdaten.
+"""  # noqa: S608 — static fragments only, no user data.
 
 # Der Seed-Katalog (core/packages/default.yaml) deklariert KEINE ``conditions``
 # — ohne diesen Schritt gaebe es fuer ``field_condition`` nie ein Objekt.
@@ -352,15 +399,15 @@ _ENSURE_RECTIFICATION_REQUEST = """
 """
 
 
-# Import-Lauf (core:import_*): der Seed legt keinen an, ohne diesen Schritt
-# waeren alle sieben Import-Endpoints samt IDOR-Probe unerntbar. Der Lauf steht
-# bewusst auf ``uploaded`` ohne Quelldatei (``storage_filename`` leer): die
-# Zuordnungs-/Vorschau-/Uebernahme-Views passieren damit Rollen-Gate und
-# Objekt-Scope und antworten dann mit der fachlichen Fehlermeldung (Redirect auf
-# die Detailseite) — es entsteht weder Klartext noch eine Datei auf der Disk.
-# Anleger ist der erste facility_admin der Einrichtung (``created_by`` ist
-# nullable, die Subquery darf also auch leer bleiben). Idempotent: nur wenn die
-# Einrichtung keinen offenen Lauf hat.
+# Import job (core:import_*): the seed creates none; without this step all
+# seven import endpoints and their IDOR probe would be unharvestable. The job
+# deliberately stays on ``uploaded`` without a source file
+# (``storage_filename`` empty): the mapping/preview/commit views pass the role
+# gate and object scope and then answer with the domain error message
+# (redirect to the detail page) — no plaintext and no file ends up on disk.
+# The creator is the facility's first facility_admin (``created_by`` is
+# nullable, so the subquery may stay empty). Idempotent: only when the
+# facility has no open job.
 _ENSURE_IMPORT_JOB = """
     INSERT INTO core_importjob
         (id, facility_id, created_by_id, target_type, document_type_id, status,
@@ -433,10 +480,10 @@ def prepare_audit_objects(conn, fac_id):
        auf einem NORMAL-Event. Daher: erstes aktuelles Attachment der Facility
        auf das vertragskonforme Event aus Schritt 2 umhängen (rein relational;
        Download entschlüsselt die Datei unabhängig vom Parent-Event).
-    4. Vertragskonformes case_event: falls kein NORMAL-Event am geernteten
-       ``case_open`` hängt, erst einem NORMAL-Event diesen Fall zuweisen
-       (``case_remove_event`` bindet Fall UND Event in der URL); dann Owner
-       des ersten NORMAL-Events dieses Falls auf lead setzen.
+    4. Contract-conforming case_event: if no NORMAL event hangs on the
+       harvested ``case_open``, first assign a NORMAL event to that case
+       (``case_remove_event`` binds case AND event in the URL); then set the
+       owner of the first NORMAL event of that case to lead.
     5. Vertragskonformes sample_workitem (core:workitem_update LEAD_PLUS):
        erstes WorkItem auf created_by = lead, assigned_to = NULL setzen —
        weder created_by noch assigned_to dürfen staff/assistant sein.
@@ -451,13 +498,13 @@ def prepare_audit_objects(conn, fac_id):
        fail-closed 404, ADR-039 §12 Stufe 2), dann den Anhang umhängen —
        Muster von Schritt 3. Idempotent: nach dem ersten Lauf sind Quelle und
        Ziel identisch, beide UPDATEs werden zu No-ops.
-    9. Eine ``FieldGroup`` (falls der Anker keine trägt) und eine
-       ``FieldCondition`` am Konfigurations-Anker (M24-Folge, Refs #1783):
-       der Seed-Katalog deklariert keine ``conditions`` und nur das Paket
-       ``default`` Gruppen — die Regel-Editor- und Gruppen-Endpoints wären
-       ohne diesen Schritt dauerhaft unerntbar. Siehe
+    9. A ``FieldGroup`` (if the anchor has none) and a ``FieldCondition`` on
+       the config anchor (M24 follow-up, Refs #1783): the seed catalogue
+       declares no ``conditions`` and only the ``default`` package declares
+       groups — the rule-editor and group endpoints would be permanently
+       unharvestable without this step. See
        ``_ENSURE_CONFIG_FIELD_GROUP``/``_ENSURE_CONFIG_CONDITION``.
-    10./11. Ein offener Berichtigungsantrag und ein offener Importlauf
+    10./11. An open rectification request and an open import job
        (``_ENSURE_RECTIFICATION_REQUEST``/``_ENSURE_IMPORT_JOB``).
     """
     cur = _superuser_cursor(conn)
@@ -525,12 +572,12 @@ def prepare_audit_objects(conn, fac_id):
         """,  # noqa: S608
         params,
     )
-    # 4a. Falls am geernteten ``case_open`` kein vertragskonformes Event haengt:
-    #     eines zuweisen (fall-lose bevorzugt, dann das der Person des Falls).
-    #     Die URL von ``case_remove_event`` kombiniert case_open.pk mit
-    #     case_event.pk, und die View antwortet 404, sobald das Event an einem
-    #     ANDEREN Fall haengt (Refs #2364) — ein Event irgendeines Falls der
-    #     Einrichtung genuegt deshalb nicht.
+    # 4a. If no contract-conforming event hangs on the harvested ``case_open``:
+    #     assign one (case-less events first, then the case client's event).
+    #     The ``case_remove_event`` URL combines case_open.pk with
+    #     case_event.pk, and the view answers 404 as soon as the event hangs on
+    #     ANOTHER case (Refs #2364) — an event of any case of the facility is
+    #     therefore not enough.
     cur.execute(
         f"""
         UPDATE core_event SET case_id = ({_CASE_OPEN})
@@ -620,13 +667,13 @@ def prepare_audit_objects(conn, fac_id):
             """,  # noqa: S608
             params,
         )
-    # 9. Feldgruppe und Feldbedingung am Konfigurations-Anker (Refs #1783).
-    #    Die Gruppe zuerst: nur das Paket ``default`` traegt welche.
+    # 9. Field group and field condition on the config anchor (Refs #1783).
+    #    The group goes first: only the ``default`` package carries any.
     cur.execute(_ENSURE_CONFIG_FIELD_GROUP, params)
     cur.execute(_ENSURE_CONFIG_CONDITION, params)
     # 10. Offener Berichtigungsantrag (M4, Refs #1060).
     cur.execute(_ENSURE_RECTIFICATION_REQUEST, params)
-    # 11. Offener Importlauf (core:import_*).
+    # 11. Open import job (core:import_*).
     cur.execute(_ENSURE_IMPORT_JOB, params)
 
 
@@ -661,8 +708,9 @@ HARVEST_SQL = {
         "SELECT id FROM core_case WHERE facility_id = %(fac)s AND status = 'closed' AND is_deleted = false "
         "ORDER BY id LIMIT 1"
     ),
-    # %(case_open)s: das Event MUSS am geernteten case_open haengen — die View
-    # antwortet 404, wenn event.case_id vom Fall der URL abweicht (Refs #2364).
+    # %(case_open)s: the event MUST hang on the harvested case_open — the view
+    # answers 404 when event.case_id differs from the case in the URL
+    # (Refs #2364).
     "case_event": f"""
         SELECT e.id FROM core_event e
         JOIN core_documenttype dt ON dt.id = e.document_type_id
@@ -791,10 +839,10 @@ HARVEST_SQL = {
         "SELECT id FROM core_deletionrequest WHERE facility_id = %(fac)s AND status = 'pending' ORDER BY id LIMIT 1"
     ),
     # --- M4 Import (Refs #1060) -------------------------------------------
-    # Ein noch nicht abgeschlossener Lauf; der Seed legt keinen an —
-    # ``prepare_audit_objects`` Schritt 11 (``_ENSURE_IMPORT_JOB``) garantiert
-    # ihn. Der Eintrag ist Pflicht, sonst zeigen die sieben import_*-Erwartungen
-    # ins Leere (``test_every_fixture_reference_is_live_harvestable``).
+    # A job that is not finished yet; the seed creates none —
+    # ``prepare_audit_objects`` step 11 (``_ENSURE_IMPORT_JOB``) guarantees
+    # one. The entry is mandatory, otherwise the seven import_* expectations
+    # point nowhere (``test_every_fixture_reference_is_live_harvestable``).
     "import_job": (
         "SELECT id FROM core_importjob WHERE facility_id = %(fac)s "
         "AND status NOT IN ('committed', 'aborted') ORDER BY id LIMIT 1"
@@ -881,10 +929,11 @@ def harvest_ids(conn, fac_id):
 
 
 def write_report(rows, header_findings, meta, path=None):
-    """Markdown-Report schreiben; gibt den Pfad zurück.
+    """Write the Markdown report and return its path.
 
-    ``path`` default: :func:`report_path` (datiert, überschreibt nie eine
-    vorhandene Datei).
+    ``path`` defaults to :func:`report_path` (``AUTHZ_AUDIT_REPORT_PATH`` or the
+    dated name). The file is created exclusively: an existing explicit target
+    raises ``FileExistsError``, a taken default name moves on to the next suffix.
 
     ``rows``: Dicts mit url_name, category, method, actor, expected, status,
     verdict ("OK"/"ABWEICHUNG"/"SETUP-ERROR"/"ERROR") und optional ``known``
@@ -991,7 +1040,4 @@ def write_report(rows, header_findings, meta, path=None):
         "Vom Repo-Root, seriell (kein xdist).",
     ]
 
-    target = Path(path) if path is not None else report_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return target
+    return _write_report_file("\n".join(lines) + "\n", path)

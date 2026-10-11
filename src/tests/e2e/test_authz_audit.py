@@ -4,9 +4,10 @@ Manuell ausgeführt (nicht Teil normaler Läufe):
 
     AUTHZ_AUDIT=1 .venv/bin/python -m pytest src/tests/e2e/test_authz_audit.py -m authz_audit -v
 
-Schreibt den Report nach docs/archive/audits/<Datum>-live-authz-matrix.md
-(bei Wiederholung am selben Tag mit Zähler-Suffix; eine vorhandene Datei wird nie
-überschrieben). ``AUTHZ_AUDIT_REPORT_PATH=<datei.md>`` legt das Ziel fest.
+Writes the report to docs/archive/audits/<date>-live-authz-matrix.md (a repeat
+on the same day gets a counter suffix). The file is created exclusively, so an
+existing report is never overwritten; an existing explicit target
+``AUTHZ_AUDIT_REPORT_PATH=<file.md>`` aborts the run with ``FileExistsError``.
 Mutationen durch erlaubte POSTs sind akzeptiert — die E2E-DB ist wegwerfbar.
 
 Der Test failt NICHT bei Abweichungen (Befunde gehören in Report + Issues;

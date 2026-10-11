@@ -207,20 +207,20 @@ class TestLiveAuditHarvestQueriesRunAgainstTheSchema:
             assert cursor.rowcount == 0, "Platzhalter-Facility duerfte keine Bedingung erzeugen"
 
     def test_ensure_group_and_import_job_are_valid_sql(self):
-        """Die beiden weiteren INSERTs von ``prepare_audit_objects``."""
+        """The two remaining INSERTs of ``prepare_audit_objects``."""
         for name in ("_ENSURE_CONFIG_FIELD_GROUP", "_ENSURE_IMPORT_JOB"):
             with connection.cursor() as cursor:
                 cursor.execute(getattr(helpers, name), self._PARAMS)
-                assert cursor.rowcount == 0, f"{name}: Platzhalter-Facility duerfte nichts erzeugen"
+                assert cursor.rowcount == 0, f"{name}: the placeholder facility must not create anything"
 
 
 @pytest.mark.django_db
 class TestPrepareAuditObjectsEnsuresTheAnchors:
-    """Der Live-Audit misst Import- und Konfigurations-Zellen nur mit Objekten.
+    """The live audit only measures import and config cells when objects exist.
 
-    Die zweite Einrichtung des ``medium``-Seeds nutzt ein Paket ohne
-    Feldgruppen und legt keinen Importlauf an; ohne diese Schritte blieben
-    ``core:import_*`` und die ``config_*``-IDOR-Zellen ungemessen.
+    The second facility of the ``medium`` seed uses a package without field
+    groups and creates no import job; without these steps ``core:import_*`` and
+    the ``config_*`` IDOR cells would stay unmeasured.
     """
 
     def _prepare(self, facility):
@@ -256,13 +256,20 @@ class TestPrepareAuditObjectsEnsuresTheAnchors:
         from core.models import Case, Event
 
         # The event starts on another open case; preparation must re-bind it.
+        # The maximal id sorts that case after ``case_open``, so the harvest
+        # picks ``case_open`` regardless of the random primary keys.
         other = Case.objects.create(
-            facility=facility, client=case_open.client, title="Anderer Fall", status=Case.Status.OPEN
+            id=uuid.UUID(int=2**128 - 1),
+            facility=facility,
+            client=case_open.client,
+            title="Other case",
+            status=Case.Status.OPEN,
         )
         Event.objects.filter(pk=sample_event.pk).update(case=other)
 
         ids = self._prepare(facility)
 
+        assert ids["case_open"] == case_open.pk
         assert ids["case_event"] is not None
         bound = Event.objects.get(pk=ids["case_event"])
         assert bound.case_id == ids["case_open"]
@@ -278,7 +285,7 @@ class TestPrepareAuditObjectsEnsuresTheAnchors:
 
 
 class TestAuditReportPath:
-    """Der Audit darf keinen versionierten Bericht überschreiben."""
+    """Report-name selection of the live audit (the writer is covered below)."""
 
     def test_default_is_dated_next_to_the_archived_audits(self, monkeypatch, tmp_path):
         import datetime
@@ -310,6 +317,86 @@ class TestAuditReportPath:
         monkeypatch.setenv(helpers.REPORT_PATH_ENV, str(target))
 
         assert helpers.report_path() == target
+
+
+_META = {"date": "2026-10-10", "commit": "abc1234"}
+
+
+class TestAuditReportWriterNeverOverwrites:
+    """``write_report`` keeps every existing file byte for byte (default, env, direct)."""
+
+    def test_default_name_skips_existing_dated_reports(self, monkeypatch, tmp_path):
+        import datetime
+
+        monkeypatch.delenv(helpers.REPORT_PATH_ENV, raising=False)
+        monkeypatch.setattr(helpers, "REPORT_DIR", tmp_path)
+        day = datetime.date.today().isoformat()
+        first = tmp_path / f"{day}-live-authz-matrix.md"
+        second = tmp_path / f"{day}-live-authz-matrix-2.md"
+        first.write_text("evidence one", encoding="utf-8")
+        second.write_text("evidence two", encoding="utf-8")
+
+        written = helpers.write_report([], [], _META)
+
+        assert written == tmp_path / f"{day}-live-authz-matrix-3.md"
+        assert written.read_text(encoding="utf-8").startswith("# ")
+        assert first.read_text(encoding="utf-8") == "evidence one"
+        assert second.read_text(encoding="utf-8") == "evidence two"
+
+    def test_default_name_retries_when_the_target_appears_after_selection(self, monkeypatch, tmp_path):
+        import datetime
+
+        monkeypatch.delenv(helpers.REPORT_PATH_ENV, raising=False)
+        monkeypatch.setattr(helpers, "REPORT_DIR", tmp_path)
+        day = datetime.date.today().isoformat()
+        raced = tmp_path / f"{day}-live-authz-matrix.md"
+        select = helpers.report_path
+        selections = []
+
+        def racing_select(*args, **kwargs):
+            candidate = select(*args, **kwargs)
+            if not selections:
+                # Another run claims the name between selection and writing.
+                raced.write_text("concurrent evidence", encoding="utf-8")
+            selections.append(candidate)
+            return candidate
+
+        monkeypatch.setattr(helpers, "report_path", racing_select)
+
+        written = helpers.write_report([], [], _META)
+
+        assert selections[0] == raced
+        assert written == tmp_path / f"{day}-live-authz-matrix-2.md"
+        assert raced.read_text(encoding="utf-8") == "concurrent evidence"
+
+    def test_existing_environment_target_is_refused(self, monkeypatch, tmp_path):
+        target = tmp_path / "pinned.md"
+        target.write_text("pinned evidence", encoding="utf-8")
+        monkeypatch.setenv(helpers.REPORT_PATH_ENV, str(target))
+
+        with pytest.raises(FileExistsError, match="pinned.md"):
+            helpers.write_report([], [], _META)
+
+        assert target.read_text(encoding="utf-8") == "pinned evidence"
+
+    def test_existing_direct_target_is_refused(self, monkeypatch, tmp_path):
+        monkeypatch.delenv(helpers.REPORT_PATH_ENV, raising=False)
+        target = tmp_path / "direct.md"
+        target.write_text("direct evidence", encoding="utf-8")
+
+        with pytest.raises(FileExistsError, match="direct.md"):
+            helpers.write_report([], [], _META, path=target)
+
+        assert target.read_text(encoding="utf-8") == "direct evidence"
+
+    def test_missing_environment_target_is_created_with_its_parents(self, monkeypatch, tmp_path):
+        target = tmp_path / "nested" / "fresh.md"
+        monkeypatch.setenv(helpers.REPORT_PATH_ENV, str(target))
+
+        written = helpers.write_report([], [], _META)
+
+        assert written == target
+        assert target.read_text(encoding="utf-8").startswith("# ")
 
 
 # ---- Vertikale Matrix: Endpoint × Methode × Akteur (Test-Client) ----------
