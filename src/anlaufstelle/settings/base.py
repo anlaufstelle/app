@@ -196,9 +196,9 @@ MIDDLEWARE = [
     # bleiben. Refs #700.
     "core.middleware.maintenance.MaintenanceModeMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    # SessionMiddleware subclass: on the demo, a response to a request that
-    # carried a replaced session key leaves the new session cookie alone
-    # (Refs #2531). Identical to Django's class outside DEMO_MODE.
+    # SessionMiddleware subclass: a response to a request that carried a
+    # replaced session key (after a privilege rotation or a demo scenario
+    # switch) leaves the new session cookie alone (Refs #2034, #2531).
     "core.middleware.demo_session.DemoSessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
