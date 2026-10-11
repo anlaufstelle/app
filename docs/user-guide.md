@@ -1123,7 +1123,7 @@ Person mit **Löschbestätigung** gibt sie frei. Zurückstellen schützt bis
 zum Datum; Ablehnen löscht nichts, frühestens nach der Wiedervorlagefrist
 (Default 365 Tage) entsteht eine neue Vorlage. Auto-Freigabe bleibt Opt-in.
 
-Den Vorschlag legt der Lauf an. Die Einrichtung benennt eine Person mit dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben; die Compliance-Karte „Genehmiger“ zeigt die Besetzung.
+Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte „Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann.
 Ohne Fall beginnt die Stufenfrist beim Ereignisdatum, im offenen Fall bei
 letzter fachlicher Fallaktivität (Fallback Anlage), geschlossen beim Abschluss.
 Eine Typ-**Höchstfrist (verkürzt nur)** ersetzt den Freigabeschritt nicht.

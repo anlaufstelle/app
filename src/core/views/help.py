@@ -196,16 +196,17 @@ HELP_PAGES = {
                             "und einer Höchstfrist (verkürzt nur) am Dokumentationstyp; der früheste Stichtag gewinnt."
                         ),
                         _(
-                            "Der Standardlauf erzeugt für „Mit Zusatzangaben“ einen Löschvorschlag und löscht "
-                            "erst nach "
-                            "Freigabe durch eine Person mit „Löschbestätigung“ (Ausnahme: die standardmäßig "
-                            "ausgeschaltete Auto-Freigabe nach mehrfacher Zurückstellung). Anonym und „Nur Pseudonym“ "
-                            "werden automatisch gelöscht; Legal Hold und Art. 18 stellen den Lauf zurück. "
-                            "Den Vorschlag "
-                            "legt der Lauf an. Die Einrichtung benennt eine Person mit „Löschbestätigung“; ohne "
-                            "besetzte "
-                            "Freigabe wird bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird "
-                            "rollenunabhängig vergeben; die Compliance-Karte „Genehmiger“ zeigt die Besetzung."
+                            "Der Standardlauf erzeugt für „Mit Zusatzangaben“ einen Löschvorschlag und löscht erst "
+                            "nach Freigabe durch eine Person mit „Löschbestätigung“ (Ausnahme: die standardmäßig "
+                            "ausgeschaltete Auto-Freigabe nach mehrfacher Zurückstellung). Anonym und „Nur "
+                            "Pseudonym“ werden automatisch gelöscht; Legal Hold und Art. 18 stellen den Lauf "
+                            "zurück. Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives "
+                            "Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht "
+                            "„Löschbestätigung“; ohne besetzte Freigabe wird bei ausgeschalteter Auto-Freigabe "
+                            "nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche "
+                            "ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte "
+                            "„Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie "
+                            "belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann."
                         ),
                     ),
                     items=(

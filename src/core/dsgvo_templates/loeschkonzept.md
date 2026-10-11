@@ -55,7 +55,7 @@ Sicherungsstände an ein Off-Site-Ziel nur hinzufügend und entfernt dort keine
   eine Person mit dem Recht „Löschbestätigung“ gelöscht; den Vorschlag legt der Lauf an. Auch eine Typ-Höchstfrist
   umgeht diesen Freigabeschritt nicht.
 
-Den Vorschlag legt der Lauf an. Die Einrichtung benennt eine Person mit dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben; die Compliance-Karte „Genehmiger“ zeigt die Besetzung.
+Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte „Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann.
 - Zurückstellen schützt bis zum gesetzten Datum. Ablehnen löscht nichts;
   frühestens nach {{ retention_rejected_retry_days }} Tagen kann ein neuer
   Vorschlag entstehen.

@@ -20,7 +20,7 @@ The German template now lists **eleven configurable retention periods**, populat
 
 The regular daily `enforce_retention` run automatically deletes anonymous and pseudonym-only events. Events with additional details receive proposals; normally a person with deletion confirmation permission must approve before deletion. A facility may explicitly enable auto-approval (opt-in, off by default): after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Holds and Art. 18 restrictions protect both paths.
 
-The run creates the proposal. The facility must designate a person with deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role; the “Approvers” compliance card shows whether it is assigned.
+The run creates the proposal. The facility must designate at least one active account in its own facility with the Manager or Application support role and deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role, but the retention interface is restricted to Manager and Application support. The “Approvers” compliance card counts active deletion-request approvers regardless of role; it does not establish that an account can operate the retention workflow.
 
 Deferral protects until its date. Rejection allows a new proposal no earlier than `retention_rejected_retry_days`; `--propose` additionally creates proposals for all strategies. After all events are deleted, the person is anonymized. Without events, automatic anonymization applies only to “Pseudonym only” persons without open cases, after the configured identified inactivity period from the latest person change, business case activity, task change or person/case attachment change (creation, replacement or removal). Eventless persons “With additional details” are excluded: the proposal and approval workflow supports events only, leaving no automatic deadline enforcement for these persons. Active holds and Art. 18 restrictions protect both paths.
 
@@ -39,4 +39,4 @@ PostgreSQL row-level security protects facility-bound sessions against cross-fac
 <!-- translation-source: src/core/dsgvo_templates/dsfa.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-11 -->
-<!-- source-hash: dc95df01ecebffa694441a781d58cfdabe4b887c -->
+<!-- source-hash: aa09b284d17c658ac40a5ef2f966861329dec30c -->

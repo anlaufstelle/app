@@ -6,7 +6,7 @@ Key rotation without data loss (MultiFernet) covers database fields (`reencrypt_
 
 Manual deletion requires a second authorized person for persons, and for events and cases at the qualified stage.
 
-The automatic retention run requires approval by a person with deletion confirmation permission for qualified events as the default. The facility may explicitly enable auto-approval (opt-in, off by default): after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Active holds and Art. 18 restrictions still block this path. The run creates the proposal. The facility must designate a person with deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role; the “Approvers” compliance card shows whether it is assigned.
+The automatic retention run requires approval by a person with deletion confirmation permission for qualified events as the default. The facility may explicitly enable auto-approval (opt-in, off by default): after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Active holds and Art. 18 restrictions still block this path. The run creates the proposal. The facility must designate at least one active account in its own facility with the Manager or Application support role and deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role, but the retention interface is restricted to Manager and Application support. The “Approvers” compliance card counts active deletion-request approvers regardless of role; it does not establish that an account can operate the retention workflow.
 
 Immediate file erasure remains a single authorized decision, blocked by an active hold or Art. 18 restriction on the person.
 
@@ -21,4 +21,4 @@ An HTTP/network/processing error fetching revocations (including 500/429), or an
 <!-- translation-source: src/core/dsgvo_templates/toms.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-11 -->
-<!-- source-hash: 75c42456cb36a058c377dfa8e0fed34a597ad5a9 -->
+<!-- source-hash: 36338c9b5c2d8325ef9dd1042039437a0e2b9131 -->

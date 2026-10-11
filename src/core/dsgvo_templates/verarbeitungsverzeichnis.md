@@ -58,7 +58,7 @@ Dokumentationstyp ergänzt den Stichtag; eine längere Frist verlängert nichts.
 Der Standardlauf erzeugt für „Mit Zusatzangaben“ Vorschläge und löscht im Regelfall erst nach
 Freigabe durch eine Person mit „Löschbestätigung“.
 
-Den Vorschlag legt der Lauf an. Die Einrichtung benennt eine Person mit dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben; die Compliance-Karte „Genehmiger“ zeigt die Besetzung. Zurückstellen schützt
+Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte „Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann. Zurückstellen schützt
 bis zum Datum; Ablehnen erlaubt frühestens nach {{ retention_rejected_retry_days }}
 Tagen eine neue Vorlage. Ohne Ereignis anonymisiert der Lauf nur Personen „Nur Pseudonym“
 ohne offene Fälle nach {{ retention_identified_days }} Tagen ab dem jüngsten Zeitpunkt aus

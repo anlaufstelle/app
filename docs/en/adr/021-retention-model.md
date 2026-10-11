@@ -19,7 +19,7 @@ progress count; key rotation does not. Deferral protects until its date;
 rejection permits a new proposal after a configurable 365 days. Automatic
 approval after maximum deferrals remains opt-in.
 
-The run creates the proposal. The facility must designate a person with deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role; the “Approvers” compliance card shows whether it is assigned.
+The run creates the proposal. The facility must designate at least one active account in its own facility with the Manager or Application support role and deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role, but the retention interface is restricted to Manager and Application support. The “Approvers” compliance card counts active deletion-request approvers regardless of role; it does not establish that an account can operate the retention workflow.
 
 ## Addendum 2026-10-10
 
@@ -58,4 +58,4 @@ from 2026-10-06 is superseded:
 <!-- translation-source: docs/adr/021-retention-modell.md -->
 <!-- translation-version: v0.99.6 -->
 <!-- translation-date: 2026-10-11 -->
-<!-- source-hash: eae124f9872592f3e071bd85662ea76b671b6597 -->
+<!-- source-hash: 5e4f8bdd1252c7c370a1c932ad6c8a6f09b7250b -->

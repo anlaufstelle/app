@@ -644,7 +644,11 @@ class TestRetentionDashboardView:
         client.force_login(lead_user)
         content = " ".join(client.get(reverse("core:retention_dashboard")).content.decode().split())
         assert "für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge" in content
-        assert "Erst nach Freigabe durch eine andere Person" in content
+        assert "Erst nach Freigabe durch eine Person mit dem Recht „Löschbestätigung“" in content
+        assert "Erst nach Freigabe durch eine andere Person" not in content
+        assert "aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung" in content
+        assert "zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle" in content
+        assert "sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann" in content
         assert "Löschbestätigung" in content
         assert "Zurückstellen schützt bis zur Wiedervorlage" in content
         assert "Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht" in content
