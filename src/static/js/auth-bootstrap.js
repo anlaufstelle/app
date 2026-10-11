@@ -66,7 +66,8 @@
         return await tryFetch("/login/");
     }
 
-    async function fetchSaltAndDeriveKey(password, location, demoBootstrap) {
+    async function fetchSaltAndDeriveKey(password, location, demoBootstrap, derivation) {
+        var attempt = derivation || window.crypto_session.beginKeyDerivation();
         var token = demoBootstrap
             ? csrfFromMeta() || ""
             : (await fetchFreshCsrfToken(location)) || csrfFromMeta() || "";
@@ -85,7 +86,7 @@
         // Refs #2528: login HTML predates authentication and has no facility.
         // The authenticated salt response supplies the policy before derivation.
         document.body.dataset.offlineKeyMaxAge = String(json.offline_key_max_age);
-        await window.crypto_session.deriveSessionKey(password, json.salt);
+        await window.crypto_session.deriveSessionKey(password, json.salt, attempt);
         // Refs #1520/#1499: das personenlose Facility-Meta-Bundle EAGER beim
         // Login-Bootstrap vorwaermen — direkt nach der Schluesselableitung
         // (verschluesseltes At-Rest-Schreiben braucht den Session-Key). So hat
@@ -187,7 +188,10 @@
             event.preventDefault();
             var formData = new FormData(form);
             var password = formData.get(passwordField);
-            fetch(form.action || window.location.pathname, {
+            // Password change clears its old key before starting the new
+            // derivation; login captures before its first request (#2528).
+            var derivation = before ? null : window.crypto_session.beginKeyDerivation();
+            return fetch(form.action || window.location.pathname, {
                 method: "POST",
                 body: formData,
                 redirect: "manual",
@@ -214,7 +218,7 @@
                     var beforePromise = before ? before() : Promise.resolve();
                     return beforePromise
                         .then(function () {
-                            return fetchSaltAndDeriveKey(password, fallbackLocation);
+                            return fetchSaltAndDeriveKey(password, fallbackLocation, false, derivation);
                         })
                         .then(function (homeUrl) {
                             return homeUrl || fallbackLocation;
@@ -223,7 +227,9 @@
                 .then(function (location) {
                     if (location) window.location.href = location;
                 })
-                .catch(function () {
+                .catch(function (error) {
+                    // Do not restart a revoked login through native submit.
+                    if (error.name === "NoSessionKeyError") return;
                     disarmed = true;
                     form.submit();
                 });
@@ -234,9 +240,10 @@
         // Consume rendered data locally as well, preventing a second derivation.
         var demoPassword = demoData.getAttribute("data-demo-offline-password");
         demoData.removeAttribute("data-demo-offline-password");
+        var demoDerivation = window.crypto_session.beginKeyDerivation();
         window.crypto_session.ready()
             .then(function () {
-                return fetchSaltAndDeriveKey(demoPassword, null, true);
+                return fetchSaltAndDeriveKey(demoPassword, null, true, demoDerivation);
             })
             .then(function (homeUrl) {
                 if (!homeUrl) showDemoBootstrapError();

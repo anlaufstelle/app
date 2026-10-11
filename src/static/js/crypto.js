@@ -87,6 +87,7 @@
     const DB_NAME = "anlaufstelle-crypto";
     const META_TABLE = "meta";
     const KEY_NAME = "sessionKey";
+    const REVOCATION_KEY = "keyRevocation";
     // Idle wipe (Refs #1065): lastActivity stamp in the same meta store.
     const ACTIVITY_KEY = "lastActivity";
     const EXPIRED_KEY = "keyExpired";
@@ -197,7 +198,19 @@
         }
     }
 
-    function _idbPut(record, generation) {
+    // Capture before the first async step of login/demo, not after the salt
+    // response. The persistent marker also invalidates work in other tabs.
+    function beginKeyDerivation() {
+        return {
+            generation: keyGeneration,
+            revocation: _idbGet(REVOCATION_KEY).then(
+                function (row) { return { value: row ? row.generation : 0 }; },
+                function (error) { return { error }; }
+            ),
+        };
+    }
+
+    function _idbPut(record, generation, revocation) {
         return _openDb().then(function (db) {
             if (generation !== undefined && generation !== keyGeneration) {
                 db.close();
@@ -205,31 +218,58 @@
             }
             return new Promise(function (resolve, reject) {
                 const tx = db.transaction(META_TABLE, "readwrite");
-                tx.objectStore(META_TABLE).put(record);
+                const store = tx.objectStore(META_TABLE);
+                let failure;
+                if (revocation !== undefined) {
+                    // Check and write atomically against deletion in any tab.
+                    const req = store.get(REVOCATION_KEY);
+                    req.onsuccess = function () {
+                        const current = req.result ? req.result.generation : 0;
+                        if (current !== revocation || generation !== keyGeneration) {
+                            failure = new Error("NoSessionKey");
+                            failure.name = "NoSessionKeyError";
+                            tx.abort();
+                            return;
+                        }
+                        store.put(record);
+                    };
+                } else {
+                    store.put(record);
+                }
                 tx.oncomplete = function () {
                     db.close();
                     resolve();
                 };
-                tx.onerror = function () {
+                tx.onerror = tx.onabort = function () {
                     db.close();
-                    reject(tx.error);
+                    reject(failure || tx.error || new Error("KeyWriteTransactionAborted"));
                 };
             });
         });
     }
 
-    function _idbDelete(key) {
+    function _idbDelete(key, revoke) {
         return _openDb().then(function (db) {
             return new Promise(function (resolve, reject) {
                 const tx = db.transaction(META_TABLE, "readwrite");
-                tx.objectStore(META_TABLE).delete(key);
+                const store = tx.objectStore(META_TABLE);
+                store.delete(key);
+                if (revoke) {
+                    const req = store.get(REVOCATION_KEY);
+                    req.onsuccess = function () {
+                        store.put({
+                            key: REVOCATION_KEY,
+                            generation: (req.result ? req.result.generation : 0) + 1,
+                        });
+                    };
+                }
                 tx.oncomplete = function () {
                     db.close();
                     resolve();
                 };
-                tx.onerror = function () {
+                tx.onerror = tx.onabort = function () {
                     db.close();
-                    reject(tx.error);
+                    reject(tx.error || new Error("KeyDeleteTransactionAborted"));
                 };
             });
         });
@@ -473,6 +513,8 @@
     // BroadcastChannel ohnehin nie ein key-cleared.
     function _onOrchestratorMessage(msg) {
         if (!msg || msg.type !== "key-cleared") return;
+        // Invalidate pending derivations even while UI refresh waits for sync.
+        keyGeneration += 1;
         _runExclusive(_applyKeyCleared).catch(function () {
             // ignore — best-effort; ein Lese-/Lock-Fehler darf nicht werfen.
         });
@@ -649,11 +691,15 @@
         await _loadKey();
     }
 
-    async function deriveSessionKey(password, saltB64Url) {
-        const generation = keyGeneration;
+    async function deriveSessionKey(password, saltB64Url, derivation) {
+        const attempt = derivation || beginKeyDerivation();
+        const generation = attempt.generation;
         if (!isSupported()) {
             throw new Error("WebCrypto not supported");
         }
+        const marker = await attempt.revocation;
+        _assertKeyGeneration(generation);
+        if (marker.error) throw marker.error;
         const createdAt = Date.now();
         const expiresAt = createdAt + _keyMaxAgeMs();
         const salt = b64UrlToBytes(saltB64Url);
@@ -681,7 +727,15 @@
         _assertKeyGeneration(generation);
         await _touchActivity(true);
         const row = { key: KEY_NAME, cryptoKey: key, createdAt, expiresAt, checkedAt: createdAt };
-        await _idbPut(row, generation);
+        try {
+            await _idbPut(row, generation, marker.value);
+        } catch (error) {
+            if (error.name === "NoSessionKeyError") {
+                cachedKey = null;
+                cachedLifetime = null;
+            }
+            throw error;
+        }
         _assertKeyGeneration(generation);
         cachedKey = key;
         cachedLifetime = row;
@@ -784,7 +838,7 @@
         cachedKey = null;
         cachedLifetime = null;
         try {
-            await _idbDelete(KEY_NAME);
+            await _idbDelete(KEY_NAME, true);
         } catch (_e) {
             // A surviving key still needs the original idle deadline.
             return { persisted: false };
@@ -840,6 +894,7 @@
 
     const api = {
         isSupported: isSupported,
+        beginKeyDerivation: beginKeyDerivation,
         deriveSessionKey: deriveSessionKey,
         clearSessionKey: clearSessionKey,
         // Refs #2136 (R-L3-13): Rueckleseprobe fuer den Loeschnachweis des
