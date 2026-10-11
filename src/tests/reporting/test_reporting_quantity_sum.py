@@ -65,11 +65,12 @@ def test_period_sums_are_type_independent_and_ordered(backend, facility, admin_u
     add_events(facility, admin_user, first, first_field, [1, 2, 7])
     result = prepared(backend, facility, date_range)
     assert result.records == [
-        {"document_type": "Alpha", "events": 3, "contributors": 3, "quantity": 10},
-        {"document_type": "Zulu", "events": 3, "contributors": 3, "quantity": 15},
+        {"document_type": "Alpha", "contributors": 3, "quantity": 10},
+        {"document_type": "Zulu", "contributors": 3, "quantity": 15},
     ]
     assert result.summary["quantity_total"] == 25
-    assert result.summary["events_total"] == result.summary["contributors_total"] == 6
+    assert result.summary["contributors_total"] == 6
+    assert "events_total" not in result.summary
 
 
 @pytest.fixture(params=["exclusive", "other-type", "shared-field", "duplicate"])
@@ -96,6 +97,7 @@ def test_excluded_type_does_not_contribute_to_dataset(backend, facility, date_ra
     _, _, included, _ = excluded_configuration
     result = backend.build_dataset(facility, *date_range)
     assert result.summary == {
+        "document_type_counts": {"Excluded counter": 5, **({"Included counter": 5} if included else {})},
         "events_total": 5 if included else 0,
         "contributors_total": 5 if included else 0,
         "quantity_total": 35 if included else 0,
@@ -233,7 +235,7 @@ def test_sum_threshold_uses_contributing_events(backend, facility, admin_user, d
     doc_type, field = make_type(facility)
     add_events(facility, admin_user, doc_type, field, [quantity] * 4 + [None] * 5)
     result = prepared(backend, facility, date_range)
-    assert result.records == [{"document_type": "Counter", "events": 9, "contributors": None, "quantity": None}]
+    assert result.records == [{"document_type": "Counter", "contributors": None, "quantity": None}]
     assert result.summary["quantity_total"] is None
     assert result.summary["contributors_total"] is None
     assert all(issue.count is None for issue in result.completeness)
@@ -243,7 +245,7 @@ def test_zero_counts_as_contribution_at_threshold(backend, facility, admin_user,
     doc_type, field = make_type(facility)
     add_events(facility, admin_user, doc_type, field, [0] * 5)
     assert prepared(backend, facility, date_range).records == [
-        {"document_type": "Counter", "events": 5, "contributors": 5, "quantity": 0}
+        {"document_type": "Counter", "contributors": 5, "quantity": 0}
     ]
 
 
@@ -253,13 +255,13 @@ def test_residual_guard_and_quantity_margin(backend, facility, admin_user, date_
         add_events(facility, admin_user, doc_type, field, values)
     result = prepared(backend, facility, date_range)
     rows = {row["document_type"]: row for row in result.records}
-    assert rows["Gamma"]["events"] is None
-    assert sum(row["events"] is None for row in rows.values()) >= 2
+    assert rows["Gamma"]["contributors"] is None
+    assert sum(row["contributors"] is None for row in rows.values()) >= 2
     assert rows["Gamma"]["contributors"] is None
     assert rows["Gamma"]["quantity"] is None
     assert result.summary["quantity_total"] is None
     assert result.summary["contributors_total"] is None
-    assert result.summary["events_total"] == 31
+    assert "events_total" not in result.summary
 
 
 @pytest.mark.parametrize("small", [False, True])
@@ -285,11 +287,11 @@ def test_panel_csv_pdf_share_published_values(backend, facility, admin_user, dat
     monkeypatch.setattr(weasyprint.HTML, "write_pdf", write_pdf)
     response = export_dataset(backend, facility, *date_range, format="pdf")
     assert response.content.startswith(b"%PDF-")
-    expected = ["Counter", None, None, None] if small else ["Counter", 6, 6, 222]
+    expected = ["Counter", None, None] if small else ["Counter", 6, 222]
     assert context["preview_rows"] == [expected]
     data_row = next(row for row in csv_rows if row and row[0] == "Counter")
     assert data_row == [str(value) if value is not None else "" for value in expected]
-    expected_pdf_row = "Counter — — —" if small else "Counter 6 6 222"
+    expected_pdf_row = "Counter — —" if small else "Counter 6 222"
     assert expected_pdf_row in pdf_text[-1]
     assert ("222" in pdf_text[-1]) is (not small)
     assert "74" not in pdf_text[-1]
@@ -335,7 +337,7 @@ def test_sum_stays_hidden_when_contributor_count_exposes_small_missing_gap(backe
     doc_type, field = make_type(facility)
     add_events(facility, admin_user, doc_type, field, [3] * 5 + [None])
     result = prepared(backend, facility, date_range)
-    assert result.records[0]["events"] == 6
+    assert "events" not in result.records[0]
     assert result.records[0]["contributors"] is None
     assert result.records[0]["quantity"] is None
     assert result.summary["contributors_total"] is None
@@ -352,3 +354,79 @@ def test_duplicate_key_on_text_field_also_blocks_numeric_sum(backend, facility, 
     assert result.records[0]["quantity"] is None
     assert result.records[0]["contributors"] == 0
     assert "duplicate_field_binding" in {issue.code for issue in result.completeness}
+
+
+@pytest.mark.parametrize("unbound_count", [2, 0])
+def test_cross_report_exports_share_document_type_suppression(client, facility, lead_user, date_range, unbound_count):
+    """A bound subtotal must not recover hidden types from another report."""
+    Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 5})
+    for name, count, value in [("Alpha", 7, 1), ("Bravo", 3, 50)]:
+        doc_type, field = make_type(facility, name)
+        add_events(facility, lead_user, doc_type, field, [value] * count)
+    unbound = DocumentType.objects.create(facility=facility, name="Charlie")
+    for _ in range(unbound_count):
+        Event.objects.create(facility=facility, created_by=lead_user, document_type=unbound, occurred_at=timezone.now())
+    client.force_login(lead_user)
+    payloads = {}
+    for slug in ["general-key-figures", "quantity-sum"]:
+        response = client.get(
+            reverse("core:statistics_report_export"),
+            {
+                "backend": slug,
+                "format": "json",
+                "date_from": str(date_range[0]),
+                "date_to": str(date_range[1]),
+                "recipient": "Funder",
+                "purpose": "Annual report",
+            },
+        )
+        assert response.status_code == 200
+        payloads[slug] = json.loads(response.content)
+    general = {
+        row["label"]: row["count"]
+        for row in payloads["general-key-figures"]["records"]
+        if row["table"] == "by_document_type"
+    }
+    quantity = payloads["quantity-sum"]
+    assert general["Bravo"] is None
+    if unbound_count:
+        assert general["Alpha"] == 7 and general["Charlie"] is None
+    else:
+        assert general["Alpha"] is None
+    assert "events_total" not in quantity["summary"]
+    assert quantity["summary"]["contributors_total"] is None
+    assert quantity["summary"]["quantity_total"] is None
+    for row in quantity["records"]:
+        assert "events" not in row
+        if general.get(row["document_type"]) is None:
+            assert row["contributors"] is None and row["quantity"] is None
+    releases = AuditLog.objects.for_facility(facility).filter(action=AuditLog.Action.EXPORT)
+    assert releases.count() == 2
+    assert all(entry.detail["artifact_released"] is True for entry in releases)
+
+
+def test_sum_export_hides_type_suppressed_by_general_figures(client, facility, lead_user, date_range):
+    doc_type, field = make_type(facility, "Alpha")
+    add_events(facility, lead_user, doc_type, field, [1] * 7)
+    other = DocumentType.objects.create(facility=facility, name="Bravo")
+    for _ in range(3):
+        Event.objects.create(facility=facility, created_by=lead_user, document_type=other, occurred_at=timezone.now())
+    client.force_login(lead_user)
+    payloads = []
+    for slug in ["general-key-figures", "quantity-sum"]:
+        response = client.get(
+            reverse("core:statistics_report_export"),
+            {"backend": slug, "format": "json", "date_from": str(date_range[0]), "date_to": str(date_range[1])},
+        )
+        assert response.status_code == 200
+        payloads.append(json.loads(response.content))
+    assert (
+        next(
+            row["count"]
+            for row in payloads[0]["records"]
+            if row["table"] == "by_document_type" and row["label"] == "Alpha"
+        )
+        is None
+    )
+    assert payloads[1]["records"][0]["contributors"] is None
+    assert payloads[1]["records"][0]["quantity"] is None

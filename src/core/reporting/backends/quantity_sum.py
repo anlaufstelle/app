@@ -28,6 +28,7 @@ from core.services.dashboard.external_report import (
     _get_threshold,
     _suppress_small,
     apply_residual_guard,
+    build_external_report,
 )
 from core.services.file_vault import safe_decrypt
 
@@ -71,12 +72,12 @@ class QuantitySumBackend(DatasetBackend):
     snapshot_enabled = False
     feld_bindungen = (QUANTITY_FIELD,)
     verfuegbarkeit = (Anforderung(feld_bindungen=(QUANTITY_FIELD,), entity_type=DocumentType.EntityType.EVENT),)
-    _EXPORT_BREAKDOWN = _Breakdown("records", "events_total", ORDER_INPUT, count_key="events")
+
+    _EXPORT_BREAKDOWN = _Breakdown("records", "contributors_total", ORDER_INPUT, count_key="contributors")
 
     def get_field_specs(self) -> list[FieldSpec]:
         return [
             FieldSpec("document_type", _("Dokumentationstyp")),
-            FieldSpec("events", _("Ereignisse")),
             FieldSpec("contributors", _("Beitragende Ereignisse")),
             FieldSpec("quantity", _("Stückzahl im Zeitraum")),
         ]
@@ -107,6 +108,10 @@ class QuantitySumBackend(DatasetBackend):
             row["quantity"] += value
             row["contributors"] += 1
 
+        # Reuse the complete general-figures decision, including secondary
+        # suppression and any whole-table removal by the residual guard.
+        disclosure = build_external_report(facility, date_from, date_to)
+        published_counts = {row["name"]: row["count"] for row in disclosure.get("by_document_type", [])}
         total = sum((row["quantity"] for row in rows.values()), Fraction(0))
         records = []
         for row in rows.values():
@@ -118,6 +123,7 @@ class QuantitySumBackend(DatasetBackend):
             mode="rows",
             records=records,
             summary={
+                "document_type_counts": published_counts,
                 "events_total": sum(row["events"] for row in records),
                 "contributors_total": sum(row["contributors"] for row in records),
                 "quantity_total": _json_number(total) if all(row["quantity"] is not None for row in records) else None,
@@ -131,41 +137,48 @@ class QuantitySumBackend(DatasetBackend):
         )
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        """Protect each count independently; hidden sums also hide their margin."""
+        """Share the type decision; never publish a bound-event subtotal."""
         threshold = _get_threshold(facility)
-        total = result.summary["events_total"]
-        published_total = total if total >= threshold else None
-        view = {
-            "events_total": published_total,
-            "records": _suppress_small(
-                result.records, threshold, count_key="events", margin=published_total, order=ORDER_INPUT
-            ),
-        }
-        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
-        rows = view.get("records")
-        # Contributor groups may contain zero events. Withhold their margin as
-        # soon as any group is hidden, rather than assume a positive lower bound.
-        contributors = _suppress_small(rows or [], threshold, count_key="contributors", margin=None, order=ORDER_INPUT)
-        complete = bool(rows) and view["events_total"] is not None
-        for row, contribution in zip(rows or (), contributors, strict=True):
-            missing = (row["events"] or 0) - row["contributors"]
-            # A visible contributor count must not reveal a suppressed small
-            # missing-value count by subtraction from the event count.
-            if row.get("suppressed") or contribution.get("suppressed") or 0 < missing < threshold:
+        published_counts = result.summary["document_type_counts"]
+        rows = [dict(row) for row in result.records]
+        # Contributors are event counts, too. Withhold their margin whenever
+        # any row is hidden; a bound subtotal could unlock another report.
+        contributions = _suppress_small(rows, threshold, count_key="contributors", margin=None, order=ORDER_INPUT)
+        complete = bool(rows)
+        for row, contribution in zip(rows, contributions, strict=True):
+            missing = row["events"] - row["contributors"]
+            # The general report still exposes event counts. Publishing a
+            # contributor count must not reveal a small missing-value gap.
+            if (
+                published_counts.get(row["document_type"]) is None
+                or contribution.get("suppressed")
+                or 0 < missing < threshold
+            ):
                 row["contributors"] = None
+                row["quantity"] = None
+                complete = False
+        # The contributor margin is published only for a fully visible table.
+        # Still pass it through the central guard so that its partition contract
+        # remains protected if subsequent suppression rules become stricter.
+        view = {"records": rows, "contributors_total": result.summary["contributors_total"] if complete else None}
+        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
+        rows = view.get("records", [])
+        for row in rows:
+            if row.get("suppressed"):
                 row["quantity"] = None
                 complete = False
         summary = stamp_threshold(
             {
-                "events_total": view["events_total"],
-                "contributors_total": result.summary["contributors_total"] if complete else None,
-                "quantity_total": result.summary["quantity_total"] if complete else None,
+                "contributors_total": view["contributors_total"],
+                "quantity_total": result.summary["quantity_total"]
+                if complete and view["contributors_total"] is not None
+                else None,
             },
             threshold,
         )
         return dataclasses.replace(
             result,
-            records=project_records(rows or (), self.get_field_specs()),
+            records=project_records(rows, self.get_field_specs()),
             summary=summary,
             # Data-independent, unnumbered completeness avoids a small-gap signal.
             completeness=[CompletenessIssue(MISSING_VALUES_CODE, MISSING_VALUES_MESSAGE, "warning", count=None)]
