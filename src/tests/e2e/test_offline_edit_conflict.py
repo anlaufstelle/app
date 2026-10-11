@@ -173,12 +173,31 @@ def _go_online(page):
 
 
 def _edit_notiz_offline(page, event_pk, value):
-    """Edit-Affordanz öffnen, ``notiz`` ändern, speichern → landet in der Queue."""
+    """Wait for the edited note to be persisted and the save UI to finish."""
     page.locator(f"[data-testid='offline-edit-btn-{event_pk}']").click()
     page.locator("[data-testid='offline-edit-form']").wait_for(state="visible", timeout=10000)
     page.locator("[data-testid='offline-edit-input-notiz']").fill(value)
     page.locator("[data-testid='offline-edit-save']").click()
-    # „Nicht synchronisiert"-Badge erscheint = Edit liegt in der Offline-Queue.
+    assert wait_until(
+        page,
+        lambda: page.evaluate(
+            """async ({pk, note}) => {
+                const record = await window.offlineStore.getOfflineEvent(pk);
+                return record?.data?.formData?.notiz === note;
+            }""",
+            {"pk": event_pk, "note": value},
+        ),
+        timeout_ms=10000,
+    ), "The edited note was not persisted before reconnect"
+    page.locator("[data-testid='offline-edit-form']").wait_for(state="hidden", timeout=10000)
+    page.wait_for_function(
+        """() => {
+            const viewer = document.querySelector('[data-testid="offline-client-view"]');
+            return viewer && window.Alpine.$data(viewer).saving === false;
+        }""",
+        timeout=10000,
+    )
+    # An existing unsynced badge alone does not prove that a re-edit finished.
     page.locator("[data-testid='event-unsynced-badge']").first.wait_for(state="visible", timeout=10000)
 
 
@@ -345,6 +364,7 @@ class TestOfflineReeditOfNewEvent:
             # urspruenglichen idempotencyKey nicht verlieren.
             after_reedit = page.evaluate("async (pk) => window.offlineStore.getOfflineEvent(pk)", new_pk)
             assert after_reedit is not None
+            assert after_reedit["data"]["formData"]["notiz"] == "Geaendert vor Sync (Re-Edit)"
             assert after_reedit["localStatus"] == "new", (
                 "Re-Edit eines offline neu angelegten Events degradiert den Status zu "
                 f"{after_reedit['localStatus']!r} statt 'new' zu bleiben (markEventModified "
@@ -391,29 +411,16 @@ class TestOfflineReeditOfNewEvent:
 
             _go_online(page)
 
-            # Endzustand statt fester Wartezeit: die new-Row muss nach dem
-            # Replay aus IndexedDB verschwunden sein. Ein Timeout hier heisst
-            # "kein Replay gelaufen" (z.B. set_offline feuerte in dieser
-            # Browser-Version gar kein online-Event) — mit klarer Meldung
-            # statt spaeter kryptisch leerlaufender Zaehler-Asserts.
-            #
-            # Python-seitig gepollt (``wait_until``), NICHT via
-            # ``page.wait_for_function`` mit async-Callback: das waere ein
-            # sofort erfuellter False-Positive (Promise ist truthy) — die
-            # Barriere faellt weg und die Zaehler-Asserts darunter laufen ins
-            # Leere, sobald der Replay auch nur Millisekunden braucht.
-            # Begruendung im Detail an ``_helpers.wait_until``.
+            # Read the physical row: a decrypted null can also mean key loss.
+            # Poll in Python so an unresolved JS promise cannot satisfy the wait.
             if not wait_until(
                 page,
-                lambda: page.evaluate("async (pk) => window.offlineStore.getOfflineEvent(pk)", new_pk) is None,
+                lambda: page.evaluate("async (pk) => window.offlineStore.db.events.get(pk)", new_pk) is None,
                 timeout_ms=20000,
             ):
                 pytest.fail(
-                    "Replay hat die lokale new-Row nicht aufgeloest (nach 20s noch in "
-                    "IndexedDB). Wahrscheinlichste Ursachen: das online-Event hat nicht "
-                    f"gefeuert (Browser-Verhalten von set_offline geaendert?) oder der "
-                    f"Replay schlug fehl. Bisher gesendete /events/new/-POSTs: {len(sent_keys)}, "
-                    f"/edit/-POSTs: {edit_counter['n']}."
+                    "Replay did not remove the local new row within 20 seconds. "
+                    f"Create requests: {len(sent_keys)}, edit requests: {edit_counter['n']}."
                 )
 
             assert edit_counter["n"] == 0, (
@@ -448,13 +455,19 @@ class TestOfflineReeditOfNewEvent:
             # nicht mehr abfangen. Flaked dieser Test wieder auf 2, ist das ein
             # ECHTES Signal ueber den Sync-Orchestrator (Lock/Koaleszenz greift nicht)
             # — dann debuggen, nicht wieder lockern.
-            page.wait_for_timeout(500)
+            assert wait_until(
+                page,
+                lambda: "Geaendert vor Sync (Re-Edit)" in _server_client_event_notes(e2e_env, client_pk),
+                timeout_ms=20000,
+            ), "The server did not persist the edited note after replay"
             notes = _server_client_event_notes(e2e_env, client_pk)
             created = notes.count("Geaendert vor Sync (Re-Edit)")
             assert created == 1, (
-                f"Server muss das re-editierte Event GENAU EINMAL angelegt haben "
-                f"(alle notiz-Werte: {notes!r}; gesendete Idempotency-Keys: {sent_keys!r})."
+                "The server must create exactly one event with the edited note "
+                f"(all notes: {notes!r}; idempotency keys: {sent_keys!r})."
             )
+            assert notes.count("Neu offline vor Re-Edit") == 0, "Replay persisted the obsolete note"
+            assert len(notes) == 2, f"Expected the existing event and exactly one new event: {notes!r}"
         finally:
             with suppress(Exception):
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
