@@ -252,7 +252,7 @@ class TestProcessingActivitiesSchema:
         assert professional_entries.keys() == {"klienten_stammdaten", "falldaten"}
         for legal_basis in professional_entries.values():
             assert "SGB VIII" not in legal_basis
-            assert "einschlaegiges Fach- und Sozialrecht der Einrichtung" in legal_basis
+            assert "einschlägiges Fach- und Sozialrecht der Einrichtung" in legal_basis
 
     def test_list_fields_are_lists_of_translatable_strings(self):
         for entry in PROCESSING_ACTIVITIES:

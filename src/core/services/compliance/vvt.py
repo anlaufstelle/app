@@ -54,8 +54,8 @@ PROCESSING_ACTIVITIES = [
         "legal_basis": _(
             "DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im "
             "oeffentlichen Interesse). Einrichtungsspezifische Grundlage: "
-            "einschlaegiges Fach- und Sozialrecht der Einrichtung "
-            "(konkrete Rechtsgrundlage vor Freigabe ergaenzen)."
+            "einschlägiges Fach- und Sozialrecht der Einrichtung "
+            "(konkrete Rechtsgrundlage vor Freigabe ergänzen)."
         ),
         "data_categories": [
             _("Pseudonym (kein Klarname)"),
@@ -108,10 +108,10 @@ PROCESSING_ACTIVITIES = [
             # Volltextsuche bewusst unprotokolliert bleibt, entscheidet
             # ADR-043.
             _(
-                "AuditLog auf jede Aenderung; von Lesezugriffen nur die "
+                "AuditLog auf jede Änderung; von Lesezugriffen nur die "
                 "Personen-Detailseite der Stufe „Mit Zusatzangaben“, Auskunft "
                 "und Export, Datei-Download, Offline-Mitnahme sowie "
-                "facility-uebergreifende Zugriffe — sonstige Listen-, Detail- "
+                "facility-übergreifende Zugriffe — sonstige Listen-, Detail- "
                 "und Suchaufrufe werden nicht protokolliert (ADR-043)"
             ),
             _("Rollenbasierte Zugriffskontrolle (5 Rollen)"),
@@ -126,30 +126,30 @@ PROCESSING_ACTIVITIES = [
         "title": _("Falldaten (Events, Episoden, Dokumentationen)"),
         "purpose": _(
             "Zeitstrom-basierte Dokumentation von Kontakten, Beratungen "
-            "und Hilfeprozessen. Strukturierung zusammenhaengender "
-            "Arbeit zu Faellen und Episoden. Grundlage der Wirkungs"
-            "messung und Berichterstattung gegenueber Foerdermittel"
+            "und Hilfeprozessen. Strukturierung zusammenhängender "
+            "Arbeit zu Fällen und Episoden. Grundlage der Wirkungs"
+            "messung und Berichterstattung gegenüber Fördermittel"
             "gebern."
         ),
         "legal_basis": _(
-            "DSGVO Art. 6 Abs. 1 lit. e; Art. 9 Abs. 2 lit. b/h fuer "
+            "DSGVO Art. 6 Abs. 1 lit. e; Art. 9 Abs. 2 lit. b/h für "
             "besondere Datenkategorien (Gesundheits-, Sozialdaten). "
-            "Einrichtungsspezifische Grundlage: einschlaegiges Fach- und "
+            "Einrichtungsspezifische Grundlage: einschlägiges Fach- und "
             "Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor "
-            "Freigabe ergaenzen). § 203 StGB, soweit anwendbar."
+            "Freigabe ergänzen). § 203 StGB, soweit anwendbar."
         ),
         "data_categories": [
             _("Ereignisbeschreibungen / Beratungsnotizen"),
             _("Strukturierte Feldwerte (je Dokumentationstyp konfiguriert)"),
             _("Kontaktanlass, Themen, Vermittlungen"),
             _("Ggf. Gesundheits-/Suchtkontext (je nach Feldkonfiguration verschlüsselt)"),
-            _("Zeitstempel, Bearbeiter:in, Sensitivitaetsstufe"),
+            _("Zeitstempel, Bearbeiter:in, Sensitivitätsstufe"),
         ],
         "recipients": [
-            _("Intern: Mitarbeiter:innen der Einrichtung mit passender Rolle und Sensitivitaetsfreigabe"),
+            _("Intern: Mitarbeiter:innen der Einrichtung mit passender Rolle und Sensitivitätsfreigabe"),
             _(
                 "Keine Weitergabe an Dritte — pseudonymisierte Statistik ggf. an "
-                "Foerdermittelgeber/Behoerden (Sachbericht-Export)"
+                "Fördermittelgeber/Behoerden (Sachbericht-Export)"
             ),
         ],
         # Refs #2462: the document type period is an additional strategy
@@ -185,7 +185,7 @@ PROCESSING_ACTIVITIES = [
             "(einstellbar); für sie gibt es keinen Legal Hold."
         ),
         "toms": [
-            _("Sensitivitaets-basierte Sichtbarkeit (je Dokumentationstyp, einzelne Feldvorlagen koennen sie anheben)"),
+            _("Sensitivitäts-basierte Sichtbarkeit (je Dokumentationstyp, einzelne Feldvorlagen können sie anheben)"),
             _("Verschlüsselung sensibler Felder (Fernet: AES-128-CBC mit HMAC-SHA256, Schlüssel außerhalb der DB)"),
             _("Optimistic Locking gegen versehentliches Ueberschreiben"),
             # Refs #1862: Hier stand "AuditLog jeder Lese- und Schreibaktion".
@@ -228,13 +228,13 @@ PROCESSING_ACTIVITIES = [
             # sondern durch die drei Aktionen, die es jetzt gibt — eine
             # Art.-30-Angabe zaehlt auf, was protokolliert wird.
             _(
-                "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; "
-                "auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, "
-                "Wiederherstellen und Anonymisieren von Faellen; auf das "
+                "AuditLog auf Anlegen, Bearbeiten und Löschen von Ereignissen; "
+                "auf Anlegen, Bearbeiten, Schließen, Wiedereröffnen, Löschen, "
+                "Wiederherstellen und Anonymisieren von Fällen; auf das "
                 "Bearbeiten von Episoden und Wirkungszielen sowie das Zuordnen "
-                "und Loesen von Ereignissen zu Faellen; von Lesezugriffen nur "
+                "und Lösen von Ereignissen zu Fällen; von Lesezugriffen nur "
                 "Export, Datei-Download, Offline-Mitnahme und "
-                "facility-uebergreifende Zugriffe — Detail-, Listen- und "
+                "facility-übergreifende Zugriffe — Detail-, Listen- und "
                 "Suchaufrufe werden nicht protokolliert (ADR-043)"
             ),
             # Refs #2492: four eyes only where the code asks for a second
@@ -247,12 +247,12 @@ PROCESSING_ACTIVITIES = [
                 "Zusatzangaben“; Dateien vernichten Leitung und "
                 "Anwendungsbetreuung ohne zweite Person"
             ),
-            _("Encrypted File Vault mit ClamAV-Scan fail-closed fuer Anhaenge"),
+            _("Encrypted File Vault mit ClamAV-Scan fail-closed für Anhänge"),
         ],
     },
     {
         "id": "auditlog",
-        "title": _("Audit-Log (Zugriffs- und Aenderungsprotokoll)"),
+        "title": _("Audit-Log (Zugriffs- und Änderungsprotokoll)"),
         "purpose": _(
             "Nachweis der Rechenschaftspflicht (DSGVO Art. 5 Abs. 2). "
             "Erkennung von Missbrauch, Beweismittel im Datenleck-Fall, "
@@ -277,7 +277,7 @@ PROCESSING_ACTIVITIES = [
         "recipients": [
             _("Anwendungsbetreuung der Einrichtung (Facility-Audit-Log)"),
             _(
-                "Systemadministration (Cross-Facility-Audit ueber "
+                "Systemadministration (Cross-Facility-Audit über "
                 "/system/audit/, mit eigenem SYSTEM_VIEW-Eintrag pro "
                 "Aufruf)"
             ),
@@ -309,7 +309,7 @@ PROCESSING_ACTIVITIES = [
                 "Wartungsfunktion für die Hash-Kette, um nur deren Prüfwerte "
                 "neu zu setzen; fachliche Inhalte ändert keiner der beiden Wege"
             ),
-            _("Zugriff nur fuer Anwendungsbetreuung und Systemadministration"),
+            _("Zugriff nur für Anwendungsbetreuung und Systemadministration"),
             _("Cross-Facility-Auswertung bedingt eigenen SYSTEM_VIEW-Audit"),
             _("Backup taeglich (siehe Verarbeitung 'Backup-Daten')"),
         ],
@@ -319,8 +319,8 @@ PROCESSING_ACTIVITIES = [
         "title": _("Login- und Authentifizierungsdaten"),
         "purpose": _(
             "Authentifizierung der Mitarbeiter:innen, Schutz gegen "
-            "Brute-Force, Sitzungsverwaltung. Nachweis fuer "
-            "Datenschutz-Vorfallpruefung."
+            "Brute-Force, Sitzungsverwaltung. Nachweis für "
+            "Datenschutz-Vorfallprüfung."
         ),
         "legal_basis": _(
             "DSGVO Art. 6 Abs. 1 lit. b (Vertragserfuellung — "
@@ -336,13 +336,13 @@ PROCESSING_ACTIVITIES = [
         ],
         "recipients": [
             _("Intern: Anwendungsbetreuung der Einrichtung"),
-            _("Systemadministration (User-Management ueber Django-Admin)"),
+            _("Systemadministration (User-Management über Django-Admin)"),
         ],
         # Refs #2492: ``login_lockout.is_locked`` derives the lockout from
         # ``LOGIN_FAILED`` audit rows; there is no separate attempt table and
         # no 90-day sweep.
         "retention_period": _(
-            "Konto-Stammdaten: bis zur Loeschung des Accounts. "
+            "Konto-Stammdaten: bis zur Löschung des Accounts. "
             "Login-Versuche und Kontosperren: als Audit-Einträge, aus denen "
             "die Sperre berechnet wird; sie folgen der Audit-Frist (siehe "
             "Verarbeitung 'Audit-Log'), Fehlversuche unter unbekanntem "
@@ -359,7 +359,7 @@ PROCESSING_ACTIVITIES = [
             ),
             _("2FA per TOTP (RFC 6238), per Rollen-Default verpflichtend"),
             _("Recovery-Codes als Self-Service-Backup"),
-            _("Sudo-Mode fuer destruktive Aktionen (15 Min Re-Auth)"),
+            _("Sudo-Mode für destruktive Aktionen (15 Min Re-Auth)"),
             _("HTTPS-only mit HSTS"),
         ],
     },
@@ -409,19 +409,19 @@ PROCESSING_ACTIVITIES = [
                 "Off-Site-Kopien erst durch die Aufbewahrungsregel am Ziel"
             ),
             _("Regelmaessige Restore-Tests"),
-            _("Zugriff nur fuer Systemadministration (4-Augen empfohlen bei Restore)"),
+            _("Zugriff nur für Systemadministration (4-Augen empfohlen bei Restore)"),
         ],
     },
     {
         "id": "dsgvo_requests",
         "title": _("DSGVO-Auskunfts- und Berichtigungsantraege"),
         "purpose": _(
-            "Technische Unterstuetzung der implementierten Betroffenenrechte "
+            "Technische Unterstützung der implementierten Betroffenenrechte "
             "nach DSGVO Art. 15, 16, 17 und 20 (Auskunft, Berichtigung, "
-            "Loeschung und Datenuebertragbarkeit). Antraege auf Einschraenkung "
-            "(Art. 18) oder Widerspruch (Art. 21) werden ausserhalb der "
+            "Löschung und Datenübertragbarkeit). Anträge auf Einschränkung "
+            "(Art. 18) oder Widerspruch (Art. 21) werden außerhalb der "
             "Anwendung im organisatorischen Prozess der Einrichtung "
-            "aufgenommen; die Anwendung stellt dafuer kein Intake-Formular "
+            "aufgenommen; die Anwendung stellt dafür kein Intake-Formular "
             "bereit. Erstellung von Datenexport-Paketen und Dokumentation der "
             "Bearbeitung."
         ),
@@ -432,7 +432,7 @@ PROCESSING_ACTIVITIES = [
         ),
         "data_categories": [
             _("Antragsteller:in (sofern identifiziert)"),
-            _("Antrags-Typ (Auskunft, Berichtigung, Loeschung, ...)"),
+            _("Antrags-Typ (Auskunft, Berichtigung, Löschung, ...)"),
             _("Bearbeitungs-Status und -datum"),
             _("Erzeugte Datenpakete (JSON, PDF) mit allen personenbezogenen Daten der Person"),
             _("Korrespondenz / Aktenvermerke der Anwendungsbetreuung"),
@@ -465,7 +465,7 @@ PROCESSING_ACTIVITIES = [
         ),
         "toms": [
             _(
-                "Berichtigung organisatorisch ueber Mitarbeiter:innen / Leitung — "
+                "Berichtigung organisatorisch über Mitarbeiter:innen / Leitung — "
                 "kein Self-Service durch die betroffene Person"
             ),
             _(
@@ -473,7 +473,7 @@ PROCESSING_ACTIVITIES = [
                 "Ereignissen und Fällen der Stufe „Mit Zusatzangaben“"
             ),
             _("Sudo-Mode-Re-Auth vor Erstellung von Datenpaketen"),
-            _("AuditLog jeder Auskunft / Berichtigung / Loeschung"),
+            _("AuditLog jeder Auskunft / Berichtigung / Löschung"),
             _("Verschluesselte Auslieferung der Datenpakete"),
         ],
     },

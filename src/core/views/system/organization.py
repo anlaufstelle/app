@@ -33,7 +33,7 @@ class SystemOrganizationView(SystemAuditMixin, TemplateView):
                 "organization": organization,
                 "facilities": facilities,
                 "no_organization_hint": _(
-                    "Es ist noch keine Organisation angelegt. Bitte ueber die Administration einrichten."
+                    "Es ist noch keine Organisation angelegt. Bitte über die Administration einrichten."
                 ),
             }
         )

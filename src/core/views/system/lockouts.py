@@ -158,7 +158,7 @@ class SystemUnlockView(SystemAuditMixin, RequireSudoModeMixin, View):
     def post(self, request):
         username = request.POST.get("username", "").strip()
         if not username:
-            messages.error(request, _("Kein Benutzername uebergeben."))
+            messages.error(request, _("Kein Benutzername übergeben."))
             return redirect("core:system_lockout_list")
 
         user = User.objects.filter(username=username).exclude(role=User.Role.SUPER_ADMIN).first()
@@ -171,5 +171,5 @@ class SystemUnlockView(SystemAuditMixin, RequireSudoModeMixin, View):
         # NULL). Analog zum SystemAuditMixin nutzen wir den Bypass.
         _set_session_vars(getattr(user, "facility", None), is_super_admin=True)
         login_lockout.unlock(user, unlocked_by=request.user, ip_address=get_client_ip(request))
-        messages.success(request, _("Sperre fuer '%(username)s' aufgehoben.") % {"username": user.username})
+        messages.success(request, _("Sperre für '%(username)s' aufgehoben.") % {"username": user.username})
         return redirect("core:system_lockout_list")

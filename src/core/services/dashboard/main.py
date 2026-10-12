@@ -141,8 +141,8 @@ def facility_admin_dashboard_context(user, facility) -> dict:
         if not settings_obj.retention_use_k_anonymization:
             warnings.append(
                 _(
-                    "K-Anonymisierung ist deaktiviert — Loeschlauf entfernt Datensaetze hart. "
-                    "Falls Statistik-Erhalt gewuenscht, in Settings aktivieren."
+                    "K-Anonymisierung ist deaktiviert — Löschlauf entfernt Datensätze hart. "
+                    "Falls Statistik-Erhalt gewünscht, in Settings aktivieren."
                 )
             )
 

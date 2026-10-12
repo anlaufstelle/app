@@ -35,6 +35,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Umlaute in Servertexten** (#2505) — Passwortbestätigung, Kontoentsperrung, Systemhinweise und Verarbeitungsverzeichnis zeigen echte Umlaute statt Ersatzschreibungen.
+
 - **Exportleiste nach Downloads wieder freigeben** (#2505) — Download-Formulare geben ihre Formatknöpfe nach einer kurzen Doppelklicksperre wieder frei, sodass weitere Formate ohne Neuladen exportiert werden können.
 
 - **Keine Abmeldung durch verspätete Seitenabrufe nach Sitzungsrotation** (#2034, #2531) — Direkt nach Sudo-Freigabe oder MFA-Einrichtung löschen verspätete Antworten auf parallel nachgeladene Seiten das neue Sitzungscookie nicht mehr; ausdrückliches Abmelden bleibt wirksam.

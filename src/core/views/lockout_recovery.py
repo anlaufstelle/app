@@ -151,7 +151,7 @@ class LockoutRecoveryConfirmView(View):
         user = consume_recovery_token(token, ip_address=get_client_ip(request))
         if user is None:
             return self._invalid(request)
-        messages.success(request, _("Konto entsperrt. Sie koennen sich jetzt anmelden."))
+        messages.success(request, _("Konto entsperrt. Sie können sich jetzt anmelden."))
         return HttpResponseRedirect("/login/?recovered=1")
 
     @staticmethod
@@ -223,5 +223,5 @@ class LockoutRecoveryBackupCodeView(FormView):
             return HttpResponseRedirect("/login/?recovered=1")
 
         # Anti-Enumeration: gleicher Fehler, egal ob User existiert oder Code falsch ist.
-        form.add_error(None, _("Code ungueltig oder Konto nicht gefunden."))
+        form.add_error(None, _("Code ungültig oder Konto nicht gefunden."))
         return self.form_invalid(form)
