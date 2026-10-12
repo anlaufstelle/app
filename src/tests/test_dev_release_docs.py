@@ -30,6 +30,25 @@ def release_findings(root):
         errors.append("missing anonymous pull check")
     if "aktuell **36**" in exclusions:
         errors.append("hardcoded strip count")
+    errors.extend(handoff_findings(checklist))
+    return errors
+
+
+def handoff_findings(checklist):
+    """Maintainer pushes bypass the pre-push hook; tag checks must not gate a chain."""
+    start = checklist.find("### Maintainer-Handoff vX.Y.Z")
+    if start < 0:
+        return ["missing maintainer handoff template"]
+    end = checklist.find("````", start)
+    template = checklist[start : end if end >= 0 else len(checklist)]
+    errors = []
+    for line in template.splitlines():
+        if re.search(r"\bgit\b[^`\n]*\bpush\b", line) and "--no-verify" not in line:
+            errors.append(f"handoff push without --no-verify: {line.strip()}")
+        if re.search(r"\btag -v\b[^`\n]*&&", line):
+            errors.append(f"handoff chains tag -v with &&: {line.strip()}")
+    if "Profil `public`" not in template:
+        errors.append("handoff lacks the public-profile E2E run")
     return errors
 
 
@@ -51,3 +70,20 @@ def test_guard_detects_wrong_repository_and_compose_service(tmp_path):
     assert "obsolete visibility mutation" in errors
     assert "hardcoded strip count" in errors
     assert len([error for error in errors if error.startswith("missing release gate")]) == 3
+
+
+def test_handoff_guard_detects_hooked_pushes_and_chained_tag_checks():
+    template = (
+        "### Maintainer-Handoff vX.Y.Z\n"
+        "git push stage main\n"
+        "git -C repo push --no-verify origin vX.Y.Z\n"
+        "git tag -v vX.Y.Z && git push --no-verify origin vX.Y.Z\n"
+        "````\n"
+        "git push origin main\n"
+    )
+    errors = handoff_findings(template)
+    assert errors == [
+        "handoff push without --no-verify: git push stage main",
+        "handoff chains tag -v with &&: git tag -v vX.Y.Z && git push --no-verify origin vX.Y.Z",
+        "handoff lacks the public-profile E2E run",
+    ]
