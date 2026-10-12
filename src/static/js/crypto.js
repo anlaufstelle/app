@@ -105,6 +105,8 @@
     let knownRevocation = 0;
     let initialLoad = null; // Promise<void> that resolves once cachedKey reflects IndexedDB
     let initialLoadSettled = false;
+    let settleInitialLoad = null; // resolves ``initialLoad``
+    let lockedHydration = null; // boot hydration run by a lock holder of this tab
     let lastActivityWrite = 0; // in-memory throttle marker for _touchActivity
 
     function isSupported() {
@@ -649,21 +651,103 @@
         return cachedKey;
     }
 
-    // Revocation high-water mark plus key hydration through the idle gate.
-    // Errors are ignored; callers retry via encrypt/decrypt (fail closed there).
-    function _hydrate() {
-        return Promise.all([_idbGet(REVOCATION_KEY).then(_observeRevocation), _loadKey()]).catch(
-            function () {}
-        );
+    // Refs #1493: boot hydration = revocation high-water mark plus key
+    // hydration through the idle gate. It settles only once BOTH reads are
+    // done, so ``ready()`` never resolves before the idle check. A failed
+    // marker read is handled on its own and fails closed: the hydrated key is
+    // not exposed, the next ``_loadKey()`` re-checks IndexedDB.
+    async function _hydrate() {
+        const markerRead = _idbGet(REVOCATION_KEY)
+            .then(_observeRevocation)
+            .then(
+                function () {
+                    return true;
+                },
+                function () {
+                    return false;
+                }
+            );
+        const results = await Promise.all([
+            markerRead,
+            _loadKey().catch(function () {
+                return null;
+            }),
+        ]);
+        if (!results[0]) {
+            cachedKey = null;
+            cachedLifetime = null;
+        }
+    }
+
+    function _finishInitialLoad() {
+        initialLoadSettled = true;
+        if (settleInitialLoad) settleInitialLoad();
+    }
+
+    // Refs #1493: the page's boot hydration. Under a lock of this tab it is
+    // the holder's own run (``hydrateUnderLock``). Without the sync module it
+    // runs directly as before; if the sync module shows up while it runs, its
+    // idle gate queues under the lock and the holder settles ``initialLoad``
+    // with its own run instead of waiting for this one.
+    function _runBootHydration() {
+        if (_lockHeldByThisTab()) return hydrateUnderLock();
+        return _hydrate().then(_finishInitialLoad, _finishInitialLoad);
+    }
+
+    // Refs #1493: a lock holder must never wait for something that itself
+    // needs the lock. The holder in ``syncOrchestrator.runExclusive`` calls
+    // this before it runs its function: while ``initialLoad`` is pending, the
+    // holder performs the boot hydration itself -- inside its lock lifetime,
+    // awaited completely -- and thereby settles ``initialLoad``. The idle gate
+    // takes its reentrant path, serialized by the held lock. Every other chain
+    // keeps waiting for ``initialLoad``, which now settles under the lock, so
+    // no chain outside the holder gets a direct gate path. The boot request
+    // queued behind the holder then finds the hydration done. The holder
+    // never joins a hydration started without the lock: that one may wait for
+    // a gate queued behind this very holder.
+    function hydrateUnderLock() {
+        if (initialLoad === null || initialLoadSettled) return Promise.resolve();
+        if (!_lockHeldByThisTab()) return initialLoad;
+        if (!lockedHydration) {
+            lockedHydration = _hydrate().then(_finishInitialLoad, _finishInitialLoad);
+        }
+        return lockedHydration;
+    }
+
+    // Refs #1493: the page's own boot hydration request, under the lock.
+    async function _startBootHydration() {
+        if (!window.syncOrchestrator) {
+            // crypto.js runs before sync-orchestrator.js; one IndexedDB round
+            // trip usually lets the synchronous <script> chain run (as in
+            // ``_runIdleGate``). If the parser still blocks on a script in
+            // between, ``_runBootHydration`` covers the late sync module.
+            try {
+                await _idbGet(ACTIVITY_KEY);
+            } catch (_e) {
+                // ignore -- only a scheduling point
+            }
+        }
+        try {
+            await _runExclusive(_runBootHydration);
+        } catch (_e) {
+            // The lock request itself failed. Fail closed unless a holder of
+            // this tab is already running the hydration.
+            if (!lockedHydration) {
+                cachedKey = null;
+                cachedLifetime = null;
+                _finishInitialLoad();
+            }
+        }
     }
 
     // Eager hydration so synchronous hasSessionKey() reflects IndexedDB
     // contents once the page has finished its first tick. _loadKey() also
     // runs the idle gate, so an expired install is wiped on boot (#1065).
     if (typeof window !== "undefined" && "indexedDB" in window) {
-        initialLoad = _hydrate().then(function () {
-            initialLoadSettled = true;
+        initialLoad = new Promise(function (resolve) {
+            settleInitialLoad = resolve;
         });
+        _startBootHydration();
 
         // Activity stamping (throttled) + periodic idle checks (#1065).
         document.addEventListener(
@@ -715,23 +799,7 @@
         }
     }
 
-    // Refs #1493: a lock holder must never wait for something that itself
-    // needs the lock. ``initialLoad`` runs the boot idle gate UNDER the
-    // origin-wide lock; if a sequence of this tab was granted the lock first,
-    // that gate request is queued behind it. Awaiting ``initialLoad`` from
-    // inside the sequence (replayQueue, revalidation, offline edits, conflict
-    // resolution) would then wait forever and keep the lock held for every
-    // tab. While ``initialLoad`` is pending and this tab holds the lock, run
-    // the same hydration directly instead: the gate takes its reentrant path,
-    // which is already serialized by the held lock, and no foreign-tab
-    // sequence can run concurrently. The queued boot gate still runs under the
-    // lock once the holder releases it.
-    function _bootGateMayBeQueuedBehindUs() {
-        return initialLoad !== null && !initialLoadSettled && _lockHeldByThisTab();
-    }
-
     function ready() {
-        if (_bootGateMayBeQueuedBehindUs()) return _hydrate();
         return initialLoad || Promise.resolve();
     }
 
@@ -741,11 +809,6 @@
     // ``await window.crypto_session?.awaitReady?.();`` (tolerant gegenueber
     // Seiten ohne crypto.js und Test-Stubs ohne diese Methode).
     async function awaitReady() {
-        if (_bootGateMayBeQueuedBehindUs()) {
-            // Reentrant hydration already runs the idle gate (see ready()).
-            await _hydrate();
-            return;
-        }
         await ready();
         await _loadKey();
     }
@@ -973,6 +1036,8 @@
         ready: ready,
         // Refs #1828: gemeinsames Ready-Gate (siehe awaitReady oben).
         awaitReady: awaitReady,
+        // Refs #1493: boot hydration inside a lock holder of this tab.
+        hydrateUnderLock: hydrateUnderLock,
         // Refs #1476 (R8): Einmal-Handshake fuer die Krypto-Primitive.
         _link: _link,
     };

@@ -245,38 +245,52 @@ def _dispatch_online_and_await_sync(page):
     )
 
 
-# Refs #1493: holds back every Web Lock request issued from crypto.js' idle gate
-# (``_runIdleGate``) on the reconnect page ``/`` until a sync sequence
-# (``_drive``) of the same tab has been granted the origin-wide lock. The gate
-# has already seen "lock not held" and then queues behind the sequence -- the
-# order that deadlocked on slow devices.
+# Refs #1493: holds back every Web Lock request issued from crypto.js' boot
+# hydration (``_startBootHydration``) or idle gate (``_runIdleGate``) on the
+# reconnect page ``/`` until a sync sequence (``_drive``) of the same tab has
+# been granted the origin-wide lock. The boot request then queues behind the
+# sequence -- the order that deadlocked on slow devices.
 # Callers are recognized by their stack frames: a test hook would need product
 # code, and ``navigator.locks`` only ever sees the sync module's wrapper
 # callback. Without a sync sequence the gate is released after a fallback
-# delay; each entry records whether it really waited for a sequence grant, so a
-# renamed function fails the guard assertion instead of passing silently.
+# delay. Each entry records once, at the moment the request is really queued,
+# what released it (``queuedBy``) and whether a sequence held the lock then
+# (``afterSequenceGrant``). The losing branch of the race never touches the
+# entry, so neither a fallback nor a renamed function can pass the guard
+# assertion.
 _GATE_BEHIND_SEQUENCE_JS = """(() => {
   if (!navigator.locks) return;
   const original = navigator.locks.request.bind(navigator.locks);
   let markSequenceGranted;
+  let sequencesHolding = 0;
   const sequenceGranted = new Promise((resolve) => { markSequenceGranted = resolve; });
   window.__bootGateLockLog = [];
   navigator.locks.request = function (name, options, callback) {
     const stack = new Error().stack || '';
     if (stack.includes('_drive')) {
-      return original(name, options, (lock) => {
+      return original(name, options, async (lock) => {
+        sequencesHolding += 1;
         markSequenceGranted();
-        return callback(lock);
+        try {
+          return await callback(lock);
+        } finally {
+          sequencesHolding -= 1;
+        }
       });
     }
-    if (location.pathname !== '/' || !stack.includes('_runIdleGate')) {
+    const bootGate = stack.includes('_startBootHydration') || stack.includes('_runIdleGate');
+    if (location.pathname !== '/' || !bootGate) {
       return original(name, options, callback);
     }
-    const entry = {path: location.pathname, afterSequenceGrant: false};
+    const entry = {path: location.pathname, queuedBy: null, afterSequenceGrant: false};
     window.__bootGateLockLog.push(entry);
-    const fallback = new Promise((resolve) => setTimeout(resolve, 5000));
-    return Promise.race([sequenceGranted.then(() => { entry.afterSequenceGrant = true; }), fallback])
-      .then(() => original(name, options, callback));
+    const bySequence = sequenceGranted.then(() => 'sequence');
+    const byFallback = new Promise((resolve) => setTimeout(() => resolve('fallback'), 5000));
+    return Promise.race([bySequence, byFallback]).then((winner) => {
+      entry.queuedBy = winner;
+      entry.afterSequenceGrant = winner === 'sequence' && sequencesHolding > 0;
+      return original(name, options, callback);
+    });
   };
 })();"""
 
@@ -513,7 +527,8 @@ class TestMidSessionCaptureRoundtrip:
             sync = _dispatch_online_and_await_sync(page)
             gate_log = page.evaluate("() => window.__bootGateLockLog")
             assert any(entry["path"] == "/" and entry["afterSequenceGrant"] for entry in gate_log), (
-                f"Boot gate did not queue behind the sync sequence, order not forced: {gate_log!r}"
+                f"Boot gate did not queue behind a holding sync sequence (fallback or no gate), order not forced: "
+                f"{gate_log!r}"
             )
             assert not sync.get("error"), f"Sync runtime missing after reconnect: {sync!r}"
             assert not sync["timedOut"], f"Sync sequence never finished after reconnect: {sync!r}"

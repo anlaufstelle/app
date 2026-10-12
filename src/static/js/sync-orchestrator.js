@@ -132,6 +132,19 @@
     // ZWINGEND: bliebe ``_lockHeldDepth`` bei einem Fehler in ``fn`` stehen,
     // saehe crypto.js den Lock faelschlich dauerhaft als gehalten und liefe den
     // Boot-Idle-Gate nie wieder gesperrt (echter Deadlock des Fix-Effekts).
+    // Refs #1493: while the crypto boot hydration is pending, the holder runs
+    // it inside its own lock lifetime before ``fn`` -- otherwise ``fn`` could
+    // wait (awaitReady) for the boot request queued behind this very holder.
+    async function _hydrateCryptoUnderLock() {
+        const cs = window.crypto_session;
+        if (!cs || typeof cs.hydrateUnderLock !== "function") return;
+        try {
+            await cs.hydrateUnderLock();
+        } catch (_e) {
+            // ignore -- fn's own gates (awaitReady/_loadKey) still fail closed
+        }
+    }
+
     function runExclusive(fn) {
         const guarded = async function () {
             const previousRun = _currentRun;
@@ -139,6 +152,7 @@
             _currentRun = {};
             _lockHeldDepth += 1;
             try {
+                await _hydrateCryptoUnderLock();
                 return await fn();
             } finally {
                 _lockHeldDepth -= 1;
