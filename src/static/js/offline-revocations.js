@@ -254,22 +254,35 @@
     let _approval = null;
     let _authPending = false;
 
-    async function isRevocationPending() {
+    async function isRevocationPending(checkFailed = false) {
         let pending = true;
+        let noticePending = true;
         try {
             const row = await db.meta.get(REVOCATION_STATE_KEY);
             const run = window.syncOrchestrator?.getCurrentRun?.();
             // Stored approval alone cannot authorize another page or replay run.
             pending = _storageFailure || !run || !_approval || _approval.run !== run ||
                 !row || row.value?.pending !== false || row.value.attempt !== _approval.attempt;
+            // Only the notice uses inventory and a persisted successful check.
+            // Replay still needs fresh approval in its current exclusive run.
+            const store = window.offlineStore;
+            const counts = await Promise.all([
+                store.countOfflineClients(),
+                store.count("queue"),
+                store.count("drafts"),
+                store.count("events"),
+            ]);
+            noticePending = _storageFailure ||
+                (counts.some((count) => count > 0) && (checkFailed || !row || row.value?.pending !== false));
         } catch (_e) {
             // Recovery from a read failure also requires a fresh persisted check.
             _storageFailure = true;
             _approval = null;
+            pending = true;
         }
         if (typeof document !== "undefined") {
             document.querySelectorAll("[data-offline-revocation-pending]").forEach((node) => {
-                node.hidden = !pending || _authPending;
+                node.hidden = !noticePending || _authPending;
             });
         }
         return pending;

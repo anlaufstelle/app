@@ -171,10 +171,14 @@
             result = { status: "error" };
         }
         _revocationPending = !result || result.status !== "ok";
-        const authPending = result?.status === "auth-pending";
-        document.querySelectorAll("[data-offline-revocation-pending]").forEach(function (node) {
-            node.hidden = !_revocationPending || authPending;
-        });
+        if (typeof store.isRevocationPending === "function") {
+            await store.isRevocationPending(_revocationPending);
+        } else {
+            const authPending = result?.status === "auth-pending";
+            document.querySelectorAll("[data-offline-revocation-pending]").forEach(function (node) {
+                node.hidden = !_revocationPending || authPending;
+            });
+        }
         return !_revocationPending;
     }
 

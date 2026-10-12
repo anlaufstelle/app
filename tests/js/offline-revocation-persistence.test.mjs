@@ -590,3 +590,52 @@ describe("revocation password warning", () => {
         expect(await w.offlineStore.db.events.toArray()).toEqual(beforeEvents);
     });
 });
+
+
+describe("revocation notice inventory", () => {
+    it("hides the notice with no inventory while keeping replay fail-closed", async () => {
+        const w = page();
+        await w.crypto_session.ready();
+        expect(await w.offlineStore.isRevocationPending()).toBe(true);
+        expect(w.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(true);
+    });
+
+    it.each(["clients", "queue", "drafts", "events"])("shows pending with encrypted %s inventory", async (table) => {
+        const w = page();
+        await w.crypto_session.ready();
+        const keys = { clients: { pk: "client" }, queue: {}, drafts: { formKey: "draft" }, events: { pk: eventPk } };
+        await w.offlineStore.db[table].put({ ...keys[table], ciphertext: "opaque" });
+        expect(await w.offlineStore.isRevocationPending()).toBe(true);
+        expect(w.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(false);
+    });
+
+    it("shows pending when inventory cannot be read", async () => {
+        const w = page();
+        await w.crypto_session.ready();
+        const count = vi.spyOn(w.offlineStore, "countOfflineClients").mockRejectedValue(new Error("Storage unavailable"));
+        expect(await w.offlineStore.isRevocationPending()).toBe(true);
+        expect(w.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(false);
+        count.mockRestore();
+    });
+
+    it("hides after a successful check across navigation without approving a new replay", async () => {
+        const w = page();
+        await seed(w);
+        status = 200;
+        await w.syncOrchestrator.runExclusive(() => w.offlineStore.applyClientRevocations());
+        const next = page();
+        await next.crypto_session.ready();
+        expect(await next.offlineStore.isRevocationPending()).toBe(true);
+        expect(next.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(true);
+    });
+});
+
+
+it("keeps the notice hidden after a failed sync check with empty inventory", async () => {
+    const w = page();
+    await w.crypto_session.ready();
+    await w.syncOrchestrator.requestSync("empty-inventory");
+    expect(await w.offlineStore.isRevocationPending()).toBe(true);
+    expect(w.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(true);
+    expect(writes).toHaveLength(0);
+});
