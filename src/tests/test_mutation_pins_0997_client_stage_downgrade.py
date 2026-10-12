@@ -7,10 +7,10 @@ Groups:
 * ``request_stage_downgrade`` (14): authorization, pending-slot identity,
   reason and attributable audit evidence.
 * ``review_stage_downgrade`` (22): facility scope, request identity, four eyes,
-  availability, decision timestamp and attributable audit evidence.
+  availability, preserved dynamic data, decision timestamp and attributable audit evidence.
 
-Four candidates only change redundant locking or full-save work and are not
-pinned. These tests exercise public services without ``rls_test_role``.
+Of these candidates, 49 are pinned and three only change redundant locking.
+The redundant-locking candidates are not pinned. These tests exercise public services without ``rls_test_role``.
 """
 
 from uuid import uuid4
@@ -21,7 +21,7 @@ from django.db import connection
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from core.models import AuditLog, Client, DeletionRequest, LegalHold
+from core.models import AuditLog, Client, DeletionRequest, DocumentType, DocumentTypeField, FieldTemplate, LegalHold
 from core.services.client import stage_downgrade
 
 pytestmark = pytest.mark.django_db
@@ -88,34 +88,39 @@ def test_foreign_facility_is_rejected_before_target_access(
     _assert_unchanged(client_qualified, request)
 
 
-@pytest.mark.parametrize("operation", ["request", "review"])
-def test_person_lock_has_actor_facility_in_its_where_clause(client_qualified, lead_user, admin_user, operation):
-    """The initial exclusive person lock is constrained by actor facility and PK.
+@pytest.fixture
+def foreign_person(second_facility):
+    """A persisted qualified person outside the actors' facility."""
+    return Client.objects.create(
+        facility=second_facility, contact_stage=Client.ContactStage.QUALIFIED, pseudonym="FOREIGN-01"
+    )
 
-    Kills x__lock_person__mutmut_12, x__lock_person__mutmut_14,
-    x_review_stage_downgrade__mutmut_23 and x_review_stage_downgrade__mutmut_25.
+
+def test_review_rejects_cross_facility_target(foreign_person, lead_user, admin_user):
+    """Reject a local request targeting a foreign person without writing a decision.
+
+    Kills x_review_stage_downgrade__mutmut_23 and x_review_stage_downgrade__mutmut_25.
     """
-    request = _request(client_qualified, lead_user) if operation == "review" else None
-    actor = admin_user if operation == "review" else lead_user
-    locks = []
+    request = _request(foreign_person, lead_user, facility=lead_user.facility)
+    with pytest.raises(ValidationError) as error:
+        stage_downgrade.review_stage_downgrade(request, admin_user, approve=False)
+    assert error.value.messages == [_("Die Person ist nicht mehr verfügbar.")]
+    _assert_unchanged(foreign_person, request)
+    assert not DeletionRequest.objects.exclude(pk=request.pk).exists()
 
-    def record(execute, sql, params, many, context):
-        if 'FROM "core_client"' in sql and ("FOR UPDATE" in sql or "FOR NO KEY UPDATE" in sql):
-            locks.append((sql, params))
-        return execute(sql, params, many, context)
 
-    with connection.execute_wrapper(record):
-        if operation == "request":
-            stage_downgrade.request_stage_downgrade(client_qualified, actor, "Minimize")
-        else:
-            stage_downgrade.review_stage_downgrade(request, actor, approve=False)
-    assert locks
-    sql, params = locks[0]
-    where = sql.split(" WHERE ", 1)[1]
-    assert '"facility_id"' in where
-    assert '"id"' in where
-    assert actor.facility_id in params
-    assert client_qualified.pk in params
+def test_request_rechecks_persisted_person_facility(foreign_person, lead_user, second_facility):
+    """Reject a foreign row even when its in-memory instance claims the actor's facility.
+
+    Kills x__lock_person__mutmut_12 and x__lock_person__mutmut_14.
+    """
+    foreign_person.facility = lead_user.facility
+    with pytest.raises(ValidationError) as error:
+        stage_downgrade.request_stage_downgrade(foreign_person, lead_user, "Minimize")
+    assert error.value.messages == [_("Diese Person kann nicht herabgestuft werden.")]
+    assert not DeletionRequest.objects.exists()
+    _assert_unchanged(foreign_person)
+    assert foreign_person.facility_id == second_facility.pk
 
 
 @pytest.mark.parametrize("state", ["inactive", "merged", "missing"])
@@ -348,3 +353,27 @@ def test_review_persists_timestamp_and_attributable_audit(client_qualified, lead
     entry = AuditLog.objects.get(target_id=client_qualified.pk, action=action)
     assert entry.user_id == admin_user.pk
     assert entry.detail["deletion_request"] == str(request.pk)
+
+
+def test_approval_preserves_stored_dynamic_data(client_qualified, lead_user, admin_user):
+    """Approval changes the contact stage without re-encrypting stored dynamic data.
+
+    Kills x_review_stage_downgrade__mutmut_70.
+    """
+    document_type = DocumentType.objects.create(facility=client_qualified.facility, name="Profile")
+    template = FieldTemplate.objects.create(
+        facility=client_qualified.facility,
+        name="Secret",
+        field_type=FieldTemplate.FieldType.TEXT,
+        is_encrypted=True,
+    )
+    DocumentTypeField.objects.create(document_type=document_type, field_template=template, sort_order=0)
+    stored_data = {template.slug: "plain value"}
+    # Model a value stored before its field template was marked for encryption.
+    Client.objects.filter(pk=client_qualified.pk).update(document_type=document_type, data_json=stored_data)
+    client_qualified.refresh_from_db()
+    request = stage_downgrade.request_stage_downgrade(client_qualified, lead_user, "Minimize")
+    stage_downgrade.review_stage_downgrade(request, admin_user, approve=True)
+    client_qualified.refresh_from_db()
+    assert client_qualified.contact_stage == Client.ContactStage.IDENTIFIED
+    assert client_qualified.data_json == stored_data
