@@ -1,6 +1,7 @@
 """Record skip evidence and fail public runs on unapproved node/profile pairs."""
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -66,17 +67,30 @@ class SkipInventory:
             if not isinstance(allowed, list) or any(
                 not all(
                     isinstance(entry.get(key), str) and entry[key]
-                    for key in ("nodeid", "profile", "reason", "exclusion", "rationale")
+                    for key in ("nodeid", "profile", "reason", "rationale")
                 )
                 for entry in allowed
             ):
-                raise ValueError("Every skip entry requires nodeid, profile, reason, exclusion and rationale")
+                raise ValueError("Every skip entry requires nodeid, profile, reason and rationale")
             keys = {}
             for entry in allowed:
+                if ("exclusion" in entry) == ("requires_env" in entry):
+                    raise ValueError("Every skip entry requires exactly one of exclusion or requires_env")
+                prerequisite = entry["exclusion"] if "exclusion" in entry else entry["requires_env"]
+                if not isinstance(prerequisite, str) or not prerequisite:
+                    raise ValueError("Every skip prerequisite must be a non-empty string")
+                if "requires_env" in entry:
+                    name, separator, value = prerequisite.partition("=")
+                    if not separator or not name or not value:
+                        raise ValueError("requires_env must have the form NAME=value")
+                    present = os.environ.get(name) == value
+                    prerequisite = f"requires_env {prerequisite}"
+                else:
+                    present = (self.config.rootpath / prerequisite).exists()
                 key = (entry["nodeid"], entry["profile"], entry["reason"])
-                if (self.config.rootpath / entry["exclusion"]).exists():
+                if present:
                     if any((record["nodeid"], record["profile"], record["reason"]) == key for record in records):
-                        terminal.write_line(f"Skip prerequisite is present: {entry['exclusion']}", red=True)
+                        terminal.write_line(f"Skip prerequisite is present: {prerequisite}", red=True)
                 else:
                     keys[key] = entry
         except (OSError, ValueError, TypeError, AttributeError) as error:

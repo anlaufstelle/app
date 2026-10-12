@@ -163,6 +163,72 @@ def test_present_exclusion_cannot_authorize_a_skip(tmp_path):
     assert "Skip prerequisite is present" in result.stdout
 
 
+@pytest.fixture
+def env_entry(monkeypatch):
+    monkeypatch.delenv("SKIP_PROFILE_OPT_IN", raising=False)
+    allowed = entry()
+    del allowed["exclusion"]
+    allowed["requires_env"] = "SKIP_PROFILE_OPT_IN=1"
+    allowed["rationale"] = "This test requires the SKIP_PROFILE_OPT_IN=1 opt-in gate."
+    return allowed
+
+
+@pytest.mark.parametrize("value", [None, "0"])
+def test_env_gated_skip_is_allowed_without_the_required_value(tmp_path, monkeypatch, env_entry, value):
+    if value is not None:
+        monkeypatch.setenv("SKIP_PROFILE_OPT_IN", value)
+    result, _ = run_profile(tmp_path, [env_entry])
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_present_env_prerequisite_cannot_authorize_a_skip(tmp_path, monkeypatch, env_entry):
+    monkeypatch.setenv("SKIP_PROFILE_OPT_IN", "1")
+    result, _ = run_profile(tmp_path, [env_entry])
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Skip prerequisite is present: requires_env SKIP_PROFILE_OPT_IN=1" in result.stdout
+    assert "Unapproved skip [public]" in result.stdout
+    assert "Public skip policy unavailable" not in result.stdout
+
+
+def test_both_skip_prerequisites_make_the_policy_unavailable(tmp_path, env_entry):
+    env_entry["exclusion"] = "docs/dev"
+    result, _ = run_profile(tmp_path, [env_entry])
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Public skip policy unavailable" in result.stdout
+
+
+def test_neither_skip_prerequisite_makes_the_policy_unavailable(tmp_path, env_entry):
+    # Prove valid environment evidence is accepted before testing its absence.
+    result, _ = run_profile(tmp_path, [env_entry])
+    assert result.returncode == 0, result.stdout + result.stderr
+    del env_entry["requires_env"]
+    result, _ = run_profile(tmp_path, [env_entry])
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Public skip policy unavailable" in result.stdout
+
+
+@pytest.mark.parametrize("requires_env", ["SKIP_PROFILE_OPT_IN", "=1", "SKIP_PROFILE_OPT_IN=", "", None, 1])
+def test_malformed_env_prerequisite_makes_the_policy_unavailable(tmp_path, env_entry, requires_env):
+    # A blanket rejection of environment entries must not satisfy this test.
+    result, _ = run_profile(tmp_path, [env_entry])
+    assert result.returncode == 0, result.stdout + result.stderr
+    env_entry["requires_env"] = requires_env
+    result, _ = run_profile(tmp_path, [env_entry])
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Public skip policy unavailable" in result.stdout
+
+
+@pytest.mark.parametrize("key, value", [("nodeid", "::other_test"), ("profile", "dev"), ("reason", "Other reason")])
+def test_env_prerequisite_cannot_authorize_another_node_profile_or_reason(tmp_path, env_entry, key, value):
+    result, _ = run_profile(tmp_path, [env_entry])
+    assert result.returncode == 0, result.stdout + result.stderr
+    env_entry[key] = value
+    result, _ = run_profile(tmp_path, [env_entry])
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Unapproved skip [public]" in result.stdout
+    assert "Public skip policy unavailable" not in result.stdout
+
+
 def test_bare_test_copy_keeps_the_dev_profile(tmp_path):
     plugin = tmp_path / "src/tests/export_profile.py"
     plugin.parent.mkdir(parents=True)
