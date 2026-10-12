@@ -300,3 +300,21 @@ def test_skip_report_without_location_is_reported_loudly(tmp_path, profile):
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Unreadable skip report" in result.stdout
     assert "test_sample.py::test_sample" in result.stdout
+
+
+def test_shipped_env_entries_match_their_skip_sites():
+    # Pin the shipped opt-in entries to real tests, reasons and gate variables.
+    allowed = json.loads((ROOT / "src/tests/public_skip_allowlist.json").read_text())
+    entries = [entry for entry in allowed if "requires_env" in entry]
+    assert entries
+    profiles = (ROOT / "src/tests/e2e/_profiles.py").read_text()
+    for entry in entries:
+        path, *names = entry["nodeid"].split("::")
+        source = (ROOT / path).read_text()
+        if "_profiles" in source:
+            source += profiles
+        name, _, value = entry["requires_env"].partition("=")
+        assert entry["profile"] == "public", entry
+        assert f"def {names[-1].split('[')[0]}(" in source, entry
+        assert entry["reason"] in source, entry
+        assert name in source and f'"{value}"' in source, entry
