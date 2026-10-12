@@ -74,7 +74,7 @@
                     }
                 });
                 // Downloads leave the page open; release only opted-in forms.
-                // Keep a short duplicate-click guard (Refs #2505).
+                // Allow typical exports to finish before another request (Refs #2505).
                 if (form.hasAttribute("data-download-form")) {
                     window.setTimeout(function () {
                         buttons.forEach(function (btn) {
@@ -84,7 +84,7 @@
                             }
                         });
                         form.dataset.submitting = "0";
-                    }, 1000);
+                    }, 5000);
                 }
             }, 0);
         },

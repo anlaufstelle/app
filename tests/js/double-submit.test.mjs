@@ -25,7 +25,10 @@ it("releases download buttons after a short duplicate-click guard", () => {
     expect(submit(target).defaultPrevented).toBe(true);
     vi.advanceTimersByTime(0);
     expect(target.querySelector("button").disabled).toBe(true);
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(4999);
+    expect(target.querySelector("button").disabled).toBe(true);
+    expect(submit(target).defaultPrevented).toBe(true);
+    vi.advanceTimersByTime(1);
     expect(target.querySelector("button").disabled).toBe(false);
     expect(target.querySelectorAll("button")[1].disabled).toBe(false);
     expect(target.querySelectorAll("button")[2].disabled).toBe(true);
@@ -34,7 +37,7 @@ it("releases download buttons after a short duplicate-click guard", () => {
 it("keeps regular forms locked until pageshow", () => {
     const target = form();
     submit(target);
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(5000);
     expect(submit(target).defaultPrevented).toBe(true);
     window.dispatchEvent(new Event("pageshow"));
     expect(submit(target).defaultPrevented).toBe(false);
