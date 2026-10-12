@@ -35,6 +35,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Reset-Hinweis beim Demo-Einstieg** (#2505) — Die Demo-Startseite erklärt, dass die Demo jede volle Stunde zurückgesetzt wird.
+
 - **Verständliche Berichtsvorschau** (#2505) — Allgemeine Kennzahlen zeigen deutsche Tabellenbezeichnungen in der Vorschau und ihren Fußnoten statt technischer Schlüssel.
 
 - **Umlaute in Servertexten** (#2505) — Passwortbestätigung, Kontoentsperrung, Systemhinweise und Verarbeitungsverzeichnis zeigen echte Umlaute statt Ersatzschreibungen.
