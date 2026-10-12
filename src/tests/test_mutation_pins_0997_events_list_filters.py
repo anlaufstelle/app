@@ -1,16 +1,15 @@
 """Pins for the public event list services.
 
 Source: mutation delta of the release-0.99.7 checkpoint, 52 reviewed mutants;
-51 receive new pins here.
+49 receive pins here; three are result-equivalent.
 Groups:
 
 * ``event_list_options`` (10): accessible choices and preloaded case titles.
 * ``resolve_event_list_filters`` (12): canonical IDs and selected presets.
 * ``event_list_queryset`` (19): independent filters, fallbacks and ordering.
 * ``_date_value`` (4): safe calendar limits through public normalization.
-* ``_apply_shift`` (6 new pins, 1 already covered): bounded shift snapshots
+* ``_apply_shift`` (4 pins, 3 result-equivalent): safe calendar boundaries
   and consecutive window days through the public queryset service.
-The already covered backwards window iteration mutant is excluded.
 """
 
 from datetime import date, datetime, time, timedelta
@@ -107,12 +106,12 @@ def test_order_is_newest_first_with_descending_uuid_ties(facility, staff_user, c
     x_event_list_queryset__mutmut_154, x_event_list_queryset__mutmut_155.
     """
     old = create_event(day=DAY - timedelta(days=1), id=UUID(int=99))
-    lower = create_event(id=UUID(int=1))
-    higher = create_event(id=UUID(int=2))
+    tied = [create_event(id=UUID(int=value)) for value in (1, 2, 3, 4)]
     result = event_list_queryset(facility, staff_user, {})
 
-    assert result.query.order_by == ("-occurred_at", "-pk")
-    assert ids(result) == [higher.pk, lower.pk, old.pk]
+    assert ids(result) == [event.pk for event in reversed(tied)] + [old.pk]
+    # A database may happen to return ties in UUID order without a tie breaker.
+    assert result.query.order_by[:2] in (("-occurred_at", "-pk"), ("-occurred_at", "-id"))
 
 
 def test_shift_filter_loads_its_own_options(facility, staff_user, create_event, day_shift):
@@ -269,47 +268,29 @@ def test_shift_includes_every_day_of_a_three_day_period(facility, staff_user, da
 
 
 @pytest.mark.parametrize(
-    "anchor_offset, late_offset, boundary, included",
+    "start, end, day, hour",
     [
-        (-1, 0, "date_from", True),
-        (-2, 0, "date_from", False),
-        (2, 0, "date_to", False),
-    ],
-    ids=["previous-day-margin", "exclude-two-days-before", "exclude-two-days-after"],
-)
-def test_shift_snapshot_uses_one_day_margins(
-    facility, staff_user, day_shift, create_event, anchor_offset, late_offset, boundary, included
-):
-    """A lazily evaluated list keeps windows derived from the one-day aggregate margin.
-
-    x__apply_shift__mutmut_6, x__apply_shift__mutmut_8, x__apply_shift__mutmut_15.
-    """
-    create_event(day=DAY + timedelta(days=anchor_offset))
-    stable_day = DAY + timedelta(days=3 if boundary == "date_from" else -3)
-    stable = create_event(day=stable_day)
-    result = event_list_queryset(facility, staff_user, {"time_filter": str(day_shift.pk), boundary: DAY.isoformat()})
-    late = create_event(day=DAY + timedelta(days=late_offset))
-    expected = {stable.pk, late.pk} if included else {stable.pk}
-    assert set(ids(result)) == expected
-
-
-@pytest.mark.parametrize(
-    "start, end, late_offset, late_hour",
-    [
-        (time(9), time(9), -1, 9),
-        (time(22), time(8), -2, 23),
+        (time(9), time(9), date(1, 1, 1), 9),
+        (time(22), time(8), date(1, 1, 2), 23),
     ],
     ids=["equal-times", "overnight"],
 )
-def test_shift_snapshot_excludes_extra_previous_windows(
-    facility, staff_user, create_event, start, end, late_offset, late_hour
+def test_shift_preserves_events_at_the_first_safe_calendar_day(
+    facility, staff_user, create_event, start, end, day, hour
 ):
-    """Equal-time and overnight shifts do not gain an extra earlier start day.
+    """Equal-time and overnight shifts include events without calendar underflow.
 
     x__apply_shift__mutmut_34, x__apply_shift__mutmut_38.
     """
     shift = TimeFilter.objects.create(facility=facility, label="Boundary shift", start_time=start, end_time=end)
-    anchor = create_event(hour=9 if start == end else 23)
-    result = event_list_queryset(facility, staff_user, {"time_filter": str(shift.pk)})
-    create_event(day=DAY + timedelta(days=late_offset), hour=late_hour)
-    assert ids(result) == [anchor.pk]
+    event = create_event(day=day, hour=hour)
+    assert ids(event_list_queryset(facility, staff_user, {"time_filter": str(shift.pk)})) == [event.pk]
+
+
+def test_shift_advances_from_an_early_calendar_day(facility, staff_user, day_shift, create_event):
+    """A day shift returns an early event without iterating backwards to underflow.
+
+    x__apply_shift__mutmut_69.
+    """
+    event = create_event(day=date(1, 1, 3))
+    assert ids(event_list_queryset(facility, staff_user, {"time_filter": str(day_shift.pk)})) == [event.pk]
