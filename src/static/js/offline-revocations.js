@@ -254,17 +254,21 @@
     let _approval = null;
     let _authPending = false;
 
-    async function isRevocationPending(checkFailed = false) {
-        let pending = true;
+    let _noticeRefresh = 0;
+
+    function _showRevocationNotice(pending) {
+        if (typeof document !== "undefined") {
+            document.querySelectorAll("[data-offline-revocation-pending]").forEach((node) => {
+                node.hidden = !pending || _authPending;
+            });
+        }
+    }
+
+    async function refreshRevocationNotice(checkFailed = false) {
+        const refresh = ++_noticeRefresh;
+        let row = null;
         let noticePending = true;
         try {
-            const row = await db.meta.get(REVOCATION_STATE_KEY);
-            const run = window.syncOrchestrator?.getCurrentRun?.();
-            // Stored approval alone cannot authorize another page or replay run.
-            pending = _storageFailure || !run || !_approval || _approval.run !== run ||
-                !row || row.value?.pending !== false || row.value.attempt !== _approval.attempt;
-            // Only the notice uses inventory and a persisted successful check.
-            // Replay still needs fresh approval in its current exclusive run.
             const store = window.offlineStore;
             const counts = await Promise.all([
                 store.countOfflineClients(),
@@ -272,24 +276,53 @@
                 store.count("drafts"),
                 store.count("events"),
             ]);
+            // Read the persisted status after inventory, never carry approval
+            // or notice visibility across an inventory await (Refs #2528).
+            row = await db.meta.get(REVOCATION_STATE_KEY);
             noticePending = _storageFailure ||
                 (counts.some((count) => count > 0) && (checkFailed || !row || row.value?.pending !== false));
         } catch (_e) {
-            // Recovery from a read failure also requires a fresh persisted check.
+            // Recovery from a read failure requires a fresh persisted check.
             _storageFailure = true;
             _approval = null;
-            pending = true;
         }
-        if (typeof document !== "undefined") {
-            document.querySelectorAll("[data-offline-revocation-pending]").forEach((node) => {
-                node.hidden = !noticePending || _authPending;
-            });
+        // An older inventory snapshot must not overwrite a newer notice.
+        // Read failures invalidate approval even in a superseded refresh.
+        if (refresh === _noticeRefresh || _storageFailure) {
+            _showRevocationNotice(noticePending || _storageFailure);
         }
-        return pending;
+        return row;
+    }
+
+    async function isRevocationPending(checkFailed = false) {
+        const row = await refreshRevocationNotice(checkFailed);
+        const run = window.syncOrchestrator?.getCurrentRun?.();
+        // Decide only after every await, from the current error and approval
+        // state. Inventory never grants replay permission (Refs #2528).
+        return _storageFailure || !run || !_approval || _approval.run !== run ||
+            !row || row.value?.pending !== false || row.value.attempt !== _approval.attempt;
+    }
+
+    // Refs #2528: refresh after committed inventory changes, including bulk
+    // removals, drafts, queue writes and edits. Never grant replay approval.
+    const _observedTransactions = new WeakSet();
+    function _observeInventoryTransaction(...args) {
+        const transaction = args[args.length - 1];
+        if (_observedTransactions.has(transaction)) return;
+        _observedTransactions.add(transaction);
+        transaction.on("complete", function () {
+            refreshRevocationNotice();
+            window.syncOrchestrator?.broadcast?.({ type: "offline-inventory-changed" });
+        });
+    }
+    for (const table of ["clients", "queue", "drafts", "events"]) {
+        for (const hook of ["creating", "updating", "deleting"]) {
+            db[table].hook(hook, _observeInventoryTransaction);
+        }
     }
 
     async function _notifyRevocationState() {
-        await isRevocationPending();
+        await refreshRevocationNotice();
         window.syncOrchestrator?.broadcast?.({ type: "revocation-state-changed" });
     }
 

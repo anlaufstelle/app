@@ -434,7 +434,7 @@
     };
 
     onMessage(function (message) {
-        if (message?.type === "revocation-state-changed") {
+        if (message?.type === "revocation-state-changed" || message?.type === "offline-inventory-changed") {
             window.offlineStore?.isRevocationPending?.();
         }
     });

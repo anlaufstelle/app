@@ -6,7 +6,7 @@ import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
 import Dexie from "dexie";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const scripts = ["url-patterns", "crypto", "offline-db", "offline-bundles", "offline-revocations", "offline-store", "offline-queue", "offline-edit", "sync-orchestrator"]
+const scripts = ["url-patterns", "crypto", "offline-db", "offline-bundles", "offline-revocations", "offline-store", "offline-queue", "offline-client", "offline-edit", "sync-orchestrator"]
     .map((name) => readFileSync(`src/static/js/${name}.js`, "utf8"));
 const eventPk = "33333333-3333-4333-8333-333333333333";
 const validPayload = () => ({ revocations: [], server_time: new Date().toISOString(), retention_seconds: 345600 });
@@ -637,5 +637,120 @@ it("keeps the notice hidden after a failed sync check with empty inventory", asy
     await w.syncOrchestrator.requestSync("empty-inventory");
     expect(await w.offlineStore.isRevocationPending()).toBe(true);
     expect(w.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(true);
+    expect(writes).toHaveLength(0);
+});
+
+
+describe("overlapping inventory failures", () => {
+    it.each(["queue", "edit", "keepLocal", "keepMerged"])("invalidates an in-flight %s gate before its POST", async (action) => {
+        const w = page();
+        const record = await seed(w);
+        status = 200;
+        let releaseCount, enteredCount;
+        const entered = new Promise((resolve) => { enteredCount = resolve; });
+        let count;
+        function delayInventory() {
+            let calls = 0;
+            count = vi.spyOn(w.offlineStore, "countOfflineClients").mockImplementation(() => {
+                calls += 1;
+                if (action.startsWith("keep") && calls === 1) return Promise.resolve(0);
+                if (calls === (action.startsWith("keep") ? 2 : 1)) {
+                    enteredCount();
+                    return new Promise((resolve) => { releaseCount = resolve; });
+                }
+                return Promise.reject(new Error("Concurrent inventory read failure"));
+            });
+        }
+        let invoke;
+        if (action.startsWith("keep")) {
+            let factory;
+            w.Alpine = { data: (_name, create) => { factory = create; } };
+            for (const name of ["offline-form-fields", "conflict-resolver"]) {
+                w.eval(readFileSync(`src/static/js/${name}.js`, "utf8"));
+            }
+            w.document.dispatchEvent(new w.Event("alpine:init"));
+            const component = factory();
+            Object.assign(component, { eventPk, localData: {}, updatedAt: "2026-10-10T08:00:00Z", diffRows: [], diffKeys: [], serverData: {} });
+            const apply = w.offlineStore.applyClientRevocations;
+            vi.spyOn(w.offlineStore, "applyClientRevocations").mockImplementation(async () => {
+                const result = await apply();
+                delayInventory();
+                return result;
+            });
+            invoke = () => component[action]();
+        } else {
+            invoke = () => w.syncOrchestrator.runExclusive(async () => {
+                expect((await w.offlineStore.applyClientRevocations()).status).toBe("ok");
+                delayInventory();
+                return action === "queue" ? w.offlineQueue.replayQueue() : w.offlineEdit.replayModifiedEvent(record, { replay: true });
+            });
+        }
+        const replay = invoke();
+        await entered;
+        expect(await w.offlineStore.isRevocationPending()).toBe(true);
+        count.mockRestore();
+        releaseCount(0);
+        await replay;
+        expect(writes).toHaveLength(0);
+        expect(await w.offlineStore.isRevocationPending()).toBe(true);
+        expect(w.document.querySelector("[data-offline-revocation-pending]").hidden).toBe(false);
+    });
+});
+
+
+describe("inventory action notifications", () => {
+    it.each(["clients", "queue", "drafts", "events"])("updates the notice after adding and removing the last %s entry", async (table) => {
+        const w = page();
+        await w.crypto_session.ready();
+        await w.crypto_session.deriveSessionKey("synthetic inventory password", "c2FsdHNhbHRzYWx0");
+        await w.offlineStore.isRevocationPending();
+        const notice = w.document.querySelector("[data-offline-revocation-pending]");
+        expect(notice.hidden).toBe(true);
+        let remove;
+        if (table === "clients") {
+            const pk = "11111111-1111-4111-8111-111111111111";
+            w.fetch = async () => ({ ok: true, headers: { get: () => null }, json: async () => ({
+                client: { pk }, events: [], cases: [], document_types: [], schema_version: 2,
+                generated_at: new Date().toISOString(), expires_at: new Date(Date.now() + 3600000).toISOString(), ttl: 3600,
+            }) });
+            await w.offlineClient.takeClientOffline(pk);
+            remove = () => w.offlineClient.removeClientFromOffline(pk);
+        } else if (table === "queue") {
+            await w.offlineQueue.enqueueRequest("/partials/tally/increment/", "POST", "contact=1", {});
+            const [row] = await w.offlineStore.db.queue.toArray();
+            remove = () => w.offlineStore.discardQueueEntry(row.id);
+        } else if (table === "drafts") {
+            await w.offlineStore.putEncrypted("drafts", { formKey: "draft", updatedAt: Date.now(), data: { note: "draft" } });
+            remove = () => w.offlineStore.deleteRow("drafts", "draft");
+        } else {
+            await w.offlineStore.saveOfflineEdit({ pk: eventPk, localStatus: "new", data: { note: "edit" } });
+            remove = () => w.offlineStore.clearOfflineEdit(eventPk);
+        }
+        await vi.waitFor(() => expect(notice.hidden).toBe(false));
+        expect(checks).toBe(0);
+        expect(await w.offlineStore.isRevocationPending()).toBe(true);
+        await remove();
+        await vi.waitFor(() => expect(notice.hidden).toBe(true));
+        expect(await w.offlineStore.isRevocationPending()).toBe(true);
+        expect(writes).toHaveLength(0);
+    });
+});
+
+
+it("hides the notice when the last offline client is removed", async () => {
+    const w = page();
+    await w.crypto_session.ready();
+    await w.crypto_session.deriveSessionKey("synthetic inventory password", "c2FsdHNhbHRzYWx0");
+    const pk = "11111111-1111-4111-8111-111111111111";
+    await w.offlineStore.saveClientBundle({
+        client: { pk }, events: [], cases: [], document_types: [], schema_version: 2,
+        generated_at: new Date().toISOString(), expires_at: new Date(Date.now() + 3600000).toISOString(), ttl: 3600,
+    });
+    await w.offlineStore.isRevocationPending();
+    const notice = w.document.querySelector("[data-offline-revocation-pending]");
+    expect(notice.hidden).toBe(false);
+    await w.offlineClient.removeClientFromOffline(pk);
+    await vi.waitFor(() => expect(notice.hidden).toBe(true));
+    expect(await w.offlineStore.isRevocationPending()).toBe(true);
     expect(writes).toHaveLength(0);
 });
