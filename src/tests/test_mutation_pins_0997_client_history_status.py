@@ -4,8 +4,9 @@ Source: mutation delta of the release-0.99.7 checkpoint, 6 candidate mutants.
 Groups:
 
 * ``pending_history_count`` scope (2): only the person's own facility events.
-* ``pending_history_count`` payloads (4): only anonymized people and versions
-  with retained values, including values present solely before the change.
+* ``pending_history_count`` anonymization state (1): live people have no pending count.
+* ``pending_history_count`` payloads (3): versions with retained values,
+  including values present solely before the change.
 
 The facility-only candidate is equivalent under the composite event/client
 facility foreign key and is not pinned. These tests exercise the public service without ``rls_test_role``.
