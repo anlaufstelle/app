@@ -738,6 +738,10 @@ class DatasetBackend(ABC):
 
         return dict.fromkeys(("CSV", "JSON", "XML", "PDF"), LIVE)
 
+    def get_table_labels(self) -> dict[str, str]:
+        """Reuse field labels for table names in the preview."""
+        return {spec.key: spec.label for spec in self.get_field_specs()}
+
     def get_table_populations(self, result: DatasetResult) -> dict[str, str]:
         """Return the population of each published table."""
         return result.summary.get("metadata", {}).get("populations", {"records": self.population})

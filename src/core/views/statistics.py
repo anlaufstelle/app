@@ -176,6 +176,7 @@ def build_report_panel_context(facility, backend, period_state) -> dict:
 
     field_specs = backend.get_field_specs()
     preview_records = result.records if result.mode == "aggregate" else result.records[:10]
+    table_labels = backend.get_table_labels()
 
     return {
         "backend": backend,
@@ -183,7 +184,15 @@ def build_report_panel_context(facility, backend, period_state) -> dict:
         "date_to": period_state.date_to,
         "field_specs": field_specs,
         "result": result,
-        "preview_rows": [[record.get(spec.key) for spec in field_specs] for record in preview_records],
+        "preview_rows": [
+            [
+                table_labels.get(record.get(spec.key), record.get(spec.key))
+                if spec.key == "table"
+                else record.get(spec.key)
+                for spec in field_specs
+            ]
+            for record in preview_records
+        ],
         "preview_total": len(result.records),
         "k_anonymity_threshold": result.summary.get("k_anonymity_threshold"),
         "k_threshold_warning": k_threshold_warning(result.summary.get("k_anonymity_threshold")),
@@ -199,7 +208,8 @@ def build_report_panel_context(facility, backend, period_state) -> dict:
         # ist der vom Backend deklarierte Code (Default: alle Ereignisse).
         "population_note": table_note(backend.population, LIVE),
         "table_population_notes": [
-            (table, table_note(population, LIVE)) for table, population in backend.get_table_populations(result).items()
+            (table_labels.get(table, table), table_note(population, LIVE))
+            for table, population in backend.get_table_populations(result).items()
         ],
         # K4a (Refs #1770): KEIN ``release_query``. Empfaenger/Zweck zur
         # Renderzeit in die Export-Ziele zu backen war ein Race: der Klick auf

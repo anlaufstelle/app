@@ -35,6 +35,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Verständliche Berichtsvorschau** (#2505) — Allgemeine Kennzahlen zeigen deutsche Tabellenbezeichnungen in der Vorschau und ihren Fußnoten statt technischer Schlüssel.
+
 - **Umlaute in Servertexten** (#2505) — Passwortbestätigung, Kontoentsperrung, Systemhinweise und Verarbeitungsverzeichnis zeigen echte Umlaute statt Ersatzschreibungen.
 
 - **Exportleiste nach Downloads wieder freigeben** (#2505) — Download-Formulare geben ihre Formatknöpfe nach einer kurzen Doppelklicksperre wieder frei, sodass weitere Formate ohne Neuladen exportiert werden können.

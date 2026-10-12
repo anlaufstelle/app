@@ -23,6 +23,16 @@ class GeneralKeyFiguresBackend(DatasetBackend):
             FieldSpec("population", _("Grundgesamtheit")),
         ]
 
+    def get_table_labels(self) -> dict[str, str]:
+        """Name the external report's tables for presentation."""
+        return {
+            "total_contacts": _("Gesamtkontakte"),
+            "unique_clients": _("Unterschiedliche Personen"),
+            "by_contact_stage": _("Kontakte nach Kontaktstufe"),
+            "by_document_type": _("Kontakte nach Dokumentationstyp"),
+            "by_age_cluster": _("Kontakte nach Altersgruppe"),
+        }
+
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
         """Project only counts already protected by build_external_report."""
         report = build_external_report(facility, date_from, date_to)
@@ -39,8 +49,8 @@ class GeneralKeyFiguresBackend(DatasetBackend):
                 }
             )
 
-        append("total_contacts", _("Gesamtkontakte"), report["total_contacts"])
-        append("unique_clients", _("Unterschiedliche Personen"), report["unique_clients"])
+        append("total_contacts", self.get_table_labels()["total_contacts"], report["total_contacts"])
+        append("unique_clients", self.get_table_labels()["unique_clients"], report["unique_clients"])
         stage_labels = {
             "anonym": _("Anonym"),
             "identifiziert": _("Nur Pseudonym"),
