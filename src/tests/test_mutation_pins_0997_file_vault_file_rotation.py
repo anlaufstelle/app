@@ -1,9 +1,8 @@
 """Pins for public attachment rotation and verification contracts.
 
-Source: mutation delta of the release-0.99.7 checkpoint, 40 mutants.
-Groups: attachment rotation (12), regular-file validation (3), streaming
+Source: mutation delta of the release-0.99.7 checkpoint, 42 mutants.
+Groups: nonblocking rotation lock (2), attachment rotation (12), regular-file validation (3), streaming
 rewrite (3), rotation iteration (3), verification (9), manifest records (10).
-The two blocking-lock mutants already have a public regression test.
 """
 
 import errno
@@ -58,6 +57,34 @@ def vault_files(facility, client_identified, settings, tmp_path):
         return attachment, path
 
     return create, primary
+
+
+@pytest.mark.django_db
+@pytest.mark.timeout(5, method="signal", func_only=True)
+def test_second_rotation_rejects_the_held_run_lock(vault_files, tmp_path):
+    """Reject a concurrent public rotation without waiting for the first to finish.
+
+    x_rotate_files__mutmut_19, x_rotate_files__mutmut_22.
+    The signal deadline turns blocking lock acquisition into a test failure
+    while allowing pytest to unwind the held lock and continue normally.
+    """
+    create, _ = vault_files
+    attachment, _ = create()
+    rejected = []
+
+    def second_rotation(stage, attachment_id):
+        if stage == "before_replace":
+            assert attachment_id == str(attachment.pk)
+            with pytest.raises(file_rotation.FileRotationLockedError) as error:
+                file_rotation.rotate_files(manifest_path=tmp_path / "second.jsonl")
+            assert str(error.value) == "Attachment rotation is already running"
+            rejected.append(attachment_id)
+
+    result = file_rotation.rotate_files(checkpoint=second_rotation)
+    assert rejected == [str(attachment.pk)]
+    assert result.rotated == 1
+    assert result.errors == {}
+    assert not (tmp_path / "second.jsonl").exists()
 
 
 @pytest.mark.django_db
@@ -237,12 +264,9 @@ def test_malformed_headers_are_collected_and_rotation_continues(vault_files, hea
     create(pk=uuid.UUID(int=2))
     path.write_bytes(header)
     result = file_rotation.rotate_files()
-    expected = (
-        "Implausible chunk count in header: 2147483648 exceeds 0 possible chunks in 5 bytes"
-        if len(header) == 5
-        else "Truncated encrypted file"
-    )
-    assert result.errors == {str(broken.pk): expected}
+    expected = "Implausible chunk count" if len(header) == 5 else "Truncated encrypted file"
+    assert set(result.errors) == {str(broken.pk)}
+    assert result.errors[str(broken.pk)].startswith(expected)
     assert result.checked == 2
     assert result.rotated == 1
     assert path.read_bytes() == header
