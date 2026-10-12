@@ -25,12 +25,22 @@ import time
 from pathlib import Path
 
 import pytest
+from django.core.cache import cache
 
 from core.services.compliance._types import ComplianceStatus
 from core.services.compliance.backup import _backup_checks
 from core.services.system.health import last_backup_info
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _clear_health_cache():
+    """/health/ caches the backup signal; a value cached by an earlier test would hide this file's sets."""
+    cache.clear()
+    yield
+    cache.clear()
+
 
 _SET_TABLES = (
     "core_facility",
