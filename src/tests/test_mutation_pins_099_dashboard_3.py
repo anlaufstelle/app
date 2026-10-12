@@ -683,7 +683,7 @@ class TestFacilityAdminDashboardContext:
         Settings.objects.create(facility=facility, mfa_enforced_facility_wide=False)
         ctx = facility_admin_dashboard_context(admin_user, facility)
         assert (
-            "MFA-Pflicht (2FA) ist einrichtungsweit nicht aktiv — Login bleibt ohne zweiten Faktor moeglich."
+            "MFA-Pflicht (2FA) ist einrichtungsweit nicht aktiv — Login bleibt ohne zweiten Faktor möglich."
             in ctx["settings_warnings"]
         )
 

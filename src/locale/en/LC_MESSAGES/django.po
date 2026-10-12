@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-11 12:30+0200\n"
+"POT-Creation-Date: 2026-10-12 07:41+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -2393,14 +2393,6 @@ msgstr ""
 msgid "AuditLog-Aufbewahrung (Monate)"
 msgstr "AuditLog retention (months)"
 
-#: src/core/models/settings.py:108
-msgid ""
-"Wie lange AuditLog-Eintraege aufbewahrt werden, bevor das enforce_retention-"
-"Kommando sie loescht. 0 = deaktiviert (unbegrenzte Aufbewahrung)."
-msgstr ""
-"How long AuditLog entries are kept before enforce_retention deletes them. 0 "
-"= disabled (unlimited retention)."
-
 #: src/core/models/settings.py:120
 msgid "Erlaubte Dateitypen"
 msgstr "Allowed file types"
@@ -3624,17 +3616,6 @@ msgstr ""
 "facilities. No real-name field — the primary identifier is a pseudonym."
 
 #: src/core/services/compliance/vvt.py:55
-msgid ""
-"DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im oeffentlichen "
-"Interesse). Einrichtungsspezifische Grundlage: einschlaegiges Fach- und "
-"Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor Freigabe "
-"ergaenzen)."
-msgstr ""
-"GDPR Art. 6(1)(e) (performance of a task in the public interest). Facility-"
-"specific basis: applicable professional and social law of the facility (add "
-"the specific legal basis before approval)."
-
-#: src/core/services/compliance/vvt.py:55
 msgid "Pseudonym (kein Klarname)"
 msgstr "Pseudonym (no real name)"
 
@@ -3674,19 +3655,6 @@ msgstr "Pseudonymization by design"
 msgid "Row Level Security (RLS) pro Facility"
 msgstr "Row Level Security (RLS) per facility"
 
-#: src/core/services/compliance/vvt.py:76
-msgid ""
-"AuditLog auf jede Aenderung; von Lesezugriffen nur die "
-"Personen-Detailseite der Stufe „Mit Zusatzangaben“, Auskunft und Export, "
-"Datei-Download, Offline-Mitnahme sowie facility-uebergreifende Zugriffe "
-"— sonstige Listen-, Detail- und Suchaufrufe werden nicht protokolliert "
-"(ADR-043)"
-msgstr ""
-"Audit log on every change; of read access only the person detail page at "
-"the \"With additional details\" level, data subject access and export, "
-"file download, offline take-out and cross-facility access — all other "
-"list, detail and search requests are not logged (ADR-043)"
-
 #: src/core/services/compliance/vvt.py:77
 msgid "Rollenbasierte Zugriffskontrolle (5 Rollen)"
 msgstr "Role-based access control (5 roles)"
@@ -3694,29 +3662,6 @@ msgstr "Role-based access control (5 roles)"
 #: src/core/services/compliance/vvt.py:83
 msgid "Falldaten (Events, Episoden, Dokumentationen)"
 msgstr "Case data (events, episodes, documentation)"
-
-#: src/core/services/compliance/vvt.py:85
-msgid ""
-"Zeitstrom-basierte Dokumentation von Kontakten, Beratungen und "
-"Hilfeprozessen. Strukturierung zusammenhaengender Arbeit zu Faellen und "
-"Episoden. Grundlage der Wirkungsmessung und Berichterstattung gegenueber "
-"Foerdermittelgebern."
-msgstr ""
-"Timeline-based documentation of contacts, counseling and support processes. "
-"Structuring related work into cases and episodes. Basis for impact "
-"measurement and reporting to funders."
-
-#: src/core/services/compliance/vvt.py:117
-msgid ""
-"DSGVO Art. 6 Abs. 1 lit. e; Art. 9 Abs. 2 lit. b/h fuer besondere "
-"Datenkategorien (Gesundheits-, Sozialdaten). Einrichtungsspezifische "
-"Grundlage: einschlaegiges Fach- und Sozialrecht der Einrichtung (konkrete "
-"Rechtsgrundlage vor Freigabe ergaenzen). § 203 StGB, soweit anwendbar."
-msgstr ""
-"GDPR Art. 6(1)(e); Art. 9(2)(b/h) for special categories of data (health and "
-"social data). Facility-specific basis: applicable professional and social "
-"law of the facility (add the specific legal basis before approval). § 203 "
-"StGB, where applicable."
 
 #: src/core/services/compliance/vvt.py:98
 msgid "Ereignisbeschreibungen / Beratungsnotizen"
@@ -3729,45 +3674,6 @@ msgstr "Structured field values (configured per document type)"
 #: src/core/services/compliance/vvt.py:100
 msgid "Kontaktanlass, Themen, Vermittlungen"
 msgstr "Contact reason, topics, referrals"
-
-#: src/core/services/compliance/vvt.py:102
-msgid "Zeitstempel, Bearbeiter:in, Sensitivitaetsstufe"
-msgstr "Timestamp, processor, sensitivity level"
-
-#: src/core/services/compliance/vvt.py:105
-msgid ""
-"Intern: Mitarbeiter:innen der Einrichtung mit passender Rolle und "
-"Sensitivitaetsfreigabe"
-msgstr ""
-"Internal: facility staff with appropriate role and sensitivity clearance"
-
-#: src/core/services/compliance/vvt.py:107
-msgid ""
-"Keine Weitergabe an Dritte — pseudonymisierte Statistik ggf. an "
-"Foerdermittelgeber/Behoerden (Sachbericht-Export)"
-msgstr ""
-"No disclosure to third parties — pseudonymized statistics may be shared with "
-"funders/authorities (activity report export)"
-
-#: src/core/services/compliance/vvt.py:117
-msgid ""
-"Sensitivitaets-basierte Sichtbarkeit (je Dokumentationstyp, einzelne "
-"Feldvorlagen koennen sie anheben)"
-msgstr ""
-"Sensitivity-based visibility (per document type; individual field templates "
-"can raise it)"
-
-#: src/core/services/compliance/vvt.py:119
-msgid "Optimistic Locking gegen versehentliches Ueberschreiben"
-msgstr "Optimistic locking against accidental overwrite"
-
-#: src/core/services/compliance/vvt.py:122
-msgid "Encrypted File Vault mit ClamAV-Scan fail-closed fuer Anhaenge"
-msgstr "Encrypted file vault with ClamAV fail-closed scan for attachments"
-
-#: src/core/services/compliance/vvt.py:127
-msgid "Audit-Log (Zugriffs- und Aenderungsprotokoll)"
-msgstr "Audit log (access and change log)"
 
 #: src/core/services/compliance/vvt.py:135
 msgid ""
@@ -3797,53 +3703,17 @@ msgstr "Associated facility (or NULL for system events)"
 msgid "Anwendungsbetreuung der Einrichtung (Facility-Audit-Log)"
 msgstr "Application support of the facility (facility audit log)"
 
-#: src/core/services/compliance/vvt.py:150
-msgid ""
-"Systemadministration (Cross-Facility-Audit ueber /system/audit/, mit eigenem "
-"SYSTEM_VIEW-Eintrag pro Aufruf)"
-msgstr ""
-"System administration (cross-facility audit via /system/audit/, with a "
-"dedicated SYSTEM_VIEW entry per access)"
-
-#: src/core/services/compliance/vvt.py:165
-msgid "Zugriff nur fuer Anwendungsbetreuung und Systemadministration"
-msgstr "Access only for application support and system administration"
-
 #: src/core/services/compliance/vvt.py:166
 msgid "Cross-Facility-Auswertung bedingt eigenen SYSTEM_VIEW-Audit"
 msgstr "Cross-facility analysis requires its own SYSTEM_VIEW audit entry"
-
-#: src/core/services/compliance/vvt.py:167
-msgid "Backup taeglich (siehe Verarbeitung 'Backup-Daten')"
-msgstr "Backup daily (see processing 'backup data')"
 
 #: src/core/services/compliance/vvt.py:172
 msgid "Login- und Authentifizierungsdaten"
 msgstr "Login and authentication data"
 
-#: src/core/services/compliance/vvt.py:174
-msgid ""
-"Authentifizierung der Mitarbeiter:innen, Schutz gegen Brute-Force, "
-"Sitzungsverwaltung. Nachweis fuer Datenschutz-Vorfallpruefung."
-msgstr ""
-"Authentication of staff, protection against brute force, session management. "
-"Evidence for data-protection incident review."
-
-#: src/core/services/compliance/vvt.py:179
-msgid ""
-"DSGVO Art. 6 Abs. 1 lit. b (Vertragserfuellung — Arbeitsvertrag) und Art. 32 "
-"(Sicherheit der Verarbeitung)."
-msgstr ""
-"GDPR Art. 6(1)(b) (performance of a contract — employment contract) and Art. "
-"32 (security of processing)."
-
 #: src/core/services/compliance/vvt.py:183
 msgid "Username, E-Mail-Adresse"
 msgstr "Username, email address"
-
-#: src/core/services/compliance/vvt.py:185
-msgid "MFA-Geraetesecret (TOTP, verschluesselt)"
-msgstr "MFA device secret (TOTP, encrypted)"
 
 #: src/core/services/compliance/vvt.py:186
 msgid "Backup-Codes (Hash)"
@@ -3861,17 +3731,9 @@ msgstr "Account lockout status"
 msgid "Intern: Anwendungsbetreuung der Einrichtung"
 msgstr "Internal: application support of the facility"
 
-#: src/core/services/compliance/vvt.py:192
-msgid "Systemadministration (User-Management ueber Django-Admin)"
-msgstr "System administration (user management via Django admin)"
-
 #: src/core/services/compliance/vvt.py:205
 msgid "Recovery-Codes als Self-Service-Backup"
 msgstr "Recovery codes as self-service backup"
-
-#: src/core/services/compliance/vvt.py:206
-msgid "Sudo-Mode fuer destruktive Aktionen (15 Min Re-Auth)"
-msgstr "Sudo mode for destructive actions (15 min re-auth)"
 
 #: src/core/services/compliance/vvt.py:207
 msgid "HTTPS-only mit HSTS"
@@ -3881,32 +3743,6 @@ msgstr "HTTPS-only with HSTS"
 msgid "Backup-Daten"
 msgstr "Backup data"
 
-#: src/core/services/compliance/vvt.py:214
-msgid ""
-"Wiederherstellbarkeit der Anwendung im Stoerfall (DSGVO Art. 32 Abs. 1 lit. "
-"c). Schutz vor Datenverlust durch Hardware-Defekt, Bedienfehler oder "
-"Ransomware."
-msgstr ""
-"Recoverability of the application in case of failure (GDPR Art. 32(1)(c)). "
-"Protection against data loss from hardware failure, operator error or "
-"ransomware."
-
-#: src/core/services/compliance/vvt.py:219
-msgid ""
-"DSGVO Art. 6 Abs. 1 lit. f (berechtigtes Interesse an Verfuegbarkeit) i.V.m. "
-"Art. 32 (Sicherheit der Verarbeitung)."
-msgstr ""
-"GDPR Art. 6(1)(f) (legitimate interest in availability) in conjunction with "
-"Art. 32 (security of processing)."
-
-#: src/core/services/compliance/vvt.py:224
-msgid "Vollstaendige PostgreSQL-Datenbankdumps"
-msgstr "Complete PostgreSQL database dumps"
-
-#: src/core/services/compliance/vvt.py:225
-msgid "File-Vault-Inhalte (verschluesselt)"
-msgstr "File-vault contents (encrypted)"
-
 #: src/core/services/compliance/vvt.py:226
 msgid "Konfigurationsdaten der Installation"
 msgstr "Configuration data of the installation"
@@ -3915,50 +3751,13 @@ msgstr "Configuration data of the installation"
 msgid "Intern: Systemadministration (Restore-Berechtigung)"
 msgstr "Internal: system administration (restore permission)"
 
-#: src/core/services/compliance/vvt.py:230
-msgid ""
-"Backup-Speicherort gemaess Hosting-Vertrag (Auftragsverarbeiter, AV-Vertrag "
-"erforderlich)"
-msgstr ""
-"Backup storage location per hosting contract (processor, data processing "
-"agreement required)"
-
-#: src/core/services/compliance/vvt.py:239
-msgid "Backup-Verschluesselung at-rest"
-msgstr "Backup encryption at rest"
-
-#: src/core/services/compliance/vvt.py:240
-msgid "Getrennter Speicherort (offsite oder anderer Verfuegbarkeitsbereich)"
-msgstr "Separate storage location (offsite or different availability zone)"
-
 #: src/core/services/compliance/vvt.py:242
 msgid "Regelmaessige Restore-Tests"
 msgstr "Regular restore tests"
 
-#: src/core/services/compliance/vvt.py:243
-msgid "Zugriff nur fuer Systemadministration (4-Augen empfohlen bei Restore)"
-msgstr ""
-"Access only for system administration (four-eyes recommended on restore)"
-
 #: src/core/services/compliance/vvt.py:248
 msgid "DSGVO-Auskunfts- und Berichtigungsantraege"
 msgstr "GDPR access and rectification requests"
-
-#: src/core/services/compliance/vvt.py:250
-msgid ""
-"Technische Unterstuetzung der implementierten Betroffenenrechte nach DSGVO "
-"Art. 15, 16, 17 und 20 (Auskunft, Berichtigung, Loeschung und "
-"Datenuebertragbarkeit). Antraege auf Einschraenkung (Art. 18) oder Widerspruch "
-"(Art. 21) werden ausserhalb der Anwendung im organisatorischen Prozess der "
-"Einrichtung aufgenommen; die Anwendung stellt dafuer kein Intake-Formular "
-"bereit. Erstellung von Datenexport-Paketen und Dokumentation der Bearbeitung."
-msgstr ""
-"Technical support for implemented data subject rights under GDPR Arts. 15, "
-"16, 17 and 20 (access, rectification, erasure and data portability). Requests "
-"for restriction (Art. 18) or objection (Art. 21) are received outside the "
-"application through the facility's organizational process; the application "
-"provides no intake form for them. Creation of data export packages and "
-"documentation of processing."
 
 #: src/core/services/compliance/vvt.py:256
 msgid ""
@@ -3971,10 +3770,6 @@ msgstr ""
 #: src/core/services/compliance/vvt.py:261
 msgid "Antragsteller:in (sofern identifiziert)"
 msgstr "Requester (if identified)"
-
-#: src/core/services/compliance/vvt.py:262
-msgid "Antrags-Typ (Auskunft, Berichtigung, Loeschung, ...)"
-msgstr "Request type (access, rectification, deletion, ...)"
 
 #: src/core/services/compliance/vvt.py:263
 msgid "Bearbeitungs-Status und -datum"
@@ -3998,25 +3793,9 @@ msgstr "Application support of the facility (processing)"
 msgid "Antragsteller:in (Auslieferung des Datenpakets)"
 msgstr "Requester (delivery of the data package)"
 
-#: src/core/services/compliance/vvt.py:280
-msgid ""
-"Berichtigung organisatorisch ueber Mitarbeiter:innen / Leitung — kein Self-"
-"Service durch die betroffene Person"
-msgstr ""
-"Rectification handled organizationally via staff / lead — no self-service by "
-"the person concerned"
-
 #: src/core/services/compliance/vvt.py:284
 msgid "Sudo-Mode-Re-Auth vor Erstellung von Datenpaketen"
 msgstr "Sudo-mode re-auth before creating data packages"
-
-#: src/core/services/compliance/vvt.py:285
-msgid "AuditLog jeder Auskunft / Berichtigung / Loeschung"
-msgstr "Audit log on every access / rectification / deletion"
-
-#: src/core/services/compliance/vvt.py:286
-msgid "Verschluesselte Auslieferung der Datenpakete"
-msgstr "Encrypted delivery of data packages"
 
 #: src/core/services/config.py:112
 #, python-format
@@ -4172,22 +3951,6 @@ msgstr "Urgent · Important"
 #: src/core/services/dashboard/main.py:113
 msgid "Keine Settings konfiguriert — bitte initial einrichten."
 msgstr "No settings configured — please set up initially."
-
-#: src/core/services/dashboard/main.py:117
-msgid ""
-"MFA-Pflicht (2FA) ist einrichtungsweit nicht aktiv — Login bleibt ohne "
-"zweiten Faktor moeglich."
-msgstr ""
-"MFA (2FA) is not enforced facility-wide — login remains possible without a "
-"second factor."
-
-#: src/core/services/dashboard/main.py:122
-msgid ""
-"K-Anonymisierung ist deaktiviert — Loeschlauf entfernt Datensaetze hart. "
-"Falls Statistik-Erhalt gewuenscht, in Settings aktivieren."
-msgstr ""
-"K-anonymization is disabled — the deletion run removes records permanently. "
-"If you want to retain statistics, enable it in Settings."
 
 #: src/core/services/deletion.py:75
 msgid "Person (nicht mehr auffindbar)"
@@ -4908,10 +4671,6 @@ msgstr "Email address"
 msgid "Konto entsperren — Anlaufstelle"
 msgstr "Unlock account — Anlaufstelle"
 
-#: src/core/views/lockout_recovery.py:123
-msgid "Konto entsperrt. Sie koennen sich jetzt anmelden."
-msgstr "Account unlocked. You can now log in."
-
 #: src/core/views/lockout_recovery.py:136
 #: src/templates/auth/lockout_recovery_backup_code.html:28
 #: src/templates/auth/login.html:64 src/templates/core/account/profile.html:18
@@ -4923,10 +4682,6 @@ msgstr "Username"
 #: src/templates/auth/mfa_login.html:97
 msgid "Backup-Code"
 msgstr "Backup code"
-
-#: src/core/views/lockout_recovery.py:185
-msgid "Code ungueltig oder Konto nicht gefunden."
-msgstr "Code invalid or account not found."
 
 #: src/core/views/mfa.py:157
 msgid ""
@@ -5115,18 +4870,9 @@ msgstr "Password is incorrect."
 msgid "Der Bestätigungscode (2FA) ist nicht korrekt."
 msgstr "The confirmation code (2FA) is incorrect."
 
-#: src/core/views/system/lockouts.py:149
-msgid "Kein Benutzername uebergeben."
-msgstr "No username provided."
-
 #: src/core/views/system/lockouts.py:154
 msgid "Benutzer nicht gefunden."
 msgstr "User not found."
-
-#: src/core/views/system/lockouts.py:162
-#, python-format
-msgid "Sperre fuer '%(username)s' aufgehoben."
-msgstr "Lockout cleared for '%(username)s'."
 
 #: src/core/views/system/maintenance.py:52
 msgid ""
@@ -5151,14 +4897,6 @@ msgstr "Could not disable maintenance mode (see server log)."
 #: src/core/views/system/maintenance.py:96
 msgid "Wartungsmodus deaktiviert."
 msgstr "Maintenance mode disabled."
-
-#: src/core/views/system/organization.py:33
-msgid ""
-"Es ist noch keine Organisation angelegt. Bitte ueber die Administration "
-"einrichten."
-msgstr ""
-"No organization has been created yet. Please set one up via the "
-"administration."
 
 #: src/core/views/workitem_actions.py:180 src/core/views/workitem_bulk.py:227
 msgid "Ungültiger Status"
@@ -5889,10 +5627,6 @@ msgid ""
 msgstr ""
 "This action is security-critical (e.g. disabling 2FA or exporting data). "
 "Please confirm your password to continue."
-
-#: src/templates/auth/sudo_mode.html:13
-msgid "Die Bestätigung gilt fuer 15 Minuten innerhalb dieser Sitzung."
-msgstr "The confirmation is valid for 15 minutes within this session."
 
 #: src/templates/auth/sudo_mode.html:35
 msgid "Bestätigungscode (2FA)"
@@ -10315,15 +10049,6 @@ msgid ""
 msgstr ""
 "This demo uses Umami analytics including session recording and heatmaps."
 
-#: src/templates/partials/_umami_consent.html:24
-msgid ""
-"Nach der Anmeldung werden Ihre Interaktionen pseudonym aufgezeichnet und "
-"ausgewertet, um die Demo zu verbessern; die Nutzung der Demo ist nur mit "
-"Ihrer Zustimmung möglich."
-msgstr ""
-"After login, your interactions are recorded and analysed pseudonymously to "
-"improve the demo; the demo can only be used with your consent."
-
 #: src/templates/partials/_umami_consent.html:26
 msgid "Datenschutzerklärung"
 msgstr "Privacy policy"
@@ -10783,10 +10508,6 @@ msgstr "The case has been permanently anonymized and cannot be restored."
 #: src/core/services/case/deletion.py:444
 msgid "Der Fall wurde bereits endgültig anonymisiert."
 msgstr "The case has already been permanently anonymized."
-
-#: src/core/services/compliance/vvt.py:174
-msgid "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, Wiederherstellen und Anonymisieren von Faellen; auf das Bearbeiten von Episoden und Wirkungszielen sowie das Zuordnen und Loesen von Ereignissen zu Faellen; von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert (ADR-043)"
-msgstr "Audit log on creating, editing and deleting events; on creating, editing, closing, reopening, deleting, restoring and anonymizing cases; on editing episodes and outcome goals as well as linking events to and unlinking them from cases; of read access only export, file download, offline take-out and cross-facility access — detail, list and search requests are not logged (ADR-043)"
 
 #: src/core/services/config.py:135
 #, python-format
@@ -13950,10 +13671,6 @@ msgstr "App %(app_version)s, Django %(django_version)s, Python %(python_version)
 msgid "Standardmäßig 24 Monate je Einrichtung; Einträge ohne Einrichtung ebenfalls 24 Monate installationsweit (AUDITLOG_SYSTEM_RETENTION_MONTHS). Jeweils 0 = aus. Der tägliche Aufbewahrungslauf lässt Audit-Zeilen mit Einrichtung zu Zielen unter aktivem Legal Hold stehen. Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs, Nachweise der Historien-Redaktion (Ereignis-Historie) und herausgegebener Berichtszeiträume bleiben dauerhaft. Die Audit-Frist gilt unabhängig von der Lebensdauer der Fachdaten; Anonymisierung redigiert die Audit-Zeilen nicht."
 msgstr "By default 24 months per facility; entries without a facility likewise 24 months installation-wide (AUDITLOG_SYSTEM_RETENTION_MONTHS). In each case 0 = off. The daily retention run leaves audit rows with a facility for targets under an active legal hold untouched. Security violations, system markers of the retention run, evidence of history redaction (event history) and disclosed reporting periods are kept permanently. The audit period applies independently of the lifetime of the case data; anonymization does not redact the audit rows."
 
-#: src/core/services/compliance/vvt.py:341
-msgid "Konto-Stammdaten: bis zur Loeschung des Accounts. Login-Versuche und Kontosperren: als Audit-Einträge, aus denen die Sperre berechnet wird; sie folgen der Audit-Frist (siehe Verarbeitung 'Audit-Log'), Fehlversuche unter unbekanntem Benutzernamen und von Konten ohne Einrichtung folgen der installationsweiten Audit-Frist (Vorgabe 24 Monate, 0 = aus). Recovery-Codes bis zu deren Verbrauch oder Neuerstellung."
-msgstr "Account master data: until the account is deleted. Login attempts and account lockouts: as audit entries from which the lockout is calculated; they follow the audit period (see processing 'Audit log'); failed attempts under unknown usernames and of accounts without a facility follow the installation-wide audit period (default 24 months, 0 = off). Recovery codes until they are used or regenerated."
-
 #: src/core/services/compliance/vvt.py:453
 msgid "Abgeschlossene Lösch-, Zusammenführungs- und Herabstufungsanträge werden nach deletion_request_retention_days (Vorgabe 1095 Tage) ab Abschluss hart gelöscht; offene Anträge bleiben. Berichtigungsanträge haben weiterhin keine technische Frist. Anonymisierung redigiert deren Inhalte und die Begründungen zugehöriger Löschanträge und Aufbewahrungssperren zu „[Anonymisiert]“. Audit-Nachweise folgen ihrer eigenen Audit-Frist. Erzeugte Datenpakete sind nach Abholung organisatorisch zu löschen. Monatsaggregate bleiben unbefristet als statistischer Restbestand erhalten."
 msgstr "Completed deletion, merge and downgrade requests are hard-deleted after deletion_request_retention_days (default 1095 days) from completion; open requests are kept. Rectification requests still have no technical deadline. Anonymization redacts their contents and the justifications of related deletion requests and retention holds to \"[Anonymized]\". Audit records follow their own audit retention period. Generated data packages must be deleted organizationally after collection. Monthly aggregates are kept indefinitely as a statistical remainder."
@@ -14360,3 +14077,188 @@ msgstr "Check whether the reports can be combined. Different reports sharing a d
 #: src/templates/core/statistics/report_releases.html:92
 msgid "Die Anzeige ist auf Seiten aufgeteilt. Überschneidungen werden mit allen protokollierten Herausgaben desselben Berichts oder derselben Artefaktfamilie geprüft. Zur Ereignisfamilie gehören auch Beispiel-, Sach-, Summen- und Teilpopulationsberichte. Allgemeine Kennzahlen und Personen-Kennzahlen teilen zusätzlich die Personendimension. Diese Beziehungen setzen unterschiedliche Grundgesamtheiten oder Einheiten nicht gleich."
 msgstr "The display is paginated. Overlaps are checked against all recorded disclosures of the same report or the same artifact family. The event family also includes example, activity, quantity sum and subset reports. General key figures and client metrics additionally share the person dimension. These relationships do not equate different populations or units."
+
+#: src/core/models/settings.py:145
+msgid "Wie lange AuditLog-Einträge aufbewahrt werden, bevor das enforce_retention-Kommando sie löscht. 0 = deaktiviert (unbegrenzte Aufbewahrung)."
+msgstr "How long AuditLog entries are kept before enforce_retention deletes them. 0 = disabled (unlimited retention)."
+
+#: src/core/reporting/backends/general_key_figures.py:31
+msgid "Kontakte nach Kontaktstufe"
+msgstr "Contacts by contact stage"
+
+#: src/core/services/compliance/vvt.py:55
+msgid "DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im öffentlichen Interesse). Einrichtungsspezifische Grundlage: einschlägiges Fach- und Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor Freigabe ergänzen)."
+msgstr "GDPR Art. 6(1)(e) (performance of a task in the public interest). Facility-specific basis: applicable professional and social law of the facility (add the specific legal basis before approval)."
+
+#: src/core/services/compliance/vvt.py:111
+msgid "AuditLog auf jede Änderung; von Lesezugriffen nur die Personen-Detailseite der Stufe „Mit Zusatzangaben“, Auskunft und Export, Datei-Download, Offline-Mitnahme sowie facility-übergreifende Zugriffe — sonstige Listen-, Detail- und Suchaufrufe werden nicht protokolliert (ADR-043)"
+msgstr "Audit log on every change; of read access only the person detail page at the \"With additional details\" level, data subject access and export, file download, offline take-out and cross-facility access — all other list, detail and search requests are not logged (ADR-043)"
+
+#: src/core/services/compliance/vvt.py:128
+msgid "Zeitstrom-basierte Dokumentation von Kontakten, Beratungen und Hilfeprozessen. Strukturierung zusammenhängender Arbeit zu Fällen und Episoden. Grundlage der Wirkungsmessung und Berichterstattung gegenüber Fördermittelgebern."
+msgstr "Timeline-based documentation of contacts, counseling and support processes. Structuring related work into cases and episodes. Basis for impact measurement and reporting to funders."
+
+#: src/core/services/compliance/vvt.py:135
+msgid "DSGVO Art. 6 Abs. 1 lit. e; Art. 9 Abs. 2 lit. b/h für besondere Datenkategorien (Gesundheits-, Sozialdaten). Einrichtungsspezifische Grundlage: einschlägiges Fach- und Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor Freigabe ergänzen). § 203 StGB, soweit anwendbar."
+msgstr "GDPR Art. 6(1)(e); Art. 9(2)(b/h) for special categories of data (health and social data). Facility-specific basis: applicable professional and social law of the facility (add the specific legal basis before approval). § 203 StGB, where applicable."
+
+#: src/core/services/compliance/vvt.py:146
+msgid "Zeitstempel, Bearbeiter:in, Sensitivitätsstufe"
+msgstr "Timestamp, processor, sensitivity level"
+
+#: src/core/services/compliance/vvt.py:149
+msgid "Intern: Mitarbeiter:innen der Einrichtung mit passender Rolle und Sensitivitätsfreigabe"
+msgstr "Internal: facility staff with appropriate role and sensitivity clearance"
+
+#: src/core/services/compliance/vvt.py:151
+msgid "Keine Weitergabe an Dritte — pseudonymisierte Statistik ggf. an Fördermittelgeber/Behörden (Sachbericht-Export)"
+msgstr "No disclosure to third parties — pseudonymized statistics may be shared with funders/authorities (activity report export)"
+
+#: src/core/services/compliance/vvt.py:188
+msgid "Sensitivitäts-basierte Sichtbarkeit (je Dokumentationstyp, einzelne Feldvorlagen können sie anheben)"
+msgstr "Sensitivity-based visibility (per document type; individual field templates can raise it)"
+
+#: src/core/services/compliance/vvt.py:231
+msgid "AuditLog auf Anlegen, Bearbeiten und Löschen von Ereignissen; auf Anlegen, Bearbeiten, Schließen, Wiedereröffnen, Löschen, Wiederherstellen und Anonymisieren von Fällen; auf das Bearbeiten von Episoden und Wirkungszielen sowie das Zuordnen und Lösen von Ereignissen zu Fällen; von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme und facility-übergreifende Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert (ADR-043)"
+msgstr "Audit log on creating, editing and deleting events; on creating, editing, closing, reopening, deleting, restoring and anonymizing cases; on editing episodes and outcome goals as well as linking events to and unlinking them from cases; of read access only export, file download, offline take-out and cross-facility access — detail, list and search requests are not logged (ADR-043)"
+
+#: src/core/services/compliance/vvt.py:250
+msgid "Encrypted File Vault mit ClamAV-Scan fail-closed für Anhänge"
+msgstr "Encrypted file vault with ClamAV fail-closed scan for attachments"
+
+#: src/core/services/compliance/vvt.py:255
+msgid "Audit-Log (Zugriffs- und Änderungsprotokoll)"
+msgstr "Audit log (access and change log)"
+
+#: src/core/services/compliance/vvt.py:280
+msgid "Systemadministration (Cross-Facility-Audit über /system/audit/, mit eigenem SYSTEM_VIEW-Eintrag pro Aufruf)"
+msgstr "System administration (cross-facility audit via /system/audit/, with a dedicated SYSTEM_VIEW entry per access)"
+
+#: src/core/services/compliance/vvt.py:312
+msgid "Zugriff nur für Anwendungsbetreuung und Systemadministration"
+msgstr "Access only for application support and system administration"
+
+#: src/core/services/compliance/vvt.py:314
+msgid "Backup täglich (siehe Verarbeitung 'Backup-Daten')"
+msgstr "Backup daily (see processing 'backup data')"
+
+#: src/core/services/compliance/vvt.py:321
+msgid "Authentifizierung der Mitarbeiter:innen, Schutz gegen Brute-Force, Sitzungsverwaltung. Nachweis für Datenschutz-Vorfallprüfung."
+msgstr "Authentication of staff, protection against brute force, session management. Evidence for data-protection incident review."
+
+#: src/core/services/compliance/vvt.py:326
+msgid "DSGVO Art. 6 Abs. 1 lit. b (Vertragserfüllung — Arbeitsvertrag) und Art. 32 (Sicherheit der Verarbeitung)."
+msgstr "GDPR Art. 6(1)(b) (performance of a contract — employment contract) and Art. 32 (security of processing)."
+
+#: src/core/services/compliance/vvt.py:332
+msgid "MFA-Gerätesecret (TOTP, verschlüsselt)"
+msgstr "MFA device secret (TOTP, encrypted)"
+
+#: src/core/services/compliance/vvt.py:339
+msgid "Systemadministration (User-Management über Django-Admin)"
+msgstr "System administration (user management via Django admin)"
+
+#: src/core/services/compliance/vvt.py:345
+msgid "Konto-Stammdaten: bis zur Löschung des Accounts. Login-Versuche und Kontosperren: als Audit-Einträge, aus denen die Sperre berechnet wird; sie folgen der Audit-Frist (siehe Verarbeitung 'Audit-Log'), Fehlversuche unter unbekanntem Benutzernamen und von Konten ohne Einrichtung folgen der installationsweiten Audit-Frist (Vorgabe 24 Monate, 0 = aus). Recovery-Codes bis zu deren Verbrauch oder Neuerstellung."
+msgstr "Account master data: until the account is deleted. Login attempts and account lockouts: as audit entries from which the lockout is calculated; they follow the audit period (see processing 'Audit log'); failed attempts under unknown usernames and of accounts without a facility follow the installation-wide audit period (default 24 months, 0 = off). Recovery codes until they are used or regenerated."
+
+#: src/core/services/compliance/vvt.py:362
+msgid "Sudo-Mode für destruktive Aktionen (15 Min Re-Auth)"
+msgstr "Sudo mode for destructive actions (15 min re-auth)"
+
+#: src/core/services/compliance/vvt.py:370
+msgid "Wiederherstellbarkeit der Anwendung im Störfall (DSGVO Art. 32 Abs. 1 lit. c). Schutz vor Datenverlust durch Hardware-Defekt, Bedienfehler oder Ransomware."
+msgstr "Recoverability of the application in case of failure (GDPR Art. 32(1)(c)). Protection against data loss from hardware failure, operator error or ransomware."
+
+#: src/core/services/compliance/vvt.py:375
+msgid "DSGVO Art. 6 Abs. 1 lit. f (berechtigtes Interesse an Verfügbarkeit) i.V.m. Art. 32 (Sicherheit der Verarbeitung)."
+msgstr "GDPR Art. 6(1)(f) (legitimate interest in availability) in conjunction with Art. 32 (security of processing)."
+
+#: src/core/services/compliance/vvt.py:380
+msgid "Vollständige PostgreSQL-Datenbankdumps"
+msgstr "Complete PostgreSQL database dumps"
+
+#: src/core/services/compliance/vvt.py:381
+msgid "File-Vault-Inhalte (verschlüsselt)"
+msgstr "File-vault contents (encrypted)"
+
+#: src/core/services/compliance/vvt.py:386
+msgid "Backup-Speicherort gemäß Hosting-Vertrag (Auftragsverarbeiter, AV-Vertrag erforderlich)"
+msgstr "Backup storage location per hosting contract (processor, data processing agreement required)"
+
+#: src/core/services/compliance/vvt.py:403
+msgid "Backup-Verschlüsselung at-rest"
+msgstr "Backup encryption at rest"
+
+#: src/core/services/compliance/vvt.py:404
+msgid "Getrennter Speicherort (offsite oder anderer Verfügbarkeitsbereich)"
+msgstr "Separate storage location (offsite or different availability zone)"
+
+#: src/core/services/compliance/vvt.py:412
+msgid "Zugriff nur für Systemadministration (4-Augen empfohlen bei Restore)"
+msgstr "Access only for system administration (four-eyes recommended on restore)"
+
+#: src/core/services/compliance/vvt.py:419
+msgid "Technische Unterstützung der implementierten Betroffenenrechte nach DSGVO Art. 15, 16, 17 und 20 (Auskunft, Berichtigung, Löschung und Datenübertragbarkeit). Anträge auf Einschränkung (Art. 18) oder Widerspruch (Art. 21) werden außerhalb der Anwendung im organisatorischen Prozess der Einrichtung aufgenommen; die Anwendung stellt dafür kein Intake-Formular bereit. Erstellung von Datenexport-Paketen und Dokumentation der Bearbeitung."
+msgstr "Technical support for implemented data subject rights under GDPR Arts. 15, 16, 17 and 20 (access, rectification, erasure and data portability). Requests for restriction (Art. 18) or objection (Art. 21) are received outside the application through the facility's organizational process; the application provides no intake form for them. Creation of data export packages and documentation of processing."
+
+#: src/core/services/compliance/vvt.py:435
+msgid "Antrags-Typ (Auskunft, Berichtigung, Löschung, ...)"
+msgstr "Request type (access, rectification, deletion, ...)"
+
+#: src/core/services/compliance/vvt.py:468
+msgid "Berichtigung organisatorisch über Mitarbeiter:innen / Leitung — kein Self-Service durch die betroffene Person"
+msgstr "Rectification handled organizationally via staff / lead — no self-service by the person concerned"
+
+#: src/core/services/compliance/vvt.py:476
+msgid "AuditLog jeder Auskunft / Berichtigung / Löschung"
+msgstr "Audit log on every access / rectification / deletion"
+
+#: src/core/services/compliance/vvt.py:477
+msgid "Verschlüsselte Auslieferung der Datenpakete"
+msgstr "Encrypted delivery of data packages"
+
+#: src/core/services/dashboard/main.py:139
+msgid "MFA-Pflicht (2FA) ist einrichtungsweit nicht aktiv — Login bleibt ohne zweiten Faktor möglich."
+msgstr "MFA (2FA) is not enforced facility-wide — login remains possible without a second factor."
+
+#: src/core/services/dashboard/main.py:144
+msgid "K-Anonymisierung ist deaktiviert — Löschlauf entfernt Datensätze hart. Falls Statistik-Erhalt gewünscht, in Settings aktivieren."
+msgstr "K-anonymization is disabled — the deletion run removes records permanently. If you want to retain statistics, enable it in Settings."
+
+#: src/core/views/lockout_recovery.py:154
+msgid "Konto entsperrt. Sie können sich jetzt anmelden."
+msgstr "Account unlocked. You can now log in."
+
+#: src/core/views/lockout_recovery.py:226
+msgid "Code ungültig oder Konto nicht gefunden."
+msgstr "Code invalid or account not found."
+
+#: src/core/views/system/lockouts.py:161
+msgid "Kein Benutzername übergeben."
+msgstr "No username provided."
+
+#: src/core/views/system/lockouts.py:174
+#, python-format
+msgid "Sperre für '%(username)s' aufgehoben."
+msgstr "Lockout cleared for '%(username)s'."
+
+#: src/core/views/system/organization.py:36
+msgid "Es ist noch keine Organisation angelegt. Bitte über die Administration einrichten."
+msgstr "No organization has been created yet. Please set one up via the administration."
+
+#: src/templates/auth/demo_scenario_select.html:43
+msgid "Die Demo wird jede volle Stunde zurückgesetzt."
+msgstr "The demo is reset every hour on the hour."
+
+#: src/templates/auth/sudo_mode.html:13
+msgid "Die Bestätigung gilt für 15 Minuten innerhalb dieser Sitzung."
+msgstr "The confirmation is valid for 15 minutes within this session."
+
+#: src/templates/partials/_umami_consent.html:24
+msgid "Nach der Anmeldung werden Ihre Interaktionen pseudonym aufgezeichnet und ausgewertet, um die Demo zu verbessern; das geschieht nur mit Ihrer Zustimmung. Ohne Zustimmung bleibt die Demo uneingeschränkt nutzbar."
+msgstr "After you sign in, your interactions are recorded and analysed under a pseudonym to improve the demo, but only with your consent. The demo remains fully usable without consent."
+
+#: src/core/services/compliance/vvt.py:190
+msgid "Optimistic Locking gegen versehentliches Überschreiben"
+msgstr "Optimistic locking against accidental overwrite"

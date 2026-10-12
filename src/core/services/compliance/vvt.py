@@ -53,7 +53,7 @@ PROCESSING_ACTIVITIES = [
         ),
         "legal_basis": _(
             "DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im "
-            "oeffentlichen Interesse). Einrichtungsspezifische Grundlage: "
+            "öffentlichen Interesse). Einrichtungsspezifische Grundlage: "
             "einschlägiges Fach- und Sozialrecht der Einrichtung "
             "(konkrete Rechtsgrundlage vor Freigabe ergänzen)."
         ),
@@ -149,7 +149,7 @@ PROCESSING_ACTIVITIES = [
             _("Intern: Mitarbeiter:innen der Einrichtung mit passender Rolle und Sensitivitätsfreigabe"),
             _(
                 "Keine Weitergabe an Dritte — pseudonymisierte Statistik ggf. an "
-                "Fördermittelgeber/Behoerden (Sachbericht-Export)"
+                "Fördermittelgeber/Behörden (Sachbericht-Export)"
             ),
         ],
         # Refs #2462: the document type period is an additional strategy
@@ -187,7 +187,7 @@ PROCESSING_ACTIVITIES = [
         "toms": [
             _("Sensitivitäts-basierte Sichtbarkeit (je Dokumentationstyp, einzelne Feldvorlagen können sie anheben)"),
             _("Verschlüsselung sensibler Felder (Fernet: AES-128-CBC mit HMAC-SHA256, Schlüssel außerhalb der DB)"),
-            _("Optimistic Locking gegen versehentliches Ueberschreiben"),
+            _("Optimistic Locking gegen versehentliches Überschreiben"),
             # Refs #1862: Hier stand "AuditLog jeder Lese- und Schreibaktion".
             # Der Ersatz muss drei Dinge genau treffen, sonst ersetzt er eine
             # unzutreffende Art.-30-Angabe nur durch die naechste:
@@ -311,7 +311,7 @@ PROCESSING_ACTIVITIES = [
             ),
             _("Zugriff nur für Anwendungsbetreuung und Systemadministration"),
             _("Cross-Facility-Auswertung bedingt eigenen SYSTEM_VIEW-Audit"),
-            _("Backup taeglich (siehe Verarbeitung 'Backup-Daten')"),
+            _("Backup täglich (siehe Verarbeitung 'Backup-Daten')"),
         ],
     },
     {
@@ -323,13 +323,12 @@ PROCESSING_ACTIVITIES = [
             "Datenschutz-Vorfallprüfung."
         ),
         "legal_basis": _(
-            "DSGVO Art. 6 Abs. 1 lit. b (Vertragserfuellung — "
-            "Arbeitsvertrag) und Art. 32 (Sicherheit der Verarbeitung)."
+            "DSGVO Art. 6 Abs. 1 lit. b (Vertragserfüllung — Arbeitsvertrag) und Art. 32 (Sicherheit der Verarbeitung)."
         ),
         "data_categories": [
             _("Username, E-Mail-Adresse"),
             _("Passwort-Hash (PBKDF2, niemals Klartext)"),
-            _("MFA-Geraetesecret (TOTP, verschluesselt)"),
+            _("MFA-Gerätesecret (TOTP, verschlüsselt)"),
             _("Backup-Codes (Hash)"),
             _("Login-Versuche (Erfolg/Fehler) inkl. IP und Zeitstempel"),
             _("Account-Lockout-Status"),
@@ -367,23 +366,23 @@ PROCESSING_ACTIVITIES = [
         "id": "backup",
         "title": _("Backup-Daten"),
         "purpose": _(
-            "Wiederherstellbarkeit der Anwendung im Stoerfall (DSGVO "
+            "Wiederherstellbarkeit der Anwendung im Störfall (DSGVO "
             "Art. 32 Abs. 1 lit. c). Schutz vor Datenverlust durch "
             "Hardware-Defekt, Bedienfehler oder Ransomware."
         ),
         "legal_basis": _(
             "DSGVO Art. 6 Abs. 1 lit. f (berechtigtes Interesse an "
-            "Verfuegbarkeit) i.V.m. Art. 32 (Sicherheit der "
+            "Verfügbarkeit) i.V.m. Art. 32 (Sicherheit der "
             "Verarbeitung)."
         ),
         "data_categories": [
-            _("Vollstaendige PostgreSQL-Datenbankdumps"),
-            _("File-Vault-Inhalte (verschluesselt)"),
+            _("Vollständige PostgreSQL-Datenbankdumps"),
+            _("File-Vault-Inhalte (verschlüsselt)"),
             _("Konfigurationsdaten der Installation"),
         ],
         "recipients": [
             _("Intern: Systemadministration (Restore-Berechtigung)"),
-            _("Backup-Speicherort gemaess Hosting-Vertrag (Auftragsverarbeiter, AV-Vertrag erforderlich)"),
+            _("Backup-Speicherort gemäß Hosting-Vertrag (Auftragsverarbeiter, AV-Vertrag erforderlich)"),
         ],
         # Refs #2464: the minimum ages mirror the ``-mtime +7/+28/+90`` values
         # in ``scripts/ops/backup.sh`` (``find`` counts full days only, and the
@@ -400,8 +399,8 @@ PROCESSING_ACTIVITIES = [
             "eine Aufbewahrungsregel am Speicherort fest."
         ),
         "toms": [
-            _("Backup-Verschluesselung at-rest"),
-            _("Getrennter Speicherort (offsite oder anderer Verfuegbarkeitsbereich)"),
+            _("Backup-Verschlüsselung at-rest"),
+            _("Getrennter Speicherort (offsite oder anderer Verfügbarkeitsbereich)"),
             _(
                 "Sicherung vor dem Aufbewahrungslauf: Ein Sicherungsstand enthält "
                 "auch die Daten, die der folgende Lauf löscht; sie verschwinden "
@@ -474,7 +473,7 @@ PROCESSING_ACTIVITIES = [
             ),
             _("Sudo-Mode-Re-Auth vor Erstellung von Datenpaketen"),
             _("AuditLog jeder Auskunft / Berichtigung / Löschung"),
-            _("Verschluesselte Auslieferung der Datenpakete"),
+            _("Verschlüsselte Auslieferung der Datenpakete"),
         ],
     },
 ]

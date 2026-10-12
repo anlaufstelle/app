@@ -136,7 +136,7 @@ def facility_admin_dashboard_context(user, facility) -> dict:
     else:
         if not settings_obj.mfa_enforced_facility_wide:
             warnings.append(
-                _("MFA-Pflicht (2FA) ist einrichtungsweit nicht aktiv — Login bleibt ohne zweiten Faktor moeglich.")
+                _("MFA-Pflicht (2FA) ist einrichtungsweit nicht aktiv — Login bleibt ohne zweiten Faktor möglich.")
             )
         if not settings_obj.retention_use_k_anonymization:
             warnings.append(

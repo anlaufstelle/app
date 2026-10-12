@@ -142,8 +142,8 @@ class Settings(models.Model):
         default=24,
         verbose_name=_("AuditLog-Aufbewahrung (Monate)"),
         help_text=_(
-            "Wie lange AuditLog-Eintraege aufbewahrt werden, bevor das "
-            "enforce_retention-Kommando sie loescht. 0 = deaktiviert "
+            "Wie lange AuditLog-Einträge aufbewahrt werden, bevor das "
+            "enforce_retention-Kommando sie löscht. 0 = deaktiviert "
             "(unbegrenzte Aufbewahrung)."
         ),
     )
