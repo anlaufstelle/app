@@ -262,8 +262,10 @@
     <script src="{% static 'js/offline-bundles.js' %}"></script>
     <script src="{% static 'js/offline-revocations.js' %}"></script>
     <script src="{% static 'js/offline-store.js' %}"></script>
-    {% if demo_mode and demo_offline_password %}
+    {% if demo_mode %}
+    {% if demo_offline_password %}
     <div hidden data-demo-offline-password="{{ demo_offline_password }}"></div>
+    {% endif %}
     <script src="{% static 'js/auth-bootstrap.js' %}"></script>
     {% endif %}
     <script src="{% static 'js/filter-persistence.js' %}" defer></script>

@@ -105,7 +105,10 @@ describe("demo offline bootstrap", () => {
 describe("demo bootstrap interruption notice", () => {
     it("shows the recovery instruction on the next demo page without a key", async () => {
         document.querySelector("[data-demo-offline-password]").remove();
-        await bootstrap();
+        document.body.insertAdjacentHTML("beforeend", '<script src="/static/js/auth-bootstrap.js"></script>');
+        for (const script of document.querySelectorAll("script[src]")) {
+            if (new URL(script.src).pathname.endsWith("/js/auth-bootstrap.js")) await bootstrap();
+        }
         await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(false));
         expect(fetch).not.toHaveBeenCalled();
     });
