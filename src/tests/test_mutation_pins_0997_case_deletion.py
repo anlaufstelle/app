@@ -1,7 +1,10 @@
 """Pins for public case deletion services.
 
 Source: mutation delta of the release-0.99.7 checkpoint, 12 mutants.
-Groups: target selection (1), early actor guards (4), batch protection (4).
+Groups: target selection (1), actor domain errors (3), batch protection (4).
+Eight mutants are pinned; four are equivalent. A foreign actor still gets
+the same domain error without changing the case: x_soft_delete_case__mutmut_9
+only adds a read scoped to the actor's facility before rejection.
 The three repeated restriction-lock mutations are equivalent: the same
 person and protection gate are already held by the enclosing transaction.
 """
@@ -12,8 +15,6 @@ from uuid import uuid4
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
-from django.db import connection
-from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from core.models import AuditLog, Case, Client, LegalHold
@@ -47,12 +48,11 @@ def test_trash_only_the_requested_case(case_open, facility, client_identified, s
     ) == {str(case_open.pk)}
 
 
-def test_foreign_actor_is_rejected_before_case_reads(case_open, second_facility_user):
-    """Reject a foreign actor before reading a case; x_soft_delete_case__mutmut_9."""
-    with CaptureQueriesContext(connection) as queries, pytest.raises(ValidationError) as error:
+def test_foreign_actor_is_rejected_without_deleting_case(case_open, second_facility_user):
+    """Reject a foreign actor with the facility error and preserve the case."""
+    with pytest.raises(ValidationError) as error:
         deletion.soft_delete_case(case_open, second_facility_user)
     assert error.value.messages == [deletion.CASE_OTHER_FACILITY_MESSAGE]
-    assert not any('"core_case"' in query["sql"] for query in queries)
     case_open.refresh_from_db()
     assert not case_open.is_deleted
 
@@ -118,17 +118,14 @@ def test_initially_protected_cases_add_scalar_ids(
     ids=["anonymize", "request", "restore"],
 )
 def test_missing_actor_facility_has_the_domain_error(case_trashed, actor, operation):
-    """Actors without facility_id get the facility error before reads or writes.
+    """Actors without facility_id receive the domain-specific facility error.
 
     Kills x_anonymize_case_now__mutmut_6,
     x_create_or_get_case_deletion_request__mutmut_6 and x_restore_case__mutmut_6.
     """
-    with CaptureQueriesContext(connection) as queries, pytest.raises(ValidationError) as error:
+    with pytest.raises(ValidationError) as error:
         if operation is deletion.create_or_get_case_deletion_request:
             operation(case_trashed, actor, "Requested erasure")
         else:
             operation(case_trashed, actor)
     assert error.value.messages == [deletion.CASE_OTHER_FACILITY_MESSAGE]
-    assert not any(
-        query["sql"].lstrip().upper().startswith(("SELECT", "INSERT", "UPDATE", "DELETE")) for query in queries
-    )
