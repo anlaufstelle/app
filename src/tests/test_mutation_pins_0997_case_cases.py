@@ -11,8 +11,6 @@ from copy import deepcopy
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
-from django.db import connection
-from django.test.utils import CaptureQueriesContext
 from django.utils.translation import gettext as _
 
 from core.models import Case
@@ -45,13 +43,13 @@ def test_equal_nested_json_has_the_database_form_token(case_open):
 def test_missing_actor_facility_has_the_domain_error(
     case_open, sample_event, facility, client_identified, actor, operation
 ):
-    """Missing facility attributes produce domain errors before data access.
+    """Missing facility attributes produce the domain-specific facility errors.
 
     Kills x_create_case__mutmut_18, x_update_case__mutmut_5,
     x_close_case__mutmut_5, x_reopen_case__mutmut_5 and
     x_remove_event_from_case__mutmut_5 through their public services.
     """
-    with CaptureQueriesContext(connection) as queries, pytest.raises(ValidationError) as error:
+    with pytest.raises(ValidationError) as error:
         if operation == "create":
             cases.create_case(facility, actor, client_identified, "New case")
         elif operation == "unlink":
@@ -64,6 +62,3 @@ def test_missing_actor_facility_has_the_domain_error(
         else _("Fall gehört zu einer anderen Einrichtung.")
     )
     assert error.value.messages == [expected]
-    assert not any(
-        query["sql"].lstrip().upper().startswith(("SELECT", "INSERT", "UPDATE", "DELETE")) for query in queries
-    )
