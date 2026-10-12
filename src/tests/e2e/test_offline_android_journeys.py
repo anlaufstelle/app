@@ -245,6 +245,42 @@ def _dispatch_online_and_await_sync(page):
     )
 
 
+# Refs #1493: holds back every Web Lock request issued from crypto.js' idle gate
+# (``_runIdleGate``) on the reconnect page ``/`` until a sync sequence
+# (``_drive``) of the same tab has been granted the origin-wide lock. The gate
+# has already seen "lock not held" and then queues behind the sequence -- the
+# order that deadlocked on slow devices.
+# Callers are recognized by their stack frames: a test hook would need product
+# code, and ``navigator.locks`` only ever sees the sync module's wrapper
+# callback. Without a sync sequence the gate is released after a fallback
+# delay; each entry records whether it really waited for a sequence grant, so a
+# renamed function fails the guard assertion instead of passing silently.
+_GATE_BEHIND_SEQUENCE_JS = """(() => {
+  if (!navigator.locks) return;
+  const original = navigator.locks.request.bind(navigator.locks);
+  let markSequenceGranted;
+  const sequenceGranted = new Promise((resolve) => { markSequenceGranted = resolve; });
+  window.__bootGateLockLog = [];
+  navigator.locks.request = function (name, options, callback) {
+    const stack = new Error().stack || '';
+    if (stack.includes('_drive')) {
+      return original(name, options, (lock) => {
+        markSequenceGranted();
+        return callback(lock);
+      });
+    }
+    if (location.pathname !== '/' || !stack.includes('_runIdleGate')) {
+      return original(name, options, callback);
+    }
+    const entry = {path: location.pathname, afterSequenceGrant: false};
+    window.__bootGateLockLog.push(entry);
+    const fallback = new Promise((resolve) => setTimeout(resolve, 5000));
+    return Promise.race([sequenceGranted.then(() => { entry.afterSequenceGrant = true; }), fallback])
+      .then(() => original(name, options, callback));
+  };
+})();"""
+
+
 def _fresh_sw_only(page, base_url):
     """Kaltstart-Praeparation: /login/ registriert den SW; ``ready`` wartet den
     Install (inkl. ``cache.addAll``) ab. Die Assets der Login-Seite selbst
@@ -439,6 +475,61 @@ class TestMidSessionCaptureRoundtrip:
             assert sync["queue"] == [], f"Queue nach abgeschlossenem Reconnect nicht leer: {sync!r}"
             assert _server_workitem_state(e2e_env, title) == "STANDALONE", (
                 f"Aufgabe '{title}' fehlt nach abgeschlossenem Reconnect: {sync!r}"
+            )
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_reconnect_replay_finishes_when_boot_gate_queues_behind_sync(self, browser, base_url, e2e_env):
+        """Refs #1493: the boot idle gate of crypto.js asks for the lock only
+        after the reconnect sequence holds it. The sequence waits for the
+        crypto session inside the lock; it must not wait for the gate queued
+        behind it -- otherwise the lock stays held and nothing is replayed."""
+        title = f"Android-Lock-Order-Task {uuid.uuid4().hex[:6]}"
+        context = _android_context(browser)
+        context.add_init_script(_GATE_BEHIND_SEQUENCE_JS)
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
+            _wait_for_active_service_worker(page)
+
+            _go_offline(page)
+            page.fill("input[name='title']", title)
+            page.click("button.btn-primary[type=submit]")
+            _wait_until(
+                lambda: page.evaluate("() => document.body.innerText.includes('lokal verschlüsselt')"),
+                timeout_s=10,
+                desc="SW queued feedback after task submit",
+            )
+            queued = _raw_queue_count(page)
+            assert queued == 1, f"Queue row missing after offline submit: {queued!r}"
+            assert _server_workitem_state(e2e_env, title) == "MISSING"
+
+            page.context.set_offline(False)
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            sync = _dispatch_online_and_await_sync(page)
+            gate_log = page.evaluate("() => window.__bootGateLockLog")
+            assert any(entry["path"] == "/" and entry["afterSequenceGrant"] for entry in gate_log), (
+                f"Boot gate did not queue behind the sync sequence, order not forced: {gate_log!r}"
+            )
+            assert not sync.get("error"), f"Sync runtime missing after reconnect: {sync!r}"
+            assert not sync["timedOut"], f"Sync sequence never finished after reconnect: {sync!r}"
+            assert sync["queue"] == [], f"Queue not empty after finished reconnect: {sync!r}"
+            assert _server_workitem_state(e2e_env, title) == "STANDALONE", (
+                f"Task '{title}' missing after finished reconnect: {sync!r}"
+            )
+            # The delayed boot gate still gets the lock once the sequence ends
+            # and releases it again; nothing keeps holding it.
+            _wait_until(
+                lambda: page.evaluate(
+                    """async () => !(await navigator.locks.query()).held
+                        .some((lock) => lock.name === 'anlaufstelle-offline-mutex')"""
+                ),
+                timeout_s=10,
+                desc="offline lock released after reconnect",
             )
         finally:
             with suppress(Exception):

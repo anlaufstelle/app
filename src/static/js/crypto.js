@@ -104,6 +104,7 @@
     // persisted marker differs; never adopt that newer value for an old attempt.
     let knownRevocation = 0;
     let initialLoad = null; // Promise<void> that resolves once cachedKey reflects IndexedDB
+    let initialLoadSettled = false;
     let lastActivityWrite = 0; // in-memory throttle marker for _touchActivity
 
     function isSupported() {
@@ -585,6 +586,12 @@
         return true;
     }
 
+    // Refs #1493: true while THIS tab runs a function under the offline lock.
+    function _lockHeldByThisTab(orch) {
+        const o = orch || window.syncOrchestrator;
+        return !!(o && o.isLockHeld && o.isLockHeld());
+    }
+
     // Refs #1493: Reentranz-bewusster Idle-Gate fuer ``_loadKey``.
     //
     // ``_loadKey`` wird auf ZWEI Wegen erreicht:
@@ -619,7 +626,7 @@
             await _idbGet(ACTIVITY_KEY);
             orch = window.syncOrchestrator;
         }
-        if (orch && orch.isLockHeld && orch.isLockHeld()) {
+        if (_lockHeldByThisTab(orch)) {
             return _enforceIdleWipeLocked(); // (1) reentrant → direkt
         }
         // (2) frei → unter dem Lock serialisieren. Ohne Sync-Orchestrator/
@@ -642,15 +649,20 @@
         return cachedKey;
     }
 
+    // Revocation high-water mark plus key hydration through the idle gate.
+    // Errors are ignored; callers retry via encrypt/decrypt (fail closed there).
+    function _hydrate() {
+        return Promise.all([_idbGet(REVOCATION_KEY).then(_observeRevocation), _loadKey()]).catch(
+            function () {}
+        );
+    }
+
     // Eager hydration so synchronous hasSessionKey() reflects IndexedDB
     // contents once the page has finished its first tick. _loadKey() also
     // runs the idle gate, so an expired install is wiped on boot (#1065).
     if (typeof window !== "undefined" && "indexedDB" in window) {
-        initialLoad = Promise.all([
-            _idbGet(REVOCATION_KEY).then(_observeRevocation),
-            _loadKey(),
-        ]).catch(function () {
-            // Ignore — caller will retry via encrypt/decrypt
+        initialLoad = _hydrate().then(function () {
+            initialLoadSettled = true;
         });
 
         // Activity stamping (throttled) + periodic idle checks (#1065).
@@ -703,7 +715,23 @@
         }
     }
 
+    // Refs #1493: a lock holder must never wait for something that itself
+    // needs the lock. ``initialLoad`` runs the boot idle gate UNDER the
+    // origin-wide lock; if a sequence of this tab was granted the lock first,
+    // that gate request is queued behind it. Awaiting ``initialLoad`` from
+    // inside the sequence (replayQueue, revalidation, offline edits, conflict
+    // resolution) would then wait forever and keep the lock held for every
+    // tab. While ``initialLoad`` is pending and this tab holds the lock, run
+    // the same hydration directly instead: the gate takes its reentrant path,
+    // which is already serialized by the held lock, and no foreign-tab
+    // sequence can run concurrently. The queued boot gate still runs under the
+    // lock once the holder releases it.
+    function _bootGateMayBeQueuedBehindUs() {
+        return initialLoad !== null && !initialLoadSettled && _lockHeldByThisTab();
+    }
+
     function ready() {
+        if (_bootGateMayBeQueuedBehindUs()) return _hydrate();
         return initialLoad || Promise.resolve();
     }
 
@@ -713,6 +741,11 @@
     // ``await window.crypto_session?.awaitReady?.();`` (tolerant gegenueber
     // Seiten ohne crypto.js und Test-Stubs ohne diese Methode).
     async function awaitReady() {
+        if (_bootGateMayBeQueuedBehindUs()) {
+            // Reentrant hydration already runs the idle gate (see ready()).
+            await _hydrate();
+            return;
+        }
         await ready();
         await _loadKey();
     }
