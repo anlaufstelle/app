@@ -820,7 +820,7 @@ class TestPrecachedShellBumpGuard:
     # Refs #2532: the source-version span was removed from the shared footer;
     # it never renders in the precached shell, so only this hash changes and
     # CACHE_NAME must not be bumped.
-    _PINNED_SHELL_HASH = "d9966ddd9e6064652d2a80bac573054367ba5ce7783641ce1de588f2f1a7bb2c"
+    _PINNED_SHELL_HASH = "ab5c5b20acd2006ff2c63ff1c1504d964333bb3a8c401b2e0ba10d46c650c9a6"
     # Refs #1904: SHA-256 over the Content-Security-Policy headers the server
     # delivers with the precached offline home (see _policy_fingerprint). Every
     # precached shell and every runtime entry keeps the policy it was stored

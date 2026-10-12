@@ -125,7 +125,7 @@
                 try {
                     await window.crypto_session?.awaitReady?.();
                     if (!window.offlineStore) {
-                        this.error = gettext("Offline-Speicher nicht verfügbar.");
+                        this.error = (document.body.dataset.i18nOfflineStorageUnavailable || gettext("Offline-Speicher nicht verfügbar."));
                         return;
                     }
                     const record = await window.offlineStore.getOfflineEvent(this.eventPk);
@@ -273,7 +273,7 @@
                 if (result.status === "conflict") {
                     // The server changed again in the meantime. Reload the
                     // component state from the refreshed IndexedDB entry.
-                    this.error = gettext("Der Server wurde erneut geändert. Bitte den Konflikt nochmals prüfen.");
+                    this.error = (document.body.dataset.i18nOfflineConflictChanged || gettext("Der Server wurde erneut geändert. Bitte den Konflikt nochmals prüfen."));
                     this.load();
                     return;
                 }

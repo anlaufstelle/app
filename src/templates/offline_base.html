@@ -70,6 +70,10 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
     {% block extra_head %}{% endblock %}
 </head>
 <body class="h-full overflow-x-hidden"
+      data-i18n-offline-client-available="{% trans 'Klientel ist jetzt offline verfügbar.' %}"
+      data-i18n-offline-key-inactive="{% trans 'Offline-Schlüssel nicht aktiv — bitte neu anmelden.' %}"
+      data-i18n-offline-storage-unavailable="{% trans 'Offline-Speicher nicht verfügbar.' %}"
+      data-i18n-offline-conflict-changed="{% trans 'Der Server wurde erneut geändert. Bitte den Konflikt nochmals prüfen.' %}"
       data-i18n-sw-update="{% trans 'Neue Version verfügbar.' %}" data-i18n-sw-reload="{% trans 'Neu laden' %}" data-i18n-sw-dismiss="{% trans 'Schließen' %}"
       data-i18n-db-update-required="{% trans 'Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren.' %}">
 

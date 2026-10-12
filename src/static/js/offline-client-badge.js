@@ -116,7 +116,7 @@
                         this.showMessage("Aus Offline-Cache entfernt.", "info");
                     } else {
                         const bundle = await window.offlineClient.takeClientOffline(this._pk);
-                        let msg = gettext("Klientel ist jetzt offline verfügbar.");
+                        let msg = (document.body.dataset.i18nOfflineClientAvailable || gettext("Klientel ist jetzt offline verfügbar."));
                         if (bundle && bundle.survivingEdits > 0 && this._labelKeptEdits) {
                             // Refs #1351/#1385: Re-Take-Rueckmeldung — ueberlebende
                             // ungesyncte Aenderungen wurden NICHT durch den
@@ -137,7 +137,7 @@
                     if (e && e.name === "OfflineLimitError") {
                         this.showMessage(e.message, "error");
                     } else if (e && e.name === "NoSessionKeyError") {
-                        this.showMessage(gettext("Offline-Schlüssel nicht aktiv — bitte neu anmelden."), "error");
+                        this.showMessage((document.body.dataset.i18nOfflineKeyInactive || gettext("Offline-Schlüssel nicht aktiv — bitte neu anmelden.")), "error");
                     } else if (e && e.name === "QuotaExceededError") {
                         // Refs #1414: Speicher voll — sichtbar melden statt
                         // still verschlucken. Der alte Bundle-Stand bleibt

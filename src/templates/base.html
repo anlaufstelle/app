@@ -59,6 +59,10 @@
 </head>
 {# Refs #1065: data-session-age (Sekunden) koppelt den Offline-Krypto-Schlüssel in crypto.js an die Session-Lebenszeit (inkl. Facility-Override via set_expiry). #}
 <body class="h-full overflow-x-hidden" data-user-id="{{ request.user.pk|default:'' }}" data-session-age="{{ request.session.get_expiry_age }}" data-offline-key-max-age="{{ offline_key_max_age }}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+      data-i18n-offline-client-available="{% trans 'Klientel ist jetzt offline verfügbar.' %}"
+      data-i18n-offline-key-inactive="{% trans 'Offline-Schlüssel nicht aktiv — bitte neu anmelden.' %}"
+      data-i18n-offline-storage-unavailable="{% trans 'Offline-Speicher nicht verfügbar.' %}"
+      data-i18n-offline-conflict-changed="{% trans 'Der Server wurde erneut geändert. Bitte den Konflikt nochmals prüfen.' %}"
       data-i18n-sw-update="{% trans 'Neue Version verfügbar.' %}" data-i18n-sw-reload="{% trans 'Neu laden' %}" data-i18n-sw-dismiss="{% trans 'Schließen' %}"
       {# Refs #2060: Meldung fuer den Versionskonflikt der lokalen Datenbank (offline-db.js) — #}
       {# derselbe data-i18n-Kanal wie beim Service-Worker-Toast darueber. #}

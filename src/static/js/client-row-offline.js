@@ -113,7 +113,7 @@
                         notify("Aus Offline-Cache entfernt.", "info");
                     } else {
                         const bundle = await window.offlineClient.takeClientOffline(this._pk);
-                        let msg = gettext("Klientel ist jetzt offline verfügbar.");
+                        let msg = (document.body.dataset.i18nOfflineClientAvailable || gettext("Klientel ist jetzt offline verfügbar."));
                         if (bundle && bundle.survivingEdits > 0 && this._labelKeptEdits) {
                             // Refs #1351/#1385: Re-Take-Rueckmeldung — ueberlebende
                             // ungesyncte Aenderungen wurden NICHT durch den
@@ -132,7 +132,7 @@
                     await this.refresh();
                 } catch (e) {
                     if (e && e.name === "NoSessionKeyError") {
-                        notify(gettext("Offline-Schlüssel nicht aktiv — bitte neu anmelden."), "error");
+                        notify((document.body.dataset.i18nOfflineKeyInactive || gettext("Offline-Schlüssel nicht aktiv — bitte neu anmelden.")), "error");
                     } else if (e && e.name === "OfflineLimitError") {
                         notify(e.message || "Offline-Limit erreicht.", "error");
                     } else if (e && e.name === "QuotaExceededError") {

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-12 07:41+0200\n"
+"POT-Creation-Date: 2026-10-12 08:12+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14351,3 +14351,23 @@ msgstr "Nach der Anmeldung werden Ihre Interaktionen pseudonym aufgezeichnet und
 #: src/core/services/compliance/vvt.py:190
 msgid "Optimistic Locking gegen versehentliches Überschreiben"
 msgstr "Optimistic Locking gegen versehentliches Überschreiben"
+
+#: src/templates/base.html:64 src/templates/offline_base.html:73
+msgid "Klientel ist jetzt offline verfügbar."
+msgstr "Klientel ist jetzt offline verfügbar."
+
+#: src/templates/base.html:65 src/templates/offline_base.html:74
+msgid "Offline-Schlüssel nicht aktiv — bitte neu anmelden."
+msgstr "Offline-Schlüssel nicht aktiv — bitte neu anmelden."
+
+#: src/templates/base.html:66 src/templates/offline_base.html:75
+msgid "Offline-Speicher nicht verfügbar."
+msgstr "Offline-Speicher nicht verfügbar."
+
+#: src/templates/base.html:67 src/templates/offline_base.html:76
+msgid "Der Server wurde erneut geändert. Bitte den Konflikt nochmals prüfen."
+msgstr "Der Server wurde erneut geändert. Bitte den Konflikt nochmals prüfen."
+
+#: src/templates/base.html:210
+msgid "Offline-Schlüssel wird vorbereitet. Bitte vor dem Weiterklicken warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten."
+msgstr "Offline-Schlüssel wird vorbereitet. Bitte vor dem Weiterklicken warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten."
