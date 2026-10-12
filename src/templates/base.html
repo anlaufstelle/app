@@ -198,8 +198,11 @@
             <a href="{% url 'demo_scenario_select' %}" class="font-semibold underline hover:no-underline" data-testid="demo-scenario-switch-link">{% trans "Demo-Bereich wechseln" %}</a>
         </div>
         {% if demo_offline_password %}
-        <div hidden role="alert" data-demo-offline-error class="bg-red-100 border border-red-300 text-red-900 p-4">{{ demo_offline_bootstrap_error }}</div>
+        <div role="status" aria-live="polite" data-demo-offline-pending class="bg-yellow-100 text-yellow-800 p-4">
+            {% trans "Offline-Schlüssel wird vorbereitet. Bitte vor dem Weiterklicken warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten." %}
+        </div>
         {% endif %}
+        <div hidden role="alert" data-demo-offline-error class="bg-red-100 border border-red-300 text-red-900 p-4">{{ demo_offline_bootstrap_error }}</div>
         {% endif %}
         <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7">
             {# Refs #811 (C-44): stabile Live-Region — siehe CONTRIBUTING.md "Templates und Frontend". #}

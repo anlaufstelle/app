@@ -87,9 +87,48 @@ describe("demo offline bootstrap", () => {
     });
 
     it("shows the bootstrap error when WebCrypto is unsupported", async () => {
+        document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-pending></div>');
+        const cryptoApi = window.crypto_session;
         Object.defineProperty(window, "crypto_session", { configurable: true, value: { isSupported: () => false } });
+        try {
+            await bootstrap();
+            expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(false);
+            expect(fetch).not.toHaveBeenCalled();
+            expect(document.querySelector("[data-demo-offline-pending]").hidden).toBe(true);
+        } finally {
+            Object.defineProperty(window, "crypto_session", { configurable: true, value: cryptoApi });
+        }
+    });
+});
+
+
+describe("demo bootstrap interruption notice", () => {
+    it("shows the recovery instruction on the next demo page without a key", async () => {
+        document.querySelector("[data-demo-offline-password]").remove();
         await bootstrap();
-        expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(false);
+        await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(false));
         expect(fetch).not.toHaveBeenCalled();
     });
+
+    it("hides the waiting notice only after derivation completes", async () => {
+        document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-pending></div>');
+        let release;
+        fetch.mockReturnValue(new Promise((resolve) => { release = resolve; }));
+        await bootstrap();
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+        expect(document.querySelector("[data-demo-offline-pending]").hidden).toBe(false);
+        release({ ok: true, json: async () => ({ salt: SALT, home_url: "/", offline_key_max_age: 3600 }) });
+        await vi.waitFor(() => expect(window.crypto_session.hasSessionKey()).toBe(true));
+        await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-pending]").hidden).toBe(true));
+    });
+});
+
+
+it("does not show a demo recovery error when a persisted key is restored", async () => {
+    await window.crypto_session.deriveSessionKey(PASSWORD, SALT);
+    document.querySelector("[data-demo-offline-password]").remove();
+    await bootstrap();
+    await window.crypto_session.ready();
+    expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
 });

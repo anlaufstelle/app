@@ -21,10 +21,12 @@
     function showDemoBootstrapError() {
         var error = document.querySelector("[data-demo-offline-error]");
         if (error) error.hidden = false;
+        var pending = document.querySelector("[data-demo-offline-pending]");
+        if (pending) pending.hidden = true;
     }
 
     if (!window.crypto_session || !window.crypto_session.isSupported()) {
-        if (demoData) showDemoBootstrapError();
+        if (document.querySelector("[data-demo-offline-error]")) showDemoBootstrapError();
         return;
     }
 
@@ -247,6 +249,19 @@
             })
             .then(function (homeUrl) {
                 if (!homeUrl) showDemoBootstrapError();
+            })
+            .catch(showDemoBootstrapError)
+            .finally(function () {
+                demoPassword = null;
+                var pending = document.querySelector("[data-demo-offline-pending]");
+                if (pending) pending.hidden = true;
+            });
+    } else if (document.querySelector("[data-demo-offline-error]")) {
+        // A navigation can interrupt the one-shot demo derivation. Report the
+        // missing key on the next page without retaining or reusing a password.
+        window.crypto_session.ready()
+            .then(function () {
+                if (!window.crypto_session.hasSessionKey()) showDemoBootstrapError();
             })
             .catch(showDemoBootstrapError);
     }
