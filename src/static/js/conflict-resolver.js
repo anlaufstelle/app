@@ -20,6 +20,8 @@
 (function () {
     "use strict";
 
+    const gettext = window.gettext || ((message) => message);
+
     // Refs #1396: In-Place-Rendern an /offline/conflicts/<pk>/ ohne
     // Django-Kontext — die event-pk aus dem Pfad ziehen (der SW serviert dort
     // offline den pk-losen conflict-shell, dessen data-event-pk leer ist).
@@ -123,7 +125,7 @@
                 try {
                     await window.crypto_session?.awaitReady?.();
                     if (!window.offlineStore) {
-                        this.error = "Offline-Speicher nicht verfuegbar.";
+                        this.error = gettext("Offline-Speicher nicht verfügbar.");
                         return;
                     }
                     const record = await window.offlineStore.getOfflineEvent(this.eventPk);
@@ -271,7 +273,7 @@
                 if (result.status === "conflict") {
                     // The server changed again in the meantime. Reload the
                     // component state from the refreshed IndexedDB entry.
-                    this.error = "Der Server wurde erneut geaendert. Bitte den Konflikt nochmals pruefen.";
+                    this.error = gettext("Der Server wurde erneut geändert. Bitte den Konflikt nochmals prüfen.");
                     this.load();
                     return;
                 }
