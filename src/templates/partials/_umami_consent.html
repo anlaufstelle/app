@@ -21,7 +21,7 @@ erst client-seitig injiziert, NACHDEM der/die Nutzer:in zugestimmt hat
   <div class="max-w-[900px] mx-auto flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
     <p class="text-[13px] text-ink">
       {% trans "Diese Demo verwendet Umami-Analyse inklusive Sitzungsaufzeichnung (Recording) und Heatmaps." %}
-      {% trans "Nach der Anmeldung werden Ihre Interaktionen pseudonym aufgezeichnet und ausgewertet, um die Demo zu verbessern; die Nutzung der Demo ist nur mit Ihrer Zustimmung möglich." %}
+      {% trans "Nach der Anmeldung werden Ihre Interaktionen pseudonym aufgezeichnet und ausgewertet, um die Demo zu verbessern; das geschieht nur mit Ihrer Zustimmung. Ohne Zustimmung bleibt die Demo uneingeschränkt nutzbar." %}
       {% if DEMO_LEGAL_PRIVACY_URL %}
       <a href="{{ DEMO_LEGAL_PRIVACY_URL }}" rel="noopener" target="_blank" class="text-accent hover:underline">{% trans "Datenschutzerklärung" %}</a>{% if DEMO_LEGAL_IMPRINT_URL %} ·
       <a href="{{ DEMO_LEGAL_IMPRINT_URL }}" rel="noopener" target="_blank" class="text-accent hover:underline">{% trans "Impressum" %}</a>{% endif %}
