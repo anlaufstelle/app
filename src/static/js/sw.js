@@ -181,7 +181,7 @@ importScripts("/static/js/url-patterns.js");
 // TestPrecachedShellBumpGuard::test_policy_change_requires_cache_name_bump).
 // 2026-10-07, Refs #2426: v56 -> v57 -- the precached crypto.js changes; the
 // bump brings the changed module to installed devices.
-const CACHE_NAME = "anlaufstelle-v60";
+const CACHE_NAME = "anlaufstelle-v61";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
