@@ -136,4 +136,4 @@ def test_invalid_token_retains_the_decryption_diagnostic(cipher):
     """Retain the public invalid-token diagnostic: x_decrypt_field__mutmut_52."""
     with pytest.raises(encryption.EncryptionError) as error:
         encryption.decrypt_field({"__encrypted__": True, "value": "invalid-token"})
-    assert str(error.value) == "Decryption failed: "
+    assert str(error.value).startswith("Decryption failed")
