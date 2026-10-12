@@ -30,7 +30,10 @@ def test_auth_hand_check_is_in_actual_unreleased_section():
     rules, active = text.split("\n## [Unreleased]\n", 1)
     assert "`/mfa/verify/`" not in rules
     assert "- Neue Einträge landen unter `## [Unreleased]`." in rules
-    assert "`/mfa/verify/`" in active
+    # The release cut moves the active entries into a per-version archive, so the
+    # check lives either in the active section or in an archived release section.
+    archives = sorted(path.parent.glob("hand-checks-archive-v*.md"))
+    assert "`/mfa/verify/`" in active or any("`/mfa/verify/`" in a.read_text() for a in archives)
 
 
 @pytest.mark.parametrize("path", ["docs/dev/dev-deployment.md", "dev-ops/deploy/barbara/.env.barbara.example"])
