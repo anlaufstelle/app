@@ -33,8 +33,8 @@ from core.services.dashboard import facility_admin_dashboard_context
 #: verglichen, damit ``"XX…XX"``-Textmutanten nicht durch eine
 #: Teilstring-Pruefung schluepfen.
 K_ANON_WARNUNG = (
-    "K-Anonymisierung ist deaktiviert — Loeschlauf entfernt Datensaetze hart. "
-    "Falls Statistik-Erhalt gewuenscht, in Settings aktivieren."
+    "K-Anonymisierung ist deaktiviert — Löschlauf entfernt Datensätze hart. "
+    "Falls Statistik-Erhalt gewünscht, in Settings aktivieren."
 )
 
 

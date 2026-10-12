@@ -70,4 +70,5 @@ def test_explicit_origin_label_matches_its_own_level(level):
         rendered = render_to_string(
             "core/config/partials/field_protection.html", {"protection": protection, "show_origin": True}
         )
-        assert f"{_('Feldvorlage:')} {expected}</span>" in rendered
+        origin_label = _("Feldvorlage:")
+        assert f"{origin_label} {expected}</span>" in rendered

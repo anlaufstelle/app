@@ -68,5 +68,6 @@ def test_sample_pdf_html_contains_completeness_and_source_text(facility):
         assert message in html
     source = _SourceParagraph()
     source.feed(html)
-    expected = f"{_('Datenquelle')}: {DATA_SOURCE_NOTES[SNAPSHOT_HYBRID]} — {DATA_SOURCE_EXPLANATIONS[SNAPSHOT_HYBRID]}"
+    source_label = _("Datenquelle")
+    expected = f"{source_label}: {DATA_SOURCE_NOTES[SNAPSHOT_HYBRID]} — {DATA_SOURCE_EXPLANATIONS[SNAPSHOT_HYBRID]}"
     assert " ".join("".join(source.text).split()) == " ".join(expected.split())
