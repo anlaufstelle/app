@@ -25,6 +25,7 @@ from collections.abc import Callable
 
 import pytest
 from django.test import Client
+from django_otp.oath import TOTP
 from django_otp.oath import totp as oath_totp
 
 from core.models import EncryptedTOTPDevice as TOTPDevice
@@ -48,6 +49,18 @@ def _code(device: TOTPDevice, *, steps_ahead: int = 0) -> str:
         digits=device.digits,
     )
     return f"{token:0{device.digits}d}"
+
+
+def _next_window_code(device: TOTPDevice) -> str:
+    """Code for the window right after the device's last accepted one.
+
+    Relative to the device, not the clock: a confirmation posted across a window
+    boundary stores a drift of -1, and "now + 1" would then fall outside the tolerance.
+    """
+    device = TOTPDevice.objects.get(pk=device.pk)
+    totp = TOTP(device.bin_key, device.step, device.t0, device.digits)
+    totp.time = device.t0 + (device.last_t + 1) * device.step
+    return f"{totp.token():0{device.digits}d}"
 
 
 def _confirmed_pks(user) -> list[int]:
@@ -209,4 +222,4 @@ class TestAfterTheAcknowledgement:
 
     def test_the_new_device_signs_in(self, admin_user, new_device):
         # The confirmation used the current window; the next one is within the tolerance.
-        assert _signs_in(admin_user, _code(new_device, steps_ahead=1)) is True
+        assert _signs_in(admin_user, _next_window_code(new_device)) is True

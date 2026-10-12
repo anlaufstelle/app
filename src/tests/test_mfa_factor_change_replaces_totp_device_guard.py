@@ -25,6 +25,7 @@ from __future__ import annotations
 import time
 
 import pytest
+from django_otp.oath import TOTP
 from django_otp.oath import totp as oath_totp
 
 from core.models import AuditLog
@@ -47,6 +48,18 @@ def _code(device: TOTPDevice, *, steps_ahead: int = 0) -> str:
         digits=device.digits,
     )
     return f"{token:0{device.digits}d}"
+
+
+def _next_window_code(device: TOTPDevice) -> str:
+    """Code for the window right after the device's last accepted one.
+
+    Relative to the device, not the clock: a confirmation posted across a window
+    boundary stores a drift of -1, and "now + 1" would then fall outside the tolerance.
+    """
+    device = TOTPDevice.objects.get(pk=device.pk)
+    totp = TOTP(device.bin_key, device.step, device.t0, device.digits)
+    totp.time = device.t0 + (device.last_t + 1) * device.step
+    return f"{totp.token():0{device.digits}d}"
 
 
 def _verified_with_sudo(client, user) -> None:
@@ -180,7 +193,7 @@ class TestOldCodeIsRefusedEverywhere:
     def test_new_device_signs_in(self, client, staff_user, gewechselt):
         _password_only(client, staff_user)
         # Der Setup-Code hat das aktuelle Zeitfenster verbraucht; das naechste liegt in der Toleranz.
-        response = client.post(VERIFY_URL, {"token": _code(gewechselt, steps_ahead=1)})
+        response = client.post(VERIFY_URL, {"token": _next_window_code(gewechselt)})
         assert response.status_code == 302
         assert client.session.get("mfa_verified") is True
 
