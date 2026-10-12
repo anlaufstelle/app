@@ -321,3 +321,23 @@ describe("Refs #2385 — a later-arriving replay result no longer overwrites 'di
         root.remove();
     });
 });
+
+
+describe("offline event field labels", () => {
+    it("uses names from the matching document type and falls back for missing metadata", async () => {
+        const root = componentRoot();
+        const component = makeComponent(root, { cachedClient: {
+            events: [{ document_type_pk: "type-1", data_fields: { duration: 5, unknown: "kept" } }],
+            documentTypes: [
+                { pk: "type-2", fields: [{ slug: "duration", name: "Other label" }] },
+                { pk: "type-1", fields: [{ slug: "duration", name: "Duration" }] },
+            ], cases: [], workitems: [],
+        } });
+        await component.load();
+        expect(component.data.events[0].data_fields_pairs).toEqual([
+            { slug: "duration", label: "Duration", value_fmt: "5" },
+            { slug: "unknown", label: "unknown", value_fmt: "kept" },
+        ]);
+        root.remove();
+    });
+});

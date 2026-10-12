@@ -175,6 +175,8 @@
                     if (cached.events) {
                         cached.events = cached.events.map((ev) => {
                             const fields = ev.data_fields || {};
+                            const documentType = (cached.documentTypes || []).find((type) => type.pk === ev.document_type_pk);
+                            const labels = new Map((documentType?.fields || []).map((field) => [field.slug, field.name]));
                             const isUnsynced = ev.localStatus === "modified" || ev.localStatus === "new";
                             const isConflict = ev.localStatus === "conflict";
                             // Refs #1351/#1385 (M8/Task 4): dead-Badge analog
@@ -186,6 +188,7 @@
                                 occurred_at_fmt: this.formatTs(ev.occurred_at),
                                 data_fields_pairs: Object.keys(fields).map((slug) => ({
                                     slug: slug,
+                                    label: labels.get(slug) || slug,
                                     value_fmt: this.formatFieldValue(fields[slug]),
                                 })),
                                 has_data_fields: Object.keys(fields).length > 0,

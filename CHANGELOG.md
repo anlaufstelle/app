@@ -46,6 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Exportleiste nach Downloads wieder freigeben** (#2505) — Download-Formulare geben ihre Formatknöpfe nach einer kurzen Doppelklicksperre wieder frei, sodass weitere Formate ohne Neuladen exportiert werden können.
 - **Widerrufshinweis nur bei Offline-Bestand** (#2528) — Online ohne lokale Personen, Ereignisse, Warteschlange oder Entwürfe bleibt der Balken verborgen, mit Bestand verschwindet er nach erfolgreicher Prüfung und überdeckt den Seitenleistenkopf nicht mehr; die Replay-Sperre bleibt bis zur frischen Freigabe geschlossen.
 - **Unterbrochene Demo-Schlüsselvorbereitung sichtbar** (#2511) — Während der Ableitung bittet die Demo vor dem Weiterklicken zu warten und zeigt nach vorzeitigem Seitenwechsel ohne aktiven Schlüssel die Anleitung zur erneuten Anmeldung beziehungsweise zum erneuten Demo-Start.
+- **Feldbezeichnungen in Offline-Personenakten** (#1111) — Die Ereignisansicht zeigt die Bezeichnungen aus dem vorhandenen gefilterten Offline-Bundle und verwendet Feldschlüssel nur bei fehlender Bezeichnung.
 
 - **Keine Abmeldung durch verspätete Seitenabrufe nach Sitzungsrotation** (#2034, #2531) — Direkt nach Sudo-Freigabe oder MFA-Einrichtung löschen verspätete Antworten auf parallel nachgeladene Seiten das neue Sitzungscookie nicht mehr; ausdrückliches Abmelden bleibt wirksam.
 

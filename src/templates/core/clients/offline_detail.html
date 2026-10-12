@@ -244,7 +244,7 @@
                                     <dl class="mt-2 text-sm text-ink-soft space-y-1">
                                         <template x-for="pair in event.data_fields_pairs" :key="pair.slug">
                                             <div class="flex">
-                                                <dt class="w-32 text-xs text-ink-muted" x-text="pair.slug"></dt>
+                                                <dt class="w-32 text-xs text-ink-muted" x-text="pair.label"></dt>
                                                 <dd class="flex-1" x-text="pair.value_fmt"></dd>
                                             </div>
                                         </template>
