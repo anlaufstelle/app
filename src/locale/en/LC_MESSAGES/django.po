@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-12 08:12+0200\n"
+"POT-Creation-Date: 2026-10-12 10:10+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14264,8 +14264,8 @@ msgid "Optimistic Locking gegen versehentliches Überschreiben"
 msgstr "Optimistic locking against accidental overwrite"
 
 #: src/templates/base.html:64 src/templates/offline_base.html:73
-msgid "Klientel ist jetzt offline verfügbar."
-msgstr "Client is now available offline."
+msgid "Person ist jetzt offline verfügbar."
+msgstr "Person is now available offline."
 
 #: src/templates/base.html:65 src/templates/offline_base.html:74
 msgid "Offline-Schlüssel nicht aktiv — bitte neu anmelden."

@@ -10,7 +10,7 @@ def test_app_shells_deliver_translated_offline_feedback():
         for template in ("base.html", "offline_base.html"):
             html = render_to_string(template, {})
             for label in (
-                "Client is now available offline.",
+                "Person is now available offline.",
                 "Offline key is not active — please sign in again.",
                 "Offline storage is unavailable.",
                 "The server has changed again. Please review the conflict once more.",

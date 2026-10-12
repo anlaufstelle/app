@@ -3,7 +3,7 @@ import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 
 const labels = {
-    i18nOfflineClientAvailable: "Client is now available offline.",
+    i18nOfflineClientAvailable: "Person is now available offline.",
     i18nOfflineKeyInactive: "Offline key is not active — please sign in again.",
     i18nOfflineStorageUnavailable: "Offline storage is unavailable.",
     i18nOfflineConflictChanged: "The server has changed again. Please review the conflict once more.",
