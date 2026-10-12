@@ -21,7 +21,7 @@ Enter would otherwise trigger the FIRST submit and thereby log a release.
 The field IDs stay stable per variant (`report-*`/`export-*`).
 {% endcomment %}
 {% if variant == "internal" %}
-<form method="get" class="no-print mb-4 bg-amber-50 border border-amber-200 rounded-[10px] px-4 py-3" data-testid="statistics-export-form" data-variant="internal">
+<form data-download-form method="get" class="no-print mb-4 bg-amber-50 border border-amber-200 rounded-[10px] px-4 py-3" data-testid="statistics-export-form" data-variant="internal">
     <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
     <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
     {% if selected_doc_type %}<input type="hidden" name="doktyp" value="{{ selected_doc_type.pk }}">{% endif %}
@@ -51,7 +51,7 @@ The field IDs stay stable per variant (`report-*`/`export-*`).
     <p class="text-[12px] text-ink-muted mt-3">{% trans "Jeder Download wird protokolliert und erscheint unter „Freigaben“. Tragen Sie als Empfänger die Organisation ein, nicht eine Person." %}</p>
 </form>
 {% else %}
-<form method="get" class="no-print mb-6" data-testid="export-bar" data-variant="reports">
+<form data-download-form method="get" class="no-print mb-6" data-testid="export-bar" data-variant="reports">
     <input type="hidden" name="zeitraum" value="frei">
     <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
     <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">

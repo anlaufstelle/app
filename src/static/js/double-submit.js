@@ -68,9 +68,24 @@
                     'button[type="submit"], input[type="submit"], button:not([type])'
                 );
                 buttons.forEach(function (btn) {
-                    btn.disabled = true;
-                    btn.dataset.reenableOnShow = "1";
+                    if (!btn.disabled) {
+                        btn.disabled = true;
+                        btn.dataset.reenableOnShow = "1";
+                    }
                 });
+                // Downloads leave the page open; release only opted-in forms.
+                // Keep a short duplicate-click guard (Refs #2505).
+                if (form.hasAttribute("data-download-form")) {
+                    window.setTimeout(function () {
+                        buttons.forEach(function (btn) {
+                            if (btn.dataset.reenableOnShow === "1") {
+                                btn.disabled = false;
+                                delete btn.dataset.reenableOnShow;
+                            }
+                        });
+                        form.dataset.submitting = "0";
+                    }, 1000);
+                }
             }, 0);
         },
         true

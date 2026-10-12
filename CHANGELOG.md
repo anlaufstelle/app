@@ -35,6 +35,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Exportleiste nach Downloads wieder freigeben** (#2505) — Download-Formulare geben ihre Formatknöpfe nach einer kurzen Doppelklicksperre wieder frei, sodass weitere Formate ohne Neuladen exportiert werden können.
+
 - **Keine Abmeldung durch verspätete Seitenabrufe nach Sitzungsrotation** (#2034, #2531) — Direkt nach Sudo-Freigabe oder MFA-Einrichtung löschen verspätete Antworten auf parallel nachgeladene Seiten das neue Sitzungscookie nicht mehr; ausdrückliches Abmelden bleibt wirksam.
 
 - **Authentifizierung bei ausstehender Offline-Synchronisation sichtbar** (#2528) — Führt die Widerrufsprüfung zur Anmeldung oder zum zweiten Faktor, erscheint auch bei Direktspeicherung und Konfliktaktionen der Anmeldehinweis statt eines Widerrufs- oder späteren Übertragungsversprechens; Passwortwechsel und Passwort-Reset zeigen die vorhandene Warnung vor dem Verlust ungesendeter Offline-Daten, die bis dahin erhalten bleiben und erst nach erfolgreicher erneuter Widerrufsprüfung übertragen werden können.
