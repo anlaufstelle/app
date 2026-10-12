@@ -546,10 +546,14 @@ def _card_rows(surface: str, text: str) -> list[tuple[str, str, str | None]]:
             for r in root.findall("./records/record")
         ]
     if surface == "preview":
+        from core.reporting.registry import get_backend
+
+        # The preview names tables by their labels; map them back to the stable keys.
+        table_keys = {str(label): key for key, label in get_backend(_CARD).get_table_labels().items()}
         parser = _PreviewRows()
         parser.feed(text)
-        cells = [row for row in parser.rows if len(row) == 4 and row[0] in _CARD_TABLES]
-        return [(row[0], row[1], _visible(row[2])) for row in cells]
+        rows = [(table_keys.get(row[0], row[0]), *row[1:]) for row in parser.rows if len(row) == 4]
+        return [(row[0], row[1], _visible(row[2])) for row in rows if row[0] in _CARD_TABLES]
     # pdf: one ``cell | cell | ...`` line per table row; wrapped cells carry stray spaces
     rows = []
     for line in text.split("\n"):
