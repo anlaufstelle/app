@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Restore nach Aktivierungsfehler wiederaufnehmen** (#2577) — Nach DB-Umschaltung bleiben Diagnose und Staging verfügbar, und derselbe signierte Satz lässt sich bei gestoppten Diensten erneut einspielen.
+
 - **Backup-Verifikation bricht bei Teilfehlern ab** (#2576) — SQL-Import, Guard-Abfragen, Medienprüfung und Bereinigung müssen erfolgreich sein, bevor der Prüflauf Erfolg meldet.
 
 ### Erforderliche Betreiber-Aktionen

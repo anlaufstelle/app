@@ -164,7 +164,7 @@ if [[ "$*" == *"HWM_CHECK="* ]]; then
     exit 0
 fi
 printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
-if [[ "$*" == *" exec -T web sh -c "* ]]; then
+if [[ "$*" == *" run --rm --entrypoint sh -T maintenance -c "* && "$*" == *"MEDIA_ROOT"* ]]; then
     if [[ "${TEST_WEB_MEDIA_ROOT_ERROR:-0}" == "1" ]]; then
         printf 'MEDIA_ROOT konnte nicht gelesen werden\\n' >&2
         exit 1
@@ -192,7 +192,7 @@ elif [[ "$*" == *" exec -T db psql "* ]]; then
     fi
 elif [[ "$*" == *" python manage.py mark_restore_verified "* ]]; then
     exit 0
-elif [[ "$*" == *" tar -C "*" -xf -"* ]]; then
+elif [[ "$*" == *"--entrypoint tar -T maintenance"* || "$*" == *" tar -C "*" -xf -"* ]]; then
     cat >/dev/null
 fi
 exit 0
@@ -323,7 +323,9 @@ def test_matching_media_roots_pass_precheck_before_confirmation(tmp_path: Path) 
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     actions = action_log.read_text(encoding="utf-8").splitlines()
-    precheck_pos = next(index for index, line in enumerate(actions) if " exec -T web sh -c " in line)
+    precheck_pos = next(
+        index for index, line in enumerate(actions) if " run --rm --entrypoint sh -T maintenance -c " in line
+    )
     psql_pos = next(index for index, line in enumerate(actions) if " psql " in line)
     assert precheck_pos < psql_pos
 
@@ -491,7 +493,7 @@ def test_restore_allows_database_only_manifest_without_media_hash(tmp_path: Path
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     actions = action_log.read_text(encoding="utf-8")
     assert " psql " in actions
-    assert " exec -T web sh -c " not in actions
+    assert 'printf "%s@" "$MEDIA_ROOT"' not in actions
 
 
 def test_restore_rejects_media_with_wrong_manifest_hash_before_database_import(tmp_path: Path) -> None:
@@ -541,7 +543,7 @@ def _install_real_media_docker(bindir: Path) -> None:
         bindir / "docker",
         """#!/usr/bin/env bash
 printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
-if [[ "$*" == *" exec -T web sh -c "* ]]; then
+if [[ "$*" == *" run --rm --entrypoint sh -T maintenance -c "* && "$*" == *"MEDIA_ROOT"* ]]; then
     MEDIA_ROOT="${TEST_WEB_MEDIA_ROOT-/data/media}" sh -c "${@: -1}"
     exit 0
 fi
@@ -573,6 +575,18 @@ if [[ "$*" == *" run --rm --entrypoint sh -T maintenance "* ]]; then
         mapped+=("${arg//$CONTAINER_MEDIA_ROOT/$HOST_MEDIA_ROOT}")
     done
     /bin/sh -c "$script" "${mapped[@]}"
+    exit $?
+fi
+if [[ "$*" == *" run --rm --entrypoint "* ]]; then
+    while [[ "$1" != "--entrypoint" ]]; do shift; done
+    executable="$2"
+    while [[ "$1" != "maintenance" ]]; do shift; done
+    shift
+    mapped=("$executable")
+    for arg in "$@"; do
+        mapped+=("${arg//$CONTAINER_MEDIA_ROOT/$HOST_MEDIA_ROOT}")
+    done
+    "${mapped[@]}"
     exit $?
 fi
 if [[ "$*" == *" exec -T web "* ]]; then

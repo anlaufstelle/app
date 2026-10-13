@@ -78,7 +78,7 @@ if [[ "$*" == *"HWM_CHECK="* ]]; then
     exit 0
 fi
 printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
-if [[ "$*" == *" exec -T web sh -c "* ]]; then
+if [[ "$*" == *" run --rm --entrypoint sh -T maintenance -c "* && "$*" == *"MEDIA_ROOT"* ]]; then
     MEDIA_ROOT="${TEST_WEB_MEDIA_ROOT-/data/media}" sh -c "${@: -1}"
 elif [[ "$*" == *" exec -T db psql "* ]]; then
     if [[ "$*" == *'RENAME TO "anlaufstelle_vor_restore_'* && "${TEST_ABORT_IN_SWITCH:-0}" == "1" ]]; then
@@ -373,7 +373,7 @@ def test_set_with_manifest_still_requires_its_anchor(tmp_path: Path) -> None:
     assert _lines(action_log) == []
 
 
-def test_failed_media_activation_cleans_up_the_staging(tmp_path: Path) -> None:
+def test_failed_media_activation_preserves_the_staging_for_repair(tmp_path: Path) -> None:
     root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
 
     result = _run(root, bindir, action_log, db_backup, media_backup, TEST_MEDIA_ACTIVATION_FAIL="1")
@@ -382,7 +382,8 @@ def test_failed_media_activation_cleans_up_the_staging(tmp_path: Path) -> None:
     lines = _lines(action_log)
     swap = _index(lines, 'mv "$stage" "$live"')
     cleanup = [line for line in lines[swap + 1 :] if "--entrypoint rm -T maintenance" in line and ".restore." in line]
-    assert cleanup, lines[swap:]
+    assert not cleanup, lines[swap:]
+    assert "staging=/data/media.restore." in result.stderr
 
 
 def _docker_calls(action_log: Path) -> list[str]:

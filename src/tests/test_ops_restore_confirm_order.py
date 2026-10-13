@@ -159,7 +159,7 @@ if [[ "$*" == *"HWM_CHECK="* ]]; then
     exit 0
 fi
 printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
-if [[ "$*" == *" exec -T web sh -c "* ]]; then
+if [[ "$*" == *" run --rm --entrypoint sh -T maintenance -c "* && "$*" == *"MEDIA_ROOT"* ]]; then
     MEDIA_ROOT="${TEST_WEB_MEDIA_ROOT-/data/media}" sh -c "${@: -1}"
 elif [[ "$*" == *" exec -T db psql "* || "$*" == *" exec -T db sh -c "* ]]; then
     if [[ "$*" == *"SELECT facility_id, storage_filename"* ]]; then
@@ -169,7 +169,7 @@ elif [[ "$*" == *" exec -T db psql "* || "$*" == *" exec -T db sh -c "* ]]; then
     else
         cat >/dev/null
     fi
-elif [[ "$*" == *" exec -T web "* ]]; then
+elif [[ "$*" == *" exec -T web "* || "$*" == *"--entrypoint tar -T maintenance"* ]]; then
     cat >/dev/null
 fi
 exit 0

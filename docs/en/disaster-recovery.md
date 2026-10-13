@@ -14,7 +14,13 @@ Current `backup.sh` aborts with exit code 1 before publishing a set if the ancho
 
 Media archive verification runs in one disposable maintenance container while `web` and `cron` remain stopped. Its temporary working directory is on the persistent `/media` volume, outside `MEDIA_ROOT`, and is removed afterwards. The German guide's verification command uses `/media/media-verify-$RESTORE_TIMESTAMP` and `${MEDIA_ROOT_CONTAINER:-/media/media}`. Compare SHA-256 and size of the encrypted files with the authenticated archive; original filenames and plaintext sizes require the separate download check. See the [German recovery steps](../disaster-recovery.md#schritt-4--db-backup-entschlüsseln--wiederherstellen) for the complete procedure.
 
+## Resuming an interrupted activation
+
+Restore preflight, extraction and attachment checks use disposable `maintenance` containers and work while `web` is stopped. The German recovery command no longer starts `web` before restore. Existing databases are preserved as `<POSTGRES_DB>_vor_restore_<timestamp>_<PID>`.
+
+If anchor installation or media activation fails after the database switch, the database already contains the backup, while media and the anchor may still differ. The error reports the reached `phase`, active and previous database, media, staging, previous media path, anchor and signed set. Validated media staging remains available. Keep `web` and `cron` stopped, fix the cause, and repeat `sudo ./scripts/ops/restore.sh --yes` with the same signed DB and media archives. Do not start `web` first. The repeat builds a new verified database and staging directory, installs the anchor again and activates media through maintenance containers. Further preserved databases may result. Start writers only after the final success line and the checks in steps 4b/5 and section 7; clean up leftover staging and preserved databases afterwards using the logged paths. This is a recovery path, not a shared transaction across PostgreSQL, media and the anchor. If media rollback itself fails, inspect both reported media paths manually.
+
 <!-- translation-source: docs/disaster-recovery.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- source-hash: fef11d7643755eb7b3ced458b3b4e06be5496c00 -->
+<!-- translation-date: 2026-10-13 -->
+<!-- source-hash: edb416832852b854922c681493406cb566ed640a -->

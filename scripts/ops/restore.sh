@@ -189,7 +189,7 @@ SU_USER="${POSTGRES_SUPERUSER:-postgres}"
 # Bestand bleibt als eigene Datenbank erhalten und wird nicht geloescht.
 SWITCH_STAMP="$(date +%Y%m%d%H%M%S)"
 RESTORE_DB="${POSTGRES_DB}_restore_$$"
-OLD_DB="${POSTGRES_DB}_vor_restore_${SWITCH_STAMP}"
+OLD_DB="${POSTGRES_DB}_vor_restore_${SWITCH_STAMP}_$$"
 for candidate in "$RESTORE_DB" "$OLD_DB"; do
     if [[ ${#candidate} -gt 63 ]]; then
         echo "FEHLER: Abgeleiteter Datenbankname ist laenger als 63 Zeichen: ${candidate}" >&2
@@ -205,15 +205,9 @@ db_psql() {
         psql -v ON_ERROR_STOP=1 -U "$SU_USER" "$@" < /dev/null
 }
 
-# Medien-Kommandos laufen vor der Schreibruhe im laufenden web-Container und
-# danach in einem Einweg-``maintenance``-Container (web ist dann gestoppt).
-MEDIA_EXEC_CTX="web"
+# One-shot maintenance containers also work when a previous restore stopped web.
 media_exec() {
-    if [[ "$MEDIA_EXEC_CTX" == "web" ]]; then
-        "${COMPOSE[@]}" exec -T web "$@" < /dev/null
-    else
-        "${COMPOSE[@]}" run --rm --entrypoint "$1" -T maintenance "${@:2}" < /dev/null
-    fi
+    "${COMPOSE[@]}" run --rm --entrypoint "$1" -T maintenance "${@:2}" < /dev/null
 }
 
 validate_or_install_hwm() {
@@ -270,16 +264,16 @@ if [[ -n "$MEDIA_FILE" ]]; then
     # trailing newlines, which would let a differing path pass as equal.
     # ``< /dev/null``: die Vorpruefung darf eine per Pipe zugefuehrte Bestaetigung
     # nicht aufbrauchen (Refs #2318).
-    if ! MEDIA_ROOT_EFFECTIVE=$(timeout 30s "${COMPOSE[@]}" exec -T web \
-        sh -c 'printf "%s@" "$MEDIA_ROOT"' < /dev/null) || [[ "$MEDIA_ROOT_EFFECTIVE" != *@ ]]; then
-        echo "FEHLER: MEDIA_ROOT des web-Containers konnte nicht ermittelt werden." >&2
+    if ! MEDIA_ROOT_EFFECTIVE=$(timeout 30s "${COMPOSE[@]}" run --rm --entrypoint sh -T maintenance \
+        -c 'printf "%s@" "$MEDIA_ROOT"' < /dev/null) || [[ "$MEDIA_ROOT_EFFECTIVE" != *@ ]]; then
+        echo "ERROR: MEDIA_ROOT of the maintenance container could not be determined." >&2
         echo "  MEDIA_ROOT='<nicht ermittelbar>', MEDIA_ROOT_CONTAINER='${MEDIA_ROOT_CONTAINER}'." >&2
         echo "  Werte in ${PROJECT_DIR}/.env pruefen und angleichen." >&2
         exit 1
     fi
     MEDIA_ROOT_EFFECTIVE="${MEDIA_ROOT_EFFECTIVE%@}"
     if [[ -z "$MEDIA_ROOT_EFFECTIVE" ]]; then
-        echo "FEHLER: MEDIA_ROOT des web-Containers ist leer." >&2
+        echo "ERROR: MEDIA_ROOT of the maintenance container is empty." >&2
         echo "  MEDIA_ROOT='<leer>', MEDIA_ROOT_CONTAINER='${MEDIA_ROOT_CONTAINER}'." >&2
         echo "  Werte in ${PROJECT_DIR}/.env pruefen und angleichen." >&2
         exit 1
@@ -326,15 +320,21 @@ SWITCHED=0
 SWITCH_PENDING=0
 OLD_DB_KEPT=0
 MEDIA_STAGED=0
+RESTORE_PHASE="preparation"
+RESTORE_COMPLETE=0
 cleanup_restore_db() {
-    # Zuerst das Staging: es muss auch dann verschwinden, wenn die Umschaltung
-    # schon gelaufen ist und erst die Medienaktivierung scheitert (oder ein
-    # Signal danach kommt).
+    if [[ "$SWITCHED" -eq 1 ]]; then
+        if [[ "$RESTORE_COMPLETE" -ne 1 ]]; then
+            echo "ERROR: restore incomplete; writers must remain stopped. phase=${RESTORE_PHASE}" >&2
+            echo "  database=${POSTGRES_DB}; previous_database=${OLD_DB}" >&2
+            echo "  media=${MEDIA_ROOT_CONTAINER}; staging=${MEDIA_STAGE:-none}; previous_media=${MEDIA_OLD:-none}" >&2
+            echo "  anchor=${DJANGO_AUDIT_HWM_PATH:-none}; signed_set=${BACKUP_FILE}" >&2
+            echo "  Repeat restore.sh --yes with the same signed DB/media archives after fixing the error; do not start web or cron." >&2
+        fi
+        return
+    fi
     if [[ "$MEDIA_STAGED" -eq 1 ]]; then
         media_exec rm -rf "$MEDIA_STAGE" > /dev/null 2>&1 || true
-    fi
-    if [[ "$SWITCHED" -eq 1 ]]; then
-        return
     fi
     if [[ "$SWITCH_PENDING" -eq 1 ]]; then
         # Abbruch (auch per Signal) zwischen den beiden Umbenennungen: der
@@ -359,6 +359,8 @@ cleanup_restore_db() {
     fi
 }
 trap cleanup_restore_db EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 echo "Lege Wiederherstellungs-Datenbank '${RESTORE_DB}' an..."
 db_psql -d postgres -c "DROP DATABASE IF EXISTS \"${RESTORE_DB}\";" > /dev/null
@@ -420,8 +422,7 @@ if [[ -n "$MEDIA_FILE" ]]; then
     echo "Entpacke Medien-Backup nach ${MEDIA_STAGE} ..."
     if ! openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_FILE" \
         | gunzip \
-        | "${COMPOSE[@]}" exec -T web \
-            tar -C "$MEDIA_STAGE" --strip-components=1 -xf -; then
+        | "${COMPOSE[@]}" run --rm --entrypoint tar -T maintenance -C "$MEDIA_STAGE" --strip-components=1 -xf -; then
         media_exec rm -rf "$MEDIA_STAGE"
         echo "FEHLER: Medien-Backup konnte nicht vollstaendig entpackt werden." >&2
         exit 1
@@ -460,7 +461,6 @@ fi
 # zwischen Pruefung und Umschaltung waere nach dem Restore verloren.
 echo "Stoppe schreibende Dienste (Schreibruhe fuer die Umschaltung)..."
 "${COMPOSE[@]}" stop web cron < /dev/null
-MEDIA_EXEC_CTX="maintenance"
 db_psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('${POSTGRES_DB}', '${RESTORE_DB}') AND pid <> pg_backend_pid();" > /dev/null
 
 TARGET_EXISTS=$(db_psql -d postgres -t -A -c "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB}';" 2>/dev/null \
@@ -482,12 +482,15 @@ if ! db_psql -d postgres -c "ALTER DATABASE \"${RESTORE_DB}\" RENAME TO \"${POST
     exit 1
 fi
 SWITCHED=1
+RESTORE_PHASE="database_activated"
 SWITCH_PENDING=0
 echo "DB-Wiederherstellung abgeschlossen."
 
 if [[ -n "$HWM_FILE" ]]; then
     echo "Spiele Audit-HWM ${HWM_FILE##*/} nach ${DJANGO_AUDIT_HWM_PATH} ..."
+    RESTORE_PHASE="anchor_activation"
     validate_or_install_hwm install
+    RESTORE_PHASE="anchor_activated"
     echo "Audit-HWM wiederhergestellt: ${HWM_FILE##*/}"
 fi
 
@@ -495,6 +498,7 @@ fi
 # Fehlschlag. Laeuft im maintenance-Container, weil web fuer die Schreibruhe
 # gestoppt ist.
 if [[ -n "$MEDIA_FILE" ]]; then
+    RESTORE_PHASE="media_activation"
     if ! "${COMPOSE[@]}" run --rm --entrypoint sh -T maintenance -c '
         set -eu
         stage="$1"; live="$2"; old="$3"
@@ -513,6 +517,7 @@ if [[ -n "$MEDIA_FILE" ]]; then
         exit 1
     fi
     MEDIA_STAGED=0
+    RESTORE_PHASE="media_activated"
     echo "Medien-Wiederherstellung abgeschlossen."
 fi
 
@@ -521,4 +526,5 @@ if [[ "$OLD_DB_KEPT" -eq 1 ]]; then
     echo "  Nach erfolgreicher Abnahme loeschbar: DROP DATABASE \"${OLD_DB}\";"
 fi
 echo "Hinweis: web- und cron-Container sind gestoppt (Schreibruhe) — Migrationen fahren, dann Stack starten."
+RESTORE_COMPLETE=1
 echo "RESTORE-SATZ WIEDERHERGESTELLT: ${BACKUP_TIMESTAMP}"
