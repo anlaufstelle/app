@@ -981,6 +981,10 @@ The detail page of a case (`/cases/<id>/`) is divided into three sections:
 - List of episodes (phases within the case)
 - List of outcome goals with milestones
 
+### Conflict when editing an episode
+
+If an episode has changed since its edit form was opened, saving is refused. A missing or invalid form baseline also prevents saving. Your submitted text and dates remain available; the current episode state appears above them. Compare both states and adjust your inputs before deliberately pressing **Save** again. In particular, if an end date has since been set: leaving the end date empty reopens the episode on that resubmission. Another intervening change is refused again (#2586).
+
 ### Editing a Case
 
 1. Open the case detail page.
@@ -1141,4 +1145,4 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: efdc81f3eea77e8e1c9388b5d0e784b3fe0ce771 -->
+<!-- source-hash: f1f58d4024d7a5a134784d508dc10ec4dc615227 -->

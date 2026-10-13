@@ -28,7 +28,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, Episode, User
-from core.services.case.episodes import close_episode, create_episode, update_episode
+from core.services.case.episodes import close_episode, create_episode, episode_basis_token, update_episode
 from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, CASE_WRITE_REDACTED_MESSAGE
 from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 from tests._row_lock_helpers import mitschnitt
@@ -186,7 +186,11 @@ class TestFehlendeEpisode:
         alt = Episode.objects.select_related("case").get(pk=episode.pk)
         _episode_entfernt(episode.pk)
 
-        _abgewiesen(lambda: update_episode(alt, user, title="Fehlt"), CASE_WRITE_GONE_MESSAGE, [])
+        _abgewiesen(
+            lambda: update_episode(alt, user, basis_token=episode_basis_token(alt), title="Fehlt"),
+            CASE_WRITE_GONE_MESSAGE,
+            [],
+        )
 
         assert not Episode.objects.filter(pk=episode.pk).exists()
 
@@ -207,13 +211,27 @@ class TestUpdateEpisode:
         user = request.getfixturevalue(akteur)
         vorher = _episodenstand(episode.pk)
 
-        _abgewiesen(lambda: update_episode(Episode.objects.get(pk=episode.pk), user, title="Fremd"), _FALL_FREMD, [])
+        _abgewiesen(
+            lambda: update_episode(
+                Episode.objects.get(pk=episode.pk),
+                user,
+                basis_token=episode_basis_token(Episode.objects.get(pk=episode.pk)),
+                title="Fremd",
+            ),
+            _FALL_FREMD,
+            [],
+        )
 
         assert _episodenstand(episode.pk) == vorher
 
     def test_unzulaessiges_feld_behaelt_vorrang_vor_der_einrichtungsgrenze(self, episode, fremde_fachkraft):
-        with pytest.raises(ValueError, match="darf nicht aktualisiert werden"):
-            update_episode(Episode.objects.get(pk=episode.pk), fremde_fachkraft, case=None)
+        with pytest.raises(ValueError, match=r"Field 'case' cannot be updated\."):
+            update_episode(
+                Episode.objects.get(pk=episode.pk),
+                fremde_fachkraft,
+                basis_token=episode_basis_token(Episode.objects.get(pk=episode.pk)),
+                case=None,
+            )
 
     @pytest.mark.parametrize(("zustand", "meldung", "sperrfolge"), AKTENZUSTAENDE)
     def test_veraltete_akte_wird_abgewiesen(self, zustand, meldung, sperrfolge, episode, staff_user):
@@ -221,7 +239,11 @@ class TestUpdateEpisode:
         vorher = _episodenstand(episode.pk)
         zustand(alt.case_id, alt.case.client_id)
 
-        _abgewiesen(lambda: update_episode(alt, staff_user, title="Veraltet"), meldung, sperrfolge)
+        _abgewiesen(
+            lambda: update_episode(alt, staff_user, basis_token=episode_basis_token(alt), title="Veraltet"),
+            meldung,
+            sperrfolge,
+        )
 
         assert _episodenstand(episode.pk) == vorher
 
@@ -231,7 +253,7 @@ class TestUpdateEpisode:
         _episode_geloescht(episode.pk)
 
         _abgewiesen(
-            lambda: update_episode(alt, staff_user, title="Geloescht"),
+            lambda: update_episode(alt, staff_user, basis_token=episode_basis_token(alt), title="Geloescht"),
             CASE_WRITE_GONE_MESSAGE,
             [_PERSON, _FALL, _EPISODE],
         )
@@ -244,7 +266,7 @@ class TestUpdateEpisode:
         spuren = _spuren()
         with mitschnitt() as m, pytest.raises(ValidationError) as excinfo:
             _umhaengen_nach_personensperre(m, alt.case_id, andere_person)
-            update_episode(alt, staff_user, title="Umgehaengt")
+            update_episode(alt, staff_user, basis_token=episode_basis_token(alt), title="Umgehaengt")
         assert m.offene_schranken() == []
         assert excinfo.value.messages == [CASE_WRITE_GONE_MESSAGE]
         assert _spuren() == spuren
@@ -254,11 +276,20 @@ class TestUpdateEpisode:
         alt = Episode.objects.select_related("case").get(pk=episode.pk)
         _fall_im_papierkorb(alt.case_id, alt.case.client_id)
 
-        _abgewiesen(lambda: update_episode(alt, staff_user), CASE_WRITE_REDACTED_MESSAGE, [_PERSON, _FALL])
+        _abgewiesen(
+            lambda: update_episode(alt, staff_user, basis_token=episode_basis_token(alt)),
+            CASE_WRITE_REDACTED_MESSAGE,
+            [_PERSON, _FALL],
+        )
 
     def test_eigene_einrichtung_schreibt_nach_der_sperrfolge(self, episode, staff_user):
         with mitschnitt() as m:
-            update_episode(Episode.objects.get(pk=episode.pk), staff_user, title="Neu")
+            update_episode(
+                Episode.objects.get(pk=episode.pk),
+                staff_user,
+                basis_token=episode_basis_token(Episode.objects.get(pk=episode.pk)),
+                title="Neu",
+            )
 
         assert m.sperrfolge()[:3] == [_PERSON, _FALL, _EPISODE]
         assert _episodenstand(episode.pk)[0] == "Neu"

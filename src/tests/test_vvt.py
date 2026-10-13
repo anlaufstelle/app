@@ -22,6 +22,7 @@ from core.models.settings import (
     DEFAULT_RETENTION_IDENTIFIED_DAYS,
     DEFAULT_RETENTION_QUALIFIED_DAYS,
 )
+from core.services.case.episodes import episode_basis_token
 from core.services.compliance import (
     PROCESSING_ACTIVITIES,
     get_activity,
@@ -409,6 +410,7 @@ class TestEpisodeAndGoalEditsAreAudited:
         response = client.post(
             reverse("core:episode_update", kwargs={"case_pk": case_open.pk, "pk": episode.pk}),
             {
+                "basis_token": episode_basis_token(episode),
                 "title": "Geaenderte Episode",
                 "description": episode.description or "",
                 "started_at": episode.started_at.isoformat(),

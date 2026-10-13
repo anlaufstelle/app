@@ -16,6 +16,7 @@ from core.models import Case
 from core.models.episode import Episode
 from core.services.case import cases_with_live_client, update_episode
 from core.services.case.episodes import close_episode, create_episode
+from core.services.form_state import FormStateConflictError
 from core.services.scoping import get_scoped_object
 from core.utils.ratelimit import ratelimit
 from core.views.mixins import StaffRequiredMixin, htmx_absage
@@ -128,16 +129,24 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
         episode = get_object_or_404(Episode, pk=pk, case=case)
         form = EpisodeForm(request.POST, instance=episode)
         if form.is_valid():
-            # Refs #1959: NICHT ``form.save()`` — ``_post_clean()`` hat die
-            # Instanz laengst mutiert, ein Diff danach faende nie eine
-            # Aenderung und schriebe nie ``EPISODE_UPDATE``. Der Service diffed
-            # gegen den DB-Stand und schreibt die Audit-Zeile.
+            # ModelForm mutates its instance; the service compares and writes the locked row.
             try:
                 update_episode(
                     episode,
                     request.user,
+                    basis_token=form.cleaned_data["basis_token"],
                     **{field: form.cleaned_data[field] for field in EpisodeForm.Meta.fields},
                 )
+            except FormStateConflictError as exc:
+                current_form = EpisodeForm(instance=exc.current)
+                data = request.POST.copy()
+                data["basis_token"] = current_form.initial["basis_token"]
+                form = EpisodeForm(data, instance=episode)
+                form.is_valid()
+                form.add_error(None, exc)
+                context = _episode_context(case, form, is_edit=True, episode=episode)
+                context["current_episode_form"] = current_form
+                return render(request, "core/cases/episode_form.html", context)
             except ValidationError as exc:
                 return _abgesagt(request, case, _meldung(exc))
             messages.success(request, _("Episode wurde aktualisiert."))

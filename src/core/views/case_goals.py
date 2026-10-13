@@ -5,8 +5,10 @@ Aus :file:`views/cases.py` abgetrennt — alle HTMX-Endpoints, die den
 """
 
 from django.core.exceptions import ValidationError
+from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
+from django.utils.translation import gettext_lazy as _
 from django.views import View
 
 from core.constants import RATELIMIT_FREQUENT
@@ -81,17 +83,20 @@ class GoalUpdateView(StaffRequiredMixin, View):
 
 
 class GoalToggleView(StaffRequiredMixin, View):
-    """HTMX: toggle goal achievement status."""
+    """HTMX: apply the explicitly requested goal achievement state."""
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
+        action = request.POST.get("action")
+        if action not in {"achieve", "unachieve"}:
+            return HttpResponseBadRequest(_("Ungültige Zielaktion."))
         try:
-            if goal.is_achieved:
-                unachieve_goal(goal, request.user)
-            else:
+            if action == "achieve":
                 achieve_goal(goal, request.user)
+            else:
+                unachieve_goal(goal, request.user)
         except ValidationError as exc:
             return _abgelehnt(exc)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))

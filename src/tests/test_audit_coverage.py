@@ -18,6 +18,7 @@ from django.utils import timezone
 from core.models import AuditLog, Case, Event, EventHistory
 from core.services.audit.diff import changed_data_json_slugs
 from core.services.case import update_case, update_workitem
+from core.services.case.episodes import episode_basis_token
 from core.services.client import update_client
 from core.services.events import update_event
 from core.services.system import log_settings_change, snapshot_settings, update_settings
@@ -465,6 +466,7 @@ class TestUpdateRouteAuditEnrollment:
     @staticmethod
     def _episode_post_data(episode, **overrides):
         data = {
+            "basis_token": episode_basis_token(episode),
             "title": episode.title,
             "description": episode.description or "",
             "started_at": episode.started_at.isoformat(),

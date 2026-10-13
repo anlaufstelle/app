@@ -27,6 +27,7 @@ from django.urls import reverse
 
 from core.models import AuditLog
 from core.services.audit.hash import hmac_hash_value
+from core.services.case.episodes import episode_basis_token
 
 pytestmark = pytest.mark.django_db
 
@@ -244,7 +245,13 @@ class TestEpisodeAndGoalUpdateDetailMinimized:
     def test_episode_detail_traegt_nur_feldnamen(self, staff_user, case_open, episode):
         from core.services.case import update_episode
 
-        update_episode(episode, staff_user, title="Klartext-Titel", description="Klartext-Verlauf")
+        update_episode(
+            episode,
+            staff_user,
+            basis_token=episode_basis_token(episode),
+            title="Klartext-Titel",
+            description="Klartext-Verlauf",
+        )
 
         log = AuditLog.objects.get(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk))
         assert set(log.detail) == {"case_id", "changed_fields"}

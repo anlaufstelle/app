@@ -60,7 +60,7 @@ from core.services.case.cases import (
     reopen_case,
     update_case,
 )
-from core.services.case.episodes import close_episode, create_episode, update_episode
+from core.services.case.episodes import close_episode, create_episode, episode_basis_token, update_episode
 from core.services.case.goals import (
     achieve_goal,
     create_goal,
@@ -512,7 +512,7 @@ class TestEpisodeServicesTakeTheClientRowLock:
         Mitschnitt.
         """
         with CaptureQueriesContext(connection) as captured:
-            update_episode(episode, staff_user, title="Neue Etappe")
+            update_episode(episode, staff_user, basis_token=episode_basis_token(episode), title="Neue Etappe")
 
         locks = _locking_statements(captured, "core_client")
         assert len(locks) == 1, f"erwartet GENAU eine Client-Sperre, war: {locks}"

@@ -70,6 +70,7 @@
                       hx-target="#goals-section"
                       hx-swap="outerHTML">
                     {% csrf_token %}
+                    <input type="hidden" name="action" value="unachieve">
                     <button type="submit" class="inline-flex items-center min-h-[44px] text-sm text-ink-muted hover:text-ink-soft">
                         {% trans "Nicht erreicht" %}
                     </button>
@@ -80,6 +81,7 @@
                       hx-target="#goals-section"
                       hx-swap="outerHTML">
                     {% csrf_token %}
+                    <input type="hidden" name="action" value="achieve">
                     <button type="submit" class="inline-flex items-center min-h-[44px] text-sm text-green-600 hover:text-green-800">
                         {% trans "Ziel erreicht" %}
                     </button>

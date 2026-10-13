@@ -26,9 +26,21 @@
 
     <form method="post" class="space-y-4">
         {% csrf_token %}
+        {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+        {% include "core/_form_errors.html" %}
+        {% if current_episode_form %}
+        <section class="card p-5" aria-labelledby="current-episode-heading">
+            <h2 id="current-episode-heading" class="font-semibold">{% trans "Aktueller Episodenstand" %}</h2>
+            <dl class="mt-2 space-y-1">
+                {% for field in current_episode_form.visible_fields %}
+                <div><dt class="font-medium">{{ field.label }}</dt><dd class="whitespace-pre-wrap">{{ field.value|default:"—" }}</dd></div>
+                {% endfor %}
+            </dl>
+        </section>
+        {% endif %}
 
         <div class="card p-5 space-y-4">
-            {% for field in form %}
+            {% for field in form.visible_fields %}
             {% include "components/_form_field.html" with field=field %}
             {% endfor %}
         </div>

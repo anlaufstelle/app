@@ -54,7 +54,9 @@ class TestWirkungszieleBeiEinschraenkung:
         _sperre(client_identified)
         client.force_login(staff_user)
         response = client.post(
-            reverse("core:goal_toggle", kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk}), **HTMX
+            reverse("core:goal_toggle", kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk}),
+            {"action": "achieve"},
+            **HTMX,
         )
         _assert_absage_ohne_swap(response)
 

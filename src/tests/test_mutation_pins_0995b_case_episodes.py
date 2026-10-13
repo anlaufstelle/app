@@ -24,7 +24,7 @@ import pytest
 from django.utils import timezone
 
 from core.models import Episode
-from core.services.case.episodes import close_episode, update_episode
+from core.services.case.episodes import close_episode, episode_basis_token, update_episode
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
@@ -90,7 +90,7 @@ class TestLockEpisodeForWrite:
         target, neighbour = target_and_neighbour
         Episode.objects.filter(pk=neighbour.pk).update(is_deleted=True, deleted_at=timezone.now())
         with mitschnitt() as queries:
-            update_episode(target, staff_user, title="Renamed")
+            update_episode(target, staff_user, basis_token=episode_basis_token(target), title="Renamed")
         target.refresh_from_db()
         neighbour.refresh_from_db()
         assert target.title == "Renamed"

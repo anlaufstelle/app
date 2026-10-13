@@ -297,7 +297,8 @@ class TestGoalToggleView:
             reverse(
                 "core:goal_toggle",
                 kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk},
-            )
+            ),
+            {"action": "achieve"},
         )
         assert response.status_code == 200
         outcome_goal.refresh_from_db()
@@ -310,7 +311,8 @@ class TestGoalToggleView:
             reverse(
                 "core:goal_toggle",
                 kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk},
-            )
+            ),
+            {"action": "unachieve"},
         )
         assert response.status_code == 200
         outcome_goal.refresh_from_db()
@@ -323,7 +325,8 @@ class TestGoalToggleView:
             reverse(
                 "core:goal_toggle",
                 kwargs={"case_pk": other_case.pk, "pk": outcome_goal.pk},
-            )
+            ),
+            {"action": "achieve"},
         )
         assert response.status_code == 404
 

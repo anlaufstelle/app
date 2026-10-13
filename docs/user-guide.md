@@ -981,6 +981,10 @@ Die Detailseite eines Falls (`/cases/<id>/`) gliedert sich in drei Bereiche:
 - Liste der Episoden (Phasen innerhalb des Falls)
 - Liste der Wirkungsziele mit Meilensteinen
 
+### Konflikt beim Bearbeiten einer Episode
+
+Hat sich eine Episode seit dem Öffnen ihres Bearbeitungsformulars geändert, wird das Speichern abgewiesen. Auch ein fehlender oder ungültiger Formularstand verhindert das Speichern. Ihre eingegebenen Texte und Datumswerte bleiben erhalten; der aktuelle Episodenstand steht darüber. Vergleichen Sie beide Stände und passen Sie Ihre Eingaben an, bevor Sie bewusst erneut **Speichern** wählen. Besonders bei einem inzwischen gesetzten Enddatum: Ein leeres Ende öffnet die Episode bei diesem erneuten Absenden wieder. Eine weitere zwischenzeitliche Änderung wird erneut abgewiesen (#2586).
+
 ### Fall bearbeiten
 
 1. Öffnen Sie die Fall-Detailseite.

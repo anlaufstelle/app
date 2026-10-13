@@ -5,10 +5,13 @@ from django.utils.translation import gettext_lazy as _
 
 from core.forms.mixins import TailwindFormMixin
 from core.models.episode import Episode
+from core.services.case.episodes import episode_basis_token
 
 
 class EpisodeForm(TailwindFormMixin, forms.ModelForm):
     """Form for creating and editing episodes."""
+
+    basis_token = forms.CharField(widget=forms.HiddenInput, required=False)
 
     class Meta:
         model = Episode
@@ -33,6 +36,10 @@ class EpisodeForm(TailwindFormMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if self.instance.pk and not self.instance._state.adding:
+            self.initial["basis_token"] = episode_basis_token(self.instance)
+        else:
+            self.fields.pop("basis_token")
         self.fields["ended_at"].required = False
         self.fields["description"].required = False
         self.fields["started_at"].label = _("Beginn")  # pragma: no mutate

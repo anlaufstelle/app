@@ -132,7 +132,7 @@ class TestHtmxRoutenMeldenStattAbzustuerzen:
         antwortender_client.force_login(staff_user)
 
         response = antwortender_client.post(
-            reverse("core:goal_toggle", kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk})
+            reverse("core:goal_toggle", kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk}), {"action": "achieve"}
         )
 
         assert response.status_code == 409
@@ -167,7 +167,7 @@ class TestHtmxRoutenMeldenStattAbzustuerzen:
         antwortender_client.force_login(staff_user)
 
         response = antwortender_client.post(
-            reverse("core:goal_toggle", kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk})
+            reverse("core:goal_toggle", kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk}), {"action": "achieve"}
         )
 
         assert response.status_code == 409
@@ -224,7 +224,9 @@ class TestNormalpfadeBleibenUnveraendert:
 
     def test_goal_toggle_bleibt_partial_mit_200(self, client, staff_user, case_open, outcome_goal):
         client.force_login(staff_user)
-        response = client.post(reverse("core:goal_toggle", kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk}))
+        response = client.post(
+            reverse("core:goal_toggle", kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk}), {"action": "achieve"}
+        )
         assert response.status_code == 200
         assert 'id="goals-section"' in response.content.decode()
         outcome_goal.refresh_from_db()

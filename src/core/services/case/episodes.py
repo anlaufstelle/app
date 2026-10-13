@@ -1,22 +1,4 @@
-"""Service layer for Episode updates (Refs #1959).
-
-Bis hierher hatte die Episode gar keinen Service: :class:`EpisodeUpdateView`
-rief ``form.save()`` direkt, und eine Bearbeitung hinterliess nirgends eine
-Spur — weder im AuditLog noch in einer ``EventHistory`` (die gibt es nur fuer
-Ereignisse) noch im Aktivitaets-Feed. Das Verarbeitungsverzeichnis musste das
-als TOM ausdruecklich einraeumen (``services/compliance/vvt.py``, ADR-043).
-
-**Ein Service ist hier zwingend, nicht nur Konvention.** ``EpisodeForm`` ist
-ein ``ModelForm(instance=…)``; ``_post_clean()`` hat die Instanz bereits
-mutiert, wenn die View sie zu Gesicht bekommt. Ein Diff *nach* ``form.save()``
-saehe ``neu == neu`` und schriebe nie eine Zeile (Threat-Model TB6,
-Repudiation). Der Diff laeuft deshalb ueber :func:`changed_fields_vs_db` gegen
-den DB-Stand — dasselbe Muster wie ``update_case``/``update_client``.
-
-Anders als ``update_case`` gibt es hier **keinen** Versionskonflikt-Check:
-:class:`~core.models.episode.Episode` fuehrt kein ``updated_at``, es gibt also
-keinen Vergleichsstempel fuer Optimistic Locking.
-"""
+"""Episode writes with signed baselines, state guards and attributed audits."""
 
 import logging
 
@@ -26,8 +8,8 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import AuditLog, Episode
 from core.services.audit import audit_event
-from core.services.audit.diff import changed_fields_vs_db
 from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, lock_case_for_write
+from core.services.form_state import require_form_state, sign_form_state
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +21,16 @@ EPISODE_CASE_NOT_OPEN_MESSAGE = _("Episoden können nur für offene Fälle erste
 #: ``case`` (ein Umhaengen der Episode in einen fremden Fall) und die
 #: Soft-Delete-Marker.
 _UPDATABLE_FIELDS = frozenset({"title", "description", "started_at", "ended_at"})
+
+
+_EPISODE_STATE_SALT = "core.episode.form_state"
+
+
+def episode_basis_token(episode):
+    """Sign all editable episode fields, bound to episode and facility."""
+    return sign_form_state(
+        episode, fields=_UPDATABLE_FIELDS, facility_id=episode.case.facility_id, salt=_EPISODE_STATE_SALT
+    )
 
 
 def _episode_facility_id(episode):
@@ -82,57 +74,37 @@ def _lock_episode_for_write(episode) -> Episode:
 
 
 @transaction.atomic
-def update_episode(episode, user, **fields):
-    """Update mutable fields on an episode + AuditLog (nur bei echtem Diff).
-
-    Art.-18-Gate (Refs #2045): Episoden-Freitexte sind Inhalt der Fallakte —
-    ihre Bearbeitung ist fachliche Nutzung, nicht Speicherung.
-
-    Nach der Allowlist die Einrichtungsgrenze der handelnden Person (vor
-    jeder Sperre, fail-closed), dann der Zustandsvertrag Person -> Fall ->
-    Episode (:func:`_lock_episode_for_write`, das Art.-18-Gate eingeschlossen).
-    Die Instanz stammt aus einem Lesevorgang vor der Sperre; ohne den Vertrag
-    schriebe die Bearbeitung Freitext an eine Akte im Papierkorb, an eine
-    getilgte Akte oder an eine geloeschte Episode.
-
-    Gibt die Episode zurueck. Ohne ``fields`` ist der Aufruf ein No-Op; ein
-    Aufruf, der nur bereits gespeicherte Werte setzt, schreibt keine
-    Audit-Zeile (sonst waere "einfach immer auditieren" der billige Fix und
-    das Log verloere seine Aussagekraft).
-    """
-    # Laeuft ZUERST — die Mass-Assignment-Pruefung darf nicht vom Diff
-    # abhaengen (Muster ``update_case``/``update_client``).
+def update_episode(episode, user, *, basis_token=None, **fields):
+    """Apply reviewed fields to the fresh locked row after the state contract."""
     for key in fields:
         if key not in _UPDATABLE_FIELDS:
-            raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
+            raise ValueError(f"Field '{key}' cannot be updated.")
     from core.services.case.goals import _assert_actor_facility
 
     _assert_actor_facility(user, _episode_facility_id(episode))
-    _lock_episode_for_write(episode)
-    if not fields:
-        return episode
-
-    changed_fields = changed_fields_vs_db(episode, fields)
-    for key, value in fields.items():
-        setattr(episode, key, value)
-    # Nur die uebergebenen Spalten schreiben (Refs #1789-Folge): ein voller
-    # Save wuerde die parallel laufende Redaktions-Kaskade (Queryset-Update)
-    # mit dem stalen Klartext ueberschreiben.
-    episode.save(update_fields=list(fields.keys()))
-
-    if changed_fields:
-        audit_event(
-            AuditLog.Action.EPISODE_UPDATE,
-            user=user,
-            facility=episode.case.facility,
-            target_obj=episode,
-            # Refs #1751 (Punkt 5): kein Titel, keine Beschreibung ins detail.
-            # Beides ist klientenbezogener Freitext, den die Anonymisierung an
-            # der Episode tilgt — im append-only AuditLog ueberlebte er sie.
-            # Die Zuordnung bleibt ueber target_id + case_id vollstaendig.
-            detail={"case_id": str(episode.case_id), "changed_fields": changed_fields},
-        )
-    return episode
+    locked = _lock_episode_for_write(episode)
+    require_form_state(
+        basis_token,
+        locked,
+        fields=_UPDATABLE_FIELDS,
+        facility_id=locked.case.facility_id,
+        salt=_EPISODE_STATE_SALT,
+    )
+    changed_fields = [key for key, value in fields.items() if getattr(locked, key) != value]
+    if not changed_fields:
+        return locked
+    for key in changed_fields:
+        setattr(locked, key, fields[key])
+    locked.save(update_fields=changed_fields)
+    audit_event(
+        AuditLog.Action.EPISODE_UPDATE,
+        user=user,
+        facility=locked.case.facility,
+        target_obj=locked,
+        # Episode plaintext must not survive redaction in the append-only audit.
+        detail={"case_id": str(locked.case_id), "changed_fields": changed_fields},
+    )
+    return locked
 
 
 @transaction.atomic

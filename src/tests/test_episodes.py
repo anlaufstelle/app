@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from core.models import Case, Client
 from core.models.episode import Episode
+from core.services.case.episodes import episode_basis_token
 
 
 def _other_facility_case(other_facility):
@@ -137,6 +138,7 @@ class TestEpisodeUpdateView:
                 kwargs={"case_pk": case_open.pk, "pk": episode.pk},
             ),
             {
+                "basis_token": episode_basis_token(episode),
                 "title": "Aktualisierte Episode",
                 "description": "Neue Beschreibung",
                 "started_at": "2025-03-01",
@@ -209,25 +211,13 @@ class TestEpisodeCloseView:
 
 @pytest.mark.django_db
 class TestUpdateEpisodeService:
-    """``update_episode`` — der Schreibpfad der Episoden-Bearbeitung (Refs #1959).
-
-    Bis #1959 rief ``EpisodeUpdateView`` ``form.save()`` direkt; es gab gar
-    keinen Service. Ein Service ist hier zwingend und nicht nur Konvention:
-    ``EpisodeForm`` ist ein ``ModelForm(instance=…)``, dessen ``_post_clean()``
-    die Instanz bereits mutiert hat — ein Diff **nach** ``form.save()`` fände
-    nie eine Änderung und schriebe nie eine Audit-Zeile (Threat-Model TB6,
-    Repudiation). Der Diff läuft deshalb gegen den DB-Stand
-    (``changed_fields_vs_db``), wie bei ``update_case``/``update_client``.
-
-    ``Episode`` hat kein ``updated_at`` — es gibt hier folgerichtig **keinen**
-    Versionskonflikt-Check (anders als ``update_case``).
-    """
+    """Episode edits audit actual changes against a signed current baseline."""
 
     def test_writes_audit_with_changed_fields(self, episode, staff_user, case_open):
         from core.models import AuditLog
         from core.services.case import update_episode
 
-        update_episode(episode, staff_user, title="Neue Episode")
+        update_episode(episode, staff_user, basis_token=episode_basis_token(episode), title="Neue Episode")
 
         episode.refresh_from_db()
         assert episode.title == "Neue Episode"
@@ -243,7 +233,13 @@ class TestUpdateEpisodeService:
         from core.models import AuditLog
         from core.services.case import update_episode
 
-        update_episode(episode, staff_user, title="Klartext-Titel", description="Klartext-Verlauf")
+        update_episode(
+            episode,
+            staff_user,
+            basis_token=episode_basis_token(episode),
+            title="Klartext-Titel",
+            description="Klartext-Verlauf",
+        )
 
         log = AuditLog.objects.get(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk))
         assert set(log.detail) == {"case_id", "changed_fields"}
@@ -253,7 +249,13 @@ class TestUpdateEpisodeService:
         from core.models import AuditLog
         from core.services.case import update_episode
 
-        update_episode(episode, staff_user, title=episode.title, description=episode.description)
+        update_episode(
+            episode,
+            staff_user,
+            basis_token=episode_basis_token(episode),
+            title=episode.title,
+            description=episode.description,
+        )
 
         assert not AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE).exists()
 
@@ -261,7 +263,7 @@ class TestUpdateEpisodeService:
         from core.models import AuditLog
         from core.services.case import update_episode
 
-        update_episode(episode, staff_user)
+        update_episode(episode, staff_user, basis_token=episode_basis_token(episode))
 
         assert not AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE).exists()
 
@@ -270,7 +272,7 @@ class TestUpdateEpisodeService:
         from core.services.case import update_episode
 
         with pytest.raises(ValueError, match="case"):
-            update_episode(episode, staff_user, case=episode.case)
+            update_episode(episode, staff_user, basis_token=episode_basis_token(episode), case=episode.case)
 
     def test_only_changed_columns_are_written(self, episode, staff_user):
         """``save(update_fields=…)`` — ein Vollsave überschriebe die parallel
@@ -278,7 +280,12 @@ class TestUpdateEpisodeService:
         from core.services.case import update_episode
 
         Episode.objects.filter(pk=episode.pk).update(description="Aus der Redaktion")
-        update_episode(episode, staff_user, title="Nur der Titel")
+        update_episode(
+            episode,
+            staff_user,
+            basis_token=episode_basis_token(Episode.objects.get(pk=episode.pk)),
+            title="Nur der Titel",
+        )
 
         episode.refresh_from_db()
         assert episode.title == "Nur der Titel"

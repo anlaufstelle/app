@@ -29,6 +29,7 @@ import pytest
 from django.core.exceptions import ValidationError
 
 from core.models import Client, Event, WorkItem
+from core.services.case.episodes import episode_basis_token
 from core.services.client.restriction import restrict_processing
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -167,7 +168,7 @@ class TestCaseSubObjectsBlocked:
         from core.services.case import update_episode
 
         with pytest.raises(ValidationError):
-            update_episode(episode, staff_user, title="Umbenannt")
+            update_episode(episode, staff_user, basis_token=episode_basis_token(episode), title="Umbenannt")
 
     def test_create_episode_blocked(self, case_open, restricted_client, staff_user):
         """Re-Review-Befund: Das Anlegen lief als reine Modell-Methode an der
