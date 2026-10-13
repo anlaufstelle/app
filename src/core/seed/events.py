@@ -25,6 +25,9 @@ def random_time_of_day(max_hour: int | None = None, max_minute: int | None = Non
     if max_hour is not None:
         filtered = [(h, w) for h, w in zip(hours, weights, strict=True) if h <= max_hour]
         if not filtered:
+            # Match the normal path's draws even before opening (Refs #2599).
+            random.random()
+            random.randint(0, 11)
             return 8, 0
         # Refs #1730: ueber Zwischenvariablen entpacken statt ``hours``/``weights``
         # (mypy-inferiert als ``list[int]`` aus der Deklaration oben) direkt mit

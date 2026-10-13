@@ -7,8 +7,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from core.models import DocumentType, Event
-from core.seed import events
+from core.models import Activity, DocumentType, Event
+from core.seed import activities, events
 from core.seed.users import seed_users
 from tests.test_seed_event_min_contact_stage import CFG, _load_default_doc_types, _make_clients
 
@@ -33,7 +33,11 @@ def seed_clock(monkeypatch):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("hour, minute", [(8, 9), (9, 59)], ids=["five-minute-boundary", "hour-boundary"])
+@pytest.mark.parametrize(
+    "hour, minute",
+    [(8, 9), (9, 59), (7, 59), (23, 59)],
+    ids=["five-minute-boundary", "hour-boundary", "opening-boundary", "midnight-boundary"],
+)
 def test_bulk_seed_content_is_stable_across_clock_boundaries(facility, seed_clock, hour, minute):
     users = seed_users(facility, 0)
     clients = _make_clients(facility, users[0], n_identified=6, n_qualified=6)
@@ -88,3 +92,32 @@ def test_bulk_seed_uses_supplied_clock_for_timestamps_and_data_dates(facility):
         assert event.occurred_at <= now
         appointment = datetime.fromisoformat(event.data_json["datum"]).date()
         assert now.date() - timedelta(days=7) <= appointment <= now.date() + timedelta(days=14)
+
+
+@pytest.mark.django_db
+def test_activity_sampling_is_stable_across_cutoff_time(facility, seed_clock, monkeypatch):
+    users = seed_users(facility, 0)
+    clients = _make_clients(facility, users[0], n_identified=6, n_qualified=6)
+    _load_default_doc_types(facility, keep_slugs=["kontakt"])
+    now = seed_clock[0].replace(hour=11, minute=59, second=59)
+    random.seed(2270)
+    events.seed_events_bulk(facility, users, clients, CFG, now=now)
+    Event.objects.filter(facility=facility).update(
+        occurred_at=(now - timedelta(days=90)).replace(hour=12, minute=0, second=0)
+    )
+    monkeypatch.setattr(activities, "timezone", events.timezone)
+
+    def snapshot():
+        return Counter(Activity.objects.filter(facility=facility).values_list("target_type_id", "target_id", "verb"))
+
+    seed_clock[0] = now
+    random.seed(2270)
+    first_count = activities.seed_activities(facility, users, CFG)
+    first = snapshot()
+    first_state = random.getstate()
+    Activity.objects.filter(facility=facility).delete()
+    seed_clock[0] += timedelta(seconds=2)
+    random.seed(2270)
+    assert activities.seed_activities(facility, users, CFG) == first_count
+    assert snapshot() == first
+    assert random.getstate() == first_state
