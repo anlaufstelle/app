@@ -75,6 +75,9 @@ class SluggedModel(models.Model):
         return nullcontext()
 
     def save(self, *args, **kwargs):
+        from core.services.dynamic_protection import validate_configuration_save
+
+        validate_configuration_save(self, kwargs.get("update_fields"))
         if kwargs.get("update_fields") is not None:
             kwargs["update_fields"] = frozenset(kwargs["update_fields"])
         with self._save_context(update_fields=kwargs.get("update_fields")):

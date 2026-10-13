@@ -77,6 +77,12 @@ def validate_configuration_facility(record, facility_id, *, facility_lookup="fac
         raise ValidationError(_("Die Einrichtung kann nach der Erstellung nicht geändert werden."))
 
 
+def validate_configuration_save(record, update_fields=None):
+    """Reject implicit deferred writes before configuration hooks reload fields (Refs #2525)."""
+    if update_fields is None and record.get_deferred_fields():
+        raise ValueError("Saving deferred configuration requires explicit update_fields or fully loaded fields")
+
+
 @contextmanager
 def dynamic_data_write(record, update_fields=None):
     """Reject incomplete type changes and keep protection stable until persistence."""

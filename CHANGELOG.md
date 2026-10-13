@@ -30,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Gesamtbudget für mehrseitige Bilder** (#2582) — Rasterbild-Uploads werden vor der vollständigen Frame-Verarbeitung und bei früh allokierenden Formaten bereits vor dem Bildöffnen anhand ihrer Header auf insgesamt standardmäßig 40 Millionen Pixel, höchstens 100 Frames oder Seiten und ein konservativ geschätztes Bildpufferbudget von 256 MiB geprüft und bei Überschreitung mit Meldung und Audit abgewiesen; zulässige Mehrseitenbilder und vom Betreiber zugelassene SVG-Dateien bleiben erhalten, eine Obergrenze für den gesamten Encoder-RAM ist damit nicht bewiesen.
 ### Security
 
-- **Implizite Teil-Speicherungen abgewiesen** (#2525) — Ereignisse, Personen und Fälle weisen `save()` auf unvollständig per `defer`/`only` geladenen Instanzen ohne ausdrückliches `update_fields` vor dem Schreiben ab, damit Typwechsel keine überholten Klartextwerte oder Suchindizes zurücklassen.
+- **Implizite Teil-Speicherungen abgewiesen** (#2525) — Ereignisse, Personen, Fälle sowie Dokumentationstypen, Feldvorlagen, Feldzuordnungen, Feldgruppen, Feldbedingungen und Quick-Templates weisen `save()` auf unvollständig per `defer`/`only` geladenen Instanzen ohne ausdrückliches `update_fields` vor dem ersten nachladenden Feldzugriff und vor dem Schreiben ab.
 
 ### Fixed
 

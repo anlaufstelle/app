@@ -259,8 +259,10 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
             configuration_write,
             rewrite_dynamic_records,
             validate_configuration_facility,
+            validate_configuration_save,
         )
 
+        validate_configuration_save(self, kwargs.get("update_fields"))
         validate_protection_literals(self, "sensitivity", "is_encrypted")
         validate_configuration_facility(self, self.facility_id)
         self._validate_number_range()

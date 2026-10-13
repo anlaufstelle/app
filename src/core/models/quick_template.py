@@ -108,9 +108,10 @@ class QuickTemplate(models.Model):
 
     def save(self, *args, **kwargs):
         """Take the shared gate before persistence and FK checks; recheck new option references under it."""
-        from core.services.dynamic_protection import lock_dynamic_protection
+        from core.services.dynamic_protection import lock_dynamic_protection, validate_configuration_save
         from core.services.option_usage import validate_option_references
 
+        validate_configuration_save(self, kwargs.get("update_fields"))
         update_fields = kwargs.get("update_fields")
         if update_fields is not None:
             update_fields = kwargs["update_fields"] = frozenset(update_fields)

@@ -107,8 +107,10 @@ class DocumentTypeField(models.Model):
             configuration_write,
             rewrite_dynamic_records,
             validate_configuration_facility,
+            validate_configuration_save,
         )
 
+        validate_configuration_save(self, kwargs.get("update_fields"))
         validate_configuration_facility(
             self, self.document_type.facility_id, facility_lookup="document_type__facility_id"
         )

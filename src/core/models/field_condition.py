@@ -91,8 +91,9 @@ class FieldCondition(models.Model):
         first (as the condition services do); taking it after this save would
         upgrade a shared lock and can deadlock.
         """
-        from core.services.dynamic_protection import lock_dynamic_protection
+        from core.services.dynamic_protection import lock_dynamic_protection, validate_configuration_save
 
+        validate_configuration_save(self, kwargs.get("update_fields"))
         update_fields = kwargs.get("update_fields")
         if update_fields is not None:
             update_fields = kwargs["update_fields"] = frozenset(update_fields)
