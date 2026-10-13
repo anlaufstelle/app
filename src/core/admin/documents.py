@@ -7,6 +7,7 @@ from django.contrib import admin, messages
 from django.contrib.admin.utils import unquote
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin, TabularInline
 
 from core.admin.mixins import FacilityScopedAdminMixin
@@ -294,8 +295,8 @@ class FieldTemplateAdmin(ConfigurationSelectionAdminMixin, ModelAdmin):
         Take every facility gate in advisory-key order before any type/template
         row or audit lock (Refs #2525). Read the changed rows after acquiring the
         gates so concurrent toggles cannot produce stale counts or audit entries.
-        Keep the conditional bulk update: activation does not need the model's
-        unrelated validation/normalization (Refs #2023).
+        Validate report bindings before the conditional bulk update; unrelated
+        model validation/normalization remains unnecessary (Refs #2023, #2574).
 
         Audit locks have their own namespace. Sort their acquisition by their
         actual keys, retaining row order within each facility for hash ties.
@@ -312,6 +313,12 @@ class FieldTemplateAdmin(ConfigurationSelectionAdminMixin, ModelAdmin):
             )
             if not affected:
                 return 0
+            if is_active:
+                from core.services.config.mutations import validate_report_key_activation
+
+                activating_ids = [obj.pk for obj in affected]
+                for obj in affected:
+                    validate_report_key_activation(obj, obj.report_key, is_active=True, activating_ids=activating_ids)
             lock_ids = {fid: (advisory_lock_id(fid) or 0) for fid in {obj.facility_id for obj in affected}}
             affected.sort(key=lambda obj: (lock_ids[obj.facility_id], str(obj.facility_id)))
             updated = FieldTemplate.objects.filter(
@@ -343,8 +350,13 @@ class FieldTemplateAdmin(ConfigurationSelectionAdminMixin, ModelAdmin):
 
     @admin.action(description="Ausgewählte Feldvorlagen aktivieren")
     def activate_selected(self, request, queryset):
-        updated = self._bulk_set_active(request, queryset, is_active=True)
-        messages.success(request, f"{updated} Feldvorlage(n) aktiviert.")
+        try:
+            updated = self._bulk_set_active(request, queryset, is_active=True)
+        except ValidationError as error:
+            for message in error.messages:
+                messages.error(request, message)
+            return
+        messages.success(request, _("%(count)s Feldvorlage(n) aktiviert.") % {"count": updated})
 
 
 @admin.register(QuickTemplate, site=anlaufstelle_admin_site)

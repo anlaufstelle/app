@@ -134,6 +134,9 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
             raise ValidationError(
                 {"slug": _("Der Slug „%(slug)s“ kollidiert mit einem festen Formularfeld.") % {"slug": self.slug}}
             )
+        from core.services.config.mutations import validate_field_type_change
+
+        validate_field_type_change(self, type(self).objects.for_facility(self.facility_id).filter(pk=self.pk).first())
         self._validate_number_range()
         self._validate_option_changes()
         self._validate_default_value()
@@ -273,6 +276,18 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
                 .filter(pk=self.pk)
                 .first()
             )
+            from core.services.config.mutations import validate_field_type_change, validate_report_key_activation
+
+            validate_field_type_change(self, previous, update_fields=kwargs.get("update_fields"))
+            persisted_fields = kwargs.get("update_fields")
+            active = self.is_active
+            report_key = self.report_key
+            if previous is not None and persisted_fields is not None:
+                if "is_active" not in persisted_fields:
+                    active = previous.is_active
+                if "report_key" not in persisted_fields:
+                    report_key = previous.report_key
+            validate_report_key_activation(self, report_key, is_active=active)
             level = self.sensitivity
             if (
                 previous is not None

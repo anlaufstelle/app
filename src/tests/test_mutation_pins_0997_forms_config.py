@@ -161,11 +161,12 @@ def test_inheritance_error_keeps_report_key_validation(facility, high_assignment
     assert form.errors["sensitivity"] == [_inheritance_message("Renamed field")]
     assert form.errors["report_key"] == [
         _(
-            "„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
-            "„%(bestand)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
+            "Im Dokumentationstyp „%(type)s“ trägt „%(new)s“ denselben Berichtsschlüssel wie die "
+            "bereits zugeordnete Feldvorlage "
+            "„%(existing)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
             "zulässig — sonst zählt der Bericht keine von beiden."
         )
-        % {"neu": "Renamed field", "bestand": existing.name}
+        % {"type": target.name, "new": "Renamed field", "existing": existing.name}
     ]
 
 

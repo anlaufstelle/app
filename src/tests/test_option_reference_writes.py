@@ -176,9 +176,11 @@ def test_existing_selections_remain_writable(facility, lead_user, selection, _en
         existing = create_event(facility, lead_user, target, timezone.now(), {field.slug: value})
     if legacy:
         field.field_type = "select" if isinstance(value, str) else "multi_select"
+        # Refs #2572: construct a historical selection without a new type change.
+        FieldTemplate.objects.for_facility(facility).filter(pk=field.pk).update(field_type=field.field_type)
     else:
         field.options_json[0]["is_active"] = False
-    field.save()
+        field.save()
     if path == "quick_update":
         existing.save(update_fields=["prefilled_data"])
     elif path == "service_update":

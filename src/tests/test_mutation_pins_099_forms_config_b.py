@@ -331,7 +331,8 @@ class TestFieldTemplateFormClean:
         )
         assert not form.is_valid()
         assert form.errors["report_key"] == [
-            "„Verlauf“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
+            f"Im Dokumentationstyp „{doc_type_contact.name}“ trägt „Verlauf“ "
+            "denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
             "„Dauer“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
             "zulässig — sonst zählt der Bericht keine von beiden."
         ]

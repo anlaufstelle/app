@@ -63,6 +63,84 @@ def save_document_type(request, form, *, creating: bool) -> DocumentType:
     return obj
 
 
+def _has_incompatible_single_line_values(template: FieldTemplate) -> bool:
+    """Include encrypted and historical values when narrowing the input widget."""
+    from itertools import chain
+
+    from django.db.models import Q
+
+    from core.models import EventHistory, QuickTemplate
+    from core.services.file_vault import safe_decrypt
+
+    current_payloads = (
+        model.objects.for_facility(template.facility_id)
+        .filter(data_json__has_key=template.slug)
+        .values_list("data_json", flat=True)
+        .iterator()
+        for model in (Client, Case, Event)
+    )
+    history_rows = (
+        EventHistory.objects.filter(event__facility_id=template.facility_id)
+        .filter(Q(data_before__has_key=template.slug) | Q(data_after__has_key=template.slug))
+        .values_list("data_before", "data_after")
+    )
+    history_payloads = (payload for row in history_rows.iterator() for payload in row)
+    presets = (
+        QuickTemplate.objects.for_facility(template.facility_id)
+        .filter(prefilled_data__has_key=template.slug)
+        .values_list("prefilled_data", flat=True)
+    )
+    for payload in chain(*current_payloads, history_payloads, presets.iterator()):
+        if not isinstance(payload, dict) or template.slug not in payload or payload[template.slug] is None:
+            continue
+        value = safe_decrypt(payload[template.slug], default=None)
+        if not isinstance(value, str) or "\n" in value or "\r" in value:
+            return True
+    return False
+
+
+def validate_field_type_change(template: FieldTemplate, previous, *, update_fields=None) -> None:
+    """Reject type reinterpretation of live, trash, historical or preset values."""
+    if previous is None or (update_fields is not None and "field_type" not in update_fields):
+        return
+    if previous.field_type == template.field_type:
+        return
+    text_types = {FieldTemplate.FieldType.TEXT, FieldTemplate.FieldType.TEXTAREA}
+    if {previous.field_type, template.field_type}.issubset(text_types) and (
+        template.field_type == FieldTemplate.FieldType.TEXTAREA or not _has_incompatible_single_line_values(previous)
+    ):
+        return
+    from django.db.models import Q
+
+    from core.models import EventHistory, QuickTemplate
+
+    used = any(
+        model.objects.for_facility(template.facility_id).filter(data_json__has_key=previous.slug).exists()
+        for model in (Client, Case, Event)
+    )
+    used = (
+        used
+        or EventHistory.objects.filter(event__facility_id=template.facility_id)
+        .filter(Q(data_before__has_key=previous.slug) | Q(data_after__has_key=previous.slug))
+        .exists()
+    )
+    used = (
+        used
+        or QuickTemplate.objects.for_facility(template.facility_id)
+        .filter(prefilled_data__has_key=previous.slug)
+        .exists()
+    )
+    if used:
+        raise ValidationError(
+            {
+                "field_type": _(
+                    "Diese Feldvorlage enthält bereits gespeicherte Werte, die mit dem gewünschten Feldtyp "
+                    "nicht sicher bearbeitet werden können. Deaktivieren Sie die Vorlage und legen Sie eine neue an."
+                )
+            }
+        )
+
+
 def save_field_template(request, form, *, creating: bool, facility) -> FieldTemplate:
     """Save a scoped template and atomically apply protection changes to its records."""
     changed_fields = list(form.changed_data)
@@ -88,14 +166,15 @@ def save_field_template(request, form, *, creating: bool, facility) -> FieldTemp
         # Validate the report binding even for callers outside the configuration UI.
         conflict = conflicting_report_key_assignment(obj, obj.report_key, is_active=obj.is_active)
         if conflict is not None:
-            _doc_type, existing = conflict
+            doc_type, existing = conflict
             raise ValidationError(
                 _(
-                    "„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
-                    "„%(bestand)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
+                    "Im Dokumentationstyp „%(type)s“ trägt „%(new)s“ denselben Berichtsschlüssel wie die "
+                    "bereits zugeordnete Feldvorlage "
+                    "„%(existing)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
                     "zulässig — sonst zählt der Bericht keine von beiden."
                 )
-                % {"neu": obj.name, "bestand": existing.name}
+                % {"type": doc_type.name, "new": obj.name, "existing": existing.name}
             )
         obj.save()
         action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
@@ -106,6 +185,41 @@ def save_field_template(request, form, *, creating: bool, facility) -> FieldTemp
             detail={"name": obj.name, "changed_fields": changed_fields},
         )
     return obj
+
+
+def validate_report_key_activation(template, report_key, *, is_active, activating_ids=()) -> None:
+    """Check current and jointly activated bindings while the exclusive gate holds."""
+    from django.db.models import Q
+
+    from core.models.report_key import EXCLUDED
+
+    if not is_active or not report_key or report_key == EXCLUDED:
+        return
+    assignments = DocumentTypeField.objects.filter(
+        field_template=template,
+        document_type__facility_id=template.facility_id,
+    ).select_related("document_type")
+    for assignment in assignments:
+        conflict = (
+            FieldTemplate.objects.for_facility(template.facility_id)
+            .filter(
+                document_type_fields__document_type=assignment.document_type,
+                report_key=report_key,
+            )
+            .filter(Q(is_active=True) | Q(pk__in=activating_ids))
+            .exclude(pk=template.pk)
+            .first()
+        )
+        if conflict is not None:
+            raise ValidationError(
+                {
+                    "is_active": _(
+                        "Die Feldvorlage kann nicht aktiviert werden: Im Dokumentationstyp „%(type)s“ "
+                        "verwendet „%(field)s“ bereits denselben Berichtsschlüssel."
+                    )
+                    % {"type": assignment.document_type.name, "field": conflict.name}
+                }
+            )
 
 
 def set_field_template_active(request, field_template: FieldTemplate, active: bool) -> FieldTemplate:

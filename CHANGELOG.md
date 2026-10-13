@@ -32,6 +32,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Implizite Teil-Speicherungen abgewiesen** (#2525) — Ereignisse, Personen und Fälle weisen `save()` auf unvollständig per `defer`/`only` geladenen Instanzen ohne ausdrückliches `update_fields` vor dem Schreiben ab, damit Typwechsel keine überholten Klartextwerte oder Suchindizes zurücklassen.
 
+### Fixed
+
+- **Belegte Feldtypen vor Datenverlust geschützt** (#2572) — Gespeicherte Personen-, Fall-, Ereignis-, Historien- und Vorlagenwerte sperren inkompatible Feldtypwechsel; kompatible Text-/Textbereichwechsel bleiben möglich, unbelegte Vorlagen bearbeitbar und die Fehlermeldung zeigt den Weg über Deaktivieren und Neuanlegen.
+- **Berichtsschlüssel bei Reaktivierung eindeutig** (#2574) — Einzelschalter, Modell-Speicherung und administrative Sammelaktivierung weisen doppelte aktive Berichtsschlüssel je Dokumentationstyp unter Konfigurationssperre ab, nennen beim Aktivieren den Konflikt und erhalten die bisherigen Berichtssummen.
+
+
 ## [0.99.7] - 2026-10-13
 
 Weiterer Release-Kandidat vor 1.0: bündelt den Schutz sensibler Feldwerte samt Suchindex, Löschfristen mit Freigabe, Hold und Art.-18-Schutz, ein abgesichertes Verwaltungs-Audit, gehärtete Offline-Schlüssel und zweite Faktoren, eine gemeinsame Exportleiste, geschützte Kleinzellen in Zeitraum-Summen sowie zahlreiche Korrekturen an Demo, Offline-Betrieb und Übersetzungen.

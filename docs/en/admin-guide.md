@@ -923,6 +923,10 @@ If only the **assignment** of a field template to a document type is removed (ra
 
 To finally **remove** orphaned values (data minimisation, once they are no longer needed), use the maintenance command **`purge_orphan_field_data`**. It removes, from clients, cases and events, exactly those `data_json` keys whose slug no longer belongs to the current field assignment of their type; assigned values (including encrypted ones) are left untouched, and records without a document type are only counted. `--dry-run` shows the effect without writing. Like the other maintenance commands (e.g. `reencrypt_fields`, § 2.9), it must run with the **admin DB role** and otherwise aborts with a clear message (Row Level Security). Execution: see `docs/ops-runbook.md` § 3.5.
 
+**Changing the type of a used field template:** Once the field slug occurs in stored client, case or event data (including trash), an event history snapshot or a quick template, only a compatible change between **Text** and **Textarea** is allowed. Multiline or unreadable textarea values cannot be narrowed to single-line text. This also applies to encrypted values, file markers and stored empty values. Other type changes are rejected without changing existing values. Deactivate the old template and create a new one instead. Without such usage, the field type remains editable; package updates keep their stricter rule that field types are immutable.
+
+**Activation and report keys:** Each documentation type may have at most one active field template for the same report key. Reactivating a replaced template is rejected on conflict; the message names the documentation type and competing template. Administrative bulk activation also checks all selected templates, including conflicts within the selection, before activating any of them. Deactivation and conflict-free reactivation remain available.
+
 ### 2.6 Manage Selection Options (Field Templates)
 
 Under **Management → Field templates**, you can edit the options of selection and multi-selection fields (Select / Multi-Select). Options are stored in the **Options (JSON)** field as a JSON array.
@@ -2546,4 +2550,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: b46cb8312090639037dc50f11479fb01db3cf564 -->
+<!-- source-hash: e375d2ad1c7864ef3a7fc2841dd3963c70119a96 -->

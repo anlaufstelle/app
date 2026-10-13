@@ -205,7 +205,12 @@ class ConfigFieldTemplateToggleActiveView(FacilityAdminRequiredMixin, View):
     def post(self, request, pk):
         field_template = get_object_or_404(FieldTemplate, pk=pk, facility=request.current_facility)
         new_state = not field_template.is_active
-        config_service.set_field_template_active(request, field_template, active=new_state)
+        try:
+            config_service.set_field_template_active(request, field_template, active=new_state)
+        except ValidationError as error:
+            for message in error.messages:
+                messages.error(request, message)
+            return redirect("core:config_fieldtemplate_list")
         if new_state:
             messages.success(request, _("Feldvorlage „%(name)s“ wurde aktiviert.") % {"name": field_template.name})
         else:

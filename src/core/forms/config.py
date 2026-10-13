@@ -565,6 +565,11 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
 
     def __init__(self, *args, facility=None, used_option_slugs=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["field_type"].help_text = _(
+            "Bei gespeicherten Werten ist nur ein kompatibler Wechsel zwischen Text und Textbereich möglich. "
+            "Mehrzeilige oder nicht lesbare Textbereiche können nicht in einzeilige Textfelder geändert werden. "
+            "Für andere Feldtypen die Vorlage deaktivieren und eine neue anlegen."
+        )
         self.facility = facility
         # The editor receives only identifiers from the shared usage service.
         self.used_option_slugs = set(used_option_slugs or ())
@@ -638,21 +643,22 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
                 except ValidationError as error:
                     self.add_error("sensitivity", error)
                     break
-        konflikt = conflicting_report_key_assignment(
+        conflict = conflicting_report_key_assignment(
             self.instance,
             cleaned.get("report_key"),
             is_active=cleaned.get("is_active", self.instance.is_active),
         )
-        if konflikt is not None:
-            _doc_type, bestand = konflikt
+        if conflict is not None:
+            doc_type, existing = conflict
             self.add_error(
                 "report_key",
                 _(
-                    "„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
-                    "„%(bestand)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
+                    "Im Dokumentationstyp „%(type)s“ trägt „%(new)s“ denselben Berichtsschlüssel wie die "
+                    "bereits zugeordnete Feldvorlage "
+                    "„%(existing)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
                     "zulässig — sonst zählt der Bericht keine von beiden."
                 )
-                % {"neu": cleaned.get("name") or self.instance.name, "bestand": bestand.name},
+                % {"type": doc_type.name, "new": cleaned.get("name") or self.instance.name, "existing": existing.name},
             )
         return cleaned
 

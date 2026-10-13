@@ -186,7 +186,8 @@ class TestSaveFieldTemplateReportKeyConflictMessage:
         with pytest.raises(ValidationError) as excinfo:
             save_field_template(req, form, creating=False, facility=facility)
         assert excinfo.value.messages == [
-            "„Zweite Dauer“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
+            f"Im Dokumentationstyp „{doc_type_contact.name}“ trägt „Zweite Dauer“ "
+            "denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
             "„Dauer“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
             "zulässig — sonst zählt der Bericht keine von beiden."
         ]
