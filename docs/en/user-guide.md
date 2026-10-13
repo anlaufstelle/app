@@ -498,7 +498,7 @@ What happens:
 
 ## 5. Hints and Tasks (Work Items)
 
-Tasks without a person remain visible. Tasks linked to people in the trash or inactive people are excluded from the inbox, task timeline, focus box, profile, navigation counts and handover; their direct links return 404. Restoring a person who remains active makes the eligible tasks visible again. Profile favorites and recent visits also exclude deleted or inactive people. Profile event lists and contact counts, the cockpit’s contact count for today, and handover events include only role-visible documentation that is not deleted and belongs to active people outside the trash or has no person attached.
+Tasks without a person remain visible. Tasks linked to people in the trash or inactive people are excluded from the inbox, timeline, focus box, profile, navigation counts and handover; their detail links return 404, as do their edit links for users permitted to edit tasks. Timeline contacts, bans and activities targeting people, events or tasks also exclude these people; entries without a person remain visible. Restoring a person who remains active makes the eligible tasks visible again. Profile favorites and recent visits also exclude deleted or inactive people. Profile event lists and contact counts, the cockpit’s contact count for today, and handover events include only role-visible documentation that is not deleted and belongs to active people outside the trash or has no person attached.
 
 **Work items** are used for internal team communication. There are two types:
 
@@ -1151,4 +1151,4 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: f63b7377159e90d28216c4a5260a20d1ec995edd -->
+<!-- source-hash: 8149290e0307ba6bd2c715d77ddb82ba5adbb8c7 -->

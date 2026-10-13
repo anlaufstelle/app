@@ -2,18 +2,19 @@
 
 from datetime import UTC, datetime, time, timedelta
 
+from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 
 from core.constants import FEED_MAX_PER_TYPE
-from core.models import Activity, Case, Event
+from core.models import Activity, Case, Client, Event, WorkItem
 from core.services.compliance import user_can_see_field
 from core.services.config import iter_fields_in_block_order
 from core.services.dynamic_data import option_label_map
 from core.services.file_vault import is_encrypted_value, safe_decrypt
-from core.services.workitem_visibility import workitems_for_read
+from core.services.workitem_visibility import readable_person_filter, workitems_for_read
 
 
 def _is_imaginary(naive_dt, tzinfo):
@@ -162,14 +163,39 @@ def get_time_range(target_date, time_filter=None):
     return start_dt, _resolve_window_end(naive_start, naive_end, start_dt)
 
 
+def events_for_feed_read(facility, user):
+    """Share the event/person read boundary between feed cards and watch projections."""
+    return Event.objects.visible_to(user).filter(readable_person_filter(), facility=facility, is_deleted=False)
+
+
+def activities_for_feed_read(facility, user):
+    """Exclude activities whose person, task or event target cannot be read."""
+    activities = Activity.objects.for_facility(facility)
+    # Keep role-neutral service calls while always enforcing the person read boundary.
+    event_targets = Event.objects.for_facility(facility).filter(readable_person_filter())
+    if user is not None:
+        event_targets = event_targets.visible_to(user)
+    visible_event_ids = event_targets.values_list("pk", flat=True)
+    visible_person_ids = (
+        Client.objects.for_facility(facility).filter(is_deleted=False, is_active=True).values_list("pk", flat=True)
+    )
+    visible_workitem_ids = workitems_for_read(facility).values_list("pk", flat=True)
+    for model, visible_ids in (
+        (Event, visible_event_ids),
+        (Client, visible_person_ids),
+        (WorkItem, visible_workitem_ids),
+    ):
+        target_type = ContentType.objects.get_for_model(model)
+        activities = activities.exclude(Q(target_type=target_type) & ~Q(target_id__in=visible_ids))
+    return activities
+
+
 def _feed_events(facility, start_dt, end_dt, user, include_all):
     """Event-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``).
 
     Exclude bans when loading all types to avoid duplicates with bans feed.
     """
-    events_qs = Event.objects.visible_to(user).filter(
-        facility=facility,
-        is_deleted=False,
+    events_qs = events_for_feed_read(facility, user).filter(
         occurred_at__gte=start_dt,
         occurred_at__lte=end_dt,
     )
@@ -185,26 +211,10 @@ def _feed_activities(facility, start_dt, end_dt, user, include_all):
     """Activity-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``)."""
     from core.services.dashboard.activity import activity_target_prefetch
 
-    activities_qs = Activity.objects.for_facility(facility).filter(occurred_at__gte=start_dt, occurred_at__lte=end_dt)
+    activities_qs = activities_for_feed_read(facility, user).filter(occurred_at__gte=start_dt, occurred_at__lte=end_dt)
     # In mixed feed: exclude 'created' activities (redundant with first-class object cards)
     if include_all:
         activities_qs = activities_qs.exclude(verb=Activity.Verb.CREATED)
-
-    # Filter out activities whose target is an Event the user may not see (#562)
-    if user is not None:
-        from django.contrib.contenttypes.models import ContentType
-
-        event_ct = ContentType.objects.get_for_model(Event)
-        # ``facility`` gehoert mit in den Subselect (Refs #2028): ohne das
-        # Praedikat laeuft der NOT-IN ueber ``core_event`` aller Einrichtungen
-        # und waechst damit mit der Gesamtinstallation statt mit der eigenen
-        # Einrichtung. Das Ergebnis aendert sich nicht — Event-PKs sind global
-        # eindeutig, ein ``target_id`` dieser Facility zeigt nie auf ein Event
-        # einer anderen; es ist reine Queryform (Muster wie ``_feed_events``).
-        visible_event_ids = Event.objects.visible_to(user).filter(facility=facility).values_list("pk", flat=True)
-        activities_qs = activities_qs.exclude(
-            Q(target_type=event_ct) & ~Q(target_id__in=visible_event_ids),
-        )
 
     # Faelle im Papierkorb aus dem Zeitstrom nehmen (Refs #1818, ADR-044 §7).
     # ``close_case``/``reopen_case`` rendern den Falltitel aus dem Ziel. Der
@@ -221,8 +231,6 @@ def _feed_activities(facility, start_dt, end_dt, user, include_all):
     # der Zeitstrom. Sie ist trotzdem nicht umsonst geschrieben: nach
     # ``restore_case`` erscheint der Fall wieder, und mit ihm die Spur, dass
     # er zwischenzeitlich im Papierkorb lag.
-    from django.contrib.contenttypes.models import ContentType
-
     case_ct = ContentType.objects.get_for_model(Case)
     trashed_case_ids = Case.objects.for_facility(facility).filter(is_deleted=True).values_list("pk", flat=True)
     activities_qs = activities_qs.exclude(Q(target_type=case_ct) & Q(target_id__in=trashed_case_ids))
@@ -249,10 +257,8 @@ def _feed_workitems(facility, start_dt, end_dt):
 def _feed_bans(facility, start_dt, end_dt, user):
     """Ban-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``)."""
     bans = (
-        Event.objects.visible_to(user)
+        events_for_feed_read(facility, user)
         .filter(
-            facility=facility,
-            is_deleted=False,
             document_type__system_type="ban",
             occurred_at__gte=start_dt,
             occurred_at__lte=end_dt,

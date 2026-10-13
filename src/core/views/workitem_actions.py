@@ -33,6 +33,7 @@ from core.services.case import (
 from core.services.case.workitems import workitem_form_state_token
 from core.services.client import resolve_writable_client
 from core.services.scoping import get_scoped_object
+from core.services.workitem_visibility import workitems_for_read
 from core.utils.formatting import isoformat_or_none
 from core.utils.ratelimit import ratelimit
 from core.views._json_contracts import (
@@ -459,7 +460,7 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
 
     def get(self, request, pk):
         workitem = get_scoped_object(
-            WorkItem.objects.select_related("client"),
+            workitems_for_read(request.current_facility).select_related("client"),
             request,
             pk=pk,
         )
@@ -490,7 +491,7 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
 
     def post(self, request, pk):
         workitem = get_scoped_object(
-            WorkItem,
+            workitems_for_read(request.current_facility).select_related("client"),
             request,
             pk=pk,
         )

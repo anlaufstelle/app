@@ -6,7 +6,6 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from django.contrib.contenttypes.models import ContentType
 from django.db.models import Case as DBCase
 from django.db.models import Count, IntegerField, Q, Value, When
 from django.db.models.functions import Coalesce
@@ -248,16 +247,14 @@ def _workitem_projection(row):
 def _feed_projection(facility, user, state: ZeitstromState):
     """Bounded values-only mirror of ``build_feed_items``."""
 
-    from core.services.events.feed import get_time_range
+    from core.services.events.feed import activities_for_feed_read, events_for_feed_read, get_time_range
 
     start_dt, end_dt = get_time_range(state.target_date, state.time_filter)
     include_all = state.feed_type == ""
     items: list[dict] = []
 
     if state.feed_type == "events" or include_all:
-        events = Event.objects.visible_to(user).filter(
-            facility=facility,
-            is_deleted=False,
+        events = events_for_feed_read(facility, user).filter(
             occurred_at__gte=start_dt,
             occurred_at__lte=end_dt,
         )
@@ -271,15 +268,12 @@ def _feed_projection(facility, user, state: ZeitstromState):
     if state.feed_type == "activities" or include_all:
         from core.services.dashboard.activity import activity_target_prefetch, render_activity_summary
 
-        activities = Activity.objects.for_facility(facility).filter(
+        activities = activities_for_feed_read(facility, user).filter(
             occurred_at__gte=start_dt,
             occurred_at__lte=end_dt,
         )
         if include_all:
             activities = activities.exclude(verb=Activity.Verb.CREATED)
-        event_ct = ContentType.objects.get_for_model(Event)
-        visible_event_ids = Event.objects.visible_to(user).values_list("pk", flat=True)
-        activities = activities.exclude(Q(target_type=event_ct) & ~Q(target_id__in=visible_event_ids))
         activity_rows = (
             activities.select_related("actor", "target_type")
             .prefetch_related(activity_target_prefetch())
@@ -315,10 +309,8 @@ def _feed_projection(facility, user, state: ZeitstromState):
 
     if state.feed_type == "bans" or include_all:
         rows = (
-            Event.objects.visible_to(user)
+            events_for_feed_read(facility, user)
             .filter(
-                facility=facility,
-                is_deleted=False,
                 document_type__system_type="ban",
                 occurred_at__gte=start_dt,
                 occurred_at__lte=end_dt,

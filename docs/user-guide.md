@@ -496,7 +496,7 @@ Was dabei passiert:
 
 ## 5. Hinweise und Aufgaben (WorkItems)
 
-Aufgaben ohne Person bleiben sichtbar. Aufgaben zu Personen im Papierkorb oder zu inaktiven Personen fehlen in Posteingang, Aufgaben-Zeitstrom, Fokus, Profil, Navigationszählern und Übergabe; ihre Direktlinks liefern 404. Nach Wiederherstellung der weiterhin aktiven Person ist der zulässige Aufgabenbestand wieder sichtbar. Auch Favoriten und zuletzt besuchte Personen im Profil schließen gelöschte oder inaktive Personen aus. Ereignislisten und Kontaktzähler im Profil, der heutige Kontaktzähler im Cockpit sowie Ereignisse in der Übergabe berücksichtigen nur für die Rolle sichtbare, nicht gelöschte Dokumentation aktiver Personen außerhalb des Papierkorbs oder ohne Personenbezug.
+Aufgaben ohne Person bleiben sichtbar. Aufgaben zu Personen im Papierkorb oder zu inaktiven Personen fehlen in Posteingang, Zeitstrom, Fokus, Profil, Navigationszählern und Übergabe; ihre Detaillinks und für Bearbeitungsberechtigte auch ihre Bearbeitungslinks liefern 404. Auch Kontakte, Hausverbote und Aktivitäten mit Personen-, Ereignis- oder Aufgabenziel im Zeitstrom schließen diese Personen aus; Einträge ohne Personenbezug bleiben sichtbar. Nach Wiederherstellung der weiterhin aktiven Person ist der zulässige Aufgabenbestand wieder sichtbar. Auch Favoriten und zuletzt besuchte Personen im Profil schließen gelöschte oder inaktive Personen aus. Ereignislisten und Kontaktzähler im Profil, der heutige Kontaktzähler im Cockpit sowie Ereignisse in der Übergabe berücksichtigen nur für die Rolle sichtbare, nicht gelöschte Dokumentation aktiver Personen außerhalb des Papierkorbs oder ohne Personenbezug.
 
 **WorkItems** dienen der teaminternen Kommunikation. Es gibt zwei Typen:
 

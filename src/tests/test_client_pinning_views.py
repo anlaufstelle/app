@@ -266,8 +266,9 @@ class TestPinnedClientStillHonoursRevocationGate:
         )
         assert_field_error(form, "client", "gelöscht oder anonymisiert")
 
-    def test_workitem_update_post_blocked_for_anonymized_client(self, client, staff_user, workitem_pinned):
-        """Ende-zu-Ende: die Person wird nach dem Anlegen anonymisiert."""
+    def test_workitem_update_post_hides_inactive_person_before_form_binding(self, client, staff_user, workitem_pinned):
+        """A person revoked after task creation is hidden before binding the edit form."""
+        original_title = workitem_pinned.title
         workitem_pinned.client.is_active = False
         workitem_pinned.client.save(update_fields=["is_active"])
         client.force_login(staff_user)
@@ -279,6 +280,7 @@ class TestPinnedClientStillHonoursRevocationGate:
                 "priority": WorkItem.Priority.NORMAL,
             },
         )
-        assert response.status_code == 200
+        assert response.status_code == 404
+        assert original_title not in response.content.decode()
         workitem_pinned.refresh_from_db()
-        assert workitem_pinned.title != "Frischer Klartext"
+        assert workitem_pinned.title == original_title

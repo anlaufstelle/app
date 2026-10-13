@@ -536,14 +536,19 @@ class TestSearchExcludesEventsOfTrashedClients:
         _, events = search_clients_and_events(facility, staff_user, "Spezialberatung-Geheim")
         assert len(events) == 1
 
-    def test_the_timeline_still_shows_them(self, facility, staff_user, event_of_trashed):
-        """Bewusste Nicht-Paritaet: das chronologische Protokoll bleibt vollstaendig.
-
-        Die Suche ist ein Nachschlagewerkzeug — was dort nicht auftaucht, ist
-        praktisch weg. Der Zeitstrom ist ein Protokoll: eine Luecke darin waere
-        eine Faelschung des Verlaufs. Deshalb filtert er hier bewusst nicht mit.
-        """
+    def test_timeline_excludes_events_of_trashed_people(self, facility, staff_user, event_of_trashed):
+        """Timeline reads exclude trashed people while retaining personless events."""
         from core.services.events import build_feed_items
 
+        personless_event = Event.objects.create(
+            facility=facility,
+            client=None,
+            document_type=event_of_trashed.document_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
         items = build_feed_items(facility, timezone.localdate(), "events", user=staff_user)
-        assert [i for i in items if i["object"].pk == event_of_trashed.pk]
+        event_ids = {item["object"].pk for item in items}
+        assert event_of_trashed.pk not in event_ids
+        assert personless_event.pk in event_ids
