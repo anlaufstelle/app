@@ -2450,7 +2450,7 @@ Anlaufstelle computes statistics (dashboard, half-year reports, example activity
 
 ### Automatic Capture
 
-Snapshots are created automatically whenever `enforce_retention` deletes events: in the same transaction in which the run deletes an event, it adds the event to the aggregate of its month, including the current month -- if the run aborts, no event already deleted is missing from the aggregate, and if two runs overlap, every event counts exactly once. A deletion run does not change the counts of an existing aggregate; it only extends its carry-over of deleted events. If the month has no aggregate yet, the run creates it from the remaining events plus the carry-over. Every recalculation of a month with `create_statistics_snapshots` counts the remaining events and adds the deleted ones. If the run cannot add an event to the aggregate (for example because a report module raises an error), it does not delete the event, writes the error as `ERROR` with the event id to the application log and tries again on the next run -- until the cause is fixed, the deletion is delayed. Events deleted manually no longer count in an aggregate after its next recalculation. The "Statistics" card on the lead's dashboard shows the latest completed month as "last snapshot".
+Snapshots are created automatically whenever `enforce_retention` deletes events: in the same transaction in which the run deletes an event, it adds the event to the aggregate of its month, including the current month -- if the run aborts, no event already deleted is missing from the aggregate, and if two runs overlap, every event counts exactly once. The deletion run extends the carry-over of deleted events and recalculates the month from that carry-over and the remaining events in the same transaction. This also counts events recorded after the previous snapshot without doubling contributions already counted. Every recalculation of a month with `create_statistics_snapshots` counts the remaining events and adds the deleted ones. If the run cannot add an event to the aggregate (for example because a report module raises an error), it does not delete the event, writes the error as `ERROR` with the event id to the application log and tries again on the next run -- until the cause is fixed, the deletion is delayed. Events deleted manually no longer count in an aggregate after its next recalculation. The "Statistics" card on the lead's dashboard shows the latest completed month as "last snapshot".
 
 ### Periodic Cron Job (Recommended)
 
@@ -2459,7 +2459,7 @@ It is also recommended to create snapshots regularly via cron:
 > **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only if the `cron` service is not running; it starts the job through the `maintenance` service of the same compose file, the only service that receives the admin role (BYPASSRLS) (without Compose, reproduce it in your own orchestration: same image, entrypoint `python manage.py`, admin role). Setting up both makes the job run twice — details: [ops runbook § 3](ops-runbook.md#3-cron-jobs).
 
 ```cron
-# Monthly on the 1st at 04:00 (like the sidecar) -- captures the previous month
+# Monthly on the 1st at 04:00 (like the sidecar) -- captures the previous and historical months
 0 4 1 * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance create_statistics_snapshots >> /var/log/anlaufstelle-snapshots.log 2>&1
 ```
 
@@ -2471,7 +2471,7 @@ During initial setup or when enabling snapshots later, snapshots can be created 
 docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics_snapshots --backfill
 ```
 
-**Note:** The backfill only captures events that are still present -- already deleted data cannot be reconstructed retroactively.
+**Note:** Backfill uses past months from the union of months with remaining events and stored snapshot months, including months containing only carried-over deleted events. Deleted data without such carry-over cannot be reconstructed retroactively. The regular run without a specific month also recalculates these past months and the previous month, picking up late entries and changes. The displayed calculation date (`updated_at`) changes only when recalculation changes the published aggregates or backend payloads; carry-over bookkeeping alone does not advance it. Person-count lower bounds are merged across segments by maximum rather than addition, keeping small cells suppressed.
 
 ### Additional Options
 
@@ -2540,4 +2540,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 6f3f99a7aca8db3f6fc05911020fdea971f75aad -->
+<!-- source-hash: 829c435a5ab76e643e06f3e1713252fd847be7c3 -->

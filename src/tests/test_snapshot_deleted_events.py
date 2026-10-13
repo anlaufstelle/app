@@ -294,3 +294,154 @@ class TestRetentionCommandCarry:
 
         assert not StatisticsSnapshot.objects.filter(facility=facility).exists()
         assert Event.objects.filter(facility=facility, is_deleted=False).count() == 1
+
+
+@pytest.mark.django_db
+class TestHistoricalSnapshotRefresh:
+    def test_default_run_recomputes_late_and_changed_old_events(
+        self,
+        facility,
+        staff_user,
+        doc_type_contact,
+        settings_obj,
+    ):
+        from core.services.dashboard import create_or_update_snapshot
+
+        occurred_at = _past_month_noon() - timedelta(days=32)
+        first = _event(facility, doc_type_contact, staff_user, occurred_at)
+        create_or_update_snapshot(facility, occurred_at.year, occurred_at.month)
+        _event(facility, doc_type_contact, staff_user, occurred_at)
+        call_command("create_statistics_snapshots")
+        row = StatisticsSnapshot.objects.get(facility=facility, year=occurred_at.year, month=occurred_at.month)
+        assert row.data["total_contacts"] == 2
+        assert row.backend_data["sample-report-1"]["total"] == 2
+        first.is_deleted = True
+        first.save(update_fields=["is_deleted"])
+        call_command("create_statistics_snapshots")
+        row.refresh_from_db()
+        assert row.data["total_contacts"] == 1
+
+    def test_carry_and_late_live_event_are_counted_once_with_safe_person_bounds(
+        self,
+        facility,
+        staff_user,
+        client_identified,
+        doc_type_contact,
+        settings_obj,
+    ):
+        from core.services.dashboard import create_or_update_snapshot, suppress_report_stats
+
+        occurred_at = _past_month_noon()
+        first = _event(facility, doc_type_contact, staff_user, occurred_at, client_identified)
+        create_or_update_snapshot(facility, occurred_at.year, occurred_at.month)
+        _delete_and_carry(facility, first)
+        second = _event(facility, doc_type_contact, staff_user, occurred_at, client_identified)
+        _delete_and_carry(facility, second)
+        row = StatisticsSnapshot.objects.get(facility=facility, year=occurred_at.year, month=occurred_at.month)
+        assert row.data["total_contacts"] == 2
+        assert row.backend_data["sample-report-1"]["total"] == 2
+        live_events = [_event(facility, doc_type_contact, staff_user, occurred_at, client_identified) for _ in range(4)]
+        for _ in range(2):
+            call_command("create_statistics_snapshots")
+            row.refresh_from_db()
+            assert row.data["total_contacts"] == 6
+            assert row.backend_data["sample-report-1"]["total"] == 6
+            assert row.data["by_contact_stage"]["identifiziert"] == 6
+            assert row.data["by_document_type"][0]["count"] == 6
+            assert row.data["persons_by_contact_stage"]["identifiziert"] == 1
+            assert row.data["by_age_cluster"][0]["persons"] == 1
+            published = suppress_report_stats(facility, row.data)
+            assert "by_contact_stage" not in published
+            assert "by_age_cluster" not in published
+        for event in live_events:
+            _delete_and_carry(facility, event)
+        row.refresh_from_db()
+        assert row.data["total_contacts"] == 6
+
+    def test_backfill_includes_carry_only_and_snapshot_only_months(
+        self,
+        facility,
+        staff_user,
+        doc_type_contact,
+        settings_obj,
+    ):
+        from io import StringIO
+
+        occurred_at = _past_month_noon()
+        event = _event(facility, doc_type_contact, staff_user, occurred_at)
+        _delete_and_carry(facility, event)
+        earlier = occurred_at - timedelta(days=40)
+        StatisticsSnapshot.objects.create(facility=facility, year=earlier.year, month=earlier.month, data={})
+        output = StringIO()
+        call_command("create_statistics_snapshots", backfill=True, stdout=output)
+        assert f"Snapshot: {facility.name} {occurred_at.year}/{occurred_at.month:02d}" in output.getvalue()
+        assert f"Snapshot: {facility.name} {earlier.year}/{earlier.month:02d}" in output.getvalue()
+        assert (
+            StatisticsSnapshot.objects.get(facility=facility, year=occurred_at.year, month=occurred_at.month).data[
+                "total_contacts"
+            ]
+            == 1
+        )
+
+    def test_timestamp_only_changes_when_published_values_change(
+        self,
+        facility,
+        staff_user,
+        doc_type_contact,
+    ):
+        from core.services.dashboard import create_or_update_snapshot
+
+        occurred_at = _past_month_noon()
+        first = _event(facility, doc_type_contact, staff_user, occurred_at)
+        counted_live = _event(facility, doc_type_contact, staff_user, occurred_at)
+        create_or_update_snapshot(facility, occurred_at.year, occurred_at.month)
+        _delete_and_carry(facility, first)
+        row = StatisticsSnapshot.objects.get(facility=facility)
+        original = row.updated_at
+        create_or_update_snapshot(facility, occurred_at.year, occurred_at.month)
+        row.refresh_from_db()
+        assert row.updated_at == original
+        _delete_and_carry(facility, counted_live)
+        row.refresh_from_db()
+        assert row.updated_at == original
+        second = _event(facility, doc_type_contact, staff_user, occurred_at)
+        _delete_and_carry(facility, second)
+        row.refresh_from_db()
+        assert row.data["total_contacts"] == 3
+        assert row.updated_at > original
+
+    def test_failed_recomputation_rolls_back_retention_deletion_and_history(
+        self,
+        facility,
+        staff_user,
+        doc_type_contact,
+        monkeypatch,
+    ):
+        from core.models import EventHistory
+        from core.services.dashboard import create_or_update_snapshot
+
+        occurred_at = _past_month_noon()
+        _event(facility, doc_type_contact, staff_user, occurred_at)
+        create_or_update_snapshot(facility, occurred_at.year, occurred_at.month)
+        _event(facility, doc_type_contact, staff_user, occurred_at)
+        Settings.objects.create(
+            facility=facility,
+            retention_anonymous_days=1,
+            retention_identified_days=3650,
+            retention_qualified_days=3650,
+        )
+        row = StatisticsSnapshot.objects.get(facility=facility)
+        before_data, before_backends, before_date = row.data, row.backend_data, row.updated_at
+
+        def fail_recomputation(*args, **kwargs):
+            raise RuntimeError("statistics recomputation unavailable")
+
+        monkeypatch.setattr("core.services.dashboard.snapshot.get_statistics", fail_recomputation)
+        call_command("enforce_retention")
+
+        assert Event.objects.filter(facility=facility, is_deleted=True).count() == 0
+        assert EventHistory.objects.filter(event__facility=facility, action=EventHistory.Action.DELETE).count() == 0
+        row.refresh_from_db()
+        assert row.data == before_data
+        assert row.backend_data == before_backends
+        assert row.updated_at == before_date

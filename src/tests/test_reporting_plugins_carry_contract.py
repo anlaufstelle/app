@@ -72,10 +72,11 @@ def test_first_carry_into_empty_monthly_row_needs_merger(monkeypatch):
     assert failure.value.__cause__.args == ("no_merger",)
 
 
-def test_carry_into_populated_row_without_prior_aggregate_needs_no_merger(monkeypatch):
-    row, saves = _carry(monkeypatch, {"total": 2})
-    assert row.backend_data[snapshot.SNAPSHOT_DELETED_KEY]["no_merger"] == {"total": 1}
-    assert len(saves) == 1
+def test_first_carry_into_populated_monthly_row_needs_merger(monkeypatch):
+    """Immediate recomputation also merges live and carry for populated rows."""
+    with pytest.raises(snapshot.SnapshotCarryError) as failure:
+        _carry(monkeypatch, {"total": 2})
+    assert failure.value.__cause__.args == ("no_merger",)
 
 
 def test_missing_merger_fails_on_second_carry(monkeypatch):

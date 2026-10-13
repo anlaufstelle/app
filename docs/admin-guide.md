@@ -2451,7 +2451,7 @@ Anlaufstelle berechnet Statistiken (Dashboard, Halbjahresberichte, Beispiel-Sach
 
 ### Automatische Sicherung
 
-Snapshots werden automatisch erstellt, wenn `enforce_retention` Events löscht: In derselben Transaktion, in der der Lauf ein Event löscht, rechnet er es dem Aggregat seines Monats hinzu, auch dem laufenden Monat — bricht der Lauf ab, fehlt kein bereits gelöschtes Event im Aggregat, und überschneiden sich zwei Läufe, zählt jedes Event genau einmal. Die Zählwerte eines bestehenden Aggregats ändert ein Löschlauf nicht, er erweitert nur dessen Übertrag gelöschter Events; gibt es für den Monat noch kein Aggregat, legt er es aus den noch vorhandenen Events und dem Übertrag an. Jede Neuberechnung eines Monats mit `create_statistics_snapshots` zählt die noch vorhandenen Events und addiert die gelöschten. Kann der Lauf ein Event nicht in das Aggregat übernehmen (etwa weil ein Berichtsmodul einen Fehler meldet), löscht er es nicht, schreibt den Fehler als `ERROR` mit der Event-ID ins Anwendungs-Log und versucht es beim nächsten Lauf erneut — bis zur Behebung verzögert sich die Löschung. Manuell gelöschte Events zählt ein Aggregat nach der nächsten Neuberechnung nicht mehr. Die Kachel „Statistik“ in der Arbeitszentrale der Leitung nennt als „letzter Snapshot“ den jüngsten abgeschlossenen Monat.
+Snapshots werden automatisch erstellt, wenn `enforce_retention` Events löscht: In derselben Transaktion, in der der Lauf ein Event löscht, rechnet er es dem Aggregat seines Monats hinzu, auch dem laufenden Monat — bricht der Lauf ab, fehlt kein bereits gelöschtes Event im Aggregat, und überschneiden sich zwei Läufe, zählt jedes Event genau einmal. Der Löschlauf erweitert den Übertrag gelöschter Events und berechnet den Monat in derselben Transaktion aus dem Übertrag und den noch vorhandenen Events neu; so werden auch nach dem bisherigen Snapshot nacherfasste Events gezählt, ohne bereits gezählte Beiträge zu verdoppeln. Jede Neuberechnung eines Monats mit `create_statistics_snapshots` zählt die noch vorhandenen Events und addiert die gelöschten. Kann der Lauf ein Event nicht in das Aggregat übernehmen (etwa weil ein Berichtsmodul einen Fehler meldet), löscht er es nicht, schreibt den Fehler als `ERROR` mit der Event-ID ins Anwendungs-Log und versucht es beim nächsten Lauf erneut — bis zur Behebung verzögert sich die Löschung. Manuell gelöschte Events zählt ein Aggregat nach der nächsten Neuberechnung nicht mehr. Die Kachel „Statistik“ in der Arbeitszentrale der Leitung nennt als „letzter Snapshot“ den jüngsten abgeschlossenen Monat.
 
 ### Periodischer Cron-Job (empfohlen)
 
@@ -2460,7 +2460,7 @@ Zusätzlich empfiehlt es sich, Snapshots regelmäßig per Cron zu erstellen:
 > **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur, wenn der `cron`-Dienst nicht läuft; es startet den Job über den `maintenance`-Dienst derselben Compose-Datei, der als einziger die Admin-Rolle (BYPASSRLS) erhält (ohne Compose in der eigenen Orchestrierung nachbilden: gleiches Image, Entrypoint `python manage.py`, Admin-Rolle). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
 
 ```cron
-# Monatlich am 1. um 04:00 (wie im Sidecar) — sichert den Vormonat
+# Monatlich am 1. um 04:00 (wie im Sidecar) — sichert Vormonat und historische Monate
 0 4 1 * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance create_statistics_snapshots >> /var/log/anlaufstelle-snapshots.log 2>&1
 ```
 
@@ -2472,7 +2472,7 @@ Bei der Ersteinrichtung oder nachträglichen Aktivierung können Snapshots für 
 docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics_snapshots --backfill
 ```
 
-**Hinweis:** Der Backfill erfasst nur noch vorhandene Events — bereits gelöschte Daten können rückwirkend nicht mehr rekonstruiert werden.
+**Hinweis:** Der Backfill berücksichtigt vergangene Monate aus der Vereinigung von Monaten mit noch vorhandenen Events und gespeicherten Snapshot-Monaten, einschließlich Monaten mit ausschließlich übertragenen gelöschten Events. Bereits gelöschte Daten ohne einen solchen Übertrag können rückwirkend nicht rekonstruiert werden. Auch der reguläre Lauf ohne Monatsangabe berechnet diese vergangenen Monate sowie den Vormonat neu und berücksichtigt dadurch Nacherfassungen und Änderungen. Der ausgewiesene „Stand“ (`updated_at`) ändert sich nur, wenn sich bei der Neuberechnung die veröffentlichten Aggregate oder Backend-Payloads ändern; reine Übertrag-Buchhaltung verschiebt ihn nicht. Personen-Untergrenzen werden über Segmente mit dem Maximum statt einer Summe zusammengeführt, damit kleine Zellen weiterhin unterdrückt bleiben.
 
 ### Weitere Optionen
 

@@ -174,17 +174,17 @@ class Command(BaseCommand):
         if year and month:
             return [(year, month)]
 
-        if backfill:
-            # All months with events, excluding current month
-            current = (today.year, today.month)
-            months = (
-                Event.objects.filter(facility=facility, is_deleted=False)
-                .values_list("occurred_at__year", "occurred_at__month")
-                .distinct()
-            )
-            return sorted((y, m) for y, m in months if (y, m) < current)
-
-        # Default: previous month
-        if today.month == 1:
-            return [(today.year - 1, 12)]
-        return [(today.year, today.month - 1)]
+        # Historical rows also contain carry-only months after retention.
+        # Without a dirty field, revisiting the union catches late edits too.
+        current = (today.year, today.month)
+        live_months = (
+            Event.objects.filter(facility=facility, is_deleted=False)
+            .values_list("occurred_at__year", "occurred_at__month")
+            .distinct()
+        )
+        stored_months = StatisticsSnapshot.objects.for_facility(facility).values_list("year", "month")
+        months = {(y, m) for y, m in (*live_months, *stored_months) if (y, m) < current}
+        if not backfill:
+            previous = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+            months.add(previous)
+        return sorted(months)

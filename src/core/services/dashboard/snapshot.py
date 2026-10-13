@@ -192,9 +192,18 @@ def _write_snapshot(facility, row, stats, payloads, backend_errors):
 
     # Refs #1740: the dual write into the sample report's former field has
     # ended — ``backend_data`` is the only source (migrations 0123/0124).
+    # Carry bookkeeping alone does not change the published calculation date.
+    previous_payloads = {key: value for key, value in row.backend_data.items() if key != SNAPSHOT_DELETED_KEY}
+    published_payloads = {key: value for key, value in payloads.items() if key != SNAPSHOT_DELETED_KEY}
+    published_changed = row.data != stats or previous_payloads != published_payloads
+    if row.data == stats and row.backend_data == payloads:
+        return
     row.data = stats
     row.backend_data = payloads
-    row.save(update_fields=["data", "backend_data", "updated_at"])
+    update_fields = ["data", "backend_data"]
+    if published_changed:
+        update_fields.append("updated_at")
+    row.save(update_fields=update_fields)
 
 
 def _to_json(value):
@@ -212,12 +221,10 @@ def carry_deleted_event(facility, event):
     later step. Only the session that actually flips the event to deleted gets
     here, so every event is carried exactly once.
 
-    The month's row is locked first. An existing row keeps its stored counts
-    and only the carry-over grows: the last recomputation counted the event
-    live, or — if the event was recorded after it — the next recomputation
-    counts it from the carry-over. Either way the stored counts never drop
-    because of the deletion. A new, empty or backend-failed row is computed
-    in full (live events plus carry-over) before the deletion can commit.
+    The month's row is locked first, then recomputed from the remaining live
+    events and the extended carry-over. Late entries become visible in the
+    same transaction; the previous published sum is never added again. A
+    backend that fails during this recomputation aborts the carry-over.
 
     Raises :class:`SnapshotCarryError` for any failure, including a backend
     that cannot summarise the event or rebuild the month; the caller rolls
@@ -230,13 +237,9 @@ def carry_deleted_event(facility, event):
             dict(row.backend_data.get(SNAPSHOT_DELETED_KEY) or {}),
             Event.objects.for_facility(facility).filter(pk=event.pk),
         )
-        if not row.data or row.backend_data.get(SNAPSHOT_BACKEND_ERRORS_KEY):
-            _recompute_locked_row(facility, row, deleted)
-            if row.backend_data.get(SNAPSHOT_BACKEND_ERRORS_KEY):
-                raise SnapshotCarryError("monthly snapshot backend recomputation failed")
-            return
-        row.backend_data = {**row.backend_data, SNAPSHOT_DELETED_KEY: _to_json(deleted)}
-        row.save(update_fields=["backend_data", "updated_at"])
+        _recompute_locked_row(facility, row, deleted)
+        if row.backend_data.get(SNAPSHOT_BACKEND_ERRORS_KEY):
+            raise SnapshotCarryError("monthly snapshot backend recomputation failed")
     except Exception as exc:
         raise SnapshotCarryError(f"monthly statistics carry-over failed for event {event.pk}") from exc
 
