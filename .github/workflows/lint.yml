@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Moving label switches to Ubuntu 26 on 2026-10-19; upgrade deliberately after v0.99.8.
     # Ohne Limit laeuft ein Haenger bis in GitHubs 6-Stunden-Default (Refs #1606).
     timeout-minutes: 15
     steps:
@@ -30,7 +30,7 @@ jobs:
   licenses:
     # Refs #839: pip-licenses prueft jede installierte Dependency gegen die
     # AGPLv3-kompatible Allowlist in scripts/check_licenses.py.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Moving label switches to Ubuntu 26 on 2026-10-19; upgrade deliberately after v0.99.8.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -55,7 +55,7 @@ jobs:
   translation-versions:
     # Refs #832: EN-Translations duerfen nicht mehr als 2 Minor-Releases
     # hinter pyproject.toml zuruckliegen.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Moving label switches to Ubuntu 26 on 2026-10-19; upgrade deliberately after v0.99.8.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -67,7 +67,7 @@ jobs:
   translations-coverage:
     # Refs #813 (C-46): Wachhund gegen fuzzy/untranslated-Regression in
     # de.po + en.po. Faellt wenn Werte oberhalb der Baseline klettern.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Moving label switches to Ubuntu 26 on 2026-10-19; upgrade deliberately after v0.99.8.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -81,7 +81,7 @@ jobs:
     # Refs #741 / #713 (Audit-Massnahme #37): mypy auf core/services
     # inkrementell. Eigener Job, damit lint + typecheck parallel laufen
     # und ein Type-Fehler die ruff-Resultate nicht versteckt.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Moving label switches to Ubuntu 26 on 2026-10-19; upgrade deliberately after v0.99.8.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
