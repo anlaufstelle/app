@@ -216,11 +216,12 @@ def carry_deleted_event(facility, event):
     and only the carry-over grows: the last recomputation counted the event
     live, or — if the event was recorded after it — the next recomputation
     counts it from the carry-over. Either way the stored counts never drop
-    because of the deletion. A row this call has to create is computed in full
-    (live events plus carry-over).
+    because of the deletion. A new, empty or backend-failed row is computed
+    in full (live events plus carry-over) before the deletion can commit.
 
     Raises :class:`SnapshotCarryError` for any failure, including a backend
-    that cannot summarise the event; the caller rolls the deletion back.
+    that cannot summarise the event or rebuild the month; the caller rolls
+    the deletion back.
     """
     try:
         occurred = timezone.localtime(event.occurred_at)
@@ -229,8 +230,10 @@ def carry_deleted_event(facility, event):
             dict(row.backend_data.get(SNAPSHOT_DELETED_KEY) or {}),
             Event.objects.for_facility(facility).filter(pk=event.pk),
         )
-        if not row.data:
+        if not row.data or row.backend_data.get(SNAPSHOT_BACKEND_ERRORS_KEY):
             _recompute_locked_row(facility, row, deleted)
+            if row.backend_data.get(SNAPSHOT_BACKEND_ERRORS_KEY):
+                raise SnapshotCarryError("monthly snapshot backend recomputation failed")
             return
         row.backend_data = {**row.backend_data, SNAPSHOT_DELETED_KEY: _to_json(deleted)}
         row.save(update_fields=["backend_data", "updated_at"])
