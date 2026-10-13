@@ -272,7 +272,14 @@ class ClientListView(AssistantOrAboveRequiredMixin, FilteredPaginatedListMixin, 
         qs = self.apply_filters(qs, request)
 
         qs = qs.annotate(
-            last_contact=Max("events__occurred_at", filter=Q(events__is_deleted=False)),
+            last_contact=Max(
+                "events__occurred_at",
+                filter=Q(
+                    events__in=Event.objects.for_facility(request.current_facility)
+                    .visible_to(request.user)
+                    .filter(is_deleted=False)
+                ),
+            ),
         ).order_by("pseudonym")
 
         clients = self.paginate(qs, request)
@@ -1079,7 +1086,14 @@ class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):
                 qs = qs.filter(contact_stage__in=allowed)
 
         clients = qs.annotate(
-            last_contact=Max("events__occurred_at", filter=Q(events__is_deleted=False)),
+            last_contact=Max(
+                "events__occurred_at",
+                filter=Q(
+                    events__in=Event.objects.for_facility(request.current_facility)
+                    .visible_to(request.user)
+                    .filter(is_deleted=False)
+                ),
+            ),
         ).order_by(F("last_contact").desc(nulls_last=True), "pseudonym")[:30]
 
         data = [

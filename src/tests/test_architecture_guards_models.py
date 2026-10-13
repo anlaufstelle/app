@@ -942,10 +942,6 @@ class TestTenantModelScopeGuard:
             "Revalidierung der Personenzuordnung an der EIGENEN Ereigniszeile nach der "
             "Sperrwartezeit (ADR-050 D2) — ``pk=event.pk``, kein Request-Input."
         ),
-        "system/offline.py:build_client_offline_bundle:Client": (
-            "``last_contact``-Aggregat zur EIGENEN, bereits gescopten Person "
-            "(``pk=client.pk``); der Max-Join braucht das Queryset, kein zweiter Lookup."
-        ),
         # --- (5) Generic-FK-Ziele aus serverseitig gescopten ID-Mengen ------
         "case/deletion.py:_redact_case_deletion_request:DeletionRequest": (
             "Generic-FK-Redaktion zum EIGENEN, bereits gescopten Fall "

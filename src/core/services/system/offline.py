@@ -19,11 +19,11 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from django.db.models import Max, Q
+from django.db.models import Max
 from django.utils import timezone
 
 from core.models import Case as CaseModel
-from core.models import Client, DocumentType, Event, User, WorkItem
+from core.models import DocumentType, Event, User, WorkItem
 from core.services.compliance import allowed_sensitivities_for_user, user_can_see_field
 from core.services.config import iter_fields_in_block_order
 from core.services.dynamic_data import orphan_gating_sensitivity, resolve_orphan_field_templates
@@ -387,17 +387,13 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
         .order_by("-created_at")
     )
 
-    # Refs #1529, #1499: ``last_contact`` fuer die Offline-Personenliste —
-    # cutoff-frei und ohne soft-geloeschte Events, exakt wie die Annotation
-    # aus ``ClientListView``, damit Online- und Offline-Wert uebereinstimmen.
-    # NICHT aus der oben gefilterten 90-Tage-``events``-Liste ableiten: die
-    # waere fuer >90d zurueckliegende Kontakte falsch. Der ``Max``-Join ueber
-    # die reverse ``events``-Relation braucht den Loeschfilter ausdruecklich,
-    # weil er Manager-Filter ignoriert. ``None`` (kontaktloser Klient) bleibt
-    # JSON-clean ``None``, sonst ISO-8601-String.
-    last_contact = Client.objects.filter(pk=client.pk).aggregate(
-        last_contact=Max("events__occurred_at", filter=Q(events__is_deleted=False)),
-    )["last_contact"]
+    # Contact metadata follows role visibility without the bundle's lookback limit.
+    last_contact = (
+        Event.objects.for_facility(facility)
+        .visible_to(user)
+        .filter(client=client, is_deleted=False)
+        .aggregate(last_contact=Max("occurred_at"))["last_contact"]
+    )
 
     generated_at = timezone.now()
 

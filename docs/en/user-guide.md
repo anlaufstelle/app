@@ -819,6 +819,8 @@ The installed app behaves like a regular program and is accessible via the Start
 
 ### Offline Capture (Streetwork)
 
+“Last contact” in the person list and offline bundle, and the ordering of person suggestions, use only contacts that are not deleted and whose documentation type is visible to the current role. With no visible contact the value is empty. Contacts older than the bundle event list’s 90-day window still count toward this value.
+
 People in the trash cannot be fetched again as offline bundles, including conditional requests. A pending deletion request does not block fetching; restoring the person permits it again. Already anonymized people outside the trash retain the existing bundle endpoint behavior.
 
 **Demo entry** (#2511): After “Start demo”, only demo mode (`DEMO_MODE`) derives the offline key once from the publicly known demo password and the account-specific server salt; the absolute maximum lifetime also applies here. When starting the demo or switching facility or role, the server requests clearing of old browser storage via `Clear-Site-Data` as before; the destination page then derives the new key. If the account password differs, the start is rejected with a visible error before that clearing; salt-fetch or derivation failures are also displayed. The account password is never reset by this flow. Demo data is synthetic; the known password offers no confidentiality against other demo visitors.
@@ -1147,4 +1149,4 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 3ed703ff3eae3cc1a334c3ea33238e9d840b229d -->
+<!-- source-hash: 6efeec9e978d13bdd37162f9e0385f03c5cbe0f3 -->

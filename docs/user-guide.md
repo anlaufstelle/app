@@ -819,6 +819,8 @@ Die installierte App verhält sich wie ein normales Programm und ist über das S
 
 ### Offline-Erfassung (Streetwork)
 
+„Letzter Kontakt“ in Personenliste und Offline-Bundle sowie die Reihenfolge der Personenauswahl berücksichtigen nur nicht gelöschte Kontakte, deren Dokumentationstyp für die eigene Rolle sichtbar ist. Ohne sichtbaren Kontakt bleibt der Wert leer. Auch Kontakte vor dem 90-Tage-Fenster der Bundle-Ereignisliste zählen für diesen Wert.
+
 Personen im Papierkorb können nicht erneut als Offline-Bundle abgerufen werden, auch nicht mit einer bedingten Anfrage. Ein offener Löschantrag sperrt den Abruf noch nicht; nach Wiederherstellung ist er wieder möglich. Bereits anonymisierte Personen außerhalb des Papierkorbs behalten den bestehenden Bundle-Abruf.
 
 **Demo-Einstieg** (#2511): Nach „Demo starten“ wird nur im Demo-Modus (`DEMO_MODE`) einmalig der Offline-Schlüssel aus dem öffentlich bekannten Demo-Passwort und dem kontospezifischen Server-Salt abgeleitet; die absolute Höchstdauer gilt auch hier. Beim Start sowie beim Bereichs- und Rollenwechsel fordert der Server per `Clear-Site-Data` die Löschung des alten Browserspeichers an; die Zielseite leitet danach den neuen Schlüssel ab. Bei einem abweichenden Kontopasswort wird der Start vor dieser Löschung mit einem sichtbaren Fehler abgewiesen; Fehler beim Salt-Abruf oder bei der Ableitung erscheinen ebenfalls sichtbar. Das Kontopasswort wird dabei nicht zurückgesetzt. Die Demo enthält synthetische Daten; das bekannte Passwort bietet keine Vertraulichkeit gegenüber anderen Demo-Besuchern.
