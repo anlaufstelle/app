@@ -672,6 +672,8 @@ voraus. Das Beispiel gehoert ausschliesslich in `sudo crontab -e`.
 
 ### 3.5 Manuelle Ausfuehrung
 
+Die Neuberechnung setzt den Übertrag (`_deleted`) dieser Version voraus; Bestände aus Versionen vor Einführung dieses Übertrags werden nicht rekonstruiert.
+
 Diese Kommandos laufen im One-Shot-Dienst `maintenance`, nicht per `exec web`: Nur `maintenance` erhält die Admin-Rolle (BYPASSRLS, Schema-Owner). Unter der App-Rolle von `web` bricht `enforce_retention` ab, `create_statistics_snapshots` überspringt jede Einrichtung („No settings … skipping“) und endet trotzdem mit Exit 0, und `refresh_statistics_view` scheitert an der fehlenden Owner-Berechtigung. In Cron-Zeilen und Skripten ohne TTY `run --rm -T maintenance …` verwenden. Harmlose Kommandos (`showmigrations`, `check --deploy`, `printenv`) bleiben in `web`.
 
 ```bash

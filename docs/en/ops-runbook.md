@@ -665,6 +665,8 @@ exclusively in `sudo crontab -e`.
 
 ### 3.5 Manual Execution
 
+Recalculation requires the carry-over (`_deleted`) maintained by this version; data from versions before carry-over was introduced is not reconstructed.
+
 These commands run in the one-shot service `maintenance`, not via `exec web`: only `maintenance` receives the admin role (BYPASSRLS, schema owner). Under the app role of `web`, `enforce_retention` aborts, `create_statistics_snapshots` skips every facility ("No settings … skipping") and still ends with exit 0, and `refresh_statistics_view` fails for lack of owner permission. In cron lines and scripts without a TTY use `run --rm -T maintenance …`. Harmless commands (`showmigrations`, `check --deploy`, `printenv`) stay in `web`.
 
 ```bash
@@ -3304,4 +3306,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 3d8a4cda08eeb14abb13792e5a0fb1c72403134c -->
+<!-- source-hash: c6c9ca6dc6988beac4f7c8394ed0249be2ea7053 -->

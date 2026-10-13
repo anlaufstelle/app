@@ -2450,7 +2450,9 @@ Anlaufstelle computes statistics (dashboard, half-year reports, example activity
 
 ### Automatic Capture
 
-Snapshots are created automatically whenever `enforce_retention` deletes events: in the same transaction in which the run deletes an event, it adds the event to the aggregate of its month, including the current month -- if the run aborts, no event already deleted is missing from the aggregate, and if two runs overlap, every event counts exactly once. The deletion run extends the carry-over of deleted events and recalculates the month from that carry-over and the remaining events in the same transaction. This also counts events recorded after the previous snapshot without doubling contributions already counted. Every recalculation of a month with `create_statistics_snapshots` counts the remaining events and adds the deleted ones. If the run cannot add an event to the aggregate (for example because a report module raises an error), it does not delete the event, writes the error as `ERROR` with the event id to the application log and tries again on the next run -- until the cause is fixed, the deletion is delayed. Events deleted manually no longer count in an aggregate after its next recalculation. The "Statistics" card on the lead's dashboard shows the latest completed month as "last snapshot".
+Snapshots are created automatically whenever `enforce_retention` deletes events: in the same transaction in which the run deletes an event, it adds the event to the aggregate of its month, including the current month -- if the run aborts, no event already deleted is missing from the aggregate, and if two runs overlap, every event counts exactly once. The deletion run extends the carry-over of deleted events and recalculates the month from that carry-over and the remaining events in the same transaction. This also counts events recorded after the previous snapshot without doubling contributions already counted. Every recalculation of a month with `create_statistics_snapshots` counts the remaining events and adds the deleted ones. If the run cannot add an event to the aggregate (for example because a report module raises an error), it does not delete the event, writes the error as `ERROR` with the event id to the application log and tries again on the next run -- until the cause is fixed, the deletion is delayed. The event deletion service (including four-eyes approval and tally undo) also carries deleted events into the monthly aggregate; they continue to count after recalculation. The "Statistics" card on the lead's dashboard shows the latest completed month as "last snapshot".
+
+Recalculation requires the carry-over (`_deleted`) maintained by this version; data from versions before carry-over was introduced is not reconstructed.
 
 ### Periodic Cron Job (Recommended)
 
@@ -2540,4 +2542,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 1c4e478e443f206d19e686f69d13d6f3763f6271 -->
+<!-- source-hash: 4b82c030e57c65aab334b828df028ec1137ca045 -->
