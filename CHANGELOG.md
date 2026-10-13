@@ -13,26 +13,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Jobstatus berücksichtigt nur erfolgreiche Voll-Läufe** (#2583) — Snapshot-Backendfehler, technische Retentionfehler einschließlich fehlgeschlagenem Monatsneuaufbau beim Statistikübertrag sowie Dateilöschfehlern bei Ereignisanhängen und veralteten Importaufträgen mit erhaltener Restarbeit, übersprungene Einrichtungen und gefilterte Läufe frischen den globalen Erfolg nicht auf; Snapshotläufe müssen außerdem den fälligen Vormonat vollständig abdecken, historische Reparaturläufe ersetzen ihn nicht.
-
 - **Health-Diagnose bei Redis-Ausfall erreichbar** (#2578) — Ein Verbindungsfehler im Health-Rate-Limit liefert kontrolliertes JSON mit degradiertem Status, während Details geschützt und andere Rate-Limits unverändert bleiben.
-
 - **Restore nach Aktivierungsfehler wiederaufnehmen** (#2577) — Nach DB-Umschaltung bleiben Diagnose und Staging verfügbar, und derselbe signierte Satz lässt sich bei gestoppten Diensten erneut einspielen.
-
 - **Backup-Verifikation bricht bei Teilfehlern ab** (#2576) — SQL-Import, Guard-Abfragen, Medienprüfung und Bereinigung müssen erfolgreich sein, bevor der Prüflauf Erfolg meldet.
-
-### Erforderliche Betreiber-Aktionen
-
-- Keine.
+- **Seed-Zufallsfolge an Uhrgrenzen stabilisiert** (#2599) — Der Bulk-Ereignis-Seed verwendet eine gemeinsame vorgebbare Uhr für Zeitstempel und Datumswerte und hält den Zufallsverbrauch zu jeder Uhrzeit auch an Öffnungszeit- und Mitternachtsgrenzen konstant; die Activity-Stichprobe verwendet Kalendertage statt eines tageszeitabhängigen 90-Tage-Schnitts.
+- **Demo-Offline-Hinweis nur für angemeldete Sitzungen** (#2607) — Anonyme Besucher sehen auf den Rechtstexten keinen Offline-Schlüsselfehler mehr; angemeldete Demo-Sitzungen erhalten den Hinweis weiterhin bei fehlendem Schlüssel.
+- **Fachwerte beim endgültigen Dateilöschen erhalten** (#2581) — Das Vernichten einer Anhangskette verwendet den frisch gesperrten Stand von Person, Fall oder Ereignis, erhält zwischenzeitlich gespeicherte Texte und fremde Dateiverknüpfungen und stellt bereits vernichtete Marker nicht wieder her.
 
 ### Security
 
 - **Gesamtbudget für mehrseitige Bilder** (#2582) — Rasterbild-Uploads werden vor der vollständigen Frame-Verarbeitung und bei früh allokierenden Formaten bereits vor dem Bildöffnen anhand ihrer Header auf insgesamt standardmäßig 40 Millionen Pixel, höchstens 100 Frames oder Seiten und ein konservativ geschätztes Bildpufferbudget von 256 MiB geprüft und bei Überschreitung mit Meldung und Audit abgewiesen; zulässige Mehrseitenbilder und vom Betreiber zugelassene SVG-Dateien bleiben erhalten, eine Obergrenze für den gesamten Encoder-RAM ist damit nicht bewiesen.
-
-### Fixed
-
-- **Seed-Zufallsfolge an Uhrgrenzen stabilisiert** (#2599) — Der Bulk-Ereignis-Seed verwendet eine gemeinsame vorgebbare Uhr für Zeitstempel und Datumswerte und hält den Zufallsverbrauch zu jeder Uhrzeit auch an Öffnungszeit- und Mitternachtsgrenzen konstant; die Activity-Stichprobe verwendet Kalendertage statt eines tageszeitabhängigen 90-Tage-Schnitts.
-- **Demo-Offline-Hinweis nur für angemeldete Sitzungen** (#2607) — Anonyme Besucher sehen auf den Rechtstexten keinen Offline-Schlüsselfehler mehr; angemeldete Demo-Sitzungen erhalten den Hinweis weiterhin bei fehlendem Schlüssel.
-- **Fachwerte beim endgültigen Dateilöschen erhalten** (#2581) — Das Vernichten einer Anhangskette verwendet den frisch gesperrten Stand von Person, Fall oder Ereignis, erhält zwischenzeitlich gespeicherte Texte und fremde Dateiverknüpfungen und stellt bereits vernichtete Marker nicht wieder her.
 
 ## [0.99.7] - 2026-10-13
 
