@@ -1,5 +1,6 @@
 """Tests fuer den demo()-Context-Processor (Refs #1062)."""
 
+import pytest
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.utils import timezone
 
@@ -53,10 +54,10 @@ def test_demo_followup_executes_delivered_recovery_script():
     from core.demo import DEMO_OFFLINE_BOOTSTRAP_PENDING
 
     request = RequestFactory().get("/")
-    request.user = SimpleNamespace(is_authenticated=True)
+    request.user = SimpleNamespace(is_authenticated=True, pk=1, username="demo", get_full_name=lambda: "Demo")
     request.session = {DEMO_OFFLINE_BOOTSTRAP_PENDING: True}
-    first_html = render_to_string("base.html", demo(request))
-    next_html = render_to_string("base.html", demo(request))
+    first_html = render_to_string("base.html", {**demo(request), "user": request.user, "request": request})
+    next_html = render_to_string("base.html", {**demo(request), "user": request.user, "request": request})
     assert "data-demo-offline-password=" in first_html
     assert "data-demo-offline-password=" not in next_html
     source = r"""
@@ -78,6 +79,47 @@ assert.equal(w.document.querySelector('[data-demo-offline-error]').hidden, false
 assert.equal(requests, 0);
 w.close();
 """.replace("HTML", json.dumps(next_html))
+    result = subprocess.run(
+        ["node", "--input-type=module"],
+        input=source,
+        text=True,
+        capture_output=True,
+        cwd=Path(__file__).resolve().parents[2],
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("supported", [False, True])
+@pytest.mark.parametrize("authenticated", [False, True])
+def test_demo_error_visibility_requires_authenticated_session(supported, authenticated):
+    """A stale error element must stay hidden for anonymous visitors."""
+    import json
+    import subprocess
+    from pathlib import Path
+
+    source = (
+        r"""
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {JSDOM} from 'jsdom';
+const dom = new JSDOM('<body data-user-id="USER_ID"><div hidden role="alert" data-demo-offline-error></div></body>',
+    {url:'https://example.test/', runScripts:'outside-only'});
+const w = dom.window;
+if (SUPPORTED) {
+    w.crypto_session = {isSupported:()=>true, ready:async()=>{}, hasSessionKey:()=>false};
+}
+let requests = 0;
+w.fetch = async () => { requests++; throw new Error('Unexpected salt request'); };
+w.eval(readFileSync('src/static/js/auth-bootstrap.js', 'utf8'));
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(w.document.querySelector('[data-demo-offline-error]').hidden, EXPECTED_HIDDEN);
+assert.equal(requests, 0);
+w.close();
+""".replace("USER_ID", "1" if authenticated else "")
+        .replace("SUPPORTED", json.dumps(supported))
+        .replace("EXPECTED_HIDDEN", json.dumps(not authenticated))
+    )
     result = subprocess.run(
         ["node", "--input-type=module"],
         input=source,

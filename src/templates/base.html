@@ -206,7 +206,9 @@
             {% trans "Offline-Schlüssel wird vorbereitet. Bitte vor dem Weiterklicken warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten." %}
         </div>
         {% endif %}
+        {% if user.is_authenticated %}
         <div hidden role="alert" data-demo-offline-error class="bg-red-100 border border-red-300 text-red-900 p-4">{{ demo_offline_bootstrap_error }}</div>
+        {% endif %}
         {% endif %}
         <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7">
             {# Refs #811 (C-44): stabile Live-Region — siehe CONTRIBUTING.md "Templates und Frontend". #}

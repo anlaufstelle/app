@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Seed-Zufallsfolge an Uhrgrenzen stabilisiert** (#2599) — Der Bulk-Ereignis-Seed verwendet eine gemeinsame vorgebbare Uhr für Zeitstempel und Datumswerte und hält den Zufallsverbrauch zu jeder Uhrzeit auch an Öffnungszeit- und Mitternachtsgrenzen konstant; die Activity-Stichprobe verwendet Kalendertage statt eines tageszeitabhängigen 90-Tage-Schnitts.
+- **Demo-Offline-Hinweis nur für angemeldete Sitzungen** (#2607) — Anonyme Besucher sehen auf den Rechtstexten keinen Offline-Schlüsselfehler mehr; angemeldete Demo-Sitzungen erhalten den Hinweis weiterhin bei fehlendem Schlüssel.
 
 ## [0.99.7] - 2026-10-13
 

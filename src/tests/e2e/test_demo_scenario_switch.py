@@ -314,3 +314,20 @@ class TestOldTabAfterSwitch:
             assert second_name in banner.inner_text()
         finally:
             context.close()
+
+
+@pytest.mark.usefixtures("demo_mode_or_skip")
+@pytest.mark.parametrize("path", ["/impressum/", "/datenschutzerklaerung/"])
+def test_anonymous_legal_pages_have_no_demo_offline_alert(base_url, browser, path):
+    """Anonymous legal pages in the demo must not announce a key failure."""
+    context = browser.new_context(locale="de-DE")
+    try:
+        page = context.new_page()
+        response = page.goto(f"{base_url}{path}")
+        assert response is not None and response.status == 200
+        page.locator("[data-testid='demo-banner']").wait_for()
+        assert page.locator("body").get_attribute("data-user-id") == ""
+        assert page.locator("[data-demo-offline-error]").count() == 0
+        assert page.locator('[role="alert"]').count() == 0
+    finally:
+        context.close()

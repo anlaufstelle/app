@@ -516,6 +516,14 @@ class TestStaleRequestAfterSwitch:
 
 
 class TestDemoOfflineBootstrap:
+    @pytest.mark.parametrize("url_name", ["demo_imprint", "demo_privacy", "login"])
+    def test_anonymous_public_pages_have_no_demo_offline_alert(self, client, demo_mode, url_name):
+        response = client.get(reverse(url_name))
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert "data-demo-offline-error" not in body
+        assert "Offline-Schlüssel konnte nicht aktiviert werden" not in body
+
     # Only the roles each scenario offers; a skip here would be unapproved in public runs.
     @pytest.mark.parametrize(
         ("scenario_key", "role"),
