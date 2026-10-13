@@ -118,7 +118,7 @@ class ClientMergeView(StaffRequiredMixin, HTMXPartialMixin, View):
     partial_template_name = "core/clients/partials/merge_search_results.html"
 
     def _load_source(self, request, pk):
-        return get_scoped_object(Client, request, pk=pk, is_deleted=False)
+        return get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
 
     def _search(self, request, source, q):
         """Zielkandidaten: Teilstring-Treffer plus Trigramm-Aehnliche.
@@ -156,7 +156,7 @@ class ClientMergeView(StaffRequiredMixin, HTMXPartialMixin, View):
         if raw_target and target_pk is None:
             raise Http404
         if pending is None and target_pk:
-            target = get_scoped_object(Client, request, pk=target_pk, is_deleted=False)
+            target = get_scoped_object(Client, request, pk=target_pk, is_deleted=False, is_active=True)
             four_eyes = merge_requires_four_eyes(source, target)
             direct = not four_eyes and request.user.is_lead_or_admin
             confirmers = (
@@ -201,7 +201,7 @@ class ClientMergeView(StaffRequiredMixin, HTMXPartialMixin, View):
         if target_pk is None:
             messages.error(request, _("Bitte zuerst eine Ziel-Person auswählen."))
             return redirect("core:client_merge", pk=pk)
-        target = get_scoped_object(Client, request, pk=target_pk, is_deleted=False)
+        target = get_scoped_object(Client, request, pk=target_pk, is_deleted=False, is_active=True)
 
         try:
             if not merge_requires_four_eyes(source, target) and request.user.is_lead_or_admin:

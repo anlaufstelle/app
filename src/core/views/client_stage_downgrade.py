@@ -29,11 +29,11 @@ class ClientStageDowngradeView(LeadOrAdminRequiredMixin, View):
         }
 
     def get(self, request, pk):
-        person = get_scoped_object(Client, request, pk=pk, is_deleted=False)
+        person = get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
         return render(request, "core/clients/stage_downgrade.html", self._context(person, ProtectionReasonForm()))
 
     def post(self, request, pk):
-        person = get_scoped_object(Client, request, pk=pk, is_deleted=False)
+        person = get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
         form = ProtectionReasonForm(request.POST)
         if not form.is_valid():
             return render(request, "core/clients/stage_downgrade.html", self._context(person, form), status=400)

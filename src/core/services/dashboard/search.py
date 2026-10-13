@@ -7,6 +7,7 @@ from django.db.models import Q
 
 from core.models import Client, Event
 from core.services.compliance import allowed_sensitivities_for_user
+from core.services.workitem_visibility import readable_person_filter
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +39,15 @@ def event_search_queryset(facility, user, query):
     document types to the user's allowed levels. Pseudonym matches remain
     available for those document types even when their field index is empty.
 
-    Events belonging to deleted clients are excluded, including matches found
-    solely through the index (Refs #1803). Events without a client remain
-    searchable. This differs intentionally from the chronological feed, which
-    retains events belonging to deleted clients.
+    Events belonging to deleted or inactive people are excluded, including
+    matches found solely through the index. Events without a person remain
+    searchable, matching the chronological feed and ordinary event readers.
     """
     allowed_sens = allowed_sensitivities_for_user(user)
     return (
         Event.objects.for_facility(facility)
         .filter(is_deleted=False, document_type__sensitivity__in=allowed_sens)
-        .exclude(client__is_deleted=True)
+        .filter(readable_person_filter())
         .filter(Q(client__pseudonym__ilike=query) | Q(search_text__ilike=query))
         .select_related("document_type", "client")
     )

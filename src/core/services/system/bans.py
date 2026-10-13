@@ -8,6 +8,7 @@ from django.utils import timezone
 from core.models import DocumentType, Event
 from core.services.compliance import user_can_see_field
 from core.services.file_vault import safe_decrypt
+from core.services.workitem_visibility import readable_person_filter
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ def get_active_bans(facility, user=None):
 
     events = (
         Event.objects.for_facility(facility)
-        .filter(document_type__in=ban_doc_types, is_deleted=False)
+        .filter(readable_person_filter(), document_type__in=ban_doc_types, is_deleted=False)
         .select_related("client", "document_type")
         .order_by("-occurred_at")
     )
@@ -124,7 +125,7 @@ def get_active_bans_for_client(client, user=None):
 
     events = (
         Event.objects.for_facility(facility)
-        .filter(client=client, document_type__in=ban_doc_types, is_deleted=False)
+        .filter(readable_person_filter(), client=client, document_type__in=ban_doc_types, is_deleted=False)
         .select_related("client", "document_type")
         .order_by("-occurred_at")
     )

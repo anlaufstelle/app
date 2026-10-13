@@ -48,7 +48,7 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
     """Fachkraft stellt Vier-Augen-Loeschantrag fuer eine Person."""
 
     def get(self, request, pk):
-        client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
         # Refs #1736 (D): Der Antragstext sprach von „der Leitung", tatsaechlich
         # entscheidet der ueber ``can_confirm_deletion`` kuratierte Pool. Die
         # Seite nennt ihn beim Namen und spiegelt den Setup-Guard der
@@ -74,7 +74,7 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
         # Refs #1736 (A): der Service ist idempotent — ein zweiter Antrag legt
         # nichts an und verwirft die neu eingegebene Begruendung. Vorher
         # meldete die View trotzdem Erfolg (stiller Fake-Erfolg); jetzt sagt

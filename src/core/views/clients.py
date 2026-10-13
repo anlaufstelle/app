@@ -312,7 +312,9 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
         # Admins kommen ueber die Papierkorb-Ansicht (#626) an den Datensatz.
         # ``select_related("document_type")``: die Zusatzfelder-Sektion greift
         # auf Name und Sensitivitaet des Typs zu (M2 P7, Refs #1058).
-        client = get_scoped_object(Client.objects.select_related("document_type"), request, pk=pk, is_deleted=False)
+        client = get_scoped_object(
+            Client.objects.select_related("document_type"), request, pk=pk, is_deleted=False, is_active=True
+        )
         track_client_visit(request.user, client, facility)
 
         events = (
@@ -345,10 +347,7 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
 
         active_bans = get_active_bans_for_client(client, user=request.user)
 
-        # Refs #1777: dieselbe Personen-Grenze wie Fall-Liste und -Detail. Eine
-        # anonymisierte Person (``is_active=False``) bleibt hier erreichbar —
-        # ihre Faelle sind es seit #1777 nicht mehr, die Sektion darf also nicht
-        # auf 404-Seiten verlinken.
+        # Refs #2585: use the same live-person boundary as the owner loader.
         open_cases = (
             cases_with_live_client()
             .filter(

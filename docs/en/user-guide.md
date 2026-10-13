@@ -498,7 +498,9 @@ What happens:
 
 ## 5. Hints and Tasks (Work Items)
 
-Tasks without a person remain visible. Tasks linked to people in the trash or inactive people are excluded from the inbox, timeline, focus box, profile, navigation counts and handover; their detail links return 404, as do their edit links for users permitted to edit tasks. Timeline contacts, bans and activities targeting people, events or tasks also exclude these people; entries without a person remain visible. Restoring a person who remains active makes the eligible tasks visible again. Profile favorites and recent visits also exclude deleted or inactive people. Profile event lists and contact counts, the cockpit’s contact count for today, and handover events include only role-visible documentation that is not deleted and belongs to active people outside the trash or has no person attached.
+Tasks without a person remain visible. Tasks linked to people in the trash or inactive people are excluded from the inbox, timeline, focus box, profile, navigation counts and handover; their detail links return 404, as do their edit links for users permitted to edit tasks. Timeline contacts, bans and activities targeting people, events, tasks or cases also exclude these people; entries without a person remain visible. Restoring a person who remains active makes the eligible tasks visible again. Profile favorites and recent visits also exclude deleted or inactive people. Profile event lists and contact counts, the cockpit’s contact count for today, and handover events include only role-visible documentation that is not deleted and belongs to active people outside the trash or has no person attached.
+
+The ordinary person record and its deletion, merge, contact-stage downgrade and legal-hold forms return 404 for deleted or inactive people. The event list, event detail and attachment links, event search and ordinary event CSV export also exclude events belonging to deleted or inactive people; eligible events without a person remain visible. Status responses and their replays return 404 for these person-linked tasks before returning task content. The completed-task count shown when loading fragments counts only readable tasks. A pending deletion request alone does not block these readers; restoring a person who remains active makes eligible records visible again. Aggregate statistics remain unchanged.
 
 **Work items** are used for internal team communication. There are two types:
 
@@ -1141,7 +1143,7 @@ The run creates the proposal. The facility must designate at least one active ac
 Downgrading additional details to pseudonym only with existing events also
 requires a request and another person with that permission. Without events, the `retention_identified_days` inactivity period applies only to pseudonym-only people without open cases. The anchor is the latest person change (`updated_at`), substantive case activity (`last_activity_at`), task change or attachment change on the person or case (creation, replacement or removal). People with additional details without events are excluded from automatic anonymization; the proposal path currently supports only events, and automatic retention enforcement for these people is missing. Pseudonym-only people without events but with an open case are excluded from the inactivity path. The facility regularly reviews people with additional details without events and submits a deletion request where necessary; it records the review interval in the deletion concept. See [`anonymization.py`](../../src/core/retention/anonymization.py).
 Holds and Art. 18 defer retention deletion, anonymization and history redaction.
-Person records and trash show pending history versions after anonymization;
+The trash shows pending history versions after anonymization;
 regular redaction happens in the nightly run. Completed deletion, merge and
 downgrade requests remain for a configurable 1095 days. Monthly counts remain
 without expiry even after manual event deletion.
@@ -1151,4 +1153,4 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 8149290e0307ba6bd2c715d77ddb82ba5adbb8c7 -->
+<!-- source-hash: be623ef86cac40627addeda8dae633a83bb05b41 -->

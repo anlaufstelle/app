@@ -13,6 +13,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import Attachment, DocumentType, Event, FieldTemplate
 from core.models.user import User
+from core.services.workitem_visibility import readable_person_filter
 
 #: Sentinel fuer „Owner ohne ``document_type``" in der Sensitivity-Coalesce
 #: (M24/AP4, Refs #1738). Bewusst ein Wert, der in KEINER Sensitivity-Liste
@@ -303,13 +304,15 @@ def get_visible_event_or_404(user, facility, pk, *, select_related=None):
     """Load an event scoped to facility and filtered by role visibility.
 
     Raises Http404 when the event does not exist, belongs to another facility,
-    is soft-deleted, or the user's role may not see its DocumentType sensitivity.
+    is soft-deleted, belongs to a deleted or inactive person, or the user's
+    role may not see its DocumentType sensitivity.
     The 404 is intentional even for existing-but-hidden events: revealing
-    existence (via 403/maskiertes 200) would leak metadata like pseudonyms or
+    existence (via 403 or a masked 200) would leak metadata like pseudonyms or
     document type names to roles that are not entitled to know an event of that
     sensitivity exists.
     """
     qs = Event.objects.visible_to(user).filter(
+        readable_person_filter(),
         pk=pk,
         facility=facility,
         is_deleted=False,

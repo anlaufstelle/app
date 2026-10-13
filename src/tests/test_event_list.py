@@ -132,7 +132,7 @@ def test_free_text_uses_global_search_and_excludes_trashed_person(client, staff_
     sample_event.client.is_deleted = True
     sample_event.client.save(update_fields=["is_deleted"])
     assert not event_ids(list_response(client, staff_user, {"q": "needle"}))
-    assert event_ids(list_response(client, staff_user)) == {sample_event.pk}
+    assert not event_ids(list_response(client, staff_user))
     assert not event_ids(list_response(client, staff_user, {"q": "n"}))
 
 

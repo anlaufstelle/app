@@ -382,7 +382,7 @@ class TestEventUpdateViewRejectsRevokedClient:
         event.refresh_from_db()
         assert "FRISCHER KLARTEXT NACH LOESCHUNG" not in (event.search_text or "")
 
-    def test_offline_replay_on_anonymized_client_is_dead_letter_422(
+    def test_offline_replay_on_anonymized_client_is_missing_before_loading(
         self, client, staff_user, facility, doc_type_contact
     ):
         person = Client.objects.create(
@@ -402,7 +402,8 @@ class TestEventUpdateViewRejectsRevokedClient:
             HTTP_ACCEPT="application/json",
         )
 
-        assert response.status_code == 422
+        assert response.status_code == 404
+        assert person.pseudonym not in response.content.decode()
         event.refresh_from_db()
         assert "Replay-Klartext" not in (event.search_text or "")
 

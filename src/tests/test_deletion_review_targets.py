@@ -290,8 +290,9 @@ def test_merge_case_counts_match_detail_visibility(
     else:
         url = reverse("core:client_merge", args=[people["source"].pk]) + f"?target={people['target'].pk}"
     response = client.get(url)
-    if state == "deleted" and page == "confirm":
+    if state != "live" and page == "confirm":
         assert response.status_code == 404
+        assert people[side].pseudonym not in response.content.decode()
         return
     assert response.status_code == 200
     body = response.content.decode()
@@ -302,5 +303,8 @@ def test_merge_case_counts_match_detail_visibility(
     else:
         for case_side, count in visible_counts.items():
             assert f'data-testid="merge-{case_side}-cases">{count}</td>' in body
-        for person in people.values():
-            assert client.get(reverse("core:client_detail", args=[person.pk])).status_code == 200
+        for person_side, person in people.items():
+            detail = client.get(reverse("core:client_detail", args=[person.pk]))
+            assert detail.status_code == (404 if person_side == side and state == "inactive" else 200)
+            if detail.status_code == 404:
+                assert person.pseudonym not in detail.content.decode()

@@ -15,6 +15,7 @@ from core.services.compliance import user_can_see_field
 from core.services.dynamic_data import is_file_marker, option_label_map
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
+from core.services.workitem_visibility import readable_person_filter
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ def _get_events_queryset(facility, date_from, date_to, user=None, document_type=
     gefilterten Tabelle nicht mehr Zeilen ausgibt, als darueber stehen.
     """
     qs = Event.objects.for_facility(facility).filter(
-        is_deleted=False, occurred_at__date__gte=date_from, occurred_at__date__lte=date_to
+        readable_person_filter(), is_deleted=False, occurred_at__date__gte=date_from, occurred_at__date__lte=date_to
     )
     if document_type is not None:
         qs = qs.filter(document_type=document_type)

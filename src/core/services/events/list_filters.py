@@ -14,6 +14,7 @@ from core.services.case import cases_with_live_client
 from core.services.compliance import allowed_sensitivities_for_user
 from core.services.dashboard.search import MIN_QUERY_LENGTH, event_search_queryset
 from core.services.events.feed import get_time_range
+from core.services.workitem_visibility import readable_person_filter
 
 
 def event_list_options(facility, user):
@@ -129,7 +130,7 @@ def _apply_shift(queryset, shift, start, end):
 
 def event_list_queryset(facility, user, filters, *, options=None):
     """Load list columns only, reusing the feed visibility and global search."""
-    queryset = Event.objects.for_facility(facility).visible_to(user).filter(is_deleted=False)
+    queryset = Event.objects.for_facility(facility).visible_to(user).filter(readable_person_filter(), is_deleted=False)
     query = filters.get("q", "")
     if query:
         if len(query) < MIN_QUERY_LENGTH:

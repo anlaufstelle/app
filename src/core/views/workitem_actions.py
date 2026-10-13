@@ -119,7 +119,7 @@ def _build_recent_done_oob(request, workitem):
     assigned_to = "" if default_scope else raw_assigned_to
 
     qs = apply_workitem_filters(
-        WorkItem.objects.for_facility(request.current_facility),
+        workitems_for_read(request.current_facility),
         item_type=request.POST.get("item_type", ""),
         priority=request.POST.get("priority", ""),
         assigned_to=assigned_to,
@@ -180,11 +180,13 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
         # wird als scoped Live-Lookup beantwortet, damit der Zweit-Replay
         # exakt die Erfolgsform des Originals bekommt (inkl. zwischen-
         # zeitlicher Folge-Transitionen).
-        workitem = get_scoped_object(WorkItem, request, pk=self.kwargs["pk"])
+        workitem = get_scoped_object(workitems_for_read(request.current_facility), request, pk=self.kwargs["pk"])
         return self._success_response(request, workitem)
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, pk):
+        # Refs #2585: reject unreadable records before replay or error responses.
+        workitem = get_scoped_object(workitems_for_read(request.current_facility), request, pk=pk)
         new_status = request.POST.get("status")
         # Refs #819: Django bietet Status.values als Liste an.
         if new_status not in WorkItem.Status.values:
@@ -229,7 +231,7 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
         # (``PermissionDenied`` aus dem Dienst -> dieselbe 403-Antwort).
         try:
             with transaction.atomic():
-                workitem = get_scoped_object(WorkItem, request, pk=pk)
+                workitem = get_scoped_object(workitems_for_read(request.current_facility), request, pk=pk)
                 if not can_user_mutate_workitem(request.user, workitem):
                     return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
 
@@ -248,7 +250,7 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
             # M8-Liste sichtbar und auflösbar bleibt, statt von der
             # generischen Queue still als Erfolg oder Dead-Letter
             # klassifiziert zu werden.
-            workitem.refresh_from_db()
+            workitem = get_scoped_object(workitems_for_read(request.current_facility), request, pk=pk)
             if _wants_raw_json_response(request):
                 if getattr(e, "code", None) == "missing_token":
                     return _workitem_conflict_response(workitem, None, error="missing-token")

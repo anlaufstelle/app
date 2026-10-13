@@ -169,7 +169,9 @@ def events_for_feed_read(facility, user):
 
 
 def activities_for_feed_read(facility, user):
-    """Exclude activities whose person, task or event target cannot be read."""
+    """Exclude activities whose person, task, case or event target cannot be read."""
+    from core.services.case.cases import cases_with_live_client
+
     activities = Activity.objects.for_facility(facility)
     # Keep role-neutral service calls while always enforcing the person read boundary.
     event_targets = Event.objects.for_facility(facility).filter(readable_person_filter())
@@ -180,10 +182,12 @@ def activities_for_feed_read(facility, user):
         Client.objects.for_facility(facility).filter(is_deleted=False, is_active=True).values_list("pk", flat=True)
     )
     visible_workitem_ids = workitems_for_read(facility).values_list("pk", flat=True)
+    visible_case_ids = cases_with_live_client().for_facility(facility).values_list("pk", flat=True)
     for model, visible_ids in (
         (Event, visible_event_ids),
         (Client, visible_person_ids),
         (WorkItem, visible_workitem_ids),
+        (Case, visible_case_ids),
     ):
         target_type = ContentType.objects.get_for_model(model)
         activities = activities.exclude(Q(target_type=target_type) & ~Q(target_id__in=visible_ids))
@@ -215,25 +219,6 @@ def _feed_activities(facility, start_dt, end_dt, user, include_all):
     # In mixed feed: exclude 'created' activities (redundant with first-class object cards)
     if include_all:
         activities_qs = activities_qs.exclude(verb=Activity.Verb.CREATED)
-
-    # Faelle im Papierkorb aus dem Zeitstrom nehmen (Refs #1818, ADR-044 §7).
-    # ``close_case``/``reopen_case`` rendern den Falltitel aus dem Ziel. Der
-    # Papierkorb nimmt den Fall aus
-    # Liste, Detail, Episoden, Zielen und Ereignis-Select — der Zeitstrom
-    # bliebe sonst der eine Ort, an dem sein Titel weiterlaeuft, und zwar
-    # bis zur Frist (``retention_activities_days``, Default 365 gegen 30 Tage;
-    # der Befund aus #1751). Rollenunabhaengig, weil „geloescht" keine
-    # Sichtbarkeitsfrage ist.
-    #
-    # Auch die ``deleted``-Zeile („Fall in den Papierkorb verschoben",
-    # titelfrei) faellt mit raus — die Rechenschaft ueber die Loeschung
-    # traegt die ``CASE_SOFT_DELETED``-Zeile im append-only AuditLog, nicht
-    # der Zeitstrom. Sie ist trotzdem nicht umsonst geschrieben: nach
-    # ``restore_case`` erscheint der Fall wieder, und mit ihm die Spur, dass
-    # er zwischenzeitlich im Papierkorb lag.
-    case_ct = ContentType.objects.get_for_model(Case)
-    trashed_case_ids = Case.objects.for_facility(facility).filter(is_deleted=True).values_list("pk", flat=True)
-    activities_qs = activities_qs.exclude(Q(target_type=case_ct) & Q(target_id__in=trashed_case_ids))
 
     activities = (
         activities_qs.select_related("actor", "target_type")

@@ -32,7 +32,8 @@ class RecordLegalHoldView(LeadOrAdminRequiredMixin, View):
         if self.target_type == "Event":
             return get_visible_event_or_404(request.user, request.current_facility, pk)
         model = Client if self.target_type == "Client" else cases_with_live_client()
-        return get_scoped_object(model, request, pk=pk, is_deleted=False)
+        owner_filters = {"is_active": True} if self.target_type == "Client" else {}
+        return get_scoped_object(model, request, pk=pk, is_deleted=False, **owner_filters)
 
     def _context(self, request, target, form):
         prefix = {"Client": "client", "Case": "case", "Event": "event"}[self.target_type]
