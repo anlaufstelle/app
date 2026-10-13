@@ -1,19 +1,34 @@
 """Exercise verification of a complete signed set through the shipped script."""
 
+import gzip
+import hashlib
 import os
 import shutil
 import subprocess
 
 import pytest
 
-from tests.test_ops_restore_populated_target import OPS_DIR, _sandbox, _write_executable
+from tests.test_ops_restore_populated_target import OPS_DIR, _encrypt, _sandbox, _sign, _write_executable
 
 pytestmark = pytest.mark.architecture
 
 
 @pytest.mark.parametrize("failure", ["import", "prepare", "query", "invalid_live", "media", "cleanup", "none"])
 def test_verify_rejects_every_failed_part_and_cleans_only_temporary_database(tmp_path, failure):
-    root, bindir, log, _db, _media = _sandbox(tmp_path)
+    root, bindir, log, db, _media = _sandbox(tmp_path)
+    if failure == "import":
+        tables = ("core_client", "core_event", "core_workitem", "core_auditlog")
+        sql = "".join(f"CREATE TABLE {table} (id integer); INSERT INTO {table} VALUES (1);\n" for table in tables)
+        sql += "CREATE INDEX broken ON nonexistent_table (id);\n"
+        _encrypt(gzip.compress(sql.encode()), db)
+        manifest = next(db.parent.glob("*.manifest"))
+        lines = manifest.read_text().splitlines()
+        lines = [
+            f"db_sha256={hashlib.sha256(db.read_bytes()).hexdigest()}" if line.startswith("db_sha256=") else line
+            for line in lines
+        ]
+        manifest.write_text("\n".join(lines) + "\n")
+        _sign(manifest)
     shutil.copy(OPS_DIR / "backup.sh", root / "scripts" / "ops" / "backup.sh")
     _write_executable(
         bindir / "docker",
@@ -35,9 +50,9 @@ elif [[ "$*" == *'SELECT COUNT(*)'* ]]; then
     else
         echo 1
     fi
-elif [[ "$*" != *'DROP DATABASE'* ]]; then
-    cat >/dev/null
-    if [[ "$TEST_FAILURE" == import ]]; then
+elif [[ "$*" != *'DROP DATABASE'* && "$*" != *'CREATE DATABASE'* ]]; then
+    sql=$(cat)
+    if [[ "$TEST_FAILURE" == import && "$sql" == *'CREATE INDEX broken'* ]]; then
         echo 'ERROR: late index failure after all guard tables' >&2
         [[ "$*" == *'ON_ERROR_STOP=1'* ]] && exit 1
     fi
