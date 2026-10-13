@@ -30,15 +30,16 @@ def _labels(value):
 
 @pytest.mark.architecture
 def test_workflows_use_pinned_runner_images():
-    workflows = sorted((Path(__file__).resolve().parents[2] / ".github/workflows").glob("*.yml"))
+    directory = Path(__file__).resolve().parents[2] / ".github/workflows"
+    workflows = sorted([*directory.glob("*.yml"), *directory.glob("*.yaml")])
     assert workflows, "No workflow files found"
     for path in workflows:
         workflow = yaml.safe_load(path.read_text())
-        assert "ubuntu-latest" not in set(_runner_labels(workflow)), path.name
+        assert not any(label.endswith("-latest") for label in _runner_labels(workflow)), path.name
         # Matrix runner labels live outside runs-on itself.
         for job in workflow.get("jobs", {}).values():
             matrix = job.get("strategy", {}).get("matrix", {})
-            assert "ubuntu-latest" not in set(_labels(matrix)), path.name
+            assert not any(label.endswith("-latest") for label in _labels(matrix)), path.name
 
 
 @pytest.mark.parametrize(
@@ -47,3 +48,20 @@ def test_workflows_use_pinned_runner_images():
 )
 def test_runner_label_reader_handles_yaml_forms(declaration):
     assert "ubuntu-latest" in set(_runner_labels(yaml.safe_load(declaration)))
+
+
+@pytest.mark.architecture
+@pytest.mark.parametrize("extension", ["yml", "yaml"])
+@pytest.mark.parametrize("label", ["ubuntu-latest", "windows-latest", "macos-latest"])
+@pytest.mark.parametrize("matrix", [False, True], ids=["direct", "matrix"])
+def test_workflow_guard_rejects_latest_runner_fixtures(tmp_path, monkeypatch, extension, label, matrix):
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "pinned.yml").write_text("jobs: {test: {runs-on: ubuntu-24.04}}")
+    job = {"runs-on": label}
+    if matrix:
+        job = {"runs-on": "${{ matrix.os }}", "strategy": {"matrix": {"os": [label]}}}
+    (workflows / f"floating.{extension}").write_text(yaml.safe_dump({"jobs": {"test": job}}))
+    monkeypatch.setattr(Path, "resolve", lambda self: tmp_path / "src" / "tests" / "guard.py")
+    with pytest.raises(AssertionError, match=f"floating.{extension}"):
+        test_workflows_use_pinned_runner_images()
