@@ -38,7 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Letzter Kontakt folgt der Rollensichtbarkeit** (#2580) — Personenliste, Offline-Bundle und Autocomplete-Reihenfolge berücksichtigen nur sichtbare, nicht gelöschte Kontakte; ohne sichtbaren Kontakt bleibt der Wert leer und ältere Kontakte zählen auch außerhalb des Bundle-Zeitfensters.
 
-- **Papierkorb-Personen vom Offline-Abruf ausgeschlossen** (#2579) — Neue Personen-Bundles werden nach genehmigter Löschung auch bei bedingten Abrufen vor der Serialisierung mit 404 abgewiesen; nach Wiederherstellung sind sie wieder abrufbar.
+- **Widerrufene Personen vom Offline-Abruf ausgeschlossen** (#2579) — Neue Personen-Bundles werden für Personen im Papierkorb oder inaktive Personen auch bei bedingten Abrufen vor der Serialisierung mit 404 abgewiesen, und der Builder prüft den gespeicherten Personenstatus erneut; nach Wiederherstellung einer weiterhin aktiven Person sind sie wieder abrufbar.
 
 ## [0.99.7] - 2026-10-13
 

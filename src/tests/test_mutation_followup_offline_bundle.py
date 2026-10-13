@@ -9,6 +9,7 @@ und das Notes-Visibility-Gate.
 from __future__ import annotations
 
 import pytest
+from django.http import Http404
 
 from core.services.system import (
     BUNDLE_SCHEMA_VERSION,
@@ -124,11 +125,12 @@ class TestBundleClientFields:
         assert bundle["client"]["age_cluster"] == "18_26"
         assert bundle["client"]["age_cluster_display"] == "18–26"
 
-    def test_client_is_active_passes_through(self, facility, client_identified, staff_user):
+    def test_bundle_requires_active_client(self, facility, client_identified, staff_user):
+        assert build_client_offline_bundle(staff_user, facility, client_identified)["client"]["is_active"] is True
         client_identified.is_active = False
         client_identified.save(update_fields=["is_active"])
-        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
-        assert bundle["client"]["is_active"] is False
+        with pytest.raises(Http404):
+            build_client_offline_bundle(staff_user, facility, client_identified)
 
 
 @pytest.mark.django_db

@@ -84,7 +84,7 @@ class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_OFFLINE_BUNDLE, method="GET", block=True))
     def get(self, request, pk):
         facility = request.current_facility
-        client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
 
         bundle = build_client_offline_bundle(request.user, facility, client)
         etag = _bundle_etag(bundle)

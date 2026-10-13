@@ -20,10 +20,11 @@ from datetime import timedelta
 from typing import Any
 
 from django.db.models import Max
+from django.http import Http404
 from django.utils import timezone
 
 from core.models import Case as CaseModel
-from core.models import DocumentType, Event, User, WorkItem
+from core.models import Client, DocumentType, Event, User, WorkItem
 from core.services.compliance import allowed_sensitivities_for_user, user_can_see_field
 from core.services.config import iter_fields_in_block_order
 from core.services.dynamic_data import orphan_gating_sensitivity, resolve_orphan_field_templates
@@ -336,6 +337,11 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
     the browser before hitting IndexedDB, but the server-side filter is the
     authoritative boundary, not the client-side crypto).
     """
+
+    # Refs #2579: recheck persisted owner state even for stale service arguments.
+    client = Client.objects.for_facility(facility).filter(pk=client.pk, is_deleted=False, is_active=True).first()
+    if client is None:
+        raise Http404("Person not found")
 
     cutoff = timezone.now() - timedelta(days=LOOKBACK_DAYS)
     events_qs = (

@@ -37,15 +37,15 @@ def test_bundle_denies_approved_deletion_before_serialization(
 
 
 @pytest.mark.parametrize("role", ["assistant", "staff", "lead", "facility_admin"])
-def test_bundle_preserves_anonymized_nontrash_contract(client, facility, client_identified, role):
+def test_bundle_denies_anonymized_nontrash_people(client, facility, client_identified, role):
     reader = User.objects.create_user(username=f"anonymized-{role}", role=role, facility=facility)
     client_identified.is_active = False
     client_identified.anonymized_at = timezone.now()
     client_identified.save(update_fields=["is_active", "anonymized_at"])
     client.force_login(reader)
     response = client.get(reverse("core:offline_bundle", kwargs={"pk": client_identified.pk}))
-    assert response.status_code == 200
-    assert response.json()["client"]["is_active"] is False
+    assert response.status_code == 404
+    assert client_identified.pseudonym not in response.content.decode()
 
 
 @pytest.mark.parametrize("role", ["assistant", "staff", "lead", "facility_admin"])
