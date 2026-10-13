@@ -21,6 +21,8 @@ beforeEach(async () => {
     now = START;
     vi.spyOn(Date, "now").mockImplementation(() => now);
     document.body.innerHTML = '<meta name="csrf-token" content="rotated-token"><div data-demo-offline-password="public demo password"></div><div data-demo-offline-error hidden role="alert">Bootstrap failed</div>';
+    // The bootstrap error is only shown to authenticated sessions (base.html renders data-user-id for them).
+    document.body.dataset.userId = "1";
     document.body.dataset.sessionAge = "7200";
     document.body.dataset.offlineKeyMaxAge = "43200";
     await store.purgeAll();
@@ -99,6 +101,19 @@ describe("demo offline bootstrap", () => {
             Object.defineProperty(window, "crypto_session", { configurable: true, value: cryptoApi });
         }
     });
+
+    it("keeps the bootstrap error hidden for anonymous visitors when WebCrypto is unsupported", async () => {
+        delete document.body.dataset.userId;
+        const cryptoApi = window.crypto_session;
+        Object.defineProperty(window, "crypto_session", { configurable: true, value: { isSupported: () => false } });
+        try {
+            await bootstrap();
+            expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(true);
+            expect(fetch).not.toHaveBeenCalled();
+        } finally {
+            Object.defineProperty(window, "crypto_session", { configurable: true, value: cryptoApi });
+        }
+    });
 });
 
 
@@ -110,6 +125,15 @@ describe("demo bootstrap interruption notice", () => {
             if (new URL(script.src).pathname.endsWith("/js/auth-bootstrap.js")) await bootstrap();
         }
         await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(false));
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("keeps the recovery instruction hidden for anonymous visitors", async () => {
+        delete document.body.dataset.userId;
+        document.querySelector("[data-demo-offline-password]").remove();
+        await bootstrap();
+        await window.crypto_session.ready();
+        expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(true);
         expect(fetch).not.toHaveBeenCalled();
     });
 
