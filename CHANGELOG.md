@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Jobstatus berücksichtigt nur erfolgreiche Voll-Läufe** (#2583) — Teil-, Fehl- und übersprungene Snapshot-/Retention-Läufe sowie gefilterte Breach-Scans frischen den globalen Erfolg nicht auf; Monitoring verlangt einen expliziten Voll-Lauf-Nachweis.
+- **Jobstatus berücksichtigt nur erfolgreiche Voll-Läufe** (#2583) — Snapshot-Backendfehler, technische Retentionfehler, übersprungene Einrichtungen und gefilterte Läufe frischen den globalen Erfolg nicht auf; Snapshotläufe müssen außerdem den fälligen Vormonat vollständig abdecken, historische Reparaturläufe ersetzen ihn nicht.
 
 - **Health-Diagnose bei Redis-Ausfall erreichbar** (#2578) — Ein Verbindungsfehler im Health-Rate-Limit liefert kontrolliertes JSON mit degradiertem Status, während Details geschützt und andere Rate-Limits unverändert bleiben.
 

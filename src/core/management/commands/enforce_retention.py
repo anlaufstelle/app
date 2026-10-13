@@ -48,6 +48,7 @@ class _RetentionTotals:
 
     processed_facilities: int = 0
     skipped_facilities: int = 0
+    failed_events: int = 0
     deferred: int = 0
     deleted: int = 0
     anonymized: int = 0
@@ -186,6 +187,7 @@ class Command(BaseCommand):
         events_result = process_facility_retention(facility, settings_obj, now, dry_run)
         totals.deleted += events_result["count"]
         totals.deferred += events_result.get("deferred", 0)
+        totals.failed_events += events_result.get("failed", 0)
         totals.activities += enforce_activities(facility, settings_obj, now, dry_run)["count"]
         totals.handover_notes += enforce_handover_notes(facility, settings_obj, now, dry_run)["count"]
         deferred_client_ids: set[UUID] = set()
@@ -309,16 +311,23 @@ class Command(BaseCommand):
         # Geschrieben nur nach erfolgreichem (non-dry-run) Lauf. ``facility=None``
         # — der Cron laeuft installationsweit, nicht pro Facility.
         self.stdout.write(
-            f"Run coverage: processed={totals.processed_facilities}, skipped={totals.skipped_facilities}, failed=0."
+            f"Run coverage: processed={totals.processed_facilities}, "
+            f"skipped={totals.skipped_facilities}, failed={totals.failed_events}."
         )
-        # Refs #2583: skipped facilities and filtered runs are not installation-wide success.
-        if not full_run or totals.skipped_facilities:
+        # Refs #2583: technical failures, skipped facilities and filters prevent global success.
+        if not full_run or totals.skipped_facilities or totals.failed_events:
             logger.warning(
-                "enforce_retention: no installation success marker; processed=%s skipped=%s filtered=%s",
+                "enforce_retention: no installation success marker; processed=%s skipped=%s failed=%s filtered=%s",
                 totals.processed_facilities,
                 totals.skipped_facilities,
+                totals.failed_events,
                 not full_run,
             )
+            if totals.failed_events:
+                raise CommandError(
+                    f"{totals.failed_events} event(s) kept after statistics carry-over failure. "
+                    "Other retention targets were processed; see application logs."
+                )
             return
         audit_event(
             AuditLog.Action.RETENTION_RUN_COMPLETED,

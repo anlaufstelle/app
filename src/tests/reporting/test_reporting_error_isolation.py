@@ -846,9 +846,11 @@ class TestSnapshotKommandoIsoliertJeEinrichtung:
 
         kaputt, heil = zwei_einrichtungen_mit_settings
 
-        call_command("create_statistics_snapshots", year=2025, month=1, stdout=StringIO(), stderr=StringIO())
+        # Refs #2583: only the due month proves a successful scheduled run.
+        previous_month = timezone.localdate().replace(day=1) - timedelta(days=1)
+        call_command("create_statistics_snapshots", stdout=StringIO(), stderr=StringIO())
 
-        assert StatisticsSnapshot.objects.filter(year=2025, month=1).count() == 2
+        assert StatisticsSnapshot.objects.filter(year=previous_month.year, month=previous_month.month).count() == 2
         assert AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).exists()
 
     def test_dry_run_bleibt_unveraendert(self, zwei_einrichtungen_mit_settings, monkeypatch):
