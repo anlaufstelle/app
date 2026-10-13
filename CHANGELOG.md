@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Backup-Verifikation bricht bei Teilfehlern ab** (#2576) — SQL-Import, Guard-Abfragen, Medienprüfung und Bereinigung müssen erfolgreich sein, bevor der Prüflauf Erfolg meldet.
+
 ### Erforderliche Betreiber-Aktionen
 
 - Keine.

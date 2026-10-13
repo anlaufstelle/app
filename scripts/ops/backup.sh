@@ -159,28 +159,37 @@ if [[ "${1:-}" == "--verify" ]]; then
     # Aufraeum-Trap: temporaere DB bei Fehler oder Abbruch droppen
     cleanup() {
         echo "Raeume temporaere Datenbank '${VERIFY_DB}' auf..."
-        docker compose -f "$COMPOSE_FILE" exec -T db \
-            psql -U "$SU_USER" -d postgres \
-            -c "DROP DATABASE IF EXISTS \"${VERIFY_DB}\";" 2>/dev/null || true
+        if ! docker compose -f "$COMPOSE_FILE" exec -T db \
+            psql -v ON_ERROR_STOP=1 -U "$SU_USER" -d postgres \
+            -c "DROP DATABASE IF EXISTS \"${VERIFY_DB}\";"; then
+            echo "ERROR: temporary verification database cleanup failed: ${VERIFY_DB}" >&2
+            return 1
+        fi
     }
     trap cleanup EXIT
 
     # Temporaere Datenbank erstellen
     echo "Erstelle temporaere Datenbank: ${VERIFY_DB}"
-    docker compose -f "$COMPOSE_FILE" exec -T db \
-        psql -U "$SU_USER" -d postgres \
-        -c "CREATE DATABASE \"${VERIFY_DB}\";"
+    if ! docker compose -f "$COMPOSE_FILE" exec -T db \
+        psql -v ON_ERROR_STOP=1 -U "$SU_USER" -d postgres \
+        -c "CREATE DATABASE \"${VERIFY_DB}\";"; then
+        echo "ERROR: verification database preparation failed." >&2
+        exit 1
+    fi
 
     # A4.3: Integrität VOR dem Entschlüsseln prüfen.
     backup_verify_hmac "$LATEST_BACKUP"
 
     # Backup entschluesseln, entpacken und wiederherstellen
     echo "Stelle Backup in temporaere Datenbank wieder her..."
-    openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY \
+    if ! openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY \
         -in "$LATEST_BACKUP" \
         | gunzip \
         | docker compose -f "$COMPOSE_FILE" exec -T db \
-            psql -U "$SU_USER" "$VERIFY_DB" > /dev/null
+            psql -v ON_ERROR_STOP=1 --single-transaction -U "$SU_USER" "$VERIFY_DB" > /dev/null; then
+        echo "ERROR: verification import failed; the backup has not passed verification." >&2
+        exit 1
+    fi
 
     # RLS guard (Refs #1336): a dump taken under a NOBYPASSRLS role is valid
     # SQL but holds 0 rows of the FORCE-RLS tables. core_facility has no RLS and
@@ -191,14 +200,19 @@ if [[ "${1:-}" == "--verify" ]]; then
     RLS_VERIFY_TABLES=(core_client core_event core_workitem core_auditlog)
     VERIFY_FAILED=0
     for tbl in "${RLS_VERIFY_TABLES[@]}"; do
-        RESTORED_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
-            psql -U "$SU_USER" -d "$VERIFY_DB" -t -A \
-            -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
-        LIVE_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
-            psql -U "$SU_USER" -d "$POSTGRES_DB" -t -A \
-            -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
-        if [[ -z "$RESTORED_COUNT" || ! "$RESTORED_COUNT" =~ ^[0-9]+$ ]]; then
-            echo "FEHLER: Pruefabfrage fuer ${tbl} fehlgeschlagen (Restore nicht abfragbar)."
+        if ! RESTORED_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
+            psql -v ON_ERROR_STOP=1 -U "$SU_USER" -d "$VERIFY_DB" -t -A \
+            -c "SELECT COUNT(*) FROM ${tbl};" | tr -d '[:space:]') \
+            || [[ ! "$RESTORED_COUNT" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: restored row count could not be checked for ${tbl}." >&2
+            VERIFY_FAILED=1
+            continue
+        fi
+        if ! LIVE_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
+            psql -v ON_ERROR_STOP=1 -U "$SU_USER" -d "$POSTGRES_DB" -t -A \
+            -c "SELECT COUNT(*) FROM ${tbl};" | tr -d '[:space:]') \
+            || [[ ! "$LIVE_COUNT" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: live row count could not be checked for ${tbl}." >&2
             VERIFY_FAILED=1
             continue
         fi
@@ -214,7 +228,6 @@ if [[ "${1:-}" == "--verify" ]]; then
         exit 1
     fi
     echo "RLS guard passed: none of the ${#RLS_VERIFY_TABLES[@]} tables is empty in the restore while the live database has rows."
-    echo "DB-Backup ist gueltig: ${LATEST_BACKUP}"
 
     # Medien-Backup integritaetspruefen — kein Restore noetig, nur tar-listen.
     # Existenz, Sidecar und Hash des Archivs hat die Satzpruefung oben bereits
@@ -226,10 +239,13 @@ if [[ "${1:-}" == "--verify" ]]; then
     else
         echo "Verifiziere Medien-Backup: ${LATEST_MEDIA}"
         backup_verify_hmac "$LATEST_MEDIA"
-        FILE_COUNT=$(openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY \
+        if ! FILE_COUNT=$(openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY \
             -in "$LATEST_MEDIA" \
             | gunzip \
-            | tar -tf - 2>/dev/null | wc -l)
+            | tar -tf - | wc -l); then
+            echo "ERROR: media archive verification failed." >&2
+            exit 1
+        fi
         if [[ "$FILE_COUNT" -lt 1 ]]; then
             echo "FEHLER: Medien-Backup enthaelt 0 Eintraege oder ist beschaedigt."
             exit 1
@@ -238,6 +254,12 @@ if [[ "${1:-}" == "--verify" ]]; then
         MEDIA_SUMMARY="media archive: HMAC and readable tar listing (${FILE_COUNT} entries)"
     fi
     echo
+    # Cleanup is part of verification; do not claim success while it is failing.
+    if ! cleanup; then
+        trap - EXIT
+        exit 1
+    fi
+    trap - EXIT
     echo "Verification summary (a sample, not a row-by-row comparison)"
     echo "  Checked:"
     echo "    - signed manifest and set binding (set id, dump hash, bound media archive and audit anchor)"
