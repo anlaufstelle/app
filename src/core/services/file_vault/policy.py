@@ -166,6 +166,7 @@ def enforce_upload_size(facility, uploaded_file, owner, user):
 _MAX_IMAGE_FRAMES = 100
 _MAX_IMAGE_DECODED_BYTES = 256 * 1024 * 1024
 _IMAGE_BUFFER_RESERVE = 3
+_MAX_PNG_CHUNKS = 10_000
 
 
 def _gif_frame_sizes(stream):
@@ -288,11 +289,21 @@ def _webp_frame_sizes(stream):
     raise ValueError("Too many WebP header chunks")
 
 
-def _png_image_size(stream):
-    """Read PNG/APNG geometry before opening can allocate a disposal buffer."""
+def _png_image_size(stream, *, end=None):
+    """Validate all PNG/APNG geometry before any canvas or disposal allocation.
+
+    Pillow also interprets headers while loading and seeking later frames.
+    Walk the complete PNG through IEND, skipping payloads, and keep IHDR immutable.
+    Chunk lengths are bounded by PNG's signed-31-bit limit and the input size;
+    a fixed chunk count bounds parser work independently of frame declarations.
+    """
     start = stream.tell()
     stream.seek(0, os.SEEK_END)
-    end = stream.tell()
+    file_size = stream.tell()
+    if end is None:
+        end = file_size
+    if end > file_size or end < start + 33:
+        raise ValueError("Truncated PNG container")
     stream.seek(start)
     header = stream.read(33)
     if len(header) != 33 or header[:16] != b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR":
@@ -300,31 +311,61 @@ def _png_image_size(stream):
     width, height = struct.unpack_from(">II", header, 16)
     if not width or not height:
         raise ValueError("Invalid PNG dimensions")
-    frames = 1
-    animated = animation_frame = False
-    while stream.tell() < end:
+    declared_frames = None
+    frames = sequence = 0
+    image_data = frame_data = default_image = False
+    for _chunk_index in range(_MAX_PNG_CHUNKS):
         chunk = stream.read(8)
         if len(chunk) != 8:
-            break
+            raise ValueError("Missing PNG end chunk")
         size, kind = int.from_bytes(chunk[:4], "big"), chunk[4:]
         next_offset = stream.tell() + size + 4
-        if next_offset > end:
-            raise ValueError("Truncated PNG chunk")
+        if size > 0x7FFFFFFF or next_offset > end:
+            raise ValueError("Invalid PNG chunk length")
         if kind == b"IHDR":
             raise ValueError("Conflicting PNG canvas headers")
-        if kind == b"IDAT":
-            return width, height, frames + int(animated and not animation_frame)
         if kind == b"acTL":
-            if animated or size != 8:
+            if declared_frames is not None or image_data or frames or size != 8:
                 raise ValueError("Invalid APNG animation header")
-            animated = True
-            frames = int.from_bytes(stream.read(4), "big")
-            if not frames:
+            declared_frames = int.from_bytes(stream.read(4), "big")
+            if not declared_frames:
                 raise ValueError("Missing APNG frames")
         elif kind == b"fcTL":
-            animation_frame = True
+            if declared_frames is None or size != 26 or (frames and not frame_data):
+                raise ValueError("Invalid APNG frame header")
+            data = stream.read(26)
+            frame_sequence, frame_width, frame_height, left, top = struct.unpack_from(">IIIII", data)
+            if frame_sequence != sequence:
+                raise ValueError("Invalid APNG frame sequence")
+            sequence += 1
+            if not frame_width or not frame_height or left + frame_width > width or top + frame_height > height:
+                raise ValueError("APNG frame exceeds canvas")
+            if data[24] > 2 or data[25] > 1:
+                raise ValueError("Invalid APNG disposal or blend operation")
+            frames += 1
+            frame_data = False
+        elif kind == b"IDAT":
+            if frames > 1 or (frames and default_image):
+                raise ValueError("Unexpected APNG default image data")
+            if not image_data:
+                default_image = frames == 0
+            image_data = True
+            frame_data = bool(frames)
+        elif kind == b"fdAT":
+            if declared_frames is None or not image_data or not frames or size < 4:
+                raise ValueError("Invalid APNG frame data")
+            if int.from_bytes(stream.read(4), "big") != sequence:
+                raise ValueError("Invalid APNG data sequence")
+            sequence += 1
+            frame_data = True
+        elif kind == b"IEND":
+            if size or not image_data or next_offset != end:
+                raise ValueError("Invalid PNG end chunk")
+            if declared_frames is not None and (frames != declared_frames or not frame_data):
+                raise ValueError("APNG frame count disagrees with image data")
+            return width, height, frames + int(default_image) if declared_frames is not None else 1
         stream.seek(next_offset)
-    raise ValueError("Missing PNG image data")
+    raise ValueError("Too many PNG header chunks")
 
 
 def _ico_frame_sizes(stream):
@@ -349,12 +390,14 @@ def _ico_frame_sizes(stream):
         payload = stream.read(12)
         if payload[:8] == b"\x89PNG\r\n\x1a\n":
             stream.seek(-len(payload), os.SEEK_CUR)
-            width, height, _frame_count = _png_image_size(stream)
+            # A PNG entry ends before the next ICO variant, not at file EOF.
+            entry_end = int.from_bytes(entry[12:16], "little") + int.from_bytes(entry[8:12], "little")
+            width, height, _frame_count = _png_image_size(stream, end=entry_end)
         elif len(payload) == 12:
             header_size = int.from_bytes(payload[:4], "little")
             if header_size == 12:
                 width, height = struct.unpack_from("<HH", payload, 4)
-            elif header_size in {40, 64, 108, 124}:
+            elif header_size in {40, 52, 56, 64, 108, 124}:
                 width, height = struct.unpack_from("<ii", payload, 4)
                 height = abs(height)
             else:

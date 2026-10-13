@@ -390,3 +390,222 @@ def test_png_conflicting_canvas_is_rejected_before_disposal_allocation(image_own
     fill.assert_not_called()
     assert upload.tell() == 0
     assert not Attachment.objects.filter(event=owner).exists()
+
+
+def png_chunk(kind, payload):
+    body = kind + payload
+    return len(payload).to_bytes(4, "big") + body + zlib.crc32(body).to_bytes(4, "big")
+
+
+def png_chunks(data):
+    offset = 8
+    while offset < len(data):
+        length = int.from_bytes(data[offset : offset + 4], "big")
+        yield data[offset + 4 : offset + 8], data[offset + 8 : offset + 8 + length]
+        offset += length + 12
+
+
+def test_late_apng_canvas_change_is_rejected_before_oversized_disposal_crop(image_owner, staff_user, monkeypatch):
+    owner, field = image_owner
+    buffer = io.BytesIO()
+    with Image.new("RGBA", (10, 10), "red") as first, Image.new("RGBA", (10, 10), "blue") as second:
+        first.save(buffer, format="PNG", save_all=True, append_images=[second], disposal=1)
+    data = buffer.getvalue()
+    result = data[:8]
+    seen_frame = False
+    for kind, payload in png_chunks(data):
+        if kind == b"fcTL":
+            if seen_frame:
+                # Only later headers grow; compressed pixels remain 10 by 10.
+                result += png_chunk(b"IHDR", (100).to_bytes(4, "big") * 2 + data[24:29])
+                payload = payload[:4] + (100).to_bytes(4, "big") * 2 + payload[12:]
+            seen_frame = True
+        result += png_chunk(kind, payload)
+    upload = SimpleUploadedFile("later.png", result, content_type="image/png")
+    monkeypatch.setattr(policy, "_MAX_IMAGE_DECODED_BYTES", 3000)
+    original_crop = Image.Image._crop
+    crop_extents = []
+
+    def bounded_crop(self, image, box):
+        crop_extents.append(box)
+        pixels = (box[2] - box[0]) * (box[3] - box[1])
+        assert pixels * 4 <= 3000, f"Unbudgeted disposal crop: {box}; {pixels * 4} bytes"
+        return original_crop(self, image, box)
+
+    with (
+        patch.object(Image.Image, "_crop", bounded_crop),
+        pytest.raises(ValidationError, match="nicht gelesen"),
+    ):
+        store_encrypted_file(owner.facility, upload, field, owner, staff_user)
+    assert crop_extents == []
+    assert upload.tell() == 0
+    assert not Attachment.objects.filter(event=owner).exists()
+    assert AuditLog.objects.filter(
+        action=AuditLog.Action.SECURITY_VIOLATION, detail__reason="image_undecodable"
+    ).exists()
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "late_ihdr",
+        "trailing_ihdr",
+        "late_actl",
+        "duplicate_actl",
+        "missing_actl",
+        "frame_count",
+        "frame_width",
+        "frame_height",
+        "frame_left",
+        "frame_top",
+        "frame_zero",
+        "frame_sequence",
+        "data_sequence",
+        "frame_header_size",
+        "missing_frame_data",
+        "chunk_length",
+        "missing_iend",
+        "chunk_count",
+    ],
+)
+def test_inconsistent_apng_headers_rejected_before_pillow_open(image_owner, staff_user, monkeypatch, damage):
+    owner, field = image_owner
+    data = image_upload("PNG", sizes=((10, 10), (10, 10))).read()
+    result = data[:8]
+    seen_frame = False
+    animation_header = None
+    for kind, payload in png_chunks(data):
+        if kind == b"acTL":
+            animation_header = payload
+            if damage in {"late_actl", "missing_actl"}:
+                continue
+            if damage == "frame_count":
+                payload = (1).to_bytes(4, "big") + payload[4:]
+            if damage == "duplicate_actl":
+                result += png_chunk(kind, payload)
+        if kind == b"fcTL":
+            if seen_frame:
+                if damage == "late_ihdr":
+                    result += png_chunk(b"IHDR", data[16:29])
+                elif damage == "late_actl":
+                    result += png_chunk(b"acTL", animation_header)
+                elif damage in {"frame_width", "frame_height", "frame_left", "frame_top", "frame_zero"}:
+                    start = {"frame_width": 4, "frame_height": 8, "frame_left": 12, "frame_top": 16, "frame_zero": 4}[
+                        damage
+                    ]
+                    value = 0 if damage == "frame_zero" else 100
+                    payload = payload[:start] + value.to_bytes(4, "big") + payload[start + 4 :]
+                elif damage == "frame_sequence":
+                    payload = (100).to_bytes(4, "big") + payload[4:]
+                elif damage == "frame_header_size":
+                    payload = payload[:-1]
+            seen_frame = True
+        if kind == b"fdAT":
+            if damage == "data_sequence":
+                payload = (100).to_bytes(4, "big") + payload[4:]
+            elif damage == "missing_frame_data":
+                continue
+        if kind == b"IEND":
+            if damage == "missing_iend":
+                continue
+            if damage == "chunk_count":
+                monkeypatch.setattr(policy, "_MAX_PNG_CHUNKS", 10, raising=False)
+                result += png_chunk(b"tEXt", b"Comment\x00bounded") * 10
+            elif damage == "chunk_length":
+                result += (2**31).to_bytes(4, "big") + b"tEXt"
+        result += png_chunk(kind, payload)
+    if damage == "trailing_ihdr":
+        result += png_chunk(b"IHDR", data[16:29])
+    upload = SimpleUploadedFile("broken.png", result, content_type="image/png")
+    with (
+        patch.object(Image, "open", side_effect=AssertionError("Inconsistent PNG entered Pillow")) as decoder,
+        pytest.raises(ValidationError, match="nicht gelesen"),
+    ):
+        store_encrypted_file(owner.facility, upload, field, owner, staff_user)
+    decoder.assert_not_called()
+    assert upload.tell() == 0
+    assert not Attachment.objects.filter(event=owner).exists()
+
+
+@pytest.mark.parametrize("header_size", [52, 56])
+@pytest.mark.parametrize("over_budget", [False, True])
+def test_supported_ico_dib_headers_obey_early_budget(image_owner, staff_user, monkeypatch, header_size, over_budget):
+    owner, field = image_owner
+    Settings.objects.filter(facility=owner.facility).update(allowed_file_types="ico")
+    buffer = io.BytesIO()
+    with Image.new("RGB", (16, 16), "red") as image:
+        image.save(buffer, format="ICO", sizes=[(16, 16)], bitmap_format="bmp")
+    data = bytearray(buffer.getvalue())
+    offset = int.from_bytes(data[18:22], "little")
+    assert int.from_bytes(data[offset : offset + 4], "little") == 40
+    data[offset : offset + 4] = header_size.to_bytes(4, "little")
+    data[offset + 40 : offset + 40] = bytes(header_size - 40)
+    data[14:18] = (int.from_bytes(data[14:18], "little") + header_size - 40).to_bytes(4, "little")
+    with Image.open(io.BytesIO(data)) as image:
+        image.load()
+        assert image.size == (16, 16)
+        assert image.convert("RGB").getpixel((0, 0)) == (255, 0, 0)
+    upload = SimpleUploadedFile("small.ico", bytes(data), content_type="image/vnd.microsoft.icon")
+    if over_budget:
+        monkeypatch.setattr(policy, "_MAX_IMAGE_DECODED_BYTES", 400)
+        with (
+            patch("PIL.ImageFile.ImageFile.load", side_effect=AssertionError("ICO decoded before rejection")) as load,
+            pytest.raises(ValidationError, match="Speicherbudget"),
+        ):
+            store_encrypted_file(owner.facility, upload, field, owner, staff_user)
+        load.assert_not_called()
+        assert not Attachment.objects.filter(event=owner).exists()
+        assert upload.tell() == 0
+    else:
+        attachment = store_encrypted_file(owner.facility, upload, field, owner, staff_user)
+        assert b"".join(get_decrypted_file_stream(attachment)) == bytes(data)
+
+
+@pytest.mark.parametrize("disposal", [0, 1, 2])
+@pytest.mark.parametrize("default_image", [False, True])
+def test_valid_apng_subframes_and_default_images_remain_allowed(image_owner, staff_user, disposal, default_image):
+    owner, field = image_owner
+    buffer = io.BytesIO()
+    with Image.new("RGBA", (10, 10), "red") as first, first.copy() as second, first.copy() as third:
+        second.paste("blue", (3, 4, 5, 6))
+        third.paste("green", (6, 7, 8, 9))
+        first.save(
+            buffer,
+            format="PNG",
+            save_all=True,
+            append_images=[second, third],
+            disposal=disposal,
+            default_image=default_image,
+        )
+    data = buffer.getvalue()
+    if disposal == 0:
+        assert any(
+            kind == b"fcTL" and int.from_bytes(payload[12:16], "big") > 0 and int.from_bytes(payload[16:20], "big") > 0
+            for kind, payload in png_chunks(data)
+        )
+    upload = SimpleUploadedFile("subframes.png", data, content_type="image/png")
+    attachment = store_encrypted_file(owner.facility, upload, field, owner, staff_user)
+    with Image.open(io.BytesIO(b"".join(get_decrypted_file_stream(attachment)))) as image:
+        assert image.n_frames == 3
+        for index in range(image.n_frames):
+            image.seek(index)
+            image.load()
+            assert image.size == (10, 10)
+        image.seek(1)
+        assert image.convert("RGB").getpixel((3, 4)) == (0, 0, 255)
+        image.seek(2)
+        assert image.convert("RGB").getpixel((6, 7)) == (0, 128, 0)
+
+
+@pytest.mark.parametrize("bitmap", [False, True])
+def test_icon_with_multiple_embedded_rasters_remains_allowed(image_owner, staff_user, bitmap):
+    owner, field = image_owner
+    Settings.objects.filter(facility=owner.facility).update(allowed_file_types="ico")
+    buffer = io.BytesIO()
+    with Image.new("RGB", (32, 32), "red") as image:
+        image.save(buffer, format="ICO", sizes=[(16, 16), (32, 32)], **({"bitmap_format": "bmp"} if bitmap else {}))
+    data = buffer.getvalue()
+    assert int.from_bytes(data[4:6], "little") == 2
+    upload = SimpleUploadedFile("variants.ico", data, content_type="image/vnd.microsoft.icon")
+    attachment = store_encrypted_file(owner.facility, upload, field, owner, staff_user)
+    assert b"".join(get_decrypted_file_stream(attachment)) == data
