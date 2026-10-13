@@ -365,7 +365,7 @@ class TestMissingSourceFileIsAUserError:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("row", ["SECRET;note;EXTRA", "SECRET", 'SECRET;"OPEN'])
+@pytest.mark.parametrize("row", ["SECRET;note;EXTRA", "SECRET", 'SECRET;"OPEN', 'SECRET;prefix"OPEN'])
 def test_upload_displays_structure_error_without_cell_contents(admin_client_logged_in, facility, media_root, row):
     response = admin_client_logged_in.post(
         reverse("core:import_create"),

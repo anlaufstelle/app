@@ -401,8 +401,42 @@ def _parse_csv_rows(reader: Any, width: int) -> list[list[str]]:
             raise ValidationError(_("Die Datei hat mehr als %(max)s Datenzeilen.") % {"max": MAX_ROWS})
 
 
+def _validate_csv_quote_positions(text: str, delimiter: str) -> None:
+    """Check quotes in the original text, including unquoted fields."""
+    state = "field_start"
+    record = 1
+    line = 1
+    for line, physical_line in enumerate(io.StringIO(text, newline=""), start=1):
+        previous_cr = False
+        for char in physical_line:
+            if char == "\n" and previous_cr:
+                previous_cr = False
+                continue
+            previous_cr = char == "\r"
+            if state == "quoted":
+                if char == '"':
+                    state = "closed"
+                continue
+            if state == "closed" and char == '"':
+                state = "quoted"
+            elif char == delimiter:
+                state = "field_start"
+            elif char in "\r\n":
+                state = "field_start"
+                record += 1
+            elif state == "field_start" and char == '"':
+                state = "quoted"
+            elif char == '"' or state == "closed":
+                raise _csv_parse_error(line, record)
+            else:
+                state = "unquoted"
+    if state == "quoted":
+        raise _csv_parse_error(line, record)
+
+
 def _parse_csv(text: str, delimiter: str) -> tuple[list[str], list[list[str]]]:
     """Validate the entire CSV before returning any records for import."""
+    _validate_csv_quote_positions(text, delimiter)
     reader = csv.reader(io.StringIO(text), delimiter=delimiter, strict=True)
     try:
         header = _parse_csv_header(reader)

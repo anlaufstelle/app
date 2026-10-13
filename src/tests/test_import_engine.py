@@ -1647,7 +1647,9 @@ class TestPureHelpers:
 
 @pytest.mark.django_db
 class TestCsvStructureValidation:
-    @pytest.mark.parametrize("row", ["SECRET;note;EXTRA", "SECRET", 'SECRET;"OPEN'])
+    @pytest.mark.parametrize(
+        "row", ["SECRET;note;EXTRA", "SECRET", 'SECRET;"OPEN', 'SECRET;prefix"OPEN', 'SECRET;"closed"suffix']
+    )
     def test_upload_rejects_invalid_structure_without_storing_job(self, facility, admin_user, media_root, row):
         before = ImportJob.objects.count()
         with pytest.raises(ValidationError) as error:
@@ -1666,7 +1668,13 @@ class TestCsvStructureValidation:
 
     @pytest.mark.parametrize("path", ["preview", "dry_run", "commit"])
     @pytest.mark.parametrize(
-        "row", ["01.03.2026 09:30;Test-ID-01;SECRET", "01.03.2026 09:30", '01.03.2026 09:30;"SECRET']
+        "row",
+        [
+            "01.03.2026 09:30;Test-ID-01;SECRET",
+            "01.03.2026 09:30",
+            '01.03.2026 09:30;"SECRET',
+            '01.03.2026 09:30;Test-ID-01"SECRET',
+        ],
     )
     def test_stored_invalid_file_is_rejected_before_any_event_write(
         self,
@@ -1734,3 +1742,43 @@ class TestCsvStructureValidation:
         assert "Zeile 4" in str(error.value)
         assert "Datensatz 3" in str(error.value)
         assert "SECRET" not in str(error.value)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("delimiter", [";", ",", "\t"])
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+def test_quote_positions_preserve_valid_upload_and_commit(facility, admin_user, media_root, delimiter, newline):
+    notes = f'first{delimiter}part{newline}second "quoted"'
+    encoded_notes = notes.replace('"', '""')
+    content = f'"Pseudonym"{delimiter}"Notizen"{newline}P-1{delimiter}"{encoded_notes}"{newline}'
+    job = import_engine.store_import_upload(
+        facility,
+        admin_user,
+        _upload(content, encoding="utf-8-sig"),
+        target_type=ImportJob.TargetType.CLIENT,
+        delimiter=delimiter,
+    )
+    import_engine.probe_import(job, admin_user, {"Pseudonym": "pseudonym", "Notizen": "notes"})
+    assert job.result_json["summary"]["errors"] == 0
+    import_engine.commit_import(job, admin_user)
+    job.refresh_from_db()
+    assert job.status == ImportJob.Status.COMMITTED
+    assert Client.objects.for_facility(facility).get(pseudonym="P-1").notes == notes
+
+
+@pytest.mark.parametrize("delimiter", [";", ",", "\t"])
+@pytest.mark.parametrize("field", ['prefix"OPEN', ' "OPEN"', '"closed"suffix', '"closed" "again"'])
+def test_invalid_quote_positions_are_rejected_without_values(delimiter, field):
+    with pytest.raises(ValidationError) as error:
+        import_engine._parse_csv(f"A{delimiter}B\nx{delimiter}{field}\n", delimiter)
+    assert "Zeile 2" in str(error.value)
+    assert "Datensatz 2" in str(error.value)
+    assert field not in str(error.value)
+
+
+def test_quote_position_error_after_multiline_field_reports_both_positions():
+    with pytest.raises(ValidationError) as error:
+        import_engine._parse_csv('A;B\nx;"first\nsecond"\ny;prefix"OPEN\n', ";")
+    assert "Zeile 4" in str(error.value)
+    assert "Datensatz 3" in str(error.value)
+    assert "prefix" not in str(error.value)

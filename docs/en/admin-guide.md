@@ -1358,7 +1358,7 @@ Relevant files: [`src/core/services/system/export.py`](https://github.com/anlauf
 
 The import wizard under **Data import** (`/import/`) imports CSV files as people or events. It is visible only to the **facility admin** role. A file may contain at most 5 MB and 1,000 non-empty data rows; its first row must contain unique, non-empty column headings. UTF-8 and Windows-1252 are supported, as are semicolons, commas, and tabs as delimiters; encoding and delimiter can be detected automatically or selected explicitly. Events require an active documentation type.
 
-Each record must contain exactly as many cells as the header; empty optional cells also need their delimiter. Too many or too few cells and invalid or unclosed quotes reject the entire file before any data is imported. The message gives the physical line and logical record (including the header), never cell contents. UTF-8 with a BOM, correctly quoted delimiters and multiline fields remain valid. Preview, dry run and commit check the same complete file structure.
+Each record must contain exactly as many cells as the header; empty optional cells also need their delimiter. Too many or too few cells reject the entire file before any data is imported. A quote may open a field only at its start; quotes inside quoted fields must be doubled, and a closing quote may only be followed by the end of the field or record. Invalid quote positions and unclosed fields also reject the file. The message gives the physical line and logical record (including the header), never cell contents. UTF-8 with a BOM, correctly quoted delimiters and multiline fields remain valid. Preview, dry run and commit check the same complete file structure.
 
 The wizard has four steps:
 
@@ -2540,4 +2540,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 829c435a5ab76e643e06f3e1713252fd847be7c3 -->
+<!-- source-hash: 1c4e478e443f206d19e686f69d13d6f3763f6271 -->
