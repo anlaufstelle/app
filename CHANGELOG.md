@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Keine.
 
+### Security
+
+- **Gesamtbudget für mehrseitige Bilder** (#2582) — Bild-Uploads werden vor der vollständigen Frame-Verarbeitung auf insgesamt standardmäßig 40 Millionen Pixel, höchstens 100 Frames oder Seiten und ein konservativ geschätztes Bildpufferbudget von 256 MiB geprüft und bei Überschreitung mit Meldung und Audit abgewiesen; zulässige Mehrseitenbilder bleiben erhalten, eine Obergrenze für den gesamten Encoder-RAM ist damit nicht bewiesen.
+
 ### Fixed
 
 - **Seed-Zufallsfolge an Uhrgrenzen stabilisiert** (#2599) — Der Bulk-Ereignis-Seed verwendet eine gemeinsame vorgebbare Uhr für Zeitstempel und Datumswerte und hält den Zufallsverbrauch zu jeder Uhrzeit auch an Öffnungszeit- und Mitternachtsgrenzen konstant; die Activity-Stichprobe verwendet Kalendertage statt eines tageszeitabhängigen 90-Tage-Schnitts.

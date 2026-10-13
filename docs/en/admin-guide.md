@@ -306,7 +306,7 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 |---|---|---|
 | `FILE_VAULT_MAX_UPLOAD_BYTES` | `52428800` (50 MB) | Hard per-file limit, applied before any full buffering. |
 | `FILE_VAULT_MAX_UPLOAD_FILES` | `20` | Maximum number of files per file field (mass-upload brake). |
-| `FILE_VAULT_MAX_IMAGE_PIXELS` | `40000000` | Decompression-bomb protection: maximum pixel count of an image upload (also sets `PIL.Image.MAX_IMAGE_PIXELS`). |
+| `FILE_VAULT_MAX_IMAGE_PIXELS` | `40000000` | Maximum total pixels across all frames/pages of an image upload (also sets `PIL.Image.MAX_IMAGE_PIXELS`); additionally, fixed limits of 100 frames/pages and an estimated image-buffer budget of 256 MiB apply. |
 | `FILE_VAULT_MAX_ARCHIVE_BYTES` | `209715200` (200 MB) | Zip-bomb protection: maximum sum of uncompressed entries (read from the zip directory). |
 | `FILE_VAULT_MAX_ARCHIVE_RATIO` | `100` | Zip-bomb protection: maximum expansion ratio (uncompressed/compressed). |
 | `FILE_VAULT_MAX_ARCHIVE_ENTRIES` | `10000` | Zip-bomb protection: maximum number of entries (read from the EOCD record). |
@@ -1210,6 +1210,7 @@ File attachments (photos, scans, documents) on **events, clients and cases** ([A
    - Default: fail-closed. If the daemon is unreachable (`CLAMAV_ENABLED=true`, but no TCP connect), the upload is **rejected**.
    - Virus detected → the upload is discarded and an audit-log entry is written.
 4a. **Content and extension must belong to the same family** (Refs #2128): the magic-bytes check rejects a file whose content is detected as an image but whose extension is not an image extension (`foto.docx`, `scan.odt`). Without that binding it was enough to name a photo `.docx` and declare `image/jpeg` correctly -- metadata stripping **and** decompression-bomb protection would both have waved it through.
+4b. **Aggregate image budget** (Refs #2582): before decoding all frames and stripping metadata, the upload is checked against the total pixel limit (default **40 million**), at most **100 frames/pages** and an estimated buffer budget of **256 MiB**. TIFF page headers are counted individually; APNG and WebP reserve a full canvas per frame, GIF also accounts for canvas expansion in later frames. The byte estimate reserves three buffers of at least four bytes per pixel (source, clean copy and processing workspace). It is a conservative admission rule, **not a proven bound on total encoder RAM**. Exceeding any limit produces a validation message and a `SECURITY_VIOLATION` audit entry. Valid small multipage images remain allowed; GIF still remains byte-identical.
 4. **Metadata stripping** for image uploads (Refs #2128): JPEG, PNG, WebP and TIFF are re-encoded and lose their EXIF data (including the **GPS capture location**, device model/serial, capture timestamp, embedded thumbnail), PNG text chunks (`tEXt`/`iTXt`) and XMP/IPTC blocks. **Orientation is preserved** -- it is baked into the pixels, so portrait photos do not flip; the ICC colour profile is kept as well. What counts is the type **detected** in step 4a via magic bytes, not the file extension. Every non-image file (PDF, DOCX, ODT ...) stays byte-identical. **Always on, no toggle** -- the application is not a forensic evidence tool. If a file cannot be decoded despite matching magic bytes, the upload is rejected (fail-closed, audit reason `image_undecodable`).
 
 > **GIF and BMP are deliberately not cleaned.** This is not an oversight: GIF89a supports both a *comment extension* and an *XMP application extension*, and BMP v5 can embed an ICC profile -- those blocks **are preserved**. A Pillow re-encode would re-quantize the GIF colour palette and change frame timing and disposal behaviour of animated files; that is a visible change to the picture for a metadata channel practice does not use (counselling photos are JPEG or PNG). **Recommendation:** to rule it out, leave `gif` and `bmp` out of `allowed_file_types`.
@@ -2535,6 +2536,6 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-11 -->
-<!-- translation-date: 2026-10-11 -->
-<!-- source-hash: 5572edf9f73320aa5d75fd361049d90fc000d46b -->
+<!-- translation-date: 2026-10-13 -->
+<!-- translation-date: 2026-10-13 -->
+<!-- source-hash: c7ac6eb8f21043fd2b1feb692aa63887bcf0b890 -->

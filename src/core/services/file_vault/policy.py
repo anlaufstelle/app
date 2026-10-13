@@ -161,66 +161,193 @@ def enforce_upload_size(facility, uploaded_file, owner, user):
     )
 
 
-def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=None):
-    """Reject decompression-bomb images (Refs #1268 (T3)).
+# Bound retained frame copies and reserve space for decoding/transform buffers.
+# This estimate is not a bound on Pillow's format-specific encoder allocations.
+_MAX_IMAGE_FRAMES = 100
+_MAX_IMAGE_DECODED_BYTES = 256 * 1024 * 1024
+_IMAGE_BUFFER_RESERVE = 3
 
-    Setzt ``PIL.Image.MAX_IMAGE_PIXELS`` und lehnt Bilder ab, deren (aus dem
-    Header gelesene, NICHT dekodierte) Pixelzahl ``FILE_VAULT_MAX_IMAGE_PIXELS``
-    uebersteigt — so kann eine klein komprimierte Datei nicht in eine RAM-Bombe
-    dekodieren. Nicht-Bild-Uploads werden uebersprungen; fuer sie bleiben
-    Extension-/Magic-/Virus-Checks zustaendig.
 
-    Refs #2128 (R-L7a-6): „Bild oder nicht" entscheidet jetzt der
-    per Magic-Bytes **erkannte** Typ ODER die Endung — nicht mehr die Endung
-    allein. Ein JPEG unter ``foto.docx`` umging sonst den Pixel-Cap komplett.
-    ``detected_mime`` ist optional, damit Bestandsaufrufer ohne Sniff-Ergebnis
-    (und Tests) unveraendert funktionieren; dann entscheidet wie bisher die
-    Endung.
+def _gif_frame_sizes(stream):
+    """Read GIF canvas extents without Pillow's decoding seek operation.
+
+    Later descriptors can exceed the logical screen size. Count their expanded
+    canvases, including offsets, rather than trusting the first-frame header.
+    The caller stops consuming headers as soon as any budget is exceeded.
     """
-    name = uploaded_file.name or ""
-    ext = _extension(uploaded_file)
-    if ext not in _IMAGE_EXTENSIONS and not _is_image_mime(detected_mime):
-        return
+    stream.seek(0)
+    header = stream.read(13)
+    if len(header) != 13 or header[:6] not in {b"GIF87a", b"GIF89a"}:
+        raise ValueError("Invalid GIF header")
+    width, height = struct.unpack_from("<HH", header, 6)
+    if header[10] & 0x80:
+        stream.seek(3 * (2 ** ((header[10] & 7) + 1)), os.SEEK_CUR)
 
-    import warnings  # noqa: PLC0415
+    def skip_subblocks():
+        while True:
+            size = stream.read(1)
+            if not size:
+                raise ValueError("Truncated GIF subblock")
+            if size == b"\x00":
+                return
+            stream.seek(size[0], os.SEEK_CUR)
 
-    from PIL import Image, UnidentifiedImageError  # noqa: PLC0415 — lazy, wie magic in enforce_magic_bytes
+    while True:
+        block = stream.read(1)
+        if block == b";":
+            return
+        if block == b"!":
+            if not stream.read(1):
+                raise ValueError("Truncated GIF extension")
+            skip_subblocks()
+        elif block == b",":
+            descriptor = stream.read(9)
+            if len(descriptor) != 9:
+                raise ValueError("Truncated GIF frame descriptor")
+            left, top, frame_width, frame_height = struct.unpack_from("<HHHH", descriptor)
+            width, height = max(width, left + frame_width), max(height, top + frame_height)
+            yield width, height
+            if descriptor[8] & 0x80:
+                stream.seek(3 * (2 ** ((descriptor[8] & 7) + 1)), os.SEEK_CUR)
+            if not stream.read(1):
+                raise ValueError("Missing GIF LZW code size")
+            skip_subblocks()
+        else:
+            raise ValueError("Invalid GIF block")
 
-    max_pixels = getattr(django_settings, "FILE_VAULT_MAX_IMAGE_PIXELS", 40_000_000)
-    # Globaler Pillow-Guard (schuetzt auch spaetere Dekodier-Pfade), zusaetzlich
-    # zur expliziten, versionsunabhaengigen Header-Pruefung unten.
-    Image.MAX_IMAGE_PIXELS = max_pixels
 
-    uploaded_file.seek(0)
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", Image.DecompressionBombWarning)
-            # Image.open liest nur den Header (lazy, keine Pixel-Dekodierung) →
-            # .size ist guenstig und auch fuer eine "Bombe" gefahrlos lesbar.
-            with Image.open(uploaded_file) as img:
-                pixels = img.size[0] * img.size[1]
-    except Image.DecompressionBombError:
-        pixels = max_pixels + 1  # harte Pillow-Grenze (>2x MAX) → ablehnen
-    except (UnidentifiedImageError, OSError, ValueError):
-        # Keine dekodierbare Bilddatei trotz Bild-Extension — hier nicht
-        # zusaetzlich abweisen; Magic-Bytes/Extension entscheiden.
-        uploaded_file.seek(0)
-        return
-    finally:
-        uploaded_file.seek(0)
-
+def _check_image_budget(facility, uploaded_file, owner, user, *, pixels, frames, decoded_bytes, max_pixels):
+    """Reject before frame copies can exhaust the aggregate image budget."""
+    if frames > _MAX_IMAGE_FRAMES:
+        _reject(
+            facility,
+            user,
+            owner,
+            reason="image_too_many_frames",
+            message=_("Bild enthält zu viele Frames oder Seiten. Maximum: %(max)d.") % {"max": _MAX_IMAGE_FRAMES},
+            filename=uploaded_file.name,
+        )
     if pixels > max_pixels:
         _reject(
             facility,
             user,
             owner,
             reason="image_too_large",
-            message=_("Bild hat zu viele Pixel (%(px)d). Maximum: %(max)d — möglicher Decompression-Bomb-Upload.")
+            message=_("Bild hat insgesamt zu viele Pixel (%(px)d). Maximum über alle Frames und Seiten: %(max)d.")
             % {"px": pixels, "max": max_pixels},
-            filename=name,
+            filename=uploaded_file.name,
             pixels=pixels,
             max_pixels=max_pixels,
         )
+    if decoded_bytes > _MAX_IMAGE_DECODED_BYTES:
+        _reject(
+            facility,
+            user,
+            owner,
+            reason="image_memory_budget",
+            message=_("Bild überschreitet das Speicherbudget für alle Frames und Seiten — Upload abgelehnt."),
+            filename=uploaded_file.name,
+        )
+
+
+def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=None):
+    """Check aggregate pixels, frame count and estimated buffers before decoding.
+
+    TIFF pages may have different sizes/modes; seeking reads their headers only.
+    Animations reserve a full canvas per frame, including compositing and mode
+    promotion to RGBA. Their frame count is read without decoding pixel data.
+    The byte estimate reserves three buffers of at least four bytes per pixel:
+    source, retained clean copy and transform/encoding workspace. Encoder
+    allocations are format-dependent and are not proven bounded by this estimate.
+    """
+    ext = _extension(uploaded_file)
+    if ext not in _IMAGE_EXTENSIONS and not _is_image_mime(detected_mime):
+        return
+
+    import warnings  # noqa: PLC0415
+
+    from PIL import Image, UnidentifiedImageError  # noqa: PLC0415
+
+    max_pixels = getattr(django_settings, "FILE_VAULT_MAX_IMAGE_PIXELS", 40_000_000)
+    Image.MAX_IMAGE_PIXELS = max_pixels
+    uploaded_file.seek(0)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", Image.DecompressionBombWarning)
+            with Image.open(uploaded_file) as img:
+                pixels = decoded_bytes = 0
+                if img.format == "GIF":
+                    for index, (width, height) in enumerate(_gif_frame_sizes(uploaded_file)):
+                        pixels += width * height
+                        decoded_bytes += width * height * 4 * _IMAGE_BUFFER_RESERVE
+                        _check_image_budget(
+                            facility,
+                            uploaded_file,
+                            owner,
+                            user,
+                            pixels=pixels,
+                            frames=index + 1,
+                            decoded_bytes=decoded_bytes,
+                            max_pixels=max_pixels,
+                        )
+                elif img.format == "TIFF":
+                    # Avoid n_frames: stop after the first over-budget page header.
+                    for index in range(_MAX_IMAGE_FRAMES + 1):
+                        try:
+                            img.seek(index)
+                        except EOFError:
+                            break
+                        page_pixels = img.width * img.height
+                        pixels += page_pixels
+                        decoded_bytes += page_pixels * max(4, len(img.getbands())) * _IMAGE_BUFFER_RESERVE
+                        _check_image_budget(
+                            facility,
+                            uploaded_file,
+                            owner,
+                            user,
+                            pixels=pixels,
+                            frames=index + 1,
+                            decoded_bytes=decoded_bytes,
+                            max_pixels=max_pixels,
+                        )
+                else:
+                    frames = getattr(img, "n_frames", 1)
+                    pixels = img.width * img.height * frames
+                    decoded_bytes = pixels * max(4, len(img.getbands())) * _IMAGE_BUFFER_RESERVE
+                    _check_image_budget(
+                        facility,
+                        uploaded_file,
+                        owner,
+                        user,
+                        pixels=pixels,
+                        frames=frames,
+                        decoded_bytes=decoded_bytes,
+                        max_pixels=max_pixels,
+                    )
+    except Image.DecompressionBombError:
+        _check_image_budget(
+            facility,
+            uploaded_file,
+            owner,
+            user,
+            pixels=max_pixels + 1,
+            frames=1,
+            decoded_bytes=0,
+            max_pixels=max_pixels,
+        )
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        _reject(
+            facility,
+            user,
+            owner,
+            reason="image_undecodable",
+            message=_("Bilddatei konnte nicht gelesen werden — Upload abgelehnt."),
+            cause=exc,
+            filename=uploaded_file.name,
+            extension=ext,
+        )
+    finally:
+        uploaded_file.seek(0)
 
 
 def _zip_entry_count(uploaded_file) -> int | None:

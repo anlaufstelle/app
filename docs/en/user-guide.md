@@ -325,6 +325,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 - **Virus scan:** Before saving, every file is automatically checked by a virus scanner (ClamAV). Infected files are rejected -- you receive an error and the event is not saved.
 - **Encryption:** All attachments are stored encrypted (Fernet, AES-128-CBC with HMAC-SHA256). Keys are held in the installation-wide `ENCRYPTION_KEYS` key ring (alternatively `ENCRYPTION_KEY`), shared by all facilities; facilities do not have separate key rings. That means the file is not readable in cleartext on the server and can only be retrieved through Anlaufstelle itself.
 - **Image metadata is removed:** For images (JPG, PNG, WebP, TIFF -- not for GIF and BMP) the embedded metadata is deleted on upload -- above all the **GPS capture location** (on phone photos often the home or current address of the person concerned), plus device model, capture time and the embedded thumbnail, which may still show the uncropped original. The picture itself stays unchanged, and portrait photos stay portrait. This does **not** happen for PDF and Office files -- their document properties may still name the social workers member who worked on them.
+- **Image limits:** Images may have up to 40 million pixels in total by default, across all frames/pages, and at most 100 frames/pages. An additional conservative image-buffer estimate must fit within 256 MiB. Images exceeding a limit are rejected with a message; small multipage images remain allowed. GIF metadata is still preserved. These checks do not guarantee a maximum for total encoder RAM.
 - **Maximum size:** By default, **up to 10 MiB per file** are allowed. Your application support can adjust this up to the installation-wide operator cap `FILE_VAULT_MAX_UPLOAD_BYTES` (default: 50 MiB). The stricter of the two limits applies.
 - **Supported formats:** PDF, Office documents, and images. Ask your administrator for the exact list allowed in your facility.
 - **Download:** Open the detail view of the event (or of the person or the case) and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
@@ -1139,5 +1140,5 @@ without expiry even after manual event deletion.
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-11 -->
-<!-- source-hash: 63f8b602758ce3276ab1083be7c11c598681fbeb -->
+<!-- translation-date: 2026-10-13 -->
+<!-- source-hash: a3b17b8649383f58e2a88a13104413b83e3e4c01 -->
