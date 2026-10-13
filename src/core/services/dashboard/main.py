@@ -28,6 +28,7 @@ from core.models import (
     WorkItem,
 )
 from core.services.file_vault.quota import facility_storage_usage, storage_warning
+from core.services.workitem_visibility import workitems_for_read
 
 
 def staff_dashboard_context(user, facility) -> dict:
@@ -43,12 +44,15 @@ def staff_dashboard_context(user, facility) -> dict:
 
     today_events_count = (
         Event.objects.for_facility(facility)
+        .visible_to(user)
+        .exclude(client__is_deleted=True)
+        .exclude(client__is_active=False)
         .filter(occurred_at__gte=today_start, occurred_at__lt=today_end, is_deleted=False)
         .count()
     )
 
     open_qs = (
-        WorkItem.objects.for_facility(facility)
+        workitems_for_read(facility)
         .filter(assigned_to=user, status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
         .select_related("client")
     )

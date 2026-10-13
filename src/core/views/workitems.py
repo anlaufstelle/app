@@ -10,12 +10,12 @@ import logging
 from django.shortcuts import render
 from django.views import View
 
-from core.models import WorkItem
 from core.services.case import (
     build_inbox_sections,
     can_user_mutate_workitem,  # Übergangs-Reexport, Abbau nach #1891 (Refs #1837).
 )
 from core.services.scoping import get_scoped_object
+from core.services.workitem_visibility import workitems_for_read
 from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ class WorkItemDetailView(AssistantOrAboveRequiredMixin, View):
 
     def get(self, request, pk):
         workitem = get_scoped_object(
-            WorkItem.objects.select_related("client", "created_by", "assigned_to"),
+            workitems_for_read(request.current_facility).select_related("client", "created_by", "assigned_to"),
             request,
             pk=pk,
         )

@@ -36,6 +36,7 @@ from core.models.user import User
 from core.services.audit import apply_allowlisted_update, audit_event, check_update_allowlist
 from core.services.case.state_contract import _raise_if_clients_revoked
 from core.services.dashboard import log_activity
+from core.services.workitem_visibility import workitems_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +218,7 @@ def build_inbox_sections(facility, user, params: QueryDict) -> dict[str, object]
     """Baut Querysets, Sektionen und Filterkontext der WorkItem-Inbox."""
     today = timezone.localdate()
     base_qs = (
-        WorkItem.objects.for_facility(facility)
+        workitems_for_read(facility)
         .select_related("client", "created_by", "assigned_to")
         .annotate(
             priority_order=Case(

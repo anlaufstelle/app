@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import WorkItem
+from core.services.workitem_visibility import workitems_for_read
 
 
 @lru_cache(maxsize=1)
@@ -106,7 +107,7 @@ def workitem_counts(request):
     active_filter = Q(status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
     user_filter = Q(assigned_to=request.user) | Q(assigned_to__isnull=True)
 
-    base_qs = WorkItem.objects.for_facility(facility).filter(active_filter).filter(user_filter)
+    base_qs = workitems_for_read(facility).filter(active_filter).filter(user_filter)
 
     count = base_qs.count()
     # Refs #1478 (COD-02): Überfälligkeits-Anker über ``timezone.localdate()``

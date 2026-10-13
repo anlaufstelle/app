@@ -10,6 +10,7 @@ from django.views.generic import TemplateView
 from core.models import Case as CaseModel
 from core.models import Event, RecentClientVisit, WorkItem
 from core.services.case import cases_with_live_client
+from core.services.workitem_visibility import workitems_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,8 @@ class AccountProfileView(LoginRequiredMixin, TemplateView):
         end_dt = timezone.make_aware(datetime.combine(today, time.max))
         context["stats"] = {
             "events_today": Event.objects.visible_to(user)
+            .exclude(client__is_deleted=True)
+            .exclude(client__is_active=False)
             .filter(
                 facility=facility,
                 is_deleted=False,
@@ -47,17 +50,19 @@ class AccountProfileView(LoginRequiredMixin, TemplateView):
             # im Papierkorb und die einer widerrufenen Person mit — Zahl und
             # Liste widersprechen sich dann ab dem ersten geloeschten Fall.
             "open_cases": cases_with_live_client().filter(facility=facility, status=CaseModel.Status.OPEN).count(),
-            "my_open_tasks": WorkItem.objects.for_facility(facility)
+            "my_open_tasks": workitems_for_read(facility)
             .filter(assigned_to=user, status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
             .count(),
-            "total_open_tasks": WorkItem.objects.for_facility(facility)
+            "total_open_tasks": workitems_for_read(facility)
             .filter(status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
             .count(),
         }
 
         # Recent clients widget (from dashboard)
         context["recent_clients"] = (
-            RecentClientVisit.objects.filter(user=user, facility=facility)
+            RecentClientVisit.objects.filter(
+                user=user, facility=facility, client__is_deleted=False, client__is_active=True
+            )
             .select_related("client")
             .order_by("-is_favorite", "-visited_at")[:8]
         )
@@ -65,6 +70,8 @@ class AccountProfileView(LoginRequiredMixin, TemplateView):
         # Last 10 created events (read-only)
         context["recent_events"] = (
             Event.objects.visible_to(user)
+            .exclude(client__is_deleted=True)
+            .exclude(client__is_active=False)
             .filter(created_by=user, is_deleted=False, facility=facility)
             .select_related("document_type", "client")
             .order_by("-occurred_at")[:10]
@@ -72,7 +79,7 @@ class AccountProfileView(LoginRequiredMixin, TemplateView):
 
         # Open tasks (assigned to the user)
         context["open_workitems"] = (
-            WorkItem.objects.for_facility(facility)
+            workitems_for_read(facility)
             .filter(assigned_to=user, status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
             .select_related("client")
             .order_by("-created_at")[:10]
@@ -80,7 +87,7 @@ class AccountProfileView(LoginRequiredMixin, TemplateView):
 
         # Recently completed tasks
         context["done_workitems"] = (
-            WorkItem.objects.for_facility(facility)
+            workitems_for_read(facility)
             .filter(assigned_to=user, status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED])
             .select_related("client")
             .order_by("-completed_at")[:5]

@@ -16,6 +16,7 @@ from core.constants import FEED_MAX_PER_TYPE
 from core.models import Activity, Client, DocumentTypeField, Event, WorkItem
 from core.services.compliance import user_can_see_field
 from core.services.events import build_tally_summary
+from core.services.workitem_visibility import workitems_for_read
 from core.services.zeitstrom_filters import ZeitstromState
 
 WATCH_COMPONENTS = (
@@ -305,7 +306,7 @@ def _feed_projection(facility, user, state: ZeitstromState):
 
     if state.feed_type == "workitems" or include_all:
         rows = (
-            WorkItem.objects.for_facility(facility)
+            workitems_for_read(facility)
             .filter(created_at__gte=start_dt, created_at__lte=end_dt)
             .values(*_WORKITEM_VALUES)
             .order_by("-created_at")[:FEED_MAX_PER_TYPE]
@@ -430,10 +431,15 @@ def _current_shift_projection(facility, user, state: ZeitstromState):
         return None
     start_dt = state.live_context.window_start
     end_dt = state.live_context.window_end
-    visible_events = Event.objects.visible_to(user).filter(
-        facility=facility,
-        is_deleted=False,
-        occurred_at__range=(start_dt, end_dt),
+    visible_events = (
+        Event.objects.visible_to(user)
+        .exclude(client__is_deleted=True)
+        .exclude(client__is_active=False)
+        .filter(
+            facility=facility,
+            is_deleted=False,
+            occurred_at__range=(start_dt, end_dt),
+        )
     )
     events_by_type = list(
         visible_events.values("document_type__name", "document_type__color")
@@ -443,8 +449,10 @@ def _current_shift_projection(facility, user, state: ZeitstromState):
     stats = {
         "events_total": sum(item["count"] for item in events_by_type),
         "events_by_type": events_by_type,
-        "workitems_new": WorkItem.objects.for_facility(facility).filter(created_at__range=(start_dt, end_dt)).count(),
-        "clients_new": Client.objects.for_facility(facility).filter(created_at__range=(start_dt, end_dt)).count(),
+        "workitems_new": workitems_for_read(facility).filter(created_at__range=(start_dt, end_dt)).count(),
+        "clients_new": Client.objects.for_facility(facility)
+        .filter(is_deleted=False, is_active=True, created_at__range=(start_dt, end_dt))
+        .count(),
     }
 
     highlights: list[dict[str, Any]] = []
@@ -456,7 +464,7 @@ def _current_shift_projection(facility, user, state: ZeitstromState):
         )
         highlights.extend({"type": highlight_type, "time": row["occurred_at"], "row": row} for row in rows)
     task_rows = list(
-        WorkItem.objects.for_facility(facility)
+        workitems_for_read(facility)
         .filter(
             priority__in=[WorkItem.Priority.URGENT, WorkItem.Priority.IMPORTANT],
             created_at__range=(start_dt, end_dt),
@@ -489,7 +497,7 @@ def _focus_box_projection(facility):
 
     today = timezone.localdate()
     open_statuses = [WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS]
-    base = WorkItem.objects.for_facility(facility).filter(status__in=open_statuses)
+    base = workitems_for_read(facility).filter(status__in=open_statuses)
     total_open = base.count()
     eligible = base.filter(
         Q(due_date__lte=today)

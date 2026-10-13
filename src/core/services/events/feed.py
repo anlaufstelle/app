@@ -8,11 +8,12 @@ from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 
 from core.constants import FEED_MAX_PER_TYPE
-from core.models import Activity, Case, Event, WorkItem
+from core.models import Activity, Case, Event
 from core.services.compliance import user_can_see_field
 from core.services.config import iter_fields_in_block_order
 from core.services.dynamic_data import option_label_map
 from core.services.file_vault import is_encrypted_value, safe_decrypt
+from core.services.workitem_visibility import workitems_for_read
 
 
 def _is_imaginary(naive_dt, tzinfo):
@@ -237,7 +238,7 @@ def _feed_activities(facility, start_dt, end_dt, user, include_all):
 def _feed_workitems(facility, start_dt, end_dt):
     """WorkItem-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``)."""
     workitems = (
-        WorkItem.objects.for_facility(facility)
+        workitems_for_read(facility)
         .filter(created_at__gte=start_dt, created_at__lte=end_dt)
         .select_related("client", "assigned_to")
         .order_by("-created_at")[:FEED_MAX_PER_TYPE]

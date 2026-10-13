@@ -2,8 +2,9 @@
 
 from django.db.models import Count
 
-from core.models import Client, Event, WorkItem
+from core.models import Client, Event
 from core.services.events import enrich_events_with_preview, get_time_range
+from core.services.workitem_visibility import workitems_for_read
 
 
 def _build_shift_metadata(time_filter, start_dt, end_dt):
@@ -27,15 +28,17 @@ def _collect_stats(facility, visible_events, time_range):
         .order_by("-count")
     )
 
-    workitems_new = WorkItem.objects.for_facility(facility).filter(created_at__range=time_range).count()
+    workitems_new = workitems_for_read(facility).filter(created_at__range=time_range).count()
 
-    workitems_completed = (
-        WorkItem.objects.for_facility(facility).filter(status="done", updated_at__range=time_range).count()
-    )
+    workitems_completed = workitems_for_read(facility).filter(status="done", updated_at__range=time_range).count()
 
     bans_new = visible_events.filter(document_type__system_type="ban").count()
 
-    clients_new = Client.objects.for_facility(facility).filter(created_at__range=time_range).count()
+    clients_new = (
+        Client.objects.for_facility(facility)
+        .filter(is_deleted=False, is_active=True, created_at__range=time_range)
+        .count()
+    )
 
     return {
         "events_total": events_total,
@@ -62,7 +65,7 @@ def _collect_highlights(facility, visible_events, time_range, user):
     )
 
     urgent_tasks = (
-        WorkItem.objects.for_facility(facility)
+        workitems_for_read(facility)
         .filter(priority__in=["urgent", "important"], created_at__range=time_range)
         .select_related("client", "assigned_to")
         .order_by("-created_at")[:10]
@@ -109,10 +112,15 @@ def build_handover_summary(facility, target_date, time_filter, user):
     shift_label, shift_range = _build_shift_metadata(time_filter, start_dt, end_dt)
 
     time_range = (start_dt, end_dt)
-    visible_events = Event.objects.visible_to(user).filter(
-        facility=facility,
-        is_deleted=False,
-        occurred_at__range=time_range,
+    visible_events = (
+        Event.objects.visible_to(user)
+        .exclude(client__is_deleted=True)
+        .exclude(client__is_active=False)
+        .filter(
+            facility=facility,
+            is_deleted=False,
+            occurred_at__range=time_range,
+        )
     )
 
     stats = _collect_stats(facility, visible_events, time_range)

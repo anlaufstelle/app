@@ -34,6 +34,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Implizite Teil-Speicherungen abgewiesen** (#2525) — Ereignisse, Personen, Fälle sowie Dokumentationstypen, Feldvorlagen, Feldzuordnungen, Feldgruppen, Feldbedingungen und Quick-Templates weisen `save()` auf unvollständig per `defer`/`only` geladenen Instanzen ohne ausdrückliches `update_fields` vor dem ersten nachladenden Feldzugriff und vor dem Schreiben ab.
 ### Security
 
+- **Arbeitsflächen blenden widerrufene Personen aus** (#2585) — Aufgabenlisten und Direktlinks, Zeitstrom-Aufgaben, Fokus, Profil, Navigationszähler und Übergabe schließen Aufgaben gelöschter oder inaktiver Personen aus, erhalten personlose Aufgaben und berücksichtigen in Profil, Cockpit und Übergabe nur sichtbare Dokumentation lebender Personen oder ohne Personenbezug; Favoriten und letzte Besuche schließen widerrufene Personen aus, und automatische Aufgaben- und Widget-Aktualisierungen verwenden dieselbe Grenze.
+
 - **Letzter Kontakt folgt der Rollensichtbarkeit** (#2580) — Personenliste, Offline-Bundle und Autocomplete-Reihenfolge berücksichtigen nur sichtbare, nicht gelöschte Kontakte; ohne sichtbaren Kontakt bleibt der Wert leer und ältere Kontakte zählen auch außerhalb des Bundle-Zeitfensters.
 
 - **Papierkorb-Personen vom Offline-Abruf ausgeschlossen** (#2579) — Neue Personen-Bundles werden nach genehmigter Löschung auch bei bedingten Abrufen vor der Serialisierung mit 404 abgewiesen; nach Wiederherstellung sind sie wieder abrufbar.

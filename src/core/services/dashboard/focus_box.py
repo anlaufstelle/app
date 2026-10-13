@@ -30,6 +30,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from core.models import WorkItem
+from core.services.workitem_visibility import workitems_for_read
 
 # Maximal angezeigte Aufgaben in der kompakten Sidebar. Die Box soll auf
 # Handlungsbedarf aufmerksam machen, nicht Vollständigkeit abbilden.
@@ -73,7 +74,7 @@ def build_focus_box(facility) -> dict:
     today = timezone.localdate()
 
     qs = (
-        WorkItem.objects.for_facility(facility)
+        workitems_for_read(facility)
         .filter(status__in=_OPEN_STATUSES)
         .select_related("client", "assigned_to")
         .annotate(
