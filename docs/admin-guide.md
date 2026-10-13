@@ -928,6 +928,8 @@ Sollen verwaiste Werte endgültig **entfernt** werden (Datenminimierung, sobald 
 
 **Aktivierung und Berichtsschlüssel:** Je Dokumentationstyp darf höchstens eine aktive Feldvorlage denselben Berichtsschlüssel verwenden. Die Reaktivierung einer ersetzten Vorlage wird bei Konflikt abgewiesen; die Meldung nennt Dokumentationstyp und konkurrierende Vorlage. Auch eine administrative Sammelaktivierung prüft alle ausgewählten Vorlagen einschließlich Konflikten untereinander, bevor sie etwas aktiviert. Deaktivieren und konfliktfreie Reaktivierung bleiben möglich.
 
+**Deaktivierte Feldvorlagen:** Inaktive Vorlagen werden in den Fachformularen für Ereignisse, Personen und Fälle sowie in Offline-Formdefinitionen nicht als Eingabefelder angeboten. Beim normalen Bearbeiten bleiben ihre gespeicherten Werte unverändert erhalten, einschließlich verschlüsselter Werte und Dateimarker; ihre bestehenden Sichtbarkeitsregeln gelten weiter. Nach konfliktfreier Reaktivierung ist das Feld wieder bearbeitbar. Bedingungen mit inaktiver Quelle oder inaktivem Ziel entfallen aus dem Eingabeformular. Entfallen alle Bedingungen eines aktiven Pflichtfelds, gilt es wieder als unbedingt erforderlich; ein inaktives Pflichtfeld blockiert das Speichern nicht.
+
 ### 2.6 Auswahloptionen verwalten (Feldvorlagen)
 
 Unter **Verwaltung → Feldvorlagen** können Sie die Optionen von Auswahl- und Mehrfachauswahl-Feldern (Select / Multi-Select) bearbeiten. Die Optionen werden im Feld **Optionen (JSON)** als JSON-Array gespeichert.

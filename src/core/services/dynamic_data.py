@@ -219,6 +219,7 @@ def clean_dynamic_data(
     entity_type,
     entity_type_error,
     facility_error: Exception | None = None,
+    old_data: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Guard a document type and whitelist its dynamic payload (Refs #1833)."""
     document_type = check_document_type(
@@ -232,10 +233,30 @@ def clean_dynamic_data(
         if data_json:
             raise ValidationError(_("Ohne Dokumentationstyp können keine dynamischen Daten gespeichert werden."))
         return {}
-    return validate_data_json(document_type, data_json)
+    return validate_data_json(document_type, data_json, old_data=old_data)
 
 
-def validate_data_json(document_type: DocumentType, data_json: Mapping[str, Any] | None) -> dict[str, Any]:
+def preserve_inactive_values(document_type, data_json, old_data=None) -> dict[str, Any]:
+    """Retain assigned inactive values verbatim and reject new inactive input."""
+    merged = dict(data_json or {})
+    existing = old_data or {}
+    inactive_slugs = document_type.fields.filter(field_template__is_active=False).values_list(
+        "field_template__slug", flat=True
+    )
+    for slug in inactive_slugs:
+        if slug in existing:
+            merged[slug] = existing[slug]
+        else:
+            merged.pop(slug, None)
+    return merged
+
+
+def validate_data_json(
+    document_type: DocumentType,
+    data_json: Mapping[str, Any] | None,
+    *,
+    old_data: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """Only accept fields defined in the DocumentType's field templates.
 
     FILE-typed fields use marker dicts — entweder das Stufe-A-Singleton
@@ -254,6 +275,8 @@ def validate_data_json(document_type: DocumentType, data_json: Mapping[str, Any]
     # dieses Modul re-exportiert.
     from core.services.events.fields import _serialize_json_value
 
+    if old_data is not None:
+        data_json = preserve_inactive_values(document_type, data_json, old_data)
     if not data_json:
         return {}
     field_templates = build_field_template_lookup(document_type)
@@ -273,7 +296,7 @@ def validate_data_json(document_type: DocumentType, data_json: Mapping[str, Any]
     for k, v in data_json.items():
         if k not in allowed_slugs:
             continue
-        if k in file_slugs and is_file_marker(v):
+        if (old_data is not None and not field_templates[k].is_active) or k in file_slugs and is_file_marker(v):
             cleaned[k] = v
         elif k in file_slugs:
             continue
@@ -338,7 +361,7 @@ def merge_dynamic_data(
     for slug in restricted_slugs:
         if slug in existing:
             merged[slug] = existing[slug]
-    return validate_data_json(document_type, merged)
+    return validate_data_json(document_type, merged, old_data=existing)
 
 
 def count_filled_dynamic_values(data_json: Mapping[str, Any] | None) -> int:

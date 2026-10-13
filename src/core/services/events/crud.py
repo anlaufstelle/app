@@ -462,7 +462,8 @@ def update_event(
         if key not in allowed:
             raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
 
-    data_json = _validate_data_json(event.document_type, data_json)
+    previous_data = Event.objects.for_facility(event.facility_id).values_list("data_json", flat=True).get(pk=event.pk)
+    data_json = _validate_data_json(event.document_type, data_json, old_data=previous_data)
     # Refs #1958: Der Slug-Diff MUSS vor dem ``save()`` unten stehen — danach
     # traegt die DB-Zeile bereits den neuen Stand, und ``changed_fields`` bliebe
     # fuer immer leer (Threat-Model-Befund „Bearbeitung ohne Audit-Spur").
@@ -562,7 +563,12 @@ def merge_update_payload(event, merged, restricted_keys, document_type):
     - **FILE-Felder** behalten ihren bestehenden Marker (beide Formate), damit
       ``apply_attachment_changes`` ihn anschliessend anpassen kann.
     """
+    from core.services.dynamic_data import preserve_inactive_values
+
     event_data = event.data_json or {}
+    retained = preserve_inactive_values(document_type, merged, event_data)
+    merged.clear()
+    merged.update(retained)
 
     # Re-insert restricted fields with original values
     for key in restricted_keys:

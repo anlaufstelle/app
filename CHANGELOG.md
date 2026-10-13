@@ -34,6 +34,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Deaktivierte Fachfelder mit Werterhalt** (#2573) — Inaktive Feldvorlagen fehlen in Ereignis-, Personen- und Fallformularen sowie Offline-Formdefinitionen, während normales Bearbeiten ihre bisherigen Werte einschließlich verschlüsselter Inhalte und Dateimarker bis zur Reaktivierung erhält.
+
 - **Belegte Feldtypen vor Datenverlust geschützt** (#2572) — Gespeicherte Personen-, Fall-, Ereignis-, Historien- und Vorlagenwerte sperren inkompatible Feldtypwechsel; kompatible Text-/Textbereichwechsel bleiben möglich, unbelegte Vorlagen bearbeitbar und die Fehlermeldung zeigt den Weg über Deaktivieren und Neuanlegen.
 - **Berichtsschlüssel bei Reaktivierung eindeutig** (#2574) — Einzelschalter, Modell-Speicherung und administrative Sammelaktivierung weisen doppelte aktive Berichtsschlüssel je Dokumentationstyp unter Konfigurationssperre ab, nennen beim Aktivieren den Konflikt und erhalten die bisherigen Berichtssummen.
 

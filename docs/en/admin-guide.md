@@ -927,6 +927,8 @@ To finally **remove** orphaned values (data minimisation, once they are no longe
 
 **Activation and report keys:** Each documentation type may have at most one active field template for the same report key. Reactivating a replaced template is rejected on conflict; the message names the documentation type and competing template. Administrative bulk activation also checks all selected templates, including conflicts within the selection, before activating any of them. Deactivation and conflict-free reactivation remain available.
 
+**Deactivated field templates:** Inactive templates are not offered as inputs in event, client or case forms or in offline form definitions. Normal edits preserve their stored values unchanged, including encrypted values and file markers; existing visibility rules continue to apply. After conflict-free reactivation, the field becomes editable again. Conditions with an inactive source or target are omitted from the input form. If all conditions on an active required field disappear, that field becomes unconditionally required again; an inactive required field does not block saving.
+
 ### 2.6 Manage Selection Options (Field Templates)
 
 Under **Management → Field templates**, you can edit the options of selection and multi-selection fields (Select / Multi-Select). Options are stored in the **Options (JSON)** field as a JSON array.
@@ -2550,4 +2552,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: e375d2ad1c7864ef3a7fc2841dd3963c70119a96 -->
+<!-- source-hash: 632e35915a66f43b1473afafc81833ec99525aa5 -->

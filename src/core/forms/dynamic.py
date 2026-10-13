@@ -350,7 +350,7 @@ class DynamicDataForm(forms.Form):
         # verlassen sich z. B. der Serienerfassungs-Autofocus und alle
         # "erstes Feld"-Konsumenten). Ein flaches ``order_by("sort_order")``
         # hätte Ties zwischen Innen-Indizes und Globalpositionen.
-        dtf_qs = block_ordered_dtf_queryset(document_type)
+        dtf_qs = block_ordered_dtf_queryset(document_type).filter(field_template__is_active=True)
 
         for dtf in dtf_qs:
             ft = dtf.field_template

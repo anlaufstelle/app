@@ -964,6 +964,7 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
             raw_data,
             entity_type=DocumentType.EntityType.CLIENT,
             entity_type_error=_CLIENT_DOCUMENT_TYPE_ERROR,
+            old_data=locked.data_json,
         )
 
     # Refs #1613: Diff gegen den DB-Stand, NICHT gegen die übergebene Instanz.

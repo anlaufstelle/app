@@ -106,7 +106,8 @@ def _serialize_document_type(user, doc_type) -> dict[str, Any]:
         "fields": [
             _serialize_field_template(dtf.field_template)
             for dtf in iter_fields_in_block_order(doc_type)
-            if user_can_see_field(user, doc_type.sensitivity, dtf.field_template.sensitivity or "")
+            if dtf.field_template.is_active
+            and user_can_see_field(user, doc_type.sensitivity, dtf.field_template.sensitivity or "")
         ],
     }
 

@@ -255,7 +255,7 @@ def update_case(case, user, *, expected_updated_at=None, expected_form_state=Non
     # Papierkorb gelegt wurde (der Papierkorb hebt ``updated_at`` nicht an und
     # aendert keine Formularspalte).
     lock_dynamic_protection(case.facility_id)
-    lock_case_for_write(case)
+    locked = lock_case_for_write(case)
     try:
         check_version_conflict(case, expected_updated_at)
     except ValidationError as exc:
@@ -286,6 +286,7 @@ def update_case(case, user, *, expected_updated_at=None, expected_form_state=Non
             raw_data,
             entity_type=DocumentType.EntityType.CASE,
             entity_type_error=_CASE_DOCUMENT_TYPE_ERROR,
+            old_data=locked.data_json,
         )
 
     # Refs #1613 (M2 P8 nachgezogen): Diff gegen den DB-Stand, NICHT gegen die
