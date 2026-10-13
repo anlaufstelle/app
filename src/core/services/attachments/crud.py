@@ -1098,6 +1098,9 @@ def purge_attachment_chain(owner, entry_id):
         # sind sie unabhaengig, und beide antworten mit demselben Fehlertyp an
         # dieselbe View-Flaeche.
         _lock_owner_row(owner)
+        # Refs #2581: edits committed before the owner lock must survive marker
+        # removal. Reload under that lock, including cached protection metadata.
+        owner.refresh_from_db(from_queryset=type(owner).objects.filter(facility_id=owner.facility_id))
 
         if owner_has_active_hold(owner):
             raise AttachmentPurgeBlockedError(
