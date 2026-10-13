@@ -675,6 +675,10 @@ The regular path for an application support is **Management > Access > Create ac
 
 Existing accounts can be edited, deactivated, or reactivated there. Application support cannot deactivate or demote their own account. The product UI does not permanently delete accounts: deactivation is the regular lifecycle; permanent deletion remains a reviewed technical exception. `super_admin`, bootstrap, and emergency work stay under **Anlaufstelle Core > User** in the Django admin; there, a `super_admin` can also toggle **2FA required** for these accounts; the field sits in the same form and is therefore also visible when an application support edits a regular account of their own facility (in addition to the Management > Access route). Each such change appears in the audit log as `USER_ACCESS_UPDATED` with `mfa_required` among the changed fields. Quick templates and time filters also deliberately remain technical admin functions.
 
+#### Conflict when editing an account
+
+If an account has changed since the form was opened, saving is refused. A missing or invalid form baseline is also refused. Your inputs remain in the form; the current security state appears above them, including role, active status, required 2FA, deletion approval and the other editable fields. Review this state and adjust your inputs if needed. Only deliberately pressing **Save** again confirms your inputs against that current baseline; another intervening change causes another conflict (#2547).
+
 #### Token Invite Flow (Refs #528)
 
 New accounts are created **without** a clear-text password. Instead, the application sends an **invitation email** containing a personalized setup link (`/invite/<uid>/<token>/`) to the email address on file. The link takes the new user to the same password-setting form as the password reset, where they set a password themselves.
@@ -2542,4 +2546,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 4b82c030e57c65aab334b828df028ec1137ca045 -->
+<!-- source-hash: 3042f62d1752f48b051a03dcfbe5c488c584fe5f -->

@@ -13,9 +13,20 @@
 
     <form method="post" class="space-y-4" novalidate data-testid="user-access-form">
         {% csrf_token %}
+        {% for field in form.hidden_fields %}{{ field }}{% endfor %}
         {% include "core/_form_errors.html" %}
+        {% if current_access_form %}
+        <section class="card p-5" aria-labelledby="current-access-heading">
+            <h2 id="current-access-heading" class="font-semibold">{% trans "Aktueller Sicherheitsstand" %}</h2>
+            <dl class="mt-2 space-y-1">
+                {% for field in current_access_form.visible_fields %}
+                <div><dt class="font-medium">{{ field.label }}</dt><dd>{% if field.name == "role" %}{{ target_user.get_role_display }}{% elif field.name == "is_active" or field.name == "mfa_required" or field.name == "can_confirm_deletion" %}{{ field.value|yesno:_("Ja,Nein") }}{% else %}{{ field.value|default:"—" }}{% endif %}</dd></div>
+                {% endfor %}
+            </dl>
+        </section>
+        {% endif %}
         <div class="card p-5 space-y-4">
-            {% for field in form %}
+            {% for field in form.visible_fields %}
             {% include "components/_form_field.html" %}
             {% endfor %}
         </div>

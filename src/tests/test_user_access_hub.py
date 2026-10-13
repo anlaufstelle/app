@@ -24,6 +24,7 @@ from core.services.user_access import (
     resend_user_invitation,
     unlock_managed_user,
     update_user_access,
+    user_access_basis_token,
 )
 
 pytestmark = pytest.mark.django_db
@@ -44,6 +45,7 @@ def _create_data(**overrides):
 
 def _update_data(user, **overrides):
     data = {
+        "basis_token": user_access_basis_token(user),
         "username": user.username,
         "email": user.email,
         "display_name": user.display_name,
@@ -58,6 +60,7 @@ def _update_data(user, **overrides):
 
 def _service_values(user, **overrides):
     values = {
+        "basis_token": user_access_basis_token(user),
         "username": user.username,
         "email": user.email,
         "display_name": user.display_name,
@@ -107,6 +110,7 @@ class TestUserAccessForms:
             "display_name",
             "role",
             "is_active",
+            "basis_token",
             "mfa_required",
             "can_confirm_deletion",
         }

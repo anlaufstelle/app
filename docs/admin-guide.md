@@ -676,6 +676,10 @@ Der reguläre Weg für die Anwendungsbetreuung ist **Verwaltung → Zugänge →
 
 Bestehende Zugänge lassen sich dort bearbeiten, deaktivieren oder reaktivieren. Der eigene Administrationszugang kann weder deaktiviert noch herabgestuft werden. Die Fach-UI löscht Konten nicht endgültig: Deaktivieren ist der reguläre Lebenszyklus; eine endgültige Löschung bleibt ein geprüfter technischer Sonderfall. `super_admin`, Bootstrap und Notfälle verbleiben unter **Anlaufstelle Core → Benutzer** im Django-Admin; dort kann ein `super_admin` auch das Feld **2FA erforderlich** für diese Konten umschalten; das Feld liegt im selben Formular und ist damit auch beim regulären Bearbeiten eines Kontos der eigenen Einrichtung durch eine Anwendungsbetreuung sichtbar (zusätzlich zum Weg über Verwaltung → Zugänge). Jede solche Änderung erscheint im Audit-Log als `USER_ACCESS_UPDATED` mit `mfa_required` in den geänderten Feldern. Quick-Templates und Zeitfenster bleiben ebenfalls bewusst technische Admin-Funktionen.
 
+#### Konflikt beim Bearbeiten eines Zugangs
+
+Wurde ein Zugang seit dem Öffnen des Formulars geändert, wird das Speichern abgewiesen. Das gilt auch bei fehlendem oder ungültigem Formularstand. Ihre Eingaben bleiben im Formular erhalten; darüber erscheint der aktuelle Sicherheitsstand mit Rolle, Aktivstatus, 2FA-Pflicht, Löschbestätigung und den übrigen bearbeitbaren Feldern. Prüfen Sie diesen Stand und passen Sie Ihre Eingaben gegebenenfalls an. Erst ein bewusstes erneutes **Speichern** bestätigt Ihre Eingaben auf dieser aktuellen Grundlage; eine weitere zwischenzeitliche Änderung führt erneut zum Konflikt (#2547).
+
 #### Token-Invite-Flow (Refs #528)
 
 Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet die Anwendung eine **Einladungs-E-Mail** mit einem personalisierten Setup-Link (`/invite/<uid>/<token>/`) an die hinterlegte E-Mail-Adresse. Der Link führt den neuen Nutzer auf dasselbe Passwort-Setzen-Formular wie der Passwort-Reset, wo er eigenhändig ein Passwort setzt.

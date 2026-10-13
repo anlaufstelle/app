@@ -10,6 +10,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.forms.mixins import TailwindFormMixin
 from core.models import User
+from core.services.user_access import user_access_basis_token
 
 _CREATE_FIELDS = (
     "username",
@@ -92,6 +93,13 @@ class UserAccessCreateForm(_UserAccessForm):
 
 
 class UserAccessUpdateForm(_UserAccessForm):
+    basis_token = forms.CharField(widget=forms.HiddenInput, required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.initial["basis_token"] = user_access_basis_token(self.instance)
+
     class Meta:
         model = User
         fields = _UPDATE_FIELDS

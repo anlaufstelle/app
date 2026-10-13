@@ -182,6 +182,7 @@ EXPECTED = {
         "can_confirm_deletion": ("Select", True, {}),
     },
     "UserAccessUpdateForm": {
+        "basis_token": ("HiddenInput", False, {}),
         "username": ("TextInput", True, {"maxlength": "150"}),
         "email": ("EmailInput", True, {"maxlength": "254"}),
         "display_name": ("TextInput", True, {"maxlength": "100"}),

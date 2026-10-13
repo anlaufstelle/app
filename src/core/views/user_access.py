@@ -15,6 +15,7 @@ from django_ratelimit import UNSAFE
 from core.constants import RATELIMIT_MUTATION
 from core.forms.user_access import UserAccessCreateForm, UserAccessUpdateForm
 from core.models.user import SessionRevocationError
+from core.services.form_state import FormStateConflictError
 from core.services.security import RequireSudoModeMixin, is_locked
 from core.services.user_access import (
     create_invited_user,
@@ -132,13 +133,25 @@ class UserAccessUpdateView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
         )
         if not form.is_valid():
             return render(request, self.template_name, self._context(form, target))
-        updated = update_user_access(
-            target,
-            facility=request.current_facility,
-            actor=request.user,
-            ip_address=get_client_ip(request),
-            **form.cleaned_data,
-        )
+        try:
+            updated = update_user_access(
+                target,
+                facility=request.current_facility,
+                actor=request.user,
+                ip_address=get_client_ip(request),
+                **form.cleaned_data,
+            )
+        except FormStateConflictError as exc:
+            current = exc.current
+            current_form = UserAccessUpdateForm(instance=current, facility=request.current_facility, actor=request.user)
+            data = request.POST.copy()
+            data["basis_token"] = current_form.initial["basis_token"]
+            form = UserAccessUpdateForm(data, instance=target, facility=request.current_facility, actor=request.user)
+            form.is_valid()
+            form.add_error(None, exc)
+            context = self._context(form, current)
+            context["current_access_form"] = current_form
+            return render(request, self.template_name, context)
         messages.success(request, _("Zugang wurde gespeichert."))
         return redirect("core:user_access_update", pk=updated.pk)
 

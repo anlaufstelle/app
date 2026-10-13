@@ -30,6 +30,7 @@ from core.models import AuditLog, User
 from core.models import EncryptedTOTPDevice as TOTPDevice
 from core.models.user import SessionRevocationError
 from core.services.audit import audit_event
+from core.services.form_state import require_form_state, sign_form_state
 from core.services.security import LOCKOUT_THRESHOLD, LOCKOUT_WINDOW, is_locked, send_invite_email, unlock
 from core.services.security.credentials import RevocationReason, revoke_credentials
 
@@ -45,6 +46,14 @@ _EDITABLE_FIELDS = (
     "mfa_required",
     "can_confirm_deletion",
 )
+
+
+_ACCESS_STATE_SALT = "core.user_access.form_state"
+
+
+def user_access_basis_token(user):
+    """Baseline of every editable access field, bound to account and facility."""
+    return sign_form_state(user, fields=_EDITABLE_FIELDS, facility_id=user.facility_id, salt=_ACCESS_STATE_SALT)
 
 
 @dataclass(frozen=True)
@@ -197,7 +206,9 @@ def create_invited_user(
     )
 
 
-def update_user_access(user: User, *, facility, actor, ip_address: str | None = None, **values) -> User:
+def update_user_access(
+    user: User, *, facility, actor, ip_address: str | None = None, basis_token: str | None = None, **values
+) -> User:
     _assert_actor(facility, actor)
     if values.get("role") not in _ASSIGNABLE_ROLES:
         raise PermissionDenied("Die Rolle Systemadministration kann hier nicht vergeben werden.")
@@ -207,6 +218,9 @@ def update_user_access(user: User, *, facility, actor, ip_address: str | None = 
         if target.pk == actor.pk and (values.get("role") != User.Role.FACILITY_ADMIN or not values.get("is_active")):
             raise PermissionDenied("Der eigene Administrationszugang darf nicht entzogen werden.")
 
+        require_form_state(
+            basis_token, target, fields=_EDITABLE_FIELDS, facility_id=facility.pk, salt=_ACCESS_STATE_SALT
+        )
         old_is_active = target.is_active
         changed_fields = []
         for name in _EDITABLE_FIELDS:
