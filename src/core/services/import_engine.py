@@ -181,13 +181,15 @@ def import_file_path(job: ImportJob) -> Path:
     return _import_dir(job.facility) / job.storage_filename
 
 
-def delete_import_file(job: ImportJob) -> None:
-    """Loescht die verschluesselte Quelldatei von der Disk (idempotent)."""
+def delete_import_file(job: ImportJob, *, raise_on_error: bool = False) -> None:
+    """Delete the upload idempotently; optionally propagate filesystem failures."""
     if not job.storage_filename:
         return
     try:
         import_file_path(job).unlink(missing_ok=True)
-    except OSError:  # pragma: no cover - Dateisystemfehler
+    except OSError:
+        if raise_on_error:
+            raise
         logger.warning("Import-Datei konnte nicht geloescht werden: job=%s", job.pk)
 
 
@@ -1189,19 +1191,21 @@ def commit_import(job: ImportJob, user) -> ImportJob:
     return job
 
 
-def abort_import(job: ImportJob, user, *, reason: str = "user") -> ImportJob:
-    """Bricht einen Lauf ab: Datei loeschen, Status ``ABORTED``, Audit.
+def abort_import(job: ImportJob, user, *, reason: str = "user", raise_on_file_error: bool = False) -> ImportJob:
+    """Abort under the commit lock; strict deletion failures preserve the job.
 
-    Ueber denselben Zeilen-Lock wie :func:`commit_import` — sonst koennten sich
-    Abbruch und Uebernahme ueberholen (Daten importiert, Lauf trotzdem
-    ``ABORTED``).
+    Retention opts into strict file deletion so a later run can retry the
+    original reference instead of certifying an incomplete cleanup (Refs #2583).
     """
     with transaction.atomic():
         _lock_job(job)
         if job.is_final:
             raise ValidationError(_("Der Importlauf ist bereits abgeschlossen."))
 
-        delete_import_file(job)
+        if raise_on_file_error:
+            delete_import_file(job, raise_on_error=True)
+        else:
+            delete_import_file(job)
         job.storage_filename = ""
         job.original_filename_encrypted = {}
         job.status = ImportJob.Status.ABORTED
@@ -1217,8 +1221,11 @@ def abort_import(job: ImportJob, user, *, reason: str = "user") -> ImportJob:
     return job
 
 
-def cleanup_stale_import_jobs(facility, now=None) -> int:
-    """Raeumt liegengebliebene Laeufe ab; liefert die Anzahl.
+def cleanup_stale_import_jobs(facility, now=None, *, failed_ids=None) -> int:
+    """Clean stale jobs and return the successful cleanup count.
+
+    Supplying ``failed_ids`` enables strict file deletion: failed jobs retain
+    their references, are counted separately, and do not stop other jobs.
 
     Ein nicht abgeschlossener Lauf haelt eine verschluesselte Datei mit
     Klientendaten auf der Disk. Nach :data:`STALE_DAYS` gilt er als aufgegeben:
@@ -1241,6 +1248,13 @@ def cleanup_stale_import_jobs(facility, now=None) -> int:
     for job in list(stale):
         # ``user=None``: der Cron-Lauf hat keinen Akteur (Muster
         # ``prune_offline_client_revocations``/``audit_event``-Doku).
-        abort_import(job, None, reason="stale")
+        try:
+            abort_import(job, None, reason="stale", raise_on_file_error=failed_ids is not None)
+        except OSError:
+            if failed_ids is None:
+                raise
+            failed_ids.add(job.pk)
+            logger.exception("Stale import file deletion failed; job %s remains retryable", job.pk)
+            continue
         count += 1
     return count

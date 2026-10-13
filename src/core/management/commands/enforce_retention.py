@@ -49,6 +49,7 @@ class _RetentionTotals:
     processed_facilities: int = 0
     skipped_facilities: int = 0
     failed_events: int = 0
+    failed_imports: int = 0
     deferred: int = 0
     deleted: int = 0
     anonymized: int = 0
@@ -242,7 +243,9 @@ class Command(BaseCommand):
             # ABORTED. Kein eigener Cron: der naechtliche Lauf ist ohnehin der
             # Ort, an dem Aufbewahrungsfristen durchgesetzt werden. Der
             # Dry-Run raeumt bewusst NICHT (read-only, wie die Nachbarn).
-            stale_imports = cleanup_stale_import_jobs(facility)
+            failed_import_ids: set[UUID] = set()
+            stale_imports = cleanup_stale_import_jobs(facility, failed_ids=failed_import_ids)
+            totals.failed_imports += len(failed_import_ids)
             if stale_imports:
                 self.stdout.write(f"Cleaned up {stale_imports} stale import job(s) for '{facility.name}'.")
 
@@ -310,22 +313,24 @@ class Command(BaseCommand):
         # Refs #919: persistenter LastRun-Marker fuer das Compliance-Dashboard.
         # Geschrieben nur nach erfolgreichem (non-dry-run) Lauf. ``facility=None``
         # — der Cron laeuft installationsweit, nicht pro Facility.
+        failed = totals.failed_events + totals.failed_imports
         self.stdout.write(
             f"Run coverage: processed={totals.processed_facilities}, "
-            f"skipped={totals.skipped_facilities}, failed={totals.failed_events}."
+            f"skipped={totals.skipped_facilities}, failed={failed}."
         )
         # Refs #2583: technical failures, skipped facilities and filters prevent global success.
-        if not full_run or totals.skipped_facilities or totals.failed_events:
+        if not full_run or totals.skipped_facilities or failed:
             logger.warning(
                 "enforce_retention: no installation success marker; processed=%s skipped=%s failed=%s filtered=%s",
                 totals.processed_facilities,
                 totals.skipped_facilities,
-                totals.failed_events,
+                failed,
                 not full_run,
             )
-            if totals.failed_events:
+            if failed:
                 raise CommandError(
-                    f"{totals.failed_events} event(s) kept after statistics carry-over failure. "
+                    f"{totals.failed_events} event(s) kept and {totals.failed_imports} import job(s) pending "
+                    "after a technical retention failure. "
                     "Other retention targets were processed; see application logs."
                 )
             return

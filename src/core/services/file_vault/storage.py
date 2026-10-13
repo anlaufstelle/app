@@ -534,13 +534,19 @@ def get_original_filename(attachment):
     return safe_decrypt(attachment.original_filename_encrypted, default="download")
 
 
-def delete_attachment_file(attachment):
-    """Delete the physical encrypted file from disk."""
+class AttachmentFileDeletionError(RuntimeError):
+    """A retention attachment could not be removed from storage (Refs #2583)."""
+
+
+def delete_attachment_file(attachment, *, raise_on_error=False):
+    """Delete the encrypted file; optionally propagate a retryable storage error."""
     path = get_attachment_path(attachment)
     try:
         with attachment_mutation_lock():
             path.unlink(missing_ok=True)
             if path.parent.exists():
                 fsync_directory(path.parent)
-    except OSError:
+    except OSError as exc:
+        if raise_on_error:
+            raise AttachmentFileDeletionError("Attachment file deletion failed") from exc
         logger.warning("Failed to delete attachment file: %s", path)

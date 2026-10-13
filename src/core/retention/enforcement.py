@@ -37,6 +37,7 @@ from core.services.audit import audit_retention_decision
 from core.services.dashboard.snapshot import SnapshotCarryError, carry_deleted_event
 from core.services.events import _snapshot_field_metadata, build_redacted_delete_history
 from core.services.file_vault import delete_attachments_for
+from core.services.file_vault.storage import AttachmentFileDeletionError
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +174,7 @@ def _lock_event_and_recheck_hold(facility, pk):
 
 
 class _CarryFailure:
-    """Turn a failed statistics carry-over of one event into a skipped event (Refs #2425).
+    """Isolate statistics carry and attachment deletion failures (Refs #2425, #2583).
 
     Entered before the event's transaction: the transaction rolls the deletion
     back first, then this logs the error and suppresses it, so the run goes on
@@ -188,10 +189,10 @@ class _CarryFailure:
         return self
 
     def __exit__(self, exc_type, exc, traceback):
-        if exc_type is None or not issubclass(exc_type, SnapshotCarryError):
+        if exc_type is None or not issubclass(exc_type, (SnapshotCarryError, AttachmentFileDeletionError)):
             return False
         logger.error(
-            "enforce_retention: event %s kept, its statistics carry-over failed",
+            "enforce_retention: event %s kept after a statistics carry-over or attachment deletion failure",
             self.pk,
             exc_info=(exc_type, exc, traceback),
         )
@@ -349,7 +350,7 @@ def _soft_delete_events(
             # carry-over commits with the deletion or not at all; it runs before
             # the attachment cleanup, whose file unlink cannot be rolled back.
             carry_deleted_event(facility, event)
-            delete_attachments_for(event)
+            delete_attachments_for(event, raise_on_file_error=True)
         if carry.failed:
             if failed_ids is not None:
                 failed_ids.add(pk)

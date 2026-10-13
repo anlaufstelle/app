@@ -34,8 +34,10 @@ DEFAULT_ORPHAN_CLEANUP_BUDGET = 10_000
 _CLEANUP_STATE_FILENAME = ".cleanup-orphan-storage-files-state.json"
 
 
-def delete_attachments_for(owner):
-    """Delete all attachments of an owner (files + DB records).
+def delete_attachments_for(owner, *, raise_on_file_error=False):
+    """Delete owner files and rows; strict failures leave the rows retryable.
+
+    Retention enables strict deletion inside its owner transaction (Refs #2583).
 
     ``owner`` ist ein ``Event``, ``Client`` oder ``Case``. Harter Rename von
     ``delete_event_attachments`` (AP2, Refs #1738 / ADR-039) — bewusst OHNE
@@ -75,7 +77,10 @@ def delete_attachments_for(owner):
     # die umgebende Loesch-/Anonymisierungskaskade bereits.
     lock_attachment_rows_in_facility_order(owner, None, deletes_rows=True)
     for attachment in owner.attachments.all():
-        delete_attachment_file(attachment)
+        if raise_on_file_error:
+            delete_attachment_file(attachment, raise_on_error=True)
+        else:
+            delete_attachment_file(attachment)
     owner.attachments.all().delete()
 
 
