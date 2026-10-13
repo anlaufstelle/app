@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Erforderliche Betreiber-Aktionen
 
+- Keine.
+
+## [0.99.7] - 2026-10-13
+
+Weiterer Release-Kandidat vor 1.0: bündelt den Schutz sensibler Feldwerte samt Suchindex, Löschfristen mit Freigabe, Hold und Art.-18-Schutz, ein abgesichertes Verwaltungs-Audit, gehärtete Offline-Schlüssel und zweite Faktoren, eine gemeinsame Exportleiste, geschützte Kleinzellen in Zeitraum-Summen sowie zahlreiche Korrekturen an Demo, Offline-Betrieb und Übersetzungen.
+
+### Erforderliche Betreiber-Aktionen
+
 - **Ältere Feldwerte und Historien nachverschlüsseln** (#2520, #2525) — Nach dem Update mit der Datenbank-Adminrolle (RLS-Bypass) zuerst `python manage.py reencrypt_fields --dry-run`, dann `python manage.py reencrypt_fields` ausführen, damit ältere Historienfassungen und Altwerte nach der aktuellen Feldkonfiguration verschlüsselt werden; übersprungene Zeilen erfordern einen erneuten Lauf ([Admin-Anleitung zur Schlüsselrotation](docs/admin-guide.md)).
 
 - **Suchindex nach dem Update neu aufbauen** (#2525) — Mit der Datenbank-Adminrolle (RLS-Bypass) zuerst `python manage.py rebuild_search_text --dry-run`, dann `python manage.py rebuild_search_text` ausführen, damit der Bestandsindex nur unverschlüsselte, wirksam normale Ereignisfelder enthält; optional begrenzt `--facility <UUID>` beide Aufrufe auf eine Einrichtung.

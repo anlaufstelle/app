@@ -185,6 +185,6 @@ Details: [ADR-022](../adr/022-offline-snapshot-keys.md).
 An HTTP/network/processing error fetching revocations (including 500/429), or an invalid response structure, pauses queue and edit replay: “Synchronization is waiting for the revocation check”. The blocking state is stored in local IndexedDB. Each replay run also requires its own fresh, structurally valid, successfully applied and persisted revocation check; an earlier approval never authorizes a later run or another tab, even when metadata writes and fallback deletion both fail. Missing or unreadable metadata blocks replay; recovery from a read failure also requires another successful check. The next sync sequence checks again, as does a direct save from the offline client record. A failed check preserves unsent work in encrypted form. Existing idempotency keys remain intact, and the server gates (422 for revoked people, 409 for status conflicts) remain authoritative. Device encryption does not replace these server checks.
 
 <!-- translation-source: docs/glossar.md -->
-<!-- translation-version: v0.99.6 -->
+<!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-11 -->
 <!-- source-hash: 3779b033bb6d05da7ce9e9126dab26368f3e1ac7 -->

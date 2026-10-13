@@ -15,6 +15,6 @@ Current `backup.sh` aborts with exit code 1 before publishing a set if the ancho
 Media archive verification runs in one disposable maintenance container while `web` and `cron` remain stopped. Its temporary working directory is on the persistent `/media` volume, outside `MEDIA_ROOT`, and is removed afterwards. The German guide's verification command uses `/media/media-verify-$RESTORE_TIMESTAMP` and `${MEDIA_ROOT_CONTAINER:-/media/media}`. Compare SHA-256 and size of the encrypted files with the authenticated archive; original filenames and plaintext sizes require the separate download check. See the [German recovery steps](../disaster-recovery.md#schritt-4--db-backup-entschlüsseln--wiederherstellen) for the complete procedure.
 
 <!-- translation-source: docs/disaster-recovery.md -->
-<!-- translation-version: v0.99.6 -->
+<!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-10 -->
 <!-- source-hash: fef11d7643755eb7b3ced458b3b4e06be5496c00 -->

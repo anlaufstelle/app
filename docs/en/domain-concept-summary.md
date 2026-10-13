@@ -317,6 +317,12 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Operations signal what they cannot see**: missing backup signals or an unmeasurable disk degrade the health status, audit high-water marks are anchored offsite and checked in the restore drill, host scripts use the host backup path, and compliance warns about unlimited audit retention.
 - **Time and speed**: the nights of the clock change keep their real hours (shift end and event form both explain the doubled or skipped hour), person search uses trigram-friendly matching, and the timeline checks event visibility only within the own facility. The test suite was restructured with identical coverage.
 
+### v0.99.7 (2026-10-13)
+
+- **Sensitive values, retention and audit**: events written through the application index only unencrypted, effectively normal fields, high-sensitivity types require explicit field levels (also in the Django admin), "with additional details" is deleted only after approval and records under a legal hold or an Art. 18 restriction are left out of the run, administrative access is audited and refused if the read audit fails, and review pages link only to records the reader may see.
+- **Offline keys and second factor hardened**: offline keys are bound to the current derivation, their lifetime and revocation check are limited, second-factor and security checks are stricter, and attachments are re-encrypted safely across interruptions.
+- **Reports, exports and everyday use**: one shared export bar with recipient and purpose for everything that leaves the statistics area, a PDF for record reports and protected small cells in period totals, a contacts list with filters, field protection visible in the configuration, and many fixes for the demo, offline feedback and translations.
+
 ### v0.99.6 (2026-10-08)
 
 - **Second-factor reset by administrators**: facility administrators (for their own facility) and system administrators can reset another account's second factor after confirming their own login again; the reset is audited and ends the account's open sessions.
@@ -347,6 +353,6 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Quick exit joins the glossary**: a header-bar action (button + keyboard shortcut) on every signed-in page that hides the content, ends the session and opens a neutral page, kept distinct from the separate opt-in privacy screen shown on window or tab switch.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.99.6 -->
-<!-- translation-date: 2026-10-10 -->
+<!-- translation-version: v0.99.7 -->
+<!-- translation-date: 2026-10-12 -->
 <!-- source-hash: a584357b32fa0f41af2fba3a4e63aa7a13470c26 -->

@@ -56,6 +56,6 @@ from 2026-10-06 is superseded:
 [the German references](../../adr/021-retention-modell.md#references).
 
 <!-- translation-source: docs/adr/021-retention-modell.md -->
-<!-- translation-version: v0.99.6 -->
+<!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-11 -->
 <!-- source-hash: 07e85a1eec925531dacbb5b079c62d3b02a94ee9 -->

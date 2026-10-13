@@ -83,6 +83,6 @@ Releases displays 50 entries per page; warning checks consider all matching rele
 Decision aid: [User Guide § 7 “The Three Tabs at a Glance”](https://github.com/anlaufstelle/app/blob/main/docs/en/user-guide.md#the-three-tabs-at-a-glance). Details: [Releases](https://github.com/anlaufstelle/app/blob/main/docs/en/user-guide.md#releases-manager--admin). Release rules: [Admin Guide § 8](https://github.com/anlaufstelle/app/blob/main/docs/en/admin-guide.md#releasing-reports-what-you-need-to-know).
 
 <!-- translation-source: docs/faq.md -->
-<!-- translation-version: v0.99.6 -->
+<!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-11 -->
 <!-- source-hash: a4d9364bbe6cf4ff1970b6cede25f1bbd969a484 -->

@@ -1138,6 +1138,6 @@ without expiry even after manual event deletion.
 *Anlaufstelle -- Documentation system for low-threshold social services*
 
 <!-- translation-source: docs/user-guide.md -->
-<!-- translation-version: v0.99.6 -->
+<!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-11 -->
 <!-- source-hash: 63f8b602758ce3276ab1083be7c11c598681fbeb -->

@@ -13,6 +13,6 @@ An HTTP/network/processing error fetching revocations (including 500/429), or an
 Seed and offline bootstrap use the same runtime constant in `core.demo`. Only the first rendered page after a successful demo start receives the password data constant for the external auth bootstrap script; there is no inline script literal. For demo bootstrap requests, the existing salt endpoint rechecks the mode and password match while retaining auditing and rate limiting. Outside `DEMO_MODE`, neither the data constant nor a demo bootstrap flag is created.
 
 <!-- translation-source: docs/adr/022-offline-snapshot-keys.md -->
-<!-- translation-version: v0.99.6 -->
+<!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-10 -->
 <!-- source-hash: 1503ba7028fb474b3105de11429624bd392b7a4e -->
