@@ -165,7 +165,11 @@ def enforce_upload_size(facility, uploaded_file, owner, user):
 # This estimate is not a bound on Pillow's format-specific encoder allocations.
 _MAX_IMAGE_FRAMES = 100
 _MAX_IMAGE_DECODED_BYTES = 256 * 1024 * 1024
-_IMAGE_BUFFER_RESERVE = 3
+# Four-byte buffer slots per admitted pixel, including retained clean frames.
+# WebP: two native canvases, source, clean copy and raw-frame handoff.
+# TIFF: native RGBA raster, source, clean copy and orientation conversion.
+# ICO: XOR raster, RGBA conversion and alpha/AND mask data and image.
+_IMAGE_BUFFER_RESERVES = {"WEBP": 5, "TIFF": 4, "ICO": 4}
 _MAX_PNG_CHUNKS = 10_000
 
 
@@ -410,6 +414,23 @@ def _ico_frame_sizes(stream):
         yield width, height
 
 
+def _image_buffer_reserve(image_format, frames):
+    """Reserve known overlapping pixel buffers, before any encoder workspace.
+
+    Multiplying every frame by the full reserve conservatively covers retained
+    clean copies alongside the current decoder, even for unequal TIFF pages.
+    APNG adds previous/disposal canvases and crop/RGBA blend intermediates.
+    Static PNG/JPEG need source, clean copy and one transformation buffer.
+    GIF is passed through: only opening/first-frame disposal is reached, but
+    keep the existing three-buffer allowance without requiring pixel loading.
+    """
+    if image_format == "PNG" and frames > 1:
+        # Source, previous canvas, disposal, two blend/crop intermediates,
+        # retained clean copy and an overlapping copy/conversion buffer.
+        return 7
+    return _IMAGE_BUFFER_RESERVES.get(image_format, 3)
+
+
 def _check_image_budget(facility, uploaded_file, owner, user, *, pixels, frames, decoded_bytes, max_pixels):
     """Reject before frame copies can exhaust the aggregate image budget."""
     if frames > _MAX_IMAGE_FRAMES:
@@ -452,8 +473,9 @@ def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=Non
     promotion to RGBA. Their frame count is read without decoding pixel data.
     WebP, PNG/APNG, GIF and ICO headers are checked before Image.open(),
     which can already allocate canvas/disposal buffers or decode an icon.
-    The byte estimate reserves three buffers of at least four bytes per pixel:
-    source, retained clean copy and transform/encoding workspace. Encoder
+    The byte estimate uses format-specific reserves of at least four bytes
+    per pixel, accounting for native canvases, source, retained clean frames,
+    disposal/blend intermediates and raw-frame handoff buffers. Encoder
     allocations are format-dependent and are not proven bounded by this estimate.
     """
     ext = _extension(uploaded_file)
@@ -474,14 +496,19 @@ def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=Non
         prefix = uploaded_file.read(12)
         uploaded_file.seek(0)
         sizes = None
+        image_format = None
         icon = prefix[:4] == b"\x00\x00\x01\x00"
         if prefix[:6] in {b"GIF87a", b"GIF89a"}:
+            image_format = "GIF"
             sizes = ((width, height, 1) for width, height in _gif_frame_sizes(uploaded_file))
         elif prefix[:4] == b"RIFF" and prefix[8:12] == b"WEBP":
+            image_format = "WEBP"
             sizes = ((width, height, 1) for width, height in _webp_frame_sizes(uploaded_file))
         elif prefix[:8] == b"\x89PNG\r\n\x1a\n":
+            image_format = "PNG"
             sizes = [_png_image_size(uploaded_file)]
         elif icon:
+            image_format = "ICO"
             sizes = ((width, height, 1) for width, height in _ico_frame_sizes(uploaded_file))
         preflighted = sizes is not None
         if sizes is not None:
@@ -497,7 +524,7 @@ def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=Non
                     user,
                     pixels=pixels,
                     frames=frames,
-                    decoded_bytes=pixels * 4 * _IMAGE_BUFFER_RESERVE,
+                    decoded_bytes=pixels * 4 * _image_buffer_reserve(image_format, frames),
                     max_pixels=max_pixels,
                 )
         uploaded_file.seek(0)
@@ -516,7 +543,9 @@ def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=Non
                             break
                         page_pixels = img.width * img.height
                         pixels += page_pixels
-                        decoded_bytes += page_pixels * max(4, len(img.getbands())) * _IMAGE_BUFFER_RESERVE
+                        decoded_bytes += (
+                            page_pixels * max(4, len(img.getbands())) * _image_buffer_reserve(img.format, index + 1)
+                        )
                         _check_image_budget(
                             facility,
                             uploaded_file,
@@ -530,7 +559,7 @@ def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=Non
                 else:
                     frames = getattr(img, "n_frames", 1)
                     pixels = img.width * img.height * frames
-                    decoded_bytes = pixels * max(4, len(img.getbands())) * _IMAGE_BUFFER_RESERVE
+                    decoded_bytes = pixels * max(4, len(img.getbands())) * _image_buffer_reserve(img.format, frames)
                     _check_image_budget(
                         facility,
                         uploaded_file,

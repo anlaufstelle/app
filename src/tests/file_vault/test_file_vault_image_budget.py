@@ -609,3 +609,71 @@ def test_icon_with_multiple_embedded_rasters_remains_allowed(image_owner, staff_
     upload = SimpleUploadedFile("variants.ico", data, content_type="image/vnd.microsoft.icon")
     attachment = store_encrypted_file(owner.facility, upload, field, owner, staff_user)
     assert b"".join(get_decrypted_file_stream(attachment)) == data
+
+
+@pytest.mark.parametrize(
+    ("fmt", "frame_count", "budget"),
+    [("WEBP", 1, 1500), ("WEBP", 2, 3000), ("PNG", 2, 3000), ("TIFF", 1, 1500), ("ICO", 1, 3500)],
+)
+def test_format_specific_live_buffers_rejected_before_decoder_or_encoder(
+    image_owner, staff_user, monkeypatch, fmt, frame_count, budget
+):
+    owner, field = image_owner
+    extension = {"WEBP": "webp", "PNG": "png", "TIFF": "tiff", "ICO": "ico"}[fmt]
+    Settings.objects.filter(facility=owner.facility).update(allowed_file_types=extension)
+    size = (16, 16) if fmt == "ICO" else (10, 10)
+    buffer = io.BytesIO()
+    frames = [Image.new("RGBA", size, (255, index * 100, 0, 128)) for index in range(frame_count)]
+    kwargs = {"save_all": True, "append_images": frames[1:]} if frame_count > 1 else {}
+    if fmt == "WEBP":
+        kwargs["lossless"] = True
+    elif fmt == "PNG":
+        kwargs.update(disposal=2, blend=1)
+    elif fmt == "ICO":
+        kwargs.update(sizes=[size], bitmap_format="bmp")
+    frames[0].save(buffer, format=fmt, **kwargs)
+    for frame in frames:
+        frame.close()
+    upload = SimpleUploadedFile(
+        f"buffers.{extension}",
+        buffer.getvalue(),
+        content_type="image/vnd.microsoft.icon" if fmt == "ICO" else f"image/{extension}",
+    )
+    monkeypatch.setattr(policy, "_MAX_IMAGE_DECODED_BYTES", budget)
+    with (
+        patch("core.services.file_vault.storage.encrypt_file") as encrypt,
+        patch.object(
+            policy, "_cleaned_image", side_effect=AssertionError("Unbudgeted buffers reached cleanup")
+        ) as clean,
+        patch.object(
+            WebPImagePlugin._webp, "WebPAnimDecoder", side_effect=AssertionError("WebP canvas allocated")
+        ) as webp,
+        patch("PIL.ImageFile.ImageFile.load", side_effect=AssertionError("Raster allocated before rejection")) as load,
+        pytest.raises(ValidationError, match="Speicherbudget"),
+    ):
+        store_encrypted_file(owner.facility, upload, field, owner, staff_user)
+    encrypt.assert_not_called()
+    clean.assert_not_called()
+    webp.assert_not_called()
+    load.assert_not_called()
+    assert upload.tell() == 0
+    assert not Attachment.objects.filter(event=owner).exists()
+    assert AuditLog.objects.filter(
+        action=AuditLog.Action.SECURITY_VIOLATION, detail__reason="image_memory_budget"
+    ).exists()
+
+
+@pytest.mark.parametrize("fmt", ["JPEG", "PNG", "WEBP"])
+def test_twelve_megapixel_photos_remain_allowed_with_default_budget(image_owner, staff_user, fmt):
+    owner, field = image_owner
+    extension = fmt.lower()
+    Settings.objects.filter(facility=owner.facility).update(allowed_file_types=extension)
+    buffer = io.BytesIO()
+    with Image.new("RGB", (4000, 3000), "red") as image:
+        image.save(buffer, format=fmt)
+    upload = SimpleUploadedFile(f"photo.{extension}", buffer.getvalue(), content_type=f"image/{extension}")
+    attachment = store_encrypted_file(owner.facility, upload, field, owner, staff_user)
+    with Image.open(io.BytesIO(b"".join(get_decrypted_file_stream(attachment)))) as image:
+        image.load()
+        assert image.size == (4000, 3000)
+        assert getattr(image, "n_frames", 1) == 1
