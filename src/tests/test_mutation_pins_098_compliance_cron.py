@@ -54,6 +54,7 @@ from core.services.compliance import (
 )
 from core.services.compliance._types import ComplianceCategory
 from core.services.compliance.cron import _age_hours, _cron_action_hint
+from tests._job_run_helpers import SUCCESSFUL_JOB_RUN
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -72,7 +73,9 @@ def _marker(action: str) -> AuditLog:
     In-Memory-Objekt.
     """
     AuditLog.objects.filter(action=action).delete()
-    entry = AuditLog.objects.create(action=action, facility=None, target_type="CronRun")
+    entry = AuditLog.objects.create(
+        detail={"job_run": SUCCESSFUL_JOB_RUN}, action=action, facility=None, target_type="CronRun"
+    )
     return AuditLog.objects.get(pk=entry.pk)
 
 

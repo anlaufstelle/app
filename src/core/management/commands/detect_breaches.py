@@ -79,12 +79,26 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.WARNING(f"{total} neue Breach-Finding(s) — siehe Audit-Log."))
 
-        # Refs #794: Marker, dass der Scan gelaufen ist (unabhängig von Findings) —
-        # fürs Compliance-Dashboard, facility=None (installationsweiter Cron).
-        audit_event(
-            AuditLog.Action.BREACH_SCAN_COMPLETED,
-            user=None,
-            facility=None,
-            target_type="BreachScanRun",
-            detail={"facilities": facilities.count(), "findings": total},
+        processed = facilities.count()
+        self.stdout.write(
+            f"Run coverage: processed={processed}, skipped=0, failed=0, system_scan={not bool(facility_name)}."
         )
+        # Refs #2583: a filtered scan omits the system heuristics and cannot prove cron health.
+        if not facility_name:
+            audit_event(
+                AuditLog.Action.BREACH_SCAN_COMPLETED,
+                user=None,
+                facility=None,
+                target_type="BreachScanRun",
+                detail={
+                    "facilities": processed,
+                    "findings": total,
+                    "job_run": {
+                        "scope": "installation",
+                        "status": "success",
+                        "processed": processed,
+                        "skipped": 0,
+                        "failed": 0,
+                    },
+                },
+            )

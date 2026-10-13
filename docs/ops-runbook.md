@@ -490,6 +490,8 @@ Start und Exit-Code stehen nur im supercronic-Log. Das Host-Monitoring sollte de
 den `cron`-Logs alarmieren — insbesondere auf `verify_audit_chain`, das bei
 Tamper-Verdacht mit Exit-Code != 0 endet.
 
+Erfolgsmarker für Snapshots, Retention und Breach-Scan setzen jetzt einen erfolgreichen installationsweiten Lauf voraus: `job_run.scope=installation`, `job_run.status=success`, keine übersprungenen oder fehlgeschlagenen Einrichtungen. Ein `--facility`-Lauf frischt den globalen Erfolg nicht auf; beim gefilterten Breach-Scan fehlen auch die Systemheuristiken. Snapshotfehler und Einrichtungen ohne Settings bei Snapshot/Retention erzeugen keinen Erfolgsmarker. Die Command-Ausgabe nennt Abdeckungszähler; Snapshotfehler enden nach Bearbeitung der übrigen Einrichtungen weiterhin mit Exit ungleich 0. Dry-Run und Retention-Propose schreiben ebenfalls keinen Erfolgsmarker. Historische Marker ohne expliziten Nachweis werden ignoriert: bis zum nächsten vollständigen Lauf kann die Karte unbekannt anzeigen oder behält das Alter des letzten nachgewiesenen Voll-Laufs. Das Health-Detail übernimmt dieselben Altersprüfungen; es nennt kritische Jobschlüssel, während unbekannter Status allein eine frische Installation nicht degradiert.
+
 **Aenderungen am Zeitplan** gehoeren in `deploy/crontab` (Repo, versioniert);
 danach `docker compose -f docker-compose.prod.yml restart cron`. Der Guard
 `src/tests/test_ops_cron_sidecar.py` haelt die Datei mit der Tabelle in §3.1

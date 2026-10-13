@@ -32,6 +32,7 @@ from core.services.compliance import (
     _retention_checks,
 )
 from core.services.compliance._types import ComplianceCategory
+from tests._job_run_helpers import SUCCESSFUL_JOB_RUN
 
 
 def _patch_compliance_now(fixed: datetime):
@@ -47,8 +48,8 @@ def _create_retention_audit(facility) -> AuditLog:
     """RETENTION_RUN_COMPLETED-Audit mit aktuellem (real) Timestamp."""
     return AuditLog.objects.create(
         action=AuditLog.Action.RETENTION_RUN_COMPLETED,
-        facility=facility,
-        detail={"event_count": 0},
+        facility=None,
+        detail={"job_run": SUCCESSFUL_JOB_RUN, "event_count": 0},
     )
 
 

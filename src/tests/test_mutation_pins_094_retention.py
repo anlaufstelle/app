@@ -50,6 +50,7 @@ from core.models import AuditLog, Facility, Settings
 from core.services import ops_thresholds
 from core.services.compliance import _retention_checks, _retention_config_checks
 from core.services.compliance._types import ComplianceStatus
+from tests._job_run_helpers import SUCCESSFUL_JOB_RUN
 
 pytestmark = pytest.mark.django_db
 
@@ -69,9 +70,9 @@ def _retention_marker(facility=None) -> AuditLog:
     AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).delete()
     entry = AuditLog.objects.create(
         action=AuditLog.Action.RETENTION_RUN_COMPLETED,
-        facility=facility,
+        facility=None,
         target_type="RetentionRun",
-        detail={"event_count": 0},
+        detail={"job_run": SUCCESSFUL_JOB_RUN, "event_count": 0},
     )
     # Der Check liest die Zeile aus der DB; fuer Zeit-/Formatvergleiche
     # zaehlt der gespeicherte Wert, nicht das In-Memory-Objekt.

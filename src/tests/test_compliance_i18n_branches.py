@@ -14,6 +14,7 @@ from core.models import AuditLog, EncryptedTOTPDevice, Settings, User
 from core.services import compliance
 from core.services.compliance.db_roles import RoleCheck
 from core.services.system import bypass_replication_triggers
+from tests._job_run_helpers import SUCCESSFUL_JOB_RUN
 
 # Each fixture exercises the real aggregate service; only external observations
 # (clock, PostgreSQL role inspection, backup files and ClamAV) are substituted.
@@ -241,7 +242,10 @@ def dashboard_scenario(request, settings, monkeypatch, facility, super_admin_use
     if not options.get("missing"):
         for action, age_hours in markers:
             entry = AuditLog.objects.create(
-                action=action, facility=None, target_type="MaintenanceResult", detail={"note": "Example note"}
+                action=action,
+                facility=None,
+                target_type="MaintenanceResult",
+                detail={"job_run": SUCCESSFUL_JOB_RUN, **{"note": "Example note"}},
             )
             with bypass_replication_triggers():
                 AuditLog.objects.filter(pk=entry.pk).update(timestamp=now - timedelta(hours=age_hours))

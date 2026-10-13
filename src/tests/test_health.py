@@ -23,6 +23,7 @@ from core.models import AuditLog
 from core.services.compliance import ComplianceCheck, ComplianceStatus
 from core.services.system import bypass_replication_triggers
 from core.views.health import _check_stale_jobs, _query_runtime_role_posture
+from tests._job_run_helpers import SUCCESSFUL_JOB_RUN
 from tests.test_rls_functional import (  # noqa: F401
     as_rls_role,
     rls_test_role,
@@ -691,7 +692,10 @@ class TestStaleJobsRlsVisibility:
         (das #1335-Kernszenario: ein tatsaechlich ausgefallener Scheduler wird
         nie gemeldet)."""
         entry = AuditLog.objects.create(
-            action=AuditLog.Action.BREACH_SCAN_COMPLETED, facility=None, target_type="BreachScanRun"
+            detail={"job_run": SUCCESSFUL_JOB_RUN},
+            action=AuditLog.Action.BREACH_SCAN_COMPLETED,
+            facility=None,
+            target_type="BreachScanRun",
         )
         # transaction=True (fuer rls_test_role/SET ROLE) laeuft ohne umschliessende
         # Transaktion — SET LOCAL braucht einen expliziten transaction.atomic()-Block,

@@ -64,6 +64,8 @@ class Command(BaseCommand):
         # FOLGENDEN Einrichtungen unverarbeitet. Der Lauf faehrt nur einmal im
         # Monat — aus einer Verzoegerung wird dann schnell eine Luecke.
         failed_facilities: list[str] = []
+        processed = 0
+        skipped = 0
 
         for facility in facilities:
             try:
@@ -75,8 +77,10 @@ class Command(BaseCommand):
                 message = f"No settings for '{facility.name}', skipping."
                 self.stdout.write(self.style.WARNING(message))
                 logger.warning("create_statistics_snapshots: %s", message)
+                skipped += 1
                 continue
 
+            processed += 1
             try:
                 months_to_snapshot = self._determine_months(facility, today, backfill, year, month)
             except Exception:
@@ -100,34 +104,49 @@ class Command(BaseCommand):
         label = "[dry-run] Would create" if dry_run else "Created"
         self.stdout.write(self.style.SUCCESS(f"{label} {total} snapshot(s) in total."))
 
-        # Refs #794: Last-Run-Marker fürs Compliance-Dashboard. Nur nach echtem
-        # (non-dry-run) Lauf — facility=None, da der Cron installationsweit läuft.
-        if not dry_run:
+        self.stdout.write(
+            f"Run coverage: processed={processed}, skipped={skipped}, failed={len(set(failed_facilities))}."
+        )
+        # Refs #2583: only a complete, successful installation run is evidence for cron health.
+        if not dry_run and not facility_name and not failed_facilities and not skipped:
             audit_event(
                 AuditLog.Action.SNAPSHOT_RUN_COMPLETED,
                 user=None,
                 facility=None,
                 target_type="SnapshotRun",
-                detail={"snapshots": total},
+                detail={
+                    "snapshots": total,
+                    "job_run": {
+                        "scope": "installation",
+                        "status": "success",
+                        "processed": processed,
+                        "skipped": 0,
+                        "failed": 0,
+                    },
+                },
+            )
+        elif not dry_run:
+            logger.warning(
+                "create_statistics_snapshots: no installation success marker; "
+                "processed=%s skipped=%s failed=%s filtered=%s",
+                processed,
+                skipped,
+                len(set(failed_facilities)),
+                bool(facility_name),
             )
 
-        # Refs #2118: Der Lauf hat alles gerettet, was zu retten war — er war
-        # aber nicht erfolgreich. Ein Exit-Code 0 haette den Ausfall im
-        # Cron-Sidecar unsichtbar gemacht (Muster ``--facility``-Tippfehler
-        # oben, Refs #2068). Die Zusammenfassung steht bewusst am ENDE, damit
-        # der Marker die tatsaechlich erzeugten Snapshots festhaelt.
         if failed_facilities:
-            namen = ", ".join(sorted(set(failed_facilities)))
+            names = ", ".join(sorted(set(failed_facilities)))
             raise CommandError(
-                f"{len(failed_facilities)} Snapshot-Fehler in {len(set(failed_facilities))} "
-                f"Einrichtung(en): {namen}. Uebrige Snapshots wurden erstellt; Details im Anwendungs-Log."
+                f"{len(failed_facilities)} snapshot failure(s) in {len(set(failed_facilities))} "
+                f"facility/facilities: {names}. Other snapshots were created; see application logs."
             )
 
     def _report_failure(self, facility, period, failed_facilities: list[str]) -> None:
-        """Einen Einzelfehler protokollieren und den Lauf weiterlaufen lassen."""
-        wo = f"{facility.name} {period[0]}/{period[1]:02d}" if period else f"{facility.name} (Monatsbestimmung)"
-        logger.exception("create_statistics_snapshots: Snapshot fuer %s ist gescheitert", wo)
-        self.stderr.write(self.style.ERROR(f"Snapshot fehlgeschlagen: {wo} — Details im Anwendungs-Log."))
+        """Report one failure while allowing other facilities and months to finish."""
+        location = f"{facility.name} {period[0]}/{period[1]:02d}" if period else f"{facility.name} (month selection)"
+        logger.exception("create_statistics_snapshots: snapshot failed for %s", location)
+        self.stderr.write(self.style.ERROR(f"Snapshot failed: {location} — see application logs."))
         failed_facilities.append(facility.name)
 
     def _determine_months(self, facility, today, backfill, year, month):

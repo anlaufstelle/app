@@ -26,6 +26,7 @@ class UnknownAuditDetailKeyError(ValueError):
 # ---------------------------------------------------------------------------
 
 AUDIT_DETAIL_KEYS: dict[str, str] = {
+    "job_run": "Cron evidence: installation scope, outcome and facility counters; no names or payloads",
     "file_reencryption": "File rotation: duration, counters, options, facility UUID; no file identifiers or content",
     # -- Zeit- und Fristangaben ------------------------------------------
     "date_from": "Berichtszeitraum-Beginn eines Exports — Zeitangabe, kein Personenbezug",

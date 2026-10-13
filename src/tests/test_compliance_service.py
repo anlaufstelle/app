@@ -13,6 +13,7 @@ from core.models import AuditLog, Facility, Settings
 from core.models.user import User
 from core.services import compliance
 from core.services.compliance._types import ComplianceCategory
+from tests._job_run_helpers import SUCCESSFUL_JOB_RUN
 
 
 def _make_role_check(label: str, role: str, actual_super: bool | None, actual_bypassrls: bool | None):
@@ -459,6 +460,7 @@ class TestRetentionChecks:
     def test_ok_when_within_warn_threshold(self):
         AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).delete()
         AuditLog.objects.create(
+            detail={"job_run": SUCCESSFUL_JOB_RUN},
             action=AuditLog.Action.RETENTION_RUN_COMPLETED,
             facility=None,
             target_type="RetentionRun",
@@ -470,7 +472,10 @@ class TestRetentionChecks:
         """Refs #1872: der Lauf ist taeglich — ein ausgefallener Lauf (> 36 h) ist WARNING."""
         AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).delete()
         old = AuditLog.objects.create(
-            action=AuditLog.Action.RETENTION_RUN_COMPLETED, facility=None, target_type="RetentionRun"
+            detail={"job_run": SUCCESSFUL_JOB_RUN},
+            action=AuditLog.Action.RETENTION_RUN_COMPLETED,
+            facility=None,
+            target_type="RetentionRun",
         )
         from core.services.system import bypass_replication_triggers
 
@@ -483,7 +488,10 @@ class TestRetentionChecks:
         """Refs #1872: zwei ausgefallene Tageslaeufe (> 48 h) sind CRITICAL."""
         AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).delete()
         old = AuditLog.objects.create(
-            action=AuditLog.Action.RETENTION_RUN_COMPLETED, facility=None, target_type="RetentionRun"
+            detail={"job_run": SUCCESSFUL_JOB_RUN},
+            action=AuditLog.Action.RETENTION_RUN_COMPLETED,
+            facility=None,
+            target_type="RetentionRun",
         )
         from core.services.system import bypass_replication_triggers
 
@@ -703,13 +711,21 @@ class TestCronChecks:
 
     def test_snapshot_ok_within_35d(self):
         AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).delete()
-        AuditLog.objects.create(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED, facility=None, target_type="SnapshotRun")
+        AuditLog.objects.create(
+            detail={"job_run": SUCCESSFUL_JOB_RUN},
+            action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED,
+            facility=None,
+            target_type="SnapshotRun",
+        )
         assert compliance._snapshot_checks()[0].status == compliance.ComplianceStatus.OK
 
     def test_snapshot_warning_35_to_65d(self):
         AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).delete()
         e = AuditLog.objects.create(
-            action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED, facility=None, target_type="SnapshotRun"
+            detail={"job_run": SUCCESSFUL_JOB_RUN},
+            action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED,
+            facility=None,
+            target_type="SnapshotRun",
         )
         self._backdate(e, days=50)
         assert compliance._snapshot_checks()[0].status == compliance.ComplianceStatus.WARNING
@@ -717,7 +733,10 @@ class TestCronChecks:
     def test_snapshot_critical_over_65d(self):
         AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).delete()
         e = AuditLog.objects.create(
-            action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED, facility=None, target_type="SnapshotRun"
+            detail={"job_run": SUCCESSFUL_JOB_RUN},
+            action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED,
+            facility=None,
+            target_type="SnapshotRun",
         )
         self._backdate(e, days=80)
         assert compliance._snapshot_checks()[0].status == compliance.ComplianceStatus.CRITICAL
@@ -730,14 +749,20 @@ class TestCronChecks:
     def test_breach_ok_within_3h(self):
         AuditLog.objects.filter(action=AuditLog.Action.BREACH_SCAN_COMPLETED).delete()
         AuditLog.objects.create(
-            action=AuditLog.Action.BREACH_SCAN_COMPLETED, facility=None, target_type="BreachScanRun"
+            detail={"job_run": SUCCESSFUL_JOB_RUN},
+            action=AuditLog.Action.BREACH_SCAN_COMPLETED,
+            facility=None,
+            target_type="BreachScanRun",
         )
         assert compliance._breach_scan_checks()[0].status == compliance.ComplianceStatus.OK
 
     def test_breach_warning_3_to_24h(self):
         AuditLog.objects.filter(action=AuditLog.Action.BREACH_SCAN_COMPLETED).delete()
         e = AuditLog.objects.create(
-            action=AuditLog.Action.BREACH_SCAN_COMPLETED, facility=None, target_type="BreachScanRun"
+            detail={"job_run": SUCCESSFUL_JOB_RUN},
+            action=AuditLog.Action.BREACH_SCAN_COMPLETED,
+            facility=None,
+            target_type="BreachScanRun",
         )
         self._backdate(e, hours=10)
         assert compliance._breach_scan_checks()[0].status == compliance.ComplianceStatus.WARNING
@@ -745,7 +770,10 @@ class TestCronChecks:
     def test_breach_critical_over_24h(self):
         AuditLog.objects.filter(action=AuditLog.Action.BREACH_SCAN_COMPLETED).delete()
         e = AuditLog.objects.create(
-            action=AuditLog.Action.BREACH_SCAN_COMPLETED, facility=None, target_type="BreachScanRun"
+            detail={"job_run": SUCCESSFUL_JOB_RUN},
+            action=AuditLog.Action.BREACH_SCAN_COMPLETED,
+            facility=None,
+            target_type="BreachScanRun",
         )
         self._backdate(e, hours=30)
         assert compliance._breach_scan_checks()[0].status == compliance.ComplianceStatus.CRITICAL

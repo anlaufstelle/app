@@ -86,7 +86,14 @@ def _retention_checks() -> list[ComplianceCheck]:
     if getattr(settings, "DEMO_MODE", False):
         return [_demo_retention_card()]
     entry = (
-        AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED)
+        AuditLog.objects.filter(
+            action=AuditLog.Action.RETENTION_RUN_COMPLETED,
+            facility__isnull=True,
+            detail__job_run__scope="installation",
+            detail__job_run__status="success",
+            detail__job_run__skipped=0,
+            detail__job_run__failed=0,
+        )
         .order_by("-timestamp")
         .only("timestamp", "detail")
         .first()

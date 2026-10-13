@@ -492,6 +492,8 @@ their start and exit code appear in the supercronic log. Host monitoring should 
 failures in the `cron` logs — in particular on `verify_audit_chain`, which ends
 with exit code != 0 on suspected tampering.
 
+Snapshot, retention and breach-scan success markers now require a successful installation-wide run, recorded as `job_run.scope=installation`, `job_run.status=success`, with zero skipped and failed facilities. A `--facility` run does not refresh global success; the filtered breach scan also omits system heuristics. Snapshot errors and facilities without settings in snapshot/retention runs do not write a success marker. Coverage counters appear in command output; snapshot failures still end with a nonzero exit code after processing the other facilities. Dry-run and retention proposal runs do not write success markers. Historical markers without explicit evidence are ignored: until the next complete run the card can show unknown, or it retains the age of the last proven successful run. The health detail uses these same age checks; it reports critical job keys, while unknown status alone does not degrade a fresh installation.
+
 **Changes to the schedule** belong in `deploy/crontab` (repo, versioned);
 afterwards `docker compose -f docker-compose.prod.yml restart cron`. The guard
 `src/tests/test_ops_cron_sidecar.py` keeps the file in sync with the table in §3.1.
@@ -3302,4 +3304,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 0994619648a6e980b52527b4ee4e91f40407b649 -->
+<!-- source-hash: 273ff88256a99a152df3bbabe1290ba06d6de435 -->

@@ -27,7 +27,15 @@ def _cron_action_hint() -> str:
 
 
 def _latest(action: str) -> AuditLog | None:
-    return AuditLog.objects.filter(action=action).order_by("-timestamp").only("timestamp", "detail").first()
+    entries = AuditLog.objects.filter(action=action, facility__isnull=True)
+    if action in {AuditLog.Action.SNAPSHOT_RUN_COMPLETED, AuditLog.Action.BREACH_SCAN_COMPLETED}:
+        entries = entries.filter(
+            detail__job_run__scope="installation",
+            detail__job_run__status="success",
+            detail__job_run__skipped=0,
+            detail__job_run__failed=0,
+        )
+    return entries.order_by("-timestamp").only("timestamp", "detail").first()
 
 
 def _age_hours(entry: AuditLog) -> float:

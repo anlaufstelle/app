@@ -46,6 +46,8 @@ class _RetentionTotals:
     without threading five integers through the call.
     """
 
+    processed_facilities: int = 0
+    skipped_facilities: int = 0
     deferred: int = 0
     deleted: int = 0
     anonymized: int = 0
@@ -139,7 +141,7 @@ class Command(BaseCommand):
 
         if not facility_name:
             totals.auditlog_pruned += prune_system_auditlog(now, dry_run)["count"]
-        self._report_enforce_summary(totals, facilities, dry_run)
+        self._report_enforce_summary(totals, facilities, dry_run, full_run=not facility_name)
 
     def _warn_missing_settings(self, facility):
         """Meldet eine uebersprungene Einrichtung auf stdout UND im Log-Kanal (Refs #1884).
@@ -167,6 +169,7 @@ class Command(BaseCommand):
             settings_obj = facility.settings
         except Settings.DoesNotExist:
             self._warn_missing_settings(facility)
+            totals.skipped_facilities += 1
             return
 
         # Reactivate deferred proposals whose wait has expired (Issue #515)
@@ -241,8 +244,10 @@ class Command(BaseCommand):
             if stale_imports:
                 self.stdout.write(f"Cleaned up {stale_imports} stale import job(s) for '{facility.name}'.")
 
-    def _report_enforce_summary(self, totals, facilities, dry_run):
-        """Emit the run summary and (on a real pass) the RETENTION_RUN_COMPLETED marker.
+        totals.processed_facilities += 1
+
+    def _report_enforce_summary(self, totals, facilities, dry_run, *, full_run=True):
+        """Emit counts and mark only complete installation runs as successful.
 
         Same stdout lines and ordering as before: dry-run prints the ``[dry-run]
         Would …`` block and writes no audit marker; a real pass prints the
@@ -303,6 +308,18 @@ class Command(BaseCommand):
         # Refs #919: persistenter LastRun-Marker fuer das Compliance-Dashboard.
         # Geschrieben nur nach erfolgreichem (non-dry-run) Lauf. ``facility=None``
         # — der Cron laeuft installationsweit, nicht pro Facility.
+        self.stdout.write(
+            f"Run coverage: processed={totals.processed_facilities}, skipped={totals.skipped_facilities}, failed=0."
+        )
+        # Refs #2583: skipped facilities and filtered runs are not installation-wide success.
+        if not full_run or totals.skipped_facilities:
+            logger.warning(
+                "enforce_retention: no installation success marker; processed=%s skipped=%s filtered=%s",
+                totals.processed_facilities,
+                totals.skipped_facilities,
+                not full_run,
+            )
+            return
         audit_event(
             AuditLog.Action.RETENTION_RUN_COMPLETED,
             user=None,
@@ -310,6 +327,13 @@ class Command(BaseCommand):
             target_type="RetentionRun",
             detail={
                 "facilities": facilities.count(),
+                "job_run": {
+                    "scope": "installation",
+                    "status": "success",
+                    "processed": totals.processed_facilities,
+                    "skipped": 0,
+                    "failed": 0,
+                },
                 "deferred": totals.deferred,
                 "soft_deleted_events": totals.deleted,
                 "hard_deleted_activities": totals.activities,
