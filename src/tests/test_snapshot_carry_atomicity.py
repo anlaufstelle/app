@@ -20,6 +20,7 @@ from io import StringIO
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.utils import timezone
 
 from core.models import Event, EventHistory, Settings, StatisticsSnapshot
@@ -122,10 +123,11 @@ class TestInterruptedRuns:
 
         with monkeypatch.context() as patch:
             patch.setattr(snapshots, "get_statistics_for_events", fail_for_july)
-            try:
+            with pytest.raises(CommandError, match=r"1 event\(s\) kept"):
                 _run_retention()
-            except RuntimeError:
-                pass  # stopping the run is acceptable; losing the count is not
+
+        assert Event.objects.filter(facility=facility, is_deleted=False).count() == 1
+        assert (_counts(facility, 6), _counts(facility, 7)) == ((1, 1), (1, 1))
 
         _run_retention()
         for month in (6, 7):
@@ -153,7 +155,8 @@ class TestCarryFailureIsFailClosed:
 
         with monkeypatch.context() as patch, caplog.at_level(logging.ERROR):
             patch.setattr(SampleReport1Backend, "summarize_events", fail_for_deleted)
-            _run_retention()
+            with pytest.raises(CommandError, match=r"1 event\(s\) kept"):
+                _run_retention()
 
         # Not deleted without its count: the next run tries again.
         assert Event.objects.filter(facility=facility, is_deleted=False).count() == 1
