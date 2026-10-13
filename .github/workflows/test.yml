@@ -13,13 +13,13 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    # Ohne Limit läuft ein Hänger bis in GitHubs 6-Stunden-Default (Refs #1606).
-    # 60 statt 30 Minuten (Refs #2022, v0.96.0): die Suite (~14 500 Tests, 2 Worker
-    # auf dem 2-vCPU-Runner privater Repos) braucht hier rund 30 Minuten; die
-    # Stage-Läufe #134/#135 wurden bei 99 % vom Job-Limit abgebrochen. Einen
-    # echten Hänger begrenzt jetzt ``--timeout`` je Test (unten), nicht das
-    # Job-Limit.
-    timeout-minutes: 50
+    # Without a limit a hang would run into GitHub's 6-hour default (Refs #1606).
+    # 60 minutes: on the 2-vCPU runner of private repos the suite took about
+    # 35 minutes up to v0.99.6 and 48-50 minutes for v0.99.7; the stage run on
+    # f70c744f was cancelled at the former 50-minute limit without a failing
+    # test. A real hang is bounded by the per-test ``--timeout`` below, not by
+    # the job limit.
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:18-alpine
