@@ -966,6 +966,9 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
             entity_type_error=_CLIENT_DOCUMENT_TYPE_ERROR,
             old_data=locked.data_json,
         )
+        from core.services.client.rectification import _merge_rectification_data
+
+        fields["data_json"] = _merge_rectification_data(client, fields["data_json"])
 
     # Refs #1613: Diff gegen den DB-Stand, NICHT gegen die übergebene Instanz.
     # ``ClientForm(instance=client)`` hat die Instanz in ``_post_clean()``

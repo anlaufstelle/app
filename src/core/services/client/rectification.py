@@ -16,6 +16,7 @@ sicher wie ein normales Bearbeiten, plus Vier-Augen-Nachweis.
 from __future__ import annotations
 
 import json
+from contextvars import ContextVar
 from typing import Any
 
 from django.core.exceptions import ValidationError
@@ -40,6 +41,29 @@ from core.services.file_vault import encrypt_field, safe_decrypt
 #: ``document_type`` fehlt ebenso — ein Typwechsel ist eine Konfigurations-,
 #: keine Datenberichtigung, und verwirft nach E11-Merge-Policy fremde Slugs.
 CORE_FIELDS: tuple[str, ...] = ("pseudonym", "age_cluster", "notes")
+
+
+# Only the approved workflow supplies a single, client-bound correction (Refs #2573).
+_DYNAMIC_CORRECTION: ContextVar[tuple[str, str, Any] | None] = ContextVar("approved_dynamic_correction", default=None)
+
+
+def _merge_rectification_data(client: Client, data: dict[str, Any]) -> dict[str, Any]:
+    """Apply only the approved target after the ordinary inactive-value merge."""
+    correction = _DYNAMIC_CORRECTION.get()
+    if correction is None:
+        return data
+    client_id, slug, value = correction
+    if client_id != str(client.pk):
+        return data
+    from core.services.dynamic_data import validate_data_json
+
+    document_type = client.document_type
+    if document_type is None:
+        raise ValidationError(_("Die Berichtigung konnte nicht angewendet werden."))
+    # Validate the requested value even when its template is inactive; other
+    # historical inactive values retain the ordinary preservation contract.
+    validated = validate_data_json(document_type, {slug: value})
+    return {**data, **validated}
 
 
 def _core_field_label(name: str) -> Any:
@@ -393,7 +417,16 @@ def _apply_rectification(client: Client, reviewer: Any, field_path: str, new_val
         # ``update_client`` (Cross-Review-Befund 4): er gilt fuer genau diesen
         # Block, nicht fuer einen beliebigen Aufrufer.
         with transaction.atomic(), _rectification_write():
-            update_client(client, reviewer, expected_updated_at=client.updated_at, **fields)
+            token = _DYNAMIC_CORRECTION.set((str(client.pk), slug, new_value) if slug is not None else None)
+            try:
+                update_client(client, reviewer, expected_updated_at=client.updated_at, **fields)
+            finally:
+                _DYNAMIC_CORRECTION.reset(token)
+            # Verify persistence before approval or success auditing. Any failure
+            # rolls back the client update and its audit in the outer transaction.
+            client.refresh_from_db()
+            if _current_value(client, field_path) != _serialize_json_value(new_value):
+                raise ValidationError(_("Die Berichtigung konnte nicht angewendet werden."))
     except IntegrityError as exc:
         # Haeufigster Fall: ``unique_facility_pseudonym`` — der Wunsch-Pseudonym
         # ist inzwischen vergeben. Als ValidationError an die View, kein 500.
