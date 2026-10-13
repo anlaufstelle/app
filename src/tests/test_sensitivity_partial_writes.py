@@ -94,11 +94,6 @@ def test_complete_type_change_persists_protected_values(facility, lead_user, ent
     assert getattr(record, "search_text", "") == ""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Deferred type changes can persist a stale plaintext search index (Refs #2525).",
-)
 @pytest.mark.parametrize("loading", ["defer_index", "only_type"])
 def test_implicit_partial_type_write_never_retains_plaintext_index(facility, lead_user, loading):
     record, field = make_record(facility, lead_user, "event", value="DeferredSecret")
@@ -113,11 +108,44 @@ def test_implicit_partial_type_write_never_retains_plaintext_index(facility, lea
     deferred = query.get(pk=record.pk)
     assert "search_text" in deferred.get_deferred_fields()
     deferred.document_type = target
-    try:
+    with pytest.raises(ValueError, match="deferred"):
         deferred.save()
-    except ValueError:
-        assert stored_state(record) == before
-    else:
-        after = stored_state(record)
-        assert after["document_type_id"] == target.pk
-        assert after["search_text"] == ""
+    assert stored_state(record) == before
+
+
+@pytest.mark.parametrize("entity", ["event", "client", "case"])
+@pytest.mark.parametrize("loading", ["only_type", "defer_data"])
+def test_implicit_deferred_save_is_rejected(facility, lead_user, entity, loading):
+    record, field = make_record(facility, lead_user, entity)
+    target = high_target(facility, field, entity)
+    before = stored_state(record)
+    query = type(record).objects.for_facility(facility)
+    query = query.only("document_type") if loading == "only_type" else query.defer("data_json")
+    deferred = query.get(pk=record.pk)
+    deferred.document_type = target
+    with pytest.raises(ValueError, match="deferred"):
+        deferred.save()
+    assert stored_state(record) == before
+
+
+@pytest.mark.parametrize("entity", ["event", "client", "case"])
+def test_explicit_complete_write_on_deferred_record_is_allowed(facility, lead_user, entity):
+    record, field = make_record(facility, lead_user, entity)
+    target = high_target(facility, field, entity)
+    deferred = type(record).objects.for_facility(facility).only("document_type").get(pk=record.pk)
+    deferred.document_type = target
+    fields = ["document_type", "data_json"]
+    if entity == "event":
+        fields.append("search_text")
+    deferred.save(update_fields=fields)
+    record.refresh_from_db()
+    assert record.document_type_id == target.pk
+    assert safe_decrypt(record.data_json[field.slug]) == "SecretToken"
+    assert getattr(record, "search_text", "") == ""
+
+
+def test_implicit_deferred_save_fails_before_database_access(facility, lead_user, django_assert_num_queries):
+    record, _ = make_record(facility, lead_user, "event")
+    deferred = type(record).objects.for_facility(facility).only("document_type").get(pk=record.pk)
+    with django_assert_num_queries(0), pytest.raises(ValueError, match="deferred"):
+        deferred.save()

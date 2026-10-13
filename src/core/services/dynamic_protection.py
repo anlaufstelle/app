@@ -80,6 +80,9 @@ def validate_configuration_facility(record, facility_id, *, facility_lookup="fac
 @contextmanager
 def dynamic_data_write(record, update_fields=None):
     """Reject incomplete type changes and keep protection stable until persistence."""
+    # Refs #2525: Django otherwise derives a partial write from loaded fields.
+    if update_fields is None and record.get_deferred_fields():
+        raise ValueError("Saving deferred dynamic records requires explicit update_fields or fully loaded fields")
     if update_fields is not None and {"document_type", "document_type_id"}.intersection(update_fields):
         required_fields = {"data_json"}
         if hasattr(record, "search_text"):
