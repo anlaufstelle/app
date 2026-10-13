@@ -17,6 +17,7 @@ import random
 from collections import Counter
 
 import pytest
+from django.utils import timezone
 
 from core.models import Client, DocumentType, Event
 from core.seed import doc_types as seed_doc_types
@@ -217,14 +218,15 @@ class TestSeedEventMinContactStage:
                 counter[key] += 1
             return counter
 
+        now = timezone.now()
         random.seed(2270)
-        seed_events_bulk(facility, users, clients, CFG, package="default")
+        seed_events_bulk(facility, users, clients, CFG, package="default", now=now)
         first_run = _snapshot()
         assert sum(first_run.values()) == EVENTS_PER_FACILITY
 
         Event.objects.filter(facility=facility).delete()
         random.seed(2270)
-        seed_events_bulk(facility, users, clients, CFG, package="default")
+        seed_events_bulk(facility, users, clients, CFG, package="default", now=now)
         second_run = _snapshot()
 
         assert first_run == second_run

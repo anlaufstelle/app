@@ -3,7 +3,7 @@
 import copy
 import logging
 import random
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from django.utils import timezone
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def random_time_of_day(max_hour: int | None = None, max_minute: int | None = None) -> tuple[int, int]:
     """Weighted hour distribution matching typical opening hours (8-19h).
 
-    Morgen-Anlauf → Vormittag-Peak → Nachmittag → Abend ausklingend.
+    Morning arrivals, a late-morning peak, then fewer evening visits.
     If ``max_hour`` is set, limits generated times (for today's events).
     """
     hours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
@@ -32,10 +32,10 @@ def random_time_of_day(max_hour: int | None = None, max_minute: int | None = Non
         filtered_hours, filtered_weights = zip(*filtered, strict=True)
         hours, weights = list(filtered_hours), list(filtered_weights)
     hour = random.choices(hours, weights=weights, k=1)[0]
+    # Draw from a fixed range so clock boundaries do not shift later draws.
+    minute = random.randint(0, 11) * 5
     if max_hour is not None and hour == max_hour and max_minute is not None:
-        minute = random.randint(0, max(0, max_minute // 5)) * 5
-    else:
-        minute = random.randint(0, 11) * 5  # 0, 5, 10, ..., 55
+        minute = min(minute, max(0, max_minute // 5) * 5)
     return hour, minute
 
 
@@ -68,7 +68,7 @@ def build_data_template(doc_type: DocumentType) -> list[dict]:
     return fields
 
 
-def random_data(slug: str, dt_data_templates: dict, *, package: str = "default") -> dict:
+def random_data(slug: str, dt_data_templates: dict, *, package: str = "default", today: date | None = None) -> dict:
     """Generate plausible random ``data_json`` for a given document type.
 
     ``slug`` ist der Poolschluessel INNERHALB von ``package`` (Refs #2148,
@@ -79,6 +79,7 @@ def random_data(slug: str, dt_data_templates: dict, *, package: str = "default")
     z. B. ``art-der-krise``-Werte des Standardkatalogs in ein Paket leaken
     lassen, das diese Options-Slugs gar nicht kennt.
     """
+    today = today if today is not None else date.today()
     pool = EVENT_DATA_POOLS.get(package, {}).get(slug)
     if pool:
         template = copy.deepcopy(random.choice(pool))
@@ -91,11 +92,11 @@ def random_data(slug: str, dt_data_templates: dict, *, package: str = "default")
         # Dynamic dates for accompaniment
         if slug == "begleitung":
             offset = random.randint(-7, 14)
-            template["datum"] = (date.today() + timedelta(days=offset)).isoformat()
+            template["datum"] = (today + timedelta(days=offset)).isoformat()
             template["uhrzeit"] = f"{random.randint(8, 16):02d}:{random.choice(['00', '30'])}"
         # Dynamic next appointment for counseling
         if slug == "beratungsgespraech":
-            template["naechster-termin"] = (date.today() + timedelta(days=random.randint(7, 28))).isoformat()
+            template["naechster-termin"] = (today + timedelta(days=random.randint(7, 28))).isoformat()
         return template
 
     # Fallback: generic generation for unknown document types
@@ -122,7 +123,7 @@ def random_data(slug: str, dt_data_templates: dict, *, package: str = "default")
             data[key] = f"Seed-Text {random.randint(1, 9999)}"
         elif ftype == "date":
             offset = random.randint(1, 60)
-            data[key] = (date.today() - timedelta(days=offset)).isoformat()
+            data[key] = (today - timedelta(days=offset)).isoformat()
         elif ftype == "time":
             data[key] = f"{random.randint(8, 20):02d}:{random.choice(['00', '15', '30', '45'])}"
     return data
@@ -205,7 +206,13 @@ def seed_events_small(facility: Facility) -> None:
 
 
 def seed_events_bulk(
-    facility: Facility, users: list[User], clients: list[Client], cfg: dict, *, package: str = "default"
+    facility: Facility,
+    users: list[User],
+    clients: list[Client],
+    cfg: dict,
+    *,
+    package: str = "default",
+    now: datetime | None = None,
 ) -> int:
     """Generate events with ``bulk_create`` for non-small scales.
 
@@ -217,6 +224,7 @@ def seed_events_bulk(
     Returns the number of newly created events (0 when the facility is
     already at or above the target).
     """
+    # Use one clock value for timestamps and all generated data dates.
     target = cfg["events_per_facility"]
     zeitraum = cfg["zeitraum_days"]
 
@@ -287,9 +295,8 @@ def seed_events_bulk(
     # faellt weiterhin auf den Default-Weight 5 zurueck.
     weights_table = EVENT_TYPE_WEIGHTS.get(package, {})
     weights = [weights_table.get(dt.slug, 5) for dt in doc_types]
-    today = timezone.localdate()
-
-    now = timezone.now()
+    now = now if now is not None else timezone.now()
+    today = timezone.localdate(now)
     # Fachkräfte (STAFF/LEAD) für gleichmäßige Verteilung
     staff_users = [u for u in users if u.role in (User.Role.STAFF, User.Role.LEAD)]
     if not staff_users:
@@ -328,7 +335,7 @@ def seed_events_bulk(
             base_date.replace(hour=hour, minute=minute, second=0, microsecond=0),
             now,
         )
-        data_json = random_data(doc_type.slug, dt_data_templates, package=package)
+        data_json = random_data(doc_type.slug, dt_data_templates, package=package, today=today)
 
         # Bans realistic: most expired, max 2 active (grund from pool)
         if doc_type.system_type == "ban":

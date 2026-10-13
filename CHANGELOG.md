@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Keine.
 
+### Fixed
+
+- **Seed-Zufallsfolge an Uhrgrenzen stabilisiert** (#2599) — Der Bulk-Ereignis-Seed verwendet eine gemeinsame vorgebbare Uhr für Zeitstempel und Datumswerte und hält den Zufallsverbrauch beim Wechsel der Fünf-Minuten- und Stundenintervalle innerhalb der Öffnungszeit konstant.
+
 ## [0.99.7] - 2026-10-13
 
 Weiterer Release-Kandidat vor 1.0: bündelt den Schutz sensibler Feldwerte samt Suchindex, Löschfristen mit Freigabe, Hold und Art.-18-Schutz, ein abgesichertes Verwaltungs-Audit, gehärtete Offline-Schlüssel und zweite Faktoren, eine gemeinsame Exportleiste, geschützte Kleinzellen in Zeitraum-Summen sowie zahlreiche Korrekturen an Demo, Offline-Betrieb und Übersetzungen.
