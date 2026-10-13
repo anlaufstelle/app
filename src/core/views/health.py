@@ -10,6 +10,7 @@ import shutil
 import smtplib
 import socket
 import time
+from functools import wraps
 from pathlib import Path
 
 from django.conf import settings
@@ -20,6 +21,8 @@ from django.http import JsonResponse
 from django.utils.crypto import constant_time_compare
 from django.utils.decorators import method_decorator
 from django.views import View
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from core.services import ops_thresholds
 from core.services.compliance import ComplianceStatus, cron_job_checks
@@ -348,7 +351,27 @@ def _check_disk_free_pct() -> float | None:
     return round(free / total * 100, 1)
 
 
-@method_decorator(ratelimit(key="ip", rate="120/m", method="GET", block=True), name="get")
+def _health_ratelimit(handler):
+    """Keep health diagnostics reachable when the rate-limit backend is down."""
+
+    @ratelimit(group="core.views.health.HealthView.get", key="ip", rate="120/m", method="GET", block=True)
+    def probe(request):
+        return None
+
+    @wraps(handler)
+    def wrapped(request, *args, **kwargs):
+        try:
+            probe(request)
+        except (RedisConnectionError, RedisTimeoutError, ConnectionError):
+            # Only the limiter probe is recoverable; errors in the view are not retried.
+            logger.warning("health: rate-limit cache unavailable", exc_info=True)
+            request.health_rate_limit_unavailable = True
+        return handler(request, *args, **kwargs)
+
+    return wrapped
+
+
+@method_decorator(_health_ratelimit, name="get")
 class HealthView(View):
     """GET /health/ -- Liveness + (für interne/Token-Caller) Detail.
 
@@ -387,6 +410,7 @@ class HealthView(View):
     def get(self, request):
         db_status, db_ok = _check_database()
         status = "ok" if db_ok else "error"
+        status = _degrade(status, getattr(request, "health_rate_limit_unavailable", False))
         http_status = 200 if db_ok else 503
 
         # ClamAV (Refs #524, #798) — Subsystem-Status. Fliesst in den
@@ -457,6 +481,8 @@ class HealthView(View):
             # Checks stehen: das Ergebnis entscheidet, ob die ueberhaupt ueber
             # den Cache laufen duerfen.
             cache_payload = _check_cache()
+            if getattr(request, "health_rate_limit_unavailable", False):
+                cache_payload["status"] = "error"
             cache_alive = cache_payload["status"] == "ok"
             payload["cache"] = cache_payload
             # Ohne Cache zaehlt django-ratelimit nicht mehr — der

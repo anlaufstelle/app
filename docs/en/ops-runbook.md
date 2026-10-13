@@ -1096,6 +1096,8 @@ curl -sf -H "X-Health-Token: $HEALTH_DETAIL_TOKEN" https://$DOMAIN/health/ \
 
 This is not a cosmetic field: if `REDIS_URL` is set but the `redis` package is not present in the image (typical when an **older** `APP_VERSION` image is run with the new compose file), `prod.py` deliberately falls back to `DatabaseCache` and writes a warning to the container log — the stack stays operational, but runs slower. `cache.backend` makes this state visible; the payload never shows `LOCATION` and therefore never exposes an embedded password. `cache.status = error` (backend configured but unreachable) sets the overall status to `degraded`, because the rate-limit protection is then also ineffective.
 
+When a Redis connection error interrupts the health rate limiter, `/health/` still returns controlled JSON: anonymous callers receive only `status=degraded`; an authorized health-token caller also receives `cache.status=error` and diagnostic fields. Expensive detail checks remain behind the existing token/session gate. Once the backend recovers, the normal limit of 120 GET requests per minute and IP applies again. This exception applies only to health; login and sudo rate-limit error handling is unchanged.
+
 **No separate `ratelimit` cache alias.** The original plan envisioned a second alias on Redis DB `/2`. It was not implemented: `django-ratelimit` hangs off `RATELIMIT_USE_CACHE`, and no code reads `caches["ratelimit"]` — the alias would be dead configuration and, in the `DatabaseCache` fallback, would additionally need a second cache table (i.e. another migration). DB index `/2` stays free for a later separation.
 
 ### 5.5 Disk Space Full
@@ -3300,4 +3302,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: e8ca89eecedbd70cc0e1d9e52051c56436e15a6f -->
+<!-- source-hash: 0994619648a6e980b52527b4ee4e91f40407b649 -->
