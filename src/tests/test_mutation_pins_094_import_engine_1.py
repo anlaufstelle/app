@@ -54,7 +54,7 @@ from core.services import import_engine
 
 DECODE_FAILURE_MESSAGE = "Die Datei konnte weder als UTF-8 noch als Windows-1252 gelesen werden."
 CSV_ERROR_MESSAGE = (
-    "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile 3). "
+    "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile 3, Datensatz 3). "
     "Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
 )
 GENERIC_ROW_MESSAGE = "Die Zeile konnte nicht übernommen werden."
@@ -167,17 +167,7 @@ class TestParseCsvErrorMessage:
     """
 
     def test_csv_error_reports_the_line_and_the_exact_message(self):
-        """Pin: ``x__parse_csv__mutmut_12``/``_15``/``_16``.
-
-        * ``_12``: erster Satz -> ``"XXDie Datei konnte nicht als CSV gelesen
-          werden (Fehler in Zeile %(line)s). XX"``;
-        * ``_15``: zweiter Satz -> ``"XXBitte Anführungszeichen … prüfen.XX"``;
-        * ``_16``: zweiter Satz komplett klein geschrieben.
-
-        Original: ``.messages == [CSV_ERROR_MESSAGE]`` (mit ``Zeile 3``). Jeder
-        Mutant setzt ``XX``-Marker bzw. Kleinschreibung in denselben Text —
-        der exakte Listenvergleich scheitert.
-        """
+        """CSV errors expose physical and logical positions without field contents."""
         oversized = "y" * (csv.field_size_limit() + 10)
         text = f"Pseudonym;Notizen\nIMP-01;kurz\nIMP-02;{oversized}\n"
 

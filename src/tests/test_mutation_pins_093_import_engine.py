@@ -183,14 +183,14 @@ class TestParseCsvRowsRowLimitBoundary:
         einzige bestehende Test nutzt ``MAX_ROWS + 1`` und trifft beide
         Varianten gleich.
         """
-        rows = import_engine._parse_csv_rows(iter([[f"P-{index}"] for index in range(import_engine.MAX_ROWS)]))
+        rows = import_engine._parse_csv_rows(iter([[f"P-{index}"] for index in range(import_engine.MAX_ROWS)]), 1)
 
         assert len(rows) == import_engine.MAX_ROWS
 
     def test_one_row_above_the_limit_is_rejected(self):
         """Gegenprobe zum Grenzwert (kein eigener Mutant, haelt die Richtung fest)."""
         with pytest.raises(ValidationError):
-            import_engine._parse_csv_rows(iter([[f"P-{index}"] for index in range(import_engine.MAX_ROWS + 1)]))
+            import_engine._parse_csv_rows(iter([[f"P-{index}"] for index in range(import_engine.MAX_ROWS + 1)]), 1)
 
 
 # ============================================================================
@@ -223,19 +223,16 @@ class TestRowValuesShortRowFallback:
         assert columns == {"pseudonym": "Pseudonym", "notes": "Notizen"}
 
     @pytest.mark.django_db
-    def test_short_row_without_the_required_column_is_a_row_error(self, facility, admin_user, media_root):
-        """Pin: ``x__row_values__mutmut_10`` (Wirkungs-Nachweis am Import).
+    def test_empty_required_cell_is_a_row_error(self, facility, admin_user, media_root):
+        """A valid-width record with an empty required cell creates no person.
 
-        Die Datenzeile hat nur eine Zelle, die Pflichtspalte ``Pseudonym``
-        steht dahinter und fehlt daher. Original: ein Zeilenfehler
-        ``required_missing`` auf Spalte ``Pseudonym``, nichts wird angelegt.
-        Mutant: ``pseudonym == "XXXX"`` ist truthy, der Lauf meldet
-        ``errors == 0`` und legt eine Person mit dem Phantom-Pseudonym an.
+        Structurally short records are rejected on upload (Refs #2575), so
+        required-value validation uses an explicit empty cell.
         """
         job = import_engine.store_import_upload(
             facility,
             admin_user,
-            _upload("Notizen;Pseudonym\nNur eine Zelle\n"),
+            _upload("Notizen;Pseudonym\nOnly a note;\n"),
             target_type=ImportJob.TargetType.CLIENT,
         )
         import_engine.apply_mapping(job, {"Notizen": "notes", "Pseudonym": "pseudonym"})

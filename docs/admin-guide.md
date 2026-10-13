@@ -1359,6 +1359,8 @@ Relevante Dateien: [`src/core/services/system/export.py`](https://github.com/anl
 
 Der Import-Assistent unter **Datenimport** (`/import/`) übernimmt CSV-Dateien in Personen oder Ereignisse. Er ist ausschließlich für die Rolle **Anwendungsbetreuung** sichtbar. Eine Datei darf höchstens 5 MB und 1.000 nicht leere Datenzeilen umfassen; die erste Zeile muss eindeutige, nicht leere Spaltenüberschriften enthalten. Unterstützt werden UTF-8 und Windows-1252 sowie Semikolon, Komma oder das Tab-Zeichen als Trennzeichen; Zeichensatz und Trennzeichen lassen sich automatisch erkennen oder ausdrücklich auswählen. Für Ereignisse ist ein aktiver Dokumentationstyp Pflicht.
 
+Jeder Datensatz muss genau so viele Zellen wie die Kopfzeile enthalten; auch leere optionale Zellen brauchen ihr Trennzeichen. Zu viele oder zu wenige Zellen und ungültige beziehungsweise offene Anführungszeichen weisen die gesamte Datei ab, bevor Daten übernommen werden. Die Meldung nennt die physische Zeile und den logischen Datensatz (einschließlich Kopfzeile), niemals Zellinhalte. UTF-8 mit BOM sowie korrekt gequotete Trennzeichen und mehrzeilige Felder bleiben zulässig. Vorschau, Probelauf und Übernahme prüfen dieselbe vollständige Dateistruktur.
+
 Der Assistent führt durch vier Schritte:
 
 1. **Datei:** Wählen Sie Personen oder Ereignisse als Ziel, bei Ereignissen den Dokumentationstyp, und laden Sie die CSV-Datei hoch.

@@ -162,18 +162,12 @@ class TestParseCsvMessages:
         assert exc_info.value.messages == [f"Die Datei hat mehr als {import_engine.MAX_ROWS} Datenzeilen."]
 
     def test_malformed_csv_message_is_the_full_two_sentence_hint(self):
-        """Pin: x__parse_csv__mutmut_17 — zweiter Satz komplett grossgeschrieben.
-
-        Original: ``... (Fehler in Zeile 2). Bitte Anführungszeichen und
-        Zeilenumbrüche innerhalb von Feldern prüfen.``; der Mutant schreibt
-        den zweiten Satz in Versalien. Die Bestandstests matchen nur auf
-        ``"Fehler in Zeile 2"`` und ueberleben das.
-        """
+        """The complete quote hint includes physical and logical positions."""
         with translation.override("de"), pytest.raises(ValidationError) as exc_info:
             import_engine._parse_csv("Pseudonym\r\na\rb\r\n", ";")
 
         assert exc_info.value.messages == [
-            "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile 2). "
+            "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile 2, Datensatz 2). "
             "Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
         ]
 

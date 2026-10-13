@@ -1643,3 +1643,94 @@ class TestPureHelpers:
         stream.size = import_engine.MAX_BYTES + 1
         with pytest.raises(ValidationError, match="Die Datei ist zu groß \\(maximal 5 MB\\)\\."):
             import_engine._read_upload(stream)
+
+
+@pytest.mark.django_db
+class TestCsvStructureValidation:
+    @pytest.mark.parametrize("row", ["SECRET;note;EXTRA", "SECRET", 'SECRET;"OPEN'])
+    def test_upload_rejects_invalid_structure_without_storing_job(self, facility, admin_user, media_root, row):
+        before = ImportJob.objects.count()
+        with pytest.raises(ValidationError) as error:
+            import_engine.store_import_upload(
+                facility,
+                admin_user,
+                _upload("Pseudonym;Notizen\n" + row + "\n"),
+                target_type=ImportJob.TargetType.CLIENT,
+                delimiter=";",
+            )
+        message = str(error.value)
+        assert "Zeile 2" in message
+        assert all(value not in message for value in ("SECRET", "note", "EXTRA", "OPEN"))
+        assert ImportJob.objects.count() == before
+        assert not list(media_root.rglob("*.enc"))
+
+    @pytest.mark.parametrize("path", ["preview", "dry_run", "commit"])
+    @pytest.mark.parametrize(
+        "row", ["01.03.2026 09:30;Test-ID-01;SECRET", "01.03.2026 09:30", '01.03.2026 09:30;"SECRET']
+    )
+    def test_stored_invalid_file_is_rejected_before_any_event_write(
+        self,
+        facility,
+        admin_user,
+        doc_type_contact,
+        client_identified,
+        media_root,
+        path,
+        row,
+    ):
+        content = "Datum;Person\n01.03.2026 09:30;Test-ID-01\n"
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload(content),
+            target_type=ImportJob.TargetType.EVENT,
+            document_type=doc_type_contact,
+            delimiter=";",
+        )
+        import_engine.apply_mapping(job, {"Datum": "occurred_at", "Person": "client_pseudonym"})
+        import_engine.run_import(job, admin_user)
+        before = Event.objects.count()
+        encrypt_file(
+            io.BytesIO((content + row + "\n").encode()),
+            import_engine.import_file_path(job),
+            file_id=job.storage_filename,
+        )
+        with pytest.raises(ValidationError) as error:
+            if path == "preview":
+                import_engine.parse_preview(job)
+            elif path == "dry_run":
+                import_engine.run_import(job, admin_user)
+            else:
+                import_engine.commit_import(job, admin_user)
+        assert "SECRET" not in str(error.value)
+        assert "Zeile 3" in str(error.value)
+        assert Event.objects.count() == before
+        job.refresh_from_db()
+        assert job.status == ImportJob.Status.VALIDATED
+        assert not AuditLog.objects.filter(action=AuditLog.Action.IMPORT_COMMITTED, target_id=str(job.pk)).exists()
+
+    def test_bom_multiline_quoted_delimiter_and_empty_cell_are_valid(self, facility, admin_user, media_root):
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload('Pseudonym;Notizen\nP-1;"first;part\nsecond"\nP-2;\n', encoding="utf-8-sig"),
+            target_type=ImportJob.TargetType.CLIENT,
+            delimiter=";",
+        )
+        assert import_engine.read_rows(job) == (
+            ["Pseudonym", "Notizen"],
+            [["P-1", "first;part\nsecond"], ["P-2", ""]],
+        )
+
+    def test_width_error_reports_physical_and_logical_position(self, facility, admin_user, media_root):
+        with pytest.raises(ValidationError) as error:
+            import_engine.store_import_upload(
+                facility,
+                admin_user,
+                _upload('Pseudonym;Notizen\nP-1;"first\nsecond"\nSECRET;note;EXTRA\n'),
+                target_type=ImportJob.TargetType.CLIENT,
+                delimiter=";",
+            )
+        assert "Zeile 4" in str(error.value)
+        assert "Datensatz 3" in str(error.value)
+        assert "SECRET" not in str(error.value)

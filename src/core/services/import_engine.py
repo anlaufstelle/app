@@ -360,31 +360,55 @@ def _validate_csv_header(header: list[str]) -> None:
         raise ValidationError(_("Die Kopfzeile enthält doppelte Spaltenüberschriften."))
 
 
-def _parse_csv_rows(reader: Iterator[list[str]]) -> list[list[str]]:
-    """Liest nicht-leere Datenzeilen und erzwingt das synchrone Importlimit."""
+def _csv_parse_error(line: int, record: int) -> ValidationError:
+    """Return a structural error containing positions only, never cell values."""
+    return ValidationError(
+        _(
+            "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s, Datensatz %(record)s). "
+            "Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
+        )
+        % {"line": line, "record": record}
+    )
+
+
+def _parse_csv_rows(reader: Any, width: int) -> list[list[str]]:
+    """Read complete records, checking width before skipping empty records."""
     rows: list[list[str]] = []
-    for row in reader:
+    record = 1
+    while True:
+        record += 1
+        try:
+            row = next(reader)
+        except StopIteration:
+            return rows
+        except csv.Error as exc:
+            raise _csv_parse_error(reader.line_num, record) from exc
+        # A physically blank line is allowed; empty cells still have a width.
+        if not row:
+            continue
+        if len(row) != width:
+            raise ValidationError(
+                _(
+                    "Die CSV-Zeile hat eine andere Spaltenanzahl als die Kopfzeile "
+                    "(Zeile %(line)s, Datensatz %(record)s: %(actual)s statt %(expected)s Spalten)."
+                )
+                % {"line": reader.line_num, "record": record, "actual": len(row), "expected": width}
+            )
         if not any((cell or "").strip() for cell in row):
             continue
         rows.append(list(row))
         if len(rows) > MAX_ROWS:
             raise ValidationError(_("Die Datei hat mehr als %(max)s Datenzeilen.") % {"max": MAX_ROWS})
-    return rows
 
 
 def _parse_csv(text: str, delimiter: str) -> tuple[list[str], list[list[str]]]:
-    """Kopfzeile + Datenzeilen; leere Zeilen fallen raus, Limits greifen hart."""
-    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    """Validate the entire CSV before returning any records for import."""
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter, strict=True)
     try:
-        return _parse_csv_header(reader), _parse_csv_rows(reader)
+        header = _parse_csv_header(reader)
     except csv.Error as exc:
-        raise ValidationError(
-            _(
-                "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s). "
-                "Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
-            )
-            % {"line": reader.line_num}
-        ) from exc
+        raise _csv_parse_error(reader.line_num, 1) from exc
+    return header, _parse_csv_rows(reader, len(header))
 
 
 # ---------------------------------------------------------------------------

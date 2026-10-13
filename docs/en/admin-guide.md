@@ -1358,6 +1358,8 @@ Relevant files: [`src/core/services/system/export.py`](https://github.com/anlauf
 
 The import wizard under **Data import** (`/import/`) imports CSV files as people or events. It is visible only to the **facility admin** role. A file may contain at most 5 MB and 1,000 non-empty data rows; its first row must contain unique, non-empty column headings. UTF-8 and Windows-1252 are supported, as are semicolons, commas, and tabs as delimiters; encoding and delimiter can be detected automatically or selected explicitly. Events require an active documentation type.
 
+Each record must contain exactly as many cells as the header; empty optional cells also need their delimiter. Too many or too few cells and invalid or unclosed quotes reject the entire file before any data is imported. The message gives the physical line and logical record (including the header), never cell contents. UTF-8 with a BOM, correctly quoted delimiters and multiline fields remain valid. Preview, dry run and commit check the same complete file structure.
+
 The wizard has four steps:
 
 1. **File:** Choose people or events as the target, select the documentation type for events, and upload the CSV file.
@@ -2538,4 +2540,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 491009ef641b9a87f4020bf3dbe255d0cd76b23f -->
+<!-- source-hash: 6f3f99a7aca8db3f6fc05911020fdea971f75aad -->

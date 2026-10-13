@@ -362,3 +362,21 @@ class TestMissingSourceFileIsAUserError:
             reverse("core:import_mapping", kwargs={"pk": import_job.pk}), {"column-0": "pseudonym"}
         )
         assert response.status_code == 302
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("row", ["SECRET;note;EXTRA", "SECRET", 'SECRET;"OPEN'])
+def test_upload_displays_structure_error_without_cell_contents(admin_client_logged_in, facility, media_root, row):
+    response = admin_client_logged_in.post(
+        reverse("core:import_create"),
+        {
+            "target_type": ImportJob.TargetType.CLIENT,
+            "source_file": SimpleUploadedFile("import.csv", ("Pseudonym;Notizen\n" + row + "\n").encode()),
+            "delimiter": "semicolon",
+            "encoding": "",
+        },
+    )
+    assert response.status_code == 200
+    assert "Zeile 2" in response.content.decode()
+    assert "SECRET" not in response.content.decode()
+    assert not ImportJob.objects.for_facility(facility).exists()
