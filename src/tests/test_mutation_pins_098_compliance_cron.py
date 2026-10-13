@@ -1,38 +1,23 @@
-"""Pin-Tests Welle K (release-0.98) — Survivors in ``core.services.compliance.cron``.
+"""Regression pins for ``core.services.compliance.cron`` (Refs #2193).
 
-Ticket-Auftrag #2193 (Prio-2-Testlücken), Batch **cron**: 123 Delta-Survivors
-aus ``make mutation-delta BASE=50eede0a`` auf ``0571fcdf`` (#2219 hat
-``src/core/services/compliance/cron.py`` geändert). Liste: ``/work/wellen/
-welle-k-0.98/reports/c-scratch/batch-cron-survivors.txt``. Quelle der
-Mutanten-Rümpfe: Mutantenbaum ``mutants/src/core/services/compliance/cron.py``.
+Cover 123 surviving cron mutations after #2219 changed the service. The
+comparison used ``make mutation-delta BASE=50eede0a`` at ``0571fcdf``;
+mutation definitions come from ``mutants/src/core/services/compliance/cron.py``.
 
-Die vier Last-Run-Check-Funktionen (``_snapshot_checks``, ``_breach_scan_checks``,
-``_mv_refresh_checks``, ``_audit_chain_checks``) teilen dieselbe Struktur: ein
-UNKNOWN-Zweig (kein Marker gefunden), dann OK/WARNING/CRITICAL nach Alter.
-Die Bestandsdeckung (``test_compliance_service.py::TestCronChecks`` und
-``::TestAuditChainChecks``) prüft an diesen Stellen ausschließlich ``status``
-an nicht-exakten Alterswerten (volle Stunden/Tage, keine Schwellwert-Grenzen)
-— Wortlaut (``key``/``label``/``category``/``message``/``detail``/
-``action_hint``) und die exakten Ampelgrenzen (``<=N`` vs. ``<N``/``<=N+1``)
-blieben ungepinnt. Genau dort liegen die 123 Survivors dieses Batches.
+The four last-run checks share an UNKNOWN branch for missing markers,
+followed by OK/WARNING/CRITICAL branches based on age. Existing compliance
+checks covered status at non-boundary ages. These pins additionally verify
+exact text fields and inclusive age boundaries.
 
-Konvention wie ``test_mutation_pins_094_retention.py``: Zusicherungen
-vergleichen EXAKT (``==``), nie per Teilstring (mutmut erzeugt zu jedem
-Text-Literal die Variante ``"XX<text>XX"``, die ein ``in``-Vergleich
-überlebt). Zeitkontrolle über ``core.services.compliance._clock.now``
-(dieselbe Technik wie ``test_mutation_followup_compliance.py`` und
-``test_mutation_pins_094_retention.py``): AuditLog-Zeilen sind per
-DB-Trigger (Migration 0024) immutable, das Alter wird also über die
-Zeitquelle gestellt, nicht über den gespeicherten Zeitstempel. Jeder Test
-nennt in der Docstring die Mutanten (``x__<funktion>__mutmut_<n>``), die er
-tötet, und den Wert, der beim Mutanten abweicht.
+As in ``test_mutation_pins_094_retention.py``, assertions compare exact values:
+substring checks would accept mutated literals of the form ``"XX<text>XX"``.
+Control time through ``core.services.compliance._clock.now`` because audit
+rows are immutable through the migration 0024 trigger. Each test documents
+its mutation identifiers and the value that changes.
 
-Nicht gepinnt (äquivalent — siehe Bericht ``c-pins-cron-report.md``):
-``x__latest__mutmut_4`` (``.only("timestamp",)`` statt ``.only("timestamp",
-"detail")`` — kein Code-Pfad in ``cron.py`` liest je ``entry.detail``, nur
-``entry.timestamp``; ohne Zugriff auf das ausgelassene Feld gibt es keinen
-beobachtbaren Unterschied, auch nicht per Query-Count).
-"""
+The equivalent ``x__latest__mutmut_4`` mutation is excluded: omitting
+``detail`` from ``.only("timestamp", "detail")`` has no observable effect
+because the cron checks only access ``entry.timestamp``."""
 
 from __future__ import annotations
 

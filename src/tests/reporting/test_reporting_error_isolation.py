@@ -463,20 +463,17 @@ class TestStatementTimeout:
 
 
 class TestExportBrichtNieNachDenHeadernAb:
-    """H1: der CSV-Renderer streamt — nichts Backend-Eigenes darf mitstreamen.
+    """Evaluate backend-owned values before sending CSV response headers.
 
-    Cross-Review zu Refs #2070  + kimi-k3) hat reproduziert, dass ein
-    Backend, das den ``DatasetResult``-Vertrag bricht, **mid-stream** wirft:
-    ``safe_download_response`` hatte da bereits HTTP 200 und
-    ``Content-Disposition`` gesetzt, Metadaten- und Kopfzeile waren schon im
-    Body. Ergebnis war eine abgeschnittene Datei statt eines klaren Fehlers —
-    kein k-Anon-Leck (die Suppression ist zu dem Zeitpunkt gelaufen), aber ein
-    Bruch der zugesagten Semantik „502, keine halbe Datei".
+    Refs #2070: a backend violating the ``DatasetResult`` contract could
+    raise mid-stream, after ``safe_download_response`` had set HTTP 200
+    and ``Content-Disposition`` and emitted metadata and column headers.
+    The result was a truncated file instead of a clear 502 response.
+    Suppression had already run, so this was not an anonymity leak.
 
-    Der Schnitt liegt deshalb bei „backend-eigen": ``records``, die Projektion
-    ``record.get(spec.key)`` und die ``FieldSpec``-Werte werden **vor** dem
-    Response-Bau ausgewertet; lazy bleibt nur noch das Chunking durch den
-    ``csv.writer`` ueber repo-eigene Strings.
+    Evaluate ``records``, ``record.get(spec.key)`` and ``FieldSpec`` values
+    before building the response. Only ``csv.writer`` chunking of strings
+    produced by the application remains lazy.
     """
 
     @pytest.fixture
@@ -510,7 +507,7 @@ class TestExportBrichtNieNachDenHeadernAb:
 
     @pytest.fixture
     def werfendes_record_get_backend(self):
-        """Vertragskonformer ``dict``-Untertyp, dessen ``get()`` wirft Reproduktion)."""
+        """A contract-compliant ``dict`` subclass whose ``get()`` raises."""
 
         class _RaisingRecord(dict):
             def get(self, key, default=None):
