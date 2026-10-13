@@ -318,3 +318,89 @@ def test_shipped_env_entries_match_their_skip_sites():
         assert f"def {names[-1].split('[')[0]}(" in source, entry
         assert entry["reason"] in source, entry
         assert name in source and f'"{value}"' in source, entry
+
+
+@pytest.fixture(scope="module", autouse=True)
+def subprocess_budget():
+    """Batch isolated pytest sessions in one interpreter, preserving each CLI result."""
+    original_popen = subprocess.Popen
+    starts = 0
+
+    def counted_popen(*args, **kwargs):
+        nonlocal starts
+        starts += 1
+        return original_popen(*args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(subprocess, "Popen", counted_popen)
+        with subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve()), "--profile-worker"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+        ) as worker:
+
+            def batched(command, **kwargs):
+                assert command[:3] == [sys.executable, "-m", "pytest"]
+                assert worker.stdin is not None and worker.stdout is not None
+                worker.stdin.write(
+                    json.dumps(
+                        {
+                            "args": command[3:],
+                            "cwd": str(kwargs["cwd"]),
+                            "env": kwargs["env"],
+                        }
+                    )
+                    + "\n"
+                )
+                worker.stdin.flush()
+                line = worker.stdout.readline()
+                assert line, f"Profile worker stopped: {worker.poll()}"
+                result = json.loads(line)
+                return subprocess.CompletedProcess(command, result["code"], result["stdout"], result["stderr"])
+
+            patch.setattr(subprocess, "run", batched)
+            try:
+                yield
+            finally:
+                assert worker.stdin is not None
+                worker.stdin.close()
+                assert worker.wait(timeout=30) == 0
+    assert starts <= 6, f"Started {starts} subprocesses; maximum is 6"
+
+
+def profile_worker():
+    """Reuse imports while keeping configuration, files and environment per case."""
+    import contextlib
+    import io
+    import traceback
+
+    output = sys.stdout
+    initial_path = sys.path.copy()
+    for line in sys.stdin:
+        request = json.loads(line)
+        os.chdir(request["cwd"])
+        os.environ.clear()
+        os.environ.update(request["env"])
+        sys.path[:] = request["env"]["PYTHONPATH"].split(os.pathsep) + initial_path
+        # Export copies deliberately have different ROOT/default profiles.
+        sys.modules.pop("export_profile", None)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            # Reusing an interpreter cannot rewrite already imported third-party plugins.
+            try:
+                code = pytest.main([*request["args"], "-W", "ignore::pytest.PytestAssertRewriteWarning"])
+            except Exception:
+                # Match the CLI's exit code and traceback for errors escaping pytest.main.
+                traceback.print_exc()
+                code = 1
+        for name, module in list(sys.modules.items()):
+            filename = getattr(module, "__file__", None)
+            if filename and Path(filename).is_relative_to(request["cwd"]):
+                sys.modules.pop(name, None)
+        output.write(json.dumps({"code": int(code), "stdout": stdout.getvalue(), "stderr": stderr.getvalue()}) + "\n")
+        output.flush()
+
+
+if __name__ == "__main__" and sys.argv[1:] == ["--profile-worker"]:
+    profile_worker()
