@@ -89,7 +89,7 @@ class TestInterruptedRuns:
             create_or_update_snapshot(facility, 2024, month)
         calls = []
 
-        def crash_on_second_event(event):
+        def crash_on_second_event(event, **kwargs):
             calls.append(event.pk)
             if len(calls) == 2:
                 raise RuntimeError("crash while deleting the second event")

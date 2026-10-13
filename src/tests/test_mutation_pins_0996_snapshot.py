@@ -141,7 +141,7 @@ class TestFailedCarryKeepsTheEvent:
 
         _make_event(facility, client_identified, doc_type_contact, staff_user, datetime(2024, 6, 15, 10, 0))
 
-        def crash(event):
+        def crash(event, **kwargs):
             raise RuntimeError("attachment cleanup crashed")
 
         monkeypatch.setattr("core.retention.enforcement.delete_attachments_for", crash)

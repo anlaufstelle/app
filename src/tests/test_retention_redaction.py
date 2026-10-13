@@ -293,11 +293,11 @@ class TestRetentionAttachmentCleanupSelfHeals:
         real_delete = enforcement_mod.delete_attachments_for
         calls = {"n": 0}
 
-        def flaky_delete(ev):
+        def flaky_delete(ev, **kwargs):
             calls["n"] += 1
             if calls["n"] == 1:
                 raise RuntimeError("simulierter Crash beim Anhang-Unlink")
-            return real_delete(ev)
+            return real_delete(ev, **kwargs)
 
         # Produktions-Filter: die ``enforce_*``-Wrapper bauen die qs stets mit
         # ``is_deleted=False`` — ein Re-Run erreicht ein schon geleertes Event nicht.
