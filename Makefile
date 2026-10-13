@@ -724,3 +724,20 @@ help:
 	@echo "test-e2e-smoke: E2E flows marked smoke"
 	@echo "dco-check / mutation*: maintainer tools; availability is checked in public trees"
 	@echo "CI_LOCK: shared host lock; default XDG_RUNTIME_DIR, TMPDIR or /tmp + /anlaufstelle-ci.lock"
+
+# File-based unit slices use the same collection and coverage path as CI (Refs #2598).
+UNIT_SLICES ?= 3
+UNIT_WORKERS ?= 2
+UNIT_COVERAGE_DIR ?= unit-coverage
+.PHONY: test-unit-slice test-unit-combine test-unit-weights
+
+test-unit-slice:
+	COVERAGE_FILE=.coverage.$(INDEX) $(PYTHON) scripts/ci/test_slices.py --slices $(UNIT_SLICES) --index $(INDEX) --log unit-durations-$(INDEX).txt --run -- -n $(UNIT_WORKERS) -x --dist worksteal --timeout=600 --timeout-method=thread --durations=0 --durations-min=0 --cov=core --cov-report= --cov-fail-under=0
+
+test-unit-combine:
+	$(PYTHON) scripts/ci/test_slices.py --coverage-dir $(UNIT_COVERAGE_DIR) --slices $(UNIT_SLICES) --test-result "$(TEST_RESULT)"
+	$(PYTHON) -m coverage combine $(foreach number,$(shell seq 1 $(UNIT_SLICES)),$(UNIT_COVERAGE_DIR)/unit-coverage-$(number))
+	$(PYTHON) -m coverage report --fail-under=96
+
+test-unit-weights:
+	$(PYTHON) scripts/ci/test_slices.py --durations $(DURATIONS)

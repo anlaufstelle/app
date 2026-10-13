@@ -328,6 +328,9 @@ cleanup; direct mutation-runner calls use the same fallback chain.
 | `make lint`      | Check code with Ruff and verify formatting                        |
 | `make typecheck` | mypy on `core/services` (strict) + baseline check (Refs #741) |
 | `make test`      | Run unit and integration tests (excluding E2E)                    |
+| `make test-unit-slice INDEX=1` | One of three unit slices weighted by measured file duration, with two workers and coverage without a per-slice threshold; the same split as `test.yml`. Produces `.coverage.1` and `unit-durations-1.txt`. |
+| `make test-unit-combine TEST_RESULT=success` | Validate and combine all three files under `unit-coverage/unit-coverage-N/.coverage.N`; enforce 96% coverage on the union. `TEST_RESULT` must reflect the actual aggregate status of the three runs. |
+| `make test-unit-weights DURATIONS="unit-durations-1.txt unit-durations-2.txt unit-durations-3.txt"` | Regenerate `scripts/ci/test_weights.json` from complete `--durations=0 --durations-min=0` logs. `python scripts/ci/test_slices.py --summary` shows files, tests and weight totals. |
 | `make test-js`   | Run the Vitest suite (JS, `npm test`) deterministically/non-watch — part of `make ci` (Refs #1932) |
 | `make test-e2e`  | Run end-to-end tests with Playwright                              |
 | `make test-e2e-halves` | E2E in two serial halves (RAM-limited hosts, Refs #1787); the split comes from `scripts/e2e_slice.py` — the same key the CI matrix uses (Refs #1976) |
@@ -1047,5 +1050,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-09 -->
-<!-- source-hash: e1548e6ee608b75fbb5869d116f653f1beba64ec -->
+<!-- translation-date: 2026-10-13 -->
+<!-- source-hash: 2b2c2d0f133d139a9c9cba343b5168cdfef3abbd -->

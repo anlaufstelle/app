@@ -332,6 +332,9 @@ direkte Mutationsrunner-Aufrufe verwenden dieselbe Default-Kette.
 | `make lint`      | Code mit Ruff prüfen und Formatierung kontrollieren               |
 | `make typecheck` | mypy auf `core/services` (strikt) + Baseline-Check (Refs #741) |
 | `make test`      | Unit- und Integrationstests ausführen (ohne E2E)                  |
+| `make test-unit-slice INDEX=1` | Eine von drei nach gemessener Dateilaufzeit gewichteten Unit-Scheiben, mit zwei Workern und Coverage ohne Einzelschwelle; derselbe Schnitt wie in `test.yml`. Ergebnis: `.coverage.1` und `unit-durations-1.txt`. |
+| `make test-unit-combine TEST_RESULT=success` | Alle drei Dateien unter `unit-coverage/unit-coverage-N/.coverage.N` prüfen und zusammenführen; 96 % Coverage auf der Vereinigung erzwingen. `TEST_RESULT` muss den tatsächlichen Gesamtstatus der drei Läufe wiedergeben. |
+| `make test-unit-weights DURATIONS="unit-durations-1.txt unit-durations-2.txt unit-durations-3.txt"` | Gewichtsdatei `scripts/ci/test_weights.json` aus vollständigen `--durations=0 --durations-min=0`-Logs erneuern. `python scripts/ci/test_slices.py --summary` zeigt Dateien, Tests und Gewichtssummen. |
 | `make test-js`   | Vitest-Suite (JS, `npm test`) deterministisch/non-watch ausführen — Teil von `make ci` (Refs #1932) |
 | `make test-e2e`  | End-to-End-Tests mit Playwright ausführen                         |
 | `make test-e2e-halves` | E2E in zwei seriellen Hälften (RAM-limitierte Hosts, Refs #1787); den Schnitt liefert `scripts/e2e_slice.py` — derselbe Schlüssel wie in der CI-Matrix (Refs #1976) |

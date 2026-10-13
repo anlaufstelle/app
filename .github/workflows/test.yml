@@ -13,13 +13,16 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-24.04  # Moving label switches to Ubuntu 26 on 2026-10-19; upgrade deliberately after v0.99.8.
-    # Without a limit a hang would run into GitHub's 6-hour default (Refs #1606).
-    # 60 minutes: on the 2-vCPU runner of private repos the suite took about
-    # 35 minutes up to v0.99.6 and 48-50 minutes for v0.99.7; the stage run on
-    # f70c744f was cancelled at the former 50-minute limit without a failing
-    # test. A real hang is bounded by the per-test ``--timeout`` below, not by
-    # the job limit.
-    timeout-minutes: 60
+    # Three file-based slices cover the complete collected unit suite (Refs #2598).
+    # Current collection: 24,951 tests (23,221 under src/tests, without release tooling).
+    # v0.99.7 measured 48-50 minutes on 2 vCPUs before slicing.
+    # 35 minutes per slice leaves room for runner variation and startup;
+    # the stage probe must confirm a mean <=24.5 minutes per slice.
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        slice: [1, 2, 3]
     services:
       postgres:
         image: postgres:18-alpine
@@ -66,20 +69,60 @@ jobs:
       # Manual-Test-Matrix Test-Files referenziert, die nicht existieren.
       - name: Verify manual-test-matrix drift
         run: python scripts/verify_test_matrix_drift.py
-      # Refs #823 (C-56): --cov-fail-under erzwingt die Coverage-Schwelle.
-      # Stand 2026-05-20 (#945/#949): 96 % erreicht durch gezielte
-      # Top-Lücken-Tests (Buckets A+B+C+D). Folge-PRs dürfen den Wert anheben,
-      # aber nicht senken.
-      # Timeout je Test (Refs #2022): ein haengender Test soll mit Traceback und
-      # Testnamen scheitern statt den Job stumm stehen zu lassen (thread-Methode
-      # wie in e2e.yml, damit auch blockierende C-Aufrufe abgebrochen werden;
-      # der langsamste Test liegt lokal bei ~15 s). --durations zeigt die
-      # teuersten Tests, damit Runner-Kosten sichtbar bleiben.
-      - run: python -m pytest -m "not e2e" --ignore=src/tests/e2e -n auto --dist worksteal --timeout=600 --timeout-method=thread --durations=30 --cov=core --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=96
+      # Preserve worksteal and the per-test timeout; enforce 96% only after combine.
+      # pyproject.toml also sets fail_under, so slices explicitly override it to zero.
+      - name: Run unit slice
+        run: make test-unit-slice INDEX=${{ matrix.slice }} PYTHON=python
         env:
           POSTGRES_HOST: localhost
           ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
-      - name: Upload coverage report
+          COVERAGE_FILE: .coverage.${{ matrix.slice }}
+      - name: Upload slice coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: unit-coverage-${{ matrix.slice }}
+          path: .coverage.${{ matrix.slice }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload slice durations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: unit-durations-${{ matrix.slice }}
+          path: unit-durations-${{ matrix.slice }}.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [test]
+    if: always()
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Download all slice coverage
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5.0.0
+        with:
+          pattern: unit-coverage-*
+          path: unit-coverage
+      - name: Validate matrix and artifacts, combine and enforce coverage
+        run: |
+          python scripts/ci/test_slices.py --coverage-dir unit-coverage --test-result '${{ needs.test.result }}'
+          python -m coverage combine unit-coverage/unit-coverage-1 unit-coverage/unit-coverage-2 unit-coverage/unit-coverage-3
+          python -m coverage report --fail-under=96
+      - name: Render coverage reports
+        if: always()
+        run: |
+          python -m coverage xml --fail-under=0
+          python -m coverage html --fail-under=0
+      - name: Upload combined coverage report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
