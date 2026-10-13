@@ -216,6 +216,157 @@ def _gif_frame_sizes(stream):
             raise ValueError("Invalid GIF block")
 
 
+def _webp_frame_sizes(stream):
+    """Read RIFF geometry and actual frame chunks before libwebp allocates canvases."""
+    stream.seek(0, os.SEEK_END)
+    file_size = stream.tell()
+    stream.seek(0)
+    header = stream.read(12)
+    if len(header) != 12 or header[:4] != b"RIFF" or header[8:] != b"WEBP":
+        raise ValueError("Invalid WebP header")
+    end = 8 + int.from_bytes(header[4:8], "little")
+    if end > file_size or end < 12:
+        raise ValueError("Truncated WebP container")
+    canvas = None
+    animated = animation_header = False
+    frames = 0
+    offset = 12
+    for _chunk_index in range(_MAX_IMAGE_FRAMES + _WEBP_MAX_CHUNKS):
+        if offset == end:
+            if not frames:
+                raise ValueError("Missing WebP image data")
+            return
+        stream.seek(offset)
+        chunk = stream.read(8)
+        if len(chunk) != 8:
+            raise ValueError("Truncated WebP chunk")
+        kind, size = chunk[:4], int.from_bytes(chunk[4:], "little")
+        next_offset = offset + 8 + size + size % 2
+        if next_offset > end:
+            raise ValueError("WebP chunk exceeds container")
+        if kind == b"VP8X":
+            if size != 10 or canvas is not None or offset != 12:
+                raise ValueError("Invalid extended WebP header")
+            data = stream.read(10)
+            animated = bool(data[0] & 2)
+            canvas = (1 + int.from_bytes(data[4:7], "little"), 1 + int.from_bytes(data[7:10], "little"))
+        elif kind == b"ANIM":
+            if not animated or size != 6 or animation_header:
+                raise ValueError("Invalid WebP animation header")
+            animation_header = True
+        elif kind == b"ANMF":
+            if not canvas or not animation_header or size < 16:
+                raise ValueError("Invalid WebP animation frame")
+            data = stream.read(16)
+            left, top = 2 * int.from_bytes(data[:3], "little"), 2 * int.from_bytes(data[3:6], "little")
+            width, height = 1 + int.from_bytes(data[6:9], "little"), 1 + int.from_bytes(data[9:12], "little")
+            if left + width > canvas[0] or top + height > canvas[1]:
+                raise ValueError("WebP frame exceeds canvas")
+            frames += 1
+            yield canvas
+        elif kind in {b"VP8 ", b"VP8L"}:
+            if animated or frames:
+                raise ValueError("Unexpected WebP image data")
+            data = stream.read(min(size, 10))
+            if kind == b"VP8L":
+                if len(data) < 5 or data[0] != 0x2F:
+                    raise ValueError("Invalid lossless WebP header")
+                bits = int.from_bytes(data[1:5], "little")
+                width, height = (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+            else:
+                if len(data) != 10 or data[3:6] != b"\x9d\x01\x2a":
+                    raise ValueError("Invalid lossy WebP header")
+                width, height = struct.unpack_from("<HH", data, 6)
+                width, height = width & 0x3FFF, height & 0x3FFF
+                if not width or not height:
+                    raise ValueError("Invalid WebP dimensions")
+            if canvas is not None and canvas != (width, height):
+                raise ValueError("WebP dimensions disagree with canvas")
+            frames = 1
+            yield width, height
+        offset = next_offset
+    raise ValueError("Too many WebP header chunks")
+
+
+def _png_image_size(stream):
+    """Read PNG/APNG geometry before opening can allocate a disposal buffer."""
+    start = stream.tell()
+    stream.seek(0, os.SEEK_END)
+    end = stream.tell()
+    stream.seek(start)
+    header = stream.read(33)
+    if len(header) != 33 or header[:16] != b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR":
+        raise ValueError("Invalid PNG header")
+    width, height = struct.unpack_from(">II", header, 16)
+    if not width or not height:
+        raise ValueError("Invalid PNG dimensions")
+    frames = 1
+    animated = animation_frame = False
+    while stream.tell() < end:
+        chunk = stream.read(8)
+        if len(chunk) != 8:
+            break
+        size, kind = int.from_bytes(chunk[:4], "big"), chunk[4:]
+        next_offset = stream.tell() + size + 4
+        if next_offset > end:
+            raise ValueError("Truncated PNG chunk")
+        if kind == b"IHDR":
+            raise ValueError("Conflicting PNG canvas headers")
+        if kind == b"IDAT":
+            return width, height, frames + int(animated and not animation_frame)
+        if kind == b"acTL":
+            if animated or size != 8:
+                raise ValueError("Invalid APNG animation header")
+            animated = True
+            frames = int.from_bytes(stream.read(4), "big")
+            if not frames:
+                raise ValueError("Missing APNG frames")
+        elif kind == b"fcTL":
+            animation_frame = True
+        stream.seek(next_offset)
+    raise ValueError("Missing PNG image data")
+
+
+def _ico_frame_sizes(stream):
+    """Read embedded raster headers before Pillow eagerly loads an ICO entry.
+
+    Directory dimensions are untrusted: PNG/DIB payloads may disagree with them.
+    Check each variant separately; Pillow only materializes one variant.
+    """
+    stream.seek(0)
+    header = stream.read(6)
+    if len(header) != 6 or header[:4] != b"\x00\x00\x01\x00":
+        raise ValueError("Invalid ICO header")
+    count = int.from_bytes(header[4:], "little")
+    if not count:
+        raise ValueError("Missing ICO entries")
+    for index in range(count):
+        stream.seek(6 + index * 16)
+        entry = stream.read(16)
+        if len(entry) != 16:
+            raise ValueError("Truncated ICO directory")
+        stream.seek(int.from_bytes(entry[12:16], "little"))
+        payload = stream.read(12)
+        if payload[:8] == b"\x89PNG\r\n\x1a\n":
+            stream.seek(-len(payload), os.SEEK_CUR)
+            width, height, _frame_count = _png_image_size(stream)
+        elif len(payload) == 12:
+            header_size = int.from_bytes(payload[:4], "little")
+            if header_size == 12:
+                width, height = struct.unpack_from("<HH", payload, 4)
+            elif header_size in {40, 64, 108, 124}:
+                width, height = struct.unpack_from("<ii", payload, 4)
+                height = abs(height)
+            else:
+                raise ValueError("Unsupported ICO bitmap header")
+            height //= 2
+        else:
+            raise ValueError("Truncated ICO raster header")
+        if width <= 0 or height <= 0:
+            raise ValueError("Invalid ICO raster dimensions")
+        yield width, height
+
+
 def _check_image_budget(facility, uploaded_file, owner, user, *, pixels, frames, decoded_bytes, max_pixels):
     """Reject before frame copies can exhaust the aggregate image budget."""
     if frames > _MAX_IMAGE_FRAMES:
@@ -256,12 +407,17 @@ def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=Non
     TIFF pages may have different sizes/modes; seeking reads their headers only.
     Animations reserve a full canvas per frame, including compositing and mode
     promotion to RGBA. Their frame count is read without decoding pixel data.
+    WebP, PNG/APNG, GIF and ICO headers are checked before Image.open(),
+    which can already allocate canvas/disposal buffers or decode an icon.
     The byte estimate reserves three buffers of at least four bytes per pixel:
     source, retained clean copy and transform/encoding workspace. Encoder
     allocations are format-dependent and are not proven bounded by this estimate.
     """
     ext = _extension(uploaded_file)
     if ext not in _IMAGE_EXTENSIONS and not _is_image_mime(detected_mime):
+        return
+    if ext not in _IMAGE_EXTENSIONS and (detected_mime or "").lower() == "image/svg+xml":
+        # SVG is passed through without rasterizing; the extension allowlist still applies.
         return
 
     import warnings  # noqa: PLC0415
@@ -272,25 +428,43 @@ def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=Non
     Image.MAX_IMAGE_PIXELS = max_pixels
     uploaded_file.seek(0)
     try:
+        prefix = uploaded_file.read(12)
+        uploaded_file.seek(0)
+        sizes = None
+        icon = prefix[:4] == b"\x00\x00\x01\x00"
+        if prefix[:6] in {b"GIF87a", b"GIF89a"}:
+            sizes = ((width, height, 1) for width, height in _gif_frame_sizes(uploaded_file))
+        elif prefix[:4] == b"RIFF" and prefix[8:12] == b"WEBP":
+            sizes = ((width, height, 1) for width, height in _webp_frame_sizes(uploaded_file))
+        elif prefix[:8] == b"\x89PNG\r\n\x1a\n":
+            sizes = [_png_image_size(uploaded_file)]
+        elif icon:
+            sizes = ((width, height, 1) for width, height in _ico_frame_sizes(uploaded_file))
+        preflighted = sizes is not None
+        if sizes is not None:
+            pixels = frames = 0
+            for width, height, count in sizes:
+                frame_pixels = width * height * count
+                pixels = max(pixels, frame_pixels) if icon else pixels + frame_pixels
+                frames = 1 if icon else frames + count
+                _check_image_budget(
+                    facility,
+                    uploaded_file,
+                    owner,
+                    user,
+                    pixels=pixels,
+                    frames=frames,
+                    decoded_bytes=pixels * 4 * _IMAGE_BUFFER_RESERVE,
+                    max_pixels=max_pixels,
+                )
+        uploaded_file.seek(0)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", Image.DecompressionBombWarning)
             with Image.open(uploaded_file) as img:
+                if preflighted:
+                    return
                 pixels = decoded_bytes = 0
-                if img.format == "GIF":
-                    for index, (width, height) in enumerate(_gif_frame_sizes(uploaded_file)):
-                        pixels += width * height
-                        decoded_bytes += width * height * 4 * _IMAGE_BUFFER_RESERVE
-                        _check_image_budget(
-                            facility,
-                            uploaded_file,
-                            owner,
-                            user,
-                            pixels=pixels,
-                            frames=index + 1,
-                            decoded_bytes=decoded_bytes,
-                            max_pixels=max_pixels,
-                        )
-                elif img.format == "TIFF":
+                if img.format == "TIFF":
                     # Avoid n_frames: stop after the first over-budget page header.
                     for index in range(_MAX_IMAGE_FRAMES + 1):
                         try:

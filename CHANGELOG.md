@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
-- **Gesamtbudget für mehrseitige Bilder** (#2582) — Bild-Uploads werden vor der vollständigen Frame-Verarbeitung auf insgesamt standardmäßig 40 Millionen Pixel, höchstens 100 Frames oder Seiten und ein konservativ geschätztes Bildpufferbudget von 256 MiB geprüft und bei Überschreitung mit Meldung und Audit abgewiesen; zulässige Mehrseitenbilder bleiben erhalten, eine Obergrenze für den gesamten Encoder-RAM ist damit nicht bewiesen.
+- **Gesamtbudget für mehrseitige Bilder** (#2582) — Rasterbild-Uploads werden vor der vollständigen Frame-Verarbeitung und bei früh allokierenden Formaten bereits vor dem Bildöffnen anhand ihrer Header auf insgesamt standardmäßig 40 Millionen Pixel, höchstens 100 Frames oder Seiten und ein konservativ geschätztes Bildpufferbudget von 256 MiB geprüft und bei Überschreitung mit Meldung und Audit abgewiesen; zulässige Mehrseitenbilder und vom Betreiber zugelassene SVG-Dateien bleiben erhalten, eine Obergrenze für den gesamten Encoder-RAM ist damit nicht bewiesen.
 
 ### Fixed
 
