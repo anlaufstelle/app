@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 13:35+0200\n"
+"POT-Creation-Date: 2026-10-14 14:09+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14700,3 +14700,11 @@ msgstr "The assigned person must be active and authorized for tasks in this faci
 #: src/templates/core/workitems/offline_create.html:12
 msgid "Bitte einen Titel angeben."
 msgstr "Please enter a title."
+
+#: src/templates/components/_client_autocomplete.html:48
+msgid "Keine Person ausgewählt. Bitte einen Treffer aus der Liste wählen."
+msgstr "No person selected. Please choose a match from the list."
+
+#: src/templates/core/clients/partials/_inline_create_modal.html:10
+msgid "Die Person konnte nicht angelegt werden. Bitte erneut versuchen."
+msgstr "The person could not be created. Please try again."

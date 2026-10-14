@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 13:35+0200\n"
+"POT-Creation-Date: 2026-10-14 14:09+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14789,3 +14789,11 @@ msgstr "Die Zielperson muss aktiv und für Aufgaben in dieser Einrichtung berech
 #: src/templates/core/workitems/offline_create.html:12
 msgid "Bitte einen Titel angeben."
 msgstr "Bitte einen Titel angeben."
+
+#: src/templates/components/_client_autocomplete.html:48
+msgid "Keine Person ausgewählt. Bitte einen Treffer aus der Liste wählen."
+msgstr "Keine Person ausgewählt. Bitte einen Treffer aus der Liste wählen."
+
+#: src/templates/core/clients/partials/_inline_create_modal.html:10
+msgid "Die Person konnte nicht angelegt werden. Bitte erneut versuchen."
+msgstr "Die Person konnte nicht angelegt werden. Bitte erneut versuchen."
