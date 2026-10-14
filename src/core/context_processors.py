@@ -56,7 +56,8 @@ def source_code(request):
 
     project_url = getattr(settings, "PROJECT_WEBSITE_URL", "")
     try:
-        if urlsplit(project_url).scheme.lower() not in {"http", "https"}:
+        parsed_url = urlsplit(project_url)
+        if parsed_url.scheme.lower() not in {"http", "https"} or not parsed_url.hostname:
             project_url = ""
     except ValueError:
         project_url = ""

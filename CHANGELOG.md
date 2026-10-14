@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **Projektwebseite verlinkt** (#2589) — Demo-Panel, freigegebene Fußzeile und Hilfe verlinken die konfigurierbare Projektwebseite; normale Anmeldeseiten bleiben ohne Projekt- und Versionshinweis.
+- **Projektwebseite verlinkt** (#2589) — Demo-Panel, freigegebene Fußzeile und Hilfe verlinken die konfigurierbare Projektwebseite; normale Anmeldeseiten bleiben ohne Projekt- und Versionshinweis, und Adressen ohne HTTP(S)-Schema oder Host blenden den Projektlink aus.
 
 ### Changed
 

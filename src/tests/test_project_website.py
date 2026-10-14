@@ -35,7 +35,7 @@ def test_demo_login_has_project_links_without_version(client, settings):
     assert 'data-testid="app-version"' not in html
 
 
-@pytest.mark.parametrize("url", ["", "javascript:alert(1)", "data:text/html,test"])
+@pytest.mark.parametrize("url", ["", "javascript:alert(1)", "data:text/html,test", "https://", "http:evil"])
 def test_disabled_or_unsafe_project_url(client, staff_user, settings, url):
     settings.PROJECT_WEBSITE_URL = url
     settings.DEMO_MODE = True
