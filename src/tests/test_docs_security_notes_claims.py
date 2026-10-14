@@ -99,3 +99,16 @@ def test_english_branch_protection_excerpt_preserves_the_evidence_boundary() -> 
     assert "does not prove active GitHub settings" in text
     assert "private development repository without GitHub Pro" in text
     assert "local gates, signed tags and the release dry run" in text
+
+
+def test_branch_protection_separates_integrity_and_release_bypass() -> None:
+    text = SECURITY_NOTES.read_text(encoding="utf-8")
+    section = text.split("### Branch-Schutz und Maintainer-Nachweis", 1)[1].split("\n### ", 1)[0]
+    assert "main-integrity" in section
+    assert "main-pr" in section
+    assert "nur Repo-Admin" not in section
+    assert "refs/heads/main" in section
+    assert "Always" in section
+    assert "keine Restrict-updates-Regel" in section
+    english = (REPO_ROOT / "docs/en/security-notes.md").read_text()
+    assert "main-integrity" in english and "main-pr" in english

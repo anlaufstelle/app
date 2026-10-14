@@ -20,7 +20,9 @@ The endpoint guard recursively walks the active URL resolver at runtime for POST
 
 Branch protection/rulesets are unavailable for the private development repository without GitHub Pro; the substitutes are local gates, signed tags and the release dry run. For the public app repository, a ruleset is planned: no force pushes and no branch deletion. Evidence of active settings is provided through the maintainer checklist #1597. The local source tree does not prove active GitHub settings; this excerpt makes no claim that the ruleset has been checked.
 
+Two separate rulesets are planned for `refs/heads/main`: `main-integrity` blocks force pushes and deletions without bypass actors; `main-pr` requires pull requests and status checks, with an “Always” bypass only for the named release identity and no restrict-updates rule; check names must be compared with an app run before configuration.
+
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 2aee5215965a484e5e784aee563331437f5e1e7d -->
+<!-- translation-date: 2026-10-14 -->
+<!-- source-hash: 8c321e5276d3ef8fd61fd8881e881f2372df6ac8 -->

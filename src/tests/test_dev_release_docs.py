@@ -100,3 +100,29 @@ def test_stage_token_guidance_reads_actions_without_watch():
     monitoring = guidance.split("Stage-CI überwachen:", 1)[1].split("## Phase 9", 1)[0]
     assert "actions/workflows/$WF/runs?head_sha=" in monitoring
     assert "gh run watch" not in monitoring
+
+
+@pytest.mark.skipif(not (ROOT / "docs/dev").exists(), reason="Dev guidance is absent from public snapshots")
+def test_dev_repository_guidance_does_not_claim_admin_ruleset_bypass():
+    text = (ROOT / "docs/dev/release-checklist.md").read_text()
+    paragraph = text.split("**Dev-Repo:**", 1)[1].split("\n\n", 1)[0]
+    assert "Bypass-Berechtigte: nur Repo-Admin" not in paragraph
+    assert "ohne GitHub Pro" in paragraph
+    assert "#branch-schutz-und-maintainer-nachweis" in paragraph
+
+
+@pytest.mark.skipif(not (ROOT / "docs/dev").exists(), reason="Dev guidance is absent from public snapshots")
+def test_platform_evidence_has_one_handoff_reference_and_read_only_commands():
+    text = (ROOT / "docs/dev/release-checklist.md").read_text()
+    section = text.split("## 4.2 Plattform-Nachweise am Spiegel (Maintainer)", 1)[1].split("## Rollback", 1)[0]
+    template = text.split("### Maintainer-Handoff vX.Y.Z", 1)[1].split("````", 1)[0]
+    assert sum("[ ]" in line and "§ 4.2" in line for line in template.splitlines()) == 1
+    for ticket in (1079, 1217, 1597, 2529):
+        assert f"#{ticket}" in section
+    assert "(6a)" in section and "(3)" in section
+    assert "403/404" in section and "nicht verifiziert" in section
+    for line in section.splitlines():
+        if line.startswith(("gh ", "git ", "GH_TOKEN=")):
+            assert '|| echo "ABBRUCH:' in line
+            assert "# Erwartet:" in line
+            assert not re.search(r"gh api.*(?:--method| -X )|gh pr close|git push|gh workflow run", line)

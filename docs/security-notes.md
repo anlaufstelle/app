@@ -649,19 +649,18 @@ Alle `uses:`-Referenzen in allen Workflows zeigen auf **40-stellige Commit-SHAs*
 
 Branch-Schutz/Rulesets stehen für das private Dev-Repo ohne GitHub Pro nicht zur Verfügung; Ersatz sind lokale Gates, signierte Tags und der Release-Dry-Run. Für das öffentliche app-Repo ist ein Ruleset vorgesehen: kein Force-Push, keine Löschung.
 
-Der Nachweis der aktiven Einstellung erfolgt über die Maintainer-Checkliste #1597. Der lokale Quellbaum belegt keine aktive GitHub-Einstellung; diese Dokumentation behauptet keine eigene Prüfung des Rulesets. Weitere empfohlene Regeln für den Default-Branch:
+Der Nachweis der aktiven Einstellung erfolgt über die Maintainer-Checkliste #1597. Der lokale Quellbaum belegt keine aktive GitHub-Einstellung; diese Dokumentation behauptet keine eigene Prüfung des Rulesets. Vorgesehen sind zwei getrennte Rulesets auf `refs/heads/main`; die Tabelle ist eine Sollvorgabe, kein Aktivierungsnachweis:
 
-| Regel | Wert |
+| Ruleset / Regel | Vorgesehener Wert |
 |---|---|
-| Require a pull request before merging | aktiv |
-| Required reviewers | 0 (Solo-Repo) — anheben sobald Team-Repo |
-| Require status checks to pass | `lint`, `test`, `e2e` |
-| Strict status checks (up-to-date with base) | aktiv |
-| Block force pushes | aktiv |
-| Restrict deletions | aktiv |
-| Bypass-Berechtigte | nur Repo-Admin |
+| `main-integrity` | Block force pushes (`non_fast_forward`) und Restrict deletions (`deletion`); keine Bypass-Liste |
+| `main-pr` | Pull Request (`pull_request`) und erforderliche Status-Checks (`required_status_checks`) |
+| `main-pr` Bypass | Nur die konkret benannte Release-Identität, Modus „Always“; keine Restrict-updates-Regel (`update`) |
+| Erforderliche Status-Checks | `lint`, `licenses`, `translation-versions`, `translations-coverage`, `typecheck`; `test (1)`, `test (2)`, `test (3)`, `coverage`, `check`, `audit`, `lock-check`; `E2E-Scheibe 1` bis `E2E-Scheibe 4` |
 
-Prüfen lässt sich ein aktives Ruleset mit `gh api repos/<owner>/<repo>/rulesets` (Einstellungen des jeweiligen Repositorys).
+Die Check-Liste ist aus Job-IDs, Job-`name` und Matrix-Schema der ausgelieferten [Lint](../.github/workflows/lint.yml)-, [Test](../.github/workflows/test.yml)- und [E2E](../.github/workflows/e2e.yml)-Workflows abgeleitet; gegen die Check-Namen eines App-Laufs abgleichen, bevor sie als erforderlich gesetzt wird. CodeQL liefert zusätzlich `Analyze (python)` und `Analyze (javascript)`; der Tag-Workflow `release.yml` liefert `build-and-push` und ist kein PR-Check.
+
+Der Maintainer prüft `enforcement = active`, das Ziel sowie Regeln und Bypass-Felder mit `gh api repos/anlaufstelle/app/rulesets` und je ID `gh api repos/anlaufstelle/app/rulesets/$ID`. Bietet GitHub für die benannte Identitätsart keinen Bypass an, ist eine Rückfrage erforderlich; eine Admin-Rolle ist kein Ersatz.
 
 ### Trigger für Re-Evaluation
 
