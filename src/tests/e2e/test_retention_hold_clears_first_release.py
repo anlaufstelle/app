@@ -2,9 +2,10 @@
 
 Reproduction: A grants the first release of a deletion proposal; a lead sets a legal hold from
 the record of the event, the person or the case; the first release is gone (database and
-dashboard). After the hold is lifted the proposal needs A and B again. Database state is read
-after each step. The scheduled run's report of missing release evidence is a command, not a
-browser flow, and is covered by the unit suite.
+dashboard). After the hold is lifted the proposal runs the whole two-person flow again: A's first
+release, A's rejected second attempt, B's final release. Database state is read after each step.
+The scheduled run's report of missing release evidence is a command, not a browser flow, and is
+covered by the unit suite.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from .test_retention_dashboard import (
     _ensure_proposals,
     _open_dashboard,
     _proposal_state,
+    _two_person_flow,
     approver_pool,  # noqa: F401  (fixture, used via usefixtures)
 )
 
@@ -106,9 +108,10 @@ def test_hold_from_record_clears_first_release_and_needs_both_again(
         expect(card_a).to_be_visible(timeout=10000)
         expect(card_a.get_by_text(_DE["progress"])).to_have_count(0)
         expect(card_a.get_by_role("button", name=_DE["second_button"])).to_have_count(0)
-        card_a.get_by_role("button", name=_DE["first_button"]).click()
-        expect(card_a.get_by_text(_DE["progress"])).to_be_visible(timeout=10000)
-        assert _proposal_state(e2e_env, proposal) == ("pending", _APPROVER_A)
+
+        # The whole flow runs again: A's first release (still pending, A recorded), A's second attempt
+        # rejected with 409 and a message while the status stays pending, then B's release approves it.
+        _two_person_flow(page_a, page_b, base_url, proposal, _DE, e2e_env)
     finally:
         context_a.close()
         context_b.close()
