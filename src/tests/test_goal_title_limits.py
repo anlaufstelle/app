@@ -63,3 +63,38 @@ def test_title_limit_is_explained_at_the_fields(client, staff_user, case_open):
     content = response.content.decode()
     assert "Titel dürfen höchstens 200 Zeichen enthalten." in content
     assert content.count('aria-describedby="goal-title-limit"') == 3
+
+
+@pytest.mark.parametrize("title", ["", "   "])
+@pytest.mark.parametrize("operation", ["create", "update"])
+def test_empty_goal_title_is_rejected_without_writes(client, staff_user, case_open, outcome_goal, operation, title):
+    client.force_login(staff_user)
+    kwargs = {"case_pk": case_open.pk}
+    if operation == "update":
+        kwargs["pk"] = outcome_goal.pk
+    before = list(OutcomeGoal.objects.values())
+    response = client.post(
+        reverse(f"core:goal_{operation}", kwargs=kwargs),
+        {"title": title, "description": "Unsaved description"},
+        HTTP_HX_REQUEST="true",
+    )
+    assert response.status_code == 409
+    assert response["HX-Reswap"] == "none"
+    assert "Der Titel darf nicht leer sein." in response.content.decode()
+    assert list(OutcomeGoal.objects.values()) == before
+
+
+@pytest.mark.parametrize("title", ["", "   "])
+@pytest.mark.parametrize("operation", ["create", "update", "milestone"])
+def test_service_rejects_empty_titles(case_open, outcome_goal, staff_user, operation, title):
+    before = list(OutcomeGoal.objects.values())
+    milestones = list(Milestone.objects.values())
+    with pytest.raises(ValidationError, match="Der Titel darf nicht leer sein"):
+        if operation == "create":
+            create_goal(case_open, staff_user, title)
+        elif operation == "update":
+            update_goal(outcome_goal, staff_user, title=title, description="Unsaved")
+        else:
+            create_milestone(outcome_goal, staff_user, title)
+    assert list(OutcomeGoal.objects.values()) == before
+    assert list(Milestone.objects.values()) == milestones

@@ -56,12 +56,11 @@ class GoalCreateView(StaffRequiredMixin, View):
     def post(self, request, case_pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         title = request.POST.get("title", "").strip()
-        if title:
-            try:
-                create_goal(case=case, user=request.user, title=title)
-            except ValidationError as exc:
-                # Refs #2329: gesperrte, geloeschte oder getilgte Akte.
-                return _abgelehnt(exc)
+        try:
+            create_goal(case=case, user=request.user, title=title)
+        except ValidationError as exc:
+            # Refs #2329: restricted, deleted or purged case.
+            return _abgelehnt(exc)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 
 
@@ -72,12 +71,12 @@ class GoalUpdateView(StaffRequiredMixin, View):
     def post(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
-        title = request.POST.get("title", "").strip() or None
+        title = request.POST.get("title")
         description = request.POST.get("description")
         try:
             update_goal(goal, request.user, title=title, description=description)
         except ValidationError as exc:
-            # Refs #2329, Spiegel von ``GoalCreateView``.
+            # Refs #2329: same rejection path as GoalCreateView.
             return _abgelehnt(exc)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 

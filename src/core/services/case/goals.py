@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 def _validated_title(title):
     """Validate the stripped title before writing a varchar(200)."""
     title = title.strip()
+    if not title:
+        raise ValidationError(_("Der Titel darf nicht leer sein."))
     if len(title) > 200:
         raise ValidationError(_("Der Titel darf höchstens 200 Zeichen enthalten."))
     return title
