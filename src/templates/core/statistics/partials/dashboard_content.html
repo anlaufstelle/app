@@ -68,6 +68,17 @@ tragen (die History-Aktualisierung folgt dem Swap), das gerenderte Attribut
 nicht.
 {% endcomment %}
 <div id="statistics-charts" data-chart-query="{{ chart_query }}"
+     data-i18n-total="{% trans 'Gesamt' %}"
+     data-i18n-anonymous="{% trans 'Anonym' %}"
+     data-i18n-pseudonym="{% trans 'Nur Pseudonym' %}"
+     data-i18n-qualified="{% trans 'Mit Zusatzangaben' %}"
+     data-i18n-contacts="{% trans 'Kontakte' %}"
+     data-i18n-source="{% trans 'Quelle: ' %}"
+     data-i18n-snapshot="{% trans 'Snapshot' %}"
+     data-i18n-live="{% trans 'Live-Daten' %}"
+     data-i18n-error="{% trans 'Fehler: ' %}"
+     data-i18n-request-failed="{% trans 'Die Diagramme konnten nicht geladen werden.' %}"
+     data-i18n-http="{% trans 'HTTP-Fehler' %}"
      x-data="statisticsCharts" x-init="fetchAndRender"
      class="mb-8 no-print" x-cloak>
 
@@ -98,7 +109,7 @@ nicht.
     {# Fehler-Anzeige #}
     <template x-if="error">
         <div class="bg-red-50 border border-red-200 rounded-[10px] p-3 mb-4">
-            <p class="text-sm text-red-600" x-text="'Fehler: ' + error"></p>
+            <p class="text-sm text-red-600" x-text="errorText"></p>
         </div>
     </template>
 

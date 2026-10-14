@@ -36,6 +36,13 @@ function buildStatisticsCharts() {
     loading: true,
     error: null,
     sources: [],
+    text(key, fallback) {
+      const host = this.$el || document.getElementById("statistics-charts");
+      return host?.dataset?.["i18n" + key[0].toUpperCase() + key.slice(1)] || fallback;
+    },
+    get errorText() {
+      return this.text("error", "Error: ") + this.error;
+    },
     // Refs #1804: KEIN docTypeFilter mehr im Client-State. Der Filter ist
     // serverseitiger Zustand (`?doktyp=`), das <select> laedt
     // `#statistics-content` per htmx neu, und diese Komponente wird dabei
@@ -71,7 +78,10 @@ function buildStatisticsCharts() {
           },
           credentials: "same-origin",
         });
-        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        if (!resp.ok) {
+          this.error = this.text("http", "HTTP error") + " " + resp.status;
+          return;
+        }
         const data = await resp.json();
         this.sources = data.sources || [];
         this.destroyCharts();
@@ -83,7 +93,7 @@ function buildStatisticsCharts() {
         // damit die Charts nicht leer/halb gezeichnet im Screenshot landen.
         document.body.setAttribute("data-charts-ready", "true");
       } catch (e) {
-        this.error = e.message;
+        this.error = this.text("requestFailed", "Request failed.");
       } finally {
         this.loading = false;
       }
@@ -91,6 +101,9 @@ function buildStatisticsCharts() {
 
     renderContactsChart(data) {
       const canvas = document.getElementById("chart-contacts");
+      const sourceLabel = this.text("source", "Source: ");
+      const snapshotLabel = this.text("snapshot", "Snapshot");
+      const liveLabel = this.text("live", "Live data");
       if (!canvas) return;
 
       const pointStyles = (data.sources || []).map(function (s) {
@@ -106,7 +119,7 @@ function buildStatisticsCharts() {
           labels: data.labels,
           datasets: [
             {
-              label: "Gesamt",
+              label: this.text("total", "Total"),
               data: data.contacts.total,
               borderColor: "rgb(99, 102, 241)",
               backgroundColor: "rgba(99, 102, 241, 0.1)",
@@ -117,7 +130,7 @@ function buildStatisticsCharts() {
               pointRadius: 5,
             },
             {
-              label: "Anonym",
+              label: this.text("anonymous", "Anonymous"),
               data: data.contacts.anonym,
               borderColor: "rgb(156, 163, 175)",
               borderDash: [5, 5],
@@ -125,7 +138,7 @@ function buildStatisticsCharts() {
               pointRadius: 3,
             },
             {
-              label: "Nur Pseudonym",
+              label: this.text("pseudonym", "Pseudonym only"),
               data: data.contacts.identifiziert,
               borderColor: "rgb(59, 130, 246)",
               borderDash: [5, 5],
@@ -133,7 +146,7 @@ function buildStatisticsCharts() {
               pointRadius: 3,
             },
             {
-              label: "Mit Zusatzangaben",
+              label: this.text("qualified", "With additional details"),
               data: data.contacts.qualifiziert,
               borderColor: "rgb(16, 185, 129)",
               borderDash: [5, 5],
@@ -151,7 +164,7 @@ function buildStatisticsCharts() {
               callbacks: {
                 afterLabel: function (ctx) {
                   var src = (data.sources || [])[ctx.dataIndex];
-                  return src ? "Quelle: " + (src === "snapshot" ? "Snapshot" : "Live-Daten") : "";
+                  return src ? sourceLabel + (src === "snapshot" ? snapshotLabel : liveLabel) : "";
                 },
               },
             },
@@ -185,7 +198,7 @@ function buildStatisticsCharts() {
           labels: items.map(function (d) { return d.name; }),
           datasets: [
             {
-              label: "Kontakte",
+              label: this.text("contacts", "Contacts"),
               data: items.map(function (d) { return d.count; }),
               backgroundColor: items.map(function (_, i) {
                 return colors[i % colors.length];
