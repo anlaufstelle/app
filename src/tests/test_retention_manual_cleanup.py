@@ -40,8 +40,14 @@ def test_manual_deletion_carries_month_exactly_once(facility, doc_type_contact, 
 
 
 def test_person_page_shows_pending_history_without_exposing_content(
-    client, staff_user, client_identified, facility, doc_type_contact
+    client, staff_user, admin_user, client_identified, facility, doc_type_contact
 ):
+    """Anonymised persons are soft-deleted first, so the history status lives in the trash.
+
+    The person detail page no longer serves revoked persons (inactive or in the
+    trash); the pending-history notice stays visible where an administrator can
+    still reach the record.
+    """
     event = make_event(
         facility=facility,
         document_type=doc_type_contact,
@@ -51,17 +57,23 @@ def test_person_page_shows_pending_history_without_exposing_content(
         data_json={},
     )
     EventHistory.objects.create(event=event, action="create", data_after={"secret": "Do not render this"})
+    client_identified.is_deleted = True
+    client_identified.deleted_at = timezone.now()
     client_identified.is_active = False
     client_identified.anonymized_at = timezone.now()
     client_identified.save()
-    client.force_login(staff_user)
 
-    response = client.get(reverse("core:client_detail", args=[client_identified.pk]))
+    client.force_login(staff_user)
+    detail = client.get(reverse("core:client_detail", args=[client_identified.pk]))
+    assert detail.status_code == 404
+
+    client.force_login(admin_user)
+    response = client.get(reverse("core:client_trash"))
 
     assert response.status_code == 200
-    assert response.context["history_deferred"] == 1
-    assert "Historie wird im Nachtlauf redigiert" in response.content.decode()
-    assert "Do not render this" not in response.content.decode()
+    body = response.content.decode()
+    assert "Historie wird im Nachtlauf redigiert" in body
+    assert "Do not render this" not in body
 
 
 def test_event_delete_page_names_confirmation_permission(
