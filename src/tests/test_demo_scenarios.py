@@ -516,6 +516,18 @@ class TestStaleRequestAfterSwitch:
 
 
 class TestDemoOfflineBootstrap:
+    def test_bootstrap_notices_offer_immediate_recovery_and_success(
+        self, client, demo_mode, patched_catalog, kontaktladen_staff
+    ):
+        response = client.post(reverse("demo_scenario_start"), {"scenario": "kontaktladen"})
+        page = client.get(response.url)
+        assert page.status_code == 200
+        body = page.content.decode()
+        assert "die Demo erneut starten oder regulär anmelden" in body
+        assert "nach dem nächsten Reset erneut starten" not in body
+        assert "data-demo-offline-success" in body
+        assert "Offline-Schlüssel ist bereit." in body
+
     @pytest.mark.parametrize("url_name", ["demo_imprint", "demo_privacy", "login"])
     def test_anonymous_public_pages_have_no_demo_offline_alert(self, client, demo_mode, url_name):
         response = client.get(reverse(url_name))

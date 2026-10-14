@@ -6,6 +6,5 @@ from django.utils.translation import gettext_lazy as _
 DEMO_PASSWORD = "anlaufstelle2026"  # noqa: S105
 DEMO_OFFLINE_BOOTSTRAP_PENDING = "demo_offline_bootstrap_pending"
 DEMO_OFFLINE_BOOTSTRAP_ERROR = _(
-    "Offline-Schlüssel konnte nicht aktiviert werden. Bitte regulär anmelden "
-    "oder die Demo nach dem nächsten Reset erneut starten."
+    "Offline-Schlüssel konnte nicht aktiviert werden. Bitte die Demo erneut starten oder regulär anmelden."
 )

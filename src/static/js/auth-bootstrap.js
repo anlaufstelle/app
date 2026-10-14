@@ -249,7 +249,12 @@
                 return fetchSaltAndDeriveKey(demoPassword, null, true, demoDerivation);
             })
             .then(function (homeUrl) {
-                if (!homeUrl) showDemoBootstrapError();
+                if (!homeUrl || !window.crypto_session.hasSessionKey()) {
+                    showDemoBootstrapError();
+                } else {
+                    var success = document.querySelector("[data-demo-offline-success]");
+                    if (success) success.hidden = false;
+                }
             })
             .catch(showDemoBootstrapError)
             .finally(function () {

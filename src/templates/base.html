@@ -210,7 +210,10 @@
         </div>
         {% if demo_offline_password %}
         <div role="status" aria-live="polite" data-demo-offline-pending class="bg-yellow-100 text-yellow-800 p-4">
-            {% trans "Offline-Schlüssel wird vorbereitet. Bitte vor dem Weiterklicken warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten." %}
+            {% trans "Offline-Schlüssel wird vorbereitet. Bitte kurz warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten oder regulär anmelden." %}
+        </div>
+        <div hidden role="status" aria-live="polite" data-demo-offline-success class="bg-yellow-100 text-yellow-800 p-4">
+            {% trans "Offline-Schlüssel ist bereit." %}
         </div>
         {% endif %}
         {% if user.is_authenticated %}

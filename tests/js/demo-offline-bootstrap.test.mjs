@@ -159,3 +159,12 @@ it("does not show a demo recovery error when a persisted key is restored", async
     expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
 });
+
+it("replaces the pending notice with a visible success status", async () => {
+    document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-pending></div><div data-demo-offline-success hidden role="status"></div>');
+    await bootstrap();
+    await vi.waitFor(() => expect(window.crypto_session.hasSessionKey()).toBe(true));
+    await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-success]").hidden).toBe(false));
+    expect(document.querySelector("[data-demo-offline-pending]").hidden).toBe(true);
+    expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(true);
+});
