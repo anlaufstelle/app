@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-12 10:10+0200\n"
+"POT-Creation-Date: 2026-10-14 09:41+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -4075,15 +4075,6 @@ msgstr[1] "[%(n)d Dateien]"
 #, python-format
 msgid "Datei zu groß (%(mb)d MB). Maximum: %(max)d MB."
 msgstr "Datei zu groß (%(mb)d MB). Maximum: %(max)d MB."
-
-#: src/core/services/file_vault/policy.py:176
-#, python-format
-msgid ""
-"Bild hat zu viele Pixel (%(px)d). Maximum: %(max)d — möglicher Decompression-"
-"Bomb-Upload."
-msgstr ""
-"Bild hat zu viele Pixel (%(px)d). Maximum: %(max)d — möglicher Decompression-"
-"Bomb-Upload."
 
 #: src/core/services/file_vault/policy.py:255
 #, python-format
@@ -11861,11 +11852,6 @@ msgstr "Diese Uhrzeit gibt es am Tag der Zeitumstellung zweimal (Sommer- und Win
 msgid "Diese Uhrzeit gibt es am Tag der Zeitumstellung nicht — die Uhr springt von 02:00 direkt auf 03:00 Uhr. Bitte eine Uhrzeit ab 03:00 Uhr eintragen."
 msgstr "Diese Uhrzeit gibt es am Tag der Zeitumstellung nicht — die Uhr springt von 02:00 direkt auf 03:00 Uhr. Bitte eine Uhrzeit ab 03:00 Uhr eintragen."
 
-#: src/core/services/import_engine.py:275
-#, python-format
-msgid "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s). Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
-msgstr "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s). Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
-
 #: src/core/retention/legal_holds.py:144
 #, python-format
 msgid "Diese Person wurde mit %(pseudonym)s zusammengeführt – die Aufbewahrungssperre gehört auf die Zielperson."
@@ -14371,3 +14357,47 @@ msgstr "Der Server wurde erneut geändert. Bitte den Konflikt nochmals prüfen."
 #: src/templates/base.html:210
 msgid "Offline-Schlüssel wird vorbereitet. Bitte vor dem Weiterklicken warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten."
 msgstr "Offline-Schlüssel wird vorbereitet. Bitte vor dem Weiterklicken warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten."
+
+#: src/core/services/file_vault/policy.py:442
+#, python-format
+msgid "Bild enthält zu viele Frames oder Seiten. Maximum: %(max)d."
+msgstr "Bild enthält zu viele Frames oder Seiten. Maximum: %(max)d."
+
+#: src/core/services/file_vault/policy.py:451
+#, python-format
+msgid "Bild hat insgesamt zu viele Pixel (%(px)d). Maximum über alle Frames und Seiten: %(max)d."
+msgstr "Bild hat insgesamt zu viele Pixel (%(px)d). Maximum über alle Frames und Seiten: %(max)d."
+
+#: src/core/services/file_vault/policy.py:463
+msgid "Bild überschreitet das Speicherbudget für alle Frames und Seiten — Upload abgelehnt."
+msgstr "Bild überschreitet das Speicherbudget für alle Frames und Seiten — Upload abgelehnt."
+
+#: src/core/services/form_state.py:19
+msgid "Der Formularstand ist veraltet oder ungültig. Es wurde nichts gespeichert. Ihre Eingaben bleiben erhalten. Prüfen Sie den aktuellen Stand und senden Sie bewusst erneut ab."
+msgstr "Der Formularstand ist veraltet oder ungültig. Es wurde nichts gespeichert. Ihre Eingaben bleiben erhalten. Prüfen Sie den aktuellen Stand und senden Sie bewusst erneut ab."
+
+#: src/core/services/import_engine.py:367
+#, python-format
+msgid "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s, Datensatz %(record)s). Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
+msgstr "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s, Datensatz %(record)s). Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
+
+#: src/core/services/import_engine.py:392
+#, python-format
+msgid "Die CSV-Zeile hat eine andere Spaltenanzahl als die Kopfzeile (Zeile %(line)s, Datensatz %(record)s: %(actual)s statt %(expected)s Spalten)."
+msgstr "Die CSV-Zeile hat eine andere Spaltenanzahl als die Kopfzeile (Zeile %(line)s, Datensatz %(record)s: %(actual)s statt %(expected)s Spalten)."
+
+#: src/core/views/case_goals.py:94
+msgid "Ungültige Zielaktion."
+msgstr "Ungültige Zielaktion."
+
+#: src/templates/core/cases/episode_form.html:33
+msgid "Aktueller Episodenstand"
+msgstr "Aktueller Episodenstand"
+
+#: src/templates/core/user_access/form.html:20
+msgid "Aktueller Sicherheitsstand"
+msgstr "Aktueller Sicherheitsstand"
+
+#: src/templates/core/user_access/form.html:23
+msgid "Ja,Nein"
+msgstr "Ja,Nein"

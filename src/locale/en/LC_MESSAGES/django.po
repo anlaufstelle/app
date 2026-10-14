@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-12 10:10+0200\n"
+"POT-Creation-Date: 2026-10-14 09:41+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -4041,15 +4041,6 @@ msgstr[1] "[%(n)d files]"
 #, python-format
 msgid "Datei zu groß (%(mb)d MB). Maximum: %(max)d MB."
 msgstr "File too large (%(mb)d MB). Maximum: %(max)d MB."
-
-#: src/core/services/file_vault/policy.py:176
-#, python-format
-msgid ""
-"Bild hat zu viele Pixel (%(px)d). Maximum: %(max)d — möglicher Decompression-"
-"Bomb-Upload."
-msgstr ""
-"Image has too many pixels (%(px)d). Maximum: %(max)d — possible "
-"decompression-bomb upload."
 
 #: src/core/services/file_vault/policy.py:255
 #, python-format
@@ -11772,11 +11763,6 @@ msgstr "This time occurs twice on the day of the clock change (summer and winter
 msgid "Diese Uhrzeit gibt es am Tag der Zeitumstellung nicht — die Uhr springt von 02:00 direkt auf 03:00 Uhr. Bitte eine Uhrzeit ab 03:00 Uhr eintragen."
 msgstr "This time does not exist on the day of the clock change — the clock jumps from 02:00 straight to 03:00. Please enter a time from 03:00 onwards."
 
-#: src/core/services/import_engine.py:275
-#, python-format
-msgid "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s). Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
-msgstr "The file could not be read as CSV (error in line %(line)s). Please check quotation marks and line breaks inside fields."
-
 #: src/core/retention/legal_holds.py:144
 #, python-format
 msgid "Diese Person wurde mit %(pseudonym)s zusammengeführt – die Aufbewahrungssperre gehört auf die Zielperson."
@@ -14282,3 +14268,47 @@ msgstr "The server has changed again. Please review the conflict once more."
 #: src/templates/base.html:210
 msgid "Offline-Schlüssel wird vorbereitet. Bitte vor dem Weiterklicken warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten."
 msgstr "The offline key is being prepared. Please wait before navigating; if you leave the page early, restart the demo."
+
+#: src/core/services/file_vault/policy.py:442
+#, python-format
+msgid "Bild enthält zu viele Frames oder Seiten. Maximum: %(max)d."
+msgstr "Image contains too many frames or pages. Maximum: %(max)d."
+
+#: src/core/services/file_vault/policy.py:451
+#, python-format
+msgid "Bild hat insgesamt zu viele Pixel (%(px)d). Maximum über alle Frames und Seiten: %(max)d."
+msgstr "Image has too many pixels in total (%(px)d). Maximum across all frames and pages: %(max)d."
+
+#: src/core/services/file_vault/policy.py:463
+msgid "Bild überschreitet das Speicherbudget für alle Frames und Seiten — Upload abgelehnt."
+msgstr "Image exceeds the memory budget for all frames and pages — upload rejected."
+
+#: src/core/services/form_state.py:19
+msgid "Der Formularstand ist veraltet oder ungültig. Es wurde nichts gespeichert. Ihre Eingaben bleiben erhalten. Prüfen Sie den aktuellen Stand und senden Sie bewusst erneut ab."
+msgstr "The form state is outdated or invalid. Nothing was saved. Your entries have been kept. Check the current state and submit again deliberately."
+
+#: src/core/services/import_engine.py:367
+#, python-format
+msgid "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s, Datensatz %(record)s). Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
+msgstr "The file could not be read as CSV (error in line %(line)s, record %(record)s). Please check quotation marks and line breaks within fields."
+
+#: src/core/services/import_engine.py:392
+#, python-format
+msgid "Die CSV-Zeile hat eine andere Spaltenanzahl als die Kopfzeile (Zeile %(line)s, Datensatz %(record)s: %(actual)s statt %(expected)s Spalten)."
+msgstr "The CSV row has a different number of columns than the header row (line %(line)s, record %(record)s: %(actual)s instead of %(expected)s columns)."
+
+#: src/core/views/case_goals.py:94
+msgid "Ungültige Zielaktion."
+msgstr "Invalid goal action."
+
+#: src/templates/core/cases/episode_form.html:33
+msgid "Aktueller Episodenstand"
+msgstr "Current episode state"
+
+#: src/templates/core/user_access/form.html:20
+msgid "Aktueller Sicherheitsstand"
+msgstr "Current security state"
+
+#: src/templates/core/user_access/form.html:23
+msgid "Ja,Nein"
+msgstr "Yes,No"
