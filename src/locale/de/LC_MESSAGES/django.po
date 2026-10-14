@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 12:41+0200\n"
+"POT-Creation-Date: 2026-10-14 13:19+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11993,9 +11993,6 @@ msgstr "Aufbewahrungslauf"
 msgid "vor 0.96 nicht erfasst"
 msgstr "vor 0.96 nicht erfasst"
 
-msgid "2. Einrichtung <em>Zweigstelle Nord</em> (Beratungsstelle, Paket <code>beratungsstelle</code>): gleiche Konten mit Suffix <span class=\"font-mono\">_1</span>."
-msgstr "2. Einrichtung <em>Zweigstelle Nord</em> (Beratungsstelle, Paket <code>beratungsstelle</code>): gleiche Konten mit Suffix <span class=\"font-mono\">_1</span>."
-
 msgid "1 Person gefunden."
 msgstr "1 Person gefunden."
 
@@ -14702,3 +14699,84 @@ msgstr "Alle Schichten"
 #: src/templates/core/events/partials/filter_form.html:70
 msgid "Alle Kontakte"
 msgstr "Alle Kontakte"
+
+#: src/core/reporting/backends/ban_overview.py:244
+msgid "Ausgesprochene Hausverbote"
+msgstr "Ausgesprochene Hausverbote"
+
+#: src/core/reporting/backends/ban_overview.py:245
+msgid "Aktuell aktive Hausverbote"
+msgstr "Aktuell aktive Hausverbote"
+
+#: src/core/reporting/backends/ban_overview.py:246
+msgid "Im Zeitraum abgelaufene Hausverbote"
+msgstr "Im Zeitraum abgelaufene Hausverbote"
+
+#: src/core/reporting/backends/case_metrics.py:187
+msgid "Neue Fälle"
+msgstr "Neue Fälle"
+
+#: src/core/reporting/backends/case_metrics.py:188
+msgid "Geschlossene Fälle"
+msgstr "Geschlossene Fälle"
+
+#: src/core/reporting/backends/case_metrics.py:189
+msgid "Aktuell offene Fälle"
+msgstr "Aktuell offene Fälle"
+
+#: src/core/reporting/backends/case_metrics.py:190
+msgid "Betroffene Personen"
+msgstr "Betroffene Personen"
+
+#: src/templates/auth/_demo_credentials.html:18
+#: src/templates/components/_public_footer.html:38
+#: src/templates/core/help/overview.html:51
+msgid "Projektwebseite"
+msgstr "Projektwebseite"
+
+#: src/templates/auth/_demo_credentials.html:45
+msgid "Solo-Konten:"
+msgstr "Solo-Konten:"
+
+#: src/templates/auth/_demo_credentials.html:46
+#, python-format
+msgid "gleiche Konten mit Suffix %(suffix)s."
+msgstr "gleiche Konten mit Suffix %(suffix)s."
+
+#: src/templates/auth/_demo_credentials.html:47
+msgid "Konten wie oben, ohne Suffix."
+msgstr "Konten wie oben, ohne Suffix."
+
+#: src/templates/core/handover/partials/_note.html:33
+msgid "Notiz für heute"
+msgstr "Notiz für heute"
+
+#: src/templates/core/handover/partials/_note.html:34
+msgid "Übergabenotiz vom Vortag"
+msgstr "Übergabenotiz vom Vortag"
+
+#: src/templates/core/handover/partials/_note.html:35
+msgid "Übergabenotiz dieses Tages"
+msgstr "Übergabenotiz dieses Tages"
+
+#: src/templates/core/handover/partials/_note.html:92
+msgid "Notiz für den Folgetag"
+msgstr "Notiz für den Folgetag"
+
+#: src/templates/core/handover/partials/_note.html:99
+#, python-format
+msgid "Bearbeitung bis zum Ende des Folgetags (%(grenze)s). Bitte keine Klarnamen — Pseudonyme wie in der Dokumentation."
+msgstr "Bearbeitung bis zum Ende des Folgetags (%(grenze)s). Bitte keine Klarnamen — Pseudonyme wie in der Dokumentation."
+
+#: src/templates/core/handover/partials/_note.html:112
+#, python-format
+msgid "Bearbeitung war bis zum Ende des Folgetags (%(grenze)s) möglich."
+msgstr "Bearbeitung war bis zum Ende des Folgetags (%(grenze)s) möglich."
+
+#: src/templates/core/handover/partials/_note.html:116
+msgid "Für diesen Tag wurde keine Übergabenotiz hinterlassen."
+msgstr "Für diesen Tag wurde keine Übergabenotiz hinterlassen."
+
+#: src/templates/core/help/overview.html:48
+msgid "Über Anlaufstelle"
+msgstr "Über Anlaufstelle"
