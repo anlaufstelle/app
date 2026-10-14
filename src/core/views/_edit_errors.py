@@ -64,6 +64,26 @@ def _comparison_value(bound_field):
     return [str(item) if item is not None else "" for item in values]
 
 
+def file_reselection_context(data_form):
+    """Name the file fields whose uploads a failed submit could not keep.
+
+    Browsers never refill file inputs, so a re-rendered form silently drops any
+    chosen file. Used by the service-error path and by the plain form-invalid
+    re-render of the edit views alike (Refs #2539).
+    """
+    files = getattr(data_form, "files", None)
+    if files is None:
+        return {"file_reselection_fields": []}
+    return {
+        "file_reselection_fields": [
+            field.label
+            for name, field in getattr(data_form, "fields", {}).items()
+            if isinstance(field, forms.FileField)
+            and any(files.getlist(key) for key in files if key == name or key.startswith(f"{name}__replace__"))
+        ]
+    }
+
+
 def edit_error_context(
     error,
     data_form,
@@ -89,16 +109,7 @@ def edit_error_context(
         )
     context = {
         "edit_notices": add_dynamic_service_errors(data_form, display_error, restricted_keys),
-        "file_reselection_fields": [
-            field.label
-            for name, field in getattr(data_form, "fields", {}).items()
-            if isinstance(field, forms.FileField)
-            and any(
-                data_form.files.getlist(key)
-                for key in data_form.files
-                if key == name or key.startswith(f"{name}__replace__")
-            )
-        ],
+        **file_reselection_context(data_form),
         "has_edit_conflict": False,
     }
     if not is_version_conflict(error) or current_version is None or not current_forms:

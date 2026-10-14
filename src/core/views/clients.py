@@ -63,7 +63,12 @@ from core.services.system import get_active_bans_for_client
 from core.utils.downloads import safe_download_response
 from core.utils.ratelimit import ratelimit
 from core.views._dynamic_errors import add_dynamic_service_errors
-from core.views._edit_errors import edit_error_context, is_version_conflict, refresh_edit_visibility
+from core.views._edit_errors import (
+    edit_error_context,
+    file_reselection_context,
+    is_version_conflict,
+    refresh_edit_visibility,
+)
 from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
     FilteredPaginatedListMixin,
@@ -698,6 +703,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
                 type_locked=type_locked,
                 expected_updated_at=request.POST.get("expected_updated_at", ""),
             )
+            context.update(file_reselection_context(data_form))
             return render(request, "core/clients/form.html", context)
 
         fields = dict(form.cleaned_data)
@@ -736,6 +742,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
                     type_locked=type_locked,
                     expected_updated_at=request.POST.get("expected_updated_at", ""),
                 )
+                context.update(file_reselection_context(data_form))
                 return render(request, "core/clients/form.html", context)
             file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
 

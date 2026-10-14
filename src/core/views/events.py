@@ -81,7 +81,12 @@ from core.services.zeitstrom_filters import zeitstrom_filter_state
 from core.utils.formatting import isoformat_or_none
 from core.utils.ratelimit import ratelimit
 from core.views._dynamic_errors import add_dynamic_service_errors
-from core.views._edit_errors import edit_error_context, is_version_conflict, refresh_edit_visibility
+from core.views._edit_errors import (
+    edit_error_context,
+    file_reselection_context,
+    is_version_conflict,
+    refresh_edit_visibility,
+)
 from core.views._json_contracts import (
     _conflict_response,
     _idempotency_mismatch_response,
@@ -1458,6 +1463,9 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             # berechnen — sonst zaehlte eine zwischenzeitliche Aenderung schon
             # zum Renderstand.
             "form_state_token": request.POST.get("expected_form_state", ""),
+            # Refs #2539: wie im Servicefehler-Zweig — gewaehlte Dateien gehen beim
+            # Neuaufbau verloren, der Hinweis nennt die Felder zur erneuten Auswahl.
+            **file_reselection_context(data_form),
         }
         return render(request, "core/events/edit.html", context)
 

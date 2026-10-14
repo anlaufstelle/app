@@ -58,7 +58,12 @@ from core.services.events import split_file_and_text_data
 from core.services.scoping import get_scoped_object
 from core.utils.ratelimit import ratelimit
 from core.views._dynamic_errors import add_dynamic_service_errors
-from core.views._edit_errors import edit_error_context, is_version_conflict, refresh_edit_visibility
+from core.views._edit_errors import (
+    edit_error_context,
+    file_reselection_context,
+    is_version_conflict,
+    refresh_edit_visibility,
+)
 from core.views.case_goals import _abgelehnt as case_goals_abgelehnt
 from core.views.mixins import (
     FilteredPaginatedListMixin,
@@ -584,6 +589,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
                 client_pseudonym="",
                 expected_updated_at=request.POST.get("expected_updated_at", ""),
             )
+            context.update(file_reselection_context(data_form))
             return render(request, "core/cases/form.html", context)
 
         fields = dict(form.cleaned_data)
@@ -626,6 +632,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
                     client_pseudonym="",
                     expected_updated_at=request.POST.get("expected_updated_at", ""),
                 )
+                context.update(file_reselection_context(data_form))
                 return render(request, "core/cases/form.html", context)
             file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
 

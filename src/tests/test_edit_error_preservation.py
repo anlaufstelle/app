@@ -34,7 +34,15 @@ def hidden_values(response):
 
 @pytest.fixture(params=["client", "case"])
 def edit_target(request, client, staff_user):
-    kind = request.param
+    return _prepare_edit_target(request, request.param, client, staff_user)
+
+
+@pytest.fixture(params=["client", "case", "event"])
+def any_edit_target(request, client, staff_user):
+    return _prepare_edit_target(request, request.param, client, staff_user)
+
+
+def _prepare_edit_target(request, kind, client, staff_user):
     target = request.getfixturevalue(
         {"client": "client_identified", "case": "case_open", "event": "sample_event"}[kind]
     )
@@ -367,3 +375,39 @@ def test_another_server_edit_after_comparison_still_conflicts(client, staff_user
     assert own_form[field].value() == "Own persistent draft"
     assert saved_text(kind, target) == "Second server version"
     assert "Second server version" in second.content.decode()
+
+
+def test_invalid_form_with_rejected_upload_asks_for_file_reselection(client, any_edit_target, facility):
+    """#2539: the plain form-invalid re-render names the file fields to select again."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from core.models import DocumentType, DocumentTypeField, FieldTemplate
+
+    kind, target, url, payload, field = any_edit_target
+    doc_type = target.document_type
+    if doc_type is None:
+        doc_type = DocumentType.objects.create(facility=facility, name="Upload type", entity_type=kind)
+        target.document_type = doc_type
+        target.save(update_fields=["document_type", "data_json", "updated_at"])
+    upload_field = FieldTemplate.objects.create(facility=facility, name="Upload file", field_type="file")
+    extra_field = FieldTemplate.objects.create(facility=facility, name="Upload draft", field_type="textarea")
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=upload_field)
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=extra_field, sort_order=1)
+    payload.update(hidden_values(client.get(url)))
+    payload["document_type"] = str(doc_type.pk)
+    payload[field] = "Own main draft"
+    payload[extra_field.slug] = "Own dynamic draft"
+    payload[upload_field.slug] = SimpleUploadedFile(
+        "malware.exe", b"MZ\x90\x00", content_type="application/x-msdownload"
+    )
+
+    response = client.post(url, payload)
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert not response.context["data_form"].is_valid()
+    assert response.context["data_form"][extra_field.slug].value() == "Own dynamic draft"
+    assert "Datei bitte erneut auswählen:" in html
+    assert response.context["file_reselection_fields"] == ["Upload file"]
+    target.refresh_from_db()
+    assert not target.attachments.exists()

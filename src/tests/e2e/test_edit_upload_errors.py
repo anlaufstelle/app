@@ -156,13 +156,6 @@ class TestFormLevelRejectionNotice:
         assert page.get_by_text("Internal Server Error").count() == 0
         assert _db(e2e_env, f"Event.objects.get(pk='{values['event']}').data_json.get('notiz')") == "Ausgangsnotiz"
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="Finding: form-level rejection re-renders with the field error and the kept text, but without "
-        "the 're-select the file' notice (edit_error_context is only used on the service-error path). "
-        "The preceding steps are guarded by the green test above; only the notice assertion is expected to fail.",
-    )
     def test_event_edit_asks_for_the_file_again(self, staff_page, base_url, e2e_env, tmp_path):
         values = _seed(e2e_env)
         page = staff_page
