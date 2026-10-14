@@ -217,17 +217,28 @@ it("selecting a person in an empty form saves normally; changing a restored pers
     expect((await p.store.getDecrypted("drafts", key)).data).toMatchObject({ __personPk: "person-a", notes: "Person A notes" });
 });
 
-it.each([true, false])("removing a template retains typed input and leaves an untouched form empty (typed=%s)", async typed => {
-    const p = await page(formHtml("data-autosave-server-prefilled") + '<a data-autosave-clear-link href="/events/new/">Remove template</a>'); await start(p);
+// Removing a template is an explicit discard by the person, not a submission.
+it.each([true, false])("removing a template discards the draft, including typed input (typed=%s)", async typed => {
+    const p = await page(formHtml("data-autosave-server-prefilled data-autosave-template-prefilled") + '<a data-autosave-clear-link href="/events/new/">Remove template</a>'); await start(p);
     if (typed) {
         p.w.document.querySelector("textarea").value = "Unsaved template text";
         p.w.document.querySelector("textarea").dispatchEvent(new p.w.Event("input", { bubbles: true }));
+        await tick(p);
+        expect((await p.store.getDecrypted("drafts", key)).data.notes).toBe("Unsaved template text");
     }
     p.w.document.querySelector("a").click();
     await new Promise(resolve => setTimeout(resolve, 30));
-    const draft = await p.store.getDecrypted("drafts", key);
-    if (typed) expect(draft.data.notes).toBe("Unsaved template text");
-    else expect(draft).toBeNull();
+    expect(await p.store.getDecrypted("drafts", key)).toBeNull();
+    await tick(p);
+    expect(await p.store.getDecrypted("drafts", key)).toBeNull();
+});
+
+it("applying a template discards an existing draft instead of restoring it", async () => {
+    const p = await page(formHtml("data-autosave-server-prefilled data-autosave-template-prefilled"), "?template=t1");
+    await seed(p, { notes: "Older draft" }); await start(p);
+    expect(p.w.document.querySelector("textarea").value).toBe("");
+    expect(p.w.document.getElementById("autosave-restored-banner")).toBeNull();
+    expect(await p.store.getDecrypted("drafts", key)).toBeNull();
 });
 
 const typedFieldsHtml = `<form data-autosave data-i18n-draft-restored="Draft restored"><select name="document_type"><option value="contact" selected>Contact</option><option value="crisis">Crisis</option></select><div id="dynamic-fields"><textarea name="notes"></textarea></div></form>`;

@@ -296,6 +296,8 @@ class TestEventCreateWithTemplate:
         assert "Beratungsgespräch 30 Min" in content
         # Context enthält den applied_template
         assert response.context["applied_template"] == template
+        # Applying a template is an explicit choice that replaces an older draft.
+        assert "data-autosave-template-prefilled" in content
 
     def test_event_create_lists_templates_in_context(self, client, staff_user, facility, doc_type_with_all):
         QuickTemplate.objects.create(

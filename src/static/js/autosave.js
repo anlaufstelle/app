@@ -326,7 +326,7 @@
      * Jetzt: einmal melden, dann mit wachsendem Abstand weiterversuchen.
      */
     async function saveDraft(ctx) {
-        if (!isOfflineReady()) return;
+        if (!isOfflineReady() || ctx.discarded) return;
         if (ctx.personMismatch || (ctx.personLocked && getPersonPk(ctx.form) !== ctx.personPk)) {
             showSaveErrorBanner(ctx.form, false);
             return;
@@ -492,8 +492,21 @@
         var personMismatch = !confirmations.ready;
         if (!confirmations.ready) showSaveErrorBanner(form, false);
         var personLocked = false;
-        // Prefill alone never acknowledges a previous submission. Refs #2561.
-        {
+        // Applying a template is an explicit choice by the person: the
+        // template replaces an older draft instead of being overwritten by it.
+        // Serial-entry prefill keeps an unsaved draft; prefill alone never
+        // acknowledges a previous submission. Refs #625, #2561.
+        var draftDiscarded = false;
+        if (form.hasAttribute("data-autosave-template-prefilled")) {
+            try {
+                await window.offlineStore.deleteRow("drafts", storageKey);
+                draftDiscarded = true;
+            } catch (error) {
+                // Retain the draft and its protection when removal fails.
+                console.warn("[autosave] Draft removal failed", error);
+            }
+        }
+        if (!draftDiscarded) {
             try {
                 var existing = await window.offlineStore.getDecrypted("drafts", storageKey);
                 if (existing && existing.data) storedDraftJson = JSON.stringify(existing.data);
@@ -588,16 +601,29 @@
             });
         }, true);
 
-        // Removing a template never discards typed text. Untouched prefill
-        // has no draft; confirmed drafts were removed above. Refs #625, #2561.
+        // "Vorlage entfernen" returns to the same path without the template.
+        // Removing it is an explicit discard: the draft goes too, otherwise the
+        // plain form would restore it. Saves in progress finish first and no
+        // further save starts. Refs #625.
         document.addEventListener("click", function (e) {
             var link = e.target.closest("[data-autosave-clear-link]");
             if (!link || e.defaultPrevented) return;
             e.preventDefault();
             var target = link.getAttribute("href") || link.href;
-            attemptSave(saveContext).finally(function () {
-                window.location.href = target;
-            });
+            saveContext.discarded = true;
+            (saveContext.pending || Promise.resolve())
+                .catch(function () {
+                    // A failed save does not prevent the removal.
+                })
+                .then(function () {
+                    return window.offlineStore.deleteRow("drafts", storageKey);
+                })
+                .catch(function (error) {
+                    console.warn("[autosave] Draft removal failed", error);
+                })
+                .finally(function () {
+                    window.location.href = target;
+                });
         });
     }
 

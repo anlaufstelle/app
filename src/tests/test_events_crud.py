@@ -546,6 +546,12 @@ class TestEventCreateSerienerfassung:
         assert response.status_code == 200
         assert "data-autosave-server-prefilled" in response.content.decode()
 
+    def test_serial_entry_prefill_keeps_an_unsaved_draft(self, client, staff_user, doc_type_contact):
+        """Serial entry follows a save; a draft on that URL may stem from a failed second contact."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:event_create") + f"?document_type={doc_type_contact.pk}")
+        assert "data-autosave-template-prefilled" not in response.content.decode()
+
     def test_get_without_prefill_not_server_prefilled(self, client, staff_user):
         """Leeres Formular ohne Prefill trägt den Server-Prefill-Marker NICHT
         (autosave-Wiederherstellung bleibt für die normale Erfassung aktiv)."""
