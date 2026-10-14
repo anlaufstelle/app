@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 15:19+0200\n"
+"POT-Creation-Date: 2026-10-14 16:03+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14732,3 +14732,39 @@ msgstr "Preparing offline key. Please wait a moment; if you leave the page too e
 #: src/templates/base.html:220
 msgid "Offline-Schlüssel ist bereit."
 msgstr "Offline key is ready."
+
+#: src/core/utils/date_input.py:23
+msgid "Bitte ein gültiges Datum bzw. eine gültige Uhrzeit im angegebenen Format eingeben."
+msgstr "Please enter a valid date or time in the given format."
+
+#: src/core/utils/date_input.py:24
+msgid "Bitte dieses Feld ausfüllen."
+msgstr "Please fill in this field."
+
+#: src/core/utils/date_input.py:25
+msgid "Der Wert liegt außerhalb des erlaubten Bereichs."
+msgstr "The value is outside the allowed range."
+
+#: src/core/utils/date_input.py:26
+msgid "Bitte die angegebene Zeitgenauigkeit einhalten."
+msgstr "Please use the required time precision."
+
+#: src/templates/core/statistics/partials/dashboard_content.html:71
+msgid "Gesamt"
+msgstr "Total"
+
+#: src/templates/core/statistics/partials/dashboard_content.html:76
+msgid "Quelle: "
+msgstr "Source: "
+
+#: src/templates/core/statistics/partials/dashboard_content.html:79
+msgid "Fehler: "
+msgstr "Error: "
+
+#: src/templates/core/statistics/partials/dashboard_content.html:80
+msgid "Die Diagramme konnten nicht geladen werden."
+msgstr "The charts could not be loaded."
+
+#: src/templates/core/statistics/partials/dashboard_content.html:81
+msgid "HTTP-Fehler"
+msgstr "HTTP error"
