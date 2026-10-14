@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 09:41+0200\n"
+"POT-Creation-Date: 2026-10-14 11:14+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -4846,13 +4846,6 @@ msgid_plural "%(count)d Löschvorschläge aktualisiert."
 msgstr[0] "%(count)d Löschvorschlag aktualisiert."
 msgstr[1] "%(count)d Löschvorschläge aktualisiert."
 
-#: src/core/views/retention.py:183
-#, python-format
-msgid "%(count)d Löschvorschlag übersprungen (Aufbewahrungssperre oder Status)."
-msgid_plural "%(count)d Löschvorschläge übersprungen (Aufbewahrungssperre oder Status)."
-msgstr[0] "%(count)d Löschvorschlag übersprungen (Aufbewahrungssperre oder Status)."
-msgstr[1] "%(count)d Löschvorschläge übersprungen (Aufbewahrungssperre oder Status)."
-
 #: src/core/retention/proposals.py:229
 msgid ""
 "Für dieses Ereignis besteht eine Aufbewahrungssperre (Legal Hold) — der "
@@ -8698,10 +8691,6 @@ msgstr "Massenaktionen für Löschvorschläge"
 msgid "ausgewählt"
 msgstr "ausgewählt"
 
-#: src/templates/core/retention/partials/dashboard_content.html:52
-msgid "Ausgewählte Vorschläge wirklich freigeben?"
-msgstr "Ausgewählte Vorschläge wirklich freigeben?"
-
 #: src/templates/core/retention/partials/dashboard_content.html:54
 #: src/templates/core/retention/partials/proposal_card.html:47
 msgid "Freigeben"
@@ -8758,10 +8747,6 @@ msgstr "Dokumentationstyp:"
 #: src/templates/core/retention/partials/proposal_card.html:32
 msgid "Datum:"
 msgstr "Datum:"
-
-#: src/templates/core/retention/partials/proposal_card.html:45
-msgid "Löschung freigeben?"
-msgstr "Löschung freigeben?"
 
 #: src/templates/core/retention/partials/proposal_card.html:51
 msgid "Hold setzen"
@@ -14137,10 +14122,6 @@ msgstr "Der Standardlauf erzeugt für „Mit Zusatzangaben“ einen Löschvorsch
 msgid "Wenn aktiv, werden Löschvorschläge nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage automatisch freigegeben, statt manuelle Entscheidung zu erzwingen."
 msgstr "Wenn aktiv, werden Löschvorschläge nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage automatisch freigegeben, statt manuelle Entscheidung zu erzwingen."
 
-#: src/templates/core/retention/dashboard.html:9
-msgid "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge an. Erst nach Freigabe durch eine Person mit dem Recht „Löschbestätigung“ wird gelöscht; nur wenn die Einrichtung die Auto-Freigabe nach mehrfacher Zurückstellung eingeschaltet hat, gibt der Lauf einen Vorschlag nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage selbst frei. Zurückstellen schützt bis zur Wiedervorlage; nach einer Ablehnung ist erneut eine Freigabe erforderlich. Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht. Aufbewahrungssperren (Legal Holds) verhindern die Löschung. Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“; ohne besetzte Freigabe wird bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte „Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann."
-msgstr "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge an. Erst nach Freigabe durch eine Person mit dem Recht „Löschbestätigung“ wird gelöscht; nur wenn die Einrichtung die Auto-Freigabe nach mehrfacher Zurückstellung eingeschaltet hat, gibt der Lauf einen Vorschlag nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage selbst frei. Zurückstellen schützt bis zur Wiedervorlage; nach einer Ablehnung ist erneut eine Freigabe erforderlich. Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht. Aufbewahrungssperren (Legal Holds) verhindern die Löschung. Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“; ohne besetzte Freigabe wird bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte „Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann."
-
 #: src/core/models/settings.py:221
 msgid "Wenn aktiv, werden Löschvorschläge nach Überschreiten der maximalen Zurückstellungszahl automatisch freigegeben, statt manuelle Entscheidung zu erzwingen."
 msgstr "Wenn aktiv, werden Löschvorschläge nach Überschreiten der maximalen Zurückstellungszahl automatisch freigegeben, statt manuelle Entscheidung zu erzwingen."
@@ -14401,3 +14382,197 @@ msgstr "Aktueller Sicherheitsstand"
 #: src/templates/core/user_access/form.html:23
 msgid "Ja,Nein"
 msgstr "Ja,Nein"
+
+#: src/core/admin/documents.py:359
+#, python-format
+msgid "%(count)s Feldvorlage(n) aktiviert."
+msgstr "%(count)s Feldvorlage(n) aktiviert."
+
+#: src/core/forms/config.py:569
+msgid "Bei gespeicherten Werten ist nur ein kompatibler Wechsel zwischen Text und Textbereich möglich. Mehrzeilige oder nicht lesbare Textbereiche können nicht in einzeilige Textfelder geändert werden. Für andere Feldtypen die Vorlage deaktivieren und eine neue anlegen."
+msgstr "Bei gespeicherten Werten ist nur ein kompatibler Wechsel zwischen Text und Textbereich möglich. Mehrzeilige oder nicht lesbare Textbereiche können nicht in einzeilige Textfelder geändert werden. Für andere Feldtypen die Vorlage deaktivieren und eine neue anlegen."
+
+#: src/core/forms/config.py:656 src/core/services/config/mutations.py:172
+#: src/tests/test_mutation_pins_0997_forms_config.py:164
+#, python-format
+msgid "Im Dokumentationstyp „%(type)s“ trägt „%(new)s“ denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage „%(existing)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel zulässig — sonst zählt der Bericht keine von beiden."
+msgstr "Im Dokumentationstyp „%(type)s“ trägt „%(new)s“ denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage „%(existing)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel zulässig — sonst zählt der Bericht keine von beiden."
+
+#: src/core/models/retention.py:55
+msgid "Erste Freigabe durch"
+msgstr "Erste Freigabe durch"
+
+#: src/core/models/retention.py:57
+msgid "Erste Freigabe am"
+msgstr "Erste Freigabe am"
+
+#: src/core/models/retention.py:68
+msgid "Automatisch freigegeben am"
+msgstr "Automatisch freigegeben am"
+
+#: src/core/retention/proposals.py:492
+msgid "Für die Freigabe ist die Rolle Leitung oder Anwendungsbetreuung erforderlich."
+msgstr "Für die Freigabe ist die Rolle Leitung oder Anwendungsbetreuung erforderlich."
+
+#: src/core/retention/proposals.py:516
+msgid "Die zweite Freigabe muss eine andere berechtigte Person erteilen."
+msgstr "Die zweite Freigabe muss eine andere berechtigte Person erteilen."
+
+#: src/core/retention/proposals.py:527
+msgid "Die erste Person ist nicht mehr berechtigt. Stellen Sie den Vorschlag zurück und beginnen Sie die Freigabe erneut."
+msgstr "Die erste Person ist nicht mehr berechtigt. Stellen Sie den Vorschlag zurück und beginnen Sie die Freigabe erneut."
+
+#: src/core/services/case/episodes.py:30
+msgid "Das Ende darf nicht vor dem Beginn liegen."
+msgstr "Das Ende darf nicht vor dem Beginn liegen."
+
+#: src/core/services/case/goals.py:30
+msgid "Der Titel darf nicht leer sein."
+msgstr "Der Titel darf nicht leer sein."
+
+#: src/core/services/case/goals.py:32
+msgid "Der Titel darf höchstens 200 Zeichen enthalten."
+msgstr "Der Titel darf höchstens 200 Zeichen enthalten."
+
+#: src/core/services/client/rectification.py:62
+#: src/core/services/client/rectification.py:444
+msgid "Die Berichtigung konnte nicht angewendet werden."
+msgstr "Die Berichtigung konnte nicht angewendet werden."
+
+#: src/core/services/compliance/retention_approvers.py:35
+#, python-format
+msgid "Ohne Genehmiger für den Aufbewahrungslauf: %(names)s."
+msgstr "Ohne Genehmiger für den Aufbewahrungslauf: %(names)s."
+
+#: src/core/services/compliance/retention_approvers.py:38
+#, python-format
+msgid "Nur ein Genehmiger für den Aufbewahrungslauf, keine manuelle Löschfreigabe möglich: %(names)s."
+msgstr "Nur ein Genehmiger für den Aufbewahrungslauf, keine manuelle Löschfreigabe möglich: %(names)s."
+
+#: src/core/services/compliance/retention_approvers.py:43
+msgid "Jede Einrichtung hat mindestens zwei aktive Genehmiger für den Aufbewahrungslauf."
+msgstr "Jede Einrichtung hat mindestens zwei aktive Genehmiger für den Aufbewahrungslauf."
+
+#: src/core/services/compliance/retention_approvers.py:47
+msgid "Genehmiger für den Aufbewahrungslauf"
+msgstr "Genehmiger für den Aufbewahrungslauf"
+
+#: src/core/services/compliance/retention_approvers.py:55
+msgid "Verwaltung → Zugänge öffnen und je Einrichtung mindestens zwei aktive Konten mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“ benennen."
+msgstr "Verwaltung → Zugänge öffnen und je Einrichtung mindestens zwei aktive Konten mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“ benennen."
+
+#: src/core/services/config/mutations.py:137
+msgid "Diese Feldvorlage enthält bereits gespeicherte Werte, die mit dem gewünschten Feldtyp nicht sicher bearbeitet werden können. Deaktivieren Sie die Vorlage und legen Sie eine neue an."
+msgstr "Diese Feldvorlage enthält bereits gespeicherte Werte, die mit dem gewünschten Feldtyp nicht sicher bearbeitet werden können. Deaktivieren Sie die Vorlage und legen Sie eine neue an."
+
+#: src/core/services/config/mutations.py:217
+#, python-format
+msgid "Die Feldvorlage kann nicht aktiviert werden: Im Dokumentationstyp „%(type)s“ verwendet „%(field)s“ bereits denselben Berichtsschlüssel."
+msgstr "Die Feldvorlage kann nicht aktiviert werden: Im Dokumentationstyp „%(type)s“ verwendet „%(field)s“ bereits denselben Berichtsschlüssel."
+
+#: src/core/services/events/crud.py:225
+msgid "Der Fall ist nicht mehr verfügbar oder nicht zugänglich."
+msgstr "Der Fall ist nicht mehr verfügbar oder nicht zugänglich."
+
+#: src/core/views/retention.py:278
+#, python-format
+msgid "%(count)d Löschvorschlag übersprungen (Aufbewahrungssperre, Status oder Berechtigung)."
+msgid_plural "%(count)d Löschvorschläge übersprungen (Aufbewahrungssperre, Status oder Berechtigung)."
+msgstr[0] "%(count)d Löschvorschlag übersprungen (Aufbewahrungssperre, Status oder Berechtigung)."
+msgstr[1] "%(count)d Löschvorschläge übersprungen (Aufbewahrungssperre, Status oder Berechtigung)."
+
+#: src/core/views/retention.py:304
+#, python-format
+msgid "%(count)d erste Freigabe erteilt (1 von 2 Freigaben)."
+msgid_plural "%(count)d erste Freigaben erteilt (1 von 2 Freigaben)."
+msgstr[0] "%(count)d erste Freigabe erteilt (1 von 2 Freigaben)."
+msgstr[1] "%(count)d erste Freigaben erteilt (1 von 2 Freigaben)."
+
+#: src/core/views/retention.py:315
+#, python-format
+msgid "%(count)d Löschvorschlag endgültig freigegeben."
+msgid_plural "%(count)d Löschvorschläge endgültig freigegeben."
+msgstr[0] "%(count)d Löschvorschlag endgültig freigegeben."
+msgstr[1] "%(count)d Löschvorschläge endgültig freigegeben."
+
+#: src/templates/components/_client_autocomplete.html:69
+msgid "Personen werden gesucht …"
+msgstr "Personen werden gesucht …"
+
+#: src/templates/components/_client_autocomplete.html:71
+msgid "Die Personensuche ist fehlgeschlagen. Bitte erneut versuchen."
+msgstr "Die Personensuche ist fehlgeschlagen. Bitte erneut versuchen."
+
+#: src/templates/components/_client_autocomplete.html:72
+#: src/templates/core/events/create.html:266
+msgid "Wiederholen"
+msgstr "Wiederholen"
+
+#: src/templates/core/cases/partials/goals_section.html:7
+msgid "Titel dürfen höchstens 200 Zeichen enthalten."
+msgstr "Titel dürfen höchstens 200 Zeichen enthalten."
+
+#: src/templates/core/events/create.html:45
+msgid "Die Fallauswahl wurde zurückgesetzt: Der Fall ist für diese Person nicht mehr verfügbar oder nicht zugänglich."
+msgstr "Die Fallauswahl wurde zurückgesetzt: Der Fall ist für diese Person nicht mehr verfügbar oder nicht zugänglich."
+
+#: src/templates/core/events/create.html:48
+msgid "Datei erneut auswählen: Hochgeladene Dateien können nach einem Fehler nicht wiederhergestellt werden."
+msgstr "Datei erneut auswählen: Hochgeladene Dateien können nach einem Fehler nicht wiederhergestellt werden."
+
+#: src/templates/core/events/create.html:263
+msgid "Fälle werden geladen …"
+msgstr "Fälle werden geladen …"
+
+#: src/templates/core/events/create.html:265
+msgid "Die Fälle konnten nicht geladen werden. Bitte erneut versuchen."
+msgstr "Die Fälle konnten nicht geladen werden. Bitte erneut versuchen."
+
+#: src/templates/core/events/create.html:268
+msgid "Vor dem Speichern muss die vorgemerkte Fallauswahl geprüft werden. Bitte warten oder die Fallabfrage wiederholen."
+msgstr "Vor dem Speichern muss die vorgemerkte Fallauswahl geprüft werden. Bitte warten oder die Fallabfrage wiederholen."
+
+#: src/templates/core/retention/dashboard.html:9
+msgid "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge an. Die manuelle Löschfreigabe braucht zwei verschiedene aktive Personen der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Die erste Freigabe hält den Vorschlag ausstehend (1 von 2 Freigaben), die zweite erlaubt die Löschung beim nächsten Lauf. Zurückstellen, Legal Hold und Ablehnung verwerfen die erste Freigabe; nach Wiedervorlage sind erneut zwei Freigaben nötig. Ausnahme: Nur wenn die Einrichtung die standardmäßig ausgeschaltete Auto-Freigabe nach mehrfacher Zurückstellung eingeschaltet hat, gibt der Lauf einen Vorschlag nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage selbst frei. Zurückstellen schützt bis zur Wiedervorlage. Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht. Aufbewahrungssperren (Legal Holds) verhindern die Löschung. Die Einrichtung benennt mindestens zwei aktive Konten für die manuelle Freigabe; mit nur einem Konto bleibt es bei 1 von 2 Freigaben. Die Compliance-Karte „Genehmiger für den Aufbewahrungslauf“ prüft Rolle und Anzahl. Die Karte „Genehmiger für Löschanträge“ zählt weiterhin aktive Löschantragsberechtigte unabhängig von ihrer Rolle."
+msgstr "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge an. Die manuelle Löschfreigabe braucht zwei verschiedene aktive Personen der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Die erste Freigabe hält den Vorschlag ausstehend (1 von 2 Freigaben), die zweite erlaubt die Löschung beim nächsten Lauf. Zurückstellen, Legal Hold und Ablehnung verwerfen die erste Freigabe; nach Wiedervorlage sind erneut zwei Freigaben nötig. Ausnahme: Nur wenn die Einrichtung die standardmäßig ausgeschaltete Auto-Freigabe nach mehrfacher Zurückstellung eingeschaltet hat, gibt der Lauf einen Vorschlag nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage selbst frei. Zurückstellen schützt bis zur Wiedervorlage. Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht. Aufbewahrungssperren (Legal Holds) verhindern die Löschung. Die Einrichtung benennt mindestens zwei aktive Konten für die manuelle Freigabe; mit nur einem Konto bleibt es bei 1 von 2 Freigaben. Die Compliance-Karte „Genehmiger für den Aufbewahrungslauf“ prüft Rolle und Anzahl. Die Karte „Genehmiger für Löschanträge“ zählt weiterhin aktive Löschantragsberechtigte unabhängig von ihrer Rolle."
+
+#: src/templates/core/retention/partials/dashboard_content.html:9
+#: src/templates/core/retention/partials/proposal_card.html:41
+msgid "1 von 2 Freigaben"
+msgstr "1 von 2 Freigaben"
+
+#: src/templates/core/retention/partials/dashboard_content.html:25
+msgid "Für manuelle Freigaben braucht die Einrichtung mindestens zwei aktive Konten mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Aktuell ist keine manuelle Löschfreigabe möglich. Die optionale Auto-Freigabe nach mehrfacher Zurückstellung bleibt eine Ausnahme."
+msgstr "Für manuelle Freigaben braucht die Einrichtung mindestens zwei aktive Konten mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Aktuell ist keine manuelle Löschfreigabe möglich. Die optionale Auto-Freigabe nach mehrfacher Zurückstellung bleibt eine Ausnahme."
+
+#: src/templates/core/retention/partials/dashboard_content.html:70
+msgid "Freigabe für ausgewählte Vorschläge erteilen? Erst zwei verschiedene berechtigte Personen geben die Löschung frei."
+msgstr "Freigabe für ausgewählte Vorschläge erteilen? Erst zwei verschiedene berechtigte Personen geben die Löschung frei."
+
+#: src/templates/core/retention/partials/dashboard_content.html:72
+msgid "Freigabe erteilen"
+msgstr "Freigabe erteilen"
+
+#: src/templates/core/retention/partials/proposal_card.html:41
+msgid "Erste Freigabe durch:"
+msgstr "Erste Freigabe durch:"
+
+#: src/templates/core/retention/partials/proposal_card.html:45
+msgid "Weniger als zwei berechtigte Konten: keine manuelle Löschfreigabe möglich. Die erste Freigabe allein erlaubt keine Löschung."
+msgstr "Weniger als zwei berechtigte Konten: keine manuelle Löschfreigabe möglich. Die erste Freigabe allein erlaubt keine Löschung."
+
+#: src/templates/core/retention/partials/proposal_card.html:55
+msgid "Freigabe erteilen? Erst zwei verschiedene berechtigte Personen geben die Löschung frei."
+msgstr "Freigabe erteilen? Erst zwei verschiedene berechtigte Personen geben die Löschung frei."
+
+#: src/templates/core/retention/partials/proposal_card.html:58
+msgid "Zweite Freigabe erteilen"
+msgstr "Zweite Freigabe erteilen"
+
+#: src/templates/core/retention/partials/proposal_card.html:60
+msgid "Erste Freigabe erteilen"
+msgstr "Erste Freigabe erteilen"
+
+#: src/templates/core/retention/partials/proposal_card.html:128
+msgid "Freigabebelege unvollständig – wird nicht gelöscht"
+msgstr "Freigabebelege unvollständig – wird nicht gelöscht"
