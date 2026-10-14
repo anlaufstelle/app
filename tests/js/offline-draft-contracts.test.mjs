@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const source = name => readFileSync(`src/static/js/${name}.js`, "utf8");
 const key = "autosave_u1_/events/new/";
 const oldToken = "11111111-2222-4333-8444-555555555555";
-const formHtml = (attrs = "", person = "") => `<form data-autosave ${attrs}><textarea name="notes"></textarea><input type="hidden" name="client" data-autosave-person value="${person}"></form>`;
+const formHtml = (attrs = "", person = "") => `<form data-autosave data-i18n-autosave-failed="Draft not saved" data-i18n-draft-other-person="Other person's draft retained" ${attrs}><textarea name="notes"></textarea><input type="hidden" name="client" data-autosave-person value="${person}"></form>`;
 const marker = token => `<div data-autosave-confirmed="autosave-confirmed:${token}"></div>`;
 const pages = [];
 let factory, encryptionKey;
@@ -54,9 +54,11 @@ async function seed(p, data) { await p.store.putEncrypted("drafts", { formKey: k
 async function start(p) {
     p.w.HTMLFormElement.prototype.requestSubmit = function () {};
     p.w.eval(source("autosave"));
-    await vi.waitFor(() => expect(p.w.document.querySelector("form")?.dataset.autosaveInitialized ?? "true").toBe("true"));
-    // Initialization continues after setting the guard.
-    await new Promise(resolve => setTimeout(resolve, 30));
+    if (p.w.document.querySelector("form")) {
+        await vi.waitFor(() => expect(p.intervals).toHaveLength(1));
+    } else {
+        await new Promise(resolve => setTimeout(resolve, 30));
+    }
 }
 async function tick(p) { for (const callback of p.intervals) callback(); await new Promise(resolve => setTimeout(resolve, 30)); }
 async function submit(p, notes) {
@@ -131,6 +133,7 @@ it.each([["person-a", "person-b"], ["person-a", ""], ["", "person-b"]])("draft f
     const p = await page(formHtml("", selected)); await seed(p, { notes: "Confidential note", __personPk: saved }); await start(p); await tick(p);
     expect(p.w.document.querySelector("textarea").value).toBe("");
     expect((await p.store.getDecrypted("drafts", key)).data).toMatchObject({ notes: "Confidential note", __personPk: saved });
+    expect(p.w.document.body.textContent).toContain("Other person's draft retained");
 });
 
 it.each(["", "person-a"])("a matching person %s may restore its own draft", async person => {
@@ -207,9 +210,10 @@ it("selecting a person in an empty form saves normally; changing a restored pers
     const p = await page(formHtml()); await start(p);
     p.w.document.querySelector('[name="client"]').value = "person-a";
     await submit(p, "Person A notes");
-    p.w.document.querySelector('[name="client"]').value = "person-b";
-    p.w.document.querySelector("textarea").value += " further typing";
-    await tick(p);
+    const restored = await page(formHtml("", "person-a")); await start(restored);
+    restored.w.document.querySelector('[name="client"]').value = "person-b";
+    restored.w.document.querySelector("textarea").value += " further typing";
+    await tick(restored);
     expect((await p.store.getDecrypted("drafts", key)).data).toMatchObject({ __personPk: "person-a", notes: "Person A notes" });
 });
 
@@ -343,4 +347,35 @@ it("retrying an older confirmation after deletion failure preserves new unconfir
     field.dispatchEvent(new p.w.Event("input", { bubbles: true })); await tick(p);
     const next = await page(formHtml()); await start(next);
     expect(next.w.document.querySelector("textarea").value).toBe("New unsaved input");
+});
+
+it.each([false, true])("selecting the first person after autosave retains the final input after failed submission (reopened=%s)", async reopened => {
+    let p = await page(formHtml()); await start(p);
+    let field = p.w.document.querySelector("textarea"); field.value = "Initial text before person";
+    field.dispatchEvent(new p.w.Event("input", { bubbles: true })); await tick(p);
+    expect((await p.store.getDecrypted("drafts", key)).data.notes).toBe("Initial text before person");
+    if (reopened) { p = await page(formHtml()); await start(p); field = p.w.document.querySelector("textarea"); }
+    const client = p.w.document.querySelector('[name="client"]'); client.value = "person-a";
+    client.dispatchEvent(new p.w.Event("change", { bubbles: true })); field.value = "Final text for selected person";
+    field.dispatchEvent(new p.w.Event("input", { bubbles: true }));
+    const form = p.w.document.querySelector("form");
+    const sent = vi.fn(() => Object.fromEntries(new p.w.FormData(form))); form.requestSubmit = sent;
+    form.dispatchEvent(new p.w.Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(sent).toHaveBeenCalledOnce());
+    expect(sent.mock.results[0].value.notes).toBe("Final text for selected person");
+    const next = await page(formHtml("", "person-a")); await start(next);
+    expect(next.w.document.querySelector("textarea").value).toBe("Final text for selected person");
+});
+
+it("a generic redirect replay success clears the queue while retaining its unconfirmed draft", async () => {
+    const p = await page(formHtml()); await start(p); await submit(p, "Queued contact");
+    const token = (await p.store.getDecrypted("drafts", key)).data.__submissionToken;
+    p.w.csrfUtils = { fromMeta: () => "csrf" }; p.store.isRevocationPending = async () => false;
+    const response = new Response("{}");
+    Object.defineProperties(response, { redirected: { value: true }, url: { value: "https://example.test/events/1/" } });
+    p.w.fetch = vi.fn(async () => response); p.w.eval(source("offline-queue"));
+    await p.w.offlineQueue.enqueueRequest("/events/new/", "POST", new URLSearchParams({ notes: "Queued contact", _autosave_token: token }).toString(), { "content-type": "application/x-www-form-urlencoded" });
+    await p.w.offlineQueue.replayQueue(); expect(await p.store.count("queue")).toBe(0);
+    const next = await page(formHtml()); await start(next);
+    expect(next.w.document.querySelector("textarea").value).toBe("Queued contact");
 });

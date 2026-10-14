@@ -326,7 +326,8 @@
                 ctx.lastSavedJson = json;
                 ctx.storedDraftJson = json;
                 ctx.inputBaseline = inputJson;
-                ctx.personLocked = true;
+                // Only restored content retains its original person binding.
+                // A live form may select its first person after saving text.
                 ctx.forceSave = false;
                 if (ctx.userEdited !== undefined) {
                     ctx.userEdited = JSON.stringify(buildDraftPayload(ctx.form, ctx.personPk)) !== inputJson;
@@ -455,8 +456,10 @@
                 var existing = await window.offlineStore.getDecrypted("drafts", storageKey);
                 if (existing && existing.data) storedDraftJson = JSON.stringify(existing.data);
                 if (confirmations.ready && existing && existing.data && !confirmedTokens.has(existing.data.__submissionToken)) {
-                    personLocked = true;
                     lastKnownPersonPk = existing.data[PERSON_KEY] || "";
+                    // An anonymous draft may receive its first person after
+                    // restore; a bound person's content keeps its identity.
+                    personLocked = Boolean(lastKnownPersonPk);
                     personMismatch = lastKnownPersonPk !== getPersonPk(form);
                     if (!personMismatch && !form.hasAttribute("data-autosave-bound")) {
                         var wasRestored = restoreFormData(form, existing.data);
@@ -472,7 +475,7 @@
                     var legacy = await _migrateLegacyLocalStorage(storageKey, form);
                     if (legacy) {
                         storedDraftJson = JSON.stringify(legacy);
-                        personLocked = true;
+                        personLocked = Boolean(legacy[PERSON_KEY]);
                         personMismatch = (legacy[PERSON_KEY] || "") !== getPersonPk(form);
                     }
                 }
