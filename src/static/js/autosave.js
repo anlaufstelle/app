@@ -297,11 +297,12 @@
      * Absturz fiel der Entwurf auf den letzten erfolgreichen Stand zurueck.
      * Jetzt: einmal melden, dann mit wachsendem Abstand weiterversuchen.
      */
-    async function attemptSave(ctx) {
+    async function saveDraft(ctx) {
         if (!isOfflineReady()) return;
         if (ctx.retryAfter && Date.now() < ctx.retryAfter) return;
         try {
             var currentData = buildDraftPayload(ctx.form, ctx.personPk);
+            if (ctx.submissionToken) currentData.__submissionToken = ctx.submissionToken;
             if (currentData[PERSON_KEY]) ctx.personPk = currentData[PERSON_KEY];
             var json = JSON.stringify(currentData);
             if (json !== ctx.lastSavedJson) {
@@ -318,6 +319,27 @@
             ctx.attempts += 1;
             ctx.retryAfter = Date.now() + saveBackoffFor(ctx.attempts);
             showSaveErrorBanner(ctx.form, isQuotaError(e));
+        }
+    }
+
+    function attemptSave(ctx) {
+        ctx.pending = (ctx.pending || Promise.resolve()).then(function () { return saveDraft(ctx); });
+        return ctx.pending;
+    }
+
+    async function clearConfirmedDrafts() {
+        var markers = document.querySelectorAll("[data-autosave-confirmed]");
+        var storageKey = KEY_PREFIX + (document.body.dataset.userId || "") + "_/events/new/";
+        for (var marker of markers) {
+            var token = marker.dataset.autosaveConfirmed.replace(/^autosave-confirmed:/, "");
+            try {
+                var draft = await window.offlineStore.getDecrypted("drafts", storageKey);
+                if (draft?.data.__submissionToken === token) {
+                    await window.offlineStore.deleteRow("drafts", storageKey);
+                }
+            } catch (_e) {
+                // An unavailable store must never imply acknowledgement.
+            }
         }
     }
 
@@ -358,7 +380,6 @@
 
     async function init() {
         var form = document.querySelector("form[data-autosave]");
-        if (!form) return;
         await window.crypto_session?.awaitReady?.();
         if (!isOfflineReady()) {
             // No session key (e.g. unsupported browser or session expired).
@@ -367,6 +388,9 @@
             return;
         }
 
+        await clearConfirmedDrafts();
+        if (!form || form.dataset.autosaveInitialized) return;
+        form.dataset.autosaveInitialized = "true";
         var storageKey = getStorageKey();
         var lastSavedJson = "";
         // Refs #1774: zuletzt bekannter Personenbezug des Entwurfs.
@@ -377,13 +401,13 @@
         // so the prefill is not clobbered on load. Refs #625.
         var serverPrefilled = form.hasAttribute("data-autosave-server-prefilled");
 
-        if (serverPrefilled) {
+        if (serverPrefilled && !form.hasAttribute("data-autosave-bound")) {
             try {
                 await window.offlineStore.deleteRow("drafts", storageKey);
             } catch (_e) {
                 // ignore — restore is skipped regardless
             }
-        } else {
+        } else if (!form.hasAttribute("data-autosave-bound")) {
             // Restore on load (encrypted store first, then legacy migration)
             try {
                 var existing = await window.offlineStore.getDecrypted("drafts", storageKey);
@@ -409,13 +433,38 @@
             attemptSave(saveContext);
         }, INTERVAL_MS);
 
-        form.addEventListener("submit", function () {
-            try {
-                window.offlineStore.deleteRow("drafts", storageKey);
-            } catch (_e) {
-                // ignore
-            }
-        });
+        var tokenField = document.createElement("input");
+        tokenField.type = "hidden";
+        tokenField.name = "_autosave_token";
+        tokenField.value = crypto.randomUUID();
+        form.appendChild(tokenField);
+        saveContext.submissionToken = tokenField.value;
+        var resumingSubmit = false;
+        var submitPending = false;
+        form.addEventListener("submit", function (event) {
+            if (resumingSubmit || event.defaultPrevented) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            if (submitPending) return;
+            submitPending = true;
+            var submitter = event.submitter;
+            // Save the latest keystrokes before navigation, including writes
+            // already in progress. Only the server marker clears this draft.
+            saveContext.retryAfter = 0;
+            attemptSave(saveContext).then(function () {
+                // Let the existing double-submit guard release the cancelled
+                // event before dispatching a fresh, validated submission.
+                setTimeout(function () {
+                    resumingSubmit = true;
+                    try {
+                        form.requestSubmit(submitter || undefined);
+                    } finally {
+                        resumingSubmit = false;
+                        submitPending = false;
+                    }
+                }, 0);
+            });
+        }, true);
 
         // "Vorlage entfernen" navigiert zurück auf denselben Pfad ohne
         // template-Query — würde ohne Eingriff den Draft wiederherstellen
@@ -461,6 +510,8 @@
             saveErrorNotified = false;
         },
     };
+
+    document.addEventListener("htmx:afterSwap", init);
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", init);

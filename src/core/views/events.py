@@ -261,6 +261,22 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         context["reselect_files"] = bool(request.FILES)
         return render(request, "core/events/create.html", context)
 
+    def _confirmed_redirect(self, request, *args, message=None, **kwargs):
+        """Acknowledge only a committed contact, including idempotent hits."""
+        from uuid import UUID
+
+        token = request.POST.get("_autosave_token", "")
+        try:
+            token = str(UUID(token))
+        except (ValueError, AttributeError):
+            token = ""
+        messages.success(
+            request,
+            message or _("Kontakt wurde dokumentiert."),
+            extra_tags=f"autosave-confirmed:{token}" if token else "",
+        )
+        return redirect(*args, **kwargs)
+
     def on_idempotent_hit(self, request, hit):
         # Replay trifft bereits angelegtes Event → dem Offline-Replay den
         # Bestaetigungsmarker geben (Refs #2289: ein Idempotenz-Treffer belegt
@@ -269,7 +285,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         confirmation = saved_confirmation(request, hit.pk)
         if confirmation is not None:
             return confirmation
-        return redirect("core:event_detail", pk=hit.pk)
+        return self._confirmed_redirect(request, "core:event_detail", pk=hit.pk)
 
     def get(self, request):
         facility = request.current_facility
@@ -426,7 +442,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                 confirmation = saved_confirmation(request, existing.pk)
                 if confirmation is not None:
                     return confirmation
-                return redirect("core:event_detail", pk=existing.pk)
+                return self._confirmed_redirect(request, "core:event_detail", pk=existing.pk)
 
         meta_form = EventMetaForm(request.POST, facility=facility, user=request.user)
 
@@ -625,7 +641,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                             confirmation = saved_confirmation(request, existing.pk)
                             if confirmation is not None:
                                 return confirmation
-                            return redirect("core:event_detail", pk=existing.pk)
+                            return self._confirmed_redirect(request, "core:event_detail", pk=existing.pk)
                     raise
         except ValidationError as e:
             # Policy-/Virus-Reject VOR der Transaktion. Der zugehoerige
@@ -676,11 +692,13 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         # bewusst KEINEN client → der nächste Kontakt startet anonym; das
         # ``occurred_at`` wird beim GET neu gesetzt.
         if request.POST.get("_save_and_new") and not _wants_raw_json_response(request):
-            messages.success(request, _("Kontakt gespeichert – bereit für den nächsten."))
-            return redirect(f"{reverse('core:event_create')}?document_type={doc_type.pk}")
+            return self._confirmed_redirect(
+                request,
+                f"{reverse('core:event_create')}?document_type={doc_type.pk}",
+                message=_("Kontakt gespeichert – bereit für den nächsten."),
+            )
 
-        messages.success(request, _("Kontakt wurde dokumentiert."))
-        return redirect("core:event_detail", pk=event.pk)
+        return self._confirmed_redirect(request, "core:event_detail", pk=event.pk)
 
 
 class EventFieldsPartialView(AssistantOrAboveRequiredMixin, View):
