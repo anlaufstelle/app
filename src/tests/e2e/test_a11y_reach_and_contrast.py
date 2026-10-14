@@ -21,7 +21,14 @@ import pytest
 from playwright.sync_api import expect
 
 from ._helpers import django_shell
-from .test_config_ui import _add_group, _assign_field, _cfg_name, _create_doctype, _delete_doctype
+from .test_config_ui import (
+    _add_group,
+    _assign_field,
+    _assign_free_field,
+    _cfg_name,
+    _create_doctype,
+    _delete_doctype,
+)
 
 pytestmark = pytest.mark.e2e
 
@@ -160,36 +167,62 @@ class TestSidebarLongName:
             expect(nav).to_be_visible()
             result = page.evaluate(
                 """() => {
-                    const nav = document.querySelector("nav.md\\\\:fixed");
+                    const nav = document.querySelector("[data-testid='nav-items']").closest("nav");
                     const link = nav.querySelector("a[href$='/account/']");
-                    const rows = Array.from(link.querySelectorAll("div > div")).filter((d) => d.children.length === 0);
-                    const rects = rows.map((d) => d.getBoundingClientRect());
-                    const overlap = rects.some((a, i) => rects.some((b, j) => i < j &&
-                        a.left < b.right && b.left < a.right && a.top < b.bottom - 1 && b.top < a.bottom - 1));
-                    const buttons = Array.from(nav.querySelectorAll("form button")).map((b) => {
-                        const r = b.getBoundingClientRect();
-                        return {text: b.textContent.trim(), left: r.left, right: r.right, top: r.top, bottom: r.bottom};
-                    });
-                    return {navW: nav.clientWidth, navScrollW: nav.scrollWidth, overlap,
-                            texts: rows.map((d) => d.textContent.trim()), buttons, vh: window.innerHeight,
-                            navRight: nav.getBoundingClientRect().right};
+                    const [nameEl, roleEl] = Array.from(link.querySelectorAll("div > div"))
+                        .filter((d) => d.children.length === 0 && d.textContent.trim().length > 2);
+                    const box = (el) => {
+                        const r = el.getBoundingClientRect();
+                        return {left: r.left, right: r.right, top: r.top, bottom: r.bottom};
+                    };
+                    const named = {name: nameEl, role: roleEl};
+                    for (const b of nav.querySelectorAll("form button")) {
+                        named[b.textContent.trim()] = b;
+                    }
+                    const boxes = Object.fromEntries(Object.entries(named).map(([k, el]) => [k, box(el)]));
+                    const keys = Object.keys(boxes);
+                    const overlaps = [];
+                    for (let i = 0; i < keys.length; i++) {
+                        for (let j = i + 1; j < keys.length; j++) {
+                            const a = boxes[keys[i]], b = boxes[keys[j]];
+                            const apart = a.right <= b.left + 1 || b.right <= a.left + 1 ||
+                                a.bottom <= b.top + 1 || b.bottom <= a.top + 1;
+                            if (!apart) {
+                                overlaps.push([keys[i], keys[j]]);
+                            }
+                        }
+                    }
+                    return {navW: nav.clientWidth, navScrollW: nav.scrollWidth,
+                            navRight: nav.getBoundingClientRect().right, vh: window.innerHeight,
+                            roleText: roleEl.textContent.trim(),
+                            roleClipped: roleEl.scrollWidth > roleEl.clientWidth + 1,
+                            roleLines: Math.round(roleEl.getBoundingClientRect().height /
+                                parseFloat(getComputedStyle(roleEl).lineHeight || '16')),
+                            boxes, overlaps};
                 }"""
             )
             assert result["navScrollW"] <= result["navW"], f"sidebar overflows horizontally: {result}"
-            assert not result["overlap"], f"name and role overlap: {result}"
-            role_text = "Anwendungsbetreuung" if language == "de" else "Application administrator"
-            assert any(role_text.lower() in t.lower() for t in result["texts"]) or any(
-                t for t in result["texts"] if t
-            ), result
-            labels = {b["text"] for b in result["buttons"]}
-            assert {"DE", "EN"} <= labels, result
-            assert any(label in labels for label in ("Abmelden", "Sign out", "Log out")), result
-            for button in result["buttons"]:
-                assert button["right"] <= result["navRight"] + 1, f"control outside the sidebar: {button}"
-            # Keyboard: sign-out is reachable and focusable.
-            logout = nav.locator("form[action$='/logout/'] button")
-            logout.focus()
-            expect(logout).to_be_focused()
+            # The full role designation is shown, not clipped, and nothing overlaps (name, role, DE, EN, sign-out).
+            role_text = "Anwendungsbetreuung" if language == "de" else "Application support"
+            assert result["roleText"] == role_text, result
+            assert not result["roleClipped"], f"role text is clipped: {result}"
+            assert result["overlaps"] == [], f"account area elements overlap: {result}"
+            logout_label = "Abmelden" if language == "de" else "Log out"
+            boxes = result["boxes"]
+            assert {"DE", "EN"} <= boxes.keys(), result
+            logout_key = next(key for key in boxes if key in {"Abmelden", "Log out", "Sign out"})
+            assert logout_key == logout_label, f"unexpected sign-out label {logout_key!r}: {result}"
+            for key in ("DE", "EN", logout_key):
+                box = boxes[key]
+                assert box["right"] <= result["navRight"] + 1, f"{key} outside the sidebar: {box}"
+                assert box["top"] >= 0 and box["bottom"] <= result["vh"], f"{key} outside the visible area: {box}"
+            # Keyboard: Tab from the profile link reaches language choice and sign-out in order.
+            nav.locator("a[href$='/account/']").focus()
+            visited = []
+            for _ in range(4):
+                page.keyboard.press("Tab")
+                visited.append(page.evaluate("() => document.activeElement.textContent.trim()"))
+            assert visited[:3] == ["DE", "EN", logout_label], f"tab order in the account area: {visited}"
             assert LONG_NAME.split()[0] in nav.inner_text()
         finally:
             context.close()
@@ -249,21 +282,30 @@ class TestBannerContrast:
             [name, detail],
         )
 
-    def test_offline_sync_and_conflict_banners_reach_4_5_to_1(self, browser, base_url, _staff_storage_state):
+    @pytest.mark.parametrize(
+        "path",
+        [
+            pytest.param("/", id="online-layout"),
+            pytest.param("/offline/conflicts/", id="offline-shell"),
+        ],
+    )
+    def test_offline_sync_and_conflict_banners_reach_4_5_to_1(self, browser, base_url, _staff_storage_state, path):
         context = browser.new_context(storage_state=_staff_storage_state, locale="de-DE")
         try:
             page = context.new_page()
             page.set_default_timeout(30000)
-            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            page.goto(f"{base_url}{path}", wait_until="domcontentloaded")
             page.wait_for_function("window.Alpine !== undefined")
 
-            # Offline banner with counters, cached-person link and expanded help.
-            self._emit(page, "offline-clients-count", {"count": 3})
-            self._emit(page, "offline-unsynced-count", {"count": 2})
+            # Offline banner with counters, cached-person link and expanded help. The counters are emitted
+            # once the banner is visible: the page's own cache count may arrive late and overwrite earlier ones.
             context.set_offline(True)
             page.evaluate("() => window.dispatchEvent(new Event('offline'))")
             banner = page.locator("[data-testid='offline-banner']")
             expect(banner).to_be_visible(timeout=10000)
+            self._emit(page, "offline-clients-count", {"count": 3})
+            self._emit(page, "offline-unsynced-count", {"count": 2})
+            expect(banner.locator("[data-testid='offline-cached-count']")).to_be_visible(timeout=10000)
             summary = banner.locator("summary").first
             if summary.count():
                 summary.click()
@@ -343,6 +385,65 @@ class TestFieldBoardKeyboard:
             moved.locator("[data-board-move]").focus()
             page.keyboard.press("Enter")
             expect(page.locator('[data-testid="free-field-row"]', has_text="Notiz")).to_have_count(1, timeout=10000)
+        finally:
+            _delete_doctype(page, base_url, pk)
+
+    def test_down_move_free_field_and_group_announce_exact_positions(self, authenticated_page, base_url):
+        """Successful keyboard moves of a field down, a free field up and a group, each with its exact position."""
+        page = authenticated_page
+        pk = _create_doctype(page, base_url, _cfg_name("DT-POS"))
+        try:
+            group = _cfg_name("GP")
+            group_pk = _add_group(page, group)
+            _assign_field(page, "Dauer", group)
+            _assign_field(page, "Notiz", group)
+            _assign_free_field(page, "Straßenkontakt")
+            status = page.locator("#field-board-status")
+
+            def block_names():
+                return page.evaluate(
+                    "() => Array.from(document.querySelectorAll('#field-board > [data-block], "
+                    "#field-board [data-block]')).filter((el) => el.matches('[data-testid=field-group], "
+                    "[data-testid=free-field-row]')).map((el) => el.dataset.itemName)"
+                )
+
+            assert block_names() == [group, "Straßenkontakt"], block_names()
+
+            # 1. Field down inside the group.
+            card = page.locator(f'[data-testid="field-group"][data-group-id="{group_pk}"]')
+            card.locator('[data-testid="field-row"]', has_text="Dauer").locator('[data-board-order="down"]').focus()
+            page.keyboard.press("Enter")
+            expect(card.locator('[data-testid="field-row"]').first).to_contain_text("Notiz", timeout=10000)
+            page.wait_for_timeout(1500)  # let preview and condition board settle
+            expect(status).to_have_text("Feld Dauer: Position 2 von 2")
+            expect(
+                card.locator('[data-testid="field-row"]', has_text="Dauer").locator('[data-board-order="down"]')
+            ).to_be_disabled()
+
+            # 2. Free field up above the group.
+            free = page.locator('[data-testid="free-field-row"]', has_text="Straßenkontakt")
+            free.locator('[data-board-order="up"]').focus()
+            page.keyboard.press("Enter")
+            expect(page.locator("#field-board").locator("[data-block]").first).to_contain_text(
+                "Straßenkontakt", timeout=10000
+            )
+            page.wait_for_timeout(1500)
+            expect(status).to_have_text("Feld Straßenkontakt: Position 1 von 2")
+            assert block_names() == ["Straßenkontakt", group], block_names()
+
+            # 3. The group back up: the order of the top-level blocks changes and the position is announced.
+            card = page.locator(f'[data-testid="field-group"][data-group-id="{group_pk}"]')
+            template = card.get_attribute("data-position-message")
+            assert template and "{position}" in template, "group carries no position message"
+            card.locator('[data-board-order="up"]').first.focus()
+            page.keyboard.press("Enter")
+            expect(page.locator("#field-board").locator("[data-block]").first).to_have_attribute(
+                "data-group-id", group_pk, timeout=10000
+            )
+            page.wait_for_timeout(1500)
+            expected = template.replace("{name}", group).replace("{position}", "1").replace("{total}", "2")
+            expect(status).to_have_text(expected)
+            assert block_names() == [group, "Straßenkontakt"], block_names()
         finally:
             _delete_doctype(page, base_url, pk)
 
