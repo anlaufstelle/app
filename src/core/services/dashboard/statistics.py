@@ -10,6 +10,7 @@ from django.db.models import Count, Q
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Event
+from core.services.workitem_visibility import readable_person_filter
 from core.utils.formatting import parse_date
 
 logger = logging.getLogger(__name__)
@@ -340,10 +341,10 @@ def _aggregate_by_age_cluster(base_qs) -> list[dict]:
 
 
 def _aggregate_top_clients(base_qs) -> list[dict]:
-    """Top-5-Klient:innen nach Ereigniszahl — Refs #1827, aus
-    ``get_statistics`` extrahiert."""
+    """Rank readable people by event count without filtering other aggregates (Refs #2585)."""
     rows = (
-        base_qs.exclude(client__isnull=True)
+        base_qs.filter(readable_person_filter())
+        .exclude(client__isnull=True)
         .values("client__pseudonym")
         .annotate(count=Count("id"))
         .order_by("-count")[:5]

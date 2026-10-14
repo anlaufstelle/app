@@ -500,7 +500,7 @@ What happens:
 
 Tasks without a person remain visible. Tasks linked to people in the trash or inactive people are excluded from the inbox, timeline, focus box, profile, navigation counts and handover; their detail links return 404, as do their edit links for users permitted to edit tasks. Timeline contacts, bans and activities targeting people, events, tasks or cases also exclude these people; entries without a person remain visible. Restoring a person who remains active makes the eligible tasks visible again. Profile favorites and recent visits also exclude deleted or inactive people. Profile event lists and contact counts, the cockpit’s contact count for today, and handover events include only role-visible documentation that is not deleted and belongs to active people outside the trash or has no person attached.
 
-The ordinary person record and its deletion, merge, contact-stage downgrade and legal-hold forms return 404 for deleted or inactive people. The event list, event detail and attachment links, event search and ordinary event CSV export also exclude events belonging to deleted or inactive people; eligible events without a person remain visible. Status responses and their replays return 404 for these person-linked tasks before returning task content. The completed-task count shown when loading fragments counts only readable tasks. A pending deletion request alone does not block these readers; restoring a person who remains active makes eligible records visible again. Aggregate statistics remain unchanged.
+The ordinary person record and its deletion, merge, contact-stage downgrade and legal-hold forms return 404 for deleted or inactive people. The event list, event detail and attachment links, event search and ordinary event CSV export also exclude events belonging to deleted or inactive people; eligible events without a person remain visible. Status responses and their replays return 404 for these person-linked tasks before returning task content. The completed-task count shown when loading fragments counts only readable tasks. A pending deletion request alone does not block these readers; restoring a person who remains active makes eligible records visible again. The person ranking in statistics shows only active people outside the trash; the next visible person moves up. Aggregate statistics remain unchanged.
 
 **Work items** are used for internal team communication. There are two types:
 
@@ -1153,4 +1153,5 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: a1fb371920fa8d48b95ae99f1a45a0e43af6f777 -->
+<!-- source-hash: fa90eac97f4bd5d7fe521b897ea725662e9c27f7 -->
+<!-- translation-date: 2026-10-14 -->
