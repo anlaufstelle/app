@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Zwei Genehmiger für den Aufbewahrungslauf benennen** (#2590) — Je Einrichtung mindestens zwei aktive Konten mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“ benennen; sonst sind neue manuelle Freigaben für Ereignisse „Mit Zusatzangaben“ nicht abschließbar, und eine erste Freigabe allein erlaubt keine Löschung.
 
+### Changed
+
+- **Paketimport und Einrichtungs-Bootstrap beschleunigt** (#2598) — Konfigurationssperre und Datenumschreibung werden je Paket gebündelt (Standardpaket: 63 auf 1 Sperre und 28 auf 1 Umschreibungsrunde), während Zeilenvalidierungen, vollständiger Rollback und einzelne Konfigurationsspeicherungen erhalten bleiben.
+
 ### Fixed
 
 - **Fallkontext bei Schnell-Vorlagen erhalten** (#2534) — Anwenden, Wechseln und Entfernen einer Vorlage erhalten auch während Laden und nach Ladefehlern die Fallabsicht derselben Person zur erneuten Serverprüfung; Speichern wartet auf die Klärung des vorgemerkten Falls.

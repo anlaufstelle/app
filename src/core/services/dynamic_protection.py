@@ -1,11 +1,90 @@
 """One transaction lock order for dynamic protection and persistence (Refs #2525)."""
 
 from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
+from threading import get_ident
 from uuid import UUID
 
 from django.core.exceptions import ValidationError
 from django.db import connection, transaction
 from django.utils.translation import gettext_lazy as _
+
+
+@dataclass
+class _ConfigurationBatch:
+    facility_id: UUID
+    db_connection: object
+    atomic_block: object
+    thread_id: int
+    document_type_ids: set[UUID] = field(default_factory=set)
+    flushing: bool = False
+
+
+_configuration_batch: ContextVar[_ConfigurationBatch | None] = ContextVar("configuration_batch", default=None)
+
+
+def _batch_for(facility_id):
+    """Only reuse a batch in its originating connection, atomic block and thread."""
+    batch = _configuration_batch.get()
+    if batch is None:
+        return None
+    if (
+        batch.thread_id != get_ident()
+        or not connection.in_atomic_block
+        or connection.needs_rollback
+        or batch.db_connection is not connection.connection
+        or not any(block is batch.atomic_block for block in connection.atomic_blocks)
+    ):
+        raise transaction.TransactionManagementError(
+            "Configuration batch has left its originating transaction or thread"
+        )
+    return batch if batch.facility_id == UUID(str(facility_id)) else None
+
+
+@contextmanager
+def configuration_batch(facility_id):
+    """Defer package rewrites only within the same facility and transaction under an already-held exclusive gate.
+
+    The caller takes the exclusive gate before entering and retains it through
+    commit. Nested batches are rejected. Standalone writes and other facilities
+    keep their ordinary configuration_write contract. The context is cleared in
+    finally, including failed rows, rewrite failures and dry-run rollbacks.
+    """
+    if _configuration_batch.get() is not None:
+        raise transaction.TransactionManagementError("Cannot open a nested configuration batch")
+    if not connection.in_atomic_block:
+        raise transaction.TransactionManagementError("Configuration batch requires an enclosing transaction")
+    facility_id = UUID(str(facility_id))
+    # Refs #2598: verify the actual lock, never infer exclusivity from an atomic block.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' "
+            "AND pid = pg_backend_pid() AND classid = 2525 "
+            "AND objid = (hashtext(%s)::bigint & 4294967295) AND objsubid = 2 "
+            "AND mode = 'ExclusiveLock' AND granted)",
+            [str(facility_id)],
+        )
+        if not cursor.fetchone()[0]:
+            raise transaction.TransactionManagementError("Configuration batch requires an already-held exclusive gate")
+    with transaction.atomic():
+        batch = _ConfigurationBatch(facility_id, connection.connection, connection.atomic_blocks[-1], get_ident())
+        token = _configuration_batch.set(batch)
+        try:
+            yield
+            _batch_for(facility_id)
+            if batch.document_type_ids:
+                from core.models import DocumentType
+
+                # Reload the final protection state; queued model instances can be stale.
+                targets = (
+                    DocumentType.objects.for_facility(facility_id).filter(pk__in=batch.document_type_ids).order_by("pk")
+                )
+                batch.flushing = True
+                rewrite_dynamic_records(targets)
+        finally:
+            batch.document_type_ids.clear()
+            _configuration_batch.reset(token)
 
 
 def lock_dynamic_protection(facility_id, *, exclusive=False):
@@ -31,6 +110,8 @@ def lock_dynamic_protection_many(facility_ids, *, exclusive=False):
     if not connection.in_atomic_block:
         raise transaction.TransactionManagementError("Dynamic protection requires an enclosing transaction")
     facility_ids = sorted({UUID(str(value)) for value in facility_ids})
+    if len(facility_ids) == 1 and _batch_for(facility_ids[0]) is not None:
+        return
     with connection.cursor() as cursor:
         gate_query = "SELECT pg_advisory_xact_lock_shared(2525, hashtext(%s))"
         if exclusive:
@@ -65,6 +146,9 @@ def lock_dynamic_protection_gate(facility_id, *, exclusive=False):
 @contextmanager
 def configuration_write(facility_id):
     """Hold exclusive configuration locks through the change and its rewrite."""
+    if _batch_for(facility_id) is not None:
+        yield
+        return
     with transaction.atomic():
         lock_dynamic_protection(facility_id, exclusive=True)
         yield
@@ -161,6 +245,10 @@ def rewrite_dynamic_records(document_types):
     if any(doc_type.facility_id != facility_id for doc_type in document_types):
         raise ValueError("Cannot rewrite dynamic records across facilities")
     type_ids = [doc_type.pk for doc_type in document_types]
+    batch = _batch_for(facility_id)
+    if batch is not None and not batch.flushing:
+        batch.document_type_ids.update(type_ids)
+        return
     for model in (Client, Case, Event):
         records = (
             model.objects.for_facility(facility_id)

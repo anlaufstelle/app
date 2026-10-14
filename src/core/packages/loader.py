@@ -175,29 +175,28 @@ class _DryRunRollbackError(Exception):
 
 
 def load_package(facility: Facility, package: PackageV1, *, dry_run: bool = False) -> PackageReport:
-    """Spielt ``package`` idempotent in ``facility`` ein.
+    """Load a validated package idempotently, rolling back every row on any error.
 
-    :param facility: Ziel-Einrichtung; alle Slugs werden relativ zu ihr aufgelöst.
-    :param package: bereits validiertes Paket (siehe
-        :func:`core.packages.schema.parse_package`).
-    :param dry_run: identischer Code-Pfad, am Ende erzwungener Rollback — der
-        Report zeigt exakt das, was ein Echtlauf getan hätte.
-    :returns: :class:`PackageReport` mit created/updated/unchanged je Objektart.
-    :raises PackageLoadError: sobald **ein** Objekt fehlschlägt; der gesamte
-        Lauf wird zurückgerollt (Alles-oder-nichts), der Report hängt an der
-        Exception.
+    Dry runs use the identical write path and force rollback after validation.
+    The exclusive gate covers all configuration rows and the final rewrite.
     """
     report = PackageReport(dry_run=dry_run)
     try:
         with transaction.atomic():
-            from core.services.dynamic_protection import lock_dynamic_protection
+            from core.services.dynamic_protection import configuration_batch, lock_dynamic_protection
 
             lock_dynamic_protection(facility.pk, exclusive=True)
-            _apply_package(facility, package, report)
-            if report.errors:
-                # Raise INNERHALB des atomic-Blocks — erst dadurch rollt der
-                # Block zurück; ein Raise danach käme zu spät (schon committet).
-                raise PackageLoadError(report)
+            try:
+                with configuration_batch(facility.pk):
+                    _apply_package(facility, package, report)
+                    if report.errors:
+                        # Raise inside the transaction and batch: failed packages never flush or commit.
+                        raise PackageLoadError(report)
+            except (ValidationError, IntegrityError) as error:
+                # Refs #2598: deferred rewrite failures keep the row-save error contract.
+                message = _validation_message(error) if isinstance(error, ValidationError) else str(error).strip()
+                report.errors.append(("dynamic-records", message))
+                raise PackageLoadError(report) from error
             if dry_run:
                 raise _DryRunRollbackError
     except _DryRunRollbackError:
