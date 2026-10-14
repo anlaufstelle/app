@@ -417,8 +417,23 @@
     // Refs #2289: jede erfolgreich uebertragene Zeile beendet zugleich den
     // Hinweis „Anmeldung erforderlich" — es ist wieder belegt geschrieben
     // worden.
-    async function _deleteQueueRowAsSuccess(record) {
+    async function _deleteQueueRowAsSuccess(record, confirmed = false) {
         _signalAuthPending(false);
+        // Refs #2561: a confirmed replay acknowledges only its own snapshot.
+        const payload = record.data;
+        if (confirmed && payload && new URL(record.url, window.location.origin).pathname === "/events/new/") {
+            const token = new URLSearchParams(payload.body).get("_autosave_token");
+            if (token) {
+                // Public offline shells have no user ID. The encrypted token
+                // identifies the snapshot without adding account metadata.
+                const drafts = await _store().listDecrypted("drafts");
+                for (const draft of drafts) {
+                    if (draft.data.__submissionToken === token && draft.formKey.endsWith("_/events/new/")) {
+                        await _store().deleteConfirmedDraft(draft.formKey, token);
+                    }
+                }
+            }
+        }
         await _store().deleteRow("queue", record.id);
     }
 
@@ -493,7 +508,7 @@
                 // kommt von den Create-/Edit-Endpunkten (Ereignis, Aufgabe)
                 // NACH einem festgeschriebenen Schreibvorgang.
                 if (response.ok && _isSavedConfirmed(response)) {
-                    await _deleteQueueRowAsSuccess(record);
+                    await _deleteQueueRowAsSuccess(record, true);
                     continue;
                 }
                 // Refs #1351/#1384: Klassifikation exakt nach der

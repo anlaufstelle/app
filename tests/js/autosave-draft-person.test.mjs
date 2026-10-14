@@ -130,12 +130,12 @@ describe("#1774 — Entwurfs-Payload traegt den Personenbezug", () => {
         expect(data[autosave._PERSON_KEY]).toBe(PK_A);
     });
 
-    it("laesst eine neue Auswahl den gemerkten Bezug ueberschreiben", () => {
+    it("keeps the restored person when a different person is selected", () => {
         const form = eventCreateForm(PK_B);
 
         const data = autosave._buildDraftPayload(form, PK_A);
 
-        expect(data[autosave._PERSON_KEY]).toBe(PK_B);
+        expect(data[autosave._PERSON_KEY]).toBe(PK_A);
     });
 });
 

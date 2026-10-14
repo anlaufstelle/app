@@ -329,6 +329,20 @@
         return out;
     }
 
+    // Refs #2561: compare and delete under one IndexedDB write lock.
+    // Keep the transaction alive during WebCrypto; errors retain the draft.
+    async function deleteConfirmedDraft(formKey, token) {
+        if (!token) return false;
+        return db.transaction("rw", db.drafts, async () => {
+            const row = await db.drafts.get(formKey);
+            if (!row) return false;
+            const data = await Dexie.waitFor(_crypto().decryptPayload(row.data, _aad("drafts", formKey)), 3000);
+            if (data.__submissionToken !== token) return false;
+            await db.drafts.delete(formKey);
+            return true;
+        });
+    }
+
     async function deleteRow(table, primaryKey) {
         return db[table].delete(primaryKey);
     }
@@ -598,6 +612,7 @@
         getDecrypted: getDecrypted,
         listDecrypted: listDecrypted,
         deleteRow: deleteRow,
+        deleteConfirmedDraft: deleteConfirmedDraft,
         purgeAll: purgeAll,
         purgeExpired: purgeExpired,
         purgeExpiredBundles: purgeExpiredBundles,

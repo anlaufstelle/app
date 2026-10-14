@@ -26,6 +26,7 @@ const EXPECTED_FACADE_KEYS = [
     "getDecrypted",
     "listDecrypted",
     "deleteRow",
+    "deleteConfirmedDraft",
     "purgeAll",
     "purgeExpired",
     "purgeExpiredBundles",

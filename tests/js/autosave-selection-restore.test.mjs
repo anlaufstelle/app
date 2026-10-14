@@ -5,7 +5,7 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-it("restores draft text without reviving an old client or a case option", async () => {
+it("retains a person-bound draft without restoring it into an unselected form", async () => {
     document.body.dataset.userId = "u1";
     document.body.innerHTML = '<form data-autosave><input type="hidden" name="client" value="" data-autosave-person>' +
         '<select name="case"><option value="">No case</option><template></template></select>' +
@@ -19,7 +19,9 @@ it("restores draft text without reviving an old client or a case option", async 
     vi.spyOn(document, "readyState", "get").mockReturnValue("loading");
     await import("../../src/static/js/autosave.js");
     document.dispatchEvent(new Event("DOMContentLoaded"));
-    await vi.waitFor(() => expect(document.querySelector("textarea").value).toBe("Draft text"));
+    await vi.waitFor(() => expect(document.querySelector("form").dataset.autosaveInitialized).toBe("true"));
+    expect(document.querySelector("textarea").value).toBe("");
+    expect(window.offlineStore.putEncrypted).not.toHaveBeenCalled();
     const form = document.querySelector("form");
     expect(new FormData(form).get("client")).toBe("");
     expect(["", null]).toContain(new FormData(form).get("case"));

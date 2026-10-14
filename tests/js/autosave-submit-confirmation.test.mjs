@@ -15,6 +15,9 @@ beforeEach(async () => {
         getDecrypted: vi.fn(async () => row),
         putEncrypted: vi.fn(async (_store, value) => { row = value; }),
         deleteRow: vi.fn(async () => { row = null; }),
+        deleteConfirmedDraft: vi.fn(async (_key, confirmed) => {
+            if (row?.data.__submissionToken === confirmed) row = null;
+        }),
     };
     vi.spyOn(window, "setInterval").mockReturnValue(0);
     vi.spyOn(form, "requestSubmit").mockImplementation(() => {});

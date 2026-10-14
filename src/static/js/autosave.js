@@ -66,18 +66,10 @@
         return (el && el.value) || "";
     }
 
-    /*
-     * Refs #1774: Entwurfs-Payload = Formularwerte + (falls bekannt) der
-     * Personenbezug. ``knownPersonPk`` ist der zuletzt gesehene Bezug: nach
-     * einem Wiederherstellen ist die Alpine-Auswahl zurueckgesetzt und das
-     * versteckte Feld leer, der Entwurfsinhalt betrifft aber weiter dieselbe
-     * Person — der Bezug darf nicht still verloren gehen, sonst waere der
-     * wiederhergestellte Entwurf fuer den Widerruf erneut unsichtbar. Eine
-     * NEUE Auswahl gewinnt dagegen immer.
-     */
+    // Refs #2561, #1774: selection changes never relabel restored content.
     function buildDraftPayload(form, knownPersonPk) {
         var data = getFormData(form);
-        var personPk = getPersonPk(form) || knownPersonPk || "";
+        var personPk = knownPersonPk || getPersonPk(form) || "";
         if (personPk) data[PERSON_KEY] = personPk;
         return data;
     }
@@ -299,9 +291,23 @@
      */
     async function saveDraft(ctx) {
         if (!isOfflineReady()) return;
+        if (ctx.personMismatch || (ctx.personLocked && getPersonPk(ctx.form) !== ctx.personPk)) {
+            if (JSON.stringify(buildDraftPayload(ctx.form, ctx.personPk)) !== ctx.inputBaseline) {
+                showSaveErrorBanner(ctx.form, false);
+            }
+            return;
+        }
+        if (!ctx.personLocked) ctx.personPk = getPersonPk(ctx.form);
         if (ctx.retryAfter && Date.now() < ctx.retryAfter) return;
         try {
             var currentData = buildDraftPayload(ctx.form, ctx.personPk);
+            var inputJson = JSON.stringify(currentData);
+            // Opening/restoring alone is not an edit, even in a second tab.
+            if (!ctx.forceSave && ctx.inputBaseline === inputJson) return;
+            if (ctx.tokenField && ctx.inputBaseline !== inputJson) {
+                ctx.submissionToken = crypto.randomUUID();
+                ctx.tokenField.value = ctx.submissionToken;
+            }
             if (ctx.submissionToken) currentData.__submissionToken = ctx.submissionToken;
             if (currentData[PERSON_KEY]) ctx.personPk = currentData[PERSON_KEY];
             var json = JSON.stringify(currentData);
@@ -312,6 +318,9 @@
                     data: currentData,
                 });
                 ctx.lastSavedJson = json;
+                ctx.inputBaseline = inputJson;
+                ctx.personLocked = true;
+                ctx.forceSave = false;
             }
             ctx.attempts = 0;
             ctx.retryAfter = 0;
@@ -329,18 +338,18 @@
 
     async function clearConfirmedDrafts() {
         var markers = document.querySelectorAll("[data-autosave-confirmed]");
+        var confirmedTokens = new Set();
         var storageKey = KEY_PREFIX + (document.body.dataset.userId || "") + "_/events/new/";
         for (var marker of markers) {
             var token = marker.dataset.autosaveConfirmed.replace(/^autosave-confirmed:/, "");
+            if (token) confirmedTokens.add(token);
             try {
-                var draft = await window.offlineStore.getDecrypted("drafts", storageKey);
-                if (draft?.data.__submissionToken === token) {
-                    await window.offlineStore.deleteRow("drafts", storageKey);
-                }
+                await window.offlineStore.deleteConfirmedDraft(storageKey, token);
             } catch (_e) {
-                // An unavailable store must never imply acknowledgement.
+                // Retain data on storage errors, but never restore a known confirmation.
             }
         }
+        return confirmedTokens;
     }
 
     function isOfflineReady() {
@@ -364,8 +373,11 @@
                     updatedAt: Date.now(),
                     data: data,
                 });
-                restoreFormData(form, data);
-                showRestoredBanner(form, storageKey);
+                if ((data[PERSON_KEY] || "") === getPersonPk(form) && !form.hasAttribute("data-autosave-bound")) {
+                    restoreFormData(form, data);
+                    showRestoredBanner(form, storageKey);
+                }
+                return data;
             }
         } catch (_e) {
             // ignore
@@ -388,47 +400,53 @@
             return;
         }
 
-        await clearConfirmedDrafts();
+        var confirmedTokens = await clearConfirmedDrafts();
         if (!form || form.dataset.autosaveInitialized) return;
         form.dataset.autosaveInitialized = "true";
         var storageKey = getStorageKey();
         var lastSavedJson = "";
         // Refs #1774: zuletzt bekannter Personenbezug des Entwurfs.
         var lastKnownPersonPk = "";
-        // If the server rendered this form with an intentional prefill
-        // (e.g. a Quick-Template), the server state wins over any older
-        // autosaved draft for the same path: drop the draft and skip restore
-        // so the prefill is not clobbered on load. Refs #625.
-        var serverPrefilled = form.hasAttribute("data-autosave-server-prefilled");
-
-        if (serverPrefilled && !form.hasAttribute("data-autosave-bound")) {
-            try {
-                await window.offlineStore.deleteRow("drafts", storageKey);
-            } catch (_e) {
-                // ignore — restore is skipped regardless
-            }
-        } else if (!form.hasAttribute("data-autosave-bound")) {
-            // Restore on load (encrypted store first, then legacy migration)
+        var personMismatch = false;
+        var personLocked = false;
+        // Prefill alone never acknowledges a previous submission. Refs #2561.
+        {
             try {
                 var existing = await window.offlineStore.getDecrypted("drafts", storageKey);
-                if (existing && existing.data) {
-                    var wasRestored = restoreFormData(form, existing.data);
-                    if (wasRestored) showRestoredBanner(form, storageKey);
-                    // Refs #1774: Alt-Entwuerfe ohne den Schluessel werden
-                    // tolerant gelesen (undefined -> "", keine Migration).
+                if (existing && existing.data && !confirmedTokens.has(existing.data.__submissionToken)) {
+                    personLocked = true;
                     lastKnownPersonPk = existing.data[PERSON_KEY] || "";
-                    lastSavedJson = JSON.stringify(existing.data);
-                } else {
-                    await _migrateLegacyLocalStorage(storageKey, form);
+                    personMismatch = lastKnownPersonPk !== getPersonPk(form);
+                    if (!personMismatch && !form.hasAttribute("data-autosave-bound")) {
+                        var wasRestored = restoreFormData(form, existing.data);
+                        if (wasRestored) showRestoredBanner(form, storageKey);
+                        lastSavedJson = JSON.stringify(existing.data);
+                    } else if (personMismatch) {
+                        var notice = document.createElement("p");
+                        notice.setAttribute("role", "status");
+                        notice.textContent = form.dataset.i18nDraftOtherPerson || "";
+                        form.parentElement.insertBefore(notice, form);
+                    }
+                } else if (!existing) {
+                    var legacy = await _migrateLegacyLocalStorage(storageKey, form);
+                    if (legacy) {
+                        personLocked = true;
+                        personMismatch = (legacy[PERSON_KEY] || "") !== getPersonPk(form);
+                    }
                 }
             } catch (_e) {
-                // ignore — better to autosave fresh than crash the form
+                // Uncertainty retains stored text and prevents overwriting.
+                personMismatch = true;
             }
         }
 
         // Refs #2059: Der Lauf traegt seinen Zustand jetzt in einem Kontext —
         // inklusive Fehlerzaehler und Backoff-Fenster.
         var saveContext = makeSaveContext(form, storageKey, lastSavedJson, lastKnownPersonPk);
+        saveContext.personMismatch = personMismatch;
+        saveContext.personLocked = personLocked;
+        saveContext.personPk = getPersonPk(form);
+        saveContext.inputBaseline = JSON.stringify(buildDraftPayload(form, saveContext.personPk));
         setInterval(function () {
             attemptSave(saveContext);
         }, INTERVAL_MS);
@@ -439,6 +457,7 @@
         tokenField.value = crypto.randomUUID();
         form.appendChild(tokenField);
         saveContext.submissionToken = tokenField.value;
+        saveContext.tokenField = tokenField;
         var resumingSubmit = false;
         var submitPending = false;
         form.addEventListener("submit", function (event) {
@@ -451,6 +470,7 @@
             // Save the latest keystrokes before navigation, including writes
             // already in progress. Only the server marker clears this draft.
             saveContext.retryAfter = 0;
+            saveContext.forceSave = true;
             attemptSave(saveContext).then(function () {
                 // Let the existing double-submit guard release the cancelled
                 // event before dispatching a fresh, validated submission.
@@ -466,25 +486,16 @@
             });
         }, true);
 
-        // "Vorlage entfernen" navigiert zurück auf denselben Pfad ohne
-        // template-Query — würde ohne Eingriff den Draft wiederherstellen
-        // und die vermeintlich leere Form wieder füllen. Refs #625.
+        // Removing a template never discards typed text. Untouched prefill
+        // has no draft; confirmed drafts were removed above. Refs #625, #2561.
         document.addEventListener("click", function (e) {
             var link = e.target.closest("[data-autosave-clear-link]");
             if (!link || e.defaultPrevented) return;
             e.preventDefault();
             var target = link.getAttribute("href") || link.href;
-            var done = function () {
+            attemptSave(saveContext).finally(function () {
                 window.location.href = target;
-            };
-            try {
-                // deleteRow ist async (offline-store.js) -> liefert immer ein
-                // Promise; .finally navigiert nach Abschluss/Fehler. Wirft der
-                // synchrone Zugriff (kein offlineStore), greift catch. Refs #1011.
-                window.offlineStore.deleteRow("drafts", storageKey).finally(done);
-            } catch (_e) {
-                done();
-            }
+            });
         });
     }
 
