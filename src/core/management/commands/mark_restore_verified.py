@@ -56,5 +56,5 @@ class Command(BaseCommand):
         )
         if not note:
             self.stdout.write(
-                self.style.WARNING("WARN Kein --note angegeben — empfohlen fuer spaetere Nachvollziehbarkeit.")
+                self.style.WARNING("WARN Kein --note angegeben — empfohlen für spätere Nachvollziehbarkeit.")
             )

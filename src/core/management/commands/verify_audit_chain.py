@@ -53,17 +53,17 @@ from core.services.system import has_rls_bypass_context as _has_rls_bypass_conte
 
 
 class Command(BaseCommand):
-    help = "Verifiziert die HMAC-Integritaetskette des AuditLog (Refs #1070)."
+    help = "Verifiziert die HMAC-Integritätskette des AuditLog (Refs #1070)."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--require-anchor",
             action="store_true",
             help=(
-                "Bricht ab, sobald auch nur eine der geprueften Ketten MIT INHALT keinen "
+                "Bricht ab, sobald auch nur eine der geprüften Ketten MIT INHALT keinen "
                 "externen High-Water-Mark-Anker hat, statt sie als Erstlauf zu behandeln und neu "
                 "zu verankern. Eine Kette ohne Zeilen hat keinen verankerbaren Tail und gilt als "
-                "trivial verankert (Refs #2317). Fuer Ablaeufe, in "
+                "trivial verankert (Refs #2317). Für Abläufe, in "
                 "denen ein Anker nachweislich vorhanden sein MUSS (Wiederherstellung, Drill) "
                 "(Refs #2242)."
             ),
@@ -75,9 +75,9 @@ class Command(BaseCommand):
             metavar="KENNNUMMER",
             dest="retire_chain",
             help=(
-                "Legt die genannte Einrichtungskette im externen Anker ausdruecklich still, statt "
-                "ihren verwaisten Anker als Inventarabweichung zu melden. Nur zulaessig, wenn die "
-                "Einrichtung tatsaechlich nicht mehr im Bestand ist und ihre Kette verankert war; "
+                "Legt die genannte Einrichtungskette im externen Anker ausdrücklich still, statt "
+                "ihren verwaisten Anker als Inventarabweichung zu melden. Nur zulässig, wenn die "
+                "Einrichtung tatsächlich nicht mehr im Bestand ist und ihre Kette verankert war; "
                 "verlangt --retire-reason. Mehrfach angebbar (Refs #2296)."
             ),
         )
@@ -85,7 +85,7 @@ class Command(BaseCommand):
             "--retire-reason",
             default="",
             metavar="TEXT",
-            help="Begruendung des Stilllegungsnachweises zu --retire-chain (Refs #2296).",
+            help="Begründung des Stilllegungsnachweises zu --retire-chain (Refs #2296).",
         )
         parser.add_argument(
             "--reactivate-chain",
@@ -94,8 +94,8 @@ class Command(BaseCommand):
             metavar="KENNNUMMER",
             dest="reactivate_chain",
             help=(
-                "Nimmt den Stilllegungsnachweis der genannten Kette zurueck, weil ihr Bestand "
-                "bewusst zurueckkehrt. Nur zulaessig, wenn die Einrichtung wieder im Bestand ist "
+                "Nimmt den Stilllegungsnachweis der genannten Kette zurück, weil ihr Bestand "
+                "bewusst zurückkehrt. Nur zulässig, wenn die Einrichtung wieder im Bestand ist "
                 "und ein Nachweis vorliegt; verlangt --reactivate-reason. Mehrfach angebbar "
                 "(Refs #2296)."
             ),
@@ -104,7 +104,7 @@ class Command(BaseCommand):
             "--reactivate-reason",
             default="",
             metavar="TEXT",
-            help="Begruendung der Rueckname zu --reactivate-chain (Refs #2296).",
+            help="Begründung der Rückname zu --reactivate-chain (Refs #2296).",
         )
 
     def _chains_with_anchorable_tail(self) -> set:
@@ -168,13 +168,13 @@ class Command(BaseCommand):
         prefix = "--require-anchor verlangt einen externen Audit-Anker, aber "
         if not hwm_path:
             raise CommandError(
-                prefix + "AUDIT_HWM_PATH ist nicht gesetzt — ohne Ankerpfad laesst sich ein "
+                prefix + "AUDIT_HWM_PATH ist nicht gesetzt — ohne Ankerpfad lässt sich ein "
                 "abgeschnittener Bestand nicht von einem Erstlauf unterscheiden."
             )
         if not os.path.exists(hwm_path):
             raise CommandError(
                 prefix + f"die HWM-Datei {hwm_path!r} fehlt — Abbruch statt stillem Erstlauf "
-                "(ein unvollstaendig wiederhergestellter Audit-Bestand wuerde sonst neu verankert)."
+                "(ein unvollständig wiederhergestellter Audit-Bestand würde sonst neu verankert)."
             )
         anchorable = self._chains_with_anchorable_tail()
         relevant = [None if facility is None else facility.pk for facility in targets]
@@ -183,7 +183,7 @@ class Command(BaseCommand):
         if missing:
             labels = ", ".join("System (facility=NULL)" if pk is None else f"Einrichtung #{pk}" for pk in missing)
             raise CommandError(
-                prefix + f"die HWM-Datei {hwm_path!r} enthaelt fuer {len(missing)} der {len(relevant)} geprueften "
+                prefix + f"die HWM-Datei {hwm_path!r} enthält für {len(missing)} der {len(relevant)} geprüften "
                 f"Kette(n) mit Inhalt keinen verankerten Tail ({labels}) — Abbruch statt stillem Erstlauf."
             )
 
@@ -213,18 +213,18 @@ class Command(BaseCommand):
         if not hwm_path or hwm is None:
             raise CommandError(
                 "--retire-chain braucht den externen Anker: AUDIT_HWM_PATH ist nicht gesetzt — "
-                "ohne signierte Ankerdatei laesst sich kein Stilllegungsnachweis hinterlegen."
+                "ohne signierte Ankerdatei lässt sich kein Stilllegungsnachweis hinterlegen."
             )
         if not reason.strip():
-            raise CommandError("--retire-chain verlangt eine Begruendung per --retire-reason.")
+            raise CommandError("--retire-chain verlangt eine Begründung per --retire-reason.")
         present = {str(facility.pk) for facility in targets if facility is not None}
         anchored = set(hwm.anchored_chain_keys())
         populated = {_chain_key(facility_id) for facility_id in self._chains_with_anchorable_tail()}
         for key in keys:
             if key == _chain_key(None):
                 raise CommandError(
-                    f"--retire-chain {key}: die System-Kette laesst sich nicht stilllegen — sie "
-                    "gehoert zu jeder Installation, und ohne ihren Tail-Anker gaebe es fuer den "
+                    f"--retire-chain {key}: die System-Kette lässt sich nicht stilllegen — sie "
+                    "gehört zu jeder Installation, und ohne ihren Tail-Anker gäbe es für den "
                     "installationsweiten Bestand keine Truncation-Erkennung mehr."
                 )
             if key in present:
@@ -234,12 +234,12 @@ class Command(BaseCommand):
                 )
             if key in populated:
                 raise CommandError(
-                    f"--retire-chain {key}: die Kette enthaelt weiterhin Audit-Zeilen — stillgelegt "
+                    f"--retire-chain {key}: die Kette enthält weiterhin Audit-Zeilen — stillgelegt "
                     "wird nur ein Bestand, der nachweislich nicht mehr da ist."
                 )
             if key not in anchored:
                 raise CommandError(
-                    f"--retire-chain {key}: die HWM-Datei {hwm_path!r} enthaelt fuer diese Kette "
+                    f"--retire-chain {key}: die HWM-Datei {hwm_path!r} enthält für diese Kette "
                     "keinen verankerten Tail — es gibt nichts stillzulegen."
                 )
         at = timezone.now().isoformat()
@@ -267,27 +267,27 @@ class Command(BaseCommand):
         if not hwm_path or hwm is None:
             raise CommandError("--reactivate-chain braucht den externen Anker: AUDIT_HWM_PATH ist nicht gesetzt.")
         if not reason.strip():
-            raise CommandError("--reactivate-chain verlangt eine Begruendung per --reactivate-reason.")
+            raise CommandError("--reactivate-chain verlangt eine Begründung per --reactivate-reason.")
         present = {str(facility.pk) for facility in targets if facility is not None}
         for key in keys:
             if key not in present:
                 raise CommandError(
                     f"--reactivate-chain {key}: die Einrichtung ist nicht im Bestand — eine Kette ohne "
-                    "Bestand zurueckzuholen erzeugt genau den verwaisten Anker, den die Pruefung meldet."
+                    "Bestand zurückzuholen erzeugt genau den verwaisten Anker, den die Prüfung meldet."
                 )
             entry = hwm.chains.get(key)
             if not isinstance(entry, dict) or not entry.get("retired"):
                 raise CommandError(
-                    f"--reactivate-chain {key}: die HWM-Datei {hwm_path!r} enthaelt fuer diese Kette "
-                    "keinen Stilllegungsnachweis — es gibt nichts zurueckzunehmen."
+                    f"--reactivate-chain {key}: die HWM-Datei {hwm_path!r} enthält für diese Kette "
+                    "keinen Stilllegungsnachweis — es gibt nichts zurückzunehmen."
                 )
         for key in keys:
             previous = hwm.reactivate(key)
             self.stdout.write(
                 self.style.WARNING(
-                    f"Stilllegung der Kette {key} zurueckgenommen ({reason.strip()}); "
+                    f"Stilllegung der Kette {key} zurückgenommen ({reason.strip()}); "
                     f"vorheriger Nachweis: seit {previous.get('retired')}, "
-                    f"Begruendung: {previous.get('reason') or 'keine'}."
+                    f"Begründung: {previous.get('reason') or 'keine'}."
                 )
             )
         self._save_hwm(hwm)
@@ -314,8 +314,8 @@ class Command(BaseCommand):
             labels = ", ".join(f"Einrichtung #{key}" for key in orphans)
             raise CommandError(
                 f"Die HWM-Datei {hwm_path!r} verankert {len(orphans)} Kette(n), die im aktuellen "
-                f"Datenbankbestand fehlen ({labels}). Abbruch statt Vollstaendigkeitsmeldung — ein "
-                "verankerter Bestand, der nicht mehr da ist, ist ein Integritaetsbefund und keine "
+                f"Datenbankbestand fehlen ({labels}). Abbruch statt Vollständigkeitsmeldung — ein "
+                "verankerter Bestand, der nicht mehr da ist, ist ein Integritätsbefund und keine "
                 "Autorisierung. War die Entfernung beabsichtigt, den Lauf einmalig mit "
                 "--retire-chain <Kennnummer> --retire-reason <Text> fahren; das hinterlegt den "
                 "authentifizierten Stilllegungsnachweis in der signierten Ankerdatei."
@@ -327,9 +327,9 @@ class Command(BaseCommand):
         # zu melden. Der Compliance-Cron MUSS als Rolle mit BYPASSRLS (Admin) laufen.
         if not _has_rls_bypass_context():
             raise CommandError(
-                "verify_audit_chain laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "verify_audit_chain läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — sonst "
-                "saehe der Lauf 0 Zeilen und meldete faelschlich intakte Ketten (Refs #1070)."
+                "sähe der Lauf 0 Zeilen und meldete fälschlich intakte Ketten (Refs #1070)."
             )
         # R16 (Refs #1476/#1665): optionaler externer High-Water-Mark. Ist
         # ``AUDIT_HWM_PATH`` gesetzt, prueft der Lauf zusaetzlich gegen den zuletzt
@@ -378,7 +378,7 @@ class Command(BaseCommand):
                 self.stderr.write(
                     self.style.ERROR(
                         f"FAIL {label}: Bruch bei Zeile {result.first_break_id} — {result.reason} "
-                        f"(nach {result.rows_checked} geprueften Zeilen)."
+                        f"(nach {result.rows_checked} geprüften Zeilen)."
                     )
                 )
 

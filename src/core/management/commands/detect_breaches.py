@@ -17,7 +17,7 @@ from core.services.system import has_rls_bypass_context as _has_rls_bypass_conte
 
 
 class Command(BaseCommand):
-    help = "Heuristik-basierte Breach-Detection ueber alle Facilities (Refs #685)."
+    help = "Heuristik-basierte Breach-Detection über alle Facilities (Refs #685)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -35,9 +35,9 @@ class Command(BaseCommand):
         # BYPASSRLS (Admin) laufen.
         if not _has_rls_bypass_context():
             raise CommandError(
-                "detect_breaches laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "detect_breaches läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — sonst "
-                "saehe der Lauf 0 Facilities/Zeilen und meldete faelschlich 'Keine neuen "
+                "sähe der Lauf 0 Facilities/Zeilen und meldete fälschlich 'Keine neuen "
                 "Breach-Findings.' (Refs #1512)."
             )
         facility_name = options["facility"]

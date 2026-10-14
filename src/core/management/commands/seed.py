@@ -57,7 +57,7 @@ class Command(BaseCommand):
             default=False,
             help=(
                 "Nur seeden, wenn die Datenbank noch kein einziges Benutzerkonto hat. "
-                "Traegt die Idempotenz des lokalen One-Command-Bootstraps (Refs #1062)."
+                "Trägt die Idempotenz des lokalen One-Command-Bootstraps (Refs #1062)."
             ),
         )
 
@@ -76,8 +76,8 @@ class Command(BaseCommand):
         if options["only_if_empty"]:
             if options["flush"]:
                 raise CommandError(
-                    "'--only-if-empty' und '--flush' schliessen sich aus: der eine "
-                    "Schalter schont den Bestand, der andere loescht ihn."
+                    "'--only-if-empty' und '--flush' schließen sich aus: der eine "
+                    "Schalter schont den Bestand, der andere löscht ihn."
                 )
             # "Leer" = noch kein einziges Benutzerkonto. Bewusst eine Tabellen-
             # Probe statt eines Migrations-Markers: ein migriertes, aber

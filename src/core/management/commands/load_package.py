@@ -77,7 +77,7 @@ class Command(BaseCommand):
             help=(
                 "Statt --file den mitgelieferten Standardkatalog "
                 f"({DEFAULT_PACKAGE_PATH}) einspielen — der Weg, um eine "
-                "Bestands-Einrichtung nachtraeglich auf den Auslieferungsstand zu bringen."
+                "Bestands-Einrichtung nachträglich auf den Auslieferungsstand zu bringen."
             ),
         )
         parser.add_argument(
@@ -166,7 +166,7 @@ class Command(BaseCommand):
         package_name: str | None = options.get("package")
         selected = int(bool(path_str)) + int(use_default) + int(package_name is not None)
         if selected > 1:
-            raise CommandError("--file, --default und --package schliessen sich aus — genau eine Paketquelle angeben.")
+            raise CommandError("--file, --default und --package schließen sich aus — genau eine Paketquelle angeben.")
         if use_default:
             self.stdout.write(self.style.MIGRATE_HEADING(f"Standardkatalog: {DEFAULT_PACKAGE_PATH}\n"))
             return load_package_data("default"), "default"

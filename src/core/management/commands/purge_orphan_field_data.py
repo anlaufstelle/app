@@ -88,7 +88,7 @@ def _purge_entity_data_json(entity):
 class Command(BaseCommand):
     help = (
         "Entferne verwaiste data_json-Keys (nicht mehr am Dokumentationstyp) aus "
-        "Personen/Faellen/Ereignissen (Refs #1725). Zugeordnete (auch verschluesselte) "
+        "Personen/Fällen/Ereignissen (Refs #1725). Zugeordnete (auch verschlüsselte) "
         "Werte bleiben unangetastet."
     )
 
@@ -96,7 +96,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Zeige nur, was bereinigt wuerde — ohne zu schreiben.",
+            help="Zeige nur, was bereinigt würde — ohne zu schreiben.",
         )
 
     def handle(self, *args, **options):
@@ -108,9 +108,9 @@ class Command(BaseCommand):
         # reencrypt_fields / cleanup_orphan_storage_files.
         if not _has_rls_bypass_context():
             raise CommandError(
-                "Orphan-Purge laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "Orphan-Purge läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — "
-                "sonst saehe der Lauf 0 Zeilen und meldete faelschlich Erfolg, waehrend die "
+                "sonst sähe der Lauf 0 Zeilen und meldete fälschlich Erfolg, während die "
                 "verwaisten Daten liegen blieben. Command mit der Admin-Rolle aufrufen "
                 "(docs/ops-runbook.md § 3.5 / § 9 DB-Rollenmodell)."
             )
@@ -121,9 +121,9 @@ class Command(BaseCommand):
             "Ereignisse": self._purge_model(Event, dry_run),
         }
 
-        verb = "Wuerde bereinigen" if dry_run else "Bereinigt"
+        verb = "Würde bereinigen" if dry_run else "Bereinigt"
         parts = [
-            f"{label}: {cleaned}/{checked} bereinigt, {keys} Key(s) entfernt, {files} Datei-Waise(n) uebersprungen"
+            f"{label}: {cleaned}/{checked} bereinigt, {keys} Key(s) entfernt, {files} Datei-Waise(n) übersprungen"
             for label, (checked, cleaned, keys, files) in results.items()
         ]
         self.stdout.write(self.style.SUCCESS(f"{verb} — " + "; ".join(parts) + "."))

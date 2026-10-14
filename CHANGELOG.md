@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Umlaute in Servertexten korrigiert** (#2591) — Passwortbestätigung, Kontoentsperrung, Begründungsmeldungen, Verarbeitungsverzeichnis, Speicherwarnung und Wartungshinweis verwenden echte Umlaute und die korrekte ß-Schreibung.
+- **Umlaute in Servertexten korrigiert** (#2591) — Passwortbestätigung, Kontoentsperrung, Begründungsmeldungen, Verarbeitungsverzeichnis, Speicherwarnung, Wartungshinweis und Konsolenausgaben verwenden echte Umlaute und die korrekte ß-Schreibung.
 
 - **Restore-Drill nutzt die vollständige Compose-Dateiliste** (#2577) — `scripts/ops/restore-drill.sh --prod` übergibt `compose.legal.yml` und `compose.override.yml` wie `restore.sh` an jeden Compose-Aufruf, soweit sie neben `docker-compose.prod.yml` liegen; zuvor lief der Drill mit der Basisdatei allein, sodass ein im Override gepinntes Image oder Pflichtangaben aus der Legal-Datei unberücksichtigt blieb und der Schritt „Audit-Anker prüfen“ dann beim Laden des Wartungsimages scheiterte.
 - **Audit-Anker der Erstinbetriebnahme vollständig** (#2577) — Der Pflichtschritt vor der ersten Sicherung verlangt zwei reguläre Läufe von `verify_audit_chain`, weil die System-Kette einer frisch eingerichteten Instanz erst im zweiten Lauf verankert wird; die Wiederherstellung beschreibt außerdem den Weg für Sicherungssätze, die nach nur einem Lauf entstanden und den Pflichtanker-Lauf nicht bestehen, und den Zustand nach einem abgebrochenen Restore je Phase (vor, während und nach der Umschaltung).

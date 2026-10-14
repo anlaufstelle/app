@@ -78,8 +78,8 @@ class Command(BaseCommand):
                 "startet dann ohne Dokumentationstypen und ist erst dokumentierbar, "
                 "wenn ein Paket geladen wurde (manage.py load_package). Schichtfenster "
                 "entstehen trotzdem, Schnellvorlagen mangels Katalog nicht. Der Entscheid "
-                "haelt: ein spaeteres Speichern der Einrichtung im Django-Admin zieht den "
-                "abgewaehlten Katalog nicht nach."
+                "hält: ein späteres Speichern der Einrichtung im Django-Admin zieht den "
+                "abgewählten Katalog nicht nach."
             ),
         )
 
@@ -89,7 +89,7 @@ class Command(BaseCommand):
         # am rohen ProgrammingError des ersten Schreibzugriffs.
         if not _has_rls_bypass_context():
             raise CommandError(
-                "Ersteinrichtung laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "Ersteinrichtung läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — "
                 "sonst scheiterte schon das Anlegen der Einstellungen an der Row-Level-Security. "
                 "Command im Dienst maintenance (Admin-Rolle) aufrufen: "
@@ -99,7 +99,7 @@ class Command(BaseCommand):
 
         requested_package = options.get("package")
         if options["no_default_package"] and requested_package is not None:
-            raise CommandError("--package und --no-default-package schliessen sich aus.")
+            raise CommandError("--package und --no-default-package schließen sich aus.")
         package_name = (
             None if options["no_default_package"] else ("default" if requested_package is None else requested_package)
         )

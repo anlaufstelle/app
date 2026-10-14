@@ -162,8 +162,8 @@ def _render_text(data: dict[str, Any]) -> str:
     lines: list[str] = [
         f"Einrichtung: {data['facility']['name']} ({data['facility']['id']})",
         "",
-        "Hinweis: Backend-Verfuegbarkeit ist NICHT durchgaengig auf entity_type=event "
-        'beschraenkt (nur "Monatsverlauf" prueft das explizit) — nur diese '
+        "Hinweis: Backend-Verfügbarkeit ist NICHT durchgängig auf entity_type=event "
+        'beschränkt (nur "Monatsverlauf" prüft das explizit) — nur diese '
         "Dokumentationstyp-Sektion ist es.",
         "",
         "Backends:",
@@ -236,10 +236,10 @@ class Command(BaseCommand):
         # export_facility/purge_orphan_field_data/detect_breaches.
         if not _has_rls_bypass_context():
             raise CommandError(
-                "inventory_report_bindings laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
-                "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — sonst saehe "
-                "der Lauf 0 Dokumentationstypen/Feldvorlagen und meldete faelschlich eine restlos "
-                "gebundene Einrichtung statt eines tatsaechlich vollstaendigen Inventars. Command mit "
+                "inventory_report_bindings läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — sonst sähe "
+                "der Lauf 0 Dokumentationstypen/Feldvorlagen und meldete fälschlich eine restlos "
+                "gebundene Einrichtung statt eines tatsächlich vollständigen Inventars. Command mit "
                 "der Admin-Rolle aufrufen (docs/ops-runbook.md § 3.5 / § 9 DB-Rollenmodell)."
             )
         facility = self._resolve_facility(options["facility"])
@@ -253,7 +253,7 @@ class Command(BaseCommand):
         for slug in self._defekte_backends(facility):
             self.stderr.write(
                 self.style.WARNING(
-                    f"Berichts-Backend '{slug}': Verfuegbarkeitspruefung fuer '{facility.name}' ist "
+                    f"Berichts-Backend '{slug}': Verfügbarkeitsprüfung für '{facility.name}' ist "
                     "gescheitert — es fehlt in diesem Inventar. Details im Anwendungs-Log."
                 )
             )

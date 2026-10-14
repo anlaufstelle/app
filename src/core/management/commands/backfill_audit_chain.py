@@ -38,13 +38,13 @@ from core.services.system import has_rls_bypass_context as _has_rls_bypass_conte
 
 
 class Command(BaseCommand):
-    help = "Berechnet die HMAC-Kette fuer Bestands-AuditLog-Zeilen nach (Refs #1070)."
+    help = "Berechnet die HMAC-Kette für Bestands-AuditLog-Zeilen nach (Refs #1070)."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Nur zaehlen, welche Zeilen (neu) verkettet wuerden — nichts schreiben.",
+            help="Nur zählen, welche Zeilen (neu) verkettet würden — nichts schreiben.",
         )
 
     def handle(self, *args, **options):
@@ -53,9 +53,9 @@ class Command(BaseCommand):
         # nichts. Das Kommando MUSS als Admin-Rolle mit BYPASSRLS laufen.
         if not _has_rls_bypass_context():
             raise CommandError(
-                "backfill_audit_chain laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "backfill_audit_chain läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — sonst "
-                "wuerden 0 Zeilen gesehen und nichts verkettet (Refs #1070)."
+                "würden 0 Zeilen gesehen und nichts verkettet (Refs #1070)."
             )
         dry_run = options["dry_run"]
         facility_ids = list(AuditLog.objects.values_list("facility_id", flat=True).distinct())
@@ -69,9 +69,9 @@ class Command(BaseCommand):
             label = "System (facility=NULL)" if facility_id is None else str(facility_id)
             self.stdout.write(f"  {label}: {rows} Zeile(n), {changed} (neu) verkettet.")
 
-        verb = "wuerden verkettet" if dry_run else "verkettet"
+        verb = "würden verkettet" if dry_run else "verkettet"
         self.stdout.write(
-            self.style.SUCCESS(f"OK  {total_changed}/{total_rows} Zeile(n) {verb} ueber {len(facility_ids)} Kette(n).")
+            self.style.SUCCESS(f"OK  {total_changed}/{total_rows} Zeile(n) {verb} über {len(facility_ids)} Kette(n).")
         )
 
     def _backfill_facility(self, facility_id, dry_run) -> tuple[int, int]:

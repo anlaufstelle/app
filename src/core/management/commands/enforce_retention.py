@@ -106,9 +106,9 @@ class Command(BaseCommand):
         # BYPASSRLS (Admin) laufen — siehe dev-ops/deploy/install-timers.sh.
         if not _has_rls_bypass_context():
             raise CommandError(
-                "Retention-Lauf laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "Retention-Lauf läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch "
-                "ohne Erfolgs-Marker — sonst wuerden 0 Zeilen verarbeitet und faelschlich "
+                "ohne Erfolgs-Marker — sonst würden 0 Zeilen verarbeitet und fälschlich "
                 "RETENTION_RUN_COMPLETED gemeldet (Refs #1016 A1.1)."
             )
         dry_run = options["dry_run"]

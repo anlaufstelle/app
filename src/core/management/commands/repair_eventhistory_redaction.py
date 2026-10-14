@@ -80,7 +80,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Nur zaehlen, nichts aendern (Standard, auch ohne Schalter).",
+            help="Nur zählen, nichts ändern (Standard, auch ohne Schalter).",
         )
         parser.add_argument(
             "--apply",
@@ -101,9 +101,9 @@ class Command(BaseCommand):
         # Refs #1016 A1.1: fail-loud VOR dem ersten Lesen, auch im Trockenlauf.
         if not _has_rls_bypass_context():
             raise CommandError(
-                "Die Pruefung der Ereignis-Historie laeuft als RLS-gefilterte App-Rolle ohne "
+                "Die Prüfung der Ereignis-Historie läuft als RLS-gefilterte App-Rolle ohne "
                 "Bypass-Kontext (weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). "
-                "Abbruch — sonst saehe die Erkennung 0 Zeilen und meldete faelschlich einen "
+                "Abbruch — sonst sähe die Erkennung 0 Zeilen und meldete fälschlich einen "
                 "sauberen Bestand. Mit der Admin-DB-Rolle erneut aufrufen."
             )
         # A bypass is not ownership: without owning the history table the dry
@@ -116,7 +116,7 @@ class Command(BaseCommand):
                 "history row. Run again with the admin/owner database role."
             )
         if options["dry_run"] and options["apply"]:
-            raise CommandError("--dry-run und --apply schliessen einander aus.")
+            raise CommandError("--dry-run und --apply schließen einander aus.")
         dry_run = not options["apply"]
 
         facilities = Facility.objects.order_by("name")

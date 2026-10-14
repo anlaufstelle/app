@@ -26,7 +26,7 @@ from core.services.system import has_rls_bypass_context as _has_rls_bypass_conte
 
 
 class Command(BaseCommand):
-    help = "Loesche verschluesselte Dateien ohne Attachment-Record (Orphan-Cleanup)."
+    help = "Lösche verschlüsselte Dateien ohne Attachment-Record (Orphan-Cleanup)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -35,7 +35,7 @@ class Command(BaseCommand):
             default=3600,
             help=(
                 "Mindestalter einer Datei in Sekunden, bevor sie als Orphan gilt. "
-                "Schuetzt vor Race Conditions: frisch geschriebene Dateien koennten "
+                "Schützt vor Race Conditions: frisch geschriebene Dateien könnten "
                 "noch keinen DB-Eintrag haben. Default: 3600 (1h)."
             ),
         )
@@ -44,14 +44,14 @@ class Command(BaseCommand):
             type=int,
             default=DEFAULT_ORPHAN_CLEANUP_BUDGET,
             help=(
-                "Hoechstzahl der je Lauf geprueften .enc-Dateien. Muss positiv "
+                "Höchstzahl der je Lauf geprüften .enc-Dateien. Muss positiv "
                 f"sein. Default: {DEFAULT_ORPHAN_CLEANUP_BUDGET}."
             ),
         )
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Nur pruefen; keine Datei loeschen und den Fortsetzungspunkt nicht veraendern.",
+            help="Nur prüfen; keine Datei löschen und den Fortsetzungspunkt nicht verändern.",
         )
 
     def handle(self, *args, **options):
@@ -63,10 +63,10 @@ class Command(BaseCommand):
         # Rolle mit BYPASSRLS (Admin) laufen — siehe dev-ops/deploy/install-timers.sh.
         if not _has_rls_bypass_context():
             raise CommandError(
-                "Orphan-Cleanup laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "Orphan-Cleanup läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — "
-                "sonst saehe der Lauf 0 registrierte Attachments und wuerde JEDE "
-                "verschluesselte Datei als Orphan loeschen (Refs #1554 / #1016 A1.1; "
+                "sonst sähe der Lauf 0 registrierte Attachments und würde JEDE "
+                "verschlüsselte Datei als Orphan löschen (Refs #1554 / #1016 A1.1; "
                 "ops-runbook §9)."
             )
         budget = options["budget"]
@@ -87,11 +87,11 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"Hinweis: {result.state_warning}"))
 
         self.stdout.write(
-            "Geprueft: "
-            f"{result.checked}; Loeschkandidaten: {result.deletion_candidates}; "
-            f"geloescht: {result.deleted}; "
-            f"uebersprungen (referenziert): {result.skipped_referenced}; "
-            f"uebersprungen (zu jung): {result.skipped_young}; Fehler: {result.errors}."
+            "Geprüft: "
+            f"{result.checked}; Löschkandidaten: {result.deletion_candidates}; "
+            f"gelöscht: {result.deleted}; "
+            f"übersprungen (referenziert): {result.skipped_referenced}; "
+            f"übersprungen (zu jung): {result.skipped_young}; Fehler: {result.errors}."
         )
         if cursor_write_error is not None:
             raise CommandError(
@@ -100,12 +100,12 @@ class Command(BaseCommand):
         self.stdout.write(f"Fortgesetzt bei: {result.continued_at or 'Anfang'}.")
         if result.tree_complete:
             if result.dry_run:
-                self.stdout.write("Baum vollstaendig durchlaufen; Fortsetzungspunkt im Trockenlauf unveraendert.")
+                self.stdout.write("Baum vollständig durchlaufen; Fortsetzungspunkt im Trockenlauf unverändert.")
             else:
-                self.stdout.write("Baum vollstaendig durchlaufen; Fortsetzungspunkt zurueckgesetzt.")
+                self.stdout.write("Baum vollständig durchlaufen; Fortsetzungspunkt zurückgesetzt.")
         else:
-            self.stdout.write(f"Naechster Start: {result.next_start}.")
+            self.stdout.write(f"Nächster Start: {result.next_start}.")
         if result.dry_run:
             self.stdout.write(
-                "Trockenlauf: Es wurden keine Dateien geloescht und der Fortsetzungspunkt wurde nicht veraendert."
+                "Trockenlauf: Es wurden keine Dateien gelöscht und der Fortsetzungspunkt wurde nicht verändert."
             )

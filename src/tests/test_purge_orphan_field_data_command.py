@@ -151,7 +151,7 @@ class TestPurgeOrphanFieldData:
         assert "alt-text" not in event.data_json
         assert event.data_json["dauer"] == 15
         # Report weist die uebersprungene Datei-Waise aus.
-        assert "uebersprungen" in out.getvalue()
+        assert "übersprungen" in out.getvalue()
 
     def test_file_orphan_marker_is_skipped_for_client_owner(
         self, facility, client_identified, doc_type_client_profile, staff_user
@@ -180,7 +180,7 @@ class TestPurgeOrphanFieldData:
         assert client_identified.data_json["alt-datei"]["__files__"] is True
         assert "alt-text" not in client_identified.data_json
         assert client_identified.data_json["wohnsituation"] == "WG"
-        assert "uebersprungen" in out.getvalue()
+        assert "übersprungen" in out.getvalue()
 
     def test_soft_deleted_entity_orphan_is_purged(self, facility, doc_type_client_profile, staff_user):
         """Refs #1725: Der Purge raeumt bewusst AUCH soft-geloeschte Datensaetze

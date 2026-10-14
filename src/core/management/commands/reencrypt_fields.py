@@ -50,10 +50,10 @@ class Command(BaseCommand):
         def _warn_totp_contended(contended: list[int]) -> None:
             self.stderr.write(
                 self.style.WARNING(
-                    f"TOTP-Rewrap: {len(contended)} Geraet(e) blieben trotz Retries unter "
-                    f"dem Alt-Schluessel (parallele MFA-Verifikation?): pks={contended}. Lauf "
-                    "ERNEUT ausfuehren und den Alt-Schluessel NICHT aus ENCRYPTION_KEYS "
-                    "entfernen, bis dieser Lauf ohne Meldung durchlaeuft."
+                    f"TOTP-Rewrap: {len(contended)} Gerät(e) blieben trotz Retries unter "
+                    f"dem Alt-Schlüssel (parallele MFA-Verifikation?): pks={contended}. Lauf "
+                    "ERNEUT ausführen und den Alt-Schlüssel NICHT aus ENCRYPTION_KEYS "
+                    "entfernen, bis dieser Lauf ohne Meldung durchläuft."
                 )
             )
 

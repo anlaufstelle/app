@@ -70,8 +70,8 @@ class TestCleanupOrphanStorageCommand:
         out = StringIO()
         with patch(self.PATCH_TARGET, return_value=_cleanup_result()):
             call_command("cleanup_orphan_storage_files", stdout=out)
-        assert "Geprueft: 0" in out.getvalue()
-        assert "Baum vollstaendig durchlaufen" in out.getvalue()
+        assert "Geprüft: 0" in out.getvalue()
+        assert "Baum vollständig durchlaufen" in out.getvalue()
 
     def test_min_age_seconds_arg_is_forwarded(self):
         """``--min-age-seconds=7200`` wird als Keyword-Arg an den Service durchgereicht."""
@@ -127,11 +127,11 @@ class TestCleanupOrphanStorageCommand:
             call_command("cleanup_orphan_storage_files", stdout=out)
 
         output = out.getvalue()
-        assert "Geprueft: 2" in output
-        assert "geloescht: 1" in output
-        assert "uebersprungen (referenziert): 1" in output
+        assert "Geprüft: 2" in output
+        assert "gelöscht: 1" in output
+        assert "übersprungen (referenziert): 1" in output
         assert "Fortgesetzt bei: a.enc" in output
-        assert "Naechster Start: c.enc" in output
+        assert "Nächster Start: c.enc" in output
 
     def test_dry_run_and_state_warning_are_reported(self):
         out = StringIO()
@@ -149,9 +149,9 @@ class TestCleanupOrphanStorageCommand:
 
         output = out.getvalue()
         assert "Hinweis: Fortsetzungspunkt ist beschaedigt; Start am Anfang." in output
-        assert "Loeschkandidaten: 1; geloescht: 0" in output
-        assert "Fortsetzungspunkt im Trockenlauf unveraendert" in output
-        assert "Trockenlauf: Es wurden keine Dateien geloescht" in output
+        assert "Löschkandidaten: 1; gelöscht: 0" in output
+        assert "Fortsetzungspunkt im Trockenlauf unverändert" in output
+        assert "Trockenlauf: Es wurden keine Dateien gelöscht" in output
 
 
 @pytest.mark.django_db

@@ -44,7 +44,7 @@ from core.services.compliance.db_roles import (
 
 
 class Command(BaseCommand):
-    help = "Prueft Postgres-Rollenattribute fuer App-/Admin-Rolle (Refs #902)."
+    help = "Prüft Postgres-Rollenattribute für App-/Admin-Rolle (Refs #902)."
 
     def handle(self, *args, **options):
         checks, config_errors = check_db_roles()

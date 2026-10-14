@@ -42,12 +42,12 @@ class Command(BaseCommand):
             "--indent",
             type=int,
             default=None,
-            help="JSON-Einrueckung (Pretty-Print). Default: kompakt.",
+            help="JSON-Einrückung (Pretty-Print). Default: kompakt.",
         )
         parser.add_argument(
             "--no-file-hashes",
             action="store_true",
-            help="Ueberspringt das On-the-fly-SHA-256-Hashing der Anhang-Inhalte (schneller bei grossen Bestaenden).",
+            help="Überspringt das On-the-fly-SHA-256-Hashing der Anhang-Inhalte (schneller bei großen Beständen).",
         )
 
     def handle(self, *args, **options):
@@ -58,9 +58,9 @@ class Command(BaseCommand):
         # stillem Falsch-Erfolg (Muster ``enforce_retention.py``).
         if not _has_rls_bypass_context():
             raise CommandError(
-                "export_facility laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "export_facility läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch "
-                "ohne Export-Datei — sonst wuerde eine leere, aber scheinbar vollstaendige "
+                "ohne Export-Datei — sonst würde eine leere, aber scheinbar vollständige "
                 "JSON-Datei geschrieben (Refs #1060)."
             )
 
@@ -90,7 +90,7 @@ class Command(BaseCommand):
             detail=counters,
         )
 
-        self.stdout.write(self.style.SUCCESS(f"Facility-Export fuer '{facility.name}' nach {output_path} geschrieben."))
+        self.stdout.write(self.style.SUCCESS(f"Facility-Export für '{facility.name}' nach {output_path} geschrieben."))
         for key, count in counters.items():
             self.stdout.write(f"  {key}: {count}")
 
