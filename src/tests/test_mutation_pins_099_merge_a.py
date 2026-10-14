@@ -100,9 +100,10 @@ from datetime import timedelta
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Case, Client, Event, FieldTemplate
+from core.models import Activity, AuditLog, Case, Client, DocumentType, Event, FieldTemplate
 from core.models.workitem import WorkItem
 from core.services.client.merge import approve_client_merge, merge_clients, request_client_merge, unmerge_client
 
@@ -454,6 +455,44 @@ class TestUndoInventoryScoping:
 
         source.refresh_from_db()
         assert source.updated_at == aged
+
+    def test_unmerge_leaves_dynamic_payload_untouched_after_configuration_drift(
+        self, source, target, doc_type_client_profile, lead_user
+    ):
+        """Pin x_unmerge_client__mutmut_177: unrelated saves must skip payload validation."""
+        payload = {"wohnsituation": "Existing value"}
+        for person in (source, target):
+            person.document_type = doc_type_client_profile
+            person.data_json = dict(payload)
+            person.save()
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+        merged_at = source.updated_at
+
+        # Simulate inconsistent configuration outside the validated write paths.
+        # Ordinary configuration changes reject inheriting fields at High level.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE core_documenttype SET sensitivity = %s WHERE id = %s",
+                [DocumentType.Sensitivity.HIGH, doc_type_client_profile.pk],
+            )
+        source.refresh_from_db()
+        with pytest.raises(ValidationError) as error:
+            source.save()
+        assert error.value.messages == [
+            "Feldvorlage „Wohnsituation“ darf in einem Dokumentationstyp mit Stufe „Hoch“ nicht erben. "
+            "Wählen Sie eine ausdrückliche Feldstufe: „Erhöht“ für Berichtsfelder, sonst „Hoch“."
+        ]
+
+        unmerge_client(source, lead_user)
+
+        source.refresh_from_db()
+        target.refresh_from_db()
+        assert source.merged_into_id is None
+        assert source.is_deleted is False
+        assert source.updated_at == merged_at
+        assert source.data_json == payload
+        assert target.data_json == payload
 
 
 class TestUnmergeAccountability:
