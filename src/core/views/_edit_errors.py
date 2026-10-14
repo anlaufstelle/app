@@ -20,7 +20,10 @@ def refresh_edit_visibility(user, data_form):
     if data_form is None or data_form.document_type is None:
         return []
     data_form.document_type.refresh_from_db(fields=["sensitivity"])
-    return remove_restricted_fields(user, data_form.document_type, data_form)
+    restricted = remove_restricted_fields(user, data_form.document_type, data_form)
+    # Validation may have cached conditions before the policy changed (Refs #2539).
+    data_form.__dict__.pop("_conditions_payload_cache", None)
+    return restricted
 
 
 def _display_value(bound_field):
