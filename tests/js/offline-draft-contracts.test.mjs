@@ -327,6 +327,31 @@ it("a stale tab's autosave cannot replace a newer stored version", async () => {
     expect(first.w.document.querySelector("#autosave-error-banner")).not.toBeNull();
 });
 
+it("new input remains recoverable after another tab confirms and deletes the previous draft", async () => {
+    const first = await page(formHtml());
+    await seed(first, { notes: "Already submitted A", __submissionToken: oldToken }); await start(first);
+    const success = await page(marker(oldToken)); await start(success);
+    expect(await first.store.getDecrypted("drafts", key)).toBeNull();
+    const field = first.w.document.querySelector("textarea");
+    field.value = "New unsaved text after confirmation";
+    field.dispatchEvent(new first.w.Event("input", { bubbles: true }));
+    await tick(first); await tick(first);
+    const draft = await first.store.getDecrypted("drafts", key);
+    expect(draft?.data.notes).toBe("New unsaved text after confirmation");
+    expect(draft.data.__submissionToken).not.toBe(oldToken);
+    expect(first.w.document.querySelector("#autosave-error-banner")).toBeNull();
+    const form = first.w.document.querySelector("form");
+    const sent = vi.fn(() => Object.fromEntries(new first.w.FormData(form))); form.requestSubmit = sent;
+    field.value = "Latest input before interrupted submission";
+    field.dispatchEvent(new first.w.Event("input", { bubbles: true }));
+    form.dispatchEvent(new first.w.Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(sent).toHaveBeenCalledOnce());
+    expect(sent.mock.results[0].value.notes).toBe("Latest input before interrupted submission");
+    const reopened = await page(formHtml()); await start(reopened);
+    expect(reopened.w.document.querySelector("textarea").value).toBe("Latest input before interrupted submission");
+    expect((await first.store.getDecrypted("drafts", key)).data.__submissionToken).toBe(sent.mock.results[0].value._autosave_token);
+});
+
 it("a failed confirmed deletion is retried on navigation without a success marker", async () => {
     const p = await page(marker(oldToken) + formHtml());
     await seed(p, { notes: "Already saved", __submissionToken: oldToken });
