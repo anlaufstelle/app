@@ -89,6 +89,7 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
         widget=AppDateTimeInput(
             attrs={
                 "type": "datetime-local",
+                "step": "60",
             },
         ),
     )

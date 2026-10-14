@@ -149,7 +149,7 @@ EXPECTED = {
     "EventMetaForm": {
         "document_type": ("Select", True, {"hx-get": "", "hx-target": "#dynamic-fields", "hx-trigger": "change"}),
         "client": ("HiddenInput", False, {}),
-        "occurred_at": ("AppDateTimeInput", True, {"step": "1"}),
+        "occurred_at": ("AppDateTimeInput", True, {"step": "60"}),
         # Refs #2127: Okkurrenz-Auswahl fuer die doppelte Stunde am
         # Rueckfalltag. Das Widget wird im Template von Hand gerendert (wie
         # ``document_type``); der Katalog haelt trotzdem fest, dass das Feld

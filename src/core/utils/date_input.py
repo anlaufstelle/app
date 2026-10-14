@@ -65,5 +65,6 @@ class AppDateTimeInput(forms.DateTimeInput):
 
     def get_context(self, name, value, attrs):
         context = super().get_context(name, value, attrs)
-        context["widget"]["attrs"].update(date_input_attributes("datetime-local", seconds=True))
+        widget_attrs = context["widget"]["attrs"]
+        widget_attrs.update(date_input_attributes("datetime-local", seconds=widget_attrs.get("step") == "1"))
         return context

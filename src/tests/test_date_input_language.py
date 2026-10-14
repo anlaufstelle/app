@@ -6,6 +6,7 @@ import pytest
 from django.template.loader import render_to_string
 from django.utils.translation import override
 
+from core.forms.events import EventMetaForm
 from core.forms.workitems import WorkItemForm
 
 
@@ -76,3 +77,19 @@ def test_condition_values_keep_iso_and_precision(language, kind, value, placehol
     assert 'id="condition-value"' in html
     if kind == "time":
         assert 'step="1"' in html
+
+
+@pytest.mark.parametrize("language,placeholder", [("de", "TT.MM.JJJJ HH:MM"), ("en", "YYYY-MM-DD HH:MM")])
+def test_online_occurrence_matches_offline_minute_precision(language, placeholder):
+    with override(language):
+        html = str(EventMetaForm(initial={"occurred_at": "2026-10-14T13:45"})["occurred_at"])
+    assert 'step="60"' in html
+    assert f'data-date-placeholder="{placeholder}"' in html
+    assert 'value="2026-10-14T13:45"' in html
+
+
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_existing_occurrence_seconds_remain_in_iso_transport(language):
+    with override(language):
+        html = str(EventMetaForm(initial={"occurred_at": "2026-10-14T13:45:17"})["occurred_at"])
+    assert 'value="2026-10-14T13:45:17"' in html
