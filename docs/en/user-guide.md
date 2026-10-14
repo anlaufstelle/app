@@ -561,7 +561,7 @@ The list updates without a page reload.
 2. On the detail page, click **Edit**.
 3. Change the desired fields and save.
 
-> **Concurrent editing:** A version conflict saves nothing. While you still have permission to edit the record and fields, your own input remains in the form; the “Current state” section shows permitted server values and marks differences. Review or copy the input, then deliberately save again: your form values replace the corresponding server values. Permitted text also remains in the form after save or upload errors. Select files again (#2539).
+> **Concurrent editing:** A version conflict saves nothing. The edit page opens again and shows the saved state. Review that state and re-enter your own unsaved changes.
 
 ### Filter: Assigned to Me
 
@@ -1157,7 +1157,7 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 208f9db74a83d6f26cc186388415369afc720097 -->
+<!-- source-hash: aa96f2812a26ca6a71f5cf5db94da5465c50e428 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->

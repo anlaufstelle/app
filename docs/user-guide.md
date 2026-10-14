@@ -559,7 +559,7 @@ Die Liste aktualisiert sich ohne Seitenneuladung.
 2. Auf der Detailseite klicken Sie auf **Bearbeiten**.
 3. Ändern Sie die gewünschten Felder und speichern Sie.
 
-> **Gleichzeitige Bearbeitung:** Bei einem Versionskonflikt wird nichts gespeichert. Solange Sie den Datensatz und die Felder weiterhin bearbeiten dürfen, stehen Ihre eigenen Eingaben im Formular; der Abschnitt „Aktueller Stand“ zeigt die zulässigen Serverwerte und markiert Abweichungen. Prüfen oder kopieren Sie die Eingaben und speichern Sie erst dann bewusst erneut: Ihre Formularwerte ersetzen dabei die entsprechenden Serverwerte. Auch nach Speicher- oder Uploadfehlern bleiben weiterhin zulässige Texte im Formular. Dateien müssen Sie erneut auswählen (#2539).
+> **Gleichzeitige Bearbeitung:** Bei einem Versionskonflikt wird nichts gespeichert. Die Bearbeitungsseite wird erneut geöffnet und zeigt den gespeicherten Stand. Prüfen Sie diesen Stand und geben Sie Ihre eigenen, noch nicht gespeicherten Änderungen erneut ein.
 
 ### Filter: Mir zugewiesen
 
