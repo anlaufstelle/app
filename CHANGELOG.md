@@ -24,21 +24,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Seed-Zufallsfolge an Uhrgrenzen stabilisiert** (#2599) — Der Bulk-Ereignis-Seed verwendet eine gemeinsame vorgebbare Uhr für Zeitstempel und Datumswerte und hält den Zufallsverbrauch zu jeder Uhrzeit auch an Öffnungszeit- und Mitternachtsgrenzen konstant; die Activity-Stichprobe verwendet Kalendertage statt eines tageszeitabhängigen 90-Tage-Schnitts.
 - **Demo-Offline-Hinweis nur für angemeldete Sitzungen** (#2607) — Anonyme Besucher sehen auf den Rechtstexten keinen Offline-Schlüsselfehler mehr; angemeldete Demo-Sitzungen erhalten den Hinweis weiterhin bei fehlendem Schlüssel.
 - **Fachwerte beim endgültigen Dateilöschen erhalten** (#2581) — Das Vernichten einer Anhangskette verwendet den frisch gesperrten Stand von Person, Fall oder Ereignis, erhält zwischenzeitlich gespeicherte Texte und fremde Dateiverknüpfungen und stellt bereits vernichtete Marker nicht wieder her.
+- **Deaktivierte Fachfelder mit Werterhalt** (#2573) — Inaktive Feldvorlagen fehlen in Ereignis-, Personen- und Fallformularen sowie Offline-Formdefinitionen, während normales Bearbeiten ihre bisherigen Werte einschließlich verschlüsselter Inhalte und Dateimarker erhält; genehmigte Berichtigungen ändern auch inaktive Personenfelder und werden erst nach Prüfung des gespeicherten Zielwerts als erfolgreich verbucht.
+- **Belegte Feldtypen vor Datenverlust geschützt** (#2572) — Gespeicherte Personen-, Fall-, Ereignis-, Historien- und Vorlagenwerte sperren inkompatible Feldtypwechsel; kompatible Text-/Textbereichwechsel bleiben möglich, unbelegte Vorlagen bearbeitbar und die Fehlermeldung zeigt den Weg über Deaktivieren und Neuanlegen.
+- **Berichtsschlüssel bei Reaktivierung eindeutig** (#2574) — Einzelschalter, Modell-Speicherung und administrative Sammelaktivierung weisen doppelte aktive Berichtsschlüssel je Dokumentationstyp unter Konfigurationssperre ab, nennen beim Aktivieren den Konflikt und erhalten die bisherigen Berichtssummen.
 
 ### Security
 
 - **Gesamtbudget für mehrseitige Bilder** (#2582) — Rasterbild-Uploads werden vor der vollständigen Frame-Verarbeitung und bei früh allokierenden Formaten bereits vor dem Bildöffnen anhand ihrer Header auf insgesamt standardmäßig 40 Millionen Pixel, höchstens 100 Frames oder Seiten und ein konservativ geschätztes Bildpufferbudget von 256 MiB geprüft und bei Überschreitung mit Meldung und Audit abgewiesen; zulässige Mehrseitenbilder und vom Betreiber zugelassene SVG-Dateien bleiben erhalten, eine Obergrenze für den gesamten Encoder-RAM ist damit nicht bewiesen.
-### Security
-
 - **Implizite Teil-Speicherungen abgewiesen** (#2525) — Ereignisse, Personen, Fälle sowie Dokumentationstypen, Feldvorlagen, Feldzuordnungen, Feldgruppen, Feldbedingungen und Quick-Templates weisen `save()` auf unvollständig per `defer`/`only` geladenen Instanzen ohne ausdrückliches `update_fields` vor dem ersten nachladenden Feldzugriff und vor dem Schreiben ab.
-
-### Fixed
-
-- **Deaktivierte Fachfelder mit Werterhalt** (#2573) — Inaktive Feldvorlagen fehlen in Ereignis-, Personen- und Fallformularen sowie Offline-Formdefinitionen, während normales Bearbeiten ihre bisherigen Werte einschließlich verschlüsselter Inhalte und Dateimarker erhält; genehmigte Berichtigungen ändern auch inaktive Personenfelder und werden erst nach Prüfung des gespeicherten Zielwerts als erfolgreich verbucht.
-
-- **Belegte Feldtypen vor Datenverlust geschützt** (#2572) — Gespeicherte Personen-, Fall-, Ereignis-, Historien- und Vorlagenwerte sperren inkompatible Feldtypwechsel; kompatible Text-/Textbereichwechsel bleiben möglich, unbelegte Vorlagen bearbeitbar und die Fehlermeldung zeigt den Weg über Deaktivieren und Neuanlegen.
-- **Berichtsschlüssel bei Reaktivierung eindeutig** (#2574) — Einzelschalter, Modell-Speicherung und administrative Sammelaktivierung weisen doppelte aktive Berichtsschlüssel je Dokumentationstyp unter Konfigurationssperre ab, nennen beim Aktivieren den Konflikt und erhalten die bisherigen Berichtssummen.
-
 
 ## [0.99.7] - 2026-10-13
 
