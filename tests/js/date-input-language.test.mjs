@@ -89,3 +89,49 @@ it("keeps step validation stable after successive edits and restores reset value
     expect(field.visible.value).toBe("12:00");
     expect(field.transport.value).toBe("12:00");
 });
+
+
+it.each(["de", "en"])("rewires a serialized htmx history snapshot in %s", language => {
+    const original = mount(language);
+    original.visible.value = language === "de" ? "14.10.2026" : "2026-10-14";
+    original.visible.dispatchEvent(new Event("input", { bubbles: true }));
+    const snapshot = document.body.innerHTML;
+    original.destroy();
+    document.body.innerHTML = snapshot;
+    const restored = window.appDateFields.enhance(document.querySelector("input[name=due_date]"));
+    expect(restored).not.toBeNull();
+    expect(document.querySelectorAll("[data-app-date-visible]")).toHaveLength(1);
+    expect(document.getElementById("due")).toBe(restored.visible);
+    expect(restored.visible.value).toBe(language === "de" ? "14.10.2026" : "2026-10-14");
+    restored.visible.value = language === "de" ? "15.10.2026" : "2026-10-15";
+    restored.visible.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(new FormData(document.querySelector("form")).get("due_date")).toBe("2026-10-15");
+});
+
+it("reinitializes after cleanup without duplicate reset listeners", async () => {
+    const first = mount();
+    const transport = first.transport;
+    first.destroy();
+    const second = window.appDateFields.enhance(transport);
+    expect(second.visible.isConnected).toBe(true);
+    expect(window.appDateFields.enhance(transport)).toBe(second);
+    const onInput = vi.fn();
+    transport.addEventListener("input", onInput);
+    document.querySelector("form").reset();
+    await new Promise(resolve => queueMicrotask(resolve));
+    expect(onInput).toHaveBeenCalledTimes(1);
+    expect(second.visible.value).toBe("01.10.2026");
+});
+
+
+it.each([false, true])("respects form noValidate=%s when submitting invalid dates", noValidate => {
+    const field = mount();
+    const form = document.querySelector("form");
+    form.noValidate = noValidate;
+    field.visible.value = "";
+    field.visible.dispatchEvent(new Event("input", { bubbles: true }));
+    const submit = new Event("submit", { bubbles: true, cancelable: true });
+    form.dispatchEvent(submit);
+    expect(submit.defaultPrevented).toBe(!noValidate);
+    expect(field.transport.value).toBe("");
+});

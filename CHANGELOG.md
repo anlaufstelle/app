@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Datumseingabe in App-Sprache** (#2603) — Datums- und Zeitfelder verwenden mit JavaScript online und offline das Format der gewählten App-Sprache und übertragen weiterhin ISO-Werte.
+- **Datumseingabe in App-Sprache** (#2603) — Datums- und Zeitfelder verwenden mit JavaScript online und offline das Format der gewählten App-Sprache; auch nach Zurück-Navigation bleiben Eingaben mit dem ISO-Transport verbunden.
 - **Episodendaten beim Bearbeiten erhalten** (#2536) — Beginn und Ende werden mit ISO-Werten vorbelegt, sodass eine Titeländerung eine abgeschlossene Episode nicht wieder aktiviert.
 - **Statistikdiagramme übersetzbar** (#2548) — Legenden, Quellenhinweise und Fehlertexte beziehen ihre Übersetzungen aus der aktiven App-Sprache.
 

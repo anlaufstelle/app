@@ -4,6 +4,10 @@
     const fields = new WeakMap();
     const kinds = ["date", "time", "datetime-local"];
 
+    function language(element = document.documentElement) {
+        return (element.closest?.("[data-date-language]")?.dataset.dateLanguage || document.documentElement.lang || "de").split("-")[0];
+    }
+
     function parse(value, kind, language) {
         if (value === "") return "";
         let date = value;
@@ -48,31 +52,56 @@
 
     function enhance(transport) {
         if (fields.has(transport)) return fields.get(transport);
-        const kind = transport.type;
+        const restored = transport.dataset.appDateTransport === "true";
+        const kind = transport.dataset.appDateKind || transport.type;
         if (!kinds.includes(kind)) return null;
-        const language = transport.dataset.dateLanguage || "de";
+        transport.dataset.appDateKind = kind;
+        // A history snapshot retains markup, but not the clone's listeners.
+        if (transport.previousElementSibling?.hasAttribute("data-app-date-visible")) {
+            transport.previousElementSibling.remove();
+        }
+        const fieldLanguage = language(transport);
         const initialISO = transport.value || transport.getAttribute("value") || "";
         const visible = transport.cloneNode(false);
         // Keep labels and accessibility metadata on the visible control only.
         for (const attr of [...visible.attributes]) {
             if (/^(x-|:|@)/.test(attr.name) || attr.name === "name") visible.removeAttribute(attr.name);
         }
+        visible.removeAttribute("data-app-date-transport");
+        if (restored && visible.id) visible.id = visible.id.replace(/__iso$/, "");
+        for (const attr of ["data-testid", "data-wi-field"]) {
+            const key = "data-app-original-" + attr.slice(5);
+            if (transport.hasAttribute(attr)) transport.setAttribute(key, transport.getAttribute(attr));
+            if (transport.hasAttribute(key)) visible.setAttribute(attr, transport.getAttribute(key));
+        }
         visible.type = "text";
         visible.autocomplete = "off";
         visible.placeholder = (kind === "time" ? transport.dataset.dateTimePlaceholder : transport.dataset.datePlaceholder) || "";
-        visible.value = format(transport.value || transport.getAttribute("value") || "", kind, language);
+        visible.value = format(transport.value || transport.getAttribute("value") || "", kind, fieldLanguage);
         visible.dataset.appDateVisible = "true";
-        let draft = parse(visible.value, kind, language) === null;
+        let draft = parse(visible.value, kind, fieldLanguage) === null;
         let lastTransport = transport.value;
         const valueObserver = new MutationObserver(() => update());
         valueObserver.observe(transport, { attributes: true, attributeFilter: ["value"] });
-        const state = { visible, transport, kind, sync, update, destroy() { valueObserver.disconnect(); visible.remove(); } };
+        const form = transport.form;
+        const reset = () => queueMicrotask(() => {
+            transport.value = initialISO;
+            transport.dispatchEvent(new Event("input", { bubbles: true }));
+            update(true);
+        });
+        const state = { visible, transport, kind, sync, update, destroy() {
+            valueObserver.disconnect();
+            form?.removeEventListener("reset", reset);
+            fields.delete(transport);
+            fields.delete(visible);
+            visible.remove();
+        } };
         fields.set(transport, state);
         fields.set(visible, state);
-        transport.id = transport.id ? transport.id + "__iso" : "";
+        if (!restored) transport.id = transport.id ? transport.id + "__iso" : "";
         transport.type = "hidden";
         transport.dataset.appDateTransport = "true";
-                transport.removeAttribute("data-testid");
+        transport.removeAttribute("data-testid");
         transport.removeAttribute("data-wi-field");
         transport.before(visible);
         visible.addEventListener("input", sync);
@@ -80,11 +109,7 @@
             sync();
             transport.dispatchEvent(new Event("change", { bubbles: true }));
         });
-        transport.form?.addEventListener("reset", () => queueMicrotask(() => {
-            transport.value = initialISO;
-            transport.dispatchEvent(new Event("input", { bubbles: true }));
-            update(true);
-        }));
+        form?.addEventListener("reset", reset);
         update();
         return state;
 
@@ -94,7 +119,7 @@
                 else visible.removeAttribute(attr);
             }
             if (force || (!draft && document.activeElement !== visible) || transport.value !== lastTransport) {
-                visible.value = format(transport.value, kind, language);
+                visible.value = format(transport.value, kind, fieldLanguage);
                 draft = false;
             }
             lastTransport = transport.value;
@@ -102,7 +127,7 @@
         }
 
         function validateValue(write) {
-            const iso = parse(visible.value, kind, language);
+            const iso = parse(visible.value, kind, fieldLanguage);
             let message = "";
             if (iso === null) message = transport.dataset.dateInvalid || "Invalid date or time.";
             else if (!iso && visible.required) message = transport.dataset.dateRequired || "This field is required.";
@@ -143,9 +168,9 @@
         if (state) { state.transport.value = value; state.update(true); }
         else input.value = value;
     }
-    window.appDateFields = { parse, format, enhance, validate, setISO };
+    window.appDateFields = { language, parse, format, enhance, validate, setISO };
     document.addEventListener("submit", event => {
-        if (!validate(event.target)) { event.preventDefault(); event.stopImmediatePropagation(); }
+        if (!event.target.noValidate && !validate(event.target)) { event.preventDefault(); event.stopImmediatePropagation(); }
     }, true);
     document.addEventListener("alpine:init", () => {
         // The directive owns the visible control; x-model stays on the ISO transport.
