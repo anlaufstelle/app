@@ -123,6 +123,10 @@ def routed_page(browser, _staff_storage_state):
     context.close()
 
 
+class DraftLostAfterAbort(AssertionError):
+    """Raised only by the draft-value check, so an expected failure cannot hide a data-integrity failure."""
+
+
 class TestInterruptedSubmit:
     @staticmethod
     def _submit_with_aborted_post(page, e2e_env, note):
@@ -158,7 +162,7 @@ class TestInterruptedSubmit:
 
     @pytest.mark.xfail(
         strict=True,
-        raises=AssertionError,
+        raises=DraftLostAfterAbort,
         reason="Finding: the autosave draft is deleted when the form is submitted (autosave.js submit "
         "listener), before the server answered. After a network abort the typed text is gone when the form "
         "is reopened; only the browser's own back-navigation form restore could bring it back.",
@@ -172,7 +176,10 @@ class TestInterruptedSubmit:
         self._submit_with_aborted_post(page, e2e_env, note)
 
         _open_form(page, base_url, person)
-        expect(page.locator(NOTE_FIELD)).to_have_value(note, timeout=10000)
+        try:
+            expect(page.locator(NOTE_FIELD)).to_have_value(note, timeout=10000)
+        except AssertionError as error:
+            raise DraftLostAfterAbort(str(error)) from error
 
 
 class TestDoubleSubmit:

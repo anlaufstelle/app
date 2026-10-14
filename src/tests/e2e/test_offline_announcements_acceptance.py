@@ -57,6 +57,10 @@ def _go_online(page):
     page.evaluate("window.dispatchEvent(new Event('online'))")
 
 
+class UntranslatedAnnouncement(AssertionError):
+    """Raised only by the language check, so an expected failure cannot hide a focus or ARIA failure."""
+
+
 def _announcement(page) -> dict:
     node = page.locator(ANNOUNCER)
     return {
@@ -90,7 +94,8 @@ def _check_announcements(page, language):
     assert page.evaluate(_ACTIVE) == before, "focus moved while the online announcement was made"
     if language == "en":
         for text in (offline["text"], online["text"]):
-            assert not any(marker in text for marker in GERMAN_MARKERS), f"German announcement in EN: {text!r}"
+            if any(marker in text for marker in GERMAN_MARKERS):
+                raise UntranslatedAnnouncement(f"German announcement in EN: {text!r}")
     else:
         assert "Verbindung" in offline["text"], offline
     return {"offline": offline, "online": online}
@@ -122,7 +127,7 @@ class TestAnnouncementsKeepFocus:
             "en",
             marks=pytest.mark.xfail(
                 strict=True,
-                raises=AssertionError,
+                raises=UntranslatedAnnouncement,
                 reason="Finding: the precached offline shell is rendered without the account language "
                 "(service worker install fetch, no per-language variant); the announcements in the shell "
                 "stay German for an English account while the online layout is English.",
