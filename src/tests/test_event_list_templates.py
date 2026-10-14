@@ -262,3 +262,55 @@ def test_history_restore_request_gets_the_full_page(client, staff_user, sample_e
     )
     assert response.templates[0].name == "core/events/list.html"
     assert len(Elements(response.content).find("form", id="event-filters")) == 1
+
+
+def test_compact_filter_bar_and_safe_url_persistence(client, staff_user, sample_event):
+    response = list_response(client, staff_user)
+    html = Elements(response.content)
+    form = html.find("form", id="event-filters")[0]
+    assert {"no-print", "rounded-[10px]", "flex-wrap", "min-w-0"} <= set(form["class"].split())
+    assert "data-filter-persist" in form and "data-filter-persist-url" in form
+    assert form["hx-indicator"] == "#event-filters-spinner"
+    search = html.find("input", name="q")[0]
+    assert search["aria-label"] and search["placeholder"]
+    assert html.find("svg", **{"data-testid": "filter-search-icon", "aria-hidden": "true"})
+    assert html.find("span", id="event-filters-spinner")
+    persisted = {"doc_type", "time_filter", "range", "anonymous"}
+    controls = [a for t, a in html.filter_tags if t in {"input", "select"}]
+    assert {a["name"] for a in controls if "data-filter-persist-exclude" not in a} == persisted
+    assert html.find("input", name="mine")[0]["type"] == "checkbox"
+    for control in controls:
+        if control["name"] != "mine":
+            assert "rounded-[10px]" in control["class"]
+            assert "text-[13px]" in control["class"]
+    for text in [
+        "Alle Typen",
+        "Alle Personen",
+        "Alle Fälle",
+        "Alle Erfassenden",
+        "Alle Schichten",
+        "Alle Zeiträume",
+        "Alle Kontakte",
+    ]:
+        assert text in response.content.decode()
+    assert html.find("a", **{"data-filter-reset": None})
+    assert "open" not in html.find("details")[0]
+
+
+@pytest.mark.parametrize("key", ["case", "created_by", "time_filter", "anonymous"])
+def test_active_secondary_filter_is_open_and_named(client, staff_user, sample_event, facility, key):
+    from datetime import time
+
+    from core.models import Case
+
+    case = Case.objects.create(facility=facility, client=sample_event.client, title="Named case", created_by=staff_user)
+    shift = TimeFilter.objects.create(facility=facility, label="Named shift", start_time=time(8), end_time=time(16))
+    value = {"case": str(case.pk), "created_by": str(staff_user.pk), "time_filter": str(shift.pk), "anonymous": "yes"}[
+        key
+    ]
+    response = list_response(client, staff_user, {key: value}, HTTP_HX_REQUEST="true")
+    html = Elements(response.content)
+    assert "open" in html.find("details")[0]
+    assert html.find("span", **{"data-active-filter": key})
+    assert "Weitere Filter" in response.content.decode()
+    assert html.find("form", id="event-filters")[0]["hx-swap-oob"] == "outerHTML"

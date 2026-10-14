@@ -239,7 +239,7 @@ Die **Kontakte-Liste** (`/events/`) ist die Arbeitsliste für Kontakte über meh
 
 **Öffnen:** Wählen Sie **Kontakte** direkt unter **Zeitstrom** in der Seitenleiste, mobil **Mehr → Kontakte**. Nur auf `/events/` ist dieser Eintrag aktiv; Kontakt-Detailseiten bleiben dem Zeitstrom zugeordnet. Auch auf der Zeitstrom-Seite führt ein lokaler Link **Kontakte** zur Liste: Er übernimmt den ausgewählten Tag, Dokumentationstyp und die Schicht.
 
-**Filter kombinieren:** Wählen Sie die gewünschten Angaben und anschließend **Filtern**. Das Formular funktioniert auch ohne JavaScript.
+**Filter kombinieren:** Wählen Sie die gewünschten Angaben und anschließend **Filtern**. Unter **Weitere Filter** finden Sie Fall, Erfasst von, Schicht und Anonym. Ist einer davon gesetzt, bleibt der Bereich offen und nennt die aktiven Filter. Das Formular funktioniert auch ohne JavaScript.
 
 | Filter | Verwendung |
 |---|---|

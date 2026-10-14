@@ -1,0 +1,4 @@
+{% comment %}Reusable filter form shell; callers supply transport attributes and accessible controls.{% endcomment %}
+<form {% block filter_attributes %}{% endblock %} class="flex flex-wrap min-w-0 gap-3 mb-6 px-4 py-3 bg-surface border border-subtle rounded-[10px] no-print">
+    {% block filter_controls %}{% endblock %}
+</form>

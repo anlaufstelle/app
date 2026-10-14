@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Kontaktfilter vereinheitlicht** (#2604) — Eine kompakte Such- und Filterleiste hält zusätzliche aktive Filter sichtbar und merkt ausschließlich unkritische Auswahlen.
+
 - **Paketimport und Einrichtungs-Bootstrap beschleunigt** (#2598) — Konfigurationssperre und Datenumschreibung werden je Paket gebündelt (Standardpaket: 63 auf 1 Sperre und 28 auf 1 Umschreibungsrunde), während Zeilenvalidierungen, vollständiger Rollback und einzelne Konfigurationsspeicherungen erhalten bleiben.
 
 ### Fixed

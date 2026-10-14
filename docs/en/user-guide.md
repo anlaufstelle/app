@@ -241,7 +241,7 @@ The **Contacts list** (`/events/`) is a working list spanning multiple days, for
 
 **Open it:** Select **Contacts** directly below **Timeline** in the sidebar, or **More → Contacts** on mobile. This entry is active only on `/events/`; contact detail pages remain assigned to the Timeline. A local **Contacts** link on the Timeline page also opens the list, carrying over the selected day, documentation type and shift.
 
-**Combine filters:** Choose the criteria, then select **Filter**. The form also works without JavaScript.
+**Combine filters:** Choose the criteria, then select **Filter**. **More filters** contains case, recorded by, shift and anonymous. When one is set, this section stays open and names the active filters. The form also works without JavaScript.
 
 | Filter | Use |
 |---|---|
@@ -1157,7 +1157,8 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 629c9377d76cc48f880898788f451ff623bcfaf2 -->
+<!-- source-hash: 3aa39311249d3aa8d9da2ff551730f3a282b66b7 -->
+<!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->

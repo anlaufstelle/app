@@ -1,71 +1,81 @@
+{% extends "components/_filter_bar.html" %}
 {% load i18n %}
-{% comment %}The browser history snapshot is taken from the live DOM, but a changed
-<select> or <input> only exists as a property there, not as markup. The HTMX
-partial therefore sends this form again (out of band), so the snapshot of every
-filter state carries the controls of that state.{% endcomment %}
-<form id="event-filters" method="get" action="{% url 'core:event_list' %}"
-      hx-get="{% url 'core:event_list' %}" hx-target="#event-table" hx-push-url="true"
-      {% if filter_form_oob %}hx-swap-oob="outerHTML"{% endif %}
-      class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-    <div><label for="event-date_from" class="block text-sm text-ink-soft mb-1">{% translate "Von" %}</label>
-    <input id="event-date_from" name="date_from" type="date" value="{{ filters.date_from|default:'' }}" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink"></div>
-    <div><label for="event-date_to" class="block text-sm text-ink-soft mb-1">{% translate "Bis" %}</label>
-    <input id="event-date_to" name="date_to" type="date" value="{{ filters.date_to|default:'' }}" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink"></div>
-    <div><label for="event-q" class="block text-sm text-ink-soft mb-1">{% translate "Suchbegriff" %}</label>
-    <input id="event-q" name="q" type="search" value="{{ filters.q|default:'' }}" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink"></div>
-    <div><label for="event-range" class="block text-sm text-ink-soft mb-1">{% translate "Schnellwahl" %}</label>
-    <select id="event-range" name="range" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
-        <option value="">{% translate "Alle" %}</option>
+{% comment %}OOB markup preserves input properties in HTMX history snapshots.{% endcomment %}
+{% block filter_attributes %}id="event-filters" method="get" action="{% url 'core:event_list' %}"
+    hx-get="{% url 'core:event_list' %}" hx-target="#event-table" hx-push-url="true" hx-indicator="#event-filters-spinner"
+    data-filter-persist data-filter-persist-url {% if filter_form_oob %}hx-swap-oob="outerHTML"{% endif %}{% endblock %}
+{% block filter_controls %}
+<div class="relative w-full min-w-0">
+    <label for="event-q" class="sr-only">{% translate "Suchbegriff" %}</label>
+    <svg data-testid="filter-search-icon" aria-hidden="true" class="absolute left-3 top-3 h-4 w-4 text-ink-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="10" cy="10" r="6"></circle><path d="m15 15 5 5"></path></svg>
+    <input id="event-q" name="q" type="search" data-filter-persist-exclude value="{{ filters.q|default:'' }}" aria-label="{% translate 'Suchbegriff' %}" placeholder="{% translate 'Kontakte durchsuchen …' %}" class="w-full min-w-0 bg-surface border border-subtle rounded-[10px] pl-10 pr-10 py-2 text-[13px] text-ink-soft">
+    {% include "components/_htmx_spinner.html" with spinner_id="event-filters-spinner" position_class="absolute right-3 top-3" %}
+</div>
+<div class="flex-1 min-w-0 basis-40"><label for="event-date_from" class="block text-sm text-ink-soft mb-1">{% translate "Von" %}</label>
+    <input id="event-date_from" name="date_from" data-filter-persist-exclude type="date" value="{{ filters.date_from|default:'' }}" class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft"></div>
+<div class="flex-1 min-w-0 basis-40"><label for="event-date_to" class="block text-sm text-ink-soft mb-1">{% translate "Bis" %}</label>
+    <input id="event-date_to" name="date_to" data-filter-persist-exclude type="date" value="{{ filters.date_to|default:'' }}" class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft"></div>
+<div class="flex-1 min-w-0 basis-40"><label for="event-range" class="block text-sm text-ink-soft mb-1">{% translate "Schnellwahl" %}</label>
+    <select id="event-range" name="range" class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft">
+        <option value="">{% translate "Alle Zeiträume" %}</option>
         <option value="this_week" {% if filters.range == "this_week" %}selected{% endif %}>{% translate "Diese Woche" %}</option>
         <option value="last_month" {% if filters.range == "last_month" %}selected{% endif %}>{% translate "Letzter Monat" %}</option>
     </select></div>
-    <div><label for="event-anonymous" class="block text-sm text-ink-soft mb-1">{% translate "Anonym" %}</label>
-    <select id="event-anonymous" name="anonymous" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
-        <option value="">{% translate "Alle" %}</option>
-        <option value="yes" {% if filters.anonymous == "yes" %}selected{% endif %}>{% translate "Ja" %}</option>
-        <option value="no" {% if filters.anonymous == "no" %}selected{% endif %}>{% translate "Nein" %}</option>
-    </select></div>
-    <div><label for="event-doc_type" class="block text-sm text-ink-soft mb-1">{% translate "Typ" %}</label>
-    <select id="event-doc_type" name="doc_type" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
-        <option value="">{% translate "Alle" %}</option>
+<div class="flex-1 min-w-0 basis-40"><label for="event-doc_type" class="block text-sm text-ink-soft mb-1">{% translate "Typ" %}</label>
+    <select id="event-doc_type" name="doc_type" class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft">
+        <option value="">{% translate "Alle Typen" %}</option>
         {% for item in document_types %}
         <option value="{{ item.pk }}" {% if item.pk|stringformat:"s" == filters.doc_type %}selected{% endif %}>{{ item.name }}</option>
         {% endfor %}
     </select></div>
-    <div><label for="event-client" class="block text-sm text-ink-soft mb-1">{% translate "Person" %}</label>
-    <select id="event-client" name="client" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
-        <option value="">{% translate "Alle" %}</option>
+<div class="flex-1 min-w-0 basis-40"><label for="event-client" class="block text-sm text-ink-soft mb-1">{% translate "Person" %}</label>
+    <select id="event-client" name="client" data-filter-persist-exclude class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft">
+        <option value="">{% translate "Alle Personen" %}</option>
         {% for item in clients %}
         <option value="{{ item.pk }}" {% if item.pk|stringformat:"s" == filters.client %}selected{% endif %}>{{ item.pseudonym }}</option>
         {% endfor %}
     </select></div>
-    {% if show_cases %}
-    <div><label for="event-case" class="block text-sm text-ink-soft mb-1">{% translate "Fall" %}</label>
-    <select id="event-case" name="case" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
-        <option value="">{% translate "Alle" %}</option>
+<details class="w-full min-w-0" {% if filters.case or filters.created_by or filters.time_filter or filters.anonymous %}open{% endif %}>
+    <summary class="cursor-pointer text-[13px] text-ink-soft min-h-[44px] py-3">{% translate "Weitere Filter" %}
+        {% if filters.case %}<span data-active-filter="case" class="ml-2 font-semibold">{% translate "Fall" %}</span>{% endif %}
+        {% if filters.created_by %}<span data-active-filter="created_by" class="ml-2 font-semibold">{% translate "Erfasst von" %}</span>{% endif %}
+        {% if filters.time_filter %}<span data-active-filter="time_filter" class="ml-2 font-semibold">{% translate "Schicht" %}</span>{% endif %}
+        {% if filters.anonymous %}<span data-active-filter="anonymous" class="ml-2 font-semibold">{% translate "Anonym" %}</span>{% endif %}
+    </summary>
+    <div class="flex flex-wrap min-w-0 gap-3">
+{% if show_cases %}<div class="flex-1 min-w-0 basis-40"><label for="event-case" class="block text-sm text-ink-soft mb-1">{% translate "Fall" %}</label>
+    <select id="event-case" name="case" data-filter-persist-exclude class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft">
+        <option value="">{% translate "Alle Fälle" %}</option>
         {% for item in cases %}
         <option value="{{ item.pk }}" {% if item.pk|stringformat:"s" == filters.case %}selected{% endif %}>{{ item.title }}</option>
         {% endfor %}
-    </select></div>
-    {% endif %}
-    <div><label for="event-created_by" class="block text-sm text-ink-soft mb-1">{% translate "Erfasst von" %}</label>
-    <select id="event-created_by" name="created_by" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
-        <option value="">{% translate "Alle" %}</option>
+    </select></div>{% endif %}
+<div class="flex-1 min-w-0 basis-40"><label for="event-created_by" class="block text-sm text-ink-soft mb-1">{% translate "Erfasst von" %}</label>
+    <select id="event-created_by" name="created_by" data-filter-persist-exclude class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft">
+        <option value="">{% translate "Alle Erfassenden" %}</option>
         {% for item in creators %}
         <option value="{{ item.pk }}" {% if item.pk|stringformat:"s" == filters.created_by %}selected{% endif %}>{{ item }}</option>
         {% endfor %}
     </select></div>
-    <div><label for="event-time_filter" class="block text-sm text-ink-soft mb-1">{% translate "Schicht" %}</label>
-    <select id="event-time_filter" name="time_filter" class="w-full bg-surface border border-subtle rounded-md px-3 py-2 text-sm text-ink">
-        <option value="">{% translate "Alle" %}</option>
+<div class="flex-1 min-w-0 basis-40"><label for="event-time_filter" class="block text-sm text-ink-soft mb-1">{% translate "Schicht" %}</label>
+    <select id="event-time_filter" name="time_filter" class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft">
+        <option value="">{% translate "Alle Schichten" %}</option>
         {% for item in time_filters %}
         <option value="{{ item.pk }}" {% if item.pk|stringformat:"s" == filters.time_filter %}selected{% endif %}>{{ item.label }}</option>
         {% endfor %}
     </select></div>
-    <div class="flex items-center gap-2"><input id="event-mine" type="checkbox" name="mine" value="1" {% if filters.mine %}checked{% endif %}>
+<div class="flex-1 min-w-0 basis-40"><label for="event-anonymous" class="block text-sm text-ink-soft mb-1">{% translate "Anonym" %}</label>
+    <select id="event-anonymous" name="anonymous" class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft">
+        <option value="">{% translate "Alle Kontakte" %}</option>
+        <option value="yes" {% if filters.anonymous == "yes" %}selected{% endif %}>{% translate "Ja" %}</option>
+        <option value="no" {% if filters.anonymous == "no" %}selected{% endif %}>{% translate "Nein" %}</option>
+    </select></div>
+    </div>
+</details>
+<div class="flex items-center gap-2"><input id="event-mine" type="checkbox" name="mine" data-filter-persist-exclude value="1" {% if filters.mine %}checked{% endif %}>
         <label for="event-mine" class="text-sm text-ink-soft">{% translate "Nur meine" %}</label></div>
     <div class="flex items-center gap-3">
         <button id="event-submit" type="submit" class="btn-primary px-4 py-2 min-h-[44px]">{% translate "Filtern" %}</button>
-        <a href="{% url 'core:event_list' %}" class="text-sm text-accent hover:underline min-h-[44px] inline-flex items-center">{% translate "Filter zurücksetzen" %}</a>
+        <a data-filter-reset href="{% url 'core:event_list' %}" class="text-sm text-accent hover:underline min-h-[44px] inline-flex items-center">{% translate "Filter zurücksetzen" %}</a>
     </div>
-</form>
+{% endblock %}
