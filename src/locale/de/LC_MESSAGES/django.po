@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 12:22+0200\n"
+"POT-Creation-Date: 2026-10-14 12:41+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14670,3 +14670,35 @@ msgstr "Konfigurierbare Ereignisfristen, ergänzt durch die Höchstfrist (verkü
 #: src/core/views/help.py:199
 msgid "Der Standardlauf erzeugt für „Mit Zusatzangaben“ einen Löschvorschlag. Anonym und „Nur Pseudonym“ werden automatisch gelöscht; Legal Hold und Art. 18 stellen den Lauf zurück. Den Vorschlag legt der Lauf an. Die manuelle Freigabe braucht zwei verschiedene aktive Personen der eigenen Einrichtung, jeweils mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Die erste Freigabe lässt den Vorschlag ausstehend (PENDING, „1 von 2 Freigaben“); erst die zweite andere Person gibt ihn endgültig frei (APPROVED). Mit nur einem berechtigten Konto bleibt es bei „1 von 2“; die erste Freigabe allein erlaubt keine Löschung. Zurückstellen, Legal Hold (auch aus der Personen-, Fall- oder Ereignisakte) und Ablehnung verwerfen die erste Freigabe mit Audit; bei einem erneuten manuellen Freigabeweg sind wieder zwei Freigaben nötig. Die Einrichtung benennt mindestens zwei berechtigte Konten. Die Compliance-Karte „Genehmiger für den Aufbewahrungslauf“ prüft Rolle und Anzahl (0 = kritisch, 1 = Warnung, mindestens 2 = ok). Die Karte „Genehmiger für Löschanträge“ zählt weiterhin aktive Löschantragsberechtigte unabhängig von ihrer Rolle. Ausnahme: Die Einrichtung kann die Auto-Freigabe nach mehrfacher Zurückstellung ausdrücklich einschalten (Opt-in, standardmäßig aus); nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg."
 msgstr "Der Standardlauf erzeugt für „Mit Zusatzangaben“ einen Löschvorschlag. Anonym und „Nur Pseudonym“ werden automatisch gelöscht; Legal Hold und Art. 18 stellen den Lauf zurück. Den Vorschlag legt der Lauf an. Die manuelle Freigabe braucht zwei verschiedene aktive Personen der eigenen Einrichtung, jeweils mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Die erste Freigabe lässt den Vorschlag ausstehend (PENDING, „1 von 2 Freigaben“); erst die zweite andere Person gibt ihn endgültig frei (APPROVED). Mit nur einem berechtigten Konto bleibt es bei „1 von 2“; die erste Freigabe allein erlaubt keine Löschung. Zurückstellen, Legal Hold (auch aus der Personen-, Fall- oder Ereignisakte) und Ablehnung verwerfen die erste Freigabe mit Audit; bei einem erneuten manuellen Freigabeweg sind wieder zwei Freigaben nötig. Die Einrichtung benennt mindestens zwei berechtigte Konten. Die Compliance-Karte „Genehmiger für den Aufbewahrungslauf“ prüft Rolle und Anzahl (0 = kritisch, 1 = Warnung, mindestens 2 = ok). Die Karte „Genehmiger für Löschanträge“ zählt weiterhin aktive Löschantragsberechtigte unabhängig von ihrer Rolle. Ausnahme: Die Einrichtung kann die Auto-Freigabe nach mehrfacher Zurückstellung ausdrücklich einschalten (Opt-in, standardmäßig aus); nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg."
+
+#: src/templates/core/events/partials/filter_form.html:12
+msgid "Kontakte durchsuchen …"
+msgstr "Kontakte durchsuchen …"
+
+#: src/templates/core/events/partials/filter_form.html:21
+msgid "Alle Zeiträume"
+msgstr "Alle Zeiträume"
+
+#: src/templates/core/events/partials/filter_form.html:34
+msgid "Alle Personen"
+msgstr "Alle Personen"
+
+#: src/templates/core/events/partials/filter_form.html:40
+msgid "Weitere Filter"
+msgstr "Weitere Filter"
+
+#: src/templates/core/events/partials/filter_form.html:49
+msgid "Alle Fälle"
+msgstr "Alle Fälle"
+
+#: src/templates/core/events/partials/filter_form.html:56
+msgid "Alle Erfassenden"
+msgstr "Alle Erfassenden"
+
+#: src/templates/core/events/partials/filter_form.html:63
+msgid "Alle Schichten"
+msgstr "Alle Schichten"
+
+#: src/templates/core/events/partials/filter_form.html:70
+msgid "Alle Kontakte"
+msgstr "Alle Kontakte"

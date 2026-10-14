@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 12:22+0200\n"
+"POT-Creation-Date: 2026-10-14 12:41+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14581,3 +14581,35 @@ msgstr "Configurable event periods, supplemented by the maximum period (shortens
 #: src/core/views/help.py:199
 msgid "Der Standardlauf erzeugt für „Mit Zusatzangaben“ einen Löschvorschlag. Anonym und „Nur Pseudonym“ werden automatisch gelöscht; Legal Hold und Art. 18 stellen den Lauf zurück. Den Vorschlag legt der Lauf an. Die manuelle Freigabe braucht zwei verschiedene aktive Personen der eigenen Einrichtung, jeweils mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Die erste Freigabe lässt den Vorschlag ausstehend (PENDING, „1 von 2 Freigaben“); erst die zweite andere Person gibt ihn endgültig frei (APPROVED). Mit nur einem berechtigten Konto bleibt es bei „1 von 2“; die erste Freigabe allein erlaubt keine Löschung. Zurückstellen, Legal Hold (auch aus der Personen-, Fall- oder Ereignisakte) und Ablehnung verwerfen die erste Freigabe mit Audit; bei einem erneuten manuellen Freigabeweg sind wieder zwei Freigaben nötig. Die Einrichtung benennt mindestens zwei berechtigte Konten. Die Compliance-Karte „Genehmiger für den Aufbewahrungslauf“ prüft Rolle und Anzahl (0 = kritisch, 1 = Warnung, mindestens 2 = ok). Die Karte „Genehmiger für Löschanträge“ zählt weiterhin aktive Löschantragsberechtigte unabhängig von ihrer Rolle. Ausnahme: Die Einrichtung kann die Auto-Freigabe nach mehrfacher Zurückstellung ausdrücklich einschalten (Opt-in, standardmäßig aus); nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg."
 msgstr "The regular run creates a deletion proposal for events with additional details. Anonymous and pseudonym-only events are deleted automatically; legal holds and Art. 18 defer the run. The run creates the proposal. Manual approval requires two different active people in the same facility, each with the Manager or Application support role and the deletion confirmation permission. The first approval keeps the proposal pending (PENDING, “1 of 2 releases”); only a second, different person approves it finally (APPROVED). With only one eligible account it stays at “1 of 2”; the first approval alone never permits deletion. Deferral, a legal hold (including one set from the person, case or event record) and rejection discard the first approval with an audit entry; a renewed manual approval again requires two approvals. The facility must designate at least two eligible accounts. The “Approvers for the retention run” compliance card checks role and number (0 = critical, 1 = warning, at least 2 = ok). The “Deletion request approvers” card still counts active deletion-request approvers regardless of role. Exception: the facility can explicitly enable auto-approval after repeated deferrals (opt-in, off by default); after the configured maximum number of deferrals and once the retry interval has elapsed, the run approves without a second person. Holds and Art. 18 protect this path as well."
+
+#: src/templates/core/events/partials/filter_form.html:12
+msgid "Kontakte durchsuchen …"
+msgstr "Search contacts …"
+
+#: src/templates/core/events/partials/filter_form.html:21
+msgid "Alle Zeiträume"
+msgstr "All periods"
+
+#: src/templates/core/events/partials/filter_form.html:34
+msgid "Alle Personen"
+msgstr "All people"
+
+#: src/templates/core/events/partials/filter_form.html:40
+msgid "Weitere Filter"
+msgstr "More filters"
+
+#: src/templates/core/events/partials/filter_form.html:49
+msgid "Alle Fälle"
+msgstr "All cases"
+
+#: src/templates/core/events/partials/filter_form.html:56
+msgid "Alle Erfassenden"
+msgstr "All recorders"
+
+#: src/templates/core/events/partials/filter_form.html:63
+msgid "Alle Schichten"
+msgstr "All shifts"
+
+#: src/templates/core/events/partials/filter_form.html:70
+msgid "Alle Kontakte"
+msgstr "All contacts"
