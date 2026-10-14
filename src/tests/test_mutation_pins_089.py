@@ -39,6 +39,7 @@ from core.services.client.merge import merge_clients, unmerge_client
 from core.services.compliance import _retention_checks
 from core.services.compliance._types import ComplianceStatus
 from core.services.system import bypass_replication_triggers
+from tests._job_run_helpers import SUCCESSFUL_JOB_RUN
 
 pytestmark = pytest.mark.django_db
 
@@ -312,6 +313,7 @@ def _retention_run_aged(hours):
         action=AuditLog.Action.RETENTION_RUN_COMPLETED,
         facility=None,
         target_type="RetentionRun",
+        detail={"job_run": SUCCESSFUL_JOB_RUN},
     )
     with bypass_replication_triggers():
         AuditLog.objects.filter(pk=entry.pk).update(timestamp=timezone.now() - timedelta(hours=hours))

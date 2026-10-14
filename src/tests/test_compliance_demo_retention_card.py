@@ -18,6 +18,7 @@ from core.services import compliance
 from core.services.audit import audit_event
 from core.services.compliance import ComplianceStatus, retention
 from core.services.compliance._types import ComplianceCategory
+from tests._job_run_helpers import SUCCESSFUL_JOB_RUN
 
 _DEMO_TEXT = "In der Demo nicht eingerichtet: der Löschlauf würde die stündlich neu erzeugten Beispieldaten löschen."
 _OPERATOR_STEPS = ("enforce_retention", "Cron", "Runbook", "crontab")
@@ -40,6 +41,7 @@ def _record_retention_run():
         user=None,
         facility=None,
         target_type="RetentionRun",
+        detail={"job_run": SUCCESSFUL_JOB_RUN},
     )
 
 

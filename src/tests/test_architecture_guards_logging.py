@@ -164,6 +164,22 @@ ALLOWLIST = {
             "ausserhalb dieser Aenderung): ``facility_id`` im ``extra``."
         ),
     },
+    # Refs #2583: the backend-failure path reports the same facility location.
+    (
+        "management/commands/create_statistics_snapshots.py",
+        "Command._report_backend_failure",
+        "name",
+    ): {
+        "count": 1,
+        "reason": (
+            "``facility.name`` ist der Name der EINRICHTUNG, kein Personenname — "
+            "dieselbe Begruendung wie bei ``Command._report_failure``: Die Zeile meldet "
+            "einen gescheiterten Statistik-Backend-Teil einer Einrichtung und macht ihn "
+            "in einer Installation mit mehreren Einrichtungen zuordenbar. Auf dem Weg zu "
+            "einem Error-Tracker geht der Wert nicht mit — der Hook ersetzt die Zeile durch "
+            "ihr Template (Refs #2198)."
+        ),
+    },
     (
         "management/commands/enforce_retention.py",
         "Command._warn_missing_settings",

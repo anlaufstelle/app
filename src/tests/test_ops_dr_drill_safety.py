@@ -39,7 +39,8 @@ def test_media_restore_stages_archive_at_app_path_and_checks_every_attachment() 
     restore = _script("restore.sh")
 
     assert 'MEDIA_STAGE="${MEDIA_ROOT_CONTAINER}.restore.$$"' in restore
-    assert 'tar -C "$MEDIA_STAGE" --strip-components=1 -xf -' in restore
+    # Refs #2577: tar runs as the maintenance container entrypoint.
+    assert '--entrypoint tar -T maintenance -C "$MEDIA_STAGE" --strip-components=1 -xf -' in restore
     assert "SELECT facility_id, storage_filename FROM core_attachment" in restore
     assert 'test -f "${MEDIA_STAGE}/$attachment_path"' in restore
     # Refs #2290: der Tausch laeuft als ein sh-Aufruf im maintenance-Container.
