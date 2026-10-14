@@ -24,11 +24,13 @@ class EpisodeForm(TailwindFormMixin, forms.ModelForm):
                 }
             ),
             "started_at": forms.DateInput(
+                format="%Y-%m-%d",
                 attrs={
                     "type": "date",
                 },
             ),
             "ended_at": forms.DateInput(
+                format="%Y-%m-%d",
                 attrs={
                     "type": "date",
                 },
