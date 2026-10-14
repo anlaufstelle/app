@@ -223,6 +223,14 @@ def assignable_workitem_users(facility):
     ).order_by("last_name", "first_name", "username")
 
 
+def filter_completed_workitems(qs, period="7"):
+    """Limit completed tasks by their completion clock; unknown dates need all."""
+    qs = qs.filter(status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED])
+    if period != "all":
+        qs = qs.filter(completed_at__gte=timezone.now() - timedelta(days=int(period)))
+    return qs
+
+
 def build_inbox_sections(facility, user, params: QueryDict) -> dict[str, object]:
     """Baut Querysets, Sektionen und Filterkontext der WorkItem-Inbox."""
     today = timezone.localdate()
@@ -293,14 +301,8 @@ def build_inbox_sections(facility, user, params: QueryDict) -> dict[str, object]
         cap,
     )
 
-    seven_days_ago = timezone.now() - timedelta(days=7)
     done_items, done_has_more = _capped(
-        _apply_default_scope(
-            base_qs.filter(
-                status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED],
-                updated_at__gte=seven_days_ago,
-            )
-        ),
+        _apply_default_scope(filter_completed_workitems(base_qs)),
         cap,
     )
     done_items_preview = done_items[:WORKITEM_RECENT_DONE_PREVIEW]
@@ -309,10 +311,7 @@ def build_inbox_sections(facility, user, params: QueryDict) -> dict[str, object]
     done_full_items: list[WorkItem] = []
     done_full_has_more = False
     if show_done_full:
-        done_full_qs = base_qs.filter(status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED])
-        if done_period != "all":
-            period_start = timezone.now() - timedelta(days=int(done_period))
-            done_full_qs = done_full_qs.filter(updated_at__gte=period_start)
+        done_full_qs = filter_completed_workitems(base_qs, done_period)
         done_full_items, done_full_has_more = _capped(_apply_default_scope(done_full_qs), cap)
 
     done_period_label = dict(DONE_PERIOD_CHOICES).get(done_period, "")

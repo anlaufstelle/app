@@ -81,7 +81,7 @@ kann.
         <a href="{% url 'core:client_detail' pk=wi.client.pk %}" class="text-accent hover:underline font-semibold">{{ wi.client.pseudonym }}</a>
         {% endif %}
         {% if wi.assigned_to %}
-        <span>{% trans "Zugewiesen:" %} {{ wi.assigned_to.get_full_name|default:wi.assigned_to.username }}</span>
+        <span>{% trans "Zugewiesen:" %} {{ wi.assigned_to }}</span>
         {% endif %}
     </div>
     {% endif %}

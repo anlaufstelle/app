@@ -12,7 +12,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
                 <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Name" %}</div>
-                <p class="text-[14px] font-semibold text-ink mt-1" data-testid="profile-name">{{ user.get_full_name|default:user.username }}</p>
+                <p class="text-[14px] font-semibold text-ink mt-1" data-testid="profile-name">{{ user }}</p>
             </div>
             <div>
                 <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Benutzername" %}</div>

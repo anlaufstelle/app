@@ -5,7 +5,6 @@ bleiben dort, weil sie reine Read-Pfade sind.
 """
 
 from contextlib import suppress
-from datetime import timedelta
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -13,7 +12,6 @@ from django.db import IntegrityError, transaction
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
-from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -30,7 +28,7 @@ from core.services.case import (
     update_workitem,
     update_workitem_status,
 )
-from core.services.case.workitems import workitem_form_state_token
+from core.services.case.workitems import filter_completed_workitems, workitem_form_state_token
 from core.services.client import resolve_writable_client
 from core.services.scoping import get_scoped_object
 from core.services.workitem_visibility import workitems_for_read
@@ -127,11 +125,9 @@ def _build_recent_done_oob(request, workitem):
     if not qs.filter(pk=workitem.pk).exists():
         return ""
 
-    seven_days_ago = timezone.now() - timedelta(days=7)
-    done_qs = qs.filter(
-        status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED],
-        updated_at__gte=seven_days_ago,
-    )
+    done_qs = filter_completed_workitems(qs)
+    if not done_qs.filter(pk=workitem.pk).exists():
+        return ""
     total = done_qs.count()
     was_empty = total <= 1  # das soeben erledigte Item zaehlt hier schon mit
     cap = WORKITEM_INBOX_CAP

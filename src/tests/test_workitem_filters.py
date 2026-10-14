@@ -277,6 +277,7 @@ class TestWorkItemInboxFilters:
             assigned_to=staff_user,
             title="Erledigt – mir",
             status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
         done_unassigned = WorkItem.objects.create(
             facility=facility,
@@ -284,6 +285,7 @@ class TestWorkItemInboxFilters:
             assigned_to=None,
             title="Erledigt – Team",
             status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
         done_foreign = WorkItem.objects.create(
             facility=facility,
@@ -291,6 +293,7 @@ class TestWorkItemInboxFilters:
             assigned_to=lead_user,
             title="Erledigt – fremd",
             status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
 
         response = client.get(reverse("core:workitem_inbox"))
@@ -314,6 +317,7 @@ class TestWorkItemInboxFilters:
             assigned_to=lead_user,
             title="Erledigt – fremd, über Alle auffindbar",
             status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
 
         response = client.get(reverse("core:workitem_inbox"), {"assigned_to": ""})
@@ -569,12 +573,20 @@ class TestWorkItemInboxStatusFilter:
         derselbe 7-Tage-Zeitraum wie die passive Vorschau."""
         client.force_login(staff_user)
         recent = WorkItem.objects.create(
-            facility=facility, created_by=staff_user, title="Kürzlich erledigt X", status=WorkItem.Status.DONE
+            facility=facility,
+            created_by=staff_user,
+            title="Recently completed task",
+            status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
         old = WorkItem.objects.create(
-            facility=facility, created_by=staff_user, title="Alt erledigt X", status=WorkItem.Status.DONE
+            facility=facility,
+            created_by=staff_user,
+            title="Old completed task",
+            status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
-        WorkItem.objects.filter(pk=old.pk).update(updated_at=timezone.now() - timedelta(days=10))
+        WorkItem.objects.filter(pk=old.pk).update(completed_at=timezone.now() - timedelta(days=10))
 
         ctx = client.get(reverse("core:workitem_inbox"), {"status": "done"}).context
         assert ctx["selected_done_period"] == "7"
@@ -585,13 +597,21 @@ class TestWorkItemInboxStatusFilter:
     def test_done_full_period_thirty_days_includes_older_item(self, client, staff_user, facility):
         client.force_login(staff_user)
         within_30 = WorkItem.objects.create(
-            facility=facility, created_by=staff_user, title="Vor 20 Tagen erledigt", status=WorkItem.Status.DONE
+            facility=facility,
+            created_by=staff_user,
+            title="Completed twenty days ago",
+            status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
-        WorkItem.objects.filter(pk=within_30.pk).update(updated_at=timezone.now() - timedelta(days=20))
+        WorkItem.objects.filter(pk=within_30.pk).update(completed_at=timezone.now() - timedelta(days=20))
         beyond_30 = WorkItem.objects.create(
-            facility=facility, created_by=staff_user, title="Vor 40 Tagen erledigt", status=WorkItem.Status.DONE
+            facility=facility,
+            created_by=staff_user,
+            title="Completed forty days ago",
+            status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
-        WorkItem.objects.filter(pk=beyond_30.pk).update(updated_at=timezone.now() - timedelta(days=40))
+        WorkItem.objects.filter(pk=beyond_30.pk).update(completed_at=timezone.now() - timedelta(days=40))
 
         ctx = client.get(reverse("core:workitem_inbox"), {"status": "done", "done_period": "30"}).context
         done_full = list(ctx["done_full_items"])
@@ -601,9 +621,13 @@ class TestWorkItemInboxStatusFilter:
     def test_done_full_period_all_includes_very_old_item(self, client, staff_user, facility):
         client.force_login(staff_user)
         very_old = WorkItem.objects.create(
-            facility=facility, created_by=staff_user, title="Uralt erledigt", status=WorkItem.Status.DONE
+            facility=facility,
+            created_by=staff_user,
+            title="Historical completed task",
+            status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
-        WorkItem.objects.filter(pk=very_old.pk).update(updated_at=timezone.now() - timedelta(days=400))
+        WorkItem.objects.filter(pk=very_old.pk).update(completed_at=timezone.now() - timedelta(days=400))
 
         ctx = client.get(reverse("core:workitem_inbox"), {"status": "done", "done_period": "all"}).context
         assert very_old in list(ctx["done_full_items"])
@@ -618,7 +642,11 @@ class TestWorkItemInboxStatusFilter:
         DONE und DISMISSED unter "Erledigt"."""
         client.force_login(staff_user)
         dismissed = WorkItem.objects.create(
-            facility=facility, created_by=staff_user, title="Verworfen X", status=WorkItem.Status.DISMISSED
+            facility=facility,
+            created_by=staff_user,
+            title="Dismissed task",
+            status=WorkItem.Status.DISMISSED,
+            completed_at=timezone.now(),
         )
         ctx = client.get(reverse("core:workitem_inbox"), {"status": "done"}).context
         assert dismissed in list(ctx["done_full_items"])
@@ -633,6 +661,7 @@ class TestWorkItemInboxStatusFilter:
             assigned_to=staff_user,
             title="Meine erledigte Aufgabe",
             status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
         foreign = WorkItem.objects.create(
             facility=facility,
@@ -640,6 +669,7 @@ class TestWorkItemInboxStatusFilter:
             assigned_to=lead_user,
             title="Fremde erledigte Aufgabe",
             status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
 
         ctx = client.get(reverse("core:workitem_inbox"), {"status": "done", "assigned_to": "me"}).context
@@ -657,6 +687,7 @@ class TestWorkItemInboxStatusFilter:
             assigned_to=lead_user,
             title="Fremde erledigte Aufgabe, über Alle auffindbar",
             status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
         ctx = client.get(reverse("core:workitem_inbox"), {"status": "done", "assigned_to": ""}).context
         assert foreign in list(ctx["done_full_items"])

@@ -17,6 +17,7 @@ import datetime
 import pytest
 from django.core.exceptions import ValidationError
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import strip_tags
 
 from core.constants import WORKITEM_INBOX_CAP
@@ -65,6 +66,7 @@ def workitem_done(facility, staff_user):
         created_by=staff_user,
         title="Erledigte Aufgabe",
         status=WorkItem.Status.DONE,
+        completed_at=timezone.now(),
     )
 
 
@@ -104,6 +106,7 @@ class TestWorkItemInbox:
                     created_by=staff_user,
                     title=f"{status} {index}",
                     status=status,
+                    completed_at=timezone.now() if status == WorkItem.Status.DONE else None,
                 )
                 for status in (
                     WorkItem.Status.OPEN,
@@ -141,6 +144,7 @@ class TestWorkItemInbox:
                     created_by=staff_user,
                     title=f"{status} {index}",
                     status=status,
+                    completed_at=timezone.now() if status == WorkItem.Status.DONE else None,
                 )
                 for status in (
                     WorkItem.Status.OPEN,
@@ -424,6 +428,7 @@ class TestWorkItemInboxRowActions:
             created_by=staff_user,
             title="Bereits verworfen",
             status=WorkItem.Status.DISMISSED,
+            completed_at=timezone.now(),
         )
         client.force_login(staff_user)
         html = client.get(reverse("core:workitem_inbox")).content.decode()
@@ -640,6 +645,7 @@ class TestWorkItemContextProcessor:
             created_by=staff_user,
             title="Erledigte ueberfaellige Aufgabe",
             status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
             due_date=datetime.date.today() - datetime.timedelta(days=1),
         )
         client.force_login(staff_user)
@@ -930,6 +936,7 @@ class TestWorkItemInboxRecentDonePreview:
                     created_by=user,
                     title=f"Erledigt {i}",
                     status=WorkItem.Status.DONE,
+                    completed_at=timezone.now(),
                 )
             )
         return items
@@ -1035,7 +1042,11 @@ class TestWorkItemInboxAllDoneAccess:
         Beschriftung den gewählten Zeitraum eindeutig benennt."""
         client.force_login(staff_user)
         WorkItem.objects.create(
-            facility=facility, created_by=staff_user, title="Erledigt X", status=WorkItem.Status.DONE
+            facility=facility,
+            created_by=staff_user,
+            title="Erledigt X",
+            status=WorkItem.Status.DONE,
+            completed_at=timezone.now(),
         )
         html = client.get(reverse("core:workitem_inbox"), {"status": "done", "done_period": "30"}).content.decode()
         assert 'data-testid="section-done-full"' in html

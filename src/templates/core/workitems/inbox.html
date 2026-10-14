@@ -80,7 +80,7 @@ vollzuschreiben.
             <option value="me" {% if selected_assigned_to == "me" %}selected{% endif %}>{% trans "Mir zugewiesen" %}</option>
             <option value="" {% if selected_assigned_to == "" %}selected{% endif %}>{% trans "Alle" %}</option>
             {% for u in facility_users %}
-            <option value="{{ u.pk }}" {% if selected_assigned_to == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+            <option value="{{ u.pk }}" {% if selected_assigned_to == u.pk|stringformat:"s" %}selected{% endif %}>{{ u }}</option>
             {% endfor %}
         </select>
     </div>
@@ -205,7 +205,7 @@ vollzuschreiben.
             <select id="bulk-assign" name="assigned_to" class="text-[13px] bg-surface border border-subtle rounded-[10px] px-2 py-1">
                 <option value="">{% trans "Zuweisung entfernen" %}</option>
                 {% for u in assignable_users %}
-                <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+                <option value="{{ u.pk }}">{{ u }}</option>
                 {% endfor %}
             </select>
             <button type="submit" class="px-3 py-1.5 btn-primary">{% trans "Anwenden" %}</button>

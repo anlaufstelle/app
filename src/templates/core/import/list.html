@@ -33,7 +33,7 @@
                 <td class="px-6 py-4 text-sm text-ink">{{ job.created_at|date:"DATETIME_FORMAT" }}</td>
                 <td class="px-6 py-4 text-sm text-ink-muted">{{ job.get_target_type_display }}</td>
                 <td class="px-6 py-4 text-sm text-ink-muted">{{ job.get_status_display }}</td>
-                <td class="px-6 py-4 text-sm text-ink-muted">{% if job.created_by %}{{ job.created_by.get_full_name|default:job.created_by.username }}{% else %}–{% endif %}</td>
+                <td class="px-6 py-4 text-sm text-ink-muted">{% if job.created_by %}{{ job.created_by }}{% else %}–{% endif %}</td>
                 <td class="px-6 py-4 text-right">
                     <a href="{% url 'core:import_detail' pk=job.pk %}"
                        class="text-sm text-accent hover:underline font-medium"

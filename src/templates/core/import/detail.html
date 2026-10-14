@@ -27,7 +27,7 @@
         </div>
         <div>
             <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Angelegt von" %}</dt>
-            <dd class="text-ink">{% if job.created_by %}{{ job.created_by.get_full_name|default:job.created_by.username }}{% else %}–{% endif %}</dd>
+            <dd class="text-ink">{% if job.created_by %}{{ job.created_by }}{% else %}–{% endif %}</dd>
         </div>
         <div>
             {# summary.created zaehlt Zeilen INNERHALB der Transaktion, die der Probelauf zurueckrollt — nur summary.committed unterscheidet Vorschau von Tatsache. #}

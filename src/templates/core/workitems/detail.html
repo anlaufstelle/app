@@ -108,7 +108,7 @@
         <div>
             <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt von" %}</h2>
             {% if workitem.created_by %}
-            <p class="text-sm font-medium">{{ workitem.created_by.get_full_name|default:workitem.created_by.username }}</p>
+            <p class="text-sm font-medium">{{ workitem.created_by }}</p>
             {% else %}
             <p class="text-sm font-medium text-ink-muted">–</p>
             {% endif %}
@@ -117,7 +117,7 @@
         {% if workitem.assigned_to %}
         <div>
             <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zugewiesen an" %}</h2>
-            <p class="text-sm font-medium">{{ workitem.assigned_to.get_full_name|default:workitem.assigned_to.username }}</p>
+            <p class="text-sm font-medium">{{ workitem.assigned_to }}</p>
         </div>
         {% endif %}
 
