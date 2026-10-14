@@ -158,10 +158,12 @@
             // Refs #2059: gleicher Kanal, gleiche Mechanik.
             saveFailed: data.i18nAutosaveFailed || "",
             saveQuota: data.i18nAutosaveQuota || "",
+            possiblySaved: data.i18nDraftPossiblySaved || "",
+            useDraft: data.i18nUseDraft || "",
         };
     }
 
-    function showRestoredBanner(form, storageKey) {
+    function showRestoredBanner(form, storageKey, uncertainDraft) {
         var labels = bannerLabels(form);
         var banner = document.createElement("div");
         banner.id = "autosave-restored-banner";
@@ -170,11 +172,28 @@
             "mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-800 " +
             "flex items-center justify-between";
         var textSpan = document.createElement("span");
-        textSpan.textContent = labels.restored;
+        textSpan.textContent = uncertainDraft ? labels.possiblySaved : labels.restored;
         banner.appendChild(textSpan);
 
         var actions = document.createElement("div");
         actions.className = "flex items-center gap-3";
+
+        if (uncertainDraft) {
+            var restoreBtn = document.createElement("button");
+            restoreBtn.type = "button";
+            restoreBtn.className = "text-blue-600 hover:text-blue-800 font-medium";
+            restoreBtn.textContent = labels.useDraft;
+            restoreBtn.setAttribute("data-testid", "autosave-restore");
+            restoreBtn.addEventListener("click", function () {
+                if ((uncertainDraft[PERSON_KEY] || "") !== getPersonPk(form)) {
+                    showSaveErrorBanner(form, false);
+                    return;
+                }
+                restoreFormData(form, uncertainDraft);
+                restoreBtn.remove();
+            });
+            actions.appendChild(restoreBtn);
+        }
 
         var discardBtn = document.createElement("button");
         discardBtn.type = "button";
@@ -366,11 +385,13 @@
             if (!token) continue;
             confirmedTokens.add(token);
             var confirmation = { key: "autosave-confirmed:" + token, data: { storageKey: storageKey, token: token } };
+            // Server confirmation authorizes cleanup even if its marker
+            // cannot be persisted. The atomic delete still protects newer text.
+            pending.push(confirmation);
             // Refs #2561: retain confirmation across navigation until cleanup
             // succeeds. Tokens and form ownership remain encrypted in meta.
             try {
                 await window.offlineStore.putEncrypted("meta", confirmation);
-                pending.push(confirmation);
             } catch (error) {
                 ready = false;
                 console.warn("[autosave] Draft confirmation persistence failed", error);
@@ -378,6 +399,12 @@
         }
         for (var confirmation of pending) {
             var data = confirmation.data;
+            if (!data || typeof data.storageKey !== "string" || !data.storageKey ||
+                typeof data.token !== "string" || !data.token ||
+                confirmation.key !== "autosave-confirmed:" + data.token) {
+                ready = false;
+                continue;
+            }
             if (data.storageKey === storageKey) confirmedTokens.add(data.token);
             try {
                 await window.offlineStore.deleteConfirmedDraft(data.storageKey, data.token);
@@ -455,6 +482,16 @@
             try {
                 var existing = await window.offlineStore.getDecrypted("drafts", storageKey);
                 if (existing && existing.data) storedDraftJson = JSON.stringify(existing.data);
+                if (!confirmations.ready && existing && existing.data && !confirmedTokens.has(existing.data.__submissionToken)) {
+                    if ((existing.data[PERSON_KEY] || "") === getPersonPk(form)) {
+                        showRestoredBanner(form, storageKey, existing.data);
+                    } else {
+                        var uncertainNotice = document.createElement("p");
+                        uncertainNotice.setAttribute("role", "status");
+                        uncertainNotice.textContent = form.dataset.i18nDraftOtherPerson || "";
+                        form.parentElement.insertBefore(uncertainNotice, form);
+                    }
+                }
                 if (confirmations.ready && existing && existing.data && !confirmedTokens.has(existing.data.__submissionToken)) {
                     lastKnownPersonPk = existing.data[PERSON_KEY] || "";
                     // An anonymous draft may receive its first person after

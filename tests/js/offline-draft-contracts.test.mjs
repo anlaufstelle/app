@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const source = name => readFileSync(`src/static/js/${name}.js`, "utf8");
 const key = "autosave_u1_/events/new/";
 const oldToken = "11111111-2222-4333-8444-555555555555";
-const formHtml = (attrs = "", person = "") => `<form data-autosave data-i18n-autosave-failed="Draft not saved" data-i18n-draft-other-person="Other person's draft retained" ${attrs}><textarea name="notes"></textarea><input type="hidden" name="client" data-autosave-person value="${person}"></form>`;
+const formHtml = (attrs = "", person = "") => `<form data-autosave data-i18n-autosave-failed="Draft not saved" data-i18n-draft-other-person="Other person's draft retained" data-i18n-draft-possibly-saved="This draft may already have been saved. Autosave is paused. Use it only after checking." data-i18n-use-draft="Use draft anyway" ${attrs}><textarea name="notes"></textarea><input type="hidden" name="client" data-autosave-person value="${person}"></form>`;
 const marker = token => `<div data-autosave-confirmed="autosave-confirmed:${token}"></div>`;
 const pages = [];
 let factory, encryptionKey;
@@ -39,7 +39,7 @@ async function page(html = "", query = "") {
                 return { iv, ciphertext };
             },
             decryptPayload: async (data, aad) => {
-                if (w.onDraftDecrypt) await w.onDraftDecrypt();
+                if (w.onDraftDecrypt) await w.onDraftDecrypt(aad);
                 return JSON.parse(new TextDecoder().decode(await webcrypto.subtle.decrypt({ name: "AES-GCM", iv: data.iv, additionalData: new TextEncoder().encode(aad) }, encryptionKey, data.ciphertext)));
             },
         }),
@@ -417,4 +417,69 @@ it("reading confirmations preserves unrelated revocation and persistence metadat
     expect(await p.store.db.meta.get(persistence.key)).toEqual(persistence);
     expect(decrypt).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
+});
+
+it.each([false, true])("a failed confirmation write still attempts atomic deletion and preserves newer input (newer=%s)", async newer => {
+    const success = await page(marker(oldToken) + formHtml());
+    await seed(success, { notes: newer ? "Newer unsaved text" : "Already saved", __submissionToken: newer ? "new-token" : oldToken });
+    const put = success.store.putEncrypted;
+    success.store.putEncrypted = async (table, ...args) => {
+        if (table === "meta") throw new Error("QuotaExceededError");
+        return put(table, ...args);
+    };
+    const remove = vi.spyOn(success.store, "deleteConfirmedDraft");
+    await start(success);
+    expect(remove).toHaveBeenCalledExactlyOnceWith(key, oldToken);
+    expect(success.w.document.querySelector("textarea").value).toBe("");
+    const reopened = await page(formHtml()); await start(reopened);
+    expect(reopened.w.document.querySelector("textarea").value).toBe(newer ? "Newer unsaved text" : "");
+    if (!newer) expect(await reopened.store.getDecrypted("drafts", key)).toBeNull();
+});
+
+it.each(["decrypt", "transient", "read", "missing-token", "missing-owner", "mismatched-token"])("an uncertain confirmation requires explicit draft recovery and retains its records (%s)", async failure => {
+    const success = await page(marker(oldToken) + formHtml());
+    await seed(success, { notes: "Possibly already saved", __submissionToken: oldToken });
+    success.store.deleteConfirmedDraft = async () => { throw new Error("Temporary deletion failure"); };
+    await start(success);
+    const confirmationKey = "autosave-confirmed:" + oldToken;
+    if (failure === "decrypt") {
+        const row = await success.store.db.meta.get(confirmationKey);
+        row.data.ciphertext = new Uint8Array([0, 1, 2]); await success.store.db.meta.put(row);
+    } else if (failure !== "read" && failure !== "transient") {
+        const data = { storageKey: key, token: oldToken };
+        if (failure === "missing-token") delete data.token;
+        if (failure === "missing-owner") delete data.storageKey;
+        if (failure === "mismatched-token") data.token = "other-token";
+        await success.store.putEncrypted("meta", { key: confirmationKey, data });
+    }
+    const record = await success.store.db.meta.get(confirmationKey);
+    const reopened = await page(formHtml());
+    if (failure === "read") reopened.store.listDecrypted = async () => { throw new Error("Confirmation read unavailable"); };
+    if (failure === "transient") reopened.w.onDraftDecrypt = async aad => {
+        if (aad.startsWith("meta:")) throw new Error("NoSessionKey");
+    };
+    await start(reopened);
+    const field = reopened.w.document.querySelector("textarea");
+    expect(field.value).toBe("");
+    expect(reopened.w.document.body.textContent).toContain("This draft may already have been saved.");
+    expect(await reopened.store.db.meta.get(confirmationKey)).toEqual(record);
+    expect((await reopened.store.getDecrypted("drafts", key)).data.notes).toBe("Possibly already saved");
+    const restore = reopened.w.document.querySelector('[data-testid="autosave-restore"]');
+    expect(restore).not.toBeNull(); restore.click();
+    expect(field.value).toBe("Possibly already saved");
+    field.value += " further typing";
+    field.dispatchEvent(new reopened.w.Event("input", { bubbles: true })); await tick(reopened);
+    expect((await reopened.store.getDecrypted("drafts", key)).data.notes).toBe("Possibly already saved");
+    expect(reopened.w.document.querySelector("#autosave-error-banner")).not.toBeNull();
+});
+
+it("uncertain confirmation recovery never inserts another person's draft", async () => {
+    const p = await page(formHtml("", "person-a"));
+    await seed(p, { notes: "Confidential A", __personPk: "person-a", __submissionToken: oldToken });
+    p.store.listDecrypted = async () => { throw new Error("Confirmation read unavailable"); };
+    await start(p);
+    const client = p.w.document.querySelector('[name="client"]'); client.value = "person-b";
+    p.w.document.querySelector('[data-testid="autosave-restore"]').click();
+    expect(p.w.document.querySelector("textarea").value).toBe("");
+    expect((await p.store.getDecrypted("drafts", key)).data).toMatchObject({ notes: "Confidential A", __personPk: "person-a" });
 });

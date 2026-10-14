@@ -333,6 +333,9 @@
                     out.push(decrypted);
                 }
             } catch (e) {
+                // A scoped confirmation read must report uncertainty without
+                // dropping the evidence or authorizing automatic recovery.
+                if (keyPrefix !== undefined) throw e;
                 if (_isTransientDecryptError(e)) {
                     // Refs #1352: kein Schluessel — Row NICHT loeschen, nur
                     // in dieser Liste ueberspringen.
