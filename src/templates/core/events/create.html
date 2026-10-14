@@ -18,6 +18,7 @@
     {# Refs #1489: data-offline-enctype-downgrade — ohne gewaehlte Datei wird der Submit auf urlencoded umgestellt, damit der SW ihn offline queuen kann (multipart wird bewusst nie gequeued). #}
     <form method="post" enctype="multipart/form-data" class="space-y-4" id="event-create-form" data-offline-enctype-downgrade data-autosave{% if applied_template or serienerfassung %} data-autosave-server-prefilled{% endif %} data-i18n-draft-restored="{% trans 'Entwurf wiederhergestellt' %}" data-i18n-discard="{% trans 'Verwerfen' %}" data-i18n-close="{% trans 'Schließen' %}" data-i18n-autosave-failed="{% trans 'Der Entwurf konnte nicht zwischengespeichert werden. Bitte den Text sichern und die Seite neu laden.' %}" data-i18n-autosave-quota="{% trans 'Speicher voll — der Entwurf wird nicht mehr zwischengespeichert. Bitte lokalen Speicher freigeben.' %}"
           x-data="eventClientAutocomplete"
+          @submit="guardCaseContext"
           data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
           data-initial-client-id="{{ client_id|default:'' }}"
           {% comment %}Refs #1803 (Konzept §3.8, R1): Vorlage fuer die
@@ -257,6 +258,7 @@
                 <p>{% trans "Die Fälle konnten nicht geladen werden. Bitte erneut versuchen." %}</p>
                 <button type="button" @click="retryCases" class="min-h-[44px] text-accent hover:underline">{% trans "Wiederholen" %}</button>
             </div>
+            <p x-show="caseContextPending" x-cloak role="status" class="text-sm text-ink-muted">{% trans "Vor dem Speichern muss die vorgemerkte Fallauswahl geprüft werden. Bitte warten oder die Fallabfrage wiederholen." %}</p>
             <p x-show="showNoCasesHint" x-cloak class="text-[12px] text-ink-muted" data-testid="no-cases-for-client">
                 {% trans "Kein offener Fall für diese Person vorhanden." %}
             </p>
@@ -277,6 +279,7 @@
 
         <div class="flex flex-col sm:flex-row gap-2.5">
             <button type="submit" id="event-submit-btn"
+                    :disabled="caseContextPending"
                     class="w-full sm:w-auto px-4 py-2 btn-primary transition-colors">
                 {% trans "Speichern" %}
             </button>
@@ -285,6 +288,7 @@
             sinnvoll — bei Typen mit Mindest-Kontaktstufe (anonymousAllowed=false)
             ausgeblendet, weil der nächste Kontakt bewusst anonym startet.{% endcomment %}
             <button type="submit" name="_save_and_new" value="1" id="event-submit-next"
+                    :disabled="caseContextPending"
                     data-testid="event-submit-next"
                     x-show="anonymousAllowed" x-cloak
                     class="w-full sm:w-auto px-4 py-2 btn-secondary transition-colors">

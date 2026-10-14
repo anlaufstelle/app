@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Fallkontext bei Schnell-Vorlagen erhalten** (#2534) — Anwenden, Wechseln und Entfernen einer Vorlage übernehmen die aktuelle Personen- und Fallauswahl und prüfen sie erneut auf dem Server.
+- **Fallkontext bei Schnell-Vorlagen erhalten** (#2534) — Anwenden, Wechseln und Entfernen einer Vorlage erhalten auch während Laden und nach Ladefehlern die Fallabsicht derselben Person zur erneuten Serverprüfung; Speichern wartet auf die Klärung des vorgemerkten Falls.
 - **Verspätete Fallantworten verwerfen** (#2541) — Beim Personenwechsel werden alte Fälle und die Auswahl sofort geleert; nur die Antwort für die aktuelle Person darf den Fallbereich aktualisieren.
 - **Fall-Ladefehler mit Wiederholung anzeigen** (#2557) — Laden und Fehler sind vom erfolgreichen Leerzustand getrennt; fehlgeschlagene Fallabfragen lassen sich wiederholen.
 - **Fehler der Personensuche sichtbar machen** (#2558) — HTTP- und Netzfehler entwerten alte Treffer, zeigen eine zugängliche Meldung und erlauben eine erneute Suche.

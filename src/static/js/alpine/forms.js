@@ -459,8 +459,15 @@ document.addEventListener("alpine:init", () => {
                     url.searchParams.delete("client");
                     url.searchParams.delete("case");
                     if (this.selectedId) url.searchParams.set("client", this.selectedId);
-                    if (this.selectedCaseId) url.searchParams.set("case", this.selectedCaseId);
+                    const caseId = this.selectedCaseId || (this.caseContextPending ? this._initialCaseId : "");
+                    if (caseId) url.searchParams.set("case", caseId);
                     link.href = url.toString();
+                },
+                get caseContextPending() {
+                    return Boolean(this._initialCaseId && this.selectedId && this.selectedId === this._casesClientId);
+                },
+                guardCaseContext(event) {
+                    if (this.caseContextPending) event.preventDefault();
                 },
                 retryCases() {
                     return this.loadCasesForClient(this.selectedId);
