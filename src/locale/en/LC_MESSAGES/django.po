@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 12:09+0200\n"
+"POT-Creation-Date: 2026-10-14 12:15+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14553,3 +14553,31 @@ msgstr "Field {name}: position {position} of {total}"
 #, python-format
 msgid "Feld %(name)s"
 msgstr "Field %(name)s"
+
+#: src/core/views/_edit_errors.py:37
+msgid "Datei vorhanden"
+msgstr "File present"
+
+#: src/core/views/_edit_errors.py:85
+msgid "Der Datensatz wurde zwischenzeitlich bearbeitet oder der Versionsnachweis ist ungültig. Es wurde nichts gespeichert."
+msgstr "The record was edited in the meantime or the version token is invalid. Nothing was saved."
+
+#: src/templates/core/partials/_edit_conflict.html:9
+msgid "Datei bitte erneut auswählen:"
+msgstr "Please select the file again:"
+
+#: src/templates/core/partials/_edit_conflict.html:14
+msgid "Aktueller Stand"
+msgstr "Current state"
+
+#: src/templates/core/partials/_edit_conflict.html:15
+msgid "Der Serverstand ist neuer oder Ihr Versionsnachweis ist ungültig. Es wurde nichts gespeichert. Ihre Eingaben stehen unverändert im Formular."
+msgstr "The server state is newer or your version token is invalid. Nothing was saved. Your entries remain unchanged in the form."
+
+#: src/templates/core/partials/_edit_conflict.html:16
+msgid "Abweichende Felder sind markiert. Prüfen oder kopieren Sie Ihre Eingaben und den aktuellen Stand. Danach bewusst erneut speichern: Dabei ersetzen Ihre Formularwerte die entsprechenden Serverwerte."
+msgstr "Differing fields are marked. Review or copy your entries and the current state. Then save again deliberately: your form values will replace the corresponding server values."
+
+#: src/templates/core/partials/_edit_conflict.html:20
+msgid "Abweichend"
+msgstr "Differs"
