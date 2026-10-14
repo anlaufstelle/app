@@ -447,12 +447,6 @@ class TestFieldBoardKeyboard:
         finally:
             _delete_doctype(page, base_url, pk)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Known defect: after a keyboard move the follow-up refreshes of the preview and the condition "
-        "board take the focus (document.activeElement ends on #condition-board) and the announced position can "
-        "be the stale one (Position 2 von 2).",
-    )
     def test_focus_stays_on_counter_button_after_move(self, authenticated_page, base_url):
         page = authenticated_page
         pk = _create_doctype(page, base_url, _cfg_name("DT-FOC"))

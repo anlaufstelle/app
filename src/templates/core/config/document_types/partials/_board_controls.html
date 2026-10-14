@@ -1,5 +1,5 @@
 {% load i18n %}
-<div data-order-controls class="flex flex-wrap items-center gap-2 my-2">
+<div data-order-controls data-hx-no-focus class="flex flex-wrap items-center gap-2 my-2">
     <button type="button" data-board-order="up" class="btn-secondary px-2 py-1 text-[12px] disabled:opacity-50"
             aria-label="{% blocktrans %}{{ name }}: Nach oben{% endblocktrans %}"{% if first %} disabled{% endif %}>{% trans "Nach oben" %}</button>
     <button type="button" data-board-order="down" class="btn-secondary px-2 py-1 text-[12px] disabled:opacity-50"

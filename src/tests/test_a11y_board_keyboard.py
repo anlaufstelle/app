@@ -56,6 +56,24 @@ def test_board_keyboard_controls_render_for_mixed_blocks(client, admin_user, doc
 
 
 @pytest.mark.django_db
+def test_board_controls_opt_out_of_global_focus_management(client, admin_user, doc_type_contact):
+    """#2554: follow-up refreshes (preview, conditions) must not move focus off a pressed board control."""
+    group = FieldGroup.objects.create(document_type=doc_type_contact, name="Focus group", sort_order=1)
+    field = doc_type_contact.fields.order_by("sort_order").first()
+    field.field_group = group
+    field.save(update_fields=["field_group"])
+    client.force_login(admin_user)
+    root = TreeParser(
+        client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk})).content.decode()
+    ).root
+    board = find(root, "id", "field-board")
+    controls = [node for node in board.iter() if "data-order-controls" in node.attrib]
+    assert controls
+    for node in controls:
+        assert "data-hx-no-focus" in node.attrib
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("endpoint", ["config_reorder_blocks", "config_reorder_fields", "config_move_field"])
 def test_board_endpoints_return_429_after_sixty_requests(
     client, admin_user, doc_type_contact, ratelimit_enabled, endpoint
