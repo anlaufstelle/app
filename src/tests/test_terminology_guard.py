@@ -67,18 +67,31 @@ def test_contact_stage_labels_single_source() -> None:
     }
 
 
-def test_chart_js_labels_match_contact_stage() -> None:
-    """Die hartcodierte Chart-Legende traegt dieselben Labels wie das Modell.
+# Chart dataset key per contact stage (``data-i18n-<key>`` / ``this.text("<key>", …)``).
+_CHART_STAGE_KEYS = {
+    Client.ContactStage.IDENTIFIED: "pseudonym",
+    Client.ContactStage.QUALIFIED: "qualified",
+}
 
-    ``statistics-charts.js`` liegt ausserhalb des i18n-Katalogs und ausserhalb
-    des Denylist-Scans unten — ohne diesen Guard driftet die Legende des
-    Kontaktverlaufs lautlos gegen den Rest der Statistik.
+
+def test_chart_js_labels_match_contact_stage() -> None:
+    """The chart legend carries the same labels as the model.
+
+    Since #2603 ``statistics-charts.js`` reads its legend texts from translated
+    ``data-i18n-*`` attributes of the statistics template (English fallback in
+    the JS). Without this guard the legend of the contact history drifts
+    silently against the rest of the statistics.
     """
+    assert set(_CHART_STAGE_KEYS) == set(Client.ContactStage)
     js = (STATIC_JS / "statistics-charts.js").read_text(encoding="utf-8")
-    for stage in Client.ContactStage:
-        assert f'label: "{stage.label}"' in js, (
-            f"statistics-charts.js kennt das Label {stage.label!r} nicht — "
-            "Chart-Legende und Kontaktstufen sind auseinandergelaufen."
+    template = (TEMPLATES / "core" / "statistics" / "partials" / "dashboard_content.html").read_text(encoding="utf-8")
+    for stage, key in _CHART_STAGE_KEYS.items():
+        assert f'label: this.text("{key}",' in js, (
+            f"statistics-charts.js does not use the chart text {key!r} for {stage.value!r}."
+        )
+        assert f"data-i18n-{key}=\"{{% trans '{stage.label}' %}}\"" in template, (
+            f"dashboard_content.html does not provide the label {stage.label!r} as data-i18n-{key} — "
+            "chart legend and contact stages have drifted apart."
         )
 
 
