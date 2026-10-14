@@ -69,11 +69,13 @@ class TestEpisodeClose:
         assert closed.ended_at == timezone.now().date()
 
     def test_close_with_explicit_date(self, episode):
+        episode.started_at = datetime.date(2025, 6, 1)
         custom_date = datetime.date(2025, 6, 15)
         closed = episode.close(ended_at=custom_date)
         assert closed.ended_at == custom_date
 
     def test_close_is_idempotent(self, episode):
+        episode.started_at = datetime.date(2025, 6, 1)
         first = episode.close(ended_at=datetime.date(2025, 6, 1))
         second = first.close(ended_at=datetime.date(2025, 7, 1))
         assert second.ended_at == datetime.date(2025, 6, 1)

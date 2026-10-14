@@ -1068,7 +1068,9 @@ Eine **Episode** ist eine abgrenzbare Phase innerhalb eines Falls. Wenn z. B. ei
 
 **Episode bearbeiten:** Klicken Sie bei der Episode auf **Bearbeiten**, um Titel, Beschreibung, Beginn oder Ende anzupassen.
 
-**Episode abschließen:** Klicken Sie auf **Abschließen**. Das Enddatum wird automatisch auf das heutige Datum gesetzt.
+**Episode abschließen:** Klicken Sie auf **Abschließen**. Das Enddatum wird automatisch auf das heutige Datum gesetzt. Liegt der Beginn in der Zukunft, wird der Abschluss mit einer Meldung abgewiesen; bearbeiten Sie die Episode, um den Beginn zu korrigieren oder ein passendes Ende einzutragen.
+
+Das Ende darf nicht vor dem Beginn liegen; derselbe Tag ist erlaubt. Eine entsprechende Fehlermeldung am Enddatum erhält Ihre Eingaben beim Erstellen und Bearbeiten.
 
 Jede Episode zeigt ihren Status:
 - **aktiv** (grün) – noch kein Enddatum

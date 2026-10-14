@@ -141,14 +141,8 @@ class Case(DynamicDataEncryptionMixin, SoftDeletableModel):
                 self._encrypt_sensitive_fields()
             super().save(*args, **kwargs)
 
-    def create_episode(self, *, user, title, description="", started_at=None):
-        """Create an :class:`Episode` for this case.
-
-        Refs #958 — ersetzt den frueheren ``services/episodes.create_episode``-
-        Service-Aufruf. Status-Guard bleibt am Modell (Defense-in-Depth gegen
-        direkte ORM-Zugriffe), View-Layer redirected zusaetzlich mit User-
-        freundlicher Meldung.
-        """
+    def create_episode(self, *, user, title, description="", started_at=None, ended_at=None):
+        """Create an episode for an open case, including its optional end date."""
         from core.models.episode import Episode
 
         if self.status != self.Status.OPEN:
@@ -158,5 +152,6 @@ class Case(DynamicDataEncryptionMixin, SoftDeletableModel):
             title=title,
             description=description,
             started_at=started_at or timezone.now().date(),
+            ended_at=ended_at,
             created_by=user,
         )

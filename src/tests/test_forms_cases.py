@@ -175,13 +175,8 @@ class TestEpisodeForm:
         )
         assert_field_error(form, "started_at", "")
 
-    def test_ended_at_before_started_at_is_currently_valid(self):
-        """Boundary: ``ended_at`` < ``started_at`` ist aktuell valide.
-
-        Hinweis: aktuelle ModelForm trimmt nicht — ggf. Edge-Case dort
-        schließen. Dieser Test dokumentiert nur den IST-Zustand, damit ein
-        späterer Fix bewusst gegen einen failing Test fährt.
-        """
+    def test_ended_at_before_started_at_is_rejected(self):
+        """Refs #2537: the requirement now rejects reversed episode dates."""
         form = EpisodeForm(
             data={
                 "title": "Rückdatierte Episode",
@@ -190,4 +185,4 @@ class TestEpisodeForm:
                 "ended_at": "2026-05-01",
             },
         )
-        assert_form_valid(form)
+        assert_field_error(form, "ended_at", "Beginn")

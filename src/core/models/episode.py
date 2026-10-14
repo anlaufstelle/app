@@ -52,13 +52,13 @@ class Episode(SoftDeletableModel):
         return self.title
 
     def close(self, ended_at=None):
-        """Set ``ended_at`` and persist. Idempotent — no-op if already closed.
+        """Close once, rejecting an end before the existing start."""
+        from core.services.case.episodes import validate_episode_dates
 
-        Refs #958 — ersetzt den frueheren ``services/episodes.close_episode``-
-        Service-Aufruf.
-        """
         if self.ended_at is not None:
             return self
-        self.ended_at = ended_at or timezone.now().date()
+        end = ended_at or timezone.now().date()
+        validate_episode_dates(self.started_at, end)
+        self.ended_at = end
         self.save(update_fields=["ended_at"])
         return self

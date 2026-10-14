@@ -97,12 +97,13 @@ class EpisodeCreateView(StaffRequiredMixin, View):
                     title=form.cleaned_data["title"],
                     description=form.cleaned_data.get("description", ""),
                     started_at=form.cleaned_data["started_at"],
+                    ended_at=form.cleaned_data["ended_at"],
                 )
             except ValidationError as exc:
-                # Auch der inzwischen geschlossene Fall: der Dienst lehnt am
-                # FRISCH gesperrten Stand ab und kennzeichnet das selbst. Kein
-                # erneuter Blick auf den Fall — der kann inzwischen wieder
-                # offen sein. Jede andere Ausnahme bleibt ein Fehler.
+                if hasattr(exc, "error_dict") and set(exc.error_dict) == {"ended_at"}:
+                    form.add_error(None, exc)
+                    context = _episode_context(case, form, is_edit=False)
+                    return render(request, "core/cases/episode_form.html", context)
                 return _abgesagt(request, case, _meldung(exc))
             messages.success(request, _("Episode wurde erstellt."))
             return redirect("core:case_detail", pk=case.pk)
@@ -148,6 +149,10 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
                 context["current_episode_form"] = current_form
                 return render(request, "core/cases/episode_form.html", context)
             except ValidationError as exc:
+                if hasattr(exc, "error_dict") and set(exc.error_dict) == {"ended_at"}:
+                    form.add_error(None, exc)
+                    context = _episode_context(case, form, is_edit=True, episode=episode)
+                    return render(request, "core/cases/episode_form.html", context)
                 return _abgesagt(request, case, _meldung(exc))
             messages.success(request, _("Episode wurde aktualisiert."))
             return redirect("core:case_detail", pk=case.pk)

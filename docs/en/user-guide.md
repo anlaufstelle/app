@@ -1068,7 +1068,9 @@ An **episode** is a distinct phase within a case. For example, if a person enter
 
 **Editing an episode:** Click **Edit** next to the episode to adjust the title, description, start, or end date.
 
-**Completing an episode:** Click **Complete**. The end date is automatically set to today's date.
+**Completing an episode:** Click **Complete**. The end date is automatically set to today's date. If the start is in the future, completion is rejected with a message; edit the episode to correct the start or enter a suitable end date.
+
+The end must not precede the start; the same day is allowed. A corresponding error at the end date retains your inputs when creating or editing.
 
 Each episode shows its status:
 - **active** (green) -- no end date yet
@@ -1153,5 +1155,6 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: fa90eac97f4bd5d7fe521b897ea725662e9c27f7 -->
+<!-- source-hash: d45be6ce9c7a8fd942f5868ead7ff69c451c3a7c -->
+<!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->

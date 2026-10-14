@@ -1,11 +1,12 @@
 """Forms for episode management."""
 
 from django import forms
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.mixins import TailwindFormMixin
 from core.models.episode import Episode
-from core.services.case.episodes import episode_basis_token
+from core.services.case.episodes import episode_basis_token, validate_episode_dates
 
 
 class EpisodeForm(TailwindFormMixin, forms.ModelForm):
@@ -44,3 +45,11 @@ class EpisodeForm(TailwindFormMixin, forms.ModelForm):
         self.fields["description"].required = False
         self.fields["started_at"].label = _("Beginn")  # pragma: no mutate
         self.fields["ended_at"].label = _("Ende")  # pragma: no mutate
+
+    def clean(self):
+        cleaned_data = super().clean() or {}
+        try:
+            validate_episode_dates(cleaned_data.get("started_at"), cleaned_data.get("ended_at"))
+        except ValidationError as exc:
+            self.add_error(None, exc)
+        return cleaned_data

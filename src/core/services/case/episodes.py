@@ -4,6 +4,7 @@ import logging
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import AuditLog, Episode
@@ -21,6 +22,12 @@ EPISODE_CASE_NOT_OPEN_MESSAGE = _("Episoden können nur für offene Fälle erste
 #: ``case`` (ein Umhaengen der Episode in einen fremden Fall) und die
 #: Soft-Delete-Marker.
 _UPDATABLE_FIELDS = frozenset({"title", "description", "started_at", "ended_at"})
+
+
+def validate_episode_dates(started_at, ended_at):
+    """Reject reversed dates without imposing a limit on future dates."""
+    if started_at is not None and ended_at is not None and ended_at < started_at:
+        raise ValidationError({"ended_at": _("Das Ende darf nicht vor dem Beginn liegen.")})
 
 
 _EPISODE_STATE_SALT = "core.episode.form_state"
@@ -90,6 +97,7 @@ def update_episode(episode, user, *, basis_token=None, **fields):
         facility_id=locked.case.facility_id,
         salt=_EPISODE_STATE_SALT,
     )
+    validate_episode_dates(fields.get("started_at", locked.started_at), fields.get("ended_at", locked.ended_at))
     changed_fields = [key for key, value in fields.items() if getattr(locked, key) != value]
     if not changed_fields:
         return locked
@@ -108,7 +116,7 @@ def update_episode(episode, user, *, basis_token=None, **fields):
 
 
 @transaction.atomic
-def create_episode(case, user, *, title, description="", started_at=None):
+def create_episode(case, user, *, title, description="", started_at=None, ended_at=None):
     """Episode anlegen — Service-Naht ueber ``Case.create_episode`` (Refs #2045).
 
     Das Anlegen lag bisher als reine Modell-Methode vor und wurde von der View
@@ -139,7 +147,11 @@ def create_episode(case, user, *, title, description="", started_at=None):
     locked_case = lock_case_for_write(case)
     if locked_case.status != locked_case.Status.OPEN:
         raise ValidationError(EPISODE_CASE_NOT_OPEN_MESSAGE)
-    return locked_case.create_episode(user=user, title=title, description=description, started_at=started_at)
+    started_at = started_at or timezone.now().date()
+    validate_episode_dates(started_at, ended_at)
+    return locked_case.create_episode(
+        user=user, title=title, description=description, started_at=started_at, ended_at=ended_at
+    )
 
 
 @transaction.atomic
