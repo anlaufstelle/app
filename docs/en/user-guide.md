@@ -1080,6 +1080,8 @@ Each episode shows its status:
 
 **Outcome goals** document what the work on a case should achieve -- e.g., "Stable housing situation" or "Connection to addiction counseling". Each goal can be broken down into specific **milestones**.
 
+Outcome goal and milestone titles may contain at most **200 characters**. This also applies when editing a goal title.
+
 **Creating a new outcome goal:**
 
 1. On the case detail page (right column, "Outcome Goals" section), enter the title in the text field.
@@ -1155,6 +1157,6 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: d45be6ce9c7a8fd942f5868ead7ff69c451c3a7c -->
+<!-- source-hash: 2680ef73a770c496bdc70d5da7907c12b36d38f6 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->

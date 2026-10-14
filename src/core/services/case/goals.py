@@ -23,6 +23,14 @@ from core.services.dashboard import log_activity
 logger = logging.getLogger(__name__)
 
 
+def _validated_title(title):
+    """Validate the stripped title before writing a varchar(200)."""
+    title = title.strip()
+    if len(title) > 200:
+        raise ValidationError(_("Der Titel darf höchstens 200 Zeichen enthalten."))
+    return title
+
+
 @transaction.atomic
 def create_goal(case, user, title, description=""):
     """Create a new OutcomeGoal for a case.
@@ -41,6 +49,7 @@ def create_goal(case, user, title, description=""):
     """
     _assert_actor_facility(user, case.facility_id)
     locked_case = lock_case_for_write(case)
+    title = _validated_title(title)
     goal = OutcomeGoal(
         case=locked_case,
         title=title,
@@ -87,7 +96,7 @@ def update_goal(goal, user, title=None, description=None):
     lock_goal_for_write(goal)
     fields = {}
     if title is not None:
-        fields["title"] = title
+        fields["title"] = _validated_title(title)
     if description is not None:
         fields["description"] = description
     if not fields:
@@ -200,6 +209,7 @@ def create_milestone(goal, user, title, sort_order=0):
         user, OutcomeGoal.objects.filter(pk=goal.pk).values_list("case__facility_id", flat=True).first()
     )
     locked_goal = lock_goal_for_write(goal)
+    title = _validated_title(title)
     milestone = Milestone(
         goal=locked_goal,
         title=title,

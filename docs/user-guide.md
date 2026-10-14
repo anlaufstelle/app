@@ -1080,6 +1080,8 @@ Jede Episode zeigt ihren Status:
 
 **Wirkungsziele** dokumentieren, was die Arbeit am Fall erreichen soll – z. B. „Stabile Wohnsituation" oder „Anbindung an Suchtberatung". Jedes Ziel kann in konkrete **Meilensteine** untergliedert werden.
 
+Titel von Wirkungszielen und Meilensteinen dürfen höchstens **200 Zeichen** enthalten. Das gilt auch beim Bearbeiten eines Zieltitels.
+
 **Neues Wirkungsziel erstellen:**
 
 1. Auf der Fall-Detailseite (rechte Spalte, Bereich „Wirkungsziele") geben Sie den Titel in das Textfeld ein.
