@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 14:45+0200\n"
+"POT-Creation-Date: 2026-10-14 15:19+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12893,10 +12893,6 @@ msgstr "Berechtigungen"
 msgid "Die k-Anonymitäts-Schwelle liegt unter 3. Bei k = 1 wird keine Zahl unterdrückt; auch Einzelfälle werden veröffentlicht und können Personen erkennbar machen. Empfohlen ist k = 5."
 msgstr "Die k-Anonymitäts-Schwelle liegt unter 3. Bei k = 1 wird keine Zahl unterdrückt; auch Einzelfälle werden veröffentlicht und können Personen erkennbar machen. Empfohlen ist k = 5."
 
-#: src/core/demo.py:9
-msgid "Offline-Schlüssel konnte nicht aktiviert werden. Bitte regulär anmelden oder die Demo nach dem nächsten Reset erneut starten."
-msgstr "Offline-Schlüssel konnte nicht aktiviert werden. Bitte regulär anmelden oder die Demo nach dem nächsten Reset erneut starten."
-
 #: src/core/forms/clients.py:139 src/core/models/managers.py:205
 #: src/core/services/client/main.py:939
 msgid "Bei vorhandenen Ereignissen ist ein Herabstufungsantrag mit Vier-Augen-Freigabe erforderlich."
@@ -14323,10 +14319,6 @@ msgstr "Offline-Speicher nicht verfügbar."
 msgid "Der Server wurde erneut geändert. Bitte den Konflikt nochmals prüfen."
 msgstr "Der Server wurde erneut geändert. Bitte den Konflikt nochmals prüfen."
 
-#: src/templates/base.html:210
-msgid "Offline-Schlüssel wird vorbereitet. Bitte vor dem Weiterklicken warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten."
-msgstr "Offline-Schlüssel wird vorbereitet. Bitte vor dem Weiterklicken warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten."
-
 #: src/core/services/file_vault/policy.py:442
 #, python-format
 msgid "Bild enthält zu viele Frames oder Seiten. Maximum: %(max)d."
@@ -14817,3 +14809,15 @@ msgstr "Übertragung beendet."
 #: src/templates/base.html:148 src/templates/offline_base.html:135
 msgid "Neuer Konflikt. Öffnen Sie die Seite „Konflikte“ über den Link im Konfliktbanner zur Auflösung."
 msgstr "Neuer Konflikt. Öffnen Sie die Seite „Konflikte“ über den Link im Konfliktbanner zur Auflösung."
+
+#: src/core/demo.py:9
+msgid "Offline-Schlüssel konnte nicht aktiviert werden. Bitte die Demo erneut starten oder regulär anmelden."
+msgstr "Offline-Schlüssel konnte nicht aktiviert werden. Bitte die Demo erneut starten oder regulär anmelden."
+
+#: src/templates/base.html:217
+msgid "Offline-Schlüssel wird vorbereitet. Bitte kurz warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten oder regulär anmelden."
+msgstr "Offline-Schlüssel wird vorbereitet. Bitte kurz warten; nach einem vorzeitigen Seitenwechsel die Demo erneut starten oder regulär anmelden."
+
+#: src/templates/base.html:220
+msgid "Offline-Schlüssel ist bereit."
+msgstr "Offline-Schlüssel ist bereit."
