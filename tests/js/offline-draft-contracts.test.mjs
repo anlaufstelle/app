@@ -483,3 +483,35 @@ it("uncertain confirmation recovery never inserts another person's draft", async
     expect(p.w.document.querySelector("textarea").value).toBe("");
     expect((await p.store.getDecrypted("drafts", key)).data).toMatchObject({ notes: "Confidential A", __personPk: "person-a" });
 });
+
+it.each([true, false])("a live draft bound to person A pauses for B and resumes for A (initiallyAnonymous=%s)", async initiallyAnonymous => {
+    const p = await page(formHtml("", initiallyAnonymous ? "" : "person-a")); await start(p);
+    const field = p.w.document.querySelector("textarea");
+    const client = p.w.document.querySelector('[name="client"]');
+    if (initiallyAnonymous) {
+        field.value = "Initial anonymous text";
+        field.dispatchEvent(new p.w.Event("input", { bubbles: true })); await tick(p);
+        client.value = "person-a";
+        client.dispatchEvent(new p.w.Event("change", { bubbles: true }));
+    }
+    field.value = "Confidential person A notes";
+    field.dispatchEvent(new p.w.Event("input", { bubbles: true })); await tick(p);
+    const original = (await p.store.getDecrypted("drafts", key)).data;
+    expect(original).toMatchObject({ notes: "Confidential person A notes", __personPk: "person-a" });
+    client.value = "person-b";
+    client.dispatchEvent(new p.w.Event("change", { bubbles: true })); await tick(p);
+    expect((await p.store.getDecrypted("drafts", key)).data).toEqual(original);
+    expect(p.w.document.querySelector("#autosave-error-banner")?.textContent).toContain("Draft not saved");
+    field.value += " further typing";
+    field.dispatchEvent(new p.w.Event("input", { bubbles: true })); await tick(p);
+    expect((await p.store.getDecrypted("drafts", key)).data).toEqual(original);
+    expect(field.value).toBe("Confidential person A notes further typing");
+    const other = await page(formHtml("", "person-b")); await start(other);
+    expect(other.w.document.querySelector("textarea").value).toBe("");
+    expect(other.w.document.body.textContent).toContain("Other person's draft retained");
+    client.value = "person-a";
+    client.dispatchEvent(new p.w.Event("change", { bubbles: true })); await tick(p);
+    expect((await p.store.getDecrypted("drafts", key)).data).toMatchObject({ __personPk: "person-a", notes: "Confidential person A notes further typing" });
+    const own = await page(formHtml("", "person-a")); await start(own);
+    expect(own.w.document.querySelector("textarea").value).toBe("Confidential person A notes further typing");
+});

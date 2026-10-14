@@ -312,9 +312,7 @@
     async function saveDraft(ctx) {
         if (!isOfflineReady()) return;
         if (ctx.personMismatch || (ctx.personLocked && getPersonPk(ctx.form) !== ctx.personPk)) {
-            if (JSON.stringify(buildDraftPayload(ctx.form, ctx.personPk)) !== ctx.inputBaseline) {
-                showSaveErrorBanner(ctx.form, false);
-            }
+            showSaveErrorBanner(ctx.form, false);
             return;
         }
         if (!ctx.personLocked) ctx.personPk = getPersonPk(ctx.form);
@@ -345,8 +343,9 @@
                 ctx.lastSavedJson = json;
                 ctx.storedDraftJson = json;
                 ctx.inputBaseline = inputJson;
-                // Only restored content retains its original person binding.
-                // A live form may select its first person after saving text.
+                // Anonymous text may receive its first person. Once saved
+                // with a person, later selections cannot relabel that text.
+                ctx.personLocked = Boolean(ctx.personPk);
                 ctx.forceSave = false;
                 if (ctx.userEdited !== undefined) {
                     ctx.userEdited = JSON.stringify(buildDraftPayload(ctx.form, ctx.personPk)) !== inputJson;
