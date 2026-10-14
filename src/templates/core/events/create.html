@@ -29,7 +29,7 @@
           {# §6.5 (Refs #1813 T4): ?case=-Vorbelegung — das Fall-<select> ist #}
           {# Alpine-getrieben (eventClientAutocomplete.loadCasesForClient), #}
           {# dieses Attribut ist der einzige Übergabeweg dorthin. #}
-          data-initial-case-id="{{ case_id|default:'' }}"
+          data-initial-case-id="{{ meta_form.case.value|default:'' }}"
           data-autocomplete-url="{% url 'core:client_autocomplete' %}"
           {% comment %}Refs #1735: ``cases_for_client`` ist staff+, die Kontakterfassung
           assistant+. Ohne Guard lief der Fetch für die Assistenz ins 403 und wurde in
@@ -37,6 +37,12 @@
           und der Hinweis „Kein offener Fall" behauptete etwas Falsches.{% endcomment %}
           {% if user.is_staff_or_above %}data-cases-for-client-url="{% url 'core:cases_for_client' %}"{% endif %}>
         {% csrf_token %}
+        {% if case_selection_reset %}
+        <p role="alert" class="text-sm text-yellow-700">{% trans "Die Fallauswahl wurde zurückgesetzt: Der Fall ist für diese Person nicht mehr verfügbar oder nicht zugänglich." %}</p>
+        {% endif %}
+        {% if reselect_files %}
+        <p role="alert" class="text-sm text-yellow-700">{% trans "Datei erneut auswählen: Hochgeladene Dateien können nach einem Fehler nicht wiederhergestellt werden." %}</p>
+        {% endif %}
 
         {# Schnell-Vorlagen (Quick-Templates, Refs #494) #}
         {% if quick_templates %}
@@ -45,14 +51,14 @@
             {% if applied_template %}
             <p class="text-[12px] text-accent">
                 {% blocktrans with name=applied_template.name %}Vorlage angewendet: <strong>{{ name }}</strong>{% endblocktrans %}
-                — <a href="{% url 'core:event_create' %}{% if client_id %}?client={{ client_id }}{% endif %}" class="underline" data-autosave-clear-link data-testid="template-remove-link">{% trans "Vorlage entfernen" %}</a>
+                — <a href="{% url 'core:event_create' %}{% if client_id %}?client={{ client_id }}{% if case_id %}&amp;case={{ case_id }}{% endif %}{% endif %}" @click="updateContextLink" class="underline" data-autosave-clear-link data-testid="template-remove-link">{% trans "Vorlage entfernen" %}</a>
             </p>
             {% else %}
             <p class="text-[12px] text-accent">{% trans "Wählen Sie eine Vorlage, um Felder automatisch vorzubefüllen." %}</p>
             {% endif %}
             <div class="flex flex-wrap gap-2">
                 {% for tpl in quick_templates %}
-                <a href="{% url 'core:event_create' %}?template={{ tpl.pk }}{% if client_id %}&client={{ client_id }}{% endif %}"
+                <a href="{% url 'core:event_create' %}?template={{ tpl.pk }}{% if client_id %}&amp;client={{ client_id }}{% endif %}{% if case_id %}&amp;case={{ case_id }}{% endif %}" @click="updateContextLink"
                    class="inline-flex items-center px-3 py-1.5 text-[13px] rounded-md border border-accent/30 bg-surface text-accent hover:bg-accent-light"
                    data-template-id="{{ tpl.pk }}"
                    data-template-name="{{ tpl.name }}">

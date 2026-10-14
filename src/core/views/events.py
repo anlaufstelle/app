@@ -21,7 +21,7 @@ from django_ratelimit import UNSAFE
 from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.forms.tally import TallyNumberDataForm
-from core.models import Client, DocumentType, Event
+from core.models import Case, Client, DocumentType, Event
 from core.services.attachments import (
     lock_attachment_batch_before_audit,
     quota_backstop_audit_boundary,
@@ -202,6 +202,29 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
 
     idempotency_scope = "event_create"
 
+    def _restore_case_context(self, request, context):
+        """Revalidate case ownership and visibility before rendering the picker."""
+        meta_form = context["meta_form"]
+        case_id = meta_form["case"].value()
+        case = get_case_or_none(request.current_facility, case_id)
+        allowed = (
+            case is not None
+            and request.user.is_staff_or_above
+            and case.status == Case.Status.OPEN
+            and str(case.client_id) == context.get("client_id")
+            and (case.document_type is None or user_can_see_document_type(request.user, case.document_type))
+        )
+        selected = str(case.pk) if allowed else ""
+        if meta_form.is_bound:
+            meta_form.data = meta_form.data.copy()
+            meta_form.data["case"] = selected
+        else:
+            meta_form.initial["case"] = selected
+            meta_form.fields["case"].initial = selected
+            meta_form["case"].initial = selected
+        context["case_id"] = selected
+        context["case_selection_reset"] = bool(case_id and not allowed)
+
     def _invalid_response(self, request, form, context):
         """Ungueltiges Formular beantworten — die EINE Stelle des Raw-JSON-
         Contracts (Refs #1351 Task 8, #1387).
@@ -216,6 +239,8 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         """
         if _wants_raw_json_response(request):
             return _invalid_form_response(form)
+        self._restore_case_context(request, context)
+        context["reselect_files"] = bool(request.FILES)
         return render(request, "core/events/create.html", context)
 
     def on_idempotent_hit(self, request, hit):
@@ -315,10 +340,6 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
             "data_form": data_form,
             "client_id": client_id or "",
             "client_pseudonym": "",
-            # Refs #1813 (T4, §6.5): roher ?case=-Query-Wert, analog client_id —
-            # das Case-<select> ist Alpine-/JS-getrieben (eventClientAutocomplete),
-            # data-initial-case-id ist der einzige Übergabeweg dorthin.
-            "case_id": case_id or "",
             "quick_templates": quick_templates,
             "current_doc_type_templates": current_doc_type_templates,
             "applied_template": applied_template,
@@ -331,6 +352,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         if client:
             context["client_pseudonym"] = client.pseudonym
 
+        self._restore_case_context(request, context)
         return render(request, "core/events/create.html", context)
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))

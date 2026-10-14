@@ -437,6 +437,15 @@ document.addEventListener("alpine:init", () => {
                     this.highlightIndex = -1;
                     this.loadCasesForClient(item.id);
                 },
+                updateContextLink(event) {
+                    const link = event.currentTarget;
+                    const url = new URL(link.href);
+                    url.searchParams.delete("client");
+                    url.searchParams.delete("case");
+                    if (this.selectedId) url.searchParams.set("client", this.selectedId);
+                    if (this.selectedCaseId) url.searchParams.set("case", this.selectedCaseId);
+                    link.href = url.toString();
+                },
                 loadCasesForClient(clientId) {
                     this.selectedCaseId = "";
                     // Refs #1735: Fehlt die URL, ist die Rolle fuer
