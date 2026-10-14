@@ -198,19 +198,26 @@ class TestAutoSave:
 
         page.select_option("select[name='document_type']", label="Kontakt")
         page.wait_for_load_state("domcontentloaded")
+        # "Kontakt" is preselected, so the selection alone leaves the form
+        # unchanged, and an unchanged form is not stored as a draft. A typed
+        # note is the input the draft has to protect until the save is confirmed.
+        page.fill("textarea[name='notiz']", "Auto-Save vor Submit")
 
         # #662 geprueft — Polling auf encrypted IndexedDB
         # ist unzuverlaessig (siehe oben). Fixe Pause bleibt.
         page.wait_for_timeout(6000)
         stored = page.evaluate(self._JS_GET)
         assert stored is not None, "Auto-Save sollte vor Submit Daten gespeichert haben"
+        assert stored["notiz"] == "Auto-Save vor Submit"
 
         page.locator("#event-submit-btn").click()
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
 
-        # IndexedDB-Draft sollte nach Submit geloescht sein
-        cleared = page.evaluate(self._JS_GET)
-        assert cleared is None, "Draft sollte nach Submit geloescht sein"
+        # IndexedDB-Draft sollte nach Submit geloescht sein. The confirming
+        # detail page removes it in the asynchronous autosave start, so poll.
+        assert wait_until(page, lambda: page.evaluate(self._JS_GET) is None, timeout_ms=15000), (
+            "Draft sollte nach Submit geloescht sein"
+        )
 
     def test_autosave_banner_dismissable(self, authenticated_page, base_url):
         """Wiederherstellungs-Banner laesst sich schliessen."""
