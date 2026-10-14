@@ -127,7 +127,9 @@ def test_event_review_matches_detail_visibility(
         assert TargetLinks(body).links == []
         assert "SECRET-EVENT-TYPE" not in body
         assert event.client.pseudonym not in body
-        assert "1997" not in body
+        # Match the rendered date forms, not the bare year: user ids such as 19970 contain it.
+        assert "03.02.1997" not in body
+        assert "1997-02-03" not in body
         assert str(event.pk) not in body
         assert 'data-testid="event-review-not-visible"' in body
         assert 'name="action" value="approve"' in body or dr.requested_by_id == response.wsgi_request.user.pk
