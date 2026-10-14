@@ -168,6 +168,11 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("mobileMore", () => ({
         moreOpen: false,
         searchOpen: false,
+        revealFocusedItem(event) {
+            if (this.moreOpen && event.target && typeof event.target.scrollIntoView === "function") {
+                event.target.scrollIntoView({ block: "nearest" });
+            }
+        },
         toggleMore() {
             this.moreOpen = !this.moreOpen;
         },

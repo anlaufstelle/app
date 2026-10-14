@@ -56,14 +56,14 @@
     </div>
     {% if user.is_authenticated %}
     <div class="px-4 py-3 border-t border-subtle">
-        <div class="flex items-center gap-2.5">
+        <div class="flex flex-col items-stretch gap-2.5">
             <a href="{% url 'core:account_profile' %}" class="flex items-center gap-2.5 flex-1 min-w-0 hover:opacity-80">
                 {# Avatar mit Initialen #}
                 {% with full_name=user.get_full_name|default:user.username %}
                 <div class="w-[30px] h-[30px] rounded-full bg-accent text-white flex items-center justify-center text-[12px] font-bold flex-shrink-0">{{ full_name|slice:":1"|upper }}{% if user.last_name %}{{ user.last_name|slice:":1"|upper }}{% endif %}</div>
                 <div class="min-w-0 flex-1">
-                    <div class="text-[12px] font-semibold text-ink truncate">{{ full_name }}</div>
-                    <div class="text-[12px] text-ink-muted">{{ user.get_role_display|default:user.username }}</div>
+                    <div class="text-[12px] font-semibold text-ink break-words">{{ full_name }}</div>
+                    <div class="text-[12px] text-ink-muted min-w-0 break-words">{{ user.get_role_display|default:user.username }}</div>
                 </div>
                 {% endwith %}
             </a>

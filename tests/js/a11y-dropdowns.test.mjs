@@ -163,3 +163,14 @@ describe("historyEntryDetails", () => {
         expect(component.isClosed).toBe(false);
     });
 });
+
+describe("mobileMore: focused rows stay visible", () => {
+    it("scrolls the focused last action into the panel viewport", () => {
+        const component = factories.mobileMore();
+        const button = triggerButton();
+        button.scrollIntoView = vi.fn();
+        component.toggleMore();
+        component.revealFocusedItem({ target: button });
+        expect(button.scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    });
+});

@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Mehr-Menü in flachen Fenstern erreichbar** (#2553) — Das mobile Mehr-Menü begrenzt seine Höhe am verfügbaren Viewport, scrollt intern und hält die fokussierte Zeile im sichtbaren Bereich.
+- **Kontobereich ohne überlappende Rollenbezeichnung** (#2559) — Die Desktop-Seitenleiste zeigt Namen und vollständige Rolle mit Umbruch und ordnet die Sprachwahl darunter an.
 - **Fallkontext bei Schnell-Vorlagen erhalten** (#2534) — Anwenden, Wechseln und Entfernen einer Vorlage erhalten auch während Laden und nach Ladefehlern die Fallabsicht derselben Person zur erneuten Serverprüfung; Speichern wartet auf die Klärung des vorgemerkten Falls.
 - **Verspätete Fallantworten verwerfen** (#2541) — Beim Personenwechsel werden alte Fälle und die Auswahl sofort geleert; nur die Antwort für die aktuelle Person darf den Fallbereich aktualisieren.
 - **Fall-Ladefehler mit Wiederholung anzeigen** (#2557) — Laden und Fehler sind vom erfolgreichen Leerzustand getrennt; fehlgeschlagene Fallabfragen lassen sich wiederholen.
