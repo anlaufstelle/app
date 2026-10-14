@@ -1,0 +1,26 @@
+{% load i18n %}
+{% if edit_notices %}
+<div role="alert" class="card p-4 mb-4">
+    <ul role="list">{% for notice in edit_notices %}<li>{{ notice }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% if file_reselection_fields %}
+<div role="alert" class="card p-4 mb-4">
+    <p>{% trans "Datei bitte erneut auswählen:" %} {{ file_reselection_fields|join:", " }}</p>
+</div>
+{% endif %}
+{% if has_edit_conflict %}
+<section aria-labelledby="edit-current-state" class="card p-5 mb-6" data-testid="edit-current-state">
+    <h2 id="edit-current-state" class="text-lg font-bold">{% trans "Aktueller Stand" %}</h2>
+    <p class="mt-2">{% trans "Der Serverstand ist neuer oder Ihr Versionsnachweis ist ungültig. Es wurde nichts gespeichert. Ihre Eingaben stehen unverändert im Formular." %}</p>
+    <p class="mt-2">{% trans "Abweichende Felder sind markiert. Prüfen oder kopieren Sie Ihre Eingaben und den aktuellen Stand. Danach bewusst erneut speichern: Dabei ersetzen Ihre Formularwerte die entsprechenden Serverwerte." %}</p>
+    <dl class="mt-4 space-y-3">
+        {% for row in edit_conflict_rows %}
+        <div{% if row.differs %} class="border-l-4 border-accent pl-3" data-conflict-difference="true"{% endif %}>
+            <dt class="font-bold">{{ row.label }}{% if row.differs %} — {% trans "Abweichend" %}{% endif %}</dt>
+            <dd class="whitespace-pre-wrap break-words">{{ row.value }}</dd>
+        </div>
+        {% endfor %}
+    </dl>
+</section>
+{% endif %}
