@@ -389,7 +389,7 @@ class TestSchreibenBisZurFolgeschicht:
         abgebend = page.locator("[data-testid='handover-note-previous']")
         expect(abgebend).to_be_visible()
 
-        expect(abgebend).to_contain_text("Übergabenotiz der letzten Schicht")
+        expect(abgebend).to_contain_text("Übergabenotiz vom Vortag")
         _speichern(page, "handover-note-previous", "E2E-Kalendernotiz von gestern")
 
         page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")

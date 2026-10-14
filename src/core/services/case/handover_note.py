@@ -677,5 +677,7 @@ def build_handover_note_context(facility, user, displayed_shift: Shift, *, now=N
 
     return {
         "can_write": can_write_notes(user),
+        "day_mode": not time_filters,
+        "previous_is_yesterday": abgebend.shift_date == laufend.shift_date - timedelta(days=1),
         "blocks": blocks,
     }

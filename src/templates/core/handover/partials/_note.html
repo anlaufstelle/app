@@ -28,7 +28,13 @@ autofocus — der Fokus landet wieder dort, wo er war.{% endcomment %}
     <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 mb-3" data-testid="handover-note-{{ block.kind }}">
         <div class="flex flex-wrap items-baseline gap-2 mb-2">
             <h2 class="font-bold text-[13px] text-ink m-0">
+                {% if handover_notes.day_mode %}
+                    {% if block.kind == "current" %}{% trans "Notiz für heute" %}
+                    {% elif handover_notes.previous_is_yesterday %}{% trans "Übergabenotiz vom Vortag" %}
+                    {% else %}{% trans "Übergabenotiz dieses Tages" %}{% endif %}
+                {% else %}
                 {% if block.kind == "previous" %}{% trans "Übergabenotiz der letzten Schicht" %}{% else %}{% trans "Notiz für die laufende Schicht" %}{% endif %}
+                {% endif %}
             </h2>
             <span class="text-[12px] text-ink-muted">{{ block.label }} · {{ block.range_label }} · {{ block.shift.shift_date|date:"j. F Y" }}</span>
         </div>
@@ -86,7 +92,11 @@ autofocus — der Fokus landet wieder dort, wo er war.{% endcomment %}
                       class="w-full rounded-[10px] border border-subtle bg-canvas px-3 py-2 text-[13px] text-ink"
                       {% if handover_note_saved and block.shift == handover_note_saved_shift %}autofocus{% endif %}>{{ block.text }}</textarea>
             <p id="handover-note-help-{{ block.kind }}" class="mt-1 text-[12px] text-ink-muted">
+                {% if handover_notes.day_mode %}
+                {% blocktrans with grenze=block.editable_until|date:"j. F Y, H:i" %}Bearbeitung bis zum Ende des Folgetags ({{ grenze }}). Bitte keine Klarnamen — Pseudonyme wie in der Dokumentation.{% endblocktrans %}
+                {% else %}
                 {% blocktrans with grenze=block.editable_until|date:"j. F Y, H:i" %}Bearbeitung bis {{ grenze }}. Bitte keine Klarnamen — Pseudonyme wie in der Dokumentation.{% endblocktrans %}
+                {% endif %}
             </p>
             <div class="mt-2 flex items-center gap-3">
                 <button type="submit" class="inline-flex items-center min-h-[44px] px-4 rounded-[10px] bg-accent text-white text-[13px] font-semibold">{% trans "Notiz speichern" %}</button>
@@ -96,10 +106,12 @@ autofocus — der Fokus landet wieder dort, wo er war.{% endcomment %}
         {% elif block.text %}
         <p class="text-[13px] text-ink whitespace-pre-line">{{ block.text }}</p>
         <p class="mt-2 text-[12px] text-ink-muted">
-            {% if block.author %}{% blocktrans with autor=block.author zeit=block.updated_at|date:"j. F Y, H:i" %}Zuletzt geändert von {{ autor }} am {{ zeit }}{% endblocktrans %} · {% endif %}{% blocktrans with grenze=block.editable_until|date:"j. F Y, H:i" %}Bearbeitung war bis {{ grenze }} möglich.{% endblocktrans %}
+            {% if block.author %}{% blocktrans with autor=block.author zeit=block.updated_at|date:"j. F Y, H:i" %}Zuletzt geändert von {{ autor }} am {{ zeit }}{% endblocktrans %} · {% endif %}{% if handover_notes.day_mode %}{% blocktrans with grenze=block.editable_until|date:"j. F Y, H:i" %}Bearbeitung war bis zum Ende des Folgetags ({{ grenze }}) möglich.{% endblocktrans %}{% else %}{% blocktrans with grenze=block.editable_until|date:"j. F Y, H:i" %}Bearbeitung war bis {{ grenze }} möglich.{% endblocktrans %}{% endif %}
         </p>
         {% else %}
-        {% if block.kind == "current" and not block.shift.time_filter_id and not block.editable %}
+        {% if handover_notes.day_mode %}
+        <p class="text-[13px] text-ink-muted">{% trans "Für diesen Tag wurde keine Übergabenotiz hinterlassen." %}</p>
+        {% elif block.kind == "current" and not block.shift.time_filter_id and not block.editable %}
         <p class="text-[13px] text-ink-muted">{% trans "In dieser Dienstplan-Lücke läuft keine Schicht. Die Übergabe der zuletzt abgeschlossenen Schicht steht darüber und bleibt bis zum Ende der Folgeschicht bearbeitbar." %}</p>
         {% else %}
         <p class="text-[13px] text-ink-muted">{% trans "Für diese Schicht wurde keine Übergabenotiz hinterlassen." %}</p>
