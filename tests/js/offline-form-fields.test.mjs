@@ -9,6 +9,7 @@ import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 let helpers;
 
 beforeAll(async () => {
+    await import("../../src/static/js/date-input-i18n.js");
     await import("../../src/static/js/offline-form-fields.js");
     helpers = window.offlineFormFields;
 });
@@ -141,15 +142,15 @@ describe("Feld-Helfer (Refs #1519, bisher nur indirekt abgedeckt)", () => {
 // Leere und unparsbare Werte ergeben "" (die Aufrufer setzen ihren eigenen
 // Platzhalter wie "–" dahinter).
 describe("Formatter formatTs/formatDate/formatValue", () => {
-    it("formatTs: Datum + Uhrzeit im de-DE-Kurzformat", () => {
+    it("formatTs: date and time in German application format", () => {
         const out = helpers.formatTs("2026-08-05T09:04:00");
-        expect(out).toContain("05.08.26");
+        expect(out).toContain("05.08.2026");
         expect(out).toContain("09:04");
     });
 
     it("formatTs akzeptiert auch Date-Instanzen (Badge-Aufrufer)", () => {
         const out = helpers.formatTs(new Date(2026, 7, 5, 9, 4));
-        expect(out).toContain("05.08.26");
+        expect(out).toContain("05.08.2026");
         expect(out).toContain("09:04");
     });
 
@@ -160,8 +161,8 @@ describe("Formatter formatTs/formatDate/formatValue", () => {
         expect(helpers.formatTs("garbage")).toBe("");
     });
 
-    it("formatDate: nur das Datum im de-DE-Kurzformat", () => {
-        expect(helpers.formatDate("2026-08-05")).toBe("05.08.26");
+    it("formatDate: date in German application format", () => {
+        expect(helpers.formatDate("2026-08-05")).toBe("05.08.2026");
     });
 
     it("formatDate: leer/ungueltig -> ''", () => {

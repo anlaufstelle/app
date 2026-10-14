@@ -220,15 +220,19 @@
         return "Keine Datei";
     }
 
-    // Refs #1828: gemeinsame Anzeige-Formatierung (de-DE) — vorher sieben
-    // verstreute toLocaleString-/Datei-Marker-Varianten in sechs Dateien.
-    // Leere und unparsbare Werte ergeben "" — Aufrufer setzen ihren eigenen
-    // Platzhalter (z.B. "–") dahinter.
+    // Use the widget's language and formatter; stored timestamps stay ISO.
+    function displayDate(d, kind) {
+        const pad = value => String(value).padStart(2, "0");
+        const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const iso = kind === "date" ? date : `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        return window.appDateFields.format(iso, kind, window.appDateFields.language());
+    }
+
     function formatTs(value) {
         if (!value) return "";
         const d = value instanceof Date ? value : new Date(value);
         if (Number.isNaN(d.getTime())) return "";
-        return d.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+        return displayDate(d, "datetime-local");
     }
 
     // Refs #2187: Prueft, ob eine Wanduhrzeit ("YYYY-MM-DDTHH:MM[:SS]") in der
@@ -306,22 +310,17 @@
         return (host && host.dataset && host.dataset.appTimezone) || "UTC";
     }
 
-    // Reines Datum (ohne Zeit). ACHTUNG: bewusst OHNE 10-Zeichen-Schnitt —
-    // offline-client-view.js schneidet ISO-Timestamps VOR dem Aufruf selbst
-    // aufs Datum (_dateOnly), offline-workitem-list.js parst den vollen Wert.
-    // Die beiden Varianten unterscheiden sich absichtlich (Zeitzonen-
-    // Verhalten von new Date("YYYY-MM-DD") vs. vollem Timestamp) und werden
-    // hier nicht vereinheitlicht.
+    // Preserve callers' existing date/timezone conversion before formatting.
     function formatDate(value) {
         if (!value) return "";
         const d = new Date(value);
         if (Number.isNaN(d.getTime())) return "";
-        return d.toLocaleDateString("de-DE", { dateStyle: "short" });
+        return displayDate(d, "date");
     }
 
     // Selection labels are display-only; the underlying slug array stays
     // intact for conflict resolution and replay (Refs #2520).
-    function formatValue(v, options, booleanLabels) {
+    function formatValue(v, options, booleanLabels, kind) {
         if (v === null || v === undefined) return "";
         const labels = new Map((Array.isArray(options) ? options : []).map((option) => [option.value, option.label]));
         if (Array.isArray(v)) {
@@ -332,7 +331,11 @@
             return JSON.stringify(v);
         }
         if (typeof v === "boolean" && booleanLabels) return v ? booleanLabels.yes : booleanLabels.no;
-        return labels.has(v) ? labels.get(v) : String(v);
+        if (labels.has(v)) return labels.get(v);
+        if (["date", "time", "datetime-local"].includes(kind)) {
+            return window.appDateFields.format(String(v), kind, window.appDateFields.language());
+        }
+        return String(v);
     }
 
     window.offlineFormFields = {

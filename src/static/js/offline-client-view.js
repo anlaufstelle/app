@@ -199,7 +199,7 @@
                                 data_fields_pairs: Object.keys(fields).map((slug) => ({
                                     slug: slug,
                                     label: metadata.get(slug)?.name || slug,
-                                    value_fmt: this.formatFieldValue(fields[slug], metadata.get(slug)?.options),
+                                    value_fmt: this.formatFieldValue(fields[slug], metadata.get(slug)?.options, metadata.get(slug)?.field_type),
                                 })),
                                 has_data_fields: Object.keys(fields).length > 0,
                                 is_unsynced: isUnsynced,
@@ -273,12 +273,12 @@
                 if (Number.isNaN(exp)) return false;
                 return exp < Date.now();
             },
-            formatFieldValue(v, options) {
+            formatFieldValue(v, options, kind) {
                 // Labels affect display only; stored values remain unchanged.
                 return window.offlineFormFields.formatValue(v, options, {
                     yes: this.$el.dataset.i18nYes || "",
                     no: this.$el.dataset.i18nNo || "",
-                });
+                }, kind);
             },
             relativeTime(ts) {
                 if (!ts) return "";
