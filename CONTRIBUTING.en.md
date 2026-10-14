@@ -254,6 +254,8 @@ applied, not even for the remaining types):
 
 #### Scale profiles overview
 
+The demo accounts advertised in the demo panel have no email address because the shared demo does not send mail; test password reset on dev with the mail console or Mailpit.
+
 | Data | `small` (default) | `medium` | `large` | `solo` | `demo` |
 |---|---|---|---|---|---|
 | Facilities | 1 | 2 | 5 | 1 | 6 (scenario catalogue, Refs #2279) |
@@ -1050,5 +1052,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 2b2c2d0f133d139a9c9cba343b5168cdfef3abbd -->
+<!-- translation-date: 2026-10-14 -->
+<!-- source-hash: 88d0b2dc10b5cf285e33d78ea62c56bf0391ff86 -->

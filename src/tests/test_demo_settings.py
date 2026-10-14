@@ -104,6 +104,13 @@ class TestDemoLogins:
         usernames = result.stdout.strip()
         assert "superadmin" not in usernames, f"superadmin darf nicht in DEMO_LOGINS stehen: {usernames}"
 
+    def test_role_values_can_be_resolved_without_models_in_settings(self):
+        result = _run_demo_import(
+            "from anlaufstelle.settings.demo import DEMO_LOGINS;print([entry['role'] for entry in DEMO_LOGINS])"
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "['facility_admin', 'lead', 'staff', 'staff', 'assistant', 'assistant']"
+
     def test_non_privileged_demo_logins_remain(self):
         """Die uebrigen Demo-Logins bleiben unveraendert erhalten."""
         result = _run_demo_import(

@@ -67,12 +67,12 @@ MFA_ENFORCE_PRIVILEGED_ROLES = False
 # weiter existieren — es wird nur nicht mehr oeffentlich mit Zugangsdaten
 # angezeigt.
 DEMO_LOGINS = [
-    {"username": "admin", "role": "Einrichtungs-Admin"},
-    {"username": "emma", "role": "Leitung"},
-    {"username": "miriam", "role": "Fachkraft"},
-    {"username": "markus", "role": "Fachkraft"},
-    {"username": "lena", "role": "Assistenz"},
-    {"username": "felix", "role": "Assistenz"},
+    {"username": "admin", "role": "facility_admin"},
+    {"username": "emma", "role": "lead"},
+    {"username": "miriam", "role": "staff"},
+    {"username": "markus", "role": "staff"},
+    {"username": "lena", "role": "assistant"},
+    {"username": "felix", "role": "assistant"},
 ]
 
 # Demo-Guard: POST auf diese Pfade wird bei DEMO_MODE gesperrt (Refs #1062).

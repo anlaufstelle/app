@@ -132,3 +132,20 @@ class TestUmamiPageIntegration:
         ):
             content = client.get(reverse("login")).content.decode()
         assert "umami.example.org" not in content
+
+
+@pytest.mark.django_db
+def test_demo_consent_leaves_navigation_uncovered(client, staff_user, settings):
+    import re
+
+    settings.DEMO_MODE = True
+    settings.UMAMI_WEBSITE_ID = "test-website"
+    settings.UMAMI_REQUIRE_CONSENT = True
+    client.force_login(staff_user)
+    response = client.get(reverse("core:zeitstrom"))
+    assert response.status_code == 200
+    container = re.search(r'<div id="umami-consent".*?>', response.content.decode(), re.S).group()
+    classes = re.search(r'class="([^"]*)"', container).group(1).split()
+    assert "md:left-60" in classes
+    assert "bottom-16" in classes
+    assert "md:bottom-0" in classes

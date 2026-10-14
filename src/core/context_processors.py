@@ -252,16 +252,28 @@ def umami(request):
 
 
 def demo(request):
-    """Refs #1062: Demo-Banner + Login-Zugangsdaten-Panel (nur bei DEMO_MODE).
-
-    Exponiert die oeffentlich kommunizierten Seed-Logins und den naechsten
-    Reset-Zeitpunkt fuer die oeffentliche Demo-Instanz. Der stuendliche
-    Reset-Timer laeuft ``OnCalendar=hourly`` -> naechster Reset ist die
-    kommende volle Stunde. Ausserhalb der Demo (Default) ein No-Op.
-    """
+    """Expose demo credentials, scenario account hints and the next hourly reset."""
     if not getattr(settings, "DEMO_MODE", False):
         return {"demo_mode": False}
     from core.demo import DEMO_OFFLINE_BOOTSTRAP_ERROR, DEMO_OFFLINE_BOOTSTRAP_PENDING, DEMO_PASSWORD
+    from core.models import User
+    from core.seed.constants import USER_TEMPLATES
+    from core.seed.scenarios import SCENARIOS
+    from core.seed.users import SOLO_USER_TEMPLATES
+
+    logins = [{**login, "role": User.Role(login["role"]).label} for login in getattr(settings, "DEMO_LOGINS", [])]
+    login_scenarios = []
+    for index, scenario in enumerate(SCENARIOS):
+        suffix = f"_{index}" if index else ""
+        templates = SOLO_USER_TEMPLATES if scenario.solo else USER_TEMPLATES
+        login_scenarios.append(
+            {
+                "facility_name": scenario.facility_name,
+                "suffix": suffix,
+                "solo": scenario.solo,
+                "usernames": [f"{username}{suffix}" for username, *_ in templates],
+            }
+        )
 
     session = getattr(request, "session", {})
     # Error pages and bare requests may render without the authentication middleware.
@@ -273,7 +285,8 @@ def demo(request):
     next_reset = now.replace(minute=0, second=0, microsecond=0) + datetime.timedelta(hours=1)
     return {
         "demo_mode": True,
-        "demo_logins": getattr(settings, "DEMO_LOGINS", []),
+        "demo_logins": logins,
+        "demo_login_scenarios": login_scenarios,
         "demo_password": DEMO_PASSWORD,
         "demo_offline_password": DEMO_PASSWORD if bootstrap_pending else "",
         "demo_offline_bootstrap_error": DEMO_OFFLINE_BOOTSTRAP_ERROR,

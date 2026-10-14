@@ -257,6 +257,8 @@ es wird nichts angewendet, auch nicht für die übrigen Typen):
 
 #### Scale-Profile im Überblick
 
+Die im Demo-Panel beworbenen Demo-Konten haben keine E-Mail-Adresse, weil die geteilte Demo keine Mails versendet; den Passwort-Reset prüft man auf dev mit Mail-Konsole bzw. Mailpit.
+
 | Daten | `small` (Default) | `medium` | `large` | `solo` | `demo` |
 |---|---|---|---|---|---|
 | Einrichtungen | 1 | 2 | 5 | 1 | 6 (Szenario-Katalog, Refs #2279) |
