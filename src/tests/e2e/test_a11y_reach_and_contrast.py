@@ -378,6 +378,9 @@ class TestFieldBoardKeyboard:
             page.keyboard.press("Enter")
             second = page.locator(f'[data-testid="field-group"][data-group-id="{second_pk}"]')
             expect(second.locator('[data-testid="field-row"]', has_text="Notiz")).to_have_count(1, timeout=10000)
+            # The announcement is written when the swap has settled and the action is released; a further
+            # key press before that is (by design) ignored, so wait for it before the next move.
+            expect(page.locator("#field-board-status")).to_contain_text("Notiz", timeout=10000)
 
             # And out of any group.
             moved = second.locator('[data-testid="field-row"]', has_text="Notiz")
