@@ -184,7 +184,7 @@ importScripts("/static/js/url-patterns.js");
 // Refs #1493: v62 -> v63 -- the precached crypto.js no longer lets a lock
 // holder wait for the boot idle gate queued behind it; the bump brings the
 // changed module to installed devices.
-const CACHE_NAME = "anlaufstelle-v63";
+const CACHE_NAME = "anlaufstelle-v64";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
