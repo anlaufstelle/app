@@ -257,7 +257,7 @@ Der Suchraum entspricht der globalen Suche (#1862, [ADR-043](adr/043-suchraum-vo
 
 **Sichtbarkeit:** Assistenz, Fachkraft, Leitung und Anwendungsbetreuung sehen Kontakte der eigenen Einrichtung, auch Erfassungen anderer Mitarbeitender, mit derselben Sensibilitätsgrenze wie im Zeitstrom: Assistenz nur **Normal**, Fachkraft bis **Erhöht**, Leitung und Anwendungsbetreuung auch **Hoch**. Gelöschte Kontakte und Kontakte im Papierkorb fehlen. Die Systemadministration hat keinen Zugang zu dieser Arbeitsliste.
 
-**Ergebnisse:** Neueste Kontakte stehen zuerst, mit 25 Einträgen je Seite. Die Tabelle zeigt Zeitpunkt, Typ, Person beziehungsweise „Anonym“, ab Fachkraft den Fall sowie „Erfasst von“; mobil erscheinen Karten. Feldwerte stehen erst in der Detailansicht, die Sie über den Zeitpunkt öffnen. Die Filter stehen in der Adresse und bleiben beim Teilen, Seitenwechsel und mit der Zurück-/Vorwärts-Taste erhalten, einschließlich der Formularwerte.
+**Ergebnisse:** Neueste Kontakte stehen zuerst, mit 25 Einträgen je Seite. Die Karten zeigen Zeitpunkt, Typ, Person beziehungsweise „Anonym“, ab Fachkraft den Fall sowie „Erfasst von“. Klicken Sie auf die Kopfzeile oder drücken Sie dort Enter beziehungsweise die Leertaste, um die Angaben auf- und zuzuklappen. Sie sehen dieselben rollenberechtigten Feldwerte wie im Zeitstrom. **Zum Eintrag** öffnet weiterhin die Detailansicht. Die Filter stehen in der Adresse und bleiben beim Teilen, Seitenwechsel und mit der Zurück-/Vorwärts-Taste erhalten, einschließlich der Formularwerte.
 
 Die Liste bietet **keinen Export und keine Massenaktionen**. Exportmöglichkeiten bleiben im Bereich [Statistik und Export](#7-statistik-und-export). Listen- und Filteraufrufe erzeugen **keinen Audit-Eintrag**; beim Öffnen einer Detailansicht gelten deren Zugriffsregeln.
 
@@ -907,7 +907,7 @@ Tabelle nur für die vier facility-gebundenen Rollen — `super_admin` ist hier 
 | Funktion | Assistenz | Fachkraft | Leitung | Anwendungsbetreuung |
 |---|---|---|---|---|
 | Zeitstrom / Startseite einsehen | Ja | Ja | Ja | Ja |
-| Kontakte-Liste filtern (auch fremde Erfassungen) | Ja (Normal) | Ja (bis Erhöht) | Ja (auch Hoch) | Ja (auch Hoch) |
+| Kontakte-Liste filtern und aufklappen (auch fremde Erfassungen) | Ja (Normal) | Ja (bis Erhöht) | Ja (auch Hoch) | Ja (auch Hoch) |
 | Fallfilter und Fallanzeige in der Kontakte-Liste | Nein | Ja | Ja | Ja |
 | Anonyme Kontakte dokumentieren | Ja | Ja | Ja | Ja |
 | Kontakte zu Personen der Stufe „Nur Pseudonym" dokumentieren | Ja | Ja | Ja | Ja |

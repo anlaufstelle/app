@@ -66,32 +66,32 @@ def test_get_form_has_labels_and_all_filters(client, staff_user, sample_event):
 
 
 @pytest.mark.parametrize("role,expected", [("assistant_user", False), ("staff_user", True)])
-def test_case_filter_and_column_follow_role(client, request, role, expected, sample_event):
+def test_case_filter_and_card_follow_role(client, request, role, expected, sample_event):
     html = Elements(list_response(client, request.getfixturevalue(role)).content)
     assert bool(html.find("select", name="case")) is expected
-    assert len(html.find("th", scope="col")) == (5 if expected else 4)
-    assert html.find("table")[0].get("aria-label") == "Kontakte"
+    assert not html.find("table")
+    assert html.find("div", **{"aria-label": "Kontakte"})
 
 
-def test_mobile_cards_show_metadata_and_detail_link(client, staff_user, sample_event):
+def test_shared_cards_show_metadata_and_detail_link(client, staff_user, sample_event):
     response = list_response(client, staff_user)
     html = Elements(response.content)
-    cards = html.find("div", **{"data-testid": "event-mobile-cards"})
-    assert cards and "md:hidden" in cards[0]["class"]
+    cards = html.find("div", **{"x-data": "expandableCard"})
+    assert len(cards) == 1
     assert html.find("a", href=reverse("core:event_detail", args=[sample_event.pk]))
-    assert len(html.find("dl")) == 1
+    assert html.find("button", **{"aria-controls": f"event-detail-{sample_event.pk}"})
     assert sample_event.client.pseudonym.encode() in response.content
     assert sample_event.document_type.name.encode() in response.content
 
 
 def test_htmx_contains_results_without_page_or_filters(client, staff_user, sample_event):
     html = Elements(list_response(client, staff_user, HTTP_HX_REQUEST="true").content)
-    assert html.find("table")
+    assert html.find("div", **{"x-data": "expandableCard"})
     assert not html.find("html")
     assert not html.find("h1")
     # The only form in the partial is the filter form, sent out of band.
     assert [form.get("hx-swap-oob") for form in html.find("form")] == ["outerHTML"]
-    assert html.find("div", **{"data-testid": "event-mobile-cards"})
+    assert html.find("button", **{"aria-controls": f"event-detail-{sample_event.pk}"})
 
 
 def test_filters_are_selected_and_pagination_retains_normalized_state(client, staff_user, sample_event, facility):
@@ -184,19 +184,22 @@ def test_full_page_query_count_does_not_grow_with_rows(client, staff_user, sampl
             client=sample_event.client,
             created_by=staff_user,
             occurred_at=sample_event.occurred_at,
+            data_json={"dauer": 15, "notiz": "Page content"},
         )
     client.force_login(staff_user)
     # Initialize the facility/session state before comparing page sizes.
     assert client.get(reverse("core:event_list")).status_code == 200
     counts = []
-    for size in [1, 25]:
+    for size in [5, 25]:
         monkeypatch.setattr(EventListView, "page_size", size)
         with CaptureQueriesContext(connection) as captured:
             response = client.get(reverse("core:event_list"))
             assert response.status_code == 200
             assert len(response.context["events"]) == size
         counts.append(len(captured))
+    print(f"Page query counts (5/25): {counts}")
     assert counts[0] == counts[1]
+    assert counts[1] <= 40
 
 
 @pytest.mark.parametrize("feed_only", ["", "1"])

@@ -13,7 +13,7 @@ from core.models import Client, DocumentType, Event, TimeFilter, User
 from core.services.case import cases_with_live_client
 from core.services.compliance import allowed_sensitivities_for_user
 from core.services.dashboard.search import MIN_QUERY_LENGTH, event_search_queryset
-from core.services.events.feed import get_time_range
+from core.services.events.feed import enrich_events_with_preview, events_for_feed_read, get_time_range
 from core.services.workitem_visibility import readable_person_filter
 
 
@@ -176,6 +176,22 @@ def event_list_queryset(facility, user, filters, *, options=None):
         related.append("case")
         columns.extend(["case__id", "case__title", "case__is_deleted"])
     return queryset.select_related(*related).only(*columns).order_by("-occurred_at", "-pk")
+
+
+def event_list_page_contents(facility, user, page_events):
+    """Reload only page contents through the feed read boundary, preserving list order."""
+    page_ids = [event.pk for event in page_events]
+    if not page_ids:
+        return []
+    readable = (
+        events_for_feed_read(facility, user)
+        .filter(pk__in=page_ids)
+        .select_related("document_type", "client", "created_by", "case")
+    )
+    by_id = {event.pk: event for event in readable}
+    events = [by_id[pk] for pk in page_ids if pk in by_id]
+    enrich_events_with_preview([{"type": "event", "object": event} for event in events], user)
+    return events
 
 
 def event_list_params_from_zeitstrom(state):

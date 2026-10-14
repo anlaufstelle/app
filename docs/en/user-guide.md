@@ -259,7 +259,7 @@ The search scope matches global search (#1862, [ADR-043](../adr/043-suchraum-vol
 
 **Visibility:** Assistant, Social worker, Manager and Application support see contacts within their own facility, including entries by other team members, with the same sensitivity limit as the Timeline: Assistant sees **Normal**, Social worker up to **Elevated**, Manager and Application support also **High**. Deleted contacts and contacts in the trash are absent. System administration has no access to this working list.
 
-**Results:** Newest contacts appear first, with 25 entries per page. The table shows timestamp, type, person or “Anonymous”, case from Social worker upwards, and “Created by”; mobile uses cards. Field values are available in the detail view opened via the timestamp. Filters remain in the address when sharing, changing pages and using Back/Forward, including the form values.
+**Results:** Newest contacts appear first, with 25 entries per page. The cards show timestamp, type, person or “Anonymous”, case from Social worker upwards, and “Created by”. Click the header or press Enter or Space there to expand and collapse the details. The visible field values follow the same role permissions as the Timeline. **Go to entry** still opens the detail view. Filters remain in the address when sharing, changing pages and using Back/Forward, including the form values.
 
 The list offers **no export or bulk actions**. Export options remain under [Statistics and Export](#7-statistics-and-export). List and filter requests create **no audit entry**; opening a detail view follows that view's access rules.
 
@@ -907,7 +907,7 @@ Table covers the four facility-bound roles only -- `super_admin` is excluded her
 | Function | Assistant | Social worker | Manager | Application support |
 |---|---|---|---|---|
 | View Timeline / home page | Yes | Yes | Yes | Yes |
-| Filter Contacts list (including others’ entries) | Yes (Normal) | Yes (up to Elevated) | Yes (including High) | Yes (including High) |
+| Filter and expand Contacts list (including others’ entries) | Yes (Normal) | Yes (up to Elevated) | Yes (including High) | Yes (including High) |
 | Case filter and case display in Contacts list | No | Yes | Yes | Yes |
 | Document anonymous contacts | Yes | Yes | Yes | Yes |
 | Document contacts for people at the "Pseudonym only" level | Yes | Yes | Yes | Yes |
@@ -1157,7 +1157,8 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 3aa39311249d3aa8d9da2ff551730f3a282b66b7 -->
+<!-- source-hash: 917de4d513792fbf3c1ff175c3a5826276be2299 -->
+<!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->

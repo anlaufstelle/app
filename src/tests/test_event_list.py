@@ -43,7 +43,10 @@ def test_visibility_matches_event_feed(client, request, role, facility, staff_us
     expected = {item["object"].pk for item in feed if item["type"] == "event"}
     assert event_ids(response) == expected
     assert foreign_event.pk not in event_ids(response)
-    assert all("data_json" in event.get_deferred_fields() for event in response.context["events"])
+    from core.services.events.list_filters import event_list_queryset
+
+    assert all("data_json" in event.get_deferred_fields() for event in event_list_queryset(facility, user, {}))
+    assert all("data_json" not in event.get_deferred_fields() for event in response.context["events"])
 
 
 def test_combined_filters_and_no_audit(client, staff_user, sample_event):
@@ -216,11 +219,12 @@ def test_query_count_is_constant_for_page_size(staff_user, sample_event, django_
         )
     # One settings read per render comes from the offline key lifetime in the context processor;
     # a fresh facility instance per request keeps that read from being served by the related-object cache.
-    for page_size in [1, 25]:
+    for page_size in [5, 25]:
         request = RequestFactory().get("/events/", HTTP_HX_REQUEST="true")
         request.user = staff_user
         request.current_facility = Facility.objects.get(pk=sample_event.facility_id)
-        with django_assert_num_queries(8):
+        # Refs #2605: page contents add one read and two shared field-metadata reads.
+        with django_assert_num_queries(11):
             response = EventListView.as_view(page_size=page_size)(request)
             assert response.status_code == 200
 

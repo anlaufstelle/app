@@ -1,35 +1,9 @@
 {% load i18n %}
 {% if filter_form_oob %}{% include "core/events/partials/filter_form.html" %}{% endif %}
 {% if events %}
-<div class="hidden md:block overflow-x-auto bg-surface border border-subtle rounded-[10px]">
-<table class="w-full text-sm text-left" aria-label="{% translate 'Kontakte' %}">
-  <thead class="bg-canvas text-ink-muted"><tr>
-    <th scope="col" class="px-4 py-3">{% translate "Zeitpunkt" %}</th>
-    <th scope="col" class="px-4 py-3">{% translate "Typ" %}</th>
-    <th scope="col" class="px-4 py-3">{% translate "Person" %}</th>
-    {% if show_cases %}<th scope="col" class="px-4 py-3">{% translate "Fall" %}</th>{% endif %}
-    <th scope="col" class="px-4 py-3">{% translate "Erfasst von" %}</th>
-  </tr></thead>
-  <tbody class="divide-y divide-subtle">{% for event in events %}<tr class="hover:bg-canvas">
-    <td class="px-4 py-3"><a href="{% url 'core:event_detail' event.pk %}" class="text-accent hover:underline">{{ event.occurred_at|date:"d.m.Y H:i" }}</a></td>
-    <td class="px-4 py-3">{{ event.document_type.name }}</td>
-    <td class="px-4 py-3">{% if event.is_anonymous %}{% translate "Anonym" %}{% elif event.client %}{{ event.client.pseudonym }}{% endif %}</td>
-    {% if show_cases %}<td class="px-4 py-3">{% if event.case and not event.case.is_deleted %}{{ event.case.title }}{% endif %}</td>{% endif %}
-    <td class="px-4 py-3">{{ event.created_by|default:"" }}</td>
-  </tr>{% endfor %}</tbody>
-</table>
-</div>
-<div class="md:hidden space-y-3" data-testid="event-mobile-cards">
+<div class="space-y-3" aria-label="{% translate 'Kontakte' %}">
 {% for event in events %}
-<div class="bg-surface border border-subtle rounded-[10px] p-4">
-    <a href="{% url 'core:event_detail' event.pk %}" class="inline-flex items-center min-h-[44px] text-accent font-medium hover:underline">{{ event.occurred_at|date:"d.m.Y H:i" }}</a>
-    <dl class="grid grid-cols-2 gap-2 text-sm">
-        <dt class="text-ink-muted">{% translate "Typ" %}</dt><dd>{{ event.document_type.name }}</dd>
-        <dt class="text-ink-muted">{% translate "Person" %}</dt><dd>{% if event.is_anonymous %}{% translate "Anonym" %}{% elif event.client %}{{ event.client.pseudonym }}{% endif %}</dd>
-        {% if show_cases %}<dt class="text-ink-muted">{% translate "Fall" %}</dt><dd>{% if event.case and not event.case.is_deleted %}{{ event.case.title }}{% endif %}</dd>{% endif %}
-        <dt class="text-ink-muted">{% translate "Erfasst von" %}</dt><dd>{{ event.created_by|default:"" }}</dd>
-    </dl>
-</div>
+    {% include "components/_event_card.html" with show_date=True show_client=True show_case=show_cases ignore_global_collapse=True %}
 {% endfor %}
 </div>
 {% include "components/_pagination.html" with page=events extra_params=pagination_params %}

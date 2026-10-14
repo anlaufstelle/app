@@ -1,12 +1,13 @@
 {% load i18n core_tags %}
 
-<div class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden" x-data="expandableCard" x-init="applyGlobalCollapse" @zeitstrom-collapse-all.window="applyGlobalCollapse">
+<div class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden" x-data="expandableCard" {% if not ignore_global_collapse %}x-init="applyGlobalCollapse" @zeitstrom-collapse-all.window="applyGlobalCollapse"{% endif %}>
     {# Linke Kante in Kontakt-Farbe #}
     <div class="w-[3px] bg-event flex-shrink-0"></div>
     <div class="flex-1 px-3.5 py-3 min-w-0">
         {# Ganze Kopfzeile togglet (nicht nur der Chevron); Button enthält nur Phrasing-Content (spans statt divs). #}
         <button type="button"
                 @click="toggle"
+                aria-expanded="false"
                 :aria-expanded="expanded"
                 aria-controls="event-detail-{{ event.pk }}"
                 class="flex flex-wrap items-center gap-2 w-full text-left cursor-pointer">
@@ -23,6 +24,9 @@
                 {% elif event.client %}
                 <span class="text-[12px] font-semibold text-accent truncate">{{ event.client.pseudonym }}</span>
                 {% endif %}
+            {% endif %}
+            {% if show_case and event.case and not event.case.is_deleted %}
+            <span class="text-[12px] text-ink-soft">{% trans "Fall" %}: {{ event.case.title }}</span>
             {% endif %}
             <span class="flex items-center gap-2 ml-auto shrink-0">
                 {% if event.created_by %}

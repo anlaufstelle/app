@@ -1,15 +1,20 @@
-"""Paginated contacts metadata list."""
+"""Paginated contacts with role-visible timeline contents."""
 
 from urllib.parse import urlencode
 
 from django.views import View
 
-from core.services.events.list_filters import event_list_options, event_list_queryset, resolve_event_list_filters
+from core.services.events.list_filters import (
+    event_list_options,
+    event_list_page_contents,
+    event_list_queryset,
+    resolve_event_list_filters,
+)
 from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin, PaginatedListMixin
 
 
 class EventListView(AssistantOrAboveRequiredMixin, PaginatedListMixin, HTMXPartialMixin, View):
-    """Show the same event visibility as the Zeitstrom without access audits."""
+    """Show the same content visibility as the Zeitstrom; no access audit."""
 
     template_name = "core/events/list.html"
     partial_template_name = "core/events/partials/table.html"
@@ -23,6 +28,7 @@ class EventListView(AssistantOrAboveRequiredMixin, PaginatedListMixin, HTMXParti
         options = {key: list(values) for key, values in event_list_options(facility, request.user).items()}
         filters = resolve_event_list_filters(request.GET, facility, request.user, options=options)
         events = self.paginate(event_list_queryset(facility, request.user, filters, options=options), request)
+        events.object_list = event_list_page_contents(facility, request.user, events.object_list)
         return self.render_htmx_or_full(
             {
                 **options,
