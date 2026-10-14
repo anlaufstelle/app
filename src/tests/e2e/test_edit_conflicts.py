@@ -1,9 +1,9 @@
-"""E2E: Bearbeitungskonflikte in zwei Browser-Kontexten (Person, Fall, Ereignis, Zugang, Episode, Wirkungsziel).
+"""E2E: Edit conflicts in two browser contexts (person, case, event, access, episode, outcome goal).
 
-Szenario je Maske: Kontext B speichert, Kontext A sendet danach einen langen eigenen
-Text. A behält seinen Entwurf, sieht den aktuellen Stand mit den Abweichungen, und
-erst das bewusste erneute Speichern übernimmt A. Alle Objekte sind eigene
-Wegwerf-Daten, damit andere Dateien nicht beeinflusst werden.
+Scenario per form: context B saves, context A then sends a long text of its own.
+A keeps its draft, sees the current state with the differences, and only the
+deliberate second save takes A over. All objects are throw-away data of their own,
+so other files are not influenced.
 """
 
 from __future__ import annotations
@@ -193,7 +193,7 @@ class TestEditConflicts:
         )
 
     def test_episode_end_set_then_stale_open_save(self, staff_page, browser, base_url, e2e_env, _staff_storage_state):
-        """A setzt ein Ende; B sendet alten Freitext mit leerem Ende → Konflikt, erst bewusstes Speichern öffnet."""
+        """A sets an end; B sends the old free text with an empty end → conflict, only a deliberate save passes."""
         ids = _seed(e2e_env)
         url = f"{base_url}/cases/{ids['case']}/episodes/{ids['episode']}/edit/"
         detail = re.compile(r"/cases/[0-9a-f-]{36}/$")
@@ -238,7 +238,7 @@ def _end_date() -> str:
 
 
 class TestGoalAchievedTwoTabs:
-    """Zweimal „Ziel erreicht“ bzw. „Nicht erreicht“ in zwei Tabs bleibt idempotent."""
+    """Pressing "Ziel erreicht" or "Nicht erreicht" twice in two tabs stays idempotent."""
 
     @staticmethod
     def _card(page, title):
@@ -296,7 +296,7 @@ class TestGoalAchievedTwoTabs:
 
 
 class TestUserAccessConflict:
-    """Zugang in zwei Tabs (Anwendungsbetreuung, mit Sudo-Modus)."""
+    """Access in two tabs (application support, with sudo mode)."""
 
     def test_stale_role_change_conflicts_with_current_security_state(
         self, authenticated_page, browser, base_url, e2e_env
@@ -352,7 +352,16 @@ class TestUserAccessConflict:
             # The rejected submit changed none of A's security values, and the current state shows them.
             assert _db(e2e_env, security) == "(False, True, 'lead', True)"
             current = page_b.locator("section[aria-labelledby='current-access-heading']")
-            expect(current).to_contain_text("Leitung")
+            # Every security value of the server state is shown next to its own label.
+            for label, shown in (
+                ("Aktiv", "Nein"),
+                ("2FA erforderlich", "Ja"),
+                ("Rolle", "Leitung"),
+                ("Löschbestätigung", "Ja"),
+            ):
+                term = current.locator("dt", has_text=re.compile(rf"^\s*{re.escape(label)}\s*$"))
+                expect(term, f"label {label!r}").to_have_count(1)
+                expect(term.locator("xpath=following-sibling::dd[1]"), f"value of {label!r}").to_have_text(shown)
             # B's own form still carries B's (stale) values for the next, deliberate save.
             expect(page_b.locator("select[name='role']")).to_have_value("staff")
             expect(page_b.locator("input[name='is_active']")).to_be_checked()
