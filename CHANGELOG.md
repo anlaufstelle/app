@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Offline-Zustände für Screenreader angekündigt** (#2556) — Online-Layout und Offline-Shell melden Verbindungswechsel, beendete Übertragung und neue Konflikte einmal ohne Fokuswechsel oder Hintergrund-Zähleransagen und verweisen bei Konflikten auf die Auflösung.
+
 - **Demo-Anzeigen präzisiert** (#2602) — Szenariobasierte Login-Hinweise und Rollenlabels, dokumentierter Mail-Verzicht, escapendes Fett/Zitat/Code in Betreiber-Rechtstexten, Consent-Banner mit layoutabhängiger Randposition, Tagesmodus-Titel und -Formularlabel und Kennzahlbezeichnungen in der Vorschau verbessern diese Teilpunkte der Demo-Abnahme.
 
 - **Aufgabenfilter vollständig kombiniert** (#2542) — Alle sechs Filter senden die übrigen Filter eindeutig mit; Status und Erledigt-Zeitraum bleiben bei Typ-, Prioritäts- und Zuweisungswechsel erhalten.

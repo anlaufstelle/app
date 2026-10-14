@@ -22,18 +22,76 @@ document.addEventListener("alpine:init", () => {
         cachedClients: 0,
         unsyncedCount: 0,
         conflictCount: 0,
+        announcement: "",
+        announcementQueue: [],
+        announcementTimer: null,
+        queueInitialized: false,
+        conflictsInitialized: false,
+        announce(key) {
+            const message = this.$el.dataset[key];
+            // Separate queue and edit events may report the same completion
+            // turn. Conflict handling takes precedence over transfer completion.
+            if (key === "conflictMessage") {
+                this.announcementQueue = this.announcementQueue.filter((entry) => entry.key !== "syncCompleteMessage");
+            } else if (key === "syncCompleteMessage" && this.announcementQueue.some((entry) => entry.key === "conflictMessage")) {
+                return;
+            }
+            if (!message) {
+                this.announcement = "";
+                return;
+            }
+            this.announcementQueue.push({ key, message });
+            if (this.announcementTimer === null) {
+                this.nextAnnouncement();
+            }
+        },
+        nextAnnouncement() {
+            this.announcement = "";
+            // A separate DOM update also exposes a repeated identical message.
+            this.announcementTimer = setTimeout(() => {
+                const entry = this.announcementQueue.shift();
+                this.announcement = entry ? entry.message : "";
+                this.announcementTimer = null;
+                if (this.announcementQueue.length) {
+                    this.announcementTimer = setTimeout(() => {
+                        this.announcementTimer = null;
+                        this.nextAnnouncement();
+                    }, 50);
+                }
+            }, 50);
+        },
+        destroy() {
+            clearTimeout(this.announcementTimer);
+            this.announcementTimer = null;
+            this.announcementQueue = [];
+        },
         onOnline() {
+            const wasOffline = this.offline;
             this.offline = false;
+            if (wasOffline) {
+                this.announce(this.queueCount > 0 ? "onlineSyncMessage" : "onlineMessage");
+            }
         },
         onOffline() {
+            const wasOffline = this.offline;
             this.offline = true;
+            if (!wasOffline) {
+                this.announce("offlineMessage");
+            }
         },
         onQueueEvent(event) {
-            // Refs #1351/#1385: `pending` statt der Gesamtzahl `count` — sonst
-            // zeigt der blaue "wird synchronisiert"-Banner auch Records, die
-            // laengst als conflict/dead vom Auto-Replay ausgeschlossen sind.
+            const previousPending = this.queueCount;
+            const previousConflicts = this.combinedConflictCount;
             this.queueCount = event.detail.pending;
             this.queueBlocked = event.detail.blocked;
+            if (this.queueInitialized) {
+                if (this.combinedConflictCount > previousConflicts) {
+                    this.announce("conflictMessage");
+                } else if (!this.offline && previousPending > 0 && this.queueCount === 0) {
+                    this.announce("syncCompleteMessage");
+                }
+            }
+            this.queueInitialized = true;
         },
         onClientsEvent(event) {
             this.cachedClients = event.detail.count;
@@ -42,10 +100,12 @@ document.addEventListener("alpine:init", () => {
             this.unsyncedCount = event.detail.count;
         },
         onConflictEvent(event) {
-            // Refs #1351/#1385: `count` ist bereits conflict+dead (Events) —
-            // siehe offline-edit.js::_fireCountEvent. Kombiniert mit
-            // queueBlocked in `combinedConflictCount` unten.
+            const previousConflicts = this.combinedConflictCount;
             this.conflictCount = event.detail.count;
+            if (this.conflictsInitialized && this.combinedConflictCount > previousConflicts) {
+                this.announce("conflictMessage");
+            }
+            this.conflictsInitialized = true;
         },
         // CSP-Build erlaubt keine Function-Calls in x-show/x-bind — nur
         // Property-Pfade. Daher computed getters statt Methoden.

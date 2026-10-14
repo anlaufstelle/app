@@ -138,7 +138,14 @@
              @offline-clients-count.window="onClientsEvent"
              @offline-unsynced-count.window="onUnsyncedEvent"
              @offline-conflict-count.window="onConflictEvent"
+             data-offline-message="{% trans 'Verbindung unterbrochen. Sie arbeiten jetzt offline.' %}"
+             data-online-message="{% trans 'Verbindung wiederhergestellt.' %}"
+             data-online-sync-message="{% trans 'Verbindung wiederhergestellt. Wartende Änderungen werden übertragen.' %}"
+             data-sync-complete-message="{% trans 'Übertragung beendet.' %}"
+             data-conflict-message="{% trans 'Neuer Konflikt. Öffnen Sie die Seite „Konflikte“ über den Link im Konfliktbanner zur Auflösung.' %}"
              id="offline-status" class="md:ml-60">
+            <span class="sr-only" role="status" aria-live="polite" aria-atomic="true"
+                  data-testid="offline-status-announcer" x-text="announcement"></span>
             <div x-show="offline" x-cloak
                  class="bg-yellow-800 text-white text-center text-sm py-2"
                  data-testid="offline-banner">
