@@ -113,6 +113,7 @@ class TestAnnouncementsKeepFocus:
             _set_language(e2e_env, previous)
 
 
+@pytest.mark.webkit_transport_artifact
 @pytest.mark.parametrize(
     "language",
     [

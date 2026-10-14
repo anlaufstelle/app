@@ -124,14 +124,8 @@ def routed_page(browser, _staff_storage_state):
 
 
 class TestInterruptedSubmit:
-    def test_aborted_post_keeps_nothing_stored_and_retry_stores_exactly_once(
-        self, routed_page, base_url, e2e_env, person
-    ):
-        page = routed_page
-        note = f"Netzabbruch {person['marker']}"
-        _open_form(page, base_url, person)
-        page.locator(NOTE_FIELD).fill(note)
-
+    @staticmethod
+    def _submit_with_aborted_post(page, e2e_env, note):
         def abort_posts(route):
             if route.request.method == "POST":
                 route.abort("connectionreset")
@@ -144,17 +138,41 @@ class TestInterruptedSubmit:
             page.wait_for_timeout(1500)
         finally:
             page.unroute("**/events/new/**", abort_posts)
-        # Database before the retry: the aborted request stored nothing.
+        # Database after the aborted request: nothing was stored.
         assert _stored_events(e2e_env, note) == []
 
-        # Retry: reopen the form; the typed text must still be available (draft) or retyped.
+    @pytest.mark.webkit_transport_artifact  # WebKit reports an internal error for an aborted navigation
+    def test_aborted_post_stores_nothing_and_a_retry_stores_exactly_once(self, routed_page, base_url, e2e_env, person):
+        page = routed_page
+        note = f"Netzabbruch {person['marker']}"
         _open_form(page, base_url, person)
-        field = page.locator(NOTE_FIELD)
-        if field.input_value() != note:
-            field.fill(note)
+        page.locator(NOTE_FIELD).fill(note)
+        self._submit_with_aborted_post(page, e2e_env, note)
+
+        # Retry by hand: the form is reopened and the text typed again.
+        _open_form(page, base_url, person)
+        page.locator(NOTE_FIELD).fill(note)
         page.locator(SAVE_BUTTON).click()
         page.wait_for_url(lambda url: "/events/new/" not in url, timeout=15000)
         assert _stored_events(e2e_env, note) == [person["pk"]]
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="Finding: the autosave draft is deleted when the form is submitted (autosave.js submit "
+        "listener), before the server answered. After a network abort the typed text is gone when the form "
+        "is reopened; only the browser's own back-navigation form restore could bring it back.",
+    )
+    @pytest.mark.webkit_transport_artifact
+    def test_aborted_post_keeps_typed_text_when_the_form_is_reopened(self, routed_page, base_url, e2e_env, person):
+        page = routed_page
+        note = f"Netzabbruch-Entwurf {person['marker']}"
+        _open_form(page, base_url, person)
+        page.locator(NOTE_FIELD).fill(note)
+        self._submit_with_aborted_post(page, e2e_env, note)
+
+        _open_form(page, base_url, person)
+        expect(page.locator(NOTE_FIELD)).to_have_value(note, timeout=10000)
 
 
 class TestDoubleSubmit:
