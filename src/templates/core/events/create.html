@@ -311,7 +311,8 @@
     </form>
     <div id="client-inline-create-modal" data-hx-no-focus x-data="inlineClientDialog"
          @htmx:before-swap="beforeSwap" @htmx:after-swap="afterSwap"
-         @keydown="onKeydown" @client-inline-created.window="onCreated"></div>
+         @htmx:before-request.window="beforeRequest"
+         @client-selection-changed.window="invalidateRequests" @keydown="onKeydown"></div>
 </div>
 {% endblock %}
 

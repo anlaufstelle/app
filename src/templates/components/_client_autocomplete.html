@@ -12,7 +12,7 @@ im Leerzustand), ``extra_hidden_attrs`` (z.B. data-autosave-person),
 Refs #1989: Die frueher gedriftete Fassung in workitems/form.html bindet
 diese Partial jetzt ein; dort ist ``client`` optional, deshalb haengt das
 Sternchen an ``required_field``.{% endcomment %}
-<div{% if inline_create %} @client-inline-created.window="selectItem($event.detail)"{% endif %}{% if autocomplete_component %} x-data="{{ autocomplete_component }}"
+<div{% if inline_create %} @client-inline-selected.window="selectItem($event.detail)"{% endif %}{% if autocomplete_component %} x-data="{{ autocomplete_component }}"
      data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
      data-initial-client-id="{{ client_id|default:'' }}"
      data-autocomplete-url="{% url 'core:client_autocomplete' %}"{% endif %}>

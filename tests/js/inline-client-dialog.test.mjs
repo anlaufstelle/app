@@ -3,6 +3,7 @@ import Alpine from "@alpinejs/csp";
 import { beforeAll, afterEach, expect, it, vi } from "vitest";
 
 const factories = {};
+const controllers = [];
 beforeAll(async () => {
     window.Alpine = Alpine;
     const register = Alpine.data.bind(Alpine);
@@ -14,6 +15,7 @@ beforeAll(async () => {
     document.dispatchEvent(new Event("alpine:init"));
 });
 afterEach(() => {
+    for (const controller of controllers.splice(0)) controller.destroy();
     Alpine.destroyTree(document.body);
     document.body.innerHTML = "";
 });
@@ -30,6 +32,7 @@ function setup() {
     c.$el = slot;
     c.$nextTick = (callback) => callback();
     c.init();
+    controllers.push(c);
     const event = { detail: { target: slot } };
     function swap(markup) {
         c.beforeSwap(event);
@@ -104,10 +107,11 @@ it("returns focus to the opener on Cancel and to the person input on success", (
     swap("");
     expect(document.activeElement).toBe(opener);
     open();
-    c.beforeSwap({ detail: { target: slot } });
+    const xhr = { getResponseHeader: () => '{"client-inline-created":{"id":"new"}}' };
+    c.beforeRequest({ detail: { target: slot, xhr, requestConfig: { elt: opener } } });
+    c.beforeSwap({ detail: { target: slot, xhr } });
     slot.innerHTML = "";
-    c.afterSwap({ detail: { target: slot, xhr: { getResponseHeader: () => '{"client-inline-created":{"id":"new"}}' } } });
-    c.onCreated();
+    c.afterSwap({ detail: { target: slot, xhr } });
     expect(document.activeElement).toBe(input);
     expect(input.value).toBe("Unchanged text");
     expect(document.querySelector("textarea").value).toBe("Outer draft");
@@ -153,5 +157,6 @@ it("handles swap and keyboard bindings through the real CSP Alpine slot", async 
     expect(document.getElementById("event-create-form").hasAttribute("inert")).toBe(false);
     window.dispatchEvent(new CustomEvent("client-inline-created"));
     await Alpine.nextTick();
-    expect(document.activeElement.getAttribute("role")).toBe("combobox");
+    // Raw server events cannot revive a closed dialog or change its focus.
+    expect(document.activeElement).toBe(opener);
 });

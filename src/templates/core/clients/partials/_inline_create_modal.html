@@ -6,6 +6,9 @@
         <h2 id="client-inline-create-title" class="text-[18px] font-bold text-ink">{% trans "Person anlegen" %}</h2>
         <p class="mt-1 text-[13px] text-ink-muted">{% trans "Die neue Person wird direkt ausgewählt; Ihre Angaben im Kontaktformular bleiben erhalten." %}</p>
 
+        <p data-inline-client-error hidden role="alert" aria-live="assertive" tabindex="-1"
+           class="mt-2 text-sm text-red-600">{% trans "Die Person konnte nicht angelegt werden. Bitte erneut versuchen." %}</p>
+
         <form class="mt-4 space-y-4"
               method="post"
               hx-post="{% url 'core:client_inline_create' %}"

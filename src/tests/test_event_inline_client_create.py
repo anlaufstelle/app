@@ -19,7 +19,8 @@ class TestEventInlineClientCreateWiring:
         form_end = body.index("</form>", form_start)
         modal_slot = body.index('id="client-inline-create-modal"')
         assert modal_slot > form_end
-        assert '@client-inline-created.window="selectItem($event.detail)"' in body
+        assert '@client-inline-selected.window="selectItem($event.detail)"' in body
+        assert "@client-inline-created.window=" not in body
         assert 'hx-target="#client-inline-create-modal"' in body
 
 

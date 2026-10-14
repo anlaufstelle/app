@@ -82,7 +82,11 @@ const _autocompleteShared = {
             });
         });
     },
+    _notifySelectionChanged() {
+        window.dispatchEvent(new CustomEvent("client-selection-changed"));
+    },
     setQuery(event) {
+        this._notifySelectionChanged();
         this.query = event.target.value;
         this._justSelected = false;
         this.resetSearch();
@@ -91,6 +95,7 @@ const _autocompleteShared = {
         if (this.loadCasesForClient) this.loadCasesForClient("");
     },
     setSelectedId(event) {
+        this._notifySelectionChanged();
         this.resetSearch();
         this.selectedId = event.target.value;
     },
@@ -166,19 +171,110 @@ document.addEventListener("alpine:init", () => {
         _trigger: null,
         _open: false,
         _ownedInert: [],
+        _generation: 0,
+        _requestSequence: 0,
+        _activeToken: null,
+        _requests: null,
+        _requestCleanups: [],
+        _acceptingCreate: false,
+        _backgroundObserver: null,
+        _focusListener: null,
         init() {
             this._slot = this.$el;
+            this._requests = new WeakMap();
+            this._focusListener = (event) => {
+                const dialog = this._slot.querySelector('[role="dialog"]');
+                if (this._open && dialog && !dialog.contains(event.target)) {
+                    (this._focusables(dialog)[0] || dialog).focus();
+                }
+            };
+            document.addEventListener("focusin", this._focusListener);
+        },
+        invalidateRequests() {
+            this._generation++;
+            this._activeToken = null;
+            this._acceptingCreate = false;
+        },
+        _isCurrentRequest(xhr) {
+            return this._activeToken !== null && this._requests.get(xhr) === this._activeToken;
+        },
+        beforeRequest(event) {
+            const { target, xhr, requestConfig } = event.detail;
+            if (target !== this._slot || !xhr) return;
+            const source = requestConfig.elt;
+            const cancel = source.hasAttribute("data-inline-client-cancel");
+            if (cancel || !this._slot.contains(source)) {
+                this.invalidateRequests();
+                this._trigger = cancel ? this._trigger : source;
+                this._acceptingCreate = !cancel;
+            }
+            const token = `${this._generation}:${++this._requestSequence}`;
+            this._activeToken = token;
+            this._requests.set(xhr, token);
+            // Listen on the source itself: detached forms still receive XHR events.
+            const beforeResponse = (responseEvent) => {
+                if (responseEvent.detail.xhr === xhr && !this._isCurrentRequest(xhr)) {
+                    responseEvent.preventDefault();
+                }
+            };
+            const onError = (errorEvent) => {
+                if (errorEvent.detail.xhr !== xhr) return;
+                if (!this._isCurrentRequest(xhr)) {
+                    errorEvent.stopPropagation();
+                    return;
+                }
+                // Keep the global facility-archive purge and reload authoritative.
+                if (xhr.status === 403 && xhr.getResponseHeader("X-Facility-Archived") === "1") return;
+                const message = this._slot.querySelector('[data-inline-client-error]');
+                if (this._open && message) {
+                    errorEvent.stopPropagation();
+                    message.hidden = false;
+                    message.focus();
+                }
+            };
+            const errorEvents = ["htmx:responseError", "htmx:sendError", "htmx:timeout"];
+            const completed = (completedEvent) => {
+                // HTMX emits sendError/timeout after afterRequest in the same stack.
+                if (completedEvent.detail.xhr === xhr) queueMicrotask(cleanup);
+            };
+            const cleanup = () => {
+                source.removeEventListener("htmx:beforeOnLoad", beforeResponse);
+                for (const name of errorEvents) source.removeEventListener(name, onError);
+                source.removeEventListener("htmx:afterRequest", completed);
+                this._requestCleanups = this._requestCleanups.filter((entry) => entry !== cleanup);
+            };
+            source.addEventListener("htmx:beforeOnLoad", beforeResponse);
+            for (const name of errorEvents) source.addEventListener(name, onError);
+            source.addEventListener("htmx:afterRequest", completed);
+            this._requestCleanups.push(cleanup);
         },
         beforeSwap(event) {
-            if (event.detail.target !== this._slot || this._open) return;
+            if (event.detail.target !== this._slot) return;
+            if (event.detail.xhr && !this._isCurrentRequest(event.detail.xhr)) {
+                event.detail.shouldSwap = false;
+                event.preventDefault();
+                return;
+            }
+            if (event.detail.xhr?.status >= 400) {
+                event.detail.shouldSwap = false;
+                return;
+            }
+            if (this._open) return;
             this._trigger = event.detail.requestConfig?.elt || document.activeElement;
         },
         afterSwap(event) {
             if (event.detail.target !== this._slot) return;
+            if (event.detail.xhr && !this._isCurrentRequest(event.detail.xhr)) return;
             const dialog = this._slot.querySelector('[role="dialog"]');
             if (dialog) {
                 this._open = true;
                 this._makeBackgroundInert();
+                if (!this._backgroundObserver) {
+                    this._backgroundObserver = new MutationObserver(() => {
+                        if (this._open) this._makeBackgroundInert();
+                    });
+                    this._backgroundObserver.observe(document.body, { childList: true, subtree: true });
+                }
                 this.$nextTick(() => {
                     if (!dialog.isConnected || !this._open) return;
                     const target = dialog.querySelector('[aria-invalid="true"]') ||
@@ -188,17 +284,24 @@ document.addEventListener("alpine:init", () => {
             } else if (this._open) {
                 this._open = false;
                 this._releaseBackground();
-                let created = false;
+                let created = null;
                 try {
                     const header = event.detail.xhr?.getResponseHeader("HX-Trigger-After-Swap");
-                    created = Boolean(JSON.parse(header || "{}")["client-inline-created"]);
+                    if (this._acceptingCreate && this._isCurrentRequest(event.detail.xhr)) {
+                        created = JSON.parse(header || "{}")["client-inline-created"] || null;
+                    }
                 } catch (_) { /* An absent selection event is a cancellation. */ }
-                this._restoreFocus(created);
+                this.invalidateRequests();
+                if (created) {
+                    // Only a current response can publish a selection; ignore raw HX events.
+                    window.dispatchEvent(new CustomEvent("client-inline-selected", { detail: created }));
+                }
+                this._restoreFocus(Boolean(created));
             }
         },
         _makeBackgroundInert() {
-            let branch = this._slot;
-            while (branch && branch !== document.body) {
+            let branch = this._slot.querySelector('[role="dialog"]') || this._slot;
+            while (branch?.parentElement && branch !== document.body) {
                 for (const sibling of branch.parentElement.children) {
                     if (sibling !== branch && !sibling.hasAttribute("inert")) {
                         sibling.setAttribute("inert", "");
@@ -209,6 +312,8 @@ document.addEventListener("alpine:init", () => {
             }
         },
         _releaseBackground() {
+            this._backgroundObserver?.disconnect();
+            this._backgroundObserver = null;
             for (const element of this._ownedInert) element.removeAttribute("inert");
             this._ownedInert = [];
         },
@@ -230,9 +335,6 @@ document.addEventListener("alpine:init", () => {
             const target = !toInput && this._isAvailable(this._trigger) ? this._trigger : input;
             if (this._isAvailable(target)) target.focus();
         },
-        onCreated() {
-            this.$nextTick(() => this._restoreFocus(true));
-        },
         onKeydown(event) {
             if (!this._open || event.defaultPrevented) return;
             if (event.key === "Escape" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
@@ -252,6 +354,10 @@ document.addEventListener("alpine:init", () => {
             }
         },
         destroy() {
+            this.invalidateRequests();
+            this._open = false;
+            for (const cleanup of [...this._requestCleanups]) cleanup();
+            document.removeEventListener("focusin", this._focusListener);
             this._releaseBackground();
         },
     }));
@@ -398,6 +504,7 @@ document.addEventListener("alpine:init", () => {
                     return this._minStageHintTemplate.replace("%(stage)s", this.minStageLabel);
                 },
                 selectItem(item) {
+                    this._notifySelectionChanged();
                     this._justSelected = true;
                     this.resetSearch();
                     this.selectedId = item.id;
@@ -567,6 +674,7 @@ document.addEventListener("alpine:init", () => {
                     this.resetSearch();
                     this._updateStageInfo(selectEl);
                     if (this.minStage && this.selectedId) {
+                        this._notifySelectionChanged();
                         this.selectedId = "";
                         this.query = "";
                         this.results = [];
@@ -581,6 +689,7 @@ document.addEventListener("alpine:init", () => {
                     }
                 },
                 selectItem(item) {
+                    this._notifySelectionChanged();
                     this._justSelected = true;
                     this.resetSearch();
                     this.selectedId = item.id;
