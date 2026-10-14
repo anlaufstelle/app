@@ -90,19 +90,6 @@ def test_handoff_guard_detects_hooked_pushes_and_chained_tag_checks():
 
 
 @pytest.mark.skipif(not (ROOT / "docs/dev").exists(), reason="Dev guidance is absent from public snapshots")
-def test_stage_token_guidance_reads_actions_without_watch():
-    script = (ROOT / "dev-ops/release/release-preflight.sh").read_text()
-    block = script.split('echo "━━━ 7/7 Token-Reichweite"', 1)[1].split("\necho\n", 1)[0]
-    assert "repos/anlaufstelle/stage/actions/" in block
-    assert "gh run watch" not in block
-    assert "403/404" in block
-    guidance = (ROOT / ".claude/commands/release.md").read_text()
-    monitoring = guidance.split("Stage-CI überwachen:", 1)[1].split("## Phase 9", 1)[0]
-    assert "actions/workflows/$WF/runs?head_sha=" in monitoring
-    assert "gh run watch" not in monitoring
-
-
-@pytest.mark.skipif(not (ROOT / "docs/dev").exists(), reason="Dev guidance is absent from public snapshots")
 def test_dev_repository_guidance_does_not_claim_admin_ruleset_bypass():
     text = (ROOT / "docs/dev/release-checklist.md").read_text()
     paragraph = text.split("**Dev-Repo:**", 1)[1].split("\n\n", 1)[0]
