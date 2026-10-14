@@ -43,6 +43,7 @@ from core.services.case import (
 )
 from core.services.case.cases import EventNotOnExpectedCaseError
 from core.services.client import resolve_writable_client
+from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE
 from core.services.compliance import get_visible_event_or_404, user_can_see_document_type
 from core.services.dynamic_data import (
     build_dynamic_data_context,
@@ -57,6 +58,7 @@ from core.services.events import split_file_and_text_data
 from core.services.scoping import get_scoped_object
 from core.utils.ratelimit import ratelimit
 from core.views._dynamic_errors import add_dynamic_service_errors
+from core.views._edit_errors import edit_error_context, is_version_conflict, refresh_edit_visibility
 from core.views.case_goals import _abgelehnt as case_goals_abgelehnt
 from core.views.mixins import (
     FilteredPaginatedListMixin,
@@ -738,15 +740,68 @@ class CaseUpdateView(StaffRequiredMixin, View):
             # #1938: Fehler an einem fuer diese Rolle unsichtbaren Feld duerfen
             # weder Slug noch Grenze nennen — derselbe Vertrag wie im
             # Ereignis-Pfad (#1936).
-            safe_messages = add_dynamic_service_errors(data_form, e, restricted)
-            messages.error(request, "; ".join(safe_messages))
             # Refs #2378: Hat der Zustandsvertrag abgelehnt, weil die Akte
             # inzwischen im Papierkorb liegt, getilgt ist oder ihre Person
             # widerrufen wurde, antwortet die Bearbeiten-Seite mit 404 — die
             # Meldung ginge dort verloren. Dann zur Fallliste.
             if not cases_with_live_client().filter(pk=case.pk).exists():
+                safe_messages = add_dynamic_service_errors(data_form, e, restricted)
+                messages.error(request, "; ".join(safe_messages))
                 return redirect("core:case_list")
-            return redirect("core:case_update", pk=case.pk)
+            if request.headers.get("HX-Request"):
+                safe_messages = add_dynamic_service_errors(data_form, e, restricted)
+                messages.error(request, "; ".join(safe_messages))
+                return redirect("core:case_update", pk=case.pk)
+            current = get_scoped_object(cases_with_live_client().select_related("document_type"), request, pk=pk)
+            if current.anonymized_at is not None:
+                return redirect("core:case_list")
+            if current.client.processing_restricted:
+                messages.error(request, PROCESSING_RESTRICTED_MESSAGE)
+                return redirect("core:case_detail", pk=pk)
+            current_form = CaseForm(
+                instance=current,
+                facility=facility,
+                user=request.user,
+                pinned_client=current.client,
+            )
+            current_locked = _lock_invisible_document_type(request, current, current_form)
+            if current_locked:
+                form.fields.pop("document_type", None)
+                if data_form is not None:
+                    data_form.fields.clear()
+            restricted = [*restricted, *refresh_edit_visibility(request.user, data_form)]
+            comparison = {}
+            if is_version_conflict(e):
+                current_data_form, current_restricted = _case_data_form(
+                    request,
+                    None if current_locked else current.document_type,
+                    initial_data=decrypt_dynamic_text_data(current.data_json),
+                    existing_file_slugs=file_marker_slugs(current.data_json),
+                )
+                current_data_form._edit_file_state = current.data_json
+                current_data_form._edit_attachments = build_attachment_context(current)
+                if data_form is not None:
+                    data_form._edit_file_state = old_data
+                comparison = {
+                    "current_forms": [(form, current_form), (data_form, current_data_form)],
+                    "current_version": current.updated_at.isoformat(),
+                    "current_form_state": current_form.form_state_token,
+                }
+                form.form_state_token = current_form.form_state_token
+            context = self._render_context(
+                current,
+                form,
+                data_form,
+                data_json=current.data_json,
+                original_document_type_id=current.document_type_id,
+                type_locked=current_locked,
+                client_id=str(current.client_id),
+                client_pseudonym=current.client.pseudonym,
+                expected_updated_at=request.POST.get("expected_updated_at", ""),
+            )
+            # The HTML page carries errors inline; keep flashes for redirects only.
+            context.update(edit_error_context(e, data_form, restricted, **comparison))
+            return render(request, "core/cases/form.html", context)
         finally:
             # Refs #1345/#1956: Committet die Transaktion nicht (Rollback,
             # Policy-Reject, unerwartete Exception), sind die vorab

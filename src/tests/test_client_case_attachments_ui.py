@@ -622,7 +622,9 @@ class TestUpdateStagingLeavesNoOrphans:
             },
         )
 
-        assert response.status_code == 302  # Redirect mit Fehlermeldung
+        assert response.status_code == 200
+        assert response.context["form"]["notes"].value() == "geaendert"
+        assert "Datei bitte erneut auswählen:" in response.content.decode()
         person.refresh_from_db()
         assert not Attachment.objects.filter(client=person).exists()
         assert ft_file.slug not in (person.data_json or {})
@@ -659,7 +661,9 @@ class TestUpdateStagingLeavesNoOrphans:
             },
         )
 
-        assert response.status_code == 302
+        assert response.status_code == 200
+        assert response.context["form"]["description"].value() == "geaendert"
+        assert "Datei bitte erneut auswählen:" in response.content.decode()
         case.refresh_from_db()
         assert not Attachment.objects.filter(case=case).exists()
         assert ft_file.slug not in (case.data_json or {})
@@ -705,7 +709,9 @@ class TestUpdateStagingLeavesNoOrphans:
             },
         )
 
-        assert response.status_code == 302
+        assert response.status_code == 200
+        assert response.context["form"]["notes"].value() == "geaendert"
+        assert "Datei bitte erneut auswählen:" in response.content.decode()
         person.refresh_from_db()
         assert person.notes == "alt", "Versionskonflikt haette den Update verhindern muessen"
         assert not Attachment.objects.filter(client=person).exists()

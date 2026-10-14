@@ -132,7 +132,8 @@ class TestCaseInvalidRerender:
             _case_payload(case, slug, rerendered["expected_updated_at"], title="Stand aus Tab A"),
         )
 
-        assert response.status_code == 302
+        assert response.status_code == 200
+        assert response.context["has_edit_conflict"]
         case.refresh_from_db()
         assert case.description == "Parallel gespeichert"
 
@@ -192,7 +193,8 @@ class TestClientInvalidRerender:
             ),
         )
 
-        assert response.status_code == 302
+        assert response.status_code == 200
+        assert response.context["has_edit_conflict"]
         client_identified.refresh_from_db()
         assert client_identified.notes == "Parallel gespeichert"
         assert client_identified.pseudonym != "Stand-aus-Tab-A"

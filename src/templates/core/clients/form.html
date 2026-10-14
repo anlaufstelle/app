@@ -29,6 +29,7 @@
     <form method="post" enctype="multipart/form-data" class="space-y-4" data-offline-enctype-downgrade
           {% include "core/partials/_dynamic_loss_confirm_attrs.html" %}>
         {% csrf_token %}
+        {% include "core/partials/_edit_conflict.html" %}
         {% include "core/_form_errors.html" %}
         {% if is_edit and client %}
         <input type="hidden" name="expected_updated_at" value="{{ expected_updated_at }}">

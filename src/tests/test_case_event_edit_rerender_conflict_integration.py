@@ -139,8 +139,10 @@ class TestCaseEditRerenderThenSubmit:
             follow=True,
         )
 
-        assert response.redirect_chain[0] == (url, 302), "Konflikt führt zurück ins Formular"
-        assert CONFLICT_TEXT in _messages_text(response)
+        assert response.status_code == 200
+        assert response.redirect_chain == []
+        assert response.context["has_edit_conflict"]
+        assert CONFLICT_TEXT in response.content.decode()
         described_case.refresh_from_db()
         assert described_case.title == "Titel aus Tab B", "Parallele Änderung darf nicht still überschrieben werden"
         assert described_case.description == snapshot.description, "Konflikt darf nichts teilweise schreiben"

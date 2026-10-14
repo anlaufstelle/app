@@ -45,6 +45,7 @@ from core.services.client import (
     update_client,
 )
 from core.services.client.history_status import pending_history_count
+from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE
 from core.services.compliance import user_can_see_document_type
 from core.services.dynamic_data import (
     build_dynamic_data_context,
@@ -62,6 +63,7 @@ from core.services.system import get_active_bans_for_client
 from core.utils.downloads import safe_download_response
 from core.utils.ratelimit import ratelimit
 from core.views._dynamic_errors import add_dynamic_service_errors
+from core.views._edit_errors import edit_error_context, is_version_conflict, refresh_edit_visibility
 from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
     FilteredPaginatedListMixin,
@@ -849,9 +851,49 @@ class ClientUpdateView(StaffRequiredMixin, View):
             # #1938: Fehler an einem fuer diese Rolle unsichtbaren Feld duerfen
             # weder Slug noch Grenze nennen — derselbe Vertrag wie im
             # Ereignis-Pfad (#1936).
-            safe_messages = add_dynamic_service_errors(data_form, e, restricted)
-            messages.error(request, "; ".join(safe_messages))
-            return redirect("core:client_update", pk=client.pk)
+            if request.headers.get("HX-Request"):
+                safe_messages = add_dynamic_service_errors(data_form, e, restricted)
+                messages.error(request, "; ".join(safe_messages))
+                return redirect("core:client_update", pk=client.pk)
+            # Re-authorize after rollback before rendering any current contents.
+            current = get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
+            if current.processing_restricted:
+                messages.error(request, PROCESSING_RESTRICTED_MESSAGE)
+                return redirect("core:client_detail", pk=pk)
+            current_form = ClientForm(instance=current, facility=request.current_facility, user=request.user)
+            current_locked = _lock_invisible_document_type(request, current, current_form)
+            if current_locked:
+                form.fields.pop("document_type", None)
+                if data_form is not None:
+                    data_form.fields.clear()
+            restricted = [*restricted, *refresh_edit_visibility(request.user, data_form)]
+            comparison = {}
+            if is_version_conflict(e):
+                current_data_form, current_restricted = _client_data_form(
+                    request,
+                    None if current_locked else current.document_type,
+                    initial_data=decrypt_dynamic_text_data(current.data_json),
+                    existing_file_slugs=file_marker_slugs(current.data_json),
+                )
+                current_data_form._edit_file_state = current.data_json
+                current_data_form._edit_attachments = build_attachment_context(current)
+                if data_form is not None:
+                    data_form._edit_file_state = old_data
+                comparison = {
+                    "current_forms": [(form, current_form), (data_form, current_data_form)],
+                    "current_version": current.updated_at.isoformat(),
+                }
+            context = self._render_context(
+                current,
+                form,
+                data_form,
+                data_json=current.data_json,
+                original_document_type_id=current.document_type_id,
+                type_locked=current_locked,
+                expected_updated_at=request.POST.get("expected_updated_at", ""),
+            )
+            context.update(edit_error_context(e, data_form, restricted, **comparison))
+            return render(request, "core/clients/form.html", context)
         finally:
             # Refs #1345/#1956: Committet die Transaktion nicht (Rollback,
             # Policy-Reject, unerwartete Exception), sind die vorab

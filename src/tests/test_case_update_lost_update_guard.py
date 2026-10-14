@@ -185,7 +185,10 @@ class TestParallelFormFieldChangeStaysCaseConflict:
             follow=True,
         )
 
-        assert response.redirect_chain[0] == (reverse("core:case_update", kwargs={"pk": described_case.pk}), 302)
+        assert response.status_code == 200
+        assert response.redirect_chain == []
+        assert response.context["form"]["description"].value() == "Beschreibung aus Tab A"
+        assert response.context["has_edit_conflict"]
         assert CONFLICT_TEXT in response.content.decode()
         described_case.refresh_from_db()
         assert described_case.title == "Titel aus Tab B", "Paralleler Titel darf nicht still überschrieben werden"
@@ -204,8 +207,9 @@ class TestParallelFormFieldChangeStaysCaseConflict:
             _form_payload(snapshot, hidden, title="Titel aus Tab A"),
         )
 
-        assert response.status_code == 302
-        assert response.url == reverse("core:case_update", kwargs={"pk": described_case.pk})
+        assert response.status_code == 200
+        assert not response.has_header("Location")
+        assert response.context["has_edit_conflict"]
         described_case.refresh_from_db()
         assert described_case.title == "Titel aus Tab B"
         assert described_case.status == Case.Status.CLOSED
@@ -223,8 +227,9 @@ class TestParallelFormFieldChangeStaysCaseConflict:
             _form_payload(snapshot, hidden, title="Titel aus Tab A"),
         )
 
-        assert response.status_code == 302
-        assert response.url == reverse("core:case_update", kwargs={"pk": described_case.pk})
+        assert response.status_code == 200
+        assert not response.has_header("Location")
+        assert response.context["has_edit_conflict"]
         described_case.refresh_from_db()
         assert described_case.title == snapshot.title
 
@@ -557,7 +562,7 @@ class TestFormStateRescueOnlyForLiveCases:
         assert Case._base_manager.get(pk=case_open.pk).title == "Offener Fall"
 
     def test_conflict_on_live_case_still_returns_to_the_form(self, client, staff_user, described_case):
-        """Normalpfad: ein Konflikt an einer lebenden Akte führt weiter zurück ins Formular."""
+        """A conflict on a live case retains the bound form with a comparison."""
         client.force_login(staff_user)
         hidden = _render_edit_form(client, described_case)
         snapshot = Case.objects.get(pk=described_case.pk)
@@ -568,5 +573,6 @@ class TestFormStateRescueOnlyForLiveCases:
             _form_payload(snapshot, hidden, description="Aus Tab A"),
         )
 
-        assert response.status_code == 302
-        assert response.url == reverse("core:case_update", kwargs={"pk": described_case.pk})
+        assert response.status_code == 200
+        assert not response.has_header("Location")
+        assert response.context["has_edit_conflict"]

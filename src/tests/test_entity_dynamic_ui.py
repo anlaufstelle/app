@@ -12,7 +12,6 @@ from unittest.mock import patch
 
 import pytest
 from cryptography.fernet import Fernet
-from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
 from django.test import override_settings
 from django.urls import reverse
@@ -737,11 +736,11 @@ class TestEntityUpdateWithDynamicData:
             ),
         )
 
-        assert response.status_code == 302
-        assert response.url == reverse(entity.url("update"), args=[target.pk])
-        # Refs #1936-Vertrag: Die Grenze eines fuer diese Rolle unsichtbaren
-        # Feldes ist eine interne Regelkennung und wird vollstaendig ersetzt.
-        assert [str(message) for message in get_messages(response.wsgi_request)] == ["Ungültige Eingabe."]
+        assert response.status_code == 200
+        assert not response.has_header("Location")
+        # Hidden-field limits remain redacted in the inline error response.
+        assert response.context["edit_notices"] == ["Ungültige Eingabe."]
+        assert response.context["data_form"][visible_field.slug].value() == "nachher"
         target.refresh_from_db()
         expected_identity = f"{entity.id_prefix}{entity.value('historical_identity')}"
         assert getattr(target, entity.identity_field) == expected_identity
@@ -788,8 +787,9 @@ class TestEntityUpdateWithDynamicData:
                 ),
             )
 
-        assert response.status_code == 302
-        assert [str(message) for message in get_messages(response.wsgi_request)] == ["Wert muss mindestens 5 sein."]
+        assert response.status_code == 200
+        assert response.context["edit_notices"] == ["Wert muss mindestens 5 sein."]
+        assert response.context["data_form"][visible_field.slug].value() == "3"
 
     def test_type_switch_drops_old_keys(self, client, staff_user, facility, request, entity: EntitySpec):
         old_type = entity.doctype(request, "form")
@@ -880,8 +880,9 @@ class TestCaseUpdateOptimisticLockingAndAudit:
                 expected_updated_at=stale,
             ),
         )
-        assert response.status_code == 302
-        assert response["Location"] == reverse("core:case_update", args=[target.pk])
+        assert response.status_code == 200
+        assert response.context["has_edit_conflict"]
+        assert response.context["data_form"]["anlass"].value() == "Neu"
         target.refresh_from_db()
         assert target.title == "P8-Lock-01"
         assert target.data_json["anlass"] == "Alt"
