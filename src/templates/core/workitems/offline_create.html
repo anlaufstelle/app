@@ -9,6 +9,9 @@
 {# — offlineWorkItemCreate liest Roster + mitgenommene Personen aus IndexedDB.   #}
 <div x-data="offlineWorkItemCreate" x-init="init"
      data-testid="offline-workitem-create"
+     data-wi-title-required="{% trans 'Bitte einen Titel angeben.' %}"
+     data-wi-title-too-long="{% trans 'Der Titel darf höchstens 200 Zeichen enthalten.' %}"
+     data-wi-reminder-after-due="{% trans 'Die Erinnerung muss vor oder am Fälligkeitstag liegen.' %}"
      class="max-w-2xl mx-auto">
 
     <div class="mb-4 flex items-center space-x-2">

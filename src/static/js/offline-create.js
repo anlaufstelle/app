@@ -259,6 +259,16 @@
             // geteilte Partial _offline_workitem_fields.html bindet an wiValues.*.
             wiValues: {},
             wiError: "",
+            wiValidationActive: false,
+            validateWorkItem() {
+                this.wiValidationActive = true;
+                return window.offlineFormFields.validateWorkItemForm(this.wiValues, this.$el);
+            },
+            clearWorkItemErrors() {
+                if (this.wiValidationActive) {
+                    window.offlineFormFields.validateWorkItemForm(this.wiValues, this.$el, false);
+                }
+            },
             // HTML5-Datumsgrenzen (heute / 31.12. Folgejahr), spiegeln
             // WorkItemForm.min_workitem_date/max_workitem_date. Server-clean()
             // bleibt Autoritaet (422 beim Replay -> graceful).
@@ -337,8 +347,8 @@
                         this.wiError = "Offline-Erfassung nicht verfügbar.";
                         return;
                     }
-                    if (!this.wiValues.title) {
-                        this.wiError = "Bitte einen Titel angeben.";
+                    if (!this.validateWorkItem()) {
+                        this.saved = false;
                         return;
                     }
                     // clientPk leer == Standalone (WorkItemForm.client ist
@@ -361,6 +371,7 @@
 
             reset() {
                 this.saved = false;
+                this.wiValidationActive = false;
                 this.wiError = "";
                 this.clientPk = "";
                 this.wiValues = window.offlineFormFields.emptyWorkItemValues();

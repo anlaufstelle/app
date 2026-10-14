@@ -62,6 +62,16 @@
             creatingWorkItem: false,
             wiValues: {},
             wiError: "",
+            wiValidationActive: false,
+            validateWorkItem() {
+                this.wiValidationActive = true;
+                return window.offlineFormFields.validateWorkItemForm(this.wiValues, this.$el);
+            },
+            clearWorkItemErrors() {
+                if (this.wiValidationActive) {
+                    window.offlineFormFields.validateWorkItemForm(this.wiValues, this.$el, false);
+                }
+            },
             // HTML5-Datumsgrenzen (heute / 31.12. Folgejahr), spiegeln
             // WorkItemForm.min_workitem_date/max_workitem_date. Server-clean()
             // bleibt Autoritaet; ein 422 wird vom P2-Track graceful behandelt.
@@ -602,6 +612,7 @@
                 return today;
             },
             startCreateWorkItem() {
+                this.wiValidationActive = false;
                 this.wiError = "";
                 this.lastSyncResult = "";
                 this._setEditing(null);
@@ -618,6 +629,7 @@
                 this.wiError = "";
             },
             startEditWorkItem(wi) {
+                this.wiValidationActive = false;
                 this.wiError = "";
                 this.lastSyncResult = "";
                 this._setEditing(null);
@@ -651,8 +663,8 @@
                         this.wiError = "Offline-Erfassung nicht verfügbar.";
                         return;
                     }
-                    if (!this.wiValues.title) {
-                        this.wiError = "Bitte einen Titel angeben.";
+                    if (!this.validateWorkItem()) {
+                        this.lastSyncResult = "";
                         return;
                     }
                     const record = await window.offlineEdit.markWorkItemNew(
@@ -687,8 +699,8 @@
                         this.wiError = "Offline-Editor nicht verfügbar.";
                         return;
                     }
-                    if (!this.wiValues.title) {
-                        this.wiError = "Bitte einen Titel angeben.";
+                    if (!this.validateWorkItem()) {
+                        this.lastSyncResult = "";
                         return;
                     }
                     // Refs #1398 (P3-Review-Handoff #1): clientPk MUSS mit — ein

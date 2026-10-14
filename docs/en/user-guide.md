@@ -850,6 +850,7 @@ For assignments without a reliable internet connection -- for example, outreach 
 - You can **record new events** (via **"Document contact"**) and **edit existing ones**; entries are stored encrypted locally (AES-GCM-256; the key is derived from your password) and sent automatically once you are back online. **File attachments** cannot be captured offline -- add them once you are back online.
 - **Capture anywhere offline:** you no longer need an **open person dossier**. Offline, tap **"Document contact"** or **"Create task"** in the **"+" menu** (or open the forms `/events/new/` / `/workitems/new/` directly) -- a real capture form opens **at the usual address**: pick a document type, optionally assign a person you took offline, and save.
 - **Contacts without a person** (anonymous contacts) and **standalone tasks** can now be **started offline too** -- choose **"-- no person --"** in the person picker. If the chosen document type requires a contact stage, "no person" is disabled; assign a taken-along person instead (the server re-checks the contact stage on sync).
+- **Tasks are checked before local saving:** After trimming surrounding whitespace, the title must not be empty and must contain at most 200 characters. The reminder must not be after the due date. Field errors keep your entries in the form; correct them before saving. Locally saved tasks still await synchronization and validation by the server.
 - **Task capture is social workers-only.** As an assistant, opening the task form offline shows a note instead of the fields -- so no entry is created that would be rejected on sync.
 - If nothing has been **prepared for offline capture** yet (the facility was never opened online, the local cache is empty, or the installed app is not updated yet), the form shows a short **"open it once online"** hint instead of the fields.
 - **`/offline/` is a purely technical fallback**, no longer an entry point: the "No local view available" page appears only when **no** local view matches the requested address (e.g. an unknown URL, or the app has not yet been updated to the current version) -- with links to the person list, tasks, and the timeline, plus "Try again".
@@ -1159,7 +1160,8 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 881285e2268bd3b382d4a3ce537414827d4c2078 -->
+<!-- source-hash: c91c8a136527912328152ad018dfa6625882c9f6 -->
+<!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->

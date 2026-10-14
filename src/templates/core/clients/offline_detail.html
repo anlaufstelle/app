@@ -10,6 +10,9 @@
 {% get_current_timezone as app_timezone %}
 <div x-data="offlineClientView" data-pk="{{ client_pk }}" x-init="load"
      data-testid="offline-client-view"
+     data-wi-title-required="{% trans 'Bitte einen Titel angeben.' %}"
+     data-wi-title-too-long="{% trans 'Der Titel darf höchstens 200 Zeichen enthalten.' %}"
+     data-wi-reminder-after-due="{% trans 'Die Erinnerung muss vor oder am Fälligkeitstag liegen.' %}"
      data-dead-reason-not-found="{% trans 'Wurde auf dem Server gelöscht oder der Zugriff wurde entzogen' %}"
      data-dead-reason-invalid="{% trans 'Vom Server als ungültig abgelehnt' %}"
      data-dead-reason-forbidden="{% trans 'Keine Berechtigung' %}"

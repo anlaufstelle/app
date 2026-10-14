@@ -153,7 +153,7 @@
     function workItemFormData(wiValues) {
         return {
             item_type: wiValues.item_type,
-            title: wiValues.title,
+            title: (wiValues.title || "").trim(),
             description: wiValues.description,
             priority: wiValues.priority,
             due_date: wiValues.due_date,
@@ -161,6 +161,42 @@
             recurrence: wiValues.recurrence,
             assigned_to: wiValues.assigned_to,
         };
+    }
+
+    function validateWorkItemForm(values, root, focus = true) {
+        const owner = root?.closest?.("[x-data]") || root;
+        const messages = owner?.dataset || {};
+        const errors = {};
+        const title = (values.title || "").trim();
+        if (!title) {
+            errors.title = messages.wiTitleRequired || "Bitte einen Titel angeben.";
+        } else if (Array.from(title).length > 200) {
+            errors.title = messages.wiTitleTooLong || "Der Titel darf höchstens 200 Zeichen enthalten.";
+        }
+        if (values.remind_at && values.due_date && values.remind_at > values.due_date) {
+            errors.remind_at = messages.wiReminderAfterDue || "Die Erinnerung muss vor oder am Fälligkeitstag liegen.";
+        }
+        let firstInvalid = null;
+        const fieldsRoot = root?.closest?.("form") || owner;
+        fieldsRoot?.querySelectorAll?.("[data-wi-field]").forEach(input => {
+            const message = errors[input.dataset.wiField];
+            const errorId = input.dataset.wiErrorId;
+            const error = document.getElementById(errorId);
+            if (error) {
+                error.textContent = message || "";
+                error.hidden = !message;
+            }
+            if (message) {
+                input.setAttribute("aria-invalid", "true");
+                input.setAttribute("aria-describedby", errorId);
+                firstInvalid ||= input;
+            } else {
+                input.removeAttribute("aria-invalid");
+                input.removeAttribute("aria-describedby");
+            }
+        });
+        if (focus) firstInvalid?.focus();
+        return Object.keys(errors).length === 0;
     }
 
     // Refs #1828: Anzeigetext fuer FILE-Feld-Marker (fieldDescriptor-
@@ -298,6 +334,7 @@
         maxWorkItemDateInput: maxWorkItemDateInput,
         emptyWorkItemValues: emptyWorkItemValues,
         workItemFormData: workItemFormData,
+        validateWorkItemForm: validateWorkItemForm,
         isAmbiguousWallClock: isAmbiguousWallClock,
         appTimeZone: appTimeZone,
         fileNote: fileNote,

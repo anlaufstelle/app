@@ -5,7 +5,9 @@
 <div>
     <label for="{{ id_prefix }}-title" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Titel" %} *</label>
     <input id="{{ id_prefix }}-title" type="text" x-model="wiValues.title" required
-           class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-title">
+           class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-title"
+           data-wi-field="title" data-wi-error-id="wi-error-{{ id_prefix }}-title" @input="clearWorkItemErrors">
+    <p id="wi-error-{{ id_prefix }}-title" role="alert" hidden class="text-sm text-red-600"></p>
 </div>
 <div>
     <label for="{{ id_prefix }}-item-type" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Typ" %}</label>
@@ -30,12 +32,16 @@
 <div>
     <label for="{{ id_prefix }}-due-date" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Zu erledigen bis" %}</label>
     <input id="{{ id_prefix }}-due-date" type="date" x-model="wiValues.due_date" :min="wiDueMin" :max="wiDateMax"
-           class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-due_date">
+           class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-due_date"
+           data-wi-field="due_date" data-wi-error-id="wi-error-{{ id_prefix }}-due-date" @input="clearWorkItemErrors">
+    <p id="wi-error-{{ id_prefix }}-due-date" role="alert" hidden class="text-sm text-red-600"></p>
 </div>
 <div>
     <label for="{{ id_prefix }}-remind-at" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Wiedervorlage am" %}</label>
     <input id="{{ id_prefix }}-remind-at" type="date" x-model="wiValues.remind_at" :min="wiRemindMin" :max="wiDateMax"
-           class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-remind_at">
+           class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-remind_at"
+           data-wi-field="remind_at" data-wi-error-id="wi-error-{{ id_prefix }}-remind-at" @input="clearWorkItemErrors">
+    <p id="wi-error-{{ id_prefix }}-remind-at" role="alert" hidden class="text-sm text-red-600"></p>
 </div>
 <div>
     <label for="{{ id_prefix }}-recurrence" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Wiederholung" %}</label>
