@@ -116,7 +116,12 @@ def _inject_sw_i18n(content: str) -> str:
         return content
     marker_end = start + len(_SW_I18N_START)
     literal = json.dumps(_sw_i18n_strings(), ensure_ascii=False)
-    injected = f"\nconst SW_I18N = {literal};\n"
+    shell_errors = {}
+    for language in ("de", "en"):
+        with override(language):
+            shell_errors[language] = gettext("Offline — dieser Inhalt kann gerade nicht aktualisiert werden.")
+    errors_literal = json.dumps(shell_errors, ensure_ascii=False)
+    injected = f"\nconst SW_I18N = {literal};\nconst SW_SHELL_ERRORS = {errors_literal};\n"
     return content[:marker_end] + injected + content[end:]
 
 

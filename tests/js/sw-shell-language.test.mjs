@@ -154,3 +154,64 @@ describe("account language for cached shells", () => {
         expect(await response.text()).not.toContain("German shell");
     });
 });
+
+function preferenceCache(entries, overrides = {}) {
+    const cache = {
+        match: async key => entries.get(key)?.clone(),
+        put: vi.fn(async (key, response) => { entries.set(key, response); }),
+        addAll: vi.fn(async () => {}), ...overrides,
+    };
+    return { cache, caches: { open: async () => cache, match: cache.match } };
+}
+function message(worker, data) {
+    let task;
+    worker.handlers.message({ data, waitUntil: value => { task = value; } });
+    return task;
+}
+it("a cached English shell is immediate while unrelated repair hangs", async () => {
+    const { cache, caches } = preferenceCache(new Map([
+        ["/offline/shell-language/", new Response("de")],
+        ["/offline/event-shell/?shell_language=en", new Response("English shell")],
+    ]), { addAll: vi.fn(() => new Promise(() => {})) });
+    const worker = workerContext(offlineFetch(), caches);
+    message(worker, { type: "SET_SHELL_LANGUAGE", language: "en" });
+    await vi.waitFor(() => expect(cache.addAll).toHaveBeenCalled());
+    const result = await Promise.race([
+        dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`)).then(r => r.text()),
+        new Promise(resolve => setTimeout(() => resolve("BLOCKED_ON_REPAIR"), 100)),
+    ]);
+    expect(result).toBe("English shell");
+});
+it.each(["en", "de"])("%s takes effect immediately despite failed persistence and retries on CHECK_PRECACHE", async language => {
+    const previous = language === "en" ? "de" : "en";
+    const entries = new Map([
+        ["/offline/shell-language/", new Response(previous)],
+        ["/offline/event-shell/?shell_language=en", new Response("English shell")],
+        ["/offline/event-shell/?shell_language=de", new Response("German shell")],
+    ]);
+    const { cache, caches } = preferenceCache(entries);
+    cache.put.mockRejectedValueOnce(new Error("Cache storage write failed"));
+    const worker = workerContext(offlineFetch(), caches);
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language });
+    const response = await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`));
+    expect(await response.text()).toBe(language === "en" ? "English shell" : "German shell");
+    await message(worker, { type: "CHECK_PRECACHE" });
+    expect(await entries.get("/offline/shell-language/").clone().text()).toBe(language);
+    const restarted = workerContext(offlineFetch(), caches);
+    expect(await (await dispatchFetch(restarted.handlers.fetch, navRequest(`${ORIGIN}/events/new/`))).text()).toBe(language === "en" ? "English shell" : "German shell");
+});
+it("missing English shell with stalled repair ends in an English error page", async () => {
+    vi.useFakeTimers();
+    try {
+        const { caches } = preferenceCache(new Map([
+            ["/offline/shell-language/", new Response("en")],
+            ["/offline/event-shell/?shell_language=de", new Response("German shell")],
+        ]), { addAll: () => new Promise(() => {}) });
+        const worker = workerContext(offlineFetch(), caches);
+        const response = dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`));
+        await vi.advanceTimersByTimeAsync(3000);
+        const resolved = await response;
+        expect(resolved.status).toBe(503);
+        expect(await resolved.text()).toContain('<html lang="en">');
+    } finally { vi.useRealTimers(); }
+});

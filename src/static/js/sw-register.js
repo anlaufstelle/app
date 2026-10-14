@@ -32,6 +32,8 @@
     // *Aktivierungs*-Gate entfaellt bewusst — es liess Geraete auf der alten
     // Shell haengen, sobald niemand den Toast anklickte.
     var _registration = null;
+    var _shellLanguageOverride = null;
+    var _shellLanguagePending = false;
     var _dirty = false;
     var _userRequestedReload = false;
 
@@ -171,13 +173,23 @@
     }
 
     function _sendShellLanguage(worker) {
-        // Offline shells carry no user ID and must not overwrite the account
-        // preference. Every authenticated navigation covers login and changes.
-        if (!document.body.dataset.userId || !worker) return;
-        var language = document.documentElement.lang;
+        // Public shells must not override the account; logout is explicit.
+        if (_shellLanguageOverride === null && !document.body.dataset.userId) return;
+        var language = _shellLanguageOverride || document.documentElement.lang;
         if (language !== "de" && language !== "en") return;
-        worker.postMessage({ type: "SET_SHELL_LANGUAGE", language: language });
+        _shellLanguagePending = true;
+        if (!worker) return;
+        try {
+            worker.postMessage({ type: "SET_SHELL_LANGUAGE", language: language });
+            _shellLanguagePending = false;
+        } catch (error) {
+            console.warn("[offline] Shell language message failed", error);
+        }
     }
+
+    window.addEventListener("online", function () {
+        if (_shellLanguagePending) _sendShellLanguage(navigator.serviceWorker?.controller || _registration?.active);
+    });
 
     /**
      * Refs #1948: Precache-Selbstheilung anstossen — CHECK_PRECACHE an den
@@ -378,13 +390,9 @@
     var _LOGOUT_WIPE_TIMEOUT_MS = 3000;
 
     function _wipeOfflineState() {
-        // Browsers without Clear-Site-Data support still reset the public
-        // shell language before another account can use this registration.
-        try {
-            navigator.serviceWorker?.controller?.postMessage?.({ type: "SET_SHELL_LANGUAGE", language: "de" });
-        } catch (_e) {
-            // Language reset must not prevent key removal or logout.
-        }
+        // Retain logout's reset for a retry even while the old page is open.
+        _shellLanguageOverride = "de";
+        _sendShellLanguage(navigator.serviceWorker?.controller || _registration?.active);
         // Refs #1065: gemeinsamer Wipe-Pfad lebt in crypto.js — Logout
         // (hier) und Idle-Timeout (crypto.js) räumen identisch ab:
         // CryptoKey + Aktivitäts-Stempel + alle Dexie-Tabellen.

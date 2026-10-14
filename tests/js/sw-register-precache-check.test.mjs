@@ -6,7 +6,19 @@
 // sw-register.js ist eine IIFE — jeder Fall braucht einen frischen
 // Modul-Import (vi.resetModules) mit vorab gesetzten Stubs (Muster
 // sw-boot-purge-gate.test.mjs).
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+const listeners = [];
+beforeEach(() => {
+    // Each import represents a fresh page, including its event listeners.
+    for (const target of [document, window]) {
+        const add = target.addEventListener;
+        vi.spyOn(target, "addEventListener").mockImplementation(function (type, callback, options) {
+            listeners.push([target, type, callback, options]);
+            return add.call(target, type, callback, options);
+        });
+    }
+});
 
 function installServiceWorkerStub(activeWorker) {
     const registration = {
@@ -33,6 +45,7 @@ async function freshLoad(activeWorker) {
 }
 
 afterEach(() => {
+    for (const [target, type, callback, options] of listeners.splice(0)) target.removeEventListener(type, callback, options);
     delete window.crypto_session;
     vi.restoreAllMocks();
 });
@@ -74,4 +87,37 @@ it("resets the public shell language when the account logs out", async () => {
     await vi.waitFor(() => expect(form.submit).toHaveBeenCalledOnce());
     expect(postMessage).toHaveBeenCalledWith({ type: "SET_SHELL_LANGUAGE", language: "de" });
     document.body.innerHTML = "";
+});
+
+it("resets language through the active registration even without a controller", async () => {
+    document.documentElement.lang = "en";
+    document.body.dataset.userId = "u1";
+    const postMessage = vi.fn();
+    await freshLoad({ postMessage });
+    postMessage.mockClear();
+    document.body.innerHTML = '<form action="/logout/" method="post"></form>';
+    const form = document.querySelector("form");
+    vi.spyOn(form, "submit").mockImplementation(() => {});
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(form.submit).toHaveBeenCalledOnce());
+    expect(postMessage).toHaveBeenCalledWith({ type: "SET_SHELL_LANGUAGE", language: "de" });
+    document.body.innerHTML = ""; delete document.body.dataset.userId; document.documentElement.lang = "";
+});
+
+it("retries a failed logout language message on reconnection without reverting to the account language", async () => {
+    document.documentElement.lang = "en";
+    document.body.dataset.userId = "u1";
+    const postMessage = vi.fn();
+    await freshLoad({ postMessage });
+    navigator.serviceWorker.controller = { postMessage };
+    postMessage.mockClear(); postMessage.mockImplementationOnce(() => { throw new Error("Worker unavailable"); });
+    document.body.innerHTML = '<form action="/logout/" method="post"></form>';
+    const form = document.querySelector("form");
+    vi.spyOn(form, "submit").mockImplementation(() => {});
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(form.submit).toHaveBeenCalledOnce());
+    window.dispatchEvent(new Event("online"));
+    expect(postMessage).toHaveBeenLastCalledWith({ type: "SET_SHELL_LANGUAGE", language: "de" });
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    document.body.innerHTML = ""; delete document.body.dataset.userId; document.documentElement.lang = "";
 });

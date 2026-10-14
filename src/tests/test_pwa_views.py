@@ -5,6 +5,7 @@ FileNotFoundError-Pfad (404), und die @lru_cache-Idempotenz.
 """
 
 import hashlib
+import json
 import re
 from pathlib import Path
 from unittest.mock import patch
@@ -1575,9 +1576,12 @@ class TestServiceWorkerI18n:
         assert "file uploads require an internet connection" in body
         assert "your entries were encrypted locally" in body
         assert "this content cannot be updated right now" in body
-        # DE-Quellstrings duerfen fuer EN nicht mehr im Body stehen.
-        assert "Datei-Uploads erfordern eine Internetverbindung" not in body
-        assert "dieser Inhalt kann gerade nicht aktualisiert werden" not in body
+        # Refs #2556: request-language messages stay English; shell errors
+        # carry both languages for subsequent account/language changes.
+        current_messages = re.search(r"const SW_I18N = (.*?);", body).group(1)
+        assert "Datei-Uploads erfordern eine Internetverbindung" not in current_messages
+        assert "dieser Inhalt kann gerade nicht aktualisiert werden" not in current_messages
+        assert json.loads(current_messages)["partialBanner"] == "Offline — this content cannot be updated right now."
 
     def test_injects_german_for_de_user(self, client, staff_user):
         _login_with_language(client, staff_user, "de")
@@ -1924,3 +1928,12 @@ def test_public_shell_language_variant(client, staff_user, route, language):
         assert "Verbindung unterbrochen. Sie arbeiten jetzt offline." in body
     client.force_login(staff_user)
     assert client.get(url, {"shell_language": language}).content == anonymous.content
+
+
+@pytest.mark.django_db
+def test_worker_shell_errors_include_both_languages(client):
+    """A worker installed in German can report a later English offline error."""
+    body = client.get(reverse("service_worker"), headers={"Accept-Language": "de"}).content.decode()
+    assert "const SW_SHELL_ERRORS = " in body
+    assert '"en": "Offline — this content cannot be updated right now."' in body
+    assert '"de": "Offline — dieser Inhalt kann gerade nicht aktualisiert werden."' in body

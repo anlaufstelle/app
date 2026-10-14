@@ -253,6 +253,10 @@ const SW_I18N = {
         "Offline — Ihre Eingaben wurden lokal verschlüsselt und werden bei Verbindung automatisch gesendet.",
     partialBanner: "Offline — dieser Inhalt kann gerade nicht aktualisiert werden.",
 };
+const SW_SHELL_ERRORS = {
+    de: "Offline — dieser Inhalt kann gerade nicht aktualisiert werden.",
+    en: "Offline — this content cannot be updated right now.",
+};
 // __SW_I18N_END__
 // Refs #1413: Die /static/-Eintraege dieses APP_SHELL werden beim Ausliefern von
 // GET /sw.js serverseitig durch staticfiles_storage.url() aufgeloest
@@ -268,7 +272,10 @@ const SHELL_URLS = [
     OFFLINE_WORKITEM_LIST_SHELL_URL, OFFLINE_ZEITSTROM_SHELL_URL, "/offline/conflicts/",
 ];
 const SHELL_LANGUAGE_KEY = "/offline/shell-language/";
+let shellLanguage = null;
+let shellLanguageDirty = false;
 let shellLanguageUpdate = Promise.resolve();
+const SHELL_REPAIR_TIMEOUT_MS = 2500;
 
 const APP_SHELL = [
     ...SHELL_URLS.flatMap(url => ["de", "en"].map(language => `${url}?shell_language=${language}`)),
@@ -412,33 +419,37 @@ self.addEventListener("install", (event) => {
     event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
 });
 
-// Refs #1948: Precache-Selbstheilung. Raeumt der Browser unter Speicherdruck
-// die Cache Storage teilweise ab (auf iOS realistisch), laufen weder install
-// noch activate je wieder — das Geraet verloere still seine
-// Offline-Faehigkeit bis zum naechsten CACHE_NAME-Bump. sw-register.js
-// schickt deshalb einmal pro Seitenladen CHECK_PRECACHE; hier wird jeder
-// APP_SHELL-Eintrag per URL-genauem cache.match geprueft (der String-Match
-// umgeht den Vary-Mismatch der HTML-Shells, siehe den Fallback-Zweig unten)
-// und NUR das Fehlende nachgeladen. Vollstaendiger Cache => reiner
-// Match-Sweep ohne Netzzugriff. Fehler (z.B. offline waehrend der Heilung)
-// werden geschluckt — die naechste Navigation stoesst den Check erneut an.
-async function _healPrecache(language) {
+// Refs #1948, #2556: repair missing public assets without blocking cached
+// shells. Preference writes are serialized separately; failures are logged
+// and retain the dirty flag for the next message or navigation.
+async function _healPrecache(preferenceOnly = false) {
     try {
         const cache = await caches.open(CACHE_NAME);
-        if (language) await cache.put(SHELL_LANGUAGE_KEY, new Response(language));
-        const missing = [];
-        for (const url of APP_SHELL) {
-            if (!(await cache.match(url))) {
-                missing.push(url);
+        if (preferenceOnly && shellLanguageDirty) {
+            const selected = shellLanguage;
+            try {
+                await cache.put(SHELL_LANGUAGE_KEY, new Response(selected));
+                if (shellLanguage === selected) shellLanguageDirty = false;
+            } catch (error) {
+                // Retain the dirty flag for the next message/navigation.
+                console.warn("[offline] Shell language persistence failed", error);
             }
         }
-        if (missing.length > 0) {
-            await cache.addAll(missing);
+        if (preferenceOnly) return;
+        const missing = [];
+        for (const url of APP_SHELL) {
+            if (!(await cache.match(url))) missing.push(url);
         }
-    } catch (_e) {
-        // still — Heilung ist best-effort, naechster Seitenaufruf probiert es
-        // erneut. Ein Teil-Erfolg ist ausgeschlossen (addAll ist atomar).
+        if (missing.length > 0) await cache.addAll(missing);
+    } catch (error) {
+        console.warn("[offline] Precache repair failed", error);
     }
+}
+
+function _persistShellLanguage() {
+    // Serialize preference writes independently of potentially stalled repair.
+    shellLanguageUpdate = shellLanguageUpdate.then(() => _healPrecache(true));
+    return shellLanguageUpdate;
 }
 
 // Refs #1386: Update-Gate. Ein frisch installierter SW bleibt in
@@ -449,8 +460,10 @@ async function _healPrecache(language) {
 // hatte.
 self.addEventListener("message", (event) => {
     if (event.data?.type === "SET_SHELL_LANGUAGE" && ["de", "en"].includes(event.data.language)) {
-        shellLanguageUpdate = shellLanguageUpdate.catch(() => {}).then(() => _healPrecache(event.data.language));
-        event.waitUntil(shellLanguageUpdate);
+        // The latest message wins synchronously, even if Cache Storage fails.
+        shellLanguage = event.data.language;
+        shellLanguageDirty = true;
+        event.waitUntil(_persistShellLanguage().then(() => _healPrecache()));
     }
     if (event.data?.type === "SKIP_WAITING") {
         self.skipWaiting();
@@ -458,7 +471,7 @@ self.addEventListener("message", (event) => {
     // Refs #1948: siehe _healPrecache oben. waitUntil haelt den SW waehrend
     // des Match-Sweeps/Nachladens am Leben (er wird zwischen Events entladen).
     if (event.data?.type === "CHECK_PRECACHE") {
-        event.waitUntil(_healPrecache());
+        event.waitUntil(_persistShellLanguage().then(() => _healPrecache()));
     }
 });
 
@@ -661,20 +674,44 @@ const SHELL_ROUTES = [
 
 // Refs #1828: gecachten Shell servieren; ohne Cache-Treffer die /offline/-Home.
 async function _serveShell(shellUrl) {
-    await shellLanguageUpdate.catch(() => {});
-    const preference = await caches.match(SHELL_LANGUAGE_KEY);
-    const language = preference ? await preference.text() : "de";
-    const selected = ["de", "en"].includes(language) ? language : "de";
-    const shell = await caches.match(`${shellUrl}?shell_language=${selected}`);
-    const fallback = shell || await caches.match(`${OFFLINE_FALLBACK_URL}?shell_language=${selected}`);
-    if (fallback) return fallback;
-    // Legacy caches are usable only before any account has selected a language.
-    if (!preference) {
-        return (await caches.match(shellUrl)) ||
-            (await caches.match(new URL(shellUrl, self.location.origin).href)) ||
-            caches.match(OFFLINE_FALLBACK_URL);
+    let preference;
+    if (shellLanguage === null) {
+        try { preference = await caches.match(SHELL_LANGUAGE_KEY); } catch (_e) { /* No persisted preference. */ }
+        const persisted = preference ? await preference.text() : "de";
+        // A language message received during the read still wins.
+        if (shellLanguage === null && ["de", "en"].includes(persisted) && preference) shellLanguage = persisted;
     }
-    return new Response("", { status: 503, statusText: "offline" });
+    if (shellLanguageDirty) void _persistShellLanguage();
+    const selected = shellLanguage || "de";
+    const matchSelected = async () => (await caches.match(`${shellUrl}?shell_language=${selected}`)) ||
+        caches.match(`${OFFLINE_FALLBACK_URL}?shell_language=${selected}`);
+    let shell;
+    try { shell = await matchSelected(); } catch (_e) { /* Try bounded repair. */ }
+    if (shellLanguage && shellLanguage !== selected) return _serveShell(shellUrl);
+    if (shell) return shell;
+    // Legacy shells are usable only before an account selected its language.
+    if (shellLanguage === null) {
+        const legacy = (await caches.match(shellUrl)) ||
+            (await caches.match(new URL(shellUrl, self.location.origin).href)) ||
+            (await caches.match(OFFLINE_FALLBACK_URL));
+        if (shellLanguage !== null) return _serveShell(shellUrl);
+        if (legacy) return legacy;
+    }
+    let timer;
+    await Promise.race([
+        _healPrecache(),
+        new Promise(resolve => { timer = setTimeout(resolve, SHELL_REPAIR_TIMEOUT_MS); }),
+    ]);
+    clearTimeout(timer);
+    // Re-evaluate when another account/language arrived while repairing.
+    if (shellLanguage && shellLanguage !== selected) return _serveShell(shellUrl);
+    try { shell = await matchSelected(); } catch (_e) { /* Storage remains unavailable. */ }
+    if (shellLanguage && shellLanguage !== selected) return _serveShell(shellUrl);
+    if (shell) return shell;
+    const text = SW_SHELL_ERRORS[selected];
+    return new Response(`<!doctype html><html lang="${selected}"><meta charset="utf-8"><title>Offline</title><body><p role="alert">${text}</p></body></html>`, {
+        status: 503, statusText: "offline", headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
 }
 
 // ACK-Timeout: nach dieser Zeit gilt enqueueRequest als gescheitert
