@@ -149,3 +149,22 @@ def test_demo_consent_leaves_navigation_uncovered(client, staff_user, settings):
     assert "md:left-60" in classes
     assert "bottom-16" in classes
     assert "md:bottom-0" in classes
+
+
+@pytest.mark.django_db
+def test_offline_consent_stays_at_viewport_edge(client, staff_user, settings):
+    import re
+
+    settings.DEMO_MODE = True
+    settings.UMAMI_WEBSITE_ID = "test-website"
+    settings.UMAMI_REQUIRE_CONSENT = True
+    client.force_login(staff_user)
+    response = client.get(reverse("core:offline_client_shell"))
+    assert response.status_code == 200
+    container = re.search(r'<div id="umami-consent".*?>', response.content.decode(), re.S).group()
+    classes = re.search(r'class="([^"]*)"', container).group(1).split()
+    assert "inset-x-0" in classes
+    assert "bottom-0" in classes
+    assert "md:left-60" not in classes
+    assert "bottom-16" not in classes
+    assert "md:bottom-0" not in classes
