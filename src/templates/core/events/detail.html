@@ -79,7 +79,7 @@
             </div>
             <div>
                 <dt class="text-ink-muted">{% trans "Erstellt von" %}</dt>
-                <dd class="font-medium">{{ event.created_by.display_name|default:event.created_by.username }}</dd>
+                <dd class="font-medium">{% if event.created_by %}{{ event.created_by.display_name|default:event.created_by.username }}{% else %}–{% endif %}</dd>
             </div>
             <div>
                 <dt class="text-ink-muted">{% trans "Erstellt am" %}</dt>
@@ -189,7 +189,7 @@
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {% if entry.action == 'create' %}bg-green-100 text-green-800{% elif entry.action == 'update' %}bg-blue-100 text-blue-800{% else %}bg-red-100 text-red-800{% endif %}">
                         {{ entry.get_action_display }}
                     </span>
-                    <span class="text-ink-muted">{{ entry.changed_by.display_name|default:entry.changed_by.username }}</span>
+                    <span class="text-ink-muted">{% if entry.changed_by %}{{ entry.changed_by.display_name|default:entry.changed_by.username }}{% else %}–{% endif %}</span>
                     {% if diff.fields %}
                     {# Refs #1059 (A11Y-040): Zustand des Diff-Blocks programmatisch bestimmbar. #}
                     <button @click="toggle" aria-expanded="false" :aria-expanded="ariaExpanded" aria-controls="history-detail-{{ forloop.counter0 }}" class="text-ink-muted hover:text-ink-muted ml-auto text-xs underline" type="button">

@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Kontakt ohne bekannten Ersteller wieder aufrufbar** (#2590) — Die Detailseite eines Kontakts, dessen Ersteller nicht mehr existiert, und der Änderungsverlauf mit entfernter Person lassen sich wieder öffnen; statt des Namens erscheint ein Strich.
 - **Rückkehr zur unterbrochenen Seite nach erneuter Anmeldung** (#2561) — Nach einem Sitzungsende führt die Anmeldung wieder auf die Seite, an der gearbeitet wurde (etwa das Kontaktformular), statt auf die Startseite; fremde Zieladressen werden weiterhin verworfen, und Ziele, die nur per Absenden erreichbar sind (etwa eine unterbrochene Aktion in einer Teilansicht), führen auf die Standardseite der Rolle statt auf eine Fehlerseite.
 - **Datumseingabe in App-Sprache** (#2603) — Datums- und Zeitfelder sowie Offline-Datumsanzeigen verwenden mit JavaScript das Format der gewählten App-Sprache; Eingaben bleiben nach Zurück-Navigation mit dem ISO-Transport verbunden, Ereigniszeitpunkte verwenden online wie offline Minutenschritte.
 - **Episodendaten beim Bearbeiten erhalten** (#2536) — Beginn und Ende werden mit ISO-Werten vorbelegt, sodass eine Titeländerung eine abgeschlossene Episode nicht wieder aktiviert.
