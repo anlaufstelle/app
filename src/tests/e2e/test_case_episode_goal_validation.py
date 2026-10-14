@@ -3,8 +3,9 @@
 * Episode mit und ohne Ende anlegen und erneut bearbeiten; Ende vor Beginn
   (Fehler bei erhaltenen Eingaben), gleicher Tag speicherbar, heutiger Abschluss
   einer Episode mit zukünftigem Beginn wird abgewiesen.
-* Ziel/Meilenstein: 200 Zeichen speicherbar, 201 Zeichen (maxlength im DOM
-  entfernt) ergeben eine Meldung ohne Serverfehler und erhalten Eingaben.
+* Titelgrenze je Vorgang getrennt (Ziel anlegen, Ziel bearbeiten, Meilenstein anlegen):
+  200 Zeichen werden exakt gespeichert, 201 Zeichen (maxlength im DOM entfernt) ergeben
+  eine Meldung ohne Serverfehler, erhalten Eingaben und schreiben nichts.
 * Mehrere Ziele: „Ziel erreicht“ lässt übrige Entwürfe und Editoren stehen.
 * Echte HTMX-/Alpine-CSP-Initialisierung: keine CSP-Verstöße in der Konsole.
 """
@@ -150,49 +151,99 @@ class TestGoalLimitsAndDrafts:
     def _card(page, title):
         return page.locator("#goals-section > div > div").filter(has=page.locator(f"h3:has-text('{title}')"))
 
-    def test_goal_and_milestone_limit_200_vs_201(self, staff_page, base_url, case_scene, e2e_env):
+    @pytest.mark.parametrize("length", [200, 201], ids=["200-chars", "201-chars"])
+    @pytest.mark.parametrize("operation", ["goal-create", "goal-edit", "milestone-create"])
+    def test_title_limit_matrix(self, staff_page, base_url, case_scene, e2e_env, operation, length):
+        """Every operation separately: 200 is stored exactly, 201 is rejected with its own message.
+
+        A fresh case and a fresh page per case, so the visible message can only come from
+        this operation; the other areas keep their input and nothing is written on 201.
+        """
         page = staff_page
         errors = track_console_errors(page)
         marker = case_scene["marker"]
         page.goto(f"{base_url}/cases/{case_scene['case']}/", wait_until="domcontentloaded")
         section = self._section(page)
+        goal_title = f"FALL-Ziel-1-{marker}"
+        title = ("T" + marker) * 40
+        title = (title + "x" * length)[:length]
+        assert len(title) == length
 
-        # 200 characters are saved.
-        ok_title = ("Z" * 190) + marker[:8] + "00"
-        assert len(ok_title) == 200
-        add_input = section.locator("input[name='title'][placeholder='Neues Wirkungsziel']")
-        add_input.fill(ok_title)
-        section.get_by_role("button", name="Hinzufügen").click()
-        expect(section.locator("h3", has_text=ok_title[:40])).to_be_visible(timeout=10000)
+        add_goal = section.locator("input[name='title'][placeholder='Neues Wirkungsziel']")
+        goal_card = self._card(page, goal_title)
+        milestone_draft = goal_card.locator("input[placeholder='Neuer Meilenstein']")
+        message = page.get_by_text("Der Titel darf höchstens 200 Zeichen enthalten.")
 
-        # 201 characters (maxlength removed in the inspector) → message, no server error, inputs kept.
-        too_long = "Y" * 201
-        add_input = self._section(page).locator("input[name='title'][placeholder='Neues Wirkungsziel']")
-        add_input.evaluate("e => e.removeAttribute('maxlength')")
-        add_input.fill(too_long)
-        other_draft = self._section(page).locator("input[placeholder='Neuer Meilenstein']").first
-        other_draft.fill("Entwurf bleibt")
-        self._section(page).get_by_role("button", name="Hinzufügen").click()
-        toast = page.get_by_text("Der Titel darf höchstens 200 Zeichen enthalten.")
-        expect(toast.first).to_be_visible(timeout=10000)
-        assert page.locator("text=Server Error").count() == 0
-        assert (
-            self._section(page).locator("input[name='title'][placeholder='Neues Wirkungsziel']").input_value()
-            == too_long
-        )
-        assert (
-            self._section(page).locator("input[placeholder='Neuer Meilenstein']").first.input_value()
-            == "Entwurf bleibt"
-        )
-        assert _db(e2e_env, f"OutcomeGoal.objects.filter(title='{too_long}').count()") == "0"
+        if operation == "goal-create":
+            add_goal.evaluate("e => e.removeAttribute('maxlength')")
+            add_goal.fill(title)
+            milestone_draft.fill("Meilenstein-Entwurf")
+            trigger = section.get_by_role("button", name="Hinzufügen")
+            url_part = "/goals/new/"
+        elif operation == "goal-edit":
+            goal_card.locator("[data-goal-edit-trigger]").click()
+            editor = goal_card.locator("form[hx-post$='/edit/'] input[name='title']")
+            expect(editor).to_be_visible()
+            editor.evaluate("e => e.removeAttribute('maxlength')")
+            editor.fill(title)
+            add_goal.fill("Neues-Ziel-Entwurf")
+            trigger = goal_card.locator("form[hx-post$='/edit/'] button[type='submit']")
+            url_part = f"/goals/{case_scene['goal1']}/edit/"
+        else:
+            milestone_draft.evaluate("e => e.removeAttribute('maxlength')")
+            milestone_draft.fill(title)
+            add_goal.fill("Neues-Ziel-Entwurf")
+            trigger = milestone_draft.locator("xpath=ancestor::form[1]").locator("button[type='submit']")
+            url_part = "/milestones/new/"
 
-        # Milestone: 201 characters are rejected the same way.
-        milestone_input = self._section(page).locator("input[placeholder='Neuer Meilenstein']").first
-        milestone_input.evaluate("e => e.removeAttribute('maxlength')")
-        milestone_input.fill("M" * 201)
-        milestone_input.locator("xpath=following-sibling::button[1]").click()
-        expect(page.get_by_text("Der Titel darf höchstens 200 Zeichen enthalten.").first).to_be_visible(timeout=10000)
-        assert _db(e2e_env, "Milestone.objects.filter(title='" + "M" * 201 + "').count()") == "0"
+        with page.expect_response(lambda r: r.request.method == "POST" and url_part in r.url) as response_info:
+            trigger.click()
+        status = response_info.value.status
+        assert status < 500, f"{operation}/{length}: server answered {status}"
+
+        if length == 200:
+            if operation == "goal-create":
+                expect(self._section(page).locator("h3", has_text=title[:40])).to_be_visible(timeout=10000)
+                stored = _db(e2e_env, f"OutcomeGoal.objects.filter(title='{title}').count()")
+            elif operation == "goal-edit":
+                expect(self._section(page).locator("h3", has_text=title[:40])).to_be_visible(timeout=10000)
+                stored = _db(
+                    e2e_env, f"OutcomeGoal.objects.filter(pk='{case_scene['goal1']}', title='{title}').count()"
+                )
+            else:
+                expect(self._section(page).get_by_text(title[:40]).first).to_be_visible(timeout=10000)
+                stored = _db(e2e_env, f"Milestone.objects.filter(title='{title}').count()")
+            assert stored == "1", f"{operation}: 200 characters were not stored exactly ({stored})"
+            expect(message).to_have_count(0)
+        else:
+            expect(message.first).to_be_visible(timeout=10000)
+            assert page.get_by_text("Server Error").count() == 0
+            if operation == "goal-create":
+                assert _db(e2e_env, f"OutcomeGoal.objects.filter(title='{title}').count()") == "0"
+                expect(
+                    self._section(page).locator("input[name='title'][placeholder='Neues Wirkungsziel']")
+                ).to_have_value(title)
+                expect(self._card(page, goal_title).locator("input[placeholder='Neuer Meilenstein']")).to_have_value(
+                    "Meilenstein-Entwurf"
+                )
+            elif operation == "goal-edit":
+                assert _db(e2e_env, f"OutcomeGoal.objects.get(pk='{case_scene['goal1']}').title") == goal_title
+                edit_input = self._card(page, goal_title).locator("form[hx-post$='/edit/'] input[name='title']")
+                expect(edit_input).to_be_visible()
+                expect(edit_input).to_have_value(title)
+                expect(
+                    self._section(page).locator("input[name='title'][placeholder='Neues Wirkungsziel']")
+                ).to_have_value("Neues-Ziel-Entwurf")
+            else:
+                assert _db(e2e_env, f"Milestone.objects.filter(title='{title}').count()") == "0"
+                expect(self._card(page, goal_title).locator("input[placeholder='Neuer Meilenstein']")).to_have_value(
+                    title
+                )
+                # The goal area is untouched: its draft stays and no goal was created from the milestone.
+                expect(
+                    self._section(page).locator("input[name='title'][placeholder='Neues Wirkungsziel']")
+                ).to_have_value("Neues-Ziel-Entwurf")
+                assert _db(e2e_env, f"OutcomeGoal.objects.filter(title__startswith='T{marker}').count()") == "0"
         assert _csp_errors(errors) == [], errors
 
     def test_achieve_keeps_other_drafts_and_open_editors_with_focus_on_action(
