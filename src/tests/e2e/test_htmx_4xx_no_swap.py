@@ -19,7 +19,7 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
-from ._date_helpers import fill_date
+from ._date_helpers import expect_date_value, fill_date
 
 pytestmark = pytest.mark.e2e
 
@@ -211,8 +211,8 @@ class TestStatisticsUngueltigerZeitraumBleibtStehen:
         # Berichte-Reiter (``{% if view_mode %}`` in full_content.html) — auf
         # der Übersicht selbst zeigen die neu gesetzten Eigener-Zeitraum-Felder
         # den übernommenen Zeitraum.
-        expect(page.locator("#statistics-date-from")).to_have_value("2026-01-01")
-        expect(page.locator("#statistics-date-to")).to_have_value("2026-01-31")
+        expect_date_value(page, "#statistics-date-from", "2026-01-01")
+        expect_date_value(page, "#statistics-date-to", "2026-01-31")
         assert page.locator(_TOAST).count() == 0
 
 
