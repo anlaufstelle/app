@@ -108,6 +108,17 @@ describe("offline status announcements", () => {
         conflicts(0); queue(0, 0); flush();
         expect(spoken()).toEqual([messages.conflictMessage, messages.conflictMessage]);
     });
+    it.each(["edit", "queue", "both"])("announces a conflict count burst once (%s)", (source) => {
+        queue(0); conflicts(0);
+        for (let count = 1; count <= 4; count++) {
+            if (source !== "queue") conflicts(count);
+            if (source !== "edit") queue(0, count);
+        }
+        flush();
+        expect(spoken()).toEqual([messages.conflictMessage]);
+        conflicts(5); flush();
+        expect(spoken()).toEqual([messages.conflictMessage, messages.conflictMessage]);
+    });
     it("keeps the first value of the other conflict source silent independently", () => {
         queue(0); queue(0, 1); flush();
         conflicts(5); flush();

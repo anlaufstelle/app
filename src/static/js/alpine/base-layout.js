@@ -40,6 +40,9 @@ document.addEventListener("alpine:init", () => {
                 this.announcement = "";
                 return;
             }
+            if (this.announcementQueue.some((entry) => entry.message === message)) {
+                return;
+            }
             this.announcementQueue.push({ key, message });
             if (this.announcementTimer === null) {
                 this.nextAnnouncement();
