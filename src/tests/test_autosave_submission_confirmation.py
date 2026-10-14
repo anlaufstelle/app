@@ -3,6 +3,7 @@
 import pytest
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.translation import gettext, override
 
 TOKEN = "11111111-2222-4333-8444-555555555555"
 
@@ -45,8 +46,8 @@ def test_contact_form_labels_explicit_recovery_of_possibly_saved_draft(client, s
     response = client.get(reverse("core:event_create"), {"document_type": str(doc_type_contact.pk)})
     assert response.status_code == 200
     content = response.content.decode()
-    assert (
-        'data-i18n-draft-possibly-saved="This draft may already have been saved. '
-        'Autosave is paused. Use it only after checking."' in content
-    )
-    assert 'data-i18n-use-draft="Use draft anyway"' in content
+    with override(response.headers["Content-Language"]):
+        warning = gettext("This draft may already have been saved. Autosave is paused. Use it only after checking.")
+        use_draft = gettext("Use draft anyway")
+    assert f'data-i18n-draft-possibly-saved="{warning}"' in content
+    assert f'data-i18n-use-draft="{use_draft}"' in content
