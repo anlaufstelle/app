@@ -459,7 +459,7 @@ class TestUndoInventoryScoping:
     def test_unmerge_leaves_dynamic_payload_untouched_after_configuration_drift(
         self, source, target, doc_type_client_profile, lead_user
     ):
-        """Pin x_unmerge_client__mutmut_177: unrelated saves must skip payload validation."""
+        """Guards the partial ``merged_into`` save: unrelated saves must skip payload validation."""
         payload = {"wohnsituation": "Existing value"}
         for person in (source, target):
             person.document_type = doc_type_client_profile
@@ -493,6 +493,51 @@ class TestUndoInventoryScoping:
         assert source.updated_at == merged_at
         assert source.data_json == payload
         assert target.data_json == payload
+
+    def test_returned_qualified_stage_save_skips_payload_validation_after_configuration_drift(
+        self, facility, source, target, doc_type_client_profile, staff_user, admin_user, lead_user
+    ):
+        """Pin x_unmerge_client__mutmut_177: the source stage save keeps its field list.
+
+        The source gets its events back from a qualified target, so unmerge raises
+        the source to ``QUALIFIED`` with ``save(update_fields=["contact_stage",
+        "updated_at"])``. The mutant (``update_fields=None``) runs the full model
+        validation, which rejects the drifted dynamic payload and aborts unmerge.
+        """
+        payload = {"wohnsituation": "Existing value"}
+        for person in (source, target):
+            person.document_type = doc_type_client_profile
+            person.data_json = dict(payload)
+        target.contact_stage = Client.ContactStage.QUALIFIED
+        source.save()
+        target.save()
+        Event.objects.create(
+            facility=facility,
+            client=source,
+            document_type=doc_type_client_profile,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        request = request_client_merge(source, target, staff_user, reason="Pin099-MergeA Vier-Augen (Stufe zurück)")
+        approve_client_merge(request, admin_user)
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE core_documenttype SET sensitivity = %s WHERE id = %s",
+                [DocumentType.Sensitivity.HIGH, doc_type_client_profile.pk],
+            )
+        source.refresh_from_db()
+        with pytest.raises(ValidationError):
+            source.save()
+
+        unmerge_client(source, lead_user)
+
+        source.refresh_from_db()
+        assert source.merged_into_id is None
+        assert source.contact_stage == Client.ContactStage.QUALIFIED
+        assert source.events.exists()
+        assert source.data_json == payload
 
 
 class TestUnmergeAccountability:
