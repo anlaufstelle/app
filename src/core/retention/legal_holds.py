@@ -393,60 +393,60 @@ def _lock_activity_and_check(facility, target_id):
     return False
 
 
+def _lock_hold_proposals(facility, target_type, target_id):
+    """Lock every proposal affected by the hold under its target anchors."""
+    if target_type == "Event":
+        event_ids = [target_id]
+    elif target_type in ("Client", "Case"):
+        events = Event.objects.filter(facility=facility)
+        events = events.filter(client_id=target_id) if target_type == "Client" else events.filter(case_id=target_id)
+        # All events precede all proposals, including for a person hold.
+        event_ids = list(events.order_by("pk").select_for_update().values_list("pk", flat=True))
+    else:
+        return []
+    return list(
+        RetentionProposal.objects.filter(facility=facility, target_type="Event", target_id__in=event_ids)
+        .order_by("pk")
+        .select_for_update()
+    )
+
+
+def _reopen_approved_hold_proposals(proposals):
+    """Allow a new two-person decision after a record hold is released.
+
+    Reopen only the latest approved proposal per target without an existing
+    active proposal. Historical decisions are never made active (Refs #2590).
+    """
+    targets = {}
+    for proposal in proposals:
+        targets.setdefault(proposal.target_id, []).append(proposal)
+    for rows in targets.values():
+        if any(
+            row.status
+            in (RetentionProposal.Status.PENDING, RetentionProposal.Status.DEFERRED, RetentionProposal.Status.HELD)
+            for row in rows
+        ):
+            continue
+        latest = max(rows, key=lambda row: (row.proposed_at, row.pk))
+        if latest.status != RetentionProposal.Status.APPROVED:
+            continue
+        latest.status = RetentionProposal.Status.PENDING
+        try:
+            with transaction.atomic():
+                latest.save(update_fields=["status"])
+        except IntegrityError as exc:
+            diagnostics = getattr(exc.__cause__, "diag", None)
+            if getattr(diagnostics, "constraint_name", None) != "unique_active_retention_proposal":
+                raise
+            raise ValidationError(PROPOSAL_OTHER_ACTIVE_MESSAGE) from exc
+
+
 def create_hold_for_target(facility, *, target_type, target_id, user, reason, expires_at=None, before_write=None):
-    """Legt einen Legal Hold OHNE Retention-Vorschlag an (Refs #1818, ADR-044 §5).
+    """Create a hold and discard affected first approvals through every entry point.
 
-    ``LegalHold.target_type`` ist ein freies ``CharField`` ohne ``choices`` —
-    ``"Case"`` war also immer speicherbar. Was fehlte, war der **Erzeugungsweg**:
-    :func:`create_legal_hold` setzt einen ``RetentionProposal`` voraus, und
-    ``RetentionProposal.TargetType`` kennt nur ``EVENT``. Ein Fall-Hold war damit
-    ausschliesslich per ORM-Konsole anlegbar.
-
-    Bewusst NICHT geloest, indem ``RetentionProposal`` einen ``CASE``-Zweig
-    bekommt: ein Vorschlag traegt ``deletion_due_at`` und
-    ``retention_category`` und entsteht aus den Fristen des
-    Ereignis-Enforcements (:mod:`core.retention.enforcement`). Fuer Faelle gibt
-    es keine solche Frist — ihr Loeschweg ist der Vier-Augen-Antrag plus die
-    Papierkorb-Frist. Ein Pseudo-Vorschlag nur als Traeger des Holds haette ein
-    zweites, leerlaufendes Vorschlagsobjekt in die Retention-Ansicht gespuelt.
-
-    Der Vorschlags-gebundene Weg bleibt :func:`create_legal_hold` und setzt
-    zusaetzlich den Vorschlag auf ``HELD``; beide schreiben dieselbe
-    ``LEGAL_HOLD``-Audit-Zeile.
-
-    **Transaktional und sperrend seit ADR-050 D2** (Refs #2065). Fuer
-    ``target_type="Event"`` wird die Ereigniszeile gesperrt, fuer
-    ``target_type="Client"`` die Personenzeile und — seit Refs #2122 — fuer
-    ``target_type="Case"`` Person, Fall und Ereigniszeilen in der kanonischen
-    Ordnung ``core_client`` -> ``core_case`` -> ``core_event``, BEVOR die
-    ``LegalHold``-Zeile entsteht — es sind die gemeinsamen
-    Koordinationspunkte mit dem
-    EventHistory-Sweep, der je Charge dieselben Zeilen in derselben Ordnung
-    sperrt. Trifft der Hold auf eine bereits redigierte
-    Historie, wird er **nicht abgelehnt**: er bindet weiterhin Ereigniszeile,
-    Anhaenge und die Anonymisierung der Person. Er wird aber als **verspaetet
-    gekennzeichnet** — am zurueckgegebenen Objekt
-    (``hold.history_already_redacted``) und als Merkmal an der
-    ``LEGAL_HOLD``-Audit-Zeile. Ein stiller Hold, der Vollstaendigkeit
-    suggeriert, waere die schlechtere Antwort: die Spoliationsfrage muss
-    spaeter beantwortbar sein.
-
-    Refs #2374: Der Hold entsteht in der Einrichtung der handelnden Person —
-    sie wird vor jeder Zielsperre mit ``facility`` verglichen (fail-closed ohne
-    Einrichtung). Die Ziel-ID bleibt davon unberuehrt frei: ein Ziel, das diese
-    Einrichtung nicht kennt, ist weiterhin kein Fehler.
-
-    ``before_write`` (optional, ohne Argumente) laeuft unter dem Zielanker,
-    aber VOR Hold-Zeile und Audit-Zeile. Die Audit-Zeile nimmt die Sperre der
-    Audit-Kette der Einrichtung und haelt sie bis zum Transaktionsende; was
-    der Aufrufer in ``before_write`` sperrt, liegt damit wie bei jeder
-    Vorschlagsentscheidung VOR der Audit-Kette. Wirft ``before_write``, entsteht
-    weder Hold noch Audit-Zeile.
-
-    ``before_write`` may also write rows of its own (``create_legal_hold``
-    writes the proposal status there). Such a write, including any uniqueness
-    check the database runs for it, then waits before the audit chain is
-    taken, never while it is held.
+    Target anchors, all affected event rows, proposals and optional status
+    changes precede every audit write. The callback receives the already
+    locked proposals; a failure rolls back the hold and all approval clears.
     """
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != facility.pk:
@@ -473,8 +473,11 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
             already_redacted = _lock_activity_and_check(facility, target_id)
         else:
             already_redacted = False
+        target_proposals = _lock_hold_proposals(facility, target_type, target_id)
         if before_write is not None:
-            before_write()
+            before_write(target_proposals)
+        else:
+            _reopen_approved_hold_proposals(target_proposals)
         hold = LegalHold.objects.create(
             facility=facility,
             target_type=target_type,
@@ -483,6 +486,10 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
             expires_at=expires_at,
             created_by=user,
         )
+        from core.retention.proposals import _clear_first_approval
+
+        for proposal in target_proposals:
+            _clear_first_approval(proposal, user, reason="legal_hold")
         detail = {
             "reason": reason,
             "expires_at": str(expires_at) if expires_at else None,
@@ -545,7 +552,6 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
     from core.retention.proposals import (
         PROPOSAL_ALREADY_DECIDED_MESSAGE,
         _assert_actor_facility,
-        _clear_first_approval,
     )
 
     _assert_actor_facility(proposal, user)
@@ -563,17 +569,8 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
     active_proposal_constraint = "unique_active_retention_proposal"
     locked = None
 
-    def _lock_target_proposals_and_mark_held():
+    def _lock_target_proposals_and_mark_held(target_proposals):
         nonlocal locked
-        target_proposals = list(
-            RetentionProposal.objects.select_for_update()
-            .filter(
-                facility=proposal.facility_id,
-                target_type=proposal.target_type,
-                target_id=proposal.target_id,
-            )
-            .order_by("pk")
-        )
         locked = next((row for row in target_proposals if row.pk == proposal.pk), None)
         if locked is None:
             # The row is gone (or no longer matches the instance) since the
@@ -593,7 +590,6 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
         try:
             with transaction.atomic():
                 locked.save(update_fields=["status"])
-                _clear_first_approval(locked, user, reason="legal_hold")
         except IntegrityError as exc:
             # A proposal run inserted a new active proposal of the target after
             # the lock above; the database waited for it and refuses a second

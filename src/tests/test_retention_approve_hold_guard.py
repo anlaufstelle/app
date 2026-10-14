@@ -484,8 +484,23 @@ class TestApproveKoordiniertMitDerHoldAnlage:
             "die Zielzeile ist kein gemeinsamer Sperr-Anker"
         )
         assert beobachtet["committed"] is True, "Der Hold entsteht danach"
-        proposal.refresh_from_db()
+        # The approval committed first; the later record hold restarts review (Refs #2590).
         assert proposal.status == RetentionProposal.Status.APPROVED
+        assert AuditLog.objects.filter(
+            facility=facility,
+            target_id=str(ereignis.pk),
+            detail__category="retention_proposal_approved",
+            user=lead,
+        ).exists()
+        proposal.refresh_from_db()
+        assert proposal.status == RetentionProposal.Status.PENDING
+        assert proposal.first_approved_by_id is None
+        assert proposal.first_approved_at is None
+        assert AuditLog.objects.filter(
+            facility=facility,
+            target_id=str(ereignis.pk),
+            detail__category="retention_proposal_first_approval_cleared",
+        ).exists()
         assert _approved_audit_rows(proposal).count() == 1
 
     def test_hold_anlage_ueber_create_legal_hold_gewinnt_und_verhindert_das_approve(self, bestand, monkeypatch):

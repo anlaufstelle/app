@@ -1408,8 +1408,8 @@ class TestEreignisHoldAnlageSperrtDiePersonenzeile:
             f"kanonische Ordnung verdreht (core_client vor core_event): {sequence}"
         )
 
-    def test_anonymes_ereignis_sperrt_nur_die_ereigniszeile(self, facility, staff_user, lead_user):
-        """``client_id is None``: es gibt keine Personenzeile zu sperren."""
+    def test_anonymous_event_locks_event_then_proposals(self, facility, staff_user, lead_user):
+        """No client anchor; record holds also lock proposals before audit (Refs #2590)."""
         ereignis = make_event(
             facility=facility,
             client=None,
@@ -1432,4 +1432,4 @@ class TestEreignisHoldAnlageSperrtDiePersonenzeile:
                 reason="Anordnung",
             )
         sequence = _lock_sequence(captured)
-        assert sequence == ["core_event"], f"Ein anonymes Ereignis hat keine Personenzeile: {sequence}"
+        assert sequence == ["core_event", "core_retentionproposal"], sequence
