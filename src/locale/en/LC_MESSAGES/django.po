@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 14:09+0200\n"
+"POT-Creation-Date: 2026-10-14 14:45+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14708,3 +14708,23 @@ msgstr "No person selected. Please choose a match from the list."
 #: src/templates/core/clients/partials/_inline_create_modal.html:10
 msgid "Die Person konnte nicht angelegt werden. Bitte erneut versuchen."
 msgstr "The person could not be created. Please try again."
+
+#: src/templates/base.html:144 src/templates/offline_base.html:131
+msgid "Verbindung unterbrochen. Sie arbeiten jetzt offline."
+msgstr "Connection lost. You are now working offline."
+
+#: src/templates/base.html:145 src/templates/offline_base.html:132
+msgid "Verbindung wiederhergestellt."
+msgstr "Connection restored."
+
+#: src/templates/base.html:146 src/templates/offline_base.html:133
+msgid "Verbindung wiederhergestellt. Wartende Änderungen werden übertragen."
+msgstr "Connection restored. Pending changes are being sent."
+
+#: src/templates/base.html:147 src/templates/offline_base.html:134
+msgid "Übertragung beendet."
+msgstr "Transfer finished."
+
+#: src/templates/base.html:148 src/templates/offline_base.html:135
+msgid "Neuer Konflikt. Öffnen Sie die Seite „Konflikte“ über den Link im Konfliktbanner zur Auflösung."
+msgstr "New conflict. Open the “Conflicts” page via the link in the conflict banner to resolve it."
