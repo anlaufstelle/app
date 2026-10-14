@@ -80,11 +80,11 @@ die Frist älterer Kontakte verschieben. Eine kürzere Typ-Höchstfrist ab dem
 jeweiligen Kontakt bleibt wirksam.
 
 Für die Stufe „Mit Zusatzangaben“ schlägt der tägliche Lauf eine Löschung vor.
-Im Regelfall gibt eine Person mit dem Recht „Löschbestätigung“ sie frei; auch eine
+Im Regelfall geben zwei verschiedene berechtigte Personen mit dem Recht „Löschbestätigung“ sie frei; auch eine
 kürzere Typ-Frist ersetzt diese Freigabe nicht. Zurückstellen oder Ablehnen
 schützt vor der Löschung, bis der Vorschlag erneut geprüft wird.
 
-Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte „Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann.
+Den Vorschlag legt der Lauf an. Die manuelle Freigabe braucht zwei verschiedene aktive Personen der eigenen Einrichtung, jeweils mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Die erste Freigabe lässt den Vorschlag ausstehend (PENDING, „1 von 2 Freigaben“); erst die zweite andere Person gibt ihn endgültig frei (APPROVED). Mit nur einem berechtigten Konto bleibt es bei „1 von 2“; die erste Freigabe allein erlaubt keine Löschung. Zurückstellen, Legal Hold (auch aus der Personen-, Fall- oder Ereignisakte) und Ablehnung verwerfen die erste Freigabe mit Audit; bei einem erneuten manuellen Freigabeweg sind wieder zwei Freigaben nötig. Die Einrichtung benennt mindestens zwei berechtigte Konten. Die Compliance-Karte „Genehmiger für den Aufbewahrungslauf“ prüft Rolle und Anzahl (0 = kritisch, 1 = Warnung, mindestens 2 = ok). Die Karte „Genehmiger für Löschanträge“ zählt weiterhin aktive Löschantragsberechtigte unabhängig von ihrer Rolle. Ausnahme: Die Einrichtung kann die Auto-Freigabe nach mehrfacher Zurückstellung ausdrücklich einschalten (Opt-in, standardmäßig aus); nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg.
 
 Abweichend davon kann die Einrichtung die Auto-Freigabe ausdrücklich aktivieren (Opt-in, standardmäßig aus): Nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf den Vorschlag ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg.
 

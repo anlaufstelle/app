@@ -2054,7 +2054,7 @@ Unter [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/vie
 
 | Aktion im Dashboard | Wirkung |
 |---|---|
-| **Freigeben** | Andere Person mit „Löschbestätigung“; nächster Lauf löscht, sofern Hold/Art. 18 nicht schützen |
+| **Freigeben** | Erste berechtigte Person: „1 von 2 Freigaben“; zweite andere berechtigte Person: endgültig frei. Nächster Lauf löscht, sofern Hold/Art. 18 nicht schützen |
 | **Aufschieben** | Schützt bis `deferred_until`; danach wieder offen. Auto-Freigabe nach maximalen Zurückstellungen bleibt Opt-in |
 | **Ablehnen** | Löscht nichts; neue Vorlage frühestens nach `retention_rejected_retry_days` (Vorgabe 365 Tage) |
 
@@ -2076,11 +2076,11 @@ im Aufbewahrungslauf Ereignisse, Personen-Anonymisierung und Historien-
 Redaktion. Beide Schutzarten werden unabhängig geprüft; die manuelle
 Vier-Augen-Löschung als Art.-17-Weg bleibt gesondert geregelt (§ 7.5).
 
-Beim ersten Lauf können zuvor unbefristete Ereignisse „Mit Zusatzangaben“
-Vorschläge erhalten. Vor Inbetriebnahme Fristen, Auto-Freigabe (Default aus)
-und den Genehmiger-Pool prüfen; die Compliance-Karte „Genehmiger“ zeigt dessen
-Besetzung. Die neue Antragsfrist ist unter Verwaltung → Einstellungen
-sichtbar; die installationsweite Audit-Frist wird über die Umgebung gesetzt.
+Den Vorschlag legt der Lauf an. Die manuelle Freigabe braucht zwei verschiedene aktive Personen der eigenen Einrichtung, jeweils mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Die erste Freigabe lässt den Vorschlag ausstehend (PENDING, „1 von 2 Freigaben“); erst die zweite andere Person gibt ihn endgültig frei (APPROVED). Mit nur einem berechtigten Konto bleibt es bei „1 von 2“; die erste Freigabe allein erlaubt keine Löschung. Zurückstellen, Legal Hold (auch aus der Personen-, Fall- oder Ereignisakte) und Ablehnung verwerfen die erste Freigabe mit Audit; bei einem erneuten manuellen Freigabeweg sind wieder zwei Freigaben nötig. Die Einrichtung benennt mindestens zwei berechtigte Konten. Die Compliance-Karte „Genehmiger für den Aufbewahrungslauf“ prüft Rolle und Anzahl (0 = kritisch, 1 = Warnung, mindestens 2 = ok). Die Karte „Genehmiger für Löschanträge“ zählt weiterhin aktive Löschantragsberechtigte unabhängig von ihrer Rolle. Ausnahme: Die Einrichtung kann die Auto-Freigabe nach mehrfacher Zurückstellung ausdrücklich einschalten (Opt-in, standardmäßig aus); nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg.
+
+Vor Inbetriebnahme Fristen und Auto-Freigabe (Standard aus) prüfen. Die neue Antragsfrist ist unter Verwaltung → Einstellungen sichtbar; die installationsweite Audit-Frist wird über die Umgebung gesetzt.
+
+Der tatsächliche Löschlauf führt für Ereignisse „Mit Zusatzangaben“ einen freigegebenen Vorschlag (APPROVED) nur mit zwei belegten Freigaben oder der nachweislichen Auto-Ausnahme aus. Bei unvollständigen Belegen überspringt er das Ereignis und meldet es; die Karte zeigt „Freigabebelege unvollständig – wird nicht gelöscht“. Ein Testlauf (`--dry-run`) zählt Kandidaten und ersetzt diese Prüfung beim Löschen nicht.
 
 #### Aufbewahrung der Ereignis-Historie
 

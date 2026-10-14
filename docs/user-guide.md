@@ -1135,12 +1135,12 @@ werden protokolliert. Ein Personen-/Fall-Hold schützt auch zugehörige
 Ereignisse und die Audit-Zeilen zu geschützten Zielen. Die Systemadministration
 kann Holds in `/system/legal-holds/` aufheben.
 
-Der Nachtlauf schlägt abgelaufene Ereignisse „Mit Zusatzangaben“ vor; erst eine
-Person mit **Löschbestätigung** gibt sie frei. Zurückstellen schützt bis
+Der Nachtlauf schlägt abgelaufene Ereignisse „Mit Zusatzangaben“ vor; erst zwei verschiedene
+berechtigte Personen mit **Löschbestätigung** geben sie manuell frei. Zurückstellen schützt bis
 zum Datum; Ablehnen löscht nichts, frühestens nach der Wiedervorlagefrist
 (Default 365 Tage) entsteht eine neue Vorlage. Auto-Freigabe bleibt Opt-in.
 
-Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte „Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann.
+Den Vorschlag legt der Lauf an. Die manuelle Freigabe braucht zwei verschiedene aktive Personen der eigenen Einrichtung, jeweils mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Die erste Freigabe lässt den Vorschlag ausstehend (PENDING, „1 von 2 Freigaben“); erst die zweite andere Person gibt ihn endgültig frei (APPROVED). Mit nur einem berechtigten Konto bleibt es bei „1 von 2“; die erste Freigabe allein erlaubt keine Löschung. Zurückstellen, Legal Hold (auch aus der Personen-, Fall- oder Ereignisakte) und Ablehnung verwerfen die erste Freigabe mit Audit; bei einem erneuten manuellen Freigabeweg sind wieder zwei Freigaben nötig. Die Einrichtung benennt mindestens zwei berechtigte Konten. Die Compliance-Karte „Genehmiger für den Aufbewahrungslauf“ prüft Rolle und Anzahl (0 = kritisch, 1 = Warnung, mindestens 2 = ok). Die Karte „Genehmiger für Löschanträge“ zählt weiterhin aktive Löschantragsberechtigte unabhängig von ihrer Rolle. Ausnahme: Die Einrichtung kann die Auto-Freigabe nach mehrfacher Zurückstellung ausdrücklich einschalten (Opt-in, standardmäßig aus); nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg.
 Ohne Fall beginnt die Stufenfrist beim Ereignisdatum, im offenen Fall bei
 letzter fachlicher Fallaktivität (Fallback Anlage), geschlossen beim Abschluss.
 Eine Typ-**Höchstfrist (verkürzt nur)** ersetzt den Freigabeschritt nicht.

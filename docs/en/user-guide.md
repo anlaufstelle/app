@@ -1134,7 +1134,7 @@ can lift it there; both actions are audited. Person/case holds protect related
 events and audit rows of protected targets. System administration can lift
 holds at `/system/legal-holds/`.
 
-The nightly run proposes expired events with additional details; a person
+The nightly run proposes expired events with additional details; two different eligible people
 with **deletion confirmation** permission must approve. Deferral protects until
 its date. Rejection deletes nothing; a new proposal can appear after the retry
 interval (default 365 days). Automatic approval remains opt-in. Without a case
@@ -1142,7 +1142,7 @@ the stage period starts at the event date; in an open case at last substantive
 activity (fallback creation); in a closed case at closure. A type **maximum
 period (shortens only)** cannot replace approval.
 
-The run creates the proposal. The facility must designate at least one active account in its own facility with the Manager or Application support role and deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role, but the retention interface is restricted to Manager and Application support. The “Approvers” compliance card counts active deletion-request approvers regardless of role; it does not establish that an account can operate the retention workflow.
+The run creates the proposal. Manual approval requires two different active people from the same facility, each with the Manager or Application support role and deletion confirmation permission. The first approval leaves the proposal pending (PENDING, “1 of 2 approvals”); only the second, different person gives final approval (APPROVED). With only one eligible account, it remains at “1 of 2”; the first approval alone never permits deletion. Deferral, legal hold (including from person, case or event records) and rejection discard the first approval with an audit record; a new manual approval workflow requires both approvals again. The facility designates at least two eligible accounts. The “Approvers for the retention run” compliance card checks role and count (0 = critical, 1 = warning, at least 2 = OK). The “Approvers for deletion requests” card still counts active deletion-request approvers regardless of role. Exception: the facility may explicitly enable auto-approval after repeated deferrals (opt-in, off by default); after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Holds and Art. 18 restrictions protect this path as well.
 
 Downgrading additional details to pseudonym only with existing events also
 requires a request and another person with that permission. Without events, the `retention_identified_days` inactivity period applies only to pseudonym-only people without open cases. The anchor is the latest person change (`updated_at`), substantive case activity (`last_activity_at`), task change or attachment change on the person or case (creation, replacement or removal). People with additional details without events are excluded from automatic anonymization; the proposal path currently supports only events, and automatic retention enforcement for these people is missing. Pseudonym-only people without events but with an open case are excluded from the inactivity path. The facility regularly reviews people with additional details without events and submits a deletion request where necessary; it records the review interval in the deletion concept. See [`anonymization.py`](../../src/core/retention/anonymization.py).
@@ -1157,7 +1157,8 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: aa96f2812a26ca6a71f5cf5db94da5465c50e428 -->
+<!-- source-hash: 629c9377d76cc48f880898788f451ff623bcfaf2 -->
+<!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->

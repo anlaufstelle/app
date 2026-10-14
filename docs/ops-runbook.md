@@ -204,6 +204,8 @@ docker compose "${compose_files[@]}" run --rm maintenance check_db_roles
 docker compose "${compose_files[@]}" run --rm maintenance enforce_retention --dry-run
 ```
 
+Beim tatsächlichen Löschen von Ereignissen „Mit Zusatzangaben“ verlangt `enforce_retention` zwei belegte Freigaben oder die nachweisliche Auto-Freigabe-Ausnahme (Opt-in, standardmäßig aus). Unvollständige Freigabebelege führen zu Überspringen und Meldung; die Vorschlagskarte zeigt „Freigabebelege unvollständig – wird nicht gelöscht“. `--dry-run` zählt Kandidaten und ersetzt diese Laufzeitprüfung nicht.
+
 ### 1.4 Compose-Stack-Abgleich
 
 Refs #2086. Die Compose-Stacks fahren dasselbe Drei-Rollen-PostgreSQL-Modell (kanonische Beschreibung: [§ 9 „DB-Rollenmodell (Goldstandard)"](#db-rollenmodell-goldstandard)). Der Abgleich ist Soll **und** Ist — driftet ein Stack, faellt das Verhalten dort still auseinander, ohne dass ein Test es meldet:

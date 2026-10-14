@@ -11,7 +11,7 @@ Anonymous and pseudonym-only events expire from their own event date; a newer
 contact does not extend older events. A document-type setting is a **maximum
 period (shortens only)**: the earliest deadline wins, never an extension.
 
-Events with additional details require a proposal and approval by a person
+Events with additional details require a proposal and manual approval by two different eligible people
 with deletion confirmation permission before deletion. Their period starts at
 case closure, without a case at the event date, and in an open case at the last
 substantive activity (fallback creation). Changes to cases, events, tasks and
@@ -19,7 +19,7 @@ progress count; key rotation does not. Deferral protects until its date;
 rejection permits a new proposal after a configurable 365 days. Automatic
 approval after maximum deferrals remains opt-in.
 
-The run creates the proposal. The facility must designate at least one active account in its own facility with the Manager or Application support role and deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role, but the retention interface is restricted to Manager and Application support. The “Approvers” compliance card counts active deletion-request approvers regardless of role; it does not establish that an account can operate the retention workflow.
+The run creates the proposal. Manual approval requires two different active people from the same facility, each with the Manager or Application support role and deletion confirmation permission. The first approval leaves the proposal pending (PENDING, “1 of 2 approvals”); only the second, different person gives final approval (APPROVED). With only one eligible account, it remains at “1 of 2”; the first approval alone never permits deletion. Deferral, legal hold (including from person, case or event records) and rejection discard the first approval with an audit record; a new manual approval workflow requires both approvals again. The facility designates at least two eligible accounts. The “Approvers for the retention run” compliance card checks role and count (0 = critical, 1 = warning, at least 2 = OK). The “Approvers for deletion requests” card still counts active deletion-request approvers regardless of role. Exception: the facility may explicitly enable auto-approval after repeated deferrals (opt-in, off by default); after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Holds and Art. 18 restrictions protect this path as well.
 
 ## Addendum 2026-10-10
 
@@ -57,5 +57,5 @@ from 2026-10-06 is superseded:
 
 <!-- translation-source: docs/adr/021-retention-modell.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-11 -->
-<!-- source-hash: 07e85a1eec925531dacbb5b079c62d3b02a94ee9 -->
+<!-- translation-date: 2026-10-14 -->
+<!-- source-hash: 3b62d191372a61b46573e986a8c280dc5809b9d3 -->

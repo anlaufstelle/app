@@ -23,7 +23,7 @@ Anlaufstelle implementiert ein **mehrstufiges Retention-Modell** mit getrennten 
 - **Vier Soft-Delete-Strategien** statt Hard-Delete:
   - `anonymous` — datensparsame Eintraege werden sofort nach Frist soft-geloescht;
   - `identified` — identifizierte Klient-Eintraege werden nach Frist **anonymisiert** ([`anonymize_clients`](../../src/core/retention/anonymization.py)); *(Präzisiert im [Nachtrag 2026-10-10](#nachtrag-2026-10-10-freigabe-und-geschlossene-fristlücken).)*
-  - `qualified` — fachlich qualifizierte Eintraege verlangen einen `RetentionProposal` mit Freigabe durch eine Person mit „Löschbestätigung“ vor Soft-Delete; *(Präzisiert im [Nachtrag 2026-10-10](#nachtrag-2026-10-10-freigabe-und-geschlossene-fristlücken).)*
+  - `qualified` — fachlich qualifizierte Eintraege verlangen einen `RetentionProposal` mit manuelle Freigabe durch zwei verschiedene berechtigte Personen mit „Löschbestätigung“ vor Soft-Delete (Auto-Freigabe nur als Opt-in-Ausnahme, standardmäßig aus); *(Präzisiert im [Nachtrag 2026-10-10](#nachtrag-2026-10-10-freigabe-und-geschlossene-fristlücken).)*
   - `document_type` — pro Dokumenttyp konfigurierbare Frist, ueberschreibt die globale Event-Frist. *(Präzisiert im [Nachtrag 2026-10-10](#nachtrag-2026-10-10-freigabe-und-geschlossene-fristlücken).)*
 - **Legal-Hold als Einfrier-Marker.** [`LegalHold`](../../src/core/retention/legal_holds.py) setzt einen Marker pro Entitaet; `has_active_hold(target)` haelt jede Soft-Delete- und Anonymisierungs-Pipeline auf. Hold setzen darf nur Lead/Admin, Aufheben mit AuditLog-Spur.
 - **`RetentionProposal`-Vorschlagspipeline** fuer qualifizierte Eintraege: Cron erzeugt Vorschlaege, Dashboard ([`build_retention_dashboard_context`](../../src/core/retention/proposals.py)) zeigt sie, Lead/Admin entscheidet `approve`/`defer`/`reject`. Damit bleibt das Pruning bei juristisch sensiblen Datensaetzen eine bewusste menschliche Entscheidung. *(Präzisiert im [Nachtrag 2026-10-10](#nachtrag-2026-10-10-freigabe-und-geschlossene-fristlücken).)*
@@ -54,7 +54,7 @@ Die Entscheidung oben formuliert *„Events, Cases, Clients, WorkItems und Audit
 
 | Entitaet | Eigene konfigurierbare Frist? | Mechanik |
 |---|---|---|
-| **Event** | **ja** — `retention_anonymous_days` (90), `retention_identified_days` (365), `retention_qualified_days` (3650), zusaetzlich `DocumentType.retention_days` als Typ-Override | Soft-Delete durch `enforce_retention`; `qualified` nur ueber `RetentionProposal` mit Freigabe durch eine Person mit „Löschbestätigung“ |
+| **Event** | **ja** — `retention_anonymous_days` (90), `retention_identified_days` (365), `retention_qualified_days` (3650), zusaetzlich `DocumentType.retention_days` als Typ-Override | Soft-Delete durch `enforce_retention`; `qualified` nur ueber `RetentionProposal` mit manuelle Freigabe durch zwei verschiedene berechtigte Personen mit „Löschbestätigung“ (Auto-Freigabe nur als Opt-in-Ausnahme, standardmäßig aus) |
 | **Activity** (Zeitstrom) | **ja** — `retention_activities_days` (365) | **Hard**-Delete, kein Soft-Delete |
 | **AuditLog** | **ja** — `auditlog_retention_months` (24, `0` = aus) | `prune_auditlog`; drei prune-exempte Aktionen plus `EXPORT`-**Berichts-Freigaben** (Zeitraum + herausgegebenes Artefakt, Refs #1770 — Klienten-/DSGVO-Exporte und Bildschirm-Ansichten bleiben der Frist unterworfen), Checkpoint-Tombstone fuer die HMAC-Kette |
 | **Client** | **nein**, zwei *abgeleitete* Ausloeser | (a) `client_trash_days` (30) nach **manuellem** Soft-Delete → `anonymize_eligible_soft_deleted_clients`; (b) `anonymize_clients`, sobald **alle** Events der Person soft-geloescht sind. Beide Wege enden in `anonymize_client` |
@@ -72,11 +72,11 @@ Nachtrag ersetzt die Ist-Beschreibung vom 2026-10-06 und präzisiert die Audit-
 Fristkorrektur vom 2026-10-07:
 
 - „Mit Zusatzangaben“: Standardlauf erzeugt Vorschläge und löscht erst nach
-  Freigabe durch eine Person mit „Löschbestätigung“. Zurückstellen
+  manuelle Freigabe durch zwei verschiedene berechtigte Personen mit „Löschbestätigung“. Zurückstellen
   schützt bis zum Datum, Ablehnen erlaubt frühestens nach 365 Tagen
   (konfigurierbar) eine neue Vorlage. Auto-Freigabe bleibt Opt-in.
 
-Den Vorschlag legt der Lauf an. Die Einrichtung benennt mindestens ein aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“; ohne besetzte Freigabe werden Ereignisse „Mit Zusatzangaben“ im Standardlauf bei ausgeschalteter Auto-Freigabe nicht gelöscht. Das Recht wird rollenunabhängig vergeben, die Aufbewahrungsoberfläche ist jedoch auf Leitung und Anwendungsbetreuung beschränkt. Die Compliance-Karte „Genehmiger“ zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle; sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann.
+Den Vorschlag legt der Lauf an. Die manuelle Freigabe braucht zwei verschiedene aktive Personen der eigenen Einrichtung, jeweils mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Die erste Freigabe lässt den Vorschlag ausstehend (PENDING, „1 von 2 Freigaben“); erst die zweite andere Person gibt ihn endgültig frei (APPROVED). Mit nur einem berechtigten Konto bleibt es bei „1 von 2“; die erste Freigabe allein erlaubt keine Löschung. Zurückstellen, Legal Hold (auch aus der Personen-, Fall- oder Ereignisakte) und Ablehnung verwerfen die erste Freigabe mit Audit; bei einem erneuten manuellen Freigabeweg sind wieder zwei Freigaben nötig. Die Einrichtung benennt mindestens zwei berechtigte Konten. Die Compliance-Karte „Genehmiger für den Aufbewahrungslauf“ prüft Rolle und Anzahl (0 = kritisch, 1 = Warnung, mindestens 2 = ok). Die Karte „Genehmiger für Löschanträge“ zählt weiterhin aktive Löschantragsberechtigte unabhängig von ihrer Rolle. Ausnahme: Die Einrichtung kann die Auto-Freigabe nach mehrfacher Zurückstellung ausdrücklich einschalten (Opt-in, standardmäßig aus); nach der konfigurierten maximalen Zahl von Zurückstellungen und Ablauf der Wiedervorlage genehmigt der Lauf ohne zweite Person. Hold und Art. 18 schützen auch diesen Weg.
 - Fristanker: Fallabschluss; ohne Fall Ereignisdatum; offen letzte fachliche
   Fallaktivität (Fallback Anlage). Fachliche Änderungen an Fall, Ereignissen,
   Aufgaben und Verlauf zählen, Umschlüsselung nicht.

@@ -2056,7 +2056,7 @@ A **retention dashboard** is available under [`/retention/`](https://github.com/
 
 | Dashboard action | Effect |
 |---|---|
-| **Release** | Another person with deletion confirmation permission; next run deletes unless hold/Art. 18 protects the target |
+| **Release** | First eligible person: “1 of 2 approvals”; second, different eligible person: final approval. The next run deletes unless a hold or Art. 18 protects the target |
 | **Defer** | Protects until deferred_until, then reopens. Automatic approval after maximum deferrals remains opt-in |
 | **Reject** | Deletes nothing; new proposal no earlier than retention_rejected_retry_days (default 365 days) |
 
@@ -2077,10 +2077,11 @@ person anonymization and history redaction in the retention run. Both forms of
 protection are checked separately; manual four-eyes deletion under Art. 17 remains
 a separate path (§ 7.5).
 
-The first run can propose previously unbounded events with additional details.
-Before operation, review periods, automatic approval (off by default), and the
-approver pool shown by the compliance card. The new completed-request period is
-available in Verwaltung → Einstellungen; the system audit period uses the environment.
+The run creates the proposal. Manual approval requires two different active people from the same facility, each with the Manager or Application support role and deletion confirmation permission. The first approval leaves the proposal pending (PENDING, “1 of 2 approvals”); only the second, different person gives final approval (APPROVED). With only one eligible account, it remains at “1 of 2”; the first approval alone never permits deletion. Deferral, legal hold (including from person, case or event records) and rejection discard the first approval with an audit record; a new manual approval workflow requires both approvals again. The facility designates at least two eligible accounts. The “Approvers for the retention run” compliance card checks role and count (0 = critical, 1 = warning, at least 2 = OK). The “Approvers for deletion requests” card still counts active deletion-request approvers regardless of role. Exception: the facility may explicitly enable auto-approval after repeated deferrals (opt-in, off by default); after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Holds and Art. 18 restrictions protect this path as well.
+
+Before operation, review periods and auto-approval (off by default). The request retention period is visible under Administration → Settings; the installation-wide audit period is set through the environment.
+
+The actual deletion run executes an approved proposal (APPROVED) for events with additional details only with evidence of both approvals or the verified auto-approval exception. Incomplete evidence causes the event to be skipped and reported; its card says “Approval evidence incomplete – will not be deleted”. A dry run (`--dry-run`) counts candidates and does not replace the evidence check when deleting.
 
 #### Retention of the Event History
 
@@ -2556,4 +2557,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
-<!-- source-hash: 305547646825487e7e47f963e4ae5ebde9830ef5 -->
+<!-- source-hash: fcb6aedc5f3d5228c34d2a7359542c8f11939626 -->

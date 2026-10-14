@@ -207,6 +207,8 @@ docker compose "${compose_files[@]}" run --rm maintenance check_db_roles
 docker compose "${compose_files[@]}" run --rm maintenance enforce_retention --dry-run
 ```
 
+When actually deleting events with additional details, `enforce_retention` requires evidence of two approvals or the verified auto-approval exception (opt-in, off by default). Incomplete approval evidence causes skipping and reporting; the proposal card says “Approval evidence incomplete – will not be deleted”. `--dry-run` counts candidates and does not replace this runtime check.
+
 ### 1.4 Compose Stack Reconciliation
 
 Refs #2086. The Compose stacks run the same three-role PostgreSQL model (canonical description: [§ 9 "DB Role Model (Gold Standard)"](#db-role-model-gold-standard)). The table is target state **and** actual state — if one stack drifts, its behaviour diverges silently and no test reports it:
@@ -3305,5 +3307,5 @@ Check lock-file drift     make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-13 -->
-<!-- source-hash: c6c9ca6dc6988beac4f7c8394ed0249be2ea7053 -->
+<!-- translation-date: 2026-10-14 -->
+<!-- source-hash: 688e05e77a0c8efaa44235c6d7cf13d50e28eb58 -->

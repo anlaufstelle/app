@@ -17,12 +17,12 @@ Search covers only **pseudonym and event search text**, from two characters onwa
 ### How do retention periods work?
 
 The regular daily `enforce_retention` run deletes anonymous and pseudonym-only
-events after expiry. Events with additional details receive proposals; a
-person with deletion confirmation permission must approve deletion. Deferral
+events after expiry. Events with additional details receive proposals;
+two different eligible people with deletion confirmation permission must approve deletion. Deferral
 protects until its date; rejection permits a new proposal no earlier than the
 retry interval (default 365 days). Automatic approval remains opt-in.
 
-The run creates the proposal. The facility must designate at least one active account in its own facility with the Manager or Application support role and deletion confirmation permission; without an approver, events with additional details are not deleted by the regular run when auto-approval is disabled. This permission is assigned independently of the role, but the retention interface is restricted to Manager and Application support. The “Approvers” compliance card counts active deletion-request approvers regardless of role; it does not establish that an account can operate the retention workflow.
+The run creates the proposal. Manual approval requires two different active people from the same facility, each with the Manager or Application support role and deletion confirmation permission. The first approval leaves the proposal pending (PENDING, “1 of 2 approvals”); only the second, different person gives final approval (APPROVED). With only one eligible account, it remains at “1 of 2”; the first approval alone never permits deletion. Deferral, legal hold (including from person, case or event records) and rejection discard the first approval with an audit record; a new manual approval workflow requires both approvals again. The facility designates at least two eligible accounts. The “Approvers for the retention run” compliance card checks role and count (0 = critical, 1 = warning, at least 2 = OK). The “Approvers for deletion requests” card still counts active deletion-request approvers regardless of role. Exception: the facility may explicitly enable auto-approval after repeated deferrals (opt-in, off by default); after the configured maximum number of deferrals and expiry of the follow-up date, the run approves without a second person. Holds and Art. 18 restrictions protect this path as well.
 
 Without a case the period starts at the event date; in an open case at last
 substantive activity (fallback creation); in a closed case at closure. A document
@@ -84,5 +84,5 @@ Decision aid: [User Guide § 7 “The Three Tabs at a Glance”](https://github.
 
 <!-- translation-source: docs/faq.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-11 -->
-<!-- source-hash: a4d9364bbe6cf4ff1970b6cede25f1bbd969a484 -->
+<!-- translation-date: 2026-10-14 -->
+<!-- source-hash: f0ebc9509325d5f634d6a5e3754d0c14be665cf0 -->
