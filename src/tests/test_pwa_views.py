@@ -188,6 +188,19 @@ class TestServiceWorkerCachesOfflineFallback:
             "focus-management.js fehlt im APP_SHELL — Fokus-Handler offline nicht ladbar."
         )
 
+    def test_sw_caches_date_input_i18n(self, client):
+        """Refs #2603: offline_base.html and base.html load date-input-i18n.js,
+        which binds date fields to the app language. It must be precached,
+        otherwise offline date fields fall back to the browser locale on a cold
+        start after a service worker update.
+        """
+        response = client.get(reverse("service_worker"))
+        body = response.content.decode()
+        shell_block = _app_shell_block(body)
+        assert "/static/js/date-input-i18n.js" in shell_block, (
+            "date-input-i18n.js missing from APP_SHELL - offline date fields lose the app language."
+        )
+
     def test_sw_caches_offline_create_shells(self, client):
         """Refs #1523 (#1499): Die pk-losen Create-Shells (Event/WorkItem)
         werden offline IN-PLACE an /events/new/ bzw. /workitems/new/ serviert —
@@ -825,7 +838,7 @@ class TestPrecachedShellBumpGuard:
     # The offline-availability notice in both shells now says "Person" instead
     # of "Klientel" (docs/sprachleitlinie.md). v61 already reached the dev host,
     # so the rendered shell change ships with v62 and this hash.
-    _PINNED_SHELL_HASH = "18d6769e864e0be956c8d7e3859fe6020325a1df515be7eeef6581f900090ea2"
+    _PINNED_SHELL_HASH = "a018eaf6c5a68c62e4df1ab4f23826de612b16dcd02c3fb36f88a36058bc1105"
     # Refs #1904: SHA-256 over the Content-Security-Policy headers the server
     # delivers with the precached offline home (see _policy_fingerprint). Every
     # precached shell and every runtime entry keeps the policy it was stored

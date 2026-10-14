@@ -296,6 +296,10 @@ const APP_SHELL = [
     // Kalt-Offline-Pfad (/events/new/, /workitems/new/) nach einem SW-Update
     // ohne Renderer.
     "/static/js/offline-form-fields.js",
+    // Refs #2603: base.html and offline_base.html bind date fields to the app
+    // language through date-input-i18n.js; without precaching, an offline cold
+    // start after a SW update shows browser-locale date fields.
+    "/static/js/date-input-i18n.js",
     "/static/js/offline-messages.js",
     "/static/js/offline-create.js",
     // Refs #1533 (#1499): Die pk-lose Personenlisten-Shell (offline_list.html)
