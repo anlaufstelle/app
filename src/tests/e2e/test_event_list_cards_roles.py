@@ -33,6 +33,14 @@ ROLE_VISIBILITY = {
     "authenticated_page": {"open": True, "elevated": True, "high": True},
 }
 
+#: role fixture -> whether the high-sensitivity document type (as a whole) is delivered
+HIGH_TYPE_VISIBLE = {
+    "assistant_page": False,
+    "staff_page": False,
+    "lead_page": True,
+    "authenticated_page": True,
+}
+
 
 @pytest.fixture(scope="module")
 def kl_data(e2e_env):
@@ -72,8 +80,16 @@ values = {{k: k.upper() + '-WERT-{marker}' for k in ('open', 'elevated', 'high')
 e1 = make('miriam', at(10, 10), {{slugs[k]: values[k] for k in slugs}}, person, case=case)
 e2 = make('emma', at(11, 10), {{slugs['open']: 'OFFEN-ZWEI-{marker}'}}, person)
 e3 = make('lena', at(12, 9), {{slugs['open']: 'OFFEN-ANONYM-{marker}'}}, None, is_anonymous=True)
+# A second, high-sensitivity document type with an ordinary field: the whole entry is withheld by type.
+dt_high = DocumentType.objects.create(facility=f, name='KLH-{marker}', slug='klh-{marker}', entity_type='event',
+                                      sensitivity='high')
+ft_high = FieldTemplate.objects.create(facility=f, name='KLH-feld-{marker}', slug='klh-feld-{marker}',
+                                       field_type='text', sensitivity='high')
+DocumentTypeField.objects.create(document_type=dt_high, field_template=ft_high, sort_order=0)
+e4 = Event.objects.create(facility=f, document_type=dt_high, client=person, occurred_at=at(13, 10),
+                          data_json={{ft_high.slug: 'HOCHTYP-WERT-{marker}'}}, created_by=users['miriam'])
 print('DATA ' + json.dumps({{'values': values, 'case': str(case.pk), 'e1': str(e1.pk), 'e2': str(e2.pk),
-    'e3': str(e3.pk), 'miriam': users['miriam'].pk, 'emma': users['emma'].pk,
+    'e3': str(e3.pk), 'e4': str(e4.pk), 'miriam': users['miriam'].pk, 'emma': users['emma'].pk,
     'time_filter': str(tf.pk) if tf else '', 'type': str(dt.pk)}}))
 """
     cleanup = f"""
@@ -82,14 +98,15 @@ from core.models import Case, Client, DocumentType, DocumentTypeField, Event, Ev
 cursor = connection.cursor()
 cursor.execute('ALTER TABLE core_eventhistory DISABLE TRIGGER eventhistory_no_delete')
 try:
-    EventHistory.objects.filter(event__document_type__name='KL-{marker}').delete()
-    Event.objects.filter(document_type__name='KL-{marker}').delete()
+    EventHistory.objects.filter(event__document_type__name__in=['KL-{marker}', 'KLH-{marker}']).delete()
+    Event.objects.filter(document_type__name__in=['KL-{marker}', 'KLH-{marker}']).delete()
 finally:
     cursor.execute('ALTER TABLE core_eventhistory ENABLE ALWAYS TRIGGER eventhistory_no_delete')
 Case.objects.filter(title='KL-Fall-{marker}').delete()
-DocumentTypeField.objects.filter(document_type__name='KL-{marker}').delete()
-DocumentType.objects.filter(name='KL-{marker}').delete()
+DocumentTypeField.objects.filter(document_type__name__in=['KL-{marker}', 'KLH-{marker}']).delete()
+DocumentType.objects.filter(name__in=['KL-{marker}', 'KLH-{marker}']).delete()
 FieldTemplate.objects.filter(name__endswith='-{marker}', name__startswith='KL-').delete()
+FieldTemplate.objects.filter(name='KLH-feld-{marker}').delete()
 Client.objects.filter(pseudonym='KL-Person-{marker}').delete()
 """
     try:
@@ -131,6 +148,33 @@ class TestRoleValueComparison:
             value = kl_data["values"][key]
             assert (value in list_html) is shown, f"{role_fixture}: {key} on /events/ (expected visible={shown})"
             assert (value in feed_html) is shown, f"{role_fixture}: {key} on the Zeitstrom (expected visible={shown})"
+
+
+class TestHighSensitivityDocumentType:
+    """A high-sensitivity document type is withheld as a whole: list, Zeitstrom and detail agree per role."""
+
+    @pytest.mark.parametrize("role_fixture", list(HIGH_TYPE_VISIBLE))
+    def test_type_value_and_actions_follow_the_role(self, request, base_url, kl_data, role_fixture):
+        page = request.getfixturevalue(role_fixture)
+        shown = HIGH_TYPE_VISIBLE[role_fixture]
+        marker = kl_data["marker"]
+        value = f"HOCHTYP-WERT-{marker}"
+        type_name = f"KLH-{marker}"
+        entry_link = f"/events/{kl_data['e4']}/"
+
+        _open_list(page, base_url)
+        expect(page.locator("#event-table")).to_contain_text(f"KL-{marker}", timeout=10000)
+        list_html = page.content()
+        page.goto(f"{base_url}/?date=2018-05-13", wait_until="domcontentloaded")
+        page.wait_for_load_state("networkidle")
+        feed_html = page.content()
+
+        for where, html in (("/events/", list_html), ("Zeitstrom", feed_html)):
+            assert (value in html) is shown, f"{role_fixture}: value on {where} (expected visible={shown})"
+            assert (type_name in html) is shown, f"{role_fixture}: type name on {where} (expected visible={shown})"
+            assert (entry_link in html) is shown, f"{role_fixture}: entry link on {where} (expected={shown})"
+        status = page.request.get(f"{base_url}{entry_link}").status
+        assert (status == 200) is shown, f"{role_fixture}: detail answered {status} (expected visible={shown})"
 
 
 class TestCardExpansion:
