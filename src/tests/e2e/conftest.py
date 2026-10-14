@@ -315,6 +315,10 @@ def _install_checked_replay_helper(browser) -> None:
     create_context = browser.new_context
 
     def new_context(*args, **kwargs):
+        # Opt-in for runs that observe page-side requests through ``page.route``:
+        # an active service worker answers some of them before the route sees them.
+        if os.environ.get("E2E_BLOCK_SERVICE_WORKERS") == "1":
+            kwargs.setdefault("service_workers", "block")
         context = create_context(*args, **kwargs)
         context.add_init_script(_CHECKED_REPLAY_INIT_SCRIPT)
         return context
