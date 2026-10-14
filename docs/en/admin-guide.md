@@ -1409,15 +1409,16 @@ Prerequisites in `.env`:
 - `BACKUP_HOST_DIR` as the base directory on the host; the script writes exclusively there and ignores `BACKUP_DIR`, which is used only as the container mount target (see the [environment table](#full-environment-variable-reference)),
 - `DJANGO_AUDIT_HWM_PATH` as the location of the audit anchor; `.env.example` ships `/data/audit_hwm.json` active out of the box.
 
-**Mandatory step before the first backup — create the audit anchor.** The audit anchor is the signed file outside the database that makes truncation of the most recent entries and a wiped chain detectable in the first place. `backup.sh` can only include it once it exists, and it is created by the first green run of the chain verification. After starting the stack, therefore run that verification **once** and check the result before you create the first backup:
+**Mandatory step before the first backup — create the audit anchor.** The audit anchor is the signed file outside the database that makes truncation of the most recent entries and a wiped chain detectable in the first place. `backup.sh` can only include it once it exists, and it is created by the first green run of the chain verification. After starting the stack, therefore run that verification **twice in a row** and check the result before you create the first backup:
 
 ```bash
 cd /opt/anlaufstelle
 docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain
+docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain
 docker compose -f docker-compose.prod.yml exec -T cron test -s /data/audit_hwm.json
 ```
 
-The second command exits with code 0 as soon as the anchor is present. A complete backup set then consists of **seven** files: database dump and media archive with one `.hmac` sidecar each, the signed `.manifest` plus its `.hmac`, and `audit_hwm-<timestamp>.json`. If the anchor is missing, empty or unreadable through `cron`, backup exits with code 1 before publication — and the recovery step “restore the audit anchor and verify the chain” ((DE: [Disaster Recovery § 6 Step 4b](../disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen))) cannot be performed with such a set.
+The second run is necessary because on a freshly set-up instance the system chain has no row yet during the first run and is therefore not anchored; only that run writes its success marker, and the second run anchors it. A backup made after a single run carries no anchor for the system chain and fails the required-anchor run of the recovery ([Disaster Recovery § 6 Step 4b](../disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen)). The last command exits with code 0 as soon as the anchor is present. A complete backup set then consists of **seven** files: database dump and media archive with one `.hmac` sidecar each, the signed `.manifest` plus its `.hmac`, and `audit_hwm-<timestamp>.json`. If the anchor is missing, empty or unreadable through `cron`, backup exits with code 1 before publication — and the recovery step “restore the audit anchor and verify the chain” ((DE: [Disaster Recovery § 6 Step 4b](../disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen))) cannot be performed with such a set.
 
 The anchor lives on a separate volume mounted read-only by `web`. This separation does not protect against host/Docker access or the maintenance/owner role. The volume is created on first start; preserve and transfer an existing signed anchor as described in [Ops Runbook § 6.7](ops-runbook.md#67-back-up-and-verify-the-audit-high-water-mark-refs-2022) when updating an instance. The “Last backup” card checks the existence and size of the copy next to the manifest; it does not read the live anchor.
 
@@ -2558,4 +2559,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
-<!-- source-hash: c1f3eedae39e49cad5d516fe9616ade15fda7b3a -->
+<!-- source-hash: 35c8b0be4e80e7422d59a361f5d697ff387b2e05 -->

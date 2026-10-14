@@ -12,6 +12,8 @@ Current `backup.sh` aborts with exit code 1 before publishing a set if the ancho
 
 `restore.sh` uses the configured anchor path or the default and aborts before changes if the set lacks the anchor copy. Restoration still requires confirmation (`--yes` or `RESTORE_CONFIRM=ja`). On a host without a custom anchor path, the explicit `--skip-audit-anchor` option restores without checking or importing the anchor; subsequent anchor verification cannot run. If `DJANGO_AUDIT_HWM_PATH` is set, the option does not bypass checking or importing that anchor. The production recovery drill uses the default even without a custom path: a missing or invalid copy produces `FAIL`, exit code 1 and no compliance evidence. The development backup format has no anchor and remains a drill with gaps (exit code 2). Record the source and reconstructed environment's actual anchor paths, whether custom or default, in the drill report.
 
+On a freshly set up instance the system chain is not anchored by the first regular verification run; only the second run anchors it, which is why the admin guide asks for two runs before the first backup. A set created after a single run carries no anchor for that chain, so its `--require-anchor` run aborts on every repetition with the same message and repeating step 4b does not help. Prefer a newer complete set that passes — at the latest the first backup after the second regular `verify_audit_chain` run is unaffected. If there is none, run the verification **once** without the switch, record the deviation in the restore or drill report, and then repeat `--require-anchor`. That run still checks every chain for which the anchor holds a tail against it and only re-anchors chains without an anchor, unchecked; it does not recreate an anchor the set never had.
+
 Media archive verification runs in one disposable maintenance container while `web` and `cron` remain stopped. Its temporary working directory is on the persistent `/media` volume, outside `MEDIA_ROOT`, and is removed afterwards. The German guide's verification command uses `/media/media-verify-$RESTORE_TIMESTAMP` and `${MEDIA_ROOT_CONTAINER:-/media/media}`. Compare SHA-256 and size of the encrypted files with the authenticated archive; original filenames and plaintext sizes require the separate download check. See the [German recovery steps](../disaster-recovery.md#schritt-4--db-backup-entschlüsseln--wiederherstellen) for the complete procedure.
 
 ## Resuming an interrupted activation
@@ -29,4 +31,4 @@ If anchor installation or media activation fails after the database switch, the 
 <!-- translation-source: docs/disaster-recovery.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 75b20822119669bfe1fb0408a5977eb521392183 -->
+<!-- source-hash: 1727d94a76c37e6b274c023129f0a6a3fa7a84de -->
