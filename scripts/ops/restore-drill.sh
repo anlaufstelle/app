@@ -125,7 +125,15 @@ fi
 if [[ "$DRILL_FORMAT" == "prod" ]]; then
     ENV_FILE="$PROD_ENV_FILE"
     BACKUP_GLOB='anlaufstelle_*.sql.gz.enc'
+    # Same file list as restore.sh and the runbook: as soon as one -f is given,
+    # Compose stops loading compose.override.yml on its own, so the optional
+    # files are added explicitly (the working directory is COMPOSE_DIR).
     COMPOSE=(docker compose -f docker-compose.prod.yml)
+    for compose_extra_file in compose.legal.yml compose.override.yml; do
+        if [[ -f "$compose_extra_file" ]]; then
+            COMPOSE+=(-f "$compose_extra_file")
+        fi
+    done
 else
     ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env.dev}"
     BACKUP_GLOB='dump-*.pgc.enc'
