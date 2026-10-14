@@ -63,7 +63,9 @@ class TestDesktopSidebarContacts:
 
         # An event record page keeps the Zeitstrom as its home, not the contact list.
         page.goto(f"{base_url}/events/", wait_until="domcontentloaded")
-        detail_link = page.locator("a[href^='/events/']").filter(has_text=re.compile(r"\d{2}\.\d{2}\.\d{4}")).first
+        # The list renders the shared card: open the first one, its entry link is revealed.
+        page.locator("#event-table button[aria-controls^='event-detail-']").first.click()
+        detail_link = page.locator("#event-table a[href^='/events/']").filter(has_text="Zum Eintrag").first
         detail_link.wait_for(state="visible", timeout=10000)
         detail_link.click()
         page.wait_for_url(EVENT_DETAIL_URL, timeout=10000)
