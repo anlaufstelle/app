@@ -833,8 +833,8 @@ class TestRetentionBulkViews:
             {"proposal_ids": [str(p.pk) for p in two_pending_proposals]},
             headers={"HX-Request": "true"},
         )
-        # HTMX path returns redirect with HX-Redirect header
-        assert resp.status_code == 302
+        # HTMX path: 200 + HX-Redirect (a 302 is followed by the XHR and the header is lost)
+        assert resp.status_code == 200
         assert "HX-Redirect" in resp.headers
         for p in two_pending_proposals:
             p.refresh_from_db()

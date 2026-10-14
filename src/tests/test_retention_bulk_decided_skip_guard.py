@@ -83,7 +83,7 @@ class TestSammelaktionUeberspringtEntschiedene:
             headers={"HX-Request": "true"},
         )
 
-        assert response.status_code == 302
+        assert response.status_code == 200
         assert response["HX-Redirect"] == reverse("core:retention_dashboard")
         gemeldet = [(m.level, str(m)) for m in get_messages(response.wsgi_request)]
         assert gemeldet == [

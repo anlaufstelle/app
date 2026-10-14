@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
@@ -249,8 +250,11 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
         self._report_decisions(request, count, skipped)
 
         if request.headers.get("HX-Request"):
-            response = redirect("core:retention_dashboard")
-            response["HX-Redirect"] = response["Location"]
+            # 200 + HX-Redirect, not 302: the XHR follows a 302 on its own and
+            # htmx only ever sees the redirected partial (no header), which it
+            # would swap into the clicked button and leave the flash unseen.
+            response = HttpResponse(status=200)
+            response["HX-Redirect"] = reverse("core:retention_dashboard")
             return response
 
         if request.headers.get("Accept", "").startswith("application/json"):

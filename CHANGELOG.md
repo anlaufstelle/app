@@ -41,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Personenauswahl bei Texteingabe entwerten** (#2549) — Änderungen am Suchtext leeren sofort die Personen- und Fallauswahl; unbestätigter Text wird sichtbar gekennzeichnet und die erste Änderung startet eine neue Suche.
 
+- **Sammelfreigabe der Löschfristen meldet ihr Ergebnis** (#2590) — Nach Freigeben, Aufschieben oder Ablehnen mehrerer Löschvorschläge lädt die Seite neu und zeigt die Meldung (erste und endgültige Freigaben getrennt); bisher wurde die Löschfristen-Übersicht in den angeklickten Knopf eingesetzt und die Meldung erschien nicht.
 - **Mehr-Menü in flachen Fenstern erreichbar** (#2553) — Das mobile Mehr-Menü begrenzt seine Höhe am verfügbaren Viewport, scrollt intern und hält die fokussierte Zeile im sichtbaren Bereich.
 - **Feld-Board per Tastatur bedienen** (#2554) — Gruppen und Felder lassen sich mit Auf-/Ab-Knöpfen sortieren und Felder über eine bestätigte Gruppenauswahl verschieben; Fokus und Positionsansage bleiben nach erfolgreicher Änderung erhalten.
 - **Statusbanner mit lesbaren Farbkontrasten** (#2555) — Offline-, Synchronisations- und Konfliktbanner verwenden in beiden Layouts dunklere Hintergründe mit mindestens 4,5:1 Textkontrast einschließlich Links, Zählern und Offline-Hilfe.
