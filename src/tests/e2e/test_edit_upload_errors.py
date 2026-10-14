@@ -131,22 +131,43 @@ class TestAssistantOwnEventUploadError:
 class TestFormLevelRejectionNotice:
     """A disallowed file type is rejected by the form itself; the files are cleared just the same."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Finding: form-level rejection re-renders with the field error and the kept text, but without "
-        "the 're-select the file' notice (edit_error_context is only used on the service-error path).",
-    )
-    def test_event_edit_asks_for_the_file_again(self, staff_page, base_url, e2e_env, tmp_path):
-        values = _seed(e2e_env)
-        page = staff_page
+    @staticmethod
+    def _submit_disallowed_file(page, base_url, event_pk, tmp_path, text):
         disallowed = tmp_path / "not-allowed.exe"
         disallowed.write_bytes(b"MZ\x90\x00 not an allowed document")
-        text = _long_text("Eigene Ergänzung")
-        page.goto(f"{base_url}/events/{values['event']}/edit/", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/events/{event_pk}/edit/", wait_until="domcontentloaded")
         page.locator("textarea[name='notiz']").fill(text)
         page.set_input_files("input[name='anhang']", str(disallowed))
         page.locator("#main-content button[type='submit']:has-text('Speichern')").first.click()
         page.wait_for_load_state("domcontentloaded")
+
+    def test_event_edit_form_level_rejection_keeps_text_and_writes_nothing(
+        self, staff_page, base_url, e2e_env, tmp_path
+    ):
+        """The working part of the path: field error, kept text, no server error, no write."""
+        values = _seed(e2e_env)
+        page = staff_page
+        text = _long_text("Eigene Ergänzung")
+        self._submit_disallowed_file(page, base_url, values["event"], tmp_path, text)
+
+        assert "/edit/" in page.url, f"left the edit form: {page.url}"
+        expect(page.locator("#main-content")).to_contain_text("nicht erlaubt", timeout=10000)
+        expect(page.locator("textarea[name='notiz']")).to_have_value(text)
+        assert page.get_by_text("Internal Server Error").count() == 0
+        assert _db(e2e_env, f"Event.objects.get(pk='{values['event']}').data_json.get('notiz')") == "Ausgangsnotiz"
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="Finding: form-level rejection re-renders with the field error and the kept text, but without "
+        "the 're-select the file' notice (edit_error_context is only used on the service-error path). "
+        "The preceding steps are guarded by the green test above; only the notice assertion is expected to fail.",
+    )
+    def test_event_edit_asks_for_the_file_again(self, staff_page, base_url, e2e_env, tmp_path):
+        values = _seed(e2e_env)
+        page = staff_page
+        text = _long_text("Eigene Ergänzung")
+        self._submit_disallowed_file(page, base_url, values["event"], tmp_path, text)
 
         main = page.locator("#main-content")
         expect(main).to_contain_text("nicht erlaubt", timeout=10000)
