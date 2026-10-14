@@ -12,6 +12,7 @@ from contextlib import suppress
 import pytest
 from playwright.sync_api import expect
 
+from ._date_helpers import fill_date
 from ._helpers import do_real_login as _do_real_login
 from ._helpers import python_bin as _python
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
@@ -101,7 +102,7 @@ def _unsynced_event_count(page):
 
 def _fill_and_submit(page, occurred_at):
     page.locator('[data-testid="offline-event-create-doctype"]').select_option(label="Kontakt")
-    page.locator('[data-testid="offline-event-create-occurred-at"]').fill(occurred_at)
+    fill_date(page, '[data-testid="offline-event-create-occurred-at"]', occurred_at)
     page.locator('[data-testid="offline-event-create-save"]').click()
 
 
@@ -171,7 +172,7 @@ class TestOfflineDoubleHour:
             page.locator('[data-testid="offline-new-event-btn"]').click()
             page.locator('[data-testid="offline-create-doctype"]').select_option(label="Kontakt")
             occurred_at = page.locator('[data-testid="offline-create-occurred-at"]')
-            occurred_at.fill(AMBIGUOUS_WALL_CLOCK)
+            fill_date(page, '[data-testid="offline-create-occurred-at"]', AMBIGUOUS_WALL_CLOCK)
             page.locator('[data-testid="offline-create-save"]').click()
 
             alert = page.locator("#offline-create-occurred-at-error")

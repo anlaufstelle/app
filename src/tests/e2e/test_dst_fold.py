@@ -31,6 +31,7 @@ import pytest
 from playwright.sync_api import expect
 
 from ._axe import assert_within_baseline, load_baseline, run_axe
+from ._date_helpers import expect_date_value, fill_date
 from ._helpers import django_shell
 
 pytestmark = [pytest.mark.e2e]
@@ -115,7 +116,7 @@ def _provoke_the_question(page, base_url):
 
     with page.expect_response(re.compile(r"/partials/events/fields/")):
         page.select_option("select[name='document_type']", label="Kontakt")
-    page.fill("#id_occurred_at", AMBIGUOUS_WALL_CLOCK)
+    fill_date(page, "#id_occurred_at", AMBIGUOUS_WALL_CLOCK)
     page.locator("#event-submit-btn").click()
 
     expect(page.locator(FOLD_SELECT)).to_be_visible(timeout=15000)
@@ -151,7 +152,7 @@ class TestOccurrenceChoice:
         expect(page.locator(FOLD_ERROR)).to_contain_text("Sommer- oder Winterzeit")
         # Die Uhrzeit selbst ist nicht falsch — sie ist nur noch nicht entschieden.
         expect(page.locator("#id_occurred_at-error")).to_have_count(0)
-        expect(page.locator("#id_occurred_at")).to_have_value(AMBIGUOUS_WALL_CLOCK)
+        expect_date_value(page, "#id_occurred_at", AMBIGUOUS_WALL_CLOCK)
 
     def test_the_question_takes_the_focus(self, authenticated_page, base_url):
         """WCAG 3.3.1/2.4.3: der Re-Display landet auf dem Feld, das die Frage stellt.

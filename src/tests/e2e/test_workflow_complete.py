@@ -9,6 +9,8 @@ import uuid
 
 import pytest
 
+from ._date_helpers import fill_date
+
 pytestmark = pytest.mark.e2e
 
 SUBMIT = "#main-content button[type='submit']"
@@ -52,7 +54,7 @@ class TestCompleteWorkflow:
         page.locator("a:has-text('Neue Episode')").click()
         page.wait_for_url(re.compile(r"/episodes/new/"))
         page.fill('input[name="title"]', f"WF-Episode-{tag}")
-        page.fill('input[name="started_at"]', "2026-03-01")
+        fill_date(page, 'input[name="started_at"]', "2026-03-01")
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/$"))
         # Zurück auf Case-Detail — Episode sollte sichtbar sein
@@ -190,7 +192,7 @@ class TestIntegrationWorkflow:
         ac_btn.click()
 
         # Fill occurred_at and dynamic fields
-        page.fill('input[name="occurred_at"]', "2026-03-20T10:00")
+        fill_date(page, 'input[name="occurred_at"]', "2026-03-20T10:00")
         dauer_field = page.locator("input[name='dauer']")
         if dauer_field.count() > 0:
             dauer_field.fill("10")

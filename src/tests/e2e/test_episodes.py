@@ -18,6 +18,8 @@ import uuid
 
 import pytest
 
+from ._date_helpers import fill_date
+
 pytestmark = pytest.mark.e2e
 
 
@@ -45,7 +47,7 @@ def _create_episode(page, base_url, title: str, started_at: str) -> None:
     page.click("a:has-text('Neue Episode')")
     page.wait_for_url(re.compile(r"/episodes/new/"))
     page.fill('input[name="title"]', title)
-    page.fill('input[name="started_at"]', started_at)
+    fill_date(page, 'input[name="started_at"]', started_at)
     page.locator("#main-content button[type='submit']").click()
     page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/$"))
 
@@ -68,7 +70,7 @@ class TestEpisodeEdit:
 
         new_title = original_title + "-edit"
         page.fill('input[name="title"]', new_title)
-        page.fill('input[name="started_at"]', "2026-02-20")
+        fill_date(page, 'input[name="started_at"]', "2026-02-20")
         page.locator("#main-content button[type='submit']").click()
 
         # Redirect zurück zur Fall-Detail-Seite.

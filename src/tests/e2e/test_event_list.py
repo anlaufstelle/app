@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from playwright.sync_api import expect
 
+from ._date_helpers import expect_date_value, fill_date
 from ._helpers import django_shell
 
 pytestmark = pytest.mark.e2e
@@ -181,8 +182,8 @@ class TestFilterRun:
         page = staff_page
         open_list(page, base_url)
 
-        page.fill("#event-date_from", "2019-03-01")
-        page.fill("#event-date_to", "2019-03-31")
+        fill_date(page, "#event-date_from", "2019-03-01")
+        fill_date(page, "#event-date_to", "2019-03-31")
         submit_filters(page)
         expect(rows(page)).to_have_count(PAGE_SIZE)
         expect_total(page, PAGE_SIZE, STAFF_TOTAL)
@@ -254,8 +255,8 @@ class TestSharedUrlAndHistory:
             other.wait_for_load_state("domcontentloaded")
             expect(rows(other)).to_have_count(3)
             assert hrefs(other) == expected_rows
-            expect(other.locator("#event-date_from")).to_have_value("2019-03-01")
-            expect(other.locator("#event-date_to")).to_have_value("2019-03-31")
+            expect_date_value(other, "#event-date_from", "2019-03-01")
+            expect_date_value(other, "#event-date_to", "2019-03-31")
             expect(other.locator("#event-doc_type")).to_have_value(dataset["type_b"])
             expect(other.locator("#event-created_by")).to_have_value(str(dataset["emma"]))
         finally:
@@ -355,7 +356,7 @@ class TestZeitstromLink:
         page.wait_for_load_state("domcontentloaded")
         expect(page).to_have_url(re.compile(r"/events/\?"))
         expect(rows(page)).to_have_count(3)
-        expect(page.locator("#event-date_from")).to_have_value("2019-03-05")
+        expect_date_value(page, "#event-date_from", "2019-03-05")
         expect(page.locator("#event-doc_type")).to_have_value(dataset["type_b"])
 
 
@@ -365,8 +366,8 @@ class TestWithoutJavaScript:
         try:
             page = context.new_page()
             open_list(page, base_url)
-            page.fill("#event-date_from", "2019-03-01")
-            page.fill("#event-date_to", "2019-03-31")
+            fill_date(page, "#event-date_from", "2019-03-01", native=True)
+            fill_date(page, "#event-date_to", "2019-03-31", native=True)
             page.select_option("#event-doc_type", dataset["type_b"])
             page.locator("#event-filters button[type='submit']").click()
             page.wait_for_load_state("domcontentloaded")

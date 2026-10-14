@@ -5,6 +5,8 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from ._date_helpers import fill_date
+
 pytestmark = pytest.mark.e2e
 
 
@@ -96,7 +98,7 @@ def _create_event_with_client(page, base_url):
     page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
     page.select_option("select[name='document_type']", label="Kontakt")
     page.wait_for_load_state("domcontentloaded")
-    page.fill("input[name='occurred_at']", "2026-03-20T10:00")
+    fill_date(page, "input[name='occurred_at']", "2026-03-20T10:00")
 
     autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
     autocomplete.fill("Stern")

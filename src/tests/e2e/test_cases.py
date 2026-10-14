@@ -5,6 +5,7 @@ import uuid
 
 import pytest
 
+from ._date_helpers import fill_date
 from ._selectors import open_desktop_overflow
 
 pytestmark = pytest.mark.e2e
@@ -270,7 +271,7 @@ class TestEpisodes:
         # Formular ausfüllen
         episode_title = f"E2E-Episode-{uuid.uuid4().hex[:6]}"
         page.fill('input[name="title"]', episode_title)
-        page.fill('input[name="started_at"]', "2025-01-15")
+        fill_date(page, 'input[name="started_at"]', "2025-01-15")
         page.locator("#main-content button[type='submit']").click()
 
         # Redirect zurück zur Fall-Detail-Seite
@@ -299,7 +300,7 @@ class TestEpisodes:
         page.wait_for_url(re.compile(r"/episodes/new/"))
         episode_title = f"E2E-EpCloseEp-{uuid.uuid4().hex[:6]}"
         page.fill('input[name="title"]', episode_title)
-        page.fill('input[name="started_at"]', "2025-01-15")
+        fill_date(page, 'input[name="started_at"]', "2025-01-15")
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
 

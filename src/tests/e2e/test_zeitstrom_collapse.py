@@ -14,6 +14,8 @@ from datetime import datetime
 import pytest
 from playwright.sync_api import expect
 
+from ._date_helpers import fill_date
+
 pytestmark = pytest.mark.e2e
 
 TOGGLE = "[data-testid='zeitstrom-collapse-toggle']"
@@ -28,7 +30,7 @@ def _create_kontakt_event(page, base_url, occurred_at=None):
     with page.expect_response(lambda r: "fields" in r.url and r.request.method == "GET"):
         page.select_option("select[name='document_type']", label="Kontakt")
     if occurred_at is not None:
-        page.fill("input[name='occurred_at']", occurred_at)
+        fill_date(page, "input[name='occurred_at']", occurred_at)
     dauer = page.locator("input[name='dauer']")
     dauer.wait_for(state="visible", timeout=10_000)
     dauer.fill("5")

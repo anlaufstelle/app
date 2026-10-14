@@ -9,6 +9,8 @@ from tests.e2e._helpers import python_bin as _python
 from tests.e2e._helpers import wait_until
 from tests.e2e._selectors import action_bar, find_client_link
 
+from ._date_helpers import fill_date
+
 pytestmark = pytest.mark.e2e
 
 
@@ -247,7 +249,7 @@ class TestWorkItemListDateLabeling:
         future = page.evaluate(
             "() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); }"
         )
-        page.fill("input[name='due_date']", future)
+        fill_date(page, "input[name='due_date']", future)
         page.click("button:has-text('Speichern')")
         page.wait_for_url(re.compile(r"/workitems/$"))
 

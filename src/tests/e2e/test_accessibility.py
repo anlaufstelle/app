@@ -41,6 +41,7 @@ import pytest
 from playwright.sync_api import expect
 
 from ._axe import assert_within_baseline, load_baseline, record_report, run_axe
+from ._date_helpers import fill_date
 from ._helpers import django_shell
 
 pytestmark = [pytest.mark.e2e, pytest.mark.a11y]
@@ -321,7 +322,7 @@ class TestAxeFormularzustaende:
         page = authenticated_page
         _open(page, base_url, "/events/new/", "#main-content h1:has-text('Kontakt dokumentieren')")
         page.evaluate("() => { document.getElementById('event-create-form').noValidate = true; }")
-        page.fill("#id_occurred_at", "")
+        fill_date(page, "#id_occurred_at", "")
         page.locator("#event-submit-btn").click()
         expect(page.locator("#id_occurred_at-error")).to_be_visible(timeout=15000)
         _scan(page, base_url, "event_create_errors", a11y_baseline, a11y_report_path)

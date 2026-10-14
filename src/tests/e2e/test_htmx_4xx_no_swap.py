@@ -19,6 +19,8 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
+from ._date_helpers import fill_date
+
 pytestmark = pytest.mark.e2e
 
 _TOAST = "#htmx-error-toast"
@@ -175,8 +177,8 @@ class TestStatisticsUngueltigerZeitraumBleibtStehen:
 
         kpi_vorher = page.locator("[data-testid='kpi-total-contacts']").inner_text()
 
-        page.fill("#statistics-date-from", "2026-09-20")
-        page.fill("#statistics-date-to", "2026-09-01")
+        fill_date(page, "#statistics-date-from", "2026-09-20")
+        fill_date(page, "#statistics-date-to", "2026-09-01")
         with page.expect_response(_ist_zeitraum_wechsel) as info:
             page.locator("form[aria-label='Eigener Zeitraum'] button[type='submit']").click()
         response = info.value
@@ -198,8 +200,8 @@ class TestStatisticsUngueltigerZeitraumBleibtStehen:
         page = lead_page
         page.goto(f"{base_url}/statistics/", wait_until="domcontentloaded")
 
-        page.fill("#statistics-date-from", "2026-01-01")
-        page.fill("#statistics-date-to", "2026-01-31")
+        fill_date(page, "#statistics-date-from", "2026-01-01")
+        fill_date(page, "#statistics-date-to", "2026-01-31")
         with page.expect_response(_ist_zeitraum_wechsel) as info:
             page.locator("form[aria-label='Eigener Zeitraum'] button[type='submit']").click()
         response = info.value

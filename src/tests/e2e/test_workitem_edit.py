@@ -9,6 +9,8 @@ import pytest
 
 from tests.e2e._selectors import action_bar
 
+from ._date_helpers import date_field, expect_date_value, fill_date
+
 pytestmark = pytest.mark.e2e
 
 
@@ -200,7 +202,7 @@ class TestWorkItemEdit:
         page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/edit/"))
 
         # Fristdatum setzen
-        page.fill('input[name="due_date"]', "2026-12-31")
+        fill_date(page, 'input[name="due_date"]', "2026-12-31")
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(f"{base_url}/workitems/")
 
@@ -209,19 +211,11 @@ class TestWorkItemEdit:
         page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/"))
         assert page.locator("text=31.12.2026").first.is_visible()
 
-    def test_due_date_native_input_present_alongside_presets(self, authenticated_page, base_url):
-        """Refs #1135: Das Faelligkeitsdatum ist als natives ``type="date"``-Feld
-        frei eingebbar — neben den Schnelloptionen, nicht nur ueber sie.
+    def test_due_date_input_present_alongside_presets(self, authenticated_page, base_url):
+        """Free text entry and presets share the language display and ISO transport.
 
-        Prueft Akzeptanzkriterien #1 (konkretes Datum frei waehlbar) und #2
-        (Schnelloptionen bleiben nutzbar und schreiben in dasselbe Feld):
-        (a) Das native Eingabefeld ist sichtbar, nicht deaktiviert/readonly und
-            hat ``type="date"`` (voller OS-Datepicker + freie Tastatureingabe).
-        (b) Ein frei gewaehltes Datum (heute + 10 Tage, KEINE Schnelloption) ist
-            browserseitig gueltig.
-        (c) Die Schnelloption "Heute" schreibt in DASSELBE native Feld.
-        (d) Das frei eingegebene Datum wird gespeichert (im Edit-Formular
-            nachweisbar).
+        Refs #1135, #2603: the application-language widget replaces the native
+        picker. Check visibility, editability, validity, presets and persistence.
         """
         page = authenticated_page
 
@@ -238,44 +232,39 @@ class TestWorkItemEdit:
         page.click("a:has-text('Bearbeiten')")
         page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/edit/"))
 
-        # (a) Natives, bedienbares Datumsfeld.
-        due = page.locator('input[name="due_date"]')
+        # (a) Visible, editable application-language date field.
+        due = date_field(page, 'input[name="due_date"]')
         assert due.is_visible()
-        assert due.get_attribute("type") == "date"
+        assert due.get_attribute("type") == "text"
         assert not due.is_disabled()
         assert due.get_attribute("readonly") is None
 
         # (a) Schnelloptionen sind weiterhin vorhanden (Koexistenz).
         assert page.locator("button:has-text('Heute')").is_visible()
 
-        # (b) Frei gewaehltes Datum (heute + 10 Tage, keine Schnelloption) ist
-        #     browserseitig gueltig. ISO-Vergleich, da native type=date im DOM
-        #     immer YYYY-MM-DD fuehrt (lokale TZ via en-CA, kein UTC-Off-by-one).
+        # (b) A freely chosen date is valid through the visible text control.
         arbitrary = page.evaluate(
             "() => { const d = new Date(); d.setDate(d.getDate() + 10); return d.toLocaleDateString('en-CA'); }"
         )
-        page.fill('input[name="due_date"]', arbitrary)
-        assert page.evaluate("() => document.querySelector('input[name=\"due_date\"]').validity.valid")
+        fill_date(page, 'input[name="due_date"]', arbitrary)
+        assert due.evaluate("el => el.validity.valid")
 
-        # (c) Schnelloption "Heute" schreibt in DASSELBE native Feld.
+        # (c) The preset updates the same visible control and ISO transport.
         today_iso = page.evaluate("() => new Date().toLocaleDateString('en-CA')")
         page.click("button:has-text('Heute')")
-        assert due.input_value() == today_iso
+        expect_date_value(page, 'input[name="due_date"]', today_iso)
 
         # (d) Frei gewaehltes Datum speichern und auf der Detailseite pruefen.
-        page.fill('input[name="due_date"]', arbitrary)
+        fill_date(page, 'input[name="due_date"]', arbitrary)
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(f"{base_url}/workitems/")
 
         page.locator(f"a:has-text('{unique_title}')").click()
         page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/"))
-        # Persistenz formatunabhaengig pruefen: erneut das Edit-Formular oeffnen
-        # und den nativen Feldwert (ISO YYYY-MM-DD) gegen das Eingegebene halten.
-        # (Die Detailseite rendert das deutsche DATE_FORMAT "j. F Y", z.B.
-        # "1. Juli 2026" — fuer einen exakten Text-Assert ungeeignet.)
+        # Check both display and transport after reopening the saved form.
         page.click("a:has-text('Bearbeiten')")
         page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/edit/"))
-        assert page.locator('input[name="due_date"]').input_value() == arbitrary
+        expect_date_value(page, 'input[name="due_date"]', arbitrary)
 
     def test_overdue_task_unchanged_due_date_is_browser_valid_and_saves(self, authenticated_page, base_url, e2e_env):
         """Überfällige Aufgabe: ``min`` ist abgesenkt → Browser akzeptiert das
@@ -292,12 +281,12 @@ class TestWorkItemEdit:
             page.goto(f"{base_url}/workitems/{wi_pk}/edit/")
             page.wait_for_load_state("domcontentloaded")
 
-            # Prefill ist das Vergangenheitsdatum, ``min`` darauf abgesenkt →
-            # Browser-Native-Validation hält den Wert für gültig.
-            due = page.locator('input[name="due_date"]')
+            # The prefilled past date equals the ISO minimum and is valid.
+            due = date_field(page, 'input[name="due_date"]')
             assert due.input_value() != ""
-            assert due.get_attribute("min") == due.input_value()
-            assert page.evaluate("() => document.querySelector('input[name=\"due_date\"]').validity.valid")
+            assert due.get_attribute("min") == page.locator('input[name="due_date"]').input_value()
+            expect_date_value(page, 'input[name="due_date"]', due.get_attribute("min"))
+            assert due.evaluate("el => el.validity.valid")
             assert page.evaluate(
                 "() => document.querySelector('input[name=\"due_date\"]').closest('form').checkValidity()"
             )
@@ -333,9 +322,9 @@ class TestWorkItemEdit:
             five_days_ago = page.evaluate(
                 "() => { const d = new Date(); d.setDate(d.getDate() - 5); return d.toISOString().slice(0,10); }"
             )
-            page.fill('input[name="due_date"]', five_days_ago)
+            fill_date(page, 'input[name="due_date"]', five_days_ago)
             # remind_at leeren, damit nicht die remind>due-Regel zuerst feuert.
-            page.fill('input[name="remind_at"]', "")
+            fill_date(page, 'input[name="remind_at"]', "")
             page.locator("#main-content button[type='submit']").click()
 
             # Bleibt auf dem Edit-Formular, Server-Fehler sichtbar.

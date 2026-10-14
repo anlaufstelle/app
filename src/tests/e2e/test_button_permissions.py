@@ -10,6 +10,7 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
+from ._date_helpers import fill_date
 from ._helpers import django_shell
 from ._selectors import action_bar, action_in_bar, open_desktop_overflow
 
@@ -46,7 +47,7 @@ def _create_event_and_go_to_detail(page, base_url):
     page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
     page.select_option("select[name='document_type']", label="Kontakt")
     page.wait_for_load_state("domcontentloaded")
-    page.fill("input[name='occurred_at']", "2026-03-20T10:00")
+    fill_date(page, "input[name='occurred_at']", "2026-03-20T10:00")
 
     # No client selected → automatically anonymous
 
@@ -364,7 +365,7 @@ class TestEventCreateValidation:
         page.wait_for_load_state("domcontentloaded")
 
         # Fill occurred_at (required field)
-        page.fill("input[name='occurred_at']", "2026-03-20T10:00")
+        fill_date(page, "input[name='occurred_at']", "2026-03-20T10:00")
 
         # Fill optional dynamic fields if present
         thema = page.locator("input[name='thema']")
