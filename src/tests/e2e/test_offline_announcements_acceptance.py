@@ -58,7 +58,7 @@ def _go_online(page):
 
 
 class UntranslatedAnnouncement(AssertionError):
-    """Raised only by the language check, so an expected failure cannot hide a focus or ARIA failure."""
+    """Raised only by the language check, so an untranslated text is reported apart from focus or ARIA failures."""
 
 
 def _announcement(page) -> dict:
@@ -119,22 +119,7 @@ class TestAnnouncementsKeepFocus:
 
 
 @pytest.mark.webkit_transport_artifact
-@pytest.mark.parametrize(
-    "language",
-    [
-        "de",
-        pytest.param(
-            "en",
-            marks=pytest.mark.xfail(
-                strict=True,
-                raises=UntranslatedAnnouncement,
-                reason="Finding: the precached offline shell is rendered without the account language "
-                "(service worker install fetch, no per-language variant); the announcements in the shell "
-                "stay German for an English account while the online layout is English.",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("language", ["de", "en"])
 def test_offline_shell(browser, base_url, e2e_env, language):
     previous = _set_language(e2e_env, language)
     context = _context(browser, language)
