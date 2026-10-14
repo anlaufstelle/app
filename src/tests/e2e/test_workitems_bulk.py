@@ -20,6 +20,7 @@ import uuid
 from urllib.parse import urlencode, urlparse
 
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -491,13 +492,20 @@ class TestBulkPreservesFilterUI:
         # vom Typ ``task`` und damit unter diesem Filter sichtbar (anders als
         # ein Personenfilter, der unassigned Items ausblenden wuerde).
         page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
-        page.select_option("#filter-item-type", value="task")
-        page.wait_for_load_state("domcontentloaded")
+        # The filter swaps the list via HTMX. Wait for that list response and its
+        # replaced URL before ticking a box: a box ticked in the old list is removed
+        # by the late swap and the selection is (correctly) derived from the DOM again.
+        with page.expect_response(
+            lambda r: "/workitems/" in r.url and "item_type=task" in r.url and r.request.method == "GET",
+            timeout=10000,
+        ):
+            page.select_option("#filter-item-type", value="task")
+        page.wait_for_url(lambda url: "item_type=task" in url, timeout=10000)
 
         boxes = page.locator("input[type=checkbox][name='workitem_ids']")
-        assert boxes.count() >= 1, "Mind. eine Aufgabe muss unter dem Typ-Filter sichtbar sein."
+        expect(boxes.first).to_be_visible(timeout=10000)
         boxes.first.check()
-        page.locator("[x-show='hasSelection']").first.wait_for(state="visible", timeout=3000)
+        expect(page.locator("[x-show='hasSelection']").first).to_be_visible(timeout=3000)
 
         page.select_option("#bulk-priority", value="urgent")
         with page.expect_navigation(timeout=10000):
