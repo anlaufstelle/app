@@ -123,3 +123,64 @@ class TestDeactivateUsedRequiredField:
         self._toggle(page, base_url, f"QAB-Pflicht-{marker}")
         page.goto(edit_url, wait_until="domcontentloaded")
         expect(page.locator(f"[name='{occupied_templates['req_slug']}']")).to_have_value("Pflichtwert")
+
+
+@pytest.fixture
+def replaced_report_key(e2e_env):
+    """Old template deactivated, replacement with the same report key assigned to the same type."""
+    marker = uuid.uuid4().hex[:8]
+    script = f"""
+from core.models import DocumentType, DocumentTypeField, FieldTemplate, Facility
+f = Facility.objects.get(name='Hauptstelle')
+dt = DocumentType.objects.create(facility=f, name='QAB-RK-{marker}', slug='qab-rk-{marker}',
+                                 entity_type='event', sensitivity='normal')
+old = FieldTemplate.objects.create(facility=f, name='QAB-Alt-{marker}', slug='qab-alt-{marker}',
+                                   field_type='number', report_key='dauer_minuten')
+DocumentTypeField.objects.create(document_type=dt, field_template=old, sort_order=0)
+old.is_active = False
+old.save(update_fields=['is_active'])
+new = FieldTemplate.objects.create(facility=f, name='QAB-Neu-{marker}', slug='qab-neu-{marker}',
+                                   field_type='number', report_key='dauer_minuten')
+DocumentTypeField.objects.create(document_type=dt, field_template=new, sort_order=1)
+print('old=' + str(old.pk)); print('new=' + str(new.pk))
+"""
+    values = {"marker": marker}
+    for line in _shell(e2e_env, script):
+        key, _, value = line.partition("=")
+        if key in {"old", "new"}:
+            values[key] = value
+    assert len(values) == 3, values
+    return values
+
+
+class TestReactivationRespectsReportKey:
+    """#2574: reactivating the old template next to its active replacement is refused with a clear message."""
+
+    @staticmethod
+    def _toggle(page, base_url, name):
+        page.goto(f"{base_url}/config/field-templates/?q={name}", wait_until="domcontentloaded")
+        row = page.locator("tr", has_text=name)
+        expect(row).to_have_count(1, timeout=10000)
+        row.locator("[data-testid='fieldtemplate-toggle-btn']").click()
+        page.wait_for_url(re.compile(r"/config/field-templates/"), timeout=10000)
+
+    def test_reactivation_is_refused_then_possible_after_replacement_is_deactivated(
+        self, authenticated_page, base_url, e2e_env, replaced_report_key
+    ):
+        page = authenticated_page
+        marker = replaced_report_key["marker"]
+        old = f"FieldTemplate.objects.get(pk='{replaced_report_key['old']}').is_active"
+
+        self._toggle(page, base_url, f"QAB-Alt-{marker}")
+        message = page.locator("#main-content").get_by_text("kann nicht aktiviert werden")
+        expect(message.first).to_be_visible(timeout=10000)
+        expect(message.first).to_contain_text(f"QAB-RK-{marker}")
+        expect(message.first).to_contain_text(f"QAB-Neu-{marker}")
+        assert _db(e2e_env, old) == "False"
+        assert page.get_by_text("wurde aktiviert").count() == 0, "success message shown for a refused activation"
+
+        # Deactivating the replacement is allowed; afterwards the old template can be reactivated.
+        self._toggle(page, base_url, f"QAB-Neu-{marker}")
+        assert _db(e2e_env, f"FieldTemplate.objects.get(pk='{replaced_report_key['new']}').is_active") == "False"
+        self._toggle(page, base_url, f"QAB-Alt-{marker}")
+        assert _db(e2e_env, old) == "True"
