@@ -87,3 +87,16 @@ def test_handoff_guard_detects_hooked_pushes_and_chained_tag_checks():
         "handoff chains tag -v with &&: git tag -v vX.Y.Z && git push --no-verify origin vX.Y.Z",
         "handoff lacks the public-profile E2E run",
     ]
+
+
+@pytest.mark.skipif(not (ROOT / "docs/dev").exists(), reason="Dev guidance is absent from public snapshots")
+def test_stage_token_guidance_reads_actions_without_watch():
+    script = (ROOT / "dev-ops/release/release-preflight.sh").read_text()
+    block = script.split('echo "━━━ 7/7 Token-Reichweite"', 1)[1].split("\necho\n", 1)[0]
+    assert "repos/anlaufstelle/stage/actions/" in block
+    assert "gh run watch" not in block
+    assert "403/404" in block
+    guidance = (ROOT / ".claude/commands/release.md").read_text()
+    monitoring = guidance.split("Stage-CI überwachen:", 1)[1].split("## Phase 9", 1)[0]
+    assert "actions/workflows/$WF/runs?head_sha=" in monitoring
+    assert "gh run watch" not in monitoring
