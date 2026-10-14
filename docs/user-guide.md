@@ -576,6 +576,8 @@ Wenn Sie mehrere Aufgaben gleichzeitig bearbeiten möchten, nutzen Sie den Bulk-
 3. Ändern Sie zentral **Status**, **Priorität** oder **Zuweisung** für alle ausgewählten Einträge auf einmal.
 4. Bestätigen Sie die Änderung — alle markierten Einträge werden gemeinsam aktualisiert.
 
+Die Auswahl umfasst nur sichtbare Aufgaben. Nach einem Filterwechsel oder dem Zuklappen erledigter Aufgaben werden verborgene Einträge aus der Auswahl entfernt. Für neue Zuweisungen bieten die Formulare nur aktive, für Aufgaben berechtigte Zugänge derselben Einrichtung an. Im Filter „Zugewiesen an“ bleiben deaktivierte Zugänge verfügbar, damit historische Aufgaben auffindbar bleiben.
+
 ### Erinnerung vs. Frist
 
 Aufgaben kennen zwei unterschiedliche Zeit-Felder:

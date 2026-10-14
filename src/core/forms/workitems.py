@@ -8,7 +8,8 @@ from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
-from core.models import User, WorkItem
+from core.models import WorkItem
+from core.services.case.workitems import assignable_workitem_users
 
 
 def max_workitem_date() -> date:
@@ -74,22 +75,7 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
         # Maintainer-Entscheid 2026-08-05).
         self.pinned_client = pinned_client
         if facility:
-            # Refs #1125: ASSISTANT ist zuweisbar. Assistenzkräfte ziehen offene
-            # Teamaufgaben ohnehin per "Übernehmen" auf sich (Auto-Assign auf
-            # IN_PROGRESS) und sind damit faktisch ``assigned_to``; eine normale,
-            # nicht-private Aufgabe (private Aufgaben aus #607 existieren noch
-            # nicht) muss einer aktiven Assistenz derselben Facility direkt
-            # zuweisbar sein. Korrigiert die frühere #867-Annahme.
-            self.fields["assigned_to"].queryset = User.objects.filter(  # type: ignore[attr-defined]
-                facility=facility,
-                is_active=True,
-                role__in=[
-                    User.Role.FACILITY_ADMIN,
-                    User.Role.LEAD,
-                    User.Role.STAFF,
-                    User.Role.ASSISTANT,
-                ],
-            ).order_by("username")
+            self.fields["assigned_to"].queryset = assignable_workitem_users(facility)  # type: ignore[attr-defined]
         self.fields["assigned_to"].required = False
         # Refs #2381: Django 6.1 faellt ohne eigenes ``empty_label`` auf den
         # unuebersetzten Blank-Choice-Text ("- Select an option -") zurueck.

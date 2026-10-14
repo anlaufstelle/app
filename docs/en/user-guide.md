@@ -578,6 +578,8 @@ If you want to change several tasks at once, use bulk edit mode:
 3. Change **status**, **priority**, or **assignment** centrally for all selected entries at once.
 4. Confirm the change -- all marked entries are updated together.
 
+The selection includes only visible tasks. Changing a filter or collapsing completed tasks removes hidden entries from the selection. For new assignments, the forms offer only active accounts in the same facility with a role eligible for tasks. Inactive accounts remain available in the “Assigned to” filter so that historical tasks can still be found.
+
 ### Reminder vs. Due Date
 
 Tasks have two distinct time fields:
@@ -1157,7 +1159,8 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 917de4d513792fbf3c1ff175c3a5826276be2299 -->
+<!-- source-hash: 881285e2268bd3b382d4a3ce537414827d4c2078 -->
+<!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->

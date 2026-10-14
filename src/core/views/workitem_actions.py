@@ -85,26 +85,19 @@ def _workitem_conflict_response(workitem, client_expected, *, error="conflict"):
 
 
 def _build_recent_done_oob(request, workitem):
-    """Baut das Out-of-Band-Fragment für "Kürzlich erledigt" (Refs #1568).
+    """Insert a just-completed task into the visible seven-day inbox widget.
 
-    Fügt ``workitem`` (gerade auf erledigt/verworfen gesetzt) OBEN in die
-    "Kürzlich erledigt"-Vorschau der Inbox ein — respektiert dabei den
-    aktuell aktiven Filter (Typ/Priorität/Zuweisung/Fälligkeit), den der
-    Inbox-Client als ``item_type``/``priority``/``assigned_to``/``due``-Felder
-    mitschickt (dieselben Filter-Selects wie in inbox.html, per
-    ``hx-include`` — siehe ``components/_workitem_row.html``). Wendet dafür
-    dieselbe Filterlogik wie ``WorkItemInboxView`` an (``apply_workitem_filters``/
-    ``apply_workitem_default_scope``), statt sie neu zu erfinden.
-
-    Reine Best-Effort-Ergänzung: Fehlt der ``recent_done_target``-Marker
-    (Aufruf außerhalb der Inbox, z.B. Zeitstrom-Sidebar mit ``hide_on_complete``
-    allein) oder passt das Item nicht (mehr) zum aktiven Filter, liefert die
-    Funktion ``""`` — kein OOB-Fragment, das primäre Verschwinden der Karte
-    bleibt davon unberührt.
+    Respect the row's inbox status and type/priority/assignee/due filters.
+    ``filter_status`` is separate from the action's ``status`` payload.
+    Completion windows and the facility/person read scope match the inbox.
+    Outside the default status view there is no recent-done OOB target.
     """
     if request.POST.get("recent_done_target") != "1":
         return ""
     if workitem.status not in (WorkItem.Status.DONE, WorkItem.Status.DISMISSED):
+        return ""
+
+    if request.POST.get("filter_status", ""):
         return ""
 
     due = request.POST.get("due", "")

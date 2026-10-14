@@ -40,8 +40,8 @@ document.addEventListener("alpine:init", () => {
                 "input[type=checkbox][name=workitem_ids]"
             );
             return Array.from(all).filter((box) => {
-                const details = box.closest("details");
-                return !details || details.open;
+                // Every ancestor must be open, including the outer recent-done section.
+                return !box.closest("details:not([open])");
             });
         },
         // Auswahl IMMER aus dem DOM ableiten — die Item-Checkboxen sind die

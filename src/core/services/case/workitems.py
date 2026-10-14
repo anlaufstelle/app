@@ -214,6 +214,15 @@ def _capped(qs: QuerySet[WorkItem], cap: int) -> tuple[list[WorkItem], bool]:
     return items[:cap] if has_more else items, has_more
 
 
+def assignable_workitem_users(facility):
+    """Return active facility members eligible for new task assignments."""
+    return User.objects.filter(
+        facility=facility,
+        is_active=True,
+        role__in=[User.Role.FACILITY_ADMIN, User.Role.LEAD, User.Role.STAFF, User.Role.ASSISTANT],
+    ).order_by("last_name", "first_name", "username")
+
+
 def build_inbox_sections(facility, user, params: QueryDict) -> dict[str, object]:
     """Baut Querysets, Sektionen und Filterkontext der WorkItem-Inbox."""
     today = timezone.localdate()
@@ -344,6 +353,7 @@ def build_inbox_sections(facility, user, params: QueryDict) -> dict[str, object]
         "status_filter_choices": STATUS_FILTER_CHOICES,
         "done_period_choices": DONE_PERIOD_CHOICES,
         "facility_users": facility_users,
+        "assignable_users": assignable_workitem_users(facility),
         "selected_item_type": params.get("item_type", ""),
         "selected_priority": params.get("priority", ""),
         "selected_assigned_to": selected_assigned_to,
@@ -1160,8 +1170,22 @@ def bulk_assign_workitems(workitems, user, assignee_or_none):
 
     ``assignee_or_none=None`` removes the assignment. Returns the processed count.
     """
+    locked = _locked_workitems(workitems, user)
+    # Client -> WorkItem -> recipient: access updates lock only the user row.
+    # A no-key lock still blocks access changes while permitting audit FK reads.
+    if assignee_or_none is not None:
+        assignee_or_none = (
+            assignable_workitem_users(user.facility_id)
+            .select_for_update(no_key=True)
+            .filter(pk=assignee_or_none.pk)
+            .first()
+        )
+        if assignee_or_none is None:
+            raise ValidationError(
+                _("Die Zielperson muss aktiv und für Aufgaben in dieser Einrichtung berechtigt sein.")
+            )
     count = 0
-    for workitem in _locked_workitems(workitems, user):
+    for workitem in locked:
         if workitem.assigned_to_id == (assignee_or_none.pk if assignee_or_none else None):
             continue
         workitem.assigned_to = assignee_or_none

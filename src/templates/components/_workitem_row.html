@@ -102,7 +102,7 @@ kann.
             {% trans "Übernehmen" %}
         </button>
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
-                hx-vals='{"status": "done", "expected_updated_at": "{{ wi.updated_at.isoformat }}"{% if hide_on_complete %}, "hide": "1"{% endif %}{% if recent_done_target %}, "recent_done_target": "1"{% endif %}}'
+                hx-vals='{"status": "done", "expected_updated_at": "{{ wi.updated_at.isoformat }}"{% if hide_on_complete %}, "hide": "1"{% endif %}{% if recent_done_target %}, "recent_done_target": "1", "filter_status": "{{ selected_status }}"{% endif %}}'
                 hx-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}"
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
@@ -111,7 +111,7 @@ kann.
             {% trans "Als erledigt markieren" %}
         </button>
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
-                hx-vals='{"status": "dismissed", "expected_updated_at": "{{ wi.updated_at.isoformat }}"{% if hide_on_complete %}, "hide": "1"{% endif %}{% if recent_done_target %}, "recent_done_target": "1"{% endif %}}'
+                hx-vals='{"status": "dismissed", "expected_updated_at": "{{ wi.updated_at.isoformat }}"{% if hide_on_complete %}, "hide": "1"{% endif %}{% if recent_done_target %}, "recent_done_target": "1", "filter_status": "{{ selected_status }}"{% endif %}}'
                 hx-confirm="{% trans 'Aufgabe als nicht relevant schließen? Sie wird als verworfen markiert und erscheint nicht mehr bei den offenen Aufgaben. Sie wird nicht gelöscht und bleibt weiterhin nachvollziehbar.' %}"
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
@@ -122,7 +122,7 @@ kann.
         {% elif wi.status == "in_progress" %}
         {# Refs #1147: Bestätigung vor dem Statuswechsel auf erledigt — abschließende Wirkung. HTMX-Button, daher hx-confirm (wie Goals/Retention) statt data-confirm. #}
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
-                hx-vals='{"status": "done", "expected_updated_at": "{{ wi.updated_at.isoformat }}"{% if hide_on_complete %}, "hide": "1"{% endif %}{% if recent_done_target %}, "recent_done_target": "1"{% endif %}}'
+                hx-vals='{"status": "done", "expected_updated_at": "{{ wi.updated_at.isoformat }}"{% if hide_on_complete %}, "hide": "1"{% endif %}{% if recent_done_target %}, "recent_done_target": "1", "filter_status": "{{ selected_status }}"{% endif %}}'
                 hx-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}"
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"

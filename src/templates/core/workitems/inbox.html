@@ -39,7 +39,7 @@ vollzuschreiben.
             hx-replace-url="true"
             hx-indicator="#workitem-filters-spinner"
             {% comment %}Refs #1145 (Reopen): Geschwister-Filter über ihre IDs einbinden, nicht über [name='…']. Die Bulk-Forms tragen eigene Selects name="assigned_to"/name="priority"; ein [name='…']-Include zog deren leeren Wert als zweiten Query-Parameter mit, der den echten Filter überschrieb (Anzeige „Mir & unzugewiesene" / „Mir zugewiesen", Liste aber „Alle").{% endcomment %}
-            hx-include="#filter-priority,#filter-assigned-to,#filter-due"
+            hx-include="#filter-priority,#filter-assigned-to,#filter-due,#filter-status,#filter-done-period"
         >
             <option value="">{% trans "Alle" %}</option>
             {% for value, label in item_type_choices %}
@@ -56,7 +56,7 @@ vollzuschreiben.
             hx-trigger="change"
             hx-replace-url="true"
             hx-indicator="#workitem-filters-spinner"
-            hx-include="#filter-item-type,#filter-assigned-to,#filter-due"
+            hx-include="#filter-item-type,#filter-assigned-to,#filter-due,#filter-status,#filter-done-period"
         >
             <option value="">{% trans "Alle" %}</option>
             {% for value, label in priority_choices %}
@@ -73,7 +73,7 @@ vollzuschreiben.
             hx-trigger="change"
             hx-replace-url="true"
             hx-indicator="#workitem-filters-spinner"
-            hx-include="#filter-item-type,#filter-priority,#filter-due"
+            hx-include="#filter-item-type,#filter-priority,#filter-due,#filter-status,#filter-done-period"
         >
             {% comment %}Refs #1145: Eigene Default-Option, deren sichtbare Auswahl zur Default-Query (eigene + nicht zugewiesene Teamaufgaben) passt. „Mir zugewiesen" (value="me") bleibt der strikte Filter, der ausschließlich eigene Aufgaben zeigt.{% endcomment %}
             <option value="{{ default_assigned_scope }}" {% if selected_assigned_to == default_assigned_scope %}selected{% endif %}>{% trans "Mir & unzugewiesene" %}</option>
@@ -143,6 +143,8 @@ vollzuschreiben.
 <div
     x-data="workitemBulkSelect"
     @workitem-bulk-clear.window="clear"
+    @htmx:after-settle.window="syncFromDom"
+    @toggle.capture="syncFromDom"
 >
     {# Action-Bar: sichtbar wenn mindestens ein Item ausgewählt #}
     <div
@@ -202,7 +204,7 @@ vollzuschreiben.
             <label class="sr-only" for="bulk-assign">{% trans "Zuweisen" %}</label>
             <select id="bulk-assign" name="assigned_to" class="text-[13px] bg-surface border border-subtle rounded-[10px] px-2 py-1">
                 <option value="">{% trans "Zuweisung entfernen" %}</option>
-                {% for u in facility_users %}
+                {% for u in assignable_users %}
                 <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
                 {% endfor %}
             </select>
