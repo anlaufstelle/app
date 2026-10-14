@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import uuid
 
 import pytest
@@ -124,6 +125,158 @@ class TestCasePickerAndAssignment:
         assert error.inner_text().strip() != ""
         expect(page.locator("textarea[name='notiz']")).to_have_value("Eigener Zusatztext bleibt")
         assert "/events/new/" in page.url
+
+
+@pytest.fixture
+def error_scene(scene, e2e_env):
+    """Extra document types: one with a required field, one that needs a higher contact stage."""
+    marker = scene["marker"]
+    script = (
+        "from core.models import DocumentType, Facility, QuickTemplate, User; "
+        "from core.models.document_type_field import DocumentTypeField; "
+        "from core.models.field_template import FieldTemplate; "
+        "f = Facility.objects.get(name='Hauptstelle'); "
+        f"ft = FieldTemplate.objects.create(facility=f, name='ERF-Pflicht-{marker}', slug='erf-pflicht-{marker}', "
+        "  field_type='text', is_required=True); "
+        f"fo = FieldTemplate.objects.create(facility=f, name='ERF-Frei-{marker}', slug='erf-frei-{marker}', "
+        "  field_type='text'); "
+        f"req = DocumentType.objects.create(facility=f, name='ERF-Pflichtfeld-{marker}', "
+        f"  slug='erf-pflichtfeld-{marker}', "
+        "  sensitivity='normal'); "
+        "DocumentTypeField.objects.create(document_type=req, field_template=ft, sort_order=0); "
+        f"stage = DocumentType.objects.create(facility=f, name='ERF-Stufe-{marker}', slug='erf-stufe-{marker}', "
+        "  sensitivity='normal', min_contact_stage='qualified'); "
+        "DocumentTypeField.objects.create(document_type=stage, field_template=fo, sort_order=0); "
+        "k = DocumentType.objects.get(facility=f, name='Kontakt'); "
+        "u = User.objects.get(username='miriam'); "
+        f"t2 = QuickTemplate.objects.create(facility=f, document_type=k, name='ERF-Vorlage2-{marker}', "
+        "  prefilled_data={'notiz': 'Aus Vorlage 2'}, created_by=u); "
+        "print('req=' + str(req.pk)); print('stage=' + str(stage.pk)); print('kontakt=' + str(k.pk)); "
+        "print('t2=' + str(t2.pk))"
+    )
+    values = dict(scene)
+    try:
+        lines = django_shell(e2e_env, script)
+    except subprocess.CalledProcessError as exc:  # surface the traceback tail in the test report
+        raise AssertionError(f"seed failed: {exc.stderr[-1500:]}") from exc
+    for line in lines:
+        key, _, value = line.partition("=")
+        if key in {"req", "stage", "kontakt", "t2"}:
+            values[key] = value
+    assert {"req", "stage", "kontakt", "t2"} <= values.keys(), f"seed failed: {values}"
+    return values
+
+
+def _event_case_of_client(e2e_env, client_pk: str) -> str:
+    """Case id of the newest event of a person (``None`` text when unassigned)."""
+    script = (
+        "from core.models import Event; "
+        f"print('case=' + str(Event.objects.filter(client_id='{client_pk}').order_by('-created_at')"
+        ".values_list('case_id', flat=True).first()))"
+    )
+    return django_shell(e2e_env, script)[-1].removeprefix("case=")
+
+
+class TestAllowedCaseSurvivesErrors:
+    """#2533: an allowed case stays selected after every error class and is saved on retry."""
+
+    def _open(self, page, base_url, scene, **params):
+        page.goto(
+            _new_url(base_url, scene, client=scene["a"], case=scene["ca"], **params), wait_until="domcontentloaded"
+        )
+        expect(page.locator("#id_case")).to_have_value(scene["ca"], timeout=10000)
+
+    def _submit(self, page):
+        page.locator("#event-submit-btn").click()
+        page.wait_for_load_state("domcontentloaded")
+
+    def test_meta_error_ambiguous_time_keeps_case_and_saves_it(self, staff_page, base_url, error_scene, e2e_env):
+        page = staff_page
+        self._open(page, base_url, error_scene, document_type=error_scene["kontakt"])
+        page.locator("textarea[name='notiz']").fill("Text vor dem Zeitfehler")
+        page.locator("input[name='occurred_at']").fill("2026-10-25T02:30")
+        self._submit(page)
+
+        fold = page.locator("[data-testid='occurred-at-fold']")
+        expect(fold).to_be_visible(timeout=10000)
+        assert "/events/new/" in page.url
+        expect(page.locator("textarea[name='notiz']")).to_have_value("Text vor dem Zeitfehler")
+        expect(page.locator("#id_case")).to_have_value(error_scene["ca"], timeout=10000)
+
+        fold.select_option(index=1)
+        self._submit(page)
+        page.wait_for_url(lambda url: "/events/new/" not in url, timeout=10000)
+        assert _event_case_of_client(e2e_env, error_scene["a"]) == error_scene["ca"]
+
+    def test_dynamic_field_error_keeps_case_and_saves_it(self, staff_page, base_url, error_scene, e2e_env):
+        page = staff_page
+        self._open(page, base_url, error_scene, document_type=error_scene["req"])
+        required = page.locator(f"[name='erf-pflicht-{error_scene['marker']}']")
+        expect(required).to_be_visible(timeout=10000)
+        # Server-side validation is the subject: switch the browser's own required check off.
+        page.locator("form[x-data='eventClientAutocomplete']").evaluate("f => { f.noValidate = true; }")
+        self._submit(page)
+
+        expect(page.get_by_text("Dieses Feld ist zwingend erforderlich.")).to_be_visible(timeout=10000)
+        assert "/events/new/" in page.url
+        expect(page.locator("#id_case")).to_have_value(error_scene["ca"], timeout=10000)
+
+        page.locator(f"[name='erf-pflicht-{error_scene['marker']}']").fill("Pflichtwert")
+        self._submit(page)
+        page.wait_for_url(lambda url: "/events/new/" not in url, timeout=10000)
+        assert _event_case_of_client(e2e_env, error_scene["a"]) == error_scene["ca"]
+
+    def test_upload_error_keeps_case_text_and_asks_for_file_again(
+        self, staff_page, base_url, error_scene, e2e_env, tmp_path
+    ):
+        page = staff_page
+        # Allowed extension, wrong content: rejected by the staging step, not by the form.
+        rejected = tmp_path / "wrong-content.pdf"
+        rejected.write_bytes(b"plain text, not a PDF document")
+        self._open(page, base_url, error_scene, document_type=error_scene["kontakt"])
+        page.locator("textarea[name='notiz']").fill("Text neben der Datei")
+        page.set_input_files("input[name='anhang']", str(rejected))
+        self._submit(page)
+
+        expect(page.locator("#main-content")).to_contain_text("passt nicht zur Endung", timeout=10000)
+        expect(page.get_by_text("Datei erneut auswählen:")).to_be_visible()
+        expect(page.locator("textarea[name='notiz']")).to_have_value("Text neben der Datei")
+        expect(page.locator("#id_case")).to_have_value(error_scene["ca"], timeout=10000)
+
+        self._submit(page)
+        page.wait_for_url(lambda url: "/events/new/" not in url, timeout=10000)
+        assert _event_case_of_client(e2e_env, error_scene["a"]) == error_scene["ca"]
+
+    def test_service_error_contact_stage_keeps_case(self, staff_page, base_url, error_scene, e2e_env):
+        page = staff_page
+        self._open(page, base_url, error_scene, document_type=error_scene["stage"])
+        self._submit(page)
+
+        assert "/events/new/" in page.url, f"service error did not return the form: {page.url}"
+        expect(page.locator("#main-content [role='alert'], #main-content .text-red-600").first).to_be_visible(
+            timeout=10000
+        )
+        expect(page.locator("#id_case")).to_have_value(error_scene["ca"], timeout=10000)
+
+    def test_case_closed_meanwhile_is_not_reactivated_and_reason_is_shown(
+        self, staff_page, base_url, error_scene, e2e_env
+    ):
+        page = staff_page
+        self._open(page, base_url, error_scene, document_type=error_scene["kontakt"])
+        django_shell(
+            e2e_env,
+            "from core.models import Case; "
+            f"Case.objects.filter(pk='{error_scene['ca']}').update(status='closed'); print('ok')",
+        )
+        page.locator("input[name='occurred_at']").fill("2026-10-25T02:30")
+        self._submit(page)
+
+        expect(page.get_by_text("Die Fallauswahl wurde zurückgesetzt")).to_be_visible(timeout=10000)
+        expect(page.locator("#id_case")).to_have_value("", timeout=10000)
+        page.locator("[data-testid='occurred-at-fold']").select_option(index=1)
+        self._submit(page)
+        page.wait_for_url(lambda url: "/events/new/" not in url, timeout=10000)
+        assert _event_case_of_client(e2e_env, error_scene["a"]) == "None"
 
 
 class TestPendingCaseContext:
@@ -238,6 +391,101 @@ class TestPendingCaseContext:
         options = _case_options(page)
         assert not any(f"ERF-Fall-A-{scene['marker']}" in text for text in options), options
         assert any(f"ERF-Fall-B-{scene['marker']}" in text for text in options), options
+
+
+class TestTemplateSwitchAndStaleAnswers:
+    """#2534/#2541/#2557: template switch/removal keeps the case intent; stale answers and states are discarded."""
+
+    @staticmethod
+    def _wait_for_held(page, held, count):
+        for _ in range(60):
+            if len(held) >= count:
+                return
+            page.wait_for_timeout(100)
+        raise AssertionError(f"expected {count} held case requests, got {len(held)}")
+
+    def test_switch_and_remove_template_while_case_request_is_held(self, staff_page, base_url, error_scene, e2e_env):
+        page = staff_page
+        scene = error_scene
+        held = _hold_requests(page, CASES_ROUTE)
+        page.goto(
+            _new_url(base_url, scene, client=scene["a"], case=scene["ca"], template=scene["t"]),
+            wait_until="domcontentloaded",
+        )
+        expect(page.locator("textarea[name='notiz']")).to_have_value("Aus Vorlage", timeout=10000)
+        self._wait_for_held(page, held, 1)
+
+        # Switch to the other template while the case request is outstanding: the intent travels in the URL.
+        page.locator(f"a[data-template-id='{scene['t2']}']").click()
+        page.wait_for_url(lambda url: f"template={scene['t2']}" in url, timeout=10000)
+        assert f"case={scene['ca']}" in page.url and f"client={scene['a']}" in page.url, page.url
+        expect(page.locator("textarea[name='notiz']")).to_have_value("Aus Vorlage 2", timeout=10000)
+        self._wait_for_held(page, held, 2)
+        expect(page.locator("#event-submit-btn")).to_be_disabled()
+
+        # Remove the template, again with the request outstanding.
+        page.locator("[data-testid='template-remove-link']").click()
+        page.wait_for_url(lambda url: "template=" not in url, timeout=10000)
+        assert f"case={scene['ca']}" in page.url and f"client={scene['a']}" in page.url, page.url
+        self._wait_for_held(page, held, 3)
+        expect(page.locator("#event-submit-btn")).to_be_disabled()
+
+        _fulfill_cases(held[-1], [{"id": scene["ca"], "title": f"ERF-Fall-A-{scene['marker']}"}])
+        expect(page.locator("#event-submit-btn")).to_be_enabled(timeout=10000)
+        expect(page.locator("#id_case")).to_have_value(scene["ca"])
+        page.locator("#event-submit-btn").click()
+        page.wait_for_url(lambda url: "/events/new/" not in url, timeout=10000)
+        assert _event_case_of_client(e2e_env, scene["a"]) == scene["ca"]
+
+    def test_cleared_person_discards_late_answer(self, staff_page, base_url, scene):
+        page = staff_page
+        held = _hold_requests(page, CASES_ROUTE)
+        page.goto(_new_url(base_url, scene, client=scene["a"]), wait_until="domcontentloaded")
+        self._wait_for_held(page, held, 1)
+
+        page.get_by_role("combobox", name="Person suchen").fill("")
+        expect(page.locator("input[name='client']")).to_have_value("")
+        _fulfill_cases(held[0], [{"id": scene["ca"], "title": f"ERF-Fall-A-{scene['marker']}"}])
+        page.wait_for_timeout(500)
+        options = _case_options(page)
+        assert not any(f"ERF-Fall-A-{scene['marker']}" in text for text in options), options
+        expect(page.locator("[data-testid='no-cases-for-client']")).to_be_hidden()
+        expect(page.locator("[data-testid='cases-load-error']")).to_be_hidden()
+
+    def test_old_error_is_gone_after_successful_answer_for_next_person(self, staff_page, base_url, scene):
+        page = staff_page
+
+        def handler(route):
+            if scene["a"] in route.request.url:
+                route.abort("failed")
+            else:
+                _fulfill_cases(route, [{"id": scene["cb"], "title": f"ERF-Fall-B-{scene['marker']}"}])
+
+        page.route(CASES_ROUTE, handler)
+        page.goto(_new_url(base_url, scene, client=scene["a"]), wait_until="domcontentloaded")
+        error = page.locator("[data-testid='cases-load-error']")
+        expect(error).to_be_visible(timeout=10000)
+
+        search = page.get_by_role("combobox", name="Person suchen")
+        search.fill(f"ERF-{scene['marker']}-B")
+        page.locator("[role='option']", has_text=f"ERF-{scene['marker']}-B").first.click()
+        expect(page.locator("#id_case option", has_text=f"ERF-Fall-B-{scene['marker']}")).to_have_count(
+            1, timeout=10000
+        )
+        expect(error).to_be_hidden()
+        expect(page.locator("#event-submit-btn")).to_be_enabled()
+
+    def test_empty_hint_not_shown_while_request_is_held(self, staff_page, base_url, scene):
+        page = staff_page
+        held = _hold_requests(page, CASES_ROUTE)
+        page.goto(_new_url(base_url, scene, client=scene["b"]), wait_until="domcontentloaded")
+        self._wait_for_held(page, held, 1)
+        page.wait_for_timeout(300)
+        expect(page.locator("[data-testid='no-cases-for-client']")).to_be_hidden()
+        expect(page.locator("[data-testid='cases-load-error']")).to_be_hidden()
+
+        _fulfill_cases(held[0], [])
+        expect(page.locator("[data-testid='no-cases-for-client']")).to_be_visible(timeout=10000)
 
 
 class TestPersonSearchFailures:
