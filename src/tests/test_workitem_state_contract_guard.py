@@ -185,10 +185,13 @@ class TestSammelaktionUeberDieView:
         audit_vorher = AuditLog.objects.count()
         header = {"HTTP_HX_REQUEST": "true"} if htmx else {}
         response = client.post(reverse(url), {"workitem_ids": [str(w.pk) for w in items], **daten}, **header)
-        assert response.status_code == 302
-        assert response.url.startswith(reverse("core:workitem_inbox"))
+        # htmx gets 200 + HX-Redirect (the XHR would follow a 302 itself), forms a 302.
         if htmx:
-            assert response["HX-Redirect"] == response.url
+            assert response.status_code == 200
+            assert response["HX-Redirect"].startswith(reverse("core:workitem_inbox"))
+        else:
+            assert response.status_code == 302
+            assert response.url.startswith(reverse("core:workitem_inbox"))
         meldungen = [str(msg) for msg in get_messages(response.wsgi_request)]
         assert meldungen == [str(WORKITEM_DELETED_MESSAGE)]
         assert _stand(items) == vorher
@@ -212,7 +215,11 @@ class TestSammelaktionUeberDieView:
             {"workitem_ids": [str(w.pk) for w in items], "priority": "urgent"},
             **header,
         )
-        assert response.status_code == 302
+        if htmx:
+            assert response.status_code == 200
+            assert response["HX-Redirect"].startswith(reverse("core:workitem_inbox"))
+        else:
+            assert response.status_code == 302
         assert [str(msg) for msg in get_messages(response.wsgi_request)] == [str(PROCESSING_RESTRICTED_MESSAGE)]
         assert _stand(items) == vorher
         assert AuditLog.objects.count() == audit_vorher
