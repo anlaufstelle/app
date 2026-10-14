@@ -47,7 +47,7 @@ def test_contact_form_labels_explicit_recovery_of_possibly_saved_draft(client, s
     assert response.status_code == 200
     content = response.content.decode()
     with override(response.headers["Content-Language"]):
-        warning = gettext("This draft may already have been saved. Autosave is paused. Use it only after checking.")
-        use_draft = gettext("Use draft anyway")
+        warning = gettext("Dieser Entwurf wurde möglicherweise bereits gespeichert. Das Zwischenspeichern ist angehalten. Bitte erst prüfen, dann verwenden.")
+        use_draft = gettext("Entwurf trotzdem verwenden")
     assert f'data-i18n-draft-possibly-saved="{warning}"' in content
     assert f'data-i18n-use-draft="{use_draft}"' in content
