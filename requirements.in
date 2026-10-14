@@ -1,11 +1,7 @@
-# Untergrenze 6.1.1: Etappe 1 des LTS-Umstiegs (#1662) — 6.0 erhaelt seit
-# 2026-08-04 nur noch Security-Fixes (Ende April 2027), 6.1 laeuft bis
-# Dezember 2027. Die Untergrenze deckt zugleich PYSEC-2026-3717/CVE-2026-15830
-# ab (GeoDjango-Rekursion beim WKT/WKB-Parsing, DoS; contrib.gis ist nicht in
-# Benutzung) und verhindert, dass ein Neu-Lock auf eine 6.0-Version
-# zurueckfaellt. Obergrenze <6.2: der Sprung auf 6.2 LTS ist Etappe 2 und
-# fruehestens ab Mai 2027 vorgesehen.
-Django>=6.1.1,<6.2
+# Django 6.1.2 includes the framework security patches from Refs #2592.
+# Keep the 6.1 release series: the 6.2 LTS upgrade is a separate step
+# planned no earlier than May 2027 (Refs #1662).
+Django>=6.1.2,<6.2
 psycopg[binary]>=3.3.6
 gunicorn>=26.2.0
 whitenoise>=6.5
@@ -30,7 +26,7 @@ django-unfold>=0.108.0
 django-csp>=4.0
 sentry-sdk[django]>=2.71.0
 pyclamd>=0.4.0
-django-otp>=1.7.3
+django-otp>=1.7.4
 # Passkeys/WebAuthn als zweiter Faktor (ADR-032, Refs #1492). Zieht
 # webauthn>=3,<4 (duo-labs py_webauthn) + cbor2/pyOpenSSL/pyasn1 transitiv;
 # die cryptography-Anforderung (>=49) wird von unserem Pin (>=50) erfuellt.

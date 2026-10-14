@@ -1,6 +1,6 @@
 -r requirements.in
 ruff>=0.16.10
-pip-tools>=7.6.1
+pip-tools>=7.6.2
 # Abhaengigkeits-Audit im schlanken CI-Audit-Job (Refs #2063).
 pip-audit>=2.10.1
 # Lizenzinventar des ausgelieferten Prod-Stacks im CI-Job (Refs #2063).
@@ -22,9 +22,9 @@ pytest-cov>=5.0
 playwright>=1.63.0
 pytest-playwright>=0.8.0
 pytest-xdist>=3.5
-filelock>=4.0.3
+filelock==4.0.12
 mypy>=2.3.1
-django-stubs[compatible-mypy]>=6.1.1
+django-stubs[compatible-mypy]>=6.1.2
 # Mutation-Testing fuer core/services + core/forms (nightly, Refs #922/#923).
 mutmut==3.7.0
 
