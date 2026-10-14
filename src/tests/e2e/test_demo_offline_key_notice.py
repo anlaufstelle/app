@@ -37,8 +37,10 @@ def test_anonymous_login_page_has_no_key_notice(base_url, browser):
         page = context.new_page()
         response = page.goto(f"{base_url}/login/")
         assert response is not None and response.status == 200
-        # The login page is a standalone page without the demo banner; wait for the scripts to settle.
-        page.wait_for_load_state("networkidle")
+        # The login page is a standalone page without the demo banner. Settle on the concrete state: the form
+        # is rendered and the key hydration of the page script (crypto_session.ready) has finished.
+        expect(page.locator("#login-form")).to_be_visible()
+        assert page.evaluate("() => window.crypto_session.ready().then(() => true)") is True
         assert page.locator("[data-demo-offline-error]").count() == 0
         assert page.locator('[role="alert"]').count() == 0
     finally:
