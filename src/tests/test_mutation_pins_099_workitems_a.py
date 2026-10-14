@@ -163,11 +163,13 @@ class TestBuildInboxSectionsOrderBy:
         knapp erledigte, obwohl beide erledigt sind.
         """
         today = timezone.localdate()
+        # Recently done is windowed by completed_at since #2587.
+        now = timezone.now()
         overdue_done = _make_workitem(
-            facility, staff_user, status=WorkItem.Status.DONE, due_date=today - timedelta(days=30)
+            facility, staff_user, status=WorkItem.Status.DONE, due_date=today - timedelta(days=30), completed_at=now
         )
         future_done = _make_workitem(
-            facility, staff_user, status=WorkItem.Status.DONE, due_date=today + timedelta(days=5)
+            facility, staff_user, status=WorkItem.Status.DONE, due_date=today + timedelta(days=5), completed_at=now
         )
         result = build_inbox_sections(facility, staff_user, QueryDict(""))
         ids = [wi.pk for wi in result["done_items"]]
@@ -314,14 +316,16 @@ class TestBuildInboxSectionsDueDateBucket:
         aendert die Reihenfolge.
         """
         today = timezone.localdate()
+        # Recently done is windowed by completed_at since #2587.
+        now = timezone.now()
         overdue_done = _make_workitem(
-            facility, staff_user, status=WorkItem.Status.DONE, due_date=today - timedelta(days=20)
+            facility, staff_user, status=WorkItem.Status.DONE, due_date=today - timedelta(days=20), completed_at=now
         )
-        today_done = _make_workitem(facility, staff_user, status=WorkItem.Status.DONE, due_date=today)
+        today_done = _make_workitem(facility, staff_user, status=WorkItem.Status.DONE, due_date=today, completed_at=now)
         future_done = _make_workitem(
-            facility, staff_user, status=WorkItem.Status.DONE, due_date=today + timedelta(days=3)
+            facility, staff_user, status=WorkItem.Status.DONE, due_date=today + timedelta(days=3), completed_at=now
         )
-        no_due_done = _make_workitem(facility, staff_user, status=WorkItem.Status.DONE, due_date=None)
+        no_due_done = _make_workitem(facility, staff_user, status=WorkItem.Status.DONE, due_date=None, completed_at=now)
 
         result = build_inbox_sections(facility, staff_user, QueryDict(""))
         ids = [wi.pk for wi in result["done_items"]]
@@ -513,6 +517,7 @@ class TestBuildInboxSectionsOutputKeys:
         "status_filter_choices",
         "done_period_choices",
         "facility_users",
+        "assignable_users",
         "selected_item_type",
         "selected_priority",
         "selected_assigned_to",
