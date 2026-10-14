@@ -654,8 +654,10 @@ def test_no_residue_after_enforce_retention(maximal_pii_graph, table, lead_user)
     # Refs #2524: exercise the destructive path with its required approval.
     from core.models import RetentionProposal
     from core.retention.proposals import approve_proposal
+    from tests._retention_approval_helpers import prime_first_approval
 
     proposal = RetentionProposal.objects.get(facility=g.facility, target_type="Event", target_id=g.event.pk)
+    prime_first_approval(proposal)
     approve_proposal(proposal, lead_user)
     call_command("enforce_retention", "--facility", g.facility.name)
 
@@ -687,8 +689,10 @@ def test_enforce_retention_acts_on_the_graph(maximal_pii_graph, lead_user):
     # Refs #2524: exercise the destructive path with its required approval.
     from core.models import RetentionProposal
     from core.retention.proposals import approve_proposal
+    from tests._retention_approval_helpers import prime_first_approval
 
     proposal = RetentionProposal.objects.get(facility=g.facility, target_type="Event", target_id=g.event.pk)
+    prime_first_approval(proposal)
     approve_proposal(proposal, lead_user)
     call_command("enforce_retention", "--facility", g.facility.name)
 

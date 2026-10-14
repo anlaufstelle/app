@@ -23,6 +23,7 @@ from core.services.dashboard import create_or_update_snapshot
 from core.services.events.crud import create_event, soft_delete_event
 from core.services.events.deletion import approve_deletion, request_deletion
 from core.services.events.tally_undo import mint_tally_undo_token, undo_tally_event
+from tests._retention_approval_helpers import prime_first_approval
 from tests.test_snapshot_deleted_events import _event, _past_month_noon
 
 pytestmark = pytest.mark.django_db
@@ -100,7 +101,9 @@ def test_deleted_event_survives_refresh_and_later_carry(
         else:
             if path == "qualified":
                 create_proposals_for_facility(facility, settings_obj, timezone.now())
-                approve_proposal(RetentionProposal.objects.get(facility=facility, target_id=event.pk), lead_user)
+                proposal = RetentionProposal.objects.get(facility=facility, target_id=event.pk)
+                prime_first_approval(proposal)
+                approve_proposal(proposal, lead_user)
             call_command("enforce_retention")
     event.refresh_from_db()
     assert event.is_deleted

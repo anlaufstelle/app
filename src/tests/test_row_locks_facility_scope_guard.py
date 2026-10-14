@@ -49,6 +49,7 @@ from core.services.case.workitems import (
     update_workitem_status,
     workitem_form_state_token,
 )
+from tests._retention_approval_helpers import prime_first_approval
 
 pytestmark = pytest.mark.django_db
 
@@ -151,6 +152,7 @@ class TestVorschlagZielzeilen:
 
     def test_genehmigung_bleibt_moeglich(self, facility, lead_user, ereignis):
         vorschlag = _vorschlag(facility, ereignis)
+        prime_first_approval(vorschlag)
         approve_proposal(vorschlag, lead_user)
         vorschlag.refresh_from_db()
         assert vorschlag.status == RetentionProposal.Status.APPROVED
