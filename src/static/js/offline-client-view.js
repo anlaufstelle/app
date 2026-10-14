@@ -186,7 +186,7 @@
                         cached.events = cached.events.map((ev) => {
                             const fields = ev.data_fields || {};
                             const documentType = (cached.documentTypes || []).find((type) => type.pk === ev.document_type_pk);
-                            const labels = new Map((documentType?.fields || []).map((field) => [field.slug, field.name]));
+                            const metadata = new Map((documentType?.fields || []).map((field) => [field.slug, field]));
                             const isUnsynced = ev.localStatus === "modified" || ev.localStatus === "new";
                             const isConflict = ev.localStatus === "conflict";
                             // Refs #1351/#1385 (M8/Task 4): dead-Badge analog
@@ -198,8 +198,8 @@
                                 occurred_at_fmt: this.formatTs(ev.occurred_at),
                                 data_fields_pairs: Object.keys(fields).map((slug) => ({
                                     slug: slug,
-                                    label: labels.get(slug) || slug,
-                                    value_fmt: this.formatFieldValue(fields[slug]),
+                                    label: metadata.get(slug)?.name || slug,
+                                    value_fmt: this.formatFieldValue(fields[slug], metadata.get(slug)?.options),
                                 })),
                                 has_data_fields: Object.keys(fields).length > 0,
                                 is_unsynced: isUnsynced,
@@ -273,9 +273,12 @@
                 if (Number.isNaN(exp)) return false;
                 return exp < Date.now();
             },
-            formatFieldValue(v) {
-                // Refs #1828: gemeinsamer Formatter (offline-form-fields.js).
-                return window.offlineFormFields.formatValue(v);
+            formatFieldValue(v, options) {
+                // Labels affect display only; stored values remain unchanged.
+                return window.offlineFormFields.formatValue(v, options, {
+                    yes: this.$el.dataset.i18nYes || "",
+                    no: this.$el.dataset.i18nNo || "",
+                });
             },
             relativeTime(ts) {
                 if (!ts) return "";

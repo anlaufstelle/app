@@ -319,17 +319,18 @@
 
     // Selection labels are display-only; the underlying slug array stays
     // intact for conflict resolution and replay (Refs #2520).
-    function formatValue(v, options) {
+    function formatValue(v, options, booleanLabels) {
         if (v === null || v === undefined) return "";
+        const labels = new Map((Array.isArray(options) ? options : []).map((option) => [option.value, option.label]));
         if (Array.isArray(v)) {
-            const labels = new Map((Array.isArray(options) ? options : []).map((option) => [option.value, option.label]));
             return v.map((value) => labels.has(value) ? labels.get(value) : String(value)).join("\n");
         }
         if (typeof v === "object") {
             if (v.__file__) return "[Datei: " + (v.name || "") + "]";
             return JSON.stringify(v);
         }
-        return String(v);
+        if (typeof v === "boolean" && booleanLabels) return v ? booleanLabels.yes : booleanLabels.no;
+        return labels.has(v) ? labels.get(v) : String(v);
     }
 
     window.offlineFormFields = {
