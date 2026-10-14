@@ -56,6 +56,23 @@ def _open_form(page, base_url, person):
     expect(page.locator(SAVE_BUTTON)).to_be_enabled(timeout=10000)
 
 
+def _derive_offline_key(page, base_url, person):
+    """Derive the session key that encrypts drafts, as the real login does.
+
+    The storage-state login skips ``login.html``, which derives this key;
+    without it autosave stores nothing at all.
+    """
+    _open_form(page, base_url, person)
+    page.evaluate(
+        """async () => {
+            await window.crypto_session.ready();
+            if (!window.crypto_session.hasSessionKey()) {
+                await window.crypto_session.deriveSessionKey('test-pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+            }
+        }"""
+    )
+
+
 def _end_server_session(e2e_env, context) -> None:
     """End the session of this browser context on the server (as an expiry would)."""
     key = next(c["value"] for c in context.cookies() if c["name"] == "sessionid")
@@ -164,6 +181,7 @@ class TestInterruptedSubmit:
     def test_aborted_post_keeps_typed_text_when_the_form_is_reopened(self, routed_page, base_url, e2e_env, person):
         page = routed_page
         note = f"Netzabbruch-Entwurf {person['marker']}"
+        _derive_offline_key(page, base_url, person)
         _open_form(page, base_url, person)
         page.locator(NOTE_FIELD).fill(note)
         self._submit_with_aborted_post(page, e2e_env, note)

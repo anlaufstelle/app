@@ -97,7 +97,7 @@
         return data;
     }
 
-    function restoreFormData(form, data) {
+    function applyDraftValues(form, data) {
         var restored = false;
         var elements = form.elements;
         for (var i = 0; i < elements.length; i++) {
@@ -130,10 +130,26 @@
                 restored = true;
             }
         }
+        return restored;
+    }
+
+    function restoreFormData(form, data) {
+        var restored = applyDraftValues(form, data);
         if (restored) {
+            // Refs #2561: the change dispatch reloads the type-specific fields
+            // (htmx swap) and replaces their restored values. Reapply the draft
+            // to fields swapped in by these events, never after a later change
+            // made by the person.
+            var dispatched = [];
+            document.addEventListener("htmx:afterSwap", function (event) {
+                var config = event.detail && event.detail.requestConfig;
+                if (config && dispatched.indexOf(config.triggeringEvent) !== -1) applyDraftValues(form, data);
+            });
             var selects = form.querySelectorAll("select");
             for (var k = 0; k < selects.length; k++) {
-                selects[k].dispatchEvent(new Event("change", { bubbles: true }));
+                var change = new Event("change", { bubbles: true });
+                dispatched.push(change);
+                selects[k].dispatchEvent(change);
             }
         }
         return restored;

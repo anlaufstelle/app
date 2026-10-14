@@ -230,6 +230,39 @@ it.each([true, false])("removing a template retains typed input and leaves an un
     else expect(draft).toBeNull();
 });
 
+const typedFieldsHtml = `<form data-autosave data-i18n-draft-restored="Draft restored"><select name="document_type"><option value="contact" selected>Contact</option><option value="crisis">Crisis</option></select><div id="dynamic-fields"><textarea name="notes"></textarea></div></form>`;
+// Stand-in for the htmx field reload: the select's change event replaces the
+// type-specific fields and reports the swap with its triggering event.
+function reloadFieldsOnChange(p) {
+    const select = p.w.document.querySelector("select");
+    select.addEventListener("change", event => {
+        setTimeout(() => {
+            const target = p.w.document.getElementById("dynamic-fields");
+            target.innerHTML = '<textarea name="notes"></textarea>';
+            target.dispatchEvent(new p.w.CustomEvent("htmx:afterSwap", { bubbles: true, detail: { target, requestConfig: { triggeringEvent: event } } }));
+        }, 5);
+    });
+}
+
+it("restored text survives the field reload triggered by the restore", async () => {
+    const p = await page(typedFieldsHtml); reloadFieldsOnChange(p);
+    await seed(p, { document_type: "contact", notes: "Interrupted text" }); await start(p);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(p.w.document.querySelector("textarea").value).toBe("Interrupted text");
+    expect(p.w.document.getElementById("autosave-restored-banner")).not.toBeNull();
+});
+
+it("a later type change by the person does not reinsert the restored text", async () => {
+    const p = await page(typedFieldsHtml); reloadFieldsOnChange(p);
+    await seed(p, { document_type: "contact", notes: "Interrupted text" }); await start(p);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    const select = p.w.document.querySelector("select");
+    select.value = "crisis";
+    select.dispatchEvent(new p.w.Event("change", { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(p.w.document.querySelector("textarea").value).toBe("");
+});
+
 it("confirmed replay from a public shell removes only its token and retains newer work", async () => {
     const p = await page(formHtml()); await start(p); await submit(p, "Queued contact");
     const token = p.w.document.querySelector('[name="_autosave_token"]').value;
