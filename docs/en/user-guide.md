@@ -154,6 +154,12 @@ To continue, click **Continue** or press `Enter` or the space bar. The cursor th
 
 ---
 
+### Entering dates and times
+
+When JavaScript is loaded, date fields follow the selected application language: German `DD.MM.YYYY`, English `YYYY-MM-DD`. Enter times in 24-hour `HH:MM` format; fields with second precision also allow `:SS`. This also applies to prepared offline forms. Without JavaScript, native browser fields remain; their display follows the browser language.
+
+Invalid calendar dates (such as `2026-02-30`) and values outside the permitted bounds prevent submission. Correct the value using the displayed format. The repeated-hour choice during the daylight-saving transition remains available.
+
 ## 2. Home — Timeline
 
 After signing in, you land on the **Timeline** (`/`) -- a chronological daily feed that unifies contacts, system activities, tasks, and entry bans in a single view.
@@ -1159,8 +1165,8 @@ without expiry even after manual event deletion.
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-13 -->
-<!-- source-hash: c91c8a136527912328152ad018dfa6625882c9f6 -->
+<!-- translation-date: 2026-10-14 -->
+<!-- source-hash: 19f9a964410f6f87d88ca32c46c5c5dc01d7af32 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->

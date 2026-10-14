@@ -3,6 +3,10 @@
 Sammlung häufig gestellter Fragen zur Konfiguration, Datenschutz und Betrieb der Anlaufstelle.
 Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit → Rollen & Datenschutz → Betrieb.
 
+### Welches Datumsformat soll ich eingeben?
+
+Mit geladenem JavaScript gilt die App-Sprache: Deutsch `TT.MM.JJJJ`, Englisch `YYYY-MM-DD`; Uhrzeiten haben 24 Stunden (`HH:MM`, bei Sekundengenauigkeit auch `:SS`). Ein ungültiger Kalendertag oder ein Wert außerhalb der Feldgrenzen muss vor dem Speichern korrigiert werden. Ohne JavaScript verwendet das native Feld die Browseranzeige.
+
 ### Inhaltsverzeichnis
 
 **A. Erste Schritte & Konfiguration**

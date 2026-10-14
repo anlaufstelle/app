@@ -4,6 +4,10 @@ This English FAQ covers the Contacts list, the updated retention topic, the offl
 and revocation check addendum and the statistics guidance. Other topics remain in the
 [German FAQ](../faq.md); see the [English user guide](user-guide.md) for daily work.
 
+## Which date format should I enter?
+
+With JavaScript loaded, fields follow the application language: German `DD.MM.YYYY`, English `YYYY-MM-DD`; times use the 24-hour clock (`HH:MM`, also `:SS` where second precision is supported). Correct invalid calendar dates and values outside the field bounds before saving. Without JavaScript, the native field uses the browser display.
+
 ## Contacts list
 
 ### Where is the list, and what can it not do?
@@ -85,4 +89,4 @@ Decision aid: [User Guide § 7 “The Three Tabs at a Glance”](https://github.
 <!-- translation-source: docs/faq.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-14 -->
-<!-- source-hash: f0ebc9509325d5f634d6a5e3754d0c14be665cf0 -->
+<!-- source-hash: edc705222b96dfa6ea4f70f1f2e353348b3916a7 -->

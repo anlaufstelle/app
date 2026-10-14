@@ -152,6 +152,12 @@ Zum Weiterarbeiten klicken Sie auf **Fortfahren** oder drücken `Enter` bzw. die
 
 ---
 
+### Datum und Uhrzeit eingeben
+
+Bei geladenem JavaScript folgen Datumsfelder der gewählten App-Sprache: Deutsch `TT.MM.JJJJ`, Englisch `YYYY-MM-DD`. Uhrzeiten werden im 24-Stunden-Format `HH:MM` eingegeben; Felder mit Sekundengenauigkeit erlauben zusätzlich `:SS`. Das gilt auch für vorbereitete Offline-Formulare. Ohne JavaScript bleiben native Browserfelder erhalten; deren Anzeige richtet sich nach dem Browser.
+
+Ungültige Kalendertage (zum Beispiel `30.02.2026`) und Werte außerhalb der erlaubten Grenzen verhindern das Absenden. Korrigieren Sie den Wert im angezeigten Format. Die Auswahl zur doppelten Stunde bei der Zeitumstellung bleibt erhalten.
+
 ## 2. Startseite – Zeitstrom
 
 Nach dem Login landen Sie auf dem **Zeitstrom** (`/`) — einem chronologischen Tagesfeed, der Kontakte, Systemaktivitäten, Aufgaben und Hausverbote in einer einheitlichen Ansicht zusammenführt.
