@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 16:03+0200\n"
+"POT-Creation-Date: 2026-10-14 18:52+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14857,3 +14857,8 @@ msgstr "Die Diagramme konnten nicht geladen werden."
 #: src/templates/core/statistics/partials/dashboard_content.html:81
 msgid "HTTP-Fehler"
 msgstr "HTTP-Fehler"
+
+#: src/templates/core/events/create.html:48
+#, python-format
+msgid "Die Vorlage „%(name)s“ wurde nicht angewendet: Der Dokumentationstyp „%(type)s“ setzt mindestens die Kontaktstufe „%(stage)s“ voraus, die ausgewählte Person hat diese Stufe nicht. Person und Fall bleiben erhalten."
+msgstr "Die Vorlage „%(name)s“ wurde nicht angewendet: Der Dokumentationstyp „%(type)s“ setzt mindestens die Kontaktstufe „%(stage)s“ voraus, die ausgewählte Person hat diese Stufe nicht. Person und Fall bleiben erhalten."
