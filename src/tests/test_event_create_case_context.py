@@ -108,3 +108,70 @@ def test_template_links_keep_valid_case(client, staff_user, case_open, doc_type_
         assert f"case={case_open.pk}" in link
         destination = client.get(link)
         assert f'data-initial-case-id="{case_open.pk}"' in destination.content.decode()
+
+
+@pytest.fixture
+def stricter_template(facility, staff_user, doc_type_contact):
+    """Quick template whose document type needs a higher contact stage than ``client_identified``."""
+    from core.models import Client as PersonModel
+    from core.models import DocumentType
+
+    stricter_type = DocumentType.objects.create(
+        facility=facility,
+        name="Qualified only",
+        sensitivity=DocumentType.Sensitivity.NORMAL,
+        min_contact_stage=PersonModel.ContactStage.QUALIFIED,
+    )
+    return QuickTemplate.objects.create(
+        facility=facility,
+        document_type=stricter_type,
+        name="Stricter preset",
+        created_by=staff_user,
+    )
+
+
+@pytest.mark.django_db
+def test_template_of_stricter_contact_stage_is_reset_with_explanation(client, staff_user, case_open, stricter_template):
+    """#2534: a template the person's stage excludes is not applied; person and case stay."""
+    client.force_login(staff_user)
+    response = client.get(
+        reverse("core:event_create"),
+        {"template": stricter_template.pk, "client": str(case_open.client_id), "case": str(case_open.pk)},
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert response.context["applied_template"] is None
+    assert response.context["template_stage_reset"] is True
+    assert "wurde nicht angewendet" in html
+    assert "Stricter preset" in html
+    assert "Mit Zusatzangaben" in html
+    assert "Person und Fall bleiben erhalten" in html
+    assert str(response.context["meta_form"]["document_type"].value()) != str(stricter_template.document_type_id)
+    assert response.context["client_id"] == str(case_open.client_id)
+    assert response.context["case_id"] == str(case_open.pk)
+    assert f'data-initial-case-id="{case_open.pk}"' in html
+
+
+@pytest.mark.django_db
+def test_template_of_permitted_contact_stage_is_applied_without_reset(
+    client, staff_user, client_qualified, stricter_template
+):
+    client.force_login(staff_user)
+    response = client.get(
+        reverse("core:event_create"), {"template": stricter_template.pk, "client": str(client_qualified.pk)}
+    )
+
+    assert response.context["applied_template"] == stricter_template
+    assert not response.context.get("template_stage_reset")
+    assert "wurde nicht angewendet" not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_template_of_stricter_stage_without_person_stays_applied(client, staff_user, stricter_template):
+    """Without a chosen person the stage is still open: the person picker filters by it."""
+    client.force_login(staff_user)
+    response = client.get(reverse("core:event_create"), {"template": stricter_template.pk})
+
+    assert response.context["applied_template"] == stricter_template
+    assert not response.context.get("template_stage_reset")

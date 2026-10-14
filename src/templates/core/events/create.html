@@ -41,6 +41,9 @@
         {% if case_selection_reset %}
         <p role="alert" class="text-sm text-yellow-700">{% trans "Die Fallauswahl wurde zurückgesetzt: Der Fall ist für diese Person nicht mehr verfügbar oder nicht zugänglich." %}</p>
         {% endif %}
+        {% if template_stage_reset %}
+        <p role="alert" data-testid="template-stage-reset" class="text-sm text-yellow-700">{% blocktrans with name=reset_template.name type=reset_template.document_type.name stage=reset_template.document_type.get_min_contact_stage_display %}Die Vorlage „{{ name }}“ wurde nicht angewendet: Der Dokumentationstyp „{{ type }}“ setzt mindestens die Kontaktstufe „{{ stage }}“ voraus, die ausgewählte Person hat diese Stufe nicht. Person und Fall bleiben erhalten.{% endblocktrans %}</p>
+        {% endif %}
         {% if reselect_files %}
         <p role="alert" class="text-sm text-yellow-700">{% trans "Datei erneut auswählen: Hochgeladene Dateien können nach einem Fehler nicht wiederhergestellt werden." %}</p>
         {% endif %}

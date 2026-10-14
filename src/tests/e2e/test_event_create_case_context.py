@@ -577,23 +577,38 @@ class TestTemplateFromCaseFile:
         stored = _latest_event_of_client(e2e_env, error_scene["a"])
         assert stored == {"case": error_scene["ca"], "notiz": "Aus Vorlage, in der Fallakte ergänzt"}
 
-    def test_template_of_stricter_contact_stage_is_refused_with_reason_and_stores_nothing(
+    def test_template_of_stricter_contact_stage_is_reset_with_explanation_and_stores_only_allowed_type(
         self, staff_page, base_url, error_scene, e2e_env
     ):
         page = staff_page
         self._open_form_from_case_file(page, base_url, error_scene)
         self._apply_template(page, error_scene, "t3")
 
-        field = page.locator(f"[name='erf-frei-{error_scene['marker']}']")
-        expect(field).to_have_value("Aus Stufen-Vorlage", timeout=10000)
+        # The type of the template needs a higher stage than the person has: the reset is explained.
+        notice = page.locator("[data-testid='template-stage-reset']")
+        expect(notice).to_be_visible(timeout=10000)
+        expect(notice).to_contain_text(
+            f"Die Vorlage „ERF-Vorlage-Stufe-{error_scene['marker']}“ wurde nicht angewendet"
+        )
+        expect(notice).to_contain_text("mindestens die Kontaktstufe „Mit Zusatzangaben“")
+        expect(notice).to_contain_text("Person und Fall bleiben erhalten")
+        # Person and the permitted case stay; nothing of the refused type is prefilled.
+        expect(page.locator("input[name='client']")).to_have_value(error_scene["a"])
         expect(page.locator("#id_case")).to_have_value(error_scene["ca"], timeout=10000)
+        expect(page.locator(f"[name='erf-frei-{error_scene['marker']}']")).to_have_count(0)
+        expect(page.locator("#id_document_type")).not_to_have_value(error_scene["stage"])
+        expect(page.locator("[data-testid='template-remove-link']")).to_have_count(0)
+
+        note_field = page.locator("textarea[name='notiz']")
+        expect(note_field).to_be_visible(timeout=10000)
+        note_field.fill("Nach erklärtem Zurücksetzen gespeichert")
         expect(page.locator("#event-submit-btn")).to_be_enabled(timeout=10000)
         page.locator("#event-submit-btn").click()
-        page.wait_for_load_state("domcontentloaded")
+        page.wait_for_url(lambda url: "/events/new/" not in url, timeout=10000)
 
-        _expect_stage_rejection(page, error_scene)
-        expect(field).to_have_value("Aus Stufen-Vorlage")
-        assert _stage_event_cases(e2e_env, error_scene) == [], "the refused submit must not store an event"
+        assert _stage_event_cases(e2e_env, error_scene) == [], "no event of the refused type may be stored"
+        stored = _latest_event_of_client(e2e_env, error_scene["a"])
+        assert stored == {"case": error_scene["ca"], "notiz": "Nach erklärtem Zurücksetzen gespeichert"}
 
     def test_template_switch_after_case_was_closed_explains_reset_and_stores_without_case(
         self, staff_page, base_url, error_scene, e2e_env

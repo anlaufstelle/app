@@ -75,7 +75,7 @@ from core.services.events import (
     update_event,
 )
 from core.services.events.crud import event_form_state_token, lock_event_for_edit
-from core.services.events.fields import file_marker_slugs
+from core.services.events.fields import file_marker_slugs, stage_index
 from core.services.scoping import get_scoped_object
 from core.services.zeitstrom_filters import zeitstrom_filter_state
 from core.utils.formatting import isoformat_or_none
@@ -152,6 +152,17 @@ def _prefill_owner(meta_form, facility, client_id, case_id):
     if client_id:
         meta_form.fields["client"].initial = client_id
     return client_id
+
+
+def _stage_excludes_client(document_type, client):
+    """Whether the type's minimum contact stage is above the person's stage.
+
+    Without a person the stage stays open: the picker filters by it and the
+    service re-checks on save.
+    """
+    if client is None or not document_type.min_contact_stage:
+        return False
+    return stage_index(client.contact_stage) < stage_index(document_type.min_contact_stage)
 
 
 def _resolve_event_client(facility, client_id):
@@ -273,10 +284,19 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         # ``?template=<uuid>`` – der Service liefert nur Templates, deren
         # DocumentType der User sehen darf.
         applied_template = None
+        stage_reset_template = None
         template_id = request.GET.get("template")
         prefill_data = None
         if template_id:
             applied_template = get_template_for_user(request.user, facility, template_id)
+            # Refs #2534: a template whose type needs a higher contact stage than the
+            # starting person has is not applied — the form keeps person and case and
+            # says so, instead of preselecting a type the save would refuse.
+            if applied_template is not None and _stage_excludes_client(
+                applied_template.document_type, _resolve_event_client(facility, client_id)
+            ):
+                stage_reset_template = applied_template
+                applied_template = None
             if applied_template is not None:
                 default_doc_type = applied_template.document_type
                 initial["document_type"] = default_doc_type.pk
@@ -345,6 +365,8 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
             "quick_templates": quick_templates,
             "current_doc_type_templates": current_doc_type_templates,
             "applied_template": applied_template,
+            "template_stage_reset": stage_reset_template is not None,
+            "reset_template": stage_reset_template,
             # Refs #1349: Serienerfassungs-Prefill zählt (wie ein Quick-Template)
             # als bewusster Server-Prefill — der autosave-Draft desselben Pfads
             # darf das vorbelegte Formular beim Laden NICHT überschreiben (#625).
