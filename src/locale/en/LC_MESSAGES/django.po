@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 11:14+0200\n"
+"POT-Creation-Date: 2026-10-14 12:09+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14487,3 +14487,69 @@ msgstr "Grant first release"
 #: src/templates/core/retention/partials/proposal_card.html:128
 msgid "Freigabebelege unvollständig – wird nicht gelöscht"
 msgstr "Release evidence incomplete – will not be deleted"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:4
+#, python-format
+msgid "%(name)s: Nach oben"
+msgstr "%(name)s: Move up"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:4
+msgid "Nach oben"
+msgstr "Move up"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:6
+#, python-format
+msgid "%(name)s: Nach unten"
+msgstr "%(name)s: Move down"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:6
+msgid "Nach unten"
+msgstr "Move down"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:8
+msgid "Verschieben nach"
+msgstr "Move to"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:10
+#, python-format
+msgid "%(name)s: Verschieben nach"
+msgstr "%(name)s: Move to"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:11
+msgid "Ohne Gruppe"
+msgstr "No group"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:17
+#, python-format
+msgid "%(name)s: Verschieben bestätigen"
+msgstr "%(name)s: Confirm move"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:17
+msgid "Verschieben"
+msgstr "Move"
+
+#: src/templates/core/config/document_types/partials/field_board.html:30
+msgid "Änderung fehlgeschlagen. Bitte erneut versuchen; bei zu vielen Anfragen später wiederholen."
+msgstr "Change failed. Please try again; if there were too many requests, retry later."
+
+#: src/templates/core/config/document_types/partials/field_board.html:40
+#, python-brace-format
+msgid "Gruppe {name}: Position {position} von {total}"
+msgstr "Group {name}: position {position} of {total}"
+
+#: src/templates/core/config/document_types/partials/field_board.html:41
+#, python-format
+msgid "Gruppe %(name)s"
+msgstr "Group %(name)s"
+
+#: src/templates/core/config/document_types/partials/field_board.html:72
+#: src/templates/core/config/document_types/partials/field_board.html:102
+#, python-brace-format
+msgid "Feld {name}: Position {position} von {total}"
+msgstr "Field {name}: position {position} of {total}"
+
+#: src/templates/core/config/document_types/partials/field_board.html:73
+#: src/templates/core/config/document_types/partials/field_board.html:103
+#, python-format
+msgid "Feld %(name)s"
+msgstr "Field %(name)s"

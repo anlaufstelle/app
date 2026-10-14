@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 11:14+0200\n"
+"POT-Creation-Date: 2026-10-14 12:09+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14576,3 +14576,69 @@ msgstr "Erste Freigabe erteilen"
 #: src/templates/core/retention/partials/proposal_card.html:128
 msgid "Freigabebelege unvollständig – wird nicht gelöscht"
 msgstr "Freigabebelege unvollständig – wird nicht gelöscht"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:4
+#, python-format
+msgid "%(name)s: Nach oben"
+msgstr "%(name)s: Nach oben"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:4
+msgid "Nach oben"
+msgstr "Nach oben"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:6
+#, python-format
+msgid "%(name)s: Nach unten"
+msgstr "%(name)s: Nach unten"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:6
+msgid "Nach unten"
+msgstr "Nach unten"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:8
+msgid "Verschieben nach"
+msgstr "Verschieben nach"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:10
+#, python-format
+msgid "%(name)s: Verschieben nach"
+msgstr "%(name)s: Verschieben nach"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:11
+msgid "Ohne Gruppe"
+msgstr "Ohne Gruppe"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:17
+#, python-format
+msgid "%(name)s: Verschieben bestätigen"
+msgstr "%(name)s: Verschieben bestätigen"
+
+#: src/templates/core/config/document_types/partials/_board_controls.html:17
+msgid "Verschieben"
+msgstr "Verschieben"
+
+#: src/templates/core/config/document_types/partials/field_board.html:30
+msgid "Änderung fehlgeschlagen. Bitte erneut versuchen; bei zu vielen Anfragen später wiederholen."
+msgstr "Änderung fehlgeschlagen. Bitte erneut versuchen; bei zu vielen Anfragen später wiederholen."
+
+#: src/templates/core/config/document_types/partials/field_board.html:40
+#, python-brace-format
+msgid "Gruppe {name}: Position {position} von {total}"
+msgstr "Gruppe {name}: Position {position} von {total}"
+
+#: src/templates/core/config/document_types/partials/field_board.html:41
+#, python-format
+msgid "Gruppe %(name)s"
+msgstr "Gruppe %(name)s"
+
+#: src/templates/core/config/document_types/partials/field_board.html:72
+#: src/templates/core/config/document_types/partials/field_board.html:102
+#, python-brace-format
+msgid "Feld {name}: Position {position} von {total}"
+msgstr "Feld {name}: Position {position} von {total}"
+
+#: src/templates/core/config/document_types/partials/field_board.html:73
+#: src/templates/core/config/document_types/partials/field_board.html:103
+#, python-format
+msgid "Feld %(name)s"
+msgstr "Feld %(name)s"
