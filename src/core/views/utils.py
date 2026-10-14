@@ -10,7 +10,9 @@ fehlerhaften URLs (Refs #733).
 Browser als protokoll-relativ interpretiert (Refs #770).
 """
 
-from django.urls import reverse
+from urllib.parse import urlsplit
+
+from django.urls import Resolver404, resolve, reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from core.constants import MAX_PAGE
@@ -51,6 +53,42 @@ def safe_redirect_path(raw: str | None) -> str:
     if raw and raw.startswith("/") and url_has_allowed_host_and_scheme(raw, allowed_hosts=None):
         return raw
     return "/"
+
+
+def _declared_http_methods(view) -> set[str] | None:
+    """The request methods a resolved view accepts, or ``None`` if it declares none.
+
+    Class-based views declare them by their handler methods;
+    ``require_http_methods``/``require_POST`` wrappers keep the allowed list in
+    the decorator closure, reachable through the ``__wrapped__`` chain.
+    """
+    view_class = getattr(view, "view_class", None)
+    if view_class is not None:
+        return {name.upper() for name in view_class.http_method_names if hasattr(view_class, name)}
+    while view is not None:
+        code = getattr(view, "__code__", None)
+        if code is not None:
+            for name, cell in zip(code.co_freevars, view.__closure__ or (), strict=False):
+                if name == "request_method_list":
+                    return {method.upper() for method in cell.cell_contents}
+        view = getattr(view, "__wrapped__", None)
+    return None
+
+
+def is_get_navigable(path: str) -> bool:
+    """Whether a browser can land on ``path`` with a GET request.
+
+    POST-only endpoints (mutations, the offline-key salt) cannot be a
+    navigation target: following them answers 405. Unknown paths and views that
+    declare no method restriction count as navigable, so only a positively
+    identified POST-only target is refused.
+    """
+    try:
+        match = resolve(urlsplit(path).path)
+    except Resolver404:
+        return True
+    methods = _declared_http_methods(match.func)
+    return methods is None or "GET" in methods
 
 
 def safe_page_param(request, default=1, max_page=None):

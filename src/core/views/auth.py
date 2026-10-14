@@ -26,7 +26,7 @@ from core.services.security.session_rotation import rotate_session_after_privile
 from core.signals.audit import get_client_ip
 from core.utils.ratelimit import ratelimit
 from core.views.mixins import anonymous_session_required
-from core.views.utils import safe_redirect_path
+from core.views.utils import is_get_navigable, safe_redirect_path
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +37,17 @@ def resolve_post_login_url(request, redirect_to: str | None) -> str:
     ``next`` values can originate from login or MFA requests, so validate the
     target at this shared boundary even if an upstream Django view already did
     so. A root target is the implicit default for super admins, not a deliberate
-    deep link (Refs #970/#2206).
+    deep link (Refs #970/#2206). A target that cannot be reached by a GET
+    navigation is dropped the same way (Refs #2561).
     """
     is_safe = url_has_allowed_host_and_scheme(
         url=redirect_to or "",
         allowed_hosts={request.get_host()},
         require_https=request.is_secure(),
     )
-    safe_redirect_to = redirect_to if is_safe else None
+    # A POST-only endpoint (e.g. an HTMX mutation interrupted by an expired
+    # session) cannot be resumed by navigation; it falls back to the role default.
+    safe_redirect_to = redirect_to if is_safe and is_get_navigable(redirect_to or "") else None
     if getattr(request.user, "is_super_admin", False):
         if safe_redirect_to and safe_redirect_to not in ("/", settings.LOGIN_REDIRECT_URL):
             return safe_redirect_to
