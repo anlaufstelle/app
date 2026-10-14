@@ -1,12 +1,12 @@
-"""E2E: Kontaktliste ``/events/`` — Karten, Filter und Rollensicht (KL), Deutsch und Englisch.
+"""E2E: Contact list ``/events/`` — cards, filters and role view (KL), German and English.
 
-Ergänzt ``test_event_list.py`` (Filterlauf, URL, Historie, Paginierung) um das,
-was dort fehlt: Aufklappen der gemeinsamen Zeitstrom-Karte per Klick, Enter und
-Leertaste, den Link „Zum Eintrag“, offene „Weitere Filter“ mit sichtbaren aktiven
-Filtern, den Wert-Vergleich je Rolle mit dem Zeitstrom (auch im geschlossenen
-DOM), kein horizontales Scrollen bei 390 px und die englischen Beschriftungen.
+Complements ``test_event_list.py`` (filter run, URL, history, pagination) with what
+is missing there: expanding the shared Zeitstrom card by click, Enter and space bar,
+the link "Zum Eintrag", open "Weitere Filter" with visible active filters, the value
+comparison per role against the Zeitstrom (also in the closed DOM), no horizontal
+scrolling at 390 px and the English labels.
 
-Alle Daten gehören zu einem eigenen Dokumenttyp (``KL-<marker>``) im Mai 2018.
+All data belongs to a dedicated document type (``KL-<marker>``) in May 2018.
 """
 
 from __future__ import annotations
@@ -131,7 +131,7 @@ def _no_horizontal_scroll(page):
 
 
 class TestRoleValueComparison:
-    """Ein für die Rolle unsichtbarer Wert darf nirgends im DOM stehen — Liste und Zeitstrom stimmen überein."""
+    """A value invisible to the role must not appear anywhere in the DOM — list and Zeitstrom agree."""
 
     @pytest.mark.parametrize("role_fixture", list(ROLE_VISIBILITY))
     def test_list_and_zeitstrom_show_the_same_values(self, request, base_url, kl_data, role_fixture):
@@ -165,16 +165,27 @@ class TestHighSensitivityDocumentType:
         _open_list(page, base_url)
         expect(page.locator("#event-table")).to_contain_text(f"KL-{marker}", timeout=10000)
         list_html = page.content()
-        page.goto(f"{base_url}/?date=2018-05-13", wait_until="domcontentloaded")
-        page.wait_for_load_state("networkidle")
+        # The feed is rendered into the page document; wait for that response and a distinct rendered state.
+        with page.expect_response(
+            lambda r: r.request.resource_type == "document" and "date=2018-05-13" in r.url
+        ) as feed_response:
+            page.goto(f"{base_url}/?date=2018-05-13", wait_until="domcontentloaded")
+        assert feed_response.value.status == 200, f"{role_fixture}: Zeitstrom answered {feed_response.value.status}"
+        feed = page.locator("#feed-list")
+        if shown:
+            expect(feed).to_contain_text(type_name, timeout=10000)
+        else:
+            expect(feed).to_contain_text("Keine Einträge für diesen Zeitraum", timeout=10000)
         feed_html = page.content()
 
         for where, html in (("/events/", list_html), ("Zeitstrom", feed_html)):
             assert (value in html) is shown, f"{role_fixture}: value on {where} (expected visible={shown})"
             assert (type_name in html) is shown, f"{role_fixture}: type name on {where} (expected visible={shown})"
             assert (entry_link in html) is shown, f"{role_fixture}: entry link on {where} (expected={shown})"
+        # Contract of get_visible_event_or_404: a hidden event answers 404, never 403 and never a masked 200.
         status = page.request.get(f"{base_url}{entry_link}").status
-        assert (status == 200) is shown, f"{role_fixture}: detail answered {status} (expected visible={shown})"
+        expected_status = 200 if shown else 404
+        assert status == expected_status, f"{role_fixture}: detail answered {status}, expected {expected_status}"
 
 
 class TestCardExpansion:
