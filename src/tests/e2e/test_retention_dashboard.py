@@ -5,10 +5,16 @@ import subprocess
 import sys
 
 import pytest
+from playwright.sync_api import expect
 
+from ._helpers import django_shell
 from ._selectors import sidebar_item, subnav_tab
 
 pytestmark = pytest.mark.e2e
+
+#: Both seeded accounts hold the "Löschbestätigung" right and a lead/admin role.
+_APPROVER_A = "admin"
+_APPROVER_B = "emma"
 
 
 def _ensure_proposals(e2e_env, count=3):
@@ -77,6 +83,113 @@ def _ensure_proposals(e2e_env, count=3):
     return pks
 
 
+def _set_approver_pool(e2e_env, eligible):
+    """Make exactly the ``eligible`` usernames manual approvers of every facility's lead/admin pool.
+
+    Returns ``{username: previous_flag}`` for :func:`_restore_approver_pool`. The
+    flag is the right "Löschbestätigung"; other roles are left untouched.
+    """
+    script = (
+        "from core.models import User; "
+        "users = list(User.objects.filter(role__in=['lead', 'facility_admin'], is_active=True)); "
+        f"keep = {sorted(eligible)!r}; "
+        "[print('prev=' + u.username + ':' + str(u.can_confirm_deletion)) for u in users]; "
+        "[User.objects.filter(pk=u.pk).update(can_confirm_deletion=(u.username in keep)) for u in users]"
+    )
+    previous = {}
+    for line in django_shell(e2e_env, script):
+        if line.startswith("prev="):
+            name, flag = line.removeprefix("prev=").rsplit(":", 1)
+            previous[name] = flag == "True"
+    assert _APPROVER_A in previous and _APPROVER_B in previous, f"seed accounts missing: {previous}"
+    return previous
+
+
+def _restore_approver_pool(e2e_env, previous):
+    script = (
+        "from core.models import User; "
+        f"prev = {previous!r}; "
+        "[User.objects.filter(username=n).update(can_confirm_deletion=f) for n, f in prev.items()]"
+    )
+    django_shell(e2e_env, script)
+
+
+def _set_language(e2e_env, usernames, code):
+    """Set ``preferred_language`` (the only thing that picks the app locale); returns previous values."""
+    script = (
+        "from core.models import User; "
+        f"names = {list(usernames)!r}; "
+        "[print('lang=' + u.username + ':' + u.preferred_language) for u in User.objects.filter(username__in=names)]; "
+        f"User.objects.filter(username__in=names).update(preferred_language={code!r})"
+    )
+    previous = {}
+    for line in django_shell(e2e_env, script):
+        if line.startswith("lang="):
+            name, value = line.removeprefix("lang=").rsplit(":", 1)
+            previous[name] = value
+    return previous
+
+
+def _restore_language(e2e_env, previous):
+    script = (
+        "from core.models import User; "
+        f"prev = {previous!r}; "
+        "[User.objects.filter(username=n).update(preferred_language=v) for n, v in prev.items()]"
+    )
+    django_shell(e2e_env, script)
+
+
+def _proposal_state(e2e_env, pk):
+    """``(status, first_approved_by username or '')`` straight from the database."""
+    script = (
+        "from core.models import RetentionProposal; "
+        f"p = RetentionProposal.objects.select_related('first_approved_by').get(pk='{pk}'); "
+        "print('state=' + p.status + ':' + (p.first_approved_by.username if p.first_approved_by else ''))"
+    )
+    line = next(ln for ln in django_shell(e2e_env, script) if ln.startswith("state="))
+    status, first = line.removeprefix("state=").split(":", 1)
+    return status, first
+
+
+def _one_approver_per_facility(e2e_env):
+    """Keep exactly one eligible lead/admin per facility; returns the previous flags for restore."""
+    script = (
+        "from core.models import User; "
+        "users = list(User.objects.filter(role__in=['lead', 'facility_admin'], is_active=True)"
+        ".order_by('facility_id', 'username')); "
+        "[print('prev=' + u.username + ':' + str(u.can_confirm_deletion)) for u in users]; "
+        "seen = set(); "
+        "keep = [u.pk for u in users if not (u.facility_id in seen or seen.add(u.facility_id))]; "
+        "[User.objects.filter(pk=u.pk).update(can_confirm_deletion=(u.pk in keep)) for u in users]"
+    )
+    previous = {}
+    for line in django_shell(e2e_env, script):
+        if line.startswith("prev="):
+            name, flag = line.removeprefix("prev=").rsplit(":", 1)
+            previous[name] = flag == "True"
+    return previous
+
+
+@pytest.fixture
+def approver_pool(e2e_env):
+    """Both seed approvers eligible; flags restored afterwards."""
+    previous = _set_approver_pool(e2e_env, {_APPROVER_A, _APPROVER_B})
+    try:
+        yield
+    finally:
+        _restore_approver_pool(e2e_env, previous)
+
+
+@pytest.fixture
+def single_approver_pool(e2e_env):
+    """Only the admin account is eligible; flags restored afterwards."""
+    previous = _set_approver_pool(e2e_env, {_APPROVER_A})
+    try:
+        yield
+    finally:
+        _restore_approver_pool(e2e_env, previous)
+
+
 class TestRetentionDashboardAccess:
     """Dashboard-Zugriff und Inhalt."""
 
@@ -88,8 +201,11 @@ class TestRetentionDashboardAccess:
         page.wait_for_load_state("domcontentloaded")
 
         assert page.locator("h1:has-text('Löschfristen')").is_visible()
-        assert page.locator("text=Ausstehend").first.is_visible()
-        assert page.locator("text=Aufbewahrungsfristen").is_visible()
+        # Scoped to the summary card: the collapsed help text above it also
+        # contains the word "ausstehend" and used to win ``text=Ausstehend``.
+        expect(page.locator("#summary-pending")).to_contain_text("Ausstehend")
+        expect(page.locator("#summary-pending")).to_be_visible()
+        assert page.locator("h3:has-text('Aufbewahrungsfristen')").is_visible()
 
     def test_admin_can_access_dashboard(self, authenticated_page, base_url, e2e_env):
         """Admin kann das Retention Dashboard aufrufen."""
@@ -108,43 +224,223 @@ class TestRetentionDashboardAccess:
         assert page.url != f"{base_url}/retention/" or resp.status == 403
 
 
+_DE = {
+    "first_button": "Erste Freigabe erteilen",
+    "second_button": "Zweite Freigabe erteilen",
+    "pending": "Ausstehend",
+    "released": "Freigegeben",
+    "progress": "1 von 2 Freigaben",
+    "first_by": "Erste Freigabe durch:",
+    "different_person": "Die zweite Freigabe muss eine andere berechtigte Person erteilen.",
+    "will_delete": "Wird beim nächsten Lauf gelöscht",
+}
+_EN = {
+    "first_button": "Grant first release",
+    "second_button": "Grant second release",
+    "pending": "Pending",
+    "released": "Released",
+    "progress": "1 of 2 releases",
+    "first_by": "First released by:",
+    "different_person": "The second release must be granted by a different authorised person.",
+    "will_delete": "Will be deleted on next run",
+}
+
+
+def _badge(card, text):
+    """The status badge span of a card with exactly this text."""
+    return card.locator("span", has_text=re.compile(rf"^\s*{re.escape(text)}\s*$"))
+
+
+def _open_dashboard(page, base_url):
+    page.goto(f"{base_url}/retention/", wait_until="domcontentloaded")
+    page.on("dialog", lambda dialog: dialog.accept())
+
+
+def _two_person_flow(page_a, page_b, base_url, pk, labels, e2e_env):
+    """Person A approves twice (second try rejected), person B finalises; returns visible evidence."""
+    evidence = {}
+    _open_dashboard(page_a, base_url)
+    card = page_a.locator(f"#proposal-{pk}")
+    expect(card).to_be_visible(timeout=10000)
+    expect(_badge(card, labels["pending"])).to_have_count(1)
+    expect(card.get_by_text(labels["progress"])).to_have_count(0)
+
+    # --- A: first release keeps the card pending and shows "1 of 2".
+    card.get_by_role("button", name=labels["first_button"]).click()
+    expect(card.get_by_text(labels["progress"])).to_be_visible(timeout=10000)
+    expect(card.get_by_text(labels["first_by"])).to_be_visible()
+    expect(_badge(card, labels["pending"])).to_have_count(1)
+    expect(_badge(card, labels["released"])).to_have_count(0)
+    evidence["progress_line"] = card.locator("p", has_text=labels["progress"]).first.inner_text()
+    assert _proposal_state(e2e_env, pk) == ("pending", _APPROVER_A)
+
+    # --- A again: rejected with a visible message, no status change, no error page.
+    with page_a.expect_response(lambda r: f"/retention/{pk}/approve/" in r.url) as response_info:
+        card.get_by_role("button", name=labels["second_button"]).click()
+    assert response_info.value.status == 409
+    expect(page_a.get_by_text(labels["different_person"])).to_be_visible(timeout=10000)
+    evidence["rejection"] = labels["different_person"]
+    assert page_a.locator("h1").first.is_visible()
+    assert "/retention/" in page_a.url
+    assert _proposal_state(e2e_env, pk) == ("pending", _APPROVER_A)
+    page_a.reload(wait_until="domcontentloaded")
+    card = page_a.locator(f"#proposal-{pk}")
+    expect(card.get_by_text(labels["progress"])).to_be_visible(timeout=10000)
+    expect(_badge(card, labels["released"])).to_have_count(0)
+
+    # --- B: the second, different person finalises.
+    _open_dashboard(page_b, base_url)
+    card_b = page_b.locator(f"#proposal-{pk}")
+    expect(card_b).to_be_visible(timeout=10000)
+    expect(card_b.get_by_text(labels["progress"])).to_be_visible()
+    expect(_badge(card_b, labels["pending"])).to_have_count(1)
+    card_b.get_by_role("button", name=labels["second_button"]).click()
+    expect(_badge(card_b, labels["released"])).to_have_count(1, timeout=10000)
+    expect(card_b.get_by_text(labels["will_delete"])).to_be_visible()
+    evidence["final_line"] = card_b.get_by_text(labels["will_delete"]).inner_text()
+    assert _proposal_state(e2e_env, pk)[0] == "approved"
+    return evidence
+
+
 class TestRetentionApproveFlow:
-    """Proposal freigeben via HTMX."""
+    """Proposal freigeben via HTMX — manuelle Löschfreigabe durch zwei verschiedene Personen."""
 
     @pytest.mark.smoke
-    def test_approve_proposal(self, authenticated_page, base_url, e2e_env):
-        """Admin gibt einen Proposal frei — Badge wechselt zu 'Freigegeben'."""
+    def test_approve_proposal(self, authenticated_page, lead_page, base_url, e2e_env, approver_pool):
+        """Admin gibt zuerst frei, die Wiederholung wird abgewiesen, erst Leitung gibt endgültig frei (DE)."""
+        pks = _ensure_proposals(e2e_env)
+        evidence = _two_person_flow(authenticated_page, lead_page, base_url, pks[0], _DE, e2e_env)
+        assert "1 von 2 Freigaben" in evidence["progress_line"]
+        assert "Erste Freigabe durch:" in evidence["progress_line"]
+
+    def test_approve_proposal_english(
+        self, browser, base_url, e2e_env, approver_pool, _login_storage_state, _lead_storage_state
+    ):
+        """Dieselbe Strecke mit Sprache Englisch (Browser-Locale und App-Sprache)."""
+        pks = _ensure_proposals(e2e_env)
+        previous = _set_language(e2e_env, [_APPROVER_A, _APPROVER_B], "en")
+        context_a = browser.new_context(storage_state=_login_storage_state, locale="en-US")
+        context_b = browser.new_context(storage_state=_lead_storage_state, locale="en-US")
+        try:
+            page_a, page_b = context_a.new_page(), context_b.new_page()
+            page_a.set_default_timeout(30000)
+            page_b.set_default_timeout(30000)
+            evidence = _two_person_flow(page_a, page_b, base_url, pks[0], _EN, e2e_env)
+            assert "1 of 2 releases" in evidence["progress_line"]
+            assert "First released by:" in evidence["progress_line"]
+            assert evidence["final_line"] == "Will be deleted on next run"
+            # No German card text is left on the finished card.
+            card = page_b.locator(f"#proposal-{pks[0]}")
+            for german in ("Freigegeben", "Freigabe", "Ausstehend"):
+                assert german not in card.inner_text()
+        finally:
+            context_a.close()
+            context_b.close()
+            _restore_language(e2e_env, previous)
+
+    def test_single_approver_first_release_warns(self, authenticated_page, base_url, e2e_env, single_approver_pool):
+        """Mit nur einem berechtigten Konto bleibt es bei 1 von 2; die Karte nennt den zu kleinen Pool."""
         pks = _ensure_proposals(e2e_env)
         page = authenticated_page
-        page.goto(f"{base_url}/retention/")
-        page.wait_for_load_state("domcontentloaded")
-
-        # Nur die EIGENE Karte freigeben (Refs #1787): ``.first`` traf sonst ein
-        # beliebiges Bestands-Proposal einer fremden Person.
+        _open_dashboard(page, base_url)
+        expect(page.get_by_text("Aktuell ist keine manuelle Löschfreigabe", exact=False)).to_be_visible(timeout=10000)
         card = page.locator(f"#proposal-{pks[0]}")
-        card.wait_for(state="visible", timeout=5000)
-        assert card.locator("span:has-text('Ausstehend')").count() >= 1
+        card.get_by_role("button", name="Erste Freigabe erteilen").click()
+        expect(card.get_by_text("1 von 2 Freigaben")).to_be_visible(timeout=10000)
+        expect(card.get_by_text("Weniger als zwei berechtigte Konten", exact=False)).to_be_visible()
+        expect(_badge(card, "Freigegeben")).to_have_count(0)
 
-        # Scope verhindert zugleich den Clash mit dem gleichnamigen Bulk-Toolbar-Button.
-        page.on("dialog", lambda dialog: dialog.accept())
-        card.locator("button:has-text('Freigeben')").click()
 
-        # The card should now show "Freigegeben" — warten, bis HTMX-Swap
-        # das Badge neu gerendert hat.
-        card.locator("span:has-text('Freigegeben')").wait_for(state="visible", timeout=5000)
-        assert card.locator("span:has-text('Freigegeben')").count() >= 1
+class TestRetentionApproverComplianceCard:
+    """Systemadministration sieht die gelbe Karte, wenn eine Einrichtung nur ein berechtigtes Konto hat."""
+
+    _CASES = {
+        "de": (
+            "Genehmiger für den Aufbewahrungslauf",
+            "Nur ein Genehmiger für den Aufbewahrungslauf, keine manuelle Löschfreigabe möglich",
+        ),
+        "en": (
+            "Approvers for the retention run",
+            "Only one approver for the retention run, no manual deletion release possible",
+        ),
+    }
+
+    @pytest.mark.parametrize("language", ["de", "en"])
+    def test_single_approver_shows_yellow_card(self, browser, base_url, e2e_env, _super_admin_storage_state, language):
+        previous_pool = _one_approver_per_facility(e2e_env)
+        previous_lang = _set_language(e2e_env, ["superadmin"], language)
+        locale = "de-DE" if language == "de" else "en-US"
+        context = browser.new_context(storage_state=_super_admin_storage_state, locale=locale)
+        try:
+            page = context.new_page()
+            page.set_default_timeout(30000)
+            page.goto(f"{base_url}/system/compliance/", wait_until="domcontentloaded")
+            card = page.locator("[data-testid='compliance-check-retention_approvers']")
+            expect(card).to_be_visible(timeout=10000)
+            label, message = self._CASES[language]
+            expect(card).to_contain_text(label)
+            expect(card).to_contain_text(message)
+            assert card.get_attribute("data-status") == "warning"
+            # The status label carries the warning colour class (yellow), not green/red.
+            expect(card.locator(".text-yellow-700")).to_have_count(1)
+        finally:
+            context.close()
+            _restore_language(e2e_env, previous_lang)
+            _restore_approver_pool(e2e_env, previous_pool)
+
+
+class TestRetentionFirstReleaseReset:
+    """Hold, Zurückstellen und Ablehnen verwerfen die erste Freigabe."""
+
+    def test_hold_clears_first_release(self, authenticated_page, base_url, e2e_env, approver_pool):
+        pks = _ensure_proposals(e2e_env)
+        page = authenticated_page
+        _open_dashboard(page, base_url)
+        card = page.locator(f"#proposal-{pks[0]}")
+        card.get_by_role("button", name="Erste Freigabe erteilen").click()
+        expect(card.get_by_text("1 von 2 Freigaben")).to_be_visible(timeout=10000)
+
+        TestRetentionHoldFlow._set_hold(card, "E2E: Hold nach erster Freigabe")
+        expect(_badge(card, "Legal Hold")).to_have_count(1, timeout=10000)
+        assert _proposal_state(e2e_env, pks[0]) == ("held", "")
+
+        card.get_by_role("button", name="Hold aufheben").click()
+        # Back to a fresh start: first button again, no progress line.
+        expect(card.get_by_role("button", name="Erste Freigabe erteilen")).to_be_visible(timeout=10000)
+        expect(card.get_by_text("1 von 2 Freigaben")).to_have_count(0)
+        assert _proposal_state(e2e_env, pks[0]) == ("pending", "")
+
+    @pytest.mark.parametrize(
+        ("button_testid", "expected_status"),
+        [("retention-bulk-defer", "deferred"), ("retention-bulk-reject", "rejected")],
+    )
+    def test_defer_and_reject_clear_first_release(
+        self, authenticated_page, base_url, e2e_env, approver_pool, button_testid, expected_status
+    ):
+        pks = _ensure_proposals(e2e_env)
+        page = authenticated_page
+        _open_dashboard(page, base_url)
+        card = page.locator(f"#proposal-{pks[0]}")
+        card.get_by_role("button", name="Erste Freigabe erteilen").click()
+        expect(card.get_by_text("1 von 2 Freigaben")).to_be_visible(timeout=10000)
+        assert _proposal_state(e2e_env, pks[0]) == ("pending", _APPROVER_A)
+
+        card.locator("[data-bulk-proposal]").check()
+        page.locator(f"[data-testid='{button_testid}']").click()
+        page.wait_for_load_state("domcontentloaded")
+        expect(page.locator("[data-testid='retention-bulk-count']")).to_be_hidden(timeout=10000)
+        status, first = _proposal_state(e2e_env, pks[0])
+        assert (status, first) == (expected_status, "")
 
 
 class TestRetentionBulkFlow:
     """Bulk-Actions: Mehrere Löschvorschläge in einem Rutsch bearbeiten."""
 
-    def test_bulk_approve_two_proposals(self, authenticated_page, base_url, e2e_env):
+    def test_bulk_approve_counts_first_releases_only(self, authenticated_page, base_url, e2e_env, approver_pool):
+        """Sammelfreigabe zweier frischer Vorschläge: zwei erste Freigaben, keine endgültige."""
         pks = _ensure_proposals(e2e_env)
         page = authenticated_page
-        page.goto(f"{base_url}/retention/")
-        page.wait_for_load_state("domcontentloaded")
-
-        approved_before = page.locator("span:has-text('Freigegeben')").count()
+        _open_dashboard(page, base_url)
 
         # Gezielt die beiden EIGENEN Vorschläge auswählen (Refs #1787) — ``nth(0/1)``
         # über alle Checkboxen hätte fremde Bestands-Vorschläge erwischt.
@@ -155,19 +451,47 @@ class TestRetentionBulkFlow:
         counter.wait_for(state="visible", timeout=10000)
         assert "2" in counter.inner_text()
 
-        page.on("dialog", lambda dialog: dialog.accept())
         page.locator("[data-testid='retention-bulk-approve']").click()
 
-        # HX-Redirect triggert full-page-Reload zurück auf /retention/ —
-        # auf mindestens zwei neue „Freigegeben"-Badges warten.
-        page.wait_for_function(
-            (
-                "count => Array.from(document.querySelectorAll('span'))"
-                ".filter(s => s.textContent.trim() === 'Freigegeben').length >= count"
-            ),
-            arg=approved_before + 2,
-            timeout=10000,
-        )
+        # HX-Redirect triggert Full-Page-Reload; die Meldung trennt erste von endgültigen Freigaben.
+        expect(page.get_by_text("2 erste Freigaben erteilt (1 von 2 Freigaben).")).to_be_visible(timeout=10000)
+        expect(page.get_by_text("endgültig freigegeben", exact=False)).to_have_count(0)
+        for pk in pks[:2]:
+            card = page.locator(f"#proposal-{pk}")
+            expect(card.get_by_text("1 von 2 Freigaben")).to_be_visible()
+            expect(_badge(card, "Ausstehend")).to_have_count(1)
+            assert _proposal_state(e2e_env, pk) == ("pending", _APPROVER_A)
+
+    def test_bulk_mixed_selection_and_same_person_skipped(
+        self, authenticated_page, lead_page, base_url, e2e_env, approver_pool
+    ):
+        """Gemischte Auswahl: erste Stimme für den frischen, endgültige für den vorbestätigten Vorschlag."""
+        pks = _ensure_proposals(e2e_env)
+        fresh, half = pks[0], pks[1]
+
+        # Leitung gibt den zweiten Vorschlag zuerst frei (einzeln).
+        _open_dashboard(lead_page, base_url)
+        half_card = lead_page.locator(f"#proposal-{half}")
+        half_card.get_by_role("button", name="Erste Freigabe erteilen").click()
+        expect(half_card.get_by_text("1 von 2 Freigaben")).to_be_visible(timeout=10000)
+
+        # Admin wählt beide aus.
+        page = authenticated_page
+        _open_dashboard(page, base_url)
+        for pk in (fresh, half):
+            page.locator(f"#proposal-{pk} [data-bulk-proposal]").check()
+        page.locator("[data-testid='retention-bulk-approve']").click()
+        expect(page.get_by_text("1 erste Freigabe erteilt (1 von 2 Freigaben).")).to_be_visible(timeout=10000)
+        expect(page.get_by_text("1 Löschvorschlag endgültig freigegeben.")).to_be_visible()
+        assert _proposal_state(e2e_env, fresh) == ("pending", _APPROVER_A)
+        assert _proposal_state(e2e_env, half)[0] == "approved"
+        expect(_badge(page.locator(f"#proposal-{half}"), "Freigegeben")).to_have_count(1)
+
+        # Dieselbe Person erneut auf den halb freigegebenen Vorschlag: übersprungen, Status unverändert.
+        page.locator(f"#proposal-{fresh} [data-bulk-proposal]").check()
+        page.locator("[data-testid='retention-bulk-approve']").click()
+        expect(page.get_by_text("1 Löschvorschlag übersprungen", exact=False)).to_be_visible(timeout=10000)
+        assert _proposal_state(e2e_env, fresh) == ("pending", _APPROVER_A)
 
     def test_select_all_toggles_every_checkbox(self, authenticated_page, base_url, e2e_env):
         _ensure_proposals(e2e_env)
@@ -239,10 +563,11 @@ class TestRetentionHoldFlow:
         page.on("dialog", lambda dialog: dialog.accept())
         card.locator("button:has-text('Hold aufheben')").click()
 
-        # After dismissal, card should revert — auf Reaparition der
-        # Freigeben-Buttons warten (signalisiert Zurück-zu-Ausstehend).
+        # After dismissal, card should revert — auf Wiedererscheinen des
+        # Freigabe-Buttons warten (signalisiert Zurück-zu-Ausstehend; der Knopf
+        # heißt seit der Zwei-Personen-Regel „Erste Freigabe erteilen").
         page.wait_for_load_state("domcontentloaded")
-        card_btn = card.locator("button:has-text('Freigeben')")
+        card_btn = card.get_by_role("button", name="Erste Freigabe erteilen")
         card_btn.wait_for(state="visible", timeout=5000)
         assert card_btn.count() >= 1
 

@@ -21,9 +21,10 @@ niemand.
    Redaktion an der PERSON — ``anonymize_client`` setzt
    ``pseudonym = "Gelöscht-<pk8>"`` und ``is_active=False``. Die Personenliste
    filtert auf ``is_active=True`` (``views/clients.py``), die Person
-   verschwindet dort also; ihre Detailseite bleibt bewusst erreichbar
-   (Kommentar ebd., Refs #1777) und zeigt das neue Pseudonym. Genau diese drei
-   Beobachtungen sind der Nachweis.
+   verschwindet dort also; ihre Akte antwortet seit der Vereinheitlichung der
+   Lesepfade widerrufener Personen ebenfalls mit **404** (``is_active=True`` im
+   Detail-Loader). Das neue Pseudonym prueft die Datenbank-Gegenprobe. Genau
+   diese Beobachtungen sind der Nachweis.
 
 **Warnung zum geteilten Lauf** (Muster ``test_statistics_snapshot.py``): Der
 ``enforce_retention``-Lauf ist installationsweit — das Command kennt keinen
@@ -33,7 +34,6 @@ fremde Vorschlaege, Fristen oder Personen. Er hebt insbesondere keinen fremden
 Legal Hold auf.
 """
 
-import re
 import subprocess
 import uuid
 
@@ -157,8 +157,8 @@ print("E2E_PROPOSALS_LEFT=" + str(RetentionProposal.objects.filter(pk="{proposal
 class TestRetentionChain:
     """Vom Vorschlag bis zur sichtbaren Redaktion — in einem Durchgang."""
 
-    def test_approved_proposal_leads_to_visible_anonymization(self, authenticated_page, base_url, e2e_env):
-        """Freigabe im Dashboard → ``enforce_retention`` → 404 + „Gelöscht-"-Pseudonym."""
+    def test_approved_proposal_leads_to_visible_anonymization(self, authenticated_page, lead_page, base_url, e2e_env):
+        """Zwei Freigaben im Dashboard → ``enforce_retention`` → 404 + „Gelöscht-"-Pseudonym."""
         page = authenticated_page
         pseudonym = f"E2E-RET-{uuid.uuid4().hex[:8]}"
         client_pk, event_pk = _create_doomed_event(e2e_env, pseudonym)
@@ -184,8 +184,19 @@ class TestRetentionChain:
         karte = page.locator(f"#proposal-{proposal_pk}")
         expect(karte).to_be_visible(timeout=10000)
         expect(karte.locator("span:has-text('Ausstehend')")).to_have_count(1, timeout=10000)
-        karte.locator("button:has-text('Freigeben')").click()
-        expect(karte.locator("span:has-text('Freigegeben')")).to_be_visible(timeout=10000)
+        karte.get_by_role("button", name="Erste Freigabe erteilen").click()
+        # Seit der Zwei-Personen-Regel genuegt eine Freigabe nicht: Karte bleibt
+        # ausstehend, und der Lauf loescht noch nichts.
+        expect(karte.get_by_text("1 von 2 Freigaben")).to_be_visible(timeout=10000)
+        expect(karte.locator("span:has-text('Freigegeben')")).to_have_count(0)
+
+        # --- Zweite, andere berechtigte Person (Leitung) gibt endgueltig frei.
+        lead_page.on("dialog", lambda dialog: dialog.accept())
+        lead_page.goto(f"{base_url}/retention/", wait_until="domcontentloaded")
+        karte_leitung = lead_page.locator(f"#proposal-{proposal_pk}")
+        expect(karte_leitung.get_by_text("1 von 2 Freigaben")).to_be_visible(timeout=10000)
+        karte_leitung.get_by_role("button", name="Zweite Freigabe erteilen").click()
+        expect(karte_leitung.locator("span:has-text('Freigegeben')")).to_be_visible(timeout=10000)
 
         # --- Der naechtliche Lauf.
         _run_enforce_retention(e2e_env)
@@ -196,11 +207,13 @@ class TestRetentionChain:
             f"Getilgtes Ereignis muss 404 liefern, war: {antwort and antwort.status}"
         )
 
-        # --- 2. Nachweis: die Person traegt das Redaktions-Pseudonym.
-        page.goto(f"{base_url}/clients/{client_pk}/", wait_until="domcontentloaded")
-        expect(page.locator("#main-content")).to_contain_text(
-            re.compile(rf"Gelöscht-{client_pk[:8]}"),
-            timeout=10000,
+        # --- 2. Nachweis: die anonymisierte Person ist inaktiv; ihre Akte antwortet
+        #        seit der Vereinheitlichung der Lesepfade widerrufener Personen mit
+        #        404 statt mit dem neuen Pseudonym (das Pseudonym prueft Nachweis 4
+        #        an der Datenbank).
+        antwort = page.goto(f"{base_url}/clients/{client_pk}/", wait_until="domcontentloaded")
+        assert antwort is not None and antwort.status == 404, (
+            f"Akte einer anonymisierten Person muss 404 liefern, war: {antwort and antwort.status}"
         )
 
         # --- 3. Nachweis: unter dem alten Pseudonym ist sie nicht mehr auffindbar.
