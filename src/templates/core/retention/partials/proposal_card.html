@@ -1,3 +1,4 @@
+{% load date_input %}
 {% load i18n core_tags %}
 
 <div id="proposal-{{ proposal.pk }}" class="proposal-card bg-surface border-l-4 {% if proposal.urgency == 'red' %}border-red-500{% elif proposal.urgency == 'yellow' %}border-yellow-400{% else %}border-subtle{% endif %} rounded-md p-4 shadow-xs"
@@ -78,8 +79,8 @@
                           placeholder="{% trans 'Grund für den Hold...' %}"></textarea>
             </div>
             <div class="mb-3">
-                <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Ablaufdatum" %} ({% trans "optional" %})</label>
-                <input type="date" name="expires_at"
+                <label for="hold-expires-{{ proposal.pk }}" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Ablaufdatum" %} ({% trans "optional" %})</label>
+                <input id="hold-expires-{{ proposal.pk }}" type="date" {% app_date_attrs "date" %} name="expires_at"
                        class="w-full rounded-md border-subtle text-sm focus:border-accent focus:ring-1 focus:ring-accent">
             </div>
             <div class="flex items-center gap-2">

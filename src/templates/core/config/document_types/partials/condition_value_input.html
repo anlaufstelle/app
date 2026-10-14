@@ -1,3 +1,4 @@
+{% load date_input %}
 {% load i18n %}
 {% comment %}
 Typisiertes Wert-Eingabefeld für den Regel-Editor (M1 P6, E19, Refs #1057).
@@ -34,9 +35,9 @@ condition_id_prefix.
 {% elif field_type == "number" %}
     <input id="{{ condition_id_prefix }}-value" type="number" step="any" name="value" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
 {% elif field_type == "date" %}
-    <input id="{{ condition_id_prefix }}-value" type="date" name="value" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
+    <input id="{{ condition_id_prefix }}-value" type="date" {% app_date_attrs "date" %} name="value" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
 {% elif field_type == "time" %}
-    <input id="{{ condition_id_prefix }}-value" type="time" name="value" step="1" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
+    <input id="{{ condition_id_prefix }}-value" type="time" {% app_date_attrs "time" seconds=True %} name="value" step="1" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
 {% else %}
     <input id="{{ condition_id_prefix }}-value" type="text" name="value" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
 {% endif %}

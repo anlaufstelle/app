@@ -47,6 +47,8 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from core.utils.date_input import AppDateInput, AppTimeInput
+
 if TYPE_CHECKING:
     from django.utils.functional import _StrPromise
 
@@ -255,11 +257,11 @@ def _widget_number() -> forms.Widget:
 
 
 def _widget_date() -> forms.Widget:
-    return forms.DateInput(attrs={"type": "date"})
+    return AppDateInput(attrs={"type": "date"})
 
 
 def _widget_time() -> forms.Widget:
-    return forms.TimeInput(attrs={"type": "time"})
+    return AppTimeInput(attrs={"type": "time"})
 
 
 def _widget_boolean() -> forms.Widget:

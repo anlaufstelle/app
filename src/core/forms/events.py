@@ -35,6 +35,7 @@ from core.forms.dynamic import (  # noqa: F401 — Re-Export, Importpfad-Stabili
 from core.forms.fields import AmbiguousWallClock, DstAwareDateTimeField
 from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
 from core.models import Case, DocumentType
+from core.utils.date_input import AppDateTimeInput
 
 
 def _case_label(case: Case) -> str:
@@ -85,7 +86,7 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
         # ``AmbiguousWallClock`` hier an statt als Feldfehler — aufgeloest wird
         # sie unten in ``clean()`` mit der Antwort auf ``occurred_at_fold``.
         resolve_ambiguous=True,
-        widget=forms.DateTimeInput(
+        widget=AppDateTimeInput(
             attrs={
                 "type": "datetime-local",
             },

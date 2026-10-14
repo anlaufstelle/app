@@ -4,6 +4,7 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.mixins import TailwindFormMixin
+from core.utils.date_input import AppDateInput
 
 
 class ProtectionReasonForm(TailwindFormMixin, forms.Form):
@@ -18,5 +19,5 @@ class LegalHoldForm(ProtectionReasonForm):
     expires_at = forms.DateField(
         label=_("Ablaufdatum"),
         required=False,
-        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+        widget=AppDateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
     )

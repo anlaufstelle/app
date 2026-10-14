@@ -60,6 +60,7 @@ FORM_FACTORIES = {
 }
 
 #: form -> field -> (Widget-Klasse, traegt INPUT_CSS, uebrige attrs)
+# Application-language widgets intentionally replace native widget classes (Refs #2603).
 EXPECTED = {
     "CaseForm": {
         "title": ("TextInput", True, {"maxlength": "200"}),
@@ -148,7 +149,7 @@ EXPECTED = {
     "EventMetaForm": {
         "document_type": ("Select", True, {"hx-get": "", "hx-target": "#dynamic-fields", "hx-trigger": "change"}),
         "client": ("HiddenInput", False, {}),
-        "occurred_at": ("DateTimeInput", True, {}),
+        "occurred_at": ("AppDateTimeInput", True, {"step": "1"}),
         # Refs #2127: Okkurrenz-Auswahl fuer die doppelte Stunde am
         # Rueckfalltag. Das Widget wird im Template von Hand gerendert (wie
         # ``document_type``); der Katalog haelt trotzdem fest, dass das Feld
@@ -197,12 +198,12 @@ EXPECTED = {
         "description": ("Textarea", True, {"rows": 4, "cols": "40"}),
         "priority": ("Select", True, {}),
         "due_date": (
-            "DateInput",
+            "AppDateInput",
             True,
             {"min": ANY, "max": ANY, "data-msg-too-early": ANY, "data-msg-too-late": ANY},
         ),
         "remind_at": (
-            "DateInput",
+            "AppDateInput",
             True,
             {"min": ANY, "max": ANY, "data-msg-too-early": ANY, "data-msg-too-late": ANY},
         ),

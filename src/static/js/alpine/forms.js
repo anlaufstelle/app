@@ -784,10 +784,12 @@ document.addEventListener("alpine:init", () => {
             this._targetId = this.$el.dataset.targetInput || "";
         },
         _commit(d) {
-            const val = d.toLocaleDateString("en-CA"); // YYYY-MM-DD in local TZ
+            const pad = value => String(value).padStart(2, "0");
+            const val = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
             const input = document.getElementById(this._targetId);
             if (!input) return;
-            input.value = val;
+            if (window.appDateFields) window.appDateFields.setISO(input, val);
+            else input.value = val;
             input.dispatchEvent(new Event("input", { bubbles: true }));
             input.dispatchEvent(new Event("change", { bubbles: true }));
         },

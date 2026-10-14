@@ -10,6 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
 from core.models import WorkItem
 from core.services.case.workitems import assignable_workitem_users
+from core.utils.date_input import AppDateInput
 
 
 def max_workitem_date() -> date:
@@ -62,8 +63,8 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
             # ist das `%d.%m.%Y`, wodurch der Prefill beim Edit leer bliebe.
             # The ``min``/``max`` bounds are set per instance in ``__init__``;
             # values computed here would freeze at import time (Refs #2380).
-            "due_date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
-            "remind_at": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "due_date": AppDateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "remind_at": AppDateInput(format="%Y-%m-%d", attrs={"type": "date"}),
         }
 
     def __init__(self, *args, facility=None, pinned_client=None, **kwargs):

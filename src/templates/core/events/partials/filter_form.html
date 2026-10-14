@@ -1,5 +1,5 @@
 {% extends "components/_filter_bar.html" %}
-{% load i18n %}
+{% load date_input i18n %}
 {% comment %}OOB markup preserves input properties in HTMX history snapshots.{% endcomment %}
 {% block filter_attributes %}id="event-filters" method="get" action="{% url 'core:event_list' %}"
     hx-get="{% url 'core:event_list' %}" hx-target="#event-table" hx-push-url="true" hx-indicator="#event-filters-spinner"
@@ -12,9 +12,9 @@
     {% include "components/_htmx_spinner.html" with spinner_id="event-filters-spinner" position_class="absolute right-3 top-3" %}
 </div>
 <div class="flex-1 min-w-0 basis-40"><label for="event-date_from" class="block text-sm text-ink-soft mb-1">{% translate "Von" %}</label>
-    <input id="event-date_from" name="date_from" data-filter-persist-exclude type="date" value="{{ filters.date_from|default:'' }}" class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft"></div>
+    <input id="event-date_from" name="date_from" data-filter-persist-exclude type="date" {% app_date_attrs "date" %} value="{{ filters.date_from|default:'' }}" class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft"></div>
 <div class="flex-1 min-w-0 basis-40"><label for="event-date_to" class="block text-sm text-ink-soft mb-1">{% translate "Bis" %}</label>
-    <input id="event-date_to" name="date_to" data-filter-persist-exclude type="date" value="{{ filters.date_to|default:'' }}" class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft"></div>
+    <input id="event-date_to" name="date_to" data-filter-persist-exclude type="date" {% app_date_attrs "date" %} value="{{ filters.date_to|default:'' }}" class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft"></div>
 <div class="flex-1 min-w-0 basis-40"><label for="event-range" class="block text-sm text-ink-soft mb-1">{% translate "Schnellwahl" %}</label>
     <select id="event-range" name="range" class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft">
         <option value="">{% translate "Alle Zeiträume" %}</option>

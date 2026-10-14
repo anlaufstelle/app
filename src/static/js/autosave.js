@@ -87,7 +87,7 @@
         var elements = form.elements;
         for (var i = 0; i < elements.length; i++) {
             var el = elements[i];
-            if (!el.name || el.name === "csrfmiddlewaretoken" || el.type === "hidden") continue;
+            if (!el.name || el.name === "csrfmiddlewaretoken" || (el.type === "hidden" && !el.hasAttribute("data-app-date-transport"))) continue;
             if (el.type === "checkbox") {
                 data[el.name] = el.checked;
             } else if (el.type === "radio") {
@@ -110,7 +110,7 @@
         var elements = form.elements;
         for (var i = 0; i < elements.length; i++) {
             var el = elements[i];
-            if (!el.name || el.name === "csrfmiddlewaretoken" || el.type === "hidden") continue;
+            if (!el.name || el.name === "csrfmiddlewaretoken" || (el.type === "hidden" && !el.hasAttribute("data-app-date-transport"))) continue;
             if (!(el.name in data)) continue;
             var value = data[el.name];
             if (el.type === "checkbox") {
