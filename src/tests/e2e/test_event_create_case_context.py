@@ -294,7 +294,16 @@ class TestAllowedCaseSurvivesErrors:
         self, staff_page, base_url, error_scene, e2e_env
     ):
         page = staff_page
+        # The stricter type is only preselected for a person whose stage permits it. The stage drops
+        # (another tab or user) after the form was rendered, so the save is refused by the service.
+        set_stage = (
+            "from core.models import Client; "
+            f"print(Client.objects.filter(pk='{error_scene['a']}').update(contact_stage='%s'))"
+        )
+        django_shell(e2e_env, set_stage % "qualified")
         self._open(page, base_url, error_scene, document_type=error_scene["stage"])
+        expect(page.locator("#id_document_type")).to_have_value(error_scene["stage"], timeout=10000)
+        django_shell(e2e_env, set_stage % "identified")
         self._submit(page)
 
         # The service rejects the contact stage: the form comes back with the concrete reason.
@@ -427,7 +436,7 @@ class TestPendingCaseContext:
         # Switch to person B while A's answer is still outstanding.
         search = page.get_by_role("combobox", name="Person suchen")
         search.fill(f"ERF-{scene['marker']}-B")
-        page.locator("[role='option']", has_text=f"ERF-{scene['marker']}-B").first.click()
+        page.locator("[role='option']", has_text=f"ERF-{scene['marker']}-B").click()
         for _ in range(50):
             if len(held) == 2:
                 break
@@ -521,7 +530,7 @@ class TestTemplateSwitchAndStaleAnswers:
 
         search = page.get_by_role("combobox", name="Person suchen")
         search.fill(f"ERF-{scene['marker']}-B")
-        page.locator("[role='option']", has_text=f"ERF-{scene['marker']}-B").first.click()
+        page.locator("[role='option']", has_text=f"ERF-{scene['marker']}-B").click()
         expect(page.locator("#id_case option", has_text=f"ERF-Fall-B-{scene['marker']}")).to_have_count(
             1, timeout=10000
         )
@@ -609,6 +618,36 @@ class TestTemplateFromCaseFile:
         assert _stage_event_cases(e2e_env, error_scene) == [], "no event of the refused type may be stored"
         stored = _latest_event_of_client(e2e_env, error_scene["a"])
         assert stored == {"case": error_scene["ca"], "notiz": "Nach erklärtem Zurücksetzen gespeichert"}
+
+    def test_reset_keeps_the_stricter_type_unselected_when_it_is_the_facility_default(
+        self, staff_page, base_url, error_scene, e2e_env
+    ):
+        """The refused type must stay unselected even when the facility preselects exactly that type."""
+        lines = django_shell(
+            e2e_env,
+            "from core.models import Facility, Settings; "
+            "settings = Settings.objects.get(facility=Facility.objects.get(name='Hauptstelle')); "
+            "print('previous=' + str(settings.default_document_type_id or '')); "
+            f"settings.default_document_type_id = '{error_scene['stage']}'; settings.save()",
+        )
+        previous = next(ln for ln in lines if ln.startswith("previous=")).removeprefix("previous=")
+        page = staff_page
+        try:
+            self._open_form_from_case_file(page, base_url, error_scene)
+            self._apply_template(page, error_scene, "t3")
+
+            expect(page.locator("[data-testid='template-stage-reset']")).to_be_visible(timeout=10000)
+            expect(page.locator("input[name='client']")).to_have_value(error_scene["a"])
+            expect(page.locator("#id_case")).to_have_value(error_scene["ca"], timeout=10000)
+            expect(page.locator("#id_document_type")).not_to_have_value(error_scene["stage"])
+            expect(page.locator(f"[name='erf-frei-{error_scene['marker']}']")).to_have_count(0)
+        finally:
+            django_shell(
+                e2e_env,
+                "from core.models import Facility, Settings; "
+                "Settings.objects.filter(facility=Facility.objects.get(name='Hauptstelle')).update("
+                f"default_document_type_id={previous!r} or None)",
+            )
 
     def test_template_switch_after_case_was_closed_explains_reset_and_stores_without_case(
         self, staff_page, base_url, error_scene, e2e_env
