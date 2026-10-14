@@ -133,15 +133,26 @@ def dataset(e2e_env):
 
 
 def rows(page):
-    return page.locator("#event-table tbody tr")
+    """One header button per contact card (the list renders the shared Zeitstrom card, not a table)."""
+    return page.locator("#event-table button[aria-controls^='event-detail-']")
 
 
 def hrefs(page):
-    return sorted(page.locator("#event-table tbody tr a").evaluate_all("els => els.map(e => e.getAttribute('href'))"))
+    return sorted(
+        page.locator("#event-table a[href^='/events/']").evaluate_all("els => els.map(e => e.getAttribute('href'))")
+    )
 
 
 def query_of(url):
     return parse_qs(urlsplit(url).query)
+
+
+def open_more_filters(page):
+    """Open the collapsed „Weitere Filter“ block (case, created by, shift, anonymous) if it is closed."""
+    details = page.locator("#event-filters details")
+    if details.get_attribute("open") is None:
+        details.locator("summary").click()
+    expect(details).to_have_attribute("open", "")
 
 
 def submit_filters(page):
@@ -187,12 +198,14 @@ class TestFilterRun:
 
         # Type "Alle" again and filter by the creator: the elevated contact joins.
         page.select_option("#event-doc_type", "")
+        open_more_filters(page)
         page.select_option("#event-created_by", str(dataset["emma"]))
         submit_filters(page)
         expect(rows(page)).to_have_count(4)
         assert query_of(page.url)["created_by"] == [str(dataset["emma"])]
 
         # "Nur meine" for the signed-in staff user: all 27 own, visible contacts.
+        open_more_filters(page)
         page.select_option("#event-created_by", "")
         page.check("#event-mine")
         submit_filters(page)
@@ -227,6 +240,7 @@ class TestSharedUrlAndHistory:
         page = staff_page
         open_list(page, base_url, RANGE)
         page.select_option("#event-doc_type", dataset["type_b"])
+        open_more_filters(page)
         page.select_option("#event-created_by", str(dataset["emma"]))
         submit_filters(page)
         expect(rows(page)).to_have_count(3)
@@ -367,18 +381,16 @@ class TestWithoutJavaScript:
 
 
 class TestMobileCards:
-    def test_cards_replace_the_table_on_a_narrow_viewport(self, mobile_authenticated_page, base_url, dataset):
+    def test_cards_fit_a_narrow_viewport(self, mobile_authenticated_page, base_url, dataset):
         page = mobile_authenticated_page
         open_list(page, base_url, RANGE)
-        cards = page.locator("[data-testid='event-mobile-cards'] > div")
-        expect(cards).to_have_count(PAGE_SIZE)
-        expect(page.locator("#event-table table")).to_be_hidden()
+        expect(rows(page)).to_have_count(PAGE_SIZE)
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
         page.select_option("#event-doc_type", dataset["type_b"])
         submit_filters(page)
-        expect(cards).to_have_count(3)
-        expect(cards.first.locator("a")).to_be_visible()
+        expect(rows(page)).to_have_count(3)
+        expect(rows(page).first).to_be_visible()
 
 
 class TestRoleColumns:
@@ -387,7 +399,7 @@ class TestRoleColumns:
         open_list(page, base_url, RANGE)
         expect_total(page, PAGE_SIZE, ASSISTANT_TOTAL)
         expect(page.locator("#event-case")).to_have_count(0)
-        expect(page.locator("#event-table thead th", has_text="Fall")).to_have_count(0)
+        expect(page.locator("#event-table")).not_to_contain_text("Fall:")
         expect(page.locator("#event-doc_type option", has_text=f"{PREFIX} Erhöht")).to_have_count(0)
 
         # A forged case filter is ignored, not applied: the total stays unfiltered.
@@ -398,6 +410,5 @@ class TestRoleColumns:
         page = staff_page
         open_list(page, base_url, f"{RANGE}&case={dataset['case']}")
         expect(page.locator("#event-case")).to_have_value(dataset["case"])
-        expect(page.locator("#event-table thead th", has_text="Fall")).to_have_count(1)
         expect(rows(page)).to_have_count(3)
-        expect(rows(page).first).to_contain_text(f"{PREFIX} Fall")
+        expect(rows(page).first).to_contain_text(f"Fall: {PREFIX} Fall")
