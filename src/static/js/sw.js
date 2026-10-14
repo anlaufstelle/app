@@ -706,10 +706,19 @@ const SHELL_ROUTES = [
 async function _serveShell(shellUrl) {
     let preference;
     if (shellLanguage === null) {
-        try { preference = await caches.match(SHELL_LANGUAGE_KEY); } catch (_e) { /* No persisted preference. */ }
+        let preferenceRead = false;
+        let neverSelected = false;
+        try {
+            preference = await caches.match(SHELL_LANGUAGE_KEY);
+            preferenceRead = true;
+        } catch (_e) { /* No persisted preference. */ }
         try {
             const keys = await caches.keys();
             const languages = ["de", "en"].filter(language => keys.includes(SHELL_LANGUAGE_CACHES[language]));
+            // No account has selected a language on this installation yet
+            // (cold start before the first login): the default public shell
+            // applies until a page reports the account language.
+            neverSelected = preferenceRead && !preference && languages.length === 0;
             // A fresh message received during the read still wins.
             if (shellLanguage === null && languages.length === 1) {
                 await caches.open(SHELL_LANGUAGE_CACHES[languages[0]]);
@@ -722,7 +731,7 @@ async function _serveShell(shellUrl) {
                 shellLanguageDirty = false;
             }
         } catch (_e) { /* Unconfirmed storage never authorizes a cached shell. */ }
-        if (shellLanguage === null) {
+        if (shellLanguage === null && !neverSelected) {
             // Legacy metadata is only a hint for the error text, never proof
             // of the current account language after a worker restart.
             const hint = preference ? await preference.text() : "de";

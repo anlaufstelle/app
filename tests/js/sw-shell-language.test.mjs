@@ -243,6 +243,32 @@ it.each([["de", "en"], ["en", "de"]])("a failed %s to %s preference write cannot
     expect(await response.text()).not.toBe(previous === "en" ? "English shell" : "German shell");
 });
 
+it("a fresh installation without any language selection serves the default shell", async () => {
+    const { caches } = preferenceCache(new Map([
+        ["/offline/event-shell/?shell_language=de", new Response("German shell")],
+        ["/offline/event-shell/?shell_language=en", new Response("English shell")],
+        ["/offline/client-shell/?shell_language=de", new Response("German client shell")],
+    ]));
+    const worker = workerContext(offlineFetch(), caches);
+    const create = await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`));
+    expect(create.status).toBe(200);
+    expect(await create.text()).toBe("German shell");
+    const client = await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/clients/${UUID}/`));
+    expect(await client.text()).toBe("German client shell");
+});
+
+it("a language selected later replaces the default shell of a fresh installation", async () => {
+    const { caches } = preferenceCache(new Map([
+        ["/offline/event-shell/?shell_language=de", new Response("German shell")],
+        ["/offline/event-shell/?shell_language=en", new Response("English shell")],
+    ]));
+    let worker = workerContext(offlineFetch(), caches);
+    expect(await (await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`))).text()).toBe("German shell");
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language: "en" });
+    worker = workerContext(offlineFetch(), caches);
+    expect(await (await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`))).text()).toBe("English shell");
+});
+
 it("interrupted language marker cleanup remains uncertain after worker restart", async () => {
     const { caches, names } = preferenceCache(new Map([
         ["/offline/shell-language/", new Response("de")],
