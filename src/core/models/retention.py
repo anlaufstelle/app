@@ -64,6 +64,9 @@ class RetentionProposal(models.Model):
         verbose_name=_("Freigegeben von"),
     )
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Freigegeben am"))
+    auto_approved_at = models.DateTimeField(
+        null=True, blank=True, editable=False, verbose_name=_("Automatisch freigegeben am")
+    )
     rejected_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Abgelehnt am"))
     proposed_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Vorgeschlagen am"))
     deletion_due_at = models.DateField(verbose_name=_("Löschfrist"))
@@ -106,6 +109,22 @@ class RetentionProposal(models.Model):
                 name="unique_active_retention_proposal",
             ),
         ]
+
+    @property
+    def has_approval_evidence(self):
+        """Require two documented reviewers or the explicit automatic exception."""
+        if self.status != self.Status.APPROVED or self.approved_at is None:
+            return False
+        if self.auto_approved_at is not None:
+            return self.approved_by_id is None and self.auto_approved_at == self.approved_at
+        return (
+            self.first_approved_by_id is not None
+            and self.approved_by_id is not None
+            and self.first_approved_by_id != self.approved_by_id
+            and self.first_approved_at is not None
+            and self.first_approved_at <= self.approved_at
+            and self.proposed_by_id not in (self.first_approved_by_id, self.approved_by_id)
+        )
 
     def __str__(self):
         return f"Löschvorschlag {self.target_type} ({self.get_status_display()})"

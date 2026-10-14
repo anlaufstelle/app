@@ -500,8 +500,16 @@ def _lock_check_and_mark_approved(proposal, *, user=None, auto_approve_max_defer
             # A hold may have reopened a previously finalized proposal.
             locked.approved_by = None
             locked.approved_at = None
+            locked.auto_approved_at = None
             locked.save(
-                update_fields=["status", "first_approved_by", "first_approved_at", "approved_by", "approved_at"]
+                update_fields=[
+                    "status",
+                    "first_approved_by",
+                    "first_approved_at",
+                    "approved_by",
+                    "approved_at",
+                    "auto_approved_at",
+                ]
             )
             return locked
         if locked.first_approved_by_id == user.pk:
@@ -523,7 +531,8 @@ def _lock_check_and_mark_approved(proposal, *, user=None, auto_approve_max_defer
     locked.status = RetentionProposal.Status.APPROVED
     locked.approved_at = timezone.now()
     locked.approved_by = user
-    locked.save(update_fields=["status", "approved_at", "approved_by"])
+    locked.auto_approved_at = locked.approved_at if auto_approve_max_defer_count is not None else None
+    locked.save(update_fields=["status", "approved_at", "approved_by", "auto_approved_at"])
     return locked
 
 
@@ -538,6 +547,7 @@ def approve_proposal(proposal, user):
     proposal.first_approved_at = locked.first_approved_at
     proposal.approved_by_id = locked.approved_by_id
     proposal.approved_at = locked.approved_at
+    proposal.auto_approved_at = locked.auto_approved_at
     audit_retention_decision(
         proposal.facility,
         target_type=proposal.target_type,

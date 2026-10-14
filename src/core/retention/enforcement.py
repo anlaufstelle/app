@@ -211,6 +211,7 @@ def _soft_delete_events(
     settings_obj=None,
     deferred_ids=None,
     failed_ids=None,
+    approval_blocked_ids=None,
     recheck_expiry=False,
 ):
     """Soft-delete every event in ``qs``, write ``EventHistory`` + ``AuditLog``,
@@ -254,6 +255,7 @@ def _soft_delete_events(
     event_pks = list(qs.values_list("pk", flat=True))
     deleted_event_ids = []
     deferred_count = 0
+    approval_blocked = set()
     for pk in event_pks:
         carry = _CarryFailure(pk)
         with carry, transaction.atomic():
@@ -276,6 +278,16 @@ def _soft_delete_events(
                     .first()
                 )
                 if latest is None or latest.status != RetentionProposal.Status.APPROVED:
+                    continue
+                if not latest.has_approval_evidence:
+                    approval_blocked.add(pk)
+                    if approval_blocked_ids is not None:
+                        approval_blocked_ids.add(pk)
+                    logger.warning(
+                        "enforce_retention: event %s skipped due to missing approval evidence (proposal %s)",
+                        pk,
+                        latest.pk,
+                    )
                     continue
             # Strategy callers recheck expiry; direct callers supply a preselected set.
             if recheck_expiry or is_qualified:
@@ -363,6 +375,8 @@ def _soft_delete_events(
         # ``deferred: 0`` an jeder Zeile des naechtlichen Laufs waere Rauschen.
         # Dieselbe Zaehl-Semantik wie am EventHistory-Sweep (ADR-050 D5.3).
         extra["deferred"] = deferred_count
+    if approval_blocked:
+        extra["approval_blocked"] = len(approval_blocked)
     audit_retention_decision(
         facility,
         target_type="Event",
@@ -395,6 +409,7 @@ def _enforce(
     settings_obj=None,
     deferred_ids=None,
     failed_ids=None,
+    approval_blocked_ids=None,
 ):
     """Zaehlen, bei Bedarf loeschen, Result-Dict — gemeinsamer Rumpf der vier
     ``enforce_*``-Strategien (Refs #1827).
@@ -407,6 +422,7 @@ def _enforce(
     bewusst bei den Aufrufern (Refs #275: gewollte Dopplung zu
     ``strategies.py``, siehe ``enforce_document_type_retention``-Docstring).
     """
+    approval_blocked = set()
     deferred = set(qs.filter(client__processing_restricted=True).values_list("pk", flat=True))
     qs = qs.exclude(client__processing_restricted=True)
     count = qs.count()
@@ -422,16 +438,23 @@ def _enforce(
             deferred_ids=deferred,
             failed_ids=failed_ids,
             recheck_expiry=True,
+            approval_blocked_ids=approval_blocked,
         )
     if deferred_ids is not None:
         deferred_ids.update(deferred)
+    if approval_blocked_ids is not None:
+        approval_blocked_ids.update(approval_blocked)
     result = {"count": count}
+    if approval_blocked:
+        result["approval_blocked"] = len(approval_blocked)
     if deferred:
         result["deferred"] = len(deferred)
     return result
 
 
-def enforce_anonymous(facility, settings_obj, now, dry_run, *, deferred_ids=None, failed_ids=None):
+def enforce_anonymous(
+    facility, settings_obj, now, dry_run, *, deferred_ids=None, failed_ids=None, approval_blocked_ids=None
+):
     """Soft-delete anonymous events older than ``retention_anonymous_days``.
 
     Returns ``{"count": N}``.
@@ -476,12 +499,15 @@ def enforce_anonymous(facility, settings_obj, now, dry_run, *, deferred_ids=None
         dry_run=dry_run,
         deferred_ids=deferred_ids,
         failed_ids=failed_ids,
+        approval_blocked_ids=approval_blocked_ids,
         now=now,
         settings_obj=settings_obj,
     )
 
 
-def enforce_identified(facility, settings_obj, now, dry_run, *, deferred_ids=None, failed_ids=None):
+def enforce_identified(
+    facility, settings_obj, now, dry_run, *, deferred_ids=None, failed_ids=None, approval_blocked_ids=None
+):
     """Soft-delete events from IDENTIFIED clients older than ``retention_identified_days``.
 
     Returns ``{"count": N}``.
@@ -526,12 +552,15 @@ def enforce_identified(facility, settings_obj, now, dry_run, *, deferred_ids=Non
         dry_run=dry_run,
         deferred_ids=deferred_ids,
         failed_ids=failed_ids,
+        approval_blocked_ids=approval_blocked_ids,
         now=now,
         settings_obj=settings_obj,
     )
 
 
-def enforce_qualified(facility, settings_obj, now, dry_run, *, deferred_ids=None, failed_ids=None):
+def enforce_qualified(
+    facility, settings_obj, now, dry_run, *, deferred_ids=None, failed_ids=None, approval_blocked_ids=None
+):
     """Propose expired qualified events and delete only approved ones.
 
     Returns ``{"count": N}``.
@@ -570,12 +599,15 @@ def enforce_qualified(facility, settings_obj, now, dry_run, *, deferred_ids=None
         dry_run=dry_run,
         deferred_ids=deferred_ids,
         failed_ids=failed_ids,
+        approval_blocked_ids=approval_blocked_ids,
         now=now,
         settings_obj=settings_obj,
     )
 
 
-def enforce_document_type_retention(facility, now, dry_run, *, deferred_ids=None, failed_ids=None):
+def enforce_document_type_retention(
+    facility, now, dry_run, *, deferred_ids=None, failed_ids=None, approval_blocked_ids=None
+):
     """Soft-delete events whose DocumentType has a custom ``retention_days`` that has been exceeded.
 
     ``retention_days`` ist **event-only** (Produktentscheid M24, Refs #1738 /
@@ -614,6 +646,7 @@ def enforce_document_type_retention(facility, now, dry_run, *, deferred_ids=None
     )
 
     type_deferred_ids = set()
+    type_approval_blocked_ids = set()
     count = 0
     for dt in doc_types_with_retention:
         # Security N8 (Refs #1445): defensiver Skip bei 0/negativer Frist (s. enforce_anonymous).
@@ -639,6 +672,7 @@ def enforce_document_type_retention(facility, now, dry_run, *, deferred_ids=None
             dry_run=dry_run,
             deferred_ids=type_deferred_ids,
             failed_ids=failed_ids,
+            approval_blocked_ids=type_approval_blocked_ids,
             extra_detail={"document_type": dt.name},
             now=now,
         )["count"]
@@ -648,6 +682,10 @@ def enforce_document_type_retention(facility, now, dry_run, *, deferred_ids=None
     result = {"count": count}
     if type_deferred_ids:
         result["deferred"] = len(type_deferred_ids)
+    if approval_blocked_ids is not None:
+        approval_blocked_ids.update(type_approval_blocked_ids)
+    if type_approval_blocked_ids:
+        result["approval_blocked"] = len(type_approval_blocked_ids)
     return result
 
 
@@ -861,6 +899,7 @@ def process_facility_retention(facility, settings_obj, now, dry_run):
     """Run event retention; count protected and technically failed targets separately."""
     deferred_ids = set()
     failed_ids = set()
+    approval_blocked_ids = set()
     for strategy in iter_strategies(facility, settings_obj, now):
         deferred_ids.update(strategy.queryset.filter(client__processing_restricted=True).values_list("pk", flat=True))
     if dry_run:
@@ -871,20 +910,50 @@ def process_facility_retention(facility, settings_obj, now, dry_run):
         create_proposals_for_facility(facility, settings_obj, now, qualified_only=True)
         count = 0
         count += enforce_anonymous(
-            facility, settings_obj, now, dry_run, deferred_ids=deferred_ids, failed_ids=failed_ids
+            facility,
+            settings_obj,
+            now,
+            dry_run,
+            deferred_ids=deferred_ids,
+            failed_ids=failed_ids,
+            approval_blocked_ids=approval_blocked_ids,
         )["count"]
         count += enforce_identified(
-            facility, settings_obj, now, dry_run, deferred_ids=deferred_ids, failed_ids=failed_ids
+            facility,
+            settings_obj,
+            now,
+            dry_run,
+            deferred_ids=deferred_ids,
+            failed_ids=failed_ids,
+            approval_blocked_ids=approval_blocked_ids,
         )["count"]
         count += enforce_qualified(
-            facility, settings_obj, now, dry_run, deferred_ids=deferred_ids, failed_ids=failed_ids
+            facility,
+            settings_obj,
+            now,
+            dry_run,
+            deferred_ids=deferred_ids,
+            failed_ids=failed_ids,
+            approval_blocked_ids=approval_blocked_ids,
         )["count"]
         count += enforce_document_type_retention(
-            facility, now, dry_run, deferred_ids=deferred_ids, failed_ids=failed_ids
+            facility,
+            now,
+            dry_run,
+            deferred_ids=deferred_ids,
+            failed_ids=failed_ids,
+            approval_blocked_ids=approval_blocked_ids,
         )["count"]
         result = {"count": count}
     if deferred_ids:
         result["deferred"] = len(deferred_ids)
     if failed_ids:
         result["failed"] = len(failed_ids)
+    if approval_blocked_ids:
+        result["approval_blocked"] = len(approval_blocked_ids)
+        logger.warning(
+            "enforce_retention: facility %s skipped %s event(s) due to missing approval evidence",
+            facility.pk,
+            len(approval_blocked_ids),
+        )
     return result

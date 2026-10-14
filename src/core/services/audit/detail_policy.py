@@ -61,6 +61,7 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     # Chargengrenzen in pk-Ordnung und machen die Charge in der Tabelle
     # wiederauffindbar, ohne ihren Inhalt zu nennen.
     "cutoff": "Fristgrenze eines Retention-Laufs — Zeitangabe",
+    "approval_blocked": "Number of events skipped because the approval evidence is incomplete",
     "deferred": "Zahl der wegen Legal Hold zurueckgestellten Ereignisse einer Charge",
     "skipped": "Zahl der wegen fremder Zeilensperre uebersprungenen Ereignisse einer Charge",
     "batch_first": "erste Historien-UUID einer Redaktions-Charge — Chargengrenze",

@@ -88,6 +88,11 @@ def seed_retention_proposals(facility: Facility, users: list[User], cfg: dict) -
 
     categories = ["anonymous", "identified", "qualified", "document_type"]
     now = timezone.now()
+    reviewers = [
+        user
+        for user in users
+        if user.is_active and user.is_lead_or_admin and user.can_confirm_deletion and user.facility_id == facility.pk
+    ]
 
     proposals_to_create: list[RetentionProposal] = []
     holds_to_create: list[tuple[Event, LegalHold]] = []
@@ -102,6 +107,16 @@ def seed_retention_proposals(facility: Facility, users: list[User], cfg: dict) -
             ],
             weights=[0.5, 0.2, 0.3],
         )[0]
+
+        first_reviewer = final_reviewer = None
+        approved_at = None
+        if status == RetentionProposal.Status.APPROVED:
+            if len({user.pk for user in reviewers}) >= 2:
+                first_reviewer = reviewers[0]
+                final_reviewer = next(user for user in reviewers if user.pk != first_reviewer.pk)
+                approved_at = now
+            else:
+                status = RetentionProposal.Status.PENDING
 
         deletion_due = (now + timedelta(days=random.randint(-10, 60))).date()
         details = {
@@ -118,6 +133,10 @@ def seed_retention_proposals(facility: Facility, users: list[User], cfg: dict) -
             target_id=event.pk,
             deletion_due_at=deletion_due,
             status=status,
+            first_approved_by=first_reviewer,
+            first_approved_at=approved_at,
+            approved_by=final_reviewer,
+            approved_at=approved_at,
             details=details,
             retention_category=category,
         )

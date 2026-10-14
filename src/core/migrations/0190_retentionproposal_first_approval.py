@@ -26,6 +26,13 @@ class Migration(migrations.Migration):
             name="first_approved_at",
             field=models.DateTimeField(null=True, blank=True, verbose_name="Erste Freigabe am"),
         ),
+        migrations.AddField(
+            model_name="retentionproposal",
+            name="auto_approved_at",
+            field=models.DateTimeField(
+                null=True, blank=True, editable=False, verbose_name="Automatisch freigegeben am"
+            ),
+        ),
         migrations.AddConstraint(
             model_name="retentionproposal",
             constraint=models.CheckConstraint(

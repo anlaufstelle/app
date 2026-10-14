@@ -186,6 +186,13 @@ class Command(BaseCommand):
         # Refs #2425: each deleted event is carried into its monthly snapshot in
         # the transaction that deletes it (``core.retention.enforcement``).
         events_result = process_facility_retention(facility, settings_obj, now, dry_run)
+        if events_result.get("approval_blocked", 0):
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Facility '{facility.name}': {events_result['approval_blocked']} event(s) skipped "
+                    "due to missing approval evidence."
+                )
+            )
         totals.deleted += events_result["count"]
         totals.deferred += events_result.get("deferred", 0)
         totals.failed_events += events_result.get("failed", 0)
