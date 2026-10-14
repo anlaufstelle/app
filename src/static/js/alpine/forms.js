@@ -16,6 +16,15 @@
  * Pro-Instanz-State (query/results/…) lebt ebenfalls im jeweiligen Literal.
  */
 const _autocompleteShared = {
+    resetSearch() {
+        this._fetchGen++;
+        this.searchState = "idle";
+        this.results = [];
+        this.enrichedResults = [];
+        this.highlightIndex = -1;
+        this.searched = false;
+        this.show = false;
+    },
     fetchResults() {
         const gen = ++this._fetchGen;
         this.results = [];
@@ -67,7 +76,10 @@ const _autocompleteShared = {
         });
     },
     setQuery(event) { this.query = event.target.value; },
-    setSelectedId(event) { this.selectedId = event.target.value; },
+    setSelectedId(event) {
+        this.resetSearch();
+        this.selectedId = event.target.value;
+    },
     hideResults() {
         this.show = false;
     },
@@ -268,7 +280,7 @@ document.addEventListener("alpine:init", () => {
                 },
                 selectItem(item) {
                     this._justSelected = true;
-                    this._fetchGen++;
+                    this.resetSearch();
                     this.selectedId = item.id;
                     this.query = item.pseudonym;
                     this.show = false;
@@ -425,9 +437,9 @@ document.addEventListener("alpine:init", () => {
                 },
                 updateAnonymousAllowed(selectEl) {
                     if (!selectEl) return;
+                    this.resetSearch();
                     this._updateStageInfo(selectEl);
                     if (this.minStage && this.selectedId) {
-                        this._fetchGen++;
                         this.selectedId = "";
                         this.query = "";
                         this.results = [];
@@ -443,7 +455,7 @@ document.addEventListener("alpine:init", () => {
                 },
                 selectItem(item) {
                     this._justSelected = true;
-                    this._fetchGen++;
+                    this.resetSearch();
                     this.selectedId = item.id;
                     this.query = item.pseudonym;
                     this.show = false;

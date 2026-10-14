@@ -129,3 +129,36 @@ describe.each(["clientAutocomplete", "eventClientAutocomplete"])("%s search", (n
         expect(c.noMatches).toBeTruthy();
     });
 });
+
+describe.each(["clientAutocomplete", "eventClientAutocomplete"])("%s invalidated search", (name) => {
+    it.each(["select", "reset"])("returns to idle on %s and ignores late completion", async (action) => {
+        let finish;
+        vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => { finish = resolve; })));
+        const c = component(name);
+        c._casesForClientUrl = "";
+        c.query = "person";
+        const request = c.fetchResults();
+        if (action === "select") c.selectItem({ id: "b", pseudonym: "Person B" });
+        else c.setSelectedId({ target: { value: "" } });
+        expect(c.searchState).toBe("idle");
+        finish(ok([{ id: "a", pseudonym: "Person A" }]));
+        await request;
+        expect(c.searchState).toBe("idle");
+        expect(c.results).toEqual([]);
+        expect(c.enrichedResults).toEqual([]);
+        expect(c.selectedId).toBe(action === "select" ? "b" : "");
+    });
+});
+
+it("returns the event search to idle on type change and ignores late failure", async () => {
+    let reject;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve, fail) => { reject = fail; })));
+    const c = component();
+    const request = c.fetchResults();
+    c.updateAnonymousAllowed({ options: [{ dataset: { minStage: "identified" } }], selectedIndex: 0 });
+    expect(c.searchState).toBe("idle");
+    reject(new Error("Offline"));
+    await request;
+    expect(c.searchState).toBe("idle");
+    expect(c.selectedId).toBe("");
+});
