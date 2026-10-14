@@ -1,5 +1,5 @@
 {% extends "offline_base.html" %}
-{% load i18n static tz %}
+{% load date_input i18n static tz %}
 
 {% block title %}{% trans "Kontakt dokumentieren (offline)" %} – Anlaufstelle{% endblock %}
 
@@ -90,7 +90,7 @@
 
             <div>
                 <label for="offline-event-occurred-at" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Zeitpunkt" %}</label>
-                <input id="offline-event-occurred-at" type="datetime-local" x-model="createOccurredAt"
+                <input id="offline-event-occurred-at" type="datetime-local" {% app_date_attrs "datetime-local" seconds=True %} x-model="createOccurredAt"
                        @input="onOccurredAtInput" :aria-invalid="dstAriaInvalid"
                        class="w-full rounded-md border-subtle text-sm" data-testid="offline-event-create-occurred-at"
                        aria-describedby="offline-event-occurred-at-error">

@@ -1,5 +1,5 @@
 {% extends "offline_base.html" %}
-{% load i18n static tz %}
+{% load date_input i18n static tz %}
 
 {% block title %}{% trans "Offline-Ansicht" %} – Anlaufstelle{% endblock %}
 
@@ -148,7 +148,7 @@
                         </div>
                         <div>
                             <label for="offline-create-occurred-at" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Zeitpunkt" %}</label>
-                            <input id="offline-create-occurred-at" type="datetime-local" x-model="createOccurredAt"
+                            <input id="offline-create-occurred-at" type="datetime-local" {% app_date_attrs "datetime-local" seconds=True %} x-model="createOccurredAt"
                                    @input="onOccurredAtInput" :aria-invalid="dstAriaInvalid"
                                    class="w-full rounded-md border-subtle text-sm" data-testid="offline-create-occurred-at"
                                    aria-describedby="offline-create-occurred-at-error">
@@ -270,7 +270,7 @@
                                                     <p class="text-xs text-ink-muted italic" x-text="field.fileNote"></p>
                                                 </template>
                                                 <template x-if="field.isPlainInput">
-                                                    <input :type="field.inputType" x-model="field.value"
+                                                    <input :type="field.inputType" :step="field.inputStep" {% app_date_attrs "date" seconds=True %} x-model="field.value"
                                                            :id="'offline-edit-field-' + field.slug"
                                                            :required="field.isRequired"
                                                            class="w-full rounded-md border-subtle text-sm"

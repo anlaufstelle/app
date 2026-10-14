@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load date_input i18n %}
 {# Refs #1521 (#1499): pk-loser Ereignis-Feld-Loop, geteilt zwischen der #}
 {# Offline-Erfassung im Klient-Detail (offline_detail.html) UND der pk-losen  #}
 {# Event-Create-Shell (core/events/offline_create.html). Bindet an editFields  #}
@@ -14,7 +14,7 @@
             <p class="text-xs text-ink-muted italic">{% trans "Datei offline nicht erfassbar — später nachreichen." %}</p>
         </template>
         <template x-if="field.isPlainInput">
-            <input :type="field.inputType" x-model="field.value" :required="field.isRequired"
+            <input :type="field.inputType" :step="field.inputStep" {% app_date_attrs "date" seconds=True %} x-model="field.value" :required="field.isRequired"
                    :id="'offline-create-field-' + field.slug"
                    :min="field.minValue" :max="field.maxValue"
                    class="w-full rounded-md border-subtle text-sm" :data-testid="'offline-create-input-' + field.slug">

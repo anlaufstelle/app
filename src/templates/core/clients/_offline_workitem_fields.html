@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load date_input i18n %}
 {# Refs #1398 (P3): Geteilte WorkItemForm-Felder fuer Offline-Create UND -Edit. #}
 {# Bindet an wiValues.* (offline-client-view.js). Enum-Werte statisch — gegen die #}
 {# WorkItem-Model-Choices verifiziert; assigned_to dynamisch aus assignableUsers. #}
@@ -31,14 +31,14 @@
 </div>
 <div>
     <label for="{{ id_prefix }}-due-date" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Zu erledigen bis" %}</label>
-    <input id="{{ id_prefix }}-due-date" type="date" x-model="wiValues.due_date" :min="wiDueMin" :max="wiDateMax"
+    <input id="{{ id_prefix }}-due-date" type="date" {% app_date_attrs "date" seconds=True %} x-model="wiValues.due_date" :min="wiDueMin" :max="wiDateMax"
            class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-due_date"
            data-wi-field="due_date" data-wi-error-id="wi-error-{{ id_prefix }}-due-date" @input="clearWorkItemErrors">
     <p id="wi-error-{{ id_prefix }}-due-date" role="alert" hidden class="text-sm text-red-600"></p>
 </div>
 <div>
     <label for="{{ id_prefix }}-remind-at" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Wiedervorlage am" %}</label>
-    <input id="{{ id_prefix }}-remind-at" type="date" x-model="wiValues.remind_at" :min="wiRemindMin" :max="wiDateMax"
+    <input id="{{ id_prefix }}-remind-at" type="date" {% app_date_attrs "date" seconds=True %} x-model="wiValues.remind_at" :min="wiRemindMin" :max="wiDateMax"
            class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-remind_at"
            data-wi-field="remind_at" data-wi-error-id="wi-error-{{ id_prefix }}-remind-at" @input="clearWorkItemErrors">
     <p id="wi-error-{{ id_prefix }}-remind-at" role="alert" hidden class="text-sm text-red-600"></p>

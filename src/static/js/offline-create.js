@@ -174,6 +174,7 @@
             },
 
             async saveCreate() {
+                if (window.appDateFields && !window.appDateFields.validate(this.$el)) return;
                 if (this.saving) return;
                 this.editError = "";
                 this.dstError = "";
@@ -339,6 +340,7 @@
             },
 
             async saveCreate() {
+                if (window.appDateFields && !window.appDateFields.validate(this.$el)) return;
                 if (this.saving) return;
                 this.saving = true;
                 this.wiError = "";

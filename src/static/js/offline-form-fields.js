@@ -63,6 +63,7 @@
             isMultiSelect: t === "multi_select",
             // text/number/date/time teilen sich ein <input> mit type-Attr.
             isPlainInput: t === "text" || t === "number" || t === "date" || t === "time",
+            inputStep: t === "time" ? "1" : null,
             inputType: t === "number" ? "number" : t === "date" ? "date" : t === "time" ? "time" : "text",
             minValue: t === "number" && f.min_value !== null && f.min_value !== undefined ? f.min_value : null,
             maxValue: t === "number" && f.max_value !== null && f.max_value !== undefined ? f.max_value : null,
@@ -173,6 +174,7 @@
     }
 
     function validateWorkItemForm(values, root, focus = true) {
+        if (focus && window.appDateFields && !window.appDateFields.validate(root)) return false;
         const owner = root?.closest?.("[x-data]") || root;
         const messages = owner?.dataset || {};
         const errors = {};
