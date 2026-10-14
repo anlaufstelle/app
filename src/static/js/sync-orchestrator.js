@@ -377,7 +377,7 @@
         return Date.now() - checkedAt >= BOOT_REVOCATION_MIN_INTERVAL_MS;
     }
 
-    async function _startupRevocationCheck() {
+    async function _startupRevocationCheck(force) {
         try {
             if (typeof navigator !== "undefined" && navigator.onLine === false) return;
             const store = window.offlineStore;
@@ -393,7 +393,7 @@
             })) {
                 return;
             }
-            if (!(await _bootRevocationDue(store))) return;
+            if (force !== true && !(await _bootRevocationDue(store))) return;
             try {
                 await runExclusive(function () {
                     return _checkClientRevocations(store);
@@ -407,6 +407,19 @@
         } catch (_e) {
             /* still — Seitenstart nie an der Widerrufs-Pruefung scheitern lassen */
         }
+    }
+
+    let _requestedRevocationCheck = null;
+
+    // A new bundle needs a fresh check even within the boot poll interval.
+    // Reuse the existing locked check and share its promise across rapid takes.
+    function requestRevocationCheck() {
+        if (!_requestedRevocationCheck) {
+            _requestedRevocationCheck = _startupRevocationCheck(true).finally(function () {
+                _requestedRevocationCheck = null;
+            });
+        }
+        return _requestedRevocationCheck;
     }
 
     function _onBoot() {
@@ -425,6 +438,7 @@
 
     window.syncOrchestrator = {
         requestSync: requestSync,
+        requestRevocationCheck: requestRevocationCheck,
         isRevocationPending: async function () {
             if (typeof window.offlineStore?.isRevocationPending === "function") {
                 return window.offlineStore.isRevocationPending();

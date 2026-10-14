@@ -103,6 +103,7 @@
         const etag = response.headers.get("ETag");
         const saveResult = await store.saveClientBundle(bundle, etag);
         await _emitCountEvent();
+        await window.syncOrchestrator?.requestRevocationCheck?.();
         // Refs #1356: Aufrufer (Badge/Listen-Toggle) haengen bei Verweigerung
         // einen dezenten Hinweis an ihre Erfolgsmeldung. `null` (API fehlt/
         // Fehler) zaehlt NICHT als Verweigerung.
