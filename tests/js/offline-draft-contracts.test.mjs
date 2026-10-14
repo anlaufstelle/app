@@ -215,7 +215,10 @@ it("selecting a person in an empty form saves normally; changing a restored pers
 
 it.each([true, false])("removing a template retains typed input and leaves an untouched form empty (typed=%s)", async typed => {
     const p = await page(formHtml("data-autosave-server-prefilled") + '<a data-autosave-clear-link href="/events/new/">Remove template</a>'); await start(p);
-    if (typed) p.w.document.querySelector("textarea").value = "Unsaved template text";
+    if (typed) {
+        p.w.document.querySelector("textarea").value = "Unsaved template text";
+        p.w.document.querySelector("textarea").dispatchEvent(new p.w.Event("input", { bubbles: true }));
+    }
     p.w.document.querySelector("a").click();
     await new Promise(resolve => setTimeout(resolve, 30));
     const draft = await p.store.getDecrypted("drafts", key);
@@ -278,4 +281,12 @@ it("a confirmed snapshot is not restored when its atomic deletion fails", async 
     await start(p); await tick(p);
     expect(p.w.document.querySelector("textarea").value).toBe("");
     expect((await p.store.getDecrypted("drafts", key)).data.notes).toBe("Already saved");
+});
+
+it("a programmatic field update in another tab cannot create a new draft version without user input", async () => {
+    const p = await page(formHtml()); await seed(p, { notes: "Saved contact", __submissionToken: oldToken }); await start(p);
+    p.w.document.querySelector("textarea").value = "Programmatic default";
+    await tick(p);
+    const success = await page(marker(oldToken)); await start(success);
+    expect(await p.store.getDecrypted("drafts", key)).toBeNull();
 });

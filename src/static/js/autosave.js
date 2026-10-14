@@ -302,6 +302,7 @@
         try {
             var currentData = buildDraftPayload(ctx.form, ctx.personPk);
             var inputJson = JSON.stringify(currentData);
+            if (ctx.userEdited === false && !ctx.forceSave) return;
             // Opening/restoring alone is not an edit, even in a second tab.
             if (!ctx.forceSave && ctx.inputBaseline === inputJson) return;
             if (ctx.tokenField && ctx.inputBaseline !== inputJson) {
@@ -321,6 +322,9 @@
                 ctx.inputBaseline = inputJson;
                 ctx.personLocked = true;
                 ctx.forceSave = false;
+                if (ctx.userEdited !== undefined) {
+                    ctx.userEdited = JSON.stringify(buildDraftPayload(ctx.form, ctx.personPk)) !== inputJson;
+                }
             }
             ctx.attempts = 0;
             ctx.retryAfter = 0;
@@ -447,6 +451,10 @@
         saveContext.personLocked = personLocked;
         saveContext.personPk = getPersonPk(form);
         saveContext.inputBaseline = JSON.stringify(buildDraftPayload(form, saveContext.personPk));
+        saveContext.userEdited = false;
+        function markEdited() { saveContext.userEdited = true; }
+        form.addEventListener("input", markEdited);
+        form.addEventListener("change", markEdited);
         setInterval(function () {
             attemptSave(saveContext);
         }, INTERVAL_MS);
