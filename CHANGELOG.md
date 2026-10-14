@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Mehr-Menü in flachen Fenstern erreichbar** (#2553) — Das mobile Mehr-Menü begrenzt seine Höhe am verfügbaren Viewport, scrollt intern und hält die fokussierte Zeile im sichtbaren Bereich.
 - **Feld-Board per Tastatur bedienen** (#2554) — Gruppen und Felder lassen sich mit Auf-/Ab-Knöpfen sortieren und Felder über eine bestätigte Gruppenauswahl verschieben; Fokus und Positionsansage bleiben nach erfolgreicher Änderung erhalten.
+- **Statusbanner mit lesbaren Farbkontrasten** (#2555) — Offline-, Synchronisations- und Konfliktbanner verwenden in beiden Layouts dunklere Hintergründe mit mindestens 4,5:1 Textkontrast einschließlich Links, Zählern und Offline-Hilfe.
 - **Kontobereich ohne überlappende Rollenbezeichnung** (#2559) — Die Desktop-Seitenleiste zeigt Namen und vollständige Rolle mit Umbruch und ordnet die Sprachwahl darunter an.
 - **Fallkontext bei Schnell-Vorlagen erhalten** (#2534) — Anwenden, Wechseln und Entfernen einer Vorlage erhalten auch während Laden und nach Ladefehlern die Fallabsicht derselben Person zur erneuten Serverprüfung; Speichern wartet auf die Klärung des vorgemerkten Falls.
 - **Verspätete Fallantworten verwerfen** (#2541) — Beim Personenwechsel werden alte Fälle und die Auswahl sofort geleert; nur die Antwort für die aktuelle Person darf den Fallbereich aktualisieren.

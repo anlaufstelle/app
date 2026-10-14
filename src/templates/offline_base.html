@@ -129,7 +129,7 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
              @offline-conflict-count.window="onConflictEvent"
              id="offline-status">
             <div x-show="offline" x-cloak
-                 class="bg-yellow-500 text-white text-center text-sm py-2"
+                 class="bg-yellow-800 text-white text-center text-sm py-2"
                  data-testid="offline-banner">
                 {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
                 <a href="{% url 'core:client_list' %}" aria-label="{% trans 'Zur Personenliste' %}" x-show="hasCachedClients" x-cloak class="ml-2 text-xs underline" data-testid="offline-cached-count">
@@ -140,12 +140,12 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
                 </span>
             </div>
             <div x-show="showSyncBanner" x-cloak
-                 class="bg-blue-500 text-white text-center text-sm py-2"
+                 class="bg-blue-800 text-white text-center text-sm py-2"
                  data-testid="sync-banner">
                 <span x-text="queueCount"></span><span x-show="isSingleQueued" x-cloak> {% trans "Änderung wird synchronisiert..." %}</span><span x-show="hasMultipleQueued" x-cloak> {% trans "Änderungen werden synchronisiert..." %}</span>
             </div>
             <div x-show="showConflictBanner" x-cloak
-                 class="bg-red-500 text-white text-center text-sm py-2"
+                 class="bg-red-800 text-white text-center text-sm py-2"
                  data-testid="conflict-banner">
                 <a href="{% url 'core:offline_conflict_list' %}" class="underline">
                     <span x-text="combinedConflictCount"></span><span x-show="isSingleConflict" x-cloak> {% trans "Konflikt — bitte auflösen" %}</span><span x-show="hasMultipleConflict" x-cloak> {% trans "Konflikte — bitte auflösen" %}</span>
