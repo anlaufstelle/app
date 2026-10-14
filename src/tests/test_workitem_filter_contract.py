@@ -10,10 +10,22 @@ class Controls(HTMLParser):
     def __init__(self, html):
         super().__init__()
         self.elements = []
+        self.select_values = {}
+        self.current_select = None
         self.feed(html)
 
     def handle_starttag(self, tag, attrs):
-        self.elements.append((tag, dict(attrs)))
+        attrs = dict(attrs)
+        self.elements.append((tag, attrs))
+        if tag == "select":
+            self.current_select = attrs.get("id")
+        elif tag == "option" and self.current_select:
+            if self.current_select not in self.select_values or "selected" in attrs:
+                self.select_values[self.current_select] = attrs.get("value", "")
+
+    def handle_endtag(self, tag):
+        if tag == "select":
+            self.current_select = None
 
 
 @pytest.mark.django_db
@@ -41,7 +53,7 @@ def test_selection_root_resynchronizes_after_swaps_and_details(client, staff_use
 
 @pytest.mark.django_db
 def test_combined_filters_keep_partial_url_and_reload_consistent(client, staff_user, facility):
-    from urllib.parse import parse_qs, urlencode, urlsplit
+    from urllib.parse import parse_qs, urlsplit
 
     from django.utils import timezone
 
@@ -67,17 +79,41 @@ def test_combined_filters_keep_partial_url_and_reload_consistent(client, staff_u
         "assigned_to": str(staff_user.pk),
         "due": "",
     }
-    partial = client.get(reverse("core:workitem_inbox"), params, HTTP_HX_REQUEST="true")
-    replacement = reverse("core:workitem_inbox") + "?" + urlencode(params)
-    assert parse_qs(urlsplit(replacement).query, keep_blank_values=True) == {
+    url = reverse("core:workitem_inbox")
+    initial = client.get(url, {**params, "priority": "normal"})
+    assert list(initial.context["done_full_items"]) == []
+    controls = Controls(initial.content.decode())
+    selects = {attrs["id"]: attrs for tag, attrs in controls.elements if tag == "select" and "hx-get" in attrs}
+    changed = selects["filter-priority"]
+    assert changed["hx-trigger"] == "change"
+    assert changed["hx-target"] == "#inbox-content"
+    assert changed["hx-replace-url"] == "true"
+    included_ids = [selector.removeprefix("#") for selector in changed["hx-include"].split(",")]
+    request_params = {selects[key]["name"]: controls.select_values[key] for key in included_ids}
+    request_params[changed["name"]] = "urgent"
+    partial = client.get(
+        changed["hx-get"],
+        request_params,
+        HTTP_HX_REQUEST="true",
+        HTTP_HX_CURRENT_URL=initial.wsgi_request.build_absolute_uri(),
+    )
+    assert partial.status_code == 200
+    assert "core/workitems/partials/inbox_content.html" in [template.name for template in partial.templates]
+    assert "core/workitems/inbox.html" not in [template.name for template in partial.templates]
+    assert wanted.title in partial.content.decode()
+    assert "Excluded open task" not in partial.content.decode()
+    observed_url = partial.wsgi_request.get_full_path()
+    assert parse_qs(urlsplit(observed_url).query, keep_blank_values=True) == {
         key: [value] for key, value in params.items()
     }
-    full = client.get(replacement)
+    full = client.get(observed_url)
     for response in [partial, full]:
         assert list(response.context["done_full_items"]) == [wanted]
         assert response.context["show_open"] is False
         assert response.context["selected_status"] == "done"
         assert response.context["selected_done_period"] == "30"
+        for key, value in params.items():
+            assert response.context["selected_" + key] == value
 
 
 @pytest.mark.django_db
