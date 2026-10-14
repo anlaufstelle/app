@@ -160,6 +160,101 @@ const _autocompleteShared = {
 };
 
 document.addEventListener("alpine:init", () => {
+    // The slot survives innerHTML swaps, including validation failures.
+    Alpine.data("inlineClientDialog", () => ({
+        _slot: null,
+        _trigger: null,
+        _open: false,
+        _ownedInert: [],
+        init() {
+            this._slot = this.$el;
+        },
+        beforeSwap(event) {
+            if (event.detail.target !== this._slot || this._open) return;
+            this._trigger = event.detail.requestConfig?.elt || document.activeElement;
+        },
+        afterSwap(event) {
+            if (event.detail.target !== this._slot) return;
+            const dialog = this._slot.querySelector('[role="dialog"]');
+            if (dialog) {
+                this._open = true;
+                this._makeBackgroundInert();
+                this.$nextTick(() => {
+                    if (!dialog.isConnected || !this._open) return;
+                    const target = dialog.querySelector('[aria-invalid="true"]') ||
+                        dialog.querySelector('[autofocus]') || this._focusables(dialog)[0] || dialog;
+                    target.focus();
+                });
+            } else if (this._open) {
+                this._open = false;
+                this._releaseBackground();
+                let created = false;
+                try {
+                    const header = event.detail.xhr?.getResponseHeader("HX-Trigger-After-Swap");
+                    created = Boolean(JSON.parse(header || "{}")["client-inline-created"]);
+                } catch (_) { /* An absent selection event is a cancellation. */ }
+                this._restoreFocus(created);
+            }
+        },
+        _makeBackgroundInert() {
+            let branch = this._slot;
+            while (branch && branch !== document.body) {
+                for (const sibling of branch.parentElement.children) {
+                    if (sibling !== branch && !sibling.hasAttribute("inert")) {
+                        sibling.setAttribute("inert", "");
+                        this._ownedInert.push(sibling);
+                    }
+                }
+                branch = branch.parentElement;
+            }
+        },
+        _releaseBackground() {
+            for (const element of this._ownedInert) element.removeAttribute("inert");
+            this._ownedInert = [];
+        },
+        _isAvailable(element) {
+            if (!element || !element.isConnected || element.matches(":disabled")) return false;
+            for (let node = element; node; node = node.parentElement) {
+                const style = window.getComputedStyle(node);
+                if (node.hasAttribute("hidden") || node.hasAttribute("inert") ||
+                    style.display === "none" || style.visibility === "hidden") return false;
+            }
+            return true;
+        },
+        _focusables(dialog) {
+            return Array.from(dialog.querySelectorAll('a[href], button, input, select, textarea, [tabindex]'))
+                .filter((element) => element.tabIndex >= 0 && this._isAvailable(element));
+        },
+        _restoreFocus(toInput) {
+            const input = document.querySelector('#event-create-form [role="combobox"]');
+            const target = !toInput && this._isAvailable(this._trigger) ? this._trigger : input;
+            if (this._isAvailable(target)) target.focus();
+        },
+        onCreated() {
+            this.$nextTick(() => this._restoreFocus(true));
+        },
+        onKeydown(event) {
+            if (!this._open || event.defaultPrevented) return;
+            if (event.key === "Escape" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+                event.preventDefault();
+                event.stopPropagation();
+                this._slot.querySelector('[data-inline-client-cancel]')?.click();
+            } else if (event.key === "Tab") {
+                const dialog = this._slot.querySelector('[role="dialog"]');
+                const items = this._focusables(dialog);
+                const first = items[0];
+                const last = items[items.length - 1];
+                if (!first || !items.includes(document.activeElement) ||
+                    (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+                    event.preventDefault();
+                    (event.shiftKey ? last || dialog : first || dialog).focus();
+                }
+            }
+        },
+        destroy() {
+            this._releaseBackground();
+        },
+    }));
     /**
      * Rueckfrage vor dem Verwerfen von Zusatzfeld-Werten (Refs #1733).
      *

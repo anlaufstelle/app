@@ -33,7 +33,7 @@ class TestClientInlineCreateView:
 
         assert response.status_code == 200
         assert 'role="dialog"' in body
-        assert 'aria-modal="true"' not in body
+        assert 'aria-modal="true"' in body
         assert 'name="pseudonym"' in body
         assert 'name="contact_stage"' in body
         assert 'name="min_stage"' in body

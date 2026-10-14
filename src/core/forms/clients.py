@@ -68,6 +68,8 @@ class ClientInlineCreateForm(_FacilityScopedPseudonymMixin, TailwindFormMixin, f
     def __init__(self, *args, facility=None, min_stage=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.facility = facility
+        if self.is_bound:
+            self.fields["pseudonym"].widget.attrs.pop("autofocus", None)
 
         # Refs #2039/#507: Die Beschneidung vertraut nie ``self.data``. Die
         # View reicht den Suchkontext getrennt ein; fehlt er im POST oder ist
