@@ -259,9 +259,18 @@ class TestGoalAchievedTwoTabs:
             # Both tabs show the open goal; A achieves, then stale B achieves again.
             self._card(page_a, title).get_by_role("button", name="Ziel erreicht").click()
             expect(self._card(page_a, title).get_by_role("button", name="Nicht erreicht")).to_be_visible(timeout=10000)
+            # Move the achievement date into the past, so a rewrite by the stale second achieve is visible.
+            first_date = (date.today() - timedelta(days=3)).isoformat()
+            django_shell(
+                e2e_env,
+                "from datetime import date, timedelta; from core.models import OutcomeGoal; "
+                f"OutcomeGoal.objects.filter(pk='{ids['goal']}').update(achieved_at=date.today() - timedelta(days=3)); "
+                "print('ok')",
+            )
             self._card(page_b, title).get_by_role("button", name="Ziel erreicht").click()
             expect(self._card(page_b, title).get_by_role("button", name="Nicht erreicht")).to_be_visible(timeout=10000)
             assert _db(e2e_env, f"OutcomeGoal.objects.get(pk='{ids['goal']}').is_achieved") == "True"
+            assert _db(e2e_env, f"OutcomeGoal.objects.get(pk='{ids['goal']}').achieved_at") == first_date
             assert page_b.locator("h1").count() >= 1, "no error page"
 
             # Both tabs now show 'achieved'; A takes it back, stale B takes it back again.
@@ -319,12 +328,17 @@ class TestUserAccessConflict:
             page_a.goto(url, wait_until="domcontentloaded")
             page_b.goto(url, wait_until="domcontentloaded")
 
-            # A deactivates the access and tightens 2FA.
+            # A deactivates the access, tightens 2FA, changes the role and grants the deletion approval.
             page_a.locator("input[name='is_active']").uncheck()
             page_a.locator("input[name='mfa_required']").check()
+            page_a.locator("select[name='role']").select_option("lead")
+            page_a.locator("input[name='can_confirm_deletion']").check()
             _submit(page_a)
             expect(page_a.get_by_text("Zugang wurde gespeichert.")).to_be_visible(timeout=10000)
-            assert _db(e2e_env, f"User.objects.get(pk={pk}).is_active") == "False"
+            security = (
+                f"(lambda u: (u.is_active, u.mfa_required, u.role, u.can_confirm_deletion))(User.objects.get(pk={pk}))"
+            )
+            assert _db(e2e_env, security) == "(False, True, 'lead', True)"
 
             # B (stale) sends an old change of the display name.
             new_name = f"Name von B {marker}"
@@ -335,11 +349,18 @@ class TestUserAccessConflict:
             expect(heading).to_have_text("Aktueller Sicherheitsstand")
             expect(page_b.locator("input[name='display_name']")).to_have_value(new_name)
             assert _db(e2e_env, f"User.objects.get(pk={pk}).display_name") != new_name
-            assert _db(e2e_env, f"User.objects.get(pk={pk}).is_active") == "False"
+            # The rejected submit changed none of A's security values, and the current state shows them.
+            assert _db(e2e_env, security) == "(False, True, 'lead', True)"
+            current = page_b.locator("section[aria-labelledby='current-access-heading']")
+            expect(current).to_contain_text("Leitung")
+            # B's own form still carries B's (stale) values for the next, deliberate save.
+            expect(page_b.locator("select[name='role']")).to_have_value("staff")
+            expect(page_b.locator("input[name='is_active']")).to_be_checked()
 
             # The deliberate second save takes over B's form values.
             _submit(page_b)
             expect(page_b.get_by_text("Zugang wurde gespeichert.")).to_be_visible(timeout=10000)
             assert _db(e2e_env, f"User.objects.get(pk={pk}).display_name") == new_name
+            assert _db(e2e_env, security) == "(True, False, 'staff', False)"
         finally:
             context_b.close()
