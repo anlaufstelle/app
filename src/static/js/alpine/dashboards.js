@@ -203,6 +203,7 @@ document.addEventListener("alpine:init", () => {
                 .map((form) => ({
                     action: form.getAttribute("hx-post"),
                     values: Array.from(form.querySelectorAll('input[type="text"], input:not([type]), textarea'))
+                        .filter((field) => field.value !== field.defaultValue)
                         .map((field) => ({ name: field.name, value: field.value })),
                     editing: form.querySelector("textarea") && form.closest('[x-data="goalsSection"].card')
                         ? Alpine.$data(form.closest('[x-data="goalsSection"].card')).editing : false,

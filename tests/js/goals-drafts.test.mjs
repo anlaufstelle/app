@@ -69,6 +69,27 @@ describe("goal drafts across swaps", () => {
         storage.mockRestore();
     });
 
+    it("keeps drafts and accepts updated server values in untouched fields", () => {
+        const original = section();
+        document.body.append(original);
+        original.querySelector('[hx-post="/edit/1"] input').value = "Draft A";
+        const form = original.querySelector('[hx-post="/status/1"]');
+        const xhr = { status: 200 };
+        const component = factories.goalsSection();
+        component.$el = original;
+        component.preserveDrafts({ detail: { target: original, shouldSwap: true, xhr, requestConfig: { elt: form } } });
+        const replacement = section();
+        replacement.querySelector('[hx-post="/edit/1"] textarea').defaultValue = "Server body A";
+        replacement.querySelector('[hx-post="/edit/2"] input').defaultValue = "Server title B";
+        replacement.querySelector('[hx-post="/edit/2"] textarea').defaultValue = "Server body B";
+        original.replaceWith(replacement);
+        document.dispatchEvent(new CustomEvent("htmx:afterSettle", { detail: { target: replacement, xhr } }));
+        expect(replacement.querySelector('[hx-post="/edit/1"] input').value).toBe("Draft A");
+        expect(replacement.querySelector('[hx-post="/edit/1"] textarea').value).toBe("Server body A");
+        expect(replacement.querySelector('[hx-post="/edit/2"] input').value).toBe("Server title B");
+        expect(replacement.querySelector('[hx-post="/edit/2"] textarea').value).toBe("Server body B");
+    });
+
     it.each([409, 400, 500])("does not treat HTTP %s as a success swap", (status) => {
         const original = section();
         document.body.append(original);
