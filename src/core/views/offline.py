@@ -363,6 +363,18 @@ class OfflineShellView(TemplateView):
     def get_context_data(self, **kwargs):
         return dict(self.extra_context or {})
 
+    def render_to_response(self, context, **response_kwargs):
+        """Render a public variant without account or request context."""
+        from django.utils.translation import override
+
+        from core.views.pwa import offline_shell_language
+
+        language = offline_shell_language(self.request)
+        with override(language):
+            response = super().render_to_response({**context, "LANGUAGE_CODE": language}, **response_kwargs)
+            response.render()
+            return response
+
 
 class OfflineClientShellView(OfflineShellView):
     """Scaffold an der kanonischen ``/clients/<uuid>/``-URL (Refs #1322).

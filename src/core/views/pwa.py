@@ -10,7 +10,7 @@ from django.conf import settings
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.http import HttpResponse, HttpResponseNotFound
 from django.template.loader import render_to_string
-from django.utils.translation import gettext
+from django.utils.translation import get_language, gettext, override
 from django.views import View
 
 logger = logging.getLogger(__name__)
@@ -153,6 +153,12 @@ class ServiceWorkerView(View):
         )
 
 
+def offline_shell_language(request):
+    """Select only supported, explicit public shell variants."""
+    language = request.GET.get("shell_language", get_language())
+    return language if language in {"de", "en"} else "de"
+
+
 class OfflineFallbackView(View):
     """GET /offline/ — Statisches Offline-Fallback-Template (Refs #701).
 
@@ -163,10 +169,11 @@ class OfflineFallbackView(View):
     """
 
     def get(self, request):
-        return HttpResponse(
-            render_to_string("offline.html"),
-            content_type="text/html; charset=utf-8",
-        )
+        with override(offline_shell_language(request)):
+            return HttpResponse(
+                render_to_string("offline.html"),
+                content_type="text/html; charset=utf-8",
+            )
 
 
 class ManifestView(View):

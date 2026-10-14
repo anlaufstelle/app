@@ -98,6 +98,7 @@
         var reloaded = false;
         var wasControlled = !!navigator.serviceWorker.controller;
         navigator.serviceWorker.addEventListener("controllerchange", function () {
+            _sendShellLanguage(navigator.serviceWorker.controller);
             if (!navigator.serviceWorker.controller) {
                 wasControlled = false;
                 return;
@@ -122,6 +123,7 @@
             // Refs #1948: Precache-Selbstheilung anstossen — einmal pro
             // Seitenladen (siehe _requestPrecacheHeal unten).
             _requestPrecacheHeal(registration);
+            _sendShellLanguage(registration.active);
 
             // Update waehrend der Sitzung: installing → installed → waiting.
             registration.addEventListener("updatefound", function () {
@@ -166,6 +168,15 @@
             // "anlaufstelle-offline-mutex" + BroadcastChannel
             // "anlaufstelle-offline"), nicht mehr ueber den Service Worker.
         });
+    }
+
+    function _sendShellLanguage(worker) {
+        // Offline shells carry no user ID and must not overwrite the account
+        // preference. Every authenticated navigation covers login and changes.
+        if (!document.body.dataset.userId || !worker) return;
+        var language = document.documentElement.lang;
+        if (language !== "de" && language !== "en") return;
+        worker.postMessage({ type: "SET_SHELL_LANGUAGE", language: language });
     }
 
     /**
@@ -367,6 +378,13 @@
     var _LOGOUT_WIPE_TIMEOUT_MS = 3000;
 
     function _wipeOfflineState() {
+        // Browsers without Clear-Site-Data support still reset the public
+        // shell language before another account can use this registration.
+        try {
+            navigator.serviceWorker?.controller?.postMessage?.({ type: "SET_SHELL_LANGUAGE", language: "de" });
+        } catch (_e) {
+            // Language reset must not prevent key removal or logout.
+        }
         // Refs #1065: gemeinsamer Wipe-Pfad lebt in crypto.js — Logout
         // (hier) und Idle-Timeout (crypto.js) räumen identisch ab:
         // CryptoKey + Aktivitäts-Stempel + alle Dexie-Tabellen.

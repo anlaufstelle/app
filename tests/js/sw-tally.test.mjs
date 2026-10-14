@@ -149,9 +149,9 @@ describe("Service-Worker Body-Idempotenz-Key", () => {
 
 describe("Service-Worker Offline-Create-Shells nach Path-Anchoring", () => {
     it.each([
-        ["/events/new/", "/offline/event-shell/"],
-        ["/workitems/new/", "/offline/workitem-shell/"],
-    ])("liefert fuer %s weiterhin %s", async (path, shellPath) => {
+        ["/events/new/", "/offline/event-shell/?shell_language=de"],
+        ["/workitems/new/", "/offline/workitem-shell/?shell_language=de"],
+    ])("serves the selected language variant for %s at %s", async (path, shellPath) => {
         const fetchMock = vi.fn(async () => {
             throw new TypeError("offline");
         });

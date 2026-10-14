@@ -261,7 +261,17 @@ const SW_I18N = {
 // Templates referenziert. Nur so trifft caches.match() die pre-cachten Assets.
 // Die Quelldatei bleibt bewusst dev-lesbar mit ungehashten Pfaden; in Dev/Test
 // (kein Manifest / DEBUG) liefert die Aufloesung dieselben Pfade zurueck.
+// Refs #2556: Public shells have explicit, account-neutral language variants.
+const SHELL_URLS = [
+    OFFLINE_FALLBACK_URL, OFFLINE_CLIENT_SHELL_URL, OFFLINE_CONFLICT_SHELL_URL,
+    OFFLINE_EVENT_SHELL_URL, OFFLINE_WORKITEM_SHELL_URL, OFFLINE_CLIENT_LIST_SHELL_URL,
+    OFFLINE_WORKITEM_LIST_SHELL_URL, OFFLINE_ZEITSTROM_SHELL_URL, "/offline/conflicts/",
+];
+const SHELL_LANGUAGE_KEY = "/offline/shell-language/";
+let shellLanguageUpdate = Promise.resolve();
+
 const APP_SHELL = [
+    ...SHELL_URLS.flatMap(url => ["de", "en"].map(language => `${url}?shell_language=${language}`)),
     "/static/css/styles.css",
     "/static/icons/icon-192.png",
     "/static/icons/icon-512.png",
@@ -412,9 +422,10 @@ self.addEventListener("install", (event) => {
 // und NUR das Fehlende nachgeladen. Vollstaendiger Cache => reiner
 // Match-Sweep ohne Netzzugriff. Fehler (z.B. offline waehrend der Heilung)
 // werden geschluckt — die naechste Navigation stoesst den Check erneut an.
-async function _healPrecache() {
+async function _healPrecache(language) {
     try {
         const cache = await caches.open(CACHE_NAME);
+        if (language) await cache.put(SHELL_LANGUAGE_KEY, new Response(language));
         const missing = [];
         for (const url of APP_SHELL) {
             if (!(await cache.match(url))) {
@@ -437,6 +448,10 @@ async function _healPrecache() {
 // install-Handler) — der Toast suggerierte eine Kontrolle, die er nicht
 // hatte.
 self.addEventListener("message", (event) => {
+    if (event.data?.type === "SET_SHELL_LANGUAGE" && ["de", "en"].includes(event.data.language)) {
+        shellLanguageUpdate = shellLanguageUpdate.catch(() => {}).then(() => _healPrecache(event.data.language));
+        event.waitUntil(shellLanguageUpdate);
+    }
     if (event.data?.type === "SKIP_WAITING") {
         self.skipWaiting();
     }
@@ -645,8 +660,21 @@ const SHELL_ROUTES = [
 ];
 
 // Refs #1828: gecachten Shell servieren; ohne Cache-Treffer die /offline/-Home.
-function _serveShell(shellUrl) {
-    return caches.match(shellUrl).then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
+async function _serveShell(shellUrl) {
+    await shellLanguageUpdate.catch(() => {});
+    const preference = await caches.match(SHELL_LANGUAGE_KEY);
+    const language = preference ? await preference.text() : "de";
+    const selected = ["de", "en"].includes(language) ? language : "de";
+    const shell = await caches.match(`${shellUrl}?shell_language=${selected}`);
+    const fallback = shell || await caches.match(`${OFFLINE_FALLBACK_URL}?shell_language=${selected}`);
+    if (fallback) return fallback;
+    // Legacy caches are usable only before any account has selected a language.
+    if (!preference) {
+        return (await caches.match(shellUrl)) ||
+            (await caches.match(new URL(shellUrl, self.location.origin).href)) ||
+            caches.match(OFFLINE_FALLBACK_URL);
+    }
+    return new Response("", { status: 503, statusText: "offline" });
 }
 
 // ACK-Timeout: nach dieser Zeit gilt enqueueRequest als gescheitert
@@ -948,18 +976,11 @@ self.addEventListener("fetch", (event) => {
                         return _serveShell(route.shell);
                     }
                 }
-                // Refs #1396: nach der URL (nicht dem Live-Request) matchen. Die
-                // pre-cachten HTML-Shells (z.B. /offline/conflicts/) tragen ein
-                // Django-``Vary: Cookie, Accept-Language``; der Install-Fetch
-                // (cache.addAll) speichert sie mit LEEREN Vary-Headern, waehrend
-                // die Offline-Navigation Accept-Language/Cookie mitschickt —
-                // caches.match(request) verfehlt sie dadurch (Vary-Mismatch) und
-                // fiele faelschlich auf /offline/ zurueck. Der URL-String-Match
-                // ignoriert die Live-Header und trifft den Precache zuverlaessig
-                // (Muster wie die SHELL_ROUTES-Eintraege darueber).
-                return caches
-                    .match(request.url)
-                    .then((cached) => cached || caches.match(OFFLINE_FALLBACK_URL));
+                // Match public shell variants explicitly instead of bypassing
+                // Cookie/Accept-Language Vary with an unrelated language.
+                const pathname = new URL(request.url).pathname;
+                if (SHELL_URLS.includes(pathname)) return _serveShell(pathname);
+                return caches.match(request.url).then(cached => cached || _serveShell(OFFLINE_FALLBACK_URL));
             })
         );
     }

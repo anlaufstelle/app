@@ -50,3 +50,28 @@ describe("#1948 — CHECK_PRECACHE-Anstoss beim Seitenladen", () => {
         await expect(freshLoad(null)).resolves.toBeUndefined();
     });
 });
+
+
+it("sends the authenticated page language to the active worker", async () => {
+    document.documentElement.lang = "en";
+    document.body.dataset.userId = "u1";
+    const postMessage = vi.fn();
+    await freshLoad({ postMessage });
+    expect(postMessage).toHaveBeenCalledWith({ type: "SET_SHELL_LANGUAGE", language: "en" });
+    delete document.body.dataset.userId;
+    document.documentElement.lang = "";
+});
+
+
+it("resets the public shell language when the account logs out", async () => {
+    const postMessage = vi.fn();
+    await freshLoad({ postMessage });
+    navigator.serviceWorker.controller = { postMessage };
+    document.body.innerHTML = '<form action="/logout/" method="post"></form>';
+    const form = document.querySelector("form");
+    vi.spyOn(form, "submit").mockImplementation(() => {});
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(form.submit).toHaveBeenCalledOnce());
+    expect(postMessage).toHaveBeenCalledWith({ type: "SET_SHELL_LANGUAGE", language: "de" });
+    document.body.innerHTML = "";
+});

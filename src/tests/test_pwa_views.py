@@ -1890,3 +1890,37 @@ class TestEmergencyPagesSurviveBrokenStaticManifest:
         assert 'rel="manifest"' in body
         assert "/static/icons/favicon.svg" in body, f"{template}: erwartet den festen Pfad, kein {{% static %}}"
         assert "/static/icons/icon-192.png" in body
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "route",
+    [
+        "offline_fallback",
+        "core:offline_client_shell",
+        "core:offline_conflict_shell",
+        "core:offline_workitem_list_shell",
+        "core:offline_zeitstrom_shell",
+        "core:offline_event_shell",
+        "core:offline_client_list_shell",
+        "core:offline_workitem_shell",
+        "core:offline_conflict_list",
+    ],
+)
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_public_shell_language_variant(client, staff_user, route, language):
+    """Explicit precache variants are translated and remain account-neutral."""
+    url = reverse(route)
+    anonymous = client.get(url, {"shell_language": language})
+    assert anonymous.status_code == 200
+    body = anonymous.content.decode()
+    assert f'<html lang="{language}"' in body
+    if route == "offline_fallback":
+        return
+    if language == "en":
+        assert "Connection lost. You are now working offline." in body
+        assert "Verbindung unterbrochen. Sie arbeiten jetzt offline." not in body
+    else:
+        assert "Verbindung unterbrochen. Sie arbeiten jetzt offline." in body
+    client.force_login(staff_user)
+    assert client.get(url, {"shell_language": language}).content == anonymous.content
