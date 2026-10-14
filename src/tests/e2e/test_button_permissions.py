@@ -380,5 +380,9 @@ class TestEventCreateValidation:
 
         # Expect a validation error about requiring a client for this document type
         # (Sprachleitlinie #604: "Klientel" -> "Person")
-        error_text = page.locator(".text-red-600:has-text('Person')")
+        # The hidden autocomplete error region (data-testid client-autocomplete-error)
+        # also carries text-red-600 and mentions "Person"; target the form error.
+        error_text = page.locator("p.text-red-600").filter(
+            has_text="Für diesen Dokumentationstyp muss eine Person ausgewählt werden"
+        )
         expect(error_text).to_be_visible(timeout=5000)
