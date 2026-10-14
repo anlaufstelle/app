@@ -51,7 +51,7 @@ def contrast(foreground, background):
 def verify_built_token(token):
     css_path = STATIC / "styles.css"
     if not css_path.exists():
-        pytest.skip("styles.css nicht gebaut — vorher make tailwind-build ausführen")
+        pytest.skip("styles.css is not built — run make tailwind-build first")
     css = css_path.read_text()
     if token in {"white", "surface"}:
         variable = "--color-white" if token == "white" else "--surface"
@@ -97,7 +97,7 @@ def test_banner_text_links_counters_and_help_meet_contrast(banner, client, admin
 
 
 def test_built_banner_tokens_match_contrast_inputs():
-    for token in ("yellow-800", "blue-800", "red-800", "white", "surface", "ink", "accent"):
+    for token in TOKENS:
         verify_built_token(token)
 
 
@@ -126,3 +126,15 @@ def test_changed_built_token_fails(tmp_path, monkeypatch):
     (tmp_path / "styles.css").write_text("--color-red-800:oklch(0.8 0.177 26.899);")
     with pytest.raises(AssertionError, match="Built token drift: red-800"):
         verify_built_token("red-800")
+
+
+@pytest.mark.parametrize("token", ["yellow-500", "blue-500", "red-500"])
+def test_changed_built_counter_token_fails(token, tmp_path, monkeypatch):
+    css_path = STATIC / "styles.css"
+    if not css_path.exists():
+        pytest.skip("styles.css is not built — run make tailwind-build first")
+    css = re.sub(r"(--color-" + re.escape(token) + r":\s*)oklch\([^)]+\)", r"\g<1>oklch(0.1 0 0)", css_path.read_text())
+    (tmp_path / "styles.css").write_text(css)
+    monkeypatch.setattr("tests.test_a11y_banner_contrast.STATIC", tmp_path)
+    with pytest.raises(AssertionError, match=f"Built token drift: {token}"):
+        test_built_banner_tokens_match_contrast_inputs()

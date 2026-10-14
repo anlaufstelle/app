@@ -180,7 +180,7 @@ maintenance-on:
 maintenance-off:
 	@rm -f $(MAINTENANCE_FLAG) && echo "Maintenance-Mode aus ($(MAINTENANCE_FLAG))"
 
-test:
+test: verify-css-fresh
 	$(PYTHON) -m pytest -m "not e2e"
 
 # Demo uses its own server session and port under the shared host lock.
@@ -257,7 +257,7 @@ test-e2e-slice: tailwind-build
 test-focus:
 	$(PYTHON) -m pytest -m "not e2e" -x $(T)
 
-test-parallel:
+test-parallel: verify-css-fresh
 	$(PYTHON) -m pytest -m "not e2e" -n auto -x
 
 # Wie test-parallel, zusaetzlich mit Coverage-Messung + 96-%-Schwelle (Spiegel
