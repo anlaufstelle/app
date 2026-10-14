@@ -276,6 +276,7 @@
             form: form,
             storageKey: storageKey,
             lastSavedJson: lastSavedJson || "",
+            storedDraftJson: lastSavedJson || null,
             personPk: personPk || "",
             attempts: 0,
             retryAfter: 0,
@@ -313,12 +314,17 @@
             if (currentData[PERSON_KEY]) ctx.personPk = currentData[PERSON_KEY];
             var json = JSON.stringify(currentData);
             if (json !== ctx.lastSavedJson) {
-                await window.offlineStore.putEncrypted("drafts", {
+                var saved = await window.offlineStore.putEncrypted("drafts", {
                     formKey: ctx.storageKey,
                     updatedAt: Date.now(),
                     data: currentData,
-                });
+                }, ctx.storedDraftJson);
+                if (saved === false) {
+                    showSaveErrorBanner(ctx.form, false);
+                    return;
+                }
                 ctx.lastSavedJson = json;
+                ctx.storedDraftJson = json;
                 ctx.inputBaseline = inputJson;
                 ctx.personLocked = true;
                 ctx.forceSave = false;
@@ -409,6 +415,7 @@
         form.dataset.autosaveInitialized = "true";
         var storageKey = getStorageKey();
         var lastSavedJson = "";
+        var storedDraftJson = null;
         // Refs #1774: zuletzt bekannter Personenbezug des Entwurfs.
         var lastKnownPersonPk = "";
         var personMismatch = false;
@@ -417,6 +424,7 @@
         {
             try {
                 var existing = await window.offlineStore.getDecrypted("drafts", storageKey);
+                if (existing && existing.data) storedDraftJson = JSON.stringify(existing.data);
                 if (existing && existing.data && !confirmedTokens.has(existing.data.__submissionToken)) {
                     personLocked = true;
                     lastKnownPersonPk = existing.data[PERSON_KEY] || "";
@@ -434,6 +442,7 @@
                 } else if (!existing) {
                     var legacy = await _migrateLegacyLocalStorage(storageKey, form);
                     if (legacy) {
+                        storedDraftJson = JSON.stringify(legacy);
                         personLocked = true;
                         personMismatch = (legacy[PERSON_KEY] || "") !== getPersonPk(form);
                     }
@@ -447,6 +456,7 @@
         // Refs #2059: Der Lauf traegt seinen Zustand jetzt in einem Kontext —
         // inklusive Fehlerzaehler und Backoff-Fenster.
         var saveContext = makeSaveContext(form, storageKey, lastSavedJson, lastKnownPersonPk);
+        saveContext.storedDraftJson = storedDraftJson;
         saveContext.personMismatch = personMismatch;
         saveContext.personLocked = personLocked;
         saveContext.personPk = getPersonPk(form);

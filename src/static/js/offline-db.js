@@ -267,7 +267,7 @@
         await db[table].delete(primaryKey);
     }
 
-    async function putEncrypted(table, record) {
+    async function putEncrypted(table, record, expectedDraftJson) {
         const crypto = _crypto();
         const { data, ...rest } = record;
         // Refs #1476 (R7): an Tabelle + Primaerschluessel binden. Fuer die
@@ -275,6 +275,19 @@
         // anderen Tabellen traegt ``rest`` den Primaerschluessel bereits.
         const aad = _aad(table, rest[_primKeyName(table)]);
         const envelope = await crypto.encryptPayload(data, aad);
+        // Refs #2561: autosave may only replace the snapshot it opened or
+        // last wrote. Compare under the same write lock as the replacement.
+        if (table === "drafts" && expectedDraftJson !== undefined) {
+            return db.transaction("rw", db.drafts, async () => {
+                const current = await db.drafts.get(rest.formKey);
+                const currentData = current ? await Dexie.waitFor(
+                    crypto.decryptPayload(current.data, aad), 3000
+                ) : null;
+                if ((currentData ? JSON.stringify(currentData) : null) !== expectedDraftJson) return false;
+                await db.drafts.put({ ...rest, data: envelope });
+                return true;
+            });
+        }
         return db[table].put({ ...rest, data: envelope });
     }
 

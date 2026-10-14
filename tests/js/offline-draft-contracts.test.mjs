@@ -290,3 +290,35 @@ it("a programmatic field update in another tab cannot create a new draft version
     const success = await page(marker(oldToken)); await start(success);
     expect(await p.store.getDecrypted("drafts", key)).toBeNull();
 });
+
+it("a stale tab's submit and confirmation retain another tab's newer unsaved draft", async () => {
+    const first = await page(formHtml());
+    await seed(first, { notes: "Original A", __submissionToken: oldToken }); await start(first);
+    const second = await page(formHtml()); await start(second);
+    const field = second.w.document.querySelector("textarea");
+    field.value = "New unsaved B";
+    field.dispatchEvent(new second.w.Event("input", { bubbles: true })); await tick(second);
+    expect((await second.store.getDecrypted("drafts", key)).data.notes).toBe("New unsaved B");
+    const form = first.w.document.querySelector("form");
+    const sent = vi.fn(() => Object.fromEntries(new first.w.FormData(form)));
+    form.requestSubmit = sent;
+    form.dispatchEvent(new first.w.Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(sent).toHaveBeenCalledOnce());
+    const success = await page(marker(sent.mock.results[0].value._autosave_token)); await start(success);
+    await tick(second);
+    const reopened = await page(formHtml()); await start(reopened);
+    expect(reopened.w.document.querySelector("textarea").value).toBe("New unsaved B");
+});
+
+it("a stale tab's autosave cannot replace a newer stored version", async () => {
+    const first = await page(formHtml());
+    await seed(first, { notes: "Original", __submissionToken: oldToken }); await start(first);
+    const second = await page(formHtml()); await start(second);
+    for (const [p, text] of [[second, "Newer saved B"], [first, "Stale input A"]]) {
+        const field = p.w.document.querySelector("textarea"); field.value = text;
+        field.dispatchEvent(new p.w.Event("input", { bubbles: true })); await tick(p);
+    }
+    expect((await first.store.getDecrypted("drafts", key)).data.notes).toBe("Newer saved B");
+    expect(first.w.document.querySelector("textarea").value).toBe("Stale input A");
+    expect(first.w.document.querySelector("#autosave-error-banner")).not.toBeNull();
+});
