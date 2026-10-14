@@ -462,7 +462,10 @@ class OfflineKeySaltView(LoginRequiredMixin, View):
         # auth-bootstrap.js den Login-Redirect mit ``redirect: "manual"``
         # liest und der Location-Header bei opaqueredirect-Responses nicht
         # auslesbar ist (Fetch-API-Spec, same-origin). Vorher: Fallback ""/"".
-        home_url = "/system/" if getattr(request.user, "is_super_admin", False) else "/"
+        # The scripted login also needs the deep link a session expiry interrupted:
+        # ``?next=`` (sent by auth-bootstrap.js from the login URL) is resolved with
+        # the same boundary check as the native redirect (Refs #2561).
+        home_url = resolve_post_login_url(request, request.GET.get("next"))
         from core.services.security.offline_keys import offline_key_max_age
 
         return JsonResponse(

@@ -76,7 +76,16 @@
             : (await fetchFreshCsrfToken(location)) || csrfFromMeta() || "";
         var headers = { "X-CSRFToken": token };
         if (demoBootstrap) headers["X-Demo-Offline-Bootstrap"] = "1";
-        var saltResp = await fetch("/auth/offline-key-salt/", {
+        var saltUrl = "/auth/offline-key-salt/";
+        if (!demoBootstrap && document.getElementById("login-form")) {
+            // The login redirect is unreadable (opaqueredirect); pass the requested
+            // target on so the server can resolve it (Refs #2561).
+            // The value stays percent-encoded exactly as the login URL carries it.
+            var search = (window.location && window.location.search) || "";
+            var requestedNext = /[?&]next=([^&#]*)/.exec(search);
+            if (requestedNext) saltUrl += "?next=" + requestedNext[1];
+        }
+        var saltResp = await fetch(saltUrl, {
             method: "POST",
             credentials: "same-origin",
             headers: headers,
