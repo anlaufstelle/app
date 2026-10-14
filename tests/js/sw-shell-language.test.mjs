@@ -131,7 +131,11 @@ describe("account language for cached shells", () => {
             put: async (key, response) => { entries.set(key, response); },
             addAll: async () => {},
         };
-        const caches = { open: async () => cache, match: cache.match };
+        const names = new Set();
+        const caches = {
+            open: async name => { names.add(name); return cache; }, match: cache.match,
+            keys: async () => [...names], delete: async name => names.delete(name),
+        };
         let worker = workerContext(offlineFetch(), caches);
         const setLanguage = async language => {
             const tasks = [];
@@ -161,7 +165,11 @@ function preferenceCache(entries, overrides = {}) {
         put: vi.fn(async (key, response) => { entries.set(key, response); }),
         addAll: vi.fn(async () => {}), ...overrides,
     };
-    return { cache, caches: { open: async () => cache, match: cache.match } };
+    const names = new Set();
+    return { cache, names, caches: {
+        open: async name => { names.add(name); return cache; }, match: cache.match,
+        keys: async () => [...names], delete: async name => names.delete(name),
+    } };
 }
 function message(worker, data) {
     let task;
@@ -203,10 +211,11 @@ it.each(["en", "de"])("%s takes effect immediately despite failed persistence an
 it("missing English shell with stalled repair ends in an English error page", async () => {
     vi.useFakeTimers();
     try {
-        const { caches } = preferenceCache(new Map([
+        const { caches, names } = preferenceCache(new Map([
             ["/offline/shell-language/", new Response("en")],
             ["/offline/event-shell/?shell_language=de", new Response("German shell")],
         ]), { addAll: () => new Promise(() => {}) });
+        names.add("anlaufstelle-v64-shell-language-en");
         const worker = workerContext(offlineFetch(), caches);
         const response = dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`));
         await vi.advanceTimersByTimeAsync(3000);
@@ -214,4 +223,96 @@ it("missing English shell with stalled repair ends in an English error page", as
         expect(resolved.status).toBe(503);
         expect(await resolved.text()).toContain('<html lang="en">');
     } finally { vi.useRealTimers(); }
+});
+
+it.each([["de", "en"], ["en", "de"]])("a failed %s to %s preference write cannot revive the previous shell after restart", async (previous, language) => {
+    const entries = new Map([
+        ["/offline/shell-language/", new Response(previous)],
+        ["/offline/event-shell/?shell_language=en", new Response("English shell")],
+        ["/offline/event-shell/?shell_language=de", new Response("German shell")],
+    ]);
+    const { cache, caches } = preferenceCache(entries);
+    let worker = workerContext(offlineFetch(), caches);
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language: previous });
+    cache.put.mockRejectedValue(new Error("QuotaExceededError"));
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language });
+    const selectedText = language === "en" ? "English shell" : "German shell";
+    expect(await (await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`))).text()).toBe(selectedText);
+    worker = workerContext(offlineFetch(), caches);
+    const response = await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`));
+    expect(await response.text()).not.toBe(previous === "en" ? "English shell" : "German shell");
+});
+
+it("interrupted language marker cleanup remains uncertain after worker restart", async () => {
+    const { caches, names } = preferenceCache(new Map([
+        ["/offline/shell-language/", new Response("de")],
+        ["/offline/event-shell/?shell_language=de", new Response("German shell")],
+        ["/offline/event-shell/?shell_language=en", new Response("English shell")],
+    ]));
+    let worker = workerContext(offlineFetch(), caches);
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language: "de" });
+    caches.delete = async () => { throw new Error("Cache deletion failed"); };
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language: "en" });
+    expect(names.has("anlaufstelle-v64-shell-language-de")).toBe(true);
+    expect(names.has("anlaufstelle-v64-shell-language-en")).toBe(true);
+    worker = workerContext(offlineFetch(), caches);
+    const response = await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`));
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain("German shell");
+});
+
+it("failed replacement marker creation invalidates the previous selection", async () => {
+    const { caches } = preferenceCache(new Map([
+        ["/offline/event-shell/?shell_language=de", new Response("German shell")],
+        ["/offline/event-shell/?shell_language=en", new Response("English shell")],
+    ]));
+    let worker = workerContext(offlineFetch(), caches);
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language: "de" });
+    const open = caches.open;
+    caches.open = async name => {
+        if (name === "anlaufstelle-v64-shell-language-en") throw new Error("Marker creation failed");
+        return open(name);
+    };
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language: "en" });
+    worker = workerContext(offlineFetch(), caches);
+    const response = await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`));
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain("German shell");
+});
+
+it("contradictory durable language records cannot authorize the previous shell", async () => {
+    const { caches } = preferenceCache(new Map([
+        ["/offline/event-shell/?shell_language=de", new Response("German shell")],
+        ["/offline/event-shell/?shell_language=en", new Response("English shell")],
+    ]));
+    let worker = workerContext(offlineFetch(), caches);
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language: "de" });
+    const open = caches.open;
+    caches.open = async name => {
+        if (name === "anlaufstelle-v64-shell-language-en") throw new Error("Marker creation failed");
+        return open(name);
+    };
+    caches.delete = async () => { throw new Error("Marker invalidation failed"); };
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language: "en" });
+    worker = workerContext(offlineFetch(), caches);
+    const response = await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`));
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain("German shell");
+});
+
+it("acknowledges language persistence only after the durable records agree", async () => {
+    const entries = new Map();
+    const { cache, caches } = preferenceCache(entries);
+    const put = cache.put.getMockImplementation();
+    cache.put.mockRejectedValue(new Error("Cache write failed"));
+    const worker = workerContext(offlineFetch(), caches);
+    const sender = { postMessage: vi.fn() };
+    const send = async () => {
+        let task;
+        worker.handlers.message({ data: { type: "SET_SHELL_LANGUAGE", language: "en", requestId: "current-request" }, source: sender, waitUntil: value => { task = value; } });
+        await task;
+    };
+    await send(); expect(sender.postMessage).not.toHaveBeenCalled();
+    cache.put.mockImplementation(put); await send();
+    expect(sender.postMessage).toHaveBeenCalledExactlyOnceWith({ type: "SHELL_LANGUAGE_STORED", language: "en", requestId: "current-request" });
 });

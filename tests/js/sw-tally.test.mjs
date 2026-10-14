@@ -159,6 +159,9 @@ describe("Service-Worker Offline-Create-Shells nach Path-Anchoring", () => {
             match: vi.fn(async (target) => new Response(String(target), { status: 200 })),
         };
         const { handlers } = workerContext(fetchMock, cachesMock);
+        let languageTask;
+        handlers.message({ data: { type: "SET_SHELL_LANGUAGE", language: "de" }, waitUntil: value => { languageTask = value; } });
+        await languageTask;
         const request = new Request(`${ORIGIN}${path}`, {
             headers: { Accept: "text/html" },
         });

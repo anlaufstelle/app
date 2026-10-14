@@ -194,6 +194,9 @@ const OFFLINE_REQUESTS = [
 ];
 
 async function offlinePolicies(handlers) {
+    let languageTask;
+    handlers.message({ data: { type: "SET_SHELL_LANGUAGE", language: "de" }, waitUntil: value => { languageTask = value; } });
+    await languageTask;
     const delivered = {};
     for (const [label, path, headers] of OFFLINE_REQUESTS) {
         const response = await respond(

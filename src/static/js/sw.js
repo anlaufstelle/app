@@ -272,6 +272,12 @@ const SHELL_URLS = [
     OFFLINE_WORKITEM_LIST_SHELL_URL, OFFLINE_ZEITSTROM_SHELL_URL, "/offline/conflicts/",
 ];
 const SHELL_LANGUAGE_KEY = "/offline/shell-language/";
+// Refs #2556: an empty named cache records language intent independently of
+// cache.put (which may fail under quota pressure). Two markers are uncertain.
+const SHELL_LANGUAGE_CACHES = {
+    de: CACHE_NAME + "-shell-language-de",
+    en: CACHE_NAME + "-shell-language-en",
+};
 let shellLanguage = null;
 let shellLanguageDirty = false;
 let shellLanguageUpdate = Promise.resolve();
@@ -448,7 +454,25 @@ async function _healPrecache(preferenceOnly = false) {
 
 function _persistShellLanguage() {
     // Serialize preference writes independently of potentially stalled repair.
-    shellLanguageUpdate = shellLanguageUpdate.then(() => _healPrecache(true));
+    shellLanguageUpdate = shellLanguageUpdate.then(async () => {
+        if (!shellLanguage) return false;
+        const selected = shellLanguage;
+        let durable = false;
+        try {
+            // Create the new marker before removing the old one. Interrupted
+            // cleanup leaves two markers, so a restarted worker fails closed.
+            await caches.open(SHELL_LANGUAGE_CACHES[selected]);
+            await caches.delete(SHELL_LANGUAGE_CACHES[selected === "de" ? "en" : "de"]);
+            durable = true;
+        } catch (error) {
+            // If creating the replacement fails, invalidate the old marker
+            // independently so a later worker cannot treat it as current.
+            try { await caches.delete(SHELL_LANGUAGE_CACHES[selected === "de" ? "en" : "de"]); } catch (_e) { /* Storage unavailable. */ }
+            console.warn("[offline] Shell language marker persistence failed", error);
+        }
+        await _healPrecache(true);
+        return durable && !shellLanguageDirty && shellLanguage === selected;
+    });
     return shellLanguageUpdate;
 }
 
@@ -463,7 +487,13 @@ self.addEventListener("message", (event) => {
         // The latest message wins synchronously, even if Cache Storage fails.
         shellLanguage = event.data.language;
         shellLanguageDirty = true;
-        event.waitUntil(_persistShellLanguage().then(() => _healPrecache()));
+        const selected = shellLanguage;
+        event.waitUntil(_persistShellLanguage().then(durable => {
+            if (durable && shellLanguage === selected) event.source?.postMessage({
+                type: "SHELL_LANGUAGE_STORED", language: selected, requestId: event.data.requestId,
+            });
+            return _healPrecache();
+        }));
     }
     if (event.data?.type === "SKIP_WAITING") {
         self.skipWaiting();
@@ -485,7 +515,7 @@ self.addEventListener("activate", (event) => {
         caches.keys().then((keys) =>
             Promise.all(
                 keys
-                    .filter((k) => k !== CACHE_NAME && k !== RUNTIME_CACHE_NAME)
+                    .filter((k) => k !== CACHE_NAME && k !== RUNTIME_CACHE_NAME && !Object.values(SHELL_LANGUAGE_CACHES).includes(k))
                     .map((k) => caches.delete(k))
             )
         )
@@ -677,9 +707,28 @@ async function _serveShell(shellUrl) {
     let preference;
     if (shellLanguage === null) {
         try { preference = await caches.match(SHELL_LANGUAGE_KEY); } catch (_e) { /* No persisted preference. */ }
-        const persisted = preference ? await preference.text() : "de";
-        // A language message received during the read still wins.
-        if (shellLanguage === null && ["de", "en"].includes(persisted) && preference) shellLanguage = persisted;
+        try {
+            const keys = await caches.keys();
+            const languages = ["de", "en"].filter(language => keys.includes(SHELL_LANGUAGE_CACHES[language]));
+            // A fresh message received during the read still wins.
+            if (shellLanguage === null && languages.length === 1) {
+                await caches.open(SHELL_LANGUAGE_CACHES[languages[0]]);
+                const persisted = preference ? await preference.clone().text() : null;
+                if (shellLanguage !== null) return _serveShell(shellUrl);
+                // A failed write or invalidation leaves durable disagreement.
+                // Neither record may authorize a shell after a restart.
+                if (persisted !== languages[0]) return _shellUnavailable(null);
+                shellLanguage = languages[0];
+                shellLanguageDirty = false;
+            }
+        } catch (_e) { /* Unconfirmed storage never authorizes a cached shell. */ }
+        if (shellLanguage === null) {
+            // Legacy metadata is only a hint for the error text, never proof
+            // of the current account language after a worker restart.
+            const hint = preference ? await preference.text() : "de";
+            if (shellLanguage !== null) return _serveShell(shellUrl);
+            return _shellUnavailable(hint === "en" ? "en" : "de");
+        }
     }
     if (shellLanguageDirty) void _persistShellLanguage();
     const selected = shellLanguage || "de";
@@ -689,14 +738,6 @@ async function _serveShell(shellUrl) {
     try { shell = await matchSelected(); } catch (_e) { /* Try bounded repair. */ }
     if (shellLanguage && shellLanguage !== selected) return _serveShell(shellUrl);
     if (shell) return shell;
-    // Legacy shells are usable only before an account selected its language.
-    if (shellLanguage === null) {
-        const legacy = (await caches.match(shellUrl)) ||
-            (await caches.match(new URL(shellUrl, self.location.origin).href)) ||
-            (await caches.match(OFFLINE_FALLBACK_URL));
-        if (shellLanguage !== null) return _serveShell(shellUrl);
-        if (legacy) return legacy;
-    }
     let timer;
     await Promise.race([
         _healPrecache(),
@@ -708,8 +749,15 @@ async function _serveShell(shellUrl) {
     try { shell = await matchSelected(); } catch (_e) { /* Storage remains unavailable. */ }
     if (shellLanguage && shellLanguage !== selected) return _serveShell(shellUrl);
     if (shell) return shell;
-    const text = SW_SHELL_ERRORS[selected];
-    return new Response(`<!doctype html><html lang="${selected}"><meta charset="utf-8"><title>Offline</title><body><p role="alert">${text}</p></body></html>`, {
+    return _shellUnavailable(selected);
+}
+
+function _shellUnavailable(selected) {
+    // Uncertain durable records have no authoritative language. Use both
+    // existing translations rather than guessing the previous account's.
+    const languages = selected ? [selected] : ["de", "en"];
+    const text = languages.map(language => `<p role="alert" lang="${language}">${SW_SHELL_ERRORS[language]}</p>`).join("");
+    return new Response(`<!doctype html><html lang="${selected || ""}"><meta charset="utf-8"><title>Offline</title><body>${text}</body></html>`, {
         status: 503, statusText: "offline", headers: { "Content-Type": "text/html; charset=utf-8" },
     });
 }

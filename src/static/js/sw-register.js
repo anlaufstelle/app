@@ -34,6 +34,8 @@
     var _registration = null;
     var _shellLanguageOverride = null;
     var _shellLanguagePending = false;
+    var _shellLanguageSent = null;
+    var _shellLanguageRequest = null;
     var _dirty = false;
     var _userRequestedReload = false;
 
@@ -140,6 +142,9 @@
         });
 
         navigator.serviceWorker.addEventListener("message", async function (event) {
+            if (event.data?.type === "SHELL_LANGUAGE_STORED" && event.data.language === _shellLanguageSent && event.data.requestId === _shellLanguageRequest) {
+                _shellLanguagePending = false;
+            }
             if (event.data.type === "QUEUE_REQUEST") {
                 // ACK/NACK an den Service Worker zurueckschicken (#662).
                 // Ohne ACK wartet der SW max. QUEUE_ACK_TIMEOUT_MS und liefert
@@ -178,10 +183,11 @@
         var language = _shellLanguageOverride || document.documentElement.lang;
         if (language !== "de" && language !== "en") return;
         _shellLanguagePending = true;
+        _shellLanguageSent = language;
+        _shellLanguageRequest = crypto.randomUUID();
         if (!worker) return;
         try {
-            worker.postMessage({ type: "SET_SHELL_LANGUAGE", language: language });
-            _shellLanguagePending = false;
+            worker.postMessage({ type: "SET_SHELL_LANGUAGE", language: language, requestId: _shellLanguageRequest });
         } catch (error) {
             console.warn("[offline] Shell language message failed", error);
         }

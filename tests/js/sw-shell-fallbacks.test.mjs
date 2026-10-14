@@ -79,8 +79,9 @@ function dispatchFetch(handler, request) {
 function cachesWith(entries) {
     return {
         match: vi.fn(async (key) => {
-            const name = typeof key === "string" ? key : key.url;
-            return name in entries ? new Response("cached:" + entries[name]) : undefined;
+            const name = (typeof key === "string" ? key : key.url).replace("?shell_language=de", "");
+            const value = entries[name] || entries[new URL(name, ORIGIN).href];
+            return value ? new Response("cached:" + value) : undefined;
         }),
         open: vi.fn(async () => ({
             keys: async () => [],
@@ -112,6 +113,10 @@ const ALL_SHELLS = {
 
 async function offlineNavigate(url, entries = ALL_SHELLS, headers = {}) {
     const { handlers } = workerContext(offlineFetch(), cachesWith(entries));
+    // This route contract starts after the authenticated page reports DE.
+    let languageTask;
+    handlers.message({ data: { type: "SET_SHELL_LANGUAGE", language: "de" }, waitUntil: value => { languageTask = value; } });
+    await languageTask;
     const response = await dispatchFetch(handlers.fetch, navRequest(url, headers));
     return { status: response.status, body: await response.text(), response };
 }

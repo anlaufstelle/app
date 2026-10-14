@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const listeners = [];
+const workerListeners = new Map();
 beforeEach(() => {
     // Each import represents a fresh page, including its event listeners.
     for (const target of [document, window]) {
@@ -30,7 +31,7 @@ function installServiceWorkerStub(activeWorker) {
         configurable: true,
         value: {
             controller: null,
-            addEventListener: () => {},
+            addEventListener: (type, callback) => { workerListeners.set(type, callback); },
             register: () => Promise.resolve(registration),
         },
     });
@@ -47,6 +48,7 @@ async function freshLoad(activeWorker) {
 afterEach(() => {
     for (const [target, type, callback, options] of listeners.splice(0)) target.removeEventListener(type, callback, options);
     delete window.crypto_session;
+    workerListeners.clear();
     vi.restoreAllMocks();
 });
 
@@ -70,7 +72,7 @@ it("sends the authenticated page language to the active worker", async () => {
     document.body.dataset.userId = "u1";
     const postMessage = vi.fn();
     await freshLoad({ postMessage });
-    expect(postMessage).toHaveBeenCalledWith({ type: "SET_SHELL_LANGUAGE", language: "en" });
+    expect(postMessage).toHaveBeenCalledWith({ type: "SET_SHELL_LANGUAGE", language: "en", requestId: expect.any(String) });
     delete document.body.dataset.userId;
     document.documentElement.lang = "";
 });
@@ -85,7 +87,7 @@ it("resets the public shell language when the account logs out", async () => {
     vi.spyOn(form, "submit").mockImplementation(() => {});
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(form.submit).toHaveBeenCalledOnce());
-    expect(postMessage).toHaveBeenCalledWith({ type: "SET_SHELL_LANGUAGE", language: "de" });
+    expect(postMessage).toHaveBeenCalledWith({ type: "SET_SHELL_LANGUAGE", language: "de", requestId: expect.any(String) });
     document.body.innerHTML = "";
 });
 
@@ -100,7 +102,7 @@ it("resets language through the active registration even without a controller", 
     vi.spyOn(form, "submit").mockImplementation(() => {});
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(form.submit).toHaveBeenCalledOnce());
-    expect(postMessage).toHaveBeenCalledWith({ type: "SET_SHELL_LANGUAGE", language: "de" });
+    expect(postMessage).toHaveBeenCalledWith({ type: "SET_SHELL_LANGUAGE", language: "de", requestId: expect.any(String) });
     document.body.innerHTML = ""; delete document.body.dataset.userId; document.documentElement.lang = "";
 });
 
@@ -117,7 +119,28 @@ it("retries a failed logout language message on reconnection without reverting t
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(form.submit).toHaveBeenCalledOnce());
     window.dispatchEvent(new Event("online"));
-    expect(postMessage).toHaveBeenLastCalledWith({ type: "SET_SHELL_LANGUAGE", language: "de" });
+    expect(postMessage).toHaveBeenLastCalledWith({ type: "SET_SHELL_LANGUAGE", language: "de", requestId: expect.any(String) });
     expect(postMessage).toHaveBeenCalledTimes(2);
     document.body.innerHTML = ""; delete document.body.dataset.userId; document.documentElement.lang = "";
+});
+
+it("retries an unacknowledged language message and stops only after durable confirmation", async () => {
+    document.documentElement.lang = "en"; document.body.dataset.userId = "u1";
+    const postMessage = vi.fn(); await freshLoad({ postMessage }); postMessage.mockClear();
+    window.dispatchEvent(new Event("online"));
+    expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: "SET_SHELL_LANGUAGE", language: "en", requestId: expect.any(String) });
+    await workerListeners.get("message")({ data: { type: "SHELL_LANGUAGE_STORED", language: "de" } });
+    window.dispatchEvent(new Event("online")); expect(postMessage).toHaveBeenCalledTimes(2);
+    await workerListeners.get("message")({ data: { type: "SHELL_LANGUAGE_STORED", language: "en", requestId: postMessage.mock.calls.at(-1)[0].requestId } });
+    window.dispatchEvent(new Event("online")); expect(postMessage).toHaveBeenCalledTimes(2);
+    delete document.body.dataset.userId; document.documentElement.lang = "";
+});
+
+it("an acknowledgement for an older message cannot complete the current language request", async () => {
+    document.documentElement.lang = "en"; document.body.dataset.userId = "u1";
+    const postMessage = vi.fn(); await freshLoad({ postMessage }); postMessage.mockClear();
+    await workerListeners.get("message")({ data: { type: "SHELL_LANGUAGE_STORED", language: "en", requestId: "older-request" } });
+    window.dispatchEvent(new Event("online"));
+    expect(postMessage).toHaveBeenCalledOnce();
+    delete document.body.dataset.userId; document.documentElement.lang = "";
 });
