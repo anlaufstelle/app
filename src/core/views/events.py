@@ -330,12 +330,26 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                 )
             except (DocumentType.DoesNotExist, ValidationError, ValueError):
                 raise Http404(_("Dokumentationstyp nicht gefunden.")) from None
-            if user_can_see_document_type(request.user, prefill_doc_type):
+            if user_can_see_document_type(request.user, prefill_doc_type) and not _stage_excludes_client(
+                prefill_doc_type, _resolve_event_client(facility, client_id)
+            ):
                 default_doc_type = prefill_doc_type
                 initial["document_type"] = prefill_doc_type.pk
                 meta_form = EventMetaForm(facility=facility, user=request.user, initial=initial)
                 client_id = _prefill_owner(meta_form, facility, client_id, case_id)
                 serienerfassung = True
+
+        # Refs #2534: whatever type ended up preselected (facility default, series
+        # prefill) must be one the starting person's stage permits; otherwise the
+        # selection stays empty — the save would refuse it anyway (fail closed).
+        if default_doc_type is not None and _stage_excludes_client(
+            default_doc_type, _resolve_event_client(facility, client_id)
+        ):
+            default_doc_type = None
+            prefill_data = None
+            initial.pop("document_type", None)
+            meta_form = EventMetaForm(facility=facility, user=request.user, initial=initial)
+            client_id = _prefill_owner(meta_form, facility, client_id, case_id)
 
         # Pre-render dynamic fields when default document type is set
         if default_doc_type:
@@ -1463,8 +1477,8 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             # berechnen — sonst zaehlte eine zwischenzeitliche Aenderung schon
             # zum Renderstand.
             "form_state_token": request.POST.get("expected_form_state", ""),
-            # Refs #2539: wie im Servicefehler-Zweig — gewaehlte Dateien gehen beim
-            # Neuaufbau verloren, der Hinweis nennt die Felder zur erneuten Auswahl.
+            # Refs #2539: same as in the service-error branch — chosen files are lost on
+            # rebuild, the notice names the fields that need to be selected again.
             **file_reselection_context(data_form),
         }
         return render(request, "core/events/edit.html", context)

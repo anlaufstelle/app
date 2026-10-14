@@ -175,3 +175,67 @@ def test_template_of_stricter_stage_without_person_stays_applied(client, staff_u
 
     assert response.context["applied_template"] == stricter_template
     assert not response.context.get("template_stage_reset")
+
+
+@pytest.fixture
+def stricter_default(facility, stricter_template):
+    """Facility default document type that needs a higher contact stage than ``client_identified``."""
+    from core.models import Settings
+
+    settings, _ = Settings.objects.get_or_create(facility=facility)
+    settings.default_document_type = stricter_template.document_type
+    settings.save()
+    return stricter_template.document_type
+
+
+def _selected_document_type(response):
+    return str(response.context["meta_form"]["document_type"].value() or "")
+
+
+@pytest.mark.django_db
+def test_stricter_template_reset_does_not_reselect_incompatible_default(
+    client, staff_user, case_open, stricter_template, stricter_default
+):
+    """#2534: the facility default is the very type the reset refused; it must not come back."""
+    client.force_login(staff_user)
+    response = client.get(reverse("core:event_create"), {"template": stricter_template.pk, "case": case_open.pk})
+
+    assert response.context["template_stage_reset"] is True
+    assert response.context["applied_template"] is None
+    assert _selected_document_type(response) in {"", "None"}
+    assert not response.context["data_form"].fields
+    assert response.context["client_id"] == str(case_open.client_id)
+    assert response.context["case_id"] == str(case_open.pk)
+
+
+@pytest.mark.django_db
+def test_incompatible_default_is_not_preselected_without_template(client, staff_user, case_open, stricter_default):
+    """Fail closed: a default the starting person's stage excludes is left empty."""
+    client.force_login(staff_user)
+    response = client.get(reverse("core:event_create"), {"client": str(case_open.client_id)})
+
+    assert _selected_document_type(response) in {"", "None"}
+    assert not response.context["data_form"].fields
+    assert response.context["client_id"] == str(case_open.client_id)
+
+
+@pytest.mark.django_db
+def test_compatible_default_stays_preselected(client, staff_user, client_qualified, stricter_default):
+    client.force_login(staff_user)
+    response = client.get(reverse("core:event_create"), {"client": str(client_qualified.pk)})
+
+    assert _selected_document_type(response) == str(stricter_default.pk)
+
+
+@pytest.mark.django_db
+def test_series_prefill_of_incompatible_type_is_ignored(client, staff_user, case_open, stricter_default):
+    """The ``?document_type=`` prefill is held to the same stage rule as the default."""
+    client.force_login(staff_user)
+    response = client.get(
+        reverse("core:event_create"), {"document_type": str(stricter_default.pk), "client": str(case_open.client_id)}
+    )
+
+    assert response.status_code == 200
+    assert _selected_document_type(response) in {"", "None"}
+    assert response.context["serienerfassung"] is False
+    assert response.context["client_id"] == str(case_open.client_id)
