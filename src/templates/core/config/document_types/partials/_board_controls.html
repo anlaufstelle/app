@@ -1,0 +1,19 @@
+{% load i18n %}
+<div data-order-controls class="flex flex-wrap items-center gap-2 my-2">
+    <button type="button" data-board-order="up" class="btn-secondary px-2 py-1 text-[12px] disabled:opacity-50"
+            aria-label="{% blocktrans %}{{ name }}: Nach oben{% endblocktrans %}"{% if first %} disabled{% endif %}>{% trans "Nach oben" %}</button>
+    <button type="button" data-board-order="down" class="btn-secondary px-2 py-1 text-[12px] disabled:opacity-50"
+            aria-label="{% blocktrans %}{{ name }}: Nach unten{% endblocktrans %}"{% if last %} disabled{% endif %}>{% trans "Nach unten" %}</button>
+    {% if field %}
+    <label for="move-target-{{ field.pk }}" class="text-[12px]">{% trans "Verschieben nach" %}</label>
+    <select id="move-target-{{ field.pk }}" data-move-target class="max-w-full min-w-0 rounded border border-subtle bg-surface text-ink text-[12px]"
+            aria-label="{% blocktrans %}{{ name }}: Verschieben nach{% endblocktrans %}">
+        <option value=""{% if not field.field_group_id %} selected{% endif %}>{% trans "Ohne Gruppe" %}</option>
+        {% for candidate in blocks %}{% if candidate.kind == "group" %}
+        <option value="{{ candidate.group.pk }}"{% if field.field_group_id == candidate.group.pk %} selected{% endif %}>{{ candidate.group.name }}</option>
+        {% endif %}{% endfor %}
+    </select>
+    <button type="button" data-board-move class="btn-secondary px-2 py-1 text-[12px]"
+            aria-label="{% blocktrans %}{{ name }}: Verschieben bestätigen{% endblocktrans %}">{% trans "Verschieben" %}</button>
+    {% endif %}
+</div>

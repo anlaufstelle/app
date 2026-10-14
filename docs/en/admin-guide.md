@@ -894,6 +894,8 @@ In addition to the document type's sensitivity, each individual field of a field
 
 In a documentation type's **field board**, every field row shows the effective level, permitted roles, **Encrypted** or **Plaintext**, and **In search index** or **Not in search index**. Inherited fields show **same as type**; a higher field level shows **Field template:** with its own level, and the detail page counts fields with higher levels. The field-template list shows each template's own level and storage mode, plus its index status for each assigned type; without an assignment there is no search index.
 
+In the field board, groups and fields can also be sorted with the keyboard using **Up** and **Down**. For fields, **Move to** selects the target group or **No group**; **Move** confirms the selection. After a successful change, focus returns to the control and the new position is announced. Dragging remains available.
+
 A **High** type may not contain an inheriting field template: each assignment requires an explicit field level. Configuration and the package loader reject inheritance in High types. In the shipped packages, reporting fields in High types receive the **Elevated** field level and remain unencrypted for statistics; other fields receive **High** and are encrypted. A high **type level** alone does not encrypt every field value.
 
 When a changed type level or changed field level/encryption setting is saved, or a field template is assigned or reassigned, affected events, clients and cases in the same facility are rewritten, including records in the trash. This applies to the administration forms, the normal model save path in Django admin and the package loader. When writing dynamic values or their search index, supported model and bulk paths within the limits described below hold shared protection locks through persistence; protection changes take exclusive locks and decide from the locked database state. Configuration, field encryption and the event search index change in **one transaction**; a failed rewrite leaves no partial transition. A shared field template affects all assigned types within the facility. Encrypted fields also store **No (`False`)** and **0** as ciphertext; newly encrypted booleans and integers retain their types after decryption. Merely lowering sensitivity does not decrypt existing ciphertext; if the template's encryption remains enabled, new values remain encrypted as well.
@@ -2552,6 +2554,6 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-13 -->
-<!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 5fa92cf273c1907d6397554a31f9254a9d691755 -->
+<!-- translation-date: 2026-10-14 -->
+<!-- translation-date: 2026-10-14 -->
+<!-- source-hash: 48231d3c313f10b600f8aacd59dfdcff17dd8740 -->

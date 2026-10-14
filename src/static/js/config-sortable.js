@@ -265,6 +265,127 @@
     }
   }
 
+  // Keyboard actions use the same batches as drag gestures, without changing
+  // the DOM before a successful server response (Refs #2554).
+  var pendingAction = null;
+
+  function announce(message) {
+    var region = document.getElementById("field-board-status");
+    if (region) {
+      region.textContent = message;
+    }
+  }
+
+  function itemRows(container) {
+    return Array.from(container.children).filter(function (item) {
+      return item.hasAttribute("data-item-name");
+    });
+  }
+
+  function rememberAction(item, action, url) {
+    pendingAction = {
+      id: item.getAttribute("data-dtf-id") || item.getAttribute("data-group-id"),
+      kind: item.hasAttribute("data-dtf-id") ? "data-dtf-id" : "data-group-id",
+      action: action,
+      url: url,
+    };
+    announce("");
+  }
+
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest("[data-board-order], [data-board-move]");
+    var root = board();
+    if (!button || button.disabled || !root || !root.contains(button) || pendingAction || !window.htmx) {
+      return;
+    }
+    var item = button.closest("[data-item-name]");
+    var container = item.parentElement;
+    var rows = itemRows(container);
+    var values;
+    var url;
+    var action;
+    if (button.hasAttribute("data-board-order")) {
+      action = button.getAttribute("data-board-order");
+      var index = rows.indexOf(item);
+      var target = index + (action === "up" ? -1 : 1);
+      if (target < 0 || target >= rows.length) {
+        return;
+      }
+      rows[index] = rows[target];
+      rows[target] = item;
+      url = container.getAttribute("data-reorder-url");
+      if (container.getAttribute("data-sortable") === "blocks") {
+        values = { blocks: rows.map(function (row) {
+          return row.hasAttribute("data-group-id") ? "group:" + row.getAttribute("data-group-id") : "field:" + row.getAttribute("data-dtf-id");
+        }) };
+      } else {
+        values = { group: container.getAttribute("data-group-id"), order: rows.map(function (row) { return row.getAttribute("data-dtf-id"); }) };
+      }
+    } else {
+      action = "move";
+      var group = item.querySelector("[data-move-target]").value;
+      var currentGroup = container.getAttribute("data-sortable") === "fields" ? container.getAttribute("data-group-id") : "";
+      if (group === currentGroup) {
+        return;
+      }
+      var blocks = root.querySelector('[data-sortable="blocks"]');
+      url = blocks.getAttribute("data-move-url");
+      values = { moved: item.getAttribute("data-dtf-id"), group: group };
+      if (group) {
+        var list = Array.from(root.querySelectorAll('[data-sortable="fields"]')).find(function (candidate) {
+          return candidate.getAttribute("data-group-id") === group;
+        });
+        if (!list) {
+          return;
+        }
+        values.order = directAttrValues(list, "data-dtf-id").concat([values.moved]);
+      } else {
+        values.blocks = collectBlocks(blocks).concat(["field:" + values.moved]);
+      }
+    }
+    if (!url) {
+      return;
+    }
+    rememberAction(item, action, url);
+    postBatch(url, values);
+  });
+
+  function restoreKeyboardAction() {
+    if (!pendingAction) {
+      return;
+    }
+    var action = pendingAction;
+    pendingAction = null;
+    var item = Array.from(board().querySelectorAll("[data-item-name]")).find(function (candidate) {
+      return candidate.getAttribute(action.kind) === action.id;
+    });
+    if (!item) {
+      return;
+    }
+    var selector = action.action === "move" ? "[data-board-move]" : '[data-board-order="' + action.action + '"]';
+    var button = item.querySelector(selector);
+    if (button && button.disabled) {
+      button = item.querySelector('[data-board-order="' + (action.action === "up" ? "down" : "up") + '"]');
+    }
+    if (button && !button.disabled) {
+      button.focus();
+    } else {
+      // A single remaining item has no enabled order button.
+      item.setAttribute("tabindex", "-1");
+      item.focus();
+    }
+    var rows = itemRows(item.parentElement);
+    var message = item.getAttribute("data-position-message") || "";
+    var replacements = {
+      name: item.getAttribute("data-item-name"),
+      position: String(rows.indexOf(item) + 1),
+      total: String(rows.length),
+    };
+    announce(message.replace(/\{(name|position|total)\}/g, function (placeholder, key) {
+      return replacements[key];
+    }));
+  }
+
   function initBoard() {
     destroyAll();
     if (!hasDeps()) {
@@ -293,6 +414,7 @@
     }
     if (elt === b || b.contains(elt) || elt.contains(b)) {
       initBoard();
+      restoreKeyboardAction();
     }
   });
 
@@ -307,7 +429,12 @@
   document.addEventListener("htmx:responseError", function (evt) {
     var cfg = evt.detail && evt.detail.requestConfig;
     var path = cfg && cfg.path;
-    if (path && reorderUrls[path]) {
+    if (path && pendingAction && pendingAction.url === path) {
+      // Keyboard requests have not moved any DOM nodes, so the displayed
+      // state remains correct. Keep the failure visible and allow a retry.
+      pendingAction = null;
+      announce(board().getAttribute("data-error-message"));
+    } else if (path && reorderUrls[path]) {
       window.location.reload();
     }
   });
