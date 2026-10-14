@@ -404,3 +404,17 @@ it("a generic redirect replay success clears the queue while retaining its uncon
     const next = await page(formHtml()); await start(next);
     expect(next.w.document.querySelector("textarea").value).toBe("Queued contact");
 });
+
+it("reading confirmations preserves unrelated revocation and persistence metadata without decrypting it", async () => {
+    const p = await page(formHtml());
+    const revocation = { key: "revocationReplayState", value: { pending: false, attempt: "successful-check" } };
+    const persistence = { key: "storagePersist", granted: true, ts: 123 };
+    await p.store.db.meta.put(revocation); await p.store.db.meta.put(persistence);
+    const decrypt = vi.fn(); p.w.onDraftDecrypt = decrypt;
+    const remove = vi.spyOn(p.store.db.meta, "delete");
+    await start(p);
+    expect(await p.store.db.meta.get(revocation.key)).toEqual(revocation);
+    expect(await p.store.db.meta.get(persistence.key)).toEqual(persistence);
+    expect(decrypt).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+});

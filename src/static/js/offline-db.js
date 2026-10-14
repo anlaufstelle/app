@@ -313,10 +313,13 @@
         }
     }
 
-    async function listDecrypted(table, filterFn) {
+    async function listDecrypted(table, filterFn, keyPrefix) {
         const crypto = _crypto();
-        const rows = await db[table].toArray();
         const pkName = _primKeyName(table);
+        // Mixed metadata contains plaintext control records. Restrict the
+        // key range before decrypting or considering any cleanup.
+        const rows = await (keyPrefix === undefined ? db[table] :
+            db[table].where(pkName).startsWith(keyPrefix)).toArray();
         const out = [];
         for (const row of rows) {
             try {

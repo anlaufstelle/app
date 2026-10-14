@@ -356,7 +356,7 @@
         try {
             pending = await window.offlineStore.listDecrypted("meta", function (row) {
                 return row.key.startsWith("autosave-confirmed:");
-            });
+            }, "autosave-confirmed:");
         } catch (error) {
             ready = false;
             console.warn("[autosave] Draft confirmations unavailable", error);
