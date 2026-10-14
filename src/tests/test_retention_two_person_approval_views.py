@@ -2,6 +2,7 @@
 
 import pytest
 from django.contrib.messages import get_messages
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
@@ -46,3 +47,26 @@ def test_bulk_reports_first_final_and_skipped(proposal, lead_user, admin_user, c
     text = " ".join(str(m) for m in get_messages(response.wsgi_request))
     assert "1 Löschvorschlag übersprungen" in text
     assert "endgültig freigegeben" not in text
+
+
+def _render_card(proposal, user, rf):
+    request = rf.get("/")
+    request.user = user
+    return render_to_string("core/retention/partials/proposal_card.html", {"proposal": proposal}, request=request)
+
+
+def test_card_does_not_promise_deletion_without_approval_evidence(proposal, lead_user, admin_user, rf):
+    approve_proposal(proposal, lead_user)
+    approve_proposal(proposal, admin_user)
+    proposal.refresh_from_db()
+    assert proposal.has_approval_evidence
+    assert "Wird beim nächsten Lauf gelöscht" in _render_card(proposal, admin_user, rf)
+
+    type(proposal).objects.filter(pk=proposal.pk).update(first_approved_by=None, first_approved_at=None)
+    proposal.refresh_from_db()
+    assert proposal.status == "approved"
+    assert not proposal.has_approval_evidence
+
+    content = _render_card(proposal, admin_user, rf)
+    assert "Wird beim nächsten Lauf gelöscht" not in content
+    assert "Freigabebelege unvollständig – wird nicht gelöscht" in content

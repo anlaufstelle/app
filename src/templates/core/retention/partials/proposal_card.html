@@ -122,6 +122,10 @@
     {% endif %}
 
     {% elif proposal.status == 'approved' %}
+    {% if proposal.has_approval_evidence %}
     <p class="text-sm text-green-700">{% trans "Wird beim nächsten Lauf gelöscht" %}</p>
+    {% else %}
+    <p class="text-sm text-amber-700" data-testid="retention-approval-evidence-missing">{% trans "Freigabebelege unvollständig – wird nicht gelöscht" %}</p>
+    {% endif %}
     {% endif %}
 </div>
