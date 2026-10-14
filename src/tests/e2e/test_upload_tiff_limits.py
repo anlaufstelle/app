@@ -1,8 +1,8 @@
-"""E2E: Datei-Upload — TIFF-Seitengrenze (ATT #2582).
+"""E2E: File upload — TIFF page limit (ATT #2582).
 
-Ein kleines TIFF mit 101 Seiten wird mit einer verständlichen Bildgrenzen-Meldung
-abgewiesen; ein kleines dreiseitiges TIFF lässt sich hochladen und mit allen Seiten
-und ohne Aufnahme-Metadaten herunterladen.
+A small TIFF with 101 pages is rejected with an understandable image-limit message;
+a small three-page TIFF can be uploaded and downloaded with all pages and without
+capture metadata.
 """
 
 from __future__ import annotations

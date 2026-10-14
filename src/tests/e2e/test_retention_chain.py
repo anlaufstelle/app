@@ -21,10 +21,10 @@ niemand.
    Redaktion an der PERSON — ``anonymize_client`` setzt
    ``pseudonym = "Gelöscht-<pk8>"`` und ``is_active=False``. Die Personenliste
    filtert auf ``is_active=True`` (``views/clients.py``), die Person
-   verschwindet dort also; ihre Akte antwortet seit der Vereinheitlichung der
-   Lesepfade widerrufener Personen ebenfalls mit **404** (``is_active=True`` im
-   Detail-Loader). Das neue Pseudonym prueft die Datenbank-Gegenprobe. Genau
-   diese Beobachtungen sind der Nachweis.
+   the person disappears there; its file also answers with **404** since the
+   read paths of revoked persons were unified (``is_active=True`` in the detail
+   loader). The new pseudonym is checked by the database cross-check. Exactly
+   these observations are the evidence.
 
 **Warnung zum geteilten Lauf** (Muster ``test_statistics_snapshot.py``): Der
 ``enforce_retention``-Lauf ist installationsweit — das Command kennt keinen
@@ -158,7 +158,7 @@ class TestRetentionChain:
     """Vom Vorschlag bis zur sichtbaren Redaktion — in einem Durchgang."""
 
     def test_approved_proposal_leads_to_visible_anonymization(self, authenticated_page, lead_page, base_url, e2e_env):
-        """Zwei Freigaben im Dashboard → ``enforce_retention`` → 404 + „Gelöscht-"-Pseudonym."""
+        """Two approvals on the dashboard → ``enforce_retention`` → 404 + "Gelöscht-" pseudonym."""
         page = authenticated_page
         pseudonym = f"E2E-RET-{uuid.uuid4().hex[:8]}"
         client_pk, event_pk = _create_doomed_event(e2e_env, pseudonym)
@@ -185,18 +185,18 @@ class TestRetentionChain:
         expect(karte).to_be_visible(timeout=10000)
         expect(karte.locator("span:has-text('Ausstehend')")).to_have_count(1, timeout=10000)
         karte.get_by_role("button", name="Erste Freigabe erteilen").click()
-        # Seit der Zwei-Personen-Regel genuegt eine Freigabe nicht: Karte bleibt
-        # ausstehend, und der Lauf loescht noch nichts.
+        # Since the two-person rule one approval is not enough: the card stays
+        # pending and the run deletes nothing yet.
         expect(karte.get_by_text("1 von 2 Freigaben")).to_be_visible(timeout=10000)
         expect(karte.locator("span:has-text('Freigegeben')")).to_have_count(0)
 
-        # --- Zweite, andere berechtigte Person (Leitung) gibt endgueltig frei.
+        # --- A second, different authorised person (lead) approves for good.
         lead_page.on("dialog", lambda dialog: dialog.accept())
         lead_page.goto(f"{base_url}/retention/", wait_until="domcontentloaded")
-        karte_leitung = lead_page.locator(f"#proposal-{proposal_pk}")
-        expect(karte_leitung.get_by_text("1 von 2 Freigaben")).to_be_visible(timeout=10000)
-        karte_leitung.get_by_role("button", name="Zweite Freigabe erteilen").click()
-        expect(karte_leitung.locator("span:has-text('Freigegeben')")).to_be_visible(timeout=10000)
+        lead_card = lead_page.locator(f"#proposal-{proposal_pk}")
+        expect(lead_card.get_by_text("1 von 2 Freigaben")).to_be_visible(timeout=10000)
+        lead_card.get_by_role("button", name="Zweite Freigabe erteilen").click()
+        expect(lead_card.locator("span:has-text('Freigegeben')")).to_be_visible(timeout=10000)
 
         # --- Der naechtliche Lauf.
         _run_enforce_retention(e2e_env)
@@ -207,13 +207,12 @@ class TestRetentionChain:
             f"Getilgtes Ereignis muss 404 liefern, war: {antwort and antwort.status}"
         )
 
-        # --- 2. Nachweis: die anonymisierte Person ist inaktiv; ihre Akte antwortet
-        #        seit der Vereinheitlichung der Lesepfade widerrufener Personen mit
-        #        404 statt mit dem neuen Pseudonym (das Pseudonym prueft Nachweis 4
-        #        an der Datenbank).
-        antwort = page.goto(f"{base_url}/clients/{client_pk}/", wait_until="domcontentloaded")
-        assert antwort is not None and antwort.status == 404, (
-            f"Akte einer anonymisierten Person muss 404 liefern, war: {antwort and antwort.status}"
+        # --- 2. Evidence: the anonymised person is inactive; since the read paths of
+        #        revoked persons were unified their file answers with 404 instead of
+        #        the new pseudonym (evidence 4 checks the pseudonym in the database).
+        response = page.goto(f"{base_url}/clients/{client_pk}/", wait_until="domcontentloaded")
+        assert response is not None and response.status == 404, (
+            f"file of an anonymised person must answer 404, was: {response and response.status}"
         )
 
         # --- 3. Nachweis: unter dem alten Pseudonym ist sie nicht mehr auffindbar.

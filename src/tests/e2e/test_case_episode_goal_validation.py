@@ -1,13 +1,13 @@
-"""E2E: Fallakte — Episodendaten, Ziel-/Meilenstein-Grenzen, Entwürfe und CSP-Konsole (FALL).
+"""E2E: Case file — episode dates, goal/milestone limits, drafts and the CSP console (FALL).
 
-* Episode mit und ohne Ende anlegen und erneut bearbeiten; Ende vor Beginn
-  (Fehler bei erhaltenen Eingaben), gleicher Tag speicherbar, heutiger Abschluss
-  einer Episode mit zukünftigem Beginn wird abgewiesen.
-* Titelgrenze je Vorgang getrennt (Ziel anlegen, Ziel bearbeiten, Meilenstein anlegen):
-  200 Zeichen werden exakt gespeichert, 201 Zeichen (maxlength im DOM entfernt) ergeben
-  eine Meldung ohne Serverfehler, erhalten Eingaben und schreiben nichts.
-* Mehrere Ziele: „Ziel erreicht“ lässt übrige Entwürfe und Editoren stehen.
-* Echte HTMX-/Alpine-CSP-Initialisierung: keine CSP-Verstöße in der Konsole.
+* Create and re-edit an episode with and without an end; end before start
+  (error with the input kept), same day can be saved, closing today an episode
+  with a future start is rejected.
+* Title limit separately per operation (create goal, edit goal, create milestone):
+  200 characters are stored exactly, 201 characters (maxlength removed from the DOM)
+  give a message without a server error, keep the input and write nothing.
+* Several goals: "Ziel erreicht" leaves the other drafts and editors in place.
+* Real HTMX/Alpine CSP initialisation: no CSP violations in the console.
 """
 
 from __future__ import annotations

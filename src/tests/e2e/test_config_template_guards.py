@@ -1,10 +1,9 @@
-"""E2E: Feldvorlagen — Typwechsel belegter Vorlagen und Deaktivieren belegter Pflichtfelder (CFG).
+"""E2E: Field templates — type change of used templates and deactivating used required fields (CFG).
 
-* Eine belegte Textvorlage lässt sich nicht auf Datei umstellen: Fehlermeldung statt
-  Erfolg, alter Feldtyp und gespeicherte Werte bleiben; Text ↔ Textbereich bleibt möglich.
-* Ein belegtes Pflichtfeld deaktivieren: das Feld fehlt im Formular, ein anderes Feld
-  lässt sich speichern, der alte Wert bleibt erhalten und erscheint nach der
-  Reaktivierung wieder.
+* A used text template cannot be switched to file: error message instead of
+  success, old field type and stored values stay; text <-> textarea stays possible.
+* Deactivating a used required field: the field is missing from the form, another
+  field can be saved, the old value is kept and reappears after reactivation.
 """
 
 from __future__ import annotations

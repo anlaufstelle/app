@@ -303,11 +303,11 @@ def _two_person_flow(page_a, page_b, base_url, pk, labels, e2e_env):
 
 
 class TestRetentionApproveFlow:
-    """Proposal freigeben via HTMX — manuelle Löschfreigabe durch zwei verschiedene Personen."""
+    """Approve a proposal via HTMX — manual deletion approval by two different persons."""
 
     @pytest.mark.smoke
     def test_approve_proposal(self, authenticated_page, lead_page, base_url, e2e_env, approver_pool):
-        """Admin gibt zuerst frei, die Wiederholung wird abgewiesen, erst Leitung gibt endgültig frei (DE)."""
+        """Admin approves first, the repetition is rejected, only the lead approves for good (DE)."""
         pks = _ensure_proposals(e2e_env)
         evidence = _two_person_flow(authenticated_page, lead_page, base_url, pks[0], _DE, e2e_env)
         assert "1 von 2 Freigaben" in evidence["progress_line"]
@@ -316,7 +316,7 @@ class TestRetentionApproveFlow:
     def test_approve_proposal_english(
         self, browser, base_url, e2e_env, approver_pool, _login_storage_state, _lead_storage_state
     ):
-        """Dieselbe Strecke mit Sprache Englisch (Browser-Locale und App-Sprache)."""
+        """The same path in English (browser locale and app language)."""
         pks = _ensure_proposals(e2e_env)
         previous = _set_language(e2e_env, [_APPROVER_A, _APPROVER_B], "en")
         context_a = browser.new_context(storage_state=_login_storage_state, locale="en-US")
@@ -339,7 +339,7 @@ class TestRetentionApproveFlow:
             _restore_language(e2e_env, previous)
 
     def test_single_approver_first_release_warns(self, authenticated_page, base_url, e2e_env, single_approver_pool):
-        """Mit nur einem berechtigten Konto bleibt es bei 1 von 2; die Karte nennt den zu kleinen Pool."""
+        """With only one authorised account it stays at 1 of 2; the card names the pool that is too small."""
         pks = _ensure_proposals(e2e_env)
         page = authenticated_page
         _open_dashboard(page, base_url)
@@ -352,7 +352,7 @@ class TestRetentionApproveFlow:
 
 
 class TestRetentionApproverComplianceCard:
-    """Systemadministration sieht die gelbe Karte, wenn eine Einrichtung nur ein berechtigtes Konto hat."""
+    """System administration sees the yellow card when a facility has only one authorised account."""
 
     _CASES = {
         "de": (
@@ -390,7 +390,7 @@ class TestRetentionApproverComplianceCard:
 
 
 class TestRetentionFirstReleaseReset:
-    """Hold, Zurückstellen und Ablehnen verwerfen die erste Freigabe."""
+    """Hold, defer and reject discard the first approval."""
 
     def test_hold_clears_first_release(self, authenticated_page, base_url, e2e_env, approver_pool):
         pks = _ensure_proposals(e2e_env)
@@ -437,7 +437,7 @@ class TestRetentionBulkFlow:
     """Bulk-Actions: Mehrere Löschvorschläge in einem Rutsch bearbeiten."""
 
     def test_bulk_approve_counts_first_releases_only(self, authenticated_page, base_url, e2e_env, approver_pool):
-        """Sammelfreigabe zweier frischer Vorschläge: zwei erste Freigaben, keine endgültige."""
+        """Bulk approval of two fresh proposals: two first approvals, no final one."""
         pks = _ensure_proposals(e2e_env)
         page = authenticated_page
         _open_dashboard(page, base_url)
@@ -453,7 +453,7 @@ class TestRetentionBulkFlow:
 
         page.locator("[data-testid='retention-bulk-approve']").click()
 
-        # HX-Redirect triggert Full-Page-Reload; die Meldung trennt erste von endgültigen Freigaben.
+        # HX-Redirect triggers a full page reload; the message separates first from final approvals.
         expect(page.get_by_text("2 erste Freigaben erteilt (1 von 2 Freigaben).")).to_be_visible(timeout=10000)
         expect(page.get_by_text("endgültig freigegeben", exact=False)).to_have_count(0)
         for pk in pks[:2]:
@@ -465,17 +465,17 @@ class TestRetentionBulkFlow:
     def test_bulk_mixed_selection_and_same_person_skipped(
         self, authenticated_page, lead_page, base_url, e2e_env, approver_pool
     ):
-        """Gemischte Auswahl: erste Stimme für den frischen, endgültige für den vorbestätigten Vorschlag."""
+        """Mixed selection: first vote for the fresh proposal, final one for the pre-approved proposal."""
         pks = _ensure_proposals(e2e_env)
         fresh, half = pks[0], pks[1]
 
-        # Leitung gibt den zweiten Vorschlag zuerst frei (einzeln).
+        # The lead approves the second proposal first (individually).
         _open_dashboard(lead_page, base_url)
         half_card = lead_page.locator(f"#proposal-{half}")
         half_card.get_by_role("button", name="Erste Freigabe erteilen").click()
         expect(half_card.get_by_text("1 von 2 Freigaben")).to_be_visible(timeout=10000)
 
-        # Admin wählt beide aus.
+        # Admin selects both.
         page = authenticated_page
         _open_dashboard(page, base_url)
         for pk in (fresh, half):
@@ -487,7 +487,7 @@ class TestRetentionBulkFlow:
         assert _proposal_state(e2e_env, half)[0] == "approved"
         expect(_badge(page.locator(f"#proposal-{half}"), "Freigegeben")).to_have_count(1)
 
-        # Dieselbe Person erneut auf den halb freigegebenen Vorschlag: übersprungen, Status unverändert.
+        # The same person on the half-approved proposal again: skipped, status unchanged.
         page.locator(f"#proposal-{fresh} [data-bulk-proposal]").check()
         page.locator("[data-testid='retention-bulk-approve']").click()
         expect(page.get_by_text("1 Löschvorschlag übersprungen", exact=False)).to_be_visible(timeout=10000)
@@ -563,9 +563,9 @@ class TestRetentionHoldFlow:
         page.on("dialog", lambda dialog: dialog.accept())
         card.locator("button:has-text('Hold aufheben')").click()
 
-        # After dismissal, card should revert — auf Wiedererscheinen des
-        # Freigabe-Buttons warten (signalisiert Zurück-zu-Ausstehend; der Knopf
-        # heißt seit der Zwei-Personen-Regel „Erste Freigabe erteilen").
+        # After dismissal the card reverts: wait for the approve button to reappear
+        # (signals the return to pending; since the two-person rule it is labelled
+        # "Erste Freigabe erteilen").
         page.wait_for_load_state("domcontentloaded")
         card_btn = card.get_by_role("button", name="Erste Freigabe erteilen")
         card_btn.wait_for(state="visible", timeout=5000)

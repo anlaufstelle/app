@@ -1,16 +1,16 @@
-"""E2E: Erreichbarkeit und Kontrast (A11Y E1) in kleinen Fenstern und bei Zoom-Äquivalenten.
+"""E2E: Reachability and contrast (A11Y E1) in small windows and at zoom equivalents.
 
-Playwright hat keinen Browser-Zoom; gleichwertig (WCAG-Reflow) sind Viewports von
-640 bzw. 320 CSS-Pixeln Breite sowie 667×375. Belegt wird mit Messungen
-(Bounding-Boxen, ``scrollWidth <= clientWidth``, berechnete Farben).
+Playwright has no browser zoom; viewports of 640 and 320 CSS pixels width plus
+667×375 are the equivalent (WCAG reflow). Evidence comes from measurements
+(bounding boxes, ``scrollWidth <= clientWidth``, computed colours).
 
-* Mobiles Mehr-Menü: alle Einträge per Tab und internem Scrollen erreichbar,
-  fokussierte Zeile sichtbar, letzte Aktion über der unteren Navigation.
-* Desktop-Seitenleiste mit langem Namen: Rolle bricht um, nichts überlappt,
-  Sprachwahl und Abmelden bleiben erreichbar.
-* Offline-/Sync-/Konfliktbanner: berechneter Kontrast ≥ 4,5:1 für Text und Links.
-* Feld-Board: Tastatur auf/ab, in andere Gruppe und „Ohne Gruppe“, Randknöpfe
-  deaktiviert, Fokus und Live-Ansage nach dem Austausch.
+* Mobile "More" menu: every entry reachable by Tab and internal scrolling,
+  focused row visible, last action above the bottom navigation.
+* Desktop sidebar with a long name: the role wraps, nothing overlaps, language
+  switch and logout stay reachable.
+* Offline/sync/conflict banners: computed contrast >= 4.5:1 for text and links.
+* Field board: keyboard up/down, into another group and "no group", edge buttons
+  disabled, focus and live announcement after the swap.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ def _set_user_field(e2e_env, username, field, value):
 
 
 class TestMoreMenuReach:
-    """#2553 — Mehr-Menü als Anwendungsbetreuung (längste Liste)."""
+    """#2553 — "More" menu as application support (longest list)."""
 
     @pytest.mark.parametrize("viewport", VIEWPORTS)
     def test_every_entry_reachable_by_tab_and_above_bottom_nav(self, authenticated_page, base_url, viewport):
@@ -145,7 +145,7 @@ class TestMoreMenuReach:
 
 
 class TestSidebarLongName:
-    """#2559 — lange Namen und Rolle im Kontobereich der Seitenleiste."""
+    """#2559 — long name and role in the account area of the sidebar."""
 
     @pytest.mark.parametrize("width", [768, 800, 1024])
     @pytest.mark.parametrize("language", ["de", "en"])
@@ -274,7 +274,7 @@ _CONTRAST_JS = """
 
 
 class TestBannerContrast:
-    """#2555 — berechneter Kontrast der Zustandsbanner."""
+    """#2555 — computed contrast of the state banners."""
 
     def _emit(self, page, name, detail):
         page.evaluate(
@@ -337,7 +337,7 @@ class TestBannerContrast:
 
 
 class TestFieldBoardKeyboard:
-    """#2554 — Feld-Board ohne Maus bedienen; Ansage über die Live-Region."""
+    """#2554 — operate the field board without a mouse; announcement through the live region."""
 
     def test_order_and_move_with_keyboard_focus_and_announcement(self, authenticated_page, base_url):
         page = authenticated_page
@@ -357,8 +357,8 @@ class TestFieldBoardKeyboard:
 
             # Field row: move "Notiz" up inside its group via the keyboard.
             card = page.locator(f'[data-testid="field-group"][data-group-id="{first_pk}"]')
-            notiz = card.locator('[data-testid="field-row"]', has_text="Notiz")
-            up = notiz.locator('[data-board-order="up"]')
+            note_row = card.locator('[data-testid="field-row"]', has_text="Notiz")
+            up = note_row.locator('[data-board-order="up"]')
             expect(up).to_be_enabled()
             up.focus()
             page.keyboard.press("Enter")
@@ -366,15 +366,15 @@ class TestFieldBoardKeyboard:
             rows = card.locator('[data-testid="field-row"]')
             expect(rows.first).to_contain_text("Notiz", timeout=10000)
             # The top row now has a disabled „Nach oben“ (edge button).
-            notiz = card.locator('[data-testid="field-row"]', has_text="Notiz")
-            expect(notiz.locator('[data-board-order="up"]')).to_be_disabled()
+            note_row = card.locator('[data-testid="field-row"]', has_text="Notiz")
+            expect(note_row.locator('[data-board-order="up"]')).to_be_disabled()
             # The live region carries an announcement naming the field (it arrives after the follow-up refreshes).
             expect(page.locator("#field-board-status")).to_contain_text("Notiz", timeout=10000)
 
             # Move into the other group via the confirmed select.
-            target = notiz.locator("[data-move-target]")
+            target = note_row.locator("[data-move-target]")
             target.select_option(value=second_pk)
-            notiz.locator("[data-board-move]").focus()
+            note_row.locator("[data-board-move]").focus()
             page.keyboard.press("Enter")
             second = page.locator(f'[data-testid="field-group"][data-group-id="{second_pk}"]')
             expect(second.locator('[data-testid="field-row"]', has_text="Notiz")).to_have_count(1, timeout=10000)
@@ -449,7 +449,7 @@ class TestFieldBoardKeyboard:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="Befund QAB-1: after a keyboard move the follow-up refreshes of the preview and the condition "
+        reason="Known defect: after a keyboard move the follow-up refreshes of the preview and the condition "
         "board take the focus (document.activeElement ends on #condition-board) and the announced position can "
         "be the stale one (Position 2 von 2).",
     )
