@@ -8,7 +8,10 @@ import pytest
 @pytest.mark.architecture
 def test_inline_dialog_acceptance_requires_a_new_focus_check():
     root = Path(__file__).resolve().parents[2]
-    source = (root / "docs/testing/abnahme-0.98.md").read_text()
+    protocol = root / "docs/testing/abnahme-0.98.md"
+    if not protocol.exists():
+        pytest.skip("docs/testing/abnahme-0.98.md nicht im Public-Snapshot — Guard nur im Dev-Repo relevant")
+    source = protocol.read_text()
     row = next(line for line in source.splitlines() if line.startswith("| A-A11Y-015 |"))
     assert "#2552" in row
     assert "Tab und Shift+Tab" in row
