@@ -88,6 +88,14 @@ describe("field board keyboard actions without Sortable", () => {
         click(row("f1").querySelector('[data-board-order="down"]'));
         expect(window.htmx.ajax).toHaveBeenCalledTimes(2);
     });
+
+    it.each(["htmx:sendError", "htmx:timeout", "htmx:swapError"])("releases the keyboard guard after %s and permits retry", (name) => {
+        click(row("f1").querySelector('[data-board-order="down"]'));
+        document.dispatchEvent(new CustomEvent(name, { detail: { requestConfig: { path: "/fields" } } }));
+        expect(status()).toBe("Change failed. Try again.");
+        click(row("f1").querySelector('[data-board-order="down"]'));
+        expect(window.htmx.ajax).toHaveBeenCalledTimes(2);
+    });
 });
 
 it("keeps item names containing position placeholders literal", () => {

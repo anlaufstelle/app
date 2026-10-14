@@ -426,16 +426,36 @@
   // Zustand per Voll-Reload wieder her. Button-Mutationen laufen nicht über
   // postBatch, ihre URLs stehen also nicht in reorderUrls und lösen hier nichts
   // aus. Reines Browser-Verhalten — manuelle Prüfung in P9.
+  function releaseFailedKeyboardAction(evt) {
+    var cfg = evt.detail && evt.detail.requestConfig;
+    var path = cfg && cfg.path;
+    if (!path || !pendingAction || pendingAction.url !== path) {
+      return false;
+    }
+    // Keyboard requests have not moved any DOM nodes, so the displayed
+    // state remains correct. Keep the failure visible and allow a retry.
+    pendingAction = null;
+    var root = board();
+    if (root) {
+      announce(root.getAttribute("data-error-message"));
+    }
+    return true;
+  }
+
   document.addEventListener("htmx:responseError", function (evt) {
     var cfg = evt.detail && evt.detail.requestConfig;
     var path = cfg && cfg.path;
-    if (path && pendingAction && pendingAction.url === path) {
-      // Keyboard requests have not moved any DOM nodes, so the displayed
-      // state remains correct. Keep the failure visible and allow a retry.
-      pendingAction = null;
-      announce(board().getAttribute("data-error-message"));
-    } else if (path && reorderUrls[path]) {
+    if (releaseFailedKeyboardAction(evt)) {
+      return;
+    }
+    if (path && reorderUrls[path]) {
       window.location.reload();
     }
+  });
+
+  // Network failures, timeouts and failed swaps never reach afterSettle;
+  // without this the guard would silently drop every later keyboard action.
+  ["htmx:sendError", "htmx:timeout", "htmx:swapError"].forEach(function (name) {
+    document.addEventListener(name, releaseFailedKeyboardAction);
   });
 })();
