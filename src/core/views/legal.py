@@ -29,23 +29,33 @@ _LIST_ITEM_RE = re.compile(r"^\s*[-*]\s+(.+)$")
 _ALLOWED_LINK_SCHEMES = frozenset({"http", "https", "mailto"})
 
 
-def _render_inline(text):
-    """Escape text and render only links with explicitly allowed schemes."""
+_FORMATTING_RE = re.compile(r"(?P<bold>\*\*[^*\n]+\*\*)|(?P<code>`[^`\n]+`)")
+_INLINE_RE = re.compile(rf"{_FORMATTING_RE.pattern}|(?P<link>{_LINK_RE.pattern})")
+
+
+def _render_inline(text, *, allow_links=True):
+    """Escape every source segment; generate only fixed, permitted tags."""
     pieces = []
     cursor = 0
-    for match in _LINK_RE.finditer(text):
+    pattern = _INLINE_RE if allow_links else _FORMATTING_RE
+    for match in pattern.finditer(text):
         pieces.append(format_html("{}", text[cursor : match.start()]))
-        label, url = match.groups()
-        if urlsplit(url).scheme.lower() in _ALLOWED_LINK_SCHEMES:
-            pieces.append(
-                format_html(
-                    '<a href="{}" class="text-accent underline break-words">{}</a>',
-                    url,
-                    label,
-                )
-            )
+        if match.group("bold"):
+            pieces.append(format_html("<strong>{}</strong>", match.group("bold")[2:-2]))
+        elif match.group("code"):
+            pieces.append(format_html("<code>{}</code>", match.group("code")[1:-1]))
         else:
-            pieces.append(format_html("{}", match.group(0)))
+            label, url = _LINK_RE.fullmatch(match.group("link")).groups()
+            if urlsplit(url).scheme.lower() in _ALLOWED_LINK_SCHEMES:
+                pieces.append(
+                    format_html(
+                        '<a href="{}" class="text-accent underline break-words">{}</a>',
+                        url,
+                        _render_inline(label, allow_links=False),
+                    )
+                )
+            else:
+                pieces.append(format_html("{}", match.group(0)))
         cursor = match.end()
     pieces.append(format_html("{}", text[cursor:]))
     return format_html_join("", "{}", ((piece,) for piece in pieces))
@@ -55,7 +65,8 @@ def render_legal_markdown(source):
     """Render a deliberately small, escaping Markdown subset.
 
     Supported are headings up to level three, paragraphs, blank lines,
-    unordered lists and links using http, https or mailto. All source text is
+    unordered lists, blockquote lines, bold text, inline code and links using
+    http, https or mailto. All source text is
     escaped before the small set of generated tags is assembled.
     """
     blocks = []
@@ -87,6 +98,14 @@ def render_legal_markdown(source):
         if not line:
             flush_paragraph()
             flush_list()
+            continue
+
+        if line.startswith("> "):
+            flush_paragraph()
+            flush_list()
+            blocks.append(
+                format_html('<blockquote class="text-sm leading-6 text-ink">{}</blockquote>', _render_inline(line[2:]))
+            )
             continue
 
         heading_match = _HEADING_RE.match(line)

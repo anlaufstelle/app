@@ -249,3 +249,34 @@ class TestLegalMarkdownRenderer:
 
         assert rendered
         assert elapsed < 2.0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("> Quoted text", "<blockquote"),
+        ("**Bold text**", "<strong>Bold text</strong>"),
+        ("`Code text`", "<code>Code text</code>"),
+        ("- **Bold** and `code`", "<strong>Bold</strong> and <code>code</code>"),
+        ("[**Bold** and `code`](https://example.org)", "<strong>Bold</strong> and <code>code</code>"),
+        ("**<script>**", "<strong>&lt;script&gt;</strong>"),
+        ("`<img src=x onerror=alert(1)>`", "<code>&lt;img src=x onerror=alert(1)&gt;</code>"),
+        ("> [x](javascript:alert)", "&gt;"),
+        ("**unpaired and `unpaired", "**unpaired and `unpaired"),
+    ],
+)
+def test_operator_markdown_subset_through_view(client, legal_files, source, expected):
+    imprint, _privacy = legal_files
+    imprint.write_text(source, encoding="utf-8")
+    response = client.get(reverse("demo_imprint"))
+    assert response.status_code == 200
+    html = response.content.decode()
+    if source.startswith("> ["):
+        assert '<a href="javascript:' not in html
+        assert "[x](javascript:alert)" in html
+        assert "<blockquote" in html
+    else:
+        assert expected in html
+    assert "<script>" not in html
+    assert "<img src=x" not in html

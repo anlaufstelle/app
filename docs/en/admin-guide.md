@@ -487,7 +487,7 @@ compose_files=(-f docker-compose.prod.yml)
 docker compose "${compose_files[@]}" up -d web
 ```
 
-Each file must be a regular, non-empty UTF-8 file no larger than 256 KiB. The files deliberately support only a small Markdown subset: headings from `#` through `###`, paragraphs and blank lines, unordered lists with `-` or `*`, and links in the form `[Text](URL)`. Link text is limited to 256 characters and link targets to 2,048 characters; longer constructs are displayed as ordinary text. Link targets are limited to `http:`, `https:`, and `mailto:`; HTML and everything else are displayed as text as well. Legal text therefore cannot inject scripts or styles into the application.
+Each file must be a regular, non-empty UTF-8 file no larger than 256 KiB. The files deliberately support only a small Markdown subset: headings from `#` through `###`, paragraphs and blank lines, unordered lists with `-` or `*`, blockquote lines with `> `, bold text with `**Text**`, inline code with backticks, and links in the form `[Text](URL)`. Link text is limited to 256 characters and link targets to 2,048 characters; longer constructs are displayed as ordinary text. Link targets are limited to `http:`, `https:`, and `mailto:`; HTML and everything else are displayed as text as well. Legal text therefore cannot inject scripts or styles into the application.
 
 When a path is unset, or a file is missing, not regular, empty, oversized, unreadable, or not valid UTF-8, the corresponding page responds with 404. File metadata is used to show the link only for regular, non-empty files within the size limit; the global page render never reads legal content for this check. The warning emitted at most once per broken configuration names only the affected setting, not the configured file path. After changing a text or mount, check `/impressum/` and `/datenschutzerklaerung/` while signed out. The special demo mode continues to use its own legal templates and ignores these two files.
 
@@ -2558,4 +2558,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
-<!-- source-hash: a2f2f87e41aa6b74294e2d35c224545862b60f79 -->
+<!-- source-hash: c1f3eedae39e49cad5d516fe9616ade15fda7b3a -->
