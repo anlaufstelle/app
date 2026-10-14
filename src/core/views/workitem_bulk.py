@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -294,10 +295,14 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         markiert/hervorhebt (Refs #1148 Folge-Feedback).
         """
         target = self._inbox_redirect_target(request, forbidden_ids=forbidden_ids)
-        response = redirect(target)
         if request.headers.get("HX-Request"):
-            response["HX-Redirect"] = response["Location"]
-        return response
+            # 200 + HX-Redirect, not 302: the XHR follows a 302 by itself and htmx
+            # would only see the redirected page (no header) and swap it into the
+            # clicked element, leaving the flash message unseen.
+            response = HttpResponse(status=200)
+            response["HX-Redirect"] = target
+            return response
+        return redirect(target)
 
 
 class WorkItemBulkStatusView(_BulkActionMixin, View):

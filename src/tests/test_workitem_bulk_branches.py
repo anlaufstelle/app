@@ -36,9 +36,11 @@ class TestWorkItemBulkStatusViewHTMX:
             {"workitem_ids": [str(workitem.pk)], "status": "done"},
             HTTP_HX_REQUEST="true",
         )
-        # 302 + HX-Redirect-Header
-        assert response.status_code == 302
-        assert "HX-Redirect" in response.headers
+        # 200 + HX-Redirect: the XHR would follow a 302 by itself and htmx would
+        # never see the header.
+        assert response.status_code == 200
+        assert response.content == b""
+        assert response.headers["HX-Redirect"] == reverse("core:workitem_inbox")
 
 
 @pytest.mark.django_db

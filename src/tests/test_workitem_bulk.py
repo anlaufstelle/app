@@ -468,7 +468,7 @@ class TestBulkPreservesFilterState:
             },
             headers={"HX-Request": "true"},
         )
-        assert response.status_code == 302
+        assert response.status_code == 200
         assert "assigned_to=" in response["HX-Redirect"]
 
     def test_bulk_ignores_unknown_filter_keys(self, client, staff_user, workitems_open):
@@ -498,7 +498,7 @@ class TestBulkPreservesFilterState:
             {"workitem_ids": ids, "status": "done", **self._filter_fields(lead_user.pk)},
             headers={"HX-Request": "true"},
         )
-        assert response.status_code == 302
+        assert response.status_code == 200
         assert f"assigned_to={lead_user.pk}" in response["HX-Redirect"]
 
     def test_bulk_status_redirect_preserves_status_and_done_period_filter(self, client, staff_user, workitems_open):
