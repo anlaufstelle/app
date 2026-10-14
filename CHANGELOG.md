@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Verspätete Fallantworten verwerfen** (#2541) — Beim Personenwechsel werden alte Fälle und die Auswahl sofort geleert; nur die Antwort für die aktuelle Person darf den Fallbereich aktualisieren.
 - **Fall-Ladefehler mit Wiederholung anzeigen** (#2557) — Laden und Fehler sind vom erfolgreichen Leerzustand getrennt; fehlgeschlagene Fallabfragen lassen sich wiederholen.
 - **Fehler der Personensuche sichtbar machen** (#2558) — HTTP- und Netzfehler entwerten alte Treffer, zeigen eine zugängliche Meldung und erlauben eine erneute Suche; Auswahl, Zurücksetzen und Typwechsel beenden die entwertete Ladeanzeige.
+- **Inline-Entwürfe bei Zielaktionen erhalten** (#2540) — Unabhängige Ziel- und Meilensteinaktionen erhalten offene Editoren und ungesendete Titel kurzzeitig im Arbeitsspeicher über den Swap hinweg und setzen den Fokus auf die ausgeführte Aktion.
+
 - **Titellänge von Wirkungszielen und Meilensteinen begrenzt** (#2538) — Alle drei Titelfelder erlauben 200 Zeichen und weisen längere Eingaben verständlich ab, ohne den Zielbereich oder Entwürfe zu ersetzen.
 
 - **Episodenende bei der Anlage gespeichert** (#2535) — Ein optionales Enddatum bleibt beim Speichern und erneuten Öffnen erhalten und zeigt die Episode als abgeschlossen.

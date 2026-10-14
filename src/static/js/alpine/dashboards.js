@@ -185,9 +185,54 @@ document.addEventListener("alpine:init", () => {
         },
     }));
 
-    /** Goals-Section Edit-Toggle (cases/partials/goals_section.html). */
+    /** Goal editors and short-lived drafts across successful HTMX swaps. */
     Alpine.data("goalsSection", () => ({
         editing: false,
+        preserveDrafts(event) {
+            const detail = event.detail;
+            if (detail.target !== this.$el || this.$el.id !== "goals-section") return;
+            if (detail.isError || detail.xhr.status >= 400) {
+                detail.shouldSwap = false;
+                return;
+            }
+            if (!detail.shouldSwap) return;
+            const submitted = detail.requestConfig?.elt?.closest("form");
+            const action = submitted?.getAttribute("hx-post");
+            const drafts = Array.from(this.$el.querySelectorAll("form[hx-post]"))
+                .filter((form) => form !== submitted)
+                .map((form) => ({
+                    action: form.getAttribute("hx-post"),
+                    values: Array.from(form.querySelectorAll('input[type="text"], input:not([type]), textarea'))
+                        .map((field) => ({ name: field.name, value: field.value })),
+                    editing: form.querySelector("textarea") && form.closest('[x-data="goalsSection"].card')
+                        ? Alpine.$data(form.closest('[x-data="goalsSection"].card')).editing : false,
+                }));
+            // Keep drafts in this callback only until this response has settled.
+            // Alpine has initialized the replacement cards by afterSettle.
+            const restore = (settled) => {
+                if (settled.detail.xhr !== detail.xhr) return;
+                document.removeEventListener("htmx:afterSettle", restore);
+                const root = document.getElementById("goals-section");
+                if (!root) return;
+                const forms = Array.from(root.querySelectorAll("form[hx-post]"));
+                for (const draft of drafts) {
+                    const form = forms.find((item) => item.getAttribute("hx-post") === draft.action);
+                    if (!form) continue;
+                    for (const value of draft.values) {
+                        const field = form.elements.namedItem(value.name);
+                        if (field) field.value = value.value;
+                    }
+                    const card = form.closest('[x-data="goalsSection"].card');
+                    if (card && draft.editing) Alpine.$data(card).editing = true;
+                }
+                const form = forms.find((item) => item.getAttribute("hx-post") === action);
+                const card = form?.closest('[x-data="goalsSection"].card');
+                const editTrigger = form?.querySelector("textarea") && card && !Alpine.$data(card).editing
+                    ? card.querySelector("[data-goal-edit-trigger]") : null;
+                (editTrigger || form?.querySelector('button[type="submit"], button:not([type])') || root).focus();
+            };
+            document.addEventListener("htmx:afterSettle", restore);
+        },
         toggleEdit() {
             this.editing = !this.editing;
         },

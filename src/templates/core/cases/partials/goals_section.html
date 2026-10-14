@@ -1,6 +1,7 @@
 {% load i18n %}
 
-<div id="goals-section" aria-live="polite" role="region">
+<div id="goals-section" aria-live="polite" role="region" tabindex="-1"
+     x-data="goalsSection" @htmx:before-swap.camel="preserveDrafts">
     <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Wirkungsziele" %}</h2>
 
     <p id="goal-title-limit" class="text-sm text-ink-muted mb-3">{% trans "Titel dürfen höchstens 200 Zeichen enthalten." %}</p>
@@ -13,7 +14,7 @@
                 <div class="flex-1 min-w-0" x-show="isViewing">
                     <div class="flex items-center">
                         <h3 class="font-medium text-ink">{{ goal.title }}</h3>
-                        <button type="button" @click="toggleEdit"
+                        <button type="button" @click="toggleEdit" data-goal-edit-trigger
                                 class="ml-2 text-ink-muted hover:text-ink-muted" title="{% trans 'Bearbeiten' %}" aria-label="{% trans 'Bearbeiten' %}">
                             <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
