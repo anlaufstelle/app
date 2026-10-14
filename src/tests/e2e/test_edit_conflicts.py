@@ -15,6 +15,7 @@ from datetime import date, timedelta
 import pytest
 from playwright.sync_api import expect
 
+from ._date_helpers import expect_date_value, fill_date
 from ._helpers import django_shell, enter_sudo_mode
 
 pytestmark = pytest.mark.e2e
@@ -203,7 +204,7 @@ class TestEditConflicts:
             page_a.goto(url, wait_until="domcontentloaded")
             page_b.goto(url, wait_until="domcontentloaded")
 
-            page_a.fill("input[name='ended_at']", _end_date())
+            fill_date(page_a, "input[name='ended_at']", _end_date())
             _submit(page_a)
             _wait_saved(page_a, detail)
             assert _db(e2e_env, f"Episode.objects.get(pk='{ids['episode']}').ended_at") == _end_date()
@@ -215,7 +216,7 @@ class TestEditConflicts:
             expect(current).to_be_visible(timeout=10000)
             expect(current).to_have_text("Aktueller Episodenstand")
             expect(page_b.locator("textarea[name='description']")).to_have_value(draft)
-            expect(page_b.locator("input[name='ended_at']")).to_have_value("")
+            expect_date_value(page_b, "input[name='ended_at']", "")
             # The shown current state carries A's end date; the episode is still closed.
             end_row = page_b.locator("section[aria-labelledby='current-episode-heading'] div:has(> dt)").filter(
                 has_text="Ende"

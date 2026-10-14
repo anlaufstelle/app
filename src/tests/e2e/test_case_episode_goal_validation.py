@@ -19,6 +19,7 @@ from datetime import date, timedelta
 import pytest
 from playwright.sync_api import expect
 
+from ._date_helpers import expect_date_value, fill_date
 from ._helpers import django_shell, track_console_errors
 
 pytestmark = pytest.mark.e2e
@@ -69,9 +70,9 @@ class TestEpisodeDates:
     def _create(self, page, base_url, case_pk, title, started, ended=""):
         page.goto(f"{base_url}/cases/{case_pk}/episodes/new/", wait_until="domcontentloaded")
         page.fill("input[name='title']", title)
-        page.fill("input[name='started_at']", started)
+        fill_date(page, "input[name='started_at']", started)
         if ended:
-            page.fill("input[name='ended_at']", ended)
+            fill_date(page, "input[name='ended_at']", ended)
         page.locator("#main-content button[type='submit']").last.click()
 
     def test_episode_with_and_without_end_roundtrip(self, staff_page, base_url, case_scene, e2e_env):
@@ -91,8 +92,8 @@ class TestEpisodeDates:
         for title, expected_end in ((f"Mit-Ende-{marker}", ended), (f"Ohne-Ende-{marker}", "")):
             pk = _db(e2e_env, f"Episode.objects.get(title='{title}').pk")
             page.goto(f"{base_url}/cases/{case_pk}/episodes/{pk}/edit/", wait_until="domcontentloaded")
-            expect(page.locator("input[name='started_at']")).to_have_value(started)
-            expect(page.locator("input[name='ended_at']")).to_have_value(expected_end)
+            expect_date_value(page, "input[name='started_at']", started)
+            expect_date_value(page, "input[name='ended_at']", expected_end)
             page.fill("textarea[name='description']", f"Beschreibung {title}")
             page.locator("#main-content button[type='submit']").last.click()
             page.wait_for_url(re.compile(r"/cases/[0-9a-f-]{36}/$"), timeout=10000)
@@ -110,12 +111,12 @@ class TestEpisodeDates:
         expect(alert).to_be_visible(timeout=10000)
         # Inputs stay as typed.
         expect(page.locator("input[name='title']")).to_have_value(f"Rueckwaerts-{marker}")
-        expect(page.locator("input[name='started_at']")).to_have_value(_iso(-3))
-        expect(page.locator("input[name='ended_at']")).to_have_value(_iso(-10))
+        expect_date_value(page, "input[name='started_at']", _iso(-3))
+        expect_date_value(page, "input[name='ended_at']", _iso(-10))
         assert _db(e2e_env, f"Episode.objects.filter(title='Rueckwaerts-{marker}').count()") == "0"
 
         # Same day is valid: fix only the end date.
-        page.fill("input[name='ended_at']", _iso(-3))
+        fill_date(page, "input[name='ended_at']", _iso(-3))
         page.locator("#main-content button[type='submit']").last.click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]{36}/$"), timeout=10000)
         assert _db(e2e_env, f"Episode.objects.get(title='Rueckwaerts-{marker}').ended_at") == _iso(-3)

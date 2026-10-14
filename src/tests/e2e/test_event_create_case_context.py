@@ -25,6 +25,7 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
+from ._date_helpers import fill_date
 from ._helpers import django_shell
 
 pytestmark = pytest.mark.e2e
@@ -236,7 +237,7 @@ class TestAllowedCaseSurvivesErrors:
         page = staff_page
         self._open(page, base_url, error_scene, document_type=error_scene["contact"])
         page.locator("textarea[name='notiz']").fill("Text vor dem Zeitfehler")
-        page.locator("input[name='occurred_at']").fill("2026-10-25T02:30")
+        fill_date(page, "input[name='occurred_at']", "2026-10-25T02:30")
         self._submit(page)
 
         fold = page.locator("[data-testid='occurred-at-fold']")
@@ -320,7 +321,7 @@ class TestAllowedCaseSurvivesErrors:
             "from core.models import Case; "
             f"Case.objects.filter(pk='{error_scene['ca']}').update(status='closed'); print('ok')",
         )
-        page.locator("input[name='occurred_at']").fill("2026-10-25T02:30")
+        fill_date(page, "input[name='occurred_at']", "2026-10-25T02:30")
         self._submit(page)
 
         expect(page.get_by_text("Die Fallauswahl wurde zurückgesetzt")).to_be_visible(timeout=10000)
