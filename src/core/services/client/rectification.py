@@ -30,7 +30,7 @@ from core.services.audit import audit_event
 from core.services.compliance import user_can_see_field
 from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.events.fields import _serialize_json_value
-from core.services.file_vault import encrypt_field, safe_decrypt
+from core.services.file_vault import encrypt_field, is_encrypted_value, safe_decrypt
 
 #: Berichtigungsfaehige Stammdatenfelder (v1-Scope laut #1060).
 #:
@@ -425,7 +425,22 @@ def _apply_rectification(client: Client, reviewer: Any, field_path: str, new_val
             # Verify persistence before approval or success auditing. Any failure
             # rolls back the client update and its audit in the outer transaction.
             client.refresh_from_db()
-            if _current_value(client, field_path) != _serialize_json_value(new_value):
+            expected_value = _serialize_json_value(new_value)
+            if (
+                slug is not None
+                and isinstance(expected_value, float)
+                and is_encrypted_value((client.data_json or {}).get(slug))
+                and client.document_type is not None
+                and client.document_type.fields.filter(
+                    field_template__slug=slug,
+                    field_template__field_type=FieldTemplate.FieldType.NUMBER,
+                    field_template__is_encrypted=True,
+                ).exists()
+            ):
+                # The field codec stores NUMBER floats as text, while integers
+                # retain their typed payload (Refs #2573).
+                expected_value = str(expected_value)
+            if _current_value(client, field_path) != expected_value:
                 raise ValidationError(_("Die Berichtigung konnte nicht angewendet werden."))
     except IntegrityError as exc:
         # Haeufigster Fall: ``unique_facility_pseudonym`` — der Wunsch-Pseudonym
