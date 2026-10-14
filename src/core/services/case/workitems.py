@@ -223,6 +223,15 @@ def assignable_workitem_users(facility):
     ).order_by("last_name", "first_name", "username")
 
 
+def _locked_workitem_recipient(recipient, facility):
+    """Validate a new recipient after Client/WorkItem locks, before any writes."""
+    # FOR NO KEY UPDATE blocks access changes while permitting audit FK reads.
+    recipient = assignable_workitem_users(facility).select_for_update(no_key=True).filter(pk=recipient.pk).first()
+    if recipient is None:
+        raise ValidationError(_("Die Zielperson muss aktiv und für Aufgaben in dieser Einrichtung berechtigt sein."))
+    return recipient
+
+
 def filter_completed_workitems(qs, period="7"):
     """Limit completed tasks by their completion clock; unknown dates need all."""
     qs = qs.filter(status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED])
@@ -870,6 +879,14 @@ def update_workitem(
             # bedeuten.
             fields.pop("client")
             workitem.client_id = db_client_id
+    if "assigned_to" in fields and fields["assigned_to"] is not None:
+        recipient = fields["assigned_to"]
+        if recipient.pk != locked_state.assigned_to_id:
+            fields["assigned_to"] = _locked_workitem_recipient(recipient, workitem.facility_id)
+        else:
+            # Historical assignments may remain after deactivation or a role change.
+            # Compare against the locked row, never the instance mutated by ModelForm.
+            fields["assigned_to"] = locked_state.assigned_to
     # Refs #1613: Diff gegen den DB-Stand, NICHT gegen die übergebene Instanz.
     # ``WorkItemForm(instance=workitem)`` hat die Instanz in ``_post_clean()``
     # bereits mutiert — ein ``getattr(workitem, key) != value`` sähe hier
@@ -1173,16 +1190,7 @@ def bulk_assign_workitems(workitems, user, assignee_or_none):
     # Client -> WorkItem -> recipient: access updates lock only the user row.
     # A no-key lock still blocks access changes while permitting audit FK reads.
     if assignee_or_none is not None:
-        assignee_or_none = (
-            assignable_workitem_users(user.facility_id)
-            .select_for_update(no_key=True)
-            .filter(pk=assignee_or_none.pk)
-            .first()
-        )
-        if assignee_or_none is None:
-            raise ValidationError(
-                _("Die Zielperson muss aktiv und für Aufgaben in dieser Einrichtung berechtigt sein.")
-            )
+        assignee_or_none = _locked_workitem_recipient(assignee_or_none, user.facility_id)
     count = 0
     for workitem in locked:
         if workitem.assigned_to_id == (assignee_or_none.pk if assignee_or_none else None):

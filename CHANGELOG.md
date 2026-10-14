@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Aufgabenfilter vollständig kombiniert** (#2542) — Alle sechs Filter senden die übrigen Filter eindeutig mit; Status und Erledigt-Zeitraum bleiben bei Typ-, Prioritäts- und Zuweisungswechsel erhalten.
 - **Verborgene Aufgaben aus der Auswahl entfernt** (#2543) — Filter- und Zeilenwechsel sowie zugeklappte Rückblicke gleichen Auswahl, Zähler und Sammelaktionen mit den sichtbaren markierten Aufgaben ab.
-- **Neue Aufgabenzuweisungen nur an aktive Zugänge** (#2544) — Einzelformular und Sammelaktion bieten dieselben berechtigten Empfänger an und die Sammelaktion prüft den Zugang vor jeder Änderung unter Sperre erneut.
+- **Neue Aufgabenzuweisungen nur an aktive Zugänge** (#2544) — Einzelformular und Sammelaktion bieten dieselben berechtigten Empfänger an; Einzel- und Sammeldienst prüfen neue Zuweisungen unter Sperre erneut, während unveränderte historische Zuweisungen bearbeitbar bleiben.
 - **Erledigt-Zeiträume nach Abschlusszeit** (#2587) — Rückblicke und Erledigt-Filter verwenden den Abschlusszeitpunkt; spätere Bearbeitungen verschieben keine Aufgabe und unbekannte Abschlussdaten erscheinen nur im unbefristeten Rückblick.
 - **Anzeigenamen in Aufgaben und Kontobereich vereinheitlicht** (#2546) — Profil, Aufgabenansichten und Importlisten zeigen den Anzeigenamen mit Vollname und Login als bestehenden Rückfallwerten.
 - **Offline-Aufgaben vor dem Speichern geprüft** (#2545) — Erfassung und Bearbeitung prüfen Titel mit derselben Unicode-Leerraumnormalisierung wie online sowie Datumsreihenfolge vor dem Queue-Eintrag und zeigen zugängliche Feldfehler, ohne ungültige Eingaben als gespeichert zu melden.
