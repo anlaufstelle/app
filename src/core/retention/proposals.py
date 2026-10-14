@@ -437,6 +437,29 @@ def _assert_target_has_no_active_hold(proposal, client_id):
         raise ValidationError(LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE)
 
 
+def _lock_approval_users(proposals, user):
+    """Read reviewers under row locks after all targets/proposals and before audit.
+
+    Lock reviewers in primary-key order across the entire bulk selection.
+    NO KEY UPDATE coordinates permission changes without blocking unrelated
+    foreign-key references to the same accounts (Refs #2590).
+    """
+    reviewer_ids = {user.pk}
+    reviewer_ids.update(p.first_approved_by_id for p in proposals if p.first_approved_by_id is not None)
+    return {
+        reviewer.pk: reviewer
+        for reviewer in User.objects.select_for_update(no_key=True).filter(pk__in=reviewer_ids).order_by("pk")
+    }
+
+
+def _lock_bulk_approval_users(facility_id, proposals, user):
+    """Prelock every reviewer of an already locked multi-proposal selection."""
+    if len({p.pk for p in proposals}) < 2:
+        return
+    current = list(RetentionProposal.objects.filter(facility_id=facility_id, pk__in=[p.pk for p in proposals]))
+    _lock_approval_users(current, user)
+
+
 def _lock_check_and_mark_approved(proposal, *, user=None, auto_approve_max_defer_count=None):
     """Lock target rows, then the proposal, before advancing manual approval.
 
@@ -460,6 +483,9 @@ def _lock_check_and_mark_approved(proposal, *, user=None, auto_approve_max_defer
     _assert_target_has_no_active_hold(locked, client_id)
 
     if user is not None:
+        reviewers = _lock_approval_users([locked], user)
+        user = reviewers.get(user.pk)
+        _assert_actor_facility(locked, user)
         if not user.is_active or not user.can_confirm_deletion:
             raise ValidationError(_("Für die Freigabe ist das Recht „Löschbestätigung“ erforderlich."))
         if not user.is_lead_or_admin:
@@ -480,7 +506,7 @@ def _lock_check_and_mark_approved(proposal, *, user=None, auto_approve_max_defer
             return locked
         if locked.first_approved_by_id == user.pk:
             raise ValidationError(_("Die zweite Freigabe muss eine andere berechtigte Person erteilen."))
-        first = locked.first_approved_by
+        first = reviewers[locked.first_approved_by_id]
         if (
             not first.is_active
             or not first.is_lead_or_admin
@@ -724,7 +750,10 @@ def lock_bulk_selection(proposals, user, *, with_targets=False):
     ``transaction.atomic()`` stehen.
     """
     facility_id, own = _actor_selection(proposals, user)
-    return _lock_selection(facility_id, own, targets_of=own if with_targets else ())
+    changed = _lock_selection(facility_id, own, targets_of=own if with_targets else ())
+    if with_targets:
+        _lock_bulk_approval_users(facility_id, own, user)
+    return changed
 
 
 @transaction.atomic
@@ -738,6 +767,7 @@ def bulk_approve_proposals(proposals, user):
     proposals = list(proposals)
     facility_id, own = _actor_selection(proposals, user)
     binding_changed = _lock_selection(facility_id, own, targets_of=own)
+    _lock_bulk_approval_users(facility_id, own, user)
     count = 0
     skipped = 0
     for proposal in proposals:
