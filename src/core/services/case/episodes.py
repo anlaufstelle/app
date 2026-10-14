@@ -147,7 +147,7 @@ def create_episode(case, user, *, title, description="", started_at=None, ended_
     locked_case = lock_case_for_write(case)
     if locked_case.status != locked_case.Status.OPEN:
         raise ValidationError(EPISODE_CASE_NOT_OPEN_MESSAGE)
-    started_at = started_at or timezone.now().date()
+    started_at = started_at or timezone.localdate()
     validate_episode_dates(started_at, ended_at)
     return locked_case.create_episode(
         user=user, title=title, description=description, started_at=started_at, ended_at=ended_at

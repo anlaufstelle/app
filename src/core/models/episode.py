@@ -57,7 +57,7 @@ class Episode(SoftDeletableModel):
 
         if self.ended_at is not None:
             return self
-        end = ended_at or timezone.now().date()
+        end = ended_at or timezone.localdate()
         validate_episode_dates(self.started_at, end)
         self.ended_at = end
         self.save(update_fields=["ended_at"])

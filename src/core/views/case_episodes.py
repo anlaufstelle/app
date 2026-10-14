@@ -104,6 +104,7 @@ class EpisodeCreateView(StaffRequiredMixin, View):
                     form.add_error(None, exc)
                     context = _episode_context(case, form, is_edit=False)
                     return render(request, "core/cases/episode_form.html", context)
+                # The service rejected the freshly locked state; do not recheck the case here.
                 return _abgesagt(request, case, _meldung(exc))
             messages.success(request, _("Episode wurde erstellt."))
             return redirect("core:case_detail", pk=case.pk)
@@ -153,6 +154,7 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
                     form.add_error(None, exc)
                     context = _episode_context(case, form, is_edit=True, episode=episode)
                     return render(request, "core/cases/episode_form.html", context)
+                # The service rejected the freshly locked state; do not recheck the case here.
                 return _abgesagt(request, case, _meldung(exc))
             messages.success(request, _("Episode wurde aktualisiert."))
             return redirect("core:case_detail", pk=case.pk)

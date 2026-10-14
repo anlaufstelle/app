@@ -1,6 +1,6 @@
 """Episode end dates survive creation and obey chronological ordering."""
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -84,7 +84,7 @@ def test_service_checks_resulting_dates(case_open, episode, staff_user, operatio
 
 @pytest.mark.parametrize("direct", [False, True])
 def test_future_start_cannot_close(episode, staff_user, direct):
-    episode.started_at = timezone.now().date() + timedelta(days=1)
+    episode.started_at = timezone.localdate() + timedelta(days=1)
     episode.save(update_fields=["started_at"])
     with pytest.raises(ValidationError, match="Beginn"):
         episode.close() if direct else close_episode(episode, staff_user)
@@ -108,7 +108,7 @@ def test_service_date_rejection_is_a_field_error(client, staff_user, case_open, 
 
 def test_future_start_close_view_reports_rejection(client, episode, staff_user):
     client.force_login(staff_user)
-    episode.started_at = timezone.now().date() + timedelta(days=1)
+    episode.started_at = timezone.localdate() + timedelta(days=1)
     episode.save(update_fields=["started_at"])
     response = client.post(url("close", episode.case, episode), follow=True)
     assert response.status_code == 200
@@ -150,8 +150,37 @@ def test_partial_service_update_uses_locked_result(episode, staff_user):
 
 
 def test_future_end_remains_allowed(case_open, staff_user):
-    start = timezone.now().date() + timedelta(days=1)
+    start = timezone.localdate() + timedelta(days=1)
     episode = create_episode(
         case_open, staff_user, title="Future", started_at=start, ended_at=start + timedelta(days=1)
     )
-    assert episode.ended_at > timezone.now().date()
+    assert episode.ended_at > timezone.localdate()
+
+
+@pytest.mark.parametrize("direct", [False, True])
+@pytest.mark.parametrize("future_start", [False, True])
+def test_close_uses_local_day_after_midnight(episode, staff_user, direct, future_start):
+    local_day = date(2026, 10, 15)
+    episode.started_at = local_day + timedelta(days=int(future_start))
+    episode.save(update_fields=["started_at"])
+    frozen = datetime(2026, 10, 14, 22, 30, tzinfo=UTC)
+    with timezone.override("Europe/Berlin"), patch("django.utils.timezone.now", return_value=frozen):
+        if future_start:
+            with pytest.raises(ValidationError, match="Beginn"):
+                episode.close() if direct else close_episode(episode, staff_user)
+        else:
+            episode.close() if direct else close_episode(episode, staff_user)
+    episode.refresh_from_db()
+    assert episode.ended_at == (None if future_start else local_day)
+
+
+@pytest.mark.parametrize("direct", [False, True])
+def test_create_defaults_to_local_day_after_midnight(case_open, staff_user, direct):
+    frozen = datetime(2026, 10, 14, 22, 30, tzinfo=UTC)
+    with timezone.override("Europe/Berlin"), patch("django.utils.timezone.now", return_value=frozen):
+        episode = (
+            case_open.create_episode(title="Local day", user=staff_user)
+            if direct
+            else create_episode(case_open, staff_user, title="Local day")
+        )
+    assert episode.started_at == date(2026, 10, 15)

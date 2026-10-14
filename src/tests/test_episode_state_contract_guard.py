@@ -336,13 +336,13 @@ class TestCloseEpisode:
     def test_parallel_abgeschlossene_episode_behaelt_ihr_ende(self, episode, staff_user):
         """Entschieden wird am frischen Stand: ein zwischenzeitliches Ende wird nicht ueberschrieben."""
         alt = Episode.objects.get(pk=episode.pk)
-        frueheres_ende = timezone.now().date() - timedelta(days=3)
-        Episode.objects.filter(pk=episode.pk).update(ended_at=frueheres_ende)
+        earlier_end = timezone.localdate() - timedelta(days=3)
+        Episode.objects.filter(pk=episode.pk).update(ended_at=earlier_end)
 
         ergebnis = close_episode(alt, staff_user)
 
-        assert _episodenstand(episode.pk)[2] == frueheres_ende
-        assert ergebnis.ended_at == frueheres_ende
+        assert _episodenstand(episode.pk)[2] == earlier_end
+        assert ergebnis.ended_at == earlier_end
 
     def test_eigene_einrichtung_schliesst_nach_der_sperrfolge(self, episode, staff_user):
         alt = Episode.objects.get(pk=episode.pk)
@@ -351,7 +351,7 @@ class TestCloseEpisode:
             ergebnis = close_episode(alt, staff_user)
 
         assert m.sperrfolge()[:3] == [_PERSON, _FALL, _EPISODE]
-        heute = timezone.now().date()
-        assert _episodenstand(episode.pk)[2] == heute
+        today = timezone.localdate()
+        assert _episodenstand(episode.pk)[2] == today
         assert ergebnis is alt
-        assert alt.ended_at == heute
+        assert alt.ended_at == today

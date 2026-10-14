@@ -39,7 +39,7 @@ class TestCaseCreateEpisode:
             user=staff_user,
             title="Erste Episode",
             description="Beschreibung",
-            started_at=timezone.now().date(),
+            started_at=timezone.localdate(),
         )
         assert episode.pk is not None
         assert episode.title == "Erste Episode"
@@ -52,12 +52,12 @@ class TestCaseCreateEpisode:
             case_closed.create_episode(
                 user=staff_user,
                 title="Ungültig",
-                started_at=timezone.now().date(),
+                started_at=timezone.localdate(),
             )
 
     def test_create_episode_default_started_at(self, case_open, staff_user):
         episode = case_open.create_episode(user=staff_user, title="Default-Datum")
-        assert episode.started_at == timezone.now().date()
+        assert episode.started_at == timezone.localdate()
 
 
 @pytest.mark.django_db
@@ -66,7 +66,7 @@ class TestEpisodeClose:
 
     def test_close_sets_ended_at_to_today(self, episode):
         closed = episode.close()
-        assert closed.ended_at == timezone.now().date()
+        assert closed.ended_at == timezone.localdate()
 
     def test_close_with_explicit_date(self, episode):
         episode.started_at = datetime.date(2025, 6, 1)
@@ -155,7 +155,7 @@ class TestEpisodeUpdateView:
         other_episode = Episode.objects.create(
             case=other_case,
             title="Andere Episode",
-            started_at=timezone.now().date(),
+            started_at=timezone.localdate(),
             created_by=staff_user,
         )
         client.force_login(staff_user)
@@ -191,14 +191,14 @@ class TestEpisodeCloseView:
             )
         )
         episode.refresh_from_db()
-        assert episode.ended_at == timezone.now().date()
+        assert episode.ended_at == timezone.localdate()
 
     def test_episode_close_facility_scoping(self, client, staff_user, other_facility):
         other_case = _other_facility_case(other_facility)
         other_episode = Episode.objects.create(
             case=other_case,
             title="Andere Episode",
-            started_at=timezone.now().date(),
+            started_at=timezone.localdate(),
             created_by=staff_user,
         )
         client.force_login(staff_user)

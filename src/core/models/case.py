@@ -151,7 +151,7 @@ class Case(DynamicDataEncryptionMixin, SoftDeletableModel):
             case=self,
             title=title,
             description=description,
-            started_at=started_at or timezone.now().date(),
+            started_at=started_at or timezone.localdate(),
             ended_at=ended_at,
             created_by=user,
         )
