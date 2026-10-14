@@ -129,14 +129,10 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
 
                 qs = qs.filter(sensitivity__in=allowed_sensitivities_for_user(user))
             self.fields["document_type"].queryset = qs  # type: ignore[attr-defined]
-            # Refs #1777: Das Queryset ist zugleich die Validierungs-Whitelist des
-            # Feldes. ``cases_with_live_client`` haelt Faelle widerrufener Personen
-            # (Papierkorb/anonymisiert) heraus — sonst haengt ein Ereignis ueber
-            # den Fall-Umweg doch wieder an einer Person, die den direkten
-            # Client-Weg seit #1771 nicht mehr annimmt.
-            from core.services.case import cases_with_live_client
+            # Refs #2533: the picker whitelist is also the assignment boundary.
+            from core.services.events.case_assignment import assignable_cases
 
-            case_qs = cases_with_live_client().for_facility(facility).filter(status=Case.Status.OPEN)
+            case_qs = assignable_cases(facility, user)
             case_qs = case_qs.select_related("client")
             self.fields["case"].queryset = case_qs  # type: ignore[attr-defined]
             self.fields["case"].label_from_instance = _case_label  # type: ignore[attr-defined]

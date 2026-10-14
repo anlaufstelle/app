@@ -21,7 +21,7 @@ from django_ratelimit import UNSAFE
 from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.forms.tally import TallyNumberDataForm
-from core.models import Case, Client, DocumentType, Event
+from core.models import Client, DocumentType, Event
 from core.services.attachments import (
     lock_attachment_batch_before_audit,
     quota_backstop_audit_boundary,
@@ -204,15 +204,16 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
 
     def _restore_case_context(self, request, context):
         """Revalidate case ownership and visibility before rendering the picker."""
+        from core.services.events.case_assignment import assignable_cases
+
         meta_form = context["meta_form"]
         case_id = meta_form["case"].value()
         case = get_case_or_none(request.current_facility, case_id)
         allowed = (
             case is not None
-            and request.user.is_staff_or_above
-            and case.status == Case.Status.OPEN
+            and not meta_form.has_error("case")
             and str(case.client_id) == context.get("client_id")
-            and (case.document_type is None or user_can_see_document_type(request.user, case.document_type))
+            and assignable_cases(request.current_facility, request.user).filter(pk=case.pk).exists()
         )
         selected = str(case.pk) if allowed else ""
         if meta_form.is_bound:
@@ -541,11 +542,20 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                     # der versteckte ``client``-Input verliert die Zuordnung,
                     # obwohl der Ablehnungsgrund nichts mit der Personenwahl
                     # selbst zu tun hat.
-                    add_dynamic_service_errors(data_form, e, restricted_keys)
+                    # Refs #2533: assignment failures belong to the metadata,
+                    # including JSON replay; dynamic field values stay bound.
+                    from core.services.events.case_assignment import CaseAssignmentError
+
+                    error_form = data_form
+                    if isinstance(e, CaseAssignmentError):
+                        meta_form.add_error("case", e.error_dict["case"])
+                        error_form = meta_form
+                    else:
+                        add_dynamic_service_errors(data_form, e, restricted_keys)
                     client = _resolve_event_client(facility, client.pk if client else None)
                     return self._invalid_response(
                         request,
-                        data_form,
+                        error_form,
                         {
                             "meta_form": meta_form,
                             "data_form": data_form,

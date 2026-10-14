@@ -128,7 +128,7 @@ class TestEventMetaForm:
             created_by=staff_user,
         )
 
-        form = EventMetaForm(facility=facility)
+        form = EventMetaForm(facility=facility, user=staff_user)
         pks = queryset_pks(form, "case")
         assert case_open.pk in pks
         assert case_closed.pk not in pks  # CLOSED gefiltert

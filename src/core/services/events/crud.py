@@ -217,6 +217,12 @@ def create_event(
             redacted_message=CASE_WRITE_REDACTED_MESSAGE,
             gone_message=CASE_WRITE_GONE_MESSAGE,
         )
+        # Refs #2533: recheck OPEN and role/type visibility on the locked row,
+        # using the same whitelist as the form, picker and redisplay.
+        from core.services.events.case_assignment import CaseAssignmentError, assignable_cases
+
+        if not assignable_cases(facility, user).filter(pk=case.pk).exists():
+            raise CaseAssignmentError({"case": _("Der Fall ist nicht mehr verfügbar oder nicht zugänglich.")})
 
     if user is not None and not user_can_see_document_type(user, document_type):
         raise PermissionDenied(_("Diese Dokumentation darf von Ihrer Rolle nicht erstellt werden."))

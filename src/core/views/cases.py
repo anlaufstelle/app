@@ -977,17 +977,10 @@ class CasesForClientView(StaffRequiredMixin, View):
             return JsonResponse([], safe=False)
 
         facility = request.current_facility
-        # Refs #1777: dieselbe Personen-Grenze wie Liste und Detail — der
-        # Picker darf keinen Fall anbieten, dessen Detailseite 404 liefert.
-        cases = (
-            cases_with_live_client()
-            .filter(
-                facility=facility,
-                client_id=client_id,
-                status=Case.Status.OPEN,
-            )
-            .values("id", "title")
-        )
+        from core.services.events.case_assignment import assignable_cases
+
+        # Refs #2533: only cases that event creation may actually assign.
+        cases = assignable_cases(facility, request.user).filter(client_id=client_id).values("id", "title")
 
         data = [{"id": str(c["id"]), "title": c["title"]} for c in cases]
         return JsonResponse(data, safe=False)
