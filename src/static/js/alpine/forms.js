@@ -75,7 +75,14 @@ const _autocompleteShared = {
             });
         });
     },
-    setQuery(event) { this.query = event.target.value; },
+    setQuery(event) {
+        this.query = event.target.value;
+        this._justSelected = false;
+        this.resetSearch();
+        this.selectedId = "";
+        // Clear case intent before Alpine's asynchronous watcher or debounce.
+        if (this.loadCasesForClient) this.loadCasesForClient("");
+    },
     setSelectedId(event) {
         this.resetSearch();
         this.selectedId = event.target.value;
@@ -128,10 +135,6 @@ const _autocompleteShared = {
         }
     },
     onInput() {
-        if (this._justSelected) {
-            this._justSelected = false;
-            return;
-        }
         this.highlightIndex = -1;
         this.selectionCleared = false;
         this.fetchResults();
@@ -263,6 +266,9 @@ document.addEventListener("alpine:init", () => {
                 init() {
                     this._initCommon();
                 },
+                get unconfirmedQuery() {
+                    return !this.selectedId && this.query.trim().length > 0;
+                },
                 get ariaExpanded() {
                     return this.show ? "true" : "false";
                 },
@@ -383,6 +389,9 @@ document.addEventListener("alpine:init", () => {
                             this.updateAnonymousAllowed(docTypeSelect);
                         });
                     }
+                },
+                get unconfirmedQuery() {
+                    return !this.selectedId && this.query.trim().length > 0;
                 },
                 get ariaExpanded() {
                     return this.show ? "true" : "false";
