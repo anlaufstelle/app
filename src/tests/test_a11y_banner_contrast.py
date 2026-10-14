@@ -51,7 +51,7 @@ def contrast(foreground, background):
 def verify_built_token(token):
     css_path = STATIC / "styles.css"
     if not css_path.exists():
-        return
+        pytest.skip("styles.css nicht gebaut — vorher make tailwind-build ausführen")
     css = css_path.read_text()
     if token in {"white", "surface"}:
         variable = "--color-white" if token == "white" else "--surface"
@@ -92,10 +92,13 @@ def test_banner_text_links_counters_and_help_meet_contrast(banner, client, admin
     assert roots[0].get("class") == roots[1].get("class")
     for root in roots:
         for foreground, background in color_pairs(root, "ink", "surface"):
-            verify_built_token(background)
-            verify_built_token(foreground)
             ratio = contrast(foreground, background)
             assert ratio >= 4.5, f"{banner}: {foreground}/{background} = {ratio:.3f}:1"
+
+
+def test_built_banner_tokens_match_contrast_inputs():
+    for token in ("yellow-800", "blue-800", "red-800", "white", "surface", "ink", "accent"):
+        verify_built_token(token)
 
 
 def test_context_help_design_token_fallbacks_match_source():
@@ -103,3 +106,23 @@ def test_context_help_design_token_fallbacks_match_source():
     assert "--accent: oklch(0.44 0.11 168)" in source
     assert "--text-primary: oklch(0.18 0.01 75)" in source
     assert "--surface: #fff" in source
+
+
+@pytest.mark.django_db
+def test_contrast_calculation_runs_without_built_css(tmp_path, monkeypatch, client, admin_user):
+    monkeypatch.setattr("tests.test_a11y_banner_contrast.STATIC", tmp_path)
+    for banner in ("offline-banner", "sync-banner", "conflict-banner"):
+        test_banner_text_links_counters_and_help_meet_contrast(banner, client, admin_user)
+
+
+def test_missing_built_css_reports_the_build_prerequisite(tmp_path, monkeypatch):
+    monkeypatch.setattr("tests.test_a11y_banner_contrast.STATIC", tmp_path)
+    with pytest.raises(pytest.skip.Exception, match="styles.css.*make tailwind-build"):
+        verify_built_token("red-800")
+
+
+def test_changed_built_token_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr("tests.test_a11y_banner_contrast.STATIC", tmp_path)
+    (tmp_path / "styles.css").write_text("--color-red-800:oklch(0.8 0.177 26.899);")
+    with pytest.raises(AssertionError, match="Built token drift: red-800"):
+        verify_built_token("red-800")
