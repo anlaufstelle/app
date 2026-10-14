@@ -69,6 +69,31 @@ async function openModal() {
     assert.equal(form.hasAttribute("inert"), true);
     assert.equal(w.document.activeElement.name, "pseudonym");
 }
+
+const dialogForm = () => w.document.querySelector('[role="dialog"] form');
+const send = () => {
+    dialogForm().dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
+    assert.equal(requests.at(-1).method, "POST");
+    return requests.at(-1);
+};
+const success = (xhr, id = "new-a") => xhr.respond("", {
+    "HX-Trigger-After-Swap": JSON.stringify({ "client-inline-created": { id, pseudonym: id } })
+});
+const cancel = () => {
+    w.document.querySelector('[data-inline-client-cancel]').click();
+    assert.equal(requests.at(-1).method, "GET");
+    return requests.at(-1);
+};
+const selected = async (id) => {
+    await tick();
+    assert.equal(posted().client, id, "the current successful creation must select its person");
+    assert.equal(c.query, id, "the selected pseudonym must match the successful creation");
+    assert.equal(w.document.querySelector('[role="dialog"]'), null);
+    assert.equal(form.hasAttribute("inert"), false);
+    assert.equal(w.document.activeElement, field);
+    assert.equal(posted().notes, "Keep draft");
+};
+
 if (mode === "selection") {
     c.selectItem({ id: "a", pseudonym: "Person A" });
     await tick();
@@ -209,5 +234,150 @@ if (mode === "selection") {
     await tick();
     assert.equal(posted().client, "new-a");
     assert.equal(w.document.activeElement, field);
-} else { throw new Error("Unknown test mode"); }
+} else if (mode === "double_submit") {
+    await openModal();
+    const first = send();
+    const count = requests.length;
+    send();
+    assert.equal(requests.length, count, "HTMX queues a second submit on the same form");
+    success(first);
+    await selected("new-a");
+    assert.equal(requests.length, count, "the detached form must not submit a second creation");
+} else if (mode === "validation_then_success") {
+    await openModal();
+    send().respond(modal.replace('autofocus', 'aria-invalid="true"'));
+    await tick();
+    assert.equal(form.hasAttribute("inert"), true);
+    assert.equal(w.document.activeElement.getAttribute("aria-invalid"), "true");
+    success(send());
+    await selected("new-a");
+} else if (mode === "post_error_then_success") {
+    await openModal();
+    send().respond("Server error", {}, 500);
+    await tick();
+    success(send());
+    await selected("new-a");
+} else if (mode === "second_creation") {
+    await openModal();
+    success(send());
+    await selected("new-a");
+    await openModal();
+    success(send(), "new-b");
+    await selected("new-b");
+} else if (mode === "new_creation_before_old_response") {
+    await openModal();
+    const old = send();
+    cancel().respond("");
+    await tick();
+    await openModal();
+    const current = send();
+    success(old, "old-person");
+    await tick();
+    assert.ok(dialogForm(), "old response cannot close the current dialog");
+    success(current, "new-b");
+    await selected("new-b");
+} else if (mode.startsWith("cancel_failure_then_create_")) {
+    field.value = "New A";
+    field.dispatchEvent(new w.Event("input", { bubbles: true }));
+    await tick();
+    await openModal();
+    const closing = cancel();
+    if (mode.endsWith("network")) closing.onerror();
+    else closing.respond("Server error", {}, 500);
+    await tick();
+    assert.ok(dialogForm(), "failed close leaves the form available to retry");
+    success(send());
+    await selected("new-a");
+} else if (["cancel_pending_then_create", "cancel_pending_close_before_create_success"].includes(mode)) {
+    await openModal();
+    const closing = cancel();
+    const current = send();
+    if (mode === "cancel_pending_close_before_create_success") {
+        closing.respond("");
+        await tick();
+        assert.ok(dialogForm(), "an older close cannot discard the new creation form");
+    }
+    success(current);
+    await selected("new-a");
+    if (mode === "cancel_pending_then_create") closing.respond("");
+    await selected("new-a");
+} else if (mode === "cancel_error_then_cancel") {
+    await openModal();
+    cancel().respond("Error", {}, 500);
+    await tick();
+    cancel().respond("");
+    await tick();
+    assert.equal(dialogForm(), null);
+    assert.equal(form.hasAttribute("inert"), false);
+    assert.equal(w.document.activeElement.id, "open");
+} else if (mode === "background_lifecycle") {
+    const preexisting = w.document.createElement("aside");
+    preexisting.setAttribute("inert", "");
+    w.document.body.append(preexisting);
+    await openModal();
+    const dynamic = w.document.createElement("button");
+    dynamic.textContent = "Background";
+    w.document.body.append(dynamic);
+    await tick();
+    assert.equal(dynamic.hasAttribute("inert"), true);
+    success(send());
+    await selected("new-a");
+    assert.equal(dynamic.hasAttribute("inert"), false);
+    assert.equal(preexisting.hasAttribute("inert"), true);
+    dynamic.focus();
+    assert.equal(w.document.activeElement, dynamic, "no focus trap remains after close");
+    const later = w.document.createElement("button");
+    w.document.body.append(later);
+    await tick();
+    assert.equal(later.hasAttribute("inert"), false, "observer is disconnected after close");
+    await openModal();
+    const modalSlot = w.document.getElementById("client-inline-create-modal");
+    w.Alpine.destroyTree(modalSlot);
+    modalSlot.remove();
+    await tick();
+    assert.equal(form.hasAttribute("inert"), false);
+    assert.equal(dynamic.hasAttribute("inert"), false);
+    dynamic.focus();
+    assert.equal(w.document.activeElement, dynamic);
+} else if (mode === "double_open") {
+    w.document.getElementById("open").click();
+    const first = requests.at(-1);
+    w.document.getElementById("open").click();
+    first.respond(modal);
+    await tick();
+    if (requests.at(-1) !== first) requests.at(-1).respond(modal);
+    await tick();
+    success(send());
+    await selected("new-a");
+} else if (["stale_archived_response", "current_archived_response", "detached_archived_response"].includes(mode)) {
+    let purges = 0;
+    w.facilityArchivedPurge = { run: () => { purges++; return Promise.resolve(); } };
+    await openModal();
+    const old = send();
+    const closing = mode !== "current_archived_response" ? cancel() : null;
+    if (mode === "detached_archived_response") {
+        closing.respond("");
+        await tick();
+        c.selectItem({ id: "b", pseudonym: "Person B" });
+        await tick();
+    }
+    old.respond("<p>Archived response must not replace the dialog</p>", {
+        "X-Facility-Archived": "1",
+        "HX-Trigger-After-Swap": JSON.stringify({ "client-inline-created": { id: "old-person", pseudonym: "Old person" } }),
+    }, 403);
+    await tick();
+    assert.equal(purges, 1, "an authoritative archive marker must still reach the global purge handler");
+    if (mode === "detached_archived_response") {
+        assert.equal(posted().client, "b", "archive errors cannot replace a later person selection");
+        assert.equal(c.query, "Person B");
+        assert.equal(dialogForm(), null, "archive errors cannot reopen the dialog");
+    } else {
+        assert.equal(posted().client, "", "archive errors cannot select a person");
+        assert.ok(dialogForm(), "archive errors cannot swap the dialog");
+        assert.ok(!dialogForm().closest('[role="dialog"]').textContent.includes("Archived response must not replace the dialog"));
+        if (closing) closing.respond("");
+    }
+    assert.equal(w.document.querySelector('[data-testid="htmx-error-toast"]'), null);
+} else { throw new Error("Unknown extra mode"); }
+
 w.close();

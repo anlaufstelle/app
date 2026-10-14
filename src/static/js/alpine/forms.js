@@ -176,7 +176,6 @@ document.addEventListener("alpine:init", () => {
         _activeToken: null,
         _requests: null,
         _requestCleanups: [],
-        _acceptingCreate: false,
         _backgroundObserver: null,
         _focusListener: null,
         init() {
@@ -193,7 +192,6 @@ document.addEventListener("alpine:init", () => {
         invalidateRequests() {
             this._generation++;
             this._activeToken = null;
-            this._acceptingCreate = false;
         },
         _isCurrentRequest(xhr) {
             return this._activeToken !== null && this._requests.get(xhr) === this._activeToken;
@@ -206,25 +204,31 @@ document.addEventListener("alpine:init", () => {
             if (cancel || !this._slot.contains(source)) {
                 this.invalidateRequests();
                 this._trigger = cancel ? this._trigger : source;
-                this._acceptingCreate = !cancel;
             }
-            const token = `${this._generation}:${++this._requestSequence}`;
+            const token = {
+                generation: this._generation,
+                sequence: ++this._requestSequence,
+                acceptsCreate: requestConfig.verb === "post" && !cancel,
+            };
             this._activeToken = token;
             this._requests.set(xhr, token);
             // Listen on the source itself: detached forms still receive XHR events.
             const beforeResponse = (responseEvent) => {
-                if (responseEvent.detail.xhr === xhr && !this._isCurrentRequest(xhr)) {
-                    responseEvent.preventDefault();
+                if (responseEvent.detail.xhr !== xhr || this._isCurrentRequest(xhr)) return;
+                // Archive responses must reach the global purge even after cancellation.
+                if (xhr.status === 403 && xhr.getResponseHeader("X-Facility-Archived") === "1") {
+                    window.htmx.trigger(document.body, "htmx:responseError", responseEvent.detail);
                 }
+                responseEvent.preventDefault();
             };
             const onError = (errorEvent) => {
                 if (errorEvent.detail.xhr !== xhr) return;
+                // Keep the global facility-archive purge and reload authoritative.
+                if (xhr.status === 403 && xhr.getResponseHeader("X-Facility-Archived") === "1") return;
                 if (!this._isCurrentRequest(xhr)) {
                     errorEvent.stopPropagation();
                     return;
                 }
-                // Keep the global facility-archive purge and reload authoritative.
-                if (xhr.status === 403 && xhr.getResponseHeader("X-Facility-Archived") === "1") return;
                 const message = this._slot.querySelector('[data-inline-client-error]');
                 if (this._open && message) {
                     errorEvent.stopPropagation();
@@ -287,7 +291,7 @@ document.addEventListener("alpine:init", () => {
                 let created = null;
                 try {
                     const header = event.detail.xhr?.getResponseHeader("HX-Trigger-After-Swap");
-                    if (this._acceptingCreate && this._isCurrentRequest(event.detail.xhr)) {
+                    if (this._requests.get(event.detail.xhr)?.acceptsCreate && this._isCurrentRequest(event.detail.xhr)) {
                         created = JSON.parse(header || "{}")["client-inline-created"] || null;
                     }
                 } catch (_) { /* An absent selection event is a cancellation. */ }

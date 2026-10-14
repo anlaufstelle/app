@@ -108,7 +108,7 @@ it("returns focus to the opener on Cancel and to the person input on success", (
     expect(document.activeElement).toBe(opener);
     open();
     const xhr = { getResponseHeader: () => '{"client-inline-created":{"id":"new"}}' };
-    c.beforeRequest({ detail: { target: slot, xhr, requestConfig: { elt: opener } } });
+    c.beforeRequest({ detail: { target: slot, xhr, requestConfig: { elt: slot.querySelector("[role=dialog]"), verb: "post" } } });
     c.beforeSwap({ detail: { target: slot, xhr } });
     slot.innerHTML = "";
     c.afterSwap({ detail: { target: slot, xhr } });
