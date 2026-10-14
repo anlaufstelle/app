@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Demo-Anzeigen präzisiert** (#2602) — Szenariobasierte Login-Hinweise und Rollenlabels, dokumentierter Mail-Verzicht, escapendes Fett/Zitat/Code in Betreiber-Rechtstexten, versetzter Consent-Banner, Tagesmodus-Titel und Kennzahlbezeichnungen in der Vorschau verbessern diese Teilpunkte der Demo-Abnahme.
+- **Demo-Anzeigen präzisiert** (#2602) — Szenariobasierte Login-Hinweise und Rollenlabels, dokumentierter Mail-Verzicht, escapendes Fett/Zitat/Code in Betreiber-Rechtstexten, versetzter Consent-Banner, Tagesmodus-Titel und -Formularlabel und Kennzahlbezeichnungen in der Vorschau verbessern diese Teilpunkte der Demo-Abnahme.
 
 - **Mehr-Menü in flachen Fenstern erreichbar** (#2553) — Das mobile Mehr-Menü begrenzt seine Höhe am verfügbaren Viewport, scrollt intern und hält die fokussierte Zeile im sichtbaren Bereich.
 - **Feld-Board per Tastatur bedienen** (#2554) — Gruppen und Felder lassen sich mit Auf-/Ab-Knöpfen sortieren und Felder über eine bestätigte Gruppenauswahl verschieben; Fokus und Positionsansage bleiben nach erfolgreicher Änderung erhalten.

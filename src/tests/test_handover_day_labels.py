@@ -16,6 +16,8 @@ def test_day_mode_titles_and_empty_note(client, staff_user, facility):
     html = client.get(reverse("core:zeitstrom"), {"view": "uebergabe"}).content.decode()
     assert "Übergabenotiz vom Vortag" in html
     assert "Notiz für heute" in html
+    assert "Notiz für den Folgetag" in html
+    assert "Folgeschicht" not in html
     assert "Übergabenotiz der letzten Schicht" not in html
     assert "Notiz für die laufende Schicht" not in html
     assert "bis zum Ende des Folgetags" in html
@@ -37,3 +39,5 @@ def test_shift_mode_titles_stay_unchanged(client, staff_user, facility):
     assert "Übergabenotiz der letzten Schicht" in html
     assert "Notiz für die laufende Schicht" in html
     assert "Notiz für heute" not in html
+    assert "Notiz für die Folgeschicht" in html
+    assert "Notiz für den Folgetag" not in html

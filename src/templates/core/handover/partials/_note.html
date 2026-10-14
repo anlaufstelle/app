@@ -86,7 +86,7 @@ autofocus — der Fokus landet wieder dort, wo er war.{% endcomment %}
             <input type="hidden" name="time_filter" value="{{ block.shift.time_filter_id }}">
             <input type="hidden" name="display_date" value="{{ handover_note_display.shift_date|date:'Y-m-d' }}">
             <input type="hidden" name="display_time_filter" value="{{ handover_note_display.time_filter_id }}">
-            <label for="handover-note-text-{{ block.kind }}" class="block text-[12px] font-semibold text-ink-soft mb-1">{% trans "Notiz für die Folgeschicht" %}</label>
+            <label for="handover-note-text-{{ block.kind }}" class="block text-[12px] font-semibold text-ink-soft mb-1">{% if handover_notes.day_mode %}{% trans "Notiz für den Folgetag" %}{% else %}{% trans "Notiz für die Folgeschicht" %}{% endif %}</label>
             <textarea id="handover-note-text-{{ block.kind }}" name="note" rows="3"
                       aria-describedby="handover-note-help-{{ block.kind }}"
                       class="w-full rounded-[10px] border border-subtle bg-canvas px-3 py-2 text-[13px] text-ink"
