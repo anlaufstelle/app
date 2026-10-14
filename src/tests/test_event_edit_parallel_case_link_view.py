@@ -95,8 +95,9 @@ class TestEventEditSurvivesParallelCaseLink:
 
         response = client.post(reverse("core:event_update", kwargs={"pk": sample_event.pk}), _payload(hidden))
 
-        assert response.status_code == 302
-        assert response["Location"] == reverse("core:event_update", kwargs={"pk": sample_event.pk})
+        assert response.status_code == 200
+        assert response.context["has_edit_conflict"]
+        assert response.context["data_form"]["notiz"].value() == "Neue Notiz aus Tab A"
         assert Event.objects.get(pk=sample_event.pk).data_json["notiz"] == "Aus Tab B"
 
     def test_json_replay_after_parallel_link_stays_409(self, client, staff_user, sample_event, case_open):

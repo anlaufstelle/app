@@ -81,6 +81,7 @@ from core.services.zeitstrom_filters import zeitstrom_filter_state
 from core.utils.formatting import isoformat_or_none
 from core.utils.ratelimit import ratelimit
 from core.views._dynamic_errors import add_dynamic_service_errors
+from core.views._edit_errors import edit_error_context, is_version_conflict, refresh_edit_visibility
 from core.views._json_contracts import (
     _conflict_response,
     _idempotency_mismatch_response,
@@ -1223,6 +1224,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
     def post(self, request, pk):
         event = self.event
         facility = request.current_facility
+        original_data = dict(event.data_json or {})
 
         # Pass existing data so inactive options stay in choices for validation.
         # Refs #1160: gemeinsame Service-Helfer (vorher dupliziert mit get()).
@@ -1347,11 +1349,52 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                         # kein sinnvoller roher Client-Wert vorliegt.
                         return _event_conflict_response(request.user, event, None, error="missing-token")
                     return _event_conflict_response(request.user, event, expected_updated_at)
-                safe_messages = add_dynamic_service_errors(data_form, e, restricted_keys)
+                if wants_json:
+                    safe_messages = add_dynamic_service_errors(data_form, e, restricted_keys)
                 if _wants_raw_json_response(request):
                     return _invalid_form_response(data_form)
-                messages.error(request, "; ".join(safe_messages))
-                return redirect("core:event_update", pk=event.pk)
+                if wants_json:
+                    messages.error(request, "; ".join(safe_messages))
+                    return redirect("core:event_update", pk=event.pk)
+                current = get_visible_event_or_404(
+                    request.user,
+                    facility,
+                    pk,
+                    select_related=("document_type", "client"),
+                )
+                if not request.user.is_staff_or_above and current.created_by_id != request.user.pk:
+                    raise PermissionDenied from None
+                if current.client is not None and current.client.processing_restricted:
+                    messages.error(request, PROCESSING_RESTRICTED_MESSAGE)
+                    return redirect("core:event_detail", pk=pk)
+                restricted_keys = [*restricted_keys, *refresh_edit_visibility(request.user, data_form)]
+                comparison = {}
+                if is_version_conflict(e):
+                    current_data_form = DynamicEventDataForm(
+                        document_type=current.document_type,
+                        initial_data=decrypt_event_text_data(current),
+                        facility=facility,
+                        existing_file_slugs=file_marker_slugs(current.data_json),
+                    )
+                    remove_restricted_fields(request.user, current.document_type, current_data_form)
+                    current_data_form._edit_file_state = current.data_json
+                    current_data_form._edit_attachments = build_attachment_context(current)
+                    data_form._edit_file_state = original_data
+                    comparison = {
+                        "current_forms": [(data_form, current_data_form)],
+                        "current_version": current.updated_at.isoformat(),
+                        "current_form_state": event_form_state_token(current),
+                    }
+                context = {
+                    "event": current,
+                    "data_form": data_form,
+                    "expected_updated_at": request.POST.get("expected_updated_at", ""),
+                    "form_state_token": request.POST.get("expected_form_state", ""),
+                    "existing_attachments": build_attachment_context(current),
+                    "back_link": _event_back_link(current),
+                }
+                context.update(edit_error_context(e, data_form, restricted_keys, **comparison))
+                return render(request, "core/events/edit.html", context)
             finally:
                 # Refs #1345/#1956: Jeder Nicht-Commit-Ausgang laesst die
                 # vorab verschluesselten ``.enc`` verwaisen — restlos entfernen

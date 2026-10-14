@@ -212,9 +212,7 @@ class TestEventUpdateConflict:
         assert payload["error"] == "conflict"
 
     def test_event_update_html_fallback_remains_rerender(self, client, staff_user, sample_event):
-        """A normal browser POST (no Accept header, no HX-Request) must keep
-        the existing redirect-with-flash fallback — *not* a 409 JSON.
-        """
+        """A normal HTML conflict retains the bound form and current state."""
         client.force_login(staff_user)
         response = client.post(
             reverse("core:event_update", kwargs={"pk": sample_event.pk}),
@@ -224,9 +222,10 @@ class TestEventUpdateConflict:
                 "expected_updated_at": _stale_timestamp(),
             },
         )
-        # redirect-to-edit flow keeps the user on the form with a flash message
-        assert response.status_code == 302
-        assert response["Content-Type"].startswith("text/html") or "Location" in response
+        assert response.status_code == 200
+        assert response["Content-Type"].startswith("text/html")
+        assert response.context["data_form"]["notiz"].value() == "offline-edit"
+        assert response.context["has_edit_conflict"]
 
     def test_conflict_response_includes_server_state(self, client, staff_user, sample_event):
         """Body carries the three fields the conflict resolver needs:
@@ -377,14 +376,15 @@ class TestEventUpdateConflict:
         assert payload["client_expected"] == "nicht-iso"
 
     def test_event_update_corrupt_token_html_path_redirects_not_500(self, client, staff_user, sample_event):
-        """Gegenprobe: derselbe korrupte Token im klassischen HTML-Pfad
-        bleibt beim bisherigen messages+redirect-Verhalten (kein 500)."""
+        """A corrupt HTML version token retains the draft and shows current values."""
         client.force_login(staff_user)
         response = client.post(
             reverse("core:event_update", kwargs={"pk": sample_event.pk}),
             {"dauer": "99", "notiz": "offline-edit", "expected_updated_at": "nicht-iso"},
         )
-        assert response.status_code == 302
+        assert response.status_code == 200
+        assert response.context["data_form"]["notiz"].value() == "offline-edit"
+        assert response.context["has_edit_conflict"]
 
     def test_offline_bundle_token_triggers_conflict_on_stale_replay(self, client, staff_user, sample_event):
         """F-07 (Refs #1109): End-to-End — der ``updated_at``-Token, den das
@@ -656,7 +656,7 @@ class TestEventUpdateConflict:
         error_key_kind,
         request_headers,
     ):
-        """#1936: Followed HTML/HTMX redirects expose only the generic flash."""
+        """HTML rerenders and HTMX redirects expose only permitted error text."""
         event, hidden_slug, visible_slug = event_with_restricted_invalid_number
         error_key = hidden_slug if error_key_kind == "restricted" else "unknown-sensitive-field"
         sensitive_message, sensitive_code = _patch_sensitive_event_validation_error(
@@ -680,7 +680,14 @@ class TestEventUpdateConflict:
         )
 
         assert response.status_code == 200
-        assert response.redirect_chain == [(reverse("core:event_update", kwargs={"pk": event.pk}), 302)]
+        expected_redirects = (
+            [(reverse("core:event_update", kwargs={"pk": event.pk}), 302)]
+            if request_headers.get("HTTP_HX_REQUEST")
+            else []
+        )
+        assert response.redirect_chain == expected_redirects
+        if not expected_redirects:
+            assert response.context["data_form"][visible_slug].value() == "darf-nicht-gespeichert-werden"
         body = response.content.decode()
         assert "Ungültige Eingabe." in body
         for secret in (

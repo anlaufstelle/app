@@ -5,7 +5,6 @@ import zlib
 from unittest.mock import patch
 
 import pytest
-from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
@@ -168,9 +167,9 @@ def test_event_upload_shows_image_budget_rejection_and_retains_values(image_owne
             field.slug: image_upload("TIFF"),
         },
     )
-    assert response.status_code == 302
-    messages = [str(message) for message in get_messages(response.wsgi_request)]
-    assert any("insgesamt zu viele Pixel" in message for message in messages), messages
+    assert response.status_code == 200
+    assert "insgesamt zu viele Pixel" in response.content.decode()
+    assert "Datei bitte erneut auswählen:" in response.content.decode()
     owner.refresh_from_db()
     assert owner.data_json == previous_data
     assert not owner.attachments.exists()

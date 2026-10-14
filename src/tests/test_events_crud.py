@@ -5,7 +5,6 @@ import re
 from unittest.mock import patch
 
 import pytest
-from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
@@ -636,7 +635,7 @@ class TestEventUpdateView:
         ).exists()
 
     def test_event_update_html_redirects_for_preserved_invalid_hidden_number(self, client, staff_user, facility):
-        """A service-side field error must stay a flash/redirect, never become a 500."""
+        """Hidden field errors retain permitted drafts with a generic error."""
         document_type = DocumentType.objects.create(
             facility=facility,
             name="Beratung mit geschützter Zahl",
@@ -675,11 +674,11 @@ class TestEventUpdateView:
             {visible_text.slug: "nachher"},
         )
 
-        assert response.status_code == 302
-        assert response.url == reverse("core:event_update", kwargs={"pk": event.pk})
-        rendered_messages = [str(message) for message in get_messages(response.wsgi_request)]
-        assert rendered_messages == ["Ungültige Eingabe."]
-        assert "Wert muss mindestens 0 sein." not in rendered_messages
+        assert response.status_code == 200
+        assert not response.has_header("Location")
+        assert response.context["edit_notices"] == ["Ungültige Eingabe."]
+        assert "Wert muss mindestens 0 sein." not in response.content.decode()
+        assert response.context["data_form"][visible_text.slug].value() == "nachher"
         event.refresh_from_db()
         assert event.data_json == {hidden_number.slug: -1, visible_text.slug: "vorher"}
 

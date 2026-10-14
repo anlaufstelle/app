@@ -75,7 +75,8 @@ class TestEventInvalidRerender:
 
         response = client.post(url, _event_payload(rerendered["expected_updated_at"], dauer="20"))
 
-        assert response.status_code == 302
+        assert response.status_code == 200
+        assert response.context["has_edit_conflict"]
         sample_event.refresh_from_db()
         assert sample_event.data_json == {"dauer": 42, "notiz": "Parallel gespeichert"}
 

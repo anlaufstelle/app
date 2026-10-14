@@ -2382,8 +2382,8 @@ Zum Schutz vor **stillen Überschreibungen** bei parallelem Bearbeiten desselben
 
 - Jedes Formular rendert das aktuelle `updated_at` als Hidden-Field.
 - Beim Speichern prüft der Helper `check_version_conflict(instance, expected_updated_at)`, ob der Datensatz in der Zwischenzeit verändert wurde.
-- Bei Konflikt wird eine `ValidationError` geworfen; der View leitet den Nutzer zurück mit der Meldung:
-  > *„Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."*
+- Bei Konflikt wird eine `ValidationError` geworfen. In den klassischen HTML-Bearbeitungsmasken für Personen, Fälle und Ereignisse wird nichts gespeichert; bei weiterhin zulässigem Zugriff bleibt das Formular an die eigene Eingabe gebunden. Ein separater Abschnitt „Aktueller Stand“ zeigt ausschließlich die für die Rolle zulässigen Serverwerte und markiert Abweichungen. Erst nach Prüfen oder Kopieren bewusst erneut speichern: Die Formularwerte ersetzen dann die entsprechenden Serverwerte auf der angezeigten Grundlage; eine weitere zwischenzeitliche Änderung führt erneut zum Konflikt (#2539).
+- Andere Speicher- und Uploadfehler zeigen zulässige Texte ebenfalls wieder an, erneuern aber den Versionsnachweis nicht. Dateien erneut auswählen; betroffene Dateifelder werden genannt. Entfällt der Zugriff auf den Datensatz, gilt weiterhin die Zugangsabweisung. JSON-/Offline-Replay-Konflikte behalten ihren bisherigen Antwortvertrag.
 
 **Administrative Hinweise:**
 - Es gibt keinen Admin-Schalter, um das Locking abzuschalten — der Schutz ist systemweit aktiv.

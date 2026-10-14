@@ -347,7 +347,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 
 > **Note:** Edits are recorded in the event's change history. Previous versions remain visible in the history. Encrypted before-values are also shown in cleartext when your role may see the field; fields above your sensitivity level remain protected as `[Eingeschränkt]` (this fixed history placeholder is currently displayed in German in both interface languages).
 
-> **Concurrent editing:** If someone else edited the same record at the same time, an error message appears. Reload the page and re-enter your changes -- this ensures that no changes are silently overwritten.
+> **Concurrent editing:** A version conflict saves nothing. While you still have permission to edit the record and fields, your own input remains in the form; the “Current state” section shows permitted server values and marks differences. Review or copy the input, then deliberately save again: your form values replace the corresponding server values. Permitted text also remains in the form after save or upload errors. Select files again (#2539).
 
 ### Deleting a Contact
 
@@ -472,7 +472,7 @@ From the detail page, you can use **Document contact** to record a contact for t
 
 > **Note:** Social workers and above may change pseudonyms and upgrade the contact stage. Only managers or application support may downgrade a person from “With additional details”. A change in contact stage is automatically recorded in the audit log.
 
-> **Concurrent editing:** If someone else edited the same record at the same time, an error message appears. Reload the page and re-enter your changes -- this ensures that no changes are silently overwritten.
+> **Concurrent editing:** A version conflict saves nothing. While you still have permission to edit the record and fields, your own input remains in the form; the “Current state” section shows permitted server values and marks differences. Review or copy the input, then deliberately save again: your form values replace the corresponding server values. Permitted text also remains in the form after save or upload errors. Select files again (#2539).
 
 ### Merging People (Duplicates)
 
@@ -561,7 +561,7 @@ The list updates without a page reload.
 2. On the detail page, click **Edit**.
 3. Change the desired fields and save.
 
-> **Concurrent editing:** If someone else edited the same record at the same time, an error message appears. Reload the page and re-enter your changes -- this ensures that no changes are silently overwritten.
+> **Concurrent editing:** A version conflict saves nothing. While you still have permission to edit the record and fields, your own input remains in the form; the “Current state” section shows permitted server values and marks differences. Review or copy the input, then deliberately save again: your form values replace the corresponding server values. Permitted text also remains in the form after save or upload errors. Select files again (#2539).
 
 ### Filter: Assigned to Me
 
@@ -1157,6 +1157,7 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-13 -->
-<!-- source-hash: 2680ef73a770c496bdc70d5da7907c12b36d38f6 -->
+<!-- source-hash: 208f9db74a83d6f26cc186388415369afc720097 -->
+<!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->

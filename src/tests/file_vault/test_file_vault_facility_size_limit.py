@@ -178,8 +178,6 @@ class TestReplaceViewFacilySizeLimit:
     def test_replace_exceeding_facility_limit_redirects_without_new_version(
         self, client, staff_user, facility, doc_type_with_file
     ):
-        from django.contrib.messages import get_messages
-
         Settings.objects.update_or_create(
             facility=facility,
             defaults={"allowed_file_types": "pdf", "max_file_size_mb": 1},
@@ -213,9 +211,9 @@ class TestReplaceViewFacilySizeLimit:
             },
         )
 
-        assert resp.status_code == 302  # graceful redirect, KEIN 500
-        msgs = [str(m) for m in get_messages(resp.wsgi_request)]
-        assert any("groß" in m or "gross" in m for m in msgs), msgs
+        assert resp.status_code == 200
+        assert "groß" in resp.content.decode() or "gross" in resp.content.decode()
+        assert "Datei bitte erneut auswählen:" in resp.content.decode()
         # Keine neue Attachment-Version gespeichert (Facility-Limit hielt).
         assert Attachment.objects.filter(event=event).count() == count_before
 

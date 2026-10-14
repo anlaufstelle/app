@@ -345,7 +345,7 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 
 > **Hinweis:** Bearbeitungen werden in der Änderungshistorie des Ereignisses protokolliert. Frühere Versionen bleiben im Verlauf sichtbar. Auch verschlüsselte Vorher-Werte werden dort im Klartext angezeigt, wenn Ihre Rolle das Feld sehen darf; höher eingestufte Felder bleiben als „[Eingeschränkt]“ geschützt.
 
-> **Gleichzeitige Bearbeitung:** Wenn jemand anderes den gleichen Datensatz gleichzeitig bearbeitet hat, erscheint eine Fehlermeldung. Laden Sie die Seite neu und tragen Sie Ihre Änderung erneut ein — so wird sichergestellt, dass keine Änderungen still überschrieben werden.
+> **Gleichzeitige Bearbeitung:** Bei einem Versionskonflikt wird nichts gespeichert. Solange Sie den Datensatz und die Felder weiterhin bearbeiten dürfen, stehen Ihre eigenen Eingaben im Formular; der Abschnitt „Aktueller Stand“ zeigt die zulässigen Serverwerte und markiert Abweichungen. Prüfen oder kopieren Sie die Eingaben und speichern Sie erst dann bewusst erneut: Ihre Formularwerte ersetzen dabei die entsprechenden Serverwerte. Auch nach Speicher- oder Uploadfehlern bleiben weiterhin zulässige Texte im Formular. Dateien müssen Sie erneut auswählen (#2539).
 
 ### Kontakt löschen
 
@@ -470,7 +470,7 @@ Von der Detailseite aus können Sie über **Kontakt dokumentieren** direkt einen
 
 > **Hinweis:** Pseudonyme ändern und die Kontaktstufe hochsetzen dürfen Sie ab Fachkraft. Eine Person der Stufe „Mit Zusatzangaben“ herabsetzen dürfen nur Leitung oder Anwendungsbetreuung. Eine Änderung der Kontaktstufe wird automatisch im Audit-Log protokolliert.
 
-> **Gleichzeitige Bearbeitung:** Wenn jemand anderes den gleichen Datensatz gleichzeitig bearbeitet hat, erscheint eine Fehlermeldung. Laden Sie die Seite neu und tragen Sie Ihre Änderung erneut ein — so wird sichergestellt, dass keine Änderungen still überschrieben werden.
+> **Gleichzeitige Bearbeitung:** Bei einem Versionskonflikt wird nichts gespeichert. Solange Sie den Datensatz und die Felder weiterhin bearbeiten dürfen, stehen Ihre eigenen Eingaben im Formular; der Abschnitt „Aktueller Stand“ zeigt die zulässigen Serverwerte und markiert Abweichungen. Prüfen oder kopieren Sie die Eingaben und speichern Sie erst dann bewusst erneut: Ihre Formularwerte ersetzen dabei die entsprechenden Serverwerte. Auch nach Speicher- oder Uploadfehlern bleiben weiterhin zulässige Texte im Formular. Dateien müssen Sie erneut auswählen (#2539).
 
 ### Personen zusammenführen (Duplikate)
 
@@ -559,7 +559,7 @@ Die Liste aktualisiert sich ohne Seitenneuladung.
 2. Auf der Detailseite klicken Sie auf **Bearbeiten**.
 3. Ändern Sie die gewünschten Felder und speichern Sie.
 
-> **Gleichzeitige Bearbeitung:** Wenn jemand anderes den gleichen Datensatz gleichzeitig bearbeitet hat, erscheint eine Fehlermeldung. Laden Sie die Seite neu und tragen Sie Ihre Änderung erneut ein — so wird sichergestellt, dass keine Änderungen still überschrieben werden.
+> **Gleichzeitige Bearbeitung:** Bei einem Versionskonflikt wird nichts gespeichert. Solange Sie den Datensatz und die Felder weiterhin bearbeiten dürfen, stehen Ihre eigenen Eingaben im Formular; der Abschnitt „Aktueller Stand“ zeigt die zulässigen Serverwerte und markiert Abweichungen. Prüfen oder kopieren Sie die Eingaben und speichern Sie erst dann bewusst erneut: Ihre Formularwerte ersetzen dabei die entsprechenden Serverwerte. Auch nach Speicher- oder Uploadfehlern bleiben weiterhin zulässige Texte im Formular. Dateien müssen Sie erneut auswählen (#2539).
 
 ### Filter: Mir zugewiesen
 

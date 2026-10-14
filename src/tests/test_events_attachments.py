@@ -421,7 +421,6 @@ class TestEventEditScannerUnavailable:
         )
 
     def test_replace_with_unreachable_scanner_redirects_not_500(self, client, staff_user, facility, doc_type_with_file):
-        from django.contrib.messages import get_messages
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         from core.models.attachment import Attachment
@@ -459,8 +458,8 @@ class TestEventEditScannerUnavailable:
                 },
             )
 
-        assert resp.status_code == 302  # graceful redirect, NICHT 500
-        msgs = [str(m) for m in get_messages(resp.wsgi_request)]
-        assert any("Virenscanner" in m for m in msgs), msgs
+        assert resp.status_code == 200
+        assert "Virenscanner" in resp.content.decode()
+        assert "Datei bitte erneut auswählen:" in resp.content.decode()
         # fail-closed: keine neue Attachment-Version gespeichert.
         assert Attachment.objects.filter(event=event).count() == count_before

@@ -658,11 +658,10 @@ class TestKontingentAuditImViewPfad:
             ft_file.slug,
         )
 
-        # Der Aenderungspfad meldet Service-Fehler als Message und leitet auf das
-        # Formular zurueck (bestehender Vertrag, unveraendert). Neu ist allein,
-        # dass die Ablehnung eine dauerhafte Rechenschaftszeile hinterlaesst.
-        assert resp.status_code == 302
-        assert resp.url.endswith("/edit/")
+        # Rejection retains the bound form and its durable quota audit entry.
+        assert resp.status_code == 200
+        assert resp.context["data_form"].is_bound
+        assert "Datei bitte erneut auswählen:" in resp.content.decode()
         assert Attachment.objects.for_facility(quota_facility).count() == 1
         assert (
             AuditLog.objects.filter(facility=quota_facility, action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED).count()

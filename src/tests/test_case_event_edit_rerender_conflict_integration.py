@@ -241,8 +241,10 @@ class TestEventEditRerenderThenSubmit:
 
         response = client.post(url, _event_payload(rerendered, dauer="20"), follow=True)
 
-        assert response.redirect_chain[0] == (url, 302), "Konflikt führt zurück ins Formular"
-        assert CONFLICT_TEXT in _messages_text(response)
+        assert response.status_code == 200
+        assert response.redirect_chain == []
+        assert response.context["has_edit_conflict"]
+        assert CONFLICT_TEXT in response.content.decode()
         sample_event.refresh_from_db()
         assert sample_event.data_json == {"dauer": 42, "notiz": "Notiz aus Tab B"}, (
             "Parallele Änderung darf nicht still überschrieben werden"

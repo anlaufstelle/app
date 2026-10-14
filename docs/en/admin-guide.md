@@ -2381,8 +2381,8 @@ To protect against **silent overwrites** when two users edit the same record in 
 
 - Every form renders the current `updated_at` as a hidden field.
 - On save, the helper `check_version_conflict(instance, expected_updated_at)` verifies whether the record has been modified in the meantime.
-- On conflict a `ValidationError` is raised; the view redirects the user with the message:
-  > *"The record has been modified in the meantime. Please reload the page."*
+- A conflict raises a `ValidationError`. The standard HTML edit forms for clients, cases and events save nothing; while access remains permitted, the form stays bound to the submitted input. A separate “Current state” section shows only server values permitted for the role and marks differences. Review or copy the input, then deliberately save again: the form values replace the corresponding server values on the displayed baseline; another intervening change causes another conflict (#2539).
+- Other save and upload errors also redisplay permitted text but keep the submitted version guard. Select files again; affected file fields are named. If access to the record is lost, the access rejection still applies. JSON/offline replay conflicts retain their existing response contract.
 
 **Administrative notes:**
 - There is no admin toggle to disable locking -- the protection is system-wide.
@@ -2556,4 +2556,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
-<!-- source-hash: 48231d3c313f10b600f8aacd59dfdcff17dd8740 -->
+<!-- source-hash: 305547646825487e7e47f963e4ae5ebde9830ef5 -->
