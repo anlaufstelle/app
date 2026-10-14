@@ -15,6 +15,7 @@ from django.views import View
 
 from core.constants import RATELIMIT_FREQUENT
 from core.models import DocumentType
+from core.reporting.base import FieldSpec
 from core.reporting.data_source import (
     ALL_EVENTS,
     DATA_SOURCE_EXPLANATIONS,
@@ -176,6 +177,13 @@ def build_report_panel_context(facility, backend, period_state) -> dict:
 
     field_specs = backend.get_field_specs()
     preview_records = result.records if result.mode == "aggregate" else result.records[:10]
+    # Labels decorate the suppressed preview; export records stay unchanged (Refs #2602).
+    metric_labels = getattr(backend, "metric_labels", {})
+    if metric_labels:
+        field_specs = [field_specs[0], FieldSpec("bezeichnung", _("Bezeichnung")), *field_specs[1:]]
+        preview_records = [
+            {**record, "bezeichnung": metric_labels.get(record.get("kennzahl"), "")} for record in preview_records
+        ]
     table_labels = backend.get_table_labels()
 
     return {

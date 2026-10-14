@@ -239,6 +239,13 @@ class BanOverviewBackend(DatasetBackend):
     # umschreibt. Dieselbe Deklaration wie bei den Daten (Refs #1785).
     verfuegbarkeit = (Anforderung(TYP_BINDUNG),)
 
+    # Display metadata only; export keys and records retain their contract (Refs #2602).
+    metric_labels = {
+        "ausgesprochen": _("Ausgesprochene Hausverbote"),
+        "aktiv_aktuell": _("Aktuell aktive Hausverbote"),
+        "abgelaufen_im_zeitraum": _("Im Zeitraum abgelaufene Hausverbote"),
+    }
+
     def get_field_specs(self) -> list[FieldSpec]:
         return [
             FieldSpec("kennzahl", _("Kennzahl")),

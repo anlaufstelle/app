@@ -182,6 +182,14 @@ class CaseMetricsBackend(DatasetBackend):
     # sagt beides — Zeitraum UND Stichtagsanteil.
     population = CASES_IN_PERIOD
 
+    # Display metadata only; export keys and records retain their contract (Refs #2602).
+    metric_labels = {
+        "neue_faelle": _("Neue Fälle"),
+        "geschlossene_faelle": _("Geschlossene Fälle"),
+        "offene_faelle_aktuell": _("Aktuell offene Fälle"),
+        "betroffene_personen": _("Betroffene Personen"),
+    }
+
     def get_field_specs(self) -> list[FieldSpec]:
         return [
             FieldSpec("kennzahl", _("Kennzahl")),
