@@ -26,6 +26,7 @@ from core.services.security.session_rotation import rotate_session_after_privile
 from core.signals.audit import get_client_ip
 from core.utils.ratelimit import ratelimit
 from core.views.mixins import anonymous_session_required
+from core.views.utils import safe_redirect_path
 
 logger = logging.getLogger(__name__)
 
@@ -465,7 +466,7 @@ class OfflineKeySaltView(LoginRequiredMixin, View):
         # The scripted login also needs the deep link a session expiry interrupted:
         # ``?next=`` (sent by auth-bootstrap.js from the login URL) is resolved with
         # the same boundary check as the native redirect (Refs #2561).
-        home_url = resolve_post_login_url(request, request.GET.get("next"))
+        home_url = resolve_post_login_url(request, safe_redirect_path(request.GET.get("next")))
         from core.services.security.offline_keys import offline_key_max_age
 
         return JsonResponse(
