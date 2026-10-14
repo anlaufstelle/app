@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 18:52+0200\n"
+"POT-Creation-Date: 2026-10-14 20:50+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14773,3 +14773,17 @@ msgstr "HTTP error"
 #, python-format
 msgid "Die Vorlage „%(name)s“ wurde nicht angewendet: Der Dokumentationstyp „%(type)s“ setzt mindestens die Kontaktstufe „%(stage)s“ voraus, die ausgewählte Person hat diese Stufe nicht. Person und Fall bleiben erhalten."
 msgstr "The template \"%(name)s\" was not applied: the documentation type \"%(type)s\" requires at least contact stage \"%(stage)s\", which the selected person does not have. Person and case are kept."
+
+#: src/templates/core/events/create.html:20
+msgid "Ein Entwurf für eine andere Person wurde behalten. Öffnen Sie das Formular für diese Person, um ihn wiederherzustellen. Dieses Formular überschreibt den Entwurf nicht."
+msgstr "A draft for another person was kept. Open the form for that person to restore it. This form does not overwrite the draft."
+
+#: src/templates/core/events/create.html:20
+#: src/tests/test_autosave_submission_confirmation.py:50
+msgid "Dieser Entwurf wurde möglicherweise bereits gespeichert. Das Zwischenspeichern ist angehalten. Bitte erst prüfen, dann verwenden."
+msgstr "This draft may already have been saved. Autosave is paused. Use it only after checking."
+
+#: src/templates/core/events/create.html:20
+#: src/tests/test_autosave_submission_confirmation.py:51
+msgid "Entwurf trotzdem verwenden"
+msgstr "Use draft anyway"
