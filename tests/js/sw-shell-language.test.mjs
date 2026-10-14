@@ -316,3 +316,26 @@ it("acknowledges language persistence only after the durable records agree", asy
     cache.put.mockImplementation(put); await send();
     expect(sender.postMessage).toHaveBeenCalledExactlyOnceWith({ type: "SHELL_LANGUAGE_STORED", language: "en", requestId: "current-request" });
 });
+
+// If every durable language change fails, consistent old records survive.
+// A restarted worker can use the old language until a fresh client message.
+it.fails("combined language storage failures cannot revive the old shell after restart", async () => {
+    const { cache, caches, names } = preferenceCache(new Map([
+        ["/offline/event-shell/?shell_language=de", new Response("German shell")],
+        ["/offline/event-shell/?shell_language=en", new Response("English shell")],
+    ]));
+    let worker = workerContext(offlineFetch(), caches);
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language: "de" });
+    const open = caches.open;
+    caches.open = async name => {
+        if (!names.has(name)) throw new Error("Cache creation unavailable");
+        return open(name);
+    };
+    caches.delete = async () => { throw new Error("Cache deletion unavailable"); };
+    cache.put.mockRejectedValue(new Error("Cache write unavailable"));
+    await message(worker, { type: "SET_SHELL_LANGUAGE", language: "en" });
+    expect(await (await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`))).text()).toBe("English shell");
+    worker = workerContext(offlineFetch(), caches);
+    const response = await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`));
+    expect(await response.text()).not.toContain("German shell");
+});
