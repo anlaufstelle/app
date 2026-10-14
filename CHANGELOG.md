@@ -32,6 +32,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Erledigt-Zeiträume nach Abschlusszeit** (#2587) — Rückblicke und Erledigt-Filter verwenden den Abschlusszeitpunkt; spätere Bearbeitungen verschieben keine Aufgabe und unbekannte Abschlussdaten erscheinen nur im unbefristeten Rückblick.
 - **Anzeigenamen in Aufgaben und Kontobereich vereinheitlicht** (#2546) — Profil, Aufgabenansichten und Importlisten zeigen den Anzeigenamen mit Vollname und Login als bestehenden Rückfallwerten.
 - **Offline-Aufgaben vor dem Speichern geprüft** (#2545) — Erfassung und Bearbeitung prüfen Titel mit derselben Unicode-Leerraumnormalisierung wie online sowie Datumsreihenfolge vor dem Queue-Eintrag und zeigen zugängliche Feldfehler, ohne ungültige Eingaben als gespeichert zu melden.
+- **Suchtreffer einheitlich aktivieren** (#2550) — Personen werden genau einmal über Klick einschließlich Touch- und assistiver Aktivierung ausgewählt; Treffer erzeugen keine zusätzlichen Tabstopps.
+- **Aktive Personenoption zugänglich melden** (#2551) — Die Combobox verweist auf die sichtbare hervorgehobene Option mit instanzeigener ID und entfernt die Referenz beim Schließen, Auswählen und Erneuern der Treffer.
+
 - **Personenauswahl bei Texteingabe entwerten** (#2549) — Änderungen am Suchtext leeren sofort die Personen- und Fallauswahl; unbestätigter Text wird sichtbar gekennzeichnet und die erste Änderung startet eine neue Suche.
 
 - **Mehr-Menü in flachen Fenstern erreichbar** (#2553) — Das mobile Mehr-Menü begrenzt seine Höhe am verfügbaren Viewport, scrollt intern und hält die fokussierte Zeile im sichtbaren Bereich.

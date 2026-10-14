@@ -596,6 +596,8 @@ class TestAutocompleteErrorWiring:
             ":aria-expanded",
             "aria-autocomplete",
             "aria-controls",
+            ":aria-controls",
+            ":aria-activedescendant",
         ]
         assert attrs == expected, tag
         assert "aria-invalid" not in tag

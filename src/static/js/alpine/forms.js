@@ -15,6 +15,12 @@
  * (Reaktivitaet kaputt), daher bleiben Getter in den jeweiligen Literalen.
  * Pro-Instanz-State (query/results/…) lebt ebenfalls im jeweiligen Literal.
  */
+let _autocompleteInstance = 0;
+function _nextAutocompleteListboxId() {
+    const instance = ++_autocompleteInstance;
+    return instance === 1 ? "client-autocomplete-list" : `client-autocomplete-list-${instance}`;
+}
+
 const _autocompleteShared = {
     resetSearch() {
         this._fetchGen++;
@@ -70,6 +76,7 @@ const _autocompleteShared = {
         this.enrichedResults = this.results.map((c, i) => {
             const isHi = i === hi;
             return Object.assign({}, c, {
+                optionId: `${this.listboxId}-option-${i}`,
                 isHighlighted: isHi,
                 highlightClass: isHi ? "bg-accent-light" : "",
             });
@@ -89,6 +96,7 @@ const _autocompleteShared = {
     },
     hideResults() {
         this.show = false;
+        this.highlightIndex = -1;
     },
     /**
      * Antwort uebernehmen — inkl. Leerzustand (Refs #1803).
@@ -98,6 +106,7 @@ const _autocompleteShared = {
      * Suche: darunter ist „nichts gefunden" keine Aussage.
      */
     _applyResults(data) {
+        this.highlightIndex = -1;
         this.results = data;
         this.searched = this.query.trim().length >= 2;
         this.show = data.length > 0 || this.searched;
@@ -106,6 +115,7 @@ const _autocompleteShared = {
         const idx = parseInt(event.currentTarget.dataset.idx, 10);
         if (Number.isFinite(idx) && this.results[idx]) {
             this.selectItem(this.results[idx]);
+            this.$refs?.clientInput?.focus();
         }
     },
     highlightByEvent(event) {
@@ -128,6 +138,7 @@ const _autocompleteShared = {
     },
     confirmHighlight() {
         if (
+            this.show &&
             this.highlightIndex >= 0 &&
             this.highlightIndex < this.results.length
         ) {
@@ -135,6 +146,8 @@ const _autocompleteShared = {
         }
     },
     onInput() {
+        // Ignore a pending debounce after selection; real input clears the flag.
+        if (this._justSelected) return;
         this.highlightIndex = -1;
         this.selectionCleared = false;
         this.fetchResults();
@@ -240,6 +253,7 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("clientAutocomplete", () =>
         Object.assign(
             {
+                listboxId: _nextAutocompleteListboxId(),
                 query: "",
                 results: [],
                 enrichedResults: [],
@@ -268,6 +282,10 @@ document.addEventListener("alpine:init", () => {
                 },
                 get unconfirmedQuery() {
                     return !this.selectedId && this.query.trim().length > 0;
+                },
+                get activeDescendant() {
+                    return this.show && this.highlightIndex >= 0 && this.highlightIndex < this.results.length
+                        ? `${this.listboxId}-option-${this.highlightIndex}` : null;
                 },
                 get ariaExpanded() {
                     return this.show ? "true" : "false";
@@ -310,6 +328,7 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("eventClientAutocomplete", () =>
         Object.assign(
             {
+                listboxId: _nextAutocompleteListboxId(),
                 query: "",
                 results: [],
                 enrichedResults: [],
@@ -392,6 +411,10 @@ document.addEventListener("alpine:init", () => {
                 },
                 get unconfirmedQuery() {
                     return !this.selectedId && this.query.trim().length > 0;
+                },
+                get activeDescendant() {
+                    return this.show && this.highlightIndex >= 0 && this.highlightIndex < this.results.length
+                        ? `${this.listboxId}-option-${this.highlightIndex}` : null;
                 },
                 get ariaExpanded() {
                     return this.show ? "true" : "false";

@@ -20,7 +20,7 @@ Sternchen an ``required_field``.{% endcomment %}
         <span x-show="notAnonymousAllowed" x-cloak class="text-red-500">*</span>{% elif required_field %} *{% endif %}
     </label>
     <div class="relative">
-        <input type="text"
+        <input type="text" x-ref="clientInput"
                :value="query" @input="setQuery"
                @input.debounce.150ms="onInput"
                @focus="onFocus"
@@ -38,6 +38,8 @@ Sternchen an ``required_field``.{% endcomment %}
                :aria-expanded="ariaExpanded"
                aria-autocomplete="list"
                aria-controls="client-autocomplete-list"
+               :aria-controls="listboxId"
+               :aria-activedescendant="activeDescendant"
                class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
                autocomplete="off">
         <input type="hidden" name="client" :value="selectedId" @input="setSelectedId"{% if extra_hidden_attrs %} {{ extra_hidden_attrs }}{% endif %}>
@@ -45,11 +47,14 @@ Sternchen an ``required_field``.{% endcomment %}
         <p x-show="unconfirmedQuery" x-cloak class="mt-1 text-sm text-yellow-700">{% trans "Keine Person ausgewählt. Bitte einen Treffer aus der Liste wählen." %}</p>
 
         {# Dropdown mit Tastatur-Hervorhebung #}
-        <div x-show="hasVisibleResults" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
+        <div x-show="hasVisibleResults" x-cloak id="client-autocomplete-list" :id="listboxId" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
             <template x-for="(c, idx) in enrichedResults" :key="c.id">
                 <button type="button"
                         :data-idx="idx"
-                        @mousedown.prevent="selectByEvent"
+                        :id="c.optionId"
+                        tabindex="-1"
+                        @mousedown.prevent=""
+                        @click="selectByEvent"
                         @mouseenter="highlightByEvent"
                         role="option"
                         :aria-selected="c.isHighlighted"
