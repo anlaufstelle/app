@@ -12,6 +12,7 @@ it("restores an ISO draft into the application-language entry", async () => {
     document.body.innerHTML = '<form data-autosave><input name="occurred_at" type="datetime-local" value="2026-10-01T12:00" data-date-language="de"></form>';
     window.crypto_session = { hasSessionKey: () => true };
     window.offlineStore = {
+        listDecrypted: vi.fn(async () => []),
         getDecrypted: vi.fn(async () => ({ data: { occurred_at: "2026-10-14T13:45" } })),
         putEncrypted: vi.fn(),
     };
@@ -26,7 +27,7 @@ it("saves ISO date entries in drafts while excluding unrelated hidden inputs", a
     document.body.dataset.userId = "date-user";
     document.body.innerHTML = '<form data-autosave><input name="due_date" type="date" value="2026-10-01" data-date-language="de"><input name="secret" type="hidden" value="excluded"></form>';
     window.crypto_session = { hasSessionKey: () => true };
-    window.offlineStore = { getDecrypted: vi.fn(async () => null), putEncrypted: vi.fn(async () => {}) };
+    window.offlineStore = { listDecrypted: vi.fn(async () => []), getDecrypted: vi.fn(async () => null), putEncrypted: vi.fn(async () => {}) };
     let tick;
     vi.spyOn(window, "setInterval").mockImplementation(callback => { tick = callback; return 0; });
     const field = window.appDateFields.enhance(document.querySelector("input"));

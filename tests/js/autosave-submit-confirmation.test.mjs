@@ -3,18 +3,33 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const token = "11111111-2222-4333-8444-555555555555";
 let row;
 let form;
+let confirmations;
+const listeners = [];
 
 beforeEach(async () => {
+    const add = document.addEventListener;
+    vi.spyOn(document, "addEventListener").mockImplementation(function (type, callback, options) {
+        listeners.push([type, callback, options]);
+        return add.call(this, type, callback, options);
+    });
     vi.resetModules();
     document.body.dataset.userId = "u1";
     document.body.innerHTML = '<form data-autosave><textarea name="notes"></textarea></form>';
     form = document.querySelector("form");
     row = { data: { notes: "Original draft" } };
+    confirmations = new Map();
     window.crypto_session = { hasSessionKey: () => true };
     window.offlineStore = {
         getDecrypted: vi.fn(async () => row),
-        putEncrypted: vi.fn(async (_store, value) => { row = value; }),
-        deleteRow: vi.fn(async () => { row = null; }),
+        listDecrypted: vi.fn(async (_store, filter) => [...confirmations.values()].filter(filter)),
+        putEncrypted: vi.fn(async (table, value) => {
+            if (table === "meta") confirmations.set(value.key, value);
+            else row = value;
+        }),
+        deleteRow: vi.fn(async (table, key) => {
+            if (table === "meta") confirmations.delete(key);
+            else row = null;
+        }),
         deleteConfirmedDraft: vi.fn(async (_key, confirmed) => {
             if (row?.data.__submissionToken === confirmed) row = null;
         }),
@@ -27,7 +42,10 @@ beforeEach(async () => {
     await vi.waitFor(() => expect(form.elements.notes.value).toBe("Original draft"));
 });
 
-afterEach(() => { document.body.innerHTML = ""; vi.restoreAllMocks(); });
+afterEach(() => {
+    for (const [type, callback, options] of listeners.splice(0)) document.removeEventListener(type, callback, options);
+    document.body.innerHTML = ""; vi.restoreAllMocks();
+});
 
 it.each(["abort", "timeout", "403", "500", "validation"])("retains the latest typed text after %s", async (failure) => {
     form.elements.notes.value = "Latest typed text";
@@ -64,7 +82,8 @@ it("keeps a newer draft when an older submission is confirmed", async () => {
     document.dispatchEvent(new Event("DOMContentLoaded"));
     await new Promise(resolve => setTimeout(resolve, 10));
     expect(row.data.notes).toBe("Original draft");
-    expect(window.offlineStore.deleteRow).not.toHaveBeenCalled();
+    expect(window.offlineStore.deleteRow).toHaveBeenCalledExactlyOnceWith("meta", "autosave-confirmed:" + token);
+    expect(window.offlineStore.deleteRow).not.toHaveBeenCalledWith("drafts", expect.anything());
 });
 
 

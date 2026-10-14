@@ -350,16 +350,43 @@
         var markers = document.querySelectorAll("[data-autosave-confirmed]");
         var confirmedTokens = new Set();
         var storageKey = KEY_PREFIX + (document.body.dataset.userId || "") + "_/events/new/";
+        var pending = [];
+        var ready = true;
+        try {
+            pending = await window.offlineStore.listDecrypted("meta", function (row) {
+                return row.key.startsWith("autosave-confirmed:");
+            });
+        } catch (error) {
+            ready = false;
+            console.warn("[autosave] Draft confirmations unavailable", error);
+        }
         for (var marker of markers) {
             var token = marker.dataset.autosaveConfirmed.replace(/^autosave-confirmed:/, "");
-            if (token) confirmedTokens.add(token);
+            if (!token) continue;
+            confirmedTokens.add(token);
+            var confirmation = { key: "autosave-confirmed:" + token, data: { storageKey: storageKey, token: token } };
+            // Refs #2561: retain confirmation across navigation until cleanup
+            // succeeds. Tokens and form ownership remain encrypted in meta.
             try {
-                await window.offlineStore.deleteConfirmedDraft(storageKey, token);
-            } catch (_e) {
-                // Retain data on storage errors, but never restore a known confirmation.
+                await window.offlineStore.putEncrypted("meta", confirmation);
+                pending.push(confirmation);
+            } catch (error) {
+                ready = false;
+                console.warn("[autosave] Draft confirmation persistence failed", error);
             }
         }
-        return confirmedTokens;
+        for (var confirmation of pending) {
+            var data = confirmation.data;
+            if (data.storageKey === storageKey) confirmedTokens.add(data.token);
+            try {
+                await window.offlineStore.deleteConfirmedDraft(data.storageKey, data.token);
+                await window.offlineStore.deleteRow("meta", confirmation.key);
+            } catch (error) {
+                // Keep the durable confirmation for the next opening.
+                console.warn("[autosave] Confirmed draft cleanup failed", error);
+            }
+        }
+        return { tokens: confirmedTokens, ready: ready };
     }
 
     function isOfflineReady() {
@@ -410,7 +437,8 @@
             return;
         }
 
-        var confirmedTokens = await clearConfirmedDrafts();
+        var confirmations = await clearConfirmedDrafts();
+        var confirmedTokens = confirmations.tokens;
         if (!form || form.dataset.autosaveInitialized) return;
         form.dataset.autosaveInitialized = "true";
         var storageKey = getStorageKey();
@@ -418,14 +446,15 @@
         var storedDraftJson = null;
         // Refs #1774: zuletzt bekannter Personenbezug des Entwurfs.
         var lastKnownPersonPk = "";
-        var personMismatch = false;
+        var personMismatch = !confirmations.ready;
+        if (!confirmations.ready) showSaveErrorBanner(form, false);
         var personLocked = false;
         // Prefill alone never acknowledges a previous submission. Refs #2561.
         {
             try {
                 var existing = await window.offlineStore.getDecrypted("drafts", storageKey);
                 if (existing && existing.data) storedDraftJson = JSON.stringify(existing.data);
-                if (existing && existing.data && !confirmedTokens.has(existing.data.__submissionToken)) {
+                if (confirmations.ready && existing && existing.data && !confirmedTokens.has(existing.data.__submissionToken)) {
                     personLocked = true;
                     lastKnownPersonPk = existing.data[PERSON_KEY] || "";
                     personMismatch = lastKnownPersonPk !== getPersonPk(form);
@@ -439,7 +468,7 @@
                         notice.textContent = form.dataset.i18nDraftOtherPerson || "";
                         form.parentElement.insertBefore(notice, form);
                     }
-                } else if (!existing) {
+                } else if (confirmations.ready && !existing) {
                     var legacy = await _migrateLegacyLocalStorage(storageKey, form);
                     if (legacy) {
                         storedDraftJson = JSON.stringify(legacy);

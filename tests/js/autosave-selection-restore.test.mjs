@@ -12,6 +12,7 @@ it("retains a person-bound draft without restoring it into an unselected form", 
         '<input aria-label="Person" value=""><textarea name="notes"></textarea></form>';
     window.crypto_session = { hasSessionKey: () => true };
     window.offlineStore = {
+        listDecrypted: vi.fn().mockResolvedValue([]),
         getDecrypted: vi.fn().mockResolvedValue({ data: { client: "old-client", case: "old-case", __personPk: "old-client", notes: "Draft text" } }),
         putEncrypted: vi.fn(),
     };

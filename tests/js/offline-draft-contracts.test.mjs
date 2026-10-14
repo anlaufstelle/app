@@ -322,3 +322,25 @@ it("a stale tab's autosave cannot replace a newer stored version", async () => {
     expect(first.w.document.querySelector("textarea").value).toBe("Stale input A");
     expect(first.w.document.querySelector("#autosave-error-banner")).not.toBeNull();
 });
+
+it("a failed confirmed deletion is retried on navigation without a success marker", async () => {
+    const p = await page(marker(oldToken) + formHtml());
+    await seed(p, { notes: "Already saved", __submissionToken: oldToken });
+    p.store.deleteConfirmedDraft = async () => { throw new Error("Temporary deletion failure"); };
+    await start(p);
+    expect(p.w.document.querySelector("textarea").value).toBe("");
+    const next = await page(formHtml()); await start(next);
+    expect(next.w.document.querySelector("textarea").value).toBe("");
+    expect(await next.store.getDecrypted("drafts", key)).toBeNull();
+});
+
+it("retrying an older confirmation after deletion failure preserves new unconfirmed input", async () => {
+    const p = await page(marker(oldToken) + formHtml());
+    await seed(p, { notes: "Already saved", __submissionToken: oldToken });
+    p.store.deleteConfirmedDraft = async () => { throw new Error("Temporary deletion failure"); };
+    await start(p);
+    const field = p.w.document.querySelector("textarea"); field.value = "New unsaved input";
+    field.dispatchEvent(new p.w.Event("input", { bubbles: true })); await tick(p);
+    const next = await page(formHtml()); await start(next);
+    expect(next.w.document.querySelector("textarea").value).toBe("New unsaved input");
+});
