@@ -32,6 +32,12 @@
     <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
     <span aria-hidden="true" class="mx-1.5">·</span>
     <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
+    {% if PROJECT_WEBSITE_URL %}
+    {% if demo_mode or footer_authenticated and session_fully_authenticated %}
+    <span aria-hidden="true" class="mx-1.5">·</span>
+    <a href="{{ PROJECT_WEBSITE_URL }}" rel="noopener noreferrer" target="_blank" class="hover:underline">{% trans "Projektwebseite" %}</a>
+    {% endif %}
+    {% endif %}
     {% if footer_authenticated and session_fully_authenticated %}
     <span aria-hidden="true" class="mx-1.5">·</span>
     <a href="{% url 'core:help_overview' %}" class="hover:underline" data-testid="footer-help">{% trans "Hilfe" %}</a>

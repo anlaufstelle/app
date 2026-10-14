@@ -3,6 +3,7 @@
 import datetime
 import os
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.db.models import Q
@@ -53,9 +54,16 @@ def source_code(request):
     from core.services.security.offline_keys import offline_key_max_age
     from core.services.security.session_state import session_fully_authenticated
 
+    project_url = getattr(settings, "PROJECT_WEBSITE_URL", "")
+    try:
+        if urlsplit(project_url).scheme.lower() not in {"http", "https"}:
+            project_url = ""
+    except ValueError:
+        project_url = ""
     app_version, app_build = _app_version_info()
     return {
         "SOURCE_CODE_URL": settings.SOURCE_CODE_URL,
+        "PROJECT_WEBSITE_URL": project_url,
         "SOURCE_CODE_VERSION": settings.SOURCE_CODE_VERSION,
         "app_version": app_version,
         "app_build": app_build,

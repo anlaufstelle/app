@@ -71,6 +71,7 @@ REVERSE_ALLOWLIST: dict[str, str] = {
     "REDIS_URL": BASELINE,
     "SENTRY_DSN": BASELINE,
     "SENTRY_TRACES_SAMPLE_RATE": BASELINE,
+    "PROJECT_WEBSITE_URL": "optional project link with a working default; no operator action required",
     "SOURCE_CODE_URL": BASELINE,
     "SOURCE_CODE_VERSION": BASELINE,
     "SUPPORT_CONTACT": BASELINE,

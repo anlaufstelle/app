@@ -44,5 +44,14 @@
             </li>
         </ul>
     </div>
+    <div class="mt-6 pt-4 border-t border-subtle">
+        <h2 class="text-base font-semibold text-ink mb-2">{% trans "Über Anlaufstelle" %}</h2>
+        <ul class="text-sm space-y-1">
+            {% if PROJECT_WEBSITE_URL %}
+            <li><a href="{{ PROJECT_WEBSITE_URL }}" rel="noopener noreferrer" target="_blank" class="text-accent hover:underline">{% trans "Projektwebseite" %}<span class="sr-only"> ({% trans "öffnet in neuem Tab" %})</span></a></li>
+            {% endif %}
+            <li><a href="{{ SOURCE_CODE_URL }}" rel="noopener noreferrer" target="_blank" class="text-accent hover:underline">{% trans "Quellcode" %}<span class="sr-only"> ({% trans "öffnet in neuem Tab" %})</span></a></li>
+        </ul>
+    </div>
 </div>
 {% endblock %}

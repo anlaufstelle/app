@@ -351,6 +351,7 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 | `REDIS_URL` | Compose: `redis://redis:6379/1` (with `REDIS_PASSWORD` set: `redis://:<password>@redis:6379/1`) | Shared cache for rate limits and health-detail caching. A custom value points to an external Redis; a deliberately empty value (`REDIS_URL=`) switches to the database cache. |
 | `REDIS_PASSWORD` | empty | Password of the delivered `redis` service; URL-safe characters only. When empty, `check --deploy` reports the warning `core.W004` (see [Step 4](#step-4-start-the-stack)). |
 | `SOURCE_CODE_URL` | `https://github.com/anlaufstelle/app` | Source-code link in the footer (AGPL § 13). Forks and modified installations enter their own source mirror here. |
+| `PROJECT_WEBSITE_URL` | `https://anlaufstelle.app` | Project link in the demo and after full authentication, and in help; an empty value or a scheme other than `http`/`https` hides it. Set as an environment variable of the app process. |
 | `SOURCE_CODE_VERSION` | empty | Optional state (e.g. commit SHA) for the version stamp in GDPR documents; the footer still shows the source-code link but no source version. |
 | `DJANGO_AUDIT_HWM_PATH` | Compose/`.env.example`: `/data/audit_hwm.json`; settings without the variable: empty | Signed audit anchor on the separate `audit-anchor` volume: `web` read-only, `cron`/`maintenance` read-write. Empty or unset uses the stack default; custom paths must stay on this volume. `backup.sh` aborts if the anchor is missing, empty or unreadable ([Ops Runbook § 6.7](ops-runbook.md#67-back-up-and-verify-the-audit-high-water-mark-refs-2022)). |
 | `DJANGO_HEALTH_BACKUP_REQUIRED` | `true` | `true`: a missing backup signal lowers `/health/` to `degraded`. Use `false` only for instances without host backups; a stale backup still lowers the status. |
@@ -2557,4 +2558,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- translation-date: 2026-10-14 -->
-<!-- source-hash: fcb6aedc5f3d5228c34d2a7359542c8f11939626 -->
+<!-- source-hash: a2f2f87e41aa6b74294e2d35c224545862b60f79 -->

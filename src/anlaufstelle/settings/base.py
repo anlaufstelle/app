@@ -99,6 +99,7 @@ INVITE_TOKEN_TIMEOUT = env_int("DJANGO_INVITE_TOKEN_TIMEOUT", 3 * 24 * 60 * 60)
 # SOURCE_CODE_VERSION is optional (commit SHA) and is used in the GDPR
 # document version stamp; the public footer does not display it.
 SOURCE_CODE_URL = os.environ.get("SOURCE_CODE_URL", "https://github.com/anlaufstelle/app")
+PROJECT_WEBSITE_URL = os.environ.get("PROJECT_WEBSITE_URL", "https://anlaufstelle.app")
 SOURCE_CODE_VERSION = os.environ.get("SOURCE_CODE_VERSION", "")
 
 DEBUG = False

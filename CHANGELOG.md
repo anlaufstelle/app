@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Zwei Genehmiger für den Aufbewahrungslauf benennen** (#2590) — Je Einrichtung mindestens zwei aktive Konten mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“ benennen; sonst sind neue manuelle Freigaben für Ereignisse „Mit Zusatzangaben“ nicht abschließbar, und eine erste Freigabe allein erlaubt keine Löschung.
 
+### Added
+
+- **Projektwebseite verlinkt** (#2589) — Demo-Panel, freigegebene Fußzeile und Hilfe verlinken die konfigurierbare Projektwebseite; normale Anmeldeseiten bleiben ohne Projekt- und Versionshinweis.
+
 ### Changed
 
 - **Kontakte direkt in der Liste aufklappen** (#2605) — Die gemeinsame Zeitstrom-Karte zeigt rollenberechtigte Angaben ohne Seitenwechsel und erhält Fallanzeige, Detail-Link, Filter und Seitenumbruch.
@@ -19,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Paketimport und Einrichtungs-Bootstrap beschleunigt** (#2598) — Konfigurationssperre und Datenumschreibung werden je Paket gebündelt (Standardpaket: 63 auf 1 Sperre und 28 auf 1 Umschreibungsrunde), während Zeilenvalidierungen, vollständiger Rollback und einzelne Konfigurationsspeicherungen erhalten bleiben.
 
 ### Fixed
+
 
 - **Mehr-Menü in flachen Fenstern erreichbar** (#2553) — Das mobile Mehr-Menü begrenzt seine Höhe am verfügbaren Viewport, scrollt intern und hält die fokussierte Zeile im sichtbaren Bereich.
 - **Feld-Board per Tastatur bedienen** (#2554) — Gruppen und Felder lassen sich mit Auf-/Ab-Knöpfen sortieren und Felder über eine bestätigte Gruppenauswahl verschieben; Fokus und Positionsansage bleiben nach erfolgreicher Änderung erhalten.
