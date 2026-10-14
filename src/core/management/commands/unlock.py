@@ -26,7 +26,7 @@ class Command(BaseCommand):
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist as exc:
-            raise CommandError(str(_("Benutzer '%s' existiert nicht. Bitte Username pruefen.")) % username) from exc
+            raise CommandError(str(_("Benutzer '%s' existiert nicht. Bitte Username prüfen.")) % username) from exc
 
         # L14 (Refs #1375): Fuer super_admin ist ``unlock`` ein No-Op (die Rolle
         # ist nie gesperrt) und liefert ``None`` — der Command bleibt idempotent.

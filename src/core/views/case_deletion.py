@@ -160,7 +160,7 @@ class CaseDeleteRequestView(StaffRequiredMixin, View):
 
         reason = (request.POST.get("reason") or "").strip()
         if not reason:
-            messages.error(request, _("Bitte eine Begruendung angeben."))
+            messages.error(request, _("Bitte eine Begründung angeben."))
             return redirect("core:case_delete_request", pk=pk)
         # Refs #2015: get-then-create — zwischen dem PENDING-Check oben und dem
         # ``create`` kann ein Doppelklick/Doppel-POST denselben Antrag anlegen.

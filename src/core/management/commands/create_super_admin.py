@@ -18,7 +18,7 @@ class Command(BaseCommand):
     help = str(
         _(
             "Legt einen Super-Admin (installation-weite Systemadministration, Refs #867) "
-            "interaktiv an. Passwort wird ueber getpass abgefragt — kein Default."
+            "interaktiv an. Passwort wird über getpass abgefragt — kein Default."
         )
     )
 
@@ -42,7 +42,7 @@ class Command(BaseCommand):
             default=False,
             help=str(
                 _(
-                    "Bestaetigung ueberspringen, wenn bereits ein Super-Admin existiert. "
+                    "Bestätigung überspringen, wenn bereits ein Super-Admin existiert. "
                     "Ohne --force bricht der Befehl ab."
                 )
             ),
@@ -63,7 +63,7 @@ class Command(BaseCommand):
                 self.stderr.write(self.style.ERROR(str(_("Benutzername darf nicht leer sein."))))
                 continue
             if User.objects.filter(username=username).exists():
-                msg = str(_("Benutzer '%s' existiert bereits — bitte anderen Namen waehlen.")) % username
+                msg = str(_("Benutzer '%s' existiert bereits — bitte anderen Namen wählen.")) % username
                 self.stderr.write(self.style.ERROR(msg))
                 continue
             return username
@@ -82,9 +82,9 @@ class Command(BaseCommand):
             if not password:
                 self.stderr.write(self.style.ERROR(str(_("Passwort darf nicht leer sein."))))
                 continue
-            confirm = getpass.getpass(str(_("Passwort (Bestaetigung): ")))
+            confirm = getpass.getpass(str(_("Passwort (Bestätigung): ")))
             if password != confirm:
-                self.stderr.write(self.style.ERROR(str(_("Passwoerter stimmen nicht ueberein."))))
+                self.stderr.write(self.style.ERROR(str(_("Passwörter stimmen nicht überein."))))
                 continue
             try:
                 validate_password(password, user=user)

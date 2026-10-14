@@ -91,7 +91,7 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
             return redirect("core:client_detail", pk=pk)
         reason = (request.POST.get("reason") or "").strip()
         if not reason:
-            messages.error(request, _("Bitte eine Begruendung angeben."))
+            messages.error(request, _("Bitte eine Begründung angeben."))
             return redirect("core:client_delete_request", pk=pk)
         # Refs #2015: Der PENDING-Check oben ist get-then-create — zwischen ihm
         # und dem ``create`` kann ein Doppelklick/Doppel-POST denselben Antrag

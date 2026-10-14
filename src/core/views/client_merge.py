@@ -217,7 +217,7 @@ class ClientMergeView(StaffRequiredMixin, HTMXPartialMixin, View):
 
             reason = (request.POST.get("reason") or "").strip()
             if not reason:
-                messages.error(request, _("Bitte eine Begruendung angeben."))
+                messages.error(request, _("Bitte eine Begründung angeben."))
                 return redirect(f"{request.path}?target={target.pk}")
             with transaction.atomic():
                 _dr, created = create_or_get_client_merge_request(source, target, request.user, reason)

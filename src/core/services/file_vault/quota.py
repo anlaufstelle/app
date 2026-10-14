@@ -162,7 +162,7 @@ def storage_warning(usage: StorageUsage) -> str | None:
         return None
     return _(
         "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, "
-        "davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhoehen."
+        "davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhöhen."
     ) % {
         "percent": usage.percent_used,
         "used": usage.used_mb,

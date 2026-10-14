@@ -49,7 +49,7 @@ PROCESSING_ACTIVITIES = [
         "purpose": _(
             "Beratungsdokumentation und Falllaufzeit-Steuerung in "
             "niedrigschwelligen Einrichtungen. Kein Klarname-Feld — der "
-            "primaere Identifikator ist ein Pseudonym."
+            "primäre Identifikator ist ein Pseudonym."
         ),
         "legal_basis": _(
             "DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im "
@@ -278,7 +278,7 @@ PROCESSING_ACTIVITIES = [
             _("Ziel-Typ und Ziel-ID (z.B. Event-UUID)"),
             _("Zeitstempel"),
             _("IP-Adresse"),
-            _("Zugehoerige Einrichtung (oder NULL bei System-Events)"),
+            _("Zugehörige Einrichtung (oder NULL bei System-Events)"),
         ],
         "recipients": [
             _("Anwendungsbetreuung der Einrichtung (Facility-Audit-Log)"),
@@ -413,13 +413,13 @@ PROCESSING_ACTIVITIES = [
                 "lokal erst mit der Rotation dieses Sicherungsstands, in "
                 "Off-Site-Kopien erst durch die Aufbewahrungsregel am Ziel"
             ),
-            _("Regelmaessige Restore-Tests"),
+            _("Regelmäßige Restore-Tests"),
             _("Zugriff nur für Systemadministration (4-Augen empfohlen bei Restore)"),
         ],
     },
     {
         "id": "dsgvo_requests",
-        "title": _("DSGVO-Auskunfts- und Berichtigungsantraege"),
+        "title": _("DSGVO-Auskunfts- und Berichtigungsanträge"),
         "purpose": _(
             "Technische Unterstützung der implementierten Betroffenenrechte "
             "nach DSGVO Art. 15, 16, 17 und 20 (Auskunft, Berichtigung, "
