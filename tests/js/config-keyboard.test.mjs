@@ -9,14 +9,21 @@ function markup() {
 }
 const row = (id) => document.querySelector(`[data-dtf-id="${id}"]`);
 const click = (element) => element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-const settle = () => document.dispatchEvent(new CustomEvent("htmx:afterSettle", { detail: { elt: document.getElementById("field-board") } }));
+let keyboardXhr;
+const settle = () => document.dispatchEvent(new CustomEvent("htmx:afterSettle", { detail: { elt: document.getElementById("field-board"), xhr: keyboardXhr } }));
 const status = () => document.getElementById("field-board-status").textContent;
 
 beforeAll(async () => { await import("../../src/static/js/config-sortable.js"); });
 beforeEach(() => {
     document.body.innerHTML = markup();
     delete window.Sortable;
-    window.htmx = { ajax: vi.fn() };
+    keyboardXhr = null;
+    window.htmx = { ajax: vi.fn((_method, path, options) => {
+        keyboardXhr = {};
+        document.dispatchEvent(new CustomEvent("htmx:beforeRequest", {
+            detail: { elt: options.source || document.body, xhr: keyboardXhr, requestConfig: { path } },
+        }));
+    }) };
 });
 afterEach(() => { settle(); vi.restoreAllMocks(); });
 
@@ -104,4 +111,30 @@ it("keeps item names containing position placeholders literal", () => {
     row("f1").parentElement.append(row("f1"));
     settle();
     expect(status()).toBe("Field Name {position}: Position 2 of 2");
+});
+
+
+it.each(["/fields", "/remove"])("ignores a foreign board settle from %s until the keyboard request settles", (path) => {
+    click(row("f1").querySelector('[data-board-order="down"]'));
+    const ownXhr = keyboardXhr;
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    const foreignXhr = {};
+    document.dispatchEvent(new CustomEvent("htmx:beforeRequest", {
+        detail: { elt: document.body, xhr: foreignXhr, requestConfig: { path } },
+    }));
+    document.dispatchEvent(new CustomEvent("htmx:afterSettle", {
+        detail: { elt: document.getElementById("field-board"), xhr: foreignXhr, requestConfig: { path } },
+    }));
+    expect(focus).not.toHaveBeenCalled();
+    expect(status()).toBe("");
+    click(row("f1").querySelector('[data-board-order="down"]'));
+    expect(window.htmx.ajax).toHaveBeenCalledTimes(1);
+    row("f1").parentElement.append(row("f1"));
+    document.dispatchEvent(new CustomEvent("htmx:afterSettle", {
+        detail: { elt: document.getElementById("field-board"), xhr: ownXhr },
+    }));
+    expect(document.activeElement).toBe(row("f1").querySelector('[data-board-order="down"]'));
+    expect(status()).toBe("Field f1: Position 2 of 2");
+    click(row("f1").querySelector('[data-board-order="up"]'));
+    expect(window.htmx.ajax).toHaveBeenCalledTimes(2);
 });

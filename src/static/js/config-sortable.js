@@ -79,10 +79,9 @@
     }
   }
 
-  // Batch-POST über htmx.ajax; CSRF kommt aus dem body-hx-headers (kein source
-  // nötig — htmx liest die Header von <body>). Array-Werte werden als
-  // wiederholte Parameter gesendet (order=…&order=…).
-  function postBatch(url, values) {
+  // Send repeated array parameters through htmx; headers inherit from body.
+  // Keyboard actions supply their button as the request source.
+  function postBatch(url, values, source) {
     if (!url || typeof window.htmx === "undefined") {
       return;
     }
@@ -94,6 +93,7 @@
       target: "#field-board",
       swap: "outerHTML",
       values: values,
+      source: source,
     });
   }
 
@@ -282,12 +282,14 @@
     });
   }
 
-  function rememberAction(item, action, url) {
+  function rememberAction(item, action, url, source) {
     pendingAction = {
       id: item.getAttribute("data-dtf-id") || item.getAttribute("data-group-id"),
       kind: item.hasAttribute("data-dtf-id") ? "data-dtf-id" : "data-group-id",
       action: action,
       url: url,
+      source: source,
+      xhr: null,
     };
     announce("");
   }
@@ -346,12 +348,21 @@
     if (!url) {
       return;
     }
-    rememberAction(item, action, url);
-    postBatch(url, values);
+    rememberAction(item, action, url, button);
+    postBatch(url, values, button);
   });
 
-  function restoreKeyboardAction() {
-    if (!pendingAction) {
+  document.addEventListener("htmx:beforeRequest", function (evt) {
+    var detail = evt.detail;
+    if (pendingAction && !pendingAction.xhr && detail && detail.elt === pendingAction.source) {
+      pendingAction.xhr = detail.xhr;
+    }
+  });
+
+  function restoreKeyboardAction(evt) {
+    // URLs are shared with drag batches; only this request may consume the
+    // keyboard action, even if another mutation has already replaced the board.
+    if (!pendingAction || !pendingAction.xhr || !evt.detail || evt.detail.xhr !== pendingAction.xhr) {
       return;
     }
     var action = pendingAction;
@@ -414,7 +425,7 @@
     }
     if (elt === b || b.contains(elt) || elt.contains(b)) {
       initBoard();
-      restoreKeyboardAction();
+      restoreKeyboardAction(evt);
     }
   });
 
