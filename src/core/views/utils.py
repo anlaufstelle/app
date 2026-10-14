@@ -12,6 +12,7 @@ Browser als protokoll-relativ interpretiert (Refs #770).
 
 from urllib.parse import urlsplit
 
+from django.conf import settings
 from django.urls import Resolver404, resolve, reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
@@ -75,20 +76,44 @@ def _declared_http_methods(view) -> set[str] | None:
     return None
 
 
+def _is_plain_path(path: str) -> bool:
+    """Whether ``path`` reaches the resolver exactly as written.
+
+    The server decodes percent-escapes and the browser reads a backslash as a
+    slash and removes dot segments before it sends the request. Resolving such a
+    path as written would judge a different target than the one the navigation
+    lands on, so only plain paths are judged.
+    """
+    if "%" in path or "\\" in path:
+        return False
+    return not {".", ".."} & set(path.split("/"))
+
+
 def is_get_navigable(path: str) -> bool:
     """Whether a browser can land on ``path`` with a GET request.
 
     POST-only endpoints (mutations, the offline-key salt) cannot be a
-    navigation target: following them answers 405. Unknown paths and views that
-    declare no method restriction count as navigable, so only a positively
-    identified POST-only target is refused.
+    navigation target: following them answers 405. The path is resolved the way
+    the navigation does it, including the end slash ``APPEND_SLASH`` adds. A
+    path that is not plain (see ``_is_plain_path``) is refused, since it cannot
+    be judged without guessing. Unknown paths and views that declare no method
+    restriction count as navigable, so only a positively identified POST-only
+    target or a non-plain path is refused.
     """
-    try:
-        match = resolve(urlsplit(path).path)
-    except Resolver404:
-        return True
-    methods = _declared_http_methods(match.func)
-    return methods is None or "GET" in methods
+    url_path = urlsplit(path).path
+    if not _is_plain_path(url_path):
+        return False
+    candidates = [url_path]
+    if settings.APPEND_SLASH and not url_path.endswith("/"):
+        candidates.append(f"{url_path}/")
+    for candidate in candidates:
+        try:
+            match = resolve(candidate)
+        except Resolver404:
+            continue
+        methods = _declared_http_methods(match.func)
+        return methods is None or "GET" in methods
+    return True
 
 
 def safe_page_param(request, default=1, max_page=None):
