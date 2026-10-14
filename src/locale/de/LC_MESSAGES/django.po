@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 13:19+0200\n"
+"POT-Creation-Date: 2026-10-14 13:35+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14780,3 +14780,12 @@ msgstr "Für diesen Tag wurde keine Übergabenotiz hinterlassen."
 #: src/templates/core/help/overview.html:48
 msgid "Über Anlaufstelle"
 msgstr "Über Anlaufstelle"
+
+#: src/core/services/case/workitems.py:231
+msgid "Die Zielperson muss aktiv und für Aufgaben in dieser Einrichtung berechtigt sein."
+msgstr "Die Zielperson muss aktiv und für Aufgaben in dieser Einrichtung berechtigt sein."
+
+#: src/templates/core/clients/offline_detail.html:13
+#: src/templates/core/workitems/offline_create.html:12
+msgid "Bitte einen Titel angeben."
+msgstr "Bitte einen Titel angeben."

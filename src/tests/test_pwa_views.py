@@ -825,7 +825,7 @@ class TestPrecachedShellBumpGuard:
     # The offline-availability notice in both shells now says "Person" instead
     # of "Klientel" (docs/sprachleitlinie.md). v61 already reached the dev host,
     # so the rendered shell change ships with v62 and this hash.
-    _PINNED_SHELL_HASH = "34126e174419da0897cc120ff98c0539eb687faf84f38a97d0ef15806c9b2562"
+    _PINNED_SHELL_HASH = "85af73ba1c39ade176f5599d0af0b7380d1ea15b2398f30c6a3fdfc3fb5a1b38"
     # Refs #1904: SHA-256 over the Content-Security-Policy headers the server
     # delivers with the precached offline home (see _policy_fingerprint). Every
     # precached shell and every runtime entry keeps the policy it was stored

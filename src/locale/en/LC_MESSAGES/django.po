@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 13:19+0200\n"
+"POT-Creation-Date: 2026-10-14 13:35+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14691,3 +14691,12 @@ msgstr "No handover note was left for this day."
 #: src/templates/core/help/overview.html:48
 msgid "Über Anlaufstelle"
 msgstr "About Anlaufstelle"
+
+#: src/core/services/case/workitems.py:231
+msgid "Die Zielperson muss aktiv und für Aufgaben in dieser Einrichtung berechtigt sein."
+msgstr "The assigned person must be active and authorized for tasks in this facility."
+
+#: src/templates/core/clients/offline_detail.html:13
+#: src/templates/core/workitems/offline_create.html:12
+msgid "Bitte einen Titel angeben."
+msgstr "Please enter a title."
