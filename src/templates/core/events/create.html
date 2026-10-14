@@ -253,6 +253,11 @@
                     {% trans "Optional: Kontakt einem offenen Fall der ausgewählten Person zuordnen." %}
                 </p>
             </div>
+            <p x-show="casesState === 'loading'" x-cloak role="status" class="text-sm text-ink-muted">{% trans "Fälle werden geladen …" %}</p>
+            <div x-show="casesState === 'error'" x-cloak role="alert" class="text-sm text-red-600" data-testid="cases-load-error">
+                <p>{% trans "Die Fälle konnten nicht geladen werden. Bitte erneut versuchen." %}</p>
+                <button type="button" @click="retryCases" class="min-h-[44px] text-accent hover:underline">{% trans "Wiederholen" %}</button>
+            </div>
             <p x-show="showNoCasesHint" x-cloak class="text-[12px] text-ink-muted" data-testid="no-cases-for-client">
                 {% trans "Kein offener Fall für diese Person vorhanden." %}
             </p>

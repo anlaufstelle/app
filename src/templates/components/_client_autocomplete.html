@@ -64,6 +64,11 @@ Sternchen an ``required_field``.{% endcomment %}
         einem ``role="listbox"`` nichts verloren. Ohne ihn blieb das
         Feld bei null Treffern schlicht stumm.
         {% endcomment %}
+        <p x-show="searchState === 'loading'" x-cloak role="status" class="mt-1 text-sm text-ink-muted">{% trans "Personen werden gesucht …" %}</p>
+        <div x-show="searchState === 'error'" x-cloak role="alert" class="mt-1 text-sm text-red-600" data-testid="client-autocomplete-error">
+            <p>{% trans "Die Personensuche ist fehlgeschlagen. Bitte erneut versuchen." %}</p>
+            <button type="button" @click="fetchResults" class="min-h-[44px] text-accent hover:underline">{% trans "Wiederholen" %}</button>
+        </div>
         <div x-show="noMatches" x-cloak data-testid="client-autocomplete-empty"
              class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg px-3 py-2 text-[13px] text-ink-muted">
             <p>{% trans "Keine Person mit diesem Pseudonym gefunden." %}</p>

@@ -16,6 +16,36 @@
  * Pro-Instanz-State (query/results/…) lebt ebenfalls im jeweiligen Literal.
  */
 const _autocompleteShared = {
+    fetchResults() {
+        const gen = ++this._fetchGen;
+        this.results = [];
+        this.enrichedResults = [];
+        this.highlightIndex = -1;
+        this.searched = false;
+        this.searchState = "loading";
+        this.show = true;
+        const url = this.buildAutocompleteUrl
+            ? this.buildAutocompleteUrl()
+            : `${this._autocompleteUrl}?q=${encodeURIComponent(this.query)}`;
+        return fetch(url)
+            .then((response) => {
+                if (!response.ok) throw new Error("Search request failed");
+                return response.json();
+            })
+            .then((data) => {
+                if (gen !== this._fetchGen) return;
+                if (!Array.isArray(data)) throw new Error("Invalid search response");
+                this.searchState = "success";
+                this._applyResults(data);
+            })
+            .catch(() => {
+                if (gen !== this._fetchGen) return;
+                this.searchState = "error";
+                this.results = [];
+                this.enrichedResults = [];
+                this.searched = false;
+            });
+    },
     _initCommon() {
         this.query = this.$el.dataset.initialPseudonym || "";
         this.selectedId = this.$el.dataset.initialClientId || "";
@@ -210,6 +240,7 @@ document.addEventListener("alpine:init", () => {
                 // unsichtbar — ununterscheidbar davon, dass die Suche noch gar
                 // nicht lief.
                 searched: false,
+                searchState: "idle",
                 // Sichtbarer Hinweis statt wortlosem Reset, wenn ein Typwechsel
                 // die bereits getroffene Personenauswahl leert.
                 selectionCleared: false,
@@ -227,24 +258,13 @@ document.addEventListener("alpine:init", () => {
                     return this.show && this.results.length > 0;
                 },
                 get noMatches() {
-                    return this.show && this.searched && this.results.length === 0;
+                    return this.show && this.searched && this.searchState !== "error" && this.results.length === 0;
                 },
                 get showMinStageHint() {
                     return this.minStageLabel !== "";
                 },
                 get minStageHint() {
                     return this._minStageHintTemplate.replace("%(stage)s", this.minStageLabel);
-                },
-                fetchResults() {
-                    const gen = ++this._fetchGen;
-                    const url = `${this._autocompleteUrl}?q=${encodeURIComponent(this.query)}`;
-                    fetch(url)
-                        .then((r) => r.json())
-                        .then((data) => {
-                            if (gen === this._fetchGen) {
-                                this._applyResults(data);
-                            }
-                        });
                 },
                 selectItem(item) {
                     this._justSelected = true;
@@ -286,6 +306,7 @@ document.addEventListener("alpine:init", () => {
                 // unsichtbar — ununterscheidbar davon, dass die Suche noch gar
                 // nicht lief.
                 searched: false,
+                searchState: "idle",
                 // Sichtbarer Hinweis statt wortlosem Reset, wenn ein Typwechsel
                 // die bereits getroffene Personenauswahl leert.
                 selectionCleared: false,
@@ -296,6 +317,9 @@ document.addEventListener("alpine:init", () => {
                 _justSelected: false,
                 _fetchGen: 0,
                 clientCases: [],
+                casesState: "idle",
+                _casesGen: 0,
+                _casesClientId: "",
                 selectedCaseId: "",
                 _autocompleteUrl: "",
                 _casesForClientUrl: "",
@@ -319,6 +343,9 @@ document.addEventListener("alpine:init", () => {
                     // vorbehalten — nur DORT hat der Browser keine Ahnung, ob
                     // die zuvor gewaehlte Person die neu verlangte Stufe
                     // erreicht.
+                    this.$watch("selectedId", (id) => {
+                        if (id !== this._casesClientId) this.loadCasesForClient(id);
+                    });
                     this._updateStageInfo(this.$refs.docTypeSelect);
                     if (this.selectedId) {
                         this.loadCasesForClient(this.selectedId);
@@ -361,7 +388,7 @@ document.addEventListener("alpine:init", () => {
                     return this.show && this.results.length > 0;
                 },
                 get noMatches() {
-                    return this.show && this.searched && this.results.length === 0;
+                    return this.show && this.searched && this.searchState !== "error" && this.results.length === 0;
                 },
                 get showMinStageHint() {
                     return this.minStageLabel !== "";
@@ -374,7 +401,7 @@ document.addEventListener("alpine:init", () => {
                     // ``cases_for_client`` nicht abrufen) wird gar nicht erst
                     // geladen — dann darf hier auch nicht "Kein offener Fall"
                     // stehen, das waere eine unbelegte Behauptung.
-                    return this.selectedId && this._casesForClientUrl && this.clientCases.length === 0;
+                    return this.selectedId && this._casesForClientUrl && this.casesState === "success" && this.clientCases.length === 0;
                 },
                 buildAutocompleteUrl() {
                     const params = new URLSearchParams({ q: this.query });
@@ -404,8 +431,7 @@ document.addEventListener("alpine:init", () => {
                         this.selectedId = "";
                         this.query = "";
                         this.results = [];
-                        this.clientCases = [];
-                        this.selectedCaseId = "";
+                        this.loadCasesForClient("");
                         this.show = false;
                         this.searched = false;
                         // Refs #1803: der Reset war wortlos — fuer die Nutzerin
@@ -414,16 +440,6 @@ document.addEventListener("alpine:init", () => {
                     } else if (!this.minStage) {
                         this.selectionCleared = false;
                     }
-                },
-                fetchResults() {
-                    const gen = ++this._fetchGen;
-                    fetch(this.buildAutocompleteUrl())
-                        .then((r) => r.json())
-                        .then((data) => {
-                            if (gen === this._fetchGen) {
-                                this._applyResults(data);
-                            }
-                        });
                 },
                 selectItem(item) {
                     this._justSelected = true;
@@ -446,33 +462,41 @@ document.addEventListener("alpine:init", () => {
                     if (this.selectedCaseId) url.searchParams.set("case", this.selectedCaseId);
                     link.href = url.toString();
                 },
+                retryCases() {
+                    return this.loadCasesForClient(this.selectedId);
+                },
                 loadCasesForClient(clientId) {
+                    const gen = ++this._casesGen;
+                    if (this._casesClientId && clientId !== this._casesClientId) this._initialCaseId = "";
+                    this._casesClientId = clientId;
+                    this.clientCases = [];
                     this.selectedCaseId = "";
-                    // Refs #1735: Fehlt die URL, ist die Rolle fuer
-                    // ``cases_for_client`` nicht berechtigt (Template setzt das
-                    // Attribut dann nicht). Frueher lief der Fetch trotzdem —
-                    // gegen die aktuelle Seite — und wurde still zu ``[]``.
+                    this.casesState = "idle";
                     if (!clientId || !this._casesForClientUrl) {
-                        this.clientCases = [];
+                        this._initialCaseId = "";
                         return;
                     }
+                    this.casesState = "loading";
+                    const current = () => gen === this._casesGen && clientId === this.selectedId;
                     const url = `${this._casesForClientUrl}?client=${encodeURIComponent(clientId)}`;
-                    fetch(url, { credentials: "same-origin" })
-                        .then((r) => (r.ok ? r.json() : []))
+                    return fetch(url, { credentials: "same-origin" })
+                        .then((response) => {
+                            if (!response.ok) throw new Error("Case request failed");
+                            return response.json();
+                        })
                         .then((data) => {
-                            this.clientCases = Array.isArray(data) ? data : [];
-                            // Refs #1813 (T4, §6.5): serverseitige ?case=-Vorbelegung
-                            // nur uebernehmen, wenn sie tatsaechlich zu einem der
-                            // geladenen (offenen, facility-eigenen) Faelle dieser
-                            // Person gehoert — sonst bliebe ein fremder/geschlossener
-                            // Fall unsichtbar im Zustand haengen.
-                            if (this._initialCaseId && this.clientCases.some((c) => c.id === this._initialCaseId)) {
+                            if (!current()) return;
+                            if (!Array.isArray(data)) throw new Error("Invalid case response");
+                            this.clientCases = data;
+                            this.casesState = "success";
+                            if (this._initialCaseId && data.some((c) => c.id === this._initialCaseId)) {
                                 this.selectedCaseId = this._initialCaseId;
                             }
                             this._initialCaseId = "";
                         })
                         .catch(() => {
-                            this.clientCases = [];
+                            if (!current()) return;
+                            this.casesState = "error";
                         });
                 },
                 setSelectedCaseId(event) { this.selectedCaseId = event.target.value; },
