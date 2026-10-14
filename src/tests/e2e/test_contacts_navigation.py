@@ -12,7 +12,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from tests.e2e._selectors import open_mobile_more, sidebar_item, sidebar_items
+from tests.e2e._selectors import event_card_toggle, open_mobile_more, sidebar_item, sidebar_items
 
 pytestmark = pytest.mark.e2e
 
@@ -64,7 +64,7 @@ class TestDesktopSidebarContacts:
         # An event record page keeps the Zeitstrom as its home, not the contact list.
         page.goto(f"{base_url}/events/", wait_until="domcontentloaded")
         # The list renders the shared card: open the first one, its entry link is revealed.
-        page.locator("#event-table button[aria-controls^='event-detail-']").first.click()
+        event_card_toggle(page).click()
         detail_link = page.locator("#event-table a[href^='/events/']").filter(has_text="Zum Eintrag").first
         detail_link.wait_for(state="visible", timeout=10000)
         detail_link.click()

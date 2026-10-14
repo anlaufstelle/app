@@ -20,6 +20,7 @@ import pytest
 from playwright.sync_api import expect
 
 from ._helpers import django_shell
+from ._selectors import event_card_toggle
 
 pytestmark = pytest.mark.e2e
 
@@ -282,7 +283,7 @@ class TestNarrowViewportAndEnglish:
         page.set_viewport_size({"width": 390, "height": 844})
         _open_list(page, base_url, f"case={kl_data['case']}")
         assert _no_horizontal_scroll(page)
-        page.locator("#event-table button[aria-controls^='event-detail-']").first.click()
+        event_card_toggle(page).click()
         assert _no_horizontal_scroll(page)
 
     def test_english_labels_and_empty_options(self, browser, base_url, kl_data, e2e_env, _staff_storage_state):

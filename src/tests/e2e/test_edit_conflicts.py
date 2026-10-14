@@ -17,6 +17,7 @@ from playwright.sync_api import expect
 
 from ._date_helpers import expect_date_value, fill_date
 from ._helpers import django_shell, enter_sudo_mode
+from ._selectors import save_button
 
 pytestmark = pytest.mark.e2e
 
@@ -77,7 +78,7 @@ def _second_context(browser, storage_state):
 
 
 def _submit(page):
-    page.locator("#main-content button[type='submit']:has-text('Speichern')").first.click()
+    save_button(page).click()
 
 
 def _wait_saved(page, pattern):

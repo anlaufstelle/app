@@ -26,6 +26,7 @@ template hook each helper depends on.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -262,4 +263,37 @@ def wait_for_settled(locator: Locator, timeout: int = 5000) -> None:
         "el => getComputedStyle(el).transform === 'none'",
         arg=locator.element_handle(),
         timeout=timeout,
+    )
+
+
+# --- Forms, lists and demo entry (Refs #2561) -------------------------------
+
+
+def save_button(page: Page) -> Locator:
+    """Save button of the edit form in the main content, found by role and name.
+
+    The label differs per form (``Speichern``, ``Änderungen speichern``), the role
+    and the ``speichern`` part of the accessible name do not. Strict: a second
+    match is a failure of the page, not something to click past.
+    """
+    return page.locator("#main-content").get_by_role("button", name=re.compile("speichern", re.IGNORECASE))
+
+
+def event_card_toggle(page: Page) -> Locator:
+    """Header button that expands the first contact card of the list.
+
+    Template hook: ``data-testid="event-card-toggle"`` (``components/_event_card.html``).
+    The list is ordered server-side, so the first card is deterministic.
+    """
+    return page.locator("#event-table [data-testid='event-card-toggle']").first
+
+
+def demo_scenario_start(page: Page, key: str = "kontaktladen") -> Locator:
+    """Start button of one demo scenario card, chosen by its scenario key.
+
+    Template hooks: ``demo-scenario-card`` with ``data-scenario-key`` and the
+    ``demo-scenario-start`` button inside it.
+    """
+    return page.locator(f"[data-testid='demo-scenario-card'][data-scenario-key='{key}']").locator(
+        "[data-testid='demo-scenario-start']"
     )

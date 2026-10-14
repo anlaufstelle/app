@@ -73,7 +73,7 @@ class TestDateFieldsInAppLanguage:
             # Filter: change the end of the period and apply (HTMX swap, history entry).
             fill_date(page, "#statistics-date-to", "2026-04-12")
             with page.expect_response(lambda r: "statistics" in r.url and r.request.method == "GET"):
-                page.get_by_role("button", name=re.compile("Anwenden|Apply")).first.click()
+                page.locator("[data-testid='statistics-period-apply']").click()
             expect_date_value(page, "#statistics-date-to", "2026-04-12")
 
             # Leave and come back: format and values stay.

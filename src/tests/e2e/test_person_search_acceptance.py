@@ -62,7 +62,7 @@ class TestSelectionFollowsVisibleText:
         page = staff_page
         _open(page, base_url)
         _search(page, f"PSA{people['marker']}-Al")
-        page.locator(OPTIONS, has_text="Alpha").first.click()
+        page.locator(OPTIONS, has_text="Alpha").click()
         expect(page.locator(HIDDEN_CLIENT)).to_have_value(people["a"], timeout=5000)
 
         # Typing another pseudonym must not leave person A behind the visible text.
@@ -71,14 +71,14 @@ class TestSelectionFollowsVisibleText:
         expect(page.get_by_text("Keine Person ausgewählt")).to_be_visible(timeout=5000)
 
         expect(page.locator(OPTIONS, has_text="Beta").first).to_be_visible(timeout=10000)
-        page.locator(OPTIONS, has_text="Beta").first.click()
+        page.locator(OPTIONS, has_text="Beta").click()
         expect(page.locator(HIDDEN_CLIENT)).to_have_value(people["b"], timeout=5000)
 
     def test_same_text_after_clearing_is_not_a_confirmed_person(self, staff_page, base_url, people):
         page = staff_page
         _open(page, base_url)
         _search(page, f"PSA{people['marker']}-Al")
-        page.locator(OPTIONS, has_text="Alpha").first.click()
+        page.locator(OPTIONS, has_text="Alpha").click()
         expect(page.locator(HIDDEN_CLIENT)).to_have_value(people["a"], timeout=5000)
         page.locator(SEARCH).fill("")
         expect(page.locator(HIDDEN_CLIENT)).to_have_value("", timeout=5000)

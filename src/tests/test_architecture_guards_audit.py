@@ -466,16 +466,6 @@ class TestE2ESelectorStabilityGuard:
         # role-Locator + ``.first``. Counter zieht den Ist-Stand nach;
         # Stabilisierung (Direkt-Navigation per pk) separat.
         "test_admin_site.py": 1,
-        # Browser specs added for release 0.99.8 brought these; the counters
-        # record the current state. The follow-up browser pass replaces them
-        # with data-testid/role selectors and removes the entries again.
-        "test_attachment_purge_stale_tab.py": 2,
-        "test_contacts_navigation.py": 1,
-        "test_demo_offline_key_notice.py": 1,
-        "test_edit_conflicts.py": 1,
-        "test_edit_upload_errors.py": 8,
-        "test_event_create_case_context.py": 2,
-        "test_event_list_cards_roles.py": 1,
         "test_button_permissions.py": 2,
         "test_cases.py": 3,
         # 1b52bea7 (#1787): Wegwerf-Seed-Umbau entfernte 3 Vorkommen.

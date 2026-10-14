@@ -10,6 +10,7 @@
                 aria-expanded="false"
                 :aria-expanded="expanded"
                 aria-controls="event-detail-{{ event.pk }}"
+                data-testid="event-card-toggle"
                 class="flex flex-wrap items-center gap-2 w-full text-left cursor-pointer">
             {% if show_date %}
             <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</span>

@@ -12,6 +12,7 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
+from ._selectors import save_button
 from .test_file_vault import _VALID_PDF_BYTES, select_doc_type_and_wait, set_files_on_swapped_input
 
 pytestmark = pytest.mark.e2e
@@ -38,7 +39,7 @@ def test_purge_from_stale_confirmation_keeps_new_text_and_second_file(
     expect(page.locator(f"a:has-text('{name_a}')")).to_be_visible(timeout=10000)
 
     # Tab 1: open the confirmation for file A (still the old state).
-    page.locator("[data-testid='owner-attachment-purge-link']").first.click()
+    page.locator("[data-testid='owner-attachment-purge-link']").click()
     confirm = page.locator("[data-testid='attachment-purge-confirm']")
     expect(confirm).to_be_visible(timeout=10000)
 
@@ -50,7 +51,7 @@ def test_purge_from_stale_confirmation_keeps_new_text_and_second_file(
         page_b.goto(f"{detail_url}edit/", wait_until="domcontentloaded")
         page_b.fill("textarea[name='notiz']", new_text)
         page_b.set_input_files("input[name='anhang']", str(path_b))
-        page_b.locator("#main-content button[type='submit']:has-text('Speichern')").first.click()
+        save_button(page_b).click()
         page_b.wait_for_url(lambda url: "/edit/" not in url, timeout=15000)
         expect(page_b.locator(f"a:has-text('{name_b}')")).to_be_visible(timeout=10000)
     finally:

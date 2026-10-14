@@ -11,6 +11,7 @@ import pytest
 from playwright.sync_api import expect
 
 from ._profiles import require_demo
+from ._selectors import demo_scenario_start
 
 pytestmark = pytest.mark.e2e
 
@@ -32,7 +33,7 @@ def demo_profile(base_url, browser):
 
 def _start_scenario(page, base_url):
     page.goto(f"{base_url}/demo/", wait_until="domcontentloaded")
-    page.locator("[data-testid='demo-scenario-start']").first.click()
+    demo_scenario_start(page).click()
     page.wait_for_url(lambda url: "/demo/" not in url, timeout=15000)
     page.locator("[data-testid='demo-banner']").wait_for()
 
@@ -54,7 +55,7 @@ class TestDemoKeyPreparation:
 
             page.route(SALT_ROUTE, hold_until_released)
             page.goto(f"{base_url}/demo/", wait_until="domcontentloaded")
-            page.locator("[data-testid='demo-scenario-start']").first.click()
+            demo_scenario_start(page).click()
             pending = page.locator("[data-demo-offline-pending]")
             expect(pending).to_be_visible(timeout=15000)
             assert pending.get_attribute("role") == "status" and pending.get_attribute("aria-live") == "polite"
@@ -82,7 +83,7 @@ class TestDemoKeyPreparation:
             page = context.new_page()
             page.route(SALT_ROUTE, lambda route: route.fulfill(status=500, body="boom"))
             page.goto(f"{base_url}/demo/", wait_until="domcontentloaded")
-            page.locator("[data-testid='demo-scenario-start']").first.click()
+            demo_scenario_start(page).click()
             error = page.locator("[data-demo-offline-error]")
             expect(error).to_be_visible(timeout=15000)
             assert error.get_attribute("role") == "alert"

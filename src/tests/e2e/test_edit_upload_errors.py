@@ -12,6 +12,7 @@ import pytest
 from playwright.sync_api import expect
 
 from ._helpers import django_shell
+from ._selectors import save_button
 from .test_attachments_client_case import _CLEANUP, _SETUP, _run_shell
 from .test_edit_conflicts import _db, _long_text, _seed
 
@@ -56,7 +57,7 @@ class TestRejectedUploadKeepsInput:
         page.goto(f"{base_url}/events/{values['event']}/edit/", wait_until="domcontentloaded")
         page.locator("textarea[name='notiz']").fill(text)
         page.set_input_files("input[name='anhang']", rejected_file)
-        page.locator("#main-content button[type='submit']:has-text('Speichern')").first.click()
+        save_button(page).click()
         page.wait_for_load_state("domcontentloaded")
 
         _assert_rejected_upload_view(page, "textarea[name='notiz']", text, "Anhang")
@@ -64,7 +65,7 @@ class TestRejectedUploadKeepsInput:
         assert _db(e2e_env, f"Event.objects.get(pk='{values['event']}').data_json.get('notiz')") == "Ausgangsnotiz"
 
         # Dropping the file and saving again stores the kept text.
-        page.locator("#main-content button[type='submit']:has-text('Speichern')").first.click()
+        save_button(page).click()
         page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
         assert _db(e2e_env, f"Event.objects.get(pk='{values['event']}').data_json.get('notiz')") == text
 
@@ -75,13 +76,13 @@ class TestRejectedUploadKeepsInput:
         page.wait_for_selector(f"input[name='{FILE_FIELD}']", timeout=10000)
         page.locator("textarea[name='notes']").fill(text)
         page.set_input_files(f"input[name='{FILE_FIELD}']", rejected_file)
-        page.locator("#main-content button[type='submit']:has-text('Speichern')").first.click()
+        save_button(page).click()
         page.wait_for_load_state("domcontentloaded")
 
         _assert_rejected_upload_view(page, "textarea[name='notes']", text, "E2E-M24-Nachweis")
         assert _db(e2e_env, f"Client.objects.get(pk='{m24_scene['client_pk']}').notes") != text
 
-        page.locator("#main-content button[type='submit']:has-text('Speichern')").first.click()
+        save_button(page).click()
         page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
         assert _db(e2e_env, f"Client.objects.get(pk='{m24_scene['client_pk']}').notes") == text
 
@@ -92,13 +93,13 @@ class TestRejectedUploadKeepsInput:
         page.wait_for_selector(f"input[name='{FILE_FIELD}']", timeout=10000)
         page.locator("textarea[name='description']").fill(text)
         page.set_input_files(f"input[name='{FILE_FIELD}']", rejected_file)
-        page.locator("#main-content button[type='submit']:has-text('Speichern')").first.click()
+        save_button(page).click()
         page.wait_for_load_state("domcontentloaded")
 
         _assert_rejected_upload_view(page, "textarea[name='description']", text, "E2E-M24-Nachweis")
         assert _db(e2e_env, f"Case.objects.get(pk='{m24_scene['case_pk']}').description") != text
 
-        page.locator("#main-content button[type='submit']:has-text('Speichern')").first.click()
+        save_button(page).click()
         page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
         assert _db(e2e_env, f"Case.objects.get(pk='{m24_scene['case_pk']}').description") == text
 
@@ -123,7 +124,7 @@ class TestAssistantOwnEventUploadError:
         page.goto(f"{base_url}/events/{pk}/edit/", wait_until="domcontentloaded")
         page.locator("textarea[name='notiz']").fill(text)
         page.set_input_files("input[name='anhang']", rejected_file)
-        page.locator("#main-content button[type='submit']:has-text('Speichern')").first.click()
+        save_button(page).click()
         page.wait_for_load_state("domcontentloaded")
         _assert_rejected_upload_view(page, "textarea[name='notiz']", text, "Anhang")
 
@@ -138,7 +139,7 @@ class TestFormLevelRejectionNotice:
         page.goto(f"{base_url}/events/{event_pk}/edit/", wait_until="domcontentloaded")
         page.locator("textarea[name='notiz']").fill(text)
         page.set_input_files("input[name='anhang']", str(disallowed))
-        page.locator("#main-content button[type='submit']:has-text('Speichern')").first.click()
+        save_button(page).click()
         page.wait_for_load_state("domcontentloaded")
 
     def test_event_edit_form_level_rejection_keeps_text_and_writes_nothing(

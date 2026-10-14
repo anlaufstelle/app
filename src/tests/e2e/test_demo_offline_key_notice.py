@@ -13,6 +13,7 @@ import pytest
 from playwright.sync_api import expect
 
 from ._profiles import require_demo
+from ._selectors import demo_scenario_start
 
 pytestmark = pytest.mark.e2e
 
@@ -53,7 +54,7 @@ def test_signed_in_session_without_offline_key_keeps_the_notice(base_url, browse
     try:
         page = context.new_page()
         page.goto(f"{base_url}/demo/")
-        page.locator("[data-testid='demo-scenario-start']").first.click()
+        demo_scenario_start(page).click()
         page.wait_for_url(lambda url: "/demo/" not in url, timeout=15000)
         page.locator("[data-testid='demo-banner']").wait_for()
         notice = page.locator("[data-demo-offline-error]")
