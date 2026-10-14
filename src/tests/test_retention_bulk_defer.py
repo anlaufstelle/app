@@ -18,6 +18,7 @@ from core.services.retention import (
     reactivate_deferred_proposals,
     reject_proposal,
 )
+from tests._retention_approval_helpers import prime_first_approval
 
 _BERLIN_DATE = date(2026, 6, 22)
 
@@ -39,6 +40,8 @@ class TestBulkActions:
         ps = [_make_proposal(facility) for _ in range(3)]
         # Refs #2109: liefert seit dem Hold-/Status-Re-Check ``(verarbeitet,
         # uebersprungen)`` — ohne Sperre bleibt die zweite Zahl null.
+        for candidate in ps:
+            prime_first_approval(candidate)
         count, skipped = bulk_approve_proposals(ps, lead_user)
         assert (count, skipped) == (3, 0)
         for p in ps:

@@ -82,6 +82,8 @@ SCENARIOS = {
 }
 
 BASE_STATUSES = {
+    # This fixture gives the deletion right to staff, never to retention reviewers.
+    "retention_approvers": "critical",
     "db_role_app_nosuperuser": "ok",
     "db_role_app_nobypassrls": "ok",
     "db_role_admin": "ok",

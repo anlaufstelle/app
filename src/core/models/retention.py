@@ -46,6 +46,15 @@ class RetentionProposal(models.Model):
         related_name="retention_proposals",
         verbose_name=_("Vorgeschlagen von"),
     )
+    first_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="first_approved_retention_proposals",
+        verbose_name=_("Erste Freigabe durch"),
+    )
+    first_approved_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Erste Freigabe am"))
     approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -87,6 +96,10 @@ class RetentionProposal(models.Model):
         verbose_name_plural = _("Löschvorschläge")
         ordering = ["deletion_due_at"]
         constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(first_approved_by=models.F("approved_by")),
+                name="retention_proposal_distinct_approvers",
+            ),
             models.UniqueConstraint(
                 fields=["facility", "target_type", "target_id"],
                 condition=models.Q(status__in=["pending", "held", "deferred"]),

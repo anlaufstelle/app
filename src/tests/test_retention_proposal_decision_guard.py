@@ -36,6 +36,7 @@ from core.retention.proposals import (
     defer_proposal,
     reject_proposal,
 )
+from tests._retention_approval_helpers import prime_first_approval
 
 pytestmark = pytest.mark.django_db
 
@@ -151,6 +152,8 @@ class TestClosedStatusIsRefused:
         offen = _proposal(facility)
         stale = _proposal(facility)
         RetentionProposal.objects.filter(pk=stale.pk).update(status=RetentionProposal.Status.REJECTED)
+        for candidate in [offen]:
+            prime_first_approval(candidate)
         assert bulk_approve_proposals([offen, stale], lead_user) == (1, 1)
         assert _snapshot(offen)[0] == RetentionProposal.Status.APPROVED
         assert _snapshot(stale)[0] == RetentionProposal.Status.REJECTED

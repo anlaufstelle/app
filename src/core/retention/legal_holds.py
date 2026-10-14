@@ -542,7 +542,11 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
     ``PROPOSAL_OTHER_ACTIVE_MESSAGE``), and the whole creation rolls back. Any
     other integrity error propagates unchanged.
     """
-    from core.retention.proposals import PROPOSAL_ALREADY_DECIDED_MESSAGE, _assert_actor_facility
+    from core.retention.proposals import (
+        PROPOSAL_ALREADY_DECIDED_MESSAGE,
+        _assert_actor_facility,
+        _clear_first_approval,
+    )
 
     _assert_actor_facility(proposal, user)
     holdable_statuses = (
@@ -589,6 +593,7 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
         try:
             with transaction.atomic():
                 locked.save(update_fields=["status"])
+                _clear_first_approval(locked, user, reason="legal_hold")
         except IntegrityError as exc:
             # A proposal run inserted a new active proposal of the target after
             # the lock above; the database waited for it and refuses a second
@@ -612,6 +617,8 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
             before_write=_lock_target_proposals_and_mark_held,
         )
     proposal.status = locked.status
+    proposal.first_approved_by = locked.first_approved_by
+    proposal.first_approved_at = locked.first_approved_at
     return hold
 
 

@@ -122,7 +122,11 @@ class TestComplianceApproverCard:
             response = client.get(reverse("core:system_compliance"))
 
         group = response.context["groups"][ComplianceCategory.PERMISSIONS]
-        assert [check.key for check in group] == ["app_user_no_django_superuser", "deletion_approvers"]
+        assert [check.key for check in group] == [
+            "app_user_no_django_superuser",
+            "deletion_approvers",
+            "retention_approvers",
+        ]
         assert "[Genehmiger für Löschanträge]" in response.content.decode()
         assert "[Berechtigungen]" in response.content.decode()
         assert 'data-testid="compliance-group-permissions"' in response.content.decode()

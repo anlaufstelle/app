@@ -36,15 +36,29 @@
         {% endif %}
     </div>
 
+    {% if proposal.status == 'pending' and proposal.first_approved_by and proposal.first_approved_at %}
+    <p class="text-sm text-yellow-800 mb-3">
+        {% trans "1 von 2 Freigaben" %} · {% trans "Erste Freigabe durch:" %}
+        {{ proposal.first_approved_by.get_full_name|default:proposal.first_approved_by.username }}
+    </p>
+    {% if retention_approver_count < 2 %}
+    <p class="text-sm text-yellow-800 mb-3">{% trans "Weniger als zwei berechtigte Konten: keine manuelle Löschfreigabe möglich. Die erste Freigabe allein erlaubt keine Löschung." %}</p>
+    {% endif %}
+    {% endif %}
+
     {# Actions based on status #}
     {% if proposal.status == 'pending' %}
     <div class="flex items-center gap-2">
         <button hx-post="{% url 'core:retention_approve' pk=proposal.pk %}"
                 hx-target="#proposal-{{ proposal.pk }}"
                 hx-swap="outerHTML"
-                hx-confirm="{% trans 'Löschung freigeben?' %}"
+                hx-confirm="{% trans 'Freigabe erteilen? Erst zwei verschiedene berechtigte Personen geben die Löschung frei.' %}"
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-green-700 text-white hover:bg-green-800">
-            {% trans "Freigeben" %}
+            {% if proposal.first_approved_by and proposal.first_approved_at %}
+                {% trans "Zweite Freigabe erteilen" %}
+            {% else %}
+                {% trans "Erste Freigabe erteilen" %}
+            {% endif %}
         </button>
         <button @click="toggleHoldForm"
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700">

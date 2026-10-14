@@ -23,6 +23,7 @@ from django.urls import reverse
 
 from core.models import AuditLog, RetentionProposal
 from core.views.retention import _BulkActionMixin
+from tests._retention_approval_helpers import first_approval_fields
 
 _AKTIONEN = [
     "core:retention_bulk_approve",
@@ -40,6 +41,7 @@ _ERWARTET = {
 def _vorschlag(facility):
     return RetentionProposal.objects.create(
         facility=facility,
+        **first_approval_fields(facility),
         target_type=RetentionProposal.TargetType.EVENT,
         target_id=uuid.uuid4(),
         retention_category="anonymous",
@@ -85,8 +87,13 @@ class TestSammelaktionUeberspringtEntschiedene:
         assert response["HX-Redirect"] == reverse("core:retention_dashboard")
         gemeldet = [(m.level, str(m)) for m in get_messages(response.wsgi_request)]
         assert gemeldet == [
-            (messages.SUCCESS, "1 Löschvorschlag aktualisiert."),
-            (messages.WARNING, "1 Löschvorschlag übersprungen (Aufbewahrungssperre oder Status)."),
+            (
+                messages.SUCCESS,
+                "1 Löschvorschlag endgültig freigegeben."
+                if url_name == "core:retention_bulk_approve"
+                else "1 Löschvorschlag aktualisiert.",
+            ),
+            (messages.WARNING, "1 Löschvorschlag übersprungen (Aufbewahrungssperre, Status oder Berechtigung)."),
         ]
 
     @pytest.mark.parametrize("url_name", _AKTIONEN)
@@ -135,7 +142,12 @@ class TestSammelaktionOhneRennen:
         )
 
         gemeldet = [(m.level, str(m)) for m in get_messages(response.wsgi_request)]
-        assert gemeldet == [(messages.SUCCESS, "2 Löschvorschläge aktualisiert.")]
+        expected = (
+            "2 Löschvorschläge endgültig freigegeben."
+            if url_name == "core:retention_bulk_approve"
+            else "2 Löschvorschläge aktualisiert."
+        )
+        assert gemeldet == [(messages.SUCCESS, expected)]
         for vorschlag in zwei_offene:
             vorschlag.refresh_from_db()
             assert vorschlag.status == _ERWARTET[url_name]

@@ -859,6 +859,10 @@ class TestTenantModelScopeGuard:
     # Eintrag wurde einzeln am Code geprueft; ein echter Cross-Facility-Zugriff
     # ist NICHT darunter (sonst waere er ein Befund, kein Allowlist-Eintrag).
     _SERVICES_ALLOWLIST = {
+        "compliance/retention_approvers.py:_retention_approver_checks:Facility": (
+            "Installation-wide compliance card for the super admin: counts active reviewers with "
+            "the retention roles and deletion right in every facility under rls_bypass_for_read."
+        ),
         "compliance/app_superuser.py:_app_superuser_checks:User": (
             "Compliance-Check auf DB-Superuser — deploymentweit per Definition; "
             "gerendert nur im Super-Admin-Bereich (views/system/compliance.py)."

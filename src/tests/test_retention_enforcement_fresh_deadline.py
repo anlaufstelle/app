@@ -9,6 +9,7 @@ from core.models import DocumentType, EventHistory, RetentionProposal
 from core.retention import enforcement
 from core.retention.proposals import approve_proposal, create_proposals_for_facility
 from core.services.events.crud import create_event
+from tests._retention_approval_helpers import prime_first_approval
 from tests._retention_race_helpers import run_threads, session_thread
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -46,7 +47,9 @@ def test_enforcement_rechecks_a_type_deadline_changed_after_selection(
     )
     if stage == "qualified":
         create_proposals_for_facility(facility, settings_obj, now)
-        approve_proposal(RetentionProposal.objects.get(facility=facility, target_id=event.pk), lead_user)
+        proposal = RetentionProposal.objects.get(facility=facility, target_id=event.pk)
+        prime_first_approval(proposal)
+        approve_proposal(proposal, lead_user)
     results, errors = {}, {}
     original_lock = enforcement._lock_event_and_recheck_hold
 

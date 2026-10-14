@@ -30,6 +30,7 @@ from django.utils import timezone
 
 from core.models import AuditLog, Client, Event, LegalHold, RetentionProposal
 from tests import test_retention_bulk_lock_order_guard as dienst_guard
+from tests._retention_approval_helpers import first_approval_fields
 from tests._row_lock_helpers import mitschnitt
 
 #: Dieselbe Ausgangslage wie am Dienst: zwei Personen, je ein Ereignis, je ein offener Vorschlag.
@@ -40,7 +41,19 @@ _SAMMEL_VIEWS = {
     "zurueckstellen": ("core:retention_bulk_defer", RetentionProposal.Status.DEFERRED, False),
     "ablehnen": ("core:retention_bulk_reject", RetentionProposal.Status.REJECTED, False),
 }
-_ZWEI_AKTUALISIERT = (messages.SUCCESS, "2 Löschvorschläge aktualisiert.")
+
+
+def _success_message(action, count):
+    """Final approvals have a distinct message; deferral and rejection remain updates."""
+    if action == "genehmigen":
+        text = (
+            f"{count} Löschvorschlag endgültig freigegeben."
+            if count == 1
+            else f"{count} Löschvorschläge endgültig freigegeben."
+        )
+    else:
+        text = f"{count} Löschvorschlag aktualisiert." if count == 1 else f"{count} Löschvorschläge aktualisiert."
+    return messages.SUCCESS, text
 
 
 def _gesperrte_zeilen(abfragen):
@@ -83,7 +96,7 @@ class TestSammelViewSperrtDieAuswahlVorDerErstenAuditZeile:
             response = client.post(reverse(url_name), _auswahl(bestand))
 
         assert response.status_code == 302
-        assert _gemeldet(response) == [_ZWEI_AKTUALISIERT]
+        assert _gemeldet(response) == [_success_message(weg, 2)]
         assert [RetentionProposal.objects.get(pk=v.pk).status for v in bestand.vorschlaege] == [status_danach] * 2
         assert "grenze" in beobachtung, "Die Sammelanfrage schrieb keine Audit-Zeile"
         # Jede Zeile der Auswahl ist schon gesperrt, wenn die Audit-Kette genommen wird …
@@ -139,7 +152,7 @@ class TestSammelViewUndHoldAnlageVerklemmenSichNicht:
         assert not fehler, fehler
         # Die Sammelanfrage hielt die Auswahl zuerst — sie kommt vollständig durch.
         assert ergebnis["sammelanfrage"].status_code == 302
-        assert _gemeldet(ergebnis["sammelanfrage"]) == [_ZWEI_AKTUALISIERT]
+        assert _gemeldet(ergebnis["sammelanfrage"]) == [_success_message(weg, 2)]
         erster.refresh_from_db()
         zweiter.refresh_from_db()
         assert erster.status == status_danach
@@ -186,6 +199,7 @@ class TestSammelgenehmigungMitGeaenderterZuordnung:
         vorschlaege = [
             RetentionProposal.objects.create(
                 facility=facility,
+                **first_approval_fields(facility),
                 target_type=RetentionProposal.TargetType.EVENT,
                 target_id=ereignis.pk,
                 deletion_due_at=date.today() + timedelta(days=5),
@@ -207,8 +221,8 @@ class TestSammelgenehmigungMitGeaenderterZuordnung:
         assert aufzeichnung.offene_schranken() == []
         assert response.status_code == 302
         assert _gemeldet(response) == [
-            (messages.SUCCESS, "1 Löschvorschlag aktualisiert."),
-            (messages.WARNING, "1 Löschvorschlag übersprungen (Aufbewahrungssperre oder Status)."),
+            _success_message("genehmigen", 1),
+            (messages.WARNING, "1 Löschvorschlag übersprungen (Aufbewahrungssperre, Status oder Berechtigung)."),
         ]
         stati = [RetentionProposal.objects.get(pk=v.pk).status for v in vorschlaege]
         assert stati == [RetentionProposal.Status.PENDING, RetentionProposal.Status.APPROVED]

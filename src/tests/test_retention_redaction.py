@@ -30,6 +30,7 @@ from core.services.events import build_redacted_delete_history, soft_delete_even
 from core.services.file_vault import store_encrypted_file
 from core.services.file_vault.storage import get_attachment_path
 from core.services.retention import _soft_delete_events
+from tests._retention_approval_helpers import prime_first_approval
 
 # Minimal gueltiges PDF, das die libmagic-Pruefung in ``store_encrypted_file`` passiert.
 PDF_HEADER = (
@@ -383,6 +384,7 @@ class TestRetentionSoftDeleteHoldRace:
         settings_obj.save(update_fields=["retention_qualified_days"])
         create_proposals_for_facility(event.facility, settings_obj, timezone.now(), qualified_only=True)
         proposal = RetentionProposal.objects.get(facility=event.facility, target_id=event.pk)
+        prime_first_approval(proposal)
         approve_proposal(proposal, user)
 
     def _stale_event(self, facility, doc_type, admin_user, person, days=400):

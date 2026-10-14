@@ -40,6 +40,7 @@ from core.services.retention import (
     get_active_hold_target_ids,
     has_active_hold,
 )
+from tests._retention_approval_helpers import prime_first_approval
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -248,11 +249,13 @@ class TestCreateProposal:
 @pytest.mark.django_db
 class TestApproveProposal:
     def test_sets_status_approved(self, proposal, lead_user):
+        prime_first_approval(proposal)
         approve_proposal(proposal, lead_user)
         proposal.refresh_from_db()
         assert proposal.status == RetentionProposal.Status.APPROVED
 
     def test_creates_audit_log(self, proposal, lead_user):
+        prime_first_approval(proposal)
         approve_proposal(proposal, lead_user)
         log = AuditLog.objects.filter(
             action=AuditLog.Action.DELETE,
@@ -644,11 +647,11 @@ class TestRetentionDashboardView:
         client.force_login(lead_user)
         content = " ".join(client.get(reverse("core:retention_dashboard")).content.decode().split())
         assert "für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge" in content
-        assert "Erst nach Freigabe durch eine Person mit dem Recht „Löschbestätigung“" in content
-        assert "Erst nach Freigabe durch eine andere Person" not in content
-        assert "aktives Konto der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung" in content
-        assert "zählt aktive Löschantragsberechtigte unabhängig von ihrer Rolle" in content
-        assert "sie belegt nicht, dass ein Konto den Aufbewahrungslauf bedienen kann" in content
+        assert "Die manuelle Löschfreigabe braucht zwei verschiedene aktive Personen" in content
+        assert "Die erste Freigabe hält den Vorschlag ausstehend (1 von 2 Freigaben)" in content
+        assert "der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung" in content
+        assert "zählt weiterhin aktive Löschantragsberechtigte unabhängig von ihrer Rolle" in content
+        assert "„Genehmiger für den Aufbewahrungslauf“ prüft Rolle und Anzahl" in content
         assert "Löschbestätigung" in content
         assert "nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage" in content
         assert "nach Überschreiten der maximalen Zurückstellungszahl" not in content
@@ -669,6 +672,7 @@ class TestRetentionDashboardView:
 class TestRetentionApproveView:
     def test_approve_changes_status(self, client, lead_user, proposal):
         client.force_login(lead_user)
+        prime_first_approval(proposal)
         resp = client.post(reverse("core:retention_approve", kwargs={"pk": proposal.pk}))
         assert resp.status_code == 200
         proposal.refresh_from_db()
@@ -681,6 +685,7 @@ class TestRetentionApproveView:
 
     def test_creates_audit_log(self, client, lead_user, proposal):
         client.force_login(lead_user)
+        prime_first_approval(proposal)
         client.post(reverse("core:retention_approve", kwargs={"pk": proposal.pk}))
         log = AuditLog.objects.filter(
             action=AuditLog.Action.DELETE,
@@ -799,9 +804,12 @@ class TestRetentionBulkViews:
         )
 
         stored_messages = list(get_messages(response.wsgi_request))
-        assert [(message.level, str(message)) for message in stored_messages] == [
-            (messages.SUCCESS, "2 Löschvorschläge aktualisiert.")
-        ]
+        expected = (
+            "2 erste Freigaben erteilt (1 von 2 Freigaben)."
+            if url_name == "core:retention_bulk_approve"
+            else "2 Löschvorschläge aktualisiert."
+        )
+        assert [(message.level, str(message)) for message in stored_messages] == [(messages.SUCCESS, expected)]
 
     def test_bulk_action_uses_singular_message(self, client, lead_user, two_pending_proposals):
         client.force_login(lead_user)
@@ -813,11 +821,13 @@ class TestRetentionBulkViews:
 
         stored_messages = list(get_messages(response.wsgi_request))
         assert [(message.level, str(message)) for message in stored_messages] == [
-            (messages.SUCCESS, "1 Löschvorschlag aktualisiert.")
+            (messages.SUCCESS, "1 erste Freigabe erteilt (1 von 2 Freigaben).")
         ]
 
     def test_bulk_approve_sets_all_selected_to_approved(self, client, lead_user, two_pending_proposals):
         client.force_login(lead_user)
+        for candidate in two_pending_proposals:
+            prime_first_approval(candidate)
         resp = client.post(
             reverse("core:retention_bulk_approve"),
             {"proposal_ids": [str(p.pk) for p in two_pending_proposals]},
@@ -904,10 +914,12 @@ class TestRetentionBulkViews:
 
 
 class _FakeProposal:
-    """Minimal stand-in carrying just the ``status`` the counter inspects."""
+    """Minimal stand-in carrying the status and first-approval metadata."""
 
     def __init__(self, status):
         self.status = status
+        self.first_approved_by_id = None
+        self.first_approved_at = None
 
 
 class TestStatusCounts:
@@ -923,6 +935,7 @@ class TestStatusCounts:
             ],
         }
         assert _status_counts(grouping) == {
+            "first_approval": 0,
             "pending": 2,
             "held": 1,
             "approved": 1,
@@ -932,6 +945,7 @@ class TestStatusCounts:
 
     def test_empty_grouping_is_all_zero(self):
         assert _status_counts({}) == {
+            "first_approval": 0,
             "pending": 0,
             "held": 0,
             "approved": 0,

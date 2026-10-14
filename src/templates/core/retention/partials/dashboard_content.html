@@ -6,6 +6,7 @@
        class="block bg-surface border border-yellow-200 rounded-[10px] p-4 hover:border-yellow-400 hover:shadow transition focus:outline-hidden focus:ring-2 focus:ring-yellow-400">
         <div class="text-sm font-medium text-yellow-800">{% trans "Ausstehend" %}</div>
         <div class="text-2xl font-bold text-yellow-700 mt-1">{{ pending_count }}</div>
+        <div class="text-sm text-yellow-800">{% trans "1 von 2 Freigaben" %}: {{ first_approval_count }}</div>
     </a>
     <a href="#retention-proposals" id="summary-held"
        class="block bg-surface border border-blue-200 rounded-[10px] p-4 hover:border-blue-400 hover:shadow transition focus:outline-hidden focus:ring-2 focus:ring-blue-400">
@@ -18,6 +19,12 @@
         <div class="text-2xl font-bold text-green-600 mt-1">{{ approved_count }}</div>
     </a>
 </div>
+
+{% if retention_approver_count < 2 %}
+<div class="bg-yellow-50 border border-yellow-200 rounded-[10px] p-4 mb-6">
+    {% trans "Für manuelle Freigaben braucht die Einrichtung mindestens zwei aktive Konten mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Aktuell ist keine manuelle Löschfreigabe möglich. Die optionale Auto-Freigabe nach mehrfacher Zurückstellung bleibt eine Ausnahme." %}
+</div>
+{% endif %}
 
 {% if inactive_cases %}
 <div class="bg-yellow-50 border border-yellow-200 rounded-[10px] p-4 mb-6">
@@ -60,9 +67,9 @@
                 data-testid="retention-bulk-approve"
                 hx-post="{% url 'core:retention_bulk_approve' %}"
                 hx-include="[data-bulk-proposal]:checked"
-                hx-confirm="{% trans 'Ausgewählte Vorschläge wirklich freigeben?' %}"
+                hx-confirm="{% trans 'Freigabe für ausgewählte Vorschläge erteilen? Erst zwei verschiedene berechtigte Personen geben die Löschung frei.' %}"
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-green-700 text-white hover:bg-green-800 focus:outline-hidden focus:ring-2 focus:ring-green-500">
-            {% trans "Freigeben" %}
+            {% trans "Freigabe erteilen" %}
         </button>
         <label class="inline-flex items-center gap-1 text-xs text-ink-muted">
             {% trans "Tage:" %}

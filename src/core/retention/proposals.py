@@ -20,7 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from core.constants import RETENTION_URGENCY_RED_DAYS, RETENTION_URGENCY_YELLOW_DAYS
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
-from core.models import AuditLog, Case, Client, Event, LegalHold, RetentionProposal
+from core.models import AuditLog, Case, Client, Event, LegalHold, RetentionProposal, User
 from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold
 from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
@@ -106,6 +106,13 @@ def _status_counts(proposals_by_category):
         all_proposals.extend(proposals)
 
     return {
+        "first_approval": sum(
+            1
+            for p in all_proposals
+            if p.status == RetentionProposal.Status.PENDING
+            and p.first_approved_by_id is not None
+            and p.first_approved_at is not None
+        ),
         "pending": sum(1 for p in all_proposals if p.status == RetentionProposal.Status.PENDING),
         "held": sum(1 for p in all_proposals if p.status == RetentionProposal.Status.HELD),
         "approved": sum(1 for p in all_proposals if p.status == RetentionProposal.Status.APPROVED),
@@ -154,6 +161,16 @@ def _category_cards(proposals_by_category):
     return categories
 
 
+def eligible_retention_approvers(facility):
+    """Return active reviewers allowed to take part in manual retention approval."""
+    return User.objects.filter(
+        facility=facility,
+        is_active=True,
+        can_confirm_deletion=True,
+        role__in=[User.Role.LEAD, User.Role.FACILITY_ADMIN],
+    )
+
+
 def build_retention_dashboard_context(facility, user=None):
     """Build the template context dict for :class:`RetentionDashboardView`.
 
@@ -197,6 +214,8 @@ def build_retention_dashboard_context(facility, user=None):
     return {
         "inactive_cases": inactive_cases,
         "categories": _category_cards(proposals_by_category),
+        "first_approval_count": counts["first_approval"],
+        "retention_approver_count": eligible_retention_approvers(facility).count(),
         "pending_count": counts["pending"],
         "held_count": counts["held"],
         "approved_count": counts["approved"],
@@ -419,25 +438,11 @@ def _assert_target_has_no_active_hold(proposal, client_id):
 
 
 def _lock_check_and_mark_approved(proposal, *, user=None, auto_approve_max_defer_count=None):
-    """Die Sperr-/Check-/Schreib-Sequenz der Genehmigung — die EINE Stelle.
+    """Lock target rows, then the proposal, before advancing manual approval.
 
-    Refs #2122: Der Auto-Approve-Zweig in
-    :func:`reactivate_deferred_proposals` setzte ``APPROVED`` frueher direkt
-    und umging damit die komplette Sequenz, die #2109 hier eingezogen hat —
-    dieselbe Wurzel, nur ohne Oberflaeche davor. Beide Wege fahren jetzt
-    diesen Helfer; eine zweite Implementierung waere genau die Drift, die
-    #1756 fuer die Anonymisierungs-Einstiege gezeigt hat.
-
-    Reihenfolge tragend (s. :func:`_lock_target_rows_for_approval`): erst die
-    Zielzeilen — der gemeinsame Anker mit ``create_hold_for_target`` —, dann
-    die Vorschlagszeile. Umgekehrt entstuende ein ABBA-Zyklus mit
-    ``create_legal_hold``, das Ereignis vor Vorschlag sperrt.
-
-    Wirft ``ValidationError``, wenn der Vorschlag nicht (mehr) offen ist oder
-    das Ziel unter einem aktiven Hold steht; der Status bleibt dann
-    unveraendert. Der Aufrufer muss innerhalb einer ``transaction.atomic()``
-    stehen — sonst faellt die Sperre mit dem impliziten Commit des ``SELECT``
-    sofort wieder.
+    Manual approval records one eligible reviewer first and a distinct eligible
+    reviewer second. Automatic approval retains its explicit opt-in exception.
+    The caller must hold an atomic transaction through the decision audit.
     """
     client_id = _lock_target_rows_for_approval(proposal)
     locked = RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=proposal.facility_id).first()
@@ -457,8 +462,38 @@ def _lock_check_and_mark_approved(proposal, *, user=None, auto_approve_max_defer
     if user is not None:
         if not user.is_active or not user.can_confirm_deletion:
             raise ValidationError(_("Für die Freigabe ist das Recht „Löschbestätigung“ erforderlich."))
+        if not user.is_lead_or_admin:
+            raise ValidationError(_("Für die Freigabe ist die Rolle Leitung oder Anwendungsbetreuung erforderlich."))
         if locked.proposed_by_id == user.pk:
             raise ValidationError(_("Sie können Ihren eigenen Löschvorschlag nicht freigeben."))
+        if locked.first_approved_by_id is None or locked.first_approved_at is None:
+            # A timestamp without its reviewer never counts as an approval.
+            locked.status = RetentionProposal.Status.PENDING
+            locked.first_approved_by = user
+            locked.first_approved_at = timezone.now()
+            # A hold may have reopened a previously finalized proposal.
+            locked.approved_by = None
+            locked.approved_at = None
+            locked.save(
+                update_fields=["status", "first_approved_by", "first_approved_at", "approved_by", "approved_at"]
+            )
+            return locked
+        if locked.first_approved_by_id == user.pk:
+            raise ValidationError(_("Die zweite Freigabe muss eine andere berechtigte Person erteilen."))
+        first = locked.first_approved_by
+        if (
+            not first.is_active
+            or not first.is_lead_or_admin
+            or not first.can_confirm_deletion
+            or first.facility_id != locked.facility_id
+            or first.pk == locked.proposed_by_id
+        ):
+            raise ValidationError(
+                _(
+                    "Die erste Person ist nicht mehr berechtigt. Stellen Sie den Vorschlag zurück "
+                    "und beginnen Sie die Freigabe erneut."
+                )
+            )
     locked.status = RetentionProposal.Status.APPROVED
     locked.approved_at = timezone.now()
     locked.approved_by = user
@@ -468,36 +503,13 @@ def _lock_check_and_mark_approved(proposal, *, user=None, auto_approve_max_defer
 
 @transaction.atomic
 def approve_proposal(proposal, user):
-    """Approve a retention proposal for deletion on next enforce_retention run.
-
-    Refs #2109 (Red-Team B-4): Bis hierher setzte die Funktion den Status und
-    schrieb die Audit-Zeile — ohne Sperre, ohne Status-Re-Check, ohne
-    Hold-Pruefung. Der Aufrufer haelt die Zeile womoeglich seit Minuten im
-    Speicher (die Karte im Loeschfristen-Dashboard aktualisiert sich nicht von
-    selbst), und zwei gleichzeitige Genehmigungen schrieben zwei Audit-Zeilen
-    fuer einen Vorgang.
-
-    Muster ``approve_client_merge``/``reject_client_merge``
-    (``services/client/merge.py``): Zeile per ``select_for_update`` NEU laden,
-    Status unter der Sperre erneut lesen, dann erst entscheiden. Der Hold wird
-    ebenfalls erst unter der Sperre gelesen — davor waere er nur eine
-    Momentaufnahme (dieselbe Wurzel wie Refs #2107/#2108).
-
-    Wirft ``ValidationError``, wenn der Vorschlag nicht (mehr) offen ist oder
-    das Ziel unter einem aktiven Hold steht. Der Status bleibt in beiden Faellen
-    unveraendert — insbesondere kippt er nicht nach ``APPROVED``, was wegen
-    ``unique_active_retention_proposal`` (``APPROVED`` ist NICHT in der aktiven
-    Menge) einen spaeteren, legitimen Vorschlag fuer dasselbe Ziel blockieren
-    wuerde.
-    """
-    # Refs #2373: Einrichtungsgrenze der handelnden Person vor jeder Sperre —
-    # der Auto-Approve-Zweig hat keine handelnde Person und prueft sie nicht.
+    """Record the first approval or finalize with a distinct eligible reviewer."""
     _assert_actor_facility(proposal, user)
-    # Refs #2122: Sperre, Re-Checks und der Statuswechsel liegen im gemeinsamen
-    # Helfer — der Auto-Approve-Zweig fuhr sie frueher gar nicht.
     locked = _lock_check_and_mark_approved(proposal, user=user)
     # Synchronize the caller's instance for immediate rendering without a refetch.
     proposal.status = locked.status
+    proposal.first_approved_by = locked.first_approved_by
+    proposal.first_approved_at = locked.first_approved_at
     proposal.approved_by_id = locked.approved_by_id
     proposal.approved_at = locked.approved_at
     audit_retention_decision(
@@ -505,12 +517,35 @@ def approve_proposal(proposal, user):
         target_type=proposal.target_type,
         target_id=proposal.target_id,
         action=AuditLog.Action.DELETE,
-        category="retention_proposal_approved",
+        category=(
+            "retention_proposal_approved"
+            if locked.status == RetentionProposal.Status.APPROVED
+            else "retention_proposal_first_approved"
+        ),
         user=user,
         retention_category=proposal.retention_category,
         deletion_due_at=str(proposal.deletion_due_at),
     )
     return proposal
+
+
+def _clear_first_approval(proposal, user, *, reason):
+    """Discard a first approval under the caller's proposal lock, with audit evidence."""
+    if proposal.first_approved_by_id is None and proposal.first_approved_at is None:
+        return
+    proposal.first_approved_by = None
+    proposal.first_approved_at = None
+    proposal.save(update_fields=["first_approved_by", "first_approved_at"])
+    audit_retention_decision(
+        proposal.facility,
+        target_type=proposal.target_type,
+        target_id=proposal.target_id,
+        action=AuditLog.Action.DELETE,
+        category="retention_proposal_first_approval_cleared",
+        user=user,
+        retention_category=proposal.retention_category,
+        reason=reason,
+    )
 
 
 @transaction.atomic
@@ -531,6 +566,9 @@ def defer_proposal(proposal, user, days=30):
     # Audit-Eintrag unten.
     locked.defer_count = F("defer_count") + 1
     locked.save(update_fields=["status", "deferred_until", "defer_count"])
+    _clear_first_approval(locked, user, reason="deferred")
+    proposal.first_approved_by = locked.first_approved_by
+    proposal.first_approved_at = locked.first_approved_at
     locked.refresh_from_db(fields=["defer_count"])
     # Die Instanz des Aufrufers mitziehen (Muster :func:`approve_proposal`).
     proposal.status = locked.status
@@ -562,6 +600,9 @@ def reject_proposal(proposal, user):
     locked.status = RetentionProposal.Status.REJECTED
     locked.rejected_at = timezone.now()
     locked.save(update_fields=["status", "rejected_at"])
+    _clear_first_approval(locked, user, reason="rejected")
+    proposal.first_approved_by = locked.first_approved_by
+    proposal.first_approved_at = locked.first_approved_at
     # Synchronize the caller's decision metadata, as in approve_proposal.
     proposal.status = locked.status
     proposal.rejected_at = locked.rejected_at
@@ -688,23 +729,11 @@ def lock_bulk_selection(proposals, user, *, with_targets=False):
 
 @transaction.atomic
 def bulk_approve_proposals(proposals, user):
-    """Approve multiple proposals — je Zeile ein Savepoint.
+    """Advance each proposal in its own savepoint; return (processed, skipped).
 
-    Returns ``(count, skipped)``: genehmigte und uebersprungene Vorschlaege.
-
-    Refs #2109: Seit ``approve_proposal`` eine ``ValidationError`` werfen kann,
-    haette EIN gehaltener Vorschlag in einer Sammel-Auswahl die ganze
-    Genehmigung zurueckgerollt — auch die bereits verarbeiteten. Deshalb
-    umschliesst jede Zeile ein eigener Savepoint: der Treffer rollt nur sich
-    selbst zurueck, der Rest committet, und der Aufrufer meldet die
-    uebersprungenen als eigene Zahl. Die Schwestern ``bulk_defer_proposals``/
-    ``bulk_reject_proposals`` bleiben bei ``int`` und ohne Savepoint je Zeile.
-
-    Refs #2374: Personen, Ereignisse und Vorschlaege der ganzen Auswahl werden
-    vor der ersten Genehmigung in der aeusseren Transaktion gesperrt
-    (:func:`_lock_selection`); ein zurueckgerollter Savepoint gibt sie nicht
-    frei. Ein Vorschlag, dessen Personenzuordnung sich waehrend dieser Sperre
-    geaendert hat, zaehlt als uebersprungen — wie im Einzelweg.
+    Both the first and final approvals count as processed decisions. Lock the
+    entire selection before the first audit write to preserve target -> proposal
+    -> audit-chain order, including overlapping selections.
     """
     proposals = list(proposals)
     facility_id, own = _actor_selection(proposals, user)
@@ -914,7 +943,11 @@ def reactivate_deferred_proposals(facility):
 
 def get_dashboard_proposals(facility):
     """Get proposals grouped by retention_category for the dashboard."""
-    proposals = RetentionProposal.objects.for_facility(facility).select_related("facility").order_by("deletion_due_at")
+    proposals = (
+        RetentionProposal.objects.for_facility(facility)
+        .select_related("facility", "first_approved_by")
+        .order_by("deletion_due_at")
+    )
 
     grouped = {}
     for proposal in proposals:

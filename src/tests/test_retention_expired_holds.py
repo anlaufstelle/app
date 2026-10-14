@@ -44,7 +44,7 @@ def held_proposal(facility, settings_obj, client_qualified, admin_user, doc_type
     return now, event, proposal, hold
 
 
-def test_expired_proposal_hold_restores_explicit_review(facility, settings_obj, held_proposal, admin_user):
+def test_expired_proposal_hold_restores_explicit_review(facility, settings_obj, held_proposal, admin_user, lead_user):
     now, event, proposal, hold = held_proposal
     settings_obj.retention_auto_approve_after_defer = True
     settings_obj.save(update_fields=["retention_auto_approve_after_defer"])
@@ -55,6 +55,10 @@ def test_expired_proposal_hold_restores_explicit_review(facility, settings_obj, 
         event.refresh_from_db()
         assert not event.is_deleted
         approve_proposal(proposal, admin_user)
+        call_command("enforce_retention", stdout=StringIO())
+        event.refresh_from_db()
+        assert not event.is_deleted
+        approve_proposal(proposal, lead_user)
         call_command("enforce_retention", stdout=StringIO())
         event.refresh_from_db()
         assert event.is_deleted

@@ -26,6 +26,7 @@ from django.urls import reverse
 from core.models import AuditLog, LegalHold, RetentionProposal
 from core.retention.legal_holds import create_legal_hold
 from core.retention.proposals import approve_proposal, create_proposal
+from tests._retention_approval_helpers import prime_first_approval
 from tests._retention_race_helpers import park_until_the_other_session_waits, run_threads, session_thread
 from tests._row_lock_helpers import mitschnitt
 
@@ -33,6 +34,7 @@ OTHER_ACTIVE_PROPOSAL_TEXT = "weiterer offener Löschvorschlag"
 
 
 def _approved(proposal, user):
+    prime_first_approval(proposal)
     approve_proposal(proposal, user)
     return RetentionProposal.objects.get(pk=proposal.pk)
 

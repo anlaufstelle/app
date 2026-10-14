@@ -20,6 +20,7 @@ from core.retention.proposals import (
     defer_proposal,
     reject_proposal,
 )
+from tests._retention_approval_helpers import prime_first_approval
 
 pytestmark = pytest.mark.django_db
 
@@ -76,6 +77,7 @@ def test_standard_run_proposes_qualified_then_deletes_after_approval(
     assert event.data_json
     proposal = RetentionProposal.objects.get(facility=facility, target_id=event.pk)
     assert proposal.status == RetentionProposal.Status.PENDING
+    prime_first_approval(proposal)
     approve_proposal(proposal, lead_user)
     assert process_facility_retention(facility, periods, clock, dry_run=False)["count"] == 1
     event.refresh_from_db()
@@ -156,6 +158,7 @@ def test_approved_proposal_is_not_proposed_again(make_event, facility, periods, 
     event = make_event(case_status=Case.Status.CLOSED)
     create_proposals_for_facility(facility, periods, clock)
     proposal = RetentionProposal.objects.get(facility=facility, target_id=event.pk)
+    prime_first_approval(proposal)
     approve_proposal(proposal, lead_user)
     assert create_proposals_for_facility(facility, periods, clock)["count"] == 0
     assert RetentionProposal.objects.filter(facility=facility, target_id=event.pk).count() == 1
@@ -408,6 +411,8 @@ def test_decision_returns_persisted_metadata(make_event, facility, periods, cloc
     event = make_event(case_status=Case.Status.CLOSED)
     create_proposals_for_facility(facility, periods, clock)
     proposal = RetentionProposal.objects.get(facility=facility, target_id=event.pk)
+    if decision == "approve":
+        prime_first_approval(proposal)
     with patch("django.utils.timezone.now", return_value=clock):
         result = (
             approve_proposal(proposal, lead_user) if decision == "approve" else reject_proposal(proposal, lead_user)

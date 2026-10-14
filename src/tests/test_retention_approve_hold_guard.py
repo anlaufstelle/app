@@ -45,6 +45,7 @@ from core.retention import legal_holds as legal_holds_mod
 from core.retention import proposals as proposals_mod
 from core.retention.legal_holds import create_hold_for_target, create_legal_hold
 from core.retention.proposals import approve_proposal, bulk_approve_proposals
+from tests._retention_approval_helpers import first_approval_fields
 
 _JOIN_TIMEOUT = 30
 #: Wie lange die Hold-Anlage ihre Ereignissperre haelt, nachdem der Approve
@@ -56,6 +57,7 @@ _SPERRFENSTER_SEKUNDEN = 0.75
 def _proposal_for(facility, event, status=RetentionProposal.Status.PENDING):
     return RetentionProposal.objects.create(
         facility=facility,
+        **first_approval_fields(facility),
         target_type=RetentionProposal.TargetType.EVENT,
         target_id=event.pk,
         deletion_due_at=date.today() + timedelta(days=5),
@@ -217,9 +219,9 @@ class TestBulkApproveUeberspringtGehaltene:
         )
 
         gemeldet = [(m.level, str(m)) for m in get_messages(response.wsgi_request)]
-        assert (messages.SUCCESS, "2 Löschvorschläge aktualisiert.") in gemeldet
+        assert (messages.SUCCESS, "2 Löschvorschläge endgültig freigegeben.") in gemeldet
         warnungen = [text for level, text in gemeldet if level == messages.WARNING]
-        assert warnungen == ["1 Löschvorschlag übersprungen (Aufbewahrungssperre oder Status)."]
+        assert warnungen == ["1 Löschvorschlag übersprungen (Aufbewahrungssperre, Status oder Berechtigung)."]
 
 
 @pytest.mark.django_db

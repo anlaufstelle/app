@@ -34,6 +34,7 @@ from core.retention.proposals import (
     reactivate_deferred_proposals,
     reject_proposal,
 )
+from tests._retention_approval_helpers import prime_first_approval
 from tests._retention_race_helpers import (
     AUDIT_CHAIN,
     AfterOwnStatusChange,
@@ -51,6 +52,7 @@ EXISTING_HOLD_TEXT = "existiert bereits ein aktiver Hold"
 
 def _two_generations(older, user):
     """An approved older proposal and a newer pending proposal of the same event, via the public services."""
+    prime_first_approval(older)
     approve_proposal(older, user)
     current, created = create_proposal(
         older.facility,
@@ -61,6 +63,7 @@ def _two_generations(older, user):
         older.retention_category,
     )
     assert created, "precondition: an approved proposal leaves room for a new active proposal"
+    prime_first_approval(current)
     return RetentionProposal.objects.get(pk=older.pk), current
 
 

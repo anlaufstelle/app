@@ -73,6 +73,7 @@ from core.services.compliance.k_anonymization import (
 )
 from core.services.compliance.mfa import _mfa_checks
 from core.services.compliance.retention import _retention_checks, _retention_config_checks
+from core.services.compliance.retention_approvers import _retention_approver_checks
 from core.services.compliance.sensitivity import (
     ROLE_MAX_SENSITIVITY,
     SENSITIVITY_RANK,
@@ -159,6 +160,7 @@ def aggregate_checks() -> list[ComplianceCheck]:
             _restore_checks,
             _mfa_checks,
             _deletion_approver_checks,
+            _retention_approver_checks,
             _migration_checks,
             _version_checks,
             _audit_event_checks,
@@ -243,6 +245,7 @@ __all__ = [
     "_breach_scan_checks",
     "_clamav_checks",
     "_deletion_approver_checks",
+    "_retention_approver_checks",
     "_mv_refresh_checks",
     "_db_role_admin_check",
     "_db_role_attribute_check",

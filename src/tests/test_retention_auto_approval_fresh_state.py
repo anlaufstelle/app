@@ -12,6 +12,7 @@ from django.utils import timezone
 from core.models import AuditLog, RetentionProposal
 from core.retention.proposals import approve_proposal, create_proposals_for_facility, defer_proposal
 from core.services.events.crud import create_event
+from tests._retention_approval_helpers import prime_first_approval
 from tests._retention_race_helpers import AfterFirstRead, run_threads, session_thread
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -104,6 +105,7 @@ def test_manual_approval_of_a_future_deferral_remains_allowed(due_proposal, faci
     event, proposal = due_proposal()
     defer_proposal(proposal, lead_user, days=30)
     assert proposal.deferred_until > timezone.localdate()
+    prime_first_approval(proposal)
     approve_proposal(proposal, lead_user)
     call_command("enforce_retention", facility=facility.name, stdout=StringIO())
     event.refresh_from_db()

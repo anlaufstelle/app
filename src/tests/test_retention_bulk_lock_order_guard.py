@@ -47,9 +47,11 @@ from core.retention.proposals import (
     reactivate_deferred_proposals,
 )
 from core.services.audit.chain import advisory_lock_name
+from tests._retention_approval_helpers import first_approval_fields
 from tests._row_lock_helpers import mitschnitt
 
 _BEOBACHTETE_TABELLEN = ("core_client", "core_event", "core_retentionproposal")
+
 _JOIN_TIMEOUT = 30
 #: Wie lange die erste Sammelaktion höchstens darauf wartet, dass die zweite
 #: Sitzung auf eine Sperre aufläuft. Läuft sie nicht auf, geht der Test weiter.
@@ -171,6 +173,7 @@ def bestand(django_db_setup):
         )
         vorschlag = RetentionProposal.objects.create(
             facility=facility,
+            **first_approval_fields(facility),
             target_type=RetentionProposal.TargetType.EVENT,
             target_id=ereignis.pk,
             deletion_due_at=date.today() + timedelta(days=5),
@@ -428,6 +431,7 @@ class TestGeaenderteZuordnungWaehrendDerSperre:
         vorschlaege = [
             RetentionProposal.objects.create(
                 facility=facility,
+                **first_approval_fields(facility),
                 target_type=RetentionProposal.TargetType.EVENT,
                 target_id=ereignis.pk,
                 deletion_due_at=date.today() + timedelta(days=5),

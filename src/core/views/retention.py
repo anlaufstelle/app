@@ -24,6 +24,7 @@ from core.services.retention import (
     bulk_reject_proposals,
     create_legal_hold,
     dismiss_legal_hold,
+    eligible_retention_approvers,
 )
 from core.services.scoping import get_scoped_object
 from core.utils.ratelimit import ratelimit
@@ -68,7 +69,14 @@ class RetentionApproveView(LeadOrAdminRequiredMixin, View):
         annotate_urgency(proposal)
         proposal.active_hold = None
 
-        return render(request, "core/retention/partials/proposal_card.html", {"proposal": proposal})
+        return render(
+            request,
+            "core/retention/partials/proposal_card.html",
+            {
+                "proposal": proposal,
+                "retention_approver_count": eligible_retention_approvers(request.current_facility).count(),
+            },
+        )
 
     def get(self, request, pk):
         return HttpResponseNotAllowed(["POST"])
@@ -130,7 +138,14 @@ class RetentionHoldView(LeadOrAdminRequiredMixin, View):
         annotate_urgency(proposal)
         proposal.active_hold = hold
 
-        return render(request, "core/retention/partials/proposal_card.html", {"proposal": proposal})
+        return render(
+            request,
+            "core/retention/partials/proposal_card.html",
+            {
+                "proposal": proposal,
+                "retention_approver_count": eligible_retention_approvers(request.current_facility).count(),
+            },
+        )
 
     def get(self, request, pk):
         return HttpResponseNotAllowed(["POST"])
@@ -196,6 +211,7 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
         action = type(self).action_fn
         count = 0
         skipped = 0
+        self.first_approvals = 0
         with transaction.atomic():
             binding_changed = lock_bulk_selection(proposals, user, with_targets=self.lock_targets)
             for proposal in proposals:
@@ -210,6 +226,8 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
                     continue
                 done, not_done = result if isinstance(result, tuple) else (result, 0)
                 count += done
+                if done and proposal.status == RetentionProposal.Status.PENDING:
+                    self.first_approvals += done
                 skipped += not_done
         return count, skipped
 
@@ -228,25 +246,7 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
 
         extra_kwargs = self.extra_kwargs_fn(request) if self.extra_kwargs_fn else {}
         count, skipped = self._apply_per_proposal(proposals, request.user, extra_kwargs)
-        message = ngettext(
-            "%(count)d Löschvorschlag aktualisiert.",
-            "%(count)d Löschvorschläge aktualisiert.",
-            count,
-        ) % {"count": count}
-        messages.success(request, message)
-        if skipped:
-            # Eine eigene Warnzeile statt einer Sammelmeldung: die Erfolgszahl
-            # bleibt genau das, was sie vorher war, und die uebersprungenen
-            # gehen nicht in ihr unter.
-            messages.warning(
-                request,
-                ngettext(
-                    "%(count)d Löschvorschlag übersprungen (Aufbewahrungssperre oder Status).",
-                    "%(count)d Löschvorschläge übersprungen (Aufbewahrungssperre oder Status).",
-                    skipped,
-                )
-                % {"count": skipped},
-            )
+        self._report_decisions(request, count, skipped)
 
         if request.headers.get("HX-Request"):
             response = redirect("core:retention_dashboard")
@@ -257,6 +257,30 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
             return JsonResponse({"processed": count})
 
         return redirect("core:retention_dashboard")
+
+    def _report_decisions(self, request, count, skipped):
+        messages.success(
+            request,
+            ngettext(
+                "%(count)d Löschvorschlag aktualisiert.",
+                "%(count)d Löschvorschläge aktualisiert.",
+                count,
+            )
+            % {"count": count},
+        )
+        self._report_skipped(request, skipped)
+
+    def _report_skipped(self, request, skipped):
+        if skipped:
+            messages.warning(
+                request,
+                ngettext(
+                    "%(count)d Löschvorschlag übersprungen (Aufbewahrungssperre, Status oder Berechtigung).",
+                    "%(count)d Löschvorschläge übersprungen (Aufbewahrungssperre, Status oder Berechtigung).",
+                    skipped,
+                )
+                % {"count": skipped},
+            )
 
     def get(self, request):
         return HttpResponseNotAllowed(["POST"])
@@ -271,6 +295,30 @@ class RetentionBulkApproveView(_BulkActionMixin, View):
         RetentionProposal.Status.PENDING,
         RetentionProposal.Status.DEFERRED,
     )
+
+    def _report_decisions(self, request, count, skipped):
+        if self.first_approvals:
+            messages.success(
+                request,
+                ngettext(
+                    "%(count)d erste Freigabe erteilt (1 von 2 Freigaben).",
+                    "%(count)d erste Freigaben erteilt (1 von 2 Freigaben).",
+                    self.first_approvals,
+                )
+                % {"count": self.first_approvals},
+            )
+        finalized = count - self.first_approvals
+        if finalized:
+            messages.success(
+                request,
+                ngettext(
+                    "%(count)d Löschvorschlag endgültig freigegeben.",
+                    "%(count)d Löschvorschläge endgültig freigegeben.",
+                    finalized,
+                )
+                % {"count": finalized},
+            )
+        self._report_skipped(request, skipped)
 
 
 class RetentionBulkDeferView(_BulkActionMixin, View):
@@ -334,7 +382,14 @@ class RetentionDismissHoldView(LeadOrAdminRequiredMixin, View):
             annotate_urgency(proposal)
             proposal.active_hold = None
 
-        return render(request, "core/retention/partials/proposal_card.html", {"proposal": proposal})
+        return render(
+            request,
+            "core/retention/partials/proposal_card.html",
+            {
+                "proposal": proposal,
+                "retention_approver_count": eligible_retention_approvers(request.current_facility).count(),
+            },
+        )
 
     def get(self, request, pk):
         return HttpResponseNotAllowed(["POST"])
