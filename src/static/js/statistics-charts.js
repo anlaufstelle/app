@@ -93,6 +93,7 @@ function buildStatisticsCharts() {
         // damit die Charts nicht leer/halb gezeichnet im Screenshot landen.
         document.body.setAttribute("data-charts-ready", "true");
       } catch (e) {
+        console.error(e);
         this.error = this.text("requestFailed", "Request failed.");
       } finally {
         this.loading = false;

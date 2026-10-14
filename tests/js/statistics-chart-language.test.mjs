@@ -42,7 +42,11 @@ it("uses translated network failure text rather than the browser exception", asy
     const component = factory();
     component.$el = document.getElementById("statistics-charts");
     component.$el.dataset.i18nRequestFailed = "Translated request failure";
-    window.fetch = vi.fn(async () => { throw new Error("Browser-language exception"); });
+    const error = new Error("Browser-language exception");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    window.fetch = vi.fn(async () => { throw error; });
     await component.fetchAndRender();
     expect(component.error).toBe("Translated request failure");
+    expect(log).toHaveBeenCalledWith(error);
+    log.mockRestore();
 });
