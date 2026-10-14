@@ -9,7 +9,7 @@ run deletes while their month is still running.
 from datetime import datetime, time, timedelta
 
 import pytest
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.db import transaction
 from django.utils import timezone
 
@@ -437,7 +437,9 @@ class TestHistoricalSnapshotRefresh:
             raise RuntimeError("statistics recomputation unavailable")
 
         monkeypatch.setattr("core.services.dashboard.snapshot.get_statistics", fail_recomputation)
-        call_command("enforce_retention")
+        # Refs #2583: the rolled-back deletion counts as a technical failure of the run.
+        with pytest.raises(CommandError, match=r"2 event\(s\) kept"):
+            call_command("enforce_retention")
 
         assert Event.objects.filter(facility=facility, is_deleted=True).count() == 0
         assert EventHistory.objects.filter(event__facility=facility, action=EventHistory.Action.DELETE).count() == 0
