@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Datumseingabe in App-Sprache** (#2603) — Datums- und Zeitfelder verwenden mit JavaScript online und offline das Format der gewählten App-Sprache und übertragen weiterhin ISO-Werte.
+- **Episodendaten beim Bearbeiten erhalten** (#2536) — Beginn und Ende werden mit ISO-Werten vorbelegt, sodass eine Titeländerung eine abgeschlossene Episode nicht wieder aktiviert.
 
 - **Offline-Zustände für Screenreader angekündigt** (#2556) — Online-Layout und Offline-Shell melden Verbindungswechsel, beendete Übertragung und neue Konflikte einmal ohne Fokuswechsel oder Hintergrund-Zähleransagen und verweisen bei Konflikten auf die Auflösung.
 

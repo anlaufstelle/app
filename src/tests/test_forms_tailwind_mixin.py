@@ -143,8 +143,8 @@ EXPECTED = {
     "EpisodeForm": {
         "title": ("TextInput", True, {"maxlength": "200"}),
         "description": ("Textarea", True, {"rows": 4, "cols": "40"}),
-        "started_at": ("DateInput", True, {}),
-        "ended_at": ("DateInput", True, {}),
+        "started_at": ("AppDateInput", True, {}),
+        "ended_at": ("AppDateInput", True, {}),
     },
     "EventMetaForm": {
         "document_type": ("Select", True, {"hx-get": "", "hx-target": "#dynamic-fields", "hx-trigger": "change"}),

@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from core.forms.mixins import TailwindFormMixin
 from core.models.episode import Episode
 from core.services.case.episodes import episode_basis_token, validate_episode_dates
+from core.utils.date_input import AppDateInput
 
 
 class EpisodeForm(TailwindFormMixin, forms.ModelForm):
@@ -23,14 +24,12 @@ class EpisodeForm(TailwindFormMixin, forms.ModelForm):
                     "rows": 4,
                 }
             ),
-            "started_at": forms.DateInput(
-                format="%Y-%m-%d",
+            "started_at": AppDateInput(
                 attrs={
                     "type": "date",
                 },
             ),
-            "ended_at": forms.DateInput(
-                format="%Y-%m-%d",
+            "ended_at": AppDateInput(
                 attrs={
                     "type": "date",
                 },
