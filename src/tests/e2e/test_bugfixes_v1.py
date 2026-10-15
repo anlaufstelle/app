@@ -18,12 +18,14 @@ pytestmark = pytest.mark.e2e
 def _run_shell(script, env):
     """Django-Shell-Befehl mit worker-aware Environment ausfuehren."""
     python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
-    subprocess.run(
+    result = subprocess.run(
         [python, "src/manage.py", "shell", "--no-imports", "-c", script],
         check=True,
         capture_output=True,
+        text=True,
         env=env,
     )
+    return result.stdout.splitlines()
 
 
 def _set_default_document_type(doc_type_name, env):
@@ -74,22 +76,37 @@ class TestHtmlLangAttribute:
 class TestDefaultDocumentType:
     """#156: Standard-Dokumentationstyp aus Einstellungen wird vorausgewaehlt."""
 
+    @pytest.fixture(autouse=True)
+    def _restore_default_document_type(self, e2e_env):
+        """Restore the facility default afterwards; later specs rely on the seeded "Kontakt" default."""
+        lines = _run_shell(
+            "from core.models import Settings, Facility; "
+            "s = Settings.objects.get(facility=Facility.objects.get(name='Hauptstelle')); "
+            "print('previous=' + str(s.default_document_type_id or ''))",
+            e2e_env,
+        )
+        previous = next(line for line in lines if line.startswith("previous=")).removeprefix("previous=")
+        yield
+        _run_shell(
+            "from core.models import Settings, Facility; "
+            "Settings.objects.filter(facility=Facility.objects.get(name='Hauptstelle')).update("
+            f"default_document_type_id={previous!r} or None)",
+            e2e_env,
+        )
+
     def test_default_document_type_preselected(self, authenticated_page, base_url, e2e_env):
         """Wenn ein Standard-Dokumentationstyp gesetzt ist, wird er im Formular vorausgewaehlt."""
         _set_default_document_type("Kontakt", e2e_env)
-        try:
-            page = authenticated_page
-            page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
+        page = authenticated_page
+        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
 
-            # Der Dokumentationstyp-Dropdown sollte "Kontakt" vorausgewaehlt haben
-            selected_value = page.locator("#id_document_type").input_value()
-            assert selected_value != "", "Kein Standard-Dokumentationstyp vorausgewaehlt"
+        # Der Dokumentationstyp-Dropdown sollte "Kontakt" vorausgewaehlt haben
+        selected_value = page.locator("#id_document_type").input_value()
+        assert selected_value != "", "Kein Standard-Dokumentationstyp vorausgewaehlt"
 
-            # Dynamische Felder sollten vorgerendert sein
-            dynamic_fields = page.locator("#dynamic-fields")
-            assert dynamic_fields.locator("label").count() > 0, "Dynamische Felder nicht vorgerendert"
-        finally:
-            _clear_default_document_type(e2e_env)
+        # Dynamische Felder sollten vorgerendert sein
+        dynamic_fields = page.locator("#dynamic-fields")
+        assert dynamic_fields.locator("label").count() > 0, "Dynamische Felder nicht vorgerendert"
 
     def test_no_default_shows_empty_dropdown(self, authenticated_page, base_url, e2e_env):
         """Ohne Standard-Dokumentationstyp bleibt der Dropdown leer."""
