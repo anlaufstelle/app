@@ -117,7 +117,7 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         results = {
             "Personen": self._purge_model(Client, dry_run),
-            "Faelle": self._purge_model(Case, dry_run),
+            "Fälle": self._purge_model(Case, dry_run),
             "Ereignisse": self._purge_model(Event, dry_run),
         }
 

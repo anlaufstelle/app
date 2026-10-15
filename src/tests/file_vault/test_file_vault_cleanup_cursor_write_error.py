@@ -53,7 +53,7 @@ def test_cursor_write_failure_reports_completed_counts_and_preserves_state(
 
     assert str(state_path) in str(exc_info.value)
     assert "disk full" in str(exc_info.value)
-    assert "Geprueft: 1" in output.getvalue()
-    assert "geloescht: 1" in output.getvalue()
+    assert "Geprüft: 1" in output.getvalue()
+    assert "gelöscht: 1" in output.getvalue()
     assert state_path.read_bytes() == state_before
     assert list(tmp_path.glob(f".{STATE_FILENAME}.*.tmp")) == []

@@ -719,7 +719,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 # Admin-DB-Rolle laufen (BYPASSRLS) — sonst fail-loud (§ 9 DB-Rollenmodell).
 #
 # Verwaiste FILE-Marker werden bei ALLEN drei Entitaeten bewusst UEBERSPRUNGEN
-# und separat als "Datei-Waise(n) uebersprungen" gemeldet, NICHT geloescht: der
+# und separat als "Datei-Waise(n) übersprungen" gemeldet, NICHT geloescht: der
 # data_json-Marker ist die einzige Bruecke zur verschluesselten Attachment-
 # Zeile. (Die Regel gilt fuer Ereignisse, Personen und Faelle gleichermassen:
 # Datei-Felder sind an allen drei Typen zulaessig, Refs #1738.)
@@ -817,7 +817,7 @@ docker compose -f docker-compose.prod.yml run --rm \
 # Transaktion: ein Abbruch laesst keine halb angelegte Einrichtung zurueck.
 # Ohne Option gilt --package default. Ein Domaenen-Paket wird mit
 # --package <name> als ERSATZ gegen die frische Einrichtung geladen.
-# --package und --no-default-package schliessen sich aus.
+# --package und --no-default-package schließen sich aus.
 # --no-default-package laesst den Katalog weg (Einrichtung startet ohne
 # Dokumentationstypen und ist erst nach load_package dokumentierbar).
 # Traegt die Einrichtung schon Dokumentationstypen oder Feldvorlagen, bleibt

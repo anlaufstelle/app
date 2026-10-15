@@ -3308,4 +3308,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-14 -->
-<!-- source-hash: 688e05e77a0c8efaa44235c6d7cf13d50e28eb58 -->
+<!-- source-hash: 24841a216df162df91805b8757575fca384fe1bd -->

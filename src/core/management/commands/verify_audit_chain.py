@@ -104,7 +104,7 @@ class Command(BaseCommand):
             "--reactivate-reason",
             default="",
             metavar="TEXT",
-            help="Begründung der Rückname zu --reactivate-chain (Refs #2296).",
+            help="Begründung der Rücknahme zu --reactivate-chain (Refs #2296).",
         )
 
     def _chains_with_anchorable_tail(self) -> set:

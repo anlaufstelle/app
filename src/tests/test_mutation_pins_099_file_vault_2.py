@@ -266,7 +266,7 @@ class TestStorageWarningExactWording:
 
         assert message == (
             "Speicherkontingent zu 95 % belegt (950 von 1000 MB, "
-            "davon 100 MB im Papierkorb) — Papierkorb leeren oder Kontingent erhoehen."
+            "davon 100 MB im Papierkorb) — Papierkorb leeren oder Kontingent erhöhen."
         )
 
 
