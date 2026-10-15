@@ -18,12 +18,16 @@ class TestCtrlEnterRequestSubmit:
         page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
         page.locator("#event-create-form").wait_for(state="visible", timeout=5000)
         url_before = page.url
+        # Since #2603 the named occurred_at input is a hidden ISO transport; the
+        # required check lives on the visible date control. Clear it the way a
+        # user does so the form becomes invalid through the real input path.
+        visible_occurred_at = page.locator("#event-create-form [data-app-date-visible]#id_occurred_at")
+        visible_occurred_at.fill("")
 
         result = page.evaluate(
             """() => {
                 const form = document.getElementById('event-create-form');
-                const occ = form.querySelector("[name='occurred_at']");
-                occ.value = '';  // Pflichtfeld leeren → Form invalid
+                const occ = form.querySelector('#id_occurred_at[data-app-date-visible]');
                 let submits = 0;
                 form.addEventListener('submit', (e) => { submits++; e.preventDefault(); });
                 form.dispatchEvent(new KeyboardEvent('keydown', {
@@ -33,9 +37,11 @@ class TestCtrlEnterRequestSubmit:
                     submits,
                     valid: form.checkValidity(),
                     validationShown: occ.validationMessage.length > 0,
+                    transportValue: form.querySelector("[name='occurred_at']").value,
                 };
             }"""
         )
+        assert result["transportValue"] == ""
         assert result["valid"] is False
         # requestSubmit() blockt das invalide Formular; das frühere submit() hätte trotzdem gefeuert.
         assert result["submits"] == 0
