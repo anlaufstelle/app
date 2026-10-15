@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 20:50+0200\n"
+"POT-Creation-Date: 2026-10-15 08:37+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -480,14 +480,6 @@ msgstr "Das Fälligkeitsdatum darf nicht in der Vergangenheit liegen."
 msgid "Die Erinnerung darf nicht in der Vergangenheit liegen."
 msgstr "Die Erinnerung darf nicht in der Vergangenheit liegen."
 
-#: src/core/management/commands/create_super_admin.py:20
-msgid ""
-"Legt einen Super-Admin (installation-weite Systemadministration, Refs #867) "
-"interaktiv an. Passwort wird ueber getpass abgefragt — kein Default."
-msgstr ""
-"Legt einen Super-Admin (installation-weite Systemadministration, Refs #867) "
-"interaktiv an. Passwort wird ueber getpass abgefragt — kein Default."
-
 #: src/core/management/commands/create_super_admin.py:30
 msgid "Benutzername. Wird interaktiv abgefragt, falls nicht angegeben."
 msgstr "Benutzername. Wird interaktiv abgefragt, falls nicht angegeben."
@@ -496,14 +488,6 @@ msgstr "Benutzername. Wird interaktiv abgefragt, falls nicht angegeben."
 msgid "E-Mail-Adresse. Wird interaktiv abgefragt, falls nicht angegeben."
 msgstr "E-Mail-Adresse. Wird interaktiv abgefragt, falls nicht angegeben."
 
-#: src/core/management/commands/create_super_admin.py:45
-msgid ""
-"Bestaetigung ueberspringen, wenn bereits ein Super-Admin existiert. Ohne --"
-"force bricht der Befehl ab."
-msgstr ""
-"Bestaetigung ueberspringen, wenn bereits ein Super-Admin existiert. Ohne --"
-"force bricht der Befehl ab."
-
 #: src/core/management/commands/create_super_admin.py:61
 msgid "Benutzername: "
 msgstr "Benutzername: "
@@ -511,11 +495,6 @@ msgstr "Benutzername: "
 #: src/core/management/commands/create_super_admin.py:63
 msgid "Benutzername darf nicht leer sein."
 msgstr "Benutzername darf nicht leer sein."
-
-#: src/core/management/commands/create_super_admin.py:66
-#, python-format
-msgid "Benutzer '%s' existiert bereits — bitte anderen Namen waehlen."
-msgstr "Benutzer '%s' existiert bereits — bitte anderen Namen waehlen."
 
 #: src/core/management/commands/create_super_admin.py:73
 msgid "E-Mail-Adresse: "
@@ -532,14 +511,6 @@ msgstr "Passwort: "
 #: src/core/management/commands/create_super_admin.py:83
 msgid "Passwort darf nicht leer sein."
 msgstr "Passwort darf nicht leer sein."
-
-#: src/core/management/commands/create_super_admin.py:85
-msgid "Passwort (Bestaetigung): "
-msgstr "Passwort (Bestaetigung): "
-
-#: src/core/management/commands/create_super_admin.py:87
-msgid "Passwoerter stimmen nicht ueberein."
-msgstr "Passwoerter stimmen nicht ueberein."
 
 #: src/core/management/commands/create_super_admin.py:110
 #, python-format
@@ -573,11 +544,6 @@ msgstr ""
 #: src/core/management/commands/unlock.py:21
 msgid "Benutzername des zu entsperrenden Accounts."
 msgstr "Benutzername des zu entsperrenden Accounts."
-
-#: src/core/management/commands/unlock.py:29
-#, python-format
-msgid "Benutzer '%s' existiert nicht. Bitte Username pruefen."
-msgstr "Benutzer '%s' existiert nicht. Bitte Username pruefen."
 
 #: src/core/management/commands/unlock.py:34
 #, python-format
@@ -3638,16 +3604,6 @@ msgstr ""
 msgid "Personen-Stammdaten"
 msgstr "Personen-Stammdaten"
 
-#: src/core/services/compliance/vvt.py:44
-msgid ""
-"Beratungsdokumentation und Falllaufzeit-Steuerung in niedrigschwelligen "
-"Einrichtungen. Kein Klarname-Feld — der primaere Identifikator ist ein "
-"Pseudonym."
-msgstr ""
-"Beratungsdokumentation und Falllaufzeit-Steuerung in niedrigschwelligen "
-"Einrichtungen. Kein Klarname-Feld — der primaere Identifikator ist ein "
-"Pseudonym."
-
 #: src/core/services/compliance/vvt.py:55
 msgid "Pseudonym (kein Klarname)"
 msgstr "Pseudonym (kein Klarname)"
@@ -3728,10 +3684,6 @@ msgstr "Aktion (LOGIN, EVENT_CREATED, SYSTEM_VIEW etc.)"
 msgid "Ziel-Typ und Ziel-ID (z.B. Event-UUID)"
 msgstr "Ziel-Typ und Ziel-ID (z.B. Event-UUID)"
 
-#: src/core/services/compliance/vvt.py:145
-msgid "Zugehoerige Einrichtung (oder NULL bei System-Events)"
-msgstr "Zugehoerige Einrichtung (oder NULL bei System-Events)"
-
 #: src/core/services/compliance/vvt.py:148
 msgid "Anwendungsbetreuung der Einrichtung (Facility-Audit-Log)"
 msgstr "Anwendungsbetreuung der Einrichtung (Facility-Audit-Log)"
@@ -3783,14 +3735,6 @@ msgstr "Konfigurationsdaten der Installation"
 #: src/core/services/compliance/vvt.py:229
 msgid "Intern: Systemadministration (Restore-Berechtigung)"
 msgstr "Intern: Systemadministration (Restore-Berechtigung)"
-
-#: src/core/services/compliance/vvt.py:242
-msgid "Regelmaessige Restore-Tests"
-msgstr "Regelmaessige Restore-Tests"
-
-#: src/core/services/compliance/vvt.py:248
-msgid "DSGVO-Auskunfts- und Berichtigungsantraege"
-msgstr "DSGVO-Auskunfts- und Berichtigungsantraege"
 
 #: src/core/services/compliance/vvt.py:256
 msgid ""
@@ -4470,10 +4414,6 @@ msgstr ""
 "Es wurde kein neuer Antrag angelegt, die eingegebene Begründung wurde nicht "
 "übernommen."
 
-#: src/core/views/client_deletion.py:89
-msgid "Bitte eine Begruendung angeben."
-msgstr "Bitte eine Begruendung angeben."
-
 #: src/core/views/client_deletion.py:95
 msgid ""
 "Löschantrag gestellt. Er erscheint in der Löschanträge-Liste und muss von "
@@ -5094,14 +5034,6 @@ msgstr "Wartungsmodus"
 #: src/templates/503.html:59
 msgid "Wartungsarbeiten"
 msgstr "Wartungsarbeiten"
-
-#: src/templates/503.html:61
-msgid ""
-"Anlaufstelle ist gerade kurz nicht erreichbar — wir spielen ein Update ein "
-"oder fuehren eine Migration durch."
-msgstr ""
-"Anlaufstelle ist gerade kurz nicht erreichbar — wir spielen ein Update ein "
-"oder fuehren eine Migration durch."
 
 #: src/templates/503.html:62
 msgid ""
@@ -11917,11 +11849,6 @@ msgstr "von %(limit)s MB belegt (davon %(trash)s MB im Papierkorb)"
 msgid "MB belegt (davon %(trash)s MB im Papierkorb) · kein Kontingent gesetzt"
 msgstr "MB belegt (davon %(trash)s MB im Papierkorb) · kein Kontingent gesetzt"
 
-#: src/core/services/file_vault/quota.py:137
-#, python-format
-msgid "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhoehen."
-msgstr "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhoehen."
-
 #: src/core/services/file_vault/policy.py:513
 #, python-format
 msgid "Datei-Inhalt ist ein Bild (%(detected)s), die Endung .%(ext)s ist keine Bild-Endung."
@@ -14876,3 +14803,59 @@ msgstr "Dieser Entwurf wurde möglicherweise bereits gespeichert. Das Zwischensp
 #: src/tests/test_autosave_submission_confirmation.py:51
 msgid "Entwurf trotzdem verwenden"
 msgstr "Entwurf trotzdem verwenden"
+
+#: src/core/management/commands/create_super_admin.py:20
+msgid "Legt einen Super-Admin (installation-weite Systemadministration, Refs #867) interaktiv an. Passwort wird über getpass abgefragt — kein Default."
+msgstr "Legt einen Super-Admin (installation-weite Systemadministration, Refs #867) interaktiv an. Passwort wird über getpass abgefragt — kein Default."
+
+#: src/core/management/commands/create_super_admin.py:45
+msgid "Bestätigung überspringen, wenn bereits ein Super-Admin existiert. Ohne --force bricht der Befehl ab."
+msgstr "Bestätigung überspringen, wenn bereits ein Super-Admin existiert. Ohne --force bricht der Befehl ab."
+
+#: src/core/management/commands/create_super_admin.py:66
+#, python-format
+msgid "Benutzer '%s' existiert bereits — bitte anderen Namen wählen."
+msgstr "Benutzer '%s' existiert bereits — bitte anderen Namen wählen."
+
+#: src/core/management/commands/create_super_admin.py:85
+msgid "Passwort (Bestätigung): "
+msgstr "Passwort (Bestätigung): "
+
+#: src/core/management/commands/create_super_admin.py:87
+msgid "Passwörter stimmen nicht überein."
+msgstr "Passwörter stimmen nicht überein."
+
+#: src/core/management/commands/unlock.py:29
+#, python-format
+msgid "Benutzer '%s' existiert nicht. Bitte Username prüfen."
+msgstr "Benutzer '%s' existiert nicht. Bitte Username prüfen."
+
+#: src/core/services/compliance/vvt.py:50
+msgid "Beratungsdokumentation und Falllaufzeit-Steuerung in niedrigschwelligen Einrichtungen. Kein Klarname-Feld — der primäre Identifikator ist ein Pseudonym."
+msgstr "Beratungsdokumentation und Falllaufzeit-Steuerung in niedrigschwelligen Einrichtungen. Kein Klarname-Feld — der primäre Identifikator ist ein Pseudonym."
+
+#: src/core/services/compliance/vvt.py:281
+msgid "Zugehörige Einrichtung (oder NULL bei System-Events)"
+msgstr "Zugehörige Einrichtung (oder NULL bei System-Events)"
+
+#: src/core/services/compliance/vvt.py:416
+msgid "Regelmäßige Restore-Tests"
+msgstr "Regelmäßige Restore-Tests"
+
+#: src/core/services/compliance/vvt.py:422
+msgid "DSGVO-Auskunfts- und Berichtigungsanträge"
+msgstr "DSGVO-Auskunfts- und Berichtigungsanträge"
+
+#: src/core/services/file_vault/quota.py:164
+#, python-format
+msgid "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhöhen."
+msgstr "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhöhen."
+
+#: src/core/views/case_deletion.py:163 src/core/views/client_deletion.py:94
+#: src/core/views/client_merge.py:220
+msgid "Bitte eine Begründung angeben."
+msgstr "Bitte eine Begründung angeben."
+
+#: src/templates/503.html:92
+msgid "Anlaufstelle ist gerade kurz nicht erreichbar — wir spielen ein Update ein oder führen eine Migration durch."
+msgstr "Anlaufstelle ist gerade kurz nicht erreichbar — wir spielen ein Update ein oder führen eine Migration durch."

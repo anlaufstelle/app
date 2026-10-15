@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 20:50+0200\n"
+"POT-Creation-Date: 2026-10-15 08:37+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -469,15 +469,6 @@ msgstr "The due date must not be in the past."
 msgid "Die Erinnerung darf nicht in der Vergangenheit liegen."
 msgstr "The reminder must not be in the past."
 
-#: src/core/management/commands/create_super_admin.py:20
-msgid ""
-"Legt einen Super-Admin (installation-weite Systemadministration, Refs #867) "
-"interaktiv an. Passwort wird ueber getpass abgefragt — kein Default."
-msgstr ""
-"Interactively creates a super admin (installation-wide system "
-"administration, Refs #867). The password is requested via getpass — no "
-"default."
-
 #: src/core/management/commands/create_super_admin.py:30
 msgid "Benutzername. Wird interaktiv abgefragt, falls nicht angegeben."
 msgstr "Username. Asked interactively if not provided."
@@ -486,14 +477,6 @@ msgstr "Username. Asked interactively if not provided."
 msgid "E-Mail-Adresse. Wird interaktiv abgefragt, falls nicht angegeben."
 msgstr "Email address. Asked interactively if not provided."
 
-#: src/core/management/commands/create_super_admin.py:45
-msgid ""
-"Bestaetigung ueberspringen, wenn bereits ein Super-Admin existiert. Ohne --"
-"force bricht der Befehl ab."
-msgstr ""
-"Skip confirmation if a super admin already exists. Without --force the "
-"command aborts."
-
 #: src/core/management/commands/create_super_admin.py:61
 msgid "Benutzername: "
 msgstr "Username: "
@@ -501,11 +484,6 @@ msgstr "Username: "
 #: src/core/management/commands/create_super_admin.py:63
 msgid "Benutzername darf nicht leer sein."
 msgstr "Username must not be empty."
-
-#: src/core/management/commands/create_super_admin.py:66
-#, python-format
-msgid "Benutzer '%s' existiert bereits — bitte anderen Namen waehlen."
-msgstr "User '%s' already exists — please choose a different name."
 
 #: src/core/management/commands/create_super_admin.py:73
 msgid "E-Mail-Adresse: "
@@ -522,14 +500,6 @@ msgstr "Password: "
 #: src/core/management/commands/create_super_admin.py:83
 msgid "Passwort darf nicht leer sein."
 msgstr "Password must not be empty."
-
-#: src/core/management/commands/create_super_admin.py:85
-msgid "Passwort (Bestaetigung): "
-msgstr "Password (confirmation): "
-
-#: src/core/management/commands/create_super_admin.py:87
-msgid "Passwoerter stimmen nicht ueberein."
-msgstr "Passwords do not match."
 
 #: src/core/management/commands/create_super_admin.py:110
 #, python-format
@@ -562,11 +532,6 @@ msgstr "Lifts a user's account lock (CLI context, writes AuditLog)."
 #: src/core/management/commands/unlock.py:21
 msgid "Benutzername des zu entsperrenden Accounts."
 msgstr "Username of the account to unlock."
-
-#: src/core/management/commands/unlock.py:29
-#, python-format
-msgid "Benutzer '%s' existiert nicht. Bitte Username pruefen."
-msgstr "User '%s' does not exist. Please check the username."
 
 #: src/core/management/commands/unlock.py:34
 #, python-format
@@ -3606,15 +3571,6 @@ msgstr "The rectification could not be applied (value already taken)."
 msgid "Personen-Stammdaten"
 msgstr "Person master data"
 
-#: src/core/services/compliance/vvt.py:44
-msgid ""
-"Beratungsdokumentation und Falllaufzeit-Steuerung in niedrigschwelligen "
-"Einrichtungen. Kein Klarname-Feld — der primaere Identifikator ist ein "
-"Pseudonym."
-msgstr ""
-"Counseling documentation and case-duration management in low-threshold "
-"facilities. No real-name field — the primary identifier is a pseudonym."
-
 #: src/core/services/compliance/vvt.py:55
 msgid "Pseudonym (kein Klarname)"
 msgstr "Pseudonym (no real name)"
@@ -3695,10 +3651,6 @@ msgstr "Action (LOGIN, EVENT_CREATED, SYSTEM_VIEW, etc.)"
 msgid "Ziel-Typ und Ziel-ID (z.B. Event-UUID)"
 msgstr "Target type and target ID (e.g. event UUID)"
 
-#: src/core/services/compliance/vvt.py:145
-msgid "Zugehoerige Einrichtung (oder NULL bei System-Events)"
-msgstr "Associated facility (or NULL for system events)"
-
 #: src/core/services/compliance/vvt.py:148
 msgid "Anwendungsbetreuung der Einrichtung (Facility-Audit-Log)"
 msgstr "Application support of the facility (facility audit log)"
@@ -3750,14 +3702,6 @@ msgstr "Configuration data of the installation"
 #: src/core/services/compliance/vvt.py:229
 msgid "Intern: Systemadministration (Restore-Berechtigung)"
 msgstr "Internal: system administration (restore permission)"
-
-#: src/core/services/compliance/vvt.py:242
-msgid "Regelmaessige Restore-Tests"
-msgstr "Regular restore tests"
-
-#: src/core/services/compliance/vvt.py:248
-msgid "DSGVO-Auskunfts- und Berichtigungsantraege"
-msgstr "GDPR access and rectification requests"
 
 #: src/core/services/compliance/vvt.py:256
 msgid ""
@@ -4433,10 +4377,6 @@ msgstr ""
 "confirmation. No new request was created, and the reason you entered was not "
 "saved."
 
-#: src/core/views/client_deletion.py:89
-msgid "Bitte eine Begruendung angeben."
-msgstr "Please provide a reason."
-
 #: src/core/views/client_deletion.py:95
 msgid ""
 "Löschantrag gestellt. Er erscheint in der Löschanträge-Liste und muss von "
@@ -5055,14 +4995,6 @@ msgstr "Maintenance mode"
 #: src/templates/503.html:59
 msgid "Wartungsarbeiten"
 msgstr "Maintenance"
-
-#: src/templates/503.html:61
-msgid ""
-"Anlaufstelle ist gerade kurz nicht erreichbar — wir spielen ein Update ein "
-"oder fuehren eine Migration durch."
-msgstr ""
-"Anlaufstelle is briefly unavailable — we are deploying an update or running "
-"a migration."
 
 #: src/templates/503.html:62
 msgid ""
@@ -11828,11 +11760,6 @@ msgstr "of %(limit)s MB used (%(trash)s MB of that in the trash)"
 msgid "MB belegt (davon %(trash)s MB im Papierkorb) · kein Kontingent gesetzt"
 msgstr "MB used (%(trash)s MB of that in the trash) · no quota set"
 
-#: src/core/services/file_vault/quota.py:137
-#, python-format
-msgid "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhoehen."
-msgstr "Storage quota %(percent)s %% used (%(used)s of %(limit)s MB, %(trash)s MB of that in the trash) -- empty the trash or raise the quota."
-
 #: src/core/services/file_vault/policy.py:513
 #, python-format
 msgid "Datei-Inhalt ist ein Bild (%(detected)s), die Endung .%(ext)s ist keine Bild-Endung."
@@ -14787,3 +14714,59 @@ msgstr "This draft may already have been saved. Autosave is paused. Use it only 
 #: src/tests/test_autosave_submission_confirmation.py:51
 msgid "Entwurf trotzdem verwenden"
 msgstr "Use draft anyway"
+
+#: src/core/management/commands/create_super_admin.py:20
+msgid "Legt einen Super-Admin (installation-weite Systemadministration, Refs #867) interaktiv an. Passwort wird über getpass abgefragt — kein Default."
+msgstr "Interactively creates a super admin (installation-wide system administration, Refs #867). The password is requested via getpass — no default."
+
+#: src/core/management/commands/create_super_admin.py:45
+msgid "Bestätigung überspringen, wenn bereits ein Super-Admin existiert. Ohne --force bricht der Befehl ab."
+msgstr "Skip confirmation if a super admin already exists. Without --force the command aborts."
+
+#: src/core/management/commands/create_super_admin.py:66
+#, python-format
+msgid "Benutzer '%s' existiert bereits — bitte anderen Namen wählen."
+msgstr "User '%s' already exists — please choose a different name."
+
+#: src/core/management/commands/create_super_admin.py:85
+msgid "Passwort (Bestätigung): "
+msgstr "Password (confirmation): "
+
+#: src/core/management/commands/create_super_admin.py:87
+msgid "Passwörter stimmen nicht überein."
+msgstr "Passwords do not match."
+
+#: src/core/management/commands/unlock.py:29
+#, python-format
+msgid "Benutzer '%s' existiert nicht. Bitte Username prüfen."
+msgstr "User '%s' does not exist. Please check the username."
+
+#: src/core/services/compliance/vvt.py:50
+msgid "Beratungsdokumentation und Falllaufzeit-Steuerung in niedrigschwelligen Einrichtungen. Kein Klarname-Feld — der primäre Identifikator ist ein Pseudonym."
+msgstr "Counseling documentation and case-duration management in low-threshold facilities. No real-name field — the primary identifier is a pseudonym."
+
+#: src/core/services/compliance/vvt.py:281
+msgid "Zugehörige Einrichtung (oder NULL bei System-Events)"
+msgstr "Associated facility (or NULL for system events)"
+
+#: src/core/services/compliance/vvt.py:416
+msgid "Regelmäßige Restore-Tests"
+msgstr "Regular restore tests"
+
+#: src/core/services/compliance/vvt.py:422
+msgid "DSGVO-Auskunfts- und Berichtigungsanträge"
+msgstr "GDPR access and rectification requests"
+
+#: src/core/services/file_vault/quota.py:164
+#, python-format
+msgid "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhöhen."
+msgstr "Storage quota %(percent)s %% used (%(used)s of %(limit)s MB, %(trash)s MB of that in the trash) -- empty the trash or raise the quota."
+
+#: src/core/views/case_deletion.py:163 src/core/views/client_deletion.py:94
+#: src/core/views/client_merge.py:220
+msgid "Bitte eine Begründung angeben."
+msgstr "Please provide a reason."
+
+#: src/templates/503.html:92
+msgid "Anlaufstelle ist gerade kurz nicht erreichbar — wir spielen ein Update ein oder führen eine Migration durch."
+msgstr "Anlaufstelle is briefly unavailable — we are deploying an update or running a migration."
