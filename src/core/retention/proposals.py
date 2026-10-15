@@ -883,7 +883,9 @@ def reactivate_deferred_proposals(facility):
     try:
         settings_obj = facility.settings
         auto_approve = settings_obj.retention_auto_approve_after_defer
-        max_defer_count = settings_obj.retention_max_defer_count
+        # A stored threshold below 1 (written without model validation) must not
+        # turn a due deferral into an approval without any counted deferral.
+        max_defer_count = max(settings_obj.retention_max_defer_count, 1)
     except facility._meta.model.settings.RelatedObjectDoesNotExist:
         # Ohne Settings wird nichts auto-approved; ``max_defer_count`` bleibt
         # bewusst ungesetzt, weil ``auto_approve=False`` die einzige Lesestelle

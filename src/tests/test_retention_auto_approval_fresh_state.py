@@ -154,3 +154,19 @@ def test_command_rechecks_auto_approval_eligibility(due_proposal, facility, chan
     decisions = AuditLog.objects.filter(facility=facility, target_id=str(event.pk))
     assert not decisions.filter(detail__category="retention_proposal_auto_approved").exists()
     assert decisions.filter(detail__category="retention_proposal_auto_approve_skipped").count() == 1
+
+
+def test_stored_zero_threshold_does_not_auto_approve_uncounted_deferral(due_proposal, facility, settings_obj):
+    event, proposal = due_proposal()
+    type(settings_obj).objects.filter(pk=settings_obj.pk).update(retention_max_defer_count=0)
+    RetentionProposal.objects.filter(pk=proposal.pk).update(defer_count=0)
+
+    call_command("enforce_retention", facility=facility.name, stdout=StringIO())
+
+    event.refresh_from_db()
+    assert not event.is_deleted
+    proposal.refresh_from_db()
+    assert proposal.approved_at is None
+    assert proposal.auto_approved_at is None
+    decisions = AuditLog.objects.filter(facility=facility, target_id=str(event.pk))
+    assert not decisions.filter(detail__category="retention_proposal_auto_approved").exists()
