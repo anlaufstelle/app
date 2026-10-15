@@ -62,7 +62,15 @@ def scene(e2e_env):
         if key in {"a", "b", "ca", "ch", "cb", "t"}:
             values[key] = value
     assert len(values) == 7, f"seed failed: {values}"
-    return values
+    yield values
+    _delete_quick_templates(e2e_env, values["t"])
+
+
+def _delete_quick_templates(e2e_env, *pks):
+    """Remove the scene's quick templates: every one adds a tab stop to every later contact form."""
+    django_shell(
+        e2e_env, f"from core.models import QuickTemplate; QuickTemplate.objects.filter(pk__in={list(pks)!r}).delete()"
+    )
 
 
 def _case_options(page) -> list[str]:
@@ -170,7 +178,8 @@ def error_scene(scene, e2e_env):
         if key in {"req", "stage", "contact", "t2", "t3"}:
             values[key] = value
     assert {"req", "stage", "contact", "t2", "t3"} <= values.keys(), f"seed failed: {values}"
-    return values
+    yield values
+    _delete_quick_templates(e2e_env, values["t2"], values["t3"])
 
 
 def _event_case_of_client(e2e_env, client_pk: str) -> str:
