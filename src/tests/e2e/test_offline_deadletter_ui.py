@@ -81,7 +81,7 @@ def _seed_client(e2e_env):
         " print(c.pk)"
     )
     lines = _shell(e2e_env, script)
-    return lines[-1]
+    return lines[-1], f"E2E-M8-{suffix}"
 
 
 # ---------------------------------------------------------------------------
@@ -406,7 +406,7 @@ def test_toggle_remove_with_unsynced_event_shows_confirm_and_cancel_keeps_offlin
     ``removeClientFromOffline`` ohne Vorwarnung auf — der Nutzer erfaehrt
     nicht, dass eine ungesyncte Aenderung betroffen ist, kein ``confirm()``
     kann die Aktion abbrechen. Refs #1351, Refs #1385."""
-    client_pk = _seed_client(e2e_env)
+    client_pk, pseudonym = _seed_client(e2e_env)
     context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
     page = context.new_page()
     page.set_default_timeout(30000)
@@ -424,7 +424,8 @@ def test_toggle_remove_with_unsynced_event_shows_confirm_and_cancel_keeps_offlin
                 await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
             }"""
         )
-        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+        # Filter on the fresh person: the paginated list grows with every spec that creates persons.
+        page.goto(f"{base_url}/clients/?q={pseudonym}", wait_until="domcontentloaded")
         row = page.locator(f"[data-testid='client-row'][data-pk='{client_pk}']")
         row.wait_for(state="visible", timeout=10000)
         toggle = row.locator("[data-testid='row-take-offline-btn']")

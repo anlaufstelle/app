@@ -6,6 +6,7 @@ document types and on the new-doctype form (never submitted).
 Preconditions: default E2E seed, login as the facility admin (``authenticated_page``).
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -29,8 +30,9 @@ DEEP_HELP_FIELDS = (
 
 
 def _open_contact_doctype_detail(page, base_url):
-    page.goto(f"{base_url}{DOCTYPE_LIST}", wait_until="domcontentloaded")
-    page.locator('[data-testid="doctype-detail-link"]').filter(has_text="Kontakt").click()
+    # Search instead of relying on page one: other specs add document types to the paginated list.
+    page.goto(f"{base_url}{DOCTYPE_LIST}?q=Kontakt", wait_until="domcontentloaded")
+    page.locator('[data-testid="doctype-detail-link"]').filter(has_text=re.compile(r"^\s*Kontakt\s*$")).click()
     page.wait_for_url("**/config/document-types/*/")
 
 
