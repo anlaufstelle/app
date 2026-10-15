@@ -122,16 +122,28 @@ def test_historical_inactive_assignment_does_not_block_other_actions(client, sta
 
 
 @pytest.mark.parametrize("kind", ["deleted_task", "deleted_client", "inactive_client", "restricted_client"])
-def test_freshly_hidden_or_locked_item_refuses_whole_post(client, staff_user, items, client_identified, kind):
+def test_freshly_hidden_or_locked_item_refuses_whole_post(
+    client, staff_user, items, client_identified, kind, monkeypatch
+):
+    from core.views.workitem_bulk import _BulkActionMixin
+
     WorkItem.objects.filter(pk=items[1].pk).update(client=client_identified)
-    if kind == "deleted_task":
-        WorkItem.objects.filter(pk=items[1].pk).update(is_deleted=True)
-    elif kind == "deleted_client":
-        type(client_identified).objects.filter(pk=client_identified.pk).update(is_deleted=True)
-    elif kind == "inactive_client":
-        type(client_identified).objects.filter(pk=client_identified.pk).update(is_active=False)
-    else:
-        type(client_identified).objects.filter(pk=client_identified.pk).update(processing_restricted=True)
+    original = _BulkActionMixin._load_workitems
+
+    def revoke_after_lookup(self, request, ids):
+        loaded = original(self, request, ids)
+        # Refs #2585: the service must catch revocation after the read boundary.
+        if kind == "deleted_task":
+            WorkItem.objects.filter(pk=items[1].pk).update(is_deleted=True)
+        elif kind == "deleted_client":
+            type(client_identified).objects.filter(pk=client_identified.pk).update(is_deleted=True)
+        elif kind == "inactive_client":
+            type(client_identified).objects.filter(pk=client_identified.pk).update(is_active=False)
+        else:
+            type(client_identified).objects.filter(pk=client_identified.pk).update(processing_restricted=True)
+        return loaded
+
+    monkeypatch.setattr(_BulkActionMixin, "_load_workitems", revoke_after_lookup)
     client.force_login(staff_user)
     response = client.post(
         reverse("core:workitem_bulk_priority"),

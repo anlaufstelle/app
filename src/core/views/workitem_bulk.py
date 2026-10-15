@@ -28,7 +28,7 @@ from core.services.case import (
     bulk_update_workitem_priority,
     bulk_update_workitem_status,
 )
-from core.services.case.workitems import WorkItemBatchForbiddenError
+from core.services.case.workitems import WorkItemBatchForbiddenError, workitems_for_read
 from core.utils.ratelimit import ratelimit
 from core.views.mixins import AssistantOrAboveRequiredMixin
 from core.views.workitems import can_user_mutate_workitem
@@ -160,7 +160,7 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         # further down the call chain (`_locked_workitems`, deadlock
         # avoidance) is independent of this list's order and stays
         # deterministic-by-pk, unaffected by this change.
-        by_pk = {wi.pk: wi for wi in WorkItem.objects.for_facility(request.current_facility).filter(pk__in=ids)}
+        by_pk = {wi.pk: wi for wi in workitems_for_read(request.current_facility).filter(pk__in=ids)}
         seen = set()
         ordered_ids = [pk for pk in ids if pk not in seen and not seen.add(pk)]
         return [by_pk[pk] for pk in ordered_ids if pk in by_pk]

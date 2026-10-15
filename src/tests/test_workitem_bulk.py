@@ -8,12 +8,72 @@ from django.contrib.messages import get_messages
 from django.urls import reverse
 
 from core.constants import WORKITEM_BULK_MAX_IDS
-from core.models import AuditLog, WorkItem
+from core.models import AuditLog, Client, WorkItem
 from core.services.case import (
     bulk_assign_workitems,
     bulk_update_workitem_priority,
     bulk_update_workitem_status,
 )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("revocation", ["trashed", "inactive"])
+@pytest.mark.parametrize(
+    ("route", "payload"),
+    [
+        ("core:workitem_bulk_status", {"status": WorkItem.Status.DONE}),
+        ("core:workitem_bulk_priority", {"priority": WorkItem.Priority.URGENT}),
+        ("core:workitem_bulk_assign", {"assigned_to": ""}),
+    ],
+)
+def test_bulk_hidden_task_matches_unknown_id(client, lead_user, facility, revocation, route, payload):
+    person = Client.objects.create(facility=facility, pseudonym="Hidden person", created_by=lead_user)
+    task = WorkItem.objects.create(
+        facility=facility, client=person, title="Hidden task", created_by=lead_user, assigned_to=lead_user
+    )
+    Client.objects.filter(pk=person.pk).update(
+        **({"is_deleted": True} if revocation == "trashed" else {"is_active": False})
+    )
+    client.force_login(lead_user)
+    replies = []
+    for task_id in (uuid.uuid4(), task.pk):
+        client.cookies.pop("messages", None)
+        response = client.post(reverse(route), {"workitem_ids": [str(task_id)], **payload}, HTTP_HX_REQUEST="true")
+        replies.append(
+            (response.status_code, response.get("HX-Redirect"), [str(m) for m in get_messages(response.wsgi_request)])
+        )
+    assert replies[0] == replies[1]
+    assert replies[1][2] == ["Keine gültigen Aufgaben gefunden."]
+    task.refresh_from_db()
+    assert task.status == WorkItem.Status.OPEN
+    assert task.priority == WorkItem.Priority.NORMAL
+    assert task.assigned_to_id == lead_user.pk
+
+
+@pytest.mark.django_db
+def test_bulk_mixed_selection_hides_revoked_task_like_unknown_id(client, lead_user, facility):
+    person = Client.objects.create(facility=facility, pseudonym="Hidden person", created_by=lead_user)
+    hidden = WorkItem.objects.create(facility=facility, client=person, title="Hidden task", created_by=lead_user)
+    visible = WorkItem.objects.create(facility=facility, title="Visible task", created_by=lead_user)
+    Client.objects.filter(pk=person.pk).update(is_deleted=True)
+    client.force_login(lead_user)
+    replies = []
+    for task_id in (uuid.uuid4(), hidden.pk):
+        WorkItem.objects.filter(pk=visible.pk).update(priority=WorkItem.Priority.NORMAL)
+        client.cookies.pop("messages", None)
+        response = client.post(
+            reverse("core:workitem_bulk_priority"),
+            {"workitem_ids": [str(visible.pk), str(task_id)], "priority": WorkItem.Priority.URGENT},
+            HTTP_HX_REQUEST="true",
+        )
+        replies.append(
+            (response.status_code, response.get("HX-Redirect"), [str(m) for m in get_messages(response.wsgi_request)])
+        )
+        visible.refresh_from_db()
+        assert visible.priority == WorkItem.Priority.URGENT
+    assert replies[0] == replies[1]
+    hidden.refresh_from_db()
+    assert hidden.priority == WorkItem.Priority.NORMAL
 
 
 @pytest.fixture
