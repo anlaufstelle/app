@@ -44,7 +44,7 @@ def test_conflicting_reactivation_preserves_report_binding(facility, admin_user,
     request = request_for(rf, facility, admin_user)
     if path == "toggle":
         client.force_login(admin_user)
-        response = client.post(reverse("core:config_fieldtemplate_toggle", args=[old.pk]), follow=True)
+        response = client.post(reverse("core:config_fieldtemplate_toggle", args=[old.pk]), {"active": "1"}, follow=True)
         assert response.status_code == 200
         assert new.name in response.content.decode()
         assert doc_type.name in response.content.decode()

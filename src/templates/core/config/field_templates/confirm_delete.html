@@ -32,6 +32,7 @@
         {% if field_template.is_active %}
         <form method="post" action="{% url 'core:config_fieldtemplate_toggle' field_template.pk %}">
             {% csrf_token %}
+            <input type="hidden" name="active" value="0">
             <button type="submit" class="inline-flex items-center px-4 py-2 btn-primary" data-testid="fieldtemplate-deactivate-btn">
                 {% trans "Stattdessen deaktivieren" %}
             </button>

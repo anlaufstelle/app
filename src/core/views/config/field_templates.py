@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import Count
+from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -199,12 +200,15 @@ class ConfigFieldTemplateDeleteView(FacilityAdminRequiredMixin, View):
 
 
 class ConfigFieldTemplateToggleActiveView(FacilityAdminRequiredMixin, View):
-    """Aktiviert/deaktiviert eine Feldvorlage (Soft-Delete-Alternative)."""
+    """Apply the explicitly requested field template activation state."""
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, pk):
         field_template = get_object_or_404(FieldTemplate, pk=pk, facility=request.current_facility)
-        new_state = not field_template.is_active
+        active = request.POST.get("active")
+        if active not in {"0", "1"}:
+            return HttpResponseBadRequest(_("Ungültige Zielaktion."))
+        new_state = active == "1"
         try:
             config_service.set_field_template_active(request, field_template, active=new_state)
         except ValidationError as error:

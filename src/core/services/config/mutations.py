@@ -223,16 +223,24 @@ def validate_report_key_activation(template, report_key, *, is_active, activatin
 
 
 def set_field_template_active(request, field_template: FieldTemplate, active: bool) -> FieldTemplate:
-    """Aktiviert/deaktiviert eine FieldTemplate (Soft-Delete-Alternative)."""
-    field_template.is_active = active
-    field_template.save(update_fields=["is_active"])
-    log_audit_event(
-        request,
-        AuditLog.Action.CONFIG_UPDATE,
-        target_obj=field_template,
-        detail={"name": field_template.name, "changed_fields": ["is_active"]},
-    )
-    return field_template
+    """Apply the activation target once, checking the current state under the configuration lock."""
+    with configuration_write(field_template.facility_id):
+        field_template = (
+            FieldTemplate.objects.for_facility(field_template.facility_id)
+            .select_for_update(no_key=True, of=("self",))
+            .get(pk=field_template.pk)
+        )
+        if field_template.is_active == active:
+            return field_template
+        field_template.is_active = active
+        field_template.save(update_fields=["is_active"])
+        log_audit_event(
+            request,
+            AuditLog.Action.CONFIG_UPDATE,
+            target_obj=field_template,
+            detail={"name": field_template.name, "changed_fields": ["is_active"]},
+        )
+        return field_template
 
 
 def save_field_group(request, form, *, doc_type: DocumentType, creating: bool) -> FieldGroup:

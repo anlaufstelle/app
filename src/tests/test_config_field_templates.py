@@ -389,7 +389,7 @@ class TestToggleActive:
     def test_toggle_deactivates_and_audits(self, client, admin_user, facility):
         ft = FieldTemplate.objects.create(facility=facility, name="Toggle", field_type="text", is_active=True)
         client.force_login(admin_user)
-        response = client.post(reverse("core:config_fieldtemplate_toggle", kwargs={"pk": ft.pk}))
+        response = client.post(reverse("core:config_fieldtemplate_toggle", kwargs={"pk": ft.pk}), {"active": "0"})
         assert response.status_code == 302
         assert response.url == reverse("core:config_fieldtemplate_list")
         ft.refresh_from_db()
@@ -400,7 +400,7 @@ class TestToggleActive:
     def test_toggle_reactivates(self, client, admin_user, facility):
         ft = FieldTemplate.objects.create(facility=facility, name="Toggle2", field_type="text", is_active=False)
         client.force_login(admin_user)
-        client.post(reverse("core:config_fieldtemplate_toggle", kwargs={"pk": ft.pk}))
+        client.post(reverse("core:config_fieldtemplate_toggle", kwargs={"pk": ft.pk}), {"active": "1"})
         ft.refresh_from_db()
         assert ft.is_active is True
 
@@ -507,7 +507,9 @@ class TestIDOR:
     )
     def test_post_foreign_object_is_404(self, client, admin_user, foreign_field_template, route):
         client.force_login(admin_user)
-        response = client.post(reverse(f"core:{route}", kwargs={"pk": foreign_field_template.pk}), _valid_post())
+        response = client.post(
+            reverse(f"core:{route}", kwargs={"pk": foreign_field_template.pk}), _valid_post(active="0")
+        )
         assert response.status_code == 404
         assert FieldTemplate.objects.filter(pk=foreign_field_template.pk).exists()
 
@@ -686,3 +688,77 @@ class TestReportBindingsDisplay:
         client.force_login(admin_user)
         response = client.get(reverse("core:config_fieldtemplate_create"))
         assert 'data-testid="fieldtemplate-report-bindings"' not in response.content.decode()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("active", [False, True])
+@pytest.mark.parametrize("already_applied", [False, True])
+@pytest.mark.parametrize("htmx", [False, True])
+def test_active_target_is_idempotent(client, admin_user, facility, active, already_applied, htmx):
+    field = FieldTemplate.objects.create(
+        facility=facility, name="Explicit state", field_type="text", is_active=active if already_applied else not active
+    )
+    client.force_login(admin_user)
+    url = reverse("core:config_fieldtemplate_toggle", args=[field.pk])
+    audits = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_UPDATE, target_id=str(field.pk))
+    before = audits.count()
+    responses = []
+    for _ in range(2):
+        response = client.post(url, {"active": "1" if active else "0"}, headers={"HX-Request": "true"} if htmx else {})
+        responses.append(response)
+        assert response.status_code == 302
+        assert response.url == reverse("core:config_fieldtemplate_list")
+        field.refresh_from_db()
+        assert field.is_active is active
+        assert audits.count() == before + (0 if already_applied else 1)
+    assert _messages(responses[0])[-1] == _messages(responses[1])[-1]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("active", [False, True])
+@pytest.mark.parametrize("payload", [{}, {"active": ""}, {"active": "true"}, {"active": "2"}, {"active": " 0"}])
+def test_invalid_active_target_is_rejected_without_mutation(client, admin_user, facility, active, payload):
+    field = FieldTemplate.objects.create(facility=facility, name="Invalid target", field_type="text", is_active=active)
+    before = FieldTemplate.objects.filter(pk=field.pk).values().get()
+    audits = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_UPDATE, target_id=str(field.pk))
+    audit_count = audits.count()
+    client.force_login(admin_user)
+    response = client.post(reverse("core:config_fieldtemplate_toggle", args=[field.pk]), payload)
+    assert response.status_code == 400
+    assert FieldTemplate.objects.filter(pk=field.pk).values().get() == before
+    assert audits.count() == audit_count
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("active", [False, True])
+@pytest.mark.parametrize("htmx", [False, True])
+def test_rendered_active_form_submits_target(client, admin_user, facility, active, htmx):
+    field = FieldTemplate.objects.create(facility=facility, name="Rendered target", field_type="text", is_active=active)
+    client.force_login(admin_user)
+    response = client.get(reverse("core:config_fieldtemplate_list"), headers={"HX-Request": "true"} if htmx else {})
+    action = reverse("core:config_fieldtemplate_toggle", args=[field.pk])
+    form = response.content.decode().split(f'action="{action}"', 1)[1].split("</form>", 1)[0]
+    assert f'name="active" value="{0 if active else 1}"' in form
+    if active:
+        response = client.get(reverse("core:config_fieldtemplate_delete", args=[field.pk]))
+        form = response.content.decode().split(f'action="{action}"', 1)[1].split("</form>", 1)[0]
+        assert 'name="active" value="0"' in form
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("active", [False, True])
+def test_active_service_uses_current_state_for_noop(rf, admin_user, facility, active):
+    from core.services.config import set_field_template_active
+    from tests.test_sensitivity_transitions import request_for
+
+    stale = FieldTemplate.objects.create(facility=facility, name="Fresh state", field_type="text", is_active=not active)
+    current = FieldTemplate.objects.get(pk=stale.pk)
+    current.is_active = active
+    current.save(update_fields=["is_active"])
+    audits = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_UPDATE, target_id=str(stale.pk))
+    before = audits.count()
+    result = set_field_template_active(request_for(rf, facility, admin_user), stale, active=active)
+    assert result.is_active is active
+    stale.refresh_from_db()
+    assert stale.is_active is active
+    assert audits.count() == before
