@@ -3,6 +3,7 @@
 import re
 import subprocess
 import sys
+import uuid
 
 import pytest
 from playwright.sync_api import expect
@@ -152,22 +153,44 @@ def _proposal_state(e2e_env, pk):
 
 
 def _one_approver_per_facility(e2e_env):
-    """Keep exactly one eligible lead/admin per facility; returns the previous flags for restore."""
+    """Keep exactly one eligible lead/admin per facility; returns what :func:`_restore_one_approver` needs.
+
+    The card is installation-wide: a facility without any lead/admin (other specs
+    create facilities that cannot be deleted again) would make it critical. Such a
+    facility gets a temporary approver that is deactivated on restore.
+    """
+    marker = uuid.uuid4().hex[:8]
     script = (
-        "from core.models import User; "
+        "from core.models import Facility, User; "
         "users = list(User.objects.filter(role__in=['lead', 'facility_admin'], is_active=True)"
         ".order_by('facility_id', 'username')); "
         "[print('prev=' + u.username + ':' + str(u.can_confirm_deletion)) for u in users]; "
         "seen = set(); "
         "keep = [u.pk for u in users if not (u.facility_id in seen or seen.add(u.facility_id))]; "
-        "[User.objects.filter(pk=u.pk).update(can_confirm_deletion=(u.pk in keep)) for u in users]"
+        "[User.objects.filter(pk=u.pk).update(can_confirm_deletion=(u.pk in keep)) for u in users]; "
+        f"temps = [User.objects.create(username='e2e-approver-{marker}-' + str(i), role='lead', facility=f, "
+        "  can_confirm_deletion=True) for i, f in enumerate(Facility.objects.exclude(pk__in=seen))]; "
+        "[print('temp=' + u.username) for u in temps]"
     )
     previous = {}
+    temporary = []
     for line in django_shell(e2e_env, script):
         if line.startswith("prev="):
             name, flag = line.removeprefix("prev=").rsplit(":", 1)
             previous[name] = flag == "True"
-    return previous
+        elif line.startswith("temp="):
+            temporary.append(line.removeprefix("temp="))
+    return previous, temporary
+
+
+def _restore_one_approver(e2e_env, state):
+    previous, temporary = state
+    _restore_approver_pool(e2e_env, previous)
+    django_shell(
+        e2e_env,
+        "from core.models import User; "
+        f"User.objects.filter(username__in={temporary!r}).update(is_active=False, can_confirm_deletion=False)",
+    )
 
 
 @pytest.fixture
@@ -386,7 +409,7 @@ class TestRetentionApproverComplianceCard:
         finally:
             context.close()
             _restore_language(e2e_env, previous_lang)
-            _restore_approver_pool(e2e_env, previous_pool)
+            _restore_one_approver(e2e_env, previous_pool)
 
 
 class TestRetentionFirstReleaseReset:
