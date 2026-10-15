@@ -892,11 +892,19 @@ def test_transient_key_loss_during_replay_skips_without_tokenless_post(authentic
             // hasSessionKey()-Aufruf true, zweiter false) wird daher ueber das
             // UNTERSTUETZTE Ersetzen der ganzen Bindung per defineProperty
             // simuliert (genau der Weg, den auch der Modul-Reload nimmt).
+            // Only the replay's own gates (offline-edit.js) take part in the
+            // race; other page code asking for the key meanwhile gets the
+            // real answer and is counted separately.
             const orig = window.crypto_session;
             let calls = 0;
+            let foreignCalls = 0;
             const fake = {
                 ready: () => (orig.ready ? orig.ready() : Promise.resolve()),
                 hasSessionKey: () => {
+                    if (!String(new Error().stack).includes('/offline-edit.js')) {
+                        foreignCalls += 1;
+                        return orig.hasSessionKey();
+                    }
                     calls += 1;
                     return calls === 1;
                 },
@@ -904,6 +912,10 @@ def test_transient_key_loss_during_replay_skips_without_tokenless_post(authentic
             Object.defineProperty(window, 'crypto_session', {
                 value: fake, configurable: true, writable: false, enumerable: true,
             });
+            // Page code outside the replay (autosave runs its key check after
+            // every HTMX swap since #2561) may ask for the key in this window;
+            // a lazy dashboard swap does exactly that.
+            document.dispatchEvent(new CustomEvent('htmx:afterSwap'));
             let replayResult;
             try {
                 replayResult = await replayInCheckedRun(() => window.offlineEdit.replayModifiedEvent(record));
@@ -913,9 +925,10 @@ def test_transient_key_loss_during_replay_skips_without_tokenless_post(authentic
                 });
                 window.fetch = origFetch;
             }
-            return { replayResult, postWentOut, calls };
+            return { replayResult, postWentOut, calls, foreignCalls };
         }"""
     )
+    assert result["foreignCalls"] >= 1, f"The dispatched swap must reach the key check: {result!r}"
     assert result["calls"] == 2, f"Erwartete Gate-Aufrufe (top-level + _cachedUpdatedAt): {result!r}"
     assert result["replayResult"]["status"] == "locked", f"Erwarteter Status 'locked': {result!r}"
     assert result["postWentOut"] is False, "Kein tokenloser POST — das Event darf gar nicht erst gesendet werden"
