@@ -86,6 +86,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Anmelde-Rückleitung bei leeren Pfadsegmenten abgesichert** (#2561) — Ziele mit doppelten Schrägstrichen führen nach Formularanmeldung und Salt-Abfrage zum Rollenstandard.
+
 - **Branch-Schutz-Vorgabe am Release-Spiegel präzisiert** (#1597) — Die Sicherheitsnotizen unterscheiden den vorgesehenen Integritätsschutz ohne Bypass von der PR-Regel mit ausschließlich benannter Release-Identität; aktive Einstellungen bleiben nachweispflichtig.
 - **Fallzuordnung bei der Kontaktanlage durchgängig prüfen** (#2533) — Formular, Wiederanzeige, Picker und Schreiben berücksichtigen dieselben Rollen- und Falltypgrenzen sowie den offenen Status unter der Fallsperre; Abweisungen erhalten die übrige Eingabe mit Feldfehler, erlaubte Fälle bleiben nach Erfassungsfehlern ausgewählt und Dateien müssen erneut ausgewählt werden.
 - **Django-Sicherheitsupdates konsolidiert** (#2592, #2593, #2594, #2595) — Django und django-stubs steigen auf 6.1.2 mit den Django-CVE-Patches, django-otp auf 1.7.4 mit ausdrücklicher Geräteauswahl im OTP-Formular sowie filelock auf 4.0.12 und pip-tools auf 7.6.2.

@@ -114,3 +114,43 @@ class TestNativeLoginHonoursNavigability:
         request = client.get(reverse("login")).wsgi_request
         request.user = staff_user
         assert resolve_post_login_url(request, reverse("core:workitem_inbox")) == reverse("core:workitem_inbox")
+
+
+EMPTY_SEGMENT_TARGETS = [
+    "/auth//offline-key-salt/",
+    "/auth///offline-key-salt",
+    "/clients//",
+    "/unknown//page/",
+    "/unknown/page//",
+]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("target", EMPTY_SEGMENT_TARGETS)
+@pytest.mark.parametrize("user_fixture,home", [("staff_user", "/"), ("super_admin_user", "/system/")])
+@pytest.mark.parametrize("login_path", ["native", "salt"])
+def test_empty_segment_next_falls_back_to_role_default(client, request, target, user_fixture, home, login_path):
+    user = request.getfixturevalue(user_fixture)
+    if login_path == "native":
+        response = client.post(reverse("login"), {"username": user.username, "password": "testpass123", "next": target})
+        assert response.status_code == 302
+        assert response.url == home
+    else:
+        client.force_login(user)
+        response = client.post(f"{reverse('offline_key_salt')}?next={quote(target, safe='')}")
+        assert response.status_code == 200
+        assert response.json()["home_url"] == home
+
+
+@pytest.mark.parametrize("target", EMPTY_SEGMENT_TARGETS)
+def test_empty_segment_path_is_not_get_navigable(target):
+    from core.views.utils import is_get_navigable
+
+    assert not is_get_navigable(target)
+
+
+@pytest.mark.parametrize("target", ["/", "/clients/", "/unknown/page/", "/unknown/page"])
+def test_plain_path_remains_get_navigable(target):
+    from core.views.utils import is_get_navigable
+
+    assert is_get_navigable(target)

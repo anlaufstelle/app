@@ -84,7 +84,8 @@ def _is_plain_path(path: str) -> bool:
     path as written would judge a different target than the one the navigation
     lands on, so only plain paths are judged.
     """
-    if "%" in path or "\\" in path:
+    # Proxies may collapse repeated slashes before resolving the target (Refs #2561).
+    if "%" in path or "\\" in path or "//" in path:
         return False
     return not {".", ".."} & set(path.split("/"))
 
