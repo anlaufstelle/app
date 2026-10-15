@@ -55,6 +55,7 @@ from core.services.dynamic_data import (
     remove_restricted_fields,
 )
 from core.services.events import split_file_and_text_data
+from core.services.events.case_assignment import assignable_cases
 from core.services.scoping import get_scoped_object
 from core.utils.ratelimit import ratelimit
 from core.views._dynamic_errors import add_dynamic_service_errors
@@ -248,7 +249,7 @@ def _get_case_event_context(case, facility, user):
         .order_by("-occurred_at")
     )
     unassigned_events = []
-    if case.client:
+    if case.client and assignable_cases(facility, user).filter(pk=case.pk).exists():
         unassigned_events = (
             Event.objects.visible_to(user)
             .filter(

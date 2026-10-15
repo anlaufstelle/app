@@ -87,6 +87,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Fallzuordnung auf zulässige Fälle begrenzt** (#2533) — Auch aus der Fallakte lassen sich Kontakte nur offenen Fällen mit für die Rolle sichtbarem Falltyp zuordnen; bei unzulässigen Fällen entfällt die Auswahl.
+
 - **Anmelde-Rückleitung bei leeren Pfadsegmenten abgesichert** (#2561) — Ziele mit doppelten Schrägstrichen führen nach Formularanmeldung und Salt-Abfrage zum Rollenstandard.
 
 - **Branch-Schutz-Vorgabe am Release-Spiegel präzisiert** (#1597) — Die Sicherheitsnotizen unterscheiden den vorgesehenen Integritätsschutz ohne Bypass von der PR-Regel mit ausschließlich benannter Release-Identität; aktive Einstellungen bleiben nachweispflichtig.

@@ -298,10 +298,11 @@ class TestCaseHoldBlocksTheManualDeletePath:
         durchsetzen, nicht jede zwischenzeitliche Umhängung abweisen — anders
         als beim Personenbezug, dessen Wechsel den Vorgang bewusst abbricht
         (dort war die falsche Personenzeile gesperrt)."""
-        from core.services.case.cases import assign_event_to_case, remove_event_from_case
+        from core.services.case.cases import assign_event_to_case, remove_event_from_case, reopen_case
 
         remove_event_from_case(Event.objects.get(pk=case_event.pk), staff_user)
         case_event.refresh_from_db()
+        reopen_case(case_closed, staff_user)
         assign_event_to_case(case_closed, Event.objects.get(pk=case_event.pk), staff_user)
         self._hold_on(facility, admin_user, "Case", case_open.pk)
 

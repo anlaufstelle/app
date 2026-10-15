@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Case, Event
+from core.models import Case, DocumentType, Event
 from core.services.case import (
     assign_event_to_case,
     close_case,
@@ -14,6 +14,61 @@ from core.services.case import (
     reopen_case,
     update_case,
 )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("boundary", ["closed", "high"])
+def test_case_assignment_rejects_unassignable_case(case_open, sample_event, staff_user, facility, boundary):
+    if boundary == "closed":
+        Case.objects.filter(pk=case_open.pk).update(status=Case.Status.CLOSED, closed_at=timezone.now())
+    else:
+        case_type = DocumentType.objects.create(
+            facility=facility,
+            name="Restricted case",
+            entity_type=DocumentType.EntityType.CASE,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        Case.objects.filter(pk=case_open.pk).update(document_type=case_type)
+    # The caller's stale instance must not bypass the locked row's boundary.
+    with pytest.raises(ValidationError, match="Der Fall ist nicht mehr verfügbar oder nicht zugänglich"):
+        assign_event_to_case(case_open, sample_event, staff_user)
+    sample_event.refresh_from_db()
+    assert sample_event.case_id is None
+
+
+@pytest.mark.django_db
+def test_case_assignment_allows_high_case_for_lead(case_open, sample_event, lead_user, facility):
+    case_type = DocumentType.objects.create(
+        facility=facility,
+        name="Restricted case",
+        entity_type=DocumentType.EntityType.CASE,
+        sensitivity=DocumentType.Sensitivity.HIGH,
+    )
+    Case.objects.filter(pk=case_open.pk).update(document_type=case_type)
+    assign_event_to_case(case_open, sample_event, lead_user)
+    sample_event.refresh_from_db()
+    assert sample_event.case_id == case_open.pk
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("boundary", ["closed", "high", "open"])
+def test_case_detail_assignment_selection_respects_boundary(
+    client, staff_user, case_open, sample_event, facility, boundary
+):
+    if boundary == "closed":
+        Case.objects.filter(pk=case_open.pk).update(status=Case.Status.CLOSED, closed_at=timezone.now())
+    elif boundary == "high":
+        case_type = DocumentType.objects.create(
+            facility=facility,
+            name="Restricted case",
+            entity_type=DocumentType.EntityType.CASE,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        Case.objects.filter(pk=case_open.pk).update(document_type=case_type)
+    client.force_login(staff_user)
+    response = client.get(reverse("core:case_detail", kwargs={"pk": case_open.pk}))
+    assert response.status_code == 200
+    assert (b'name="event_id"' in response.content) == (boundary == "open")
 
 
 @pytest.mark.django_db
