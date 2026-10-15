@@ -62,9 +62,10 @@ _FIELD_GROUPS = (
 
 # Corrected wording on the form instead of the model, so no help_text migration is needed.
 AUTO_APPROVE_AFTER_DEFER_HELP = _(
-    "Wenn aktiv, werden Löschvorschläge nach Erreichen der maximalen "
-    "Zurückstellungszahl und Ablauf der Wiedervorlage automatisch freigegeben, statt manuelle Entscheidung "
-    "zu erzwingen."
+    "Wenn ausdrücklich aktiviert (standardmäßig aus), werden Löschvorschläge nach Erreichen der maximalen "
+    "Zurückstellungszahl und Ablauf der Wiedervorlage ohne zweite Person freigegeben. "
+    "Es zählen nur Zurückstellungen durch Personen mit dem Recht „Löschbestätigung“, "
+    "wenn kein Aufschub desselben Vorschlags mehr läuft."
 )
 
 
@@ -97,6 +98,7 @@ class FacilitySettingsForm(TailwindFormMixin, forms.ModelForm):
     def __init__(self, *args, facility, **kwargs):
         super().__init__(*args, **kwargs)
         self.facility = facility
+        self.fields["retention_max_defer_count"].widget.attrs["min"] = 1
         current_id = getattr(self.instance, "default_document_type_id", None)
         queryset = DocumentType.objects.for_facility(facility).filter(
             Q(is_active=True) | Q(pk=current_id),

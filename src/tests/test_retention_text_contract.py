@@ -54,3 +54,13 @@ def test_help_response_explains_two_person_contract(client, lead_user):
 def test_generated_vvt_explains_two_person_contract():
     with override("de"):
         assert_retention_contract(str(get_activity("klienten_stammdaten")["retention_period"]))
+
+
+@pytest.mark.django_db
+def test_vvt_explains_which_deferrals_count(facility, settings_obj):
+    rendered, _ = render_document("verarbeitungsverzeichnis", facility)
+    with override("de"):
+        generated = str(get_activity("klienten_stammdaten")["retention_period"])
+    for content in (rendered, generated):
+        assert "Es zählen nur Zurückstellungen durch Personen mit dem Recht „Löschbestätigung“" in content
+        assert "wenn kein Aufschub desselben Vorschlags mehr läuft" in content

@@ -225,6 +225,7 @@ class Settings(models.Model):
     )
     retention_max_defer_count = models.PositiveIntegerField(
         default=2,
+        validators=[MinValueValidator(1)],
         verbose_name=_("Maximale Zurückstellungen"),
         help_text=_(
             "Nach wie vielen Zurückstellungen eine endgültige Entscheidung "

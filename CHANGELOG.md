@@ -88,6 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 
 - **Fallzuordnung auf zulässige Fälle begrenzt** (#2533) — Auch aus der Fallakte lassen sich Kontakte nur offenen Fällen mit für die Rolle sichtbarem Falltyp zuordnen; bei unzulässigen Fällen entfällt die Auswahl.
+- **Auto-Freigabe auf berechtigte Zurückstellungen begrenzt** (#2590) — Für die ausdrücklich aktivierte Auto-Freigabe zählen nur Zurückstellungen mit dem Recht „Löschbestätigung“ ohne noch laufenden Aufschub desselben Vorschlags, und die einstellbare Schwelle beträgt mindestens 1.
 
 - **Anmelde-Rückleitung bei leeren Pfadsegmenten abgesichert** (#2561) — Ziele mit doppelten Schrägstrichen führen nach Formularanmeldung und Salt-Abfrage zum Rollenstandard.
 

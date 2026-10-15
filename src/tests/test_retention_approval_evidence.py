@@ -1,21 +1,100 @@
 """Only evidenced manual or explicitly automatic approvals authorize deletion."""
 
+from datetime import timedelta
 from io import StringIO
 from unittest.mock import patch
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
+from django.forms.models import model_to_dict
+from django.urls import reverse
 from django.utils import timezone
 
+from core.forms.facility_settings import FacilitySettingsForm
 from core.models import Event, RetentionProposal
 from core.retention.enforcement import enforce_document_type_retention, process_facility_retention
 from core.seed.deletions import seed_retention_proposals
-from core.services.retention import approve_proposal, defer_proposal
+from core.services.retention import (
+    approve_proposal,
+    bulk_defer_proposals,
+    defer_proposal,
+    reactivate_deferred_proposals,
+)
 from tests.test_retention_two_person_approval import proposal as proposal
 
 pytestmark = pytest.mark.django_db
+
+
+def test_deferral_without_deletion_permission_never_auto_approves(proposal, settings_obj, lead_user, client):
+    settings_obj.retention_auto_approve_after_defer = True
+    settings_obj.save(update_fields=["retention_auto_approve_after_defer"])
+    lead_user.can_confirm_deletion = False
+    lead_user.save(update_fields=["can_confirm_deletion"])
+    client.force_login(lead_user)
+    for _ in range(settings_obj.retention_max_defer_count):
+        response = client.post(
+            reverse("core:retention_bulk_defer"),
+            {"proposal_ids": [str(proposal.pk)], "days": "1"},
+            HTTP_HX_REQUEST="true",
+        )
+        assert response.status_code == 200
+        proposal.refresh_from_db()
+        assert proposal.status == RetentionProposal.Status.DEFERRED
+        RetentionProposal.objects.filter(pk=proposal.pk).update(deferred_until=timezone.localdate())
+        call_command("enforce_retention", facility=proposal.facility.name, stdout=StringIO())
+    proposal.refresh_from_db()
+    assert proposal.defer_count == 0
+    assert proposal.status == RetentionProposal.Status.PENDING
+    assert not Event.objects.get(pk=proposal.target_id).is_deleted
+
+
+@pytest.mark.parametrize("bulk", [False, True])
+def test_running_deferral_counts_only_once(proposal, settings_obj, lead_user, bulk):
+    settings_obj.retention_auto_approve_after_defer = True
+    settings_obj.save(update_fields=["retention_auto_approve_after_defer"])
+    for _ in range(2):
+        if bulk:
+            assert bulk_defer_proposals([proposal], lead_user, days=1) == 1
+        else:
+            defer_proposal(proposal, lead_user, days=1)
+    proposal.refresh_from_db()
+    assert proposal.defer_count == 1
+    RetentionProposal.objects.filter(pk=proposal.pk).update(deferred_until=timezone.localdate())
+    reactivate_deferred_proposals(proposal.facility)
+    proposal.refresh_from_db()
+    assert proposal.status == RetentionProposal.Status.PENDING
+    assert proposal.auto_approved_at is None
+
+
+@pytest.mark.parametrize("bulk", [False, True])
+def test_expired_eligible_deferrals_reach_auto_approval(proposal, settings_obj, lead_user, bulk):
+    settings_obj.retention_auto_approve_after_defer = True
+    settings_obj.save(update_fields=["retention_auto_approve_after_defer"])
+    for _ in range(2):
+        if bulk:
+            bulk_defer_proposals([proposal], lead_user, days=1)
+        else:
+            defer_proposal(proposal, lead_user, days=1)
+        RetentionProposal.objects.filter(pk=proposal.pk).update(deferred_until=timezone.localdate() - timedelta(days=1))
+        reactivate_deferred_proposals(proposal.facility)
+    proposal.refresh_from_db()
+    assert proposal.defer_count == 2
+    assert proposal.status == RetentionProposal.Status.APPROVED
+    assert proposal.auto_approved_at is not None
+
+
+def test_zero_auto_approval_threshold_rejected_by_model_and_form(settings_obj):
+    settings_obj.retention_max_defer_count = 0
+    with pytest.raises(ValidationError) as error:
+        settings_obj.full_clean()
+    assert "retention_max_defer_count" in error.value.message_dict
+    form = FacilitySettingsForm(data=model_to_dict(settings_obj), instance=settings_obj, facility=settings_obj.facility)
+    assert not form.is_valid()
+    assert "retention_max_defer_count" in form.errors
+    assert form.fields["retention_max_defer_count"].widget.attrs["min"] == 1
 
 
 @pytest.mark.django_db(transaction=True)

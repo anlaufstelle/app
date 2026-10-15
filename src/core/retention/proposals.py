@@ -592,15 +592,23 @@ def defer_proposal(proposal, user, days=30):
     Einrichtung, entschieden unter der Zeilensperre (:func:`_lock_open_proposal`).
     """
     locked = _lock_open_proposal(proposal, user)
-    deferred_until = timezone.localdate() + timedelta(days=days)
+    today = timezone.localdate()
+    # Refs #2590: only a new deferral by an eligible deletion confirmer counts.
+    running_deferral = (
+        locked.status == RetentionProposal.Status.DEFERRED
+        and locked.deferred_until is not None
+        and locked.deferred_until > today
+    )
+    if (
+        not running_deferral
+        and User.objects.filter(
+            pk=user.pk, facility_id=locked.facility_id, is_active=True, can_confirm_deletion=True
+        ).exists()
+    ):
+        locked.defer_count = F("defer_count") + 1
+    deferred_until = today + timedelta(days=days)
     locked.status = RetentionProposal.Status.DEFERRED
     locked.deferred_until = deferred_until
-    # Refs #1022 (B2): DB-atomares Increment statt In-Memory-Read-Modify-
-    # Write — zwei zeitgleiche Defers duerfen kein Increment verlieren
-    # (Lost-Update). Seit Refs #2373 serialisiert zusaetzlich die Zeilensperre.
-    # ``refresh_from_db`` materialisiert den F()-Ausdruck fuer den
-    # Audit-Eintrag unten.
-    locked.defer_count = F("defer_count") + 1
     locked.save(update_fields=["status", "deferred_until", "defer_count"])
     _clear_first_approval(locked, user, reason="deferred")
     proposal.first_approved_by = locked.first_approved_by
