@@ -78,6 +78,22 @@ def _reset_active_language():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _restore_pil_pixel_limit():
+    """Restore Pillow's process-global decompression-bomb limit after each test.
+
+    The upload policy writes ``FILE_VAULT_MAX_IMAGE_PIXELS`` into
+    ``PIL.Image.MAX_IMAGE_PIXELS``. A test that lowers the setting would leave a
+    tiny limit behind, and a later test that opens an image directly would fail
+    with ``DecompressionBombError`` depending on test order.
+    """
+    from PIL import Image
+
+    original = Image.MAX_IMAGE_PIXELS
+    yield
+    Image.MAX_IMAGE_PIXELS = original
+
+
 def xdist_role_suffix() -> str:
     """Worker-Suffix fuer cluster-globale Postgres-Rollennamen unter ``-n auto``.
 
