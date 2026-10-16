@@ -158,3 +158,97 @@ def test_single_recipient_lock_follows_client_and_workitem_locks(item, staff_use
     relevant = [table for table in capture.sperrfolge() if table in {"core_client", "core_workitem", "core_user"}]
     assert relevant[0] == "core_client"
     assert relevant.index("core_client") < relevant.index("core_workitem") < relevant.index("core_user")
+
+
+@pytest.mark.parametrize("kind", ["inactive", "wrong_role", "super_admin"])
+@pytest.mark.parametrize("title", ["Single assignment", "Edited historical task"])
+def test_edit_form_preserves_historical_assignment(client, item, staff_user, lead_user, kind, title):
+    WorkItem.objects.filter(pk=item.pk).update(assigned_to=lead_user)
+    User.objects.filter(pk=lead_user.pk).update(
+        **(
+            {"is_active": False}
+            if kind == "inactive"
+            else {"role": "observer" if kind == "wrong_role" else User.Role.SUPER_ADMIN}
+        )
+    )
+    client.force_login(staff_user)
+    url = reverse("core:workitem_update", args=[item.pk])
+    response = client.get(url)
+    assert response.status_code == 200
+    choices = dict(response.context["form"].fields["assigned_to"].choices)
+    assert str(lead_user.pk) in {str(value) for value in choices}
+    assert f"{lead_user} (aktuell)" in str(response.context["form"]["assigned_to"])
+    response = client.post(
+        url,
+        {
+            "title": title,
+            "item_type": "task",
+            "priority": "normal",
+            "assigned_to": lead_user.pk,
+            "expected_updated_at": item.updated_at.isoformat(),
+        },
+    )
+    assert response.status_code == 302
+    item.refresh_from_db()
+    assert item.title == title
+    assert item.priority == "normal"
+    assert item.assigned_to_id == lead_user.pk
+
+
+@pytest.mark.parametrize("kind", ["inactive", "foreign"])
+def test_edit_form_rejects_other_unassignable_recipient(
+    client, item, staff_user, lead_user, facility, other_facility, kind
+):
+    WorkItem.objects.filter(pk=item.pk).update(assigned_to=lead_user)
+    User.objects.filter(pk=lead_user.pk).update(is_active=False)
+    recipient = User.objects.create(
+        username="other-recipient",
+        facility=other_facility if kind == "foreign" else facility,
+        is_active=kind == "foreign",
+        role=User.Role.STAFF,
+    )
+    client.force_login(staff_user)
+    url = reverse("core:workitem_update", args=[item.pk])
+    response = client.get(url)
+    assert recipient.pk not in response.context["form"].fields["assigned_to"].queryset.values_list("pk", flat=True)
+    response = client.post(
+        url,
+        {"title": "Refused edit", "item_type": "task", "priority": "normal", "assigned_to": recipient.pk},
+    )
+    assert response.status_code == 200
+    assert "assigned_to" in response.context["form"].errors
+    item.refresh_from_db()
+    assert item.title == "Single assignment"
+    assert item.assigned_to_id == lead_user.pk
+
+
+def test_edit_form_excludes_foreign_historical_recipient(client, item, staff_user, lead_user, other_facility):
+    WorkItem.objects.filter(pk=item.pk).update(assigned_to=lead_user)
+    User.objects.filter(pk=lead_user.pk).update(facility=other_facility)
+    client.force_login(staff_user)
+    url = reverse("core:workitem_update", args=[item.pk])
+    response = client.get(url)
+    assert lead_user.pk not in response.context["form"].fields["assigned_to"].queryset.values_list("pk", flat=True)
+    response = client.post(
+        url,
+        {"title": "Refused edit", "item_type": "task", "priority": "normal", "assigned_to": lead_user.pk},
+    )
+    assert response.status_code == 200
+    assert "assigned_to" in response.context["form"].errors
+    item.refresh_from_db()
+    assert item.title == "Single assignment"
+
+
+def test_create_form_excludes_and_rejects_inactive_recipient(client, staff_user, lead_user):
+    User.objects.filter(pk=lead_user.pk).update(is_active=False)
+    client.force_login(staff_user)
+    url = reverse("core:workitem_create")
+    response = client.get(url)
+    assert lead_user.pk not in response.context["form"].fields["assigned_to"].queryset.values_list("pk", flat=True)
+    response = client.post(
+        url,
+        {"title": "Refused creation", "item_type": "task", "priority": "normal", "assigned_to": lead_user.pk},
+    )
+    assert response.status_code == 200
+    assert "assigned_to" in response.context["form"].errors
+    assert not WorkItem.objects.filter(title="Refused creation").exists()

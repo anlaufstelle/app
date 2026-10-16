@@ -1,6 +1,7 @@
 """Forms for WorkItem management."""
 
 from datetime import date
+from typing import cast
 
 from django import forms
 from django.utils import timezone
@@ -8,7 +9,7 @@ from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
-from core.models import WorkItem
+from core.models import User, WorkItem
 from core.services.case.workitems import assignable_workitem_users
 from core.utils.date_input import AppDateInput
 
@@ -76,7 +77,18 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
         # Maintainer-Entscheid 2026-08-05).
         self.pinned_client = pinned_client
         if facility:
-            self.fields["assigned_to"].queryset = assignable_workitem_users(facility)  # type: ignore[attr-defined]
+            assignee_field = cast(forms.ModelChoiceField, self.fields["assigned_to"])
+            recipients = assignable_workitem_users(facility)
+            if not self.instance._state.adding and self.instance.facility_id == facility.pk:
+                # Refs #2544: retain only this task's current facility member.
+                # New assignments remain subject to the service's locked check.
+                current_id = self.instance.assigned_to_id
+                recipients = recipients | User.objects.filter(facility=facility, pk=current_id)
+                current_label = _("aktuell")
+                assignee_field.label_from_instance = lambda obj: (  # type: ignore[method-assign]
+                    f"{obj} ({current_label})" if obj.pk == current_id else str(obj)
+                )
+            assignee_field.queryset = recipients
         self.fields["assigned_to"].required = False
         # Refs #2381: Django 6.1 faellt ohne eigenes ``empty_label`` auf den
         # unuebersetzten Blank-Choice-Text ("- Select an option -") zurueck.
