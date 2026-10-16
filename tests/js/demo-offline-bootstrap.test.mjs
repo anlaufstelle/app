@@ -42,11 +42,15 @@ describe("demo offline bootstrap", () => {
     it("fetches one audited salt, derives a usable key and warms facility metadata", async () => {
         await bootstrap();
         await vi.waitFor(() => expect(window.crypto_session.hasSessionKey()).toBe(true));
-        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledTimes(2);
         expect(fetch).toHaveBeenCalledWith("/auth/offline-key-salt/", expect.objectContaining({
             method: "POST", credentials: "same-origin",
             headers: expect.objectContaining({ "X-CSRFToken": "rotated-token", "X-Demo-Offline-Bootstrap": "1" }),
         }));
+        expect(fetch).toHaveBeenCalledWith("/demo/offline-key-ready/", {
+            method: "POST", credentials: "same-origin",
+            headers: { "X-CSRFToken": "rotated-token" },
+        });
         await store.saveOfflineEdit({ pk: "demo-event", data: { note: "demo work" } });
         expect((await store.getOfflineEvent("demo-event")).data.note).toBe("demo work");
         expect(store.revalidateCachedFacility).toHaveBeenCalledTimes(1);
@@ -54,7 +58,7 @@ describe("demo offline bootstrap", () => {
         expect(document.querySelector("[data-demo-offline-password]")).toBeNull();
         vi.resetModules();
         await bootstrap();
-        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledTimes(2);
     });
 
     it("honours the server lifetime and preserves encrypted work after expiration", async () => {
@@ -72,11 +76,15 @@ describe("demo offline bootstrap", () => {
     it.each(["mismatch", "network", "invalid-policy"])("shows a visible error without resetting work on %s", async (failure) => {
         await window.crypto_session.deriveSessionKey(PASSWORD, SALT);
         await store.saveOfflineEdit({ pk: "previous-work", data: { note: "preserved" } });
+        await window.crypto_session.clearSessionKey();
         if (failure === "mismatch") fetch.mockResolvedValue({ ok: false, status: 403 });
         if (failure === "network") fetch.mockRejectedValue(new Error("Offline"));
         if (failure === "invalid-policy") fetch.mockResolvedValue({ ok: true, json: async () => ({ salt: SALT, offline_key_max_age: 0 }) });
         await bootstrap();
         await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(false));
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(fetch).not.toHaveBeenCalledWith("/demo/offline-key-ready/", expect.anything());
+        await window.crypto_session.deriveSessionKey(PASSWORD, SALT);
         expect((await store.getOfflineEvent("previous-work")).data.note).toBe("preserved");
         expect(store.revalidateCachedFacility).not.toHaveBeenCalled();
     });
@@ -140,7 +148,7 @@ describe("demo bootstrap interruption notice", () => {
     it("hides the waiting notice only after derivation completes", async () => {
         document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-pending></div>');
         let release;
-        fetch.mockReturnValue(new Promise((resolve) => { release = resolve; }));
+        fetch.mockReturnValueOnce(new Promise((resolve) => { release = resolve; }));
         await bootstrap();
         await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
         expect(document.querySelector("[data-demo-offline-pending]").hidden).toBe(false);
@@ -167,4 +175,36 @@ it("replaces the pending notice with a visible success status", async () => {
     await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-success]").hidden).toBe(false));
     expect(document.querySelector("[data-demo-offline-pending]").hidden).toBe(true);
     expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(true);
+});
+
+
+it("confirms a restored key without deriving it again or extending its lifetime", async () => {
+    await window.crypto_session.deriveSessionKey(PASSWORD, SALT);
+    await store.saveOfflineEdit({ pk: "previous-work", data: { note: "preserved" } });
+    const derive = vi.spyOn(window.crypto.subtle, "deriveKey");
+    document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-pending></div><div data-demo-offline-success hidden role="status"></div>');
+    await bootstrap();
+    await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-success]").hidden).toBe(false));
+    expect(derive).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledExactlyOnceWith("/demo/offline-key-ready/", {
+        method: "POST", credentials: "same-origin", headers: { "X-CSRFToken": "rotated-token" },
+    });
+    expect((await store.getOfflineEvent("previous-work")).data.note).toBe("preserved");
+    expect(store.revalidateCachedFacility).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-demo-offline-pending]").hidden).toBe(true);
+    expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(true);
+    now += 43200_000;
+    expect(window.crypto_session.hasSessionKey()).toBe(false);
+});
+
+it.each(["http", "network"])("shows a current-page error if key confirmation fails: %s", async (failure) => {
+    await window.crypto_session.deriveSessionKey(PASSWORD, SALT);
+    if (failure === "http") fetch.mockResolvedValue({ ok: false, status: 429 });
+    else fetch.mockRejectedValue(new Error("Offline"));
+    document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-success hidden role="status"></div>');
+    await bootstrap();
+    await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(false));
+    expect(window.crypto_session.hasSessionKey()).toBe(true);
+    expect(document.querySelector("[data-demo-offline-success]").hidden).toBe(true);
+    expect(fetch).toHaveBeenCalledExactlyOnceWith("/demo/offline-key-ready/", expect.anything());
 });

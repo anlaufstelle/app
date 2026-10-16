@@ -5,8 +5,8 @@
  *   POST /auth/offline-key-salt/ and call crypto_session.deriveSessionKey()
  *   with the user's password before navigating away. Falls back to a native
  *   form submit if WebCrypto is unavailable.
- * - After demo start: consume server-rendered password data once, using
- *   the authenticated page CSRF token and the same key lifetime policy.
+ * - After demo start: retry server-rendered password data until the browser
+ *   confirms a usable key, preserving its lifetime and using the page CSRF token.
  * - On the password-change page: same flow with the new password, after
  *   purging any stale ciphertext.
  *
@@ -254,16 +254,21 @@
         demoData.removeAttribute("data-demo-offline-password");
         var demoDerivation = window.crypto_session.beginKeyDerivation();
         window.crypto_session.ready()
-            .then(function () {
-                return fetchSaltAndDeriveKey(demoPassword, null, true, demoDerivation);
-            })
-            .then(function (homeUrl) {
-                if (!homeUrl || !window.crypto_session.hasSessionKey()) {
-                    showDemoBootstrapError();
-                } else {
-                    var success = document.querySelector("[data-demo-offline-success]");
-                    if (success) success.hidden = false;
+            .then(async function () {
+                if (!window.crypto_session.hasSessionKey()) {
+                    var homeUrl = await fetchSaltAndDeriveKey(demoPassword, null, true, demoDerivation);
+                    if (!homeUrl || !window.crypto_session.hasSessionKey()) {
+                        throw new Error("Demo offline key preparation failed");
+                    }
                 }
+                var response = await fetch("/demo/offline-key-ready/", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "X-CSRFToken": csrfFromMeta() || "" },
+                });
+                if (!response.ok) throw new Error("Demo offline key confirmation failed");
+                var success = document.querySelector("[data-demo-offline-success]");
+                if (success) success.hidden = false;
             })
             .catch(showDemoBootstrapError)
             .finally(function () {
@@ -272,8 +277,8 @@
                 if (pending) pending.hidden = true;
             });
     } else if (authenticatedSession && document.querySelector("[data-demo-offline-error]")) {
-        // A navigation can interrupt the one-shot demo derivation. Report the
-        // missing key on the next page without retaining or reusing a password.
+        // After confirmed preparation, report a subsequently missing key.
+        // Pending sessions receive password data and retry in the branch above.
         window.crypto_session.ready()
             .then(function () {
                 if (!window.crypto_session.hasSessionKey()) showDemoBootstrapError();
