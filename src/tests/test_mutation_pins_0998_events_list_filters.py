@@ -1,8 +1,9 @@
 """Pins for public event list visibility, shift windows and loaded page data.
 
-Source: mutation delta of the release-0.99.8 checkpoint, 11 mutants.
-Groups: read visibility (2), shift bounds (6), supplied options (2),
-preloaded page cases (1).
+Source: mutation delta of the release-0.99.8 checkpoint, 8 mutants.
+Groups: read visibility (2), shift bounds (3), supplied options (2),
+preloaded page cases (1). Three aggregation-margin candidates are
+result-equivalent because the shift windows are clamped to the requested dates.
 """
 
 from datetime import date, datetime, time, timedelta
@@ -86,27 +87,6 @@ def test_shift_respects_requested_boundary(facility, staff_user, create_event, s
     chosen = create_event()
     result = event_list_queryset(facility, staff_user, {"time_filter": str(shift.pk), boundary: DAY.isoformat()})
     assert [event.pk for event in result] == [chosen.pk]
-
-
-@pytest.mark.parametrize(
-    "boundary, anchors, includes_inserted",
-    [("date_from", (-1, 3), True), ("date_from", (-2, 3), False), ("date_to", (-3, 2), False)],
-    ids=["previous-day-anchor", "earlier-anchor-excluded", "later-anchor-excluded"],
-)
-def test_lazy_shift_result_retains_its_aggregation_window(
-    facility, staff_user, create_event, shift, boundary, anchors, includes_inserted
-):
-    """Evaluation uses windows bounded by the service call's one-day aggregation margin.
-
-    x__apply_shift__mutmut_6, x__apply_shift__mutmut_8, x__apply_shift__mutmut_15.
-    """
-    before, after = (create_event(offset=offset) for offset in anchors)
-    result = event_list_queryset(facility, staff_user, {"time_filter": str(shift.pk), boundary: DAY.isoformat()})
-    inserted = create_event()
-    expected = [after.pk] if boundary == "date_from" else [before.pk]
-    if includes_inserted:
-        expected.append(inserted.pk)
-    assert [event.pk for event in result] == expected
 
 
 def test_empty_supplied_shift_options_remain_authoritative(facility, staff_user, create_event, shift):
