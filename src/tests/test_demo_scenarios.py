@@ -516,14 +516,15 @@ class TestStaleRequestAfterSwitch:
 
 
 class TestDemoOfflineBootstrap:
-    def test_bootstrap_notices_offer_immediate_recovery_and_success(
+    def test_bootstrap_notices_offer_short_waiting_text_and_success(
         self, client, demo_mode, patched_catalog, kontaktladen_staff
     ):
         response = client.post(reverse("demo_scenario_start"), {"scenario": "kontaktladen"})
         page = client.get(response.url)
         assert page.status_code == 200
         body = page.content.decode()
-        assert "die Demo erneut starten oder regulär anmelden" in body
+        assert "Offline-Schlüssel wird vorbereitet. Bitte kurz warten." in body
+        assert "Offline-Schlüssel konnte nicht aktiviert werden" in body
         assert "nach dem nächsten Reset erneut starten" not in body
         assert "data-demo-offline-success" in body
         assert "Offline-Schlüssel ist bereit." in body
