@@ -13,7 +13,7 @@ from core.views.auth import (
     set_user_language,
 )
 from core.views.csp_report import CSPReportView
-from core.views.demo_scenarios import DemoScenarioSelectView, DemoScenarioStartView
+from core.views.demo_scenarios import DemoOfflineKeyReadyView, DemoScenarioSelectView, DemoScenarioStartView
 from core.views.health import HealthView
 from core.views.legal import DemoImprintView, DemoPrivacyView
 from core.views.mfa import (
@@ -111,6 +111,7 @@ urlpatterns = [
     # Demo-Bereichsauswahl + -wechsel (Refs #2285): nur bei DEMO_MODE erreichbar
     # (404 sonst, dieselbe Doktrin wie die beiden Rechtstexte oben).
     path("demo/", DemoScenarioSelectView.as_view(), name="demo_scenario_select"),
+    path("demo/offline-key-ready/", DemoOfflineKeyReadyView.as_view(), name="demo_offline_key_ready"),
     path("demo/start/", DemoScenarioStartView.as_view(), name="demo_scenario_start"),
     path("sw.js", ServiceWorkerView.as_view(), name="service_worker"),
     path("manifest.json", ManifestView.as_view(), name="manifest"),

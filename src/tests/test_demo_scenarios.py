@@ -618,3 +618,65 @@ class TestDemoOfflineBootstrap:
         assert response.status_code == 200
         assert response.json()["offline_key_max_age"] == 10800
         assert AuditLog.objects.filter(action=AuditLog.Action.OFFLINE_KEY_FETCH, user=kontaktladen_staff).count() == 1
+
+
+class TestDemoOfflineKeyReady:
+    url = "/demo/offline-key-ready/"
+
+    def test_confirmation_clears_pending_flag_and_is_idempotent(self, client, demo_mode, staff_user):
+        client.force_login(staff_user)
+        session = client.session
+        session["demo_offline_bootstrap_pending"] = True
+        session.save()
+        response = client.post(self.url)
+        assert response.status_code == 204
+        assert response.content == b""
+        assert "demo_offline_bootstrap_pending" not in client.session
+        assert "data-demo-offline-password" not in client.get("/account/").content.decode()
+        assert client.post(self.url).status_code == 204
+
+    @pytest.mark.parametrize("authenticated", [False, True])
+    def test_disabled_demo_returns_404(self, client, settings, staff_user, authenticated):
+        settings.DEMO_MODE = False
+        if authenticated:
+            client.force_login(staff_user)
+        assert client.post(self.url).status_code == 404
+
+    def test_anonymous_confirmation_requires_login(self, client, demo_mode):
+        response = client.post(self.url)
+        assert response.status_code == 302
+        assert response.url == "/login/?next=/demo/offline-key-ready/"
+
+    def test_confirmation_requires_csrf(self, demo_mode, staff_user):
+        from django.middleware.csrf import get_token
+        from django.test import Client, RequestFactory
+
+        strict_client = Client(enforce_csrf_checks=True)
+        strict_client.force_login(staff_user)
+        session = strict_client.session
+        session["demo_offline_bootstrap_pending"] = True
+        session.save()
+        assert strict_client.post(self.url).status_code == 403
+        assert strict_client.session["demo_offline_bootstrap_pending"] is True
+        request = RequestFactory().get("/")
+        token = get_token(request)
+        strict_client.cookies["csrftoken"] = request.META["CSRF_COOKIE"]
+        assert strict_client.post(self.url, HTTP_X_CSRFTOKEN=token).status_code == 204
+
+    def test_get_does_not_confirm(self, client, demo_mode, staff_user):
+        client.force_login(staff_user)
+        session = client.session
+        session["demo_offline_bootstrap_pending"] = True
+        session.save()
+        assert client.get(self.url).status_code == 405
+        assert client.session["demo_offline_bootstrap_pending"] is True
+
+    def test_confirmation_is_limited_per_user(self, client, demo_mode, staff_user, ratelimit_enabled):
+        client.force_login(staff_user)
+        for _ in range(10):
+            assert client.post(self.url).status_code == 204
+        session = client.session
+        session["demo_offline_bootstrap_pending"] = True
+        session.save()
+        assert client.post(self.url).status_code == 429
+        assert client.session["demo_offline_bootstrap_pending"] is True

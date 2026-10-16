@@ -45,7 +45,8 @@ from functools import wraps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login as auth_login
-from django.http import Http404
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -275,3 +276,13 @@ class DemoScenarioStartView(View):
         response = redirect(settings.LOGIN_REDIRECT_URL)
         response["Clear-Site-Data"] = CLEAR_SITE_DATA_VALUE
         return response
+
+
+@method_decorator(require_demo_mode, name="dispatch")
+class DemoOfflineKeyReadyView(LoginRequiredMixin, View):
+    """Confirm browser key preparation without changing the offline salt."""
+
+    @method_decorator(ratelimit(key="user", rate="10/m", method="POST", block=True))
+    def post(self, request, *args, **kwargs):
+        request.session.pop(DEMO_OFFLINE_BOOTSTRAP_PENDING, None)
+        return HttpResponse(status=204)
