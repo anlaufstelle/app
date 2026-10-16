@@ -404,3 +404,36 @@ def test_static_deprecated_email_settings_cover_django_runtime() -> None:
     """Der Fallback darf bei einer Django-Erweiterung nicht still veralten."""
     runtime_names = frozenset(django_conf.DEPRECATED_EMAIL_SETTINGS)
     assert runtime_names <= STATIC_DEPRECATED_EMAIL_SETTINGS
+
+
+@pytest.mark.parametrize("email_host", ["", "smtp.example.invalid"])
+def test_demo_mail_delivery_stays_on_console_with_smtp_configured(email_host):
+    import subprocess
+    import sys
+
+    from tests.test_devlive_settings import _devlive_env
+
+    env = _devlive_env(
+        {
+            "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.demo",
+            "EMAIL_HOST": email_host,
+        }
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from django.conf import settings;"
+            "from django.core.mail import get_connection, send_mail;"
+            "assert settings.MAILERS['default'] == {'BACKEND': 'django.core.mail.backends.console.EmailBackend'};"
+            "assert 'mail.E001' in settings.SILENCED_SYSTEM_CHECKS;"
+            "assert get_connection().__class__.__module__ == 'django.core.mail.backends.console';"
+            "assert send_mail('Demo mail', 'Console only', 'demo@example.invalid', ['recipient@example.invalid']) == 1",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Demo mail" in result.stdout

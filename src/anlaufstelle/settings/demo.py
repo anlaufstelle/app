@@ -20,6 +20,11 @@ from core.demo import DEMO_PASSWORD  # noqa: F401
 from . import base as _base
 from .devlive import *  # noqa: F401, F403
 
+# Refs #2602: never deliver demo mail, even when EMAIL_HOST is configured.
+# Replace the inherited mailer entirely so no SMTP options survive.
+MAILERS = {"default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"}}
+SILENCED_SYSTEM_CHECKS = ["mail.E001"]
+
 # Schalter fuer Demo-Banner, Login-Zugangsdaten-Panel und Demo-Guard.
 DEMO_MODE = True
 
