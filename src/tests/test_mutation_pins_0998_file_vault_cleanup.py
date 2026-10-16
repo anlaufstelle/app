@@ -24,7 +24,7 @@ STATE_NAME = ".cleanup-orphan-storage-files-state.json"
 
 
 def test_unicode_cursor_continues_under_an_ascii_locale(settings, tmp_path):
-    """Public cleanup decodes raw UTF-8 independently of locale: x__read_cleanup_cursor__mutmut_2."""
+    """Public cleanup decodes raw UTF-8 under a real ASCII locale in a fresh interpreter."""
     settings.MEDIA_ROOT = tmp_path
     cursor = "caf\u00e9.enc"
     (tmp_path / STATE_NAME).write_text(json.dumps({"after": cursor}, ensure_ascii=False), encoding="utf-8")
@@ -61,6 +61,30 @@ print(json.dumps({"checked": result.checked_paths, "warning": result.state_warni
 
     assert json.loads(result.stdout) == {"checked": ["zzz.enc"], "warning": None}
     assert json.loads((tmp_path / STATE_NAME).read_text(encoding="utf-8")) == {"after": cursor}
+
+
+def test_unicode_cursor_ignores_the_default_text_encoding(settings, tmp_path, monkeypatch):
+    """Cursor decoding never falls back to the default encoding: x__read_cleanup_cursor__mutmut_2.
+
+    Runs in-process so mutation tooling associates it with the cursor reader; a default
+    (encoding=None) read is decoded as ASCII, as under a C locale.
+    """
+    settings.MEDIA_ROOT = tmp_path
+    cursor = "caf\u00e9.enc"
+    (tmp_path / STATE_NAME).write_text(json.dumps({"after": cursor}, ensure_ascii=False), encoding="utf-8")
+    for name in ("aaa.enc", "zzz.enc"):
+        (tmp_path / name).write_bytes(b"ciphertext")
+    original_read_text = Path.read_text
+
+    def ascii_default_read_text(self, encoding=None, errors=None, **kwargs):
+        return original_read_text(self, encoding=encoding or "ascii", errors=errors, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", ascii_default_read_text)
+
+    result = cleanup_orphan_storage_files(budget=1, dry_run=True)
+
+    assert list(result.checked_paths) == ["zzz.enc"]
+    assert result.state_warning is None
 
 
 def test_empty_existing_tree_completes_and_resets_its_cursor(settings, tmp_path):
