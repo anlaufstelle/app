@@ -77,6 +77,43 @@ class TestDemoKeyPreparation:
         finally:
             context.close()
 
+    def test_navigation_during_preparation_recovers_on_next_page(self, base_url, browser):
+        context = browser.new_context(locale="de-DE")
+        try:
+            page = context.new_page()
+            # Hold the actual derivation after salt fetch, without delaying navigation.
+            page.add_init_script("""(() => {
+                let api;
+                Object.defineProperty(window, "crypto_session", {
+                    configurable: true,
+                    get: () => api,
+                    set: value => {
+                        api = Object.assign({}, value, {
+                            deriveSessionKey: async (...args) => {
+                                if (!sessionStorage.getItem("demo-derivation-held")) {
+                                    sessionStorage.setItem("demo-derivation-held", "1");
+                                    document.body.dataset.demoDerivationHeld = "true";
+                                    await new Promise(() => {});
+                                }
+                                return value.deriveSessionKey(...args);
+                            }
+                        });
+                    }
+                });
+            })();""")
+            _start_scenario(page, base_url)
+            page.wait_for_function("() => document.body.dataset.demoDerivationHeld === 'true'")
+            expect(page.locator("[data-demo-offline-pending]")).to_be_visible()
+            assert not page.evaluate("() => window.crypto_session.hasSessionKey()")
+
+            page.goto(f"{base_url}/account/", wait_until="domcontentloaded")
+            expect(page.locator("[data-demo-offline-success]")).to_be_visible(timeout=15000)
+            expect(page.locator("[data-demo-offline-error]")).to_be_hidden()
+            expect(page.locator("[data-demo-offline-pending]")).to_be_hidden()
+            assert page.evaluate("() => window.crypto_session.hasSessionKey()")
+        finally:
+            context.close()
+
     def test_failed_preparation_shows_alert_and_no_success(self, base_url, browser):
         context = browser.new_context(locale="de-DE")
         try:

@@ -193,6 +193,9 @@ EXPECTATIONS = (
         idor_exempt="Feste Inhalts-Whitelist ohne Objektbezug",
     ),
     E("offline_key_salt", "auth-flow", post=ALL_AUTH),
+    # Disabled demos return 404 even anonymously; TestDemoOfflineKeyReady
+    # separately requires a login redirect when demo mode is enabled.
+    E("demo_offline_key_ready", "auth-flow", post=ALL_AUTH, anonymous_ok=True, extra_ok=(404,)),
     # POST ohne korrektes Passwort antwortet 403 (Re-Auth-Form, sudo_mode.py) —
     # Authentifizierungs-, keine Autorisierungs-Semantik.
     E("sudo_mode", "auth-flow", get=ALL_AUTH, post=ALL_AUTH, extra_ok=(403,)),

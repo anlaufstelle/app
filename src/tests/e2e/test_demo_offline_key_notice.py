@@ -1,7 +1,7 @@
 """E2E: Offline-key notice of the demo (DEMO #2607), complement to the legal-page cases.
 
 Anonymous visitors never see the red key notice, not even on the login page. A
-signed-in demo session whose offline key is missing (interrupted start) keeps
+signed-in demo session whose confirmed offline key is subsequently removed keeps
 seeing it on the next page.
 
 Runs only in the demo profile (``E2E_DEMO_MODE=1 E2E_SEED_SCALE=demo``).
@@ -60,10 +60,10 @@ def test_signed_in_session_without_offline_key_keeps_the_notice(base_url, browse
         notice = page.locator("[data-demo-offline-error]")
 
         # Regular start: the key is derived, the notice stays hidden.
-        page.wait_for_function("() => window.crypto_session && window.crypto_session.hasSessionKey()", timeout=15000)
+        expect(page.locator("[data-demo-offline-success]")).to_be_visible(timeout=15000)
         expect(notice).to_be_hidden()
 
-        # Interrupted start: the key is gone; the next page reports it in the signed-in session.
+        # After confirmation, removing the key still reports an error on the next page.
         page.evaluate("() => window.crypto_session.clearSessionKey()")
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
         expect(page.locator("[data-demo-offline-error]")).to_be_visible(timeout=15000)

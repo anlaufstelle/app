@@ -141,7 +141,8 @@ describe("revocation snapshot before database initialization", () => {
     it.each(["direct", "demo", "login"])("rejects an old %s attempt when its first marker open resumes after remote clear", async (mode) => {
         const database = new IDBFactory();
         const clearing = await newTab(database);
-        await clearing.session.deriveSessionKey(PASSWORD, SALT);
+        // Demo bootstrap derives only when no valid key is already available.
+        if (mode !== "demo") await clearing.session.deriveSessionKey(PASSWORD, SALT);
         const tab = await newTab(database, mode);
         const delayed = pauseDatabaseOpens(database);
         tab.context.indexedDB = delayed.database;
@@ -221,7 +222,8 @@ describe("bootstrap revocation before derivation starts", () => {
     it.each(["demo", "login"])("rejects a delayed %s salt response after clear", async (mode) => {
         const db = new IDBFactory();
         const tab = await newTab(db, mode);
-        await tab.session.deriveSessionKey(PASSWORD, SALT);
+        // A demo with an existing key now confirms it without fetching a salt.
+        if (mode !== "demo") await tab.session.deriveSessionKey(PASSWORD, SALT);
         const saltResponse = deferred();
         tab.fetch.mockImplementation(async (url) => {
             if (url === "/login/") return { status: 302 };

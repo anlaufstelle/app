@@ -125,10 +125,15 @@ describe("persistent revocation gate", () => {
         put.mockRestore(); remove.mockRestore();
         const next = mode === "same page" ? a : b || page();
         if (mode === "demo bootstrap") {
+            // Exercise a fresh derivation while retaining the encrypted work and replay gate.
+            await next.crypto_session.ready();
+            await next.crypto_session.clearSessionKey();
             const originalFetch = next.fetch;
             next.fetch = (url, options) => String(url).includes("/offline-key-salt/")
-                ? Promise.resolve({ ok: true, json: async () => ({ salt: "c2FsdHNhbHRzYWx0", offline_key_max_age: 43200 }) })
-                : originalFetch(url, options);
+                ? Promise.resolve({ ok: true, json: async () => ({ salt: "c2FsdHNhbHRzYWx0", offline_key_max_age: 43200, home_url: "/" }) })
+                : String(url).includes("/demo/offline-key-ready/")
+                    ? Promise.resolve({ ok: true, status: 204 })
+                    : originalFetch(url, options);
             next.document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-password="correct horse battery"></div>');
             const warm = vi.spyOn(next.offlineStore, "revalidateCachedFacility").mockResolvedValue({ ok: true });
             next.eval(readFileSync("src/static/js/auth-bootstrap.js", "utf8"));
