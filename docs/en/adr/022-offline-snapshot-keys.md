@@ -8,11 +8,11 @@ An HTTP/network/processing error fetching revocations (including 500/429), or an
 
 ## Addendum: Demo key after starting the demo
 
-**Demo entry** (#2511): After “Start demo”, only demo mode (`DEMO_MODE`) derives the offline key once from the publicly known demo password and the account-specific server salt; the absolute maximum lifetime also applies here. When starting the demo or switching facility or role, the server requests clearing of old browser storage via `Clear-Site-Data` as before; the destination page then derives the new key. If the account password differs, the start is rejected with a visible error before that clearing; salt-fetch or derivation failures are also displayed. The account password is never reset by this flow. Demo data is synthetic; the known password offers no confidentiality against other demo visitors.
+**Demo entry** (#2511): After “Start demo”, only demo mode (`DEMO_MODE`) derives the offline key from the publicly known demo password and the account-specific server salt; the absolute maximum lifetime also applies here. When starting the demo or switching facility or role, the server requests clearing of old browser storage via `Clear-Site-Data` as before; the destination page then derives the new key. If the account password differs, the start is rejected with a visible error before that clearing; salt-fetch or derivation failures are also displayed. If navigation interrupts preparation, the next authenticated page retries it; no demo restart is needed for this. An existing valid key is confirmed without deriving it again or extending its lifetime. The account password is never reset by this flow. Demo data is synthetic; the known password offers no confidentiality against other demo visitors.
 
-Seed and offline bootstrap use the same runtime constant in `core.demo`. Only the first rendered page after a successful demo start receives the password data constant for the external auth bootstrap script; there is no inline script literal. For demo bootstrap requests, the existing salt endpoint rechecks the mode and password match while retaining auditing and rate limiting. Outside `DEMO_MODE`, neither the data constant nor a demo bootstrap flag is created.
+Seed and offline bootstrap use the same runtime constant in `core.demo`. Every authenticated page after a successful demo start receives the public password data constant for the external auth bootstrap script until the browser confirms an available key through the CSRF-protected confirmation endpoint; there is no inline script literal. For demo bootstrap requests, the existing salt endpoint rechecks the mode and password match while retaining auditing and rate limiting. Outside `DEMO_MODE`, neither the data constant nor a demo bootstrap flag is created.
 
 <!-- translation-source: docs/adr/022-offline-snapshot-keys.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-10 -->
-<!-- source-hash: 1503ba7028fb474b3105de11429624bd392b7a4e -->
+<!-- translation-date: 2026-10-16 -->
+<!-- source-hash: 75427204e042d89dd989f437f37951cb3622a44f -->
