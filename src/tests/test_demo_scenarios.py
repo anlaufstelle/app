@@ -681,3 +681,12 @@ class TestDemoOfflineKeyReady:
         session.save()
         assert client.post(self.url).status_code == 429
         assert client.session["demo_offline_bootstrap_pending"] is True
+
+    @pytest.mark.parametrize("demo_enabled", [False, True])
+    def test_confirmation_without_facility(self, client, settings, staff_user, demo_enabled):
+        settings.DEMO_MODE = demo_enabled
+        staff_user.facility = None
+        staff_user.save(update_fields=["facility"])
+        client.force_login(staff_user)
+        response = client.post(self.url)
+        assert response.status_code == (204 if demo_enabled else 404)

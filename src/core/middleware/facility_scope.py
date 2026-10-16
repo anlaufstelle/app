@@ -154,6 +154,8 @@ FACILITY_MISSING_EXEMPT_PATHS = (
     # dem Einrichtungs-Guard fallen (Refs #2285, #2351).
     "/demo/",
     "/demo/start/",
+    # Session-only key confirmation needs no facility data (Refs #2602).
+    "/demo/offline-key-ready/",
 )
 
 #: Refs #2090: Standalone-Seite ohne ``base.html`` — aus demselben Grund wie
