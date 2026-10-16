@@ -81,25 +81,18 @@ class TestDemoKeyPreparation:
         context = browser.new_context(locale="de-DE")
         try:
             page = context.new_page()
-            # Hold the actual derivation after salt fetch, without delaying navigation.
+            # Hold the actual WebCrypto derivation after the salt fetch, without delaying
+            # navigation. The public crypto_session object is frozen, so hook SubtleCrypto.
             page.add_init_script("""(() => {
-                let api;
-                Object.defineProperty(window, "crypto_session", {
-                    configurable: true,
-                    get: () => api,
-                    set: value => {
-                        api = Object.assign({}, value, {
-                            deriveSessionKey: async (...args) => {
-                                if (!sessionStorage.getItem("demo-derivation-held")) {
-                                    sessionStorage.setItem("demo-derivation-held", "1");
-                                    document.body.dataset.demoDerivationHeld = "true";
-                                    await new Promise(() => {});
-                                }
-                                return value.deriveSessionKey(...args);
-                            }
-                        });
+                const original = SubtleCrypto.prototype.deriveKey;
+                SubtleCrypto.prototype.deriveKey = function (...args) {
+                    if (!sessionStorage.getItem("demo-derivation-held")) {
+                        sessionStorage.setItem("demo-derivation-held", "1");
+                        document.body.dataset.demoDerivationHeld = "true";
+                        return new Promise(() => {});
                     }
-                });
+                    return original.apply(this, args);
+                };
             })();""")
             _start_scenario(page, base_url)
             page.wait_for_function("() => document.body.dataset.demoDerivationHeld === 'true'")
