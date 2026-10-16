@@ -541,7 +541,7 @@ class TestDemoOfflineBootstrap:
         ("scenario_key", "role"),
         [("kontaktladen", role) for role in TEAM_ROLES] + [("solo", role) for role in SOLO_ROLES],
     )
-    def test_start_renders_one_time_password_data_after_clear_site_data(
+    def test_start_keeps_password_data_until_confirmation_after_clear_site_data(
         self, client, demo_mode, patched_catalog, kontaktladen_staff, solo_staff, role, scenario_key
     ):
         user = kontaktladen_staff if scenario_key == "kontaktladen" else solo_staff
@@ -561,7 +561,8 @@ class TestDemoOfflineBootstrap:
         assert 'src="/static/js/auth-bootstrap.js"' in body
         assert "data-demo-offline-error" in body
         assert body.index("data-demo-offline-error") < body.index('id="flash-messages"')
-        assert "data-demo-offline-password" not in client.get(response.url).content.decode()
+        assert 'data-demo-offline-password="anlaufstelle2026"' in client.get("/account/").content.decode()
+        assert client.session["demo_offline_bootstrap_pending"] is True
 
     def test_changed_password_shows_error_without_login_or_storage_reset(
         self, client, demo_mode, patched_catalog, kontaktladen_staff

@@ -42,54 +42,24 @@ class DemoContextProcessorTests(SimpleTestCase):
 
 
 @override_settings(DEMO_MODE=True)
-def test_demo_followup_executes_delivered_recovery_script():
-    """Render both pages and execute only the scripts delivered to the second."""
-    import json
-    import subprocess
-    from pathlib import Path
+def test_demo_followup_retains_public_password_until_confirmation():
+    """Every authenticated page can retry an interrupted demo bootstrap."""
     from types import SimpleNamespace
 
     from django.template.loader import render_to_string
 
-    from core.demo import DEMO_OFFLINE_BOOTSTRAP_PENDING
+    from core.demo import DEMO_OFFLINE_BOOTSTRAP_PENDING, DEMO_PASSWORD
 
     request = RequestFactory().get("/")
     request.user = SimpleNamespace(is_authenticated=True, pk=1, username="demo", get_full_name=lambda: "Demo")
     request.session = {DEMO_OFFLINE_BOOTSTRAP_PENDING: True}
-    first_html = render_to_string("base.html", {**demo(request), "user": request.user, "request": request})
-    next_html = render_to_string("base.html", {**demo(request), "user": request.user, "request": request})
-    assert "data-demo-offline-password=" in first_html
-    assert "data-demo-offline-password=" not in next_html
-    source = r"""
-import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {JSDOM} from 'jsdom';
-const dom = new JSDOM(HTML, {url:'https://example.test/', runScripts:'outside-only'});
-const w = dom.window;
-w.crypto_session = {isSupported:()=>true, ready:async()=>{}, hasSessionKey:()=>false};
-let requests = 0;
-w.fetch = async () => { requests++; throw new Error('Unexpected salt request'); };
-for (const node of w.document.querySelectorAll('script[src]')) {
-    if (new URL(node.src).pathname.endsWith('/js/auth-bootstrap.js')) {
-        w.eval(readFileSync('src/static/js/auth-bootstrap.js', 'utf8'));
-    }
-}
-await new Promise(resolve => setTimeout(resolve, 0));
-assert.equal(w.document.querySelector('[data-demo-offline-error]').hidden, false);
-assert.equal(requests, 0);
-w.close();
-""".replace("HTML", json.dumps(next_html))
-    result = subprocess.run(
-        ["node", "--input-type=module"],
-        input=source,
-        text=True,
-        capture_output=True,
-        cwd=Path(__file__).resolve().parents[2],
-        timeout=30,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
+    for _ in range(2):
+        html = render_to_string("base.html", {**demo(request), "user": request.user, "request": request})
+        assert f'data-demo-offline-password="{DEMO_PASSWORD}"' in html
+        assert request.session[DEMO_OFFLINE_BOOTSTRAP_PENDING] is True
 
 
+@pytest.mark.architecture
 @pytest.mark.parametrize("supported", [False, True])
 @pytest.mark.parametrize("authenticated", [False, True])
 def test_demo_error_visibility_requires_authenticated_session(supported, authenticated):

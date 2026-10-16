@@ -279,7 +279,7 @@ def demo(request):
     session = getattr(request, "session", {})
     # Error pages and bare requests may render without the authentication middleware.
     user = getattr(request, "user", None)
-    bootstrap_pending = bool(user is not None and user.is_authenticated) and session.pop(
+    bootstrap_pending = bool(user is not None and user.is_authenticated) and session.get(
         DEMO_OFFLINE_BOOTSTRAP_PENDING, False
     )
     now = timezone.localtime()
