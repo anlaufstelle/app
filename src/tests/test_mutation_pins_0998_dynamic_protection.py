@@ -2,13 +2,15 @@
 
 Source: mutation delta of the release-0.99.8 checkpoint, 6 pinned mutants.
 Groups: invalid batch contexts and diagnostics (4), eager type loading (1),
-unchanged modification timestamps (1). Three candidates already have coverage;
+unchanged modification timestamps (1). Three candidates fail existing tests in
+targeted runs but timed out under mutmut, so their kill is confirmed separately;
 two iterator-size candidates impose no public semantic requirement.
 Related pattern: test_mutation_pins_0997_services_dynamic_protection.py.
 """
 
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
+from datetime import timedelta
 
 import pytest
 from django.db import connection, connections, transaction
@@ -112,7 +114,7 @@ def test_rewrite_updates_protection_without_changing_modification_time(facility,
     x_rewrite_dynamic_records__mutmut_33
     """
     record, field = make_record(facility, lead_user, entity)
-    original_time = timezone.now() - timezone.timedelta(days=2)
+    original_time = timezone.now() - timedelta(days=2)
     type(record).objects.filter(pk=record.pk).update(updated_at=original_time)
     FieldTemplate.objects.filter(pk=field.pk).update(is_encrypted=True, sensitivity="high")
     with transaction.atomic():
