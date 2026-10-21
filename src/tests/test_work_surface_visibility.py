@@ -14,14 +14,23 @@ from tests._factories import make_client, make_document_type, make_event
 pytestmark = pytest.mark.django_db
 
 
-@pytest.mark.parametrize("surface", ["inbox", "badges", "detail", "profile", "focus", "cockpit", "handover", "feed"])
-@pytest.mark.parametrize("role", ["assistant", "staff", "lead", "facility_admin"])
+ROLES = ["assistant", "staff", "lead", "facility_admin"]
+# The cockpit is only rendered for assistant and staff roles.
+COCKPIT_ROLES = {"assistant", "staff"}
+
+
+def _role_surfaces(surfaces):
+    return [(role, surface) for role in ROLES for surface in surfaces if surface != "cockpit" or role in COCKPIT_ROLES]
+
+
+@pytest.mark.parametrize(
+    ("role", "surface"),
+    _role_surfaces(["inbox", "badges", "detail", "profile", "focus", "cockpit", "handover", "feed"]),
+)
 @pytest.mark.parametrize("revocation", ["trash", "inactive"])
 def test_work_surfaces_follow_person_revocation_and_restoration(
     client, facility, second_facility, client_identified, staff_user, lead_user, role, surface, revocation
 ):
-    if surface == "cockpit" and role in ["lead", "facility_admin"]:
-        pytest.skip("The cockpit is only rendered for assistant and staff roles.")
     reader = User.objects.create_user(username=f"surface-{role}", role=role, facility=facility)
     live = make_client(facility=facility, pseudonym="Live person", created_by=staff_user)
     foreign = make_client(facility=second_facility, pseudonym="Foreign person", created_by=None)
@@ -156,11 +165,8 @@ def test_work_surfaces_follow_person_revocation_and_restoration(
         check_visible(True, favorite=True)
 
 
-@pytest.mark.parametrize("surface", ["profile", "cockpit", "handover"])
-@pytest.mark.parametrize("role", ["assistant", "staff", "lead", "facility_admin"])
+@pytest.mark.parametrize(("role", "surface"), _role_surfaces(["profile", "cockpit", "handover"]))
 def test_widgets_exclude_role_hidden_documentation(client, facility, client_identified, role, surface):
-    if surface == "cockpit" and role in ["lead", "facility_admin"]:
-        pytest.skip("The cockpit is only rendered for assistant and staff roles.")
     reader = User.objects.create_user(username=f"hidden-{role}", role=role, facility=facility)
     visible = {"assistant": {"normal"}, "staff": {"normal", "elevated"}}.get(role, {"normal", "elevated", "high"})
     for sensitivity in ["normal", "elevated", "high"]:

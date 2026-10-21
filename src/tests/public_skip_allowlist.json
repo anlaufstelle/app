@@ -77,6 +77,13 @@
     "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
   },
   {
+    "nodeid": "src/tests/test_acceptance_dialog_documentation.py::test_inline_dialog_acceptance_requires_a_new_focus_check",
+    "profile": "public",
+    "reason": "docs/testing/abnahme-0.98.md nicht im Public-Snapshot — Guard nur im Dev-Repo relevant",
+    "exclusion": "docs/testing/abnahme-0.98.md",
+    "rationale": "The release strip list excludes docs/testing/abnahme-0.98.md; this node checks that excluded artifact."
+  },
+  {
     "nodeid": "src/tests/test_architecture_guards_deploy_sources.py::test_deploy_ships_every_sourced_repo_file[dev-ops/deploy/barbara/deploy-barbara.sh]",
     "profile": "public",
     "reason": "dev-ops/deploy/barbara/deploy-barbara.sh: dev-ops/ (incl. dev-ops/deploy/deploy-dev.sh) is stripped from the public snapshot",
@@ -1391,6 +1398,20 @@
     "reason": "dev-ops/release/ and scripts/dev/ are excluded from public snapshots",
     "exclusion": "scripts/dev",
     "rationale": "The release strip list excludes scripts/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_dev_release_docs.py::test_dev_repository_guidance_does_not_claim_admin_ruleset_bypass",
+    "profile": "public",
+    "reason": "docs/dev/ is absent from public snapshots",
+    "exclusion": "docs/dev",
+    "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_dev_release_docs.py::test_platform_evidence_has_one_handoff_reference_and_read_only_commands",
+    "profile": "public",
+    "reason": "docs/dev/ is absent from public snapshots",
+    "exclusion": "docs/dev",
+    "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
   },
   {
     "nodeid": "src/tests/test_dev_release_docs.py::test_release_documentation_uses_current_commands",
