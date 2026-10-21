@@ -96,6 +96,22 @@ class TestScenarioSelectionBeforeFirstLogin:
         finally:
             context.close()
 
+    @pytest.mark.smoke
+    def test_start_button_logs_in_with_blocked_indexeddb(self, base_url, browser):
+        """Demo login stays available when the browser denies IndexedDB access."""
+        context = browser.new_context(locale="de-DE")
+        context.add_init_script("indexedDB.open = function () { throw new DOMException('Blocked', 'SecurityError'); };")
+        page = context.new_page()
+        try:
+            page.goto(f"{base_url}/demo/")
+            first_card = page.locator("[data-testid='demo-scenario-card']").first
+            first_card.locator("[data-testid='demo-scenario-start']").click()
+            page.wait_for_url(lambda url: "/demo/" not in url, timeout=10000)
+            assert page.locator("[data-testid='demo-scenario-switch-link']").is_visible()
+            assert _session_key(context) is not None
+        finally:
+            context.close()
+
 
 @pytest.mark.usefixtures("demo_mode_or_skip")
 class TestScenarioSwitchFromBanner:

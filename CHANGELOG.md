@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Demo-Start bei blockiertem Browserspeicher** (#2602) — „Demo starten“ sendet auch bei fehlender oder fehlerhafter IndexedDB genau einmal mit dem gewählten Bereich und der gewählten Rolle ab; die Bestätigung bei ausstehender Offline-Arbeit bleibt erhalten.
+
 - **Umlaute in Servertexten korrigiert** (#2591) — Passwortbestätigung, Kontoentsperrung, Begründungsmeldungen, Verarbeitungsverzeichnis, Speicherwarnung, Wartungshinweis und Konsolenausgaben verwenden echte Umlaute und die korrekte ß-Schreibung.
 - **Feldvorlagen mit ausdrücklichem Zielzustand schalten** (#2573) — Wiederholtes Aktivieren oder Deaktivieren erhält den gewünschten Zustand ohne erneuten Änderungseintrag im Audit-Protokoll, während eine Anfrage ohne oder mit ungültiger Zielangabe jetzt mit HTTP 400 abgewiesen wird und nichts ändert.
 

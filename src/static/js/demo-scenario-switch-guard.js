@@ -1,27 +1,12 @@
 /*
- * Warnt vor ungespeicherter Offline-Arbeit beim Demo-Start/-Wechsel (Refs
- * #2285, Ticket-Punkt 9: "Ungespeicherte Arbeit vorher
- * nachvollziehbar behandeln; weder still verlieren noch übertragen").
+ * Warn before discarding pending offline work on demo start/switch
+ * (Refs #2285, #2602).
+ * Reuse the offlineStore counters; missing or failed counts allow the start.
+ * Only a positive count requires confirmation.
  *
- * Gleiche Zaehl-/Bestaetigungs-Mechanik wie auth-bootstrap.js
- * (unsyncedEntryCount/attachUnsyncedGuard, Refs #1415/#2287 — dort fuer den
- * Passwortwechsel) — hier repliziert, KEIN neuer Store: beide Zaehlfunktionen
- * kommen unveraendert aus window.offlineStore (countUnsyncedEvents/
- * countQueueByStatus). Eine gemeinsame Modul-Datei gibt es nicht (kein
- * Modulsystem/keine Exports zwischen den beiden IIFE-Skripten), deshalb die
- * kleine Aggregationsfunktion dupliziert statt importiert.
- *
- * FAIL-OPEN (Pflicht, wie beim Vorbild): schlaegt der Zaehl-Check fehl oder
- * ist window.offlineStore nicht initialisiert (z. B. anonymer Erstbesuch auf
- * /demo/ vor jedem Login — es gibt dann naturgemaess nichts zu verlieren),
- * geht der Start/Wechsel ungehindert durch. `confirm()` erscheint nur, wenn
- * der Zaehler nachweislich > 0 ist.
- *
- * Async/sync-Bruch (`confirm()` ist synchron, der Zaehl-Check async):
- * `preventDefault` + `stopImmediatePropagation` auf dem ersten Submit, dann
- * nach dem asynchronen Check ein programmatischer `form.requestSubmit()`.
- * Ein `bypass`-Flag pro Formular laesst den zweiten, programmatischen Submit
- * unangetastet durch.
+ * Resume submission in a new task: a microtask can still run while the native
+ * form algorithm is firing submission events and rejects requestSubmit().
+ * Keep requestSubmit() so validation, the submitter and other listeners survive.
  */
 (function () {
     "use strict";
@@ -50,26 +35,39 @@
 
     function attachGuard(form) {
         var bypass = false;
+        var pending = false;
         form.addEventListener("submit", function (event) {
-            if (bypass) return; // programmatischer Re-Submit nach confirm/Fail-Open
+            if (bypass) return; // Allow the deferred resubmission through.
             event.preventDefault();
             event.stopImmediatePropagation();
-            unsyncedEntryCount()
+            if (pending) return;
+            pending = true;
+            var submitter = event.submitter;
+            Promise.resolve()
+                .then(function () {
+                    // Convert synchronous counter exceptions to rejections too.
+                    return unsyncedEntryCount();
+                })
+                .catch(function () {
+                    return 0; // Fail open if counting is unavailable.
+                })
                 .then(function (count) {
                     if (count > 0) {
                         var template = document.body.getAttribute("data-i18n-demo-switch-confirm") || FALLBACK_CONFIRM_TEXT;
                         var msg = template.replace("{count}", String(count));
-                        if (!window.confirm(msg)) return; // Abbruch
+                        if (!window.confirm(msg)) {
+                            pending = false;
+                            return;
+                        }
                     }
-                    bypass = true;
-                    if (form.requestSubmit) form.requestSubmit();
-                    else form.submit();
-                })
-                .catch(function () {
-                    // FAIL-OPEN: Zaehl-Check fehlgeschlagen -> nicht blockieren.
-                    bypass = true;
-                    if (form.requestSubmit) form.requestSubmit();
-                    else form.submit();
+                    window.setTimeout(function () {
+                        bypass = true;
+                        pending = false;
+                        if (form.requestSubmit) {
+                            if (submitter) form.requestSubmit(submitter);
+                            else form.requestSubmit();
+                        } else form.submit();
+                    }, 0);
                 });
         });
     }

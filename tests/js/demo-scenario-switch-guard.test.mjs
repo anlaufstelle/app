@@ -6,6 +6,15 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 let guard;
 
+beforeEach(() => {
+    vi.useFakeTimers();
+});
+
+afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+});
+
 beforeAll(async () => {
     await import("../../src/static/js/demo-scenario-switch-guard.js");
     guard = window.demoScenarioSwitchGuard;
@@ -24,8 +33,8 @@ function makeForm() {
     return form;
 }
 
-function flushMicrotasks() {
-    return new Promise((resolve) => setTimeout(resolve, 0));
+async function flushMicrotasks() {
+    await vi.runAllTimersAsync();
 }
 
 describe("unsyncedEntryCount", () => {
