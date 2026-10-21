@@ -7,6 +7,41 @@
     "rationale": "The live authorization audit is opt-in through the AUTHZ_AUDIT=1 audit run."
   },
   {
+    "nodeid": "src/tests/e2e/test_demo_offline_key_notice.py::test_anonymous_login_page_has_no_key_notice[chromium]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_offline_key_notice.py::test_signed_in_session_without_offline_key_keeps_the_notice[chromium]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_offline_key_preparation.py::TestDemoKeyPreparation::test_failed_preparation_shows_alert_and_no_success[chromium]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_offline_key_preparation.py::TestDemoKeyPreparation::test_hint_while_preparing_then_completion[chromium]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_offline_key_preparation.py::TestDemoKeyPreparation::test_navigation_during_preparation_recovers_on_next_page[chromium]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
     "nodeid": "src/tests/e2e/test_demo_scenario_switch.py::TestOldTabAfterSwitch::test_requests_pending_during_the_switch_keep_the_new_session[chromium]",
     "profile": "public",
     "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
@@ -35,6 +70,13 @@
     "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
   },
   {
+    "nodeid": "src/tests/e2e/test_demo_scenario_switch.py::TestScenarioSelectionBeforeFirstLogin::test_start_button_logs_in_with_blocked_indexeddb[chromium]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
     "nodeid": "src/tests/e2e/test_demo_scenario_switch.py::TestScenarioSelectionBeforeFirstLogin::test_start_button_logs_in_without_credentials[chromium]",
     "profile": "public",
     "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
@@ -57,6 +99,20 @@
   },
   {
     "nodeid": "src/tests/e2e/test_demo_scenario_switch.py::TestScenarioSwitchFromBanner::test_two_independent_visitor_contexts_do_not_interfere[chromium]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_scenario_switch.py::test_anonymous_legal_pages_have_no_demo_offline_alert[chromium-/datenschutzerklaerung/]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_scenario_switch.py::test_anonymous_legal_pages_have_no_demo_offline_alert[chromium-/impressum/]",
     "profile": "public",
     "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
     "requires_env": "E2E_DEMO_MODE=1",
