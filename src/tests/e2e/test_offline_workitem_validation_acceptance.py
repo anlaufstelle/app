@@ -33,6 +33,23 @@ FIELD_ERROR = {
 UNSYNCED = "[data-testid='workitem-unsynced-badge']"
 
 
+def _browser_date(page, days):
+    """ISO date ``days`` after today in the browser's local calendar.
+
+    The form takes its earliest allowed date from the browser's local today,
+    so fixed dates expire once they fall into the past.
+    """
+    return page.evaluate(
+        """days => {
+            const d = new Date();
+            d.setDate(d.getDate() + days);
+            const pad = n => String(n).padStart(2, "0");
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }""",
+        days,
+    )
+
+
 @pytest.mark.parametrize(
     "case",
     ["empty-title", "unicode-whitespace-title", "title-too-long", "reminder-after-due"],
@@ -60,8 +77,8 @@ def test_invalid_offline_task_is_not_confirmed_as_saved(browser, base_url, e2e_e
             title = "T" * 201
         page.locator("[data-testid='offline-wi-input-title']").fill(title)
         if case == "reminder-after-due":
-            fill_date(page, "[data-testid='offline-wi-input-due_date']", "2026-10-20")
-            fill_date(page, "[data-testid='offline-wi-input-remind_at']", "2026-10-25")
+            fill_date(page, "[data-testid='offline-wi-input-due_date']", _browser_date(page, 5))
+            fill_date(page, "[data-testid='offline-wi-input-remind_at']", _browser_date(page, 10))
         page.locator("[data-testid='offline-wi-create-save']").click()
 
         if case == "empty-title":
@@ -82,7 +99,7 @@ def test_invalid_offline_task_is_not_confirmed_as_saved(browser, base_url, e2e_e
 
         # A corrected input is saved normally.
         if case == "reminder-after-due":
-            fill_date(page, "[data-testid='offline-wi-input-remind_at']", "2026-10-18")
+            fill_date(page, "[data-testid='offline-wi-input-remind_at']", _browser_date(page, 3))
         else:
             page.locator("[data-testid='offline-wi-input-title']").fill(f"Offline-Gueltig-{marker}")
         _go_offline(page)

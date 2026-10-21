@@ -476,29 +476,30 @@ def test_revoked_403_shows_explanatory_text_instead_of_generic_error(browser, ba
     try:
         client_pk = str(uuid.uuid4())
         event_pk = str(uuid.uuid4())
-        future = "2027-01-01T00:00:00Z"
         page.goto(base_url, wait_until="domcontentloaded")
         page.wait_for_function("window.crypto_session && window.offlineStore && window.offlineEdit")
         page.evaluate(
             """async (args) => {
+                // Relative to the browser clock: an expired bundle is dropped on read.
+                const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
                 await window.crypto_session.clearSessionKey();
                 await window.offlineStore.purgeAll();
                 await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
                 await window.offlineStore.saveClientBundle({
                     client: {pk: args.clientPk, pseudonym: 'REVOKED-TEST'},
-                    expires_at: args.future, ttl: 3600,
+                    expires_at: future, ttl: 3600,
                     schema_version: window.offlineStore.BUNDLE_SCHEMA_VERSION,
                     document_types: [{pk: 'dt-1', name: 'Kontakt', fields: [
                         {slug: 'notiz', name: 'Notiz', field_type: 'text'}
                     ]}],
                     events: [{
-                        pk: args.eventPk, occurred_at: args.future, updated_at: '2026-05-01T12:00:00Z',
+                        pk: args.eventPk, occurred_at: future, updated_at: '2026-05-01T12:00:00Z',
                         document_type_pk: 'dt-1', document_type_name: 'Kontakt',
                         data_fields: {notiz: 'Originalwert'}, can_edit: true,
                     }],
                 });
             }""",
-            {"clientPk": client_pk, "eventPk": event_pk, "future": future},
+            {"clientPk": client_pk, "eventPk": event_pk},
         )
 
         def _handler(route):

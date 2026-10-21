@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 import uuid
+from datetime import date, timedelta
 
 import pytest
 
@@ -201,15 +202,17 @@ class TestWorkItemEdit:
         page.click("a:has-text('Bearbeiten')")
         page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/edit/"))
 
-        # Fristdatum setzen
-        fill_date(page, 'input[name="due_date"]', "2026-12-31")
+        # Relative to today: the form refuses a changed date in the past, and the
+        # detail page shows the full date only beyond the next calendar month.
+        due = date.today() + timedelta(days=70)
+        fill_date(page, 'input[name="due_date"]', due.isoformat())
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(f"{base_url}/workitems/")
 
         # Detail-Seite prüfen: Fristdatum angezeigt
         page.locator(f"a:has-text('{unique_title}')").click()
         page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/"))
-        assert page.locator("text=31.12.2026").first.is_visible()
+        assert page.locator(f"text={due:%d.%m.%Y}").first.is_visible()
 
     def test_due_date_input_present_alongside_presets(self, authenticated_page, base_url):
         """Free text entry and presets share the language display and ISO transport.
