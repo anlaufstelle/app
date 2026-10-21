@@ -40,8 +40,8 @@ pyyaml>=6.0
 # Raised to 2.8.0 for PYSEC-2026-4175/-4176/-4177 (CVE-2026-97687/-97688/-97689:
 # HTTPS proxy TLS config, chunked deflate infinite loop, unbounded chunk-size line).
 urllib3>=2.8.0
-# Pin transitiver dep wegen PYSEC-2026-2253 bis PYSEC-2026-2257 (weasyprint zieht es ein).
-pillow>=12.3.0
+# Security fixes for image decoders and decompression limits (Refs #2638).
+pillow>=13.0.0
 # Pin transitiver dep: WeasyPrint 70 nutzt CSS-Notes-Pseudoelemente (::note-call) in seinem
 # UA-Stylesheet; cssselect2 < 0.10 kennt sie nicht und loggt bei jedem PDF drei Warnungen.
 cssselect2>=0.10.1
