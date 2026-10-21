@@ -108,7 +108,7 @@
     let settleInitialLoad = null; // resolves ``initialLoad``
     let lockedHydration = null; // boot hydration run by a lock holder of this tab
     let lastActivityWrite = 0; // in-memory throttle marker for _touchActivity
-    let idleDecision = null; // running idle-wipe decision of this tab
+    let idleDecision = null; // running idle-window decision of this tab
 
     function isSupported() {
         return (
@@ -551,22 +551,25 @@
         return _runExclusive(_enforceIdleWipeLocked);
     }
 
-    // One idle decision per tab at a time. A gate reached while a decision of
-    // this tab is running (as a guest of the lock holder via ``_runIdleGate``,
-    // or without any lock where the sync module is missing) joins it. Deciding
-    // again would read the stamp before the running wipe deletes it and
-    // revoke once more, after a re-login derivation may have started.
-    function _enforceIdleWipeLocked() {
+    // Every gate checks the absolute key lifetime itself, so a gate entering
+    // after the deadline never takes over an earlier gate's result. Only the
+    // idle-window decision is shared: one per tab at a time. A gate reached
+    // while it is running (as a guest of the lock holder via
+    // ``_runIdleGate``, or without any lock where the sync module is missing)
+    // joins it. Deciding again would read the stamp before the running wipe
+    // deletes it and revoke once more, after a re-login derivation may have
+    // started.
+    async function _enforceIdleWipeLocked() {
+        if (await _enforceAbsoluteKeyExpiry()) return true;
         if (!idleDecision) {
-            idleDecision = _decideIdleWipe().finally(function () {
+            idleDecision = _decideIdleWindow().finally(function () {
                 idleDecision = null;
             });
         }
         return idleDecision;
     }
 
-    async function _decideIdleWipe() {
-        if (await _enforceAbsoluteKeyExpiry()) return true;
+    async function _decideIdleWindow() {
         const row = await _idbGet(ACTIVITY_KEY);
         if (!row || typeof row.ts !== "number") {
             // No stamp yet (pre-#1065 install or first run): start the idle
