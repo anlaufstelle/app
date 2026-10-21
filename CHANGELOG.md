@@ -89,6 +89,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Bildverarbeitung, Zertifikatsspeicher und Entwicklungswerkzeuge abgesichert** (#2638) — Pillow 13.0.0 und certifi 2026.10.19 beheben gemeldete Sicherheitslücken in Bildverarbeitung und Zertifikatsspeicher; Vite 8.3.5 schließt die Sicherheitslücken der Entwicklungs-Toolchain.
 - **Fallzuordnung auf zulässige Fälle begrenzt** (#2533) — Auch aus der Fallakte lassen sich Kontakte nur offenen Fällen mit für die Rolle sichtbarem Falltyp zuordnen; bei unzulässigen Fällen entfällt die Auswahl.
 - **Auto-Freigabe auf berechtigte Zurückstellungen begrenzt** (#2590) — Für die ausdrücklich aktivierte Auto-Freigabe zählen nur Zurückstellungen mit dem Recht „Löschbestätigung“ ohne noch laufenden Aufschub desselben Vorschlags, und die einstellbare Schwelle beträgt mindestens 1.
 - **Verborgene Aufgaben auch bei Sammelaktionen ausgefiltert** (#2585) — Aufgaben widerrufener Personen werden wie unbekannte Aufgaben abgewiesen, ohne ihre Existenz durch abweichende Fehlermeldungen preiszugeben.
