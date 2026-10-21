@@ -54,7 +54,8 @@ def test_only_current_recipient_has_current_label(facility, lead_user, staff_use
         form = WorkItemForm(instance=item, facility=facility)
         labels = {str(value): label for value, label in form.fields["assigned_to"].choices}
 
-        assert labels[str(lead_user.pk)] == f"{lead_user} ({gettext('aktuell')})"
+        current_label = gettext("aktuell")
+        assert labels[str(lead_user.pk)] == f"{lead_user} ({current_label})"
         assert labels[str(staff_user.pk)] == str(staff_user)
 
 
