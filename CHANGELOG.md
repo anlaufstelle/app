@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Inaktivitätssperre entscheidet je Tab nur einmal** (#1493) — Erreicht eine weitere Prüfung desselben Tabs die Sperre, während diese noch läuft, schließt sie sich der laufenden Entscheidung an, statt den Offline-Schlüssel ein zweites Mal zu widerrufen. Eine direkt nach der Sperre im selben Tab begonnene Schlüsselableitung wird dadurch nicht mehr nachträglich verworfen; ungesyncte Offline-Einträge bleiben nach der Neuanmeldung lesbar.
 - **Demo-Start bei blockiertem Browserspeicher** (#2602) — „Demo starten“ sendet auch bei fehlender oder fehlerhafter IndexedDB genau einmal mit dem gewählten Bereich und der gewählten Rolle ab; die Bestätigung bei ausstehender Offline-Arbeit bleibt erhalten.
 
 - **Umlaute in Servertexten korrigiert** (#2591) — Passwortbestätigung, Kontoentsperrung, Begründungsmeldungen, Verarbeitungsverzeichnis, Speicherwarnung, Wartungshinweis und Konsolenausgaben verwenden echte Umlaute und die korrekte ß-Schreibung.
