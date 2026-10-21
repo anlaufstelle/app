@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Paketimport und Einrichtungs-Bootstrap beschleunigt** (#2598) — Konfigurationssperre und Datenumschreibung werden je Paket gebündelt (Standardpaket: 63 auf 1 Sperre und 28 auf 1 Umschreibungsrunde), während Zeilenvalidierungen, vollständiger Rollback und einzelne Konfigurationsspeicherungen erhalten bleiben.
 
+- **Sitzungsgrenze beim 2FA-Gerätewechsel benannt** (#2590) — Benutzerhandbuch, ADR 015 und Sicherheitshinweise halten fest, dass Gerätewechsel und freiwillige Deaktivierung andere angemeldete Sitzungen des Kontos nicht beenden und bei Verlust oder Diebstahl eines Geräts mit möglicherweise offener Sitzung der Admin-Reset nach Dienstanweisung der Einrichtung greift.
+
 ### Fixed
 
 - **Demo-Start bei blockiertem Browserspeicher** (#2602) — „Demo starten“ sendet auch bei fehlender oder fehlerhafter IndexedDB genau einmal mit dem gewählten Bereich und der gewählten Rolle ab; die Bestätigung bei ausstehender Offline-Arbeit bleibt erhalten.

@@ -8,7 +8,7 @@ Old idempotency fingerprints cannot be rewrapped because the original request pa
 
 ## Authentication, release metadata and guard coverage
 
-Ten backup codes carry 128 bits each and are stored as purpose-separated 96-bit HMAC prefixes derived from `SECRET_KEY`. Earlier SHA digests and the old input format are invalid; rotating `SECRET_KEY` also invalidates codes. Anonymous recovery uses 5/min per IP and 10/h per normalized username without increasing device throttling. Authenticated device throttling and atomic single use remain. The [user guide](user-guide.md#two-factor-authentication-2fa) explains **Neues Gerät einrichten** (set up a new device): existing verified MFA plus sudo; only acknowledgement of new codes replaces confirmed TOTP devices, while passkeys remain.
+Ten backup codes carry 128 bits each and are stored as purpose-separated 96-bit HMAC prefixes derived from `SECRET_KEY`. Earlier SHA digests and the old input format are invalid; rotating `SECRET_KEY` also invalidates codes. Anonymous recovery uses 5/min per IP and 10/h per normalized username without increasing device throttling. Authenticated device throttling and atomic single use remain. The [user guide](user-guide.md#two-factor-authentication-2fa) explains **Neues Gerät einrichten** (set up a new device): existing verified MFA plus sudo; only acknowledgement of new codes replaces confirmed TOTP devices, while passkeys remain. Device change and voluntary deactivation do not end other signed-in sessions of the account; if a device with a possibly open session is lost or stolen, use the admin reset (the facility's service instruction).
 
 Passkey completion is limited to 60/h per user before JSON parsing. Cryptographic failures and malformed completion requests received during a started verification count; an interrupted started verification consumes the challenge and records `WEBAUTHN_FAILED` with fixed event/error codes, without setting MFA/OTP markers. A local browser cancellation without a completion request is not observable by the server.
 
@@ -25,4 +25,4 @@ Two separate rulesets are planned for `refs/heads/main`: `main-integrity` blocks
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-14 -->
-<!-- source-hash: 8c321e5276d3ef8fd61fd8881e881f2372df6ac8 -->
+<!-- source-hash: 1fbfc5bc658d31f6dfcef13ac0cadd22889e1f81 -->

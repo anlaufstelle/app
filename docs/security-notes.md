@@ -2085,7 +2085,7 @@ Der Endpunkt-Guard `TestRateLimitOnAllMutations` durchläuft zur Laufzeit rekurs
 
 Anonyme Fehlversuche auf `/account/recovery/backup-code/` erhöhen die Gerätedrossel nicht. Der Pfad begrenzt mit 5/min je IP und 10/h je normalisiertem Benutzernamen; das Benutzerlimit bleibt bei wechselnden IPs wirksam. Die authentifizierte Gerätedrossel bleibt erhalten. Ein eingelöster Code entsperrt das Konto bzw. bestätigt den zweiten Faktor, ersetzt aber kein TOTP-Gerät.
 
-**Neues Gerät einrichten** unter `/mfa/settings/` führt nach bereits bestätigter MFA und Sudo mit Passwort plus TOTP oder Backup-Code auf `/mfa/change-device/`. Erst die Quittung der neuen Backup-Codes entfernt die bisher bestätigten TOTP-Geräte; Passkeys bleiben. Der Abschluss schreibt `MFA_ENABLED` mit der Anzahl ersetzter TOTP-Geräte. Nach Sudo führt die freiwillige Deaktivierung auf eine GET-Bestätigungsseite, ihr POST deaktiviert den Faktor.
+**Neues Gerät einrichten** unter `/mfa/settings/` führt nach bereits bestätigter MFA und Sudo mit Passwort plus TOTP oder Backup-Code auf `/mfa/change-device/`. Erst die Quittung der neuen Backup-Codes entfernt die bisher bestätigten TOTP-Geräte; Passkeys bleiben. Der Abschluss schreibt `MFA_ENABLED` mit der Anzahl ersetzter TOTP-Geräte. Nach Sudo führt die freiwillige Deaktivierung auf eine GET-Bestätigungsseite, ihr POST deaktiviert den Faktor. Gerätewechsel und freiwillige Deaktivierung beenden andere angemeldete Sitzungen des Kontos nicht; bei Verlust oder Diebstahl eines Geräts mit möglicherweise offener Sitzung den Admin-Reset verwenden (Dienstanweisung der Einrichtung).
 
 ### Verifikation
 

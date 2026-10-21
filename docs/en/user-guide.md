@@ -94,7 +94,7 @@ When setting up 2FA, you receive **10 single-use backup codes**. Store them safe
 
 > **All codes used up or lost?** Contact the application support of your facility. They can reset your second factor: this removes all authenticator apps, passkeys and backup codes of your account and signs you out everywhere. Your password stays valid. If 2FA is mandatory for you, you set up 2FA and new backup codes at your next sign-in.
 
-**Set up a new authenticator device:** After signing in with TOTP or a backup code, choose **Neues Gerät einrichten** (set up a new device) at `/mfa/settings/`. If sudo is requested, enter your password and a current TOTP or another unused backup code. Scan the new QR code, confirm the new app's code, store the new backup codes and acknowledge them. Only acknowledgement replaces the previously confirmed authenticator devices; your passkeys remain. This works even with mandatory 2FA. A backup-code sign-in alone does not replace the device.
+**Set up a new authenticator device:** After signing in with TOTP or a backup code, choose **Neues Gerät einrichten** (set up a new device) at `/mfa/settings/`. If sudo is requested, enter your password and a current TOTP or another unused backup code. Scan the new QR code, confirm the new app's code, store the new backup codes and acknowledge them. Only acknowledgement replaces the previously confirmed authenticator devices; your passkeys remain. This works even with mandatory 2FA. A backup-code sign-in alone does not replace the device. Device change and voluntary deactivation do not end other signed-in sessions of the account; if a device with a possibly open session is lost or stolen, use the admin reset (the facility's service instruction).
 
 **Replace earlier backup codes:** Codes generated before this hardening are invalid. Generate new codes using your working authenticator app; without a usable factor, contact application support. A change of the server key (`SECRET_KEY`) also requires new codes.
 
@@ -1166,7 +1166,7 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.7 -->
 <!-- translation-date: 2026-10-16 -->
-<!-- source-hash: 4e137462cec6e8793f4d1d3e4dbb83b9184da976 -->
+<!-- source-hash: f94322d28cac084e040499483835c13d5cfa41fa -->
 <!-- translation-date: 2026-10-16 -->
 <!-- translation-date: 2026-10-16 -->
 <!-- translation-date: 2026-10-16 -->
