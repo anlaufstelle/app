@@ -19,6 +19,6 @@ The facility must configure an off-site lifecycle with a maximum of 12 months fr
 An HTTP/network/processing error fetching revocations (including 500/429), or an invalid response structure, pauses queue and edit replay: “Synchronization is waiting for the revocation check”. The blocking state is stored in local IndexedDB. Each replay run also requires its own fresh, structurally valid, successfully applied and persisted revocation check; an earlier approval never authorizes a later run or another tab, even when metadata writes and fallback deletion both fail. Missing or unreadable metadata blocks replay; recovery from a read failure also requires another successful check. The next sync sequence checks again, as does a direct save from the offline client record. A failed check preserves unsent work in encrypted form. Existing idempotency keys remain intact, and the server gates (422 for revoked people, 409 for status conflicts) remain authoritative. Device encryption does not replace these server checks.
 
 <!-- translation-source: src/core/dsgvo_templates/toms.md -->
-<!-- translation-version: v0.99.7 -->
+<!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- source-hash: 76654739f46e8fad521c7ea166f111f9b01e8023 -->

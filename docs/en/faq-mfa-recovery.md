@@ -7,6 +7,6 @@ Use an unused valid backup code at the 2FA sign-in. Then choose **Neues Gerät e
 Earlier codes with SHA digests and the old input format are invalid; changing `SECRET_KEY` also invalidates codes. Generate new codes while your authenticator app works. If no usable factor or valid backup code remains, ask application support for an admin MFA reset. A voluntary 2FA deactivation now returns from sudo to a confirmation page; only its POST disables the factor.
 
 <!-- translation-source: docs/faq.md -->
-<!-- translation-version: v0.99.7 -->
+<!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- source-hash: edc705222b96dfa6ea4f70f1f2e353348b3916a7 -->

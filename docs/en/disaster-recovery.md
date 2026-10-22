@@ -29,6 +29,6 @@ The preserved previous database is never dropped automatically; remove it with `
 If anchor installation or media activation fails after the database switch, the database already contains the backup, while media and the anchor may still differ. The error reports the reached `phase`, active and previous database, media, staging, previous media path, anchor and signed set. Validated media staging remains available. Keep `web` and `cron` stopped, fix the cause, and repeat `sudo ./scripts/ops/restore.sh --yes` with the same signed DB and media archives. Do not start `web` first. The repeat builds a new verified database and staging directory, installs the anchor again and activates media through maintenance containers. Further preserved databases may result. Start writers only after the final success line and the checks in steps 4b/5 and section 7; clean up leftover staging and preserved databases afterwards using the logged paths. This is a recovery path, not a shared transaction across PostgreSQL, media and the anchor. If media rollback itself fails, inspect both reported media paths manually.
 
 <!-- translation-source: docs/disaster-recovery.md -->
-<!-- translation-version: v0.99.7 -->
+<!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-13 -->
 <!-- source-hash: dedb12c7e829cd52e98e05fb6a9462d5167b0d7a -->

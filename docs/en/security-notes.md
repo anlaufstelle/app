@@ -23,6 +23,6 @@ Branch protection/rulesets are unavailable for the private development repositor
 Two separate rulesets are planned for `refs/heads/main`: `main-integrity` blocks force pushes and deletions without bypass actors; `main-pr` requires pull requests and status checks, with an “Always” bypass only for the named release identity and no restrict-updates rule; check names must be compared with an app run before configuration.
 
 <!-- translation-source: docs/security-notes.md -->
-<!-- translation-version: v0.99.7 -->
+<!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-22 -->
 <!-- source-hash: 76d160fc56c503fd2be12e1cc227ecdbfd7420cc -->

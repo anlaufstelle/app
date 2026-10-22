@@ -86,6 +86,6 @@ The handover shows one free-text field per shift -- what the outgoing worker wan
 Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, storage limitation, soft-delete strategies) → [glossary.md](glossary.md).
 
 <!-- translation-source: docs/datenschutz.md -->
-<!-- translation-version: v0.99.7 -->
+<!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-07 -->
 <!-- source-hash: 5609c903db3a77351627cd73ca0cf469ee2cca55 -->

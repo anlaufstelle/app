@@ -92,6 +92,6 @@ accompaniment from the counselling-service package (Zweigstelle Nord).
 | ![Timeline mobile](screenshots/zeitstrom-mobil-en.webp) | ![Work hub mobile](screenshots/arbeitszentrale-mobil-en.webp) |
 
 <!-- translation-source: docs/screenshots.md -->
-<!-- translation-version: v0.99.7 -->
+<!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-09-18 -->
 <!-- source-hash: a0d31601483beda9cde161da29d264656acbc373 -->

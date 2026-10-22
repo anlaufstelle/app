@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Erforderliche Betreiber-Aktionen
 
+- Keine.
+
+## [0.99.8] - 2026-10-23
+
+Weiterer Release-Kandidat vor 1.0: bündelt die Vier-Augen-Freigabe im Aufbewahrungslauf, das Ausblenden widerrufener Personen in Arbeitsflächen und Offline-Abruf, ein Gesamtbudget für Bild-Uploads, Sicherheitsupdates für Django und Pillow, erhaltene Eingaben und Entwürfe bei Fehlern und Konflikten sowie zahlreiche Korrekturen an Aufgaben, Episoden, Feldvorlagen, Barrierefreiheit, Backup und Restore.
+
+### Erforderliche Betreiber-Aktionen
+
 - **Zwei Genehmiger für den Aufbewahrungslauf benennen** (#2590) — Je Einrichtung mindestens zwei aktive Konten mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“ benennen; sonst sind neue manuelle Freigaben für Ereignisse „Mit Zusatzangaben“ nicht abschließbar, und eine erste Freigabe allein erlaubt keine Löschung.
 
 ### Added

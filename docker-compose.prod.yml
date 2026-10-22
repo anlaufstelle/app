@@ -159,7 +159,7 @@ services:
     # (Refs #2308). ``web`` does not receive APP_VERSION from the .env: the
     # value of this variable only selects the image, /health/ shows the value
     # baked in at build time.
-    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.99.7}${APP_IMAGE_DIGEST:-}
+    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.99.8}${APP_IMAGE_DIGEST:-}
     # Container-Runtime-Hardening (Refs #1374): kein Privilege-Escalation,
     # cap_drop ALL (web laeuft als non-root appuser auf :8000, braucht keine
     # Caps). read_only-Root-FS mit definiertem Schreib-Scratch: /tmp
@@ -325,7 +325,7 @@ services:
     # vollstaendige .env und damit Admin-/Bootstrap-Zugangsdaten sehen.
     # Registry-Stand pruefen und lokaler Build-Pfad: siehe Kommentar beim
     # ``web``-Dienst weiter oben.
-    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.99.7}${APP_IMAGE_DIGEST:-}
+    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.99.8}${APP_IMAGE_DIGEST:-}
     profiles: ["maintenance"]
     entrypoint: ["python", "manage.py"]
     security_opt:
@@ -385,7 +385,7 @@ services:
     # (except the backup, which stays on the host) — docs/ops-runbook.md § 3.3.
     # Registry-Stand pruefen und lokaler Build-Pfad: siehe Kommentar beim
     # ``web``-Dienst weiter oben.
-    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.99.7}${APP_IMAGE_DIGEST:-}
+    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.99.8}${APP_IMAGE_DIGEST:-}
     # Der Image-Entrypoint faehrt collectstatic + gunicorn hoch; hier soll
     # stattdessen nur supercronic laufen (im Image unter /usr/local/bin,
     # sha256-gepinnt gebaut — siehe Dockerfile).

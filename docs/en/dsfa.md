@@ -37,6 +37,6 @@ Account lockout follows ten failed attempts within fifteen minutes per account a
 PostgreSQL row-level security protects facility-bound sessions against cross-facility access even if the ORM layer is faulty. System-administration sessions set `app.is_super_admin` and permit cross-facility access. `SYSTEM_VIEW` records system-area calls and list/detail views for all registered admin models, including deletion requests, users, settings, audit logs, snapshots, templates, organization and facilities. If audit recording fails, output is blocked with HTTP 403. Events and event history show only metadata in the admin, without field contents.
 
 <!-- translation-source: src/core/dsgvo_templates/dsfa.md -->
-<!-- translation-version: v0.99.7 -->
+<!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-14 -->
 <!-- source-hash: e6dae0668def5498390c2b99a69f500c991142a0 -->

@@ -317,6 +317,12 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Operations signal what they cannot see**: missing backup signals or an unmeasurable disk degrade the health status, audit high-water marks are anchored offsite and checked in the restore drill, host scripts use the host backup path, and compliance warns about unlimited audit retention.
 - **Time and speed**: the nights of the clock change keep their real hours (shift end and event form both explain the doubled or skipped hour), person search uses trigram-friendly matching, and the timeline checks event visibility only within the own facility. The test suite was restructured with identical coverage.
 
+### v0.99.8 (2026-10-23)
+
+- **Four-eyes approval in the retention run**: manual deletion approvals need two different authorised people of the own facility whose rights are re-checked under lock; deferral, rejection and holds discard a first approval with an audit entry, and the run skips and reports approvals without two people unless the explicitly enabled auto-approval (off by default) applies after repeated deferrals, counting only deferrals by holders of the "deletion confirmation" right with no deferral of the same proposal still running; operators name at least two active accounts with the lead or application-support role and that right per facility, otherwise new manual approvals for "with additional details" events cannot be completed.
+- **Revoked persons, access limits and security updates**: work surfaces, tasks, search and handover leave out content on deleted or inactive persons while keeping permitted entries without a person reference and respecting role visibility (aggregate statistics stay unchanged), new offline person bundles are refused for them, contacts can be linked only to open cases with a case type visible to the role, raster image uploads are checked against a total pixel, frame and buffer budget (no proven upper bound for the whole encoder memory), and Django 6.1.2, Pillow 13.0.0 and certifi are updated.
+- **Forms, tasks and operations**: inputs and contact drafts survive save errors and conflicts (a draft is deleted only after a confirmed save, files must be selected again), stale forms no longer overwrite newer changes, new task assignments go only to active accounts, deactivated fields keep their values and field types in use cannot be switched incompatibly, plus fixes for episodes, accessibility, dates in the app language, backup verification, restore and the demo.
+
 ### v0.99.7 (2026-10-13)
 
 - **Sensitive values, retention and audit**: events written through the application index only unencrypted, effectively normal fields, high-sensitivity types require explicit field levels (also in the Django admin), "with additional details" is deleted only after approval and records under a legal hold or an Art. 18 restriction are left out of the run, administrative access is audited and refused if the read audit fails, and review pages link only to records the reader may see.
@@ -353,6 +359,6 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Quick exit joins the glossary**: a header-bar action (button + keyboard shortcut) on every signed-in page that hides the content, ends the session and opens a neutral page, kept distinct from the separate opt-in privacy screen shown on window or tab switch.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-14 -->
+<!-- translation-version: v0.99.8 -->
+<!-- translation-date: 2026-10-23 -->
 <!-- source-hash: 68a13f46f665f522ec012c7708ad89d5f72e443d -->
