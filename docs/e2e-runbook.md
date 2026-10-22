@@ -18,7 +18,7 @@ Die `conftest.py` erledigt DB-Erstellung, Migration, Seed und `collectstatic` au
 | 4 | Venv aktiv | `source .venv/bin/activate` | `which python` zeigt `.venv/` |
 | 5 | Playwright-Browser passend zur Version | `python -m playwright install chromium` | Kein „Executable doesn't exist at …" |
 | 6 | Tailwind gebaut | `make tailwind-build` | `src/static/css/styles.css` existiert |
-| 7 | Tests starten | `make test-e2e-locked` (bzw. `make test-e2e-halves-locked`; einzelne CI-Scheibe: `make test-e2e-slice-locked SLICES=4 INDEX=3`) | Grüne Ausgabe |
+| 7 | Tests starten | `make test-e2e-locked` (bzw. `make test-e2e-halves-locked`; einzelne CI-Scheibe: `make test-e2e-slice-locked SLICES=8 INDEX=3`) | Grüne Ausgabe |
 
 > **Hinweis:** Docker benötigt auf manchen Systemen `sudo`. Der Dev-Server (Port 8000/8443) muss **nicht** laufen — E2E nutzt Port 8844.
 
@@ -367,16 +367,16 @@ Port oder Datenbank nicht außerhalb des Locks verändern. Für Screenshots dien
 ### Eine rot gewordene CI-Scheibe nachstellen
 
 Die E2E-CI faehrt (#1976)
-eine Matrix aus vier seriellen Scheiben; der rote Job heisst `E2E-Scheibe 3`.
+eine Matrix aus acht seriellen Scheiben; der rote Job heisst `E2E-Scheibe 3`.
 Dieselbe Scheibe lokal, mit demselben Schnitt:
 
 ```bash
 # Welche Dateien liegen in welcher Scheibe?
-.venv/bin/python scripts/e2e_slice.py --slices 4 --summary
-.venv/bin/python scripts/e2e_slice.py --slices 4 --index 3
+.venv/bin/python scripts/e2e_slice.py --slices 8 --summary
+.venv/bin/python scripts/e2e_slice.py --slices 8 --index 3
 
 # Die Scheibe fahren (Lock, weil Port 8844 + anlaufstelle_e2e geteilt sind)
-make test-e2e-slice-locked SLICES=4 INDEX=3
+make test-e2e-slice-locked SLICES=8 INDEX=3
 ```
 
 Der Schnitt haengt nur am Dateibestand, nicht an Runner oder Reihenfolge —

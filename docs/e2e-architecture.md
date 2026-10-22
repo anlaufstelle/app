@@ -200,9 +200,9 @@ keine Zusage. Die aktuelle Verteilung liefert `--summary`. Die CI-Matrix in
 **Wer schneidet:** [`scripts/e2e_slice.py`](../scripts/e2e_slice.py), stdlib-only.
 
 ```bash
-python scripts/e2e_slice.py --slices 4 --summary        # Verteilung ansehen
-python scripts/e2e_slice.py --slices 4 --index 3        # Dateiliste der Scheibe 3
-make test-e2e-slice-locked SLICES=4 INDEX=3             # Scheibe 3 lokal nachfahren
+python scripts/e2e_slice.py --slices 8 --summary        # Verteilung ansehen
+python scripts/e2e_slice.py --slices 8 --index 3        # Dateiliste der Scheibe 3
+make test-e2e-slice-locked SLICES=8 INDEX=3             # Scheibe 3 lokal nachfahren
 ```
 
 **Aufteilungsschluessel: Testzahl je Datei.** Der naheliegende Schnitt „erste

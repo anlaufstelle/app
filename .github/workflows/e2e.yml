@@ -22,29 +22,22 @@ jobs:
       # uebrigen Scheiben ebenfalls betroffen sind.
       fail-fast: false
       matrix:
-        slice: [1, 2, 3, 4]
+        slice: [1, 2, 3, 4, 5, 6, 7, 8]
     env:
       # Muss zur Laenge der ``slice``-Liste oben passen; der erste Step prueft
       # das gegen ``strategy.job-total``. Eine stille Abweichung waere der
       # gefaehrlichste Fehler dieses Workflows: bei E2E_SLICES > Matrix-Laenge
       # liefe die CI gruen, ohne den Rest der Suite je auszufuehren.
-      E2E_SLICES: 4
-    # Die Suite laeuft bewusst seriell (kein -n, Begruendung am pytest-Step
-    # unten). Bis v0.81.0 passte sie in einen Job mit 45 min; mit v0.82.0 kam
-    # der Lauf bis 92 % und wurde vom Job-Timeout gekappt -- ohne einen
-    # einzigen Testfehler. Groessenordnung: lokal seriell 22 min fuer 832
-    # Tests, auf dem Runner > 45 min. Der Faktor ist Runner-Hardware, nicht
-    # Testcode: die Postgres-Service-Logs desselben Laufs zeigen Checkpoints
-    # mit write=151 s (lokal Millisekunden), also gesaettigte Disk-I/O.
-    # Statt das Limit weiter hochzuschieben (90 min als Notlösung, #1975)
-    # verteilt die Matrix die Suite auf vier Scheiben zu je ~207 Tests
-    # (Refs #1976): rechnerisch ~11-12 min Testzeit je Scheibe, plus Setup
-    # (Checkout/Deps/Browser, mit Cache ~5 min) und dem Sitzungs-Overhead der
-    # E2E-Fixtures (collectstatic, migrate, seed --flush, gunicorn) -- rund
-    # 20 min im pessimistischen Fall. 30 min lassen dafuer Luft und raeumen
-    # einen Haenger trotzdem zeitnah ab; die erste Verteidigungslinie gegen
-    # Haenger bleibt --timeout=120 pro Test.
-    timeout-minutes: 30
+      E2E_SLICES: 8
+    # Each slice runs serially (no -n, see the pytest step below). Sizing
+    # (Refs #1976): the suite has 1,111 test functions, cut by test count.
+    # Measured on Stage with four slices: ~6 min setup per job (checkout,
+    # deps, browser, Tailwind, collectstatic) and ~104 min pytest in total;
+    # three of four slices were cancelled at the 30 min limit (slowest slice
+    # > 30 min). With eight slices a job is expected to take ~25 min, i.e. about
+    # 62 % of 40 min; the target is <= 80 % of the limit. --timeout=120 per
+    # test remains the first line of defence against hangs.
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:18-alpine
@@ -124,9 +117,9 @@ jobs:
       # eigenen Timer-Thread und beendet den Prozess hart (os._exit) -- macht den
       # Hänger zum Fehlschlag. Der Job-Level ``timeout-minutes`` bleibt als
       # zweite Sicherung.
-      # Die Leer-Pruefung ist kein Zierrat: ``pytest`` OHNE Dateiargumente
-      # sammelt die GESAMTE Suite ein -- ein fehlgeschlagener Schnitt liefe
-      # sonst als vierfacher Voll-Lauf durch, still und ins Timeout.
+      # The emptiness check matters: ``pytest`` WITHOUT file arguments
+      # collects the WHOLE suite -- a failed cut would otherwise run as a full
+      # run in every slice, silently and into the timeout.
       - name: E2E-Scheibe ${{ matrix.slice }} ausfuehren
         run: |
           set -euo pipefail

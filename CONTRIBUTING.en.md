@@ -336,7 +336,7 @@ cleanup; direct mutation-runner calls use the same fallback chain.
 | `make test-js`   | Run the Vitest suite (JS, `npm test`) deterministically/non-watch — part of `make ci` (Refs #1932) |
 | `make test-e2e`  | Run end-to-end tests with Playwright                              |
 | `make test-e2e-halves` | E2E in two serial halves (RAM-limited hosts, Refs #1787); the split comes from `scripts/e2e_slice.py` — the same key the CI matrix uses (Refs #1976) |
-| `make test-e2e-slice-locked SLICES=4 INDEX=3` | Re-run a single slice of the CI split locally, under the CI lock (a single slice also occupies port 8844 and `anlaufstelle_e2e`; unlocked as `make test-e2e-slice`, only when no other E2E run is active) — the number comes from the job name (`E2E-Scheibe 3`); `python scripts/e2e_slice.py --slices 4 --summary` shows the distribution (Refs #1976) |
+| `make test-e2e-slice-locked SLICES=8 INDEX=3` | Re-run a single slice of the CI split locally, under the CI lock (a single slice also occupies port 8844 and `anlaufstelle_e2e`; unlocked as `make test-e2e-slice`, only when no other E2E run is active) — the number comes from the job name (`E2E-Scheibe 3`); `python scripts/e2e_slice.py --slices 4 --summary` shows the distribution (Refs #1976) |
 | `make check`     | Run Django system checks and verify migration consistency         |
 | `make i18n-check` | Full `.po` reconciliation against the source tree (new/removed/semantically changed msgids) — part of `make ci` (Refs #1933) |
 | `make ci`        | Full CI pipeline locally: `lint` + `check` + guards (deps/matrix/release-test/vendor-js/agent-docs) + `audit-js` + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |
@@ -1052,5 +1052,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-14 -->
-<!-- source-hash: 88d0b2dc10b5cf285e33d78ea62c56bf0391ff86 -->
+<!-- translation-date: 2026-10-22 -->
+<!-- source-hash: d056ef22e6e969191d009c56732d72696dae8acc -->

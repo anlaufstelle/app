@@ -656,7 +656,7 @@ Der Nachweis der aktiven Einstellung erfolgt über die Maintainer-Checkliste #15
 | `main-integrity` | Block force pushes (`non_fast_forward`) und Restrict deletions (`deletion`); keine Bypass-Liste |
 | `main-pr` | Pull Request (`pull_request`) und erforderliche Status-Checks (`required_status_checks`) |
 | `main-pr` Bypass | Nur die konkret benannte Release-Identität, Modus „Always“; keine Restrict-updates-Regel (`update`) |
-| Erforderliche Status-Checks | `lint`, `licenses`, `translation-versions`, `translations-coverage`, `typecheck`; `test (1)`, `test (2)`, `test (3)`, `coverage`, `check`, `audit`, `lock-check`; `E2E-Scheibe 1` bis `E2E-Scheibe 4` |
+| Erforderliche Status-Checks | `lint`, `licenses`, `translation-versions`, `translations-coverage`, `typecheck`; `test (1)`, `test (2)`, `test (3)`, `coverage`, `check`, `audit`, `lock-check`; `E2E-Scheibe 1` bis `E2E-Scheibe 8` |
 
 Die Check-Liste ist aus Job-IDs, Job-`name` und Matrix-Schema der ausgelieferten [Lint](../.github/workflows/lint.yml)-, [Test](../.github/workflows/test.yml)- und [E2E](../.github/workflows/e2e.yml)-Workflows abgeleitet; gegen die Check-Namen eines App-Laufs abgleichen, bevor sie als erforderlich gesetzt wird. CodeQL liefert zusätzlich `Analyze (python)` und `Analyze (javascript)`; der Tag-Workflow `release.yml` liefert `build-and-push` und ist kein PR-Check.
 

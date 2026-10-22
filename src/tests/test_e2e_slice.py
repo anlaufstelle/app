@@ -207,7 +207,7 @@ class TestSliceInvariants:
 class TestRealSuite:
     """Der Schnitt gegen die echte E2E-Suite."""
 
-    @pytest.mark.parametrize("count", [2, 3, 4])
+    @pytest.mark.parametrize("count", [2, 3, 4, 8])
     def test_slices_partition_the_real_suite(self, count: int) -> None:
         slices = e2e_slice.build_slices(E2E_DIR, count)
         flat = [p for chunk in slices for p in chunk]
@@ -216,7 +216,7 @@ class TestRealSuite:
         assert len(flat) == len(set(flat)), "Datei in mehreren Scheiben"
         assert set(flat) == set(E2E_DIR.glob("test_*.py"))
 
-    @pytest.mark.parametrize("count", [2, 4])
+    @pytest.mark.parametrize("count", [2, 4, 8])
     def test_real_slices_are_balanced(self, count: int) -> None:
         """Der Datei-Halbierungs-Schluessel lag bei 2 Scheiben 47 % daneben — der hier nicht.
 
@@ -287,3 +287,17 @@ class TestCommandLine:
         assert len(lines) == 4
         for index, line in enumerate(lines, start=1):
             assert f"{index}/4" in line
+
+
+def test_workflow_runs_eight_slices_with_a_forty_minute_limit() -> None:
+    """The matrix and ``E2E_SLICES`` must agree, otherwise slices go unrun."""
+    import yaml
+
+    job = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "e2e.yml").read_text())["jobs"]["test-e2e"]
+    assert job["env"]["E2E_SLICES"] == 8
+    assert job["strategy"]["matrix"]["slice"] == list(range(1, 9))
+    assert job["strategy"]["fail-fast"] is False
+    assert job["timeout-minutes"] == 40
+    # ``make test-e2e-slice SLICES=<n>`` defaults to the CI cut, so a failed job number fits locally.
+    makefile = (REPO_ROOT / "Makefile").read_text()
+    assert "\nSLICES ?= 8\n" in makefile

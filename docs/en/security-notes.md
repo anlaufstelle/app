@@ -24,5 +24,5 @@ Two separate rulesets are planned for `refs/heads/main`: `main-integrity` blocks
 
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.7 -->
-<!-- translation-date: 2026-10-14 -->
-<!-- source-hash: 1fbfc5bc658d31f6dfcef13ac0cadd22889e1f81 -->
+<!-- translation-date: 2026-10-22 -->
+<!-- source-hash: 76d160fc56c503fd2be12e1cc227ecdbfd7420cc -->

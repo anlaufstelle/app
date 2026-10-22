@@ -340,7 +340,7 @@ direkte Mutationsrunner-Aufrufe verwenden dieselbe Default-Kette.
 | `make test-js`   | Vitest-Suite (JS, `npm test`) deterministisch/non-watch ausführen — Teil von `make ci` (Refs #1932) |
 | `make test-e2e`  | End-to-End-Tests mit Playwright ausführen                         |
 | `make test-e2e-halves` | E2E in zwei seriellen Hälften (RAM-limitierte Hosts, Refs #1787); den Schnitt liefert `scripts/e2e_slice.py` — derselbe Schlüssel wie in der CI-Matrix (Refs #1976) |
-| `make test-e2e-slice-locked SLICES=4 INDEX=3` | Eine einzelne Scheibe des CI-Schnitts lokal nachfahren, unter dem CI-Lock (auch eine Scheibe belegt Port 8844 und `anlaufstelle_e2e`; ungelockt als `make test-e2e-slice`, nur wenn sicher kein anderer E2E-Lauf läuft) — die Nummer stammt aus dem Job-Namen (`E2E-Scheibe 3`); `python scripts/e2e_slice.py --slices 4 --summary` zeigt die Verteilung (Refs #1976) |
+| `make test-e2e-slice-locked SLICES=8 INDEX=3` | Eine einzelne Scheibe des CI-Schnitts lokal nachfahren, unter dem CI-Lock (auch eine Scheibe belegt Port 8844 und `anlaufstelle_e2e`; ungelockt als `make test-e2e-slice`, nur wenn sicher kein anderer E2E-Lauf läuft) — die Nummer stammt aus dem Job-Namen (`E2E-Scheibe 3`); `python scripts/e2e_slice.py --slices 4 --summary` zeigt die Verteilung (Refs #1976) |
 | `make check`     | Django-Systemcheck und Migrations-Konsistenz prüfen               |
 | `make i18n-check` | `.po`-Vollabgleich gegen den Quellbaum (neue/entfernte/semantisch geänderte msgids) — Teil von `make ci` (Refs #1933) |
 | `make ci`        | Vollständige CI-Pipeline lokal: `lint` + `check` + Guards (deps/matrix/release-test/vendor-js/agent-docs) + `audit-js` + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |

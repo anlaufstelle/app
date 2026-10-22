@@ -211,15 +211,14 @@ test-e2e: tailwind-build
 # Speicher-Budget. Greift, wenn der Voll-Lauf trotz Browser-Recycling
 # (modul-scoped ``browser``-Fixture) noch ins Host-OOM laeuft.
 #
-# Den Schnitt liefert seit Refs #1976 scripts/e2e_slice.py -- derselbe
-# Splitter, den die CI-Matrix (.github/workflows/e2e.yml) fuer ihre vier
-# Scheiben benutzt. Damit haben lokaler Fallback und CI denselben
-# Aufteilungsschluessel: gleiche Datei-Gruppierung, gleiche Reihenfolge-
-# Abhaengigkeiten, und eine rot gewordene CI-Scheibe laesst sich hier 1:1
-# nachstellen (`make test-e2e-slice-locked SLICES=4 INDEX=3`). Der frueher an
-# dieser Stelle gerechnete Schnitt "erste/zweite Haelfte der sortierten Liste"
-# war zwar deterministisch, aber schief -- 335 gegen 492 Tests (+47 %), weil
-# Dateinamen nichts ueber die Zahl der Tests darin sagen.
+# Since Refs #1976 the cut comes from scripts/e2e_slice.py -- the same
+# splitter the CI matrix (.github/workflows/e2e.yml) uses for its slices. The
+# local fallback and CI therefore share the split key: same file grouping,
+# same ordering dependencies, and a failed CI slice can be replayed here 1:1
+# (`make test-e2e-slice-locked SLICES=8 INDEX=3`). The cut formerly computed
+# here ("first/second half of the sorted list") was deterministic but skewed
+# -- 335 against 492 tests (+47 %), because file names say nothing about the
+# number of tests inside.
 #
 # Das Rezept ist EINE Shell (``; \``), damit ``set -e`` ueber alle Zeilen gilt
 # und die zweite Haelfte nicht den Exit-Code der ersten maskiert.
@@ -237,16 +236,16 @@ test-e2e-halves: tailwind-build
 	$(PYTHON) -m pytest $$h1 -m e2e --browser chromium --timeout=120 --timeout-method=thread -v; \
 	$(PYTHON) -m pytest $$h2 -m e2e --browser chromium --timeout=120 --timeout-method=thread -v
 
-# Eine einzelne Scheibe des CI-Schnitts lokal nachstellen (Refs #1976):
+# Replay a single slice of the CI cut locally (Refs #1976):
 #
-#     make test-e2e-slice-locked SLICES=4 INDEX=3
+#     make test-e2e-slice-locked SLICES=8 INDEX=3
 #
-# SLICES ist per Default die Scheibenzahl der CI-Matrix, damit die Nummer aus
-# dem roten Job-Namen ("E2E-Scheibe 3") ohne Umrechnung passt. Welche Dateien
-# in welcher Scheibe liegen, zeigt `python scripts/e2e_slice.py --slices 4
-# --summary`. Wie bei den Haelften gilt: kein Dateiargument = Voll-Lauf, daher
-# der Leer-Guard.
-SLICES ?= 4
+# SLICES defaults to the slice count of the CI matrix, so the number in the
+# failed job name ("E2E-Scheibe 3") fits without conversion. Which files sit
+# in which slice is shown by `python scripts/e2e_slice.py --slices 8
+# --summary`. As with the halves: no file argument means a full run, hence the
+# emptiness guard.
+SLICES ?= 8
 test-e2e-slice: tailwind-build
 	set -e; \
 	[ -n "$(INDEX)" ] || { echo "test-e2e-slice: INDEX=<1..$(SLICES)> angeben"; exit 1; }; \

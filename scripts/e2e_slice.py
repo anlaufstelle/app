@@ -35,8 +35,8 @@ zwei Sessions aufbauen.
 
 Aufruf::
 
-    python scripts/e2e_slice.py --slices 4 --index 2   # Dateien der Scheibe 2
-    python scripts/e2e_slice.py --slices 4 --summary   # Uebersicht aller Scheiben
+    python scripts/e2e_slice.py --slices 8 --index 2   # Dateien der Scheibe 2
+    python scripts/e2e_slice.py --slices 8 --summary   # Uebersicht aller Scheiben
 
 Bei jedem Fehler (unbekanntes Verzeichnis, leerer Schnitt, Index ausserhalb
 des Bereichs) bleibt **stdout leer** und der Exit-Code ist != 0. Das ist
