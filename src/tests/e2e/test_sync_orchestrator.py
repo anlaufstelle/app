@@ -26,7 +26,6 @@ E2E seriell ausfuehren (RAM-Limit der Container) — nicht parallelisieren.
 from __future__ import annotations
 
 import re
-import time
 from contextlib import suppress
 
 import pytest
@@ -55,22 +54,8 @@ def _boot_with_key(page, base_url):
     )
 
 
-def _wait_for_boot_activity_to_settle(page, timeout=15):
-    """Block until no Web Lock is held or pending and the key hydration is done.
-
-    The page boots with background work that reads and writes the key row: the
-    revocation check runs under the sync lock, and every ``_loadKey`` rewrites
-    the row (``checkedAt``) after reading it. A test that wipes the key while
-    that read-modify-write is in flight gets the row written back and sees a
-    key that "was cleared".
-    """
-    page.evaluate("async () => { await window.crypto_session.ready(); }")
-    deadline = time.monotonic() + timeout
-    while page.evaluate(
-        "async () => { const q = await navigator.locks.query(); return q.held.length + q.pending.length; }"
-    ):
-        assert time.monotonic() < deadline, "Boot-time lock activity did not settle"
-        time.sleep(0.2)
+# Name of the origin-wide Web Lock of sync-orchestrator.js.
+_LOCK_NAME = "anlaufstelle-offline-mutex"
 
 
 def _attach_to_shared_store(page, base_url):
@@ -481,18 +466,20 @@ class TestSyncOrchestrator:
         try:
             page.goto(base_url, wait_until="domcontentloaded")
             page.wait_for_function("() => !!(window.syncOrchestrator && window.syncOrchestrator.isLockHeld)")
-            # The boot-time revocation check runs under the same lock. Measure only
-            # once the page is idle, otherwise "before" reports that boot run.
-            _wait_for_boot_activity_to_settle(page)
+            # The page takes the same lock in waves after boot (boot hydration,
+            # then the idle gate of every ``awaitReady`` consumer), with gaps in
+            # between. "before" is read while the test holds the lock itself, so
+            # no ``runExclusive`` function of this origin can be running.
             result = page.evaluate(
-                """async () => {
+                """async (lockName) => {
                     const o = window.syncOrchestrator;
-                    const before = o.isLockHeld();
+                    const before = await navigator.locks.request(lockName, { mode: 'exclusive' }, () => o.isLockHeld());
                     let during = null;
                     await o.runExclusive(async () => { during = o.isLockHeld(); });
                     const after = o.isLockHeld();
                     return { before, during, after };
-                }"""
+                }""",
+                _LOCK_NAME,
             )
             assert result == {"before": False, "during": True, "after": False}, (
                 f"isLockHeld() muss nur waehrend runExclusive true sein, war: {result!r}"
@@ -526,16 +513,15 @@ class TestSyncOrchestrator:
         page.set_default_timeout(30000)
         try:
             _boot_with_key(page, base_url)
-            # Without this the wipe below can race the boot-time revocation
-            # check, whose key-row rewrite resurrects the key ("encrypted").
-            _wait_for_boot_activity_to_settle(page)
             outcome = page.evaluate(
                 """async () => {
                     const o = window.syncOrchestrator;
-                    // cachedKey auf null zwingen, damit _loadKey den Idle-Gate
-                    // ueberhaupt betritt (sonst Kurzschluss auf den Memory-Key).
-                    await window.crypto_session.clearSessionKey();
                     return await o.runExclusive(async () => {
+                        // Force cachedKey to null so _loadKey enters the idle gate
+                        // instead of short-circuiting on the in-memory key. Cleared
+                        // under the held lock: a boot-time idle gate rewrites the
+                        // key row and would otherwise restore the key.
+                        await window.crypto_session.clearSessionKey();
                         try {
                             // Refs #1476 (R8): encryptPayload steht nicht mehr
                             // auf crypto_session — ueber den Store treiben, der
