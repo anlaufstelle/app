@@ -31,7 +31,7 @@ import pytest
 from playwright.sync_api import expect
 
 from ._axe import assert_within_baseline, load_baseline, run_axe
-from ._date_helpers import expect_date_value, fill_date
+from ._date_helpers import date_field, expect_date_value, fill_date
 from ._helpers import django_shell
 
 pytestmark = [pytest.mark.e2e]
@@ -121,6 +121,11 @@ def _provoke_the_question(page, base_url):
 
     expect(page.locator(FOLD_SELECT)).to_be_visible(timeout=15000)
     expect(page.locator(FOLD_ERROR)).to_be_visible()
+    # The select is visible as soon as the redisplay is parsed, before the
+    # deferred date widget has replaced ``#id_occurred_at`` with its visible
+    # clone. Wait for that observable state; acting earlier hits the native
+    # input that the widget turns into a hidden transport a moment later.
+    date_field(page, "#id_occurred_at")
 
 
 def _stored_utc(e2e_env, url):
@@ -165,7 +170,10 @@ class TestOccurrenceChoice:
         page = authenticated_page
         _provoke_the_question(page, base_url)
 
-        assert page.evaluate("() => document.activeElement && document.activeElement.id") == "id_occurred_at_fold"
+        # ``autofocus`` is applied by the browser asynchronously (on a later
+        # rendering step), so the check waits for the focus instead of reading
+        # ``document.activeElement`` at one arbitrary moment.
+        expect(page.locator(FOLD_SELECT)).to_be_focused()
 
     def test_winter_time_choice_stores_the_second_hour(self, authenticated_page, base_url, e2e_env):
         page = authenticated_page
@@ -191,7 +199,11 @@ class TestOccurrenceChoice:
         page = authenticated_page
         _provoke_the_question(page, base_url)
 
-        page.focus("#id_occurred_at")
+        # Let the asynchronous ``autofocus`` land first; moving the focus
+        # before that races with it. Then start from the visible time field.
+        expect(page.locator(FOLD_SELECT)).to_be_focused()
+        date_field(page, "#id_occurred_at").focus()
+        expect(date_field(page, "#id_occurred_at")).to_be_focused()
         seen: list[str | None] = []
         for _ in range(10):
             page.keyboard.press("Tab")
