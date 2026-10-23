@@ -16,6 +16,7 @@ from ._helpers import django_shell
 
 pytestmark = pytest.mark.e2e
 
+# Sample each Tab stop and its indicator together; do not wait for a later redirect.
 _ACTIVE = """(sel) => {
     const a = document.activeElement;
     return !!a && a !== document.body && a.matches(sel);

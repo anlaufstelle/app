@@ -127,6 +127,7 @@ class TestArt18ButtonReachableOnMobile:
         reached = False
         for _ in range(40):
             page.keyboard.press("Tab")
+            # Observe each actual Tab stop; do not wait for focus to move on its own.
             is_target = page.evaluate(
                 "(testid) => document.activeElement && document.activeElement.dataset.testid === testid",
                 _SUBMIT_TESTID,
@@ -136,6 +137,7 @@ class TestArt18ButtonReachableOnMobile:
                 break
         assert reached, "Der Knopf ist per Tab-Reihenfolge nicht erreichbar."
 
+        # Measure the indicator on the reached stop immediately.
         outline = page.evaluate(
             "() => { const s = getComputedStyle(document.activeElement); "
             "return {outline: s.outlineStyle, outlineWidth: s.outlineWidth, boxShadow: s.boxShadow}; }"

@@ -207,6 +207,7 @@ class TestOccurrenceChoice:
         seen: list[str | None] = []
         for _ in range(10):
             page.keyboard.press("Tab")
+            # Record this Tab stop immediately so delayed focus cannot repair the order.
             seen.append(page.evaluate("() => document.activeElement && document.activeElement.id"))
             if seen[-1] == "id_occurred_at_fold":
                 break

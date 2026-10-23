@@ -23,6 +23,7 @@ from ._helpers import wait_for_active_service_worker as _wait_for_active_service
 pytestmark = pytest.mark.e2e
 
 ANNOUNCER = "[data-testid='offline-status-announcer']"
+# Compare immediate before/after snapshots; a delayed restoration must not hide stolen focus.
 _ACTIVE = """() => {
     const a = document.activeElement;
     if (!a || a === document.body) return null;

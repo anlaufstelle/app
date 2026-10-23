@@ -433,6 +433,7 @@ class TestSchichtnotizBedienung:
         textfeld = page.locator("[data-testid='handover-note-current'] textarea")
         textfeld.focus()
         page.keyboard.press("Tab")
+        # Snapshot the immediate successor in the Tab order, without waiting for redirects.
         fokus = page.evaluate("() => document.activeElement.textContent.trim()")
         assert fokus == "Notiz speichern"
 

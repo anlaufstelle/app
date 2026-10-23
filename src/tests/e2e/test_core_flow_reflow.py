@@ -21,6 +21,7 @@ pytestmark = pytest.mark.e2e
 VIEWPORTS = [(640, 480), (320, 568), (667, 375), (390, 844)]
 TAB_STEPS = 14
 
+# Measure the current Tab stop, including transient clipping that polling could hide.
 _MEASURE = """() => {
     const doc = document.documentElement;
     const active = document.activeElement;

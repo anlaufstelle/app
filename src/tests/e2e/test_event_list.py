@@ -190,7 +190,7 @@ class TestFilterRun:
         expect(page).to_have_url(re.compile(r"date_from=2019-03-01"))
         assert query_of(page.url)["date_to"] == ["2019-03-31"]
         # The form is re-sent with the results; keyboard focus must stay on the button.
-        assert page.evaluate("document.activeElement.id") == "event-submit"
+        expect(page.locator("#event-submit")).to_be_focused()
 
         page.select_option("#event-doc_type", dataset["type_b"])
         submit_filters(page)

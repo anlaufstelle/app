@@ -93,6 +93,7 @@ class TestMoreMenuReach:
         trigger.focus()
         for _ in range(len(names) + 6):
             page.keyboard.press("Tab")
+            # Measure this exact Tab stop, including any inaccessible intermediate stop.
             info = page.evaluate(
                 """() => {
                     const a = document.activeElement;
@@ -221,6 +222,7 @@ class TestSidebarLongName:
             visited = []
             for _ in range(4):
                 page.keyboard.press("Tab")
+                # Record every stop immediately to preserve the actual Tab order.
                 visited.append(page.evaluate("() => document.activeElement.textContent.trim()"))
             assert visited[:3] == ["DE", "EN", logout_label], f"tab order in the account area: {visited}"
             assert LONG_NAME.split()[0] in nav.inner_text()

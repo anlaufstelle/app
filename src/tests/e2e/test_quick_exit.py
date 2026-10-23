@@ -44,6 +44,7 @@ import subprocess
 import time
 
 import pytest
+from playwright.sync_api import expect
 
 from ._helpers import do_real_login as _do_real_login
 from ._helpers import python_bin as _python
@@ -403,11 +404,13 @@ class TestTastaturpfad:
         page.locator("[data-testid='quick-exit-button']").wait_for(state="visible", timeout=15000)
 
         page.keyboard.press("Tab")
+        # Snapshot the first Tab stop; delayed redirects must not repair the order.
         assert page.evaluate("() => document.activeElement && document.activeElement.getAttribute('href')") == (
             "#main-content"
         ), "Erstes Tab-Ziel ist nicht mehr der Skip-Link."
 
         page.keyboard.press("Tab")
+        # Snapshot the second Tab stop for the same ordering guarantee.
         assert page.evaluate("() => document.activeElement && document.activeElement.id") == "quick-exit-button", (
             "Zweites Tab-Ziel ist nicht der Knopf „Schnell verlassen“: "
             + str(page.evaluate("() => document.activeElement && document.activeElement.outerHTML"))
@@ -499,15 +502,13 @@ class TestSichtschutz:
 
         page.locator("[data-testid='privacy-screen']").wait_for(state="visible", timeout=10000)
         assert not page.locator("#main-content").is_visible(), "Der Inhalt liegt sichtbar unter der Blende."
-        assert page.evaluate("() => document.activeElement && document.activeElement.id") == "privacy-screen-resume"
+        expect(page.locator("#privacy-screen-resume")).to_be_focused()
 
         page.locator("[data-testid='privacy-screen-resume']").click()
 
         page.locator("[data-testid='privacy-screen']").wait_for(state="hidden", timeout=10000)
         assert page.locator("#main-content").is_visible(), "Der Inhalt bleibt nach der Freigabe verdeckt."
-        assert page.evaluate("() => document.activeElement && document.activeElement.getAttribute('href')") == (
-            "#main-content"
-        ), "Der Fokus kehrt nicht an sein Ausgangselement zurueck (WCAG 2.4.3)."
+        expect(page.locator("a[href='#main-content']")).to_be_focused()
 
     def test_bleibt_aus_solange_die_einrichtung_ihn_nicht_aktiviert(
         self, authenticated_page, base_url, default_quick_exit

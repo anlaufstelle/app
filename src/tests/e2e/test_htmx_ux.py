@@ -13,6 +13,7 @@ Refs #1339 — globaler htmx:afterSwap-Fokus-Handler (focus-management.js):
 import re
 
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -200,23 +201,19 @@ class TestHtmxFocusManagement:
         # Nach dem Swap zeigt die Karte den in_progress-Zustand (Zurücksetzen-Btn).
         page.locator(f"#{card_id}").get_by_role("button", name="Zurücksetzen").wait_for(state="visible", timeout=5000)
 
-        focus_info = page.evaluate(
+        page.wait_for_function(
             """(id) => {
                 const active = document.activeElement;
                 const card = document.getElementById(id);
-                return {
-                    onBody: active === document.body,
-                    insideCard: !!(card && card.contains(active)),
-                };
+                return active !== document.body && !!(card && card.contains(active));
             }""",
-            card_id,
+            arg=card_id,
         )
-        assert focus_info["onBody"] is False, "Fokus fiel nach dem Swap auf <body> zurück."
-        assert focus_info["insideCard"] is True, "Fokus liegt nicht im getauschten Fragment."
 
         # Tastatur-Smoke: Tab läuft weiter INNERHALB der Karte (die Aktions-
         # Buttons der neu gerenderten Zeile sind per Tastatur erreichbar).
         page.keyboard.press("Tab")
+        # Inspect the immediate Tab stop; polling could hide a temporary escape.
         still_inside = page.evaluate(
             """(id) => {
                 const active = document.activeElement;
@@ -253,7 +250,4 @@ class TestHtmxFocusManagement:
 
         page.wait_for_function("() => window.__clientTableSwapped === true", timeout=5000)
 
-        still_focused = page.evaluate(
-            "() => document.activeElement === document.querySelector(\"input[hx-target='#client-table']\")"
-        )
-        assert still_focused is True, "Der Fokus wurde bei der Live-Suche aus dem Eingabefeld gestohlen."
+        expect(page.locator("input[hx-target='#client-table']")).to_be_focused()

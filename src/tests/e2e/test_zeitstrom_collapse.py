@@ -53,7 +53,7 @@ class TestZeitstromCollapseToggle:
 
         # Fokussierbar per Tastatur (nativer <button>).
         toggle.focus()
-        assert toggle.evaluate("el => el === document.activeElement")
+        expect(toggle).to_be_focused()
 
     def test_toggle_expands_all_cards_and_persists_after_reload(self, authenticated_page, base_url):
         """Toggle klappt alle Cards auf; der Zustand überdauert einen Reload."""

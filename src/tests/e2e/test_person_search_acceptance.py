@@ -165,6 +165,7 @@ class TestInlineCreateDialog:
         )
 
     def _focus_is_inside_dialog(self, page) -> bool:
+        # Snapshot every Tab stop so a later focus redirect cannot hide a trap escape.
         return page.evaluate(
             "() => { const d = document.querySelector(\"#client-inline-create-modal [role='dialog']\");"
             " return !!d && d.contains(document.activeElement); }"
@@ -196,10 +197,14 @@ class TestInlineCreateDialog:
 
         page.keyboard.press("Escape")
         expect(page.locator(DIALOG)).to_have_count(0, timeout=10000)
-        focused = page.evaluate("() => document.activeElement && document.activeElement.outerHTML.slice(0, 160)")
-        assert page.locator(SEARCH).evaluate("e => e === document.activeElement") or "client-autocomplete-create" in (
-            focused or ""
-        ), f"focus not returned to the trigger or the person field: {focused}"
+        page.wait_for_function(
+            """(search) => {
+                const active = document.activeElement;
+                return active === document.querySelector(search) ||
+                    !!active && active.outerHTML.slice(0, 160).includes('client-autocomplete-create');
+            }""",
+            arg=SEARCH,
+        )
         expect(note).to_have_value("Bleibt erhalten")
 
         # Open again and cancel with the button.

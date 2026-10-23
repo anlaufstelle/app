@@ -36,6 +36,7 @@ import subprocess
 import uuid
 
 import pytest
+from playwright.sync_api import expect
 
 from ._axe import AXE_TAGS, run_axe
 from ._helpers import python_bin as _python
@@ -240,8 +241,9 @@ def _assert_tab_order_unchanged(page) -> None:
     """Tastaturpfad (WCAG 2.1.1): Genehmigen zuerst, dann Ablehnen — unveraendert."""
     approve = page.locator("form button[name='action'][value='approve']")
     approve.focus()
-    assert page.evaluate("document.activeElement.value") == "approve"
+    expect(approve).to_be_focused()
     page.keyboard.press("Tab")
+    # Check the immediate next stop; delayed focus must not repair a wrong Tab order.
     assert page.evaluate("document.activeElement.value") == "reject"
 
 
@@ -304,8 +306,9 @@ def _assert_confirmation_surface(page, base_url) -> None:
     page.wait_for_load_state("domcontentloaded")
     _assert_axe_clean(page, base_url)
     submit.focus()
-    assert page.evaluate("document.activeElement.tagName") == "BUTTON"
+    expect(submit).to_be_focused()
     page.keyboard.press("Tab")
+    # Check the immediate next stop rather than accepting a later focus redirect.
     assert page.evaluate("document.activeElement.tagName") == "A"
 
     page.set_viewport_size({"width": _DESKTOP_WIDTH, "height": _DESKTOP_HEIGHT})

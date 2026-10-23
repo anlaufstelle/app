@@ -280,12 +280,11 @@ class TestGoalLimitsAndDrafts:
             "Neues-Ziel-Entwurf"
         )
         # Focus stays on the action that was used (now „Nicht erreicht“) inside the section.
-        focused = page.evaluate(
+        page.wait_for_function(
             """() => {
                 const a = document.activeElement;
-                if (!a) return '<none>';
-                return a.closest('#goals-section') ? a.textContent.trim() : '<outside>';
+                return !!a && !!a.closest('#goals-section') &&
+                    ['Nicht erreicht', 'Ziel erreicht'].includes(a.textContent.trim());
             }"""
         )
-        assert focused in {"Nicht erreicht", "Ziel erreicht"}, f"focus not on the action: {focused!r}"
         assert _csp_errors(errors) == [], errors

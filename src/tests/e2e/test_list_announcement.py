@@ -152,7 +152,7 @@ class TestListAnnouncementTotal:
 
         # Live-Suche (Refs #1339, Abgrenzung Live-Suche in focus-management.js):
         # der Fokus bleibt im Suchfeld, die Ansage darf ihn nicht stehlen.
-        assert page.evaluate("document.activeElement.getAttribute('name')") == "q"
+        expect(search).to_be_focused()
 
 
 # Befund MITTEL: die kleine

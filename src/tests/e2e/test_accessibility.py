@@ -392,6 +392,7 @@ class TestSkipLink:
         expect(page.locator("#main-content")).to_be_attached()
 
         page.keyboard.press("Tab")
+        # Snapshot this Tab stop; polling could hide a later focus redirect.
         focused_href = page.evaluate("() => document.activeElement && document.activeElement.getAttribute('href')")
         assert focused_href == "#main-content", (
             f"Erstes Tab-Ziel auf {path} ist nicht der Skip-Link, sondern "
@@ -407,6 +408,7 @@ class TestSkipLink:
         # wieder am Anfang der Navigation. Ein Skip-Link, der nur den Hash
         # setzt, hat die Navigation nicht uebersprungen.
         page.keyboard.press("Tab")
+        # Inspect the next Tab stop immediately, before any later focus redirect.
         assert page.evaluate("() => !!(document.activeElement && document.activeElement.closest('#main-content'))"), (
             f"Nach dem Skip-Link auf {path} liegt der Fokus ausserhalb von #main-content: "
             f"{page.evaluate('() => document.activeElement && document.activeElement.outerHTML')}"
