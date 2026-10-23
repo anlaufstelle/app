@@ -193,10 +193,12 @@
     </div>
 
     {# --- Desktop Sidebar: hidden below md, fixed left. Refs #911. --- #}
+    {% if session_fully_authenticated %}
     {% include "partials/_navigation_desktop.html" %}
+    {% endif %}
 
     {# --- Main Content: always visible, offset on desktop --- #}
-    <main id="main-content" class="md:ml-60 min-h-screen pb-20 md:pb-0 overflow-x-hidden">
+    <main id="main-content" class="{% if session_fully_authenticated %}md:ml-60 pb-20 md:pb-0 {% endif %}min-h-screen overflow-x-hidden">
         {# 2FA-Setup-Reminder — Countdown der Grace-Frist (Refs #689). #}
         {% include "partials/_mfa_setup_reminder.html" %}
         {# Demo-Banner — kennzeichnet synthetische Daten + naechsten Reset (Refs #1062). #}
@@ -240,7 +242,9 @@
     </main>
 
     {# --- Mobile Bottom-Nav. Refs #911. --- #}
+    {% if session_fully_authenticated %}
     {% include "partials/_navigation_mobile.html" %}
+    {% endif %}
 
     {# Umami-Consent-Banner (Opt-in) — nur Demo mit UMAMI_REQUIRE_CONSENT. Refs #1604. #}
     {% include "partials/_umami_consent.html" with consent_navigation_offsets=True %}
