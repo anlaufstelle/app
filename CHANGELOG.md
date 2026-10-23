@@ -31,7 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Andere Sitzungen bei 2FA-Gerätewechsel und Deaktivierung widerrufen** (#2640, #2529) — Beide Aktionen melden alle anderen Sitzungen des Kontos bei deren nächster Anfrage ab, erhalten die ausführende Sitzung auch nach späterer Passwortprüfung oder Sudo und lassen bei Fehlern einschließlich Anlage und abschließendem Speichern der Nachfolgesitzung den bisherigen Faktor gültig; die Bestätigung bleibt wiederholbar.
 ### Added
 
-- **Rollengetreuer Freitext-Review** (#918) — Modellbezogene Online-Listen bieten lokale Musterhinweise und reversible, auditierte Prüffristen, deren Gültigkeit an den aktuellen Text gebunden ist.
+- **Rollengetreuer Freitext-Review** (#918) — Modellbezogene Online-Listen bieten lokale Musterhinweise und reversible, auditierte Prüffristen, deren Gültigkeit an den aktuellen Text gebunden ist; die Anzeige von Notizen qualifizierter Personen schreibt denselben Lese-Eintrag wie die Personendetailseite.
 - **Verschlüsselungsentwurf für feste Langtexte** (#845) — Option B beschreibt neue leere verschlüsselte Felder, schreibgeschützte bisherige Texte und die nötigen Betreiberprüfungen als gesonderten Entwurf ohne Code- oder Datenmigration.
 
 ## [0.99.8] - 2026-10-23
