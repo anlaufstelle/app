@@ -591,7 +591,7 @@ class TestSessionRevocation:
         actor_page = reverse("core:user_access_list") if entry == "view" else USER_ADMIN_CHANGELIST
         assert actor_browser.get(actor_page).status_code == 200
 
-    def test_password_keeps_working_and_gets_a_fresh_hash(self, admin_user, staff_user):
+    def test_password_keeps_working_with_a_permanent_session_revision(self, admin_user, staff_user):
         _enroll(staff_user)
         old_browser = _verified_client(staff_user)
         hash_before = User.objects.get(pk=staff_user.pk).password
@@ -602,10 +602,10 @@ class TestSessionRevocation:
         assert authenticate(username=staff_user.username, password="wrong-password") is None
         assert authenticate(username=staff_user.username, password="testpass123") == staff_user
         rehashed = User.objects.get(pk=staff_user.pk)
-        # The sign-in stores a new hash with a fresh salt: the pre-reset hash --
-        # and with it the sessions bound to it -- never comes back.
+        # The permanent revision keeps pre-reset sessions invalid even when
+        # password verification upgrades the inner hash.
         assert rehashed.password not in (hash_before, "")
-        assert not rehashed.password.startswith(User.SESSION_REVOCATION_PREFIX)
+        assert rehashed.password.startswith(User.SESSION_REVOCATION_PREFIX)
         assert rehashed.check_password("testpass123")
         assert old_browser.get("/").status_code == 302
 
@@ -640,7 +640,7 @@ class TestSessionRevocation:
 
         assert async_to_sync(revoked.acheck_password)("wrong-password") is False
         assert async_to_sync(revoked.acheck_password)("testpass123") is True
-        assert not User.objects.get(pk=staff_user.pk).password.startswith(User.SESSION_REVOCATION_PREFIX)
+        assert User.objects.get(pk=staff_user.pk).password.startswith(User.SESSION_REVOCATION_PREFIX)
 
     def test_admin_change_page_renders_while_the_hash_is_revoked(self, super_admin_user, admin_user, staff_user):
         _enroll(staff_user)
@@ -752,15 +752,15 @@ def _reset_password(user, new_password) -> str:
 class TestRehashRace:
     """A rehash on sign-in never overwrites a password set meanwhile.
 
-    Both rehash triggers -- the revoked hash of a second-factor reset and
-    Django's upgrade to the preferred hasher -- verify the password first and
+    Upgrades of a revoked account's inner hash and of a plain outdated hash
+    both verify the password first and
     store a fresh hash afterwards. A password reset completed in between on
     another connection must stand: the new password works, the old one no
     longer does, and the sign-in that raced it is refused.
     """
 
     @pytest.fixture
-    def stored_hash(self, request, settings, admin_user, staff_user):
+    def stored_hash(self, request, settings, monkeypatch, admin_user, staff_user):
         trigger = request.param
         if trigger == "revoked":
             settings.PASSWORD_HASHERS = [PBKDF2]
@@ -769,6 +769,8 @@ class TestRehashRace:
             _enroll(staff_user)
             reset_user_mfa(staff_user, actor=admin_user)
             assert User.objects.get(pk=staff_user.pk).password.startswith(User.SESSION_REVOCATION_PREFIX)
+            # A permanent revision only rehashes an outdated inner hash.
+            monkeypatch.setattr(PBKDF2PasswordHasher, "iterations", PBKDF2PasswordHasher.iterations + 1)
             return PBKDF2PasswordHasher
         settings.PASSWORD_HASHERS = [PBKDF2, MD5]
         User.objects.filter(pk=staff_user.pk).update(password=make_password("testpass123", hasher="md5"))
@@ -840,7 +842,7 @@ class TestRehashRace:
         assert valid is True
         stored = User.objects.get(pk=staff_user.pk)
         assert user.password == stored.password
-        assert not stored.password.startswith(User.SESSION_REVOCATION_PREFIX)
+        assert stored.password.startswith(User.SESSION_REVOCATION_PREFIX) is (stored_hash is PBKDF2PasswordHasher)
         assert stored.check_password("testpass123")
 
     @pytest.mark.parametrize("stored_hash", ["revoked", "outdated-hasher"], indirect=True)
@@ -877,7 +879,7 @@ class TestResetUnderRlsRole:
         assert _factor_rows(staff_user) == (0, 0, 0, 0)
         assert _reset_rows(staff_user).get().facility_id == staff_user.facility_id
 
-    def test_sign_in_after_the_reset_stores_a_fresh_hash(
+    def test_sign_in_after_the_reset_preserves_the_session_revision(
         self,
         admin_user,
         staff_user,
@@ -891,7 +893,7 @@ class TestResetUnderRlsRole:
             response = browser.post("/login/", {"username": staff_user.username, "password": "testpass123"})
 
         assert response.status_code == 302
-        assert not User.objects.get(pk=staff_user.pk).password.startswith(User.SESSION_REVOCATION_PREFIX)
+        assert User.objects.get(pk=staff_user.pk).password.startswith(User.SESSION_REVOCATION_PREFIX)
 
     def test_super_admin_action_writes_audit_in_target_facility(
         self,

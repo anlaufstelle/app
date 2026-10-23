@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib.auth import hashers
 from django.contrib.auth.models import AbstractUser
 from django.db import DatabaseError, models
-from django.utils.crypto import get_random_string
+from django.utils.crypto import get_random_string, salted_hmac
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 
@@ -123,7 +123,7 @@ class User(AbstractUser):
         return self.display_name or self.get_full_name() or self.username
 
     def _revoked_password_hash(self) -> str | None:
-        """The original hash inside a ``revoke_sessions`` wrapper, else None."""
+        """The current password hash inside a revocation wrapper, else None."""
         if not (self.password or "").startswith(self.SESSION_REVOCATION_PREFIX):
             return None
         return self.password.split("$", 2)[-1]
@@ -131,19 +131,18 @@ class User(AbstractUser):
     def revoke_sessions(self) -> None:
         """Make every existing session of this account invalid (Refs #2469).
 
-        Django signs a session out at its next request once the session-auth
-        hash stored in it no longer matches ``get_session_auth_hash()``, an
-        HMAC over the password field. Changing that field therefore ends every
-        session of the account at once -- unlike ``flush_user_sessions``, which
-        has to decode the session table (no user index) and stops at
+        Django signs a session out at its next request when its stored auth
+        hash no longer matches ``get_session_auth_hash()``. A fresh revision
+        changes that HMAC for every session of the account at once, unlike
+        ``flush_user_sessions``, which has to decode the session table
+        (no user index) and stops at
         ``OFFLINE_REVOCATION_SESSION_SCAN_LIMIT``.
 
-        The password itself stays valid: the current hash is wrapped as
-        ``revoked$<nonce>$<hash>``, ``check_password`` verifies against the
-        inner hash and then stores a fresh hash of the same password, so the
-        old hash -- and every session bound to it -- never comes back. The
-        nonce makes a repeated revocation change the field again. An unusable
-        password gets a new unusable value.
+        The password stays valid inside ``revoked$<revision>$<hash>``. The
+        revision is the session-HMAC basis and survives inner-hash upgrades;
+        each revocation replaces it. A real password change replaces the entire
+        value, so it also invalidates every session. Unusable passwords get a
+        fresh unusable value.
 
         Only the instance changes; the caller persists ``password``. Raises
         ``SessionRevocationError`` when the wrapped hash does not fit the
@@ -160,19 +159,31 @@ class User(AbstractUser):
             raise SessionRevocationError("The password hash is too long to revoke the sessions of this account.")
         self.password = wrapped
 
+    def _get_session_auth_hash(self, secret=None):
+        """Keep a revoked account's revision stable across password rehashes.
+
+        Never use the inner hash as the session basis: that would revive
+        sessions issued before revocation. Real password changes replace the
+        wrapper; repeated revocations replace its revision (Refs #2640).
+        Django's fallback-secret path calls this method too.
+        """
+        if self._revoked_password_hash() is None:
+            return super()._get_session_auth_hash(secret=secret)
+        revision = self.password.split("$", 2)[1]
+        return salted_hmac(
+            "core.models.User.mfa_session_revision",
+            revision,
+            secret=secret,
+            algorithm="sha256",
+        ).hexdigest()
+
     def check_password(self, raw_password):
-        """Verify ``raw_password``; a rehash only replaces the verified hash.
+        """Verify and upgrade only the stored hash that was actually checked.
 
-        A revoked hash (``revoke_sessions``) and an outdated one (Django's
-        upgrade to the preferred hasher or work factor) are replaced by a fresh
-        hash of the same password. A fresh hash, not the inner one: restoring
-        that would revive the revoked sessions. Like Django's upgrade this is
-        no password change.
-
-        The write is a compare-and-swap on the verified hash: a password set
-        meanwhile by a reset or change is never overwritten. Then the check
-        runs again against the stored hash; a sign-in with the replaced
-        password fails, a repeated conflict fails closed.
+        A revocation wrapper is permanent until the next password change.
+        Upgrades replace its inner hash while retaining the session revision.
+        Compare-and-swap prevents an upgrade from undoing a concurrent reset;
+        even without an upgrade a wrapped hash is rechecked against storage.
         """
         for _attempt in range(REHASH_ATTEMPTS):
             verified = self.password
@@ -182,11 +193,20 @@ class User(AbstractUser):
                 return valid
             if inner is None and not outdated:
                 return True
-            fresh = hashers.make_password(raw_password)
             accounts = type(self)._base_manager.using(self._state.db)
-            if accounts.filter(pk=self.pk, password=verified).update(password=fresh) == 1:
-                self.password = fresh
-                return True
+            if not outdated:
+                if accounts.filter(pk=self.pk, password=verified).exists():
+                    return True
+            else:
+                fresh = hashers.make_password(raw_password)
+                if inner is not None:
+                    revision = verified.split("$", 2)[1]
+                    fresh = f"{self.SESSION_REVOCATION_PREFIX}{revision}${fresh}"
+                    if len(fresh) > self._meta.get_field("password").max_length:
+                        raise SessionRevocationError("The upgraded password hash does not fit the revocation wrapper.")
+                if accounts.filter(pk=self.pk, password=verified).update(password=fresh) == 1:
+                    self.password = fresh
+                    return True
             stored = accounts.filter(pk=self.pk).values_list("password", flat=True).first()
             if stored is None:
                 return False
