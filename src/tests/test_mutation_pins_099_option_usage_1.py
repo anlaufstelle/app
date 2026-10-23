@@ -29,7 +29,7 @@ Konventionen wie ``test_mutation_pins_099_delete_blockers_a.py``: Zusicherungen
 vergleichen EXAKT (``==``), Fixtures aus ``src/tests/conftest.py`` bzw. echte
 Model-Objekte; jeder Test nennt seinen Mutanten mit vollem Namen in der
 Docstring. ``_encryption_key`` liegt modulweit an (Lehre 112) — der
-Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

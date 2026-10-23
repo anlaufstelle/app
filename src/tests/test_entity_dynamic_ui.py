@@ -415,7 +415,7 @@ class TestEntityTypeChangeConfirm:
             entity.field("primary"): entity.value("confirm_primary"),
             entity.field("secondary"): entity.value("confirm_secondary"),
         }
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             target = self._target(request, entity, facility, staff_user, doc_type, data_json)
             client.force_login(staff_user)
             content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
@@ -439,7 +439,7 @@ class TestEntityTypeChangeConfirm:
         self, client, staff_user, facility, fernet_key, request, entity: EntitySpec
     ):
         doc_type = entity.doctype(request, "form")
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             target = self._target(
                 request,
                 entity,
@@ -460,7 +460,7 @@ class TestEntityTypeChangeConfirm:
         self, client, staff_user, facility, fernet_key, request, entity: EntitySpec
     ):
         doc_type = entity.doctype(request, "high")
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             target = self._target(
                 request,
                 entity,
@@ -487,7 +487,7 @@ class TestEntityCreateWithDynamicData:
     ):
         doc_type = entity.doctype(request, "form")
         client.force_login(staff_user)
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             response = client.post(
                 reverse(entity.url("create")),
                 entity.post_data(
@@ -590,7 +590,7 @@ class TestEntityUpdateWithDynamicData:
         self, client, staff_user, facility, fernet_key, request, entity: EntitySpec
     ):
         doc_type = entity.doctype(request, "form")
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             target = self._target(
                 request,
                 entity,
@@ -610,7 +610,7 @@ class TestEntityUpdateWithDynamicData:
 
     def test_update_saves_changed_values(self, client, staff_user, facility, fernet_key, request, entity: EntitySpec):
         doc_type = entity.doctype(request, "form")
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             target = self._target(
                 request,
                 entity,
@@ -1557,7 +1557,7 @@ class TestEntityPartialPrefillsAssignedType:
     @staticmethod
     def _target(request, entity: EntitySpec, facility, staff_user, fernet_key):
         doc_type = entity.doctype(request, "form")
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             target = entity.model.objects.create(
                 facility=facility,
                 created_by=staff_user,
@@ -1575,7 +1575,7 @@ class TestEntityPartialPrefillsAssignedType:
     ):
         target, doc_type = self._target(request, entity, facility, staff_user, fernet_key)
         client.force_login(staff_user)
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             response = client.get(
                 reverse(entity.url("fields_partial")),
                 {"document_type": str(doc_type.pk), entity.name: str(target.pk)},
@@ -1590,7 +1590,7 @@ class TestEntityPartialPrefillsAssignedType:
         target, _ = self._target(request, entity, facility, staff_user, fernet_key)
         other_type = entity.doctype(request, "mixed")
         client.force_login(staff_user)
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             response = client.get(
                 reverse(entity.url("fields_partial")),
                 {"document_type": str(other_type.pk), entity.name: str(target.pk)},
@@ -1605,7 +1605,7 @@ class TestEntityPartialPrefillsAssignedType:
     ):
         _, doc_type = self._target(request, entity, facility, staff_user, fernet_key)
         client.force_login(staff_user)
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             response = client.get(
                 reverse(entity.url("fields_partial")),
                 {"document_type": str(doc_type.pk)},
@@ -1645,7 +1645,7 @@ class TestEntityPartialPrefillsAssignedType:
         partial = reverse(entity.url("fields_partial"))
         target_pk = str(target.pk)
 
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             away = client.get(partial, {"document_type": str(other_type.pk), entity.name: target_pk})
             assert away.status_code == 200
 
@@ -1674,7 +1674,7 @@ class TestClientTrashRestore:
 
     @pytest.fixture
     def client_with_values(self, facility, staff_user, doc_type_client_profile, fernet_key):
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             yield Client.objects.create(
                 facility=facility,
                 pseudonym="P7-Prefill-01",
@@ -1699,7 +1699,7 @@ class TestClientTrashRestore:
         """
         client_with_values.soft_delete(user=admin_user)
         client.force_login(staff_user)
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             response = client.get(
                 reverse("core:client_fields_partial"),
                 {"document_type": str(doc_type_client_profile.pk), "client": str(client_with_values.pk)},
@@ -1715,7 +1715,7 @@ class TestClientTrashRestore:
         client_with_values.soft_delete(user=admin_user)
         client_with_values.restore()
         client.force_login(staff_user)
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             response = client.get(
                 reverse("core:client_fields_partial"),
                 {"document_type": str(doc_type_client_profile.pk), "client": str(client_with_values.pk)},
@@ -1744,7 +1744,7 @@ class TestEntityDetailDynamicSection:
 
     def test_values_are_visible(self, client, staff_user, facility, fernet_key, request, entity: EntitySpec):
         doc_type = entity.doctype(request, "form")
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             target = self._target(
                 request,
                 entity,
@@ -1847,7 +1847,7 @@ class TestEntityExportDynamicData:
         self, facility, staff_user, lead_user, fernet_key, request, entity: EntitySpec
     ):
         doc_type = entity.doctype(request, "form")
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             target = self._target(
                 request,
                 entity,
@@ -1916,7 +1916,7 @@ class TestEntityExportDynamicData:
             return real_html(*args, **kwargs)
 
         doc_type = entity.doctype(request, "form")
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             target = self._target(
                 request,
                 entity,

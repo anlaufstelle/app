@@ -31,7 +31,6 @@ def vault_files(facility, client_identified, settings, tmp_path):
     settings.MEDIA_ROOT = tmp_path
     primary = Fernet.generate_key().decode()
     old = Fernet.generate_key().decode()
-    settings.ENCRYPTION_KEY = ""
     settings.ENCRYPTION_KEYS = f"{primary},{old}"
 
     def create(*, name=None, primary_key=False, target_facility=facility, pk=None):

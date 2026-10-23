@@ -36,7 +36,7 @@ Der Nachweis ist damit plan-unabhaengig statt auf eine bestimmte
 Zeilenreihenfolge angewiesen.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

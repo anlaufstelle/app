@@ -45,7 +45,7 @@ Funktion/Mutantengruppe; jeder Test nennt seine Mutanten mit vollem
 
 ``_encryption_key`` liegt modulweit an: der Mutantenbaum
 (``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEY``; ohne die Fixture waeren die Pins dort aus dem FALSCHEN
+``ENCRYPTION_KEYS``; ohne die Fixture waeren die Pins dort aus dem FALSCHEN
 Grund rot und der Kill-Nachweis wertlos.
 """
 

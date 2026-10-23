@@ -597,7 +597,7 @@ def test_encrypted_multi_selection_counts_individual_slugs_once(backend, facilit
     from tests._factories import make_event
 
     FieldTemplate.objects.filter(facility=facility, slug=LEISTUNGEN_SLUG).update(is_encrypted=True)
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=generate_key()):
+    with override_settings(ENCRYPTION_KEYS=generate_key()):
         event = make_event(
             facility=facility,
             client=None,

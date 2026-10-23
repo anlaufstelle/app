@@ -437,18 +437,18 @@ class TestRotationCountsEveryObjectNotJustTheFirst:
         dem neuen Primaerschluessel."""
         old_key = generate_key()
         new_key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             device_a = TOTPDevice.objects.create(user=mfa_user_a, name="totp", confirmed=True, key="a" * 40)
             device_b = TOTPDevice.objects.create(user=mfa_user_b, name="totp", confirmed=True, key="b" * 40)
         before = {device_a.pk: _raw_totp_key(device_a.pk), device_b.pk: _raw_totp_key(device_b.pk)}
 
-        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}", ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             updated, contended = _reencrypt_totp_devices(dry_run=False)
 
             assert updated == 2
             assert contended == []
             # Nur der neue Schluessel: beide Tokens muessen frisch gewickelt sein.
-            with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+            with override_settings(ENCRYPTION_KEYS=new_key):
                 assert decrypt_totp_key(_raw_totp_key(device_a.pk)) == "a" * 40
                 assert decrypt_totp_key(_raw_totp_key(device_b.pk)) == "b" * 40
         assert _raw_totp_key(device_a.pk) != before[device_a.pk]
@@ -458,7 +458,7 @@ class TestRotationCountsEveryObjectNotJustTheFirst:
         """Der Dry-Run-Zweig hat ein eigenes ``continue`` und einen eigenen
         Zaehler — beide brauchen ein zweites Geraet, um beobachtbar zu sein."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             device_a = TOTPDevice.objects.create(user=mfa_user_a, name="totp", confirmed=True, key="a" * 40)
             device_b = TOTPDevice.objects.create(user=mfa_user_b, name="totp", confirmed=True, key="b" * 40)
             before = {device_a.pk: _raw_totp_key(device_a.pk), device_b.pk: _raw_totp_key(device_b.pk)}
@@ -484,7 +484,7 @@ class TestRotationCountsEveryObjectNotJustTheFirst:
         slug = doc_type_crisis.fields.first().field_template.slug
         old_key = generate_key()
         new_key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             rotated = Event.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -506,12 +506,12 @@ class TestRotationCountsEveryObjectNotJustTheFirst:
         Event.objects.filter(pk=healed.pk).update(data_json={slug: "Klartext-Altbestand"})
         assert not is_encrypted_value(_raw_event_data_json(healed)[slug])
 
-        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}", ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             updated = _reencrypt_events(dry_run=False)
 
             assert updated == 2
             assert is_encrypted_value(_raw_event_data_json(healed)[slug])
-            with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+            with override_settings(ENCRYPTION_KEYS=new_key):
                 assert safe_decrypt(_raw_event_data_json(rotated)[slug]) == "Ciphertext-Zeile"
                 assert safe_decrypt(_raw_event_data_json(healed)[slug]) == "Klartext-Altbestand"
 

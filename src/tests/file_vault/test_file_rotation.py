@@ -23,7 +23,6 @@ def attachment_factory(facility, client_identified, settings, tmp_path):
     field = FieldTemplate.objects.create(facility=facility, name="File", field_type=FieldTemplate.FieldType.FILE)
     old_key = Fernet.generate_key().decode()
     new_key = Fernet.generate_key().decode()
-    settings.ENCRYPTION_KEY = ""
     settings.ENCRYPTION_KEYS = f"{new_key},{old_key}"
 
     def create(data=b"private attachment", *, legacy=False, key=old_key):

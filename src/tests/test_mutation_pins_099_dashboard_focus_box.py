@@ -34,7 +34,7 @@ werden von Postgres unter ASC-Sortierung IMMER ans Ende sortiert
 Wirkung; siehe ``skip``/``equivalent``-Liste im Bericht.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

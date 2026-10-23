@@ -28,7 +28,7 @@ expliziten ``default`` — ein weggelassenes Argument landet als ``""``
 Konventionen wie ``test_mutation_pins_096_settings.py``: Zusicherungen
 vergleichen EXAKT (``==``/``is``); Fixtures kommen aus
 ``src/tests/conftest.py``. ``_encryption_key`` liegt modulweit an (Lehre 112):
-der Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+der Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

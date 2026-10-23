@@ -71,7 +71,7 @@ in dieser Datei ruft diesen Zweig auf (am Ende gegen die fertige Pin-Datei
 unter ``MUTANT_UNDER_TEST`` verifiziert, ``killmap.tsv``).
 
 ``_encryption_key`` is provided module-wide: ``mutants/`` has no ``.env``
-and therefore no ``ENCRYPTION_KEY``.
+and therefore no ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

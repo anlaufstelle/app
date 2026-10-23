@@ -109,7 +109,7 @@ class TestDryRunWritesNothingPerPath:
         """Mutant ``x_rotate_all__mutmut_7`` (``_reencrypt_events(None, …)``):
         der Ereignispfad wickelt ``data_json`` bei ``--dry-run`` real neu ein."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             event = _make_event(facility, doc_type_crisis, staff_user, data_json={"notiz-krise": "Dry-Run-Ereignis"})
             token_before = raw_event_data_json(event)["notiz-krise"]["value"]
 
@@ -122,7 +122,7 @@ class TestDryRunWritesNothingPerPath:
         """Mutant ``x_rotate_all__mutmut_12`` (``_reencrypt_event_history(None, …)``):
         der Historienpfad schreibt bei ``--dry-run`` real (per Trigger-Bypass!)."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             event = _make_event(facility, doc_type_crisis, staff_user, data_json={})
             history = EventHistory.objects.create(
                 event=event,
@@ -142,7 +142,7 @@ class TestDryRunWritesNothingPerPath:
         """Mutant ``x_rotate_all__mutmut_17`` (``_reencrypt_attachments(None, …)``):
         der Anhangspfad wickelt ``original_filename_encrypted`` bei ``--dry-run`` real neu ein."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             event = _make_event(facility, doc_type_crisis, staff_user, data_json={})
             attachment = Attachment.objects.create(
                 facility=facility,
@@ -166,7 +166,7 @@ class TestDryRunWritesNothingPerPath:
         """Mutant ``x_rotate_all__mutmut_22`` (``_reencrypt_totp_devices(None)``):
         das TOTP-Secret wird bei ``--dry-run`` real umgewickelt statt nur validiert."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             device = EncryptedTOTPDevice.objects.create(user=staff_user, name="dry-run", confirmed=True)
             token_before = raw_totp_key(device.id)
 
@@ -181,7 +181,7 @@ class TestDryRunWritesNothingPerPath:
         """Mutant ``x_rotate_all__mutmut_37`` (``_rotate_dynamic_json_model(Case, dry_run=None, …)``):
         der Fallpfad wickelt ``data_json`` bei ``--dry-run`` real neu ein."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             case = Case.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -201,7 +201,7 @@ class TestDryRunWritesNothingPerPath:
         """Mutant ``x_rotate_all__mutmut_43`` (``_reencrypt_rectification_requests(None, …)``):
         die vier Belegspalten des Art.-16-Antrags werden bei ``--dry-run`` real neu eingewickelt."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             request = RectificationRequest.objects.create(
                 facility=facility,
                 target_client=client_identified,
@@ -300,7 +300,7 @@ class TestCompareAndSwapIsBoundToOneRow:
 
         old_key = generate_key()
         new_key = generate_key()
-        with override_settings(ENCRYPTION_KEYS=old_key, ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             target = EncryptedTOTPDevice.objects.create(user=staff_user, name="ziel", confirmed=True)
             bystander = EncryptedTOTPDevice.objects.create(user=lead_user, name="fremd", confirmed=True)
             shared = raw_totp_key(target.id)
@@ -310,7 +310,7 @@ class TestCompareAndSwapIsBoundToOneRow:
             EncryptedTOTPDevice.objects.filter(pk=bystander.pk).update(key=shared)
             assert raw_totp_key(bystander.id) == shared
 
-        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}", ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             outcome = _rewrap_one_totp_device(target.pk, decrypt_totp_key, encrypt_totp_key)
 
         assert outcome == "rewrapped"
@@ -331,7 +331,7 @@ class TestUndecryptableValuesAreNeverOverwritten:
         key = generate_key()
         payload = {"notiz-krise": UNDECRYPTABLE}
 
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             assert safe_decrypt(UNDECRYPTABLE) == "[verschlüsselt]"
             new_payload, changed = _reencrypt_data_json(payload)
 
@@ -344,7 +344,7 @@ class TestUndecryptableValuesAreNeverOverwritten:
         ``data_json``-Wert bleibt unangetastet (der Mutant schreibt
         ``encrypt_field("[verschlüsselt]")`` darueber)."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             event = _make_event(facility, doc_type_crisis, staff_user, data_json={})
             Event.objects.filter(pk=event.pk).update(data_json={"notiz-krise": UNDECRYPTABLE})
 
@@ -370,7 +370,7 @@ class TestUnrotatableRowsAreSkippedNotFatal:
         gesamte Anhangs-Rotation — ``attachments`` faellt von 1 auf 0."""
         key = generate_key()
         field_template = doc_type_crisis.fields.first().field_template
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             event = _make_event(facility, doc_type_crisis, staff_user, data_json={})
             rotatable = Attachment.objects.create(
                 facility=facility,
@@ -410,7 +410,7 @@ class TestUnrotatableRowsAreSkippedNotFatal:
         uebersprungen zu werden."""
         key = generate_key()
         field_template = doc_type_crisis.fields.first().field_template
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             event = _make_event(facility, doc_type_crisis, staff_user, data_json={})
             rotatable = Attachment.objects.create(
                 facility=facility,
@@ -452,7 +452,7 @@ class TestUnrotatableRowsAreSkippedNotFatal:
 
         old_key = generate_key()
         new_key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             event = _make_event(facility, doc_type_crisis, staff_user, data_json={})
             rotatable = EventHistory.objects.create(
                 event=event,
@@ -474,7 +474,7 @@ class TestUnrotatableRowsAreSkippedNotFatal:
             EventHistory.objects.filter(pk=rotatable.pk).update(changed_at=now - timedelta(minutes=5))
         before_token, _ = raw_history_payloads(rotatable)
 
-        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}", ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             counts = rotate_all(dry_run=False)
             rotated_before, _ = raw_history_payloads(rotatable)
             assert safe_decrypt(rotated_before["notiz-krise"]) == "Vorher-Wortlaut"
@@ -493,7 +493,7 @@ class TestUnrotatableRowsAreSkippedNotFatal:
         (Regelfall bei Pseudonym-Berichtigungen), bricht die Spaltenschleife ab
         und ``reason``/``review_note`` rotieren NIE mit."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             request = RectificationRequest.objects.create(
                 facility=facility,
                 target_client=client_identified,
@@ -523,7 +523,7 @@ class TestUnrotatableRowsAreSkippedNotFatal:
         nachfolgenden Spalten desselben Antrags still unter dem ausrangierten
         Schluessel liegen."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             request = RectificationRequest.objects.create(
                 facility=facility,
                 target_client=client_identified,
@@ -553,7 +553,7 @@ class TestUnrotatableRowsAreSkippedNotFatal:
         ein einziger Antrag ohne rotierbare Spalte (abgelehnt, ohne Pruefvermerk)
         beendet die Rotation ALLER weiteren Antraege."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             rotatable = RectificationRequest.objects.create(
                 facility=facility,
                 target_client=client_identified,

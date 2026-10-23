@@ -1,6 +1,6 @@
 """Klartext-Warnung/Guard für ``settings/dev.py`` (#1276, T15).
 
-``dev.py`` darf lokal weiterhin OHNE ``ENCRYPTION_KEY`` starten (Felder dann im
+``dev.py`` darf lokal weiterhin OHNE ``ENCRYPTION_KEYS`` starten (Felder dann im
 Klartext) — aber das Risiko muss unübersehbar sein, damit eine Staging-Box, die
 versehentlich auf dev-Settings läuft, keine Art-9-Daten still im Klartext
 ablegt. Geprüft wird:
@@ -8,7 +8,7 @@ ablegt. Geprüft wird:
 1. Default (kein Key, kein Flag): Import lädt, aber eine **laute** Warnung geht
    nach stderr.
 2. Opt-in-Guard ``REQUIRE_ENCRYPTION``: ohne Key verweigert ``dev.py`` den Start.
-3. Mit gesetztem ``ENCRYPTION_KEY``: kein Klartext-Banner.
+3. Mit gesetztem ``ENCRYPTION_KEYS``: kein Klartext-Banner.
 
 Subprozess-Strategie wie ``test_prod_settings.py`` (Module-Level-Guards greifen
 nur beim Import in einer kontrollierten Env).
@@ -63,20 +63,20 @@ class TestDevPlaintextGuard:
         assert result.returncode == 0, f"dev.py darf ohne Key starten: {result.stderr}"
         # Laut = unübersehbar auf stderr (nicht nur eine versteckte Log-Zeile).
         assert _BANNER_MARKER in result.stderr
-        assert "ENCRYPTION_KEY" in result.stderr
+        assert "ENCRYPTION_KEYS" in result.stderr
 
     def test_missing_key_with_require_encryption_raises(self):
         result = _run_dev_import({"REQUIRE_ENCRYPTION": "1"})
         assert result.returncode != 0
-        assert "REQUIRE_ENCRYPTION" in result.stderr or "ENCRYPTION_KEY" in result.stderr
+        assert "REQUIRE_ENCRYPTION" in result.stderr or "ENCRYPTION_KEYS" in result.stderr
 
     def test_key_present_no_banner(self):
-        result = _run_dev_import({"ENCRYPTION_KEY": _FERNET_KEY})
+        result = _run_dev_import({"ENCRYPTION_KEYS": _FERNET_KEY})
         assert result.returncode == 0, result.stderr
         assert _BANNER_MARKER not in result.stderr
 
     def test_key_present_with_require_encryption_loads(self):
-        result = _run_dev_import({"ENCRYPTION_KEY": _FERNET_KEY, "REQUIRE_ENCRYPTION": "1"})
+        result = _run_dev_import({"ENCRYPTION_KEYS": _FERNET_KEY, "REQUIRE_ENCRYPTION": "1"})
         assert result.returncode == 0, result.stderr
 
 
@@ -91,7 +91,7 @@ class TestLocalKeyFile:
     Container denselben Schlüssel.
     """
 
-    _EXPR = "import anlaufstelle.settings.dev as s;print(s.ENCRYPTION_KEY)"
+    _EXPR = "import anlaufstelle.settings.dev as s;print(s.ENCRYPTION_KEYS)"
 
     def test_key_is_read_from_the_file(self, tmp_path):
         key_file = tmp_path / "encryption.key"
@@ -110,7 +110,7 @@ class TestLocalKeyFile:
         key_file.write_text("DATEISCHLUESSEL_GEWINNT_NICHT", encoding="utf-8")
 
         result = _run_dev_import(
-            {"LOCAL_ENCRYPTION_KEY_FILE": str(key_file), "ENCRYPTION_KEY": _FERNET_KEY},
+            {"LOCAL_ENCRYPTION_KEY_FILE": str(key_file), "ENCRYPTION_KEYS": _FERNET_KEY},
             expr=self._EXPR,
         )
 
@@ -138,7 +138,7 @@ class TestLocalKeyFile:
         )
 
         assert result.returncode != 0
-        assert "ENCRYPTION_KEY" in result.stderr
+        assert "ENCRYPTION_KEYS" in result.stderr
 
     def test_variable_unset_changes_nothing(self):
         """Der Rückfall ist strikt opt-in — test.py und e2e.py erben von hier."""

@@ -21,7 +21,6 @@ def rotation_files(facility, client_identified, settings, tmp_path):
     field = FieldTemplate.objects.create(facility=facility, name="File", field_type=FieldTemplate.FieldType.FILE)
     primary = Fernet.generate_key().decode()
     old = Fernet.generate_key().decode()
-    settings.ENCRYPTION_KEY = ""
     settings.ENCRYPTION_KEYS = f"{primary},{old}"
 
     def create(data=b"private payload", *, key=old, legacy=False, owner=client_identified):
@@ -363,8 +362,8 @@ def test_missing_key_is_a_command_error_before_file_changes(rotation_files, main
     path = get_attachment_path(attachment)
     before = path.read_bytes()
     files = set(settings.MEDIA_ROOT.rglob("*"))
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=""):
-        with pytest.raises(CommandError, match="encryption key|ENCRYPTION_KEY"):
+    with override_settings(ENCRYPTION_KEYS=""):
+        with pytest.raises(CommandError, match="encryption key|ENCRYPTION_KEYS"):
             run_command(*(["--verify"] if verify else []))
     assert path.read_bytes() == before
     assert set(settings.MEDIA_ROOT.rglob("*")) == files

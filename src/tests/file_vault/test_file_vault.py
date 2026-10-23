@@ -486,8 +486,7 @@ class TestAttachmentListSensitivityFiltering:
         slice so that invisible HIGH records do not push visible NORMAL records
         out of the result window.
         """
-        settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-        settings.ENCRYPTION_KEYS = ""
+        settings.ENCRYPTION_KEYS = Fernet.generate_key().decode("utf-8")
 
         ft_file = FieldTemplate.objects.create(
             facility=facility,
@@ -552,8 +551,7 @@ class TestAttachmentListSensitivityFiltering:
         """Attachments whose field_template has HIGH sensitivity are hidden
         from STAFF even when the doc_type is NORMAL.
         """
-        settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-        settings.ENCRYPTION_KEYS = ""
+        settings.ENCRYPTION_KEYS = Fernet.generate_key().decode("utf-8")
 
         ft_normal = FieldTemplate.objects.create(
             facility=facility,

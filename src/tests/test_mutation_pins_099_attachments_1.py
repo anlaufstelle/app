@@ -40,7 +40,7 @@ Gruppierung der gepinnten Tests (Funktion -> Mutanten):
 
 ``_encryption_key`` liegt modulweit an: der Mutantenbaum
 (``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEY``; ohne die Fixture waeren die Pins dort aus dem FALSCHEN
+``ENCRYPTION_KEYS``; ohne die Fixture waeren die Pins dort aus dem FALSCHEN
 Grund rot (Original-Dateiname/-Attribute werden verschluesselt gespeichert).
 
 Fuenf ``continue``->``break``- und drei ``missing_ok``-Mutanten je Gruppe

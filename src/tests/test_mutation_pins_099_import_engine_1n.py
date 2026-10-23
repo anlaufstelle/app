@@ -27,7 +27,7 @@ Bearbeiter-Zuordnung).
 Konventionen wie ``test_mutation_pins_099_import_engine_1.py``: Zusicherungen
 vergleichen EXAKT (``==``); ``pytestmark`` setzt ``django_db`` +
 ``_encryption_key`` modulweit (der Mutantenbaum hat keine ``.env`` und damit
-keinen ``ENCRYPTION_KEY``); Fixtures aus ``src/tests/conftest.py``.
+keinen ``ENCRYPTION_KEYS``); Fixtures aus ``src/tests/conftest.py``.
 """
 
 import pytest

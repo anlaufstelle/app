@@ -79,7 +79,7 @@ AUSSCHLIESSLICH als empirischer Aequivalenz-Nachweis (bleiben unter den betroffe
   ``equivalent`` (``Activity``s erstes konkretes Feld ist ebenfalls ``id``).
 
 ``_encryption_key`` liegt modulweit an: der Mutantenbaum (``/work/anlaufstelle/mutants``) hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``; ohne die Fixture wären die Pins dort aus dem
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``; ohne die Fixture wären die Pins dort aus dem
 FALSCHEN Grund rot.
 """
 

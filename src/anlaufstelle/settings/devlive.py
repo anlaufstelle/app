@@ -2,7 +2,7 @@
 Live-Dev settings for dev.anlaufstelle.app (Refs #671).
 
 Erbt von ``prod.py`` und uebernimmt alle Security-Defaults
-(HSTS, Secure-Cookies, ENCRYPTION_KEY-Pflicht, SUDO_MODE_ENABLED-Guard,
+(HSTS, Secure-Cookies, ENCRYPTION_KEYS-Pflicht, SUDO_MODE_ENABLED-Guard,
 ALLOWED_HOSTS-Pflicht, fail-closed checks).
 
 Einziger Unterschied zu prod: ohne ``EMAIL_HOST`` faellt der

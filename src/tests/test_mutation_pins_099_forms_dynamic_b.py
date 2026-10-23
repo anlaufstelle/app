@@ -109,7 +109,7 @@ Aequivalente Mutanten (nachweislich verhaltensgleich, bewusst NICHT gepinnt):
   ``xlsx``/``XLSX``/``.xlsx``/``"  .PDF "`` verifiziert — bytgleiches Ergebnis).
 
 ``_encryption_key`` liegt modulweit an: der Mutantenbaum (``/work/anlaufstelle/mutants``)
-hat keine ``.env`` und damit keinen ``ENCRYPTION_KEY``; ohne die Fixture waeren
+hat keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``; ohne die Fixture waeren
 die Pins dort aus dem FALSCHEN Grund rot und der Kill-Nachweis wertlos.
 """
 

@@ -696,7 +696,7 @@ class TestComputeDiffMaskingMatrix:
         entry = EventHistory.objects.get(event=event, action=EventHistory.Action.CREATE)
 
         with (
-            override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=""),
+            override_settings(ENCRYPTION_KEYS=""),
             pytest.raises(EncryptionKeyMissing),
         ):
             compute_diff(entry, user=staff_user)

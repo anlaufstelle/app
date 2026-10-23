@@ -61,7 +61,7 @@ WHITENOISE_USE_FINDERS = True
 
 # --- Feldverschlüsselung in Dev (Refs #1276) ---
 # Encryption ist in Dev optional, damit lokal ohne Key-Setup gearbeitet werden
-# kann. ABER: ohne ENCRYPTION_KEY werden sensible Felder (inkl. besonderer
+# kann. ABER: ohne Schlüsselring (ENCRYPTION_KEYS) werden sensible Felder (inkl. besonderer
 # Kategorien nach Art. 9 DSGVO) im KLARTEXT persistiert. Eine Staging-Box, die
 # versehentlich auf dev-Settings läuft, täte das bisher still (nur eine
 # einzeilige Log-Warnung). Daher:
@@ -83,33 +83,39 @@ REQUIRE_ENCRYPTION = os.environ.get("REQUIRE_ENCRYPTION", "").lower() in ("true"
 # Das lokale Compose reicht deshalb einen PFAD durch statt eines Wertes; jeder
 # Prozess im Container liest denselben Schlüssel aus derselben Datei. Strikt
 # opt-in: ohne ``LOCAL_ENCRYPTION_KEY_FILE`` ändert sich nichts — auch nicht in
-# ``test.py``/``e2e.py``, die von hier erben. Ein gesetztes ``ENCRYPTION_KEY``
-# gewinnt weiterhin.
+# ``test.py``/``e2e.py``, die von hier erben. Der Dateiinhalt wird zum einzigen
+# Eintrag des Schlüsselrings; ein gesetzter ``ENCRYPTION_KEYS`` gewinnt weiterhin.
 _LOCAL_ENCRYPTION_KEY_FILE = os.environ.get("LOCAL_ENCRYPTION_KEY_FILE", "")
-if not ENCRYPTION_KEY and _LOCAL_ENCRYPTION_KEY_FILE:  # noqa: F405
+
+
+def _ring_has_keys(value):
+    return any(entry.strip() for entry in (value or "").split(","))
+
+
+if not _ring_has_keys(ENCRYPTION_KEYS) and _LOCAL_ENCRYPTION_KEY_FILE:  # noqa: F405
     # Fehlt die Datei oder ist sie unlesbar, geht es unverändert in den
     # Klartext-/``REQUIRE_ENCRYPTION``-Pfad unten — laut statt still.
     with contextlib.suppress(OSError):
-        ENCRYPTION_KEY = Path(_LOCAL_ENCRYPTION_KEY_FILE).read_text(encoding="utf-8").strip()
+        ENCRYPTION_KEYS = Path(_LOCAL_ENCRYPTION_KEY_FILE).read_text(encoding="utf-8").strip()
 
-if not ENCRYPTION_KEY:  # noqa: F405
+if not _ring_has_keys(ENCRYPTION_KEYS):  # noqa: F405
     if REQUIRE_ENCRYPTION:
         from django.core.exceptions import ImproperlyConfigured
 
         raise ImproperlyConfigured(
-            "REQUIRE_ENCRYPTION ist gesetzt, aber ENCRYPTION_KEY fehlt — dev-Settings "
-            "verweigern den Start, statt Felder im Klartext zu speichern. Setze einen "
-            "ENCRYPTION_KEY (Fernet-Key) oder entferne REQUIRE_ENCRYPTION für rein "
-            "lokale Entwicklung mit Wegwerf-Daten."
+            "REQUIRE_ENCRYPTION is set but ENCRYPTION_KEYS is empty — dev settings "
+            "refuse to start instead of storing fields in plaintext. Set ENCRYPTION_KEYS "
+            "(comma-separated Fernet key ring) or remove REQUIRE_ENCRYPTION for purely "
+            "local development with throwaway data."
         )
 
     import logging
 
     _plaintext_msg = (
-        "KLARTEXT-MODUS: ENCRYPTION_KEY ist NICHT gesetzt — sensible Felder (inkl. "
+        "KLARTEXT-MODUS: ENCRYPTION_KEYS ist NICHT gesetzt — sensible Felder (inkl. "
         "besonderer Kategorien nach Art. 9 DSGVO) werden UNVERSCHLÜSSELT gespeichert. "
         "Nur für lokale Entwicklung mit Wegwerf-Daten zulässig. Für jede nicht-lokale "
-        "Umgebung ENCRYPTION_KEY setzen oder mit REQUIRE_ENCRYPTION=1 hart absichern."
+        "Umgebung ENCRYPTION_KEYS setzen oder mit REQUIRE_ENCRYPTION=1 hart absichern."
     )
     _border = "!" * 80
     logging.getLogger("core").warning("\n%s\n  %s\n%s", _border, _plaintext_msg, _border)

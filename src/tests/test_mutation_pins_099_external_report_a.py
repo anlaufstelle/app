@@ -29,7 +29,7 @@ nicht Teil dieses Commits) und die Erwartungswerte von Hand gegen den
 Original-Quelltext nachvollzogen.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``. Alle drei getesteten
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``. Alle drei getesteten
 Funktionen sind reine Python-Funktionen ohne DB-Zugriff — ``django_db`` ist
 hier ausschliesslich wegen der einheitlichen Fixture-Vorgabe fuer Pin-Dateien gesetzt, nicht weil ein Test ihn
 braucht.

@@ -28,7 +28,7 @@ def _function_body(path: Path, name: str) -> str:
     return ast.dump(ast.Module(body=body, type_ignores=[]), include_attributes=False)
 
 
-def _prod_import(*, single_key: str, key_ring: str = " , ") -> subprocess.CompletedProcess[str]:
+def _prod_import(*, key_ring: str = " , ") -> subprocess.CompletedProcess[str]:
     env = {
         "PATH": os.environ.get("PATH", ""),
         "PYTHONPATH": str(SRC_DIR),
@@ -41,8 +41,9 @@ def _prod_import(*, single_key: str, key_ring: str = " , ") -> subprocess.Comple
         "POSTGRES_PORT": "5432",
         "DJANGO_SECRET_KEY": "x" * 50,
         "ALLOWED_HOSTS": "example.org",
-        "ENCRYPTION_KEY": single_key,
+        "ENCRYPTION_KEY": "",
         "ENCRYPTION_KEYS": key_ring,
+        "DJANGO_LOAD_DOTENV": "false",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
         "POSTGRES_ADMIN_USER": "",
         "POSTGRES_ADMIN_PASSWORD": "",
@@ -80,77 +81,35 @@ def test_prod_startgate_ring_splitter_matches_shared_helper():
     assert prod_body == shared_body
 
 
-@pytest.mark.parametrize(
-    ("single_key", "expected"),
-    [(KEY, [KEY]), ("", [])],
-    ids=["single-key-fallback", "no-key"],
-)
-def test_runtime_treats_separator_only_ring_as_unset(single_key, expected):
+def test_runtime_treats_separator_only_ring_as_unset():
     from core.services.file_vault.encryption import _get_keys
 
-    with override_settings(ENCRYPTION_KEYS=" , ", ENCRYPTION_KEY=single_key):
-        assert _get_keys() == expected
+    with override_settings(ENCRYPTION_KEYS=" , "):
+        assert _get_keys() == []
 
 
-@pytest.mark.parametrize(
-    ("single_key", "expected_ids"),
-    [(KEY, {"core.W005"}), ("", set())],
-    ids=["single-key-warning", "no-key-no-deprecation-warning"],
-)
-def test_system_check_treats_separator_only_ring_as_unset(single_key, expected_ids):
-    from core.checks import check_encryption_single_key_deprecated
+def test_runtime_ignores_a_leftover_single_key_setting():
+    from core.services.file_vault.encryption import _get_keys
 
-    with override_settings(DEBUG=False, ENCRYPTION_KEYS=" , ", ENCRYPTION_KEY=single_key):
-        messages = check_encryption_single_key_deprecated(None)
-
-    assert {message.id for message in messages} == expected_ids
+    with override_settings(ENCRYPTION_KEYS=" , ", ENCRYPTION_KEY=KEY):
+        assert _get_keys() == []
 
 
-def test_system_check_uses_shared_ring_splitter():
-    from core import checks
-    from core.services.file_vault.keyring import split_key_ring
-
-    assert checks.split_key_ring is split_key_ring
-
-
-def test_prod_startgate_rejects_separator_only_ring_without_single_key():
-    result = _prod_import(single_key="")
+def test_prod_startgate_rejects_separator_only_ring():
+    result = _prod_import()
 
     assert result.returncode != 0
     assert "Schlüsselring enthält keinen Schlüssel" in result.stderr
 
 
 def test_prod_startgate_keeps_missing_key_message_when_nothing_is_set():
-    result = _prod_import(single_key="", key_ring="")
+    result = _prod_import(key_ring="")
 
     assert result.returncode != 0
-    assert "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein." in result.stderr
+    assert "ENCRYPTION_KEYS muss in Produktion gesetzt sein." in result.stderr
 
 
-def test_prod_startgate_accepts_separator_only_ring_with_single_key():
-    result = _prod_import(single_key=KEY)
+def test_prod_startgate_accepts_a_ring_with_separators_around_the_key():
+    result = _prod_import(key_ring=f" , {KEY} ,")
 
     assert result.returncode == 0, result.stderr
-
-
-def test_prod_startgate_rejects_whitespace_only_single_key():
-    result = _prod_import(single_key="   ", key_ring="")
-
-    assert result.returncode != 0
-    assert "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein." in result.stderr
-
-
-def test_runtime_treats_whitespace_only_single_key_as_unset():
-    from core.services.file_vault.encryption import _get_keys
-
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY="   "):
-        assert _get_keys() == []
-
-
-def test_system_check_treats_whitespace_only_single_key_as_unset():
-    from core.checks import check_encryption_single_key_deprecated
-
-    with override_settings(DEBUG=False, ENCRYPTION_KEYS="", ENCRYPTION_KEY="   "):
-        messages = check_encryption_single_key_deprecated(None)
-
-    assert messages == []

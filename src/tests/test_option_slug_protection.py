@@ -274,7 +274,7 @@ def test_saved_references_block_removal_including_trash_and_encrypted_lists(
     option_template, client_identified, doc_type_contact, staff_user, source, encrypted
 ):
     template = option_template
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=generate_key()):
+    with override_settings(ENCRYPTION_KEYS=generate_key()):
         value = encrypt_field(["used"]) if encrypted else ["used"]
         if source == "client":
             Client.objects.filter(pk=client_identified.pk).update(data_json={template.slug: value}, is_deleted=True)

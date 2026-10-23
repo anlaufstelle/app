@@ -57,7 +57,7 @@ def selection_entity(request, facility, client_identified, staff_user):
         ],
     )
     DocumentTypeField.objects.create(document_type=document_type, field_template=template)
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=generate_key()):
+    with override_settings(ENCRYPTION_KEYS=generate_key()):
         kwargs = dict(
             facility=facility, created_by=staff_user, document_type=document_type, data_json={"selection": ["a", "b"]}
         )

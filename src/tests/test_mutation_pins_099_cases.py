@@ -34,7 +34,7 @@ Quelle: ``welle-l-0.99/reports/m-scratch/batch-forms-3.json`` (Triage
   Client-UUID) bekommt einen XX-Marker.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

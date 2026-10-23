@@ -9,7 +9,7 @@ Getoetete Mutante (voller ``x...__mutmut_N``-Name, Modul
 
 * **``x__fingerprint_pepper__mutmut_3``**: das ``EncryptionKeyMissing``
   bekommt statt des Diagnosetexts ``None`` als einziges Argument
-  (Meldungsverlust). Ohne konfigurierten ``ENCRYPTION_KEY``/
+  (Meldungsverlust). Ohne konfigurierten ``ENCRYPTION_KEYS``/
   ``ENCRYPTION_KEYS`` bricht ``_fingerprint_pepper()`` bewusst ab, statt auf
   einen ungepfefferten Digest zurueckzufallen (Refs #1942) — die Meldung
   benennt genau diesen Grund. Pin: exakte Assertion auf
@@ -17,7 +17,7 @@ Getoetete Mutante (voller ``x...__mutmut_N``-Name, Modul
 
 ``_encryption_key`` liegt modulweit an (Lehre 112, wie in den bestehenden
 099-Pin-Dateien) — fuer diesen einen Pin wird der so gesetzte Schluessel im
-Testkoerper GEZIELT wieder geleert (``settings.ENCRYPTION_KEY`` /
+Testkoerper GEZIELT wieder geleert (``settings.ENCRYPTION_KEYS`` /
 ``settings.ENCRYPTION_KEYS`` auf leer), damit ``_get_keys()``
 (``core/services/file_vault/encryption.py``) eine leere Liste liefert und der
 Fehlerpfad ueberhaupt erreichbar wird.
@@ -34,19 +34,17 @@ pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
 
 def test_fingerprint_pepper_ohne_schluessel_wirft_die_volle_diagnosemeldung(settings):
-    """``xǁ_fingerprint_pepperǁmutmut_3``: fehlt ``ENCRYPTION_KEY``/
+    """``xǁ_fingerprint_pepperǁmutmut_3``: fehlt ``ENCRYPTION_KEYS``/
     ``ENCRYPTION_KEYS``, muss ``EncryptionKeyMissing`` mit dem vollen
     Diagnosetext ausgeloest werden — nicht mit ``None`` als einzigem
     Argument. Der Schluessel wird hier gezielt geleert (die modulweite
     ``_encryption_key``-Fixture setzt ihn zuvor), damit ``_get_keys()``
     tatsaechlich ``[]`` liefert."""
-    settings.ENCRYPTION_KEY = ""
     settings.ENCRYPTION_KEYS = ""
 
     with pytest.raises(EncryptionKeyMissing) as exc_info:
         _fingerprint_pepper()
 
     assert exc_info.value.args[0] == (
-        "ENCRYPTION_KEY / ENCRYPTION_KEYS ist nicht gesetzt — der Idempotenz-Fingerprint "
-        "braucht ihn als Pepper (Refs #1942)."
+        "ENCRYPTION_KEYS is not set — the idempotency fingerprint needs it as pepper (Refs #1942)."
     )

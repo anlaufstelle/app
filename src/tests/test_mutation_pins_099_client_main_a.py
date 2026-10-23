@@ -76,7 +76,7 @@ Gruppierung der gepinnten Tests:
   (``TestLockedWorkitemsSkipLogging``).
 
 ``_encryption_key`` liegt modulweit an: der Mutantenbaum (``mutants/`` im Checkout)
-hat keine ``.env`` und damit keinen ``ENCRYPTION_KEY``; ohne die Fixture waeren
+hat keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``; ohne die Fixture waeren
 die Pins dort aus dem FALSCHEN Grund rot.
 """
 

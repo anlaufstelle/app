@@ -27,7 +27,7 @@ SRC_DIR = REPO_ROOT / "src"
 _PROD_ENV = {
     "DJANGO_SECRET_KEY": "x" * 50,
     "ALLOWED_HOSTS": "example.org",
-    "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+    "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
     "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     "POSTGRES_DB": "x",
     "POSTGRES_USER": "u",

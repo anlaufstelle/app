@@ -322,9 +322,9 @@ else:
 RATELIMIT_USE_CACHE = "default"
 
 
-# --- Encryption Key (mandatory in production) ---
-# Akzeptiert ENCRYPTION_KEYS (Plural, MultiFernet-Rotation) oder ENCRYPTION_KEY (Singular, Legacy).
-# Mindestens eins muss gesetzt sein.
+# --- Encryption key ring (mandatory in production) ---
+# ENCRYPTION_KEYS (comma-separated, MultiFernet) is the only key source; the
+# single-key variable ENCRYPTION_KEY is rejected in base.py.
 def _split_encryption_key_ring(value):
     """Pure settings-time twin of ``file_vault.keyring.split_key_ring``.
 
@@ -335,14 +335,11 @@ def _split_encryption_key_ring(value):
 
 
 _encryption_key_ring = _split_encryption_key_ring(ENCRYPTION_KEYS)  # noqa: F405
-_encryption_single_key = str(ENCRYPTION_KEY or "").strip()  # noqa: F405
-if not _IS_COLLECTSTATIC and not (_encryption_single_key or _encryption_key_ring):
+if not _IS_COLLECTSTATIC and not _encryption_key_ring:
     if ENCRYPTION_KEYS:  # noqa: F405
-        _encryption_key_error = (
-            "Schlüsselring enthält keinen Schlüssel (ENCRYPTION_KEYS) und ENCRYPTION_KEY ist nicht gesetzt. "
-        )
+        _encryption_key_error = "Schlüsselring enthält keinen Schlüssel (ENCRYPTION_KEYS). "
     else:
-        _encryption_key_error = "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein. "
+        _encryption_key_error = "ENCRYPTION_KEYS muss in Produktion gesetzt sein. "
     raise ImproperlyConfigured(
         _encryption_key_error
         + 'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'

@@ -17,7 +17,7 @@ Zeilenreihenfolge bei einem Sort-Order-Gleichstand — die haelt ohne
 entscheidendes ORDER-BY-Kriterium nicht zuverlaessig.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 
 Gepinnte Mutanten dieser Datei (Details je Test in dessen Docstring):
 

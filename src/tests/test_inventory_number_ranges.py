@@ -139,7 +139,7 @@ def test_inventory_skips_encrypted_empty_optional_number_value(facility, staff_u
     monkeypatch.setattr(command_module, "_has_rls_bypass_context", lambda: True)
     document_type, field_template = _configured_number_type(facility, is_required=False, is_encrypted=True)
 
-    with override_settings(ENCRYPTION_KEY=fernet_key):
+    with override_settings(ENCRYPTION_KEYS=fernet_key):
         Event.objects.create(
             facility=facility,
             document_type=document_type,
@@ -173,7 +173,7 @@ def test_inventory_reports_undecryptable_optional_number_value_as_no_number(
     # bloß ein leerer/fehlender Marker).
     foreign_token = Fernet(Fernet.generate_key()).encrypt(b"42").decode()
 
-    with override_settings(ENCRYPTION_KEY=fernet_key):
+    with override_settings(ENCRYPTION_KEYS=fernet_key):
         Event.objects.create(
             facility=facility,
             document_type=document_type,
@@ -209,7 +209,7 @@ def test_inventory_accepts_encrypted_numeric_string_and_avoids_per_entity_field_
     field_template.is_encrypted = True
     field_template.save(update_fields=["is_encrypted"])
 
-    with override_settings(ENCRYPTION_KEY=fernet_key):
+    with override_settings(ENCRYPTION_KEYS=fernet_key):
         Event.objects.create(
             facility=facility,
             document_type=document_type,
@@ -250,7 +250,7 @@ def test_inventory_reports_encrypted_arbitrarily_large_integer_as_range_violatio
     field_template.max_value = 10
     field_template.save(update_fields=["is_encrypted", "max_value"])
 
-    with override_settings(ENCRYPTION_KEY=fernet_key):
+    with override_settings(ENCRYPTION_KEYS=fernet_key):
         Event.objects.create(
             facility=facility,
             document_type=document_type,

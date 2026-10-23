@@ -428,8 +428,7 @@ class TestPayloadFingerprintPepper:
         return RequestFactory().post("/x", data or {"dauer": "20"})
 
     def _fresh_key(self, settings):
-        settings.ENCRYPTION_KEYS = ""
-        settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
+        settings.ENCRYPTION_KEYS = Fernet.generate_key().decode("utf-8")
 
     def test_fingerprint_depends_on_the_server_key(self, settings):
         """Ohne serverseitiges Geheimnis ist derselbe Payload ueberall derselbe
@@ -528,14 +527,12 @@ class TestPayloadFingerprintPepper:
         )
 
         alt = Fernet.generate_key().decode("utf-8")
-        settings.ENCRYPTION_KEYS = ""
-        settings.ENCRYPTION_KEY = alt
+        settings.ENCRYPTION_KEYS = alt
         alt_fingerprint = payload_fingerprint(self._req({"dauer": "20"}))
 
         # Rotation: neuer Schluessel zuerst, alter bleibt konfiguriert.
         neu = Fernet.generate_key().decode("utf-8")
         settings.ENCRYPTION_KEYS = f"{neu},{alt}"
-        settings.ENCRYPTION_KEY = ""
 
         # Neue Fingerprints entstehen unter dem neuen Pepper …
         assert payload_fingerprint(self._req({"dauer": "20"})) != alt_fingerprint

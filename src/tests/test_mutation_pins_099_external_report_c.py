@@ -15,7 +15,7 @@ Sekundaer-Suppression, ``_finalize_report`` verdrahtet den K1-Fixpunkt-Guard
 am Berichtsabschluss. Alle Tests rufen die privaten Funktionen direkt auf
 (reiner Rechenkern, keine DB-Zugriffe noetig) — ``django_db`` liegt trotzdem
 modulweit an (Lehre 112: der Mutantenbaum hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEY``, ``_encryption_key`` muss vor jedem Import-Pfad greifen).
+``ENCRYPTION_KEYS``, ``_encryption_key`` muss vor jedem Import-Pfad greifen).
 """
 
 from __future__ import annotations

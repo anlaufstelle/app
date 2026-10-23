@@ -14,7 +14,7 @@ Quelle: ``welle-l-0.99/reports/m-scratch/batch-forms-3.json`` (Triage
   Djangos Default-Label und -Widget zurueck.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``. Diese Datei braucht
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``. Diese Datei braucht
 keine Datenbank (reine Feld-Konstruktion) — der Marker steht trotzdem
 aus Konsistenzgruenden mit den Schwesterdateien.
 """

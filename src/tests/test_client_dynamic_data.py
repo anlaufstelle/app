@@ -55,7 +55,7 @@ def raw_data_json(client) -> dict:
 def fernet_key():
     """Frischer Fernet-Key fuer die Verschluesselungs-Proben.
 
-    Die Test-Settings erben ``ENCRYPTION_KEY`` aus der Umgebung — die
+    Die Test-Settings erben ``ENCRYPTION_KEYS`` aus der Umgebung — die
     Krypto-Tests setzen ihn deshalb explizit (Muster P4a,
     ``test_encrypt_dynamic_data.py``).
     """
@@ -67,7 +67,7 @@ class TestClientDataJsonEncryption:
     """``Client.save()`` verschluesselt die als encrypted markierten Slugs."""
 
     def test_encrypted_slug_is_ciphertext_in_db(self, facility, doc_type_client_profile, staff_user, fernet_key):
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             client = Client.objects.create(
                 facility=facility,
                 pseudonym="P4b-Krypto-01",
@@ -82,7 +82,7 @@ class TestClientDataJsonEncryption:
             assert safe_decrypt(row["diagnose"]) == "Sehr sensibel"
 
     def test_plain_slug_stays_plaintext(self, facility, doc_type_client_profile, staff_user, fernet_key):
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             client = Client.objects.create(
                 facility=facility,
                 pseudonym="P4b-Krypto-02",
@@ -94,7 +94,7 @@ class TestClientDataJsonEncryption:
             assert raw_data_json(client)["wohnsituation"] == "WG"
 
     def test_resave_does_not_double_encrypt(self, facility, doc_type_client_profile, staff_user, fernet_key):
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             client = Client.objects.create(
                 facility=facility,
                 pseudonym="P4b-Krypto-03",
@@ -131,7 +131,7 @@ class TestClientDataJsonEncryption:
         )
         DocumentTypeField.objects.create(document_type=other_type, field_template=ft_b, sort_order=0)
 
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             client = Client.objects.create(
                 facility=facility,
                 pseudonym="P4b-Krypto-TypSwitch",
@@ -155,7 +155,7 @@ class TestClientDataJsonEncryption:
 
     def test_create_client_service_encrypts_too(self, facility, doc_type_client_profile, staff_user, fernet_key):
         """Der Service-Pfad haengt am selben ``save()`` — kein zweiter Krypto-Ort."""
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             client = create_client(
                 facility,
                 staff_user,
@@ -350,7 +350,7 @@ class TestClientDataJsonWhitelist:
         )
         DocumentTypeField.objects.create(document_type=other_type, field_template=ft, sort_order=0)
 
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             client = create_client(
                 facility,
                 staff_user,
@@ -371,7 +371,7 @@ class TestClientDynamicDataAnonymization:
     def test_anonymize_wipes_data_json_and_document_type(
         self, facility, doc_type_client_profile, staff_user, fernet_key
     ):
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             client = create_client(
                 facility,
                 staff_user,
@@ -392,7 +392,7 @@ class TestClientDynamicDataAnonymization:
     ):
         """``k_anonymize_client`` redigiert die Client-Zeile eigenstaendig — die
         Dynamikdaten muessen dort genauso fallen wie im Hard-Pfad."""
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             client = create_client(
                 facility,
                 staff_user,

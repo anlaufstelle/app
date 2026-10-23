@@ -29,7 +29,7 @@ den Kandidatenraum durchprobiert, vergleicht Digests und liest den Klartext ab.
 Der Idempotenz-Zweck bleibt vollständig erhalten: verglichen wird ohnehin nur
 innerhalb derselben (scope, user, key)-Kette.
 
-Der Pepper wird aus dem vorhandenen ``ENCRYPTION_KEY``/``ENCRYPTION_KEYS``
+Der Pepper wird aus dem vorhandenen Schlüsselring ``ENCRYPTION_KEYS``
 abgeleitet (Domain-Separation, :func:`_fingerprint_pepper`) — **kein neues
 Pflicht-ENV**: diese Anwendung betreiben Einrichtungen selbst, jede weitere
 Pflichtvariable ist ein zusätzlicher Weg, eine Installation fail-closed
@@ -121,7 +121,7 @@ IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 # beide waeren sonst 64 Zeichen und ununterscheidbar.
 FINGERPRINT_SCHEME = "h1"
 
-# Domain-Separation der Pepper-Ableitung: derselbe ENCRYPTION_KEY dient auch
+# Domain-Separation der Pepper-Ableitung: derselbe erste ENCRYPTION_KEYS-Eintrag dient auch
 # der Feld-/Datei-Verschluesselung; der Pepper darf mit keinem anderen
 # Gebrauch zusammenfallen.
 _PEPPER_DOMAIN = b"anlaufstelle:idempotency-fingerprint:v1:"
@@ -308,7 +308,7 @@ def _fingerprint_for_pepper(pepper: bytes, canonical: str) -> str:
 def _fingerprint_pepper() -> bytes:
     """Serverseitiger Pepper des Payload-Fingerprints (Refs #1942).
 
-    Abgeleitet aus dem vorhandenen ``ENCRYPTION_KEY``/``ENCRYPTION_KEYS`` —
+    Abgeleitet aus dem vorhandenen Schluesselring ``ENCRYPTION_KEYS`` —
     **kein** neues Pflicht-ENV, denn diese Anwendung betreiben Einrichtungen
     selbst, und jede zusaetzliche Pflichtvariable ist ein weiterer Weg, eine
     Installation fail-closed lahmzulegen. Die Domain-Separation
@@ -322,7 +322,7 @@ def _fingerprint_pepper() -> bytes:
 
     Fehlt der Schluessel, bricht die Funktion ab statt auf einen ungepfefferten
     Digest zurueckzufallen — das waere genau die Luecke, die #1942 schliesst.
-    Eine Installation ohne ``ENCRYPTION_KEY`` kann ohnehin kein
+    Eine Installation ohne ``ENCRYPTION_KEYS`` kann ohnehin kein
     verschluesseltes Feld schreiben (:func:`get_fernet`).
 
     Bewusst NICHT gecacht: die Ableitung ist ein einzelner SHA-256 ueber
@@ -333,8 +333,7 @@ def _fingerprint_pepper() -> bytes:
     keys = _get_keys()
     if not keys:
         raise EncryptionKeyMissing(
-            "ENCRYPTION_KEY / ENCRYPTION_KEYS ist nicht gesetzt — der Idempotenz-Fingerprint "
-            "braucht ihn als Pepper (Refs #1942)."
+            "ENCRYPTION_KEYS is not set — the idempotency fingerprint needs it as pepper (Refs #1942)."
         )
     return _pepper_from_key(keys[0])
 

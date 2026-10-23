@@ -105,7 +105,7 @@ Mutante mit der FERTIGEN Pin-Datei bestätigt (Bericht Abschnitt 3,
 ``killmap.tsv``: ``GRUEN-BESTAETIGT-AEQUIVALENT`` statt nur behauptet).
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

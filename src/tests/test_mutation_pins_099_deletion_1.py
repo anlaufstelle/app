@@ -64,7 +64,7 @@ Fixtures kommen aus ``src/tests/conftest.py``; ``event_qualified``/
 ``own_request`` sind eine eigene, modul-lokale Kopie (bewusst nicht aus
 ``test_deletion_request_withdraw.py`` importiert, um Pin-Dateien voneinander
 unabhaengig zu halten). ``_encryption_key`` liegt modulweit an (Lehre 112) — der
-Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

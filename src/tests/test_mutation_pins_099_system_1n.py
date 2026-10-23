@@ -32,7 +32,7 @@ Familienreview hat das widerlegt und bindend vorgegeben: alle vier sind
   den vollstaendigen Diagnosetext.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

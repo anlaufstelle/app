@@ -146,7 +146,7 @@ class TestNumberRangeAcrossEntryPaths:
 
         from django.test import override_settings
 
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             encrypted_old_value = encrypt_field(3)
             assert merge_dynamic_data(
                 document_type,

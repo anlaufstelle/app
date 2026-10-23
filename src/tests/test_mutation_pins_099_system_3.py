@@ -12,7 +12,7 @@ bereits-falsy Bool-Kontexten und ein strukturell unerreichbarer
 ``source=``-Parameter in ``validate_audit_detail``).
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

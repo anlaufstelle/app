@@ -31,7 +31,7 @@ vergleichen EXAKT (``==``/``is``), nie per Teilstring, wo mutmut
 ``src/tests/conftest.py``. Jeder Test nennt in der Docstring die
 Mutante(n) samt der abweichenden Semantik. ``_encryption_key`` liegt
 modulweit an (Lehre 112): der Mutantenbaum hat keine ``.env`` und damit
-keinen ``ENCRYPTION_KEY``.
+keinen ``ENCRYPTION_KEYS``.
 
 **Why the PDF context tests monkeypatch ``render_to_string`` instead of
 inspecting the rendered HTML.** All mutants of this file for

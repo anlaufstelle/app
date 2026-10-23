@@ -48,7 +48,8 @@ verifiziert):**
 
 - ``_get_keys.__mutmut_4``/``_7``/``_10``/``_16``/``_19``/``_22``: alle sechs
   verändern nur den ``default``-Parameter von
-  ``getattr(settings, "ENCRYPTION_KEYS"/"ENCRYPTION_KEY", …)``. Beide Settings
+  ``getattr(settings, "ENCRYPTION_KEYS"/"ENCRYPTION_KEY", …)`` (Stand vor dem
+  Entfernen des Einzelschlüssels). Beide Settings
   werden in ``anlaufstelle/settings/base.py`` UNBEDINGT gesetzt
   (``os.environ.get(…, "")``, Zeilen 505/506) und jede vererbte Settings-Datei
   (``dev``/``test``/``prod``/``devlive``/``e2e``) importiert ``base`` — der

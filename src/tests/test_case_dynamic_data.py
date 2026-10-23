@@ -57,7 +57,7 @@ def raw_data_json(case) -> dict:
 def fernet_key():
     """Frischer Fernet-Key fuer die Verschluesselungs-Proben.
 
-    Die Test-Settings erben ``ENCRYPTION_KEY`` aus der Umgebung — die
+    Die Test-Settings erben ``ENCRYPTION_KEYS`` aus der Umgebung — die
     Krypto-Tests setzen ihn deshalb explizit (Muster P4a/P4b).
     """
     return Fernet.generate_key().decode()
@@ -70,7 +70,7 @@ class TestCaseDataJsonEncryption:
     def test_encrypted_slug_is_ciphertext_in_db(
         self, facility, client_identified, doc_type_case_form, staff_user, fernet_key
     ):
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             case = Case.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -86,7 +86,7 @@ class TestCaseDataJsonEncryption:
             assert safe_decrypt(row["verlauf"]) == "Sehr sensibel"
 
     def test_plain_slug_stays_plaintext(self, facility, client_identified, doc_type_case_form, staff_user, fernet_key):
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             case = Case.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -101,7 +101,7 @@ class TestCaseDataJsonEncryption:
     def test_resave_does_not_double_encrypt(
         self, facility, client_identified, doc_type_case_form, staff_user, fernet_key
     ):
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             case = Case.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -119,7 +119,7 @@ class TestCaseDataJsonEncryption:
         self, facility, client_identified, doc_type_case_form, staff_user, fernet_key
     ):
         """Der Service-Pfad haengt am selben ``save()`` — kein zweiter Krypto-Ort."""
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             case = create_case(
                 facility,
                 staff_user,
@@ -254,7 +254,7 @@ class TestCaseDataJsonWhitelist:
         )
         DocumentTypeField.objects.create(document_type=other_type, field_template=ft, sort_order=0)
 
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             case = create_case(
                 facility,
                 staff_user,
@@ -276,7 +276,7 @@ class TestCaseDynamicDataAnonymization:
     def test_anonymize_wipes_data_json_and_document_type(
         self, facility, client_identified, doc_type_case_form, staff_user, fernet_key
     ):
-        with override_settings(ENCRYPTION_KEY=fernet_key):
+        with override_settings(ENCRYPTION_KEYS=fernet_key):
             case = create_case(
                 facility,
                 staff_user,

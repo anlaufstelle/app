@@ -52,7 +52,7 @@ Gleichstand nicht garantiert ist), nie per Teilstring (mutmut erzeugt
 Fixtures kommen aus ``src/tests/conftest.py``; Dokumenttypen/Aufgaben mit
 eigenen, unverwechselbaren Werten werden je Test frisch angelegt.
 ``_encryption_key`` liegt modulweit an (Lehre 112) — der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

@@ -533,12 +533,21 @@ MEDIA_URL = "/media/"
 BACKUP_DIR = Path(os.environ.get("BACKUP_DIR", BASE_DIR.parent / "backups"))
 
 # --- Encryption ---
-# MultiFernet key rotation: ENCRYPTION_KEYS is a comma-separated list of Fernet keys.
-# The first key is used for encrypting, all keys are tried for decrypting.
-# Fallback: if only ENCRYPTION_KEY (singular) is set, it is used as the single key.
+# MultiFernet key ring: ENCRYPTION_KEYS is a comma-separated list of Fernet keys.
+# The first key is used for encrypting, all keys are tried for decrypting. It is
+# the only source for the keys. The former single-key variable ENCRYPTION_KEY no
+# longer exists; a non-empty value stops the start (no silent ignoring, also not
+# next to a ring), because ignoring it would leave existing data undecryptable
+# or start a dev box in plaintext mode without anyone noticing.
 
 ENCRYPTION_KEYS = os.environ.get("ENCRYPTION_KEYS", "")
-ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "")
+if os.environ.get("ENCRYPTION_KEY", "").strip():
+    raise ImproperlyConfigured(
+        "ENCRYPTION_KEY is no longer supported: rename the variable to ENCRYPTION_KEYS "
+        "and keep its value unchanged (comma-separated key ring, the first entry encrypts, "
+        "all entries decrypt). Remove ENCRYPTION_KEY from the environment/.env and recreate "
+        "the containers (a plain restart does not pick up changed variables)."
+    )
 
 # --- Virenscan (ClamAV, Issue #524) ---
 # Prüft jede hochgeladene Datei VOR der Verschlüsselung gegen einen ClamAV-Daemon.

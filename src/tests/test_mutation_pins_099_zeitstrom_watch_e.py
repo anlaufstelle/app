@@ -55,7 +55,7 @@ Teilstring. ``facility``/``user`` sind fuer die reinen Weiterreichungs-Spies
 bewusst leichte ``SimpleNamespace``-Platzhalter (nur ``.pk`` noetig) statt
 echter DB-Objekte — die Funktionen selbst fassen sie nur an, ohne sie zu
 lesen/zu speichern. ``_encryption_key`` liegt modulweit an (Lehre 112) — der
-Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

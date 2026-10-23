@@ -39,7 +39,7 @@ in einem einzigen Assert je Funktion.
 
 ``_encryption_key`` liegt modulweit an (Wellen-Konvention): der
 Mutantenbaum (``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit
-keinen ``ENCRYPTION_KEY``; ohne die Fixture wären Pins, deren Modelle
+keinen ``ENCRYPTION_KEYS``; ohne die Fixture wären Pins, deren Modelle
 verschlüsselte Felder anfassen, aus dem FALSCHEN Grund rot (Lehre 112).
 Keiner der fünf Serialisierer dieser Batch fasst ``data_json``/
 Verschlüsselung an, die Fixture liegt trotzdem modulweit an.

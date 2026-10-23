@@ -64,7 +64,7 @@ Save NACH dem ``with transaction.atomic()``-Block liegt (Lost-Update-Fenster).
 Konventionen wie ``test_mutation_pins_099_audit_1.py``: Zusicherungen
 vergleichen EXAKT (``==``), nie per Teilstring; ``pytestmark`` setzt
 ``django_db`` + ``_encryption_key`` modulweit (der Mutantenbaum hat keine
-``.env`` und damit keinen ``ENCRYPTION_KEY``); Fixtures aus
+``.env`` und damit keinen ``ENCRYPTION_KEYS``); Fixtures aus
 ``src/tests/conftest.py``, eigene lokale ``media_root``-Fixture wie in
 ``test_import_engine.py``. Jeder Test nennt seine Mutanten in der Docstring.
 """

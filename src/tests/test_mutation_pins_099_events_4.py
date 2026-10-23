@@ -10,7 +10,7 @@ siehe Begruendung in ``triage-099-events-4.json`` — und werden hier NICHT
 gepinnt.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

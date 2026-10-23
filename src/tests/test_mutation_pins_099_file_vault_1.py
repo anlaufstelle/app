@@ -13,7 +13,7 @@ Argument-/Textverlust ist ``test`` (exakte ``caplog``-Assertion auf
 ``skip`` gewesen — hier toetet der Exakt-Vergleich sie ohnehin mit).
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

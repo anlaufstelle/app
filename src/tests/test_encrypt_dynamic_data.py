@@ -58,7 +58,7 @@ class TestEncryptDynamicDataFileMarkerSkip:
     def test_singleton_file_marker_untouched(self, doc_type_with_file_field, settings):
         from cryptography.fernet import Fernet
 
-        settings.ENCRYPTION_KEY = Fernet.generate_key().decode()
+        settings.ENCRYPTION_KEYS = Fernet.generate_key().decode()
         assert "anhang" in _encrypted_slugs(doc_type_with_file_field), (
             "Testvoraussetzung: 'anhang' muss in der encrypted-Slug-Menge liegen — "
             "sonst prueft die folgende Assertion den Marker-Skip nicht wirklich"
@@ -73,7 +73,7 @@ class TestEncryptDynamicDataFileMarkerSkip:
     def test_multi_file_marker_untouched(self, doc_type_with_file_field, settings):
         from cryptography.fernet import Fernet
 
-        settings.ENCRYPTION_KEY = Fernet.generate_key().decode()
+        settings.ENCRYPTION_KEYS = Fernet.generate_key().decode()
         assert "anhang" in _encrypted_slugs(doc_type_with_file_field), (
             "Testvoraussetzung: 'anhang' muss in der encrypted-Slug-Menge liegen — "
             "sonst prueft die folgende Assertion den Marker-Skip nicht wirklich"
@@ -89,7 +89,7 @@ class TestEncryptDynamicDataFileMarkerSkip:
         from cryptography.fernet import Fernet
 
         key = Fernet.generate_key().decode()
-        settings.ENCRYPTION_KEY = key
+        settings.ENCRYPTION_KEYS = key
         data_json = {"vertrauliche-notiz": "Klartext-PII"}
 
         result = encrypt_dynamic_data(doc_type_with_file_field, data_json)
@@ -101,7 +101,7 @@ class TestEncryptDynamicDataFileMarkerSkip:
         from cryptography.fernet import Fernet
 
         key = Fernet.generate_key().decode()
-        settings.ENCRYPTION_KEY = key
+        settings.ENCRYPTION_KEYS = key
         marker = {"__files__": True, "entries": [{"id": "a", "sort": 0}]}
         data_json = {"anhang": marker, "vertrauliche-notiz": "Geheim"}
 
@@ -116,7 +116,7 @@ class TestEncryptDynamicDataFileMarkerSkip:
         from cryptography.fernet import Fernet
 
         key = Fernet.generate_key().decode()
-        settings.ENCRYPTION_KEY = key
+        settings.ENCRYPTION_KEYS = key
         already_encrypted = encrypt_field("Original")
         data_json = {"vertrauliche-notiz": already_encrypted}
 
@@ -155,7 +155,7 @@ def test_encrypt_dynamic_data_used_by_bulk_create_path(facility, client_identifi
     DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_anhang, sort_order=0)
 
     marker = {"__files__": True, "entries": [{"id": "a", "sort": 0}]}
-    with override_settings(ENCRYPTION_KEY=Fernet.generate_key().decode()):
+    with override_settings(ENCRYPTION_KEYS=Fernet.generate_key().decode()):
         event = Event(
             facility=facility,
             client=client_identified,

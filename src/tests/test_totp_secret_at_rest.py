@@ -90,16 +90,16 @@ class TestMultiFernetRotation:
         new_key = Fernet.generate_key().decode()
         plain = "12ab" * 10  # 40 Hex
 
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             token_old = encrypt_totp_key(plain)
 
         # Neuer Primärschlüssel voran, alter noch in der Liste → Alt-Token lesbar.
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=f"{new_key},{old_key}"):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             assert decrypt_totp_key(token_old) == plain
             token_new = encrypt_totp_key(decrypt_totp_key(token_old))  # Re-Wrap
 
         # Alter Schlüssel entfernt: neues Token weiter lesbar, altes nicht mehr.
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=new_key):
+        with override_settings(ENCRYPTION_KEYS=new_key):
             assert decrypt_totp_key(token_new) == plain
             with pytest.raises(Exception):
                 decrypt_totp_key(token_old)
@@ -269,7 +269,7 @@ class TestVerifySaveDoesNotClobberKey:
         das frisch umgewickelte Token, nur die Throttle-Felder werden persistiert."""
         old_key = Fernet.generate_key().decode()
         new_key = Fernet.generate_key().decode()
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             device = EncryptedTOTPDevice.objects.create(user=staff_user, name="d", confirmed=True)
             device_id = device.id
             raw_old = _raw_key(device_id)
@@ -278,7 +278,7 @@ class TestVerifySaveDoesNotClobberKey:
             stale = EncryptedTOTPDevice.objects.get(pk=device_id)
             assert stale.key == raw_old  # trägt das Alt-Key-Token im Speicher
 
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=f"{new_key},{old_key}"):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             call_command("reencrypt_fields")  # Rewrap → Gerät jetzt unter new_key
             raw_new = _raw_key(device_id)
             assert raw_new != raw_old
@@ -292,7 +292,7 @@ class TestVerifySaveDoesNotClobberKey:
             assert EncryptedTOTPDevice.objects.get(pk=device_id).throttling_failure_count == 1
 
         # Harter Beweis: Alt-Schlüssel entfernt → Gerät bleibt entschlüsselbar, kein Lockout.
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=new_key):
+        with override_settings(ENCRYPTION_KEYS=new_key):
             assert decrypt_totp_key(_raw_key(device_id)) == plain
 
     def test_failed_verify_does_not_rewrite_key(self, staff_user):
@@ -340,7 +340,7 @@ class TestReencryptTotpRewrapRace:
 
     def _make_old_key_device(self, user, old_key):
         """Legt ein Gerät an, dessen Secret unter ``old_key`` gewickelt ist."""
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             device = EncryptedTOTPDevice.objects.create(user=user, name="d", confirmed=True)
             raw = _raw_key(device.id)
             return device.id, raw, decrypt_totp_key(raw)
@@ -378,7 +378,7 @@ class TestReencryptTotpRewrapRace:
 
         monkeypatch.setattr(totp_mod, "encrypt_totp_key", clobbering_encrypt)
 
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=f"{new_key},{old_key}"):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             call_command("reencrypt_fields")
             raw_after = _raw_key(device_id)
             assert state["fired"] is True  # Interleave wurde wirklich ausgelöst
@@ -387,7 +387,7 @@ class TestReencryptTotpRewrapRace:
             assert decrypt_totp_key(raw_after) == plain  # Secret unverändert
 
         # Harter Beweis: Alt-Schlüssel entfernt → neues Token lesbar, beide Alt-Tokens tot.
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=new_key):
+        with override_settings(ENCRYPTION_KEYS=new_key):
             assert decrypt_totp_key(raw_after) == plain
             with pytest.raises(Exception):
                 decrypt_totp_key(raw_before)
@@ -421,7 +421,7 @@ class TestReencryptTotpRewrapRace:
         monkeypatch.setattr(totp_mod, "encrypt_totp_key", always_clobber)
 
         out, err = StringIO(), StringIO()
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=f"{new_key},{old_key}"):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             call_command("reencrypt_fields", stdout=out, stderr=err)
 
         # Nicht stillschweigend als „umgewickelt" gezählt …
@@ -438,12 +438,12 @@ class TestReencryptTotpRewrapRace:
         new_key = Fernet.generate_key().decode()
         device_id, raw_before, plain = self._make_old_key_device(staff_user, old_key)
 
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=f"{new_key},{old_key}"):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             call_command("reencrypt_fields")
             raw_after = _raw_key(device_id)
         assert raw_after != raw_before
 
-        with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=new_key):
+        with override_settings(ENCRYPTION_KEYS=new_key):
             assert decrypt_totp_key(raw_after) == plain
             with pytest.raises(Exception):
                 decrypt_totp_key(raw_before)

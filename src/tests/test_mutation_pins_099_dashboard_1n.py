@@ -53,7 +53,7 @@ zusätzlich unmittelbar am Aufruf: ein Spy auf
 unabhängig von jeder Planer-/Index-Entscheidung.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

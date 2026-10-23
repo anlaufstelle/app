@@ -18,7 +18,7 @@ widerlegt hat:
   im Uebergabekopf) ist ein funktionaler String, kein Logging-Text.
 
 ``pytestmark`` bindet ``_encryption_key`` modulweit (Lehre 112): der
-Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

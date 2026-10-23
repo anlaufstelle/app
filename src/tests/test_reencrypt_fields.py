@@ -122,7 +122,7 @@ def test_reencrypt_client_token_rotates_under_key_rotation(facility, doc_type_cl
     old_key = generate_key()
     new_key = generate_key()
 
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+    with override_settings(ENCRYPTION_KEYS=old_key):
         client = Client.objects.create(
             facility=facility,
             pseudonym="P6-Rotation-01",
@@ -133,7 +133,7 @@ def test_reencrypt_client_token_rotates_under_key_rotation(facility, doc_type_cl
     token_before = raw_client_data_json(client)["diagnose"]["value"]
 
     keys = f"{new_key},{old_key}"
-    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+    with override_settings(ENCRYPTION_KEYS=keys):
         call_command("reencrypt_fields", stdout=StringIO())
 
     client.refresh_from_db()
@@ -141,7 +141,7 @@ def test_reencrypt_client_token_rotates_under_key_rotation(facility, doc_type_cl
     assert is_encrypted_value(stored), "Feld muss weiterhin ein Verschluesselungsmarker sein"
     assert stored["value"] != token_before, "Ciphertext muss sich nach der Rotation aendern"
 
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+    with override_settings(ENCRYPTION_KEYS=new_key):
         assert safe_decrypt(stored) == "Rotationstest"
 
 
@@ -151,7 +151,7 @@ def test_reencrypt_case_token_rotates_under_key_rotation(facility, client_identi
     old_key = generate_key()
     new_key = generate_key()
 
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+    with override_settings(ENCRYPTION_KEYS=old_key):
         case = Case.objects.create(
             facility=facility,
             client=client_identified,
@@ -163,7 +163,7 @@ def test_reencrypt_case_token_rotates_under_key_rotation(facility, client_identi
     token_before = raw_case_data_json(case)["verlauf"]["value"]
 
     keys = f"{new_key},{old_key}"
-    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+    with override_settings(ENCRYPTION_KEYS=keys):
         call_command("reencrypt_fields", stdout=StringIO())
 
     case.refresh_from_db()
@@ -171,7 +171,7 @@ def test_reencrypt_case_token_rotates_under_key_rotation(facility, client_identi
     assert is_encrypted_value(stored)
     assert stored["value"] != token_before
 
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+    with override_settings(ENCRYPTION_KEYS=new_key):
         assert safe_decrypt(stored) == "Rotationstest"
 
 
@@ -181,7 +181,7 @@ def test_reencrypt_heals_plaintext_client_diagnose(facility, doc_type_client_pro
     wird vom Heal-Lauf nachverschluesselt — Vorbedingung ist ein gesetzter ``document_type``.
     """
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         client = Client.objects.create(
             facility=facility,
             pseudonym="P6-Heal-01",
@@ -198,7 +198,7 @@ def test_reencrypt_heals_plaintext_client_diagnose(facility, doc_type_client_pro
     client.refresh_from_db()
     stored = raw_client_data_json(client)["diagnose"]
     assert is_encrypted_value(stored), "Plaintext-Diagnose muss nach dem Heal-Lauf verschluesselt sein"
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         assert safe_decrypt(stored) == "klartext-diagnose"
 
 
@@ -231,7 +231,7 @@ def test_reencrypt_soft_deleted_client_is_rotated(facility, doc_type_client_prof
     old_key = generate_key()
     new_key = generate_key()
 
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+    with override_settings(ENCRYPTION_KEYS=old_key):
         client = Client.objects.create(
             facility=facility,
             pseudonym="P6-SoftDel-01",
@@ -244,13 +244,13 @@ def test_reencrypt_soft_deleted_client_is_rotated(facility, doc_type_client_prof
     assert Client.objects.get(pk=client.pk).is_deleted is True
 
     keys = f"{new_key},{old_key}"
-    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+    with override_settings(ENCRYPTION_KEYS=keys):
         call_command("reencrypt_fields", stdout=StringIO())
 
     client.refresh_from_db()
     assert client.is_deleted is True, "Soft-Delete darf durch die Rotation nicht rueckgaengig gemacht werden"
     stored = raw_client_data_json(client)["diagnose"]
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+    with override_settings(ENCRYPTION_KEYS=new_key):
         assert safe_decrypt(stored) == "Geloescht aber rotiert"
 
 
@@ -269,7 +269,7 @@ def test_reencrypt_soft_deleted_event_is_rotated(facility, client_identified, do
     old_key = generate_key()
     new_key = generate_key()
 
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+    with override_settings(ENCRYPTION_KEYS=old_key):
         event = Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -286,13 +286,13 @@ def test_reencrypt_soft_deleted_event_is_rotated(facility, client_identified, do
     assert Event.objects.get(pk=event.pk).is_deleted is True
 
     keys = f"{new_key},{old_key}"
-    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+    with override_settings(ENCRYPTION_KEYS=keys):
         call_command("reencrypt_fields", stdout=StringIO())
 
     event.refresh_from_db()
     assert event.is_deleted is True, "Soft-Delete darf durch die Rotation nicht rueckgaengig gemacht werden"
     stored = raw_event_data_json(event)["notiz-krise"]
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+    with override_settings(ENCRYPTION_KEYS=new_key):
         assert safe_decrypt(stored) == "Geloescht aber rotiert"
 
 
@@ -300,7 +300,7 @@ def test_reencrypt_soft_deleted_event_is_rotated(facility, client_identified, do
 def test_reencrypt_dry_run_counts_but_does_not_write(facility, doc_type_client_profile, staff_user):
     """``--dry-run`` meldet den Client in der Zaehlung, schreibt aber nichts in die DB."""
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         client = Client.objects.create(
             facility=facility,
             pseudonym="P6-DryRun-01",
@@ -310,7 +310,7 @@ def test_reencrypt_dry_run_counts_but_does_not_write(facility, doc_type_client_p
         )
     token_before = raw_client_data_json(client)["diagnose"]["value"]
 
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         out = StringIO()
         call_command("reencrypt_fields", "--dry-run", stdout=out)
 
@@ -328,7 +328,7 @@ def test_reencrypt_output_line_includes_client_and_case_counts(
 ):
     """Die Ausgabezeile des Commands nennt die neuen Client-/Case-Zaehler."""
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         client = Client.objects.create(
             facility=facility,
             pseudonym="P6-Output-01",
@@ -387,7 +387,7 @@ class TestRotateAll:
     def test_dry_run_writes_nothing(self, facility, doc_type_client_profile, staff_user):
         """``dry_run=True`` zaehlt den Client, schreibt aber nichts in die DB."""
         key = generate_key()
-        with override_settings(ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             client = Client.objects.create(
                 facility=facility,
                 pseudonym="P6-RotateAll-DryRun-01",
@@ -397,7 +397,7 @@ class TestRotateAll:
             )
         token_before = raw_client_data_json(client)["diagnose"]["value"]
 
-        with override_settings(ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             counts = rotate_all(dry_run=True)
 
         assert counts["clients"] == 1
@@ -426,7 +426,7 @@ class TestRotateAll:
         from core.services.file_vault import rotation as rotation_module
 
         key = generate_key()
-        with override_settings(ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             event = Event.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -508,7 +508,7 @@ class TestRotateAll:
             return False
 
         monkeypatch.setattr(rotation_module, "_locked_compare_and_swap", reject_cas)
-        with override_settings(ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             counts = rotate_all(dry_run=False)
 
         assert counts == {
@@ -557,7 +557,7 @@ class TestRotateAll:
         attachment.refresh_from_db()
         rectification.refresh_from_db()
         history_before, history_after = raw_history_payloads(history)
-        with override_settings(ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             assert safe_decrypt(raw_event_data_json(event)["notiz-krise"]) == "Event-CAS"
             assert safe_decrypt(raw_client_data_json(client)["diagnose"]) == "Client-CAS"
             assert safe_decrypt(raw_case_data_json(case)["verlauf"]) == "Case-CAS"
@@ -691,7 +691,7 @@ class TestRotateAll:
         """
         old_key = generate_key()
         new_key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             event = Event.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -709,7 +709,7 @@ class TestRotateAll:
             )
         before_token, after_token = raw_history_payloads(history)
 
-        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}", ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             counts = rotate_all(dry_run=False)
             rotated_before, rotated_after = raw_history_payloads(history)
 
@@ -736,7 +736,7 @@ class TestRotateAll:
         from core.services.system import bypass_replication_triggers
 
         key = generate_key()
-        with override_settings(ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             event = Event.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -793,7 +793,7 @@ class TestRotateAll:
         from core.retention.eventhistory import redact_event_history_rows
 
         key = generate_key()
-        with override_settings(ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             event = Event.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -840,7 +840,7 @@ class TestEventHistoryRotationTriggerSelection:
 
         old_key = generate_key()
         new_key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             event = Event.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -866,7 +866,7 @@ class TestEventHistoryRotationTriggerSelection:
 
         monkeypatch.setattr("core.services.system.bypass_replication_triggers", _recording)
 
-        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}", ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             counts = rotate_all(dry_run=False)
 
         assert counts["event_history"] == 1
@@ -939,7 +939,7 @@ class TestRotationCompareAndSwapRace:
                 connections.close_all()
 
         keys = f"{new_key},{old_key}"
-        with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=keys):
             redaction_thread = threading.Thread(
                 target=save_redaction_without_timestamp,
                 name=f"rotation-{counter}-redaction",
@@ -968,7 +968,7 @@ class TestRotationCompareAndSwapRace:
 
         old_key = generate_key()
         new_key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             client = Client.objects.create(
                 facility=facility,
                 pseudonym="CAS-Client-Redaktion",
@@ -996,7 +996,7 @@ class TestRotationCompareAndSwapRace:
 
         old_key = generate_key()
         new_key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             case = Case.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -1025,7 +1025,7 @@ class TestRotationCompareAndSwapRace:
 
         old_key = generate_key()
         new_key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             event = Event.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -1082,7 +1082,7 @@ class TestRotationCompareAndSwapRace:
                 connections.close_all()
 
         keys = f"{new_key},{old_key}"
-        with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=keys):
             user_thread = threading.Thread(target=save_user_change, name="rotation-user-save")
             rotation_thread = threading.Thread(target=run_rotation, name="rotation-command")
             user_thread.start()
@@ -1131,7 +1131,7 @@ class TestRotationCompareAndSwapRace:
 
         old_key = generate_key()
         new_key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        with override_settings(ENCRYPTION_KEYS=old_key):
             event = Event.objects.create(
                 facility=facility,
                 client=client_identified,
@@ -1195,7 +1195,7 @@ class TestRotationCompareAndSwapRace:
             finally:
                 connections.close_all()
 
-        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}", ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             redaction_thread = threading.Thread(target=commit_redaction, name="rotation-history-redaction")
             rotation_thread = threading.Thread(target=run_rotation, name="rotation-history-command")
             redaction_thread.start()
@@ -1302,11 +1302,11 @@ class TestShiftHandoverNoteRotation:
     def test_rotation_wechselt_das_chiffrat_und_haelt_den_klartext(self, facility, staff_user):
         key_alt = generate_key()
         key_neu = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key_alt):
+        with override_settings(ENCRYPTION_KEYS=key_alt):
             note = self._note(facility, staff_user, "Schichtnotiz-Rotation")
             token_vorher = note.note["value"]
 
-        with override_settings(ENCRYPTION_KEYS=f"{key_neu},{key_alt}", ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=f"{key_neu},{key_alt}"):
             counts = rotate_all(dry_run=False)
             assert counts["shift_handover_notes"] == 1
             note.refresh_from_db()
@@ -1315,7 +1315,7 @@ class TestShiftHandoverNoteRotation:
 
     def test_dry_run_zaehlt_ohne_zu_schreiben(self, facility, staff_user):
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             note = self._note(facility, staff_user, "Schichtnotiz-DryRun")
             token_vorher = note.note["value"]
             assert rotate_all(dry_run=True)["shift_handover_notes"] == 1
@@ -1324,7 +1324,7 @@ class TestShiftHandoverNoteRotation:
 
     def test_leere_notiz_wird_uebersprungen(self, facility, staff_user):
         key = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             ShiftHandoverNote.objects.create(
                 facility=facility,
                 shift_date=timezone.localdate(),
@@ -1343,7 +1343,7 @@ class TestShiftHandoverNoteRotation:
 
         key_alt = generate_key()
         key_neu = generate_key()
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key_alt):
+        with override_settings(ENCRYPTION_KEYS=key_alt):
             note = self._note(facility, staff_user, "Schichtnotiz-Race")
 
         echtes_cas = rotation_module._locked_compare_and_swap
@@ -1354,7 +1354,7 @@ class TestShiftHandoverNoteRotation:
             return echtes_cas(model, pk, expected=expected, updates=updates)
 
         monkeypatch.setattr(rotation_module, "_locked_compare_and_swap", loescht_dann_cas)
-        with override_settings(ENCRYPTION_KEYS=f"{key_neu},{key_alt}", ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=f"{key_neu},{key_alt}"):
             counts = rotate_all(dry_run=False)
 
         assert counts["shift_handover_notes"] == 0

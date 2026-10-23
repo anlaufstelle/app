@@ -44,7 +44,7 @@ in ``suppress_report_stats`` betrifft dadurch nachweislich die
 ``by_contact_stage``-Randsumme, nicht ``by_age_cluster``.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat keine
-``.env`` und damit keinen ``ENCRYPTION_KEY``.
+``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

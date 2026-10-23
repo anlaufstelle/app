@@ -17,7 +17,7 @@ EINELEMENTIGEN Definitionsliste — bei nur einem Element sind ``continue`` und
 Definitionen, den unbekannten Slug VORAN.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat keine
-``.env`` und damit keinen ``ENCRYPTION_KEY``.
+``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

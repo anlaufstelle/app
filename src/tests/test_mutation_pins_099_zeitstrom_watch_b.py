@@ -57,7 +57,7 @@ Zusicherungen vergleichen EXAKT (``==``/``is``), nie per Teilstring (mutmut
 erzeugt ``"XX<text>XX"``-Varianten, die ein Substring-Match übersehen
 würde). Fixtures kommen aus ``src/tests/conftest.py``. ``_encryption_key``
 liegt modulweit an (Lehre 112) — der Mutantenbaum hat keine ``.env`` und
-damit keinen ``ENCRYPTION_KEY``.
+damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

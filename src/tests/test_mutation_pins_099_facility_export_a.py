@@ -36,7 +36,7 @@ vergleichen EXAKT (``==``), nie per Teilstring (mutmut erzeugt
 kommen aus ``src/tests/conftest.py`` bzw. sind echte Model-Objekte. Jeder Test
 nennt seine Mutanten in der Docstring samt dem Wert, der beim Mutanten
 abweicht. ``_encryption_key`` liegt modulweit an (Lehre 112) — der
-Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

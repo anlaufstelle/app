@@ -77,7 +77,7 @@ werden (``ValueError: '...' is not a valid field``). Drei Pins:
   ``str()``-Aufruf ueber ``form.errors["document_type"]``).
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env``/``ENCRYPTION_KEY``, ohne die Fixture waeren die Pins dort aus
+keine ``.env``/``ENCRYPTION_KEYS``, ohne die Fixture waeren die Pins dort aus
 dem falschen Grund rot.
 """
 

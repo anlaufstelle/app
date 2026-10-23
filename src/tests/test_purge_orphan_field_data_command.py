@@ -63,7 +63,7 @@ class TestPurgeOrphanFieldData:
     def test_removes_only_orphan_keys_keeps_mapped_and_encrypted(self, facility, doc_type_client_profile, staff_user):
         """Nur ``alt-feld`` (nicht am Typ) fällt; ``wohnsituation`` (zugeordnet,
         Klartext) und ``diagnose`` (zugeordnet, verschlüsselt) bleiben."""
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=generate_key()):
+        with override_settings(ENCRYPTION_KEYS=generate_key()):
             client = Client.objects.create(
                 facility=facility,
                 pseudonym="purge-01",

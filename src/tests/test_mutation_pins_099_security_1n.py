@@ -26,7 +26,7 @@ Direktaufrufe mit nicht-leerem ``expected_updated_at`` brauchen deshalb
 ``code`` pruefen, nie den Wortlaut).
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

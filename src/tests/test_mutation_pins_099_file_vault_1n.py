@@ -75,7 +75,6 @@ class TestSafeDecryptLogsExactErrorWhenKeyIsMissing:
 
     def test_safe_decrypt_meldet_fehlenden_schluessel_exakt(self, settings, caplog):
         settings.ENCRYPTION_KEYS = ""
-        settings.ENCRYPTION_KEY = ""
 
         with caplog.at_level(logging.ERROR, logger=_LOGGER_NAME):
             with pytest.raises(EncryptionKeyMissing):
@@ -86,7 +85,7 @@ class TestSafeDecryptLogsExactErrorWhenKeyIsMissing:
         record = records[0]
         assert record.levelno == logging.ERROR
         assert record.getMessage() == (
-            "safe_decrypt: Entschlüsselung unmöglich — ENCRYPTION_KEY/ENCRYPTION_KEYS "
+            "safe_decrypt: Entschlüsselung unmöglich — ENCRYPTION_KEYS "
             "fehlt oder ist fehlkonfiguriert. Fehler wird durchgereicht statt maskiert."
         )
 
@@ -229,11 +228,10 @@ class TestEncryptFieldReportsMissingKeyExactly:
 
     def test_encrypt_field_without_key_raises_exact_error(self, settings):
         settings.ENCRYPTION_KEYS = ""
-        settings.ENCRYPTION_KEY = ""
 
         with pytest.raises(EncryptionError) as exc_info:
             encrypt_field("Klartext, der nie verschluesselt wird")
 
         assert str(exc_info.value) == (
-            "Cannot encrypt field: no encryption key configured. Set ENCRYPTION_KEY in environment."
+            "Cannot encrypt field: no encryption key configured. Set ENCRYPTION_KEYS in environment."
         )

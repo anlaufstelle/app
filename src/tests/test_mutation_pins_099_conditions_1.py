@@ -83,7 +83,7 @@ per Fuzz-Test ueber 2000 Zufallsgraphen) — Details in der Triage-Begruendung.
   bereinigte, zulaessige Feldsatz — Datenschutz-/Berechtigungsrelevanz).
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

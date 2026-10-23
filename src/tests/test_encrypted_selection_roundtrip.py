@@ -67,7 +67,7 @@ def test_encrypted_values_survive_persistence_paths(entity_type, path, value, fa
     else:
         obj = Event(client=client_identified, occurred_at=timezone.now(), **kwargs)
 
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+    with override_settings(ENCRYPTION_KEYS=old_key):
         if legacy:
             # Invalid slugs can only be historical values, never a new selection.
             # Inject plaintext history, then exercise real encryption on save/bulk/rotation.
@@ -94,7 +94,7 @@ def test_encrypted_values_survive_persistence_paths(entity_type, path, value, fa
             obj.save()
             assert obj.data_json["private"] == first_stored
     if path == "rotation":
-        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}", ENCRYPTION_KEY=""):
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}"):
             call_command("reencrypt_fields", stdout=StringIO())
 
     obj.refresh_from_db()
@@ -111,7 +111,7 @@ def test_encrypted_values_survive_persistence_paths(entity_type, path, value, fa
         assert json.dumps(stored) != json.dumps(value)
     else:
         assert stored == value
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key if path == "rotation" else old_key):
+    with override_settings(ENCRYPTION_KEYS=new_key if path == "rotation" else old_key):
         result = decrypt_field(stored)
     assert result == value
     assert type(result) is type(value)

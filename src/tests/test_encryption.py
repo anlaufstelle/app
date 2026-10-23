@@ -25,7 +25,7 @@ def test_multifernet_encrypt_decrypt_with_multiple_keys():
     new_key = generate_key()
     old_key = generate_key()
     keys = f"{new_key},{old_key}"
-    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+    with override_settings(ENCRYPTION_KEYS=keys):
         encrypted = encrypt_field("Geheim")
         result = decrypt_field(encrypted)
     assert result == "Geheim"
@@ -37,12 +37,12 @@ def test_multifernet_decrypt_old_key_data():
     new_key = generate_key()
 
     # Encrypt with old key only
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+    with override_settings(ENCRYPTION_KEYS=old_key):
         encrypted = encrypt_field("Alter Inhalt")
 
     # Decrypt with new key first, old key second
     keys = f"{new_key},{old_key}"
-    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+    with override_settings(ENCRYPTION_KEYS=keys):
         result = decrypt_field(encrypted)
     assert result == "Alter Inhalt"
 
@@ -53,37 +53,13 @@ def test_multifernet_removed_key_makes_data_unreadable():
     new_key = generate_key()
 
     # Encrypt with old key
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+    with override_settings(ENCRYPTION_KEYS=old_key):
         encrypted = encrypt_field("Geheimer Text")
 
     # Try to decrypt with only the new key (old key removed)
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+    with override_settings(ENCRYPTION_KEYS=new_key):
         result = safe_decrypt(encrypted)
     assert result == "[verschlüsselt]"
-
-
-def test_encryption_keys_takes_precedence_over_encryption_key():
-    """ENCRYPTION_KEYS setting takes precedence over ENCRYPTION_KEY."""
-    key_a = generate_key()
-    key_b = generate_key()
-
-    # Encrypt with key_a via ENCRYPTION_KEYS
-    with override_settings(ENCRYPTION_KEYS=key_a, ENCRYPTION_KEY=key_b):
-        encrypted = encrypt_field("Test")
-
-    # Decrypt with key_a only — proves ENCRYPTION_KEYS was used, not ENCRYPTION_KEY
-    with override_settings(ENCRYPTION_KEYS=key_a, ENCRYPTION_KEY=""):
-        result = decrypt_field(encrypted)
-    assert result == "Test"
-
-
-def test_single_encryption_key_fallback_still_works():
-    """Backward compatibility: single ENCRYPTION_KEY still works when ENCRYPTION_KEYS is empty."""
-    key = generate_key()
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
-        encrypted = encrypt_field("Fallback-Test")
-        result = decrypt_field(encrypted)
-    assert result == "Fallback-Test"
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +70,7 @@ def test_single_encryption_key_fallback_still_works():
 def test_encrypt_decrypt_roundtrip():
     """Encrypt then decrypt returns the original plaintext."""
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         plaintext = "Geheime Notiz"
         encrypted = encrypt_field(plaintext)
         result = decrypt_field(encrypted)
@@ -104,7 +80,7 @@ def test_encrypt_decrypt_roundtrip():
 def test_encrypt_produces_marker():
     """Encrypted value is a dict with __encrypted__: True and a value key."""
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         encrypted = encrypt_field("Testinhalt")
     assert isinstance(encrypted, dict)
     assert encrypted.get("__encrypted__") is True
@@ -115,7 +91,7 @@ def test_encrypt_produces_marker():
 def test_is_encrypted_value_true():
     """is_encrypted_value correctly identifies encrypted values."""
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         encrypted = encrypt_field("Hallo")
     assert is_encrypted_value(encrypted) is True
 
@@ -138,7 +114,7 @@ def test_is_encrypted_value_false_missing_value_key():
 def test_decrypt_invalid_token_raises():
     """decrypt_field raises EncryptionError when given an invalid token."""
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         bad_value = {"__encrypted__": True, "value": "not-a-valid-fernet-token"}
         with pytest.raises(EncryptionError):
             decrypt_field(bad_value)
@@ -167,7 +143,7 @@ def test_decrypt_field_does_not_mask_unexpected_errors(monkeypatch):
 def test_safe_decrypt_returns_fallback():
     """safe_decrypt returns the fallback string instead of raising on error."""
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         bad_value = {"__encrypted__": True, "value": "invalid-token"}
         result = safe_decrypt(bad_value, default="[Fehler]")
     assert result == "[Fehler]"
@@ -176,7 +152,7 @@ def test_safe_decrypt_returns_fallback():
 def test_safe_decrypt_returns_default_fallback():
     """safe_decrypt uses '[verschlüsselt]' as default fallback."""
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         bad_value = {"__encrypted__": True, "value": "invalid-token"}
         result = safe_decrypt(bad_value)
     assert result == "[verschlüsselt]"
@@ -192,7 +168,7 @@ def test_safe_decrypt_surfaces_missing_key_instead_of_masking(caplog):
     """Refs #1269 (T4): ein fehlender/fehlkonfigurierter Schlüssel darf auf
     Lesepfaden NICHT als '[verschlüsselt]'-Platzhalter maskiert werden.
 
-    ``EncryptionKeyMissing`` (ENCRYPTION_KEY/ENCRYPTION_KEYS gar nicht gesetzt)
+    ``EncryptionKeyMissing`` (ENCRYPTION_KEYS gar nicht gesetzt)
     muss laut gemeldet werden (Error-Log) und durchschlagen, damit eine
     Key-Fehlkonfiguration sichtbar wird — im Gegensatz zu echter Token-Korruption
     (``InvalidToken``), die weiter graceful auf den Platzhalter zurückfällt
@@ -201,10 +177,10 @@ def test_safe_decrypt_surfaces_missing_key_instead_of_masking(caplog):
     import logging
 
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         encrypted = encrypt_field("Art-9-Notiz")
 
-    with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=""):
+    with override_settings(ENCRYPTION_KEYS=""):
         with caplog.at_level(logging.ERROR, logger="core.services.file_vault.encryption"):
             with pytest.raises(EncryptionKeyMissing):
                 safe_decrypt(encrypted)
@@ -215,16 +191,16 @@ def test_safe_decrypt_surfaces_missing_key_instead_of_masking(caplog):
 
 
 def test_missing_key_raises():
-    """Empty ENCRYPTION_KEY raises EncryptionKeyMissing."""
-    with override_settings(ENCRYPTION_KEY=""), pytest.raises(EncryptionKeyMissing):
+    """Empty ENCRYPTION_KEYS raises EncryptionKeyMissing."""
+    with override_settings(ENCRYPTION_KEYS=""), pytest.raises(EncryptionKeyMissing):
         from core.services.file_vault import get_fernet
 
         get_fernet()
 
 
 def test_encrypt_field_without_key_raises_error():
-    """encrypt_field raises EncryptionError when ENCRYPTION_KEY is empty (fail-closed)."""
-    with override_settings(ENCRYPTION_KEY=""), pytest.raises(EncryptionError, match="no encryption key configured"):
+    """encrypt_field raises EncryptionError when ENCRYPTION_KEYS is empty (fail-closed)."""
+    with override_settings(ENCRYPTION_KEYS=""), pytest.raises(EncryptionError, match="no encryption key configured"):
         encrypt_field("Klartext")
 
 
@@ -248,7 +224,7 @@ def test_event_save_encrypts_sensitive_fields(facility, client_identified, doc_t
     from core.models import Event
 
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         event = Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -261,7 +237,7 @@ def test_event_save_encrypts_sensitive_fields(facility, client_identified, doc_t
     stored_value = event.data_json["notiz-krise"]
     assert is_encrypted_value(stored_value), "Sensitive field should be stored encrypted"
     # Verify we can decrypt it back
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         plaintext = decrypt_field(stored_value)
     assert plaintext == "Sehr geheime Information"
 
@@ -280,7 +256,7 @@ def test_reencrypt_heals_plaintext_pii_fields(facility, client_identified, doc_t
     from core.models import Event
 
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         event = Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -298,7 +274,7 @@ def test_reencrypt_heals_plaintext_pii_fields(facility, client_identified, doc_t
     event.refresh_from_db()
     stored = event.data_json["notiz-krise"]
     assert is_encrypted_value(stored), "Plaintext-PII muss nach dem Heal-Lauf verschlüsselt sein"
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         assert decrypt_field(stored) == "klartext-pii"
 
 
@@ -308,7 +284,7 @@ def test_event_save_skips_unencrypted_fields(facility, client_identified, doc_ty
     from core.models import Event
 
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         event = Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -330,7 +306,7 @@ def test_already_encrypted_not_double_encrypted(facility, client_identified, doc
     from core.models import Event
 
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         event = Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -358,7 +334,7 @@ def test_event_history_contains_encrypted_data(facility, client_identified, doc_
     from core.services.events import create_event
 
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         event = create_event(
             facility=facility,
             user=staff_user,
@@ -371,7 +347,7 @@ def test_event_history_contains_encrypted_data(facility, client_identified, doc_
     history = EventHistory.objects.get(event=event, action=EventHistory.Action.CREATE)
     stored_value = history.data_after["notiz-krise"]
     assert is_encrypted_value(stored_value), "EventHistory.data_after should contain encrypted values"
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         plaintext = decrypt_field(stored_value)
     assert plaintext == "Vertraulicher Inhalt"
 
@@ -391,7 +367,7 @@ def test_reencrypt_command_roundtrip(facility, client_identified, doc_type_crisi
     from core.models import Event
 
     key = generate_key()
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         event = Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -405,7 +381,7 @@ def test_reencrypt_command_roundtrip(facility, client_identified, doc_type_crisi
     assert is_encrypted_value(event.data_json["notiz-krise"])
 
     # Run the reencrypt command
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         out = StringIO()
         call_command("reencrypt_fields", stdout=out)
 
@@ -417,7 +393,7 @@ def test_reencrypt_command_roundtrip(facility, client_identified, doc_type_crisi
     assert is_encrypted_value(stored), "Field should still be encrypted after reencrypt"
 
     # Must decrypt back to the original plaintext
-    with override_settings(ENCRYPTION_KEY=key):
+    with override_settings(ENCRYPTION_KEYS=key):
         plaintext = decrypt_field(stored)
     assert plaintext == "Vertrauliche Notiz", (
         "Reencrypted field should decrypt to original value without double encryption"
@@ -437,7 +413,7 @@ def test_reencrypt_command_key_rotation(facility, client_identified, doc_type_cr
     new_key = generate_key()
 
     # Encrypt with old key
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+    with override_settings(ENCRYPTION_KEYS=old_key):
         event = Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -449,7 +425,7 @@ def test_reencrypt_command_key_rotation(facility, client_identified, doc_type_cr
 
     # Run reencrypt with both keys (new primary, old for decryption)
     keys = f"{new_key},{old_key}"
-    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+    with override_settings(ENCRYPTION_KEYS=keys):
         out = StringIO()
         call_command("reencrypt_fields", stdout=out)
 
@@ -457,7 +433,7 @@ def test_reencrypt_command_key_rotation(facility, client_identified, doc_type_cr
     stored = event.data_json["notiz-krise"]
 
     # Now should be decryptable with new key only
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+    with override_settings(ENCRYPTION_KEYS=new_key):
         plaintext = decrypt_field(stored)
     assert plaintext == "Rotationstest"
 
@@ -483,7 +459,7 @@ def test_reencrypt_command_rotates_event_history_and_attachments(
     old_key = generate_key()
     new_key = generate_key()
 
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+    with override_settings(ENCRYPTION_KEYS=old_key):
         event = Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -518,12 +494,12 @@ def test_reencrypt_command_rotates_event_history_and_attachments(
 
     # Re-Encrypt mit New Primary + Old fuer Decrypt
     keys = f"{new_key},{old_key}"
-    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+    with override_settings(ENCRYPTION_KEYS=keys):
         out = StringIO()
         call_command("reencrypt_fields", stdout=out)
 
     # Mit Nur-New-Key dekryptieren — alle drei Modelle muessen lesbar sein.
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+    with override_settings(ENCRYPTION_KEYS=new_key):
         event.refresh_from_db()
         assert decrypt_field(event.data_json["notiz-krise"]) == "Geheim 1"
 
@@ -554,7 +530,7 @@ def test_reencrypt_command_rotates_rectification_requests(facility, client_ident
     old_key = generate_key()
     new_key = generate_key()
 
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+    with override_settings(ENCRYPTION_KEYS=old_key):
         rr = RectificationRequest.objects.create(
             facility=facility,
             target_client=client_identified,
@@ -569,13 +545,13 @@ def test_reencrypt_command_rotates_rectification_requests(facility, client_ident
         )
 
     keys = f"{new_key},{old_key}"
-    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+    with override_settings(ENCRYPTION_KEYS=keys):
         out = StringIO()
         call_command("reencrypt_fields", stdout=out)
     assert "rectification requests" in out.getvalue()
 
     # Nur mit dem NEUEN Schluessel entschluesseln — gelingt das, wurde rotiert.
-    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+    with override_settings(ENCRYPTION_KEYS=new_key):
         rr.refresh_from_db()
         assert decrypt_field(rr.old_value) == '"Alt"'
         assert decrypt_field(rr.new_value) == '"Neu"'
@@ -613,12 +589,12 @@ def test_field_roundtrip_preserves_selection_or_text_type(value, _encryption_key
     ["true", "123", '["a", "b"]', "['a', 'b']", '{"type": "list"}', "\x89ANLAUFSTELLE-FIELD\x001:list\x00[]"],
 )
 def test_legacy_text_tokens_remain_text(text, _encryption_key, settings):
-    token = Fernet(settings.ENCRYPTION_KEY.encode()).encrypt(text.encode()).decode()
+    token = Fernet(settings.ENCRYPTION_KEYS.encode()).encrypt(text.encode()).decode()
     stored = {"__encrypted__": True, "value": token, "json": True, "type": "list"}
     assert decrypt_field(stored) == text
     assert type(decrypt_field(stored)) is str
     new_token = encrypt_field(text)
-    assert Fernet(settings.ENCRYPTION_KEY.encode()).decrypt(new_token["value"].encode()) == text.encode()
+    assert Fernet(settings.ENCRYPTION_KEYS.encode()).decrypt(new_token["value"].encode()) == text.encode()
 
 
 def test_selection_type_is_authenticated(_encryption_key):
@@ -645,7 +621,7 @@ def test_selection_type_is_authenticated(_encryption_key):
     ids=["unknown-version", "unknown-type", "wrong-json-type", "invalid-json", "invalid-utf8"],
 )
 def test_invalid_typed_field_payload_uses_existing_error_contract(payload, _encryption_key, settings):
-    token = Fernet(settings.ENCRYPTION_KEY.encode()).encrypt(b"\x89ANLAUFSTELLE-FIELD\x00" + payload).decode()
+    token = Fernet(settings.ENCRYPTION_KEYS.encode()).encrypt(b"\x89ANLAUFSTELLE-FIELD\x00" + payload).decode()
     stored = {"__encrypted__": True, "value": token}
     with pytest.raises(EncryptionError):
         decrypt_field(stored)

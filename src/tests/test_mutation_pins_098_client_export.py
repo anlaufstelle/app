@@ -28,7 +28,7 @@ toetet. Diese Datei prueft stattdessen direkt und plan-unabhaengig, dass
 ``"pk"`` das letzte Kriterium der ``order_by``-Kette ist.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat keine
-``.env`` und damit keinen ``ENCRYPTION_KEY``.
+``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

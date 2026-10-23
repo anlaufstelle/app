@@ -117,7 +117,7 @@ def _attachment_sha256(attachment: Attachment) -> str | None:
     ``decrypt_file_stream`` meldet jeden Parserfehler seit Refs #1968 selbst
     als ``EncryptionError``.
 
-    ``EncryptionKeyMissing`` (Fehlkonfiguration: ``ENCRYPTION_KEY``/``_KEYS``
+    ``EncryptionKeyMissing`` (Fehlkonfiguration: ``ENCRYPTION_KEYS``
     fehlt) wird bewusst NICHT gefangen und propagiert — analog
     ``safe_decrypt``-Praezedenz (:func:`core.services.file_vault.safe_decrypt`)
     darf eine fehlende Schluesselkonfiguration nicht als harmloses

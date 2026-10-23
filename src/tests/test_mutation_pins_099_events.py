@@ -15,7 +15,7 @@ Quelle: ``welle-l-0.99/reports/m-scratch/batch-forms-3.json`` (Triage
   Mutant dort. Dieser Test vergleicht die Meldung EXAKT.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

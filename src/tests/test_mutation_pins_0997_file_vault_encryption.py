@@ -20,8 +20,7 @@ from core.services.file_vault import encryption
 def cipher(settings):
     """Use a real, isolated Fernet key for the public encryption APIs."""
     key = Fernet.generate_key()
-    settings.ENCRYPTION_KEYS = ""
-    settings.ENCRYPTION_KEY = key.decode()
+    settings.ENCRYPTION_KEYS = key.decode()
     return Fernet(key)
 
 

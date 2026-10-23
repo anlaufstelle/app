@@ -20,7 +20,7 @@ bewusst ungepinnt.
 
 ``_encryption_key`` liegt modulweit an: der Mutantenbaum
 (``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEY``; ohne die Fixture wären Pins, deren Formulare
+``ENCRYPTION_KEYS``; ohne die Fixture wären Pins, deren Formulare
 verschlüsselte Felder anfassen, aus dem FALSCHEN Grund rot (Lehre 112).
 """
 

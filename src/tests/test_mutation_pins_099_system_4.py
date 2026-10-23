@@ -25,7 +25,7 @@ Triage: ``welle-l-0.99/reports/m-scratch/pins-system-4/triage-099-system-4.json`
   unsichtbares Stratum).
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

@@ -280,7 +280,7 @@ class TestGatherEntityDynamicData:
         from core.models import Client
         from core.services.file_vault import generate_key
 
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=generate_key()):
+        with override_settings(ENCRYPTION_KEYS=generate_key()):
             client = Client.objects.create(
                 facility=facility,
                 pseudonym="entity-dyn-enc",
@@ -1047,7 +1047,7 @@ class TestGatherEventHistory:
         statt Klartext ausweisen — das wäre keine Auskunft."""
         from core.services.file_vault import encrypt_field, generate_key
 
-        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=generate_key()):
+        with override_settings(ENCRYPTION_KEYS=generate_key()):
             EventHistory.objects.create(
                 event=sample_event,
                 action=EventHistory.Action.CREATE,

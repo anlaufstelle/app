@@ -236,7 +236,7 @@ class TestVisibleDataFields:
         Default leaken.
         """
         key = Fernet.generate_key().decode("utf-8")
-        with override_settings(ENCRYPTION_KEY=key, ENCRYPTION_KEYS=""):
+        with override_settings(ENCRYPTION_KEYS=key):
             dt = _make_doc_type(facility, name="Enc")
             ft = _make_field_template(
                 facility,

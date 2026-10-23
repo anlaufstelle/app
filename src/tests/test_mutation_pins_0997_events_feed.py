@@ -45,8 +45,7 @@ def test_encrypted_selection_without_options_preserves_the_decrypted_list(facili
 
     x__format_preview_value__mutmut_11.
     """
-    settings.ENCRYPTION_KEYS = ""
-    settings.ENCRYPTION_KEY = generate_key()
+    settings.ENCRYPTION_KEYS = generate_key()
     value = ["a", "b"]
     event = preview(facility, staff_user, FieldTemplate.FieldType.MULTI_SELECT, [], encrypt_field(value))
     for entries in (event.preview_fields, event.expanded_fields):

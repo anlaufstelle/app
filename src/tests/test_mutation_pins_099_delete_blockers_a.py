@@ -49,7 +49,7 @@ vergleichen EXAKT (``==``), nie per Teilstring (mutmut erzeugt
 Fixtures kommen aus ``src/tests/conftest.py`` bzw. sind echte Model-Objekte.
 Jeder Test nennt seine Mutanten in der Docstring. ``_encryption_key`` liegt
 modulweit an (Lehre 112) — der Mutantenbaum hat keine ``.env`` und damit
-keinen ``ENCRYPTION_KEY``.
+keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

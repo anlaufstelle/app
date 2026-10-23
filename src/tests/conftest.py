@@ -503,8 +503,7 @@ def _encryption_key(settings):
     hier. Aufrufweg (``usefixtures("_encryption_key")`` bzw. als
     Funktionsparameter) bleibt an den Aufrufstellen unveraendert.
     """
-    settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-    settings.ENCRYPTION_KEYS = ""
+    settings.ENCRYPTION_KEYS = Fernet.generate_key().decode("utf-8")
 
 
 # ---- Rate-Limit-Fixtures (Refs #1900) -----------------------------------

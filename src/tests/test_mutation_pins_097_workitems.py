@@ -44,7 +44,7 @@ laufen echte Model-Objekte durch die echten Services.
 
 ``_encryption_key`` liegt modulweit an: der Mutantenbaum
 (``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEY``; ohne die Fixture waeren die Pins dort aus dem FALSCHEN
+``ENCRYPTION_KEYS``; ohne die Fixture waeren die Pins dort aus dem FALSCHEN
 Grund rot und der Kill-Nachweis wertlos.
 
 Die Bulk-Pfade laden ihre Items in ``_locked_workitems`` per ``order_by("pk")``

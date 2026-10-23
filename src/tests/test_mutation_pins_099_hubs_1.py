@@ -21,7 +21,7 @@ gepinnt: ``facility_admin_dashboard_context`` (``core/services/dashboard/
 main.py``) liest ihren ``user``-Parameter im gesamten Funktionskoerper nie.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
+keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations

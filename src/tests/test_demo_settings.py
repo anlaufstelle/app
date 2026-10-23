@@ -28,7 +28,7 @@ DEMO_ALLOWED_HOSTS = "demo.anlaufstelle.app,localhost,127.0.0.1"
 _VALID_ENV = {
     "DJANGO_SECRET_KEY": "x" * 50,
     "ALLOWED_HOSTS": DEMO_ALLOWED_HOSTS,
-    "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+    "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
     "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     "POSTGRES_DB": "x",
     "POSTGRES_USER": "u",

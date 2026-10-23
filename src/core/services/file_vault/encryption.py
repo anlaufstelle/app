@@ -37,24 +37,16 @@ class EncryptionError(Exception):
 
 
 class EncryptionKeyMissing(EncryptionError):  # noqa: N818 — historischer Name, oeffentlich exportiert
-    """ENCRYPTION_KEY is not configured."""
+    """ENCRYPTION_KEYS is not configured."""
 
 
 def _get_keys():
-    """Return all configured Fernet keys as a list.
+    """Return all configured Fernet keys of the ``ENCRYPTION_KEYS`` ring as a list.
 
-    Checks ENCRYPTION_KEYS (comma-separated) first, then falls back to
-    ENCRYPTION_KEY (single key) for backward compatibility.
+    The ring (comma-separated) is the only key source: the first entry
+    encrypts, every entry decrypts.
     """
-    keys = split_key_ring(getattr(settings, "ENCRYPTION_KEYS", ""))
-    if keys:
-        return keys
-
-    single_key = str(getattr(settings, "ENCRYPTION_KEY", "") or "").strip()
-    if single_key:
-        return [single_key]
-
-    return []
+    return split_key_ring(getattr(settings, "ENCRYPTION_KEYS", ""))
 
 
 @lru_cache(maxsize=1)
@@ -67,21 +59,19 @@ def get_fernet():
     pro Row, Refs #644) spart das die wiederholte Fernet-Instantiierung
     und Key-Normalisierung.
 
-    Cache wird bei Test-``override_settings`` auf ``ENCRYPTION_KEY(S)``
+    Cache wird bei Test-``override_settings`` auf ``ENCRYPTION_KEYS``
     über den ``setting_changed``-Signal-Receiver invalidiert.
     """
     keys = _get_keys()
     if not keys:
-        raise EncryptionKeyMissing(
-            "ENCRYPTION_KEY / ENCRYPTION_KEYS ist nicht gesetzt. Generiere einen Key mit generate_key()."
-        )
+        raise EncryptionKeyMissing("ENCRYPTION_KEYS is not set. Generate a key with generate_key().")
     fernets = [Fernet(k.encode() if isinstance(k, str) else k) for k in keys]
     return MultiFernet(fernets)
 
 
 def _reset_fernet_cache(**kwargs):
     """Invalidate get_fernet()-Cache wenn Keys per override_settings geändert werden."""
-    if kwargs.get("setting") in ("ENCRYPTION_KEY", "ENCRYPTION_KEYS"):
+    if kwargs.get("setting") == "ENCRYPTION_KEYS":
         get_fernet.cache_clear()
 
 
@@ -111,7 +101,7 @@ def encrypt_field(value):
         return {"__encrypted__": True, "value": token}
     except EncryptionKeyMissing as exc:
         raise EncryptionError(
-            "Cannot encrypt field: no encryption key configured. Set ENCRYPTION_KEY in environment."
+            "Cannot encrypt field: no encryption key configured. Set ENCRYPTION_KEYS in environment."
         ) from exc
     except Exception as exc:
         raise EncryptionError(f"Encryption failed: {exc}") from exc
@@ -177,7 +167,7 @@ def safe_decrypt(value, default="[verschlüsselt]"):
         return decrypt_field(value)
     except EncryptionKeyMissing:
         logger.error(
-            "safe_decrypt: Entschlüsselung unmöglich — ENCRYPTION_KEY/ENCRYPTION_KEYS "
+            "safe_decrypt: Entschlüsselung unmöglich — ENCRYPTION_KEYS "
             "fehlt oder ist fehlkonfiguriert. Fehler wird durchgereicht statt maskiert."
         )
         raise

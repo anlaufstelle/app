@@ -2,7 +2,7 @@
 
 Quelle: Mutations-Delta des Checkpoints release-0.99.4, 4 Mutanten, alle in
 ``_get_keys``: die ``getattr``-Defaults fuer ``ENCRYPTION_KEYS`` und
-``ENCRYPTION_KEY`` entfallen (``AttributeError``) oder werden zu einem
+``ENCRYPTION_KEYS`` entfallen (``AttributeError``) oder werden zu einem
 Platzhalter-Schluessel. Beides ist nur bei einer ganz entfernten Einstellung
 beobachtbar — die Basis-Settings setzen beide sonst immer. Die Pins entfernen
 die Einstellungen deshalb ueber die Settings-Fixture: fehlt nur der
@@ -32,7 +32,7 @@ class TestGetKeys:
         (Platzhalter-Schluessel statt Rueckfall)."""
         schluessel = Fernet.generate_key().decode("utf-8")
         del settings.ENCRYPTION_KEYS
-        settings.ENCRYPTION_KEY = schluessel
+        settings.ENCRYPTION_KEYS = schluessel
         assert _get_keys() == [schluessel]
         assert get_fernet().decrypt(Fernet(schluessel).encrypt(b"probe")) == b"probe"
 
@@ -40,7 +40,7 @@ class TestGetKeys:
         """x__get_keys__mutmut_20 (``AttributeError`` ohne Default), _23
         (Platzhalter-Schluessel statt leerer Liste)."""
         del settings.ENCRYPTION_KEYS
-        del settings.ENCRYPTION_KEY
+        del settings.ENCRYPTION_KEYS
         assert _get_keys() == []
         with pytest.raises(EncryptionKeyMissing):
             get_fernet()

@@ -1142,7 +1142,7 @@ class TestClientExportHistoryContents:
         from core.services.file_vault import encrypt_field
 
         key = Fernet.generate_key().decode()
-        with override_settings(ENCRYPTION_KEY=key):
+        with override_settings(ENCRYPTION_KEYS=key):
             EventHistory.objects.create(
                 event=sample_event,
                 changed_by=admin_user,

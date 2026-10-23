@@ -72,7 +72,7 @@ class TestFileEncryption:
 
     def test_key_rotation(self, tmp_path, settings):
         """File encrypted with old key decrypts with new primary + old fallback."""
-        old_key = settings.ENCRYPTION_KEY
+        old_key = settings.ENCRYPTION_KEYS
         output = tmp_path / "rotated.enc"
         data = b"rotation test data"
 
@@ -81,7 +81,6 @@ class TestFileEncryption:
         # Rotate: new primary key, old key as fallback
         new_key = Fernet.generate_key().decode("utf-8")
         settings.ENCRYPTION_KEYS = f"{new_key},{old_key}"
-        settings.ENCRYPTION_KEY = ""
 
         result = b"".join(decrypt_file_stream(output))
         assert result == data
