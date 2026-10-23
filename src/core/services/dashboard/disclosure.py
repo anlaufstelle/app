@@ -300,19 +300,43 @@ def shared_alternatives(
     basis = _shared_basis(cells, partitions)
     hidden = {key for key, cell in cells.items() if cell.published is None}
     alternatives = {key: {raw_values[key]} for key in hidden}
+    directions = []
+
+    def witness(step: dict[str, int]) -> None:
+        candidate = {key: raw_values[key] + value for key, value in step.items()}
+        if all(
+            value >= lower and (upper is None or value <= upper)
+            for lower, upper, value in ((cells[key].lo, cells[key].hi, value) for key, value in candidate.items())
+        ):
+            for key, value in candidate.items():
+                alternatives[key].add(value)
+
     for free in sorted(hidden - basis.keys()):
         direction = {free: Fraction(1)}
         direction.update({key: -row[free] for key, (row, _) in basis.items() if free in row})
         scale = lcm(*(coefficient.denominator for coefficient in direction.values()))
         step = {key: int(coefficient * scale) for key, coefficient in direction.items() if coefficient}
+        directions.append(step)
         for sign in (-1, 1):
-            candidate = {key: raw_values[key] + sign * value for key, value in step.items()}
-            if all(
-                value >= lower and (upper is None or value <= upper)
-                for lower, upper, value in ((cells[key].lo, cells[key].hi, value) for key, value in candidate.items())
-            ):
-                for key, value in candidate.items():
-                    alternatives[key].add(value)
+            witness({key: sign * value for key, value in step.items()})
+    # Coupled population aliases can require two basis directions at once
+    # (Refs #2639). Every accepted combination is still an actual integer
+    # world, never an estimate of feasibility. Bound the additional search;
+    # missing a witness remains a reason to suppress more.
+    remaining = {key for key in hidden if raw_values[key] > 0 and len(alternatives[key]) < MIN_FEASIBLE_SPAN}
+    attempts = 0
+    for index, first in enumerate(directions):
+        for second in directions[index + 1 :]:
+            if not remaining or attempts >= 4096:
+                return alternatives
+            keys = first.keys() | second.keys()
+            if not (first.keys() & second.keys()) or not (keys & remaining):
+                continue
+            for left in (-1, 1):
+                for right in (-1, 1):
+                    attempts += 1
+                    witness({key: left * first.get(key, 0) + right * second.get(key, 0) for key in keys})
+            remaining = {key for key in remaining if len(alternatives[key]) < MIN_FEASIBLE_SPAN}
     return alternatives
 
 

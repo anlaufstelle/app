@@ -296,6 +296,7 @@ class SampleReport1Backend(DatasetBackend):
             records=[{"category": name, "count": count} for name, count in summary["by_category"]],
             summary=summary,
             completeness=self.validate_completeness(facility, date_from, date_to),
+            disclosure_context=(date_from, date_to, "live"),
         )
 
     def build_format_dataset(self, facility, date_from, date_to, *, format: str) -> DatasetResult:
@@ -512,12 +513,18 @@ class SampleReport1Backend(DatasetBackend):
         """
         threshold = _get_threshold(facility)
 
-        summary = suppress_sample_report_1_stats(facility, result.summary)
+        if result.disclosure_context is not None:
+            from core.services.dashboard.shared_disclosure import build_live_release
+
+            date_from, date_to, _source = result.disclosure_context
+            summary = build_live_release(facility, date_from, date_to).sample
+        else:
+            summary = suppress_sample_report_1_stats(facility, result.summary)
         # Transparenz analog ``build_external_report``-Metadaten: der Empfaenger
         # soll erkennen, ab welcher Fallzahl unterdrueckt wurde.
-        summary = stamp_threshold(summary, threshold)
+        summary = stamp_threshold({"by_category": [], **summary}, threshold)
 
-        records = [{"category": row["name"], "count": row["count"]} for row in summary["by_category"]]
+        records = [{"category": row["name"], "count": row["count"]} for row in summary.get("by_category", [])]
 
         # K6 (Refs #1769): fest verdrahtet statt aus ``result.completeness``
         # abgeleitet — jede Ableitung waere wieder eine datenabhaengige

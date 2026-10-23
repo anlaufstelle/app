@@ -27,7 +27,7 @@ from core.models import Client, Settings
 from core.models.settings import K_ANONYMITY_MIN, K_ANONYMITY_WARN_BELOW
 from core.reporting.data_source import ALL_EVENTS, DATA_SOURCE_NOTES, LIVE, PERSONS
 from core.services.dashboard.disclosure import MAX_GUARD_ITERATIONS, Cell, Partition, findings
-from core.services.dashboard.statistics import PERSONS_KEY, get_statistics
+from core.services.dashboard.statistics import PERSONS_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -988,14 +988,16 @@ def _finalize_report(
 
 
 def build_external_report(facility, date_from: date, date_to: date) -> dict[str, Any]:
-    """Baut einen datenschutzfreundlichen externen Bericht.
+    """Publish the general figures through the shared raw-population mask."""
+    from core.services.dashboard.shared_disclosure import build_live_release
 
-    Reuses ``statistics.get_statistics()``, entfernt ``top_clients`` und
-    wendet die K-Anon-Schwelle aus ``Settings.k_anonymity_threshold`` an.
-    Fuegt einen ``metadata``-Block mit Datenschutzprofil-Informationen hinzu.
-    """
-    threshold = _get_threshold(facility)
-    raw = get_statistics(facility, date_from, date_to)
+    return build_live_release(facility, date_from, date_to).general
+
+
+def _protect_external_statistics(
+    facility, date_from: date, date_to: date, raw: dict[str, Any], *, threshold: int
+) -> dict[str, Any]:
+    """Apply the local general-figures contract to supplied raw statistics."""
 
     # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl — und was
     # nicht publiziert wird, kann das K2-Audit auch nicht als Gleichung nutzen.
@@ -1063,45 +1065,14 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
 
 
 def build_shared_document_type_counts(facility, date_from: date, date_to: date) -> dict[str, int | None]:
-    """Intersect type and category decisions before publishing event lower bounds.
+    """Facade for the common event-type publication decision."""
+    report = build_external_report(facility, date_from, date_to)
+    return {row["name"]: row["count"] for row in report.get("by_document_type", [])}
 
-    A quantity contributor is an event, not a quantity unit. All types belonging
-    to a hidden sample-report category must remain hidden, even if the broader
-    general-figures population permits their counts. A visible category total
-    must not unlock a hidden member type either: block all its type lower bounds.
-    Include the hybrid PDF
-    decision as well as live categories; combining either file must stay safe.
-    """
-    from core.models import DocumentType
-    from core.reporting.registry import get_backend
 
-    general = build_external_report(facility, date_from, date_to)
-    counts = {row["name"]: row["count"] for row in general.get("by_document_type", [])}
-    sample = get_backend("sample-report-1")
-    binding = sample.typ_bindung
-    if binding is None:
-        return dict.fromkeys(counts)
-    categories = {
-        row["name"]: binding.resolve_row(row)
-        for row in DocumentType.objects.for_facility(facility).values("name", *binding.values_fields())
-        if row["name"] in counts
-    }
-    if not any(category is not None for category in categories.values()):
-        return counts
-    blocked_categories = {
-        category for name, category in categories.items() if category is not None and counts[name] is None
-    }
-    for format_name in ("json", "pdf"):
-        raw = sample.build_format_dataset(facility, date_from, date_to, format=format_name)
-        protected = suppress_sample_report_1_stats(facility, raw.summary)
-        published = {row["name"]: row["count"] for row in protected.get("by_category", [])}
-        blocked_categories.update(
-            category for category in categories.values() if category is not None and published.get(category) is None
-        )
-    for name, category in categories.items():
-        if category in blocked_categories:
-            counts[name] = None
-    return counts
+def project_protected_rows(rows: Sequence[dict[str, Any]], counts: Sequence[int | None]) -> list[dict[str, Any]]:
+    """Attach display markers to counts already decided by the shared mask."""
+    return [{**row, "count": value, "suppressed": value is None} for row, value in zip(rows, counts, strict=True)]
 
 
 def suppress_single_margin(
@@ -1178,7 +1149,11 @@ def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str,
     ``suppressed`` normalisiert, damit das Template den Unterdrueckungs-Marker
     rendern kann. Gibt ein neues Dict zurueck; die Eingabe wird nicht mutiert.
     """
-    threshold = _get_threshold(facility)
+    return _protect_sample_statistics(stats, threshold=_get_threshold(facility))
+
+
+def _protect_sample_statistics(stats: dict[str, Any], *, threshold: int) -> dict[str, Any]:
+    """Apply the local sample contract without querying per canonical window."""
 
     unique = stats.get("unique_clients", 0)
     total = stats.get("total", 0)

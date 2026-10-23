@@ -332,3 +332,20 @@ def test_temporal_row_existence_cannot_use_zero_as_a_false_alternative(facility)
     )
     assert target in mask.dropped, "A listed positive row cannot claim that zero is a feasible recipient world"
     assert mask.published[target] is None
+
+
+@pytest.mark.django_db
+def test_equal_unit_unions_share_stricter_local_masks_across_calendar_aliases(facility):
+    population = shared_disclosure.TemporalPopulation(
+        "event_counts", "all-events", tuple((str(i), date(2026, 1, 15)) for i in range(7))
+    )
+    prefix = key("all-events", START, date(2026, 2, 28))
+    whole = key("all-events")
+    mask = shared_disclosure.protect_temporal_counts(
+        facility,
+        [population],
+        ((prefix.date_from, prefix.date_to), (whole.date_from, whole.date_to)),
+        observations=[shared_disclosure.RawCount(prefix, 7, hidden=True)],
+    )
+    assert mask.published[prefix] is None
+    assert mask.published[whole] is None, "The same unit union must not bypass a stricter alias decision"

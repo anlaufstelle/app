@@ -12,8 +12,8 @@ import hashlib
 import json
 from collections import defaultdict
 from collections.abc import Collection, Sequence
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, replace
+from datetime import date, timedelta
 
 from core.services.dashboard.disclosure import (
     MIN_FEASIBLE_SPAN,
@@ -51,6 +51,8 @@ class RawCount:
     collector's local contract. ``person_sensitive`` also protects exact pins
     above k that would disclose a small contributing-person population.
     ``drop`` imports the stronger requirement to withhold row existence.
+    ``suppression_rank`` only selects which public equation is removed first;
+    it never changes sensitivity or the required feasible span.
     """
 
     key: CountKey
@@ -60,6 +62,7 @@ class RawCount:
     upper: int | None = None
     person_sensitive: bool = False
     drop: bool = False
+    suppression_rank: int = 0
 
     def __post_init__(self) -> None:
         if (
@@ -144,6 +147,7 @@ def protect_counts(facility, counts: Sequence[RawCount], partitions: Sequence[Co
                 upper=min(upper_values) if upper_values else None,
                 person_sensitive=cell.person_sensitive or previous.person_sensitive,
                 drop=cell.drop or previous.drop,
+                suppression_rank=min(cell.suppression_rank, previous.suppression_rank),
             )
         raw[cell.key] = cell
     for partition in partitions:
@@ -217,7 +221,7 @@ def protect_counts(facility, counts: Sequence[RawCount], partitions: Sequence[Co
         connected = _component(unsafe, active_partitions)
         candidates = connected - hidden
         if candidates:
-            victim = min(candidates, key=lambda key: (raw[key].value, key))
+            victim = min(candidates, key=lambda key: (raw[key].suppression_rank, raw[key].value, key))
             hidden.add(victim)
         else:
             dropped.update(connected)
@@ -297,6 +301,8 @@ def protect_temporal_counts(
         counts.append(RawCount(atom, value, hidden=True))
         atom_memberships[atom] = membership
     partitions = []
+    representatives: dict[tuple[str, str, tuple[CountKey, ...]], CountKey] = {}
+    aliases: dict[CountKey, CountKey] = {}
     for dimension, identity in sorted(identities):
         for start, end in sorted(set(windows)):
             target = CountKey(dimension, identity, start, end)
@@ -305,6 +311,7 @@ def protect_temporal_counts(
                 for atom, membership in atom_memberships.items()
                 if atom.dimension == dimension and any(start <= day <= end for day in membership.get(identity, ()))
             )
+            aliases[target] = representatives.setdefault((dimension, identity, members), target)
             value = sum(atoms[(dimension, atom.population.removeprefix("canonical:"))][1] for atom in members)
             counts.append(
                 RawCount(
@@ -316,25 +323,40 @@ def protect_temporal_counts(
                 )
             )
             partitions.append(CountPartition(target.token(), target, members))
-    return protect_counts(facility, [*counts, *observations], partitions)
+    merged_counts = [replace(cell, key=aliases.get(cell.key, cell.key)) for cell in [*counts, *observations]]
+    merged_partitions = {
+        (aliases[partition.margin], partition.cells): replace(partition, margin=aliases[partition.margin])
+        for partition in partitions
+    }
+    mask = protect_counts(facility, merged_counts, tuple(merged_partitions.values()))
+    return SharedMask(
+        mask.facility_id,
+        mask.threshold,
+        {**mask.published, **{key: mask.published[alias] for key, alias in aliases.items()}},
+        mask.dropped | frozenset(key for key, alias in aliases.items() if alias in mask.dropped),
+    )
 
 
 def collect_event_populations(facility, date_from: date, date_to: date) -> tuple[TemporalPopulation, ...]:
     """Collect base live event/person populations with explicit tenant scoping.
 
-    This is the common source for totals, document types, contact stages and
-    age groups. Backend-specific mapped, field-value, case and hybrid sources
-    must extend the family before solving; this function does not substitute
-    for those collectors. Event dates use the database timezone conversion
-    used by the existing statistics query. No user or role enters the source.
+    This is the common source for totals, document types, mapped categories,
+    contact stages and age groups. Field-value, admission, case and hybrid
+    snapshot sources require their own collectors before joining this family.
+    Event dates use the database timezone conversion used by the existing
+    statistics query. No user or role enters the source.
     """
     from django.db.models import Case, CharField, Value, When
     from django.db.models.functions import TruncDate
 
     from core.models import Event
+    from core.reporting.registry import get_backend
     from core.services.dashboard.statistics import _STAGE_ANONYM_Q, _STAGE_IDENTIFIED_Q, _STAGE_QUALIFIED_Q
 
     _require_facility(facility)
+    sample_binding = get_backend("sample-report-1").typ_bindung
+    if sample_binding is None:
+        raise ValueError("The sample report requires a category binding")
     if date_from > date_to:
         raise ValueError("Invalid population collection interval")
     rows = (
@@ -350,12 +372,16 @@ def collect_event_populations(facility, date_from: date, date_to: date) -> tuple
                 output_field=CharField(),
             ),
         )
-        .values("pk", "document_type_id", "client_id", "client__age_cluster", "day", "stage")
+        .values(
+            "pk", "document_type_id", "document_type__report_key", "client_id", "client__age_cluster", "day", "stage"
+        )
         .order_by("occurred_at", "pk")
     )
     populations: dict[tuple[str, str], set[tuple[str, date]]] = defaultdict(set)
     populations[("event_counts", "all-events")] = set()
     populations[("person_counts", "active-persons")] = set()
+    populations[("event_counts", "mapped-events")] = set()
+    populations[("event_counts", "age:__no_person__")] = set()
     for stage in ("anonym", "identifiziert", "qualifiziert"):
         populations[("event_counts", f"contact-stage:{stage}")] = set()
     for row in rows.iterator(chunk_size=1000):
@@ -363,6 +389,10 @@ def collect_event_populations(facility, date_from: date, date_to: date) -> tuple
         event = str(row["pk"]), day
         populations[("event_counts", "all-events")].add(event)
         populations[("event_counts", f"document-type:{row['document_type_id']}")].add(event)
+        category = sample_binding.resolve(row["document_type__report_key"])
+        if category is not None:
+            populations[("event_counts", "mapped-events")].add(event)
+            populations[("event_counts", f"category:{category}")].add(event)
         if row["stage"]:
             populations[("event_counts", f"contact-stage:{row['stage']}")].add(event)
         cluster = row["client__age_cluster"] if row["client_id"] is not None else "__no_person__"
@@ -370,8 +400,331 @@ def collect_event_populations(facility, date_from: date, date_to: date) -> tuple
         if row["client_id"] is not None:
             person = str(row["client_id"]), day
             populations[("person_counts", "active-persons")].add(person)
+            if row["stage"]:
+                populations[("person_counts", f"contact-stage:{row['stage']}")].add(person)
             populations[("person_counts", f"age:{cluster}")].add(person)
     return tuple(
         TemporalPopulation(dimension, identity, tuple(sorted(members, key=lambda member: (member[1], member[0]))))
         for (dimension, identity), members in sorted(populations.items())
     )
+
+
+@dataclass(frozen=True)
+class LiveRelease:
+    """Projected general and sample figures; the mask stays internal."""
+
+    general: dict
+    sample: dict
+    mask: SharedMask
+
+
+@dataclass(frozen=True)
+class _LocalInterval:
+    date_from: date
+    date_to: date
+    general: dict
+    sample: dict
+    raw: dict
+    observations: tuple[RawCount, ...]
+    dropped: frozenset[CountKey]
+
+
+def _raw_live_statistics(populations, types, date_from, date_to):
+    """Aggregate raw unit unions, keeping person counts non-additive."""
+    from core.models import Client
+    from core.services.dashboard.statistics import PERSONS_KEY
+
+    members = {
+        (p.dimension, p.identity): {unit for unit, day in p.members if date_from <= day <= date_to} for p in populations
+    }
+
+    def size(identity, dimension="event_counts"):
+        return len(members.get((dimension, identity), ()))
+
+    stages = ("anonym", "identifiziert", "qualifiziert")
+    labels = dict(Client.AgeCluster.choices)
+    ages = [
+        {
+            "cluster": identity.removeprefix("age:"),
+            "count": len(units),
+            "label": labels.get(identity.removeprefix("age:"), identity.removeprefix("age:")),
+            PERSONS_KEY: size(identity, "person_counts"),
+        }
+        for (dimension, identity), units in members.items()
+        if dimension == "event_counts" and identity.startswith("age:") and identity != "age:__no_person__" and units
+    ]
+    ages.sort(key=lambda row: -row["count"])
+    raw = {
+        "total_contacts": size("all-events"),
+        "unique_clients": size("active-persons", "person_counts"),
+        "by_document_type": [
+            {"name": name, "count": size(f"document-type:{pk}")}
+            for name, pk in types.items()
+            if size(f"document-type:{pk}")
+        ],
+        "by_age_cluster": ages,
+        "by_contact_stage": {stage: size(f"contact-stage:{stage}") for stage in stages},
+        "persons_by_contact_stage": {
+            stage: size(f"contact-stage:{stage}", "person_counts")
+            + (size("age:__no_person__") if stage == "anonym" else 0)
+            for stage in stages
+        },
+    }
+    raw["by_document_type"].sort(key=lambda row: -row["count"])
+    raw_sample = {
+        "total": size("mapped-events"),
+        "by_category": [
+            (identity.removeprefix("category:"), len(units))
+            for (dimension, identity), units in members.items()
+            if dimension == "event_counts" and identity.startswith("category:") and units
+        ],
+        "by_age_cluster": ages,
+        "unique_clients": raw["unique_clients"],
+    }
+    return members, raw, raw_sample
+
+
+def _prepare_live_interval(facility, populations, types, type_categories, snapshots, threshold, date_from, date_to):
+    """Import local contracts using raw aggregates, never published numbers."""
+    from core.services.dashboard.external_report import _protect_external_statistics, _protect_sample_statistics
+
+    members, raw, raw_sample = _raw_live_statistics(populations, types, date_from, date_to)
+    general = _protect_external_statistics(facility, date_from, date_to, raw, threshold=threshold)
+    sample = _protect_sample_statistics(raw_sample, threshold=threshold)
+    hybrid_raw = _raw_hybrid_sample(populations, types, snapshots, date_from, date_to)
+    hybrid = _protect_sample_statistics(hybrid_raw, threshold=threshold)
+    hybrid_categories = {row["name"]: row["count"] for row in hybrid.get("by_category", [])}
+    observations = []
+    local_dropped = set()
+
+    def observe(identity, value, published, *, dimension="event_counts", lower=0, drop=False, person_sensitive=False):
+        key = CountKey(dimension, identity, date_from, date_to)
+        if drop:
+            local_dropped.add(key)
+        observations.append(
+            RawCount(
+                key,
+                value,
+                hidden=published is None or drop,
+                lower=0 if drop else lower,
+                person_sensitive=person_sensitive and not drop,
+                # A broad total is dispensable when it pins a small excluded
+                # remainder. Preserve the useful mapped subtotal if possible.
+                suppression_rank=-1 if identity == "all-events" else 0,
+            )
+        )
+
+    observe("all-events", raw["total_contacts"], general["total_contacts"])
+    observe("mapped-events", raw_sample["total"], sample["total"])
+    observe("active-persons", raw["unique_clients"], general["unique_clients"], dimension="person_counts")
+    observe("active-persons", raw["unique_clients"], sample["unique_clients"], dimension="person_counts")
+    for table, original, protected, prefix, label in (
+        ("by_document_type", raw["by_document_type"], general.get("by_document_type", []), "document-type:", "name"),
+        ("by_age_cluster", raw["by_age_cluster"], general.get("by_age_cluster", []), "age:", "cluster"),
+        ("by_age_cluster", raw["by_age_cluster"], sample.get("by_age_cluster", []), "age:", "cluster"),
+    ):
+        published = {row[label]: row["count"] for row in protected}
+        for row in original:
+            identity = f"{prefix}{types[row[label]] if table == 'by_document_type' else row[label]}"
+            observe(
+                identity,
+                row["count"],
+                published.get(row[label]),
+                lower=1,
+                drop=not protected,
+                person_sensitive=table == "by_age_cluster",
+            )
+    for row in general.get("by_age_cluster", []):
+        if row["cluster"] == "__no_person__":
+            value = len(members.get(("event_counts", "age:__no_person__"), ()))
+            observe("age:__no_person__", value, row["count"])
+    for stage, value in raw["by_contact_stage"].items():
+        observe(
+            f"contact-stage:{stage}",
+            value,
+            general.get("by_contact_stage", {}).get(stage),
+            person_sensitive=True,
+            drop="by_contact_stage" not in general,
+        )
+    published_categories = {row["name"]: row["count"] for row in sample.get("by_category", [])}
+    for category, value in raw_sample["by_category"]:
+        observe(
+            f"category:{category}", value, published_categories.get(category), lower=1, drop="by_category" not in sample
+        )
+    # Preserve the existing hybrid-PDF safeguard as a raw input to the shared
+    # decision. Snapshot and live counts are distinct sources, never aliases.
+    for row in raw["by_document_type"]:
+        type_id = types[row["name"]]
+        category = type_categories[type_id]
+        if category is not None and hybrid_categories.get(category) is None:
+            observe(f"document-type:{type_id}", row["count"], None, lower=1)
+    return _LocalInterval(date_from, date_to, general, sample, raw, tuple(observations), frozenset(local_dropped))
+
+
+def _raw_hybrid_sample(populations, types, snapshots, date_from, date_to):
+    """Reuse snapshot segment semantics without any backend invocation."""
+    from core.reporting.data_source import LIVE
+    from core.services.dashboard.snapshot import (
+        SNAPSHOT_AS_OF_KEY,
+        _merge_sample_report_1_stats,
+        _newer,
+        _split_into_segments,
+    )
+
+    segments = []
+    as_of = None
+    for start, end, eligible in _split_into_segments(date_from, date_to):
+        snapshot = snapshots.get((start.year, start.month)) if eligible else None
+        raw = snapshot["backend_data"].get("sample-report-1") if snapshot else None
+        if raw:
+            as_of = _newer(as_of, snapshot["updated_at"])
+        else:
+            raw = _raw_live_statistics(populations, types, start, end)[2]
+        segments.append(raw)
+    merged = _merge_sample_report_1_stats(segments)
+    merged[SNAPSHOT_AS_OF_KEY] = as_of
+    merged["unique_clients"] = _raw_live_statistics(populations, types, date_from, date_to)[1]["unique_clients"]
+    merged["unique_clients_data_source"] = LIVE
+    return merged
+
+
+def canonical_live_windows(populations: Sequence[TemporalPopulation]) -> tuple[tuple[date, date], ...]:
+    """All contiguous calendar-month unions over the current live population.
+
+    Empty months introduce no new union. The family depends on facility data,
+    never on the requested interval, report, format or role. It includes all
+    prefixes, overlapping month unions, cross-year unions and the standard
+    rolling periods as of today. Other finer intervals can only reuse a
+    decision when their exact unit union is already present.
+    """
+    import calendar
+
+    from django.utils import timezone
+
+    from core.services.dashboard.statistics import ROLLING_WINDOW_DAYS
+
+    months = sorted({(day.year, day.month) for p in populations for _, day in p.members})
+    windows = {
+        (date(*start, 1), date(*end, calendar.monthrange(*end)[1]))
+        for index, start in enumerate(months)
+        for end in months[index:]
+    }
+    if not windows:
+        windows.add((date.min, date.min))
+    today = timezone.localdate()
+    windows.update((today - timedelta(days=days - 1), today) for days in ROLLING_WINDOW_DAYS.values())
+    return tuple(sorted(windows))
+
+
+def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
+    """Solve one canonical live family before projecting the requested interval.
+
+    This protects current live calendar unions without retaining publication
+    history. A finer interval that is not an existing population union is
+    withheld rather than adding a request-dependent equation to the graph.
+    Local table removal is a projection rule: remove its row-existence bound,
+    but retain the raw subset equations when solving other consumers.
+    """
+    from core.models import DocumentType, StatisticsSnapshot
+    from core.reporting.registry import get_backend
+    from core.services.dashboard.external_report import _get_threshold, project_protected_rows
+
+    populations = collect_event_populations(facility, date.min, date.max)
+    type_rows = list(
+        DocumentType.objects.for_facility(facility).order_by("name").values_list("name", "pk", "report_key")
+    )
+    types = {name: pk for name, pk, _key in type_rows}
+    sample_binding = get_backend("sample-report-1").typ_bindung
+    if sample_binding is None:
+        raise ValueError("The sample report requires a category binding")
+    type_categories = {pk: sample_binding.resolve(key) for _name, pk, key in type_rows}
+    snapshots = {
+        (row["year"], row["month"]): row
+        for row in StatisticsSnapshot.objects.for_facility(facility).values(
+            "year", "month", "backend_data", "updated_at"
+        )
+    }
+    threshold = _get_threshold(facility)
+    windows = canonical_live_windows(populations)
+    intervals = [
+        _prepare_live_interval(facility, populations, types, type_categories, snapshots, threshold, start, end)
+        for start, end in windows
+    ]
+    observations = [cell for interval in intervals for cell in interval.observations]
+    observed = {cell.key for cell in observations}
+    internal = {CountKey(p.dimension, p.identity, start, end) for p in populations for start, end in windows} - observed
+    mask = protect_temporal_counts(facility, populations, windows, observations=observations, hidden_keys=internal)
+    mask = SharedMask(
+        mask.facility_id,
+        mask.threshold,
+        mask.published,
+        mask.dropped | frozenset(key for interval in intervals for key in interval.dropped),
+    )
+    # Index exact unions, not numerical equality. Two equal-sized populations
+    # are never aliases unless their counting units are identical.
+    aliases: dict[tuple[str, str, frozenset[str]], CountKey] = {}
+    for population in populations:
+        for start, end in windows:
+            units = frozenset(unit for unit, day in population.members if start <= day <= end)
+            aliases.setdefault(
+                (population.dimension, population.identity, units),
+                CountKey(population.dimension, population.identity, start, end),
+            )
+    requested = _prepare_live_interval(
+        facility, populations, types, type_categories, snapshots, threshold, date_from, date_to
+    )
+    members = {
+        (p.dimension, p.identity): frozenset(unit for unit, day in p.members if date_from <= day <= date_to)
+        for p in populations
+    }
+
+    def resolve(identity, dimension="event_counts"):
+        return aliases.get((dimension, identity, members.get((dimension, identity), frozenset())))
+
+    def publish(identity, *, dimension="event_counts"):
+        key = resolve(identity, dimension)
+        return mask.published[key] if key is not None else None
+
+    general, sample, raw = requested.general, requested.sample, requested.raw
+    general["total_contacts"] = publish("all-events")
+    general["unique_clients"] = publish("active-persons", dimension="person_counts")
+    sample["total"] = publish("mapped-events")
+    sample["unique_clients"] = publish("active-persons", dimension="person_counts")
+    for report, table, prefix, label in (
+        (general, "by_document_type", "document-type:", "name"),
+        (general, "by_age_cluster", "age:", "cluster"),
+        (sample, "by_age_cluster", "age:", "cluster"),
+        (sample, "by_category", "category:", "name"),
+    ):
+        if table not in report:
+            continue
+        rows = report[table]
+        identities = [f"{prefix}{types[row[label]] if table == 'by_document_type' else row[label]}" for row in rows]
+        if any(resolve(identity) is None or resolve(identity) in mask.dropped for identity in identities):
+            report.pop(table, None)
+        else:
+            report[table] = project_protected_rows(rows, [publish(identity) for identity in identities])
+    if "by_contact_stage" in general:
+        if any(resolve(f"contact-stage:{stage}") in mask.dropped for stage in raw["by_contact_stage"]):
+            general.pop("by_contact_stage")
+        else:
+            general["by_contact_stage"] = {
+                stage: publish(f"contact-stage:{stage}") for stage in raw["by_contact_stage"]
+            }
+    return LiveRelease(general, sample, mask)
+
+
+def project_shared_type_dataset(facility, result):
+    """Project the example report through the shared type/month decision."""
+    if result.disclosure_context is None:
+        return result
+    date_from, date_to, _source = result.disclosure_context
+    general = build_live_release(facility, date_from, date_to).general
+    published = {row["name"]: row["count"] for row in general.get("by_document_type", [])}
+    records = [
+        {**row, "count": published[row["document_type"]] if row["count"] is not None else None}
+        for row in result.records
+        if row["document_type"] in published
+    ]
+    summary = {**result.summary, "total": general["total_contacts"] if result.summary["total"] is not None else None}
+    return replace(result, records=records, summary=summary)
