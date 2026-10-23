@@ -41,6 +41,7 @@ Modelle mehr direkt an.
 from __future__ import annotations
 
 from functools import wraps
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -58,6 +59,7 @@ from django_ratelimit import UNSAFE
 from core.constants import RATELIMIT_FREQUENT
 from core.demo import DEMO_OFFLINE_BOOTSTRAP_ERROR, DEMO_OFFLINE_BOOTSTRAP_PENDING, DEMO_PASSWORD
 from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY, LAST_RENEWAL_KEY
+from core.middleware.user_language import visit_language
 from core.models import User
 from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
 from core.services.demo_scenarios import account_for, facility_for_scenario
@@ -218,14 +220,27 @@ class DemoScenarioStartView(View):
     per GET/Deep-Link, Ticket-Punkt 8).
     """
 
+    @staticmethod
+    def selection_redirect(request, scenario_key=""):
+        """Keep the visitor's language and scenario through all failure paths."""
+        params = {}
+        area = scenario_key or request.GET.get("bereich") or request.POST.get("bereich")
+        if area:
+            params["bereich"] = area
+        language = visit_language(request)
+        if language:
+            params["lang"] = language
+        target = reverse(SCENARIO_SELECT_URL_NAME)
+        return redirect(f"{target}?{urlencode(params)}" if params else target)
+
     def get(self, request):
-        return redirect(SCENARIO_SELECT_URL_NAME)
+        return self.selection_redirect(request)
 
     def post(self, request):
         scenario = _lookup_scenario(request.POST.get("scenario", ""))
         if scenario is None:
             messages.error(request, _("Dieser Demo-Bereich ist nicht verfügbar."))
-            return redirect(SCENARIO_SELECT_URL_NAME)
+            return self.selection_redirect(request)
 
         role = request.POST.get("role") or _default_role(scenario)
         # Serverseitige Pruefung gegen den Katalog (Ticket-Punkt 7): kein frei
@@ -233,8 +248,7 @@ class DemoScenarioStartView(View):
         # DIESES Szenario tatsaechlich angelegten Rollen sein.
         if role not in scenario.demo_roles:
             messages.error(request, _("Diese Rolle ist für diesen Demo-Bereich nicht freigegeben."))
-            select_url = reverse(SCENARIO_SELECT_URL_NAME)
-            return redirect(f"{select_url}?bereich={scenario.key}")
+            return self.selection_redirect(request, scenario.key)
 
         facility, available = facility_for_scenario(scenario)
         if not available:
@@ -245,7 +259,7 @@ class DemoScenarioStartView(View):
                     "oder wird vorbereitet). Bitte gleich erneut versuchen."
                 ),
             )
-            return redirect(SCENARIO_SELECT_URL_NAME)
+            return self.selection_redirect(request)
 
         # Fest zugeordnetes Demo-Konto je Facility+Rolle (Ticket-Punkt 5):
         # NIE die facility-Zuordnung eines Kontos umschreiben, nur ein
@@ -255,12 +269,12 @@ class DemoScenarioStartView(View):
         user = account_for(facility, role)
         if user is None:
             messages.error(request, _("Für diesen Demo-Bereich ist noch kein passendes Konto vorbereitet."))
-            return redirect(SCENARIO_SELECT_URL_NAME)
+            return self.selection_redirect(request)
 
         # Refuse before login and Clear-Site-Data to preserve existing work.
         if not user.check_password(DEMO_PASSWORD):
             messages.error(request, DEMO_OFFLINE_BOOTSTRAP_ERROR)
-            return redirect(SCENARIO_SELECT_URL_NAME)
+            return self.selection_redirect(request)
 
         # ``authenticate()`` entfaellt bewusst — es gibt kein Passwort in
         # diesem Ablauf, Vertrauensanker ist die serverseitige Szenario-/

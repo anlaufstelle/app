@@ -1,6 +1,7 @@
 """Custom auth views for Anlaufstelle."""
 
 import logging
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
 from django.contrib.auth import views as auth_views
@@ -484,9 +485,24 @@ class OfflineKeySaltView(LoginRequiredMixin, View):
 @require_POST
 @ratelimit(key="user_or_ip", rate=RATELIMIT_MUTATION, method="POST", block=True)
 def set_user_language(request):
-    """Save language preference to user model, then delegate to Django's set_language."""
+    """Save a visit choice, preserving shared demo account preferences."""
     language = request.POST.get("language")
-    if language and request.user.is_authenticated:
+    if language in {code for code, _ in settings.LANGUAGES}:
+        # Replace stale explicit links so the next request honors this choice.
+        try:
+            target = urlsplit(request.POST.get("next", ""))
+        except ValueError:
+            target = urlsplit("")
+        query = [
+            (key, language if key == "lang" else value)
+            for key, value in parse_qsl(target.query, keep_blank_values=True)
+        ]
+        request.POST = request.POST.copy()
+        request.POST["next"] = urlunsplit(target._replace(query=urlencode(query)))
+    else:
+        request.POST = request.POST.copy()
+        request.POST.pop("language", None)
+    if language and request.user.is_authenticated and not getattr(settings, "DEMO_MODE", False):
         valid_langs = [code for code, _ in settings.LANGUAGES]
         if language in valid_langs:
             User.objects.filter(pk=request.user.pk).update(preferred_language=language)

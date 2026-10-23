@@ -1,35 +1,52 @@
-"""Middleware to activate the user's preferred language."""
+"""Resolve explicit visit language before account preferences."""
 
 from django.conf import settings
 from django.utils import translation
 
 
+def visit_language(request):
+    """Ignore unsupported query/cookie values and browser language headers."""
+    supported = {code for code, _ in settings.LANGUAGES}
+    for value in (request.GET.get("lang"), request.COOKIES.get(settings.LANGUAGE_COOKIE_NAME)):
+        if value in supported:
+            return value
+    return None
+
+
+def persist_visit_language(request, response):
+    """Persist valid explicit links using the existing Django cookie policy."""
+    language = request.GET.get("lang")
+    if language in {code for code, _ in settings.LANGUAGES}:
+        response.set_cookie(
+            settings.LANGUAGE_COOKIE_NAME,
+            language,
+            max_age=settings.LANGUAGE_COOKIE_AGE,
+            path=settings.LANGUAGE_COOKIE_PATH,
+            domain=settings.LANGUAGE_COOKIE_DOMAIN,
+            secure=settings.LANGUAGE_COOKIE_SECURE,
+            httponly=settings.LANGUAGE_COOKIE_HTTPONLY,
+            samesite=settings.LANGUAGE_COOKIE_SAMESITE,
+        )
+    return response
+
+
 class UserLanguageMiddleware:
-    """Decide the request locale via app preference, ignoring Accept-Language.
+    """Select query, cookie, account preference, then the application default.
 
-    Runs after Django's ``LocaleMiddleware`` and ``AuthenticationMiddleware``.
-
-    - Authentifizierter User mit gesetztem ``preferred_language``: aktiviert
-      diese Praeferenz.
-    - Sonst (anonyme User oder fehlende Praeferenz): Default-Locale
-      (``settings.LANGUAGE_CODE``).
-
-    Damit ignorieren wir bewusst den ``Accept-Language``-Header — anonyme
-    Pages (Login, Password-Reset, MFA-Login) rendern in der App-Default-
-    Sprache statt in einer Browser-Sprache, die der User nicht eingestellt
-    hat. Refs #670.
+    Authentication runs first. A visit choice survives login without writing
+    the account, including shared demo accounts. Accept-Language is ignored.
     """
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        lang = settings.LANGUAGE_CODE
-        if hasattr(request, "user") and request.user.is_authenticated:
-            preferred = getattr(request.user, "preferred_language", "")
-            if preferred:
-                lang = preferred
-
-        translation.activate(lang)
-        request.LANGUAGE_CODE = lang
-        return self.get_response(request)
+        language = visit_language(request)
+        if language is None:
+            user = getattr(request, "user", None)
+            language = getattr(user, "preferred_language", "") if user and user.is_authenticated else ""
+            if language not in {code for code, _ in settings.LANGUAGES}:
+                language = settings.LANGUAGE_CODE
+        translation.activate(language)
+        request.LANGUAGE_CODE = language
+        return persist_visit_language(request, self.get_response(request))

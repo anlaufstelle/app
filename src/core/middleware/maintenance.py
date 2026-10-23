@@ -25,7 +25,9 @@ import time
 from django.conf import settings
 from django.http import HttpResponse
 from django.template.loader import render_to_string
+from django.utils import translation
 
+from core.middleware.user_language import persist_visit_language, visit_language
 from core.signals.audit import get_client_ip
 
 # Default-Whitelist — Pfade, die auch im Wartungsmodus erreichbar bleiben muessen.
@@ -63,12 +65,17 @@ class MaintenanceModeMiddleware:
         if self._client_ip(request) in self.allow_ips:
             return self.get_response(request)
 
-        return HttpResponse(
-            render_to_string("503.html"),
-            status=503,
-            content_type="text/html; charset=utf-8",
-            headers={"Retry-After": str(self.retry_after)},
-        )
+        # This response bypasses authentication and LocaleMiddleware entirely.
+        language = visit_language(request) or settings.LANGUAGE_CODE
+        with translation.override(language):
+            response = HttpResponse(
+                render_to_string("503.html"),
+                status=503,
+                content_type="text/html; charset=utf-8",
+                headers={"Retry-After": str(self.retry_after)},
+            )
+        response.headers["Content-Language"] = language
+        return persist_visit_language(request, response)
 
     def _is_maintenance_active(self) -> bool:
         """Cached File-Exists-Check."""
