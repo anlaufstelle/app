@@ -215,7 +215,7 @@ it("missing English shell with stalled repair ends in an English error page", as
             ["/offline/shell-language/", new Response("en")],
             ["/offline/event-shell/?shell_language=de", new Response("German shell")],
         ]), { addAll: () => new Promise(() => {}) });
-        names.add("anlaufstelle-v64-shell-language-en");
+        names.add("anlaufstelle-v65-shell-language-en");
         const worker = workerContext(offlineFetch(), caches);
         const response = dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`));
         await vi.advanceTimersByTimeAsync(3000);
@@ -279,8 +279,8 @@ it("interrupted language marker cleanup remains uncertain after worker restart",
     await message(worker, { type: "SET_SHELL_LANGUAGE", language: "de" });
     caches.delete = async () => { throw new Error("Cache deletion failed"); };
     await message(worker, { type: "SET_SHELL_LANGUAGE", language: "en" });
-    expect(names.has("anlaufstelle-v64-shell-language-de")).toBe(true);
-    expect(names.has("anlaufstelle-v64-shell-language-en")).toBe(true);
+    expect(names.has("anlaufstelle-v65-shell-language-de")).toBe(true);
+    expect(names.has("anlaufstelle-v65-shell-language-en")).toBe(true);
     worker = workerContext(offlineFetch(), caches);
     const response = await dispatchFetch(worker.handlers.fetch, navRequest(`${ORIGIN}/events/new/`));
     expect(response.status).toBe(503);
@@ -296,7 +296,7 @@ it("failed replacement marker creation invalidates the previous selection", asyn
     await message(worker, { type: "SET_SHELL_LANGUAGE", language: "de" });
     const open = caches.open;
     caches.open = async name => {
-        if (name === "anlaufstelle-v64-shell-language-en") throw new Error("Marker creation failed");
+        if (name === "anlaufstelle-v65-shell-language-en") throw new Error("Marker creation failed");
         return open(name);
     };
     await message(worker, { type: "SET_SHELL_LANGUAGE", language: "en" });
@@ -315,7 +315,7 @@ it("contradictory durable language records cannot authorize the previous shell",
     await message(worker, { type: "SET_SHELL_LANGUAGE", language: "de" });
     const open = caches.open;
     caches.open = async name => {
-        if (name === "anlaufstelle-v64-shell-language-en") throw new Error("Marker creation failed");
+        if (name === "anlaufstelle-v65-shell-language-en") throw new Error("Marker creation failed");
         return open(name);
     };
     caches.delete = async () => { throw new Error("Marker invalidation failed"); };
