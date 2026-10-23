@@ -1,6 +1,7 @@
 """Online-only review pages; source permissions are checked for every request."""
 
 from django.core.exceptions import ValidationError
+from django.http import Http404
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -11,6 +12,7 @@ from core.forms.free_text_review import FreeTextReviewForm, ReviewFilterForm
 from core.models import AuditLog
 from core.services.audit import log_audit_event
 from core.services.free_text_review import (
+    MAX_PAGE,
     TARGET_LABELS,
     ReviewPage,
     get_entry,
@@ -30,15 +32,20 @@ def _audit_qualified_reads(request, entries):
 
 
 def _page_number(raw):
+    """Malformed or non-positive input shows the first page; a page beyond ``MAX_PAGE`` does not exist."""
     try:
-        return max(1, int(raw))
+        number = max(1, int(raw))
     except (TypeError, ValueError):
         return 1
+    if number > MAX_PAGE:
+        raise Http404("Review page not found")
+    return number
 
 
 class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
     @method_decorator(never_cache)
     def get(self, request):
+        page_number = _page_number(request.GET.get("page"))
         data = request.GET.copy()
         if not data.get("model"):
             data["model"] = "Client" if request.user.is_staff_or_above else "WorkItem"
@@ -53,7 +60,7 @@ class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
                 request.current_facility,
                 request.user,
                 form.cleaned_data["model"],
-                page=_page_number(request.GET.get("page")),
+                page=page_number,
                 changed_before=form.cleaned_data["changed_before"],
                 editor_id=form.cleaned_data["editor"],
                 risk=form.cleaned_data["risk"],

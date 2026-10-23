@@ -31,6 +31,8 @@ TARGET_LABELS = {
     "Event": _("Ereignis-Freitexte"),
 }
 PAGE_SIZE = 50
+# Far beyond any realistic table; keeps the SQL offset inside the database integer range.
+MAX_PAGE = 1_000_000
 SCAN_BATCH = 200
 STATIC_FIELDS = {"Client": "notes", "Case": "description", "Episode": "description", "WorkItem": "description"}
 

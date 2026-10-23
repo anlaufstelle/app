@@ -212,3 +212,37 @@ def test_event_pages_skip_events_without_a_nonblank_text_value(
     assert response.status_code == 200
     assert [entry.target_id for entry in response.context["entries"]] == [events[0].pk]
     assert not response.context["page_obj"].has_next()
+
+
+@pytest.mark.parametrize("raw", ["-3", "0", "abc", "1.5", "", "9" * 5000], ids=lambda raw: raw[:12] or "empty")
+def test_malformed_page_numbers_fall_back_to_the_first_page(client, facility, staff_user, raw):
+    make_clients(facility, staff_user, 3)
+    client.force_login(staff_user)
+    response = client.get(reverse("core:free_text_review_list"), {"page": raw})
+    assert response.status_code == 200
+    assert response.context["page_obj"].number == 1
+    assert len(response.context["entries"]) == 3
+
+
+@pytest.mark.parametrize(
+    "raw", [str(2**63), "999999999999999999999999", "1" + "0" * 400], ids=["bigint", "24-digits", "401-digits"]
+)
+@pytest.mark.parametrize("risk", ["", "email"])
+def test_page_numbers_beyond_the_supported_range_are_not_found(client, facility, staff_user, raw, risk):
+    make_clients(facility, staff_user, 1)
+    client.force_login(staff_user)
+    client.raise_request_exception = False
+    with CaptureQueriesContext(connection) as queries:
+        response = client.get(reverse("core:free_text_review_list"), {"page": raw, "risk": risk})
+    assert response.status_code == 404
+    # No review query ran (the error page's own navigation counters are unrelated).
+    assert not [q for q in queries if '"core_client"."notes"' in q["sql"] or "core_freetextreview" in q["sql"]]
+
+
+def test_last_supported_page_is_an_empty_page_not_an_error(client, facility, staff_user):
+    make_clients(facility, staff_user, 1)
+    client.force_login(staff_user)
+    response = client.get(reverse("core:free_text_review_list"), {"page": review_service.MAX_PAGE})
+    assert response.status_code == 200
+    assert response.context["entries"] == []
+    assert not response.context["page_obj"].has_next()
