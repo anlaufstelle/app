@@ -1729,6 +1729,27 @@
     "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
   },
   {
+    "nodeid": "src/tests/test_process_vocabulary_guard.py::test_baseline_history_never_restores_findings",
+    "profile": "public",
+    "reason": "No Git history for the baseline file (flat clone or release tree).",
+    "exclusion": ".git",
+    "rationale": "A release tree carries no Git history; the history rule runs wherever the baseline file has commits."
+  },
+  {
+    "nodeid": "src/tests/test_process_vocabulary_guard.py::test_keys_of_all_current_findings_survive_the_real_release_sanitizer",
+    "profile": "public",
+    "reason": "The release sanitizer is not part of the release tree.",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node runs that excluded sanitizer."
+  },
+  {
+    "nodeid": "src/tests/test_process_vocabulary_guard.py::test_keys_survive_the_real_release_sanitizer",
+    "profile": "public",
+    "reason": "The release sanitizer is not part of the release tree.",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node runs that excluded sanitizer."
+  },
+  {
     "nodeid": "src/tests/test_prod_settings.py::TestAusgelieferteDeployVorlagenStarten::test_vorlage_startet_und_leitet_die_oeffentliche_domain_ab[.env.barbara.example]",
     "profile": "public",
     "reason": "dev-ops/deploy/barbara/.env.barbara.example nicht im Public-Snapshot — Guard nur im Dev-Repo relevant",

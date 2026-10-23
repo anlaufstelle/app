@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import re
+import shutil
 import subprocess
 from collections import Counter
 from pathlib import Path
@@ -192,9 +194,44 @@ def scan_release_vocabulary(root: Path) -> list[Hit]:
     ]
 
 
+# The release sanitizer rewrites repository addresses; the key must not depend on those rewrites.
+# Dev issue addresses lose their link: "[#N](address)" and a bare address become "#N",
+# "[label](address)" becomes "label #N". The dev repository name becomes the public one,
+# and blob/tree addresses point to the public "main" branch.
+_KEY_FORMAT = 2
+# Assembled from parts: the release sanitizer rewrites or rejects the literal dev repository name in source files.
+_DEV_REPOSITORY = "tobiasnix" + "/" + "anlaufstelle"
+_DEV_ISSUE_HOST = r"https?://(?:www\.)?github\.com/" + _DEV_REPOSITORY + r"/(?:issues|pull)/(?P<number>\d+)"
+_DEV_ISSUE_LINK_RE = re.compile(r"\[(?P<label>[^\[\]]*)\]\(" + _DEV_ISSUE_HOST + r"[^)\s]*\)")
+_DEV_ISSUE_ADDRESS_RE = re.compile(_DEV_ISSUE_HOST + r"[\w~%.+/?=\x26;:@!$,*#-]*")
+_DEV_REPOSITORY_RE = re.compile(re.escape(_DEV_REPOSITORY) + r"(?![\w-])")
+_REPOSITORY_REF_RE = re.compile(r"(anlaufstelle/app/(?:blob|tree))/[^/\s\\%]+/")
+
+
+def _normalize_release_rewrites(line: str) -> str:
+    """Write a line the way it reads after the release sanitizer's repository rewrites."""
+    line = _unlink_dev_issues(line)
+    return _REPOSITORY_REF_RE.sub(r"\1/main/", _DEV_REPOSITORY_RE.sub("anlaufstelle/app", line))
+
+
+def _unlink_dev_issues(line: str) -> str:
+    """Write dev issue addresses the way the release sanitizer leaves them."""
+
+    def link(match: re.Match[str]) -> str:
+        label, number = match.group("label"), match.group("number")
+        return label if label.endswith(f"#{number}") else f"{label} #{number}"
+
+    return _DEV_ISSUE_ADDRESS_RE.sub(lambda m: f"#{m.group('number')}", _DEV_ISSUE_LINK_RE.sub(link, line))
+
+
 def finding_counts(hits: list[Hit]) -> dict[str, int]:
-    """Pin file and exact line content, independent of line-number shifts."""
-    return dict(Counter(f"{hit.relpath}:{hashlib.sha256(hit.line.encode()).hexdigest()}" for hit in hits))
+    """Pin file, matched word and release-normalized line content, independent of line-number shifts."""
+    return dict(
+        Counter(
+            f"{hit.relpath}:{hit.word.lower()}:{hashlib.sha256(_normalize_release_rewrites(hit.line).encode()).hexdigest()}"
+            for hit in hits
+        )
+    )
 
 
 def baseline_is_subset(current: dict[str, int], ceiling: dict[str, int]) -> bool:
@@ -210,26 +247,47 @@ def _git_text(root: Path, *args: str) -> str | None:
     return proc.stdout.decode("utf-8") if proc.returncode == 0 else None
 
 
-def _committed_baselines(root: Path) -> list[dict[str, int]]:
-    """Return the committed ``remaining`` maps of the baseline file, oldest first."""
+def _committed_baselines(root: Path) -> list[tuple[int, dict[str, int]]]:
+    """Return the committed ``(key_format, remaining)`` pairs of the baseline file, oldest first."""
     relpath = _BASELINE_PATH.relative_to(REPO_ROOT).as_posix()
     log = _git_text(root, "log", "--reverse", "--format=%H", "--", relpath)
-    versions: list[dict[str, int]] = []
+    versions: list[tuple[int, dict[str, int]]] = []
     for commit in (log or "").split():
         blob = _git_text(root, "show", f"{commit}:{relpath}")
         if blob is not None:
-            versions.append(json.loads(blob)["remaining"])
+            data = json.loads(blob)
+            versions.append((data.get("key_format", 1), data["remaining"]))
     return versions
 
 
-def baseline_history_allows(root: Path, current: dict[str, int]) -> bool:
-    """Every committed baseline version, and the current one, may only shrink."""
-    versions = [*_committed_baselines(root), current]
-    return all(baseline_is_subset(newer, older) for older, newer in zip(versions, versions[1:], strict=False))
+def _counts_per_file(counts: dict[str, int]) -> dict[str, int]:
+    """Sum finding counts per file; keys start with the file path in every key format."""
+    per_file: Counter[str] = Counter()
+    for key, count in counts.items():
+        per_file[key.split(":", 1)[0]] += count
+    return dict(per_file)
+
+
+def baseline_history_allows(root: Path, current: dict[str, int], current_format: int = _KEY_FORMAT) -> bool:
+    """Every committed baseline version, and the current one, may only shrink.
+
+    Keys of different formats cannot be compared one by one; across such a boundary the
+    counts per file must not grow.
+    """
+    versions = [*_committed_baselines(root), (current_format, current)]
+    for (older_format, older), (newer_format, newer) in zip(versions, versions[1:], strict=False):
+        if older_format == newer_format:
+            allowed = baseline_is_subset(newer, older)
+        else:
+            allowed = baseline_is_subset(_counts_per_file(newer), _counts_per_file(older))
+        if not allowed:
+            return False
+    return True
 
 
 def test_release_findings_match_remaining_baseline() -> None:
     baseline = json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
+    assert baseline["key_format"] == _KEY_FORMAT
     current = finding_counts(scan_release_vocabulary(REPO_ROOT))
     assert current == baseline["remaining"], "Update removed findings; new findings must be fixed."
 
@@ -237,7 +295,7 @@ def test_release_findings_match_remaining_baseline() -> None:
 def test_frozen_baseline_cannot_grow() -> None:
     baseline = json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
     frozen = json.dumps(baseline["ceiling"], sort_keys=True).encode()
-    assert hashlib.sha256(frozen).hexdigest() == "c2b7831b973a96365cf1e74774637069317285e8ac3377d5de8e32b2c3bacbb8"
+    assert hashlib.sha256(frozen).hexdigest() == "191d9c57c2ea745abb300c5f84462f8877c58a78a4d1234578822b04d9a584ad"
     assert baseline_is_subset(baseline["remaining"], baseline["ceiling"])
 
 
@@ -273,35 +331,110 @@ def test_baseline_can_only_shrink() -> None:
     assert not baseline_is_subset({"new:hash": 1}, {"sample:hash": 2})
 
 
+def _commit_baseline(repo: Path, content: dict) -> None:
+    """Commit one version of the baseline file into a throwaway repository."""
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    baseline_path = repo / _BASELINE_PATH.relative_to(REPO_ROOT)
+    baseline_path.parent.mkdir(parents=True, exist_ok=True)
+    baseline_path.write_text(json.dumps(content), encoding="utf-8")
+    subprocess.run(["git", "add", str(baseline_path)], cwd=repo, check=True)
+    identity = [
+        "-c",
+        "user.name=Fixture Author",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+    ]
+    subprocess.run(["git", *identity, "commit", "-qm", "Update baseline"], cwd=repo, check=True)
+
+
 def test_history_rejects_restored_finding_after_shrink(tmp_path: Path) -> None:
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    baseline_path = tmp_path / _BASELINE_PATH.relative_to(REPO_ROOT)
-    baseline_path.parent.mkdir(parents=True)
     for count in (2, 1):
-        baseline_path.write_text(json.dumps({"remaining": {"sample:hash": count}}), encoding="utf-8")
-        subprocess.run(["git", "add", str(baseline_path)], cwd=tmp_path, check=True)
-        subprocess.run(
-            [
-                "git",
-                "-c",
-                "user.name=Fixture Author",
-                "-c",
-                "user.email=fixture@example.invalid",
-                "-c",
-                "commit.gpgsign=false",
-                "commit",
-                "-qm",
-                "Update baseline",
-            ],
-            cwd=tmp_path,
-            check=True,
-        )
-    assert baseline_history_allows(tmp_path, {"sample:hash": 1})
-    assert not baseline_history_allows(tmp_path, {"sample:hash": 2})
+        _commit_baseline(tmp_path, {"remaining": {"sample:hash": count}})
+    assert baseline_history_allows(tmp_path, {"sample:hash": 1}, 1)
+    assert not baseline_history_allows(tmp_path, {"sample:hash": 2}, 1)
+
+
+def test_history_compares_per_file_across_key_formats(tmp_path: Path) -> None:
+    _commit_baseline(tmp_path, {"remaining": {"a.py:" + "0" * 64: 2, "b.py:" + "1" * 64: 1}})
+    assert baseline_history_allows(tmp_path, {"a.py:word:" + "2" * 64: 2}, 2)
+    assert baseline_history_allows(tmp_path, {"a.py:x:" + "2" * 64: 1, "a.py:y:" + "3" * 64: 1}, 2)
+    assert not baseline_history_allows(tmp_path, {"a.py:word:" + "2" * 64: 3}, 2)
+    assert not baseline_history_allows(tmp_path, {"c.py:word:" + "2" * 64: 1}, 2)
 
 
 def test_baseline_history_never_restores_findings() -> None:
     if not _committed_baselines(REPO_ROOT):
         pytest.skip("No Git history for the baseline file (flat clone or release tree).")
     baseline = json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
-    assert baseline_history_allows(REPO_ROOT, baseline["remaining"]), "A removed finding was restored."
+    assert baseline_history_allows(REPO_ROOT, baseline["remaining"], baseline["key_format"]), (
+        "A removed finding was restored."
+    )
+
+
+_SANITIZER_PATH = REPO_ROOT / "dev-ops" / "release" / "sanitize_release_tree.py"
+_DEV_ISSUE_URL = f"https://github.com/{_DEV_REPOSITORY}/issues/2149"
+
+
+def _load_sanitizer():
+    """Load the release sanitizer from its file; the release tree does not ship it."""
+    spec = importlib.util.spec_from_file_location("release_sanitizer_under_test", _SANITIZER_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_key_is_stable_when_dev_issue_links_are_unlinked() -> None:
+    linked = [
+        Hit("a.py", 3, "Welle J", f"# measured in Welle J ({_DEV_ISSUE_URL}),"),
+        Hit("b.md", 1, "Ruling", f"- Ruling [#2149]({_DEV_ISSUE_URL}) applies"),
+        Hit("c.md", 1, "Ruling", f"- Ruling, see [the ticket]({_DEV_ISSUE_URL}) here"),
+    ]
+    unlinked = [
+        Hit("a.py", 3, "Welle J", "# measured in Welle J (#2149),"),
+        Hit("b.md", 1, "Ruling", "- Ruling #2149 applies"),
+        Hit("c.md", 1, "Ruling", "- Ruling, see the ticket #2149 here"),
+    ]
+    assert finding_counts(linked) == finding_counts(unlinked)
+
+
+def test_key_still_changes_with_the_rest_of_the_line() -> None:
+    first = [Hit("a.py", 1, "Ruling", f"# Ruling A ({_DEV_ISSUE_URL})")]
+    second = [Hit("a.py", 1, "Ruling", f"# Ruling B ({_DEV_ISSUE_URL})")]
+    other_word = [Hit("a.py", 1, "Lane", f"# Ruling A ({_DEV_ISSUE_URL})")]
+    other_issue = [Hit("a.py", 1, "Ruling", f"# Ruling A (https://github.com/{_DEV_REPOSITORY}/issues/7)")]
+    assert finding_counts(first) != finding_counts(second)
+    assert finding_counts(first) != finding_counts(other_word)
+    assert finding_counts(first) != finding_counts(other_issue)
+
+
+@pytest.mark.skipif(not _SANITIZER_PATH.exists(), reason="The release sanitizer is not part of the release tree.")
+def test_keys_survive_the_real_release_sanitizer(tmp_path: Path) -> None:
+    (tmp_path / "CHANGELOG.md").write_text(
+        f"- **Entry** ([#2149]({_DEV_ISSUE_URL})) — measured in Welle J ({_DEV_ISSUE_URL}), see /work/example\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "sample.py").write_text(
+        f'"""Docstring.\n\nSource: measuring run of Welle J ({_DEV_ISSUE_URL}),\nruling pending.\n"""\n',
+        encoding="utf-8",
+    )
+    before = finding_counts(scan_release_vocabulary(tmp_path))
+    assert before
+    _load_sanitizer().sanitize_directory(tmp_path)
+    assert _DEV_ISSUE_URL not in (tmp_path / "sample.py").read_text(encoding="utf-8")
+    assert finding_counts(scan_release_vocabulary(tmp_path)) == before
+
+
+@pytest.mark.skipif(not _SANITIZER_PATH.exists(), reason="The release sanitizer is not part of the release tree.")
+def test_keys_of_all_current_findings_survive_the_real_release_sanitizer(tmp_path: Path) -> None:
+    """Copy every file holding a finding and compare its keys before and after sanitizing."""
+    files = {hit.relpath for hit in scan_release_vocabulary(REPO_ROOT)}
+    assert files
+    for relpath in files:
+        target = tmp_path / relpath
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO_ROOT / relpath, target)
+    before = finding_counts(scan_release_vocabulary(tmp_path))
+    _load_sanitizer().sanitize_directory(tmp_path)
+    assert finding_counts(scan_release_vocabulary(tmp_path)) == before
