@@ -1062,10 +1062,47 @@ def _sample_section(text: str, start: str, end: str | None = None) -> str:
 
 
 def _patch_sample_hybrid(monkeypatch, raw: dict[str, Any]) -> None:
-    """Replace only the raw hybrid read; protection and PDF layout run for real."""
+    """Supply both raw sources; the shared solver and PDF layout run for real.
+
+    The aggregate facade is no longer an authoritative mask input. Supply
+    the same snapshot at the scoped collection boundary and a separate raw
+    distinct-person cohort, without assigning snapshot events to persons.
+    """
+    from types import SimpleNamespace
+
+    from core.models import StatisticsSnapshot
     from core.services import dashboard
+    from core.services.dashboard import shared_disclosure
 
     monkeypatch.setattr(dashboard, "get_sample_report_1_statistics_hybrid", lambda *args: copy.deepcopy(raw))
+    row = {
+        "year": 2026,
+        "month": 1,
+        "backend_data": {"sample-report-1": copy.deepcopy(raw)},
+        "updated_at": raw.get("snapshot_as_of"),
+    }
+    monkeypatch.setattr(
+        StatisticsSnapshot.objects,
+        "for_facility",
+        lambda facility: SimpleNamespace(values=lambda *fields: [row]),
+    )
+    # Preserve the real event collector on repeated worlds in the same test.
+    original = getattr(monkeypatch, "_sample_event_collector", shared_disclosure.collect_event_populations)
+    monkeypatch._sample_event_collector = original
+
+    def collect(facility, start, end):
+        return tuple(
+            shared_disclosure.TemporalPopulation(
+                "person_counts",
+                "active-persons",
+                tuple((f"raw-person-{index}", date(2026, 1, 1)) for index in range(raw["unique_clients"])),
+            )
+            if population.dimension == "person_counts" and population.identity == "active-persons"
+            else population
+            for population in original(facility, start, end)
+        )
+
+    monkeypatch.setattr(shared_disclosure, "collect_event_populations", collect)
 
 
 def _release_identities(facility) -> list[tuple[str, str]]:

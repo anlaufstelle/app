@@ -349,3 +349,27 @@ def test_equal_unit_unions_share_stricter_local_masks_across_calendar_aliases(fa
     )
     assert mask.published[prefix] is None
     assert mask.published[whole] is None, "The same unit union must not bypass a stricter alias decision"
+
+
+@pytest.mark.django_db
+def test_snapshot_cohort_weights_preserve_calendar_remainder_constraints(facility):
+    population = shared_disclosure.TemporalPopulation(
+        "event_counts",
+        "snapshot-contacts",
+        (("january-cohort", date(2026, 1, 1)), ("march-cohort", date(2026, 3, 1))),
+        unit_weights=(("january-cohort", 10), ("march-cohort", 1)),
+    )
+    windows = ((START, date(2026, 2, 28)), (START, END))
+    mask = shared_disclosure.protect_temporal_counts(facility, [population], windows)
+    prefix, whole = [mask.published[key("snapshot-contacts", *window)] for window in windows]
+    possible = {whole - prefix} if whole is not None and prefix is not None else set(range(1, 5))
+    assert 1 in possible and len(possible) >= 2
+
+
+@pytest.mark.django_db
+def test_cohort_weights_cannot_invent_distinct_person_memberships(facility):
+    population = shared_disclosure.TemporalPopulation(
+        "person_counts", "persons", (("aggregate", START),), unit_weights=(("aggregate", 10),)
+    )
+    with pytest.raises(ValueError, match="person"):
+        shared_disclosure.protect_temporal_counts(facility, [population], ((START, END),))

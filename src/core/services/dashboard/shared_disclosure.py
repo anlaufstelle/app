@@ -236,13 +236,15 @@ class TemporalPopulation:
     Unit identities are transient inputs, never publication keys. Repeated
     memberships of one person are unioned, including across calendar months.
     Supply all canonical populations together, so overlapping subsets share
-    the same disjoint membership atoms.
+    the same disjoint membership atoms. Event aggregate cohorts may carry
+    additive weights; distinct person memberships always retain unit weight.
     """
 
     dimension: str
     identity: str
     members: tuple[tuple[str, date], ...]
     point_in_time: bool = False
+    unit_weights: tuple[tuple[str, int], ...] = ()
 
 
 def population_units(population: TemporalPopulation, start: date, end: date) -> frozenset[str]:
@@ -275,13 +277,23 @@ def protect_temporal_counts(
     _require_facility(facility)
     memberships: dict[str, dict[str, dict[str, set[date]]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
     identities = set()
+    unit_weights: dict[tuple[str, str], int] = {}
     current = {(p.dimension, p.identity) for p in populations if p.point_in_time}
     for population in populations:
         population_key = population.dimension, population.identity
         if population_key in identities:
             raise ValueError("Duplicate temporal population identity")
         identities.add(population_key)
+        weights = dict(population.unit_weights)
+        if population.dimension == "person_counts" and any(weight != 1 for weight in weights.values()):
+            raise ValueError("Distinct person populations require actual unit memberships")
         for unit, day in population.members:
+            weight = weights.get(unit, 1)
+            if isinstance(weight, bool) or not isinstance(weight, int) or weight < 1:
+                raise ValueError("Invalid event cohort weight")
+            unit_key = population.dimension, unit
+            if unit_weights.setdefault(unit_key, weight) != weight:
+                raise ValueError("Conflicting event cohort weights")
             memberships[population.dimension][unit][population.identity].add(day)
     targets = {
         CountKey(dimension, identity, start, end) for dimension, identity in identities for start, end in windows
@@ -293,13 +305,14 @@ def protect_temporal_counts(
     # Group units by the populations/dates in which they occur, not by IDs.
     atoms: dict[tuple[str, str], tuple[dict[str, set[date]], int]] = {}
     for dimension, units in memberships.items():
-        for membership in units.values():
+        for unit, membership in units.items():
             signature = json.dumps(
                 [(identity, sorted(day.isoformat() for day in days)) for identity, days in sorted(membership.items())]
             )
             token = hashlib.sha256(signature.encode()).hexdigest()
             previous = atoms.get((dimension, token))
-            atoms[dimension, token] = membership, 1 if previous is None else previous[1] + 1
+            weight = unit_weights[dimension, unit]
+            atoms[dimension, token] = membership, weight if previous is None else previous[1] + weight
     counts = []
     atom_memberships = {}
     for (dimension, token), (membership, value) in atoms.items():
@@ -421,12 +434,13 @@ def collect_event_populations(facility, date_from: date, date_to: date) -> tuple
 
 @dataclass(frozen=True)
 class LiveRelease:
-    """Projected general and sample figures; the mask stays internal."""
+    """Projected canonical datasets and hybrid figures; the mask stays internal."""
 
     general: dict
     sample: dict
     mask: SharedMask
     datasets: dict
+    hybrid: dict
 
 
 @dataclass(frozen=True)
@@ -435,6 +449,7 @@ class _LocalInterval:
     date_to: date
     general: dict
     sample: dict
+    hybrid: dict
     raw: dict
     observations: tuple[RawCount, ...]
     dropped: frozenset[CountKey]
@@ -570,6 +585,27 @@ def _prepare_live_interval(
         category = type_categories[type_id]
         if category is not None and hybrid_categories.get(category) is None:
             observe(f"document-type:{type_id}", row["count"], None, lower=1)
+    if is_calendar_interval(date_from, date_to):
+        observe("hybrid-mapped-events", hybrid_raw["total"], hybrid["total"])
+        for table, label, prefix, originals in (
+            (
+                "by_category",
+                "name",
+                "hybrid-category:",
+                [{"name": name, "count": value} for name, value in hybrid_raw["by_category"]],
+            ),
+            ("by_age_cluster", "cluster", "hybrid-age:", hybrid_raw["by_age_cluster"]),
+        ):
+            published = {row[label]: row["count"] for row in hybrid.get(table, [])}
+            for row in originals:
+                observe(
+                    f"{prefix}{row[label]}",
+                    row["count"],
+                    published.get(row[label]),
+                    lower=1,
+                    drop=table not in hybrid,
+                    person_sensitive=table == "by_age_cluster",
+                )
     from core.services.dashboard.shared_field_sources import prepare_field_interval
     from core.services.dashboard.shared_sources import prepare_additional_interval
 
@@ -579,7 +615,7 @@ def _prepare_live_interval(
         observations.extend(binding.observations())
         local_dropped.update(binding.dropped())
     return _LocalInterval(
-        date_from, date_to, general, sample, raw, tuple(observations), frozenset(local_dropped), datasets
+        date_from, date_to, general, sample, hybrid, raw, tuple(observations), frozenset(local_dropped), datasets
     )
 
 
@@ -610,10 +646,17 @@ def _raw_hybrid_sample(populations, types, snapshots, date_from, date_to):
     return merged
 
 
-def canonical_live_windows(populations: Sequence[TemporalPopulation]) -> tuple[tuple[date, date], ...]:
-    """All contiguous calendar-month unions over the current live population.
+def is_calendar_interval(start, end):
+    """Snapshot cohorts represent whole months, never partial-month identities."""
+    import calendar
 
-    Empty months introduce no new union. The family depends on facility data,
+    return start.day == 1 and end.day == calendar.monthrange(end.year, end.month)[1]
+
+
+def canonical_live_windows(populations: Sequence[TemporalPopulation]) -> tuple[tuple[date, date], ...]:
+    """All contiguous calendar-month unions over the current scoped sources.
+
+    Empty months introduce no new union. The family depends on facility sources,
     never on the requested interval, report, format or role. It includes all
     prefixes, overlapping month unions, cross-year unions and the standard
     rolling periods as of today. Other finer intervals can only reuse a
@@ -639,18 +682,20 @@ def canonical_live_windows(populations: Sequence[TemporalPopulation]) -> tuple[t
 
 
 def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
-    """Solve one canonical live family before projecting the requested interval.
+    """Solve one canonical source family before projecting the requested interval.
 
-    This protects current live calendar unions without retaining publication
-    history. A finer interval that is not an existing population union is
+    This protects current live and snapshot calendar unions without retaining
+    publication history. A finer live interval outside existing population unions is
     withheld rather than adding a request-dependent equation to the graph.
     Local table removal is a projection rule: remove its row-existence bound,
-    but retain the raw subset equations when solving other consumers.
+    but retain the raw subset equations when solving other consumers. Hybrid
+    event projections conservatively require complete calendar months.
     """
     from core.models import DocumentType, StatisticsSnapshot
     from core.reporting.registry import get_backend
     from core.services.dashboard.external_report import _get_threshold, project_protected_rows
     from core.services.dashboard.shared_field_sources import collect_field_sources
+    from core.services.dashboard.shared_hybrid_sources import collect_hybrid_populations
     from core.services.dashboard.shared_sources import collect_additional_populations
 
     field_sources = collect_field_sources(facility)
@@ -673,6 +718,7 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
             "year", "month", "backend_data", "updated_at"
         )
     }
+    populations = (*populations, *collect_hybrid_populations(populations, snapshots))
     threshold = _get_threshold(facility)
     windows = canonical_live_windows(populations)
     intervals = [
@@ -696,8 +742,10 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
         for interval in intervals
         for cell in interval.observations
     ]
-    observed = {cell.key for cell in observations}
-    internal = {CountKey(p.dimension, p.identity, start, end) for p in populations for start, end in windows} - observed
+    observed_unions = {unions[cell.key] for cell in observations}
+    # An unpublished window must not force a published alias of the exact
+    # same source/population union into secondary suppression.
+    internal = {key for key, union in unions.items() if union not in observed_unions}
     mask = protect_temporal_counts(facility, populations, windows, observations=observations, hidden_keys=internal)
     mask = SharedMask(
         mask.facility_id,
@@ -752,7 +800,23 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
         slug: binding.project(lambda dimension, identity: resolve(identity, dimension), mask)
         for slug, binding in requested.datasets.items()
     }
-    return LiveRelease(general, sample, mask, datasets)
+    hybrid = requested.hybrid
+    hybrid["unique_clients"] = publish("active-persons", dimension="person_counts")
+    calendar_interval = is_calendar_interval(date_from, date_to)
+    hybrid["total"] = publish("hybrid-mapped-events") if calendar_interval else None
+    for table, label, prefix in (
+        ("by_category", "name", "hybrid-category:"),
+        ("by_age_cluster", "cluster", "hybrid-age:"),
+    ):
+        rows = hybrid.get(table, [])
+        identities = [f"{prefix}{row[label]}" for row in rows]
+        if not calendar_interval or any(
+            resolve(identity) is None or resolve(identity) in mask.dropped for identity in identities
+        ):
+            hybrid.pop(table, None)
+        elif table in hybrid:
+            hybrid[table] = project_protected_rows(rows, [publish(identity) for identity in identities])
+    return LiveRelease(general, sample, mask, datasets, hybrid)
 
 
 def project_shared_type_dataset(facility, result):

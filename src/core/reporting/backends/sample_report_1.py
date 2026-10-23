@@ -306,7 +306,7 @@ class SampleReport1Backend(DatasetBackend):
         from core.services.dashboard import get_sample_report_1_statistics_hybrid
 
         summary = get_sample_report_1_statistics_hybrid(facility, date_from, date_to)
-        return DatasetResult("aggregate", [], summary, [])
+        return DatasetResult("aggregate", [], summary, [], (date_from, date_to, "snapshot_hybrid"))
 
     def get_format_sources(self) -> dict[str, str]:
         from core.reporting.data_source import SNAPSHOT_HYBRID
@@ -516,8 +516,9 @@ class SampleReport1Backend(DatasetBackend):
         if result.disclosure_context is not None:
             from core.services.dashboard.shared_disclosure import build_live_release
 
-            date_from, date_to, _source = result.disclosure_context
-            summary = build_live_release(facility, date_from, date_to).sample
+            date_from, date_to, source = result.disclosure_context
+            release = build_live_release(facility, date_from, date_to)
+            summary = release.hybrid if source == "snapshot_hybrid" else release.sample
         else:
             summary = suppress_sample_report_1_stats(facility, result.summary)
         # Transparenz analog ``build_external_report``-Metadaten: der Empfaenger
