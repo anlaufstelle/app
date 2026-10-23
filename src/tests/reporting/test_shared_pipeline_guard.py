@@ -6,6 +6,7 @@ from datetime import date, datetime
 
 import pytest
 from django.utils import timezone
+from django.utils.functional import Promise
 
 from core.models import Case, Client, DocumentTypeField, Event, FieldTemplate, StatisticsSnapshot
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec, stamp_threshold
@@ -94,11 +95,19 @@ def _numbers(value):
         yield value
 
 
+def _public_text(value):
+    """Return the text a value shows to the reader; lazy translations equal plain strings."""
+    if isinstance(value, Promise):
+        return str(value)
+    return value if isinstance(value, str) else None
+
+
 def _row_identities(value, path=()):
     """Yield (path, identity) for every table row and keyed entry in a prepared result.
 
     A row's identity is its text content (labels, names, categories); counts,
-    markers and other numbers are not part of it.
+    markers and other numbers are not part of it. Lazy translations count as the
+    text they render, so a materialized label identifies the same row.
     """
     if isinstance(value, Mapping):
         for key, item in value.items():
@@ -110,12 +119,18 @@ def _row_identities(value, path=()):
     else:
         for item in value:
             if isinstance(item, Mapping):
-                yield path, ("row", frozenset((key, text) for key, text in item.items() if isinstance(text, str)))
+                yield (
+                    path,
+                    (
+                        "row",
+                        frozenset((key, text) for key, raw in item.items() if (text := _public_text(raw)) is not None),
+                    ),
+                )
                 for key, nested in item.items():
                     if isinstance(nested, Mapping | list | tuple):
                         yield from _row_identities(nested, (*path, key))
-            elif isinstance(item, str):
-                yield path, ("text", item)
+            elif (text := _public_text(item)) is not None:
+                yield path, ("text", text)
 
 
 def _identities(result):
@@ -238,10 +253,23 @@ def _restore_summary_table(result, protected):
     return protected
 
 
+def _restore_age_rows_with_plain_label(result, protected):
+    """Bring a removed age row back with its translated label materialized as a plain string."""
+    if protected.summary.get("by_age_cluster") or not Event.objects.exists():
+        return protected
+    cluster = Client.AgeCluster.values[0]
+    row = {"cluster": cluster, "label": str(Client.AgeCluster(cluster).label), "count": None, "suppressed": True}
+    return replace(protected, summary={**protected.summary, "by_age_cluster": [row]})
+
+
 @pytest.mark.parametrize(
     "slug,restore",
-    [("example", _restore_records), ("sample-report-1", _restore_summary_table)],
-    ids=["record-rows", "summary-table"],
+    [
+        ("example", _restore_records),
+        ("sample-report-1", _restore_summary_table),
+        ("general-key-figures", _restore_age_rows_with_plain_label),
+    ],
+    ids=["record-rows", "summary-table", "age-rows-plain-label"],
 )
 def test_behavioral_guard_rejects_rows_restored_after_the_solver_dropped_them(
     pipeline_world, monkeypatch, slug, restore
