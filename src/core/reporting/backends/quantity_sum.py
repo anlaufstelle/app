@@ -1,13 +1,12 @@
 """Period quantity sums, bound only to numeric event fields (Refs #2515)."""
 
 import dataclasses
-import math
 from fractions import Fraction
 
+from django.db.models import Count
 from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, Event, FieldTemplate
-from core.reporting.backends.needle_exchange_balance import as_number
 from core.reporting.base import (
     Anforderung,
     BindungsEintrag,
@@ -17,20 +16,16 @@ from core.reporting.base import (
     FeldBindung,
     FieldSpec,
     doppelbindungs_issues,
-    project_records,
-    stamp_threshold,
 )
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.registry import register_backend
+from core.reporting.values import json_number as _json_number
+from core.reporting.values import read_quantity as _read_quantity
 from core.services.dashboard.external_report import (
     ORDER_INPUT,
     _Breakdown,
     _get_threshold,
-    _suppress_small,
-    apply_residual_guard,
-    build_shared_document_type_counts,
 )
-from core.services.file_vault import safe_decrypt
 
 QUANTITY_FIELD = FeldBindung(
     (BindungsEintrag("quantity_units", _("Stückzahl")),),
@@ -39,27 +34,6 @@ QUANTITY_FIELD = FeldBindung(
 )
 MISSING_VALUES_CODE = "missing_field_values"
 MISSING_VALUES_MESSAGE = _("Nicht verwertbare Stückzahlen oder Summen bleiben in diesem Bericht unberücksichtigt")
-
-
-def _read_quantity(data, slug):
-    """Reject malformed payloads and non-finite numbers before aggregation."""
-    if slug is None or not isinstance(data, dict):
-        return None
-    number = as_number(safe_decrypt(data.get(slug), default=None))
-    if number is None or (isinstance(number, float) and not math.isfinite(number)):
-        return None
-    return Fraction(str(number))
-
-
-def _json_number(value):
-    """Keep integral sums as integers, including totals beyond float range."""
-    if value.denominator == 1:
-        return value.numerator
-    try:
-        number = float(value)
-    except OverflowError:
-        return None
-    return number if math.isfinite(number) else None
 
 
 @register_backend("quantity-sum")
@@ -109,9 +83,15 @@ class QuantitySumBackend(DatasetBackend):
             row["quantity"] += value
             row["contributors"] += 1
 
-        # Respect both the full type population and mapped category subsets,
-        # including secondary suppression and whole-table removal.
-        published_counts = build_shared_document_type_counts(facility, date_from, date_to)
+        # Keep the raw dataset free of report calls; preparation imports
+        # the complete type and contributor contracts before projection.
+        published_counts = {
+            row["document_type__name"]: row["count"]
+            for row in Event.objects.for_facility(facility)
+            .filter(is_deleted=False, occurred_at__date__gte=date_from, occurred_at__date__lte=date_to)
+            .values("document_type__name")
+            .annotate(count=Count("pk"))
+        }
         total = sum((row["quantity"] for row in rows.values()), Fraction(0))
         records = []
         for row in rows.values():
@@ -120,6 +100,7 @@ class QuantitySumBackend(DatasetBackend):
             row["quantity"] = _json_number(row["quantity"]) if row["contributors"] else None
             records.append(row)
         return DatasetResult(
+            disclosure_context=(date_from, date_to, "live"),
             mode="rows",
             records=records,
             summary={
@@ -137,50 +118,16 @@ class QuantitySumBackend(DatasetBackend):
         )
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        """Share the type decision; never publish a bound-event subtotal."""
-        threshold = _get_threshold(facility)
-        published_counts = result.summary["document_type_counts"]
-        rows = [dict(row) for row in result.records]
-        # Contributors are event counts, too. Withhold their margin whenever
-        # any row is hidden; a bound subtotal could unlock another report.
-        contributions = _suppress_small(rows, threshold, count_key="contributors", margin=None, order=ORDER_INPUT)
-        complete = bool(rows)
-        for row, contribution in zip(rows, contributions, strict=True):
-            missing = row["events"] - row["contributors"]
-            # The general report still exposes event counts. Publishing a
-            # contributor count must not reveal a small missing-value gap.
-            if (
-                published_counts.get(row["document_type"]) is None
-                or contribution.get("suppressed")
-                or 0 < missing < threshold
-            ):
-                row["contributors"] = None
-                row["quantity"] = None
-                complete = False
-        # The contributor margin is published only for a fully visible table.
-        # Still pass it through the central guard so that its partition contract
-        # remains protected if subsequent suppression rules become stricter.
-        view = {"records": rows, "contributors_total": result.summary["contributors_total"] if complete else None}
-        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
-        rows = view.get("records", [])
-        for row in rows:
-            if row.get("suppressed"):
-                row["quantity"] = None
-                complete = False
-        summary = stamp_threshold(
-            {
-                "contributors_total": view["contributors_total"],
-                "quantity_total": result.summary["quantity_total"]
-                if complete and view["contributors_total"] is not None
-                else None,
-            },
-            threshold,
+        """Publish the local contract through the shared population mask."""
+        from core.services.dashboard.external_report import _protect_quantity_dataset
+        from core.services.dashboard.shared_disclosure import project_shared_dataset
+
+        local = _protect_quantity_dataset(
+            result, _get_threshold(facility), field_specs=self.get_field_specs(), breakdown=self._EXPORT_BREAKDOWN
         )
-        return dataclasses.replace(
-            result,
-            records=project_records(rows, self.get_field_specs()),
-            summary=summary,
-            # Data-independent, unnumbered completeness avoids a small-gap signal.
+        local = dataclasses.replace(
+            local,
             completeness=[CompletenessIssue(MISSING_VALUES_CODE, MISSING_VALUES_MESSAGE, "warning", count=None)]
             + doppelbindungs_issues(QUANTITY_FIELD.leseschluessel(facility, entity_type=DocumentType.EntityType.EVENT)),
         )
+        return project_shared_dataset(facility, local, "quantity-sum")

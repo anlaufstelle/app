@@ -120,8 +120,6 @@ from core.reporting.base import (
     FieldSpec,
     TypBindung,
     doppelbindungs_issues,
-    project_records,
-    stamp_threshold,
 )
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.registry import register_backend
@@ -129,8 +127,6 @@ from core.services.dashboard.external_report import (
     ORDER_INPUT,
     _Breakdown,
     _get_threshold,
-    _suppress_small,
-    apply_residual_guard,
 )
 from core.services.file_vault import safe_decrypt
 
@@ -266,6 +262,7 @@ class CounselingHoursBackend(DatasetBackend):
             if events[kategorie]
         ]
         return DatasetResult(
+            disclosure_context=(date_from, date_to, "live"),
             mode="rows",
             records=records,
             summary={
@@ -291,54 +288,18 @@ class CounselingHoursBackend(DatasetBackend):
     _EXPORT_BREAKDOWN = _Breakdown("records", "events_gesamt", ORDER_INPUT, count_key="events")
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        """K-Anon-Suppression fuer Export und Panel — Kaskade siehe Modul-Docstring.
+        """Publish the local contract through the shared population mask."""
+        from core.services.dashboard.external_report import _protect_counseling_dataset
+        from core.services.dashboard.shared_disclosure import project_shared_dataset
 
-        Die Zeilen-``events`` gehen durch die **zentrale** Maschinerie; ueber
-        ``minuten`` entscheidet dieses Backend, weil nur es die Bezugsgroesse
-        kennt (:data:`BEITRAGENDE_KEY`). Das ist keine zweite Suppressionslogik
-        neben der zentralen: der Unterdrueckungs-Marker wird ausschliesslich
-        gelesen, nie gesetzt — gesetzt wird er nur in
-        :mod:`core.services.dashboard.external_report` (Architektur-Guard
-        ``test_kein_artefakt_baut_eigene_unterdrueckung``).
-        """
-        threshold = _get_threshold(facility)
-        events_gesamt = result.summary["events_gesamt"]
-        # R14: eine Randsumme < k ist selbst eine Kleinstfallzahl.
-        published_events_gesamt = events_gesamt if events_gesamt >= threshold else None
-
-        view = {
-            "events_gesamt": published_events_gesamt,
-            "records": _suppress_small(
-                result.records,
-                threshold,
-                count_key="events",
-                margin=published_events_gesamt,
-                order=ORDER_INPUT,
-            ),
-        }
-        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
-
-        # Der Guard kann die ganze Aufschluesselung fallen lassen (fail-safe,
-        # Key weg) und dabei auch die Randsumme nullen — beides muss die
-        # Minuten-Randsumme mitnehmen.
-        zeilen = view.get("records")
-        minuten_vollstaendig = zeilen is not None and view["events_gesamt"] is not None
-        for row in zeilen or ():
-            if row.get("suppressed") or (row.get(BEITRAGENDE_KEY) or 0) < threshold:
-                row["minuten"] = None
-                minuten_vollstaendig = False
-
-        records = project_records(zeilen or (), self.get_field_specs())
-        summary = stamp_threshold(
-            {
-                **result.summary,
-                "events_gesamt": view["events_gesamt"],
-                "minuten_gesamt": result.summary["minuten_gesamt"] if minuten_vollstaendig else None,
-            },
-            threshold,
+        local = _protect_counseling_dataset(
+            result, _get_threshold(facility), field_specs=self.get_field_specs(), breakdown=self._EXPORT_BREAKDOWN
         )
-        completeness = [
-            CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None),
-            *doppelbindungs_issues(FELD_DAUER.leseschluessel(facility, TYP_BINDUNG)),
-        ]
-        return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)
+        local = dataclasses.replace(
+            local,
+            completeness=[
+                CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None),
+                *doppelbindungs_issues(FELD_DAUER.leseschluessel(facility, TYP_BINDUNG)),
+            ],
+        )
+        return project_shared_dataset(facility, local, "counseling-hours")

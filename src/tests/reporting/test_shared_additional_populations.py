@@ -56,3 +56,69 @@ def test_public_prefix_difference_cannot_recover_an_additional_population_single
     candidates = {whole - prefix} if whole is not None and prefix is not None else set(range(1, 5))
     assert 1 in candidates
     assert len(candidates) >= 2, f"The two {slug} files must not determine the March singleton via {metric}"
+
+
+@pytest.mark.parametrize(
+    "slug,metric",
+    [
+        ("counseling-hours", "events_gesamt"),
+        ("needle-exchange-balance", "events"),
+        ("ban-overview", "ausgesprochen"),
+        ("ban-overview", "abgelaufen_im_zeitraum"),
+        ("service-distribution", "events_leistungen"),
+        ("quantity-sum", "contributors_total"),
+    ],
+)
+def test_public_field_and_ban_prefix_difference_does_not_recover_a_singleton(facility, admin_user, slug, metric):
+    from core.models import DocumentTypeField, FieldTemplate
+
+    report_keys = {
+        "counseling-hours": "counseling",
+        "needle-exchange-balance": "needle_exchange",
+        "ban-overview": None,
+        "service-distribution": "contact",
+        "quantity-sum": "contact",
+    }
+    document_type = make_document_type(
+        facility=facility,
+        name="Activity",
+        report_key=report_keys[slug],
+        **({"system_type": "ban"} if slug == "ban-overview" else {}),
+    )
+    field_keys = {
+        "counseling-hours": ("dauer_minuten",),
+        "needle-exchange-balance": ("ausgabe_stueck", "rueckgabe_stueck"),
+        "ban-overview": (),
+        "service-distribution": ("leistungen",),
+        "quantity-sum": ("quantity_units",),
+    }
+    fields = []
+    for key in field_keys[slug]:
+        field = FieldTemplate.objects.create(
+            facility=facility,
+            name=key,
+            report_key=key,
+            field_type="multi_select" if key == "leistungen" else "number",
+            options_json=[{"slug": "support", "label": "Support"}] if key == "leistungen" else [],
+        )
+        DocumentTypeField.objects.create(document_type=document_type, field_template=field)
+        fields.append(field)
+    for month, amount in ((1, 10), (3, 1)):
+        for index in range(amount + (5 if slug == "quantity-sum" else 0)):
+            data = {field.slug: ["support"] if field.report_key == "leistungen" else 1 for field in fields}
+            if slug == "quantity-sum" and index >= amount:
+                data = {}
+            if slug == "ban-overview":
+                data = {"aktiv": True, "bis": f"2026-{month:02d}-20"}
+            make_event(
+                facility=facility,
+                document_type=document_type,
+                client=None,
+                created_by=admin_user,
+                occurred_at=_at(month),
+                data_json=data,
+            )
+    whole, prefix = [_payload(facility, slug, end)["summary"][metric] for end in (date(2026, 3, 31), date(2026, 2, 28))]
+    candidates = {whole - prefix} if whole is not None and prefix is not None else set(range(1, 5))
+    assert 1 in candidates
+    assert len(candidates) >= 2, f"The {slug} files must not determine the March singleton via {metric}"

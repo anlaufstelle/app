@@ -107,7 +107,6 @@ dort nicht ungeprueft ablegen will.
 
 import dataclasses
 import logging
-from datetime import date
 
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -121,17 +120,14 @@ from core.reporting.base import (
     DatasetResult,
     FieldSpec,
     TypBindung,
-    project_records,
-    stamp_threshold,
 )
 from core.reporting.data_source import BANS_IN_PERIOD
 from core.reporting.registry import register_backend
+from core.reporting.values import read_ban_expiry as _bis_datum
 from core.services.dashboard.external_report import (
     ORDER_INPUT,
     _Breakdown,
     _get_threshold,
-    _suppress_small,
-    apply_residual_guard,
 )
 from core.services.file_vault import safe_decrypt
 
@@ -187,25 +183,6 @@ def _ban_events(facility):
     return (
         Event.objects.for_facility(facility).filter(is_deleted=False).filter(TYP_BINDUNG.matching_q("document_type__"))
     )
-
-
-def _bis_datum(data: dict) -> date | None:
-    """Das ``bis``-Datum eines Hausverbots — ``None`` = kein Ablauf.
-
-    Lesart wie ``_collect_active_bans``: ``safe_decrypt`` (das Feld kann
-    feldverschluesselt sein), und ein defekt gespeichertes Datum gilt als „kein
-    Ablauf", wird aber fuer die Diagnose protokolliert (Refs #1011). Raten waere
-    hier die schlechtere Richtung — ein unlesbares Ablaufdatum darf ein
-    Hausverbot nicht still beenden.
-    """
-    bis_raw = safe_decrypt(data.get("bis", ""), default="")
-    if not bis_raw:
-        return None
-    try:
-        return date.fromisoformat(str(bis_raw))
-    except (ValueError, TypeError):
-        logger.debug("Ungueltiges Ban-'bis'-Datum im Bericht ignoriert: %r", bis_raw)
-        return None
 
 
 @register_backend("ban-overview")
@@ -301,6 +278,7 @@ class BanOverviewBackend(DatasetBackend):
         }
 
         return DatasetResult(
+            disclosure_context=(date_from, date_to, "live"),
             mode="aggregate",
             records=[{"kennzahl": key, _COUNT_KEY: werte[key]} for key in _KENNZAHLEN],
             summary=dict(werte),
@@ -334,38 +312,10 @@ class BanOverviewBackend(DatasetBackend):
     _EXPORT_BREAKDOWN = _Breakdown("records", None, ORDER_INPUT, count_key=_COUNT_KEY)
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        """K-Anon-Suppression fuer Export und Panel-Vorschau (Refs #1278/#1770).
+        """Publish issue, expiry and current-stock cohorts through one mask."""
+        from core.services.dashboard.external_report import _protect_metric_dataset
+        from core.services.dashboard.shared_disclosure import project_shared_dataset
 
-        Alle drei Zahlen laufen als Zeilen durch :func:`_suppress_small` und
-        werden unterhalb der Schwelle ``None``; ``margin=None`` ist die
-        wahrheitsgemaesse Angabe (keine publizierte Randsumme). ``summary``
-        entsteht aus **denselben** suppressierten Zeilen — eine zweite
-        Suppressionsstelle gibt es nicht. Danach die Rueckprojektion auf die
-        FieldSpec-Keys; das interne ``suppressed``-Flag ist keine Spalte.
-
-        Der Momentaufnahme-Hinweis wird aus dem **festen** Code gebaut, nicht aus
-        ``result.completeness`` abgeleitet (K6-Muster, Refs #1769) — bei diesem
-        Thema besonders wichtig: ein kuenftiger, bezifferter Hinweis erreichte
-        den Export sonst ungeprueft.
-
-        Erwartet das **rohe** ``build_dataset``-Ergebnis (nicht idempotent).
-        """
-        threshold = _get_threshold(facility)
-
-        view = {
-            "records": _suppress_small(result.records, threshold, count_key=_COUNT_KEY, margin=None, order=ORDER_INPUT),
-        }
-        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
-
-        records = project_records(view.get("records", []), self.get_field_specs())
-
-        summary = dict(result.summary)
-        # Fail-safe-Reihenfolge wie in ``case_metrics``: erst alles auf ``None``,
-        # dann die suppressierten Zeilen einspielen. Faellt eine Zeile weg (die
-        # Eskalationsleiter des Guards kann eine Aufschluesselung ganz
-        # entfernen), bleibt ``None`` stehen statt des Rohwerts aus
-        # ``build_dataset``.
-        summary.update(dict.fromkeys(_KENNZAHLEN, None))
-        summary.update({row["kennzahl"]: row[_COUNT_KEY] for row in records})
-        summary = stamp_threshold(summary, threshold)
-        return dataclasses.replace(result, records=records, summary=summary, completeness=[_POINT_IN_TIME_ISSUE])
+        local = _protect_metric_dataset(result, _get_threshold(facility), count_key=_COUNT_KEY)
+        local = dataclasses.replace(local, completeness=[_POINT_IN_TIME_ISSUE])
+        return project_shared_dataset(facility, local, "ban-overview")

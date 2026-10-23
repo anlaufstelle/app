@@ -25,6 +25,7 @@ from django.utils.translation import gettext_lazy
 
 from core.models import Client, Settings
 from core.models.settings import K_ANONYMITY_MIN, K_ANONYMITY_WARN_BELOW
+from core.reporting.base import project_records, stamp_threshold
 from core.reporting.data_source import ALL_EVENTS, DATA_SOURCE_NOTES, LIVE, PERSONS
 from core.services.dashboard.disclosure import MAX_GUARD_ITERATIONS, Cell, Partition, findings
 from core.services.dashboard.statistics import PERSONS_KEY
@@ -1288,3 +1289,120 @@ def _protect_metric_dataset(result, threshold, *, count_key):
     summary = {key: None for key in result.summary}
     summary.update({row["kennzahl"]: row[count_key] for row in records})
     return replace(result, records=records, summary=stamp_threshold(summary, threshold))
+
+
+def _drop_service_margin(view, group):
+    """Withhold a multi-option margin whenever any of its rows is hidden."""
+    if any(row.get("suppressed") for row in view.get(group.records_key, ())):
+        view[group.summary_key] = None
+
+
+def _protect_counseling_dataset(result, threshold, *, field_specs, breakdown):
+    """Apply the counseling contract to raw aggregates without source reads."""
+    event_total = result.summary["events_gesamt"]
+    published_total = event_total if event_total >= threshold else None
+    view = {
+        "events_gesamt": published_total,
+        "records": _suppress_small(
+            result.records, threshold, count_key="events", margin=published_total, order=ORDER_INPUT
+        ),
+    }
+    apply_residual_guard(view, threshold, (breakdown,))
+    rows = view.get("records")
+    complete_minutes = rows is not None and view["events_gesamt"] is not None
+    for row in rows or ():
+        if row.get("suppressed") or (row.get("beitragende") or 0) < threshold:
+            row["minuten"] = None
+            complete_minutes = False
+    records = project_records(rows or (), field_specs)
+    summary = stamp_threshold(
+        {
+            **result.summary,
+            "events_gesamt": view["events_gesamt"],
+            "minuten_gesamt": result.summary["minuten_gesamt"] if complete_minutes else None,
+        },
+        threshold,
+    )
+    return dataclasses.replace(result, records=records, summary=summary)
+
+
+def _protect_needle_dataset(result, threshold, *, field_specs):
+    """Apply the needle contract to raw aggregates without source reads."""
+    events = result.summary["events"]
+    missing = result.summary["events_ohne_werte"]
+    contributors = events - missing
+    published_events = events if events >= threshold else None
+    visible_sums = contributors >= threshold
+    visible_gap = published_events is not None and min(contributors, missing) >= threshold
+    view = {
+        "events": published_events,
+        "summe_ausgabe": result.summary["summe_ausgabe"] if visible_sums else None,
+        "summe_rueckgabe": result.summary["summe_rueckgabe"] if visible_sums else None,
+        "saldo": result.summary["saldo"] if visible_sums else None,
+        "events_ohne_werte": result.summary["events_ohne_werte"] if visible_gap else None,
+    }
+    apply_residual_guard(view, threshold, ())
+    summary = stamp_threshold({**result.summary, **view}, threshold)
+    records = [{spec.key: view[spec.key] for spec in field_specs}]
+    return dataclasses.replace(result, records=records, summary=summary)
+
+
+def _protect_service_dataset(result, threshold, *, field_specs, groups):
+    """Apply the service contract to raw aggregates without source reads."""
+    view: dict = {}
+    breakdowns: list[_Breakdown] = []
+    active: list = []
+    for group in groups:
+        if group.summary_key not in result.summary:
+            continue
+        active.append(group)
+        events = result.summary[group.summary_key]
+        published = events if events >= threshold else None
+        margin = None if group.mehrfachnennung else published
+        rows = [row for row in result.records if row["feld"] == group.feld_slug]
+        view[group.summary_key] = published
+        view[group.records_key] = _suppress_small(rows, threshold, margin=margin, order=ORDER_INPUT)
+        if group.mehrfachnennung:
+            _drop_service_margin(view, group)
+        else:
+            breakdowns.append(_Breakdown(group.records_key, group.summary_key, ORDER_INPUT))
+    apply_residual_guard(view, threshold, tuple(breakdowns))
+    rows = [row for group in active for row in view.get(group.records_key, ())]
+    records = project_records(rows, field_specs)
+    summary = stamp_threshold({group.summary_key: view[group.summary_key] for group in active}, threshold)
+    return dataclasses.replace(result, records=records, summary=summary)
+
+
+def _protect_quantity_dataset(result, threshold, *, field_specs, breakdown):
+    """Apply the quantity contract to raw aggregates without source reads."""
+    published_counts = result.summary["document_type_counts"]
+    rows = [dict(row) for row in result.records]
+    contributions = _suppress_small(rows, threshold, count_key="contributors", margin=None, order=ORDER_INPUT)
+    complete = bool(rows)
+    for row, contribution in zip(rows, contributions, strict=True):
+        missing = row["events"] - row["contributors"]
+        if (
+            published_counts.get(row["document_type"]) is None
+            or contribution.get("suppressed")
+            or 0 < missing < threshold
+        ):
+            row["contributors"] = None
+            row["quantity"] = None
+            complete = False
+    view = {"records": rows, "contributors_total": result.summary["contributors_total"] if complete else None}
+    apply_residual_guard(view, threshold, (breakdown,))
+    rows = view.get("records", [])
+    for row in rows:
+        if row.get("suppressed"):
+            row["quantity"] = None
+            complete = False
+    summary = stamp_threshold(
+        {
+            "contributors_total": view["contributors_total"],
+            "quantity_total": result.summary["quantity_total"]
+            if complete and view["contributors_total"] is not None
+            else None,
+        },
+        threshold,
+    )
+    return dataclasses.replace(result, records=project_records(rows, field_specs), summary=summary)

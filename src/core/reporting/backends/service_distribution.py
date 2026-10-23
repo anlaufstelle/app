@@ -103,17 +103,12 @@ from core.reporting.base import (
     FieldSpec,
     TypBindung,
     doppelbindungs_issues,
-    project_records,
-    stamp_threshold,
 )
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.registry import register_backend
+from core.reporting.values import as_options
 from core.services.dashboard.external_report import (
-    ORDER_INPUT,
-    _Breakdown,
     _get_threshold,
-    _suppress_small,
-    apply_residual_guard,
 )
 from core.services.file_vault import safe_decrypt
 
@@ -219,31 +214,12 @@ GRUPPEN: tuple[Feldgruppe, ...] = (
 )
 
 
-def as_options(raw) -> list[str]:
-    """Feldwert nach Options-Schluesseln koerzieren — leere Liste heisst „kein Wert".
-
-    ``data_json`` ist ein freies JSONB: dasselbe Feld kann eine Liste (heutiges
-    ``multi_select``), einen blanken String (Alt-/Fremdschreibpfad, und der
-    Normalfall bei ``select``) oder Unsinn enthalten. Alles Nicht-Verwertbare
-    faellt still weg und wird ueber die Vollstaendigkeits-Meldung sichtbar —
-    ein ``TypeError`` hier killte den ganzen Bericht wegen eines Feldes.
-
-    Duplikate werden entfernt: die Zelle zaehlt Ereignisse mit dieser Option,
-    nicht Nennungen (siehe Modul-Docstring).
-    """
-    werte = raw if isinstance(raw, list | tuple) else [raw]
-    treffer = []
-    for wert in werte:
-        if isinstance(wert, str) and wert.strip() and wert.strip() not in treffer:
-            treffer.append(wert.strip())
-    return treffer
-
-
 @register_backend("service-distribution")
 class ServiceDistributionBackend(DatasetBackend):
     """Options-Verteilung der Auswahlfelder ``leistungen`` und ``art-der-krise``."""
 
     name = _("Beispiel: Leistungs- und Krisenarten-Verteilung")
+    count_groups = GRUPPEN
     disclosure_dimensions = frozenset({"event_counts"})
     description = _("Zählt, wie oft die Optionen der Leistungs- und Krisenarten-Felder im Zeitraum gewählt wurden.")
     snapshot_enabled = False
@@ -322,6 +298,7 @@ class ServiceDistributionBackend(DatasetBackend):
             )
 
         return DatasetResult(
+            disclosure_context=(date_from, date_to, "live"),
             mode="rows",
             records=records,
             summary=summary,
@@ -336,87 +313,30 @@ class ServiceDistributionBackend(DatasetBackend):
         )
 
     @staticmethod
-    def _drop_margin_on_any_suppression(view: dict, gruppe: Feldgruppe) -> None:
-        """Total-Doktrin fuer die Mehrfachnennungs-Randsumme (C1, Refs #1754).
+    def _drop_margin_on_any_suppression(view: dict, group: Feldgruppe) -> None:
+        """Delegate the existing multi-option margin contract."""
+        from core.services.dashboard.external_report import _drop_service_margin
 
-        Analog :func:`~core.services.dashboard.external_report.drop_person_margin_on_person_suppression`:
-        die Randsumme faellt, sobald **eine** Zelle der Gruppe unterdrueckt ist.
-
-        **Warum es nicht ohne geht.** ``Σ Options-Counts >= events_leistungen``
-        (jedes Ereignis mit Wert traegt nach Dedup mindestens eine Option bei).
-        Diese Ungleichung liefert fuer jede unterdrueckte Zelle eine **untere**
-        Schranke ``x >= Randsumme − Σ sichtbare Zellen``, und die
-        Primaer-Suppression liefert die obere ``x <= k − 1``. Fallen beide
-        zusammen, ist die Zelle exakt bestimmt (k = 5, sichtbar 6, Randsumme 10
-        ⇒ die unterdrueckte Zelle ist genau 4). Ohne publizierte Randsumme gibt
-        es die untere Schranke nicht mehr, und es bleibt ``1 <= x <= k − 1``.
-
-        Bewusst **schaerfer** als der Fixpunkt-Guard und bewusst hier statt
-        dort: der Guard modelliert exakte Partitionen (``Σ Zellen = Randsumme``),
-        und eine Ungleichung ist kein Fall seines Inferenzmodells — sie in
-        ``disclosure.py`` nachzuruesten waere ein zweites Modell neben dem
-        bestehenden (die in ``_SAMPLE_REPORT_1_BREAKDOWNS`` als Route (2)
-        vermerkte, bewusst nicht gebaute Erweiterung). Bis dahin ist die
-        pauschale Total-Doktrin die sichere Richtung.
-
-        Setzt **nur** die Randsumme auf ``None``; der Unterdrueckungs-Marker der
-        Zeilen wird ausschliesslich gelesen (Architektur-Guard
-        ``test_kein_artefakt_baut_eigene_unterdrueckung``).
-        """
-        if any(row.get("suppressed") for row in view.get(gruppe.records_key, ())):
-            view[gruppe.summary_key] = None
+        _drop_service_margin(view, group)
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        """K-Anon-Suppression je Gruppe — Randsummen-Begruendung im Modul-Docstring.
+        """Publish the local contract through the shared population mask."""
+        from core.services.dashboard.external_report import _protect_service_dataset
+        from core.services.dashboard.shared_disclosure import project_shared_dataset
 
-        Die Gruppen werden strikt getrennt suppressiert: sie teilen keine
-        Randsumme, und eine Zellsuppression in der einen darf in der anderen
-        nichts ausloesen.
-
-        Zwei **verschiedene** Schutzwege, je nach Partitionseigenschaft der
-        Gruppe (Begruendung im Modul-Docstring):
-
-        * Einfachauswahl — exakte Partition: ``margin`` deklariert,
-          Sekundaer-Suppression und :func:`apply_residual_guard` uebernehmen.
-        * Mehrfachauswahl — nur Ungleichung: ``margin=None`` (die zentrale
-          Maschinerie darf nicht an einer falschen Gleichung rechnen) UND
-          :meth:`_drop_margin_on_any_suppression` als Total-Doktrin. ``margin=None``
-          allein waere **kein** Schutz, sondern nur dessen Abschaltung.
-        """
-        threshold = _get_threshold(facility)
-        view: dict = {}
-        breakdowns: list[_Breakdown] = []
-        aktive: list[Feldgruppe] = []
-
-        for gruppe in GRUPPEN:
-            if gruppe.summary_key not in result.summary:
-                continue
-            aktive.append(gruppe)
-            events = result.summary[gruppe.summary_key]
-            # R14: eine Randsumme < k ist selbst eine Kleinstfallzahl — auch
-            # dort, wo sie keine Partition traegt.
-            published = events if events >= threshold else None
-            # ``margin`` NUR bei exakter Partition: eine deklarierte, aber
-            # unzutreffende Randsumme laesse das Machbarkeits-Audit an einer
-            # falschen Gleichung rechnen.
-            margin = None if gruppe.mehrfachnennung else published
-            zeilen = [row for row in result.records if row["feld"] == gruppe.feld_slug]
-            view[gruppe.summary_key] = published
-            view[gruppe.records_key] = _suppress_small(zeilen, threshold, margin=margin, order=ORDER_INPUT)
-            if gruppe.mehrfachnennung:
-                self._drop_margin_on_any_suppression(view, gruppe)
-            else:
-                breakdowns.append(_Breakdown(gruppe.records_key, gruppe.summary_key, ORDER_INPUT))
-
-        apply_residual_guard(view, threshold, tuple(breakdowns))
-
-        # Der Guard kann eine ganze Aufschluesselung fallen lassen (Key weg,
-        # fail-safe) — deshalb ``get`` statt Indexzugriff.
-        rows = [row for gruppe in aktive for row in view.get(gruppe.records_key, ())]
-        records = project_records(rows, self.get_field_specs())
-        summary = stamp_threshold({gruppe.summary_key: view[gruppe.summary_key] for gruppe in aktive}, threshold)
-        completeness = [
-            CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None),
-            *doppelbindungs_issues(*(gruppe.leseschluessel(facility) for gruppe in aktive)),
-        ]
-        return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)
+        local = _protect_service_dataset(
+            result,
+            _get_threshold(facility),
+            field_specs=self.get_field_specs(),
+            groups=GRUPPEN,
+        )
+        local = dataclasses.replace(
+            local,
+            completeness=[
+                CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None),
+                *doppelbindungs_issues(
+                    *(group.leseschluessel(facility) for group in GRUPPEN if group.summary_key in result.summary)
+                ),
+            ],
+        )
+        return project_shared_dataset(facility, local, "service-distribution")

@@ -494,7 +494,9 @@ def _raw_live_statistics(populations, types, date_from, date_to):
     return members, raw, raw_sample
 
 
-def _prepare_live_interval(facility, populations, types, type_categories, snapshots, threshold, date_from, date_to):
+def _prepare_live_interval(
+    facility, populations, types, type_categories, snapshots, field_sources, threshold, date_from, date_to
+):
     """Import local contracts using raw aggregates, never published numbers."""
     from core.services.dashboard.external_report import _protect_external_statistics, _protect_sample_statistics
 
@@ -568,9 +570,11 @@ def _prepare_live_interval(facility, populations, types, type_categories, snapsh
         category = type_categories[type_id]
         if category is not None and hybrid_categories.get(category) is None:
             observe(f"document-type:{type_id}", row["count"], None, lower=1)
+    from core.services.dashboard.shared_field_sources import prepare_field_interval
     from core.services.dashboard.shared_sources import prepare_additional_interval
 
     datasets = prepare_additional_interval(populations, date_from, date_to, threshold)
+    datasets.update(prepare_field_interval(field_sources, populations, date_from, date_to, threshold, general))
     for binding in datasets.values():
         observations.extend(binding.observations())
         local_dropped.update(binding.dropped())
@@ -646,9 +650,15 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
     from core.models import DocumentType, StatisticsSnapshot
     from core.reporting.registry import get_backend
     from core.services.dashboard.external_report import _get_threshold, project_protected_rows
+    from core.services.dashboard.shared_field_sources import collect_field_sources
     from core.services.dashboard.shared_sources import collect_additional_populations
 
-    populations = (*collect_event_populations(facility, date.min, date.max), *collect_additional_populations(facility))
+    field_sources = collect_field_sources(facility)
+    populations = (
+        *collect_event_populations(facility, date.min, date.max),
+        *collect_additional_populations(facility),
+        *field_sources.populations,
+    )
     type_rows = list(
         DocumentType.objects.for_facility(facility).order_by("name").values_list("name", "pk", "report_key")
     )
@@ -666,7 +676,9 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
     threshold = _get_threshold(facility)
     windows = canonical_live_windows(populations)
     intervals = [
-        _prepare_live_interval(facility, populations, types, type_categories, snapshots, threshold, start, end)
+        _prepare_live_interval(
+            facility, populations, types, type_categories, snapshots, field_sources, threshold, start, end
+        )
         for start, end in windows
     ]
     observations = [cell for interval in intervals for cell in interval.observations]
@@ -690,7 +702,7 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
                 CountKey(population.dimension, population.identity, start, end),
             )
     requested = _prepare_live_interval(
-        facility, populations, types, type_categories, snapshots, threshold, date_from, date_to
+        facility, populations, types, type_categories, snapshots, field_sources, threshold, date_from, date_to
     )
     members = {(p.dimension, p.identity): population_units(p, date_from, date_to) for p in populations}
 
