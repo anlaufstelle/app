@@ -1,20 +1,12 @@
-"""Vokabular-Guard: kein Arbeitsablauf-Jargon in ausgelieferten Dateien (Refs #2349).
-
-Kommentare und Docstrings sollen begruenden, WARUM etwas so gebaut ist —
-nicht WER es anfassen durfte. Woerter, die nur innerhalb eines internen
-Arbeitsablaufs Bedeutung haben, sind daher in jeder ausgelieferten Datei
-fehl am Platz: sie sind fuer Leser des Repos ohne Kontext unverstaendlich
-und verraten organisatorische Details, die nicht Teil des Produkts sind.
-
-Einzige Ausnahme ist der Fachbegriff des Offline-Sync-Moduls
-(``sync-orchestrator.js`` / ``window.syncOrchestrator`` / „Sync-Orchestrator")
-— ein echter Produktbestandteil, kein Arbeitsablauf-Verweis.
-"""
+"""Reject new internal process references in release files (Refs #2647)."""
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import subprocess
+from collections import Counter
 from pathlib import Path
 from typing import NamedTuple
 
@@ -35,32 +27,26 @@ _PROCESS_WORDS = (
     "fix-runde",
 )
 
-# Erfasst auch Flexionen/Zusammensetzungen ueber den Wortstamm hinaus — die
-# Wortliste selbst ist die einzige Stelle, an der die gebannten Woerter im
-# Klartext stehen duerfen. Ausnahme "tabu(?!l)": schliesst voellig andere
-# Woerter mit zufaellig gleichem Wortanfang aus (z. B. "Tabulator",
-# "TabularInline", "tabular-nums" — nichts davon hat mit dem gebannten Begriff
-# zu tun).
+# Match inflections, but preserve unrelated words such as Tabulator.
 _WORD_RE = re.compile(
-    r"\btabu(?!l)\w*|\b(?:" + "|".join(re.escape(word) for word in _PROCESS_WORDS if word != "tabu") + r")\w*",
+    r"\btabu(?!l)\w*|\b(?:"
+    + "|".join(re.escape(word) for word in _PROCESS_WORDS if word != "tabu")
+    + r")\w*|\bWelle [A-Z]\b|/work/|\bCLAUDE\.md\b",
     re.IGNORECASE,
 )
 
-# Der Fachbegriff des Sync-Moduls: "sync-orchestrator" (mit Bindestrich, in
-# jeder Gross-/Kleinschreibung) wird VOR der Wortsuche aus der Zeile maskiert,
-# nicht die ganze Zeile uebersprungen — ein echter Treffer daneben soll
-# weiterhin auffallen.
-_SYNC_ORCHESTRATOR_RE = re.compile(r"sync-orchestrator", re.IGNORECASE)
-_SYNC_ORCHESTRATOR_MASK = "SyncOrchestratorOK"
-
-_DEFAULT_EXTENSIONS = (".py", ".js", ".mjs", ".html", ".txt", ".md", ".json", ".yml", ".yaml", ".css")
-_DEFAULT_EXCLUDED_DIR_NAMES = frozenset({"staticfiles", "media", "__pycache__", "node_modules"})
-
-# Der Scanner selbst enthaelt die Wortliste (fuer die Erkennung) und
-# Test-Fixture-Zeichenketten, die die Erkennung an genau diesen Woertern
-# ueben — beides zwingend noetig, damit der Scanner sich selbst pruefen
-# laesst. Die eigene Datei ist deshalb vom Real-Baum-Lauf ausgenommen.
-_SELF_RELPATH = "tests/test_process_vocabulary_guard.py"
+# Mask only the product token; other references on the same line remain visible.
+_SYNC_ORCHESTRATOR_RE = re.compile(r"sync[-_]?orchestrator", re.IGNORECASE)
+_DEFAULT_EXCLUDED_DIR_NAMES = frozenset({"staticfiles", "media", "__pycache__", "node_modules", ".git"})
+_DEFAULT_EXTENSIONS = None
+_BASELINE_PATH = Path(__file__).with_name("process_vocabulary_baseline.json")
+# These files necessarily contain scanner patterns or forbidden-path examples.
+_ALLOWLIST = {
+    "src/tests/test_process_vocabulary_guard.py": "Scanner implementation and fixtures",
+    "src/tests/process_vocabulary_baseline.json": "Frozen scanner findings",
+    ".gitignore": "Local-only paths must be ignored",
+    "scripts/verify_release_test_guard.py": "Release exclusion scanner",
+}
 
 
 class Hit(NamedTuple):
@@ -71,7 +57,7 @@ class Hit(NamedTuple):
 
 
 def _candidate_files(root: Path) -> list[Path]:
-    """Versionierte Dateien unter ``root`` (Git), sonst alle regulaeren Dateien."""
+    """Return tracked files, or regular files outside a Git checkout."""
     try:
         proc = subprocess.run(
             ["git", "ls-files", "-z", "--", "."],
@@ -91,20 +77,13 @@ def _candidate_files(root: Path) -> list[Path]:
 def scan_process_vocabulary(
     root: Path,
     *,
-    extensions: tuple[str, ...] = _DEFAULT_EXTENSIONS,
+    extensions: tuple[str, ...] | None = _DEFAULT_EXTENSIONS,
     excluded_dir_names: frozenset[str] = _DEFAULT_EXCLUDED_DIR_NAMES,
 ) -> list[Hit]:
-    """Scannt ``root`` rekursiv nach Arbeitsablauf-Jargon (reine Baumsuche ohne Seiteneffekte).
-
-    Liegt ``root`` in einem Git-Arbeitsbaum, werden nur versionierte Dateien geprueft:
-    lokale, per ``.gitignore`` ausgeschlossene Ablagen (z. B. persoenliche Planungsnotizen
-    unter ``docs/``) gehoeren nicht zum ausgelieferten Baum und duerfen den Guard nicht
-    reissen. Ausserhalb eines Git-Baums (Proben unter ``tmp_path``) bleibt es bei der
-    reinen Dateisystemsuche.
-    """
+    """Scan text files without modifying the tree."""
     hits: list[Hit] = []
     for path in sorted(_candidate_files(root)):
-        if path.suffix not in extensions:
+        if extensions is not None and path.suffix not in extensions:
             continue
         relparts = path.relative_to(root).parts
         if any(part in excluded_dir_names for part in relparts):
@@ -115,7 +94,7 @@ def scan_process_vocabulary(
             continue
         relpath = path.relative_to(root).as_posix()
         for lineno, line in enumerate(text.splitlines(), start=1):
-            masked = _SYNC_ORCHESTRATOR_RE.sub(_SYNC_ORCHESTRATOR_MASK, line)
+            masked = _SYNC_ORCHESTRATOR_RE.sub("", line)
             for match in _WORD_RE.finditer(masked):
                 hits.append(Hit(relpath, lineno, match.group(0), line))
     return hits
@@ -187,7 +166,7 @@ class TestScanFunctionAgainstFixtures:
     def test_only_scans_configured_extensions(self, tmp_path: Path) -> None:
         (tmp_path / "sample.png").write_bytes(b"TABU")
         (tmp_path / "sample.py").write_text("# TABU\n", encoding="utf-8")
-        hits = scan_process_vocabulary(tmp_path)
+        hits = scan_process_vocabulary(tmp_path, extensions=(".py",))
         assert [h.relpath for h in hits] == ["sample.py"]
 
     def test_binary_files_are_skipped_without_error(self, tmp_path: Path) -> None:
@@ -195,24 +174,74 @@ class TestScanFunctionAgainstFixtures:
         scan_process_vocabulary(tmp_path)  # nur: darf nicht werfen
 
 
-class TestRealTreeHasNoUnresolvedProcessVocabulary:
-    """Der eigentliche Guard: der ausgelieferte Baum bleibt sauber, damit
-    der Bestand aus Ticket 2349 nicht wieder waechst."""
-
-    # Alle Verzeichnisse mit ausgeliefertem Code oder begleitender
-    # Dokumentation werden gemeinsam geprüft.
-    _SCAN_ROOTS = ("src", "deploy", "docs", "dev-ops", "scripts")
-
-    def test_no_unresolved_process_vocabulary_remains(self) -> None:
-        unresolved: list[Hit] = []
-        for root_name in self._SCAN_ROOTS:
-            root = REPO_ROOT / root_name
-            if not root.is_dir():
-                continue
-            for hit in scan_process_vocabulary(root):
-                if root_name == "src" and hit.relpath == _SELF_RELPATH:
-                    continue
-                unresolved.append(hit._replace(relpath=f"{root_name}/{hit.relpath}"))
-        assert unresolved == [], "Arbeitsablauf-Jargon in ausgelieferten Dateien gefunden (Refs #2349):\n" + "\n".join(
-            f"{h.relpath}:{h.lineno} [{h.word}] {h.line}" for h in unresolved
+def scan_release_vocabulary(root: Path) -> list[Hit]:
+    """Select release files using the build script's literal removal list."""
+    build_script = root / "dev-ops/release/build-release.sh"
+    removed: set[str] = set()
+    if (root / "dev-ops/release/build-release.sh").exists():
+        removed.update(
+            re.findall(
+                r'^\s*rm -[rf]+\s+"\$RELEASE_DIR/([^"\n]+)"\s*$', build_script.read_text(encoding="utf-8"), re.MULTILINE
+            )
         )
+    return [
+        hit
+        for hit in scan_process_vocabulary(root)
+        if hit.relpath not in _ALLOWLIST
+        and not any(hit.relpath == name or hit.relpath.startswith(name + "/") for name in removed)
+    ]
+
+
+def finding_counts(hits: list[Hit]) -> dict[str, int]:
+    """Pin file and exact line content, independent of line-number shifts."""
+    return dict(Counter(f"{hit.relpath}:{hashlib.sha256(hit.line.encode()).hexdigest()}" for hit in hits))
+
+
+def baseline_is_subset(current: dict[str, int], ceiling: dict[str, int]) -> bool:
+    """Reject added keys and increased counts, including duplicate lines."""
+    return all(isinstance(count, int) and 0 < count <= ceiling.get(key, 0) for key, count in current.items())
+
+
+def test_release_findings_match_remaining_baseline() -> None:
+    baseline = json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
+    current = finding_counts(scan_release_vocabulary(REPO_ROOT))
+    assert current == baseline["remaining"], "Update removed findings; new findings must be fixed."
+
+
+def test_frozen_baseline_cannot_grow() -> None:
+    baseline = json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
+    frozen = json.dumps(baseline["ceiling"], sort_keys=True).encode()
+    assert hashlib.sha256(frozen).hexdigest() == "c2b7831b973a96365cf1e74774637069317285e8ac3377d5de8e32b2c3bacbb8"
+    assert baseline_is_subset(baseline["remaining"], baseline["ceiling"])
+
+
+@pytest.mark.parametrize("text", ["// Welle U", "// /work/example/file.py", "// CLAUDE" + ".md"])
+def test_detects_internal_references_in_javascript_tests(tmp_path: Path, text: str) -> None:
+    directory = tmp_path / "tests" / "js"
+    directory.mkdir(parents=True)
+    (directory / "example.test.mjs").write_text(text, encoding="utf-8")
+    hits = scan_process_vocabulary(tmp_path)
+    assert len(hits) == 1
+    assert hits[0].relpath == "tests/js/example.test.mjs"
+
+
+def test_sync_token_does_not_hide_internal_path(tmp_path: Path) -> None:
+    (tmp_path / "sample.js").write_text("// Sync-Orchestrator /work/example\n", encoding="utf-8")
+    assert [hit.word for hit in scan_process_vocabulary(tmp_path)] == ["/work/"]
+
+
+def test_release_selection_includes_root_files_and_javascript_tests(tmp_path: Path) -> None:
+    build_script = tmp_path / "dev-ops/release/build-release.sh"
+    build_script.parent.mkdir(parents=True)
+    build_script.write_text('rm -rf "$RELEASE_DIR/dev-ops"\nrm -rf "$RELEASE_DIR/docs/dev"\n', encoding="utf-8")
+    for name in ("Makefile", "tests/js/example.test.mjs", Path("docs") / "dev" / "private.md"):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# Ruling\n", encoding="utf-8")
+    assert {hit.relpath for hit in scan_release_vocabulary(tmp_path)} == {"Makefile", "tests/js/example.test.mjs"}
+
+
+def test_baseline_can_only_shrink() -> None:
+    assert baseline_is_subset({"sample:hash": 1}, {"sample:hash": 2})
+    assert not baseline_is_subset({"sample:hash": 3}, {"sample:hash": 2})
+    assert not baseline_is_subset({"new:hash": 1}, {"sample:hash": 2})

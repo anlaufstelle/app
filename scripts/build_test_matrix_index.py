@@ -68,10 +68,9 @@ AUTOGEN_END = "<!-- INDEX-AUTOGEN:END -->"
 ANHANG_C_START = "<!-- ANHANG-C:START -->"
 ANHANG_C_END = "<!-- ANHANG-C:END -->"
 
-# Repo-Konvention (CLAUDE.md / release-checklist): Issue-Referenzen sind
-# klickbare Markdown-Links. Der Generator emittiert sie direkt in dieser
-# Form, damit ``--check`` byte-idempotent bleibt und nicht gegen eine
-# manuelle Nachbearbeitung der erzeugten Dateien anläuft.
+# Issue references follow the documentation convention and use
+# clickable Markdown links. The generator emits them directly so that
+# --check remains byte-idempotent without manual post-processing.
 #
 # Refs #1058 (M2/P13, Korrekturrunde): Die referenzierten Nummern (#909, #916,
 # #1071) sind Tickets des **Entwicklungs-Trackers**, nicht des oeffentlichen

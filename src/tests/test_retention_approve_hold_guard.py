@@ -1,21 +1,12 @@
-"""``approve_proposal`` prüft Status und Legal Hold unter Lock (Refs #2109).
+"""Verify status and legal holds under the proposal lock (Refs #2109).
 
-Der Dienst setzte ``status = APPROVED`` und schrieb die Audit-Zeile, ohne die
-Vorschlagszeile zu sperren, ohne den Status erneut zu lesen und ohne den Hold
-auf dem Ziel zu prüfen. Zwei Folgen:
+Approval previously updated status and audit history without locking or
+re-reading the proposal and without checking the target's legal hold.
+This allowed approvals under an active hold and duplicate audit entries
+from concurrent approvals. Held targets were still protected from deletion.
 
-* Die Oberfläche erzeugte **APPROVED-Vorschläge unter aktivem Hold**. Gelöscht
-  wurde nichts (das Enforcement schließt gehaltene Ziele aus), aber der
-  Audit-Trail behauptete eine Genehmigung, die unter laufender Sperre gar nicht
-  hätte ergehen dürfen — bei einer behördlichen Prüfung genau die falsche
-  Aussage. Dynamisch belegt in ``/work/redteam-pocs/h9_b4_b5_retention_hold_race.py``
-  Teil A.
-* Zwei gleichzeitige Genehmigungen schrieben **zwei** Audit-Zeilen für einen
-  Vorgang.
-
-Muster des Fixes ist ``approve_client_merge``/``reject_client_merge``
-(``services/client/merge.py``): Zeile per ``select_for_update`` neu laden,
-Status erneut prüfen, sonst ``ValidationError``.
+As with approve_client_merge and reject_client_merge, reload the proposal
+with select_for_update and reject an invalid status with ValidationError.
 """
 
 import threading

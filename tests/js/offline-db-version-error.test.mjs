@@ -50,13 +50,10 @@ async function loadOfflineDb(openResult) {
 }
 
 //
-// Refs #2060 (Fix-Runde 1): Fuenf Templates laden ``offline-db.js``, aber nur
-// ``base.html`` liefert ein ``data-i18n-db-update-required``. Der Toast trug
-// die Meldung deshalb ausgerechnet dort nicht, wo sie am noetigsten ist —
-// Anmeldung, Passwortwechsel, terminaler Offline-Fallback und die precachten
-// In-Place-Shells. Er hat jetzt einen deutschen Rueckfall (dokumentierte
-// Ausnahme nach dem Muster htmx-errors.js); das Template-Label gewinnt, wo es
-// existiert.
+// Refs #2060: Five templates load offline-db.js, but only base.html
+// supplies data-i18n-db-update-required. The toast needs a German fallback
+// on login, password changes, the offline fallback and cached shells.
+// As in htmx-errors.js, the template label takes precedence when supplied.
 const FALLBACK_TEXT = "Die lokal gespeicherten Daten stammen aus einer neueren Programmversion.";
 
 /** Die fuenf Layouts, die ``offline-db.js`` laden — mit ihrem echten Dataset-Stand. */
@@ -104,8 +101,7 @@ describe("offline-db version mismatch", () => {
     });
 
     it("still speaks up where no template supplies a label", async () => {
-        // Refs #2060 (Fix-Runde 1): vorher brach der Toast hier ab und es
-        // blieb nur console.error — also genau der Zustand vor dem Fix.
+        // Refs #2060: Previously the toast failed here, leaving only console.error.
         delete document.body.dataset.i18nDbUpdateRequired;
         delete document.body.dataset.i18nSwDismiss;
 

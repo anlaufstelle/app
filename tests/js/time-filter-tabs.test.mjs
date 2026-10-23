@@ -1,9 +1,8 @@
-// Refs #1059 (A11Y-017/008, Ruling R-B2p-10): Die Zeitfilter-Leiste wird beim
-// Umschalten NICHT neu gerendert - der HTMX-Swap trifft die Feed-Liste. Alles,
-// was time-filter-tabs.js nicht mitzieht, bleibt auf dem Server-Stand stehen.
-// Vorher zog das Skript nur die Tailwind-Stilklassen mit: der Auswahlzustand
-// blieb am alten Knopf haengen (er war rein visuell), und die Uhrzeit-Spanne
-// behielt ``text-ink-muted``, das auf ``bg-accent-light`` nur 4,31:1 erreicht.
+// Refs #1059 (A11Y-017/008): HTMX swaps the feed list, leaving time-filter
+// controls mounted. The script must update their selection and contrast.
+// Previously only Tailwind classes changed: selection stayed on the old
+// button and the time range retained text-ink-muted, whose contrast on
+// bg-accent-light is only 4.31:1.
 //
 // Der Zustand steht in ``aria-pressed`` und NICHT in ``aria-selected``: die
 // Knoepfe sind unabhaengige Umschalter, kein ARIA-Tab-Widget (kein
