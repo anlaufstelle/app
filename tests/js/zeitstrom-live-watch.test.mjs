@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeAll(async () => {
     window.__ZEITSTROM_WATCH_TEST__ = true;
@@ -126,6 +126,7 @@ async function flush() {
 
 beforeEach(() => {
     vi.useFakeTimers();
+    Object.defineProperty(document, "readyState", { configurable: true, value: "complete" });
     delete window.htmx;
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -1426,5 +1427,168 @@ describe("Zeitstrom live watch", () => {
             delete window.__logoutInFlight;
             delete window.__quickExitLeaving;
         }
+    });
+});
+
+describe("htmx initialization barrier", () => {
+    let watcher;
+
+    afterEach(() => {
+        watcher?.stop();
+        document.dispatchEvent(new Event("quick-exit:leaving"));
+        window.__ZEITSTROM_WATCH_TEST__ = true;
+    });
+
+    function pendingPage(readyState) {
+        Object.defineProperty(document, "readyState", { configurable: true, value: readyState });
+        document.getElementById("feed-list").innerHTML =
+            '<div id="activity-detail-1" style="display: none;"></div>';
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(watchResponse(["feed"], { feed: '"feed-v2"' }))
+            .mockResolvedValueOnce(response({
+                text: '<div id="activity-detail-1">Updated activity</div>',
+                headers: { "Content-Type": "text/html", ETag: '"feed-v2"' },
+            }))
+            .mockResolvedValue(watchResponse());
+        const styleWrites = [];
+        const htmx = {
+            config: { attributesToSettle: ["class", "style", "width", "height"] },
+            swap: vi.fn((target, html) => {
+                const previousStyle = target.firstElementChild.getAttribute("style");
+                target.innerHTML = html;
+                // Model htmx's default settle copying Alpine's CSSOM style.
+                if (htmx.config.attributesToSettle.includes("style") && previousStyle) {
+                    styleWrites.push(previousStyle);
+                    target.firstElementChild.setAttribute("style", previousStyle);
+                }
+            }),
+        };
+        return { fetchMock, htmx, styleWrites };
+    }
+
+    function initializeHtmx() {
+        // Deferred htmx reads the meta config in its DOMContentLoaded handler,
+        // then emits the initial body load. A prior DCL listener is not enough.
+        window.htmx.config.attributesToSettle = ["class", "width", "height"];
+        document.body.dispatchEvent(new CustomEvent("htmx:load", {
+            bubbles: true, detail: { elt: document.body },
+        }));
+    }
+
+    it.each(["loading", "interactive"])(
+        "waits through %s and default htmx config before the single baseline swap",
+        async (readyState) => {
+            const { fetchMock, htmx, styleWrites } = pendingPage(readyState);
+            watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+                fetch: fetchMock,
+            });
+            watcher.start();
+            // The synchronous body script runs before deferred htmx exists.
+            window.htmx = htmx;
+            await watcher.checkNow();
+            await watcher.pollNow();
+            window.dispatchEvent(new Event("focus"));
+            window.dispatchEvent(new Event("pageshow"));
+            document.dispatchEvent(new Event("visibilitychange"));
+            window.dispatchEvent(new Event("online"));
+            document.getElementById("feed-list").dispatchEvent(
+                new CustomEvent("htmx:load", { bubbles: true }),
+            );
+            document.dispatchEvent(new Event("DOMContentLoaded"));
+            await vi.advanceTimersByTimeAsync(24_000);
+
+            expect(fetchMock).not.toHaveBeenCalled();
+            expect(htmx.swap).not.toHaveBeenCalled();
+            expect(styleWrites).toEqual([]);
+
+            initializeHtmx();
+            await watcher.checkNow();
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            expect(htmx.swap).toHaveBeenCalledOnce();
+            expect(styleWrites).toEqual([]);
+            expect(document.getElementById("activity-detail-1").hasAttribute("style")).toBe(false);
+
+            initializeHtmx();
+            watcher.start();
+            window.dispatchEvent(new Event("load"));
+            await flush();
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            await vi.advanceTimersByTimeAsync(12_000);
+            expect(fetchMock).toHaveBeenCalledTimes(3);
+        },
+    );
+
+    it("does not let the public bootstrap hook poll before htmx initialization", async () => {
+        const { fetchMock, htmx } = pendingPage("loading");
+        const previousFetch = window.fetch;
+        window.fetch = fetchMock;
+        window.__ZEITSTROM_WATCH_TEST__ = false;
+        try {
+            vi.resetModules();
+            await import("../../src/static/js/zeitstrom-live-watch.js");
+            window.htmx = htmx;
+            await window.zeitstromWatch.checkNow();
+            window.dispatchEvent(new Event("focus"));
+            await flush();
+            expect(fetchMock).not.toHaveBeenCalled();
+
+            initializeHtmx();
+            await window.zeitstromWatch.checkNow();
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            expect(htmx.swap).toHaveBeenCalledOnce();
+        } finally {
+            window.fetch = previousFetch;
+        }
+    });
+
+    it("starts immediately on an already initialized complete page", async () => {
+        const { fetchMock, htmx } = pendingPage("complete");
+        window.htmx = htmx;
+        htmx.config.attributesToSettle = ["class", "width", "height"];
+        watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+            fetch: fetchMock,
+        });
+        watcher.start();
+        await watcher.checkNow();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(htmx.swap).toHaveBeenCalledOnce();
+    });
+
+    it("handles late embedding after the initial body event via window load", async () => {
+        const { fetchMock, htmx } = pendingPage("interactive");
+        window.htmx = htmx;
+        initializeHtmx();
+        watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+            fetch: fetchMock,
+        });
+        watcher.start();
+        await watcher.checkNow();
+        expect(fetchMock).not.toHaveBeenCalled();
+
+        Object.defineProperty(document, "readyState", { configurable: true, value: "complete" });
+        window.dispatchEvent(new Event("load"));
+        await watcher.checkNow();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(htmx.swap).toHaveBeenCalledOnce();
+    });
+
+    it.each([false, true])("never restarts a watcher stopped before init (started: %s)", async (started) => {
+        const { fetchMock, htmx } = pendingPage("loading");
+        watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+            fetch: fetchMock,
+        });
+        if (started) watcher.start();
+        watcher.stop();
+        window.htmx = htmx;
+        initializeHtmx();
+        window.dispatchEvent(new Event("load"));
+        window.dispatchEvent(new Event("focus"));
+        window.dispatchEvent(new Event("pageshow"));
+        watcher.start();
+        await watcher.checkNow();
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(watcher.isStopped()).toBe(true);
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(htmx.swap).not.toHaveBeenCalled();
     });
 });

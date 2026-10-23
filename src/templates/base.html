@@ -26,6 +26,11 @@
     Kopierschritt war unter der CSP ohnehin wirkungslos; Alpine setzt seinen
     Sichtbarkeits-Zustand nach dem Swap selbst.
 
+    Live-watch swaps must wait for htmx initialization: the deferred script
+    applies this meta config at DOMContentLoaded, before its body htmx:load.
+    A body-end DOMContentLoaded listener may run first; interactive alone
+    does not prove the config has been applied (Refs #2644).
+
     ``responseHandling`` (Refs #2232): regulaere 4xx-Antworten sind fachliche
     HTMX-Partials und werden in das bereits vom ausloesenden Element bestimmte
     Ziel eingewechselt. Die expliziten Regeln muessen vor ``4..`` stehen:

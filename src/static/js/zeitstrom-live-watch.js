@@ -63,6 +63,9 @@
         let timer = null;
         let cycle = null;
         let started = false;
+        // base.html loads htmx with defer. Only complete guarantees its
+        // DOMContentLoaded initialization has run; interactive does not.
+        let htmxInitialized = document.readyState === "complete";
         let stopped = false;
         let pageActive = true;
         let pendingFilterTransition = null;
@@ -118,6 +121,7 @@
 
         function canPoll() {
             return (
+                htmxInitialized &&
                 !stopped &&
                 !quickExitLeaving() &&
                 pageActive &&
@@ -162,6 +166,7 @@
 
         function stop() {
             stopped = true;
+            removeInitListeners();
             clearTimer();
             abortCycle(true);
         }
@@ -724,6 +729,19 @@
             stop();
         }
 
+        function removeInitListeners() {
+            document.body.removeEventListener("htmx:load", onHtmxInitialized);
+            window.removeEventListener("load", onHtmxInitialized);
+        }
+
+        function onHtmxInitialized(event) {
+            // Descendant loads are ordinary fragment swaps, not body init.
+            if (event.type === "htmx:load" && event.target !== document.body) return;
+            htmxInitialized = true;
+            removeInitListeners();
+            if (started) pollImmediately();
+        }
+
         function start() {
             if (started || stopped) return;
             started = true;
@@ -740,6 +758,13 @@
             document.body.addEventListener("htmx:configRequest", onHtmxConfigRequest);
             document.body.addEventListener("htmx:afterRequest", onHtmxAfterRequest);
             pollImmediately();
+        }
+
+        if (!htmxInitialized) {
+            document.body.addEventListener("htmx:load", onHtmxInitialized);
+            // A late embedding may miss the initial body event while the
+            // document is still interactive. Window load follows htmx init.
+            window.addEventListener("load", onHtmxInitialized);
         }
 
         return {
