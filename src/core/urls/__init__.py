@@ -1,13 +1,11 @@
 """URL configuration for the core app.
 
 Refs #1835: Package-Split von ehemals ``core/urls.py`` (592 Zeilen,
-147 Patterns) in ``_config.py``/``_system.py``/``_offline.py``. Eingebunden
-per ``include()`` **ohne eigenen Namespace** — die Submodule setzen bewusst
-kein ``app_name``, damit ``include()`` keinen Sub-Namespace aufspannt und
-``from core.views.free_text_review import FreeTextReviewListView, FreeTextReviewTargetView
-
-app_name = "core"`` (unten) der einzige Namespace bleibt. Jedes
-``{% url "core:…" %}``/``reverse("core:…")`` verhaelt sich damit unveraendert.
+147 Patterns) in ``_config.py``/``_system.py``/``_offline.py``. The submodules are
+included via ``include()`` **without their own namespace** and deliberately set no
+``app_name``, so ``include()`` does not open a sub-namespace and ``app_name = "core"``
+(below) stays the only namespace. Every ``{% url "core:…" %}``/``reverse("core:…")``
+therefore behaves unchanged.
 """
 
 from django.urls import include, path
