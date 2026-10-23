@@ -781,7 +781,7 @@ The calculation considers the current data across contiguous calendar months, in
 
 **Overlap warning:** The page marks distinct, overlapping reporting periods of the same artifact. Registered counting dimensions determine related reports: the event family includes **General key figures**, **Sum of number fields**, **Example: Events by documentation type**, **Sample activity report**, monthly trend, counseling hours, needle exchange balance, ban overview and service distribution, including their categories and subsets. **Client metrics** additionally shares the person dimension with general key figures; case metrics is outside the event family. Across related reports, identical periods also trigger a warning. A relationship means neither equal populations or units nor complete protection against reconstruction across all reports. File format and recipient do not affect this comparison; repeated downloads of the same report for an identical period remain excluded. Older entries without a backend key are grouped by format, falling back to target. Checks consider **all matching releases still recorded** for the facility, including those outside the displayed page and beyond 500 entries. The notice at the top counts only affected releases on the current page. `RELEASE_LOG_LIMIT = 500` is a service-call default, neither the page size nor a limit on this period check.
 
-The warning does not prevent a release. Differences between overlapping files can reveal suppressed information, even without visible suppression. Identical periods of the same report are excluded from the warning algorithm; changes in records or source timestamps can still produce different contents. Check recipients and possible combination: different recipients reduce the risk only under the **organisational assumption** that they do not combine the files; the application does not guarantee this.
+The warning does not prevent a release. Outside the jointly calculated populations and within the remaining boundary described above, differences between files can reveal suppressed information, even without visible suppression. Identical periods of the same report are excluded from the warning algorithm; changes in records or source timestamps can still produce different contents. Check recipients and possible combination: different recipients reduce the risk only under the **organisational assumption** that they do not combine the files; the application does not guarantee this.
 
 Enter the **organisation as recipient**, not a contact person. Recipient and purpose are optional; each allows at most 200 characters. Detected email/phone patterns and typical personal-name pairs are rejected before download. The check is heuristic and cannot detect every personal detail.
 
@@ -1182,7 +1182,7 @@ Phone, email, date and address patterns are detected heuristically and locally o
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: d63ac9c1394a73d3c9804c68befb8d5420c3469d -->
+<!-- source-hash: 1f466ff36a7e279ba35ef2facc0128370265203e -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
