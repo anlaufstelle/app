@@ -100,8 +100,9 @@ def test_zero_auto_approval_threshold_rejected_by_model_and_form(settings_obj):
 @pytest.mark.django_db(transaction=True)
 def test_schema_upgrade_keeps_unproven_approval_and_reports_skip(proposal, lead_user, settings_obj, caplog):
     old = [("core", "0189_settings_auditlog_retention_help_text")]
-    new = [("core", "0190_retentionproposal_first_approval")]
     executor = MigrationExecutor(connection)
+    # Restore the current schema before using live models and services.
+    new = executor.loader.graph.leaf_nodes()
     executor.migrate(old)
     try:
         model = executor.loader.project_state(old).apps.get_model("core", "RetentionProposal")
@@ -181,3 +182,6 @@ def test_unproven_approval_counted_once_across_strategies(proposal, lead_user, s
     call_command("enforce_retention", facility=proposal.facility.name, stdout=output)
     assert "1 event(s) skipped due to missing approval evidence" in output.getvalue()
     assert "failed=0" in output.getvalue()
+
+    current = MigrationExecutor(connection)
+    assert set(current.loader.graph.leaf_nodes()).issubset(current.loader.applied_migrations)
