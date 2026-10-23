@@ -486,7 +486,12 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
             raise PermissionDenied("Nur super_admin darf die Rolle „Systemadministration“ vergeben.")
 
         if change:
-            super().save_model(request, obj, form, change)
+            # The normal change form cannot edit credentials. Reload them under
+            # the same row lock as MFA revocation before any full save (Refs #2640).
+            with transaction.atomic():
+                stored = User.objects.select_for_update().get(pk=obj.pk)
+                obj.password = stored.password
+                super().save_model(request, obj, form, change)
             return
 
         obj.must_change_password = True
