@@ -22,7 +22,13 @@ Branch protection/rulesets are unavailable for the private development repositor
 
 Two separate rulesets are planned for `refs/heads/main`: `main-integrity` blocks force pushes and deletions without bypass actors; `main-pr` requires pull requests and status checks, with an “Always” bypass only for the named release identity and no restrict-updates rule; check names must be compared with an app run before configuration.
 
+## Limits of free-text review (#918)
+
+Online review is an organisational aid for the four fixed long-text fields and configured unencrypted event text/textarea values. It does not extend read permissions, decrypt values or encrypt existing data. Pseudonyms, titles, dynamic person/case fields and the derived search index are outside this list. Local phone/email/date/address heuristics can produce false positives or miss sensitive content; neither the absence of a match nor a review mark guarantees GDPR compliance.
+
+Marks contain no source text: only target, field, date, account, timestamp and a purpose-separated HMAC bound to content and target. Validity is checked against current content and date; changing `SECRET_KEY` invalidates earlier HMACs. Restoring exactly the previous text produces the same content fingerprint. This does not prove a complete modification history. RLS isolates facilities' metadata rather than encrypting source text. Marking and revocation log neither text values nor matched snippets. Suggestions about contact creation, sensitivity and neutralisation do not change data themselves. Review responses carry `no-store`; no separate offline review data store is created.
+
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: c9709239f4eaf70c9257f952a202db0c030db66f -->
+<!-- source-hash: 6f48ce06dff0d01018b3513c091b1916eedc6f3d -->

@@ -2557,9 +2557,17 @@ The **release overview** (Statistics → "Releases" tab, role: lead/application 
 
 Snapshots are visible in the Django admin under **Statistics snapshots** (read-only). You can check which months have been captured and when the last update took place.
 
+## Organising free-text reviews
+
+The **Free-text review** navigation item (`/free-text-review/`) provides model-specific lists in the current facility. Person notes and case and episode descriptions require staff or higher facility roles; task descriptions and unencrypted event text fields are available to assistants and above within existing read permissions. Event type and field protection also apply. System administrators gain no clinical review permissions.
+
+A review stores target model, target UUID, field key, expiry date, reviewing account, timestamp and a server-side HMAC content fingerprint, without copying free text. Facility scoping and a direct RLS policy protect this metadata. Content changes, expiry and a change of `SECRET_KEY` invalidate existing marks. Manual marking and revocation are audited with target/field/date rather than text or matched snippets. Deletion and anonymisation through supported write paths remove associated marks; audit history remains.
+
+Agree review dates and responsibilities organisationally. Local pattern detection is heuristic and offers no GDPR guarantee. Suggestions do not transfer or decrypt content, change sensitivity or edit source text. An actually encrypted field must be selected deliberately when creating a contact. Review supplements existing plaintext fields without encrypting them and is available online only. Activation uses the regular schema migrations without copying source data or running an additional seed command.
+
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: a8fd6af8d9c1b2c212691fe282b2f9712412620b -->
+<!-- source-hash: 165608daf99d287e7eadbb6d385b113b42f6c48f -->
 <!-- translation-date: 2026-10-14 -->

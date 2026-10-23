@@ -1166,3 +1166,11 @@ Abgeschlossene Lösch-, Zusammenführungs- und Herabstufungsanträge bleiben
 manueller Ereignislöschung unbefristet erhalten.
 
 *Anlaufstelle – Dokumentationssystem für niedrigschwellige soziale Hilfsangebote*
+
+## Freitext-Review
+
+Über **Freitext-Review** in der Navigation öffnen Sie `/free-text-review/`. Die Liste zeigt ausschließlich sichtbare, nicht leere Texte der aktuellen Einrichtung. Fachkraft, Leitung und Anwendungsbetreuung sehen Personen-Notizen sowie Fall- und Episodenbeschreibungen. Assistenz aufwärts sieht Aufgabenbeschreibungen und Ereignis-Freitexte im Rahmen der bestehenden Leserechte. Ereignisse werden zusätzlich nach Typ- und Feldschutz gefiltert; verschlüsselte oder nicht als Text/Textarea konfigurierte Werte fehlen. Personen im Papierkorb oder inaktive Personen und ihre zugeordneten Texte bleiben verborgen; Aufgaben und Ereignisse ohne Person können sichtbar bleiben. Systemadministration erhält keinen Zugang.
+
+Wählen Sie das Modell und bei Bedarf **Geändert bis**, **Erfasst oder geprüft von** und einen **Musterhinweis**. Bei Episoden dient das Erfassungsdatum als Altersangabe, da kein Änderungsdatum vorliegt. Die Einrichtung kommt aus der angemeldeten Sitzung. Mit **Text prüfen** öffnen Sie den einzelnen Text und können ihn bis einschließlich des gewählten Tages markieren oder die Markierung zurücknehmen. Geänderter Inhalt oder eine abgelaufene Frist benötigt eine erneute Prüfung. Das Markieren und Zurücknehmen wird ohne Textinhalt auditiert; der Ursprungstext wird dabei nicht geändert. **Ursprungstext öffnen** führt zur regulären Detailseite, bei Episoden zum Elternfall.
+
+Telefon-, E-Mail-, Datums- und Adressmuster werden ausschließlich lokal auf dem Server heuristisch erkannt. Die Hinweise können falsch sein und sensible Angaben übersehen; sie sind keine DSGVO-Garantie. Der erste Vorschlag öffnet nur die Kontakterfassung ohne Vorbefüllung. Verwenden Sie bei einer eigenen Neuerfassung ein tatsächlich verschlüsseltes Feld. Die weiteren Hinweise empfehlen, die Schutzstufe organisatorisch zu prüfen oder den Ursprungstext manuell zu neutralisieren. Keiner der Hinweise kopiert, entschlüsselt oder verändert Inhalte oder Schutzstufen automatisch. Der Review ist nur online verfügbar.

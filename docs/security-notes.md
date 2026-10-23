@@ -2485,3 +2485,9 @@ Auf den beiden bereits gesperrten, frisch gelesenen Personenzeilen (`_locked_cli
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)
 - [docs/ops-runbook.md § 9](ops-runbook.md#9-row-level-security-rls) — RLS-Runbook, Rollen
 - Tiefenanalyse-Audit 2026-04-21 (internes Code-Audit, dev-only) — Security-/DSGVO-/Perf-Audit mit zeilengenauer Verifikation
+
+## Grenzen des Freitext-Reviews (#918)
+
+Der Online-Review ist eine organisatorische Prüfhilfe für die vier festen Langtexte und konfigurierte unverschlüsselte Ereignis-Text-/Textarea-Werte. Er erweitert keine fachlichen Leserechte, führt keine Entschlüsselung aus und verschlüsselt keine Bestandsdaten. Pseudonyme, Titel, dynamische Personen-/Fallfelder und der abgeleitete Suchindex gehören nicht zu dieser Review-Liste. Lokale Telefon-/E-Mail-/Datums-/Adressheuristiken können falsch anschlagen oder sensible Inhalte übersehen; weder Trefferfreiheit noch eine Markierung ist eine DSGVO-Garantie.
+
+Die Markierung enthält keinen Text, sondern Ziel, Feld, Datum, Konto, Zeit und einen zweckgetrennten HMAC über Inhalt und Zielbindung. Die Gültigkeit wird anhand des aktuellen Texts und des Datums geprüft; ein Wechsel von `SECRET_KEY` invalidiert frühere HMACs. Ein später auf denselben Inhalt zurückgesetzter Text hat wieder denselben Inhaltsfingerprint. Dies ist kein Nachweis einer lückenlosen Änderungshistorie. RLS schützt die Einrichtungstrennung der Metadaten, nicht die Verschlüsselung der Quelltexte. Markieren und Zurücknehmen protokollieren keine Textwerte oder Musterfundstellen. Hinweise zur Kontakterfassung, Sensitivity und Neutralisierung ändern selbst keine Daten. Antworten der Review-Views tragen `no-store`; ein eigener Offline-Review-Datenbestand wird nicht aufgebaut.

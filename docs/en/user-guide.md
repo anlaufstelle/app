@@ -1165,10 +1165,18 @@ without expiry even after manual event deletion.
 
 *Anlaufstelle -- Documentation system for low-threshold social services*
 
+## Free-text review
+
+Open **Free-text review** in navigation at `/free-text-review/`. The list contains only currently readable, nonempty texts in the signed-in facility. Staff, leads and facility administrators can review person notes and case and episode descriptions. Assistants and higher facility roles can review task descriptions and event free text within existing read permissions. Event type and field protection both apply; encrypted values and fields not configured as text/textarea are excluded. Deleted or inactive people and their associated texts are hidden; personless tasks and events may remain visible. System administrators receive no access.
+
+Select a model and optionally **Changed through**, **Created or reviewed by**, and a **Pattern hint**. Episodes use their creation date as an age indicator because they have no modification timestamp. The facility comes from the signed-in session. **Review text** opens an individual text, where you can mark it through the selected day, inclusive, or revoke the mark. Changed content or an expired date requires another review. Marking and revocation are audited without text content and do not change the original text. **Open source text** links to its regular detail page, or the parent case for an episode.
+
+Phone, email, date and address patterns are detected heuristically and locally on the server. Hints can be false and miss sensitive information; they do not guarantee GDPR compliance. The first suggestion only opens contact creation without prefilled content. Choose an actually encrypted field if you manually create a new record. Other suggestions recommend checking protection levels with the responsible administrator or manually neutralising the source text. Suggestions never automatically copy, decrypt or change content or protection. Review is available online only.
+
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: 74b524fc1e946c4370caa8dbf9e29de7c1fa7425 -->
+<!-- source-hash: 4d42fc3a38ccef31871d942192820a0d4c4b41b7 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->

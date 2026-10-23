@@ -2556,3 +2556,11 @@ Die **Freigabe-Übersicht** (Statistik → Reiter „Freigaben", Rolle: Leitung/
 ### Admin-Oberfläche
 
 Snapshots sind im Django-Admin unter **Statistik-Snapshots** einsehbar (nur Lesezugriff). Dort können Sie prüfen, welche Monate gesichert wurden und wann die letzte Aktualisierung stattfand.
+
+## Freitext-Review organisieren
+
+Der Navigationseintrag **Freitext-Review** (`/free-text-review/`) stellt modellbezogene Listen innerhalb der aktuellen Einrichtung bereit. Personen-Notizen, Fall- und Episodenbeschreibungen sind Fachkräften aufwärts vorbehalten; Aufgabenbeschreibungen und unverschlüsselte Ereignis-Textfelder sind ab Assistenz innerhalb ihrer bestehenden Leserechte zugänglich. Typ- und Feldschutz von Ereignissen gelten zusätzlich. Systemadministration bekommt keine fachlichen Reviewrechte.
+
+Die Prüfung speichert Zielmodell, Ziel-UUID, Feldschlüssel, „geprüft bis“, prüfendes Konto, Prüfzeit und einen serverseitigen HMAC-Inhaltsfingerprint, keine Kopie des Freitexts. Facility-Scoping und eine direkte RLS-Policy schützen diese Metadaten. Textänderungen, Ablauf des Datums und ein Wechsel von `SECRET_KEY` machen bisherige Markierungen unwirksam. Manuelles Markieren und Zurücknehmen werden mit Ziel/Feld/Datum statt Text oder Musterfundstellen auditiert. Bei Löschung und Anonymisierung über die vorgesehenen Speicherpfade werden nicht mehr zugehörige Markierungen entfernt; die Audit-Historie bleibt bestehen.
+
+Vereinbaren Sie Prüffristen und Verantwortlichkeiten organisatorisch. Die lokale Mustererkennung ist heuristisch und bietet keine DSGVO-Garantie. Hinweise führen keine Übernahme, Entschlüsselung, Sensitivity- oder Textänderung aus. Für die Kontakterfassung ist ein tatsächlich verschlüsseltes Feld bewusst auszuwählen. Der Review ergänzt die vorhandenen Klartextfelder und verschlüsselt sie nicht; er ist nur online verfügbar. Für die Aktivierung genügen die regulären Schema-Migrationen, ohne Datenübernahme oder zusätzlichen Seed-Lauf.
