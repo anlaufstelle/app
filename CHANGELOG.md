@@ -10,7 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Keine.
 
+### Security
+
+- **Sicherheitsupdates für Python-Abhängigkeiten** (#2593) — django-otp 1.7.5 und Brotli 1.2.1 schließen die behobenen Sicherheitslücken einschließlich PYSEC-2026-4322; beide Hash-Locks sind aktualisiert.
+
 ### Changed
+
+- **Abhängigkeiten aktualisiert** (#2594, #2641) — filelock 4.2.4 und django-unfold 0.110.0 aktualisieren Entwicklungswerkzeuge und Administrationsoberfläche.
 
 - **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
 ### Fixed
