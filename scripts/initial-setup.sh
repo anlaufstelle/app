@@ -155,7 +155,7 @@ docker compose version >/dev/null 2>&1 ||
 [[ -f "$ENV_FILE" ]] ||
     fail "Env-Datei nicht gefunden: ${ENV_FILE}
   Zuerst die Vorlage .env.example kopieren und ausfuellen — insbesondere DJANGO_SECRET_KEY,
-  ENCRYPTION_KEY sowie das Drei-Rollen-Modell (POSTGRES_BOOTSTRAP_PASSWORD,
+  ENCRYPTION_KEYS (Schluesselring) sowie das Drei-Rollen-Modell (POSTGRES_BOOTSTRAP_PASSWORD,
   POSTGRES_ADMIN_USER, POSTGRES_ADMIN_PASSWORD). Siehe docs/admin-guide.md § 1.
   Andere Datei waehlen: ENV_FILE=<env-file> scripts/initial-setup.sh"
 

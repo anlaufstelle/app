@@ -1100,17 +1100,25 @@ class TestReadmeQuickStart:
         """Refs #1977/#1062: Kein ausgeliefertes Fest-Geheimnis — aber auch
         kein Setup-Schritt vor dem ersten Start.
 
-        Die Compose reicht ENCRYPTION_KEY nur durch; fehlt er, erzeugt das
+        Die Compose reicht ENCRYPTION_KEYS nur durch; fehlt er, erzeugt das
         Bootstrap-Skript einen zufaelligen Schluessel auf DIESER Maschine.
         Ein in der Datei stehender Literal-Wert waere fuer alle Klone
         derselbe und damit kein Geheimnis mehr.
         """
         services = self._compose()["services"]
         for name in ("web", "init"):
-            value = services[name]["environment"]["ENCRYPTION_KEY"]
-            assert value == "${ENCRYPTION_KEY:-}", (
-                f"{name} muss ENCRYPTION_KEY unveraendert aus der Umgebung durchreichen "
+            environment = services[name]["environment"]
+            value = environment["ENCRYPTION_KEYS"]
+            assert value == "${ENCRYPTION_KEYS:-}", (
+                f"{name} muss ENCRYPTION_KEYS unveraendert aus der Umgebung durchreichen "
                 f"(gefunden: {value!r}) — kein ausgelieferter Festschluessel (Refs #1977)."
+            )
+            # Erkennungskanal: ein Altwert aus der .env muss die Settings erreichen und den
+            # Start mit Umbenennungshinweis stoppen, statt still ignoriert zu werden.
+            legacy = environment["ENCRYPTION_KEY"]
+            assert legacy == "${ENCRYPTION_KEY:-}", (
+                f"{name} muss einen Altwert ENCRYPTION_KEY durchreichen (gefunden: {legacy!r}) — "
+                "sonst wird er still ignoriert und es entsteht ein fremder Schluessel."
             )
 
     def test_dev_compose_healthcheck_treats_http_200_as_liveness(self) -> None:
@@ -1250,7 +1258,7 @@ class TestLocalOneCommandBootstrap:
         Klon derselbe. Erzeugt wird er zufaellig, beim ersten Start."""
         body = self._SCRIPT.read_text(encoding="utf-8")
         assert "Fernet.generate_key()" in body, "Der lokale Schluessel muss zufaellig erzeugt werden (Refs #1977)."
-        assert not re.search(r"ENCRYPTION_KEY=[\"']?[A-Za-z0-9_-]{20,}", body), (
+        assert not re.search(r"ENCRYPTION_KEYS?=[\"']?[A-Za-z0-9_-]{20,}", body), (
             "Kein fest verdrahteter Schluessel im Bootstrap-Skript (Refs #1977)."
         )
 

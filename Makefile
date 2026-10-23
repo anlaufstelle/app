@@ -33,7 +33,7 @@ setup:
 	@if [ -f .env ]; then echo ".env existiert bereits."; else \
 		cp .env.example .env && \
 		KEY=$$($(PYTHON) -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())") && \
-		sed -i "s/^ENCRYPTION_KEY=$$/ENCRYPTION_KEY=$$KEY/" .env && \
+		sed -i "s/^ENCRYPTION_KEYS=$$/ENCRYPTION_KEYS=$$KEY/" .env && \
 		echo ".env erstellt. Bitte die übrigen Werte anpassen."; \
 	fi
 	@if [ ! -f certs/dev-cert.pem ]; then $(MAKE) ssl-cert; fi

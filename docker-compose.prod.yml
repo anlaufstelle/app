@@ -206,6 +206,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      # Only a detection channel: a leftover ENCRYPTION_KEY reaches the settings and
+      # stops the start with a rename hint instead of being ignored silently.
       ENCRYPTION_KEY: ${ENCRYPTION_KEY-}
       ENCRYPTION_KEYS: ${ENCRYPTION_KEYS-}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS}

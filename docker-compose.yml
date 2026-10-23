@@ -76,8 +76,12 @@ services:
       POSTGRES_PASSWORD: anlaufstelle
       # Leer lassen ist der Normalfall: das Bootstrap-Skript erzeugt beim
       # allerersten Start einen zufaelligen Schluessel in ``localstate``.
-      # Ein gesetzter Wert gewinnt (Refs #1977: kein ausgeliefertes
+      # Ein gesetzter Schluesselring gewinnt (Refs #1977: kein ausgeliefertes
       # Fest-Geheimnis, aber auch kein Setup-Schritt vor dem ersten Start).
+      ENCRYPTION_KEYS: "${ENCRYPTION_KEYS:-}"
+      # Nur Erkennungskanal: ein Altwert aus der ``.env`` erreicht so die
+      # Settings und stoppt den Start mit Umbenennungshinweis, statt still
+      # ignoriert zu werden (dann entstuende ein fremder Schluessel).
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"
       # Der PFAD, nicht der Wert: ``settings/dev.py`` liest die Datei. Ein nur
       # in die Startshell exportierter Schluessel waere fuer
@@ -127,6 +131,7 @@ services:
       POSTGRES_USER: anlaufstelle
       POSTGRES_PASSWORD: anlaufstelle
       # Siehe ``init``: leer heisst "Schluessel aus ``localstate`` nehmen".
+      ENCRYPTION_KEYS: "${ENCRYPTION_KEYS:-}"
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"
       LOCAL_ENCRYPTION_KEY_FILE: /home/appuser/encryption.key
       SUPPORT_CONTACT: ${SUPPORT_CONTACT-}
