@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Rollengetreuer Freitext-Review** (#918) — Modellbezogene Online-Listen bieten lokale Musterhinweise und reversible, auditierte Prüffristen, deren Gültigkeit an den aktuellen Text gebunden ist; die Anzeige von Notizen qualifizierter Personen schreibt denselben Lese-Eintrag wie die Personendetailseite.
 - **Verschlüsselungsentwurf für feste Langtexte** (#845) — Option B beschreibt neue leere verschlüsselte Felder, schreibgeschützte bisherige Texte und die nötigen Betreiberprüfungen als gesonderten Entwurf ohne Code- oder Datenmigration.
+- **Gemeinsame Unterdrückung je Zähldimension** (#2639) — Datensatz-Berichte übernehmen einschließlich Hybrid-PDF gemeinsame Zell-, Sekundär-, Randsummen- und Tabellenentscheidungen für aktuelle kanonische Populationen; beliebige frühere Veröffentlichungen und unbekannte Quellzuordnungen bleiben ohne vollständigen Rückrechnungsschutz.
 
 ## [0.99.8] - 2026-10-23
 

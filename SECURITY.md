@@ -116,6 +116,16 @@ Die Werte stehen in [`src/anlaufstelle/settings/prod.py`](src/anlaufstelle/setti
 22. `core.middleware.demo_guard.DemoGuardMiddleware` — sperrt auf der Demo wenige Aktionen, die die Instanz für alle lahmlegen
 23. `django_htmx.middleware.HtmxMiddleware` — HTMX-Anfragedaten
 
+## Statistik und Herausgabegrenze (K4a)
+
+**Gemeinsame Zählentscheidung:** Vorschau und CSV/JSON/XML/PDF der registrierten Datensatz-Berichte übernehmen eine gemeinsame, einrichtungsbezogene Maske je Zähldimension und stabiler Population. Sie umfasst kleine Zellen, zusätzliche Sekundärunterdrückung sowie gegebenenfalls Randsummen und ganze Tabellen. Ereignis-, Personen- und Fallzahlen bleiben verschiedene Dimensionen; unterschiedliche Teilpopulationen werden nicht wegen gleicher Zahlen gleichgesetzt. Eindeutige Personen werden über tatsächliche Vereinigungen gezählt, nie durch Addition von Monatszahlen.
+
+Die Berechnung berücksichtigt den heutigen Datenstand über zusammenhängende Kalendermonate einschließlich verschachtelter Zeiträume und überlappender Teilmengen sowie die konfigurierten Standardzeiträume am heutigen Tag. Andere freie Teilmonatszeiträume erhalten nur Werte, deren genaue Population bereits in dieser Familie enthalten ist; zusätzliche Werte oder Tabellen können deshalb vollständig entfallen. Das Beispiel-Sachbericht-PDF verwendet eigene Snapshot-Kohorten mit Live-Fallback und unterdrückt Ereigniswerte und Tabellen bei Teilmonatszeiträumen vorsorglich. Snapshot-Kategorien und -Altersgruppen werden nicht als bekannte Zuordnung zu heutigen Ereignissen oder Personen behandelt.
+
+**Verbleibende Grenze:** Die Maske wird bei jeder Anfrage neu aus dem aktuellen Bestand berechnet. Es gibt keine persistierte Veröffentlichungshistorie, keine Herausgabesperre und keinen vollständigen Rückrechnungsschutz über beliebige Veröffentlichungen, Datenstände, Snapshot-Stände, Stichtagsbestände oder Zusatzwissen. Die K-Anonymitäts-Schwelle bleibt unverändert. Quelle, Stand, Empfänger und mögliche Zusammenführung bleiben vor jeder Weitergabe zu prüfen.
+
+Details: [Reporting-Vertrag](docs/reporting-plugins.md#k4a--gemeinsame-populationen-und-verbleibende-herausgabegrenze).
+
 ## Out of Scope
 
 Folgende Punkte werden ohne Rücksprache nicht als Sicherheitslücke akzeptiert:
@@ -243,6 +253,16 @@ The values live in [`src/anlaufstelle/settings/prod.py`](src/anlaufstelle/settin
 21. `django.contrib.messages.middleware.MessageMiddleware` — flash messages
 22. `core.middleware.demo_guard.DemoGuardMiddleware` — on the demo, blocks a few actions that would break the instance for everyone
 23. `django_htmx.middleware.HtmxMiddleware` — HTMX request data
+
+## Statistics and disclosure boundary (K4a)
+
+**Shared count decision:** Preview and CSV/JSON/XML/PDF of registered dataset reports use one facility-scoped mask per counting dimension and stable population. It covers small cells, secondary suppression and, where necessary, margins and entire tables. Event, person and case counts remain separate dimensions; equal numbers do not establish equal subsets. Distinct persons are counted through actual unions, never by adding monthly counts.
+
+The calculation considers the current data across contiguous calendar months, including nested periods and overlapping subsets, and the configured standard periods as of today. Other custom partial-month periods receive only values whose exact population already occurs in this family; additional values or tables may therefore disappear completely. The sample activity report PDF uses separate snapshot cohorts with live fallback and conservatively withholds event values and tables for partial-month periods. Snapshot categories and age groups do not establish known links to current events or persons.
+
+**Remaining boundary:** Each request recalculates the mask from current records. There is no persisted publication history, no release block and no complete protection against reconstruction across arbitrary publications, data versions, snapshot versions, current stocks or auxiliary knowledge. The k-anonymity threshold is unchanged. Source, as-of date, recipient and potential combination still require review before every disclosure.
+
+Details: [reporting contract](docs/en/reporting-plugins.md#k4a--shared-populations-and-remaining-disclosure-boundary).
 
 ## Out of Scope
 

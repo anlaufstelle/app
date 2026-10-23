@@ -1919,7 +1919,7 @@ docker system df -v | grep pgdata
 
 2. **The internal statistics Overview is deliberately not suppressed** and can therefore help check whether any data exists (managers/application support only). The internal event list contains pseudonyms and is not anonymised statistics. There is no internal PDF mode. Figures may differ from Dataset reports; content from internal views requires a separate assessment before sharing.
 
-3. **A boundary remains even when no suppression is visible:** the guarantee applies per artifact and period, not across multiple releases -- see [§ 8, "Releasing Reports: What You Need to Know"](#8-statistics-snapshots--materialized-view).
+3. **A boundary remains even when no suppression is visible:** the shared mask protects the currently calculated population family, not arbitrary sequences of earlier releases -- see [§ 8, "Releasing Reports: What You Need to Know"](#8-statistics-snapshots--materialized-view).
 
 > **Important:** Lowering the threshold is a privacy decision, not a troubleshooting step. It affects every report that leaves the organization; document the change accordingly -- the audit log records it as "Settings changed" with the old and new values ([§ 7.4](#74-audit-log)).
 
@@ -2517,7 +2517,13 @@ docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics
 
 ### Releasing Reports: What You Need to Know
 
-Dataset reports suppress small counts. Protection applies **per artifact and per period** and alone does not guarantee anonymity, particularly across several releases. The internal event list, in contrast, contains personal pseudonyms. The following operating rules apply to report files.
+**Shared count decision:** Preview and CSV/JSON/XML/PDF of registered dataset reports use one facility-scoped mask per counting dimension and stable population. It covers small cells, secondary suppression and, where necessary, margins and entire tables. Event, person and case counts remain separate dimensions; equal numbers do not establish equal subsets. Distinct persons are counted through actual unions, never by adding monthly counts.
+
+The calculation considers the current data across contiguous calendar months, including nested periods and overlapping subsets, and the configured standard periods as of today. Other custom partial-month periods receive only values whose exact population already occurs in this family; additional values or tables may therefore disappear completely. The sample activity report PDF uses separate snapshot cohorts with live fallback and conservatively withholds event values and tables for partial-month periods. Snapshot categories and age groups do not establish known links to current events or persons.
+
+**Remaining boundary:** Each request recalculates the mask from current records. There is no persisted publication history, no release block and no complete protection against reconstruction across arbitrary publications, data versions, snapshot versions, current stocks or auxiliary knowledge. The k-anonymity threshold is unchanged. Source, as-of date, recipient and potential combination still require review before every disclosure.
+
+The internal event list contains personal pseudonyms. The following operating rules apply to report files.
 
 **1. Do not give the activity report PDF and a live export of the same period to the same recipient.**
 
@@ -2527,7 +2533,7 @@ Every artefact therefore states **source and as-of date** ("Data source: monthly
 
 **2. Do not choose reporting periods shorter than a month — and keep an eye on overlaps.**
 
-If reports are released for the same facility covering sub-periods **and** their union (twelve monthly reports plus one annual report), every cell suppressed in a sub-report can be recomputed exactly from the sum of the others — even if **not a single** cell was suppressed in any of the reports involved. This is a property of the method, not a defect: k-anonymity is a property of *one* table over *one* population.
+The shared mask considers subset and margin constraints within its current canonical time populations. This does not replace review of earlier files: changed data or snapshot versions and populations outside the model can still expose small remainders through subtraction between releases. Short custom periods may conservatively return no publishable numbers.
 
 The **release overview** (Statistics → "Releases" tab, role: lead/application support) lists the reporting periods already released, taken from the audit trail, and marks overlaps. It prevents nothing — it shows you where to look. To keep the warning meaningful, fill in the optional **Recipient** and **Purpose** fields on export; also check possible combination by different recipients. Different recipients reduce the risk only under the organisational assumption that they do not combine the files; the application does not guarantee this.
 
@@ -2569,5 +2575,5 @@ Agree review dates and responsibilities organisationally. Local pattern detectio
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: 165608daf99d287e7eadbb6d385b113b42f6c48f -->
+<!-- source-hash: 7c684f495de0c8fa4db7692daabe897a3fc16b02 -->
 <!-- translation-date: 2026-10-14 -->

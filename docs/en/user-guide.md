@@ -773,6 +773,12 @@ The **Releases** tab shows no statistics, but your facility's marked releases: t
 
 **A release is** a successful download of the internal event list or a dataset report as CSV, JSON, XML or PDF with a reporting period and a release marker in the audit log. **Not recorded here** are report previews or sharing outside the application, such as forwarded files and screenshots. The `/statistics/external/` address redirects to the **General key figures** card even with `?format=json`; this request is not a release and creates no export audit entry.
 
+**Shared count decision:** Preview and CSV/JSON/XML/PDF of registered dataset reports use one facility-scoped mask per counting dimension and stable population. It covers small cells, secondary suppression and, where necessary, margins and entire tables. Event, person and case counts remain separate dimensions; equal numbers do not establish equal subsets. Distinct persons are counted through actual unions, never by adding monthly counts.
+
+The calculation considers the current data across contiguous calendar months, including nested periods and overlapping subsets, and the configured standard periods as of today. Other custom partial-month periods receive only values whose exact population already occurs in this family; additional values or tables may therefore disappear completely. The sample activity report PDF uses separate snapshot cohorts with live fallback and conservatively withholds event values and tables for partial-month periods. Snapshot categories and age groups do not establish known links to current events or persons.
+
+**Remaining boundary:** Each request recalculates the mask from current records. There is no persisted publication history, no release block and no complete protection against reconstruction across arbitrary publications, data versions, snapshot versions, current stocks or auxiliary knowledge. The k-anonymity threshold is unchanged. Source, as-of date, recipient and potential combination still require review before every disclosure.
+
 **Overlap warning:** The page marks distinct, overlapping reporting periods of the same artifact. Registered counting dimensions determine related reports: the event family includes **General key figures**, **Sum of number fields**, **Example: Events by documentation type**, **Sample activity report**, monthly trend, counseling hours, needle exchange balance, ban overview and service distribution, including their categories and subsets. **Client metrics** additionally shares the person dimension with general key figures; case metrics is outside the event family. Across related reports, identical periods also trigger a warning. A relationship means neither equal populations or units nor complete protection against reconstruction across all reports. File format and recipient do not affect this comparison; repeated downloads of the same report for an identical period remain excluded. Older entries without a backend key are grouped by format, falling back to target. Checks consider **all matching releases still recorded** for the facility, including those outside the displayed page and beyond 500 entries. The notice at the top counts only affected releases on the current page. `RELEASE_LOG_LIMIT = 500` is a service-call default, neither the page size nor a limit on this period check.
 
 The warning does not prevent a release. Differences between overlapping files can reveal suppressed information, even without visible suppression. Identical periods of the same report are excluded from the warning algorithm; changes in records or source timestamps can still produce different contents. Check recipients and possible combination: different recipients reduce the risk only under the **organisational assumption** that they do not combine the files; the application does not guarantee this.
@@ -1176,7 +1182,7 @@ Phone, email, date and address patterns are detected heuristically and locally o
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: a564e7001259791c974b1f9c793872bed10d53cd -->
+<!-- source-hash: d63ac9c1394a73d3c9804c68befb8d5420c3469d -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
