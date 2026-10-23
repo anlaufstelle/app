@@ -31,6 +31,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from minify_offline_js import SOURCES as OFFLINE_SOURCES
+
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_JSON = ROOT / "package.json"
 VENDOR_DIR = ROOT / "src" / "static" / "js"
@@ -382,6 +384,8 @@ def _discover_shipped() -> list[str]:
     """Shipped third-party files that are not registered."""
     errors: list[str] = []
     registered = {lib.vendored_filename for lib in VENDOR_LIBS} | {entry[0] for entry in UNMANAGED_BUILDS.values()}
+    # First-party builds have their own byte-for-byte drift guard (Refs #2011).
+    registered |= {f"{name}.min.js" for name in OFFLINE_SOURCES}
     shipped = {p.relative_to(VENDOR_DIR).as_posix() for p in VENDOR_DIR.glob("*.min.js")}
     vendor_subdir = VENDOR_DIR / "vendor"
     if vendor_subdir.is_dir():

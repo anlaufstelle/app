@@ -486,6 +486,14 @@ verify-agent-docs-sync:
 sync-vendor-js:
 	$(PYTHON) scripts/sync_vendor_js.py
 
+# Build versioned classic offline scripts without bundling or identifier mangling.
+.PHONY: minify-offline-js verify-offline-js-sync
+minify-offline-js:
+	$(PYTHON) scripts/minify_offline_js.py
+
+verify-offline-js-sync:
+	$(PYTHON) scripts/minify_offline_js.py --check
+
 # Mutation-Testing für core/services + core/forms (Refs #922 / #923).
 # Konfiguration in pyproject.toml [tool.mutmut].
 # Full measurements take several hours; the nightly workflow is paused (ADR-029).

@@ -57,7 +57,12 @@ def _mirror_repo(dest: Path, *, mutate: dict[str, str] | None = None) -> Path:
     (dest / "scripts").mkdir(parents=True, exist_ok=True)
     (dest / VENDOR_REL).mkdir(parents=True, exist_ok=True)
 
-    files = ["package.json", "scripts/verify_vendor_js_sync.py", "THIRDPARTY-LICENSES.md"]
+    files = [
+        "package.json",
+        "scripts/verify_vendor_js_sync.py",
+        "scripts/minify_offline_js.py",
+        "THIRDPARTY-LICENSES.md",
+    ]
     files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / VENDOR_REL).glob("*.min.js")]
     for sub in (VENDOR_REL / "vendor", VENDOR_REL / "licenses", FONT_REL, ICON_REL):
         files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / sub).rglob("*") if p.is_file()]
@@ -516,3 +521,13 @@ if __name__ == "__main__":
         print(f"\n{len(failures)} Selbsttest(s) fehlgeschlagen: {failures}")
         sys.exit(1)
     print("\nAlle Selbsttests gruen.")
+
+
+def test_unknown_root_minified_script_with_source_is_still_rejected(tmp_path: Path) -> None:
+    """Only explicitly registered first-party builds bypass the vendor inventory."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / VENDOR_REL / "unknown.js").write_text("window.unknown = true;", encoding="utf-8")
+    (mirror / VENDOR_REL / "unknown.min.js").write_text("window.unknown=!0;", encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "unknown.min.js: shipped vendor file is not registered" in result.stderr
