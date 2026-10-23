@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
+
 ### Erforderliche Betreiber-Aktionen
 
 - Keine.
@@ -23,8 +27,6 @@ Weiterer Release-Kandidat vor 1.0: bündelt die Vier-Augen-Freigabe im Aufbewahr
 - **Projektwebseite verlinkt** (#2589) — Demo-Panel, freigegebene Fußzeile und Hilfe verlinken die konfigurierbare Projektwebseite; normale Anmeldeseiten bleiben ohne Projekt- und Versionshinweis, und Adressen ohne HTTP(S)-Schema oder Host blenden den Projektlink aus.
 
 ### Changed
-
-- **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
 
 - **Kontakte direkt in der Liste aufklappen** (#2605) — Die gemeinsame Zeitstrom-Karte zeigt rollenberechtigte Angaben ohne Seitenwechsel und erhält Fallanzeige, Detail-Link, Filter und Seitenumbruch.
 

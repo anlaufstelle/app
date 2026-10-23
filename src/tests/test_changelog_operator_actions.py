@@ -55,8 +55,8 @@ def test_open_and_future_release_blocks_have_operator_actions() -> None:
     blocks = _blocks(text)
 
     _assert_operator_sections(text)
-    first_heading = next(line for line in blocks["Unreleased"] if line.startswith("### "))
-    assert first_heading == f"### {OPERATOR_SECTION}"
+    headings = [line for line in blocks["Unreleased"] if line.startswith("### ")]
+    assert headings[:2] == ["### Changed", f"### {OPERATOR_SECTION}"]
 
 
 def test_historical_jump_and_operator_notes_are_explained() -> None:
