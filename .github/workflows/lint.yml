@@ -74,7 +74,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
-      - run: sudo apt-get update && sudo apt-get install -y gettext
+      - run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y gettext
+        timeout-minutes: 5
       - run: python scripts/check_translations.py
 
   typecheck:

@@ -75,7 +75,8 @@ jobs:
       # (DeprecationWarning), unter ``filterwarnings = error`` stirbt damit
       # django.setup() beim pytest-Start (Stage-CI #137, v0.96.0). Zeile analog
       # test.yml; ``playwright install --with-deps`` bringt das Paket nicht mit.
-      - run: sudo apt-get update && sudo apt-get install -y libharfbuzz-subset0
+      - run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y libharfbuzz-subset0
+        timeout-minutes: 5
       - run: npm ci
       - run: npx @tailwindcss/cli -i src/static/css/input.css -o src/static/css/styles.css --minify
       - run: cd src && python manage.py collectstatic --noinput

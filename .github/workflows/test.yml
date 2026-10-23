@@ -59,7 +59,8 @@ jobs:
       # error`` stirbt damit django.setup() (Stage-CI #137, v0.96.0). Das
       # Runner-Image bringt das Paket nicht mit; kuenftige WeasyPrint-Versionen
       # setzen es voraus. Gleiche Zeile in e2e.yml, Paket auch im Dockerfile.
-      - run: sudo apt-get update && sudo apt-get install -y gettext libharfbuzz-subset0
+      - run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y gettext libharfbuzz-subset0
+        timeout-minutes: 5
       # ``styles.css`` ist ein gitignoriertes Tailwind-Build-Artefakt (v4, #1480):
       # der Prod-Dockerfile baut es, die PWA-/APP_SHELL-Guards und der
       # collectstatic-Test brauchen es ebenfalls. Schritt analog zu e2e.yml.
