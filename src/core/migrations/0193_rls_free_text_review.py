@@ -18,6 +18,7 @@ WITH CHECK (
 
 DISABLE_SQL = """
 DROP POLICY IF EXISTS facility_isolation ON core_freetextreview;
+ALTER TABLE core_freetextreview NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE core_freetextreview DISABLE ROW LEVEL SECURITY;
 """
 
