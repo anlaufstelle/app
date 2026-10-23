@@ -94,7 +94,13 @@ class FieldDataset:
         dropped_groups = {
             self.group(label)
             for label, fields in self.row_counts.items()
-            if any(key(identity) is None or key(identity) in mask.dropped for identity in fields.values())
+            if any(
+                key(identity) is None or key(identity) in mask.dropped
+                for identity in (
+                    *fields.values(),
+                    *(identity for dependencies in self.row_gates.get(label, {}).values() for identity in dependencies),
+                )
+            )
         }
         rows = []
         for original in self.local.records:

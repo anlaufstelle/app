@@ -681,7 +681,18 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
         )
         for start, end in windows
     ]
-    observations = [cell for interval in intervals for cell in interval.observations]
+    unions = {
+        CountKey(p.dimension, p.identity, start, end): (p.dimension, p.identity, population_units(p, start, end))
+        for p in populations
+        for start, end in windows
+    }
+    dropped_unions = {unions[key] for interval in intervals for key in interval.dropped}
+    local_dropped = frozenset(key for key, union in unions.items() if union in dropped_unions)
+    observations = [
+        replace(cell, hidden=True, lower=0, person_sensitive=False) if cell.key in local_dropped else cell
+        for interval in intervals
+        for cell in interval.observations
+    ]
     observed = {cell.key for cell in observations}
     internal = {CountKey(p.dimension, p.identity, start, end) for p in populations for start, end in windows} - observed
     mask = protect_temporal_counts(facility, populations, windows, observations=observations, hidden_keys=internal)
@@ -689,18 +700,13 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
         mask.facility_id,
         mask.threshold,
         mask.published,
-        mask.dropped | frozenset(key for interval in intervals for key in interval.dropped),
+        mask.dropped | local_dropped,
     )
     # Index exact unions, not numerical equality. Two equal-sized populations
     # are never aliases unless their counting units are identical.
     aliases: dict[tuple[str, str, frozenset[str]], CountKey] = {}
-    for population in populations:
-        for start, end in windows:
-            units = population_units(population, start, end)
-            aliases.setdefault(
-                (population.dimension, population.identity, units),
-                CountKey(population.dimension, population.identity, start, end),
-            )
+    for key, union in unions.items():
+        aliases.setdefault(union, key)
     requested = _prepare_live_interval(
         facility, populations, types, type_categories, snapshots, field_sources, threshold, date_from, date_to
     )
