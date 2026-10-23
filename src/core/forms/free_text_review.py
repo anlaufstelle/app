@@ -3,6 +3,7 @@
 from typing import cast
 
 from django import forms
+from django.http import QueryDict
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -33,7 +34,8 @@ class ReviewFilterForm(forms.Form):
             for key, label in TARGET_LABELS.items()
             if user.is_staff_or_above or key in {"WorkItem", "Event"}
         ]
-        cast(forms.ChoiceField, self.fields["editor"]).choices = [
+        editor = cast(forms.ChoiceField, self.fields["editor"])
+        editor.choices = [
             ("", _("Alle")),
             *(
                 (str(person.pk), person.display_name or person.username)
@@ -41,9 +43,10 @@ class ReviewFilterForm(forms.Form):
             ),
         ]
         # A selection made for another model (HTMX model switch, stale link) is dropped, not rejected.
-        if self.is_bound and self.data.get("editor") not in {value for value, _label in self.fields["editor"].choices}:
-            self.data = self.data.copy()
-            self.data.pop("editor", None)
+        if self.is_bound and self.data.get("editor") not in {value for value, _label in editor.choices}:
+            data = cast(QueryDict, self.data).copy()
+            data.pop("editor", None)
+            self.data = data
         for field in self.fields.values():
             field.widget.attrs["class"] = "rounded border border-ink-muted bg-surface p-2 text-ink"
 
