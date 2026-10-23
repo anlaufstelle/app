@@ -97,3 +97,32 @@ def test_anonymous_username_limit_survives_ip_rotation(client, staff_user, ratel
     )
     assert response.status_code == 429
     assert remaining_backup_codes(staff_user) == 10
+
+
+def test_anonymous_username_limit_uses_an_hourly_window(client, staff_user, ratelimit_enabled):
+    code = generate_backup_codes(staff_user)[0]
+    for attempt in range(10):
+        response = client.post(
+            "/account/recovery/backup-code/",
+            {"username": staff_user.username, "backup_code": "A" * 22},
+            REMOTE_ADDR=f"192.0.2.{attempt + 1}",
+        )
+        assert response.status_code == 200
+
+    ratelimit_enabled.advance(61)
+    response = client.post(
+        "/account/recovery/backup-code/",
+        {"username": staff_user.username, "backup_code": code},
+        REMOTE_ADDR="192.0.2.98",
+    )
+    assert response.status_code == 429
+    assert remaining_backup_codes(staff_user) == 10
+
+    ratelimit_enabled.advance(3600)
+    response = client.post(
+        "/account/recovery/backup-code/",
+        {"username": staff_user.username, "backup_code": code},
+        REMOTE_ADDR="192.0.2.99",
+    )
+    assert response.status_code == 302
+    assert remaining_backup_codes(staff_user) == 9
