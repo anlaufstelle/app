@@ -1108,7 +1108,11 @@ def suppress_single_margin(
     selbst (K6: manche Berichte geben einen datenunabhaengigen Hinweis mit,
     andere gar keinen) und ruft ``dataclasses.replace``.
     """
-    threshold = _get_threshold(facility)
+    return _protect_single_margin(result, _get_threshold(facility), breakdown=breakdown, field_specs=field_specs)
+
+
+def _protect_single_margin(result, threshold, *, breakdown, field_specs):
+    """Apply the single-margin contract to raw figures without database reads."""
     total = result.summary["total"]
     # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
     published_total = _published_if_above(total, threshold)
@@ -1235,3 +1239,52 @@ def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
     # K0-Fail-safe (Refs #1768): Altersgruppen UND Kontaktstufen sind
     # personenabgeleitet und fallen gemeinsam mit der Personenzahl.
     return _finalize_report(out, unique, age_rows, threshold, _EXTERNAL_REPORT_BREAKDOWNS)
+
+
+def _protect_client_dataset(result, threshold):
+    """Apply the existing person margin and table contract to raw unions."""
+    from dataclasses import replace
+
+    from core.reporting.base import stamp_threshold
+
+    active = result.summary["aktive_personen"]
+    published = _published_if_above(active, threshold)
+    view = {
+        "aktive_personen": published,
+        "records": _suppress_small(
+            result.records, threshold, count_key="personen", margin=published, order=ORDER_INPUT
+        ),
+    }
+    drop_person_margin_on_person_suppression(
+        view, result.records, threshold, count_key="personen", margin_key="aktive_personen"
+    )
+    apply_residual_guard(
+        view, threshold, (_Breakdown("records", "aktive_personen", ORDER_INPUT, count_key="personen"),)
+    )
+    _drop_person_derived_breakdowns(view, active, threshold, breakdown_keys=("records",))
+    return replace(
+        result,
+        records=[{key: row[key] for key in ("alterscluster", "personen")} for row in view.get("records", [])],
+        summary=stamp_threshold(
+            {
+                **result.summary,
+                "aktive_personen": view["aktive_personen"],
+                "neuaufnahmen": _published_if_above(result.summary["neuaufnahmen"], threshold),
+            },
+            threshold,
+        ),
+    )
+
+
+def _protect_metric_dataset(result, threshold, *, count_key):
+    """Protect fixed scalar rows and derive their summary from those rows."""
+    from dataclasses import replace
+
+    from core.reporting.base import stamp_threshold
+
+    view = {"records": _suppress_small(result.records, threshold, count_key=count_key, margin=None, order=ORDER_INPUT)}
+    apply_residual_guard(view, threshold, (_Breakdown("records", None, ORDER_INPUT, count_key=count_key),))
+    records = [{key: row[key] for key in ("kennzahl", count_key)} for row in view.get("records", [])]
+    summary = {key: None for key in result.summary}
+    summary.update({row["kennzahl"]: row[count_key] for row in records})
+    return replace(result, records=records, summary=stamp_threshold(summary, threshold))

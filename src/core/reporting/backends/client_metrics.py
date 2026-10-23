@@ -152,23 +152,17 @@ der steht, warum.
 ``snapshot_enabled = False`` (Beispielvorlage, kein Monats-Merge-Thema).
 """
 
-import dataclasses
-
 from django.db.models import Count
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Client, DocumentType, Event
-from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec, project_records, stamp_threshold
+from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.data_source import PERSONS
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
     ORDER_INPUT,
     _Breakdown,
-    _drop_person_derived_breakdowns,
     _get_threshold,
-    _suppress_small,
-    apply_residual_guard,
-    drop_person_margin_on_person_suppression,
 )
 
 # Zaehlschluessel der Aufschluesselung. Bewusst NICHT ``persons``: das ist der
@@ -241,6 +235,7 @@ class ClientMetricsBackend(DatasetBackend):
         ]
 
         return DatasetResult(
+            disclosure_context=(date_from, date_to, "live"),
             mode="aggregate",
             records=records,
             summary={"aktive_personen": aktive_personen, "neuaufnahmen": neuaufnahmen},
@@ -252,87 +247,12 @@ class ClientMetricsBackend(DatasetBackend):
     _EXPORT_BREAKDOWN = _Breakdown("records", "aktive_personen", ORDER_INPUT, count_key=_COUNT_KEY)
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        """K-Anon-Suppression fuer Export und Panel-Vorschau (Refs #1278/#1770).
+        """Publish person unions and admissions using the common raw mask."""
+        from core.services.dashboard.external_report import _protect_client_dataset
+        from core.services.dashboard.shared_disclosure import project_shared_dataset
 
-        Reihenfolge **exakt wie in den drei Bestandsartefakten** — nur mit
-        anderen Schluesseln:
-
-        1. Beide Randzahlen unter der Schwelle werden ``None`` (R14).
-        2. :func:`_suppress_small` nullt Alterszellen < *k* und fuehrt das
-           Machbarkeits-Audit (K2) gegen die **publizierte** Randsumme aus —
-           ``margin=published_aktive``, nicht die Rohzahl: gegen eine gar nicht
-           veroeffentlichte Randsumme kann niemand rueckrechnen.
-        3. :func:`drop_person_margin_on_person_suppression` — die Personen-
-           Randsummen-Doktrin (Auflage 1 zu K0-b, Refs #1770). Sie ist hier
-           **Pflicht und nicht Kuer**: ``aktive_personen`` ist dieselbe Groesse,
-           die ``statistics.count_unique_clients()`` zaehlt, und ``records`` ist
-           die DISTINCT-Altersverteilung genau dieser Personenmenge — also die
-           Partition, fuer die die Doktrin in allen drei Bestandsartefakten
-           laeuft. Ohne sie bliebe die Randsumme im Fall (2, 1, 1, 1) bei
-           ``aktive_personen`` = 5 stehen: der Fixpunkt-Guard misst dort genau
-           ``MIN_FEASIBLE_SPAN`` und greift nicht, obwohl die einzige
-           konsistente Partition drei Gruppen mit exakt einer Person festlegt.
-           Die Doktrin ist bewusst schaerfer als der Guard — sie setzt schon
-           bei der *Einengung* an, nicht erst beim exakten Pin.
-        4. :func:`apply_residual_guard` (K1).
-        5. :func:`_drop_person_derived_breakdowns` — der K0-Fail-safe
-           (Refs #1768/#1754). Liegt die **rohe** ``aktive_personen`` unter der
-           Schwelle, faellt ``records`` als ganze Tabelle: die Zeilenexistenz
-           allein publiziert sonst die Verteilung einer Personenmenge, von der
-           das Artefakt gleichzeitig sagt, dass sie kleiner als *k* ist. Auch
-           dieser Guard kommt mit Schluessel-Parameter aus dem zentralen Modul,
-           statt hier als ``if`` nachgebaut zu werden.
-
-        Aufgerufen wird die Doktrin mit den **rohen** ``result.records`` (dort
-        stehen die Personenzahlen noch) und mit den Schluesseln dieses Backends
-        — die Regel selbst bleibt im zentralen Modul. Ein backend-lokales
-        ``if`` waere eine zweite Suppressionslogik und damit genau das, was der
-        Architektur-Guard verbietet.
-
-        ``neuaufnahmen`` bleibt bewusst **ausserhalb** von ``view``: sie ist
-        keine Zelle der Partition, und sie in die Kaskade zu nehmen waere eine
-        Eigenbau-Regel ohne Gleichung dahinter (uebersuppression ohne
-        Schutzgewinn).
-
-        Zum Schluss die Rueckprojektion auf die FieldSpec-Keys — das interne
-        ``suppressed``-Flag ist keine Spalte und landete sonst in CSV/JSON/XML.
-
-        Erwartet das **rohe** ``build_dataset``-Ergebnis (nicht idempotent).
-        """
-        threshold = _get_threshold(facility)
-
-        aktive = result.summary["aktive_personen"]
-        published_aktive = None if aktive < threshold else aktive
-        view = {
-            "aktive_personen": published_aktive,
-            "records": _suppress_small(
-                result.records, threshold, count_key=_COUNT_KEY, margin=published_aktive, order=ORDER_INPUT
-            ),
-        }
-        drop_person_margin_on_person_suppression(
-            view,
-            result.records,
-            threshold,
-            count_key=_COUNT_KEY,
-            margin_key="aktive_personen",
-        )
-        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
-        # 5. K0-Fail-safe (Refs #1768/#1754): liegt die **rohe** Personenzahl
-        #    unter der Schwelle, faellt die ganze Altersverteilung — Werte nullen
-        #    genuegt nicht, weil schon die Zeilenexistenz die Verteilung der < k
-        #    Personen publiziert (eine einzige „u18"-Zeile sagt: alle sind u18).
-        #    Gegen die **rohe** Zahl, nicht gegen ``published_aktive``: die ist
-        #    genau dann ``None``, wenn der Fail-safe greifen muss.
-        _drop_person_derived_breakdowns(view, aktive, threshold, breakdown_keys=("records",))
-
-        records = project_records(view.get("records", []), self.get_field_specs())
-
-        neuaufnahmen = result.summary["neuaufnahmen"]
-        summary = dict(result.summary)
-        summary["aktive_personen"] = view["aktive_personen"]
-        summary["neuaufnahmen"] = None if neuaufnahmen < threshold else neuaufnahmen
-        summary = stamp_threshold(summary, threshold)
-        return dataclasses.replace(result, records=records, summary=summary)
+        local = _protect_client_dataset(result, _get_threshold(facility))
+        return project_shared_dataset(facility, local, "client-metrics")
 
     def is_available(self, facility) -> bool:
         """Waehlbar, sobald die Einrichtung mindestens einen aktiven

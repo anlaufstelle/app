@@ -242,6 +242,12 @@ class TemporalPopulation:
     dimension: str
     identity: str
     members: tuple[tuple[str, date], ...]
+    point_in_time: bool = False
+
+
+def population_units(population: TemporalPopulation, start: date, end: date) -> frozenset[str]:
+    """Count actual unit unions; current stocks ignore the requested interval."""
+    return frozenset(unit for unit, day in population.members if population.point_in_time or start <= day <= end)
 
 
 def protect_temporal_counts(
@@ -269,6 +275,7 @@ def protect_temporal_counts(
     _require_facility(facility)
     memberships: dict[str, dict[str, dict[str, set[date]]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
     identities = set()
+    current = {(p.dimension, p.identity) for p in populations if p.point_in_time}
     for population in populations:
         population_key = population.dimension, population.identity
         if population_key in identities:
@@ -309,7 +316,9 @@ def protect_temporal_counts(
             members = tuple(
                 atom
                 for atom, membership in atom_memberships.items()
-                if atom.dimension == dimension and any(start <= day <= end for day in membership.get(identity, ()))
+                if atom.dimension == dimension
+                and identity in membership
+                and ((dimension, identity) in current or any(start <= day <= end for day in membership[identity]))
             )
             aliases[target] = representatives.setdefault((dimension, identity, members), target)
             value = sum(atoms[(dimension, atom.population.removeprefix("canonical:"))][1] for atom in members)
@@ -393,6 +402,7 @@ def collect_event_populations(facility, date_from: date, date_to: date) -> tuple
         if category is not None:
             populations[("event_counts", "mapped-events")].add(event)
             populations[("event_counts", f"category:{category}")].add(event)
+            populations[("event_counts", f"monthly-category:{day:%Y-%m}:{category}")].add(event)
         if row["stage"]:
             populations[("event_counts", f"contact-stage:{row['stage']}")].add(event)
         cluster = row["client__age_cluster"] if row["client_id"] is not None else "__no_person__"
@@ -416,6 +426,7 @@ class LiveRelease:
     general: dict
     sample: dict
     mask: SharedMask
+    datasets: dict
 
 
 @dataclass(frozen=True)
@@ -427,6 +438,7 @@ class _LocalInterval:
     raw: dict
     observations: tuple[RawCount, ...]
     dropped: frozenset[CountKey]
+    datasets: dict
 
 
 def _raw_live_statistics(populations, types, date_from, date_to):
@@ -434,9 +446,7 @@ def _raw_live_statistics(populations, types, date_from, date_to):
     from core.models import Client
     from core.services.dashboard.statistics import PERSONS_KEY
 
-    members = {
-        (p.dimension, p.identity): {unit for unit, day in p.members if date_from <= day <= date_to} for p in populations
-    }
+    members = {(p.dimension, p.identity): population_units(p, date_from, date_to) for p in populations}
 
     def size(identity, dimension="event_counts"):
         return len(members.get((dimension, identity), ()))
@@ -558,7 +568,15 @@ def _prepare_live_interval(facility, populations, types, type_categories, snapsh
         category = type_categories[type_id]
         if category is not None and hybrid_categories.get(category) is None:
             observe(f"document-type:{type_id}", row["count"], None, lower=1)
-    return _LocalInterval(date_from, date_to, general, sample, raw, tuple(observations), frozenset(local_dropped))
+    from core.services.dashboard.shared_sources import prepare_additional_interval
+
+    datasets = prepare_additional_interval(populations, date_from, date_to, threshold)
+    for binding in datasets.values():
+        observations.extend(binding.observations())
+        local_dropped.update(binding.dropped())
+    return _LocalInterval(
+        date_from, date_to, general, sample, raw, tuple(observations), frozenset(local_dropped), datasets
+    )
 
 
 def _raw_hybrid_sample(populations, types, snapshots, date_from, date_to):
@@ -603,7 +621,7 @@ def canonical_live_windows(populations: Sequence[TemporalPopulation]) -> tuple[t
 
     from core.services.dashboard.statistics import ROLLING_WINDOW_DAYS
 
-    months = sorted({(day.year, day.month) for p in populations for _, day in p.members})
+    months = sorted({(day.year, day.month) for p in populations if not p.point_in_time for _, day in p.members})
     windows = {
         (date(*start, 1), date(*end, calendar.monthrange(*end)[1]))
         for index, start in enumerate(months)
@@ -628,8 +646,9 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
     from core.models import DocumentType, StatisticsSnapshot
     from core.reporting.registry import get_backend
     from core.services.dashboard.external_report import _get_threshold, project_protected_rows
+    from core.services.dashboard.shared_sources import collect_additional_populations
 
-    populations = collect_event_populations(facility, date.min, date.max)
+    populations = (*collect_event_populations(facility, date.min, date.max), *collect_additional_populations(facility))
     type_rows = list(
         DocumentType.objects.for_facility(facility).order_by("name").values_list("name", "pk", "report_key")
     )
@@ -665,7 +684,7 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
     aliases: dict[tuple[str, str, frozenset[str]], CountKey] = {}
     for population in populations:
         for start, end in windows:
-            units = frozenset(unit for unit, day in population.members if start <= day <= end)
+            units = population_units(population, start, end)
             aliases.setdefault(
                 (population.dimension, population.identity, units),
                 CountKey(population.dimension, population.identity, start, end),
@@ -673,10 +692,7 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
     requested = _prepare_live_interval(
         facility, populations, types, type_categories, snapshots, threshold, date_from, date_to
     )
-    members = {
-        (p.dimension, p.identity): frozenset(unit for unit, day in p.members if date_from <= day <= date_to)
-        for p in populations
-    }
+    members = {(p.dimension, p.identity): population_units(p, date_from, date_to) for p in populations}
 
     def resolve(identity, dimension="event_counts"):
         return aliases.get((dimension, identity, members.get((dimension, identity), frozenset())))
@@ -711,7 +727,11 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
             general["by_contact_stage"] = {
                 stage: publish(f"contact-stage:{stage}") for stage in raw["by_contact_stage"]
             }
-    return LiveRelease(general, sample, mask)
+    datasets = {
+        slug: binding.project(lambda dimension, identity: resolve(identity, dimension), mask)
+        for slug, binding in requested.datasets.items()
+    }
+    return LiveRelease(general, sample, mask, datasets)
 
 
 def project_shared_type_dataset(facility, result):
@@ -728,3 +748,14 @@ def project_shared_type_dataset(facility, result):
     ]
     summary = {**result.summary, "total": general["total_contacts"] if result.summary["total"] is not None else None}
     return replace(result, records=records, summary=summary)
+
+
+def project_shared_dataset(facility, result, slug):
+    """Project a live consumer through its common raw-population contract."""
+    if result.disclosure_context is None:
+        return result
+    start, end, source = result.disclosure_context
+    if source != "live":
+        raise ValueError("A live population projection requires a live source")
+    protected = build_live_release(facility, start, end).datasets[slug]
+    return replace(result, records=protected.records, summary={**result.summary, **protected.summary})

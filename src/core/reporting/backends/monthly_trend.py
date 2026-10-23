@@ -219,6 +219,7 @@ class MonthlyTrendBackend(DatasetBackend):
         ]
 
         return DatasetResult(
+            disclosure_context=(date_from, date_to, "live"),
             mode="rows",
             records=records,
             summary={"total": sum(row["count"] for row in records)},
@@ -307,4 +308,7 @@ class MonthlyTrendBackend(DatasetBackend):
             CompletenessIssue(code, _SUPPRESSED_MESSAGES[code], _ISSUE_SEVERITIES[code], count=None)
             for code in _EXPORT_ISSUE_CODES
         ]
-        return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)
+        from core.services.dashboard.shared_disclosure import project_shared_dataset
+
+        local = dataclasses.replace(result, records=records, summary=summary, completeness=completeness)
+        return project_shared_dataset(facility, local, "monthly-trend")
