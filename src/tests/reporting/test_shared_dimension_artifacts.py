@@ -165,3 +165,53 @@ def test_standard_rolling_window_keeps_a_safe_partial_month_union(facility, admi
     assert payload["summary"]["total_contacts"] == 6, (
         "The standard last-30-days population belongs to the canonical family"
     )
+
+
+@pytest.mark.django_db
+def test_free_partial_month_does_not_add_a_request_dependent_subtraction_equation(facility, admin_user, monkeypatch):
+    monkeypatch.setattr(timezone, "localdate", lambda: date(2026, 3, 31))
+    document_type = make_document_type(facility=facility, name="Contacts", report_key="contact")
+    for day, amount in ((1, 1), (20, 10)):
+        for _ in range(amount):
+            make_event(
+                facility=facility,
+                document_type=document_type,
+                client=None,
+                created_by=admin_user,
+                occurred_at=timezone.make_aware(datetime(2026, 1, day)),
+                data_json={},
+            )
+    payload = json.loads(
+        export_dataset(
+            get_backend("general-key-figures"), facility, date(2026, 1, 16), date(2026, 1, 31), format="json"
+        ).content
+    )
+    assert payload["summary"]["total_contacts"] is None
+    assert all(
+        row["table"] in {"total_contacts", "unique_clients"} and row["count"] is None for row in payload["records"]
+    ), "Only fixed summary fields may remain; data-dependent type rows must disappear"
+
+
+@pytest.mark.django_db
+def test_sparse_multi_year_calendar_family_keeps_the_small_final_remainder_private(facility, admin_user, monkeypatch):
+    monkeypatch.setattr(timezone, "localdate", lambda: date(2026, 3, 31))
+    document_type = make_document_type(facility=facility, name="Contacts", report_key="contact")
+    for year, month, amount in ((2024, 1, 10), (2025, 1, 10), (2026, 3, 1)):
+        for _ in range(amount):
+            make_event(
+                facility=facility,
+                document_type=document_type,
+                client=None,
+                created_by=admin_user,
+                occurred_at=timezone.make_aware(datetime(year, month, 15)),
+                data_json={},
+            )
+    values = [
+        json.loads(
+            export_dataset(get_backend("general-key-figures"), facility, date(2024, 1, 1), end, format="json").content
+        )["summary"]["total_contacts"]
+        for end in (date(2026, 3, 31), date(2025, 12, 31))
+    ]
+    whole, prefix = values
+    possible = {whole - prefix} if whole is not None and prefix is not None else set(range(1, 5))
+    assert 1 in possible and len(possible) >= 2

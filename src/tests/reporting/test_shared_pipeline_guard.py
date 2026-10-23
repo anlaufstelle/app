@@ -1,4 +1,4 @@
-"""Behavioral guard: declared live consumers must use the solver's decisions."""
+"""Behavioral guard: declared consumers must use the solver's decisions."""
 
 from dataclasses import replace
 from datetime import date, datetime
@@ -124,8 +124,24 @@ def _assert_consumes_solver_output(backend, facility, format_name, monkeypatch):
     )
 
 
-@pytest.mark.parametrize("slug,format_name", [key for key, source in SOURCES.items() if source == "live"])
-def test_registered_live_dimensions_consume_the_actual_solver_mask(pipeline_world, slug, format_name, monkeypatch):
+@pytest.mark.parametrize("slug,format_name", SOURCES)
+def test_registered_dimensions_consume_the_actual_solver_mask(pipeline_world, slug, format_name, monkeypatch):
+    if SOURCES[slug, format_name] == "snapshot_hybrid":
+        from core.models import StatisticsSnapshot
+
+        StatisticsSnapshot.objects.create(
+            facility=pipeline_world,
+            year=2026,
+            month=1,
+            backend_data={
+                "sample-report-1": {
+                    "total": 29,
+                    "unique_clients": 0,
+                    "by_category": [["Kontakte", 29]],
+                    "by_age_cluster": [],
+                }
+            },
+        )
     _assert_consumes_solver_output(get_backend(slug), pipeline_world, format_name, monkeypatch)
 
 

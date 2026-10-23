@@ -12,6 +12,7 @@ from core.reporting.export import export_dataset
 from core.reporting.registry import get_backend
 from tests._factories import make_document_type, make_event
 from tests.reporting import _disclosure_inventory as inventory
+from tests.reporting.test_reporting_sample_pdf_integration import pdf_text as pdf_text
 
 
 def test_every_format_pair_has_an_explicit_reviewed_attack_class():
@@ -30,7 +31,7 @@ EVENT_GROUPS = {
     "monthly-trend": frozenset("cnsb"),
     "quantity-sum": frozenset("cnsb"),
     "sample-report-1": frozenset("cns"),
-    "counseling-hours": frozenset("c"),
+    "counseling-hours": frozenset("cs"),
     "needle-exchange-balance": frozenset("n"),
     "service-distribution": frozenset("s"),
     "ban-overview": frozenset("b"),
@@ -125,3 +126,64 @@ def test_pair_class_recipient_cannot_solve_the_small_calendar_remainder(
             candidates.add(remainder)
     assert 1 in candidates, "The true world must remain feasible"
     assert len(candidates) >= 2, f"{left}/{right} determine the March singleton: {candidates}"
+
+
+HYBRID_CLASSES = [entry for entry in inventory.ATTACK_CLASSES if "snapshot_hybrid" in entry[3:]]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("dimension,left,right,left_source,right_source", HYBRID_CLASSES)
+@pytest.mark.parametrize("use_snapshot", [False, True], ids=["live-fallback", "mixed-source"])
+def test_hybrid_pair_class_preserves_independent_snapshot_and_live_remainders(
+    facility, attack_world, pdf_text, dimension, left, right, left_source, right_source, use_snapshot
+):
+    import re
+
+    from core.models import StatisticsSnapshot
+
+    if use_snapshot:
+        StatisticsSnapshot.objects.create(
+            facility=facility,
+            year=2026,
+            month=1,
+            backend_data={
+                "sample-report-1": {
+                    "total": 10,
+                    "unique_clients": 0,
+                    "by_category": [["Kontakte", 10]],
+                    "by_age_cluster": [],
+                }
+            },
+        )
+    left_groups, right_groups = EVENT_GROUPS[left], EVENT_GROUPS[right]
+    attack_world(sorted(left_groups)[0], 3, 1)
+    values = []
+    for slug, source, end in ((left, left_source, date(2026, 3, 31)), (right, right_source, date(2026, 2, 28))):
+        if source == "live":
+            values.append(_public_metric(facility, dimension, slug, end))
+        else:
+            response = export_dataset(get_backend(slug), facility, date(2026, 1, 1), end, format="pdf")
+            assert response.content.startswith(b"%PDF-")
+            match = re.search(r"Gesamtkontakte \(ohne Notizen/Hausverbote\):\s*(unterdrückt|[0-9]+)", pdf_text[-1])
+            assert match
+            values.append(None if match[1] == "unterdrückt" else int(match[1]))
+    whole, prefix = values
+    candidates = set()
+    for january in product(range(8, 13), repeat=4):
+        counts = dict(zip("cnsb", january, strict=True))
+        for snapshot in range(8, 13) if use_snapshot else (None,):
+            # A snapshot counter cannot constrain the current January cohort.
+            left_base = (
+                snapshot
+                if use_snapshot and left_source == "snapshot_hybrid"
+                else sum(counts[group] for group in left_groups)
+            )
+            right_base = (
+                snapshot
+                if use_snapshot and right_source == "snapshot_hybrid"
+                else sum(counts[group] for group in right_groups)
+            )
+            for remainder in range(1, 5):
+                if (whole is None or left_base + remainder == whole) and (prefix is None or right_base == prefix):
+                    candidates.add(remainder)
+    assert 1 in candidates and len(candidates) >= 2, f"The PDF/{left}/{right} equations reveal {candidates}"
