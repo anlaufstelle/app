@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **Abhängigkeiten aktualisiert** (#2594, #2641) — filelock 4.2.4 und django-unfold 0.110.0 aktualisieren Entwicklungswerkzeuge und Administrationsoberfläche.
+- **Abhängigkeiten aktualisiert** (#2594, #2641, #2635, #2636) — filelock 4.2.4, django-unfold 0.110.0, jsdom 30.1.3 und Vitest 5.0.5 aktualisieren Administrationsoberfläche und Entwicklungswerkzeuge; die JS-Toolchain setzt weiterhin Node.js 24+ voraus.
 
 - **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
 ### Fixed
