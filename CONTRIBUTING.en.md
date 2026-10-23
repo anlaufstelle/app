@@ -498,6 +498,8 @@ git add package.json package-lock.json src/static/js
 
 **Verification:** `make ci` runs the drift guard `make verify-vendor-js-sync` ([`scripts/verify_vendor_js_sync.py`](scripts/verify_vendor_js_sync.py)). It compares the version pinned in `package.json` against the version string in the checked-in `*.min.js` and fails on drift — so re-vendoring cannot be forgotten. The guard is a pure string comparison (no node/npm required). Additionally E2E smoke (`make test-e2e-smoke`), since the offline flows depend on Dexie.
 
+**Application offline scripts:** After changing the core stack, run `npm ci` and `make minify-offline-js`, then commit both the readable sources and generated `src/static/js/*.min.js`. `make verify-offline-js-sync` checks artifacts byte for byte without writing. The explicit list in [`scripts/minify_offline_js.py`](scripts/minify_offline_js.py) covers crypto, offline-db/bundles/revocations/store/queue/client/edit and sync-orchestrator; esbuild minifies whitespace and syntax only, without bundling, changing format or renaming identifiers. Template loading order is preserved.
+
 #### HTMX & Live Regions (Refs #811)
 
 To ensure HTMX success messages reach screen-reader users:
@@ -1052,5 +1054,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-22 -->
-<!-- source-hash: d056ef22e6e969191d009c56732d72696dae8acc -->
+<!-- translation-date: 2026-10-23 -->
+<!-- source-hash: d136499c971f12bf6be08bcfc51e73e136f3b990 -->
