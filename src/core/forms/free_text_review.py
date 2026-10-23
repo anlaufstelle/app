@@ -40,6 +40,10 @@ class ReviewFilterForm(forms.Form):
                 for person in User.objects.filter(facility=facility, pk__in=editor_ids).order_by("username")
             ),
         ]
+        # A selection made for another model (HTMX model switch, stale link) is dropped, not rejected.
+        if self.is_bound and self.data.get("editor") not in {value for value, _label in self.fields["editor"].choices}:
+            self.data = self.data.copy()
+            self.data.pop("editor", None)
         for field in self.fields.values():
             field.widget.attrs["class"] = "rounded border border-ink-muted bg-surface p-2 text-ink"
 

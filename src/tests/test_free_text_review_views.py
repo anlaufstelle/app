@@ -210,3 +210,42 @@ def test_read_audit_only_for_displayed_qualified_persons(
     assert len(client.get(url).context["entries"]) == 2
     assert _qualified_audit(facility, client_qualified).count() == 1
     assert not _qualified_audit(facility, client_identified).exists()
+
+
+def test_model_change_refreshes_editor_choices(
+    client, facility, staff_user, lead_user, client_identified, sample_event
+):
+    client_identified.notes = "Neutral source text"
+    client_identified.save(update_fields=["notes"])
+    sample_event.created_by = lead_user
+    sample_event.save(update_fields=["created_by"])
+    client.force_login(staff_user)
+    url = reverse("core:free_text_review_list")
+    initial = client.get(url)
+    assert str(lead_user.pk) not in dict(initial.context["filter_form"].fields["editor"].choices)
+    response = client.get(url, {"model": "Event"}, HTTP_HX_REQUEST="true")
+    assert response.status_code == 200
+    assert str(lead_user.pk) in dict(response.context["filter_form"].fields["editor"].choices)
+    # The partial carries the refreshed form, not only the result list.
+    assert b'name="editor"' in response.content
+    assert f'value="{lead_user.pk}"'.encode() in response.content
+
+
+def test_stale_editor_selection_is_discarded_on_model_change(
+    client, facility, staff_user, lead_user, client_identified, sample_event
+):
+    client_identified.notes = "Neutral source text"
+    client_identified.save(update_fields=["notes"])
+    sample_event.created_by = staff_user
+    sample_event.save(update_fields=["created_by"])
+    client_identified.created_by = lead_user
+    client_identified.save(update_fields=["created_by"])
+    client.force_login(staff_user)
+    url = reverse("core:free_text_review_list")
+    # The lead authored only the person note; after switching to events the choice no longer exists.
+    for extra in ({}, {"HTTP_HX_REQUEST": "true"}):
+        response = client.get(url, {"model": "Event", "editor": str(lead_user.pk), "page": 1}, **extra)
+        assert response.status_code == 200
+        assert [entry.target_id for entry in response.context["entries"]] == [sample_event.pk]
+        assert response.context["filter_form"].data.get("editor") is None
+        assert "editor=" not in response.context["filter_query"]

@@ -60,7 +60,7 @@ class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
             )
         else:
             page = ReviewPage([], 1, False)
-        query = data.copy()
+        query = form.data.copy()
         query.pop("page", None)
         context = {
             "filter_form": form,
@@ -69,7 +69,7 @@ class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
             "filter_query": query.urlencode(),
         }
         template = (
-            "core/free_text_review/partials/entries.html"
+            "core/free_text_review/partials/results.html"
             if request.headers.get("HX-Request")
             else ("core/free_text_review/list.html")
         )
