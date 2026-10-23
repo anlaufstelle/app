@@ -199,6 +199,8 @@ def scan_release_vocabulary(root: Path) -> list[Hit]:
 # "[label](address)" becomes "label #N". The dev repository name becomes the public one,
 # and blob/tree addresses point to the public "main" branch.
 _KEY_FORMAT = 2
+_KNOWN_KEY_FORMATS = (1, 2)
+_KEY_FORMAT_MIGRATION = (1, 2)
 # Assembled from parts: the release sanitizer rewrites or rejects the literal dev repository name in source files.
 _DEV_REPOSITORY = "tobiasnix" + "/" + "anlaufstelle"
 _DEV_ISSUE_HOST = r"https?://(?:www\.)?github\.com/" + _DEV_REPOSITORY + r"/(?:issues|pull)/(?P<number>\d+)"
@@ -271,15 +273,25 @@ def _counts_per_file(counts: dict[str, int]) -> dict[str, int]:
 def baseline_history_allows(root: Path, current: dict[str, int], current_format: int = _KEY_FORMAT) -> bool:
     """Every committed baseline version, and the current one, may only shrink.
 
-    Keys of different formats cannot be compared one by one; across such a boundary the
-    counts per file must not grow.
+    Within one key format the comparison is key by key. The only accepted format change is the
+    one-time migration from format 1 to format 2, which must keep the count per file unchanged.
+    Downgrades, unknown formats and repeated changes are rejected, so a format change can never
+    serve as a reset that lets a removed finding come back.
     """
     versions = [*_committed_baselines(root), (current_format, current)]
+    if any(version_format not in _KNOWN_KEY_FORMATS for version_format, _ in versions):
+        return False
+    migrations = 0
     for (older_format, older), (newer_format, newer) in zip(versions, versions[1:], strict=False):
         if older_format == newer_format:
             allowed = baseline_is_subset(newer, older)
         else:
-            allowed = baseline_is_subset(_counts_per_file(newer), _counts_per_file(older))
+            migrations += 1
+            allowed = (
+                (older_format, newer_format) == _KEY_FORMAT_MIGRATION
+                and migrations == 1
+                and _counts_per_file(newer) == _counts_per_file(older)
+            )
         if not allowed:
             return False
     return True
@@ -356,12 +368,88 @@ def test_history_rejects_restored_finding_after_shrink(tmp_path: Path) -> None:
     assert not baseline_history_allows(tmp_path, {"sample:hash": 2}, 1)
 
 
-def test_history_compares_per_file_across_key_formats(tmp_path: Path) -> None:
-    _commit_baseline(tmp_path, {"remaining": {"a.py:" + "0" * 64: 2, "b.py:" + "1" * 64: 1}})
-    assert baseline_history_allows(tmp_path, {"a.py:word:" + "2" * 64: 2}, 2)
-    assert baseline_history_allows(tmp_path, {"a.py:x:" + "2" * 64: 1, "a.py:y:" + "3" * 64: 1}, 2)
-    assert not baseline_history_allows(tmp_path, {"a.py:word:" + "2" * 64: 3}, 2)
-    assert not baseline_history_allows(tmp_path, {"c.py:word:" + "2" * 64: 1}, 2)
+def _commit_versions(repo: Path, versions: list[tuple[int, dict[str, int]]]) -> None:
+    for key_format, remaining in versions:
+        _commit_baseline(repo, {"key_format": key_format, "remaining": remaining})
+
+
+def _legacy(path: str, line_no: int) -> str:
+    return f"{path}:{line_no:064x}"
+
+
+def _current(path: str, word: str, line_no: int) -> str:
+    return f"{path}:{word}:{line_no:064x}"
+
+
+def test_history_allows_the_one_time_migration_with_unchanged_counts_per_file(tmp_path: Path) -> None:
+    _commit_versions(tmp_path, [(1, {_legacy("a.py", 1): 2, _legacy("b.py", 2): 1})])
+    migrated = {_current("a.py", "x", 1): 1, _current("a.py", "y", 2): 1, _current("b.py", "x", 3): 1}
+    assert baseline_history_allows(tmp_path, migrated, 2)
+
+
+@pytest.mark.parametrize(
+    "migrated",
+    [
+        {_current("a.py", "x", 1): 2},
+        {_current("a.py", "x", 1): 3, _current("b.py", "x", 3): 1},
+        {_current("a.py", "x", 1): 2, _current("b.py", "x", 3): 1, _current("c.py", "x", 4): 1},
+        {_current("a.py", "x", 1): 2, _current("b.py", "x", 3): 1, _current("b.py", "y", 4): 1},
+    ],
+    ids=["finding-dropped", "count-grown", "new-file", "second-finding-in-known-file"],
+)
+def test_history_requires_the_migration_to_keep_the_stock(tmp_path: Path, migrated: dict[str, int]) -> None:
+    _commit_versions(tmp_path, [(1, {_legacy("a.py", 1): 2, _legacy("b.py", 2): 1})])
+    assert not baseline_history_allows(tmp_path, migrated, 2)
+
+
+def test_history_rejects_a_return_to_the_old_format_and_a_second_migration(tmp_path: Path) -> None:
+    initial = {_current("a.py", "x", 1): 1, _current("a.py", "y", 2): 1}
+    shrunk = {_current("a.py", "x", 1): 1}
+    restored = {_current("a.py", "y", 2): 1}
+    _commit_versions(tmp_path, [(2, initial), (2, shrunk), (1, {_legacy("a.py", 1): 1})])
+    assert not baseline_history_allows(tmp_path, restored, 2)
+    assert not baseline_history_allows(tmp_path, {_legacy("a.py", 1): 1}, 1)
+
+
+def test_history_rejects_a_downgrade_in_the_working_copy(tmp_path: Path) -> None:
+    _commit_versions(tmp_path, [(2, {_current("a.py", "x", 1): 1})])
+    assert not baseline_history_allows(tmp_path, {_legacy("a.py", 1): 1}, 1)
+
+
+@pytest.mark.parametrize("unknown_format", [0, 3, 99])
+def test_history_rejects_unknown_key_formats(tmp_path: Path, unknown_format: int) -> None:
+    _commit_versions(tmp_path, [(1, {_legacy("a.py", 1): 1})])
+    assert not baseline_history_allows(tmp_path, {"a.py:" + "9" * 8: 1}, unknown_format)
+    committed_unknown = tmp_path / "committed-unknown"
+    _commit_versions(committed_unknown, [(unknown_format, {"a.py:" + "9" * 8: 1})])
+    assert not baseline_history_allows(committed_unknown, {"a.py:" + "9" * 8: 1}, unknown_format)
+
+
+def test_history_keeps_comparing_key_by_key_within_a_format(tmp_path: Path) -> None:
+    _commit_versions(tmp_path, [(2, {_current("a.py", "x", 1): 1, _current("a.py", "y", 2): 1})])
+    assert baseline_history_allows(tmp_path, {_current("a.py", "x", 1): 1}, 2)
+    assert not baseline_history_allows(tmp_path, {_current("a.py", "z", 3): 1}, 2)
+
+
+def test_format_changes_cannot_restore_a_removed_real_finding(tmp_path: Path) -> None:
+    """Shrink, go through the old format and back, then restore one finding while dropping a sibling."""
+    baseline = json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
+    initial = baseline["remaining"]
+    by_file: dict[str, list[str]] = {}
+    for key in initial:
+        by_file.setdefault(key.split(":", 1)[0], []).append(key)
+    removed, replacement = next(keys for keys in by_file.values() if len(keys) >= 2)[:2]
+    shrunk = {key: count for key, count in initial.items() if key != removed}
+    restored = {key: count for key, count in initial.items() if key != replacement}
+    legacy: dict[str, int] = {}
+    for hit in scan_release_vocabulary(REPO_ROOT):
+        if next(iter(finding_counts([hit]))) in shrunk:
+            legacy_key = f"{hit.relpath}:{hashlib.sha256(hit.line.encode()).hexdigest()}"
+            legacy[legacy_key] = legacy.get(legacy_key, 0) + 1
+    _commit_versions(tmp_path, [(2, initial), (2, shrunk), (1, legacy)])
+    assert baseline_is_subset(restored, baseline["ceiling"])
+    assert not baseline_is_subset(restored, shrunk)
+    assert not baseline_history_allows(tmp_path, restored, 2)
 
 
 def test_baseline_history_never_restores_findings() -> None:
