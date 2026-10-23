@@ -503,7 +503,7 @@ mutation-delta:
 ifneq ($(wildcard scripts/dev/run_mutmut.py),)
 	@[ -n "$(BASE)" ] || { echo "mutation-delta: BASE=<tag/ref> required"; exit 2; }
 endif
-	@if [ -f scripts/dev/run_mutmut.py ]; then $(PYTHON) scripts/dev/run_mutmut.py run --since "$(BASE)"; \
+	@if [ -f scripts/dev/run_mutmut.py ]; then $(PYTHON) scripts/dev/run_mutmut.py run --since "$(BASE)"$(if $(filter 1,$(RESUME)), --resume,); \
 	else echo "mutation-delta: not available in the public source tree (maintainer tool)"; fi
 
 # Ergebnisse des letzten Mutation-Runs anzeigen (textuell, nicht-interaktiv).
