@@ -7,7 +7,9 @@ from uuid import UUID
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import CharField, Exists, Func, OuterRef, Q
+from django.db.models.fields.json import KeyTextTransform, KeyTransform
+from django.db.models.lookups import Exact, Regex
 from django.http import Http404
 from django.urls import reverse
 from django.utils import timezone
@@ -170,14 +172,40 @@ def _changed_column(target_type):
     return "created_at" if target_type == "Episode" else "updated_at"
 
 
+def _text_value(key):
+    """Condition: the JSON value at ``key`` is a string with at least one non-whitespace character."""
+    kind = Func(KeyTransform(key, "data_json"), function="jsonb_typeof", output_field=CharField())
+    return Q(Exact(kind, "string")) & Q(Regex(KeyTextTransform(key, "data_json"), r"\S"))
+
+
+def _event_condition(event_fields, extra=None):
+    """Events holding a nonblank value in a field the user may see; ``extra(key)`` narrows per field."""
+    condition = Q(pk__in=[])
+    for document_type_id, keys in event_fields.items():
+        for key in keys:
+            field = _text_value(key)
+            condition |= Q(document_type_id=document_type_id) & (field & extra(key) if extra else field)
+    return condition
+
+
 def _has_text(target_type, event_fields):
     """Database prefilter: rows that can yield at least one nonblank text entry."""
     if target_type != "Event":
         return Q(**{f"{STATIC_FIELDS[target_type]}__regex": r"\S"})
-    condition = Q(pk__in=[])
-    for document_type_id, keys in event_fields.items():
-        condition |= Q(document_type_id=document_type_id, data_json__has_any_keys=keys)
-    return condition
+    return _event_condition(event_fields)
+
+
+def _editor_condition(facility, target_type, event_fields, editor_id):
+    """Rows whose built entries include one the editor wrote or reviewed, decided before paging."""
+    reviews = FreeTextReview.objects.for_facility(facility).filter(
+        target_type=target_type, reviewed_by_id=editor_id, target_id=OuterRef("pk")
+    )
+    if target_type != "Event":
+        return Q(created_by_id=editor_id) | Exists(reviews.filter(field_key=STATIC_FIELDS[target_type]))
+    # Authorship counts for any event that yields an entry; a review only for the field it marks.
+    return Q(created_by_id=editor_id) | _event_condition(
+        event_fields, lambda key: Exists(reviews.filter(field_key=key))
+    )
 
 
 def _limited_targets(facility, user, target_type, event_fields, *, changed_before=None, editor_id=""):
@@ -187,10 +215,7 @@ def _limited_targets(facility, user, target_type, event_fields, *, changed_befor
     if changed_before is not None:
         qs = qs.filter(**{f"{column}__date__lte": changed_before})
     if editor_id:
-        reviewed = FreeTextReview.objects.for_facility(facility).filter(
-            target_type=target_type, reviewed_by_id=editor_id
-        )
-        qs = qs.filter(Q(created_by_id=editor_id) | Q(pk__in=reviewed.values("target_id")))
+        qs = qs.filter(_editor_condition(facility, target_type, event_fields, editor_id))
     return qs.order_by(f"-{column}", "-pk")
 
 

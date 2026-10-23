@@ -8,7 +8,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Client, Event, FreeTextReview
+from core.models import Client, DocumentTypeField, Event, FieldTemplate, FreeTextReview
 from core.services import free_text_review as review_service
 
 pytestmark = pytest.mark.django_db
@@ -171,3 +171,44 @@ def test_get_entry_ignores_marks_of_other_targets(facility, staff_user, lead_use
     reviews_sql = [q["sql"] for q in loaded if "core_freetextreview" in q["sql"]]
     assert reviews_sql
     assert all(str(client_identified.pk).replace("-", "") in sql.replace("-", "") for sql in reviews_sql)
+
+
+def test_editor_filter_ignores_marks_of_hidden_event_fields_before_paging(
+    client, facility, assistant_user, lead_user, staff_user, client_identified, doc_type_contact
+):
+    restricted = FieldTemplate.objects.create(
+        facility=facility, name="Restricted review", field_type="textarea", sensitivity="elevated"
+    )
+    DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=restricted)
+    events = make_events(facility, staff_user, doc_type_contact, client_identified, PAGE_SIZE + 1)
+    Event.objects.filter(pk__in=[e.pk for e in events]).update(
+        data_json={"notiz": "Visible ordinary text", restricted.slug: "Restricted text"}
+    )
+    oldest = events[0]
+    Event.objects.filter(pk=oldest.pk).update(updated_at=timezone.now() - timedelta(days=1))
+    # The lead only marks the elevated field of the 50 newer events, and the visible one of the oldest.
+    for event in events:
+        key = "notiz" if event.pk == oldest.pk else restricted.slug
+        entry = review_service.get_entry(facility, lead_user, "Event", event.pk, key)
+        review_service.mark_review(facility, lead_user, "Event", event.pk, key, timezone.localdate(), entry.fingerprint)
+    client.force_login(assistant_user)
+    url = reverse("core:free_text_review_list")
+    response = client.get(url, {"model": "Event", "editor": str(lead_user.pk)})
+    assert response.status_code == 200
+    assert [entry.target_id for entry in response.context["entries"]] == [oldest.pk]
+    assert not response.context["page_obj"].has_next()
+
+
+def test_event_pages_skip_events_without_a_nonblank_text_value(
+    client, facility, staff_user, client_identified, doc_type_contact
+):
+    events = make_events(facility, staff_user, doc_type_contact, client_identified, PAGE_SIZE + 5)
+    unusable = [{"notiz": ""}, {"notiz": "   "}, {"notiz": None}, {"notiz": 15}, {"notiz": {"marker": 1}}]
+    for index, event in enumerate(events[1:]):
+        Event.objects.filter(pk=event.pk).update(data_json=unusable[index % len(unusable)])
+    Event.objects.filter(pk=events[0].pk).update(updated_at=timezone.now() - timedelta(days=1))
+    client.force_login(staff_user)
+    response = client.get(reverse("core:free_text_review_list"), {"model": "Event"})
+    assert response.status_code == 200
+    assert [entry.target_id for entry in response.context["entries"]] == [events[0].pk]
+    assert not response.context["page_obj"].has_next()
