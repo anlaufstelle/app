@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
 ### Fixed
 
-- **Unterbrochene Delta-Mutationsläufe fortsetzen** (#2608) — `RESUME=1` prüft nur offene Mutanten derselben Lauf-Identität weiter; frühe atomare Stats und Teilurteile sichern den Fortschritt, während geänderte Tests oder Werkzeugstände die Wiederaufnahme verweigern.
+- **Unterbrochene Delta-Mutationsläufe fortsetzen** (#2608) — `RESUME=1` prüft nur offene Mutanten derselben Lauf-Identität weiter; frühe atomare Stats und Teilurteile sichern den Fortschritt, während ein geänderter Dateibaum oder Werkzeugstand die Wiederaufnahme verweigert und Befunde auch nach dem Fortsetzen Exit 3 erzwingen.
 
 - **Zeitstrom-Live-Aktualisierung nach htmx-Initialisierung** (#2644) — Die erste Hintergrundaktualisierung wartet auf die übernommene htmx-Konfiguration und verhindert dadurch CSP-Verstöße beim Übernehmen zugeklappter Detailbereiche.
 - **Andere Sitzungen bei 2FA-Gerätewechsel und Deaktivierung widerrufen** (#2640) — Beide Aktionen melden alle anderen Sitzungen des Kontos bei deren nächster Anfrage ab, erhalten die ausführende Sitzung auch nach späterer Passwortprüfung oder Sudo und lassen bei Fehlern einschließlich Anlage und abschließendem Speichern der Nachfolgesitzung den bisherigen Faktor gültig; die Bestätigung bleibt wiederholbar.
