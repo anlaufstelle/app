@@ -96,7 +96,7 @@ When setting up 2FA, you receive **10 single-use backup codes**. Store them safe
 
 > **All codes used up or lost?** Contact the application support of your facility. They can reset your second factor: this removes all authenticator apps, passkeys and backup codes of your account and signs you out everywhere. Your password stays valid. If 2FA is mandatory for you, you set up 2FA and new backup codes at your next sign-in.
 
-**Set up a new authenticator device:** After signing in with TOTP or a backup code, choose **Neues Gerät einrichten** (set up a new device) at `/mfa/settings/`. If sudo is requested, enter your password and a current TOTP or another unused backup code. Scan the new QR code, confirm the new app's code, store the new backup codes and acknowledge them. Only acknowledgement replaces the previously confirmed authenticator devices; your passkeys remain. This works even with mandatory 2FA. A backup-code sign-in alone does not replace the device. Device change and voluntary deactivation do not end other signed-in sessions of the account; if a device with a possibly open session is lost or stolen, use the admin reset (the facility's service instruction).
+**Set up a new authenticator device:** After signing in with TOTP or a backup code, choose **Neues Gerät einrichten** (set up a new device) at `/mfa/settings/`. If sudo is requested, enter your password and a current TOTP or another unused backup code. Scan the new QR code, confirm the new app's code, store the new backup codes and acknowledge them. Only acknowledgement replaces the previously confirmed authenticator devices; your passkeys remain. This works even with mandatory 2FA. A backup-code sign-in alone does not replace the device. Device change and voluntary deactivation revoke all other signed-in sessions of this account without a session scan; they are signed out on their next request. The initiating session stays signed in and receives a new session ID. The factor change, revocation and audit are committed together; on failure the previous factor remains valid and confirmation can be retried. The password stays valid; previously issued password-reset and invitation links may become invalid because of the hash change. The offline salt is unchanged. Offline devices without a connection cannot be remotely erased; on reconnection the existing revocation check requires signing in again and holds pending transmissions. Without a usable second factor, the admin reset remains the fallback.
 
 **Replace earlier backup codes:** Codes generated before this hardening are invalid. Generate new codes using your working authenticator app; without a usable factor, contact application support. A change of the server key (`SECRET_KEY`) also requires new codes.
 
@@ -1168,7 +1168,7 @@ without expiry even after manual event deletion.
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: abb019a68e553404929698c09904813aa2baa659 -->
+<!-- source-hash: 74b524fc1e946c4370caa8dbf9e29de7c1fa7425 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
@@ -1177,3 +1177,11 @@ without expiry even after manual event deletion.
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-16 -->
+<!-- translation-date: 2026-10-16 -->
+<!-- translation-date: 2026-10-16 -->
+<!-- translation-date: 2026-10-16 -->
+<!-- translation-date: 2026-10-16 -->
+<!-- translation-date: 2026-10-16 -->
+<!-- translation-date: 2026-10-16 -->
+<!-- translation-date: 2026-10-16 -->

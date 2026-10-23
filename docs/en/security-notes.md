@@ -8,7 +8,7 @@ Old idempotency fingerprints cannot be rewrapped because the original request pa
 
 ## Authentication, release metadata and guard coverage
 
-Ten backup codes carry 128 bits each and are stored as purpose-separated 96-bit HMAC prefixes derived from `SECRET_KEY`. Earlier SHA digests and the old input format are invalid; rotating `SECRET_KEY` also invalidates codes. Anonymous recovery uses 5/min per IP and 10/h per normalized username without increasing device throttling. Authenticated device throttling and atomic single use remain. The [user guide](user-guide.md#two-factor-authentication-2fa) explains **Neues Gerät einrichten** (set up a new device): existing verified MFA plus sudo; only acknowledgement of new codes replaces confirmed TOTP devices, while passkeys remain. Device change and voluntary deactivation do not end other signed-in sessions of the account; if a device with a possibly open session is lost or stolen, use the admin reset (the facility's service instruction).
+Ten backup codes carry 128 bits each and are stored as purpose-separated 96-bit HMAC prefixes derived from `SECRET_KEY`. Earlier SHA digests and the old input format are invalid; rotating `SECRET_KEY` also invalidates codes. Anonymous recovery uses 5/min per IP and 10/h per normalized username without increasing device throttling. Authenticated device throttling and atomic single use remain. The [user guide](user-guide.md#two-factor-authentication-2fa) explains **Neues Gerät einrichten** (set up a new device): existing verified MFA plus sudo; only acknowledgement of new codes replaces confirmed TOTP devices, while passkeys remain. Device change and voluntary deactivation revoke all other signed-in sessions of this account without a session scan; they are signed out on their next request. The initiating session stays signed in and receives a new session ID. The factor change, revocation and audit are committed together; on failure the previous factor remains valid and confirmation can be retried. The password stays valid; previously issued password-reset and invitation links may become invalid because of the hash change. The offline salt is unchanged. Offline devices without a connection cannot be remotely erased; on reconnection the existing revocation check requires signing in again and holds pending transmissions. Without a usable second factor, the admin reset remains the fallback.
 
 Passkey completion is limited to 60/h per user before JSON parsing. Cryptographic failures and malformed completion requests received during a started verification count; an interrupted started verification consumes the challenge and records `WEBAUTHN_FAILED` with fixed event/error codes, without setting MFA/OTP markers. A local browser cancellation without a completion request is not observable by the server.
 
@@ -24,5 +24,5 @@ Two separate rulesets are planned for `refs/heads/main`: `main-integrity` blocks
 
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-22 -->
-<!-- source-hash: 76d160fc56c503fd2be12e1cc227ecdbfd7420cc -->
+<!-- translation-date: 2026-10-23 -->
+<!-- source-hash: c9709239f4eaf70c9257f952a202db0c030db66f -->
