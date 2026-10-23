@@ -8,7 +8,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Client, DocumentTypeField, Event, FieldTemplate, FreeTextReview
+from core.models import Client, DocumentType, DocumentTypeField, Event, FieldTemplate, FreeTextReview
 from core.services import free_text_review as review_service
 
 pytestmark = pytest.mark.django_db
@@ -246,3 +246,48 @@ def test_last_supported_page_is_an_empty_page_not_an_error(client, facility, sta
     assert response.status_code == 200
     assert response.context["entries"] == []
     assert not response.context["page_obj"].has_next()
+
+
+@pytest.mark.parametrize("change", ["unassign", "empty"])
+def test_editor_choices_exclude_reviewers_without_visible_entries(
+    client, facility, assistant_user, staff_user, lead_user, client_identified, doc_type_contact, change
+):
+    field = FieldTemplate.objects.create(facility=facility, name="Extra text", field_type="textarea")
+    assignment = DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=field)
+    other_type = DocumentType.objects.create(facility=facility, name="Other visible type")
+    DocumentTypeField.objects.create(document_type=other_type, field_template=field)
+    event = Event.objects.create(
+        facility=facility,
+        document_type=doc_type_contact,
+        client=client_identified,
+        created_by=staff_user,
+        occurred_at=timezone.now(),
+        data_json={"notiz": "Still visible", field.slug: "Previously reviewed"},
+    )
+    entry = review_service.get_entry(facility, lead_user, "Event", event.pk, field.slug)
+    review_service.mark_review(
+        facility, lead_user, "Event", event.pk, field.slug, timezone.localdate(), entry.fingerprint
+    )
+    if change == "unassign":
+        assignment.delete()
+    else:
+        event.data_json[field.slug] = ""
+        event.save(update_fields=["data_json"])
+    client.force_login(assistant_user)
+    response = client.get(reverse("core:free_text_review_list"), {"model": "Event"})
+    assert response.status_code == 200
+    choices = dict(response.context["filter_form"].fields["editor"].choices)
+    assert str(lead_user.pk) not in choices
+    assert str(staff_user.pk) in choices
+
+
+def test_editor_choices_keep_reviewers_of_currently_visible_fields(
+    client, facility, assistant_user, staff_user, lead_user, client_identified, doc_type_contact
+):
+    event = make_events(facility, staff_user, doc_type_contact, client_identified, 1)[0]
+    entry = review_service.get_entry(facility, lead_user, "Event", event.pk, "notiz")
+    review_service.mark_review(facility, lead_user, "Event", event.pk, "notiz", timezone.localdate(), entry.fingerprint)
+    client.force_login(assistant_user)
+    response = client.get(reverse("core:free_text_review_list"), {"model": "Event"})
+    assert response.status_code == 200
+    assert str(lead_user.pk) in dict(response.context["filter_form"].fields["editor"].choices)

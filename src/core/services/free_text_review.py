@@ -7,7 +7,7 @@ from uuid import UUID
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import CharField, Exists, Func, OuterRef, Q
+from django.db.models import CharField, Exists, Func, OuterRef, Q, Value
 from django.db.models.fields.json import KeyTextTransform, KeyTransform
 from django.db.models.lookups import Exact, Regex
 from django.http import Http404
@@ -281,7 +281,13 @@ def list_editor_ids(facility, user, target_type):
         target_type=target_type, target_id__in=visible.order_by().values("pk")
     )
     if target_type == "Event":
-        reviews = reviews.filter(field_key__in={key for keys in event_fields.values() for key in keys})
+        # A mark counts only while its own field still carries text in a type the user may see.
+        marked = visible.order_by().filter(pk=OuterRef("target_id"))
+        reviews = reviews.filter(
+            Exists(
+                marked.filter(_event_condition(event_fields, lambda key: Q(Exact(Value(key), OuterRef("field_key")))))
+            )
+        )
     ids = set(visible.order_by().values_list("created_by_id", flat=True).distinct())
     ids |= set(reviews.values_list("reviewed_by_id", flat=True).distinct())
     ids.discard(None)
