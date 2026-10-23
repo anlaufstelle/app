@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
-- **Sicherheitsupdates für Python-Abhängigkeiten** (#2593) — django-otp 1.7.5 und Brotli 1.2.1 schließen die behobenen Sicherheitslücken einschließlich PYSEC-2026-4322; beide Hash-Locks sind aktualisiert.
+- **Sicherheitsupdates für Python-Abhängigkeiten** (#2593) — django-otp 1.7.5 übernimmt die Sicherheitskorrektur des Upstream-Projekts; die transitive Abhängigkeit Brotli 1.2.1 schließt PYSEC-2026-4322. Beide Hash-Locks sind aktualisiert.
 
 ### Changed
 
