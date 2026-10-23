@@ -318,3 +318,12 @@ def test_missing_index_markers_are_stale_and_unmarked_appendix_is_preserved(inde
     index_module.SOURCE.write_text(original, encoding="utf-8")
     assert index_module.patch_anhang_c("generated\n", index_module.SOURCE) == (False, None)
     assert index_module.SOURCE.read_text(encoding="utf-8") == original
+
+
+def test_generated_references_are_plain_text(index_module, matrix_tree):
+    assert index_module.main([]) == 0
+    index = index_module.TARGET.read_text(encoding="utf-8")
+    assert "Refs #916" in index
+    assert "Refs #1071" in index
+    assert "/issues/" not in index
+    assert "[#916]" not in index

@@ -68,21 +68,13 @@ AUTOGEN_END = "<!-- INDEX-AUTOGEN:END -->"
 ANHANG_C_START = "<!-- ANHANG-C:START -->"
 ANHANG_C_END = "<!-- ANHANG-C:END -->"
 
-# Issue references follow the documentation convention and use
-# clickable Markdown links. The generator emits them directly so that
-# --check remains byte-idempotent without manual post-processing.
-#
-# Refs #1058 (M2/P13, Korrekturrunde): Die referenzierten Nummern (#909, #916,
-# #1071) sind Tickets des **Entwicklungs-Trackers**, nicht des oeffentlichen
-# Spiegel-Repos — dort existieren sie unter diesen Nummern nicht. Die
-# uebrige Doku verlinkt konsistent ``anlaufstelle/app`` (siehe
-# ``docs/README.md``: im Release-Snapshot entschaerft der Sanitizer die
-# Ticket-Links ohnehin zu Klartext-``#NNN``).
+# The index uses plain issue numbers: other repositories have independent
+# issue namespaces. Appendix C retains its existing public-mode rendering.
 ISSUE_URL_BASE = "https://github.com/anlaufstelle/app/issues"
 
 
 def issue_link(number: int) -> str:
-    """``#NNN`` als klickbarer Markdown-Link, z.B. ``[#916](…/issues/916)``."""
+    """Return a development appendix reference; public mode uses plain text."""
     return f"[#{number}]({ISSUE_URL_BASE}/{number})"
 
 
@@ -451,7 +443,7 @@ def render_extras(tests: list[Test], e2e_files: set[str] | None = None) -> list[
     lines.append("## Automatisierungskandidaten (Manuell-only)")
     lines.append("")
     lines.append(
-        f"> Refs {issue_link(916)}: Cases ohne E2E-Spiegelung "
+        "> Refs #916: Cases ohne E2E-Spiegelung "
         "sind potenzielle Kandidaten zur Automatisierung. Sortiert nach Sektion + TC-ID."
     )
     lines.append("")
@@ -471,7 +463,7 @@ def render_extras(tests: list[Test], e2e_files: set[str] | None = None) -> list[
     lines.append("## 🔧 LOKAL/SSH-Cases")
     lines.append("")
     lines.append(
-        f"> Refs {issue_link(916)}: Cases, die direkten "
+        "> Refs #916: Cases, die direkten "
         "Server-Zugriff brauchen (`docker compose exec web python manage.py …`, `psql`, …)."
     )
     lines.append("")
@@ -494,7 +486,7 @@ def render_extras(tests: list[Test], e2e_files: set[str] | None = None) -> list[
     lines.append("## Security/DSGVO-Cases ohne E2E-Coverage")
     lines.append("")
     lines.append(
-        f"> Refs {issue_link(916)}: Sektion-C-Cases ohne "
+        "> Refs #916: Sektion-C-Cases ohne "
         "automatisierte Spiegelung — höchste Priorität für nachfolgende E2E-/Architekturtests."
     )
     lines.append("")
@@ -519,7 +511,7 @@ def render_extras(tests: list[Test], e2e_files: set[str] | None = None) -> list[
     lines.append("## Orphan-E2E (im Code, nicht im Katalog)")
     lines.append("")
     lines.append(
-        f"> Refs {issue_link(1071)} Block B: E2E-Testdateien in `src/tests/e2e/`, "
+        "> Refs #1071 Block B: E2E-Testdateien in `src/tests/e2e/`, "
         "die keine Matrix-Zelle referenziert. Kandidaten, um den Katalog "
         "nachzuziehen (umgekehrte Drift zu `verify-matrix-drift`)."
     )
