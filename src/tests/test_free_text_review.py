@@ -41,9 +41,9 @@ def test_role_matrix(request, facility, target_type, role):
     user = request.getfixturevalue(role)
     if role == "super_admin_user":
         with pytest.raises(PermissionDenied):
-            service().list_entries(facility, user, target_type)
+            service().list_page(facility, user, target_type)
         return
-    entries = service().list_entries(facility, user, target_type)
+    entries = service().list_page(facility, user, target_type).entries
     allowed = role != "assistant_user" or target_type in {"WorkItem", "Event"}
     assert [(entry.target_id, entry.field_key) for entry in entries] == ([(obj.pk, field)] if allowed else [])
 
@@ -56,11 +56,11 @@ def test_unavailable_targets_are_hidden(request, facility, staff_user, target_ty
     if state == "foreign":
         scope = second_facility
         with pytest.raises(PermissionDenied):
-            service().list_entries(scope, staff_user, target_type)
+            service().list_page(scope, staff_user, target_type)
         return
     setattr(person, "is_deleted" if state == "deleted" else "is_active", state == "deleted")
     person.save()
-    assert service().list_entries(facility, staff_user, target_type) == []
+    assert service().list_page(facility, staff_user, target_type).entries == []
     with pytest.raises(Http404):
         service().get_entry(facility, staff_user, target_type, obj.pk, field)
     with pytest.raises(Http404):
@@ -131,14 +131,14 @@ def test_event_fields_fail_closed(facility, assistant_user, lead_user, sample_ev
         "dauer": {"__encrypted__": True, "value": "Hidden"},
     }
     sample_event.save()
-    assert [entry.field_key for entry in service().list_entries(facility, assistant_user, "Event")] == ["notiz"]
-    assert {entry.field_key for entry in service().list_entries(facility, lead_user, "Event")} == {
+    assert [entry.field_key for entry in service().list_page(facility, assistant_user, "Event").entries] == ["notiz"]
+    assert {entry.field_key for entry in service().list_page(facility, lead_user, "Event").entries} == {
         "notiz",
         "restricted",
     }
     doc_type_contact.sensitivity = DocumentType.Sensitivity.ELEVATED
     doc_type_contact.save()
-    assert service().list_entries(facility, assistant_user, "Event") == []
+    assert service().list_page(facility, assistant_user, "Event").entries == []
     with pytest.raises(Http404):
         service().get_entry(facility, assistant_user, "Event", sample_event.pk, "notiz")
 

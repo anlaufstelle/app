@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.translation import gettext_lazy as _
 
-from core.models import AuditLog, Case, Client, Episode, Event, FreeTextReview, WorkItem
+from core.models import AuditLog, Case, Client, DocumentTypeField, Episode, Event, FreeTextReview, WorkItem
 from core.services.audit import audit_event
 from core.services.compliance.sensitivity import user_can_see_field
 from core.services.dynamic_protection import lock_dynamic_protection
@@ -28,6 +28,8 @@ TARGET_LABELS = {
     "WorkItem": _("Aufgabenbeschreibungen"),
     "Event": _("Ereignis-Freitexte"),
 }
+PAGE_SIZE = 50
+SCAN_BATCH = 200
 STATIC_FIELDS = {"Client": "notes", "Case": "description", "Episode": "description", "WorkItem": "description"}
 
 
@@ -126,24 +128,33 @@ def _entry(facility, target_type, target, key, text, reviews):
     )
 
 
-def _entries(facility, user, target_type, targets):
+def _event_fields(facility, user):
+    """Map document type id to the text slugs the user may see; one query for all types."""
+    fields = DocumentTypeField.objects.filter(
+        document_type__facility=facility,
+        field_template__facility=facility,
+        field_template__is_encrypted=False,
+        field_template__field_type__in=["text", "textarea"],
+    ).select_related("field_template", "document_type")
+    visible = {}
+    for field in fields:
+        if user_can_see_field(user, field.document_type.sensitivity, field.field_template.sensitivity):
+            visible.setdefault(field.document_type_id, []).append(field.field_template.slug)
+    return visible
+
+
+def _entries(facility, target_type, targets, event_fields):
+    """Build entries for an already limited list of targets; marks are loaded in one query."""
     reviews = {
         (review.target_id, review.field_key): review
-        for review in FreeTextReview.objects.for_facility(facility).filter(target_type=target_type)
+        for review in FreeTextReview.objects.for_facility(facility).filter(
+            target_type=target_type, target_id__in=[target.pk for target in targets]
+        )
     }
     entries = []
     for target in targets:
         if target_type == "Event":
-            fields = target.document_type.fields.select_related("field_template").filter(
-                field_template__facility=facility,
-                field_template__is_encrypted=False,
-                field_template__field_type__in=["text", "textarea"],
-            )
-            values = (
-                (field.field_template.slug, target.data_json.get(field.field_template.slug))
-                for field in fields
-                if user_can_see_field(user, target.document_type.sensitivity, field.field_template.sensitivity)
-            )
+            values = [(key, target.data_json.get(key)) for key in event_fields.get(target.document_type_id, ())]
         else:
             key = STATIC_FIELDS[target_type]
             values = [(key, getattr(target, key))]
@@ -154,16 +165,107 @@ def _entries(facility, user, target_type, targets):
     return entries
 
 
-def list_entries(facility, user, target_type):
-    """Return only currently readable nonempty source fields, newest first."""
-    targets = _targets(facility, user, target_type)
-    return sorted(_entries(facility, user, target_type, targets), key=lambda entry: entry.changed_at, reverse=True)
+def _changed_column(target_type):
+    # Episodes carry no modification timestamp; the creation time stands in for it.
+    return "created_at" if target_type == "Episode" else "updated_at"
+
+
+def _has_text(target_type, event_fields):
+    """Database prefilter: rows that can yield at least one nonblank text entry."""
+    if target_type != "Event":
+        return Q(**{f"{STATIC_FIELDS[target_type]}__regex": r"\S"})
+    condition = Q(pk__in=[])
+    for document_type_id, keys in event_fields.items():
+        condition |= Q(document_type_id=document_type_id, data_json__has_any_keys=keys)
+    return condition
+
+
+def _limited_targets(facility, user, target_type, event_fields, *, changed_before=None, editor_id=""):
+    """Visible targets that can carry text, narrowed and ordered in the database."""
+    qs = _targets(facility, user, target_type).filter(_has_text(target_type, event_fields))
+    column = _changed_column(target_type)
+    if changed_before is not None:
+        qs = qs.filter(**{f"{column}__date__lte": changed_before})
+    if editor_id:
+        reviewed = FreeTextReview.objects.for_facility(facility).filter(
+            target_type=target_type, reviewed_by_id=editor_id
+        )
+        qs = qs.filter(Q(created_by_id=editor_id) | Q(pk__in=reviewed.values("target_id")))
+    return qs.order_by(f"-{column}", "-pk")
+
+
+@dataclass
+class ReviewPage:
+    """One page of entries; the total is deliberately unknown (no full count)."""
+
+    entries: list
+    number: int
+    more: bool
+
+    def has_next(self):
+        return self.more
+
+    def has_previous(self):
+        return self.number > 1
+
+    def next_page_number(self):
+        return self.number + 1
+
+    def previous_page_number(self):
+        return self.number - 1
+
+
+def list_page(facility, user, target_type, *, page=1, per_page=PAGE_SIZE, changed_before=None, editor_id="", risk=""):
+    """Return one page of readable nonempty source fields, newest first.
+
+    Without a pattern filter the page is cut in the database and only its rows are
+    built. A pattern filter is heuristic and cannot run in SQL, so the ordered rows
+    are scanned in bounded batches; only the requested window is kept and the scan
+    stops as soon as one more match proves that another page exists.
+    """
+    event_fields = _event_fields(facility, user) if target_type == "Event" else {}
+    qs = _limited_targets(facility, user, target_type, event_fields, changed_before=changed_before, editor_id=editor_id)
+    page = max(1, page)
+    start = (page - 1) * per_page
+    keep = dict(changed_before=changed_before, editor_id=editor_id, risk=risk)
+    if not risk:
+        rows = list(qs[start : start + per_page + 1])
+        entries = filter_entries(_entries(facility, target_type, rows[:per_page], event_fields), **keep)
+        return ReviewPage(entries, page, len(rows) > per_page)
+    window, matched, offset = [], 0, 0
+    while True:
+        batch = list(qs[offset : offset + SCAN_BATCH])
+        for entry in filter_entries(_entries(facility, target_type, batch, event_fields), **keep):
+            if matched >= start + per_page:
+                return ReviewPage(window, page, True)
+            if matched >= start:
+                window.append(entry)
+            matched += 1
+        if len(batch) < SCAN_BATCH:
+            return ReviewPage(window, page, False)
+        offset += SCAN_BATCH
+
+
+def list_editor_ids(facility, user, target_type):
+    """Authors and reviewers of the currently visible, nonblank entries of one model."""
+    event_fields = _event_fields(facility, user) if target_type == "Event" else {}
+    visible = _limited_targets(facility, user, target_type, event_fields)
+    reviews = FreeTextReview.objects.for_facility(facility).filter(
+        target_type=target_type, target_id__in=visible.order_by().values("pk")
+    )
+    if target_type == "Event":
+        reviews = reviews.filter(field_key__in={key for keys in event_fields.values() for key in keys})
+    ids = set(visible.order_by().values_list("created_by_id", flat=True).distinct())
+    ids |= set(reviews.values_list("reviewed_by_id", flat=True).distinct())
+    ids.discard(None)
+    return ids
 
 
 def get_entry(facility, user, target_type, target_id, field_key):
     """Resolve the target and field afresh; hidden and missing values share a 404."""
-    targets = _targets(facility, user, target_type).filter(pk=target_id)
-    for entry in _entries(facility, user, target_type, targets):
+    event_fields = _event_fields(facility, user) if target_type == "Event" else {}
+    targets = list(_targets(facility, user, target_type).filter(pk=target_id))
+    for entry in _entries(facility, target_type, targets, event_fields):
         if entry.field_key == field_key:
             return entry
     raise Http404("Review target not found")

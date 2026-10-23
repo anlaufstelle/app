@@ -1,7 +1,6 @@
 """Online-only review pages; source permissions are checked for every request."""
 
 from django.core.exceptions import ValidationError
-from django.core.paginator import Paginator
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -13,9 +12,10 @@ from core.models import AuditLog
 from core.services.audit import log_audit_event
 from core.services.free_text_review import (
     TARGET_LABELS,
-    filter_entries,
+    ReviewPage,
     get_entry,
-    list_entries,
+    list_editor_ids,
+    list_page,
     mark_review,
     revoke_review,
 )
@@ -29,33 +29,42 @@ def _audit_qualified_reads(request, entries):
         log_audit_event(request, AuditLog.Action.VIEW_QUALIFIED, target_type="Client", target_id=str(client_id))
 
 
+def _page_number(raw):
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError):
+        return 1
+
+
 class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
     @method_decorator(never_cache)
     def get(self, request):
         data = request.GET.copy()
         if not data.get("model"):
             data["model"] = "Client" if request.user.is_staff_or_above else "WorkItem"
-        entries = (
-            list_entries(request.current_facility, request.user, data["model"])
+        editor_ids = (
+            list_editor_ids(request.current_facility, request.user, data["model"])
             if data["model"] in TARGET_LABELS
-            else []
+            else ()
         )
-        form = ReviewFilterForm(data, facility=request.current_facility, user=request.user, entries=entries)
+        form = ReviewFilterForm(data, facility=request.current_facility, user=request.user, editor_ids=editor_ids)
         if form.is_valid():
-            entries = filter_entries(
-                entries,
+            page = list_page(
+                request.current_facility,
+                request.user,
+                form.cleaned_data["model"],
+                page=_page_number(request.GET.get("page")),
                 changed_before=form.cleaned_data["changed_before"],
                 editor_id=form.cleaned_data["editor"],
                 risk=form.cleaned_data["risk"],
             )
         else:
-            entries = []
-        page = Paginator(entries, 50).get_page(request.GET.get("page"))
+            page = ReviewPage([], 1, False)
         query = data.copy()
         query.pop("page", None)
         context = {
             "filter_form": form,
-            "entries": page.object_list,
+            "entries": page.entries,
             "page_obj": page,
             "filter_query": query.urlencode(),
         }
@@ -64,7 +73,7 @@ class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
             if request.headers.get("HX-Request")
             else ("core/free_text_review/list.html")
         )
-        _audit_qualified_reads(request, page.object_list)
+        _audit_qualified_reads(request, page.entries)
         return render(request, template, context, status=200 if form.is_valid() else 400)
 
 

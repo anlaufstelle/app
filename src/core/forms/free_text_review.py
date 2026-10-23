@@ -26,19 +26,13 @@ class ReviewFilterForm(forms.Form):
         choices=[("", _("Alle")), *PATTERN_LABELS.items()],
     )
 
-    def __init__(self, *args, facility, user, entries=(), **kwargs):
+    def __init__(self, *args, facility, user, editor_ids=(), **kwargs):
         super().__init__(*args, **kwargs)
         cast(forms.ChoiceField, self.fields["model"]).choices = [
             (key, label)
             for key, label in TARGET_LABELS.items()
             if user.is_staff_or_above or key in {"WorkItem", "Event"}
         ]
-        editor_ids = {
-            user_id
-            for entry in entries
-            for user_id in (entry.author_id, entry.review.reviewed_by_id if entry.review else None)
-            if user_id is not None
-        }
         cast(forms.ChoiceField, self.fields["editor"]).choices = [
             ("", _("Alle")),
             *(
