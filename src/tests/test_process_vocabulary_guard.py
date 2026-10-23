@@ -202,6 +202,32 @@ def baseline_is_subset(current: dict[str, int], ceiling: dict[str, int]) -> bool
     return all(isinstance(count, int) and 0 < count <= ceiling.get(key, 0) for key, count in current.items())
 
 
+def _git_text(root: Path, *args: str) -> str | None:
+    try:
+        proc = subprocess.run(["git", *args], cwd=root, capture_output=True, check=False, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return proc.stdout.decode("utf-8") if proc.returncode == 0 else None
+
+
+def _committed_baselines(root: Path) -> list[dict[str, int]]:
+    """Return the committed ``remaining`` maps of the baseline file, oldest first."""
+    relpath = _BASELINE_PATH.relative_to(REPO_ROOT).as_posix()
+    log = _git_text(root, "log", "--reverse", "--format=%H", "--", relpath)
+    versions: list[dict[str, int]] = []
+    for commit in (log or "").split():
+        blob = _git_text(root, "show", f"{commit}:{relpath}")
+        if blob is not None:
+            versions.append(json.loads(blob)["remaining"])
+    return versions
+
+
+def baseline_history_allows(root: Path, current: dict[str, int]) -> bool:
+    """Every committed baseline version, and the current one, may only shrink."""
+    versions = [*_committed_baselines(root), current]
+    return all(baseline_is_subset(newer, older) for older, newer in zip(versions, versions[1:], strict=False))
+
+
 def test_release_findings_match_remaining_baseline() -> None:
     baseline = json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
     current = finding_counts(scan_release_vocabulary(REPO_ROOT))
@@ -245,3 +271,37 @@ def test_baseline_can_only_shrink() -> None:
     assert baseline_is_subset({"sample:hash": 1}, {"sample:hash": 2})
     assert not baseline_is_subset({"sample:hash": 3}, {"sample:hash": 2})
     assert not baseline_is_subset({"new:hash": 1}, {"sample:hash": 2})
+
+
+def test_history_rejects_restored_finding_after_shrink(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    baseline_path = tmp_path / _BASELINE_PATH.relative_to(REPO_ROOT)
+    baseline_path.parent.mkdir(parents=True)
+    for count in (2, 1):
+        baseline_path.write_text(json.dumps({"remaining": {"sample:hash": count}}), encoding="utf-8")
+        subprocess.run(["git", "add", str(baseline_path)], cwd=tmp_path, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Fixture Author",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "-qm",
+                "Update baseline",
+            ],
+            cwd=tmp_path,
+            check=True,
+        )
+    assert baseline_history_allows(tmp_path, {"sample:hash": 1})
+    assert not baseline_history_allows(tmp_path, {"sample:hash": 2})
+
+
+def test_baseline_history_never_restores_findings() -> None:
+    if not _committed_baselines(REPO_ROOT):
+        pytest.skip("No Git history for the baseline file (flat clone or release tree).")
+    baseline = json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
+    assert baseline_history_allows(REPO_ROOT, baseline["remaining"]), "A removed finding was restored."
