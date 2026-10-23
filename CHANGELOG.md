@@ -6,13 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Changed
-
-- **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
-
 ### Erforderliche Betreiber-Aktionen
 
 - Keine.
+
+### Changed
+
+- **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
 
 ## [0.99.8] - 2026-10-23
 
