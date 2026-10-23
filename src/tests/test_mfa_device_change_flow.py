@@ -69,7 +69,7 @@ def test_device_change_requires_sudo_and_replaces_only_after_ack(client, staff_u
     assert client.session["otp_device_id"] == pending.persistent_id
     entry = AuditLog.objects.get(user=staff_user, action=AuditLog.Action.MFA_ENABLED)
     assert entry.facility_id == staff_user.facility_id
-    assert entry.detail == {"event": "mfa_setup_confirmed", "count": 2}
+    assert entry.detail == {"event": "mfa_setup_confirmed", "count": 2, "sessions_revoked": True}
     assert verify_backup_code(staff_user, codes[1]) is False
 
 

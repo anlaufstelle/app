@@ -71,6 +71,8 @@ def _verified_with_sudo(client, user) -> None:
 
 
 def _password_only(client, user) -> None:
+    """Start a fresh session against the stored hash after a factor change."""
+    user.refresh_from_db(fields=["password"])
     client.logout()
     client.force_login(user)
 
@@ -151,7 +153,9 @@ class TestCompletedChangeLeavesOneDevice:
         _verified_with_sudo(client, staff_user)
         _complete_change(client, staff_user)
         entries = AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_ENABLED)
-        assert [entry.detail for entry in entries] == [{"event": "mfa_setup_confirmed", "count": 1}]
+        assert [entry.detail for entry in entries] == [
+            {"event": "mfa_setup_confirmed", "count": 1, "sessions_revoked": True}
+        ]
 
 
 @pytest.mark.django_db
@@ -234,4 +238,6 @@ class TestFirstSetupRemovesNothing:
         neu = _complete_change(client, staff_user)
         assert _confirmed(staff_user) == [neu.pk]
         entries = AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_ENABLED)
-        assert [entry.detail for entry in entries] == [{"event": "mfa_setup_confirmed", "count": 0}]
+        assert [entry.detail for entry in entries] == [
+            {"event": "mfa_setup_confirmed", "count": 0, "sessions_revoked": False}
+        ]

@@ -7,17 +7,18 @@ import hmac
 import re
 import secrets
 from contextlib import contextmanager
+from dataclasses import dataclass
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils.crypto import salted_hmac
 from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 
-from core.models import EncryptedTOTPDevice as TOTPDevice
-
 # TOTP access uses the proxy model with an encrypted secret (ADR-031).
-from core.models import User
+from core.models import AuditLog, User
+from core.models import EncryptedTOTPDevice as TOTPDevice
 from core.models.user import SessionRevocationError
+from core.services.audit import audit_event
 
 BACKUP_CODES_COUNT = 10
 BACKUP_DEVICE_NAME = "backup"
@@ -198,3 +199,59 @@ def revoke_mfa_sessions(locked: User) -> None:
     locked.revoke_sessions()
     if User.objects.filter(facility=locked.facility_id, pk=locked.pk).update(password=locked.password) != 1:
         raise SessionRevocationError("The revoked password hash of the target was not stored.")
+
+
+@dataclass(frozen=True)
+class MFASetupResult:
+    user: User
+    device: TOTPDevice
+    sessions_revoked: bool
+
+
+def confirm_totp_setup(user: User, device_pk, *, ip_address: str | None = None) -> MFASetupResult | None:
+    """Confirm only the authorized device, atomically replacing the old factor."""
+    with mfa_change_transaction(user, require_current_session=True) as locked:
+        device = TOTPDevice.objects.filter(user=locked, pk=device_pk, confirmed=False).first()
+        if device is None:
+            return None
+        sessions_revoked = locked.has_confirmed_mfa_device
+        if sessions_revoked:
+            revoke_mfa_sessions(locked)
+        device.confirmed = True
+        device.save(update_fields=["confirmed"])
+        replaced, _info = TOTPDevice.objects.filter(user=locked, confirmed=True).exclude(pk=device.pk).delete()
+        audit_event(
+            AuditLog.Action.MFA_ENABLED,
+            user=locked,
+            facility=locked.facility,
+            target_obj=locked,
+            detail={"event": "mfa_setup_confirmed", "count": replaced, "sessions_revoked": sessions_revoked},
+            ip_address=ip_address,
+        )
+    return MFASetupResult(user=locked, device=device, sessions_revoked=sessions_revoked)
+
+
+def disable_mfa(user: User, *, ip_address: str | None = None) -> User | None:
+    """Remove TOTP and passkeys only together with session revocation and audit."""
+    from django_otp_webauthn.models import WebAuthnCredential
+
+    with mfa_change_transaction(user, require_current_session=True) as locked:
+        # Recheck enforcement under the lock, including a concurrent account change.
+        if locked.is_mfa_enforced:
+            raise PermissionDenied("Two-factor authentication is mandatory for this account.")
+        devices = TOTPDevice.objects.filter(user=locked)
+        passkeys = WebAuthnCredential.objects.filter(user=locked)
+        if not devices.exists() and not passkeys.exists():
+            return None
+        revoke_mfa_sessions(locked)
+        devices.delete()
+        passkeys_deleted, _info = passkeys.delete()
+        audit_event(
+            AuditLog.Action.MFA_DISABLED,
+            user=locked,
+            facility=locked.facility,
+            target_obj=locked,
+            detail={"event": "mfa_disabled", "passkeys_removed": passkeys_deleted, "sessions_revoked": True},
+            ip_address=ip_address,
+        )
+    return locked

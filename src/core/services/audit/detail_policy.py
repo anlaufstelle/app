@@ -73,6 +73,7 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "findings": "Zahl der Breach-Detection-Treffer eines Laufs",
     "threshold": "Schwellwert der Breach-Detection-Regel",
     "k_threshold": "k-Anonymitaets-Schwelle des Berichts",
+    "sessions_revoked": "whether the account session nonce was renewed atomically with the MFA change",
     "passkeys_removed": "Zahl der beim MFA-Reset entfernten Passkeys",
     # Refs #2469: counters of the second-factor reset by facility administration.
     "totp_devices_removed": "number of TOTP devices removed by a second-factor reset",

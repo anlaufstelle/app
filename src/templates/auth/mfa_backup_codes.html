@@ -44,6 +44,10 @@
         </button>
     </div>
 
+    {% if setup_pending and sessions_will_be_revoked %}
+    <p class="text-sm text-ink-muted mb-4">{% trans "Andere angemeldete Geräte werden abgemeldet." %}</p>
+    {% endif %}
+
     <form method="post" class="print:hidden">
         {% csrf_token %}
         {% if confirm_error %}

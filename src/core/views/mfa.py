@@ -25,8 +25,8 @@ from urllib.parse import urlsplit
 import qrcode
 from django.conf import settings as django_settings
 from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -53,8 +53,10 @@ from core.services.security import (
     remaining_backup_codes,
     verify_backup_code,
 )
+from core.services.security.mfa import confirm_totp_setup, disable_mfa
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
 from core.services.security.sudo_mode import is_sudo_required, sudo_redirect_if_required, sudo_url
+from core.signals.audit import get_client_ip
 from core.utils.ratelimit import ratelimit
 from core.views.auth import resolve_post_login_url
 from core.views.utils import object_back_link, safe_redirect_path
@@ -468,6 +470,7 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
         context = self.get_context_data(
             codes=codes,
             setup_pending=bool(request.session.get("mfa_setup_pending")),
+            sessions_will_be_revoked=request.user.has_confirmed_mfa_device,
             **kwargs,
         )
         return self.render_to_response(context)
@@ -484,65 +487,41 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
             context = self.get_context_data(
                 codes=codes,
                 setup_pending=bool(request.session.get("mfa_setup_pending")),
+                sessions_will_be_revoked=request.user.has_confirmed_mfa_device,
                 confirm_error=True,
                 **kwargs,
             )
             return self.render_to_response(context)
 
-        # Quittung erteilt. Im Setup-Flow jetzt — und erst jetzt — 2FA aktivieren.
-        if request.session.pop("mfa_setup_pending", False):
-            # Refs #2287: Nur das Geraet, fuer das dieser Vorgang autorisiert
-            # wurde, wird scharf geschaltet. Frueher genuegte "irgendein"
-            # unbestaetigtes Geraet des Kontos — damit liess sich der Abschluss
-            # auf ein fremd angelegtes Geraet umlenken.
-            device_pk = request.session.pop(_SESSION_SETUP_DEVICE_KEY, None)
-            device = (
-                TOTPDevice.objects.filter(user=request.user, pk=device_pk, confirmed=False).first()
-                if device_pk is not None
-                else None
-            )
-            if device is None:
-                # Defensive: Pending-Marker ohne autorisiertes unbestätigtes
-                # Device (oder ohne Marker) → Einrichtung neu aufsetzen.
+        if request.session.get("mfa_setup_pending"):
+            # Keep the ceremony markers and encrypted codes until the transaction commits.
+            device_pk = request.session.get(_SESSION_SETUP_DEVICE_KEY)
+            try:
+                result = confirm_totp_setup(request.user, device_pk, ip_address=get_client_ip(request))
+            except Exception:  # noqa: BLE001 -- a failed factor change must preserve the ceremony
+                logger.error("Second-factor setup could not be committed.")
+                messages.error(
+                    request,
+                    _(
+                        "Der zweite Faktor wurde nicht geändert. "
+                        "Bitte versuche es erneut oder wende dich an die Administration."
+                    ),
+                )
+                return redirect("mfa_backup_codes")
+            request.session.pop("mfa_setup_pending", None)
+            request.session.pop(_SESSION_SETUP_DEVICE_KEY, None)
+            if result is None:
                 request.session.pop(_SESSION_BACKUP_CODES_KEY, None)
                 return redirect("mfa_setup")
-            # Refs #2328: Mit der Quittung wird das neue Geraet wirksam und
-            # ersetzt das bisherige — in derselben Transaktion verschwindet
-            # jedes andere bestaetigte TOTP-Geraet des Kontos. Danach hat das
-            # Konto genau eines; das ersetzte bleibt nicht als ungepruefte,
-            # bestaetigte Zeile samt Secret stehen. Unbestaetigte Geraete und
-            # Passkeys bleiben unberuehrt; bricht der Wechsel vor der Quittung
-            # ab, gilt das bisherige Geraet unveraendert weiter.
-            with transaction.atomic():
-                device.confirmed = True
-                device.save(update_fields=["confirmed"])
-                replaced, _info = (
-                    TOTPDevice.objects.filter(user=request.user, confirmed=True).exclude(pk=device.pk).delete()
-                )
-            # Refs #2034: Der Setup-Abschluss ist die erste Rechteanhebung der
-            # Sitzung (2FA aktiv + verifiziert) — Rotation vor dem Flag. Der
-            # Abbau von ``mfa_setup_pending`` oben wandert mit.
-            rotate_session_after_privilege_gain(request)
-            # Refs #2175: Der Setup-Abschluss ist ein vollwertiger zweiter
-            # Faktor — django-otp muss ihn genauso sehen wie den Verify-Pfad.
-            # django-otp-webauthn 0.10.3 prueft in der Registrierungs-Zeremonie
-            # zusaetzlich ``user.is_verified()``; ohne ``otp_login`` koennte der
-            # Nutzer direkt nach der Einrichtung keinen Passkey anlegen (403).
-            otp_login(request, device)
+            # Use the committed, locked hash rather than the request's stale copy.
+            request.user.password = result.user.password
+            update_session_auth_hash(request, request.user)
+            otp_login(request, result.device)
             request.session["mfa_verified"] = True
-            log_audit_event(
-                request,
-                AuditLog.Action.MFA_ENABLED,
-                target_obj=request.user,
-                # Refs #2328: ``count`` = Zahl der mit der Quittung entfernten
-                # TOTP-Geraete (wie ``passkeys_removed`` bei MFA_DISABLED) —
-                # 0 bei der erstmaligen Einrichtung, ab 1 beim Faktorwechsel.
-                detail={"event": "mfa_setup_confirmed", "count": replaced},
-                facility=getattr(request.user, "facility", None),
-            )
             messages.success(request, _("Zwei-Faktor-Authentifizierung aktiviert."))
+            if result.sessions_revoked:
+                messages.info(request, _("Andere angemeldete Geräte wurden abgemeldet."))
         else:
-            # Regenerate-Flow: Device ist längst bestätigt, nur Codes quittieren.
             messages.success(request, _("Backup-Codes gespeichert."))
 
         request.session.pop(_SESSION_BACKUP_CODES_KEY, None)
@@ -662,22 +641,25 @@ class MFADisableView(LoginRequiredMixin, RequireSudoModeMixin, TemplateView):
                 _("Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend."),
             )
             return redirect("mfa_settings")
-        # 2FA vollstaendig deaktivieren = beide Faktoren entfernen (ADR-032):
-        # ein Passkey darf nicht als verwaister zweiter Faktor zurueckbleiben.
-        from django_otp_webauthn.models import WebAuthnCredential
-
-        deleted, _info = TOTPDevice.objects.filter(user=user).delete()
-        passkeys_deleted, _pk_info = WebAuthnCredential.objects.filter(user=user).delete()
-        request.session.pop("mfa_verified", None)
-        if deleted or passkeys_deleted:
-            log_audit_event(
+        try:
+            changed_user = disable_mfa(user, ip_address=get_client_ip(request))
+        except Exception:  # noqa: BLE001 -- report failure only after the transaction has rolled back
+            logger.error("Second-factor deactivation could not be committed.")
+            messages.error(
                 request,
-                AuditLog.Action.MFA_DISABLED,
-                target_obj=user,
-                detail={"event": "mfa_disabled", "passkeys_removed": passkeys_deleted},
-                facility=getattr(user, "facility", None),
+                _(
+                    "Der zweite Faktor wurde nicht geändert. "
+                    "Bitte versuche es erneut oder wende dich an die Administration."
+                ),
             )
+            return redirect("mfa_settings")
+        if changed_user is not None:
+            user.password = changed_user.password
+            update_session_auth_hash(request, user)
+            request.session.pop("mfa_verified", None)
+            request.session.pop("otp_device_id", None)
             messages.success(request, _("Zwei-Faktor-Authentifizierung deaktiviert."))
+            messages.info(request, _("Andere angemeldete Geräte wurden abgemeldet."))
         return redirect("mfa_settings")
 
 

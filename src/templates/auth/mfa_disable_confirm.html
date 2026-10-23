@@ -8,6 +8,7 @@
     <p class="text-sm text-ink-muted mb-4">
         {% trans "Damit entfernst du deine Authenticator-Geräte und Passkeys. Dein Konto ist danach nur noch durch das Passwort geschützt." %}
     </p>
+    <p class="text-sm text-ink-muted mb-4">{% trans "Andere angemeldete Geräte werden abgemeldet." %}</p>
     <form method="post" action="{% url 'mfa_disable' %}">
         {% csrf_token %}
         <button type="submit" data-testid="mfa-disable-confirm-button"

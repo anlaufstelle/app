@@ -68,6 +68,7 @@ def _confirmed_pks(user) -> list[int]:
 
 
 def _verified(client, user) -> None:
+    user.refresh_from_db(fields=["password"])
     client.force_login(user)
     session = client.session
     session["mfa_verified"] = True
@@ -125,6 +126,7 @@ def _acknowledge(client) -> None:
 
 def _signs_in(user, code: str) -> bool:
     client = Client()
+    user.refresh_from_db(fields=["password"])
     client.force_login(user)
     response = client.post(VERIFY_URL, {"token": code})
     return response.status_code == 302 and client.session.get("mfa_verified") is True

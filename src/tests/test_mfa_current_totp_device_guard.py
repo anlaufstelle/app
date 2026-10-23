@@ -47,6 +47,8 @@ def _next_window_code(device: TOTPDevice) -> str:
 
 
 def _password_only(client, user):
+    """Start a new session with the current persisted authentication hash."""
+    user.refresh_from_db(fields=["password"])
     client.force_login(user)
 
 

@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Zeitstrom-Live-Aktualisierung nach htmx-Initialisierung** (#2644) — Die erste Hintergrundaktualisierung wartet auf die übernommene htmx-Konfiguration und verhindert dadurch CSP-Verstöße beim Übernehmen zugeklappter Detailbereiche.
+- **Andere Sitzungen bei 2FA-Gerätewechsel und Deaktivierung widerrufen** (#2640) — Beide Aktionen melden alle anderen Sitzungen des Kontos bei deren nächster Anfrage ab, erhalten die ausführende Sitzung und lassen bei Fehlern den bisherigen Faktor gültig.
 
 ## [0.99.8] - 2026-10-23
 
