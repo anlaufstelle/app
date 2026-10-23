@@ -563,6 +563,8 @@ Afterwards, the organization, facility, default settings, the **default catalog 
 
 > ⚠️ **Domain packages are replacements, not additions.** Load a domain package with `setup_facility --package <name>` against a fresh facility. `load_package --package <name>` aborts if it finds type or field slugs that do not belong to the selected package -- including during a dry run. Repeating the same package remains allowed. The default catalog is the existing-installation case: `--default` or `--package default` retains its documented write-back semantics.
 
+> **Review file sources deliberately:** `load_package --file <path>` does not run the check for foreign catalog slugs, even when the file contains the same content as a bundled domain package. RLS and schema checks and the loader's conflict checks remain active. Before deliberately importing a file, review the package content and target facility, have a current backup ready, and inspect the run with `--dry-run` first.
+
 > **Retrofitting an existing facility:** For a facility that already exists -- created in the Django admin under **Anlaufstelle Core > Facilities**, or deliberately started empty with `--no-default-package` -- the same default catalog can be applied afterwards:
 >
 > ```bash
@@ -2557,6 +2559,6 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-14 -->
-<!-- translation-date: 2026-10-14 -->
-<!-- source-hash: 5397ee74d277d8d23c43357fa4cbac66dc4e7549 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- source-hash: 70f98f73ce29b01ad1b75c074b15f12c47fa5635 -->

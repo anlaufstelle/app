@@ -564,6 +564,8 @@ Anschließend sind Organisation, Einrichtung, Standardeinstellungen, der **Stand
 
 > ⚠️ **Domänen-Pakete sind Ersatz, nicht Zusatz.** Laden Sie ein Domänen-Paket mit `setup_facility --package <name>` gegen eine frische Einrichtung. `load_package --package <name>` bricht bei Typ- oder Feld-Slugs ab, die nicht zum gewählten Paket gehören — auch im Dry-Run. Ein erneuter Lauf desselben Pakets bleibt erlaubt. Der Standardkatalog ist der Bestandsfall: `--default` beziehungsweise `--package default` synchronisiert seine Paketwerte zurück.
 
+> **Dateiquelle bewusst prüfen:** `load_package --file <pfad>` durchläuft die Prüfung auf fremde Katalog-Slugs nicht — auch dann nicht, wenn die Datei denselben Inhalt wie ein mitgeliefertes Domänen-Paket hat. RLS- und Schema-Prüfungen sowie die Konfliktprüfungen des Loaders bleiben aktiv. Vor einem bewussten Dateiimport Paketinhalt und Ziel-Einrichtung prüfen, ein aktuelles Backup bereithalten und den Lauf zuerst mit `--dry-run` prüfen.
+
 > **Bereits bestehende Einrichtung nachrüsten:** Für eine Einrichtung, die es schon gibt — im Django-Admin unter **Anlaufstelle Core → Einrichtungen** angelegt oder mit `--no-default-package` bewusst leer gestartet — spielt derselbe Standardkatalog nachträglich ein:
 >
 > ```bash
