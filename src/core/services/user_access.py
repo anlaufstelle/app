@@ -28,11 +28,11 @@ from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 
 from core.models import AuditLog, User
 from core.models import EncryptedTOTPDevice as TOTPDevice
-from core.models.user import SessionRevocationError
 from core.services.audit import audit_event
 from core.services.form_state import require_form_state, sign_form_state
 from core.services.security import LOCKOUT_THRESHOLD, LOCKOUT_WINDOW, is_locked, send_invite_email, unlock
 from core.services.security.credentials import RevocationReason, revoke_credentials
+from core.services.security.mfa import mfa_change_transaction, revoke_mfa_sessions
 
 logger = logging.getLogger(__name__)
 
@@ -371,14 +371,8 @@ def reset_user_mfa(target: User, *, actor, ip_address: str | None = None) -> MFA
     """
     _assert_can_reset_mfa(target, actor)
 
-    with transaction.atomic():
-        # Lock the row under the facility the check above saw: an account moved
-        # to another facility in the meantime is not found instead of being
-        # reset by an administrator who no longer manages it. The check then
-        # runs again on the locked row (e.g. a concurrent role change).
-        locked = User.objects.select_for_update().filter(facility=target.facility, pk=target.pk).first()
-        if locked is None:
-            raise PermissionDenied("Second-factor reset is not allowed for this account.")
+    # The facility-bound lock also rejects an account moved since authorization.
+    with mfa_change_transaction(target) as locked:
         _assert_can_reset_mfa(locked, actor)
         totp_devices = TOTPDevice.objects.filter(user=locked)
         passkeys = _webauthn_credentials().filter(user=locked)
@@ -391,9 +385,7 @@ def reset_user_mfa(target: User, *, actor, ip_address: str | None = None) -> MFA
         )
         if not result.removed_anything:
             return result
-        locked.revoke_sessions()
-        if User.objects.filter(facility=locked.facility, pk=locked.pk).update(password=locked.password) != 1:
-            raise SessionRevocationError("The revoked password hash of the target was not stored.")
+        revoke_mfa_sessions(locked)
         totp_devices.delete()
         passkeys.delete()
         backup_devices.delete()

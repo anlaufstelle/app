@@ -6,14 +6,18 @@ import base64
 import hmac
 import re
 import secrets
+from contextlib import contextmanager
 
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils.crypto import salted_hmac
 from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 
-# TOTP-Zugriff ueber das Proxy-Modell mit at-rest verschluesseltem Secret
-# (Refs #1362, ADR-031) — ``verify_token`` entschluesselt transparent.
 from core.models import EncryptedTOTPDevice as TOTPDevice
+
+# TOTP access uses the proxy model with an encrypted secret (ADR-031).
+from core.models import User
+from core.models.user import SessionRevocationError
 
 BACKUP_CODES_COUNT = 10
 BACKUP_DEVICE_NAME = "backup"
@@ -167,3 +171,30 @@ def verify_totp_or_backup(user, token: str) -> bool:
     if device is not None and _has_totp_form(token, device):
         return device.verify_token(token)
     return False
+
+
+@contextmanager
+def mfa_change_transaction(user: User, *, require_current_session: bool = False):
+    """Lock the authorized account through factor changes and their audit write."""
+    with transaction.atomic():
+        locked = User.objects.select_for_update().filter(facility=user.facility_id, pk=user.pk).first()
+        if locked is None:
+            # Preserve the administrative reset's denial contract (Refs #2640).
+            operation = "change" if require_current_session else "reset"
+            raise PermissionDenied(f"Second-factor {operation} is not allowed for this account.")
+        if require_current_session and (not locked.is_active or locked.password != user.password):
+            raise PermissionDenied("The account authentication changed during the second-factor operation.")
+        yield locked
+
+
+def revoke_mfa_sessions(locked: User) -> None:
+    """Persist a fresh session nonce inside ``mfa_change_transaction``.
+
+    The row lock serializes changes against other factor changes and password
+    writes. A signal-free update preserves the offline salt. Device changes
+    and auditing must share the caller's transaction, so any failure restores
+    the old factor and auth hash. No bounded session scan is involved.
+    """
+    locked.revoke_sessions()
+    if User.objects.filter(facility=locked.facility_id, pk=locked.pk).update(password=locked.password) != 1:
+        raise SessionRevocationError("The revoked password hash of the target was not stored.")

@@ -908,3 +908,22 @@ class TestResetUnderRlsRole:
         assert response.status_code == 302
         assert _factor_rows(foreign_staff) == (0, 0, 0, 0)
         assert _reset_rows(foreign_staff).get().facility_id == foreign_staff.facility_id
+
+
+def test_admin_reset_audit_failure_rolls_back_everything(admin_user, staff_user, monkeypatch):
+    old = TOTPDevice.objects.create(user=staff_user, confirmed=True)
+    browser = _verified_client(staff_user)
+    hash_before = staff_user.password
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("Audit unavailable")
+
+    monkeypatch.setattr(AuditLog, "save", fail)
+    with pytest.raises(RuntimeError, match="Audit unavailable"):
+        reset_user_mfa(staff_user, actor=admin_user)
+    monkeypatch.undo()
+
+    assert User.objects.get(pk=staff_user.pk).password == hash_before
+    assert TOTPDevice.objects.filter(pk=old.pk, confirmed=True).exists()
+    assert browser.get("/mfa/settings/").status_code == 200
+    assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_RESET_BY_ADMIN).exists()
