@@ -54,7 +54,7 @@ not re-seed). The one-off image build takes about a minute; after that the login
 available within roughly 20 seconds at
 **[http://localhost:8000/login/](http://localhost:8000/login/)**.
 
-> **No preparation needed.** You neither create a `.env` nor export an `ENCRYPTION_KEY` — the
+> **No preparation needed.** You neither create a `.env` nor export an `ENCRYPTION_KEYS` — the
 > local setup generates its own key on the first start and keeps it in a dedicated volume so
 > that encrypted development data stays readable across restarts. Background and the boundary
 > to the production path: [ADR-049](docs/adr/049-one-command-local-bootstrap.md) (German).
@@ -148,7 +148,7 @@ Create a `.env` file in the project directory (or export the variables). With th
 
 ```bash
 DJANGO_SECRET_KEY=dev-secret-key-bitte-aendern
-ENCRYPTION_KEY=<Fernet key, see below>
+ENCRYPTION_KEYS=<Fernet key, see below>
 
 # Only for your own PostgreSQL instance (example with different values):
 POSTGRES_HOST=db.example.org
@@ -158,9 +158,9 @@ POSTGRES_USER=my_user
 POSTGRES_PASSWORD=my-password
 ```
 
-`DEBUG` is not an environment variable: the settings profile decides. `manage.py` starts with `anlaufstelle.settings.dev` (`DEBUG = True`); the production settings set `DEBUG = False`. Without `DJANGO_SECRET_KEY` the development settings use an insecure dev value, the production settings require it. Without `ENCRYPTION_KEY` the development settings run in plaintext mode with a loud warning (sensitive fields are stored unencrypted).
+`DEBUG` is not an environment variable: the settings profile decides. `manage.py` starts with `anlaufstelle.settings.dev` (`DEBUG = True`); the production settings set `DEBUG = False`. Without `DJANGO_SECRET_KEY` the development settings use an insecure dev value, the production settings require it. Without `ENCRYPTION_KEYS` the development settings run in plaintext mode with a loud warning (sensitive fields are stored unencrypted).
 
-Generate an `ENCRYPTION_KEY`:
+Generate a key for `ENCRYPTION_KEYS` (comma-separated ring; one key = one entry; the former `ENCRYPTION_KEY` variable stops the start):
 
 ```bash
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
@@ -1046,7 +1046,7 @@ src/
 
 ### Key Design Decisions
 
-- **Encryption:** Sensitive fields are encrypted at the application level (`core/services/`). The `ENCRYPTION_KEY` is required in production.
+- **Encryption:** Sensitive fields are encrypted at the application level (`core/services/`). The `ENCRYPTION_KEYS` key ring is required in production.
 - **Audit log:** All security-relevant actions are written to `AuditLog` — via the typed helpers in `core/services/audit/` (direct `AuditLog.objects.create(...)` calls are blocked by an architecture test). Every `detail` key must be declared with a rationale in `core/services/audit/detail_policy.py`; an undeclared key fails the test run. Plain-text free text does not belong there — use `hmac_hash_value` or the `target_id` instead (Refs #1944).
 - **Retention:** The management command `enforce_retention` enforces retention periods.
 - **HTMX-first:** Interactive UI elements are preferably implemented via HTMX partials to keep JavaScript minimal.
@@ -1055,4 +1055,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: d136499c971f12bf6be08bcfc51e73e136f3b990 -->
+<!-- source-hash: 91825edd6035abfeab3ac5548e3479dc55be660b -->

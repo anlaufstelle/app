@@ -319,7 +319,7 @@ Beim Anlegen oder Bearbeiten eines Ereignisses gibt es ein **Datei-Upload-Feld**
 |--------|------|
 | Maximale Dateigröße | Standard 10 MiB pro Datei; Anwendungsbetreuung kann bis zur Betreibergrenze `FILE_VAULT_MAX_UPLOAD_BYTES` erhöhen (Vorgabe: 50 MiB); das strengere Limit gilt |
 | Virenscan | ClamAV, automatisch vor der Speicherung |
-| Verschlüsselung | Fernet/AES-128; installationsweiter Schlüsselring `ENCRYPTION_KEYS` (alternativ `ENCRYPTION_KEY`), gemeinsam für alle Einrichtungen; keine getrennten Einrichtungsschlüssel |
+| Verschlüsselung | Fernet/AES-128; installationsweiter Schlüsselring `ENCRYPTION_KEYS`, gemeinsam für alle Einrichtungen; keine getrennten Einrichtungsschlüssel |
 | Offline-Modus | Datei-Anhänge sind offline nicht möglich |
 
 **Wenn der Upload abgelehnt wird:** Meldet das System die Datei als infiziert, ist sie mit hoher Wahrscheinlichkeit tatsächlich befallen — **nicht einfach erneut hochladen**. Informieren Sie Ihre IT/Administration und entfernen Sie die Datei aus Ihrem Arbeitsordner.

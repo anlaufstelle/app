@@ -28,7 +28,9 @@ ENV_ASSIGNMENT = re.compile(r"(?<![A-Z0-9_])([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)=")
 ENV_LINE = re.compile(r"^#?\s*([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)=", re.MULTILINE)
 
 # Named in an operator action, but deliberately absent from ``.env.example``.
-FORWARD_ALLOWLIST: dict[str, str] = {}
+FORWARD_ALLOWLIST: dict[str, str] = {
+    "ENCRYPTION_KEY": "removed single-key variable, named in the rename action",
+}
 BASELINE = "installation baseline: set at first setup per the admin guide, not a release-time action"
 # In ``.env.example`` but not named in any operator action. Remove an entry as soon as
 # an operator action names the variable (the guard then reports it as stale).
@@ -57,7 +59,6 @@ REVERSE_ALLOWLIST: dict[str, str] = {
     "EMAIL_HOST_PASSWORD": BASELINE,
     "EMAIL_HOST_USER": BASELINE,
     "EMAIL_PORT": BASELINE,
-    "ENCRYPTION_KEY": BASELINE,
     "EXTERNAL_ORIGIN": BASELINE,
     "LEGAL_IMPRINT_FILE": BASELINE,
     "LEGAL_PRIVACY_FILE": BASELINE,

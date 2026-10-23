@@ -26,7 +26,7 @@
 | **RPO** (max. tolerierter Datenverlust) | **≤ 24 h** | Der einzurichtende Host-Cron aus [ops-runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs) läuft täglich um **02:00**. Zwischen zwei Läufen entstandene Daten sind bei Totalverlust verloren. Wer engere Ziele braucht, erhöht die Backup-Frequenz **und** die Off-Site-Sync-Frequenz. |
 | **RPO Off-Site** (Datenverlust bei Host-Totalverlust) | **≤ 24 h**, sofern Off-Site-Sync aktiv | `scripts/ops/backup.sh` synct die Retention-Stufen **vor der Rotation** in `BACKUP_OFFSITE_TARGET`. Ohne konfiguriertes Off-Site-Ziel ist der RPO bei Host-Totalverlust **unendlich** (lokale Backups gehen mit dem Host verloren) — siehe [§8](#8-offene-punkte-nicht-im-code-verdrahtet). |
 | **RTO** (Zeit bis Service wieder online auf frischem Host) | **Richtwert 2–4 h** | Setzt sich zusammen aus: Betriebssystem härten und Docker installieren (installationsabhängig) · Off-Site-Backup herunterladen (datenmengenabhängig) · DB- + Medien-Restore (~10–30 min bei mittlerer Datenmenge) · Smoke-Verifikation (~15 min). **Kein vertraglich zugesichertes SLA** — Richtwert für einen geübten Operator mit verfügbaren Schlüsseln. |
-| **RTO ohne Schlüssel** | **∞ (nicht wiederherstellbar)** | Ohne `ENCRYPTION_KEY`/`ENCRYPTION_KEYS` sind die verschlüsselten Feld-/Datei-Inhalte **dauerhaft unlesbar**; ohne `BACKUP_ENCRYPTION_KEY` ist das Backup selbst nicht entschlüsselbar. Die Schlüssel-Eskrow-Strategie ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) ist damit der kritischste RTO-Faktor. |
+| **RTO ohne Schlüssel** | **∞ (nicht wiederherstellbar)** | Ohne `ENCRYPTION_KEYS` sind die verschlüsselten Feld-/Datei-Inhalte **dauerhaft unlesbar**; ohne `BACKUP_ENCRYPTION_KEY` ist das Backup selbst nicht entschlüsselbar. Die Schlüssel-Eskrow-Strategie ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) ist damit der kritischste RTO-Faktor. |
 
 > **Die RTO-Annahme steht und fällt mit zwei Voraussetzungen:** (a) ein aktuelles Off-Site-Backup ist erreichbar und (b) die Schlüssel sind aus einem **vom Prod-Host getrennten** Speicher wiederbeschaffbar. Sind beide erfüllt, ist Recovery Routine. Fehlt eines, ist es kein Recovery mehr, sondern Datenverlust.
 
@@ -57,7 +57,7 @@ Ein vollständiges Recovery rekonstruiert **vier Kategorien**. Der aktuelle Back
    - DB-Dump (`anlaufstelle_<timestamp>.sql.gz.enc` + `.hmac`)
    - Medien-Tarball (`anlaufstelle_<timestamp>_media.tar.gz.enc` + `.hmac`). Ohne ihn fehlen alle Datei-Anhänge aus dem Encrypted File Vault.
    - authentifiziertes Zeilenzahl-Manifest (`anlaufstelle_<timestamp>.manifest` + `.hmac`). Es bindet Satzkennung, Artefakt-Hashes und die Referenzzahlen von sechs Tabellen.
-2. **Die Secrets/Schlüssel** ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) — vor allem `ENCRYPTION_KEY(S)` und `BACKUP_ENCRYPTION_KEY`.
+2. **Die Secrets/Schlüssel** ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) — vor allem `ENCRYPTION_KEYS` und `BACKUP_ENCRYPTION_KEY`.
 3. **Der externe Audit-Anker** `audit_hwm-<timestamp>.json`, der genau zum gewählten DB-/Medien-Satz gehört. Ohne ihn kann die wiederhergestellte Audit-Kette nicht gegen ihren vor dem Ausfall gesicherten Stand geprüft werden.
 4. **Die Deployment-Artefakte** — der Git-Stand bzw. das Release-Paket (Compose-Files, `deploy/postgres-init/`, `scripts/ops/`) und das Container-Image (`ghcr.io/anlaufstelle/app:<APP_VERSION-Tag>`). Der Code ist öffentlich (AGPL) und damit immer wiederbeschaffbar — er ist **nicht** der Engpass.
 
@@ -72,7 +72,7 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 | Variable | Rolle im Recovery | Code-Beleg |
 |---|---|---|
 | `BACKUP_ENCRYPTION_KEY` | Entschlüsselt das Backup selbst (`openssl enc -d`) **und** leitet den HMAC-Verify-Key ab. **Ohne ihn ist das Backup wertloser Chiffretext.** | Pflichtprüfung `: "${BACKUP_ENCRYPTION_KEY:?...}"` in [`backup.sh`](../scripts/ops/backup.sh) und [`restore.sh`](../scripts/ops/restore.sh); HMAC-Key-Ableitung in [`_backup_common.sh`](../scripts/ops/_backup_common.sh) |
-| `ENCRYPTION_KEY` **oder** `ENCRYPTION_KEYS` | Fernet-Key(s) für die **Feld- und Datei-Verschlüsselung** in der DB/im Vault. Ein wiederhergestelltes Backup ist ohne den passenden Key lesbar als Tabellenstruktur, aber alle verschlüsselten Inhalte bleiben unentschlüsselbar. Für den gewählten Backup-Satz müssen **alle darin benutzten** Keys in `ENCRYPTION_KEYS` stehen (MultiFernet, erster Key = aktiv). | Einstellungen `ENCRYPTION_KEY`/`ENCRYPTION_KEYS` in [`settings/base.py`](../src/anlaufstelle/settings/base.py); Pflichtprüfung „`ENCRYPTION_KEY` oder `ENCRYPTION_KEYS` muss in Produktion gesetzt sein" in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) |
+| `ENCRYPTION_KEYS` | Schlüsselring aus Fernet-Key(s), komma-separiert (bei einem Schlüssel ein Eintrag; die frühere Einzelvariable `ENCRYPTION_KEY` gibt es nicht mehr, ein gesetzter Wert stoppt den Start) für die **Feld- und Datei-Verschlüsselung** in der DB/im Vault. Ein wiederhergestelltes Backup ist ohne den passenden Key lesbar als Tabellenstruktur, aber alle verschlüsselten Inhalte bleiben unentschlüsselbar. Für den gewählten Backup-Satz müssen **alle darin benutzten** Keys in `ENCRYPTION_KEYS` stehen (MultiFernet, erster Key = aktiv). | Einstellung `ENCRYPTION_KEYS` in [`settings/base.py`](../src/anlaufstelle/settings/base.py); Pflichtprüfung „`ENCRYPTION_KEYS` muss in Produktion gesetzt sein" in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) |
 
 > **MultiFernet-Falle:** Ein älterer Backup-Satz kann Datenbankfelder und Dateianhänge unter mehreren Schlüsselgenerationen enthalten. Für seinen Restore braucht `ENCRYPTION_KEYS` alle darin verwendeten Schlüssel, auch wenn der aktuelle Bestand inzwischen mit `reencrypt_fields` und `reencrypt_files` vollständig rotiert wurde. Die Rotation verändert vorhandene Backups nicht. Die Schlüsselhistorie gehört getrennt vom Backup ins Eskrow und bleibt dort bis zum tatsächlichen Ablauf des letzten betroffenen lokalen oder Off-Site-Satzes; längere Aufbewahrung verlangt entsprechend längere Schlüsselaufbewahrung. Ein Restore mit nur dem heutigen Primärschlüssel kann sonst Inhalte unlesbar machen. Vor einer Entfernung aus dem aktiven Ring die Reihenfolge samt Import-/Staging-Grenzen im [Ops-Runbook § 9.5](ops-runbook.md#dateirotation-und-altschlüssel-entfernen) abarbeiten.
 >
@@ -190,7 +190,7 @@ git clone https://github.com/anlaufstelle/app.git /opt/anlaufstelle   # oder Rel
 # .env aus den eskrowten Secrets rekonstruieren (§4). chmod 600 ist Pflicht.
 cd /opt/anlaufstelle
 cp .env.example .env && chmod 600 .env
-# -> POSTGRES_*, ENCRYPTION_KEY(S), BACKUP_ENCRYPTION_KEY, DJANGO_*, ALLOWED_HOSTS, DOMAIN eintragen
+# -> POSTGRES_*, ENCRYPTION_KEYS (Schluesselring, auch bei einem einzigen Schluessel), BACKUP_ENCRYPTION_KEY, DJANGO_*, ALLOWED_HOSTS, DOMAIN eintragen
 ```
 
 ### Schritt 3 — Frisches DB-Cluster mit korrekten Rollen hochfahren

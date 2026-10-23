@@ -75,8 +75,9 @@ fail-closed nicht in ein stilles „nichts zu tun" verwandeln.
 
 `scripts/local/bootstrap.sh` erzeugt beim allerersten Start einen zufälligen
 Fernet-Schlüssel und legt ihn mit Mode 0600 in einem benannten Volume ab
-(`localstate`, gemountet auf das Home des Container-Benutzers). Ein gesetztes
-`ENCRYPTION_KEY` gewinnt weiterhin und wird unverändert durchgereicht.
+(`localstate`, gemountet auf das Home des Container-Benutzers). Ein gesetzter
+Schlüsselring `ENCRYPTION_KEYS` gewinnt weiterhin und wird unverändert durchgereicht;
+der frühere Einzelwert `ENCRYPTION_KEY` stoppt den Start mit Umbenennungshinweis (#2363).
 
 Damit bleibt die Aussage aus #1977 gültig — es gibt kein ausgeliefertes
 Fest-Geheimnis —, ohne dass vor dem ersten Start ein Handgriff nötig ist. Die
@@ -86,7 +87,7 @@ zurück.
 
 **Weitergereicht wird der Pfad, nicht der Wert.** Die Container bekommen
 `LOCAL_ENCRYPTION_KEY_FILE`; `settings/dev.py` liest die Datei, wenn
-`ENCRYPTION_KEY` leer ist. Der naheliegende Weg — der Startbefehl exportiert
+`ENCRYPTION_KEYS` leer ist; ihr Inhalt wird zum einzigen Ring-Eintrag. Der naheliegende Weg — der Startbefehl exportiert
 den gelesenen Schlüssel in seine Shell — trägt nur bis PID 1:
 `docker compose exec`/`run` startet einen neuen Prozess aus der
 Container-**Konfiguration**, nicht aus der Umgebung von PID 1. Jedes

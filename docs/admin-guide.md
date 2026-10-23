@@ -171,7 +171,7 @@ Die folgenden Tabellen dokumentieren App-Settings und Betriebsvariablen (siehe [
 |---|---|
 | `DJANGO_SECRET_KEY`, `DJANGO_AUDIT_HASH_KEY`, `ALLOWED_HOSTS`, `EXTERNAL_ORIGIN`, `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_CIDRS` | aus `.env` an `web` durchgereicht |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | aus `.env` an `web` durchgereicht; die App-Rolle bleibt RLS-beschränkt |
-| `ENCRYPTION_KEYS`/`ENCRYPTION_KEY`, `CLAMAV_ENABLED`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | aus `.env` an `web` durchgereicht |
+| `ENCRYPTION_KEYS`, `CLAMAV_ENABLED`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | aus `.env` an `web` durchgereicht |
 | `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | aus `.env` an `web` durchgereicht |
 | `SUPPORT_CONTACT` | aus `.env` an `web` durchgereicht; leer = allgemeiner Verweis auf die Anwendungsbetreuung der Einrichtung auf der Serverfehlerseite |
 | `DJANGO_SETTINGS_MODULE`, `POSTGRES_HOST`, `CLAMAV_HOST` | `DJANGO_SETTINGS_MODULE` und `POSTGRES_HOST` sind in `docker-compose.prod.yml` fest auf `anlaufstelle.settings.prod` und `db` gesetzt; `CLAMAV_HOST` ist über `.env` konfigurierbar |
@@ -232,16 +232,17 @@ Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Sup
 
 | Name | Default | Beschreibung |
 |---|---|---|
-| `ENCRYPTION_KEYS` | — | Komma-separierte Liste von Fernet-Keys. Der **erste** Key ist Write-Key (neue Daten werden damit verschlüsselt), alle weiteren sind Read-Only (Decrypt-Fallback für Rotation). |
-| `ENCRYPTION_KEY` | — | Einzelschlüssel-Betrieb (Alternative zu `ENCRYPTION_KEYS`); **abgekündigt**, Schlüsselring bevorzugt. Mindestens eine der beiden Variablen muss in Produktion gesetzt sein, sonst verweigert die App den Start. |
+| `ENCRYPTION_KEYS` | — | **Pflicht in Produktion.** Komma-separierter Schlüsselring von Fernet-Keys; bei einem einzelnen Schlüssel genau ein Eintrag. Der **erste** Key ist Write-Key (neue Daten werden damit verschlüsselt), alle Einträge entschlüsseln (Decrypt-Fallback für Rotation). Ohne mindestens einen Eintrag verweigert die App in Produktion den Start. |
+| `ENCRYPTION_KEY` | — | **Entfernt.** Der frühere Einzelschlüssel wird nicht mehr gelesen; ein gesetzter Wert stoppt den Start mit einem Umbenennungshinweis (in jedem Settings-Profil, auch neben einem gesetzten `ENCRYPTION_KEYS`). |
 
-**Einzelschlüssel → Schlüsselring migrieren:** Ist nur `ENCRYPTION_KEY` gesetzt, meldet `python manage.py check --deploy` die Warnung `core.W005` (#2240). Der Einzelschlüssel funktioniert unverändert weiter; nach Version 1.0 entfällt er, dann ist `ENCRYPTION_KEYS` die einzige unterstützte Variable. Umstellen, ohne Daten neu zu verschlüsseln:
+**Von `ENCRYPTION_KEY` auf `ENCRYPTION_KEYS` umstellen (Betreiberaktion):** Der Wert bleibt unverändert, es wird nichts neu verschlüsselt:
 
-1. Den bisherigen Wert von `ENCRYPTION_KEY` unverändert als ersten und einzigen Eintrag in `ENCRYPTION_KEYS` übernehmen: `ENCRYPTION_KEYS=<bisheriger-wert>`.
-2. `ENCRYPTION_KEY` aus der `.env` entfernen.
-3. Den Webdienst mit dem vollständigen Compose-Dateisatz (wie oben in diesem Abschnitt) neu erstellen und `python manage.py check --deploy` im Web-Container ausführen — `core.W005` erscheint nicht mehr.
+1. Den bisherigen Wert von `ENCRYPTION_KEY` unverändert als ersten und einzigen Eintrag in `ENCRYPTION_KEYS` übernehmen: `ENCRYPTION_KEYS=<bisheriger-wert>`. Existiert bereits ein Ring, nicht überschreiben, sondern zuerst Herkunft und Reihenfolge klären.
+2. `ENCRYPTION_KEY` aus der `.env` entfernen (auch aus Shell- oder Secret-Overrides).
+3. Die Container **neu erzeugen**, nicht nur neu starten — ein `restart` übernimmt geänderte Umgebungsvariablen nicht zuverlässig: den Webdienst mit dem vollständigen Compose-Dateisatz (wie oben in diesem Abschnitt) per `up -d --force-recreate web` neu erstellen; gleiches gilt für weitere Dienste, die den Schlüssel erhalten.
+4. Prüfen: `python manage.py check --deploy` im Web-Container läuft ohne Fehler durch, `/health/` antwortet mit 200, und ein vorhandener verschlüsselter Inhalt ist mit berechtigter Rolle lesbar (die Antwort 200 allein belegt keine Schlüsselkontinuität).
 
-Derselbe Schlüssel entschlüsselt danach alle vorhandenen Daten; eine spätere Rotation folgt dem Abschnitt „Schlüssel-Rotation (`ENCRYPTION_KEYS`)“.
+Alte Schlüssel erst entfernen, wenn Restore- und Datenbeleg vorliegen. Eine spätere Rotation folgt dem Abschnitt „Schlüssel-Rotation (`ENCRYPTION_KEYS`)“.
 
 **Virus-Scan (ClamAV, #524)**
 
@@ -1785,7 +1786,7 @@ Häufige Ursachen:
 | Fehlermeldung | Lösung |
 |---|---|
 | `DJANGO_SECRET_KEY muss in Produktion gesetzt sein.` | `DJANGO_SECRET_KEY` in `.env` setzen (siehe [Abschnitt 1.2](#schritt-2-umgebungsvariablen-konfigurieren)) |
-| `ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein.` | `ENCRYPTION_KEYS` oder `ENCRYPTION_KEY` in `.env` setzen (siehe [Abschnitt 1.2](#schritt-2-umgebungsvariablen-konfigurieren)) |
+| `ENCRYPTION_KEYS muss in Produktion gesetzt sein.` | `ENCRYPTION_KEYS` in `.env` setzen (siehe [Abschnitt 1.2](#schritt-2-umgebungsvariablen-konfigurieren)) |
 | `DJANGO_AUDIT_HASH_KEY muss in Produktion gesetzt sein` | `DJANGO_AUDIT_HASH_KEY` (separat vom Secret Key) in `.env` setzen (siehe [Abschnitt 1.2](#schritt-2-umgebungsvariablen-konfigurieren)) |
 | `connection refused` (Datenbank) | Prüfen, ob `db` läuft: `docker compose -f docker-compose.prod.yml ps db` |
 | `django.db.utils.OperationalError` / `password authentication failed` | Stimmen Rollen und `.env` nach einer Passwortänderung nicht mehr überein, Passwörter koordiniert mit `rotate-db-passwords.sh` rotieren. Bei einer Erstinstallation zuerst den Abschnitt [DB-Init abgebrochen](#problem-db-init-abgebrochen-rollen-fehlen) prüfen. |
@@ -1971,11 +1972,11 @@ Anlaufstelle wurde nach dem Prinzip **Privacy by Design** (Art. 25 DSGVO) entwic
 
 **Feldverschlüsselung (Fernet/AES-128):**
 
-Sensible Felder in der Datenbank werden mit dem `ENCRYPTION_KEY` verschlüsselt gespeichert. Dies gilt als zusätzliche Schutzmaßnahme über die allgemeine Datenbankzugriffskontrolle hinaus.
+Sensible Felder in der Datenbank werden mit dem Schlüsselring `ENCRYPTION_KEYS` verschlüsselt gespeichert. Dies gilt als zusätzliche Schutzmaßnahme über die allgemeine Datenbankzugriffskontrolle hinaus.
 
 **Sichtbarkeit vs. Verschlüsselung:** Die Verschlüsselung (`is_encrypted`) und Sichtbarkeitsstufe (`sensitivity`) eines Feldes haben getrennte Wirkungen; eine eigene Feldstufe Hoch erzwingt jedoch Verschlüsselung. Ein verschlüsseltes Feld kann für alle Rollen sichtbar sein, und ein nicht-verschlüsseltes Feld kann auf bestimmte Rollen eingeschränkt werden.
 
-- Der Schlüssel wird über die Umgebungsvariable `ENCRYPTION_KEY` bereitgestellt.
+- Der Schlüssel wird über die Umgebungsvariable `ENCRYPTION_KEYS` (Schlüsselring, erster Eintrag verschlüsselt) bereitgestellt. Die frühere Variable `ENCRYPTION_KEY` gibt es nicht mehr; ein gesetzter Wert stoppt den Start.
 - In der Produktion verweigert die Anwendung den Start, wenn kein Schlüssel gesetzt ist.
 - Ein Schlüsselverlust bedeutet den dauerhaften Verlust der verschlüsselten Daten.
 
@@ -2374,7 +2375,7 @@ Der PDF-Hinweiskasten benennt beide Punkte gegenüber der betroffenen Person aus
 - Führen Sie eine **Datenschutz-Folgenabschätzung (DSFA)** nach Art. 35 DSGVO durch, falls Ihre Einrichtung besonders sensible Daten (z. B. Gesundheitsdaten, Daten schutzbedürftiger Personengruppen) verarbeitet.
 - Beschränken Sie den Admin-Zugang auf das notwendige Minimum (**Least Privilege**).
 - Erzwingen Sie einen Passwortwechsel dort, wo ein Passwort **außerhalb** der Anwendung bekannt ist: Beim Fallback ohne E-Mail-Adresse setzt die Neuanlage `must_change_password` selbst, für ein nachträglich von Hand vergebenes Passwort aktivieren Sie das Feld **Passwort muss geändert werden** in der Benutzer-Bearbeitung. Bei Konten **mit** E-Mail-Adresse ersetzt der Einladungsweg diese Maßnahme — der Nutzer wählt sein Passwort dort selbst, und der abgeschlossene Setup-Schritt löscht das Kennzeichen wieder (§ 2.4, #1969).
-- Lagern Sie Backups und `ENCRYPTION_KEY` an getrennten, gesicherten Orten.
+- Lagern Sie Backups und `ENCRYPTION_KEYS` an getrennten, gesicherten Orten.
 
 ### 7.8 Optimistic Locking
 

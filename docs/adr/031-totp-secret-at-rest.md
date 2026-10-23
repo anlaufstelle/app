@@ -107,7 +107,7 @@ Primärschlüssel um, sodass ein ausrangierter Schlüssel entfernt werden kann.
   [`test_totp_secret_at_rest.py`](../../src/tests/test_totp_secret_at_rest.py)
   prüft die effektive `varchar`-Breite und fängt eine unbeabsichtigte
   Re-Verengung früh (rot im Testlauf, bevor es produktiv aufschlägt).
-- **−** Ohne `ENCRYPTION_KEY(S)` ist kein TOTP-Login möglich — derselbe
+- **−** Ohne `ENCRYPTION_KEYS` ist kein TOTP-Login möglich — derselbe
   Boot-Time-Hard-Fail wie für alle Fernet-Felder gilt (bewusst).
 - **−** Ein Klartext-`TOTPDevice`-Zugriff (Basisklasse) an neuem Code würde am
   verschlüsselten Secret scheitern; die Zugriffsschicht ist deshalb auf

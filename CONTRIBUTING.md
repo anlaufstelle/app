@@ -55,7 +55,7 @@ erneut). Der einmalige Image-Bau dauert etwa eine Minute; danach ist die Anmeldu
 20 Sekunden unter **[http://localhost:8000/login/](http://localhost:8000/login/)** erreichbar.
 
 > **Keine Vorbereitung nötig.** Du legst weder eine `.env` an noch exportierst du einen
-> `ENCRYPTION_KEY` — das lokale Setup erzeugt sich seinen Schlüssel beim ersten Start selbst und
+> `ENCRYPTION_KEYS` — das lokale Setup erzeugt sich seinen Schlüssel beim ersten Start selbst und
 > legt ihn in einem eigenen Volume ab, damit verschlüsselte Entwicklungsdaten über Neustarts
 > hinweg lesbar bleiben. Hintergrund und Abgrenzung zum Produktionspfad:
 > [ADR-049](docs/adr/049-one-command-local-bootstrap.md).
@@ -151,7 +151,7 @@ Lege eine `.env`-Datei im Projektverzeichnis an (oder exportiere die Variablen).
 
 ```bash
 DJANGO_SECRET_KEY=dev-secret-key-bitte-aendern
-ENCRYPTION_KEY=<Fernet-Schlüssel, siehe unten>
+ENCRYPTION_KEYS=<Fernet-Schlüssel, siehe unten>
 
 # Nur für eine eigene PostgreSQL-Instanz (Beispiel mit abweichenden Werten):
 POSTGRES_HOST=db.example.org
@@ -161,9 +161,9 @@ POSTGRES_USER=mein_nutzer
 POSTGRES_PASSWORD=mein-passwort
 ```
 
-`DEBUG` gibt es nicht als Umgebungsvariable: Das Settings-Profil entscheidet. `manage.py` startet mit `anlaufstelle.settings.dev` (`DEBUG = True`); die Produktions-Settings setzen `DEBUG = False`. Ohne `DJANGO_SECRET_KEY` setzen die Entwicklungs-Settings einen unsicheren Dev-Wert, die Produktions-Settings verlangen ihn. Ohne `ENCRYPTION_KEY` laufen die Entwicklungs-Settings mit lauter Warnung im Klartextmodus (sensible Felder werden unverschlüsselt gespeichert).
+`DEBUG` gibt es nicht als Umgebungsvariable: Das Settings-Profil entscheidet. `manage.py` startet mit `anlaufstelle.settings.dev` (`DEBUG = True`); die Produktions-Settings setzen `DEBUG = False`. Ohne `DJANGO_SECRET_KEY` setzen die Entwicklungs-Settings einen unsicheren Dev-Wert, die Produktions-Settings verlangen ihn. Ohne `ENCRYPTION_KEYS` laufen die Entwicklungs-Settings mit lauter Warnung im Klartextmodus (sensible Felder werden unverschlüsselt gespeichert).
 
-Einen `ENCRYPTION_KEY` erzeugen:
+Einen Schlüssel für `ENCRYPTION_KEYS` erzeugen (komma-separierter Ring; ein Schlüssel = ein Eintrag; die frühere Variable `ENCRYPTION_KEY` stoppt den Start):
 
 ```bash
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
@@ -1059,7 +1059,7 @@ src/
 
 ### Wichtige Designentscheidungen
 
-- **Verschlüsselung:** Sensible Felder werden auf Anwendungsebene verschlüsselt (`core/services/`). Der `ENCRYPTION_KEY` ist Pflicht in Produktion.
+- **Verschlüsselung:** Sensible Felder werden auf Anwendungsebene verschlüsselt (`core/services/`). Der Schlüsselring `ENCRYPTION_KEYS` ist Pflicht in Produktion.
 - **Audit-Log:** Alle sicherheitsrelevanten Aktionen werden in `AuditLog` geschrieben — über die typed Helper aus `core/services/audit/` (direkte `AuditLog.objects.create(...)` blockt ein Architekturtest). Jeder `detail`-Schlüssel muss in `core/services/audit/detail_policy.py` mit Begründung deklariert sein; ein neuer Schlüssel scheitert im Testlauf. Klartext-Freitext gehört nicht hinein — stattdessen `hmac_hash_value` oder die `target_id` verwenden (Refs #1944).
 - **Retention:** Das Management-Command `enforce_retention` setzt Löschfristen durch.
 - **HTMX-First:** Interaktive UI-Elemente werden bevorzugt über HTMX-Partials realisiert, um JavaScript minimal zu halten.

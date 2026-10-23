@@ -173,7 +173,7 @@ The following tables document application settings and operating variables (see 
 |---|---|
 | `DJANGO_SECRET_KEY`, `DJANGO_AUDIT_HASH_KEY`, `ALLOWED_HOSTS`, `EXTERNAL_ORIGIN`, `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_CIDRS` | passed from `.env` to `web` |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | passed from `.env` to `web`; the app role remains RLS-restricted |
-| `ENCRYPTION_KEYS`/`ENCRYPTION_KEY`, `CLAMAV_ENABLED`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | passed from `.env` to `web` |
+| `ENCRYPTION_KEYS`, `CLAMAV_ENABLED`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | passed from `.env` to `web` |
 | `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | passed from `.env` to `web` |
 | `SUPPORT_CONTACT` | passed from `.env` to `web`; empty shows a generic reference to the facility's application support on the server-error page |
 | `DJANGO_SETTINGS_MODULE`, `POSTGRES_HOST`, `CLAMAV_HOST` | `DJANGO_SETTINGS_MODULE` and `POSTGRES_HOST` are fixed in `docker-compose.prod.yml` to `anlaufstelle.settings.prod` and `db`; `CLAMAV_HOST` is configurable through `.env` |
@@ -234,16 +234,17 @@ Anlaufstelle separates three DB roles: a hardcoded `postgres` bootstrap superuse
 
 | Name | Default | Description |
 |---|---|---|
-| `ENCRYPTION_KEYS` | -- | Comma-separated list of Fernet keys. The **first** key is the write key (new data is encrypted with it); all others are read-only (decrypt fallback during rotation). |
-| `ENCRYPTION_KEY` | -- | Single-key operation (alternative to `ENCRYPTION_KEYS`); **deprecated**, a key ring is preferred. At least one of the two variables must be set in production; otherwise the app refuses to start. |
+| `ENCRYPTION_KEYS` | -- | **Required in production.** Comma-separated key ring of Fernet keys; a single key is a ring with exactly one entry. The **first** key is the write key (new data is encrypted with it); every entry decrypts (decrypt fallback during rotation). Without at least one entry the app refuses to start in production. |
+| `ENCRYPTION_KEY` | -- | **Removed.** The former single key is no longer read; a set value stops the start with a rename hint (in every settings profile, also next to a set `ENCRYPTION_KEYS`). |
 
-**Migrating from a single key to a key ring:** If only `ENCRYPTION_KEY` is set, `python manage.py check --deploy` reports the warning `core.W005` (#2240). The single key keeps working unchanged; it will be removed after version 1.0, after which `ENCRYPTION_KEYS` is the only supported variable. To switch over without re-encrypting any data:
+**Switching from `ENCRYPTION_KEY` to `ENCRYPTION_KEYS` (operator action):** The value stays unchanged, nothing is re-encrypted:
 
-1. Copy the current value of `ENCRYPTION_KEY` unchanged as the first and only entry into `ENCRYPTION_KEYS`: `ENCRYPTION_KEYS=<previous-value>`.
-2. Remove `ENCRYPTION_KEY` from `.env`.
-3. Recreate the web service with the full set of Compose files (as described earlier in this section) and run `python manage.py check --deploy` in the web container -- `core.W005` no longer appears.
+1. Copy the current value of `ENCRYPTION_KEY` unchanged as the first and only entry into `ENCRYPTION_KEYS`: `ENCRYPTION_KEYS=<previous-value>`. If a ring already exists, do not overwrite it; clarify its origin and order first.
+2. Remove `ENCRYPTION_KEY` from `.env` (also from shell or secret overrides).
+3. **Recreate** the containers, do not just restart them -- a `restart` does not reliably pick up changed environment variables: recreate the web service with the full set of Compose files (as described earlier in this section) using `up -d --force-recreate web`; the same applies to any other service that receives the key.
+4. Verify: `python manage.py check --deploy` in the web container finishes without errors, `/health/` answers 200, and an existing encrypted item is readable with an authorized role (a 200 alone does not prove key continuity).
 
-The same key then decrypts all existing data; a later rotation follows the section "Key Rotation (`ENCRYPTION_KEYS`)".
+Remove old keys only after restore and data evidence exists. A later rotation follows the section "Key Rotation (`ENCRYPTION_KEYS`)".
 
 **Virus Scanning (ClamAV, #524)**
 
@@ -1786,7 +1787,7 @@ Common causes:
 | Error Message | Solution |
 |---|---|
 | `DJANGO_SECRET_KEY muss in Produktion gesetzt sein.` | Set `DJANGO_SECRET_KEY` in `.env` (see [Section 1.2](#step-2-configure-environment-variables)) |
-| `ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein.` | Set `ENCRYPTION_KEYS` or `ENCRYPTION_KEY` in `.env` (see [Section 1.2](#step-2-configure-environment-variables)) |
+| `ENCRYPTION_KEYS muss in Produktion gesetzt sein.` | Set `ENCRYPTION_KEYS` in `.env` (see [Section 1.2](#step-2-configure-environment-variables)) |
 | `DJANGO_AUDIT_HASH_KEY muss in Produktion gesetzt sein` | Set `DJANGO_AUDIT_HASH_KEY` (separate from the secret key) in `.env` (see [Section 1.2](#step-2-configure-environment-variables)) |
 | `connection refused` (database) | Check whether `db` is running: `docker compose -f docker-compose.prod.yml ps db` |
 | `django.db.utils.OperationalError` / `password authentication failed` | If roles and `.env` diverged after a password change, rotate passwords together with `rotate-db-passwords.sh`. During initial setup, first check [DB initialization aborted](#problem-db-initialization-aborted-roles-missing). |
@@ -1973,11 +1974,11 @@ Anlaufstelle was developed following the principle of **Privacy by Design** (Art
 
 **Field Encryption (Fernet/AES-128):**
 
-Sensitive fields in the database are stored encrypted using the `ENCRYPTION_KEY`. This serves as an additional protective measure beyond general database access controls.
+Sensitive fields in the database are stored encrypted using the `ENCRYPTION_KEYS` key ring. This serves as an additional protective measure beyond general database access controls.
 
 **Visibility vs. encryption:** Field encryption (`is_encrypted`) and sensitivity (`sensitivity`) have separate effects; a field's own High level nevertheless enforces encryption. An encrypted field may be visible to all roles, and a non-encrypted field can be restricted to certain roles.
 
-- The key is provided via the `ENCRYPTION_KEY` environment variable.
+- The key is provided via the `ENCRYPTION_KEYS` environment variable (key ring, the first entry encrypts). The former `ENCRYPTION_KEY` variable no longer exists; a set value stops the start.
 - In production, the application refuses to start if no key is set.
 - Loss of the key means permanent loss of the encrypted data.
 
@@ -2374,7 +2375,7 @@ The PDF notice box states both points explicitly to the data subject -- the reco
 - Conduct a **Data Protection Impact Assessment** (Art. 35 GDPR / Datenschutz-Folgenabschaetzung -- DSFA under German law) if your facility processes particularly sensitive data (e.g., health data, data of vulnerable individuals).
 - Restrict admin access to the minimum necessary (**Least Privilege**).
 - Enforce a password change wherever a password is known **outside** the application: for the fallback without an email address, account creation sets `must_change_password` itself; for a password you assign by hand afterwards, tick the **Passwort muss geändert werden** ("Password must be changed") field in the user edit form. For accounts **with** an email address the invitation flow replaces this measure -- the user picks their own password there, and the completed setup step clears the flag again (§ 2.4, #1969).
-- Store backups and the `ENCRYPTION_KEY` in separate, secured locations.
+- Store backups and the `ENCRYPTION_KEYS` in separate, secured locations.
 
 ### 7.8 Optimistic Locking
 
@@ -2574,4 +2575,6 @@ Agree review dates and responsibilities organisationally. Local pattern detectio
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: 7c684f495de0c8fa4db7692daabe897a3fc16b02 -->
+<!-- source-hash: ca0ce3ac2c0bb116cc4de3ae6965ea0c91667e59 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-14 -->

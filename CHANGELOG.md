@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Erforderliche Betreiber-Aktionen
 
-- Keine.
+- **`ENCRYPTION_KEY` in `ENCRYPTION_KEYS` umbenennen** (#2363) — Vor dem Update in `.env` bzw. `.env.demo`/`.env.dev`/`.env.staging` den Wert von `ENCRYPTION_KEY` **unverändert** als einzigen Eintrag nach `ENCRYPTION_KEYS` übernehmen (`ENCRYPTION_KEYS=<bisheriger-wert>`; Komma-Liste, der erste Eintrag verschlüsselt) und die Zeile `ENCRYPTION_KEY` entfernen; ein bereits vorhandener Ring wird nicht überschrieben. Danach die Container **neu erzeugen** (`docker compose … up -d --force-recreate web`, nicht nur `restart`) und prüfen: `docker compose … exec -T web python manage.py check --deploy` ohne Fehler, `/health/` antwortet mit 200, ein vorhandener verschlüsselter Inhalt ist mit berechtigter Rolle lesbar. Ohne diese Umstellung startet die Anwendung nicht mehr. Lokale Entwicklungs-`.env`-Dateien, Secret-Overrides und CI-Variablen ebenso umstellen. Anleitung: Admin-Guide, Abschnitt „Von `ENCRYPTION_KEY` auf `ENCRYPTION_KEYS` umstellen“.
 
 ### Security
 
@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Einzelschlüssel `ENCRYPTION_KEY` entfernt — Breaking Change** (#2363) — Die Feldverschlüsselung liest ihre Schlüssel ausschließlich aus dem Schlüsselring `ENCRYPTION_KEYS`; ein gesetztes `ENCRYPTION_KEY` stoppt den Start in jedem Settings-Profil mit Umbenennungshinweis (auch neben einem gesetzten Ring) und wird nicht mehr stillschweigend ignoriert. Die Systemprüfung `core.W005` entfällt. Lokaler Stack, Setup-/Worktree-Werkzeuge, Compose-Vorlagen, Workflows und Release-Prüfungen sind auf den Ring umgestellt; eine lokale Schlüsseldatei füllt den Ring mit einem Eintrag. Schlüsselwert, Verschlüsselung und der aus dem ersten Schlüssel abgeleitete Idempotenz-Pepper bleiben unverändert. Upgrade-Schritte siehe „Erforderliche Betreiber-Aktionen“.
 - **Offline-Skripte minifiziert** (#2011) — Neun eigene Kernmodule werden als reproduzierbare, kleinere Dateien ausgeliefert; lesbare Quellen und Skriptreihenfolge bleiben erhalten.
 - **Website-Nachführung als Release-Abschluss** (#2649) — Die Checkliste verlangt den Website-Abgleich nach Public-Verify, GitHub-Release und Demo-Deploy, eine Ruleset-Sichtprüfung vor der Veröffentlichung und ausschließlich tatsächlich erzeugte Nachweise.
 

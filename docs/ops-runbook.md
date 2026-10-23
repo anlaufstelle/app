@@ -116,7 +116,7 @@ fi
 ```
 
 
-> **Einzelschlüssel abgekündigt (#2240):** Meldet `python manage.py check --deploy` die Warnung `core.W005`, läuft die Instanz noch mit `ENCRYPTION_KEY` statt mit dem Schlüsselring `ENCRYPTION_KEYS`. Das Update ist davon nicht betroffen; vor der Entfernung nach Version 1.0 den Wert unverändert nach `ENCRYPTION_KEYS` übernehmen und `ENCRYPTION_KEY` entfernen — Anleitung im [Admin-Guide, Abschnitt „Einzelschlüssel → Schlüsselring migrieren“](admin-guide.md#vollständige-umgebungsvariablen-referenz).
+> **Einzelschlüssel entfernt (#2363):** Die Variable `ENCRYPTION_KEY` wird nicht mehr gelesen. Ist sie noch gesetzt, stoppt der Start mit einem Umbenennungshinweis — vor dem Update den Wert unverändert als einzigen Eintrag nach `ENCRYPTION_KEYS` übernehmen, `ENCRYPTION_KEY` entfernen und die Container neu erzeugen (nicht nur neu starten). Anleitung im [Admin-Guide, Abschnitt „Von `ENCRYPTION_KEY` auf `ENCRYPTION_KEYS` umstellen“](admin-guide.md#vollständige-umgebungsvariablen-referenz). Bei Neuinstallation und Notfall-Wiederherstellung wird der Schlüssel von Anfang an als `ENCRYPTION_KEYS` in die `.env` eingetragen.
 
 ### 1.2 Deploy-Schritte
 
@@ -220,7 +220,7 @@ Invarianten, die fuer **jeden** Stack gelten:
 - Der `db`-Service laedt **kein** `env_file`, sondern setzt seinen `environment:`-Block ueber Compose-Interpolation — sonst waere `POSTGRES_USER` die App-Rolle und damit der Bootstrap-Superuser.
 - Jeder Stack setzt `REQUIRE_ADMIN_DB_ROLE: "true"`; der Pfad ohne separate Admin-Rolle (App-Rolle wird selbst Owner) ist damit ausgeschlossen.
 - Die App-Rolle ist nirgends Owner und nirgends `SUPERUSER`/`BYPASSRLS`.
-- `web` laedt **kein** `env_file`, sondern eine explizite Runtime-Allowlist (Refs #1962). Unter den **Anwendungsdiensten** sehen Admin-/Bootstrap-Secrets nur `maintenance` und `cron`; der `db`-Service bekommt sie zwangslaeufig ebenfalls (`POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `ADMIN_DB_PASSWORD`) — er legt die Rollen ja an. Er erhaelt aber ausschliesslich die dafuer noetigen Werte und keine Anwendungs-Secrets (`DJANGO_SECRET_KEY`, `ENCRYPTION_KEY*`).
+- `web` laedt **kein** `env_file`, sondern eine explizite Runtime-Allowlist (Refs #1962). Unter den **Anwendungsdiensten** sehen Admin-/Bootstrap-Secrets nur `maintenance` und `cron`; der `db`-Service bekommt sie zwangslaeufig ebenfalls (`POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `ADMIN_DB_PASSWORD`) — er legt die Rollen ja an. Er erhaelt aber ausschliesslich die dafuer noetigen Werte und keine Anwendungs-Secrets (`DJANGO_SECRET_KEY`, `ENCRYPTION_KEYS`).
 
 
 ---
@@ -937,7 +937,8 @@ docker compose -f docker-compose.prod.yml logs web --no-log-prefix 2>&1 \
 | Log-Muster | Bedeutung | Aktion |
 |------------|-----------|--------|
 | `django.db.utils.OperationalError: failed to resolve host 'db'` bzw. `connection failed: connection to server at … failed: Connection refused` | DB-Container gestoppt bzw. noch nicht bereit | DB-Container pruefen, siehe [5.1](#51-db-verbindung-fehlgeschlagen) |
-| `ImproperlyConfigured: ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein` | Schluessel fehlt in der `.env` | `.env` pruefen |
+| `ImproperlyConfigured: ENCRYPTION_KEYS muss in Produktion gesetzt sein` | Schluesselring fehlt in der `.env` | `.env` pruefen |
+| `ImproperlyConfigured: ENCRYPTION_KEY is no longer supported …` | Alte Variable `ENCRYPTION_KEY` noch gesetzt | Wert unveraendert nach `ENCRYPTION_KEYS` uebernehmen, `ENCRYPTION_KEY` entfernen, Container neu erzeugen |
 | `relation "core_*" does not exist` | Migrationen nicht gelaufen | Migrations-One-Shot aus [1.2](#12-deploy-schritte) Schritt 3 ausfuehren (nicht `migrate` im `web`-Container: dort fehlt die Owner-Rolle) |
 | `OSError: write error` | Festplatte voll | Speicherplatz freigeben, siehe [5.5](#55-speicherplatz-voll) |
 | `[CRITICAL] WORKER TIMEOUT` | Gunicorn-Worker-Timeout | Siehe [5.4](#54-gunicorn-timeout) |
@@ -1151,8 +1152,10 @@ docker compose -f docker-compose.prod.yml logs web --tail=100
 
 # 2. Haeufige Fehler
 #    "ImproperlyConfigured" → Fehlende oder ungueltige Env-Vars in .env
-#    "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein"
-#                         → Schluessel in .env fehlt
+#    "ENCRYPTION_KEYS muss in Produktion gesetzt sein"
+#                         → Schluesselring in .env fehlt
+#    "ENCRYPTION_KEY is no longer supported"
+#                         → Altvariable noch gesetzt: nach ENCRYPTION_KEYS umbenennen
 #    "OperationalError … Connection refused" bzw. "failed to resolve host 'db'"
 #                         → DB noch nicht bereit bzw. gestoppt (siehe 5.1)
 

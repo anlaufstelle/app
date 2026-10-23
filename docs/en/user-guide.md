@@ -331,7 +331,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 
 - **Upload:** The contact form includes a file upload field. Pick a file from your device and save the event as usual. On people and cases it works identically: pick the file in the form, save the record.
 - **Virus scan:** Before saving, every file is automatically checked by a virus scanner (ClamAV). Infected files are rejected -- you receive an error and the event is not saved.
-- **Encryption:** All attachments are stored encrypted (Fernet, AES-128-CBC with HMAC-SHA256). Keys are held in the installation-wide `ENCRYPTION_KEYS` key ring (alternatively `ENCRYPTION_KEY`), shared by all facilities; facilities do not have separate key rings. That means the file is not readable in cleartext on the server and can only be retrieved through Anlaufstelle itself.
+- **Encryption:** All attachments are stored encrypted (Fernet, AES-128-CBC with HMAC-SHA256). Keys are held in the installation-wide `ENCRYPTION_KEYS` key ring, shared by all facilities; facilities do not have separate key rings. That means the file is not readable in cleartext on the server and can only be retrieved through Anlaufstelle itself.
 - **Image metadata is removed:** For images (JPG, PNG, WebP, TIFF -- not for GIF and BMP) the embedded metadata is deleted on upload -- above all the **GPS capture location** (on phone photos often the home or current address of the person concerned), plus device model, capture time and the embedded thumbnail, which may still show the uncropped original. The picture itself stays unchanged, and portrait photos stay portrait. This does **not** happen for PDF and Office files -- their document properties may still name the social workers member who worked on them.
 - **Image limits:** Raster images may have up to 40 million pixels in total by default, across all frames/pages, and at most 100 frames/pages. An additional conservative image-buffer estimate must fit within 256 MiB. Images exceeding a limit are rejected with a message; small multipage images remain allowed. GIF metadata is still preserved. WebP, PNG/APNG, GIF and ICO headers are checked before opening the image. Approved SVG files are stored unchanged without rasterization. These checks do not guarantee a maximum for total encoder RAM.
 - **Maximum size:** By default, **up to 10 MiB per file** are allowed. Your application support can adjust this up to the installation-wide operator cap `FILE_VAULT_MAX_UPLOAD_BYTES` (default: 50 MiB). The stricter of the two limits applies.
@@ -1182,4 +1182,20 @@ Phone, email, date and address patterns are detected heuristically and locally o
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: 1f466ff36a7e279ba35ef2facc0128370265203e -->
+<!-- source-hash: 4ae7c4ae45121b0afa1054cc1a5d4d6a50ec6fe3 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->

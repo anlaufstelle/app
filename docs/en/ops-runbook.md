@@ -119,7 +119,7 @@ fi
 ```
 
 
-> **Single key deprecated (#2240):** If `python manage.py check --deploy` reports the warning `core.W005`, the instance still runs with `ENCRYPTION_KEY` instead of the key ring `ENCRYPTION_KEYS`. The update itself is not affected; before the removal after version 1.0, copy the value unchanged into `ENCRYPTION_KEYS` and remove `ENCRYPTION_KEY` -- see the [admin guide, "Migrating from a single key to a key ring"](admin-guide.md#full-environment-variable-reference).
+> **Single key removed (#2363):** The `ENCRYPTION_KEY` variable is no longer read. If it is still set, the start stops with a rename hint -- before updating, copy the value unchanged as the only entry into `ENCRYPTION_KEYS`, remove `ENCRYPTION_KEY`, and recreate the containers (do not just restart them). See the [admin guide, "Switching from `ENCRYPTION_KEY` to `ENCRYPTION_KEYS`"](admin-guide.md#full-environment-variable-reference). For fresh installs and emergency restores the key goes into `.env` as `ENCRYPTION_KEYS` from the start.
 
 ### 1.2 Deploy Steps
 
@@ -223,7 +223,7 @@ Invariants that hold for **every** stack:
 - The `db` service loads **no** `env_file`; it sets its `environment:` block via Compose interpolation — otherwise `POSTGRES_USER` would be the app role and therefore the bootstrap superuser.
 - Every stack sets `REQUIRE_ADMIN_DB_ROLE: "true"`, which rules out the path without a separate admin role (where the app role becomes owner itself).
 - The app role is nowhere an owner and nowhere `SUPERUSER`/`BYPASSRLS`.
-- `web` loads **no** `env_file` but an explicit runtime allowlist (Refs #1962). Among the **application services**, only `maintenance` and `cron` see admin/bootstrap secrets; the `db` service necessarily receives them as well (`POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `ADMIN_DB_PASSWORD`) — it is the service that creates the roles. It gets only those values and no application secrets (`DJANGO_SECRET_KEY`, `ENCRYPTION_KEY*`).
+- `web` loads **no** `env_file` but an explicit runtime allowlist (Refs #1962). Among the **application services**, only `maintenance` and `cron` see admin/bootstrap secrets; the `db` service necessarily receives them as well (`POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `ADMIN_DB_PASSWORD`) — it is the service that creates the roles. It gets only those values and no application secrets (`DJANGO_SECRET_KEY`, `ENCRYPTION_KEYS`).
 
 ---
 
@@ -928,7 +928,8 @@ docker compose -f docker-compose.prod.yml logs web --no-log-prefix 2>&1 \
 | Log pattern | Meaning | Action |
 |------------|-----------|--------|
 | `django.db.utils.OperationalError: failed to resolve host 'db'` or `connection failed: connection to server at … failed: Connection refused` | DB container stopped or not ready yet | Check the DB container, see [5.1](#51-db-connection-failed) |
-| `ImproperlyConfigured: ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein` | Key missing in the `.env` | Check `.env` |
+| `ImproperlyConfigured: ENCRYPTION_KEYS muss in Produktion gesetzt sein` | Key ring missing in the `.env` | Check `.env` |
+| `ImproperlyConfigured: ENCRYPTION_KEY is no longer supported …` | Old `ENCRYPTION_KEY` variable still set | Copy the value unchanged into `ENCRYPTION_KEYS`, remove `ENCRYPTION_KEY`, recreate the containers |
 | `relation "core_*" does not exist` | Migrations not run | Run the migration one-shot from [1.2](#12-deploy-steps) step 3 (not `migrate` in the `web` container: it lacks the owner role) |
 | `OSError: write error` | Disk full | Free up disk space, see [5.5](#55-disk-space-full) |
 | `[CRITICAL] WORKER TIMEOUT` | Gunicorn worker timeout | See [5.4](#54-gunicorn-timeout) |
@@ -1142,8 +1143,10 @@ docker compose -f docker-compose.prod.yml logs web --tail=100
 
 # 2. Common errors
 #    "ImproperlyConfigured" → missing or invalid env vars in .env
-#    "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein"
-#                         → key missing in .env
+#    "ENCRYPTION_KEYS muss in Produktion gesetzt sein"
+#                         → key ring missing in .env
+#    "ENCRYPTION_KEY is no longer supported"
+#                         → old variable still set: rename to ENCRYPTION_KEYS
 #    "OperationalError … Connection refused" or "failed to resolve host 'db'"
 #                         → DB not ready yet or stopped (see 5.1)
 
@@ -3307,5 +3310,5 @@ Check lock-file drift     make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-15 -->
-<!-- source-hash: 24841a216df162df91805b8757575fca384fe1bd -->
+<!-- translation-date: 2026-10-23 -->
+<!-- source-hash: 187c84b6e39781c5cbfa18735178f06f3c19bca9 -->
