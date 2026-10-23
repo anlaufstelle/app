@@ -2574,6 +2574,4 @@ Agree review dates and responsibilities organisationally. Local pattern detectio
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
 <!-- source-hash: 7c684f495de0c8fa4db7692daabe897a3fc16b02 -->
-<!-- translation-date: 2026-10-14 -->
