@@ -80,6 +80,12 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
 
     template_name = "core/zeitstrom/index.html"
 
+    def get_login_url(self):
+        """Use the public scenario selection as the demo entry point."""
+        if getattr(settings, "DEMO_MODE", False):
+            return reverse("demo_scenario_select")
+        return super().get_login_url()
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         facility = self.request.current_facility

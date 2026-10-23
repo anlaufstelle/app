@@ -288,21 +288,17 @@ class FacilityScopeMiddleware:
         ``footer_authenticated``) rendert der Footer garantiert ohne Versions-,
         Build- und Hilfe-Anzeige (Refs #1901/#1050).
 
-        Sprache: diese Middleware liegt VOR ``UserLanguageMiddleware``, die
-        Seite rendert also, bevor die Praeferenz aktiviert waere, und laege
-        sonst immer auf ``LANGUAGE_CODE``. Der User ist hier bereits bekannt,
-        deshalb wird die Praeferenz mit derselben Regel wie dort selbst
-        aktiviert. ``Content-Language`` wird explizit gesetzt, weil
-        ``translation.override`` mit dem Renderblock endet und die aeussere
-        ``LocaleMiddleware`` den Header sonst aus der WIEDERHERGESTELLTEN
-        Request-Sprache setzte — englischer Body neben ``Content-Language:
-        de``. Sie nutzt ``setdefault`` und laesst den Wert stehen.
+        This middleware precedes UserLanguageMiddleware. Resolve the visit
+        choice before the account preference here as well. Set Content-Language
+        explicitly: translation.override ends before LocaleMiddleware handles
+        the response and would otherwise restore a different header language.
 
         Refs #2067 (Cross-Review Finding 8 + N1), #2090.
         """
         from core import context_processors
+        from core.middleware.user_language import visit_language
 
-        lang = getattr(request.user, "preferred_language", "") or settings.LANGUAGE_CODE
+        lang = visit_language(request) or getattr(request.user, "preferred_language", "") or settings.LANGUAGE_CODE
         context = {
             "csrf_token": get_token(request),
             "page_language": lang,

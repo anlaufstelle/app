@@ -490,7 +490,7 @@ def set_user_language(request):
     if language in {code for code, _ in settings.LANGUAGES}:
         # Replace stale explicit links so the next request honors this choice.
         try:
-            target = urlsplit(request.POST.get("next", ""))
+            target = urlsplit(request.POST.get("next", request.GET.get("next", "")))
         except ValueError:
             target = urlsplit("")
         query = [
