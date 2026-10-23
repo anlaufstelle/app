@@ -693,7 +693,13 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
     """
     from core.models import DocumentType, StatisticsSnapshot
     from core.reporting.registry import get_backend
-    from core.services.dashboard.external_report import _get_threshold, project_protected_rows
+    from core.services.dashboard.external_report import (
+        ORDER_AGE_CLUSTER,
+        ORDER_CATEGORY,
+        ORDER_DOCUMENT_TYPE,
+        _get_threshold,
+        project_protected_rows,
+    )
     from core.services.dashboard.shared_field_sources import collect_field_sources
     from core.services.dashboard.shared_hybrid_sources import collect_hybrid_populations
     from core.services.dashboard.shared_sources import collect_additional_populations
@@ -775,11 +781,11 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
     general["unique_clients"] = publish("active-persons", dimension="person_counts")
     sample["total"] = publish("mapped-events")
     sample["unique_clients"] = publish("active-persons", dimension="person_counts")
-    for report, table, prefix, label in (
-        (general, "by_document_type", "document-type:", "name"),
-        (general, "by_age_cluster", "age:", "cluster"),
-        (sample, "by_age_cluster", "age:", "cluster"),
-        (sample, "by_category", "category:", "name"),
+    for report, table, prefix, label, order in (
+        (general, "by_document_type", "document-type:", "name", ORDER_DOCUMENT_TYPE),
+        (general, "by_age_cluster", "age:", "cluster", ORDER_AGE_CLUSTER),
+        (sample, "by_age_cluster", "age:", "cluster", ORDER_AGE_CLUSTER),
+        (sample, "by_category", "category:", "name", ORDER_CATEGORY),
     ):
         if table not in report:
             continue
@@ -788,7 +794,7 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
         if any(resolve(identity) is None or resolve(identity) in mask.dropped for identity in identities):
             report.pop(table, None)
         else:
-            report[table] = project_protected_rows(rows, [publish(identity) for identity in identities])
+            report[table] = project_protected_rows(rows, [publish(identity) for identity in identities], order=order)
     if "by_contact_stage" in general:
         if any(resolve(f"contact-stage:{stage}") in mask.dropped for stage in raw["by_contact_stage"]):
             general.pop("by_contact_stage")
@@ -804,9 +810,9 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
     hybrid["unique_clients"] = publish("active-persons", dimension="person_counts")
     calendar_interval = is_calendar_interval(date_from, date_to)
     hybrid["total"] = publish("hybrid-mapped-events") if calendar_interval else None
-    for table, label, prefix in (
-        ("by_category", "name", "hybrid-category:"),
-        ("by_age_cluster", "cluster", "hybrid-age:"),
+    for table, label, prefix, order in (
+        ("by_category", "name", "hybrid-category:", ORDER_CATEGORY),
+        ("by_age_cluster", "cluster", "hybrid-age:", ORDER_AGE_CLUSTER),
     ):
         rows = hybrid.get(table, [])
         identities = [f"{prefix}{row[label]}" for row in rows]
@@ -815,7 +821,7 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
         ):
             hybrid.pop(table, None)
         elif table in hybrid:
-            hybrid[table] = project_protected_rows(rows, [publish(identity) for identity in identities])
+            hybrid[table] = project_protected_rows(rows, [publish(identity) for identity in identities], order=order)
     return LiveRelease(general, sample, mask, datasets, hybrid)
 
 

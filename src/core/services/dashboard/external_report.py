@@ -1071,9 +1071,16 @@ def build_shared_document_type_counts(facility, date_from: date, date_to: date) 
     return {row["name"]: row["count"] for row in report.get("by_document_type", [])}
 
 
-def project_protected_rows(rows: Sequence[dict[str, Any]], counts: Sequence[int | None]) -> list[dict[str, Any]]:
-    """Attach display markers to counts already decided by the shared mask."""
-    return [{**row, "count": value, "suppressed": value is None} for row, value in zip(rows, counts, strict=True)]
+def project_protected_rows(
+    rows: Sequence[dict[str, Any]], counts: Sequence[int | None], *, order: str = ORDER_INPUT
+) -> list[dict[str, Any]]:
+    """Attach display markers to counts already decided by the shared mask.
+
+    The mask may hide rows the raw ordering still ranks by their value, so the
+    declared canonical order is applied again. No count is suppressed here.
+    """
+    projected = [{**row, "count": value, "suppressed": value is None} for row, value in zip(rows, counts, strict=True)]
+    return _canonicalize_suppressed_order(projected, order)
 
 
 def suppress_single_margin(

@@ -6,6 +6,7 @@ from datetime import date, datetime
 import pytest
 from django.utils import timezone
 
+from core.models import Client
 from core.reporting.export import export_dataset
 from core.reporting.registry import get_backend
 from tests._factories import make_document_type, make_event
@@ -215,3 +216,69 @@ def test_sparse_multi_year_calendar_family_keeps_the_small_final_remainder_priva
     whole, prefix = values
     possible = {whole - prefix} if whole is not None and prefix is not None else set(range(1, 5))
     assert 1 in possible and len(possible) >= 2
+
+
+@pytest.mark.django_db
+def test_rows_hidden_by_the_shared_mask_keep_the_value_independent_type_order(facility, admin_user, monkeypatch):
+    from core.models import DocumentType, StatisticsSnapshot
+
+    monkeypatch.setattr(timezone, "localdate", lambda: date(2026, 4, 30))
+    StatisticsSnapshot.objects.create(
+        facility=facility,
+        year=2026,
+        month=1,
+        backend_data={
+            "sample-report-1": {
+                "total": 1,
+                "unique_clients": 0,
+                "by_category": [["Kontakte", 1]],
+                "by_age_cluster": [],
+            }
+        },
+    )
+    for name, report_key, amount in (("Alpha", "excluded", 6), ("Mike", "contact", 7), ("Zulu", "excluded", 8)):
+        document_type = make_document_type(facility=facility, name=name, report_key=report_key)
+        for _ in range(amount):
+            make_event(
+                facility=facility,
+                document_type=document_type,
+                client=None,
+                created_by=admin_user,
+                occurred_at=timezone.make_aware(datetime(2026, 1, 15)),
+                data_json={},
+            )
+    make_event(
+        facility=facility,
+        document_type=DocumentType.objects.get(facility=facility, name="Mike"),
+        client=None,
+        created_by=admin_user,
+        occurred_at=timezone.make_aware(datetime(2026, 3, 15)),
+        data_json={},
+    )
+    payload = json.loads(
+        export_dataset(
+            get_backend("general-key-figures"), facility, date(2026, 1, 1), date(2026, 1, 31), format="json"
+        ).content
+    )
+    rows = [row for row in payload["records"] if row["table"] == "by_document_type"]
+    hidden = [row["label"] for row in rows if row["count"] is None]
+    visible = [row["label"] for row in rows if row["count"] is not None]
+    assert len(hidden) >= 2, "The probe needs at least two hidden types"
+    assert hidden == sorted(hidden), "Hidden types must follow the value-independent type order"
+    assert [row["label"] for row in rows] == [*visible, *hidden], "Hidden rows form the block at the end"
+
+
+def test_projected_rows_are_returned_in_their_declared_order():
+    from core.services.dashboard.external_report import ORDER_AGE_CLUSTER, ORDER_INPUT, project_protected_rows
+
+    clusters = [Client.AgeCluster.values[2], Client.AgeCluster.values[0], Client.AgeCluster.values[1]]
+    rows = [{"cluster": cluster, "count": 9 - index} for index, cluster in enumerate(clusters)]
+    projected = project_protected_rows(rows, [8, None, None], order=ORDER_AGE_CLUSTER)
+    assert [row["cluster"] for row in projected] == [
+        clusters[0],
+        *sorted(clusters[1:], key=Client.AgeCluster.values.index),
+    ]
+    assert [row["count"] for row in projected] == [8, None, None]
+    assert [row["suppressed"] for row in projected] == [False, True, True]
+    unordered = project_protected_rows(rows, [None, None, 7], order=ORDER_INPUT)
+    assert [row["cluster"] for row in unordered] == clusters
