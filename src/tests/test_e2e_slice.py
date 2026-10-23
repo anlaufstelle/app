@@ -234,7 +234,7 @@ class TestRealSuite:
     @pytest.mark.parametrize("count", [2, 4, 8])
     def test_real_slices_are_balanced(self, count: int) -> None:
         """Runtime balance replaces the former 2% static-test-count requirement (Refs #2646)."""
-        weights, _ = e2e_slice.file_weights(E2E_DIR)
+        weights, _, _ = e2e_slice.file_weights(E2E_DIR)
         loads = [sum(weights[p] for p in chunk) for chunk in e2e_slice.build_slices(E2E_DIR, count)]
         mean = sum(loads) / count
         assert max(loads) <= mean * 1.15, f"Unbalanced runtime weights: {loads}"

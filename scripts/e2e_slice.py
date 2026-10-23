@@ -72,22 +72,26 @@ def distribute(weights: dict[Path, float], slices: int) -> list[list[Path]]:
     return [sorted(bucket) for bucket in buckets]
 
 
-def file_weights(base_dir: Path, weights_file: Path = DEFAULT_WEIGHTS) -> tuple[dict[Path, float], list[str]]:
-    """Load measured weights and identify specs using the median fallback."""
+def file_weights(
+    base_dir: Path, weights_file: Path = DEFAULT_WEIGHTS
+) -> tuple[dict[Path, float], list[str], list[str]]:
+    """Load current weights, identify fallback specs, and report stale entries."""
     if not base_dir.is_dir():
         raise ValueError(f"Not a directory: {base_dir}")
-    known = load_weights(weights_file, base_dir)
+    known = load_weights(weights_file, base_dir, require_existing=False)
+    stale = sorted(name for name in known if not (base_dir / name).is_file())
+    known = {name: value for name, value in known.items() if name not in stale}
     fallback = median(known.values()) if known else 1.0
     files = discover(base_dir)
     missing = [
         path.relative_to(base_dir).as_posix() for path in files if path.relative_to(base_dir).as_posix() not in known
     ]
-    return {path: known.get(path.relative_to(base_dir).as_posix(), fallback) for path in files}, missing
+    return {path: known.get(path.relative_to(base_dir).as_posix(), fallback) for path in files}, missing, stale
 
 
 def build_slices(base_dir: Path, slices: int, weights_file: Path = DEFAULT_WEIGHTS) -> list[list[Path]]:
     """Partition all discovered specs using measured or fallback durations."""
-    weights, _ = file_weights(base_dir, weights_file)
+    weights, _, _ = file_weights(base_dir, weights_file)
     return distribute(weights, slices)
 
 
@@ -103,7 +107,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Deterministic runtime-weighted E2E partitioning.")
     parser.add_argument("--slices", type=int, required=True, help="Number of CI slices")
     parser.add_argument("--index", type=int, help="Slice index, starting at 1")
-    parser.add_argument("--summary", action="store_true", help="Print slice loads and missing measurements")
+    parser.add_argument(
+        "--summary", action="store_true", help="Print slice loads, missing measurements, and stale weights"
+    )
     parser.add_argument("--base-dir", type=Path, default=DEFAULT_BASE_DIR, help="Spec directory (default: E2E suite)")
     parser.add_argument("--weights", type=Path, default=DEFAULT_WEIGHTS, help="Versioned spec durations")
     args = parser.parse_args(argv)
@@ -112,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("Specify exactly one of --index and --summary")
 
     try:
-        weights, missing = file_weights(args.base_dir, args.weights)
+        weights, missing, stale = file_weights(args.base_dir, args.weights)
         buckets = distribute(weights, args.slices)
     except (ValueError, OSError, TypeError) as exc:
         print(f"e2e_slice: {exc}", file=sys.stderr)
@@ -126,6 +132,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"max/mean: {ratio:.3f} (target <= 1.15)")
         print(f"unmeasured: {len(missing)}")
         for name in missing:
+            print(f"  {name}")
+        print(f"stale: {len(stale)}")
+        for name in stale:
             print(f"  {name}")
         return 0
 

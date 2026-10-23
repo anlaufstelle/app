@@ -143,3 +143,29 @@ def test_converter_rejects_support_modules(tmp_path):
     source.write_text('<testsuite><testcase file="src/tests/e2e/conftest.py" time="1"/></testsuite>')
     result = run("scripts/ci/e2e_weights.py", "--from-junit", source, "--output", tmp_path / "weights.json")
     assert result.returncode != 0
+
+
+def test_slicer_ignores_stale_weights_but_validator_rejects_them(tmp_path):
+    base = tmp_path / "specs"
+    base.mkdir()
+    for name in "abc":
+        (base / f"test_{name}.py").write_text("def test_one(): pass\n")
+    weights = tmp_path / "weights.json"
+    weights.write_text(json.dumps({"test_a.py": 6, "test_b.py": 2, "test_deleted.py": 1000, "_meta": {}}))
+    args = ("--base-dir", base, "--weights", weights, "--slices", 2)
+    summary = run("scripts/e2e_slice.py", *args, "--summary")
+    assert summary.returncode == 0, summary.stderr
+    assert "stale: 1" in summary.stdout
+    assert "unmeasured: 1" in summary.stdout
+    assert "6.00s" in summary.stdout  # The stale weight must not affect the fallback median.
+    selected = []
+    for index in (1, 2):
+        result = run("scripts/e2e_slice.py", *args, "--index", index)
+        assert result.returncode == 0, result.stderr
+        selected.extend(result.stdout.splitlines())
+    assert Counter(selected) == Counter(str(path) for path in base.glob("test_*.py"))
+    existing = sorted(BASE.glob("test_*.py"))[0].name
+    weights.write_text(json.dumps({existing: 6, "test_deleted.py": 1000, "_meta": {}}))
+    validated = run("scripts/ci/e2e_weights.py", "--validate", weights)
+    assert validated.returncode != 0
+    assert "Unknown spec path: test_deleted.py" in validated.stderr

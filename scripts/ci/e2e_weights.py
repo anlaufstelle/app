@@ -21,7 +21,7 @@ BASE = ROOT / "src/tests/e2e"
 DEFAULT_WEIGHTS = Path(__file__).with_name("e2e_weights.json")
 
 
-def load_weights(path: Path, base: Path = BASE) -> dict[str, float]:
+def load_weights(path: Path, base: Path = BASE, *, require_existing: bool = True) -> dict[str, float]:
     data = json.loads(path.read_text())
     if not isinstance(data, dict) or not isinstance(data.get("_meta"), dict):
         raise ValueError("Weights must be an object with _meta metadata")
@@ -30,7 +30,7 @@ def load_weights(path: Path, base: Path = BASE) -> dict[str, float]:
         if name == "_meta":
             continue
         spec = Path(name)
-        if spec.is_absolute() or ".." in spec.parts or not (base / spec).is_file():
+        if spec.is_absolute() or ".." in spec.parts or (require_existing and not (base / spec).is_file()):
             raise ValueError(f"Unknown spec path: {name}")
         if not (spec.name.startswith("test_") or spec.name.endswith("_test.py")) or spec.suffix != ".py":
             raise ValueError(f"Not a spec file: {name}")
