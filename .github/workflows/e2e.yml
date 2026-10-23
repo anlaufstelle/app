@@ -30,7 +30,8 @@ jobs:
       # liefe die CI gruen, ohne den Rest der Suite je auszufuehren.
       E2E_SLICES: 8
     # Each slice runs serially (no -n, see the pytest step below). Sizing
-    # (Refs #1976): the suite has 1,111 test functions, cut by test count.
+    # (Refs #2646): specs are cut by versioned runtime weights; provisional
+    # weights include test-count proxies until complete measurements arrive.
     # Measured on Stage with four slices: ~6 min setup per job (checkout,
     # deps, browser, Tailwind, collectstatic) and ~104 min pytest in total;
     # three of four slices were cancelled at the 30 min limit (slowest slice
@@ -129,8 +130,16 @@ jobs:
             echo "Leerer Schnitt fuer Scheibe ${{ matrix.slice }}/$E2E_SLICES." >&2
             exit 1
           fi
-          python -m pytest $files -m "e2e" --timeout=120 --timeout-method=thread
+          python -m pytest $files -m "e2e" --timeout=120 --timeout-method=thread --junitxml=e2e-durations-${{ matrix.slice }}.xml
         env:
           DJANGO_SETTINGS_MODULE: anlaufstelle.settings.e2e
           POSTGRES_HOST: localhost
           ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
+      - name: Upload E2E durations
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: e2e-durations-${{ matrix.slice }}
+          path: e2e-durations-${{ matrix.slice }}.xml
+          if-no-files-found: error
+          retention-days: 14

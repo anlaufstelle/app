@@ -18,6 +18,7 @@ reproduzierbar.
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -107,13 +108,27 @@ class TestTestCounting:
         assert e2e_slice.count_tests(path) == 2
 
 
+def _counted_slices(base: Path, slices: int):
+    """Keep synthetic LPT fixtures explicit as runtime weights replace test counts."""
+    weights = base / "weights.json"
+    weights.write_text(
+        json.dumps(
+            {
+                **{path.name: max(e2e_slice.count_tests(path), 0.000001) for path in base.glob("test_*.py")},
+                "_meta": {},
+            }
+        )
+    )
+    return e2e_slice.build_slices(base, slices, weights)
+
+
 class TestSliceInvariants:
     """Partition + Determinismus auf einem synthetischen Baum."""
 
     def test_every_file_lands_in_exactly_one_slice(self, tmp_path: Path) -> None:
         for i, n in enumerate([7, 5, 4, 3, 3, 2, 1]):
             _write(tmp_path, f"test_f{i}.py", n)
-        slices = e2e_slice.build_slices(tmp_path, 3)
+        slices = _counted_slices(tmp_path, 3)
         flat = [p for chunk in slices for p in chunk]
         assert sorted(flat) == sorted(tmp_path.glob("test_*.py"))
         assert len(flat) == len(set(flat)), "Datei doppelt vergeben"
@@ -121,7 +136,7 @@ class TestSliceInvariants:
     def test_no_slice_is_empty(self, tmp_path: Path) -> None:
         for i, n in enumerate([9, 1, 1, 1]):
             _write(tmp_path, f"test_f{i}.py", n)
-        assert all(chunk for chunk in e2e_slice.build_slices(tmp_path, 4))
+        assert all(chunk for chunk in _counted_slices(tmp_path, 4))
 
     def test_files_without_tests_do_not_leave_a_slice_empty(self, tmp_path: Path) -> None:
         """Gewicht 0 darf keine Scheibe leer lassen — sonst laeuft sie als Voll-Lauf.
@@ -137,7 +152,7 @@ class TestSliceInvariants:
         _write(tmp_path, "test_with_tests.py", 1)
         for name in ("test_fixtures_only_a.py", "test_fixtures_only_b.py", "test_fixtures_only_c.py"):
             _write(tmp_path, name, 0)
-        buckets = e2e_slice.build_slices(tmp_path, 4)
+        buckets = _counted_slices(tmp_path, 4)
         assert all(chunk for chunk in buckets), f"leere Scheibe: {buckets}"
 
     def test_heaviest_file_is_placed_first(self, tmp_path: Path) -> None:
@@ -153,7 +168,7 @@ class TestSliceInvariants:
         """
         for name, count in (("test_a.py", 1), ("test_b.py", 2), ("test_c.py", 3), ("test_d.py", 6)):
             _write(tmp_path, name, count)
-        buckets = e2e_slice.build_slices(tmp_path, 2)
+        buckets = _counted_slices(tmp_path, 2)
         loads = [sum(e2e_slice.count_tests(path) for path in chunk) for chunk in buckets]
         assert loads == [6, 6], f"nicht nach Gewicht verteilt: {loads}"
         assert buckets[0] == [tmp_path / "test_d.py"], "die schwerste Datei gehoert zuerst vergeben"
@@ -163,13 +178,13 @@ class TestSliceInvariants:
         weights = [11, 9, 8, 6, 5, 5, 4, 3, 2, 2, 1]
         for i, n in enumerate(weights):
             _write(tmp_path, f"test_f{i}.py", n)
-        loads = [sum(e2e_slice.count_tests(p) for p in chunk) for chunk in e2e_slice.build_slices(tmp_path, 3)]
+        loads = [sum(e2e_slice.count_tests(p) for p in chunk) for chunk in _counted_slices(tmp_path, 3)]
         assert max(loads) - min(loads) <= max(weights)
 
     def test_split_is_deterministic(self, tmp_path: Path) -> None:
         for i, n in enumerate([6, 6, 5, 4, 4, 2, 1]):
             _write(tmp_path, f"test_f{i}.py", n)
-        assert e2e_slice.build_slices(tmp_path, 2) == e2e_slice.build_slices(tmp_path, 2)
+        assert _counted_slices(tmp_path, 2) == _counted_slices(tmp_path, 2)
 
     def test_input_order_does_not_change_the_split(self, tmp_path: Path) -> None:
         """Gleiche Dateien, andere Reihenfolge — identischer Schnitt."""
@@ -189,19 +204,19 @@ class TestSliceInvariants:
     def test_more_slices_than_files_is_an_error(self, tmp_path: Path) -> None:
         _write(tmp_path, "test_only.py", 3)
         with pytest.raises(ValueError):
-            e2e_slice.build_slices(tmp_path, 2)
+            _counted_slices(tmp_path, 2)
 
     def test_non_positive_slice_count_is_an_error(self, tmp_path: Path) -> None:
         _write(tmp_path, "test_a.py", 1)
         _write(tmp_path, "test_b.py", 1)
         for bad in (0, -1):
             with pytest.raises(ValueError):
-                e2e_slice.build_slices(tmp_path, bad)
+                _counted_slices(tmp_path, bad)
 
     def test_empty_directory_is_an_error(self, tmp_path: Path) -> None:
         """Leerlauf ist gefaehrlicher als ein Fehler: pytest ohne Dateiargumente nimmt ALLES."""
         with pytest.raises(ValueError):
-            e2e_slice.build_slices(tmp_path, 2)
+            _counted_slices(tmp_path, 2)
 
 
 class TestRealSuite:
@@ -218,20 +233,11 @@ class TestRealSuite:
 
     @pytest.mark.parametrize("count", [2, 4, 8])
     def test_real_slices_are_balanced(self, count: int) -> None:
-        """Der Datei-Halbierungs-Schluessel lag bei 2 Scheiben 47 % daneben — der hier nicht.
-
-        Die Schranke ist bewusst eng: real liegt die schwerste Scheibe unter
-        einem Promille ueber dem Mittel (207 bei Mittel 206,75), und genau
-        diese Zusage steht in ``docs/e2e-architecture.md``. Faellt die
-        Gewichtssortierung im Splitter weg, driftet der Schnitt auf gut sieben
-        Prozent Streuung — mit den frueheren 10 % Toleranz waere das
-        unbemerkt durchgegangen. Zwei Prozent lassen Luft fuer eine einzelne
-        schwere neue Testdatei (LPT haelt die Streuung unter deren Gewicht),
-        ohne die Aussage zu verwaessern.
-        """
-        loads = [sum(e2e_slice.count_tests(p) for p in chunk) for chunk in e2e_slice.build_slices(E2E_DIR, count)]
+        """Runtime balance replaces the former 2% static-test-count requirement (Refs #2646)."""
+        weights, _ = e2e_slice.file_weights(E2E_DIR)
+        loads = [sum(weights[p] for p in chunk) for chunk in e2e_slice.build_slices(E2E_DIR, count)]
         mean = sum(loads) / count
-        assert max(loads) <= mean * 1.02, f"Scheiben unausgewogen: {loads}"
+        assert max(loads) <= mean * 1.15, f"Unbalanced runtime weights: {loads}"
 
     def test_union_of_slices_equals_the_pytest_marker_selection(self) -> None:
         """Haerteste Zusicherung: der Schnitt deckt exakt das ab, was ``-m e2e`` einsammelt."""
@@ -283,7 +289,7 @@ class TestCommandLine:
     def test_summary_reports_every_slice_with_its_load(self) -> None:
         result = _run_cli("--slices", "4", "--summary")
         assert result.returncode == 0, result.stderr
-        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        lines = [line for line in result.stdout.splitlines() if line.startswith("Slice ")]
         assert len(lines) == 4
         for index, line in enumerate(lines, start=1):
             assert f"{index}/4" in line

@@ -24,6 +24,8 @@ Weiterer Release-Kandidat vor 1.0: bündelt die Vier-Augen-Freigabe im Aufbewahr
 
 ### Changed
 
+- **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
+
 - **Kontakte direkt in der Liste aufklappen** (#2605) — Die gemeinsame Zeitstrom-Karte zeigt rollenberechtigte Angaben ohne Seitenwechsel und erhält Fallanzeige, Detail-Link, Filter und Seitenumbruch.
 
 - **Kontaktfilter vereinheitlicht** (#2604) — Eine kompakte Such- und Filterleiste hält zusätzliche aktive Filter sichtbar und merkt ausschließlich unkritische Auswahlen.
