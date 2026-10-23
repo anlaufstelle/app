@@ -7,8 +7,7 @@ from uuid import UUID
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import CharField, Exists, Func, OuterRef, Q, Value
-from django.db.models.fields.json import KeyTextTransform, KeyTransform
+from django.db.models import CharField, Exists, Func, JSONField, OuterRef, Q, Value
 from django.db.models.lookups import Exact, Regex
 from django.http import Http404
 from django.urls import reverse
@@ -175,9 +174,16 @@ def _changed_column(target_type):
 
 
 def _text_value(key):
-    """Condition: the JSON value at ``key`` is a string with at least one non-whitespace character."""
-    kind = Func(KeyTransform(key, "data_json"), function="jsonb_typeof", output_field=CharField())
-    return Q(Exact(kind, "string")) & Q(Regex(KeyTextTransform(key, "data_json"), r"\S"))
+    """Condition: the JSON value at ``key`` is a string with at least one non-whitespace character.
+
+    The key is passed as text to ``jsonb_extract_path``; ``KeyTransform`` would read a purely
+    numeric key (a valid field slug such as ``123``) as an array index and miss the object key.
+    """
+    path = Value(key, output_field=CharField())
+    node = Func("data_json", path, function="jsonb_extract_path", output_field=JSONField())
+    kind = Func(node, function="jsonb_typeof", output_field=CharField())
+    text = Func("data_json", path, function="jsonb_extract_path_text", output_field=CharField())
+    return Q(Exact(kind, "string")) & Q(Regex(text, r"\S"))
 
 
 def _event_condition(event_fields, extra=None):

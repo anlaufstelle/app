@@ -291,3 +291,25 @@ def test_editor_choices_keep_reviewers_of_currently_visible_fields(
     response = client.get(reverse("core:free_text_review_list"), {"model": "Event"})
     assert response.status_code == 200
     assert str(lead_user.pk) in dict(response.context["filter_form"].fields["editor"].choices)
+
+
+def test_numeric_field_slug_is_listed_and_filterable(client, facility, staff_user, client_identified, doc_type_contact):
+    field = FieldTemplate.objects.create(facility=facility, name="123", field_type="textarea")
+    field.full_clean()
+    assert field.slug == "123"
+    DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=field)
+    event = Event.objects.create(
+        facility=facility,
+        document_type=doc_type_contact,
+        client=client_identified,
+        created_by=staff_user,
+        occurred_at=timezone.now(),
+        data_json={field.slug: "Visible text"},
+    )
+    assert review_service.get_entry(facility, staff_user, "Event", event.pk, field.slug).text == "Visible text"
+    client.force_login(staff_user)
+    url = reverse("core:free_text_review_list")
+    for params in ({"model": "Event"}, {"model": "Event", "editor": str(staff_user.pk)}):
+        response = client.get(url, params)
+        assert response.status_code == 200
+        assert [(e.target_id, e.field_key) for e in response.context["entries"]] == [(event.pk, field.slug)]
