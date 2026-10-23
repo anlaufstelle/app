@@ -7,7 +7,7 @@ from itertools import product
 import pytest
 from django.utils import timezone
 
-from core.models import Client, DocumentTypeField, FieldTemplate
+from core.models import Client, DocumentTypeField, Event, FieldTemplate
 from core.reporting.export import export_dataset
 from core.reporting.registry import get_backend
 from tests._factories import make_document_type, make_event
@@ -31,7 +31,7 @@ def test_every_format_pair_has_an_explicit_reviewed_attack_class():
 EVENT_GROUPS = {
     "general-key-figures": frozenset("cnsb"),
     "example": frozenset("cnsb"),
-    "monthly-trend": frozenset("cnsb"),
+    "monthly-trend": frozenset("cns"),
     "quantity-sum": frozenset("cnsb"),
     "sample-report-1": frozenset("cns"),
     "counseling-hours": frozenset("cs"),
@@ -99,10 +99,65 @@ def attack_world(facility, admin_user, monkeypatch):
     return add
 
 
+def _metric_name(dimension, slug):
+    return "unique_clients" if dimension == "person_counts" and slug == "general-key-figures" else METRICS[slug]
+
+
 def _public_metric(facility, dimension, slug, end):
     payload = json.loads(export_dataset(get_backend(slug), facility, date(2026, 1, 1), end, format="json").content)
-    metric = "unique_clients" if dimension == "person_counts" and slug == "general-key-figures" else METRICS[slug]
-    return payload["summary"][metric]
+    return payload["summary"][_metric_name(dimension, slug)]
+
+
+def _raw_metric(facility, dimension, slug, end):
+    """Unmasked value the backend counts before any suppression."""
+    if slug == "general-key-figures":
+        # Its dataset only exposes already protected values, so count the stored events directly.
+        events = Event.objects.for_facility(facility).filter(
+            is_deleted=False, occurred_at__date__gte=date(2026, 1, 1), occurred_at__date__lte=end
+        )
+        return (
+            events.exclude(client=None).values("client").distinct().count()
+            if dimension == "person_counts"
+            else events.count()
+        )
+    result = get_backend(slug).build_dataset(facility, date(2026, 1, 1), end)
+    return result.summary[_metric_name(dimension, slug)]
+
+
+def _remainder_candidates(left_groups, right_groups, whole, prefix, *, snapshot_sides=()):
+    """Remainders consistent with the two observed values.
+
+    January group sizes are nuisance variables. A side listed in
+    ``snapshot_sides`` is a historical snapshot counter that is independent of
+    the current January cohort.
+    """
+    candidates = set()
+    for january in product(range(8, 13), repeat=4):
+        counts = dict(zip("cnsb", january, strict=True))
+        for snapshot in range(8, 13) if snapshot_sides else (None,):
+            left_base = snapshot if "left" in snapshot_sides else sum(counts[group] for group in left_groups)
+            right_base = snapshot if "right" in snapshot_sides else sum(counts[group] for group in right_groups)
+            for remainder in range(1, 5):
+                if (whole is None or left_base + remainder == whole) and (prefix is None or right_base == prefix):
+                    candidates.add(remainder)
+    return candidates
+
+
+def _groups(dimension, slug):
+    return EVENT_GROUPS[slug] if dimension == "event_counts" else frozenset("cnsb")
+
+
+def _assert_raw_world_matches_model(facility, dimension, slug, target):
+    """The fixture's real raw counts must equal the equation model's population."""
+    groups = _groups(dimension, slug)
+    january = 10 * len(groups)
+    assert _raw_metric(facility, dimension, slug, date(2026, 2, 28)) == january, (
+        f"{slug}: the January/February raw population differs from the modelled groups {sorted(groups)}"
+    )
+    expected = january + (1 if target in groups else 0)
+    assert _raw_metric(facility, dimension, slug, date(2026, 3, 31)) == expected, (
+        f"{slug}: the March target group {target!r} does not move the raw count as modelled"
+    )
 
 
 @pytest.mark.django_db
@@ -110,25 +165,36 @@ def _public_metric(facility, dimension, slug, end):
 def test_pair_class_recipient_cannot_solve_the_small_calendar_remainder(
     facility, attack_world, dimension, left, right, left_source, right_source
 ):
-    left_groups = EVENT_GROUPS[left] if dimension == "event_counts" else frozenset("cnsb")
-    right_groups = EVENT_GROUPS[right] if dimension == "event_counts" else frozenset("cnsb")
+    left_groups, right_groups = _groups(dimension, left), _groups(dimension, right)
     target_group = sorted(left_groups)[0]
     attack_world(target_group, 3, 1)
+    # The target cell belongs to the examined (left) population, and the model
+    # matches what the real backends count before masking.
+    _assert_raw_world_matches_model(facility, dimension, left, target_group)
+    _assert_raw_world_matches_model(facility, dimension, right, target_group)
     whole = _public_metric(facility, dimension, left, date(2026, 3, 31))
     prefix = _public_metric(facility, dimension, right, date(2026, 2, 28))
-    # Independently enumerate recipient equations. Disjoint/partial populations
-    # retain their nuisance variables; subtracting them is not an identity.
-    candidates = set()
-    for january in product(range(8, 13), repeat=4):
-        counts = dict(zip("cnsb", january, strict=True))
-        for remainder in range(1, 5):
-            if whole is not None and sum(counts[group] for group in left_groups) + remainder != whole:
-                continue
-            if prefix is not None and sum(counts[group] for group in right_groups) != prefix:
-                continue
-            candidates.add(remainder)
+    candidates = _remainder_candidates(left_groups, right_groups, whole, prefix)
     assert 1 in candidates, "The true world must remain feasible"
     assert len(candidates) >= 2, f"{left}/{right} determine the March singleton: {candidates}"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("dimension,left,right,left_source,right_source", LIVE_CLASSES)
+def test_pair_class_equations_pin_the_remainder_when_values_are_unmasked(
+    facility, attack_world, dimension, left, right, left_source, right_source
+):
+    """Control: with raw values the same equations expose the target exactly for equal populations."""
+    left_groups, right_groups = _groups(dimension, left), _groups(dimension, right)
+    attack_world(sorted(left_groups)[0], 3, 1)
+    whole = _raw_metric(facility, dimension, left, date(2026, 3, 31))
+    prefix = _raw_metric(facility, dimension, right, date(2026, 2, 28))
+    candidates = _remainder_candidates(left_groups, right_groups, whole, prefix)
+    assert 1 in candidates
+    if left_groups == right_groups:
+        assert candidates == {1}, f"{left}/{right}: unmasked equal populations must pin the remainder"
+    else:
+        assert len(candidates) >= 2, f"{left}/{right}: unequal populations keep free nuisance variables"
 
 
 HYBRID_CLASSES = [entry for entry in inventory.ATTACK_CLASSES if "snapshot_hybrid" in entry[3:]]
@@ -159,7 +225,12 @@ def test_hybrid_pair_class_preserves_independent_snapshot_and_live_remainders(
             },
         )
     left_groups, right_groups = EVENT_GROUPS[left], EVENT_GROUPS[right]
-    attack_world(sorted(left_groups)[0], 3, 1)
+    target_group = sorted(left_groups)[0]
+    attack_world(target_group, 3, 1)
+    # Live sides (and the live fallback of the hybrid PDF) must match the model.
+    for slug, source in ((left, left_source), (right, right_source)):
+        if source == "live" or not use_snapshot:
+            _assert_raw_world_matches_model(facility, dimension, slug, target_group)
     values = []
     for slug, source, end in ((left, left_source, date(2026, 3, 31)), (right, right_source, date(2026, 2, 28))):
         if source == "live":
@@ -171,22 +242,8 @@ def test_hybrid_pair_class_preserves_independent_snapshot_and_live_remainders(
             assert match
             values.append(None if match[1] == "unterdrückt" else int(match[1]))
     whole, prefix = values
-    candidates = set()
-    for january in product(range(8, 13), repeat=4):
-        counts = dict(zip("cnsb", january, strict=True))
-        for snapshot in range(8, 13) if use_snapshot else (None,):
-            # A snapshot counter cannot constrain the current January cohort.
-            left_base = (
-                snapshot
-                if use_snapshot and left_source == "snapshot_hybrid"
-                else sum(counts[group] for group in left_groups)
-            )
-            right_base = (
-                snapshot
-                if use_snapshot and right_source == "snapshot_hybrid"
-                else sum(counts[group] for group in right_groups)
-            )
-            for remainder in range(1, 5):
-                if (whole is None or left_base + remainder == whole) and (prefix is None or right_base == prefix):
-                    candidates.add(remainder)
+    snapshot_sides = tuple(
+        side for side, source in (("left", left_source), ("right", right_source)) if use_snapshot and source != "live"
+    )
+    candidates = _remainder_candidates(left_groups, right_groups, whole, prefix, snapshot_sides=snapshot_sides)
     assert 1 in candidates and len(candidates) >= 2, f"The PDF/{left}/{right} equations reveal {candidates}"
