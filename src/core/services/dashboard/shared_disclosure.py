@@ -686,7 +686,10 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
         for p in populations
         for start, end in windows
     }
-    dropped_unions = {unions[key] for interval in intervals for key in interval.dropped}
+    # A fixed zero cell has no secret unit/row existence to transfer. Its
+    # containing table may be absent locally (e.g. no active persons), while
+    # another interval legitimately lists that same zero alongside safe rows.
+    dropped_unions = {unions[key] for interval in intervals for key in interval.dropped if unions[key][2]}
     local_dropped = frozenset(key for key, union in unions.items() if union in dropped_unions)
     observations = [
         replace(cell, hidden=True, lower=0, person_sensitive=False) if cell.key in local_dropped else cell
