@@ -4,7 +4,9 @@ Refs #1835: Package-Split von ehemals ``core/urls.py`` (592 Zeilen,
 147 Patterns) in ``_config.py``/``_system.py``/``_offline.py``. Eingebunden
 per ``include()`` **ohne eigenen Namespace** — die Submodule setzen bewusst
 kein ``app_name``, damit ``include()`` keinen Sub-Namespace aufspannt und
-``app_name = "core"`` (unten) der einzige Namespace bleibt. Jedes
+``from core.views.free_text_review import FreeTextReviewListView, FreeTextReviewTargetView
+
+app_name = "core"`` (unten) der einzige Namespace bleibt. Jedes
 ``{% url "core:…" %}``/``reverse("core:…")`` verhaelt sich damit unveraendert.
 """
 
@@ -91,6 +93,7 @@ from core.views.events import (
     TallyUndoView,
 )
 from core.views.facility_settings import FacilitySettingsView
+from core.views.free_text_review import FreeTextReviewListView, FreeTextReviewTargetView
 from core.views.hubs import DatenschutzUebersichtView, VerwaltungUebersichtView
 from core.views.import_wizard import (
     ImportAbortView,
@@ -168,6 +171,12 @@ from core.views.zeitstrom import (
 app_name = "core"
 
 urlpatterns = [
+    path("free-text-review/", FreeTextReviewListView.as_view(), name="free_text_review_list"),
+    path(
+        "free-text-review/<str:target_type>/<uuid:target_id>/<slug:field_key>/",
+        FreeTextReviewTargetView.as_view(),
+        name="free_text_review_target",
+    ),
     path("clients/<uuid:pk>/stage-downgrade/", ClientStageDowngradeView.as_view(), name="client_stage_downgrade"),
     path("clients/<uuid:pk>/legal-hold/", RecordLegalHoldView.as_view(target_type="Client"), name="client_legal_hold"),
     path(

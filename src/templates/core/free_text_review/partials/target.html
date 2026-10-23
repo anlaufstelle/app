@@ -1,0 +1,28 @@
+{% load i18n %}
+<div id="review-target">
+    <p class="whitespace-pre-wrap break-words border rounded p-4">{{ entry.text }}</p>
+    {% for label in entry.pattern_labels %}<p>{{ label }}</p>{% empty %}<p>{% trans "Kein Muster erkannt; bitte trotzdem inhaltlich prüfen." %}</p>{% endfor %}
+    <p>{% trans "Die Mustererkennung ist heuristisch und keine DSGVO-Garantie." %}</p>
+    {% if entry.is_reviewed %}
+        <p>{% trans "Geprüft bis" %} {{ entry.review.reviewed_until|date:"SHORT_DATE_FORMAT" }} · {{ entry.review.reviewed_at|date:"SHORT_DATETIME_FORMAT" }}</p>
+    {% else %}
+        <p>{% trans "Prüfung offen. Ein geänderter Text oder eine abgelaufene Frist benötigt eine erneute Prüfung." %}</p>
+    {% endif %}
+    <form method="post" class="my-4 space-y-3">
+        {% csrf_token %}
+        {% if form.errors %}<p role="alert">{% trans "Bitte prüfen Sie die Eingaben." %}</p>{% endif %}
+        {{ form.non_field_errors }}
+        {{ form.fingerprint }}{{ form.fingerprint.errors }}
+        <p>{{ form.reviewed_until.label_tag }} {{ form.reviewed_until }} {{ form.reviewed_until.errors }}</p>
+        <button class="rounded bg-accent text-white px-4 py-2" name="action" value="mark" type="submit">{% trans "Als geprüft markieren" %}</button>
+        {% if entry.review %}<button class="rounded border px-4 py-2" name="action" value="revoke" type="submit">{% trans "Prüfung zurücknehmen" %}</button>{% endif %}
+    </form>
+    <p><a class="text-accent underline" href="{{ entry.source_url }}">{% trans "Ursprungstext öffnen" %}</a></p>
+    <h2 class="font-bold">{% trans "Hinweise für die manuelle Bearbeitung" %}</h2>
+    <ol class="list-decimal pl-5 space-y-2">
+        <li><a class="text-accent underline" href="{% url 'core:event_create' %}">{% trans "Kontakterfassung öffnen: Inhalt bei Bedarf in einem verschlüsselten Ereignisfeld neu erfassen." %}</a></li>
+        <li>{% trans "Sensitivity prüfen: Bei Bedarf die zuständige Anwendungsbetreuung um eine höhere Schutzstufe bitten." %}</li>
+        <li>{% trans "Text neutralisieren: Den Ursprungstext bei Bedarf über die reguläre Bearbeitung ändern." %}</li>
+    </ol>
+    <p class="mt-4">{% trans "Diese Hinweise kopieren oder entschlüsseln nichts und ändern weder Text noch Schutzstufe. Nur die Prüfmarkierung wird hier gespeichert oder zurückgenommen. Der Review ist nur online verfügbar." %}</p>
+</div>

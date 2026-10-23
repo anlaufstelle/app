@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+{% block title %}{% trans "Freitext prüfen" %} · {{ model_label }} – Anlaufstelle{% endblock %}
+{% block content %}
+{% back_link %}
+<h1 class="text-2xl font-bold my-4">{% trans "Freitext prüfen" %} · {{ model_label }}</h1>
+{% include "core/free_text_review/partials/target.html" %}
+{% endblock %}

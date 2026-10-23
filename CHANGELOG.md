@@ -29,6 +29,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Zeitstrom-Live-Aktualisierung nach htmx-Initialisierung** (#2644) — Die erste Hintergrundaktualisierung wartet auf die übernommene htmx-Konfiguration und verhindert dadurch CSP-Verstöße beim Übernehmen zugeklappter Detailbereiche.
 - **Andere Sitzungen bei 2FA-Gerätewechsel und Deaktivierung widerrufen** (#2640) — Beide Aktionen melden alle anderen Sitzungen des Kontos bei deren nächster Anfrage ab, erhalten die ausführende Sitzung auch nach späterer Passwortprüfung oder Sudo und lassen bei Fehlern einschließlich Anlage und abschließendem Speichern der Nachfolgesitzung den bisherigen Faktor gültig; die Bestätigung bleibt wiederholbar.
 - **Andere Sitzungen bei 2FA-Gerätewechsel und Deaktivierung widerrufen** (#2640, #2529) — Beide Aktionen melden alle anderen Sitzungen des Kontos bei deren nächster Anfrage ab, erhalten die ausführende Sitzung auch nach späterer Passwortprüfung oder Sudo und lassen bei Fehlern einschließlich Anlage und abschließendem Speichern der Nachfolgesitzung den bisherigen Faktor gültig; die Bestätigung bleibt wiederholbar.
+### Added
+
+- **Rollengetreuer Freitext-Review** (#918) — Modellbezogene Online-Listen bieten lokale Musterhinweise und reversible, auditierte Prüffristen, deren Gültigkeit an den aktuellen Text gebunden ist.
 
 ## [0.99.8] - 2026-10-23
 

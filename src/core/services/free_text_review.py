@@ -9,6 +9,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.http import Http404
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.translation import gettext_lazy as _
@@ -17,6 +18,7 @@ from core.models import AuditLog, Case, Client, Episode, Event, FreeTextReview, 
 from core.services.audit import audit_event
 from core.services.compliance.sensitivity import user_can_see_field
 from core.services.dynamic_protection import lock_dynamic_protection
+from core.services.sensitive_patterns import PATTERN_LABELS, detect_patterns
 from core.services.workitem_visibility import readable_person_filter, workitems_for_read
 
 TARGET_LABELS = {
@@ -39,6 +41,11 @@ class ReviewEntry:
     author_id: object
     fingerprint: str
     review: FreeTextReview | None
+    source_url: str
+
+    @property
+    def pattern_labels(self):
+        return [PATTERN_LABELS[key] for key in detect_patterns(self.text)]
 
     @property
     def is_reviewed(self) -> bool:
@@ -103,6 +110,16 @@ def _entry(facility, target_type, target, key, text, reviews):
         target.created_by_id,
         fingerprint,
         reviews.get((target.pk, key)),
+        reverse(
+            {
+                "Client": "core:client_detail",
+                "Case": "core:case_detail",
+                "Episode": "core:case_detail",
+                "WorkItem": "core:workitem_detail",
+                "Event": "core:event_detail",
+            }[target_type],
+            kwargs={"pk": target.case_id if target_type == "Episode" else target.pk},
+        ),
     )
 
 
@@ -246,3 +263,18 @@ def remove_target_reviews(instance):
     elif target_type == "Case":
         targets |= Q(target_type="Episode", target_id__in=Episode.objects.filter(case_id=instance.pk).values("pk"))
     FreeTextReview.objects.for_facility(facility_id).filter(targets).delete()
+
+
+def filter_entries(entries, *, changed_before=None, editor_id=None, risk=""):
+    """Filter already-authorized entries without copying text to another store."""
+    return [
+        entry
+        for entry in entries
+        if (changed_before is None or timezone.localtime(entry.changed_at).date() <= changed_before)
+        and (
+            not editor_id
+            or str(entry.author_id) == str(editor_id)
+            or (entry.review is not None and str(entry.review.reviewed_by_id) == str(editor_id))
+        )
+        and (not risk or risk in detect_patterns(entry.text))
+    ]

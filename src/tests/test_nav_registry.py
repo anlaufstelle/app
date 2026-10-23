@@ -48,6 +48,7 @@ NAV_ROUTE_PREFIXES = (
     "import/",
     "deletion-requests/",
     "rectification/",
+    "free-text-review/",
     "retention/",
     "audit/",
     "dsgvo/",
@@ -76,7 +77,8 @@ NAV_ROUTE_PREFIXES = (
 # #2505 removes the two statistics PDF special routes: 176 -> 174.
 # #2521 adds the contact list route core:event_list: 174 -> 175.
 # #2524 adds record protection and downgrade routes: 175 -> 183.
-_EXPECTED_TOTAL_PATTERNS = 183
+# Free-text review adds a list and one source-field review route.
+_EXPECTED_TOTAL_PATTERNS = 185
 
 
 def _prefixed_route_names() -> dict[str, str]:
@@ -307,3 +309,14 @@ def test_contacts_sidebar_and_mobile_entry_visibility(client, request, role):
         marker = mobile.index('data-testid="mobile-nav-more"')
         assert 'aria-current="true"' in mobile[mobile.rindex("<button", 0, marker) : marker]
         assert 'href="/" aria-current="page"' not in mobile
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("role", ["assistant_user", "staff_user", "lead_user", "admin_user", "super_admin_user"])
+def test_review_navigation_respects_facility_roles(client, request, role):
+    user = request.getfixturevalue(role)
+    client.force_login(user)
+    response = client.get(
+        reverse("core:workitem_inbox") if role != "super_admin_user" else reverse("core:system_dashboard")
+    )
+    assert ('data-testid="nav-free-text-review"' in response.content.decode()) == (role != "super_admin_user")

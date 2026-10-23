@@ -1,0 +1,17 @@
+{% load i18n %}
+{% if filter_form.errors %}<p role="alert">{% trans "Bitte prüfen Sie die Filtereingaben." %}</p>{% endif %}
+<ul class="space-y-4">
+{% for entry in entries %}
+    <li class="rounded border p-4" data-testid="free-text-review-entry">
+        <p class="whitespace-pre-wrap break-words">{{ entry.text }}</p>
+        <p class="text-sm">{{ entry.changed_at|date:"SHORT_DATETIME_FORMAT" }} · {{ entry.field_key }}</p>
+        {% for label in entry.pattern_labels %}<p class="text-sm">{{ label }}</p>{% empty %}<p class="text-sm">{% trans "Kein Muster erkannt; bitte trotzdem inhaltlich prüfen." %}</p>{% endfor %}
+        {% if entry.is_reviewed %}<p>{% trans "Geprüft bis" %} {{ entry.review.reviewed_until|date:"SHORT_DATE_FORMAT" }}</p>{% else %}<p>{% trans "Prüfung offen" %}</p>{% endif %}
+        <a class="text-accent underline" href="{% url 'core:free_text_review_target' target_type=entry.target_type target_id=entry.target_id field_key=entry.field_key %}">{% trans "Text prüfen" %}</a>
+    </li>
+{% empty %}
+    <li>{% trans "Keine sichtbaren Freitexte für diese Filter." %}</li>
+{% endfor %}
+</ul>
+{% if page_obj.has_previous %}<a href="?{{ filter_query }}&amp;page={{ page_obj.previous_page_number }}">{% trans "Zurück" %}</a>{% endif %}
+{% if page_obj.has_next %}<a href="?{{ filter_query }}&amp;page={{ page_obj.next_page_number }}">{% trans "Weiter" %}</a>{% endif %}

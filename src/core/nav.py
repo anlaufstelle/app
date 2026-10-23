@@ -661,6 +661,16 @@ VERWALTUNG_HUB = NavItem(
 # Zeile auf der Verwaltungs-Übersicht („öffnet die technische Administration ·
 # erfordert Sudo-Modus", Konzept §3.1) — er ist eine eigene Anwendungshülle mit
 # eigener Navigation und Sudo-Modus, kein Bereich dieser Anwendung.
+FREE_TEXT_REVIEW = NavItem(
+    key="free-text-review",
+    label=_("Freitext-Review"),
+    url_name="core:free_text_review_list",
+    family=frozenset({"free_text_review_list", "free_text_review_target"}),
+    gates=("is_assistant_or_above",),
+    testid="nav-free-text-review",
+    icon="audit",
+)
+
 SIDEBAR: tuple[NavItem, ...] = (
     ARBEITSZENTRALE,
     ZEITSTROM,
@@ -669,6 +679,7 @@ SIDEBAR: tuple[NavItem, ...] = (
     PERSONEN,
     FAELLE,
     DATEIEN,
+    FREE_TEXT_REVIEW,
     STATISTIK,
     HILFE,
     DATENSCHUTZ_HUB,
@@ -710,6 +721,7 @@ MOBILE_MORE: tuple[NavItem, ...] = (
     CONTACTS,
     FAELLE,
     DATEIEN,
+    FREE_TEXT_REVIEW,
     STATISTIK,
     DATENSCHUTZ_HUB,
     VERWALTUNG_HUB,
@@ -887,6 +899,7 @@ BACKLINK_EXEMPT: frozenset[str] = frozenset(
         # Operative Listen (die Heimat selbst — ein Rücklink zeigte auf sich)
         "zeitstrom",
         "event_list",
+        "free_text_review_list",
         "workitem_inbox",
         "client_list",
         "client_trash",
