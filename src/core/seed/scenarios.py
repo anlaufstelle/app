@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from django.utils.translation import gettext_noop
+
 from core.models import User
 
 
@@ -74,81 +76,103 @@ _SOLO_ROLES: tuple[str, ...] = (
 SCENARIOS: tuple[DemoScenario, ...] = (
     DemoScenario(
         key="kontaktladen",
-        display_name="Kontaktladen Wärmestube",
+        display_name=gettext_noop("Kontaktladen Wärmestube"),
         description=(
-            "Tagesoffene, niedrigschwellige Anlaufstelle mit Komm-Struktur: "
-            "viele kurze Kontakte, Versorgung vor Ort, wenig Terminbindung."
+            gettext_noop(
+                "Tagesoffene, niedrigschwellige Anlaufstelle mit Komm-Struktur: "
+                "viele kurze Kontakte, Versorgung vor Ort, wenig Terminbindung."
+            )
         ),
         package="default",
         facility_name="Kontaktladen Wärmestube",
         demo_roles=_TEAM_ROLES,
         intro_hint=(
-            "Zeigt den Standardkatalog im Alltag eines offenen Kontaktladens: "
-            "Kurzkontakte, Sachleistungen, gelegentliche Krisen- und "
-            "Vermittlungsgespräche."
+            gettext_noop(
+                "Zeigt den Standardkatalog im Alltag eines offenen Kontaktladens: "
+                "Kurzkontakte, Sachleistungen, gelegentliche Krisen- und "
+                "Vermittlungsgespräche."
+            )
         ),
     ),
     DemoScenario(
         key="beratungsstelle",
-        display_name="Beratungsstelle Falkenweg",
-        description=("Offene Sprechstunde und Sozialberatung mit Terminvergabe, Fallverläufen und Wirkungszielen."),
+        display_name=gettext_noop("Beratungsstelle Falkenweg"),
+        description=(
+            gettext_noop("Offene Sprechstunde und Sozialberatung mit Terminvergabe, Fallverläufen und Wirkungszielen.")
+        ),
         package="beratungsstelle",
         facility_name="Beratungsstelle Falkenweg",
         demo_roles=_TEAM_ROLES,
         intro_hint=(
-            "Zeigt ein Team in der Sozialberatung: Beratungsgespräche, "
-            "Fallakten, Episoden und Auswertung über einen längeren Zeitraum."
+            gettext_noop(
+                "Zeigt ein Team in der Sozialberatung: Beratungsgespräche, "
+                "Fallakten, Episoden und Auswertung über einen längeren Zeitraum."
+            )
         ),
     ),
     DemoScenario(
         key="solo",
-        display_name="Beratungspraxis Lindenhof",
+        display_name=gettext_noop("Beratungspraxis Lindenhof"),
         description=(
-            "Allein arbeitende Fachkraft mit eigener Klientel — Kontakte, "
-            "Aufgaben/Wiedervorlagen, Verläufe und Auswertung ohne Team-"
-            "Schichtbetrieb. Eine Vertretung sichert Freigaben (z. B. "
-            "Löschbestätigungen) ab, ohne im Tagesgeschäft mitzuarbeiten."
+            gettext_noop(
+                "Allein arbeitende Fachkraft mit eigener Klientel — Kontakte, "
+                "Aufgaben/Wiedervorlagen, Verläufe und Auswertung ohne Team-"
+                "Schichtbetrieb. Eine Vertretung sichert Freigaben (z. B. "
+                "Löschbestätigungen) ab, ohne im Tagesgeschäft mitzuarbeiten."
+            )
         ),
         package="beratungsstelle",
         facility_name="Beratungspraxis Lindenhof",
         demo_roles=_SOLO_ROLES,
         intro_hint=(
-            "Zeigt den Solo-Betrieb: eine Fachkraft führt Beratung, "
-            "Dokumentation und Auswertung allein; eine Vertretung mit "
-            "Freigabebefugnis bleibt sichtbar, aber im Hintergrund."
+            gettext_noop(
+                "Zeigt den Solo-Betrieb: eine Fachkraft führt Beratung, "
+                "Dokumentation und Auswertung allein; eine Vertretung mit "
+                "Freigabebefugnis bleibt sichtbar, aber im Hintergrund."
+            )
         ),
         solo=True,
     ),
     DemoScenario(
         key="awareness",
-        display_name="Awareness-Team Nachtfalter",
-        description=("Awareness-Team bei Veranstaltungen: mobile, anlassbezogene Einsätze."),
+        display_name=gettext_noop("Awareness-Team Nachtfalter"),
+        description=(gettext_noop("Awareness-Team bei Veranstaltungen: mobile, anlassbezogene Einsätze.")),
         package="awareness",
         facility_name="Awareness-Team Nachtfalter",
         demo_roles=_TEAM_ROLES,
-        intro_hint=("Zeigt Awareness-Arbeit bei Veranstaltungen: kurze, oft anonyme Kontakte während Einsätzen."),
+        intro_hint=(
+            gettext_noop("Zeigt Awareness-Arbeit bei Veranstaltungen: kurze, oft anonyme Kontakte während Einsätzen.")
+        ),
     ),
     DemoScenario(
         key="jugendarbeit",
-        display_name="Jugendtreff Wilhelmshöhe",
-        description=("Mobile und offene Jugendarbeit mit wiederkehrenden Kontakten und Gruppenangeboten."),
+        display_name=gettext_noop("Jugendtreff Wilhelmshöhe"),
+        description=(
+            gettext_noop("Mobile und offene Jugendarbeit mit wiederkehrenden Kontakten und Gruppenangeboten.")
+        ),
         package="jugendarbeit",
         facility_name="Jugendtreff Wilhelmshöhe",
         demo_roles=_TEAM_ROLES,
-        intro_hint=("Zeigt offene Jugendarbeit: wiederkehrende Besuche, Gruppenangebote, altersgerechte Themen."),
+        intro_hint=(
+            gettext_noop("Zeigt offene Jugendarbeit: wiederkehrende Besuche, Gruppenangebote, altersgerechte Themen.")
+        ),
     ),
     DemoScenario(
         key="frauenhaus",
-        display_name="Frauenhaus Amalie",
+        display_name=gettext_noop("Frauenhaus Amalie"),
         description=(
-            "Frauenhaus / Gewalt-Fachberatung mit hohem Schutzbedarf — "
-            "Klarname der Einrichtung bewusst symbolisch, wie in der "
-            "Praxis aus Diskretionsgründen üblich."
+            gettext_noop(
+                "Frauenhaus / Gewalt-Fachberatung mit hohem Schutzbedarf — "
+                "Klarname der Einrichtung bewusst symbolisch, wie in der "
+                "Praxis aus Diskretionsgründen üblich."
+            )
         ),
         package="frauenhaus",
         facility_name="Frauenhaus Amalie",
         demo_roles=_TEAM_ROLES,
-        intro_hint=("Zeigt Fachberatung mit hohem Schutzbedarf: enge Zugriffsgrenzen, sensible Dokumentation."),
+        intro_hint=(
+            gettext_noop("Zeigt Fachberatung mit hohem Schutzbedarf: enge Zugriffsgrenzen, sensible Dokumentation.")
+        ),
     ),
 )
 

@@ -59,13 +59,13 @@
             {% for card in scenario_cards %}
             <section role="listitem" class="bg-surface border border-subtle rounded-[10px] p-5 flex flex-col{% if not card.available %} opacity-60{% endif %}" data-testid="demo-scenario-card" data-scenario-key="{{ card.scenario.key }}">
                 <h2 class="text-[15px] font-bold text-ink">
-                    {{ card.scenario.display_name }}
+                    {% trans card.scenario.display_name %}
                     {% if card.is_current %}
                     <span class="ml-1 align-middle text-[11px] font-semibold uppercase tracking-[0.05em] text-accent" data-testid="demo-scenario-current">{% trans "aktuell" %}</span>
                     {% endif %}
                 </h2>
-                <p class="mt-1 text-[13px] text-ink-soft">{{ card.scenario.description }}</p>
-                <p class="mt-2 text-[12px] text-ink-muted flex-1">{{ card.scenario.intro_hint }}</p>
+                <p class="mt-1 text-[13px] text-ink-soft">{% trans card.scenario.description %}</p>
+                <p class="mt-2 text-[12px] text-ink-muted flex-1">{% trans card.scenario.intro_hint %}</p>
 
                 {% if card.available %}
                 <form method="post" action="{% url 'demo_scenario_start' %}" class="mt-4 space-y-2" data-demo-scenario-form>
@@ -86,7 +86,7 @@
                     <form method="post" action="{% url 'demo_scenario_start' %}" class="mt-2 space-y-1.5" data-demo-scenario-form>
                         {% csrf_token %}
                         <input type="hidden" name="scenario" value="{{ card.scenario.key }}">
-                    <input type="hidden" name="bereich" value="{{ card.scenario.key }}">
+                        <input type="hidden" name="bereich" value="{{ card.scenario.key }}">
                         <fieldset class="space-y-1">
                             <legend class="sr-only">{% trans "Rolle für diesen Demo-Bereich" %}</legend>
                             {% for role in card.other_roles %}
