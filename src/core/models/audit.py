@@ -14,6 +14,8 @@ class AuditLog(models.Model):
     """Log entry for security-relevant actions."""
 
     class Action(models.TextChoices):
+        FREE_TEXT_REVIEWED = "free_text_reviewed", _("Freitext geprüft")
+        FREE_TEXT_REVIEW_REVOKED = "free_text_review_revoked", _("Freitext-Prüfung zurückgenommen")
         LOGIN = "login", _("Anmeldung")
         LOGOUT = "logout", _("Abmeldung")
         LOGIN_FAILED = "login_failed", _("Anmeldung fehlgeschlagen")

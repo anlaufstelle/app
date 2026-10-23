@@ -26,6 +26,8 @@ class UnknownAuditDetailKeyError(ValueError):
 # ---------------------------------------------------------------------------
 
 AUDIT_DETAIL_KEYS: dict[str, str] = {
+    "review_field": "Configured field key or fixed column name; never a text value",
+    "reviewed_until": "Review expiry date in ISO format; no free text",
     "job_run": "Cron evidence: installation scope, outcome and facility counters; no names or payloads",
     "file_reencryption": "File rotation: duration, counters, options, facility UUID; no file identifiers or content",
     # -- Zeit- und Fristangaben ------------------------------------------

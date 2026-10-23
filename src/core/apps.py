@@ -13,5 +13,6 @@ class CoreConfig(AppConfig):
         import core.signals.event_search  # noqa: F401
         import core.signals.facility_protection  # noqa: F401
         import core.signals.field_template  # noqa: F401
+        import core.signals.free_text_review  # noqa: F401
         import core.signals.offline_invalidation  # noqa: F401
         import core.signals.settings_seed  # noqa: F401

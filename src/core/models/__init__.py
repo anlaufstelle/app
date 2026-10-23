@@ -12,6 +12,7 @@ from .event_history import EventHistory
 from .field_condition import FieldCondition
 from .field_group import FieldGroup
 from .field_template import FieldTemplate
+from .free_text_review import FreeTextReview
 from .import_job import ImportJob
 from .mfa import EncryptedTOTPDevice
 from .offline_revocation import OfflineClientRevocation
@@ -45,6 +46,7 @@ __all__ = [
     "FieldCondition",
     "FieldGroup",
     "FieldTemplate",
+    "FreeTextReview",
     "ImportJob",
     "Milestone",
     "OfflineClientRevocation",
