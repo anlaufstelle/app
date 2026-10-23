@@ -517,7 +517,7 @@ class SampleReport1Backend(DatasetBackend):
             from core.services.dashboard.shared_disclosure import build_live_release
 
             date_from, date_to, source = result.disclosure_context
-            release = build_live_release(facility, date_from, date_to)
+            release = build_live_release(facility, date_from, date_to, warn_threshold=False)
             summary = release.hybrid if source == "snapshot_hybrid" else release.sample
         else:
             summary = suppress_sample_report_1_stats(facility, result.summary)

@@ -220,10 +220,12 @@ def effective_k_threshold(stored: int) -> int:
     return stored if stored >= 1 else DEFAULT_K_THRESHOLD
 
 
-def _get_threshold(facility) -> int:
+def _get_threshold(facility, *, warn: bool = True) -> int:
     """K-anonymity threshold from the facility settings; the default without settings.
 
     A stored value below ``K_ANONYMITY_MIN`` is logged, so it never takes effect silently.
+    ``warn=False`` is for a caller that already looked the threshold up for the same
+    report computation, so the warning appears once per computation.
     """
     try:
         settings = Settings.objects.get(facility=facility)
@@ -231,7 +233,7 @@ def _get_threshold(facility) -> int:
         return DEFAULT_K_THRESHOLD
     stored = settings.k_anonymity_threshold
     threshold = effective_k_threshold(stored)
-    if stored < K_ANONYMITY_MIN:
+    if warn and stored < K_ANONYMITY_MIN:
         logger.warning(
             "Stored k-anonymity threshold %s for facility %s is below the minimum %s; computing with %s.",
             stored,

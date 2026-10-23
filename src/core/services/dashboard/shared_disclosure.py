@@ -119,19 +119,24 @@ def _component(seed: set[CountKey], partitions: Sequence[CountPartition]) -> set
             return connected
 
 
-def protect_counts(facility, counts: Sequence[RawCount], partitions: Sequence[CountPartition]) -> SharedMask:
+def protect_counts(
+    facility, counts: Sequence[RawCount], partitions: Sequence[CountPartition], *, threshold: int | None = None
+) -> SharedMask:
     """Compute one monotone primary/secondary/margin/table mask.
 
     Identity aliases are merged before solving. Each iteration removes one
     public equation by suppressing a visible cell. Constraints are rebuilt
     from the remaining published view, so reconstructed margins cannot evade
     the audit. Invalid raw equations are rejected rather than interpreted as
-    evidence that a disclosure attack is infeasible.
+    evidence that a disclosure attack is infeasible. A caller that already
+    resolved the facility threshold passes it, so the lookup and its warning
+    happen once per report computation.
     """
     from core.services.dashboard.external_report import _get_threshold
 
     _require_facility(facility)
-    threshold = _get_threshold(facility)
+    if threshold is None:
+        threshold = _get_threshold(facility)
     raw: dict[CountKey, RawCount] = {}
     for cell in counts:
         previous = raw.get(cell.key)
@@ -261,6 +266,7 @@ def protect_temporal_counts(
     person_sensitive_keys: Collection[CountKey] = (),
     dropped_keys: Collection[CountKey] = (),
     observations: Sequence[RawCount] = (),
+    threshold: int | None = None,
 ) -> SharedMask:
     """Protect canonical time/subset unions and their shared residuals.
 
@@ -350,7 +356,7 @@ def protect_temporal_counts(
         (aliases[partition.margin], partition.cells): replace(partition, margin=aliases[partition.margin])
         for partition in partitions
     }
-    mask = protect_counts(facility, merged_counts, tuple(merged_partitions.values()))
+    mask = protect_counts(facility, merged_counts, tuple(merged_partitions.values()), threshold=threshold)
     return SharedMask(
         mask.facility_id,
         mask.threshold,
@@ -681,7 +687,7 @@ def canonical_live_windows(populations: Sequence[TemporalPopulation]) -> tuple[t
     return tuple(sorted(windows))
 
 
-def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
+def build_live_release(facility, date_from: date, date_to: date, *, warn_threshold: bool = True) -> LiveRelease:
     """Solve one canonical source family before projecting the requested interval.
 
     This protects current live and snapshot calendar unions without retaining
@@ -690,6 +696,8 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
     Local table removal is a projection rule: remove its row-existence bound,
     but retain the raw subset equations when solving other consumers. Hybrid
     event projections conservatively require complete calendar months.
+    ``warn_threshold=False`` is for a consumer that already resolved the threshold
+    for the same report, so a low stored value is logged once.
     """
     from core.models import DocumentType, StatisticsSnapshot
     from core.reporting.registry import get_backend
@@ -725,7 +733,7 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
         )
     }
     populations = (*populations, *collect_hybrid_populations(populations, snapshots))
-    threshold = _get_threshold(facility)
+    threshold = _get_threshold(facility, warn=warn_threshold)
     windows = canonical_live_windows(populations)
     intervals = [
         _prepare_live_interval(
@@ -752,7 +760,9 @@ def build_live_release(facility, date_from: date, date_to: date) -> LiveRelease:
     # An unpublished window must not force a published alias of the exact
     # same source/population union into secondary suppression.
     internal = {key for key, union in unions.items() if union not in observed_unions}
-    mask = protect_temporal_counts(facility, populations, windows, observations=observations, hidden_keys=internal)
+    mask = protect_temporal_counts(
+        facility, populations, windows, observations=observations, hidden_keys=internal, threshold=threshold
+    )
     mask = SharedMask(
         mask.facility_id,
         mask.threshold,
@@ -830,7 +840,7 @@ def project_shared_type_dataset(facility, result):
     if result.disclosure_context is None:
         return result
     date_from, date_to, _source = result.disclosure_context
-    general = build_live_release(facility, date_from, date_to).general
+    general = build_live_release(facility, date_from, date_to, warn_threshold=False).general
     published = {row["name"]: row["count"] for row in general.get("by_document_type", [])}
     records = [
         {**row, "count": published[row["document_type"]] if row["count"] is not None else None}
@@ -848,5 +858,5 @@ def project_shared_dataset(facility, result, slug):
     start, end, source = result.disclosure_context
     if source != "live":
         raise ValueError("A live population projection requires a live source")
-    protected = build_live_release(facility, start, end).datasets[slug]
+    protected = build_live_release(facility, start, end, warn_threshold=False).datasets[slug]
     return replace(result, records=protected.records, summary={**result.summary, **protected.summary})
