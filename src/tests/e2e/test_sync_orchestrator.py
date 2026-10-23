@@ -120,22 +120,40 @@ def _clear_queue_backoff(page):
     )
 
 
-def _stamp_stale_activity(page):
-    """Aktivitaets-Stempel kuenstlich veralten (Muster
-    test_offline_store.py::_expire_activity_and_enforce_idle)."""
-    page.evaluate(
-        """async () => {
-            await new Promise((resolve, reject) => {
-                const req = indexedDB.open('anlaufstelle-crypto', 1);
-                req.onsuccess = () => {
-                    const tx = req.result.transaction('meta', 'readwrite');
-                    tx.objectStore('meta').put({ key: 'lastActivity', ts: 1 });
-                    tx.oncomplete = () => resolve();
-                    tx.onerror = () => reject(tx.error);
-                };
-                req.onerror = () => reject(req.error);
+def _stamp_stale_activity(page, *, wipe_under_lock=False):
+    """Expire activity, optionally driving the public crypto idle gate under the same lock.
+
+    The raw variant is only for a test that already holds the lock in another tab.
+    """
+    return page.evaluate(
+        """async (wipeUnderLock) => {
+            const stamp = async () => {
+                await new Promise((resolve, reject) => {
+                    const req = indexedDB.open('anlaufstelle-crypto', 1);
+                    req.onsuccess = () => {
+                        const db = req.result;
+                        const tx = db.transaction('meta', 'readwrite');
+                        tx.objectStore('meta').put({ key: 'lastActivity', ts: 1 });
+                        tx.oncomplete = () => { db.close(); resolve(); };
+                        tx.onerror = () => { db.close(); reject(tx.error); };
+                    };
+                    req.onerror = () => reject(req.error);
+                });
+            };
+            if (!wipeUnderLock) return await stamp();
+            if (!navigator.locks) throw new Error('Web Locks are required for this test');
+            return await window.syncOrchestrator.runExclusive(async () => {
+                if (!window.syncOrchestrator.isLockHeld()) throw new Error('Offline lock is not held');
+                await stamp();
+                // A foreign boot gate must not read the stale stamp and wipe first:
+                // its deletion of the stamp could make this tab start a fresh idle window.
+                // awaitReady enters the idle gate reentrantly under our held lock.
+                // enforceIdleWipe would request the non-reentrant Web Lock again.
+                await window.crypto_session.awaitReady();
+                return window.crypto_session.hasSessionKey();
             });
-        }"""
+        }""",
+        wipe_under_lock,
     )
 
 
@@ -354,11 +372,10 @@ class TestSyncOrchestrator:
             context.close()
 
     def test_idle_wipe_broadcasts_key_cleared_to_other_tab(self, browser, base_url, _login_storage_state):
-        """Gegen den heutigen Code ROT: ohne BroadcastChannel behaelt Tab B seinen
-        Memory-``cachedKey`` bis zu 60s, obwohl Tab A den Schluessel samt
-        IndexedDB-Grundlage bereits idle-gewiped hat (TOCTOU #1324). Mit
-        ``key-cleared``-Broadcast verwirft Tab B seinen Key SOFORT →
-        ``hasSessionKey()`` wird false ohne eigenen Timer-Tick. Refs #1383.
+        """An idle wipe drops this tab's key and broadcasts revocation to the other tab.
+
+        Expire and probe under one lock so a late boot gate cannot consume the
+        stale stamp first. Neither tab may retain its key after the wipe.
         """
         context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
         page_a = context.new_page()
@@ -371,17 +388,14 @@ class TestSyncOrchestrator:
             assert page_a.evaluate("() => window.crypto_session.hasSessionKey()") is True
             assert page_b.evaluate("() => window.crypto_session.hasSessionKey()") is True
 
-            # Tab A: Idle-Grenze ueberschreiten + Wipe erzwingen (kein unsynced →
-            # voller Wipe). enforceIdleWipe broadcastet danach key-cleared.
-            _stamp_stale_activity(page_a)
-            page_a.evaluate("async () => { await window.crypto_session.enforceIdleWipe(); }")
+            # No pending work: the public crypto idle gate must wipe and broadcast.
+            assert _stamp_stale_activity(page_a, wipe_under_lock=True) is False
             assert page_a.evaluate("() => window.crypto_session.hasSessionKey()") is False, (
-                "Tab A muss seinen Schluessel nach dem Idle-Wipe verworfen haben"
+                "Tab A must discard its key after the idle wipe"
             )
+            assert page_a.evaluate("async () => window.crypto_session.hasPersistedSessionKey()") is False
 
-            # Tab B: cachedKey wird OHNE eigenen Timer/Reload false — nur per
-            # Broadcast. In RED laeuft dieser Wait in den Timeout (Tab B behaelt
-            # seinen Key).
+            # Tab B must drop its cached key without its own timer tick or reload.
             page_b.wait_for_function("() => window.crypto_session.hasSessionKey() === false", timeout=10000)
         finally:
             with suppress(Exception):
@@ -597,6 +611,7 @@ class TestSyncOrchestrator:
             # enforceIdleWipe laeuft ueber runExclusive → wartet hinter Tab Bs
             # Lock. Der Aufruf wird NICHT ge-awaited (er wuerde bis zur Freigabe
             # blockieren) — wir pruefen nur, dass Tab A noch NICHT gewiped hat.
+            # Raw stamping is intentional here: Tab B already holds the origin lock.
             _stamp_stale_activity(page_a)
             page_a.evaluate("() => { window.__gate = window.crypto_session.enforceIdleWipe(); }")
             assert page_a.evaluate("() => window.crypto_session.hasSessionKey()") is True, (
