@@ -478,6 +478,16 @@ def test_runs_without_node_modules(tmp_path: Path) -> None:
     assert os.path.exists(mirror / "package.json")
 
 
+def test_unknown_root_minified_script_with_source_is_still_rejected(tmp_path: Path) -> None:
+    """Only explicitly registered first-party builds bypass the vendor inventory."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / VENDOR_REL / "unknown.js").write_text("window.unknown = true;", encoding="utf-8")
+    (mirror / VENDOR_REL / "unknown.min.js").write_text("window.unknown=!0;", encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "unknown.min.js: shipped vendor file is not registered" in result.stderr
+
+
 if __name__ == "__main__":
     # Eigenstaendiger Selbsttest OHNE pytest (Test-DB ist seriell/--reuse-db).
     # Baut die Szenarien manuell und prueft die Exit-Codes; gibt am Ende eine
@@ -521,13 +531,3 @@ if __name__ == "__main__":
         print(f"\n{len(failures)} Selbsttest(s) fehlgeschlagen: {failures}")
         sys.exit(1)
     print("\nAlle Selbsttests gruen.")
-
-
-def test_unknown_root_minified_script_with_source_is_still_rejected(tmp_path: Path) -> None:
-    """Only explicitly registered first-party builds bypass the vendor inventory."""
-    mirror = _mirror_repo(tmp_path / "repo")
-    (mirror / VENDOR_REL / "unknown.js").write_text("window.unknown = true;", encoding="utf-8")
-    (mirror / VENDOR_REL / "unknown.min.js").write_text("window.unknown=!0;", encoding="utf-8")
-    result = _run(mirror)
-    assert result.returncode == 1
-    assert "unknown.min.js: shipped vendor file is not registered" in result.stderr
