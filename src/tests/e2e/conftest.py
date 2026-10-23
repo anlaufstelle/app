@@ -369,7 +369,7 @@ def _create_storage_state(launch_browser, base_url, username, password=SEED_PASS
         page.goto(f"{base_url}/login/")
         page.fill('input[name="username"]', username)
         page.fill('input[name="password"]', password)
-        page.click('button[type="submit"]')
+        page.click('#login-form button[type="submit"]')
         page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
         storage = context.storage_state()
         context.close()
@@ -703,7 +703,7 @@ def login_as(browser, base_url, username, password=SEED_PASSWORD):
     page.goto(f"{base_url}/login/")
     page.fill('input[name="username"]', username)
     page.fill('input[name="password"]', password)
-    page.click('button[type="submit"]')
+    page.click('#login-form button[type="submit"]')
     page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
     return page, context
 

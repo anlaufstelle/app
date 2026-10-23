@@ -69,7 +69,7 @@ def _login_with_retry(browser, base_url, username="admin", password=SEED_PASSWOR
             page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
             page.fill('input[name="username"]', username)
             page.fill('input[name="password"]', password)
-            page.click('button[type="submit"]')
+            page.click('#login-form button[type="submit"]')
             page.wait_for_url(lambda url: "/login/" not in url, timeout=20000)
             return page, context
         except Exception as exc:  # noqa: BLE001 - bewusst breit, siehe Docstring

@@ -217,7 +217,7 @@ def do_real_login(page, base_url, username="miriam", password=SEED_PASSWORD):
     page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
     page.fill("#id_username", username)
     page.fill("#id_password", password)
-    page.click("button[type=submit]")
+    page.click("#login-form button[type=submit]")
     page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
     # Warten, bis der In-Memory-Key aus IndexedDB rehydriert wurde.
     page.evaluate("async () => { await window.crypto_session.ready(); }")

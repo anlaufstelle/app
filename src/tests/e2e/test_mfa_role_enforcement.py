@@ -31,7 +31,7 @@ def _login(browser, base_url, username, password=SEED_PASSWORD):
     page.goto(f"{base_url}/login/")
     page.fill('input[name="username"]', username)
     page.fill('input[name="password"]', password)
-    page.click('button[type="submit"]')
+    page.click('#login-form button[type="submit"]')
     return page, context
 
 

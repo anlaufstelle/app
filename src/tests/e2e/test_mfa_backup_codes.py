@@ -121,7 +121,7 @@ class TestZZMFABackupCodeLogin:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "lena")
                 page.fill("#id_password", SEED_PASSWORD)
-                page.click("button[type=submit]")
+                page.click("#login-form button[type=submit]")
                 # Redirect zum MFA-Prompt
                 page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=8000)
 
@@ -153,7 +153,7 @@ class TestZZMFABackupCodeLogin:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "felix")
                 page.fill("#id_password", SEED_PASSWORD)
-                page.click("button[type=submit]")
+                page.click("#login-form button[type=submit]")
                 page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=8000)
 
                 # Realer Fehlbedienungs-Flow: Backup-Code (mit Buchstaben)
@@ -181,7 +181,7 @@ class TestZZMFABackupCodeLogin:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "emma")
                 page.fill("#id_password", SEED_PASSWORD)
-                page.click("button[type=submit]")
+                page.click("#login-form button[type=submit]")
                 page.wait_for_url(re.compile(r"/mfa/verify/"))
 
                 page.locator("[data-testid='mfa-toggle-mode']").click()
@@ -218,7 +218,7 @@ class TestZZMFATotpLogin:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "miriam")
                 page.fill("#id_password", SEED_PASSWORD)
-                page.click("button[type=submit]")
+                page.click("#login-form button[type=submit]")
                 page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=8000)
 
                 page.locator("[data-testid='mfa-token-input']").fill(code)
@@ -245,7 +245,7 @@ class TestZZMFASettingsBackupSection:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "admin")
                 page.fill("#id_password", SEED_PASSWORD)
-                page.click("button[type=submit]")
+                page.click("#login-form button[type=submit]")
                 page.wait_for_url(re.compile(r"/mfa/verify/"))
                 page.locator("[data-testid='mfa-toggle-mode']").click()
                 page.locator("[data-testid='mfa-backup-input']").fill(codes[0])

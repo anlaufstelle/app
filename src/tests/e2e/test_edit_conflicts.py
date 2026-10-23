@@ -323,7 +323,7 @@ class TestUserAccessConflict:
             page_b.goto(f"{base_url}/login/", wait_until="domcontentloaded")
             page_b.fill('input[name="username"]', "admin")
             page_b.fill('input[name="password"]', "anlaufstelle2026")
-            page_b.click('button[type="submit"]')
+            page_b.click('#login-form button[type="submit"]')
             page_b.wait_for_url(lambda u: "/login/" not in u, timeout=10000)
             enter_sudo_mode(page_b, base_url)
 

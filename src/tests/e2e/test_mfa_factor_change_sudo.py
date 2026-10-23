@@ -146,7 +146,7 @@ def _login(page, base_url, backup_code: str | None = None) -> None:
     page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
     page.fill("#id_username", USERNAME)
     page.fill("#id_password", SEED_PASSWORD)
-    page.click("button[type=submit]")
+    page.click("#login-form button[type=submit]")
     if backup_code is None:
         page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
         return
@@ -164,7 +164,7 @@ def _login_with_totp(page, base_url, code: str) -> None:
     page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
     page.fill("#id_username", USERNAME)
     page.fill("#id_password", SEED_PASSWORD)
-    page.click("button[type=submit]")
+    page.click("#login-form button[type=submit]")
     page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=10000)
     page.locator("[data-testid='mfa-token-input']").fill(code)
     page.locator("[data-testid='mfa-verify-button']").click()

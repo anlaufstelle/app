@@ -270,7 +270,7 @@ class TestZZAccountLockout:
             page.goto(f"{base_url}/login/")
             page.fill('input[name="username"]', "markus")
             page.fill('input[name="password"]', SEED_PASSWORD)
-            page.click('button[type="submit"]')
+            page.click('#login-form button[type="submit"]')
 
             # Erst auf die Sperr-Meldung warten, DANN die URL prüfen:
             # ein URL-Assert direkt nach domcontentloaded gewinnt sonst das
@@ -316,7 +316,7 @@ class TestZZAccountLockout:
             page.goto(f"{base_url}/login/")
             page.fill('input[name="username"]', "lena")
             page.fill('input[name="password"]', SEED_PASSWORD)
-            page.click('button[type="submit"]')
+            page.click('#login-form button[type="submit"]')
             page.wait_for_url(f"{base_url}/")
             assert page.url == f"{base_url}/"
         finally:
@@ -339,7 +339,7 @@ class TestZZRateLimiting:
                     page.goto(f"{base_url}/login/")
                     page.fill('input[name="username"]', "admin")
                     page.fill('input[name="password"]', "falschespasswort")
-                    page.click('button[type="submit"]')
+                    page.click('#login-form button[type="submit"]')
                     page.wait_for_load_state("domcontentloaded")
                 except Exception as exc:
                     # Hard-Block durch Rate-Limit-Middleware kann die Connection

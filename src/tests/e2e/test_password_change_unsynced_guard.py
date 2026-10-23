@@ -64,7 +64,7 @@ def _login(page, base_url, username, password=_ORIG_PASSWORD):
     page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
     page.fill("#id_username", username)
     page.fill("#id_password", password)
-    page.click("button[type=submit]")
+    page.click("#login-form button[type=submit]")
     page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
 

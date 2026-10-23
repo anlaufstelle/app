@@ -41,7 +41,7 @@ def _login_via_form(page, base_url, username="miriam", password=SEED_PASSWORD):
     page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
     page.fill("#id_username", username)
     page.fill("#id_password", password)
-    page.click("button[type=submit]")
+    page.click("#login-form button[type=submit]")
     page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
     _ensure_service_worker_controls(page, timeout_ms=10000)
     page.wait_for_function("window.crypto_session && window.offlineStore")

@@ -133,7 +133,7 @@ class TestMobileNavMore:
         page.goto(f"{base_url}/login/")
         page.fill('input[name="username"]', "miriam")
         page.fill('input[name="password"]', SEED_PASSWORD)
-        page.click('button[type="submit"]')
+        page.click('#login-form button[type="submit"]')
         page.wait_for_url(f"{base_url}/")
 
         page.set_viewport_size({"width": 375, "height": 812})

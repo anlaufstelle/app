@@ -101,7 +101,7 @@ class TestZZMFASetupFlow:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "admin")
                 page.fill("#id_password", SEED_PASSWORD)
-                page.click("button[type=submit]")
+                page.click("#login-form button[type=submit]")
                 page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
                 # Admin hat im Seed kein mfa_required, also keine Zwangs-
@@ -169,7 +169,7 @@ class TestZZMFASetupFlow:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "admin")
                 page.fill("#id_password", SEED_PASSWORD)
-                page.click("button[type=submit]")
+                page.click("#login-form button[type=submit]")
                 page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
                 page.goto(f"{base_url}/mfa/setup/", wait_until="domcontentloaded")
@@ -203,7 +203,7 @@ class TestZZMFASetupFlow:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "admin")
                 page.fill("#id_password", SEED_PASSWORD)
-                page.click("button[type=submit]")
+                page.click("#login-form button[type=submit]")
                 page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
                 page.goto(f"{base_url}/mfa/setup/", wait_until="domcontentloaded")

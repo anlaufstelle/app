@@ -103,7 +103,7 @@ class TestSessionEndedBeforeSave:
 
             page.fill("#id_username", "miriam")
             page.fill("#id_password", SEED_PASSWORD)
-            page.click("button[type=submit]")
+            page.click("#login-form button[type=submit]")
             page.wait_for_url(lambda url: "/login/" not in url, timeout=15000)
             # The way back: login returns to the page that was being worked on.
             assert "/events/new/" in page.url, f"login did not return to the form: {page.url}"

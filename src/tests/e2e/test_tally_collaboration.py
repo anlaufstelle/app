@@ -58,7 +58,7 @@ class TestCollaborativeTally:
             page_b.goto(f"{base_url}/login/", wait_until="domcontentloaded")
             page_b.locator('input[name="username"]').fill("markus")
             page_b.locator('input[name="password"]').fill(SEED_PASSWORD)
-            page_b.locator('button[type="submit"]').click()
+            page_b.locator('#login-form button[type="submit"]').click()
             page_b.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
             page_b.goto(f"{base_url}/", wait_until="domcontentloaded")
 
