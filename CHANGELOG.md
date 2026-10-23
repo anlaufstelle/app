@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Abhängigkeiten aktualisiert** (#2594, #2641, #2635, #2636, #2642) — filelock 4.2.4, django-unfold 0.110.0, jsdom 30.1.3 und Vitest 5.0.5 aktualisieren Administrationsoberfläche und Entwicklungswerkzeuge; die JS-Toolchain setzt weiterhin Node.js 24+ voraus, und CodeQL 4.39.0 sowie download-artifact 8.0.2 sind auf geprüfte Commit-SHAs gepinnt.
 - **Paketbetrieb und Kontokennungen erläutert** (#2191) — Die Betreiber-Dokumentation beschreibt die fehlende Fremd-Slug-Prüfung bei `load_package --file` und empfiehlt im Frauenhaus-Paket neutrale, intern zuordenbare Benutzernamen wegen ihrer Offenlegung in Art.-15-Auskünften; der Importhinweis steht auf Deutsch und Englisch, die Empfehlung im deutschsprachigen Paketleitfaden.
+- **Sprache vor der Anmeldung wählen** (#2609) — DE/EN-Umschalter und direkte Sprachlinks speichern die Besuchswahl über Login und Demo-Start hinweg, ohne die Sprachpräferenz geteilter Demo-Konten zu verändern.
 
 - **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
 ### Fixed

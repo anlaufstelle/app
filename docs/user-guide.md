@@ -28,6 +28,8 @@ Dieses Handbuch und die [FAQ](faq.md) sind innerhalb der Anwendung unter „Hilf
 
 ### Anmelden
 
+> **Sprache vor der Anmeldung:** Auf der Anmeldeseite und in der Demo-Auswahl können Sie mit **DE/EN** die Sprache wählen. Direkte Links mit `?lang=en` oder `?lang=de` funktionieren auch ohne Anmeldung auf öffentlichen Seiten. Die Wahl wird im Sprachcookie gespeichert und bleibt über die Anmeldung bzw. den Demo-Start erhalten; die Kontopräferenz geteilter Demo-Konten wird dabei nicht verändert. Ohne Besuchswahl gilt nach der Anmeldung die Kontosprache, davor Deutsch. Betreibertexte werden nicht automatisch übersetzt.
+
 1. Rufen Sie die Anlaufstelle-Adresse Ihrer Einrichtung im Browser auf (z. B. `https://anlaufstelle.meine-einrichtung.de`).
 2. Sie werden automatisch zur Anmeldeseite weitergeleitet (`/login/`).
 3. Geben Sie Ihren **Benutzernamen** und Ihr **Passwort** ein.

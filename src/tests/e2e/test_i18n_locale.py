@@ -1,59 +1,80 @@
-"""E2E: Locale-Wechsel via User-Setting (ENT-SYS-05).
-
-Refs #928, Master #922, Matrix ENT-SYS-05.
-
-**Hinweis zur Spec-Lücke:** Der ursprüngliche TC ENT-SYS-05 in der
-Manual-Test-Matrix beschreibt ein Verhalten mit ``?lang=de/en``-Query-
-Parameter und ``Accept-Language``-Auswertung. Das ist **nicht** das
-implementierte Verhalten: ``core.middleware.user_language`` ignoriert
-bewusst den Browser-Header (Refs #670) und es gibt keinen
-Query-Param-Handler. Locale wird ausschließlich über:
-
-1. ``request.user.preferred_language`` (eingeloggter User mit Setting), oder
-2. ``settings.LANGUAGE_CODE`` (Default: ``de``)
-
-bestimmt. Dieser Test verifiziert das **tatsächliche** Verhalten —
-nicht die idealisierte Spec.
-"""
+"""E2E coverage for visit and account language selection (Refs #2609, #928)."""
 
 from __future__ import annotations
 
 import pytest
+from playwright.sync_api import expect
+
+from ._profiles import require_demo
 
 
 @pytest.mark.e2e
 class TestAnonymousLocale:
-    """Anonyme User sehen immer den App-Default (Deutsch).
+    """Use fresh cookie contexts for direct links, switches and errors."""
 
-    Refs #670: Accept-Language und URL-Param werden bewusst nicht
-    ausgewertet, damit anonyme Seiten (Login, MFA, Password-Reset) in
-    deterministischer Sprache rendern.
-    """
-
-    def test_login_renders_german_by_default(self, page, base_url):
-        page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
-        assert page.locator("button:has-text('Anmelden')").first.is_visible()
-
-    def test_lang_query_param_ignored(self, page, base_url):
-        """``?lang=en`` hat keinen Effekt — Anonym-User sehen immer Deutsch."""
-        page.goto(f"{base_url}/login/?lang=en", wait_until="domcontentloaded")
-        assert page.locator("button:has-text('Anmelden')").first.is_visible(), (
-            "?lang=en darf das anonyme Login-Layout nicht auf Englisch wechseln."
-        )
-
-    def test_accept_language_header_ignored(self, browser, base_url):
-        """Browser-Header ``Accept-Language: en-US`` wird ignoriert."""
-        context = browser.new_context(
-            locale="en-US",
-            extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
-        )
+    def test_login_renders_german_by_default(self, browser, base_url):
+        context = browser.new_context(locale="en-US")
         try:
             page = context.new_page()
-            page.set_default_timeout(30000)
             page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
-            assert page.locator("button:has-text('Anmelden')").first.is_visible(), (
-                "Accept-Language: en-US darf das Login-Layout nicht beeinflussen."
+            expect(page.locator("html")).to_have_attribute("lang", "de")
+            expect(page.locator("#login-form button[type='submit']")).to_have_text("Anmelden")
+        finally:
+            context.close()
+
+    @pytest.mark.parametrize("width", [390, 1280])
+    def test_login_query_switch_and_error(self, browser, base_url, width):
+        context = browser.new_context(viewport={"width": width, "height": 844})
+        try:
+            page = context.new_page()
+            page.goto(f"{base_url}/login/?lang=en&next=%2Fclients%2F", wait_until="domcontentloaded")
+            expect(page.locator("html")).to_have_attribute("lang", "en")
+            expect(page.locator("button[value='en']")).to_have_attribute("aria-pressed", "true")
+            german = page.locator("button[value='de']")
+            german.focus()
+            german.press("Space")
+            expect(page.locator("html")).to_have_attribute("lang", "de")
+            assert "next=%2Fclients%2F" in page.url
+            page.locator("button[value='en']").click()
+            expect(page.locator("html")).to_have_attribute("lang", "en")
+            page.locator("#id_username").fill("missing-language-test-user")
+            page.locator("#id_password").fill("incorrect-language-test-password")
+            page.locator("#login-form button[type='submit']").click()
+            expect(page.locator("#login-errors")).to_contain_text("Please enter a correct")
+            expect(page.locator("html")).to_have_attribute("lang", "en")
+            expect(page.locator("[data-testid='app-version']")).to_have_count(0)
+        finally:
+            context.close()
+
+    def test_demo_query_switch_error_and_start(self, browser, base_url):
+        """Requires E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."""
+        context = browser.new_context(viewport={"width": 390, "height": 844})
+        try:
+            page = context.new_page()
+            response = page.goto(f"{base_url}/demo/?lang=en&bereich=kontaktladen", wait_until="domcontentloaded")
+            require_demo(lambda: response is not None and response.status == 200)
+            expect(page.locator("html")).to_have_attribute("lang", "en")
+            page.locator("button[value='de']").click()
+            expect(page.locator("html")).to_have_attribute("lang", "de")
+            assert "bereich=kontaktladen" in page.url
+            page.locator("button[value='en']").click()
+            expect(page.locator("html")).to_have_attribute("lang", "en")
+            token = page.locator("input[name='csrfmiddlewaretoken']").first.input_value()
+            failure = page.request.post(
+                f"{base_url}/demo/start/",
+                form={"scenario": "invalid", "csrfmiddlewaretoken": token},
+                max_redirects=0,
             )
+            assert failure.status == 302
+            page.goto(base_url + failure.headers["location"], wait_until="domcontentloaded")
+            expect(page.locator("html")).to_have_attribute("lang", "en")
+            expect(page.locator("[role='alert']").first).to_contain_text("not available")
+            expect(page.locator("[data-testid='app-version']")).to_have_count(0)
+            start = page.locator("[data-testid='demo-scenario-start']").first
+            expect(start).to_be_visible()
+            start.click()
+            page.wait_for_url(lambda url: "/demo/" not in url, wait_until="domcontentloaded")
+            expect(page.locator("html")).to_have_attribute("lang", "en")
         finally:
             context.close()
 

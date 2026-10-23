@@ -30,6 +30,8 @@ This guide and the [FAQ](../faq.md) ([English offline excerpt](faq.md)) are link
 
 ### Signing In
 
+> **Language before signing in:** Use **DE/EN** on the login page and demo selection to choose a language. Direct links with `?lang=en` or `?lang=de` also work on public pages without signing in. The choice is stored in the language cookie and survives sign-in or demo start; it does not change shared demo accounts’ language preferences. Without a visit choice, the account language applies after sign-in and German beforehand. Operator-provided legal texts are not translated automatically.
+
 1. Open your facility's Anlaufstelle URL in a browser (e.g., `https://anlaufstelle.meine-einrichtung.de`).
 2. You will be automatically redirected to the login page (`/login/`).
 3. Enter your **username** and **password**.
@@ -1165,13 +1167,13 @@ without expiry even after manual event deletion.
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-16 -->
-<!-- source-hash: f94322d28cac084e040499483835c13d5cfa41fa -->
-<!-- translation-date: 2026-10-16 -->
-<!-- translation-date: 2026-10-16 -->
-<!-- translation-date: 2026-10-16 -->
-<!-- translation-date: 2026-10-16 -->
-<!-- translation-date: 2026-10-16 -->
-<!-- translation-date: 2026-10-16 -->
-<!-- translation-date: 2026-10-16 -->
-<!-- translation-date: 2026-10-16 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- source-hash: abb019a68e553404929698c09904813aa2baa659 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
+<!-- translation-date: 2026-10-23 -->
