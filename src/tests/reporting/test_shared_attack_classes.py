@@ -16,6 +16,9 @@ from tests.reporting.test_reporting_sample_pdf_integration import pdf_text as pd
 
 
 def test_every_format_pair_has_an_explicit_reviewed_attack_class():
+    assert set(inventory.exported_formats()) == set(inventory.FORMATS), (
+        "Supported export formats are not all part of the reviewed format pairs"
+    )
     actual = {
         (dimension, left, right, inventory.SOURCES[left, left_format], inventory.SOURCES[right, right_format])
         for dimension, left, right, left_format, right_format in inventory.FORMAT_PAIRS

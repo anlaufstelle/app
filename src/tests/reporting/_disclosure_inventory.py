@@ -18,6 +18,15 @@ DIMENSIONS = {
     "case_counts": ("case-metrics",),
 }
 FORMATS = ("preview", "csv", "json", "xml", "pdf")
+
+
+def exported_formats():
+    """Return the formats the export dispatch really accepts, plus the preview."""
+    from core.reporting import export
+
+    return ("preview", *export._CONTENT_TYPES)
+
+
 PAIRS = tuple((dimension, *pair) for dimension, slugs in DIMENSIONS.items() for pair in combinations(slugs, 2))
 FORMAT_PAIRS = tuple((*pair, *formats) for pair, formats in product(PAIRS, product(FORMATS, repeat=2)))
 SOURCES = {

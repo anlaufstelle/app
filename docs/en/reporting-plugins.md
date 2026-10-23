@@ -497,7 +497,7 @@ The calculation considers the current data across contiguous calendar months, in
 | `person_counts` | `client-metrics`, `general-key-figures` | 1 |
 | `case_counts` | `case-metrics` | 0; independent service contract |
 
-The machine-readable inventory is `src/tests/reporting/_disclosure_inventory.py`: 37 pairs × five output paths per side (preview, CSV, JSON, XML, PDF) produce 925 format pairs. Equal dimension, backend population and mask source define a class: 37 live classes covering 885 combinations and eight classes involving the hybrid sample PDF covering 40 combinations. Classes remain separate per backend pair; different subsets are not merged. A guard requires explicit assignment of every format pair. Reconstruction probes for each class evaluate recipient equations through public JSON exports or the actually rendered hybrid PDF; they do not prove inference resistance for every field. The data-flow guard alters the solver decision and requires its effect on counts and tables, including inherited/aliased consumers; a backend ignoring the result is rejected.
+The machine-readable inventory is `src/tests/reporting/_disclosure_inventory.py`: 37 pairs × five output paths per side (preview, CSV, JSON, XML, PDF) produce 925 format pairs. Equal dimension, backend population and mask source define a class: 37 live classes covering 885 combinations and eight classes involving the hybrid sample PDF covering 40 combinations. Classes remain separate per backend pair; different subsets are not merged. A guard compares the inventoried formats with the export formats actually supported and with each backend's source declarations, and requires explicit assignment of every format pair; an additional export format or a missing source declaration turns it red. Reconstruction probes for each class evaluate recipient equations through public JSON exports or the actually rendered hybrid PDF; they do not prove inference resistance for every field. The data-flow guard alters the solver decision and requires its effect on counts and tables, including inherited/aliased consumers; a backend ignoring the result is rejected.
 
 Snapshot event cohorts carry additive weights rather than invented individuals. Categories and age groups retain separate identities; only known identical live memberships or consistent snapshot category partitions create shared constraints. Unknown links between historical age/category aggregates and current data carry no complete inference guarantee. The release overview continues warning from registered relationships and recorded periods without blocking release.
 
@@ -694,4 +694,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: ae55ad47993e8ac638534c36e8f10b65d04075dd -->
+<!-- source-hash: a00d3024bbd0c9efb1431ad999fdf30151c5f7cc -->
