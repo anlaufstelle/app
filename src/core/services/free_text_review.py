@@ -42,6 +42,7 @@ class ReviewEntry:
     fingerprint: str
     review: FreeTextReview | None
     source_url: str
+    qualified_client_id: UUID | None = None
 
     @property
     def pattern_labels(self):
@@ -120,6 +121,8 @@ def _entry(facility, target_type, target, key, text, reviews):
             }[target_type],
             kwargs={"pk": target.case_id if target_type == "Episode" else target.pk},
         ),
+        # Only the person detail page audits reads of qualified persons; mirror exactly that scope.
+        target.pk if target_type == "Client" and target.contact_stage == Client.ContactStage.QUALIFIED else None,
     )
 
 

@@ -163,3 +163,50 @@ def test_editor_choices_only_include_visible_source_metadata(
     choices = {value for value, _label in response.context["filter_form"].fields["editor"].choices}
     assert str(staff_user.pk) in choices
     assert str(admin_user.pk) not in choices
+
+
+def _qualified_audit(facility, person):
+    from core.models import AuditLog
+
+    return AuditLog.objects.for_facility(facility).filter(action=AuditLog.Action.VIEW_QUALIFIED, target_id=person.pk)
+
+
+@pytest.mark.parametrize("page", ["list", "target", "htmx_list"])
+def test_qualified_notes_keep_existing_read_audit(client, facility, staff_user, client_qualified, page):
+    client_qualified.notes = "Qualified review content"
+    client_qualified.save(update_fields=["notes"])
+    client.force_login(staff_user)
+    audit = _qualified_audit(facility, client_qualified)
+    normal = client.get(reverse("core:client_detail", kwargs={"pk": client_qualified.pk}))
+    assert b"Qualified review content" in normal.content
+    assert audit.count() == 1
+    if page == "target":
+        response = client.get(target_url(client_qualified, "notes"))
+    else:
+        extra = {"HTTP_HX_REQUEST": "true"} if page == "htmx_list" else {}
+        response = client.get(reverse("core:free_text_review_list"), **extra)
+    assert response.status_code == 200
+    assert b"Qualified review content" in response.content
+    assert audit.count() == 2
+    # The audit stores the person reference only, never the text.
+    assert all("Qualified review content" not in str(row.detail) for row in audit)
+
+
+def test_read_audit_only_for_displayed_qualified_persons(
+    client, facility, staff_user, client_qualified, client_identified
+):
+    from core.models import AuditLog
+
+    client_qualified.notes = "Qualified plain note"
+    client_qualified.save(update_fields=["notes"])
+    client_identified.notes = "Write person@example.org"
+    client_identified.save(update_fields=["notes"])
+    client.force_login(staff_user)
+    url = reverse("core:free_text_review_list")
+    # The email filter displays only the identified person: no qualified read happens.
+    assert len(client.get(url, {"risk": "email"}).context["entries"]) == 1
+    assert not AuditLog.objects.for_facility(facility).filter(action=AuditLog.Action.VIEW_QUALIFIED).exists()
+    # Without a filter both are displayed; only the qualified person is audited, once.
+    assert len(client.get(url).context["entries"]) == 2
+    assert _qualified_audit(facility, client_qualified).count() == 1
+    assert not _qualified_audit(facility, client_identified).exists()
