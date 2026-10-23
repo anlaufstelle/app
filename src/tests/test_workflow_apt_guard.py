@@ -1,4 +1,4 @@
-"""Bound every explicit apt invocation in GitHub workflows."""
+"""Bound explicit and Playwright-managed apt invocations in GitHub workflows."""
 
 import re
 from pathlib import Path
@@ -17,11 +17,12 @@ def test_apt_steps_have_deadlines_retries_and_network_timeouts():
         for job in workflow.get("jobs", {}).values():
             for step in job.get("steps", []):
                 run = step.get("run", "")
-                if "apt-get" not in run:
+                playwright_apt = re.search(r"\bplaywright\s+(?:install-deps\b|install\b[^\n;&|]*--with-deps\b)", run)
+                if "apt-get" not in run and not playwright_apt:
                     continue
                 assert 0 < step.get("timeout-minutes", 0) <= 10, (path.name, step)
                 commands = re.findall(r"\bapt-get\b([^\n;&|]*)", run)
-                assert commands
+                assert commands or playwright_apt
                 for command in commands:
                     invocations += 1
                     for option in ("Acquire::Retries=3", "Acquire::http::Timeout=30", "Acquire::https::Timeout=30"):

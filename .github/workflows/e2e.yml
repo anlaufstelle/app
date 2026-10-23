@@ -93,9 +93,11 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('requirements-dev.txt') }}
       - name: Install Playwright browsers
         run: python -m playwright install --with-deps chromium
+        timeout-minutes: 10
         if: steps.playwright-cache.outputs.cache-hit != 'true'
       - name: Install Playwright system deps only (cache hit)
         run: python -m playwright install-deps chromium
+        timeout-minutes: 10
         if: steps.playwright-cache.outputs.cache-hit == 'true'
       # Protokolliert den Schnitt im Log: welche Scheibe wie viele Dateien und
       # Tests traegt. Macht eine schiefe Verteilung sichtbar, bevor jemand die
