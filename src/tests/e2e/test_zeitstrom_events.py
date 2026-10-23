@@ -13,6 +13,7 @@ from datetime import datetime, time
 import pytest
 from playwright.sync_api import expect
 
+from ._helpers import track_console_errors, wait_for_active_service_worker
 from ._selectors import open_desktop_overflow
 
 pytestmark = pytest.mark.e2e
@@ -81,6 +82,48 @@ class TestAktivitaetslogStartseite:
         nav = page.locator("nav[aria-label='Hauptnavigation']")
         assert nav.get_by_role("link", name="Zeitstrom", exact=True).is_visible()
         assert nav.locator("a[href='/clients/']").is_visible()
+
+
+class TestZeitstromLiveWatchCsp:
+    def test_initial_watch_and_service_worker_activation_have_no_csp_errors(
+        self, browser, base_url, _staff_storage_state
+    ):
+        """Observe the staff page from its first navigation through SW activation."""
+        violations = []
+        with browser.new_context(storage_state=_staff_storage_state, locale="de-DE") as context:
+            context.expose_binding(
+                "__recordZeitstromCspViolation",
+                lambda _source, violation: violations.append(violation),
+            )
+            context.add_init_script("""
+                document.addEventListener("securitypolicyviolation", (event) => {
+                    window.__recordZeitstromCspViolation({
+                        directive: event.effectiveDirective,
+                        blockedURI: event.blockedURI,
+                    });
+                });
+            """)
+            # The staff_page fixture already navigates before returning, so
+            # create this page here and attach both listeners before navigation.
+            staff_page = context.new_page()
+            errors = track_console_errors(staff_page)
+            with staff_page.expect_response(
+                lambda response: (
+                    response.request.headers.get("x-zeitstrom-watch") == "1" and "feed_only=1" in response.url
+                )
+            ):
+                staff_page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            staff_page.evaluate("() => window.zeitstromWatch.checkNow()")
+            expect(staff_page.locator("#feed-list")).to_be_visible()
+
+            # Keep collecting across any reload needed to gain SW control.
+            wait_for_active_service_worker(staff_page)
+            staff_page.evaluate("() => window.zeitstromWatch.checkNow()")
+            staff_page.evaluate("""() => new Promise((resolve) => {
+                requestAnimationFrame(() => requestAnimationFrame(resolve));
+            })""")
+            assert violations == [], f"CSP violations during Zeitstrom startup: {violations}"
+            assert errors == [], f"Browser errors during Zeitstrom startup: {errors}"
 
 
 class TestTimeFilterHTMX:
