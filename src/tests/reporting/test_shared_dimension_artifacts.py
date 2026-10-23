@@ -1,15 +1,18 @@
 """Cross-report recipient attacks through the public artifact service."""
 
 import json
+from dataclasses import replace
 from datetime import date, datetime
 
 import pytest
 from django.utils import timezone
 
-from core.models import Client
+from core.models import Client, StatisticsSnapshot
 from core.reporting.export import export_dataset
 from core.reporting.registry import get_backend
+from core.services.dashboard import shared_disclosure
 from tests._factories import make_document_type, make_event
+from tests.reporting.test_reporting_sample_pdf_integration import pdf_text as pdf_text
 
 
 @pytest.mark.django_db
@@ -271,14 +274,87 @@ def test_rows_hidden_by_the_shared_mask_keep_the_value_independent_type_order(fa
 def test_projected_rows_are_returned_in_their_declared_order():
     from core.services.dashboard.external_report import ORDER_AGE_CLUSTER, ORDER_INPUT, project_protected_rows
 
-    clusters = [Client.AgeCluster.values[2], Client.AgeCluster.values[0], Client.AgeCluster.values[1]]
+    # The hidden groups arrive in reverse of their canonical order, so only an actual reordering passes.
+    clusters = [Client.AgeCluster.values[2], Client.AgeCluster.values[1], Client.AgeCluster.values[0]]
     rows = [{"cluster": cluster, "count": 9 - index} for index, cluster in enumerate(clusters)]
     projected = project_protected_rows(rows, [8, None, None], order=ORDER_AGE_CLUSTER)
     assert [row["cluster"] for row in projected] == [
         clusters[0],
         *sorted(clusters[1:], key=Client.AgeCluster.values.index),
     ]
+    assert [row["cluster"] for row in projected[1:]] != clusters[1:], "The input order must differ from the result"
     assert [row["count"] for row in projected] == [8, None, None]
     assert [row["suppressed"] for row in projected] == [False, True, True]
     unordered = project_protected_rows(rows, [None, None, 7], order=ORDER_INPUT)
     assert [row["cluster"] for row in unordered] == clusters
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("slug,format_name", [("general-key-figures", "json"), ("sample-report-1", "pdf")])
+def test_age_groups_keep_their_declared_order_after_additional_suppression(
+    facility, admin_user, monkeypatch, pdf_text, slug, format_name
+):
+    monkeypatch.setattr(timezone, "localdate", lambda: date(2026, 4, 30))
+    clusters = list(Client.AgeCluster.values[:3])
+    labels = dict(Client.AgeCluster.choices)
+    document_type = make_document_type(facility=facility, name="Age contacts", report_key="contact")
+    snapshot_rows = []
+    for cluster, amount in zip(clusters, (6, 7, 8), strict=True):
+        for index in range(amount):
+            person = Client.objects.create(facility=facility, pseudonym=f"{cluster}-{index}", age_cluster=cluster)
+            make_event(
+                facility=facility,
+                document_type=document_type,
+                client=person,
+                created_by=admin_user,
+                occurred_at=timezone.make_aware(datetime(2026, 1, 15, 12)),
+                data_json={},
+            )
+        snapshot_rows.append({"cluster": cluster, "label": str(labels[cluster]), "count": amount, "persons": amount})
+    StatisticsSnapshot.objects.create(
+        facility=facility,
+        year=2026,
+        month=1,
+        backend_data={
+            "sample-report-1": {
+                "total": 21,
+                "unique_clients": 21,
+                "by_category": [["Kontakte", 21]],
+                "by_age_cluster": snapshot_rows,
+            }
+        },
+    )
+    backend = get_backend(slug)
+    start, end = date(2026, 1, 1), date(2026, 1, 31)
+    baseline = backend.prepare_export(facility, backend.build_format_dataset(facility, start, end, format=format_name))
+    # The general figures append their established residual row for events without a person.
+    residual = ["__no_person__"] if slug == "general-key-figures" else []
+    assert [row["cluster"] for row in baseline.summary["by_age_cluster"]] == [*reversed(clusters), *residual]
+    original = shared_disclosure.protect_temporal_counts
+    hidden_populations = {f"{prefix}{cluster}" for prefix in ("age:", "hybrid-age:") for cluster in clusters[:2]}
+
+    def hide_two_age_rows(*args, **kwargs):
+        mask = original(*args, **kwargs)
+        values = dict(mask.published)
+        for key in values:
+            if key.dimension == "event_counts" and key.population in hidden_populations:
+                values[key] = None
+        return replace(mask, published=values)
+
+    monkeypatch.setattr(shared_disclosure, "protect_temporal_counts", hide_two_age_rows)
+    response = export_dataset(backend, facility, start, end, format=format_name)
+    assert response.status_code == 200
+    expected = [clusters[2], clusters[0], clusters[1], *residual]
+    if format_name == "json":
+        payload = json.loads(response.content)
+        rows = payload["summary"]["by_age_cluster"]
+        assert [row["cluster"] for row in rows] == expected
+        assert [row["count"] for row in rows] == [8, None, None, *([None] if residual else [])]
+        public_rows = [row for row in payload["records"] if row["table"] == "by_age_cluster"]
+        assert [row["label"] for row in public_rows] == [row["label"] for row in rows]
+    else:
+        assert response.content.startswith(b"%PDF-")
+        age_text = pdf_text[-1].split("Altersverteilung", 1)[1]
+        positions = [age_text.index(str(labels[cluster])) for cluster in expected]
+        assert positions == sorted(positions), age_text
+        assert age_text.count("unterdrückt") >= 2
