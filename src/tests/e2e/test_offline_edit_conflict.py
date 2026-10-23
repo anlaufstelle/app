@@ -901,7 +901,7 @@ def test_transient_key_loss_during_replay_skips_without_tokenless_post(authentic
             const fake = {
                 ready: () => (orig.ready ? orig.ready() : Promise.resolve()),
                 hasSessionKey: () => {
-                    if (!String(new Error().stack).includes('/offline-edit.js')) {
+                    if (!String(new Error().stack).includes('/offline-edit.min.js')) {
                         foreignCalls += 1;
                         return orig.hasSessionKey();
                     }

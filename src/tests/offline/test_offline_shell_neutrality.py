@@ -63,18 +63,18 @@ REQUIRED_SCRIPTS = (
     "js/csrf-utils.js",
     "js/dexie.min.js",
     "js/url-patterns.js",
-    "js/crypto.js",
+    "js/crypto.min.js",
     # Refs #1838: offline-store ist ein 4-Datei-Verbund — jedes Glied ist
     # Kalt-Offline-Pflicht (eine Mischkette haette weder Fassade noch
     # internen Kanal).
-    "js/offline-db.js",
-    "js/offline-bundles.js",
-    "js/offline-revocations.js",
-    "js/offline-store.js",
-    "js/offline-queue.js",
-    "js/offline-client.js",
-    "js/offline-edit.js",
-    "js/sync-orchestrator.js",
+    "js/offline-db.min.js",
+    "js/offline-bundles.min.js",
+    "js/offline-revocations.min.js",
+    "js/offline-store.min.js",
+    "js/offline-queue.min.js",
+    "js/offline-client.min.js",
+    "js/offline-edit.min.js",
+    "js/sync-orchestrator.min.js",
     "js/focus-management.js",
     "js/sw-register.js",
 )
@@ -203,8 +203,8 @@ class TestShellNeutrality:
         belegte Timer-Race waere zurueck, lautlos.
         """
         body = _fetch(client, url_name)
-        verbund = ("offline-db.js", "offline-bundles.js", "offline-revocations.js", "offline-store.js")
-        for tag in re.findall(r"<script[^>]+src=\"[^\"]*js/offline-[a-z-]+\.js[^\"]*\"[^>]*>", body):
+        verbund = ("offline-db.min.js", "offline-bundles.min.js", "offline-revocations.min.js", "offline-store.min.js")
+        for tag in re.findall(r"<script[^>]+src=\"[^\"]*js/offline-[a-z-]+\.min\.js[^\"]*\"[^>]*>", body):
             if any(name in tag for name in verbund):
                 assert "defer" not in tag and "async" not in tag, (
                     f"{url_name}: Verbund-Tag traegt defer/async — bricht die "

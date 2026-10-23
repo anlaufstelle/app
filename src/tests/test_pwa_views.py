@@ -122,12 +122,12 @@ class TestOfflineFallbackView:
         assert 'href="/"' in body
         # offline-home.js fuellt weiter die additiven Status-/Storage-Badges.
         assert "offline-home.js" in body
-        assert "offline-store.js" in body
+        assert "offline-store.min.js" in body
         # Refs #1838: der komplette 4-Datei-Verbund muss precached sein — eine
         # Mischgeneration haette weder Fassade noch internen Kanal.
-        assert "offline-db.js" in body
-        assert "offline-bundles.js" in body
-        assert "offline-revocations.js" in body
+        assert "offline-db.min.js" in body
+        assert "offline-bundles.min.js" in body
+        assert "offline-revocations.min.js" in body
 
     def test_selfhelp_content_is_static_without_js(self, client):
         """Refs #1494: Der Selbsthilfe-Inhalt (Hinweistext + Navigations-Links)
@@ -335,8 +335,8 @@ class TestServiceWorkerCachesOfflineFallback:
         body = response.content.decode()
         for asset in (
             "/static/js/dexie.min.js",
-            "/static/js/crypto.js",
-            "/static/js/offline-store.js",
+            "/static/js/crypto.min.js",
+            "/static/js/offline-store.min.js",
             "/static/js/offline-home.js",
         ):
             assert asset in body, f"{asset} fehlt im APP_SHELL — Offline-Home offline nicht ladbar."
@@ -359,9 +359,9 @@ class TestServiceWorkerCachesOfflineFallback:
             # der Offline-Replay-Refresh-Pfad (Konsumenten laufen leer).
             "/static/js/csrf-utils.js",
             "/static/js/url-patterns.js",
-            "/static/js/offline-queue.js",
-            "/static/js/offline-client.js",
-            "/static/js/offline-edit.js",
+            "/static/js/offline-queue.min.js",
+            "/static/js/offline-client.min.js",
+            "/static/js/offline-edit.min.js",
         ):
             assert asset in body, f"{asset} fehlt im APP_SHELL — Offline-Sync-Kern offline nicht ladbar."
 
@@ -383,7 +383,7 @@ class TestServiceWorkerCachesOfflineFallback:
         for asset in (
             "/static/js/alpine-csp.min.js",
             "/static/js/alpine/base-layout.js",
-            "/static/js/sync-orchestrator.js",
+            "/static/js/sync-orchestrator.min.js",
         ):
             assert asset in shell_block, (
                 f"{asset} fehlt im APP_SHELL — In-Place-Shells offline ohne Renderer/Nav/Koordinator."

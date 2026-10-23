@@ -295,16 +295,16 @@ const APP_SHELL = [
     // JS-Deps muessen pre-cached sein, sonst ist die Home beim ersten
     // Offline-Aufruf (PWA-Kaltstart) leer/unladbar.
     "/static/js/dexie.min.js",
-    "/static/js/crypto.js",
+    "/static/js/crypto.min.js",
     // Refs #1838: offline-store ist ein 4-Datei-Verbund (offline-db →
     // offline-bundles → offline-revocations → offline-store, EINE Fassade);
     // alle vier muessen atomar precached sein — eine Mischgeneration
     // (z.B. neues offline-store.js ohne offline-db.js) haette weder Fassade
     // noch internen Kanal.
-    "/static/js/offline-db.js",
-    "/static/js/offline-bundles.js",
-    "/static/js/offline-revocations.js",
-    "/static/js/offline-store.js",
+    "/static/js/offline-db.min.js",
+    "/static/js/offline-bundles.min.js",
+    "/static/js/offline-revocations.min.js",
+    "/static/js/offline-store.min.js",
     "/static/js/offline-home.js",
     // Refs #1322: Der In-Place-Client-Shell rendert ueber offline-client-view.js,
     // das NUR vom Offline-Detail-Template geladen wird (sonst nirgends -> nicht
@@ -365,9 +365,9 @@ const APP_SHELL = [
     // Replay-Refresh-Pfad ins Leere (window.csrfUtils fehlt).
     "/static/js/csrf-utils.js",
     "/static/js/url-patterns.js",
-    "/static/js/offline-queue.js",
-    "/static/js/offline-client.js",
-    "/static/js/offline-edit.js",
+    "/static/js/offline-queue.min.js",
+    "/static/js/offline-client.min.js",
+    "/static/js/offline-edit.min.js",
     // Refs #1482: Die In-Place-Shells (offline_detail.html/conflict_review.html)
     // erweitern seit Refs #1966 offline_base.html — ihr gesamtes Rendering
     // haengt an Alpine (alpine:init in offline-client-view.js/
@@ -383,7 +383,7 @@ const APP_SHELL = [
     // Offline-Kaltstart ohne Renderer/Statusbalken/Koordinator.
     "/static/js/alpine-csp.min.js",
     "/static/js/alpine/base-layout.js",
-    "/static/js/sync-orchestrator.js",
+    "/static/js/sync-orchestrator.min.js",
     // Refs #1339: Der globale HTMX-Fokus-Handler (htmx:afterSwap) wird von
     // base.html auf jeder Seite geladen — auch von den In-Place-Offline-Shells
     // (offline_detail.html etc.), die base.html erweitern und selbst hx-Swaps

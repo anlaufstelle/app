@@ -14,11 +14,11 @@
     {# (sw-register.js hooks every form posting to the logout URL); order as in login.html. #}
     <script src="{% static 'js/dexie.min.js' %}"></script>
     <script src="{% static 'js/url-patterns.js' %}"></script>
-    <script src="{% static 'js/crypto.js' %}"></script>
-    <script src="{% static 'js/offline-db.js' %}"></script>
-    <script src="{% static 'js/offline-bundles.js' %}"></script>
-    <script src="{% static 'js/offline-revocations.js' %}"></script>
-    <script src="{% static 'js/offline-store.js' %}"></script>
+    <script src="{% static 'js/crypto.min.js' %}"></script>
+    <script src="{% static 'js/offline-db.min.js' %}"></script>
+    <script src="{% static 'js/offline-bundles.min.js' %}"></script>
+    <script src="{% static 'js/offline-revocations.min.js' %}"></script>
+    <script src="{% static 'js/offline-store.min.js' %}"></script>
 </head>
 <body class="min-h-screen bg-canvas flex items-center justify-center p-6"
       data-i18n-sw-update="{% trans 'Neue Version verfügbar.' %}" data-i18n-sw-reload="{% trans 'Neu laden' %}" data-i18n-sw-dismiss="{% trans 'Schließen' %}"

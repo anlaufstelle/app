@@ -89,7 +89,7 @@ class TestNoLoadPathStaysSilent:
         loading = {
             str(path.relative_to(TEMPLATES))
             for path in TEMPLATES.rglob("*.html")
-            if "offline-db.js" in path.read_text(encoding="utf-8")
+            if "js/offline-db.min.js" in path.read_text(encoding="utf-8")
         }
 
         assert loading == {*self.WITH_LABEL, *self.WITHOUT_LABEL}
