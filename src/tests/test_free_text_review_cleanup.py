@@ -59,3 +59,12 @@ def test_case_revocation_cleans_case_and_episode(marked_targets, facility, staff
         anonymize_case(case, user=staff_user, trigger="manual")
     assert not FreeTextReview.objects.for_facility(facility).filter(target_type__in=["Case", "Episode"]).exists()
     assert FreeTextReview.objects.for_facility(facility).filter(target_type="Client").exists()
+
+
+def test_marked_event_soft_delete_removes_metadata(facility, staff_user, sample_event):
+    from core.services.events.crud import soft_delete_event
+
+    entry = get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
+    mark_review(facility, staff_user, "Event", sample_event.pk, "notiz", timezone.localdate(), entry.fingerprint)
+    soft_delete_event(sample_event, staff_user)
+    assert not FreeTextReview.objects.for_facility(facility).filter(target_type="Event").exists()

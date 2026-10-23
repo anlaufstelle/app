@@ -691,11 +691,16 @@ def _assert_current_client_binding(event):
     geloescht), verhaelt sich die Pruefung wie bisher: ``client_id`` gilt als
     ``None`` und ein gesetzter Bezug bricht ab.
     """
-    binding = Event.objects.filter(pk=event.pk).values_list("client_id", "case_id").first()
+    # Refs #918
+    # Share the post-lock state read with the review cleanup path
+    # so deleting an unmarked event retains the existing query budget.
+    binding = Event.objects.filter(pk=event.pk).values_list("client_id", "case_id", "is_deleted").first()
+    if binding is not None and binding[2]:
+        raise ValidationError(_("Dieses Ereignis liegt bereits im Papierkorb."), code="event_already_deleted")
     current_client_id = binding[0] if binding is not None else None
     if current_client_id != event.client_id:
         raise ValidationError(CLIENT_BINDING_CHANGED_MESSAGE)
-    return binding if binding is not None else (None, None)
+    return binding[:2] if binding is not None else (None, None)
 
 
 def _assert_no_active_hold(event, *, client_id, case_id):
@@ -801,11 +806,6 @@ def soft_delete_event(event, user, *, source=None, rows_locked=False):
         # avoids acquiring a second lock or issuing another query here.
         if event.facility_id != user.facility_id:
             raise ValidationError(_EVENT_OTHER_FACILITY_MESSAGE)
-    # The deletion state comes from the locked row, not from the instance: a
-    # stale instance or a second request that waited on the locks above would
-    # otherwise stamp, record and audit the same deletion again.
-    if Event.objects.filter(pk=event.pk, facility_id=event.facility_id).values_list("is_deleted", flat=True).first():
-        raise ValidationError(_("Dieses Ereignis liegt bereits im Papierkorb."), code="event_already_deleted")
     # Refs #2197 (Cross-Review-Runde 1): die Bindung kommt aus der gesperrten
     # Zeile, nicht aus der womoeglich veralteten Instanz — sonst prueft der
     # Hold-Guard eine Fallzuordnung von vorhin.
