@@ -169,12 +169,16 @@ def protect_counts(
     dropped = _component({key for key, cell in raw.items() if cell.drop}, partitions)
     hidden = {key for key, cell in raw.items() if cell.hidden or cell.value < threshold} | dropped
     tokens = {key: key.token() for key in raw}
-    # Every pass either hides a visible cell or drops an entire component.
-    for _ in range(len(raw) + 1):
+
+    def audit(hidden_now):
+        """Cells whose hidden value stays recoverable, with the active partitions.
+
+        ``None`` when the audit cannot complete.
+        """
         cells = {
             tokens[key]: Cell(
                 tokens[key],
-                None if key in hidden else cell.value,
+                None if key in hidden_now else cell.value,
                 lo=cell.lower,
                 hi=min(cell.upper, threshold - 1)
                 if cell.value < threshold and cell.upper is not None
@@ -200,12 +204,11 @@ def protect_counts(
         try:
             bounds = shared_bounds(cells, model)
         except RuntimeError:
-            # An incomplete audit cannot authorize publication or row existence.
-            return SharedMask(facility.pk, threshold, dict.fromkeys(raw), frozenset(raw))
+            return None
         local_findings = {token for _, token in findings(model, threshold=threshold)}
         alternatives = shared_alternatives(cells, model, {tokens[key]: cell.value for key, cell in raw.items()})
         unsafe = set()
-        for key in hidden - dropped:
+        for key in hidden_now - dropped:
             cell = raw[key]
             lower, upper = bounds[tokens[key]]
             if cell.value == 0 or (cell.value >= threshold and not cell.person_sensitive):
@@ -216,7 +219,26 @@ def protect_counts(
                 or len(alternatives[tokens[key]]) < MIN_FEASIBLE_SPAN
             ):
                 unsafe.add(key)
+        return unsafe, active_partitions
+
+    victims: list[CountKey] = []
+    # Every pass either hides a visible cell or drops an entire component.
+    for _ in range(len(raw) + 1):
+        audited = audit(hidden)
+        if audited is None:
+            # An incomplete audit cannot authorize publication or row existence.
+            return SharedMask(facility.pk, threshold, dict.fromkeys(raw), frozenset(raw))
+        unsafe, active_partitions = audited
         if not unsafe:
+            # The cheapest-first choice can hide cells that a later victim made
+            # unnecessary. Release each such cell again, but only while the
+            # audit of the smaller mask stays clean.
+            for victim in victims:
+                if victim in dropped:
+                    continue
+                trial = audit(hidden - {victim})
+                if trial is not None and not trial[0]:
+                    hidden = hidden - {victim}
             return SharedMask(
                 facility.pk,
                 threshold,
@@ -228,6 +250,7 @@ def protect_counts(
         if candidates:
             victim = min(candidates, key=lambda key: (raw[key].suppression_rank, raw[key].value, key))
             hidden.add(victim)
+            victims.append(victim)
         else:
             dropped.update(connected)
             hidden.update(connected)

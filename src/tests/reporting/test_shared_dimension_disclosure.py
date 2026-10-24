@@ -47,7 +47,9 @@ def test_common_margin_does_not_recover_a_hidden_cell_across_reports(facility):
     assert 1 in possible
     assert len(possible) >= 2, "Combining the two report margins must not recover Bravo"
     assert mask.published[key("bravo")] is None
-    assert mask.published[key("alpha")] is None
+    assert None in (mask.published[key(name)] for name in ("all", "mapped", "alpha")), (
+        "At least one figure of the combination that fixes Bravo stays withheld"
+    )
     assert mask.threshold == 5
     assert mask.facility_id == facility.pk
 
@@ -373,3 +375,30 @@ def test_cohort_weights_cannot_invent_distinct_person_memberships(facility):
     )
     with pytest.raises(ValueError, match="person"):
         shared_disclosure.protect_temporal_counts(facility, [population], ((START, END),))
+
+
+@pytest.mark.django_db
+def test_a_cell_made_unnecessary_by_a_later_suppression_is_released_again(facility):
+    """The cheapest-first choice hides ``left`` first, but ``shared`` alone protects both small cells."""
+    counts = [
+        count("first-margin", 16),
+        count("small-first", 2),
+        count("left", 6),
+        count("shared", 8),
+        count("second-margin", 20),
+        count("small-second", 3),
+        count("right", 9),
+    ]
+    equations = [
+        (key("first-margin"), (key("small-first"), key("left"), key("shared"))),
+        (key("second-margin"), (key("small-second"), key("shared"), key("right"))),
+    ]
+    partitions = [
+        shared_disclosure.CountPartition(str(index), margin, cells) for index, (margin, cells) in enumerate(equations)
+    ]
+    mask = shared_disclosure.protect_counts(facility, counts, partitions)
+    assert mask.published[key("shared")] is None
+    assert mask.published[key("left")] == 6, "A cell no longer needed for any hidden value stays published"
+    assert mask.published[key("right")] == 9
+    for small in ("small-first", "small-second"):
+        assert len(possible_targets(mask, key(small), equations, maximum=20)) >= 2
