@@ -141,7 +141,9 @@ class Case(DynamicDataEncryptionMixin, SoftDeletableModel):
                 self._encrypt_sensitive_fields()
             super().save(*args, **kwargs)
 
-    def create_episode(self, *, user, title, description="", started_at=None, ended_at=None):
+    def create_episode(
+        self, *, user, title, description="", started_at=None, ended_at=None, document_type=None, data_json=None
+    ):
         """Create an episode for an open case, including its optional end date."""
         from core.models.episode import Episode
 
@@ -154,4 +156,6 @@ class Case(DynamicDataEncryptionMixin, SoftDeletableModel):
             started_at=started_at or timezone.localdate(),
             ended_at=ended_at,
             created_by=user,
+            document_type=document_type,
+            data_json=data_json or {},
         )

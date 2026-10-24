@@ -463,6 +463,8 @@ WORKITEM_FORM_STATE_FIELDS = (
     "item_type",
     "title",
     "description",
+    "document_type_id",
+    "data_json",
     "priority",
     "due_date",
     "remind_at",
@@ -683,13 +685,26 @@ def create_workitem(facility, user, *, client=None, **data):
     neue Aufgabe an — entschieden an der eben gesperrten Personenzeile, nicht
     am Stand der Formularpruefung.
     """
+    from core.models import DocumentType
     from core.services.client.restriction import assert_processing_allowed
+    from core.services.dynamic_data import clean_dynamic_data
+    from core.services.dynamic_protection import lock_dynamic_protection
 
     facility_id = getattr(facility, "pk", facility)
     _assert_actor_in_facility(user, facility_id)
+    if "document_type_id" in data:
+        raise ValueError("Use document_type instead of document_type_id.")
+    lock_dynamic_protection(facility_id)
     assert_processing_allowed(client, lock=True)
     if client is not None:
         _raise_if_clients_revoked([getattr(client, "pk", client)], facility_id)
+    data["data_json"] = clean_dynamic_data(
+        facility,
+        data.get("document_type"),
+        data.get("data_json"),
+        entity_type=DocumentType.EntityType.WORKITEM,
+        entity_type_error=_("Der Dokumentationstyp muss für Aufgaben gelten."),
+    )
     workitem = WorkItem(facility=facility, created_by=user, client=client, **data)
     workitem.save()
     log_activity(
@@ -750,7 +765,10 @@ def update_workitem(
     sind Freitext und es gibt keinen nachgelagerten Prune, ein Umhängen
     schriebe also fremden Klartext an eine andere Person fest.
     """
+    from core.models import DocumentType
     from core.services.client.restriction import assert_processing_allowed
+    from core.services.dynamic_data import clean_dynamic_data
+    from core.services.dynamic_protection import lock_dynamic_protection
     from core.services.security import check_version_conflict
 
     # Art.-18-Gate (Refs #2045) VOR dem Versions-Guard und unabhaengig davon,
@@ -764,6 +782,7 @@ def update_workitem(
     # geposteten Wert mutiert (Muster #1613).
     # Einrichtungsgrenze der handelnden Person vor jeder Lesung und Sperre.
     _assert_actor_in_facility(user, workitem.facility_id)
+    lock_dynamic_protection(workitem.facility_id)
     # Refs #2377: auch diese Lesung nur in der Einrichtung der Aufgabe — sonst
     # sperrte eine Instanz mit verfaelschter Einrichtung die Person einer
     # fremden Aufgabe, bevor die gescopte Aufgabensperre unten abweist.
@@ -815,7 +834,7 @@ def update_workitem(
     locked_state = (
         type(workitem)
         ._base_manager.select_related("created_by", "assigned_to")
-        .only("pk", "is_deleted", "created_by", "assigned_to")
+        .only("pk", "is_deleted", "created_by", "assigned_to", "document_type", "data_json")
         .get(pk=workitem.pk, facility_id=workitem.facility_id)
     )
     if locked_state.is_deleted:
@@ -843,6 +862,8 @@ def update_workitem(
         "item_type",
         "title",
         "description",
+        "document_type",
+        "data_json",
         "priority",
         "due_date",
         "assigned_to",
@@ -851,6 +872,15 @@ def update_workitem(
         "recurrence",
     }
     check_update_allowlist(fields, allowed)
+    if "document_type" in fields or "data_json" in fields:
+        fields["data_json"] = clean_dynamic_data(
+            workitem.facility,
+            fields.get("document_type", locked_state.document_type),
+            fields.get("data_json", locked_state.data_json),
+            entity_type=DocumentType.EntityType.WORKITEM,
+            entity_type_error=_("Der Dokumentationstyp muss für Aufgaben gelten."),
+            old_data=locked_state.data_json,
+        )
 
     if "client" in fields:
         # Refs #1786 (TOCTOU): Der Pin-Zustand wird gegen den **DB-Stand unter

@@ -7,9 +7,11 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models import AuditLog, Episode
+from core.models import AuditLog, DocumentType, Episode
 from core.services.audit import audit_event
 from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, lock_case_for_write
+from core.services.dynamic_data import clean_dynamic_data
+from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.form_state import require_form_state, sign_form_state
 
 logger = logging.getLogger(__name__)
@@ -21,7 +23,9 @@ EPISODE_CASE_NOT_OPEN_MESSAGE = _("Episoden können nur für offene Fälle erste
 #: Mass-Assignment durch versehentlich durchgereichte Felder — insbesondere
 #: ``case`` (ein Umhaengen der Episode in einen fremden Fall) und die
 #: Soft-Delete-Marker.
-_UPDATABLE_FIELDS = frozenset({"title", "description", "started_at", "ended_at"})
+_UPDATABLE_FIELDS = frozenset({"title", "description", "started_at", "ended_at", "document_type", "data_json"})
+_EPISODE_STATE_FIELDS = (_UPDATABLE_FIELDS - {"document_type"}) | {"document_type_id"}
+_EPISODE_DOCUMENT_TYPE_ERROR = _("Der Dokumentationstyp muss für Episoden gelten.")
 
 
 def validate_episode_dates(started_at, ended_at):
@@ -36,7 +40,7 @@ _EPISODE_STATE_SALT = "core.episode.form_state"
 def episode_basis_token(episode):
     """Sign all editable episode fields, bound to episode and facility."""
     return sign_form_state(
-        episode, fields=_UPDATABLE_FIELDS, facility_id=episode.case.facility_id, salt=_EPISODE_STATE_SALT
+        episode, fields=_EPISODE_STATE_FIELDS, facility_id=episode.case.facility_id, salt=_EPISODE_STATE_SALT
     )
 
 
@@ -88,17 +92,30 @@ def update_episode(episode, user, *, basis_token=None, **fields):
             raise ValueError(f"Field '{key}' cannot be updated.")
     from core.services.case.goals import _assert_actor_facility
 
-    _assert_actor_facility(user, _episode_facility_id(episode))
+    facility_id = _episode_facility_id(episode)
+    _assert_actor_facility(user, facility_id)
+    lock_dynamic_protection(facility_id)
     locked = _lock_episode_for_write(episode)
     require_form_state(
         basis_token,
         locked,
-        fields=_UPDATABLE_FIELDS,
+        fields=_EPISODE_STATE_FIELDS,
         facility_id=locked.case.facility_id,
         salt=_EPISODE_STATE_SALT,
     )
     validate_episode_dates(fields.get("started_at", locked.started_at), fields.get("ended_at", locked.ended_at))
+    if "document_type" in fields or "data_json" in fields:
+        fields["data_json"] = clean_dynamic_data(
+            locked.facility,
+            fields.get("document_type", locked.document_type),
+            fields.get("data_json", locked.data_json),
+            entity_type=DocumentType.EntityType.EPISODE,
+            entity_type_error=_EPISODE_DOCUMENT_TYPE_ERROR,
+            old_data=locked.data_json,
+        )
     changed_fields = [key for key, value in fields.items() if getattr(locked, key) != value]
+    if "document_type" in changed_fields and "data_json" not in changed_fields:
+        changed_fields.append("data_json")
     if not changed_fields:
         return locked
     for key in changed_fields:
@@ -116,7 +133,9 @@ def update_episode(episode, user, *, basis_token=None, **fields):
 
 
 @transaction.atomic
-def create_episode(case, user, *, title, description="", started_at=None, ended_at=None):
+def create_episode(
+    case, user, *, title, description="", started_at=None, ended_at=None, document_type=None, data_json=None
+):
     """Episode anlegen — Service-Naht ueber ``Case.create_episode`` (Refs #2045).
 
     Das Anlegen lag bisher als reine Modell-Methode vor und wurde von der View
@@ -144,13 +163,27 @@ def create_episode(case, user, *, title, description="", started_at=None, ended_
     from core.services.case.goals import _assert_actor_facility
 
     _assert_actor_facility(user, case.facility_id)
+    lock_dynamic_protection(case.facility_id)
     locked_case = lock_case_for_write(case)
     if locked_case.status != locked_case.Status.OPEN:
         raise ValidationError(EPISODE_CASE_NOT_OPEN_MESSAGE)
     started_at = started_at or timezone.localdate()
     validate_episode_dates(started_at, ended_at)
+    cleaned = clean_dynamic_data(
+        locked_case.facility,
+        document_type,
+        data_json,
+        entity_type=DocumentType.EntityType.EPISODE,
+        entity_type_error=_EPISODE_DOCUMENT_TYPE_ERROR,
+    )
     return locked_case.create_episode(
-        user=user, title=title, description=description, started_at=started_at, ended_at=ended_at
+        user=user,
+        title=title,
+        description=description,
+        started_at=started_at,
+        ended_at=ended_at,
+        document_type=document_type,
+        data_json=cleaned,
     )
 
 
