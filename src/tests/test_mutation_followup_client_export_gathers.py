@@ -165,9 +165,9 @@ class TestGatherClientFields:
     # -- Refs #1752: Freitext, Anonymisierung, Papierkorb --------------------
 
     def test_notes_are_exported_verbatim(self, client_identified):
-        """Mutation ``client.data_json`` → Konstante/Leerstring würde ausgerechnet
-        den Freitext unterschlagen, den ``docs/security-notes.md`` selbst als
-        „hoch (Klarname-Risiko)" einstuft."""
+        """Mutating ``client.data_json`` to a constant or empty string would drop
+        exactly the free text that ``docs/security-notes.md`` rates as
+        high risk (real-name risk)."""
         set_record_text(client_identified, "Freitext-Vermerk der Fachkraft")
         client_identified.save(update_fields=["document_type", "data_json"])
         assert _gather_client_fields(client_identified)["dynamic_data"][0]["value"] == "Freitext-Vermerk der Fachkraft"

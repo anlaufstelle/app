@@ -137,10 +137,11 @@ class TestBundleClientFields:
 
 @pytest.mark.django_db
 class TestNotesVisibilityGate:
-    """Notes-Gate: ``is_staff_or_above`` schaltet ``client.data_json`` frei.
+    """Typed person values in the offline bundle are filtered per field and type
+    sensitivity for the user's role.
 
-    Mutation der Negation, des Property-Namens oder des Fallback-``""``
-    werden gefangen.
+    Mutations of the negation, the property name or the empty fallback are
+    caught.
     """
 
     def test_assistant_sees_empty_notes(self, facility, client_identified, assistant_user):
