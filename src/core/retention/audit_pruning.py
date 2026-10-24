@@ -23,6 +23,7 @@ from core.retention.legal_holds import (
 from core.services.audit import audit_event
 from core.services.audit.chain import advisory_lock_name
 from core.services.dashboard.release_log import RELEASE_EXPORT_Q
+from core.services.dynamic_records import DYNAMIC_DATA_MODELS, dynamic_case_lookup, dynamic_client_lookup
 from core.services.system import bypass_replication_triggers
 
 # A6.3 (Refs #1024 / #1016): Aktionen, die NICHT der Routine-Retention
@@ -137,44 +138,55 @@ def _held_targets(facility):
         )
         | held_events
     )
-    return (
-        Q(target_type="Client", target_id__in=[str(pk) for pk in protected_clients])
-        | Q(target_type="Case", target_id__in=[str(pk) for pk in protected_cases])
-        | Q(target_type="Event", target_id__in=[str(pk) for pk in protected_events])
-    )
+    protected = {Client: protected_clients, Case: protected_cases, Event: protected_events}
+    result = Q(pk__in=[])
+    for model in DYNAMIC_DATA_MODELS:
+        if model not in protected:
+            direct = get_active_hold_target_ids(facility, model.__name__)
+            condition = Q(pk__in=direct)
+            client_lookup = dynamic_client_lookup(model)
+            case_lookup = dynamic_case_lookup(model)
+            if client_lookup:
+                condition |= Q(**{f"{client_lookup}__in": held_clients})
+            if case_lookup:
+                condition |= Q(**{f"{case_lookup}__in": held_cases})
+            protected[model] = (
+                set(model.objects.for_facility(facility).filter(condition).values_list("pk", flat=True)) | direct
+            )
+        result |= Q(target_type=model.__name__, target_id__in=[str(pk) for pk in protected[model]])
+    return result
 
 
 def _lock_audit_targets(qs, facility):
-    """Take the hold anchors before the audit chain, in person/case/event order.
-
-    Hold creation uses the same anchors. Unknown/non-record targets have no
-    anchor; direct holds on missing records are still respected by the filter.
-    """
-    ids = {kind: set() for kind in ("Client", "Case", "Event")}
+    """Lock parent anchors before all affected carriers and the audit chain."""
+    ids = {model.__name__: set() for model in DYNAMIC_DATA_MODELS}
     for kind, value in qs.filter(target_type__in=ids).values_list("target_type", "target_id"):
         try:
             ids[kind].add(UUID(value))
         except (ValueError, TypeError):
             continue
-    events = Event.objects.for_facility(facility).filter(pk__in=ids["Event"])
-    cases = Case.objects.for_facility(facility).filter(pk__in=ids["Case"])
-    person_ids = (
-        ids["Client"] | set(events.values_list("client_id", flat=True)) | set(cases.values_list("client_id", flat=True))
-    )
+    person_ids = ids["Client"].copy()
+    case_ids = ids["Case"].copy()
+    for model in DYNAMIC_DATA_MODELS:
+        records = model.objects.for_facility(facility).filter(pk__in=ids[model.__name__])
+        client_lookup = dynamic_client_lookup(model)
+        case_lookup = dynamic_case_lookup(model)
+        if client_lookup:
+            person_ids.update(records.values_list(client_lookup, flat=True))
+        if case_lookup:
+            case_ids.update(records.values_list(case_lookup, flat=True))
     list(Client.objects.for_facility(facility).filter(pk__in=person_ids).order_by("pk").select_for_update())
-    case_ids = ids["Case"] | set(events.values_list("case_id", flat=True))
-    list(
-        Case.objects.for_facility(facility)
-        .filter(Q(pk__in=case_ids) | Q(client_id__in=ids["Client"]))
-        .order_by("pk")
-        .select_for_update()
-    )
-    list(
-        Event.objects.for_facility(facility)
-        .filter(Q(pk__in=ids["Event"]) | Q(client_id__in=ids["Client"]) | Q(case_id__in=ids["Case"]))
-        .order_by("pk")
-        .select_for_update()
-    )
+    for model in DYNAMIC_DATA_MODELS:
+        if model is Client:
+            continue
+        condition = Q(pk__in=case_ids if model is Case else ids[model.__name__])
+        client_lookup = dynamic_client_lookup(model)
+        case_lookup = dynamic_case_lookup(model)
+        if client_lookup:
+            condition |= Q(**{f"{client_lookup}__in": ids["Client"]})
+        if case_lookup:
+            condition |= Q(**{f"{case_lookup}__in": ids["Case"]})
+        list(model.objects.for_facility(facility).filter(condition).order_by("pk").select_for_update(of=("self",)))
 
 
 @transaction.atomic

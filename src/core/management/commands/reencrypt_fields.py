@@ -72,6 +72,7 @@ class Command(BaseCommand):
                 f"{action} {counts['events']} events, {counts['event_history']} history entries, "
                 f"{counts['attachments']} attachments, {counts['totp_devices']} TOTP devices, "
                 f"{counts['clients']} clients, {counts['cases']} cases, "
+                f"{counts['episodes']} episodes, {counts['workitems']} workitems, "
                 f"{counts['rectification_requests']} rectification requests, "
                 f"{counts['shift_handover_notes']} handover notes."
             )

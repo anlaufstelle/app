@@ -1,48 +1,17 @@
-"""Management command: verwaiste ``data_json``-Keys aus Client/Case/Event entfernen.
+"""Remove orphan dynamic keys from every registered carrier.
 
-Refs #1725(a): Wird eine Feldzuordnung von einem ``DocumentType`` entfernt,
-bleiben bereits erfasste Werte unter ihrem Slug in ``data_json`` gespeichert —
-der Slug faellt erst beim naechsten Speichern der Entitaet durch
-``validate_data_json``. Bis dahin sind sie „verwaist": in der Detailansicht in
-der Sektion „Nicht mehr zugeordnete Felder" sichtbar (Refs #1725), aber aus
-Sicht der Datenminimierung (Art. 5 Abs. 1 lit. c/e DSGVO) Reste, die entfernt
-werden sollen, sobald sie fachlich nicht mehr gebraucht werden.
-
-Dieser Command entfernt bei Personen, Faellen und Ereignissen jene
-``data_json``-Schluessel, die **nicht (mehr)** zur aktuellen Feldzuordnung ihres
-Typs gehoeren. Zugeordnete Werte — auch verschluesselte — bleiben unangetastet:
-es werden nur Keys entfernt, keine Werte umgeschrieben.
-
-**Verwaiste FILE-Marker werden bewusst UEBERSPRUNGEN** und separat
-gezaehlt/gemeldet, statt geloescht: der ``data_json``-Marker ist die einzige
-Bruecke zur verschluesselten ``Attachment``-Zeile.
-
-M24 (Refs #1738, ADR-039 §7): Die Skip-Regel galt frueher faktisch nur fuer
-Ereignisse (Datei-Felder waren an Personen-/Fall-Typen gesperrt, E8). Seit der
-Owner-Generik gilt sie fuer **alle drei** Entitaeten — Personen und Faelle
-koennen ebenfalls FILE-Waisen tragen und werden genauso verschont.
-Loeschte man ihn hier, verschonte ``cleanup_orphan_storage_files`` die Datei (die
-Attachment-Zeile existiert weiter) und sie waere danach UI-unsichtbar und nur
-noch ueber die Klient-Hardloeschung erreichbar — schlechter minimiert statt
-besser. Die eigentliche Datei-Bereinigung laeuft ueber die Attachment-
-Loeschpfade / ``cleanup_orphan_storage_files``, nicht ueber diesen Command.
-
-    python manage.py purge_orphan_field_data --dry-run
-    python manage.py purge_orphan_field_data
-
-Wie die uebrigen Wartungskommandos MUSS der Lauf mit der Admin-DB-Rolle
-(BYPASSRLS) erfolgen — siehe docs/ops-runbook.md § 3.5 / § 9.
+Assigned fields and orphan file markers remain intact. Run with an RLS bypass
+context to include all facilities, live records and deleted records.
 """
 
 from django.core.management.base import BaseCommand, CommandError
-
-from core.models import Case, Client, Event
 
 # Refs #1725: FILE-Marker-Erkennung (Stufe A/B) — verwaiste Datei-Marker werden
 # uebersprungen, nicht geloescht (s. Modul-Docstring). Refs #1738: Der Helfer
 # ist mit der Owner-Generik nach ``services/dynamic_data`` gezogen (SSOT), weil
 # Marker nicht mehr event-gebunden sind.
 from core.services.dynamic_data import is_file_marker
+from core.services.dynamic_records import DYNAMIC_DATA_MODELS
 
 # Refs #1016/#1554: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
 # als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
@@ -116,9 +85,7 @@ class Command(BaseCommand):
             )
         dry_run = options["dry_run"]
         results = {
-            "Personen": self._purge_model(Client, dry_run),
-            "Fälle": self._purge_model(Case, dry_run),
-            "Ereignisse": self._purge_model(Event, dry_run),
+            str(model._meta.verbose_name_plural): self._purge_model(model, dry_run) for model in DYNAMIC_DATA_MODELS
         }
 
         verb = "Würde bereinigen" if dry_run else "Bereinigt"
@@ -160,5 +127,8 @@ class Command(BaseCommand):
             # (``compute_event_search_text`` nimmt nur Slugs des aktuellen Typs),
             # ein Resync waere ein unerwuenschter Seiteneffekt auf sonst
             # unberuehrte Ereignisse.
-            entity.save(update_fields=["data_json", "updated_at"])
+            fields = ["data_json"]
+            if hasattr(entity, "updated_at"):
+                fields.append("updated_at")
+            entity.save(update_fields=fields)
         return checked, cleaned, keys_removed, files_skipped

@@ -24,6 +24,7 @@ from core.models import (
 from core.services.audit import log_audit_event
 from core.services.config.block_order import iter_blocks_in_order
 from core.services.dynamic_protection import configuration_write
+from core.services.dynamic_records import DYNAMIC_DATA_MODELS
 
 
 class ConfigDeleteBlocked(Exception):  # noqa: N818 — Plan-Vorgabe (#1056); UI-Semantik „blockiert", kein Error-Suffix
@@ -373,6 +374,25 @@ def field_template_delete_blockers(field_template: FieldTemplate) -> list[str]:
                     len(_trashed_case_ids_with_slug(field_template)),
                     of_cases=True,
                 )
+            )
+
+    # These carriers have no attachment ownership or legacy trash messages.
+    for model in DYNAMIC_DATA_MODELS:
+        if not getattr(model, "dynamic_entity_type", None):
+            continue
+        count = (
+            model.objects.for_facility(field_template.facility_id)
+            .filter(
+                data_json__has_key=field_template.slug,
+            )
+            .count()
+            if field_template.slug
+            else 0
+        )
+        if count:
+            reasons.append(
+                _("%(entity)s: %(n)d Datensatz/Datensätze enthalten Daten unter dem Slug „%(slug)s“.")
+                % {"entity": model._meta.verbose_name_plural, "n": count, "slug": field_template.slug}
             )
 
     return reasons

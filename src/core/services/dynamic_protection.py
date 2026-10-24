@@ -231,12 +231,13 @@ def dynamic_data_write(record, update_fields=None):
 
 
 def rewrite_dynamic_records(document_types):
-    """Rewrite the scoped live/trash values in person, case, event order.
+    """Rewrite scoped live and deleted carriers in the registry's lock order.
 
     Historical snapshots keep their separate rotation contract; no append-only
     trigger is bypassed by normal configuration writes.
     """
-    from core.models import Case, Client, Event
+    from core.models import Event
+    from core.services.dynamic_records import DYNAMIC_DATA_MODELS
 
     document_types = list(document_types)
     if not document_types:
@@ -249,7 +250,7 @@ def rewrite_dynamic_records(document_types):
     if batch is not None and not batch.flushing:
         batch.document_type_ids.update(type_ids)
         return
-    for model in (Client, Case, Event):
+    for model in DYNAMIC_DATA_MODELS:
         records = (
             model.objects.for_facility(facility_id)
             .filter(document_type_id__in=type_ids)

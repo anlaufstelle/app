@@ -10,7 +10,8 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Case, Client, Event, EventHistory, FieldCondition, FieldTemplate, QuickTemplate
+from core.models import EventHistory, FieldCondition, FieldTemplate, QuickTemplate
+from core.services.dynamic_records import DYNAMIC_DATA_MODELS
 from core.services.file_vault.encryption import safe_decrypt
 
 
@@ -24,10 +25,13 @@ def _collect_option_values(used: set[str], value: Any) -> None:
 
 
 def _dynamic_values(model, template: FieldTemplate) -> Iterable[Any]:
-    rows = model.objects.filter(
-        facility=template.facility,
-        data_json__has_key=template.slug,
-    ).values_list("data_json", flat=True)
+    rows = (
+        model.objects.for_facility(template.facility)
+        .filter(
+            data_json__has_key=template.slug,
+        )
+        .values_list("data_json", flat=True)
+    )
     for data_json in rows.iterator():
         if isinstance(data_json, dict):
             yield data_json.get(template.slug)
@@ -41,7 +45,7 @@ def option_slugs_in_use(template: FieldTemplate, *, include_default: bool = True
     values cannot be counted; this is not a database or concurrency guarantee.
     """
     used: set[str] = set()
-    for model in (Event, Client, Case):
+    for model in DYNAMIC_DATA_MODELS:
         for value in _dynamic_values(model, template):
             _collect_option_values(used, value)
 

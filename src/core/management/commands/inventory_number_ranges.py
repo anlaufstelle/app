@@ -8,7 +8,8 @@ from collections import Counter
 
 from django.core.management.base import BaseCommand, CommandError
 
-from core.models import Case, Client, DocumentTypeField, Event, Facility, FieldTemplate
+from core.models import DocumentTypeField, Facility, FieldTemplate
+from core.services.dynamic_records import DYNAMIC_DATA_MODELS
 from core.services.file_vault import safe_decrypt
 from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
 
@@ -106,11 +107,15 @@ class Command(BaseCommand):
             if template.min_value is None and template.max_value is None:
                 continue
             templates_by_document_type.setdefault(assignment.document_type_id, {})[template.slug] = template
-        for label, model in (("Personen", Client), ("Fälle", Case), ("Ereignisse", Event)):
-            queryset = model.objects.filter(
-                facility=facility,
-                document_type__isnull=False,
-            ).select_related("document_type")
+        for model in DYNAMIC_DATA_MODELS:
+            label = str(model._meta.verbose_name_plural)
+            queryset = (
+                model.objects.for_facility(facility)
+                .filter(
+                    document_type__isnull=False,
+                )
+                .select_related("document_type")
+            )
             for entity in queryset.iterator(chunk_size=500):
                 document_type = entity.document_type
                 if document_type is None:

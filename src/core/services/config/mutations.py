@@ -9,11 +9,8 @@ from django.utils.translation import gettext as _
 
 from core.models import (
     AuditLog,
-    Case,
-    Client,
     DocumentType,
     DocumentTypeField,
-    Event,
     FieldGroup,
     FieldTemplate,
 )
@@ -22,6 +19,7 @@ from core.services.audit import log_audit_event
 from core.services.compliance.sensitivity import validate_explicit_high_field
 from core.services.config.block_order import _compact_block_positions, _next_block_position
 from core.services.dynamic_protection import configuration_write, lock_dynamic_protection
+from core.services.dynamic_records import DYNAMIC_DATA_MODELS
 
 
 def save_document_type(request, form, *, creating: bool) -> DocumentType:
@@ -77,7 +75,7 @@ def _has_incompatible_single_line_values(template: FieldTemplate) -> bool:
         .filter(data_json__has_key=template.slug)
         .values_list("data_json", flat=True)
         .iterator()
-        for model in (Client, Case, Event)
+        for model in DYNAMIC_DATA_MODELS
     )
     history_rows = (
         EventHistory.objects.filter(event__facility_id=template.facility_id)
@@ -116,7 +114,7 @@ def validate_field_type_change(template: FieldTemplate, previous, *, update_fiel
 
     used = any(
         model.objects.for_facility(template.facility_id).filter(data_json__has_key=previous.slug).exists()
-        for model in (Client, Case, Event)
+        for model in DYNAMIC_DATA_MODELS
     )
     used = (
         used
@@ -480,17 +478,7 @@ def count_field_removal_impact(dtf: DocumentTypeField) -> int:
     genau dieses Typs weg — deren Werte werden zu „Nicht mehr zugeordnet"
     (Refs #1725(a)). Der Zähler speist die Entfern-Bestätigung im Feld-Board.
     """
-    # Refs #1730: explizit als Union von KONKRETEN Modellklassen annotieren —
-    # ohne die Annotation zieht mypy aus dem Dict-Literal den gemeinsamen
-    # Basistyp ``type[DynamicDataEncryptionMixin]`` (abstrakt, ohne ``objects``-
-    # Manager). Der Key kommt aus einem CharField (django-stubs typisiert ihn
-    # als ``str``), daher der explizite ``EntityType(...)``-Narrowing-Schritt.
-    model_by_entity_type: dict[DocumentType.EntityType, type[Event] | type[Client] | type[Case]] = {
-        DocumentType.EntityType.EVENT: Event,
-        DocumentType.EntityType.CLIENT: Client,
-        DocumentType.EntityType.CASE: Case,
-    }
-    model = model_by_entity_type[DocumentType.EntityType(dtf.document_type.entity_type)]
+    model = next(model for model in DYNAMIC_DATA_MODELS if model._meta.model_name == dtf.document_type.entity_type)
     return model.objects.filter(
         document_type=dtf.document_type,
         data_json__has_key=dtf.field_template.slug,

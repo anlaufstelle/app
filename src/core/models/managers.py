@@ -28,18 +28,20 @@ class FacilityScopedQuerySet(models.QuerySet):
     def _protect_dynamic_batch(self, objects, *, fields=None):
         from core.models import DocumentType
         from core.services.dynamic_protection import lock_dynamic_protection_many
+        from core.services.dynamic_records import dynamic_facility_lookup
         from core.services.events.fields import compute_event_search_text
         from core.services.option_usage import validate_option_references
 
         lock_dynamic_protection_many({obj.facility_id for obj in objects})
         current_rows = {}
+        facility_lookup = dynamic_facility_lookup(self.model)
         if fields is not None:
             current_rows = {
                 row["pk"]: row
                 for row in self.filter(pk__in=[obj.pk for obj in objects])
-                .order_by("facility_id", "pk")
+                .order_by(facility_lookup, "pk")
                 .select_for_update(of=("self",))
-                .values("pk", "facility_id", "document_type_id", "data_json")
+                .values("pk", facility_lookup, "document_type_id", "data_json")
             }
             if "document_type" not in fields and "document_type_id" not in fields:
                 for obj in objects:
@@ -58,7 +60,7 @@ class FacilityScopedQuerySet(models.QuerySet):
                     obj.facility_id,
                     obj.data_json,
                     previous_data=current["data_json"]
-                    if current and current["facility_id"] == obj.facility_id
+                    if current and current[facility_lookup] == obj.facility_id
                     else None,
                 )
             obj._encrypt_sensitive_fields()

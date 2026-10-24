@@ -40,8 +40,9 @@ from collections.abc import Callable
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import Case, Client, Event, EventHistory, FieldTemplate, RectificationRequest, ShiftHandoverNote
+from core.models import Event, EventHistory, FieldTemplate, RectificationRequest, ShiftHandoverNote
 from core.models.attachment import Attachment
+from core.services.dynamic_records import DYNAMIC_DATA_MODELS, dynamic_facility_lookup
 from core.services.file_vault.encryption import encrypt_dynamic_data, encrypt_field, is_encrypted_value, safe_decrypt
 
 
@@ -97,11 +98,11 @@ def _locked_compare_and_swap(model, pk, *, expected: dict, updates: dict) -> boo
     row lock before each bounded attempt.
     """
     with transaction.atomic():
-        if model in (Event, Client, Case):
+        if model in DYNAMIC_DATA_MODELS:
             from core.services.dynamic_protection import lock_dynamic_protection
             from core.services.events.fields import compute_event_search_text
 
-            facility_id = model.objects.filter(pk=pk).values_list("facility_id", flat=True).first()
+            facility_id = model.objects.filter(pk=pk).values_list(dynamic_facility_lookup(model), flat=True).first()
             if facility_id is None:
                 return False
             lock_dynamic_protection(facility_id)
@@ -176,23 +177,10 @@ def _reencrypt_events(dry_run: bool, *, on_contended: Callable[[], None] | None 
 
 
 def _rotate_dynamic_json_model(model, *, dry_run: bool, on_contended: Callable[[], None] | None = None) -> int:
-    """Gemeinsamer Rotationspfad fuer ``Client``/``Case`` (Refs #1835).
+    """Rotate nullable-type carriers, including deleted rows and timestamp-less episodes.
 
-    ``_reencrypt_clients``/``_reencrypt_cases`` waren bis aufs Modell
-    identisch (M2/P6, Refs #1058, Entscheid E17: rotiert ALLE Rows inkl.
-    soft-deleted — ``FacilityScopedManager`` filtert ``is_deleted`` nicht,
-    ``<Model>.objects`` deckt damit ohne Extra-Filter bereits den vollen
-    Bestand ab). Beide Modelle bieten dieselbe Form (``data_json``,
-    nullable ``document_type``/``document_type_id``,
-    ``DynamicDataEncryptionMixin``) — die Rotation ist deshalb
-    modellunabhaengig ausdrueckbar.
-
-    Refs #1730: ``document_type`` ist bei beiden Modellen nullable — ueber
-    die lokale Variable auf ``is not None`` narrowen (statt auf
-    ``document_type_id`` zu prüfen), damit mypy den ``DocumentType | None``-
-    Typ real ausschliesst. Verhaltensgleich: der FK-Dereferenz passiert
-    weiterhin nur, wenn eine Zuordnung existiert (Kurzschluss dank
-    ``if``-Ausdruck).
+    Compare the stored payload and, where present, its update timestamp before
+    writing. Concurrent writers win over stale rotation candidates.
     """
     updated = 0
     pks = list(model.objects.values_list("pk", flat=True))
@@ -207,12 +195,12 @@ def _rotate_dynamic_json_model(model, *, dry_run: bool, on_contended: Callable[[
             if dry_run:
                 updated += 1
                 continue
-            if _locked_compare_and_swap(
-                model,
-                pk,
-                expected={"updated_at": obj.updated_at, "data_json": obj.data_json},
-                updates={"data_json": healed, "updated_at": timezone.now()},
-            ):
+            expected = {"data_json": obj.data_json}
+            updates = {"data_json": healed}
+            if hasattr(obj, "updated_at"):
+                expected["updated_at"] = obj.updated_at
+                updates["updated_at"] = timezone.now()
+            if _locked_compare_and_swap(model, pk, expected=expected, updates=updates):
                 updated += 1
             elif on_contended is not None:
                 on_contended()
@@ -560,8 +548,11 @@ def rotate_all(*, dry_run: bool, on_totp_contended: Callable[[list[int]], None] 
     if totp_contended and on_totp_contended is not None:
         on_totp_contended(totp_contended)
     contended += len(totp_contended)
-    clients_updated = _rotate_dynamic_json_model(Client, dry_run=dry_run, on_contended=_count_contended)
-    cases_updated = _rotate_dynamic_json_model(Case, dry_run=dry_run, on_contended=_count_contended)
+    dynamic_counts = {
+        f"{model._meta.model_name}s": _rotate_dynamic_json_model(model, dry_run=dry_run, on_contended=_count_contended)
+        for model in DYNAMIC_DATA_MODELS
+        if model is not Event
+    }
     rectifications_updated = _reencrypt_rectification_requests(
         dry_run,
         on_contended=_count_contended,
@@ -576,8 +567,7 @@ def rotate_all(*, dry_run: bool, on_totp_contended: Callable[[list[int]], None] 
         "event_history": history_updated,
         "attachments": attachments_updated,
         "totp_devices": totp_updated,
-        "clients": clients_updated,
-        "cases": cases_updated,
+        **dynamic_counts,
         "rectification_requests": rectifications_updated,
         "shift_handover_notes": handover_notes_updated,
         "contended": contended,
