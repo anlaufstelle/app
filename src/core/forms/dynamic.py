@@ -77,6 +77,13 @@ def configure_entity_document_type(form, facility, entity_type):
     field.required = bool(active)
     if not assigned_pk and len(active) == 1:
         form.initial["document_type"] = active[0].pk
+    field_name = form.add_prefix("document_type")
+    if form.is_bound and field_name not in form.data:
+        default_pk = assigned_pk or (active[0].pk if len(active) == 1 else None)
+        if default_pk is not None:
+            # Stored offline payloads omit this key; explicit blanks must still fail.
+            form.data = form.data.copy()
+            form.data[field_name] = default_pk
 
 
 def document_type_label(document_type: DocumentType) -> str:
