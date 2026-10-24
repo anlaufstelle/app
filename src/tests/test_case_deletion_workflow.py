@@ -33,6 +33,7 @@ from core.services.case.deletion import (
     soft_delete_case,
 )
 from core.services.dashboard import render_activity_summary
+from tests._standard_text import record_text
 
 pytestmark = pytest.mark.django_db
 
@@ -408,7 +409,7 @@ class TestTrashExpiryRedaction:
         assert Case.objects.filter(pk=trashed_case.pk).exists()
         assert trashed_case.is_deleted is True
         assert "Anonymisiert" in trashed_case.title
-        assert trashed_case.description == ""
+        assert record_text(trashed_case) == ""
         assert trashed_case.data_json == {}
         assert trashed_case.document_type is None
 

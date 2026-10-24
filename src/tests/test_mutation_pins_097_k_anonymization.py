@@ -18,6 +18,7 @@ import pytest
 
 from core.models import Client
 from core.services.compliance.k_anonymization import k_anonymize_client
+from tests._standard_text import record_text
 
 pytestmark = pytest.mark.django_db
 
@@ -46,7 +47,7 @@ def test_k_anonymisierung_schreibt_nur_die_generalisierten_spalten(client_identi
     assert frisch.is_deleted is True
     # Die sechs Generalisierungs-Spalten sind trotzdem geschrieben.
     assert frisch.pseudonym.startswith("anon-")
-    assert frisch.notes == ""
+    assert record_text(frisch) == ""
     assert frisch.data_json == {}
     assert frisch.document_type_id is None
     assert frisch.is_active is False

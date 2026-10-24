@@ -309,10 +309,6 @@ def _gather_client_fields(client):
         "pseudonym": client.pseudonym,
         "contact_stage": client.get_contact_stage_display(),
         "age_cluster": client.get_age_cluster_display(),
-        # Refs #1752: ``notes`` ist der gewichtigste bislang fehlende Freitext
-        # (docs/security-notes.md stuft ihn selbst als „hoch (Klarname-Risiko)"
-        # ein) — ohne ihn war die Auskunft substanziell unvollstaendig.
-        "notes": client.notes,
         "is_active": client.is_active,
         # Refs #1752: Anonymisierungs-Status gehoert zur Auskunft — er erklaert,
         # warum Felder generalisiert erscheinen.
@@ -479,7 +475,6 @@ def _gather_cases(client, attachment_index=None, *, is_deleted=False):
     for case in cases:
         entry = {
             "title": case.title,
-            "description": case.description,
             "status": case.get_status_display(),
             "created_at": case.created_at.isoformat(),
             # Refs #1752: ``updated_at`` + Papierkorb-Metadaten fehlten.

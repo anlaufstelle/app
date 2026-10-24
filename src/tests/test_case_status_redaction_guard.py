@@ -30,6 +30,7 @@ from core.services.case import (
     soft_delete_case,
     update_case,
 )
+from tests._standard_text import record_text, text_fields
 
 
 def _zweite_instanz(case):
@@ -56,7 +57,7 @@ class TestFallstatusSchreibtGetilgtesNichtZurueck:
 
         frisch = Case.objects.get(pk=case_open.pk)
         assert frisch.title == getilgter_titel
-        assert frisch.description == ""
+        assert record_text(frisch) == ""
         assert frisch.data_json == {}
         assert frisch.is_deleted is True
         assert frisch.deleted_at is not None
@@ -132,13 +133,24 @@ class TestFallstatusUeberschreibtParalleleInhalteNicht:
 
     def test_close_case_ueberschreibt_den_parallel_geaenderten_titel_nicht(self, case_open, staff_user):
         alte_instanz = _zweite_instanz(case_open)
-        update_case(case_open, staff_user, title="Parallel vergebener Titel", description="Parallel ergaenzt")
+        update_case(
+            case_open,
+            staff_user,
+            title="Parallel vergebener Titel",
+            **text_fields(
+                case_open.facility,
+                "Parallel ergaenzt",
+                entity="case",
+                document_type=case_open.document_type,
+                data_json=case_open.data_json,
+            ),
+        )
 
         close_case(alte_instanz, staff_user)
 
         frisch = Case.objects.get(pk=case_open.pk)
         assert frisch.title == "Parallel vergebener Titel"
-        assert frisch.description == "Parallel ergaenzt"
+        assert record_text(frisch) == "Parallel ergaenzt"
         assert frisch.status == Case.Status.CLOSED
         assert frisch.closed_at is not None
 

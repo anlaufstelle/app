@@ -9,6 +9,7 @@ from django.core.management.base import CommandError
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, Event, Facility, LegalHold, RetentionProposal, Settings
+from tests._standard_text import record_text
 
 
 @pytest.fixture
@@ -379,7 +380,7 @@ def test_client_anonymized_after_all_events_soft_deleted(identified_event_expire
     # Client should be anonymized
     client_identified.refresh_from_db()
     assert client_identified.pseudonym.startswith("Gelöscht-")
-    assert client_identified.notes == ""
+    assert record_text(client_identified) == ""
     assert client_identified.is_active is False
 
 

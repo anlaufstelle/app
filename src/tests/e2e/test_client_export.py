@@ -143,9 +143,16 @@ class TestClientExportJSON:
             "export_meta",
         }
         # Stammdaten tragen die mit #1752 ergaenzten Pflichtfelder.
-        assert {"notes", "is_deleted", "deleted_at", "deleted_by", "k_anonymized", "updated_at"} <= set(
-            payload["client"]
-        )
+        assert {
+            "document_type",
+            "dynamic_data",
+            "is_deleted",
+            "deleted_at",
+            "deleted_by",
+            "k_anonymized",
+            "updated_at",
+        } <= set(payload["client"])
+        assert "notes" not in payload["client"]
         # Refs #1765: explizit non-vacuous — vorher konnte eine leere Liste die
         # folgende Schleife stillschweigend ueberspringen und der Test war
         # tautologisch gruen, ohne die Redaktion je zu pruefen.

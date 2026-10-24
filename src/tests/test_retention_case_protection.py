@@ -19,6 +19,7 @@ from core.services.case.deletion import (
 )
 from core.services.client.restriction import restrict_processing
 from core.services.events.crud import create_event
+from tests._standard_text import record_text, text_fields
 
 pytestmark = pytest.mark.django_db
 
@@ -30,7 +31,7 @@ def expired_case(facility, client_qualified, staff_user, admin_user, doc_type_co
             facility=facility,
             client=client_qualified,
             title="Preserve this case",
-            description="Evidence",
+            **text_fields(facility, "Evidence", entity="case", document_type=None, data_json=None),
             created_by=staff_user,
         )
         event = create_event(
@@ -71,7 +72,7 @@ def test_case_cleanup_preserves_and_counts_protected_targets(
     case.refresh_from_db()
     event.refresh_from_db()
     assert case.anonymized_at is None
-    assert case.title == "Preserve this case" and case.description == "Evidence"
+    assert case.title == "Preserve this case" and record_text(case) == "Evidence"
     assert event.case_id == case.pk
     assert "Deferred 1 event/person/case target(s)" in output.getvalue()
 
@@ -93,7 +94,7 @@ def test_case_cleanup_rechecks_restriction_after_selection(
     count = anonymize_eligible_soft_deleted_cases(facility, settings_obj, deferred_ids=deferred)
     case.refresh_from_db()
     assert count == 0 and deferred == {case.pk}
-    assert case.anonymized_at is None and case.description == "Evidence"
+    assert case.anonymized_at is None and record_text(case) == "Evidence"
 
 
 def test_case_cleanup_still_erases_unprotected_case(facility, settings_obj, expired_case):
@@ -102,7 +103,7 @@ def test_case_cleanup_still_erases_unprotected_case(facility, settings_obj, expi
     assert anonymize_eligible_soft_deleted_cases(facility, settings_obj, deferred_ids=deferred) == 1
     case.refresh_from_db()
     event.refresh_from_db()
-    assert case.anonymized_at is not None and case.description == ""
+    assert case.anonymized_at is not None and record_text(case) == ""
     assert event.case_id is None
     assert deferred == set()
 
@@ -113,4 +114,4 @@ def test_manual_case_erasure_rechecks_current_restriction(expired_case, admin_us
     with pytest.raises(ValidationError, match="Art. 18"):
         anonymize_case_now(case, admin_user)
     case.refresh_from_db()
-    assert case.anonymized_at is None and case.description == "Evidence"
+    assert case.anonymized_at is None and record_text(case) == "Evidence"

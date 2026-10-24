@@ -79,6 +79,7 @@ from core.services.client.export import (
     _gather_retention_proposals,
     _gather_workitems,
 )
+from tests._standard_text import text_path
 
 
 def _pk(n: int) -> uuid.UUID:
@@ -659,6 +660,8 @@ class TestGatherRectificationRequests:
 
     @staticmethod
     def _request(facility, client, requester, reviewer, *, field_path: str, pk: int) -> RectificationRequest:
+        if field_path == "data_json.client-notes":
+            text_path(client)
         return RectificationRequest.objects.create(
             id=_pk(pk),
             facility=facility,
@@ -682,7 +685,7 @@ class TestGatherRectificationRequests:
         Mutant: ``["pseudonym", "age_cluster", "notes"]``.
         """
         base = timezone.now() - timedelta(days=20)
-        for index, field_path in enumerate(["pseudonym", "age_cluster", "notes"]):
+        for index, field_path in enumerate(["pseudonym", "age_cluster", "data_json.client-notes"]):
             request = self._request(
                 facility,
                 client_identified,
@@ -695,7 +698,7 @@ class TestGatherRectificationRequests:
 
         entries = _gather_rectification_requests(facility, client_identified)
 
-        assert [entry["field_path"] for entry in entries] == ["notes", "age_cluster", "pseudonym"]
+        assert [entry["field_path"] for entry in entries] == ["data_json.client-notes", "age_cluster", "pseudonym"]
 
     def test_requests_created_at_the_same_moment_keep_a_stable_pk_order(
         self, facility, client_identified, admin_user, lead_user
@@ -713,14 +716,14 @@ class TestGatherRectificationRequests:
         """
         created_at = timezone.now() - timedelta(days=4)
         pks = []
-        for field_path, pk in [("pseudonym", 193), ("age_cluster", 192), ("notes", 191)]:
+        for field_path, pk in [("pseudonym", 193), ("age_cluster", 192), ("data_json.client-notes", 191)]:
             request = self._request(facility, client_identified, admin_user, lead_user, field_path=field_path, pk=pk)
             pks.append(request.pk)
         RectificationRequest.objects.filter(pk__in=pks).update(created_at=created_at)
 
         entries = _gather_rectification_requests(facility, client_identified)
 
-        assert [entry["field_path"] for entry in entries] == ["notes", "age_cluster", "pseudonym"]
+        assert [entry["field_path"] for entry in entries] == ["data_json.client-notes", "age_cluster", "pseudonym"]
 
     def test_requester_and_reviewer_are_joined_not_reloaded_per_request(
         self, facility, client_identified, admin_user, lead_user
@@ -740,7 +743,7 @@ class TestGatherRectificationRequests:
         ``client_identified`` traegt keinen ``document_type`` — der
         Feld-Vorlagen-Zweig bleibt damit aus und die Zahl konstant.
         """
-        self._request(facility, client_identified, admin_user, lead_user, field_path="notes", pk=201)
+        self._request(facility, client_identified, admin_user, lead_user, field_path="data_json.client-notes", pk=201)
         _gather_rectification_requests(facility, client_identified)
         with_one = _count_queries(lambda: _gather_rectification_requests(facility, client_identified))
 

@@ -97,6 +97,7 @@ from django.utils import timezone
 
 from core.models import Case, Client, Milestone, OutcomeGoal
 from core.services.system.facility_export import build_facility_export
+from tests._standard_text import text_fields
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -167,11 +168,15 @@ class TestSerializeCaseFullShapeAndValues:
         case = Case.objects.create(
             facility=facility,
             client=client_identified,
-            document_type=doc_type_case_form,
             title="Fall-Export-Shape",
-            description="Beschreibungstext fuer den Shape-Pin",
+            **text_fields(
+                facility,
+                "Beschreibungstext fuer den Shape-Pin",
+                entity="case",
+                document_type=doc_type_case_form,
+                data_json={"anlass": "Erstkontakt", "verlauf": "Vertraulicher Verlauf"},
+            ),
             status=Case.Status.CLOSED,
-            data_json={"anlass": "Erstkontakt", "verlauf": "Vertraulicher Verlauf"},
             lead_user=lead_user,
             created_by=staff_user,
             closed_at=closed_at,
@@ -185,7 +190,6 @@ class TestSerializeCaseFullShapeAndValues:
             "client_id",
             "document_type_id",
             "title",
-            "description",
             "status",
             "data_json",
             "lead_user_id",
@@ -199,9 +203,13 @@ class TestSerializeCaseFullShapeAndValues:
         assert entry["client_id"] == str(client_identified.pk)
         assert entry["document_type_id"] == str(doc_type_case_form.pk)
         assert entry["title"] == "Fall-Export-Shape"
-        assert entry["description"] == "Beschreibungstext fuer den Shape-Pin"
+        assert entry["data_json"]["standard-description"] == "Beschreibungstext fuer den Shape-Pin"
         assert entry["status"] == Case.Status.CLOSED
-        assert entry["data_json"] == {"anlass": "Erstkontakt", "verlauf": "Vertraulicher Verlauf"}
+        assert entry["data_json"] == {
+            "anlass": "Erstkontakt",
+            "verlauf": "Vertraulicher Verlauf",
+            "standard-description": "Beschreibungstext fuer den Shape-Pin",
+        }
         assert entry["lead_user_id"] == str(lead_user.pk)
         assert entry["created_by_id"] == str(staff_user.pk)
         assert entry["created_at"] == case.created_at.isoformat()
@@ -232,9 +240,12 @@ class TestSerializeClientFullShapeAndValues:
             pseudonym="Export-Shape-01",
             contact_stage=Client.ContactStage.QUALIFIED,
             age_cluster=Client.AgeCluster.AGE_27_PLUS,
-            notes="Interne Randnotiz",
-            document_type=doc_type_client_profile,
-            data_json={"wohnsituation": "Eigene Wohnung", "diagnose": "Klartext-Diagnose"},
+            **text_fields(
+                facility,
+                "Interne Randnotiz",
+                document_type=doc_type_client_profile,
+                data_json={"wohnsituation": "Eigene Wohnung", "diagnose": "Klartext-Diagnose"},
+            ),
             k_anonymized=False,
             created_by=staff_user,
         )
@@ -247,7 +258,6 @@ class TestSerializeClientFullShapeAndValues:
             "pseudonym",
             "contact_stage",
             "age_cluster",
-            "notes",
             "document_type_id",
             "data_json",
             "is_active",
@@ -262,9 +272,13 @@ class TestSerializeClientFullShapeAndValues:
         assert entry["pseudonym"] == "Export-Shape-01"
         assert entry["contact_stage"] == Client.ContactStage.QUALIFIED
         assert entry["age_cluster"] == Client.AgeCluster.AGE_27_PLUS
-        assert entry["notes"] == "Interne Randnotiz"
+        assert entry["data_json"]["client-notes"] == "Interne Randnotiz"
         assert entry["document_type_id"] == str(doc_type_client_profile.pk)
-        assert entry["data_json"] == {"wohnsituation": "Eigene Wohnung", "diagnose": "Klartext-Diagnose"}
+        assert entry["data_json"] == {
+            "wohnsituation": "Eigene Wohnung",
+            "diagnose": "Klartext-Diagnose",
+            "client-notes": "Interne Randnotiz",
+        }
         assert entry["is_active"] is True
         assert entry["k_anonymized"] is False
         assert entry["is_anonymized"] is False

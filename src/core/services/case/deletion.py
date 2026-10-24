@@ -503,11 +503,10 @@ def redact_case_content(case) -> None:
     from core.models.episode import Episode
 
     case.title = f"[Anonymisiert {case.created_at:%Y-%m-%d}]"
-    case.description = ""
     case.data_json = {}
     case.document_type = None
     case.anonymized_at = case.anonymized_at or timezone.now()
-    case.save(update_fields=["title", "description", "data_json", "document_type", "anonymized_at"])
+    case.save(update_fields=["title", "data_json", "document_type", "anonymized_at"])
     Episode.objects.filter(case_id=case.pk).update(
         title="Episode (anonymisiert)",
         description="",

@@ -36,7 +36,6 @@ def k_anonymize_client(client):
     Generalization rules:
 
     * ``pseudonym`` → ``anon-<sha256[:12]>`` (non-reversible hash bucket)
-    * ``notes`` → ``""`` (free text can leak identity)
     * ``data_json`` → ``{}`` (M2 P4b, Refs #1058)
     * ``document_type`` → ``None`` (M2 P4b, Refs #1058)
     * ``age_cluster`` stays as-is (already bucketed)
@@ -65,7 +64,6 @@ def k_anonymize_client(client):
     waere (kein Ticket-Auftrag dafuer).
     """
     client.pseudonym = _pseudonym_hash(client)
-    client.notes = ""
     client.data_json = {}
     client.document_type = None
     client.is_active = False
@@ -73,7 +71,6 @@ def k_anonymize_client(client):
     client.save(
         update_fields=[
             "pseudonym",
-            "notes",
             "data_json",
             "document_type",
             "is_active",

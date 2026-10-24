@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from core.models import Case, Client, WorkItem
 from core.models.episode import Episode
+from tests._standard_text import record_text, text_fields
 
 pytestmark = pytest.mark.django_db
 
@@ -128,20 +129,20 @@ class TestAnonymizeClientServiceLayer:
     fachlich identisch zu Refs #715."""
 
     def test_anonymize_via_model_wrapper_redacts_pseudonym(self, facility):
-        c = _make_client(facility, notes="sensible notiz")
+        c = _make_client(facility, **text_fields(facility, "sensible notiz", document_type=None, data_json=None))
         original_pk = c.pk
         c.anonymize()
         c.refresh_from_db()
         assert c.pseudonym.startswith("Gelöscht-")
-        assert c.notes == ""
+        assert record_text(c) == ""
         assert c.is_active is False
         assert c.pk == original_pk  # Datensatz bleibt fuer Statistik
 
     def test_anonymize_via_service_directly(self, facility, lead_user):
         from core.services.client import anonymize_client
 
-        c = _make_client(facility, notes="sensible notiz")
+        c = _make_client(facility, **text_fields(facility, "sensible notiz", document_type=None, data_json=None))
         anonymize_client(c, user=lead_user)
         c.refresh_from_db()
         assert c.pseudonym.startswith("Gelöscht-")
-        assert c.notes == ""
+        assert record_text(c) == ""

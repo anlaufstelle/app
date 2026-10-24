@@ -82,7 +82,7 @@ logger = logging.getLogger(__name__)
 
 #: Schema-Version des Facility-Exports — additive Aenderungen bleiben v1,
 #: ein Breaking Change (Feld entfernt/umbenannt/Bedeutung geaendert) braucht v2.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _uuid_str(pk: Any) -> str | None:
@@ -280,7 +280,6 @@ def _serialize_client(client: Client, facility, *, with_file_hashes: bool) -> di
         "pseudonym": client.pseudonym,
         "contact_stage": client.contact_stage,
         "age_cluster": client.age_cluster,
-        "notes": client.notes,
         "document_type_id": _uuid_str(client.document_type_id),
         "data_json": _decrypt_data_json(client.data_json),
         "is_active": client.is_active,
@@ -338,7 +337,6 @@ def _serialize_case(case: CaseModel, facility, *, with_file_hashes: bool) -> dic
         "client_id": str(case.client_id),
         "document_type_id": _uuid_str(case.document_type_id),
         "title": case.title,
-        "description": case.description,
         "status": case.status,
         "data_json": _decrypt_data_json(case.data_json),
         "lead_user_id": _uuid_str(case.lead_user_id),

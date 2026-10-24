@@ -35,6 +35,7 @@ from core.services.client import (
 )
 from core.services.client.export import ATTACHMENT_FIELD_PLACEHOLDER
 from tests._factories import make_client, make_document_type, make_event
+from tests._standard_text import set_record_text, text_fields, text_path
 
 
 @pytest.fixture
@@ -117,7 +118,7 @@ def sample_case(facility, admin_user, sample_client):
         facility=facility,
         client=sample_client,
         title="Testfall",
-        description="Beschreibung",
+        **text_fields(facility, "Beschreibung", entity="case", document_type=None, data_json=None),
         created_by=admin_user,
     )
 
@@ -746,15 +747,15 @@ class TestClientExportCoreCategories:
     """Refs #1752 — Kern-Kategorien der Art.-15-Auskunft.
 
     Produktentscheid 2026-08-03 (#1755):
-    ``Client.notes``, Papierkorb-/Anonymisierungs-Metadaten und die im Issue
+    ``Client.data_json``, Papierkorb-/Anonymisierungs-Metadaten und die im Issue
     gelisteten Kleinfelder gehoeren in die Auskunft.
     """
 
     def test_client_notes_included(self, sample_client, facility, admin_user):
-        sample_client.notes = "Freitext-Vermerk der Fachkraft"
-        sample_client.save(update_fields=["notes"])
+        set_record_text(sample_client, "Freitext-Vermerk der Fachkraft")
+        sample_client.save(update_fields=["document_type", "data_json"])
         data = export_client_data(sample_client, facility, admin_user)
-        assert data["client"]["notes"] == "Freitext-Vermerk der Fachkraft"
+        assert data["client"]["dynamic_data"][0]["value"] == "Freitext-Vermerk der Fachkraft"
 
     def test_client_trash_and_anonymization_metadata(self, sample_client, facility, admin_user):
         sample_client.k_anonymized = True
@@ -1384,7 +1385,7 @@ class TestClientExportDeletedCases:
             facility=facility,
             client=sample_client,
             title="Papierkorb-Fall",
-            description="Papierkorb-Beschreibung",
+            **text_fields(facility, "Papierkorb-Beschreibung", entity="case", document_type=None, data_json=None),
             created_by=admin_user,
         )
         case.soft_delete(user=admin_user)
@@ -2202,7 +2203,9 @@ class TestClientExportRectificationRequests:
         """Abgelehnte Antraege bleiben in der Auskunft — samt Pruefvermerk."""
         from core.services.client.rectification import reject_rectification, request_rectification
 
-        rr = request_rectification(sample_client, staff_user, "notes", "Korrigierte Notiz", "Sachlich falsch")
+        rr = request_rectification(
+            sample_client, staff_user, text_path(sample_client), "Korrigierte Notiz", "Sachlich falsch"
+        )
         reject_rectification(rr, lead_user, "Nicht nachvollziehbar")
         data = export_client_data(sample_client, facility, admin_user)
         entry = data["rectification_requests"][0]
@@ -2358,15 +2361,15 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
     )
     merge_clients(merge_source, sample_client, lead_user)
 
-    sample_client.notes = "Notiz-Freitext-PDF"
+    set_record_text(sample_client, "Notiz-Freitext-PDF")
     sample_client.k_anonymized = True
-    sample_client.save(update_fields=["notes", "k_anonymized"])
+    sample_client.save(update_fields=["document_type", "data_json", "k_anonymized"])
 
     case = CaseModel.objects.create(
         facility=facility,
         client=sample_client,
         title="PDF-Fall",
-        description="Fall-Beschreibung",
+        **text_fields(facility, "Fall-Beschreibung", entity="case", document_type=None, data_json=None),
         created_by=admin_user,
     )
     # Refs #1818: ein Fall im Papierkorb — der abgeleitete PDF-Guard prueft
@@ -2375,7 +2378,7 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
         facility=facility,
         client=sample_client,
         title="PDF-Papierkorb-Fall",
-        description="Papierkorb-Beschreibung",
+        **text_fields(facility, "Papierkorb-Beschreibung", entity="case", document_type=None, data_json=None),
         created_by=admin_user,
     )
     trashed_case.soft_delete(user=admin_user)
@@ -2425,7 +2428,9 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
     # Refs #1796: Berichtigungsantrag (Art. 16, ADR-041) — eigene PDF-Nadel.
     from core.services.client.rectification import request_rectification
 
-    request_rectification(sample_client, admin_user, "notes", "PDF-Wunschnotiz", "PDF-Berichtigungsgrund")
+    request_rectification(
+        sample_client, admin_user, text_path(sample_client), "PDF-Wunschnotiz", "PDF-Berichtigungsgrund"
+    )
     LegalHold.objects.create(
         facility=facility,
         target_type="Event",
@@ -2528,7 +2533,7 @@ class TestClientExportPdfCoverage:
     @pytest.mark.parametrize(
         "needle",
         [
-            "Notiz-Freitext-PDF",  # Client.notes
+            "Notiz-Freitext-PDF",  # Client.data_json
             "K-anonymisiert",  # Anonymisierungs-Metadaten
             "PDF-Fall",  # Fall
             "PDF-Papierkorb-Fall",  # Fall im Papierkorb (Refs #1818)
@@ -2766,7 +2771,8 @@ class TestClientExportCompleteness:
         "audit_trail",
     ]
     REQUIRED_CLIENT_FIELDS = [
-        "notes",
+        "document_type",
+        "dynamic_data",
         "is_deleted",
         "deleted_at",
         "deleted_by",

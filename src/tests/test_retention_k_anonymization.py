@@ -27,6 +27,7 @@ from django.utils import timezone
 from core.models import AuditLog, Client, Event, LegalHold, Settings
 from core.retention.anonymization import anonymize_clients
 from core.services.compliance import is_k_anonymous
+from tests._standard_text import record_text
 
 
 def _make_client(
@@ -182,7 +183,7 @@ class TestKAnonymity:
         assert client_identified.pseudonym.startswith("anon-"), "K-Anon-Pfad muss greifen, sobald Setting aktiv ist."
         assert not client_identified.pseudonym.startswith("Gelöscht-")
         assert client_identified.k_anonymized is True
-        assert client_identified.notes == ""
+        assert record_text(client_identified) == ""
         assert client_identified.is_active is False
 
     def test_enforce_retention_command_uses_k_anon_when_enabled(

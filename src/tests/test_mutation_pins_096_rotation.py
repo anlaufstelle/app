@@ -205,7 +205,7 @@ class TestDryRunWritesNothingPerPath:
             request = RectificationRequest.objects.create(
                 facility=facility,
                 target_client=client_identified,
-                field_path="notes",
+                field_path="data_json.client-notes",
                 old_value=encrypt_field('"Alt"'),
                 new_value=encrypt_field('"Neu"'),
                 reason=encrypt_field("Dry-Run-Grund"),
@@ -497,7 +497,7 @@ class TestUnrotatableRowsAreSkippedNotFatal:
             request = RectificationRequest.objects.create(
                 facility=facility,
                 target_client=client_identified,
-                field_path="notes",
+                field_path="data_json.client-notes",
                 old_value=None,
                 new_value=None,
                 reason=encrypt_field("Spalten-Grund"),
@@ -527,7 +527,7 @@ class TestUnrotatableRowsAreSkippedNotFatal:
             request = RectificationRequest.objects.create(
                 facility=facility,
                 target_client=client_identified,
-                field_path="notes",
+                field_path="data_json.client-notes",
                 old_value=UNDECRYPTABLE,
                 new_value=encrypt_field('"Neu"'),
                 reason=encrypt_field("Fremdschlüssel-Grund"),
@@ -557,7 +557,7 @@ class TestUnrotatableRowsAreSkippedNotFatal:
             rotatable = RectificationRequest.objects.create(
                 facility=facility,
                 target_client=client_identified,
-                field_path="notes",
+                field_path="data_json.client-notes",
                 old_value=encrypt_field('"Alt"'),
                 new_value=encrypt_field('"Neu"'),
                 reason=encrypt_field("Reihenfolge-Grund"),

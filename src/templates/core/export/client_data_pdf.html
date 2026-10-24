@@ -36,7 +36,6 @@
         <tr><th>{% trans "Pseudonym" %}</th><td>{{ client.pseudonym }}</td></tr>
         <tr><th>{% trans "Kontaktstufe" %}</th><td>{{ client.contact_stage }}</td></tr>
         <tr><th>{% trans "Altersgruppe" %}</th><td>{{ client.age_cluster }}</td></tr>
-        <tr><th>{% trans "Notizen" %}</th><td>{{ client.notes|default:"-" }}</td></tr>
         <tr><th>{% trans "Aktiv" %}</th><td>{% if client.is_active %}{% trans "Ja" %}{% else %}{% trans "Nein" %}{% endif %}</td></tr>
         <tr><th>{% trans "K-anonymisiert" %}</th><td>{% if client.k_anonymized %}{% trans "Ja" %}{% else %}{% trans "Nein" %}{% endif %}</td></tr>
         <tr><th>{% trans "Im Papierkorb" %}</th><td>{% if client.is_deleted %}{% trans "Ja" %}{% else %}{% trans "Nein" %}{% endif %}</td></tr>
@@ -132,7 +131,6 @@
         <thead>
             <tr>
                 <th>{% trans "Titel" %}</th>
-                <th>{% trans "Beschreibung" %}</th>
                 <th>{% trans "Status" %}</th>
                 <th>{% trans "Erstellt am" %}</th>
                 <th>{% trans "Geschlossen am" %}</th>
@@ -147,7 +145,6 @@
             {% for case in cases %}
             <tr>
                 <td>{{ case.title }}</td>
-                <td>{{ case.description|default:"-" }}</td>
                 <td>{{ case.status }}</td>
                 <td>{{ case.created_at }}</td>
                 <td>{{ case.closed_at|default:"-" }}</td>
@@ -196,7 +193,6 @@
         <thead>
             <tr>
                 <th>{% trans "Titel" %}</th>
-                <th>{% trans "Beschreibung" %}</th>
                 <th>{% trans "Status" %}</th>
                 <th>{% trans "Erstellt am" %}</th>
                 <th>{% trans "Gelöscht am" %}</th>
@@ -211,7 +207,6 @@
             {% for case in deleted_cases %}
             <tr>
                 <td>{{ case.title }}</td>
-                <td>{{ case.description|default:"-" }}</td>
                 <td>{{ case.status }}</td>
                 <td>{{ case.created_at }}</td>
                 <td>{{ case.deleted_at|default:"-" }}</td>

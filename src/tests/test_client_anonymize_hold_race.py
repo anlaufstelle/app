@@ -36,6 +36,7 @@ from core.retention.legal_holds import create_hold_for_target, has_active_hold
 from core.services.client import anonymize_client_now
 from core.services.client import main as client_main_mod
 from core.services.client.main import anonymize_eligible_soft_deleted_clients
+from tests._standard_text import record_text, set_record_text, text_fields
 
 #: Wartezeit, bis der Gegenspieler sicher an der Personenzeile haengt. Bewusst
 #: eine reine Untergrenze: laeuft er langsamer, ist der Test trotzdem
@@ -71,7 +72,7 @@ class TestAnonymizeClientNowHoldRace:
             facility=facility,
             pseudonym="Race-Person",
             contact_stage=Client.ContactStage.IDENTIFIED,
-            notes="Interne Notiz im Klartext",
+            **text_fields(facility, "Interne Notiz im Klartext", document_type=None, data_json=None),
         )
         for i in range(5):
             Event.objects.create(
@@ -159,7 +160,7 @@ class TestAnonymizeClientNowHoldRace:
         )
         assert "Aufbewahrungssperre" in str(ergebnis["b"])
         assert person.anonymized_at is None
-        assert person.notes == "Interne Notiz im Klartext"
+        assert record_text(person) == "Interne Notiz im Klartext"
         assert Event.objects.filter(client=person, data_json__freitext__startswith="Klartext").count() == 5
 
     def test_spiegelfall_die_hold_anlage_wartet_und_kommt_dokumentiert_zu_spaet(self, komplett):
@@ -214,7 +215,7 @@ class TestNachtSweepReChecktDenHoldUnterDerSperre:
             facility=facility,
             pseudonym="Sweep-Person",
             contact_stage=Client.ContactStage.IDENTIFIED,
-            notes="Interne Notiz im Klartext",
+            **text_fields(facility, "Interne Notiz im Klartext", document_type=None, data_json=None),
         )
         Event.objects.create(
             facility=facility,
@@ -249,7 +250,7 @@ class TestNachtSweepReChecktDenHoldUnterDerSperre:
         person.refresh_from_db()
         assert count == 0
         assert person.anonymized_at is None, "Person unter aktivem Hold wurde anonymisiert (Spoliation)"
-        assert person.notes == "Interne Notiz im Klartext"
+        assert record_text(person) == "Interne Notiz im Klartext"
 
     def test_event_hold_nach_der_sammlung_stellt_die_person_ebenfalls_zurueck(
         self, facility, settings_obj, admin_user, doc_type_contact
@@ -294,8 +295,8 @@ def person_im_papierkorb(facility, client_identified, admin_user, doc_type_conta
         occurred_at=timezone.now(),
         data_json={"freitext": "Klartext"},
     )
-    client_identified.notes = "Interne Notiz im Klartext"
-    client_identified.save(update_fields=["notes"])
+    set_record_text(client_identified, "Interne Notiz im Klartext")
+    client_identified.save(update_fields=["document_type", "data_json"])
     client_identified.soft_delete(user=admin_user)
     return client_identified
 
@@ -328,7 +329,7 @@ class TestSofortpfadPrueftAufDerGesperrtenZeile:
         assert "Papierkorb" in str(exc.value)
         wiederhergestellt.refresh_from_db()
         assert wiederhergestellt.anonymized_at is None, "Aktive Person wurde anonymisiert"
-        assert wiederhergestellt.notes == "Interne Notiz im Klartext"
+        assert record_text(wiederhergestellt) == "Interne Notiz im Klartext"
 
     def test_zweite_tilgung_derselben_person_wird_abgewiesen(self, person_im_papierkorb, admin_user):
         anonymize_client_now(person_im_papierkorb, admin_user)
@@ -359,7 +360,7 @@ class TestSofortpfadPrueftAufDerGesperrtenZeile:
         assert ergebnis.anonymized_at is not None
         assert ergebnis.pseudonym.startswith("Gelöscht-")
         person_im_papierkorb.refresh_from_db()
-        assert person_im_papierkorb.notes == ""
+        assert record_text(person_im_papierkorb) == ""
 
 
 def _committet_innerhalb(beobachtet, sekunden=1.0):

@@ -63,7 +63,7 @@ def _bypass_rls(monkeypatch):
 class TestSchemaShape:
     def test_top_level_keys_and_schema_version(self, facility):
         export = build_facility_export(facility)
-        assert export["schema_version"] == 1
+        assert export["schema_version"] == 2
         assert set(export.keys()) == {"schema_version", "exported_at", "facility", "configuration", "entities"}
 
     def test_facility_block(self, facility):
@@ -756,7 +756,7 @@ class TestJSONRoundtrip:
         export = build_facility_export(facility)
         dumped = json.dumps(export)
         reloaded = json.loads(dumped)
-        assert reloaded["schema_version"] == 1
+        assert reloaded["schema_version"] == 2
 
 
 @pytest.mark.django_db
@@ -818,7 +818,7 @@ class TestCommandEndToEnd:
         call_command("export_facility", facility=str(facility.pk), output=str(output), stdout=StringIO())
         assert output.exists()
         data = json.loads(output.read_text(encoding="utf-8"))
-        assert data["schema_version"] == 1
+        assert data["schema_version"] == 2
         assert str(client_identified.pk) in {c["id"] for c in data["entities"]["clients"]}
 
     def test_command_resolves_by_name(self, facility, tmp_path):

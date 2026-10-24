@@ -117,6 +117,7 @@ from core.services.client.restriction import (
 )
 from core.services.client.targets import client_activity_targets_q, client_legal_hold_targets_q
 from tests._factories import make_event
+from tests._standard_text import text_path
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -409,7 +410,9 @@ class TestGatherAuditTrailValuesListEquivalence:
         nutzen): jene tragen kein ``_encryption_key``-``usefixtures`` und waeren im
         ``.env``-losen Mutantenbaum aus dem FALSCHEN Grund rot."""
         request_client_deletion(client_identified, staff_user, "Pin099-Client2-Loeschgrund")
-        request_rectification(client_identified, staff_user, "notes", "Pin099-Client2-Neu", "Pin099-Client2-Grund")
+        request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Pin099-Client2-Neu", "Pin099-Client2-Grund"
+        )
         case = CaseModel.objects.create(
             facility=facility, client=client_identified, title="Pin099-Client2-Fall", created_by=staff_user
         )

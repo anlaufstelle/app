@@ -18,6 +18,7 @@ from core.models import AuditLog, Client, DocumentType, Event, LegalHold
 from core.models.event_history import EventHistory
 from core.services.client import anonymize_client_now
 from core.services.events.history_diff import build_anonymization_marker
+from tests._standard_text import record_text, set_record_text
 from tests.conftest import xdist_role_suffix
 
 pytestmark = pytest.mark.django_db
@@ -27,8 +28,8 @@ pytestmark = pytest.mark.django_db
 def trashed_client(client_identified, admin_user, doc_type_client):
     client_identified.document_type = doc_type_client
     client_identified.data_json = {"notiz-frei": "Klartext"}
-    client_identified.notes = "Interne Notiz"
-    client_identified.save(update_fields=["document_type", "data_json", "notes"])
+    set_record_text(client_identified, "Interne Notiz")
+    client_identified.save(update_fields=["document_type", "data_json"])
     client_identified.soft_delete(user=admin_user)
     return client_identified
 
@@ -48,7 +49,7 @@ class TestAnonymizeClientNowService:
         anonymize_client_now(trashed_client, admin_user)
         trashed_client.refresh_from_db()
         assert trashed_client.pseudonym.startswith("Gelöscht-")
-        assert trashed_client.notes == ""
+        assert record_text(trashed_client) == ""
         assert trashed_client.data_json == {}
         assert trashed_client.document_type_id is None
         # Der Datensatz bleibt im Papierkorb — anonymisiert, nicht auferstanden.
@@ -79,7 +80,7 @@ class TestAnonymizeClientNowService:
         with pytest.raises(ValidationError):
             anonymize_client_now(trashed_client, admin_user)
         trashed_client.refresh_from_db()
-        assert trashed_client.notes == "Interne Notiz"
+        assert record_text(trashed_client) == "Interne Notiz"
 
     def test_refuses_when_an_event_is_under_legal_hold(
         self, trashed_client, admin_user, facility, lead_user, doc_type_contact
@@ -114,7 +115,7 @@ class TestAnonymizeClientNowView:
         assert response.status_code == 302
         trashed_client.refresh_from_db()
         assert trashed_client.data_json == {}
-        assert trashed_client.notes == ""
+        assert record_text(trashed_client) == ""
 
     def test_lead_is_denied(self, client, lead_user, trashed_client):
         client.force_login(lead_user)

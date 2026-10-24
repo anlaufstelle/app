@@ -46,7 +46,6 @@ def known_residue(table: str, column: str, reason: str, issue: str = "") -> ColR
 COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     # ---- core_client -----------------------------------------------------
     pii("core_client", "pseudonym"),
-    pii("core_client", "notes"),
     non_pii("core_client", "contact_stage", reason="Enum (identified/qualified), kein Freitext."),
     non_pii("core_client", "age_cluster", reason="Generalisierte Altersgruppe (Enum-Bucket), kein Identifikator."),
     # Refs #2045: Art.-18-Sperrvermerk. Bewusst eine Werteliste (die vier
@@ -93,7 +92,6 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     ),
     # ---- core_case -------------------------------------------------------
     pii("core_case", "title"),
-    pii("core_case", "description"),
     non_pii("core_case", "status", reason="Enum (open/closed), kein Freitext."),
     # M2 P5 (Refs #1058): dynamische Fall-Felder — exakt dieselbe Form wie
     # ``core_client.data_json``/``core_event.data_json`` (freie Feldwerte je

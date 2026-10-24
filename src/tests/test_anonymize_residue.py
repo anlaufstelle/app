@@ -28,6 +28,7 @@ from core.models import (
     EventHistory,
     WorkItem,
 )
+from tests._standard_text import record_text, text_fields
 
 
 @pytest.fixture
@@ -54,22 +55,29 @@ def client_with_full_history(facility, normal_doc_type, doc_type_client_profile,
     cli = Client.objects.create(
         facility=facility,
         pseudonym="Maria-eindeutig",
-        notes="Klient hat psychische Krise, Hausarzt Dr. Mueller",
+        **text_fields(
+            facility,
+            "Klient hat psychische Krise, Hausarzt Dr. Mueller",
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "Wohnt bei Dr. Mueller, Hauptstraße 5"},
+        ),
         contact_stage=Client.ContactStage.IDENTIFIED,
-        document_type=doc_type_client_profile,
-        data_json={"wohnsituation": "Wohnt bei Dr. Mueller, Hauptstraße 5"},
     )
     case = Case.objects.create(
         facility=facility,
         client=cli,
         title="Mietproblem 2026",
-        description="Konkrete Adresse: Hauptstraße 5",
+        **text_fields(
+            facility,
+            "Konkrete Adresse: Hauptstraße 5",
+            entity="case",
+            document_type=doc_type_case_form,
+            data_json={"anlass": "Mahnung von Vermieter Mueller"},
+        ),
         created_by=admin_user,
         # M2 P5 (Refs #1058): Fall-``document_type`` + ``data_json``-Probe,
         # analog zur Client-Probe oben. Needle im unverschluesselten Slug
         # (``anlass``), sonst versteckt Fernet die Probe.
-        document_type=doc_type_case_form,
-        data_json={"anlass": "Mahnung von Vermieter Mueller"},
     )
     Episode.objects.create(
         case=case,
@@ -136,7 +144,7 @@ class TestAnonymizeResidueMatrix:
         cli.anonymize()
         cli.refresh_from_db()
         assert cli.pseudonym.startswith("Gelöscht-")
-        assert cli.notes == ""
+        assert record_text(cli) == ""
         assert cli.is_active is False
 
     def test_client_dynamic_data_redacted(self, client_with_full_history):
@@ -158,7 +166,7 @@ class TestAnonymizeResidueMatrix:
         cli.anonymize()
         case.refresh_from_db()
         assert "Mietproblem" not in case.title
-        assert "Hauptstraße" not in case.description
+        assert "Hauptstraße" not in record_text(case)
         episode = Episode.objects.get(case=case)
         assert episode.title == "Episode (anonymisiert)"
         assert episode.description == ""

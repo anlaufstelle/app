@@ -6,8 +6,10 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 
 from core.models import Case, Client, DocumentType, DocumentTypeField, FieldTemplate, ImportJob
+from core.services.client.export import export_client_data, render_client_export_html
 from core.services.client.rectification import rectifiable_fields, request_rectification
 from core.services.import_engine import available_targets
+from core.services.system.facility_export import build_facility_export
 
 pytestmark = pytest.mark.django_db
 
@@ -76,3 +78,38 @@ def test_rectification_excludes_untyped_notes(client_identified, staff_user):
 def test_import_has_no_untyped_notes_target(facility):
     job = ImportJob(facility=facility, target_type="client")
     assert "notes" not in [target.key for target in available_targets(job)]
+
+
+@pytest.fixture
+def text_record(typed_text, facility, staff_user, client_identified, fernet_key):
+    entity, document_type, field = typed_text
+    if entity == "client":
+        record = client_identified
+    else:
+        record = Case.objects.create(facility=facility, client=client_identified, title="Case", created_by=staff_user)
+    record.document_type = document_type
+    record.data_json = {field.slug: "Exported confidential text"}
+    record.save()
+    record.refresh_from_db()
+    return entity, record, field
+
+
+def test_subject_export_has_typed_text_and_no_legacy_keys(text_record, client_identified, facility, lead_user):
+    entity, record, field = text_record
+    data = export_client_data(client_identified, facility, lead_user)
+    entry = data["client"] if entity == "client" else data["cases"][0]
+    assert ("notes" if entity == "client" else "description") not in entry
+    assert any(
+        item["slug"] == field.slug and item["value"] == "Exported confidential text" for item in entry["dynamic_data"]
+    )
+    html = render_client_export_html(client_identified, facility, lead_user)
+    assert "Exported confidential text" in html
+
+
+def test_facility_export_schema_and_typed_text(text_record, facility):
+    entity, record, field = text_record
+    data = build_facility_export(facility)
+    assert data["schema_version"] == 2
+    entry = data["entities"]["clients" if entity == "client" else "cases"][0]
+    assert ("notes" if entity == "client" else "description") not in entry
+    assert entry["data_json"][field.slug] == "Exported confidential text"

@@ -111,7 +111,6 @@ def test_redact_client_identity_limits_the_client_save(client_identified):
         frozenset(
             {
                 "pseudonym",
-                "notes",
                 "age_cluster",
                 "contact_stage",
                 "is_active",

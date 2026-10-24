@@ -100,7 +100,6 @@ def _redact_client_identity(client) -> None:
     Laeufe faenden ohnehin nichts mehr vor.
     """
     client.pseudonym = f"Gelöscht-{str(client.pk)[:8]}"
-    client.notes = ""
     client.age_cluster = client.AgeCluster.UNKNOWN
     # Refs #2047: Symmetrie zu ``age_cluster``. Der Hard-Pfad zerstoerte
     # bisher genau EINEN der beiden Quasi-Identifikatoren — eine Asymmetrie
@@ -117,7 +116,6 @@ def _redact_client_identity(client) -> None:
     client.save(
         update_fields=[
             "pseudonym",
-            "notes",
             "age_cluster",
             "contact_stage",
             "is_active",
@@ -680,14 +678,14 @@ def anonymize_client(client, user=None):
     Anonymisierung erfasst alle Aggregat-Bestandteile, die sonst eine
     Re-Identifikation ermöglichen würden:
 
-    - ``Client``-Felder (pseudonym, notes, age_cluster, contact_stage,
+    - ``Client``-Felder (pseudonym, age_cluster, contact_stage,
       is_active) — ``contact_stage`` seit Refs #2047 symmetrisch zu
       ``age_cluster``
     - ``Event.occurred_at`` aller Ereignisse der Person wird auf den
       Monatsersten 00:00 im lokalen Kalender generalisiert (Refs #2047) —
       die Timeline exakter Zeitpunkte war der letzte hochdimensionale
       Quasi-Identifikator am Tombstone
-    - ``Case.title`` / ``Case.description`` / ``Case.data_json`` /
+    - ``Case.title`` / ``Case.data_json`` /
       ``Case.document_type`` (M2 P5, Refs #1058) aller verknüpften Fälle
     - ``Episode.title`` / ``Episode.description`` aller Episoden dieser Fälle
     - ``OutcomeGoal.title`` / ``OutcomeGoal.description`` / ``Milestone.title``

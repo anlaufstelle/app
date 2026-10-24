@@ -8,6 +8,7 @@ from core.services.compliance import (
     is_k_anonymous,
     k_anonymize_client,
 )
+from tests._standard_text import record_text, set_record_text
 
 
 @pytest.mark.django_db
@@ -27,8 +28,8 @@ class TestKAnonymizeClient:
 
     def test_k_anonymize_keeps_age_cluster(self, client_identified):
         client_identified.age_cluster = Client.AgeCluster.AGE_18_26
-        client_identified.notes = "Sensible Notiz"
-        client_identified.save(update_fields=["age_cluster", "notes"])
+        set_record_text(client_identified, "Sensible Notiz")
+        client_identified.save(update_fields=["age_cluster", "document_type", "data_json"])
 
         k_anonymize_client(client_identified)
         client_identified.refresh_from_db()
@@ -36,7 +37,7 @@ class TestKAnonymizeClient:
         # age_cluster is the equivalence-class feature and must stay intact
         assert client_identified.age_cluster == Client.AgeCluster.AGE_18_26
         # free-text notes are cleared, record is deactivated, k_anonymized flag set
-        assert client_identified.notes == ""
+        assert record_text(client_identified) == ""
         assert client_identified.is_active is False
         assert client_identified.k_anonymized is True
 

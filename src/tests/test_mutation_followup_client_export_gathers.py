@@ -48,6 +48,7 @@ from tests._mutation_followup_client_export_helpers import (
     _make_doc_type,
     _make_event,
 )
+from tests._standard_text import set_record_text, text_fields
 
 # ---------------------------------------------------------------------------
 # _gather_client_fields — DSGVO-vollständige Master-Daten
@@ -63,7 +64,7 @@ class TestGatherClientFields:
     pinnen jedes Feld explizit fest.
     """
 
-    def test_contains_all_twelve_master_fields(self, client_identified):
+    def test_contains_all_master_fields(self, client_identified):
         """Anforderung geändert per Produktentscheid 2026-08-03 (Refs #1752):
         vorher pinnte dieser Test sechs Felder.
 
@@ -76,7 +77,6 @@ class TestGatherClientFields:
             "pseudonym",
             "contact_stage",
             "age_cluster",
-            "notes",
             "is_active",
             "k_anonymized",
             "created_at",
@@ -165,17 +165,16 @@ class TestGatherClientFields:
     # -- Refs #1752: Freitext, Anonymisierung, Papierkorb --------------------
 
     def test_notes_are_exported_verbatim(self, client_identified):
-        """Mutation ``client.notes`` → Konstante/Leerstring würde ausgerechnet
+        """Mutation ``client.data_json`` → Konstante/Leerstring würde ausgerechnet
         den Freitext unterschlagen, den ``docs/security-notes.md`` selbst als
         „hoch (Klarname-Risiko)" einstuft."""
-        client_identified.notes = "Freitext-Vermerk der Fachkraft"
-        client_identified.save(update_fields=["notes"])
-        assert _gather_client_fields(client_identified)["notes"] == "Freitext-Vermerk der Fachkraft"
+        set_record_text(client_identified, "Freitext-Vermerk der Fachkraft")
+        client_identified.save(update_fields=["document_type", "data_json"])
+        assert _gather_client_fields(client_identified)["dynamic_data"][0]["value"] == "Freitext-Vermerk der Fachkraft"
 
     def test_notes_empty_by_default(self, client_identified):
-        """Der Key existiert auch ohne Inhalt — sonst wäre der Schlüsselsatz
-        datenabhängig und die Auskunft nicht reproduzierbar."""
-        assert _gather_client_fields(client_identified)["notes"] == ""
+        """Untyped records have no fixed notes key in the export."""
+        assert "notes" not in _gather_client_fields(client_identified)
 
     def test_k_anonymized_false_for_untouched_record(self, client_identified):
         assert _gather_client_fields(client_identified)["k_anonymized"] is False
@@ -191,8 +190,8 @@ class TestGatherClientFields:
     def test_updated_at_is_isoformat_and_independent_of_created_at(self, client_identified):
         """Mutation ``client.updated_at`` → ``client.created_at`` würde die
         letzte Änderung verschweigen — beide Zeitstempel eigenständig pinnen."""
-        client_identified.notes = "Änderung"
-        client_identified.save(update_fields=["notes", "updated_at"])
+        set_record_text(client_identified, "Änderung")
+        client_identified.save(update_fields=["document_type", "data_json", "updated_at"])
         client_identified.refresh_from_db()
         result = _gather_client_fields(client_identified)
         assert isinstance(result["updated_at"], str)
@@ -584,7 +583,7 @@ class TestGatherCases:
     def test_empty_when_no_cases(self, client_identified):
         assert _gather_cases(client_identified) == []
 
-    def test_contains_all_twelve_fields(self, facility, client_identified, staff_user):
+    def test_contains_all_declared_fields(self, facility, client_identified, staff_user):
         """Anforderung geändert per Produktentscheid 2026-08-03 (Refs #1752):
         vorher sieben Felder — ``updated_at`` und die Papierkorb-Metadaten
         fehlten. Refs #1818 (ADR-044 P3a): dazu ``anonymized_at`` — die Zeile
@@ -594,7 +593,7 @@ class TestGatherCases:
             facility=facility,
             client=client_identified,
             title="T",
-            description="D",
+            **text_fields(facility, "D", entity="case", document_type=None, data_json=None),
             status=CaseModel.Status.OPEN,
             created_by=staff_user,
         )
@@ -603,7 +602,8 @@ class TestGatherCases:
         entry = result[0]
         assert set(entry.keys()) == {
             "title",
-            "description",
+            "document_type",
+            "dynamic_data",
             "status",
             "created_at",
             "updated_at",
@@ -625,10 +625,10 @@ class TestGatherCases:
             facility=facility,
             client=client_identified,
             title="X",
-            description="Lange Beschreibung",
+            **text_fields(facility, "Lange Beschreibung", entity="case", document_type=None, data_json=None),
             created_by=staff_user,
         )
-        assert _gather_cases(client_identified)[0]["description"] == "Lange Beschreibung"
+        assert _gather_cases(client_identified)[0]["dynamic_data"][0]["value"] == "Lange Beschreibung"
 
     def test_status_uses_display_label(self, facility, client_identified, staff_user):
         """Mutation ``get_status_display()`` → ``status`` würde
@@ -742,8 +742,8 @@ class TestGatherCases:
         """Mutation ``case.updated_at`` → ``case.created_at`` würde die letzte
         Fall-Änderung verschweigen."""
         case = CaseModel.objects.create(facility=facility, client=client_identified, title="X", created_by=staff_user)
-        case.description = "Nachtrag"
-        case.save(update_fields=["description", "updated_at"])
+        set_record_text(case, "Nachtrag")
+        case.save(update_fields=["document_type", "data_json", "updated_at"])
         case.refresh_from_db()
         result = _gather_cases(client_identified)[0]
         assert isinstance(result["updated_at"], str)

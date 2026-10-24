@@ -13,6 +13,7 @@ from django.db import connection
 from django.utils import timezone
 
 from tests._residue_expectations import COLUMN_CLASSIFICATION, NEEDLE_PREFIX, SCOPED_TABLES
+from tests._standard_text import record_text, text_fields
 
 # information_schema.data_type-Werte, die Freitext/JSON tragen koennen.
 TEXTY_TYPES = frozenset({"character varying", "text", "character", '"char"', "json", "jsonb"})
@@ -240,10 +241,8 @@ def maximal_pii_graph(facility, admin_user, lead_user):
         facility,
         admin_user,
         pseudonym="RESIDUEPROBE-Pseudonym",
-        notes="RESIDUEPROBE-Notiz Hausarzt",
+        **text_fields(facility, "RESIDUEPROBE-Notiz Hausarzt", document_type=None, data_json=None),
         contact_stage=Client.ContactStage.IDENTIFIED,
-        document_type=dt_person,
-        data_json={ft_wohnsituation.slug: "RESIDUEPROBE-Wohnsituation Hauptstrasse"},
     )
 
     # 2) Stufenwechsel IDENTIFIED -> QUALIFIED (Service schreibt Activity
@@ -262,9 +261,13 @@ def maximal_pii_graph(facility, admin_user, lead_user):
         admin_user,
         client=client,
         title="RESIDUEPROBE-Falltitel",
-        description="RESIDUEPROBE-Fallbeschreibung",
-        document_type=dt_case,
-        data_json={ft_anlass.slug: "RESIDUEPROBE-Fallanlass"},
+        **text_fields(
+            facility,
+            "RESIDUEPROBE-Fallbeschreibung",
+            entity="case",
+            document_type=dt_case,
+            data_json={ft_anlass.slug: "RESIDUEPROBE-Fallanlass"},
+        ),
     )
 
     # 3a) Episode unter dem Fall (core_episode.{title,description}). Kein
@@ -703,7 +706,7 @@ def test_enforce_retention_acts_on_the_graph(maximal_pii_graph, lead_user):
     assert ev.data_json == {}
     # ... Client anonymisiert (Pseudonym-Marker) ...
     assert g.client.pseudonym.startswith("Gelöscht-")
-    assert g.client.notes == ""
+    assert record_text(g.client) == ""
     # ... Activities komplett hart geloescht.
     assert not Activity.objects.filter(facility=g.facility).exists()
 

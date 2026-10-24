@@ -534,7 +534,7 @@ def test_reencrypt_command_rotates_rectification_requests(facility, client_ident
         rr = RectificationRequest.objects.create(
             facility=facility,
             target_client=client_identified,
-            field_path="notes",
+            field_path="data_json.client-notes",
             old_value=encrypt_field('"Alt"'),
             new_value=encrypt_field('"Neu"'),
             reason=encrypt_field("Antragsbegruendung"),

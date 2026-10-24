@@ -54,6 +54,7 @@ from core.retention.legal_holds import create_hold_for_target, has_active_hold
 from core.retention.proposals import reactivate_deferred_proposals
 from core.services.client import anonymize_client_now
 from tests._factories import make_client, make_document_type, make_event
+from tests._standard_text import record_text, text_fields
 
 #: Untergrenze, bis der Gegenspieler sicher an der Zeile haengt. Bewusst nur
 #: eine Untergrenze: laeuft er langsamer, ist der Test trotzdem aussagekraeftig.
@@ -99,7 +100,7 @@ def _committed_bestand(*, mit_fall=False, im_papierkorb=False, events=5):
         facility=facility,
         pseudonym="TOCTOU-Person",
         contact_stage=Client.ContactStage.IDENTIFIED,
-        notes="Interne Notiz im Klartext",
+        **text_fields(facility, "Interne Notiz im Klartext", document_type=None, data_json=None),
     )
     fall = None
     if mit_fall:
@@ -197,7 +198,7 @@ class TestKAnonBridgeHoldRace:
             "Die K-Anon-Bridge hat trotz eines waehrend der Sperrwartezeit committeten Holds anonymisiert (Spoliation)"
         )
         assert person.k_anonymized is False
-        assert person.notes == "Interne Notiz im Klartext"
+        assert record_text(person) == "Interne Notiz im Klartext"
         assert ergebnis["b"]["count"] == 0
         assert ergebnis["b"]["skipped_holds"] == 1
 

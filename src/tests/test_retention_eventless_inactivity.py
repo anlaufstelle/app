@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from core.models import Attachment, Case, Client, LegalHold, RetentionProposal, WorkItem
 from core.retention.anonymization import anonymize_clients
+from tests._standard_text import record_text, text_fields
 
 pytestmark = pytest.mark.django_db
 
@@ -36,13 +37,17 @@ def _run_retention(facility, path):
 def test_eventless_open_case_is_preserved(idle_person, facility, staff_user, path, stage):
     Client.objects.filter(pk=idle_person.pk).update(contact_stage=stage)
     case = Case.objects.create(
-        facility=facility, client=idle_person, title="Active case", description="Preserve notes", created_by=staff_user
+        facility=facility,
+        client=idle_person,
+        title="Active case",
+        **text_fields(facility, "Preserve notes", entity="case", document_type=None, data_json=None),
+        created_by=staff_user,
     )
     result = _run_retention(facility, path)
     idle_person.refresh_from_db()
     case.refresh_from_db()
     assert idle_person.anonymized_at is None
-    assert case.description == "Preserve notes"
+    assert record_text(case) == "Preserve notes"
     assert not RetentionProposal.objects.filter(facility=facility).exists()
     if result is not None:
         assert result["count"] == 0

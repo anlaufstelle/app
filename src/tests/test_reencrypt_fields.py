@@ -465,7 +465,7 @@ class TestRotateAll:
             rectification = RectificationRequest.objects.create(
                 facility=facility,
                 target_client=client_identified,
-                field_path="notes",
+                field_path="data_json.client-notes",
                 old_value=encrypt_field('"Alt"'),
                 new_value=encrypt_field('"Neu"'),
                 reason=encrypt_field("CAS-Grund"),
@@ -653,7 +653,7 @@ class TestRotateAll:
         RectificationRequest.objects.create(
             facility=facility,
             target_client=client_identified,
-            field_path="notes",
+            field_path="data_json.client-notes",
             requested_by=staff_user,
         )
         RectificationRequest.objects.create(

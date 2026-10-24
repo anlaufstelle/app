@@ -33,6 +33,7 @@ from core.models import (
     EventHistory,
 )
 from core.services.client import anonymize_client
+from tests._standard_text import record_text, text_fields, text_path
 
 
 @pytest.mark.django_db
@@ -42,7 +43,7 @@ class TestClientAnonymizeCharacterization:
             facility=facility,
             contact_stage=Client.ContactStage.IDENTIFIED,
             pseudonym="Stern-7",
-            notes="sehr persoenliche Notiz",
+            **text_fields(facility, "sehr persoenliche Notiz", document_type=None, data_json=None),
             age_cluster=Client.AgeCluster.AGE_27_PLUS,
             created_by=staff_user,
         )
@@ -51,7 +52,7 @@ class TestClientAnonymizeCharacterization:
 
         client.refresh_from_db()
         assert client.pseudonym.startswith("Gelöscht-")
-        assert client.notes == ""
+        assert record_text(client) == ""
         assert client.age_cluster == Client.AgeCluster.UNKNOWN
         assert client.is_active is False
 
@@ -119,14 +120,16 @@ class TestClientAnonymizeCharacterization:
         """
         from core.services.client.rectification import request_rectification
 
-        rr = request_rectification(client_identified, staff_user, "notes", "Wunschwert", "Klartext-Begruendung")
+        rr = request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Wunschwert", "Klartext-Begruendung"
+        )
 
         anonymize_client(client_identified, user=lead_user)
 
         rr.refresh_from_db()
         assert (rr.old_value, rr.new_value, rr.reason, rr.review_note) == (None, None, None, None)
         # Antrags-Meta bleibt fuer den Vier-Augen-Audit-Trail erhalten.
-        assert rr.field_path == "notes"
+        assert rr.field_path == "data_json.client-notes"
         assert rr.requested_by_id == staff_user.pk
 
     def test_activity_context_redacted_for_client_and_event_targets(self, facility, staff_user, doc_type_contact):
@@ -215,7 +218,7 @@ class TestAnonymizeClientHelpers:
             facility=facility,
             contact_stage=Client.ContactStage.IDENTIFIED,
             pseudonym="Original-1",
-            notes="Geheimnotiz",
+            **text_fields(facility, "Geheimnotiz", document_type=None, data_json=None),
             age_cluster=Client.AgeCluster.AGE_27_PLUS,
             created_by=staff_user,
         )
@@ -224,7 +227,7 @@ class TestAnonymizeClientHelpers:
         client.refresh_from_db()
 
         assert client.pseudonym.startswith("Gelöscht-")
-        assert client.notes == ""
+        assert record_text(client) == ""
         assert client.age_cluster == Client.AgeCluster.UNKNOWN
         assert client.is_active is False
         # contact_stage bleibt unangetastet — gehört nicht zur Identity-Redaktion.
@@ -239,7 +242,7 @@ class TestAnonymizeClientHelpers:
             facility=facility,
             client=client_identified,
             title="Klartext-Titel",
-            description="Klartext-Beschreibung",
+            **text_fields(facility, "Klartext-Beschreibung", entity="case", document_type=None, data_json=None),
             status=Case.Status.OPEN,
             created_by=staff_user,
         )
@@ -257,7 +260,7 @@ class TestAnonymizeClientHelpers:
 
         assert case.pk in case_ids
         assert case.title.startswith("[Anonymisiert ")
-        assert case.description == ""
+        assert record_text(case) == ""
         assert episode.title == "Episode (anonymisiert)"
         assert episode.description == ""
 
@@ -815,7 +818,9 @@ class TestAnonymizeClientHelpers:
         from core.services.client import _redact_rectification_requests
         from core.services.client.rectification import reject_rectification, request_rectification
 
-        rr = request_rectification(client_identified, staff_user, "notes", "Wunschwert", "Begruendung")
+        rr = request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Wunschwert", "Begruendung"
+        )
         reject_rectification(rr, lead_user, "Pruefvermerk")
 
         _redact_rectification_requests(client_identified)
@@ -827,7 +832,7 @@ class TestAnonymizeClientHelpers:
         assert rr.review_note is None
         # Antrags-Meta bleibt als Vier-Augen-Nachweis erhalten.
         assert rr.status == RectificationRequest.Status.REJECTED
-        assert rr.field_path == "notes"
+        assert rr.field_path == "data_json.client-notes"
         assert rr.requested_by_id == staff_user.pk
         assert rr.reviewed_by_id == lead_user.pk
         assert rr.created_at is not None
@@ -847,7 +852,7 @@ class TestAnonymizeClientHelpers:
             pseudonym="Fremd-Rect-1",
             created_by=staff_user,
         )
-        foreign = request_rectification(other, staff_user, "notes", "Fremdwert", "Fremde Begruendung")
+        foreign = request_rectification(other, staff_user, text_path(other), "Fremdwert", "Fremde Begruendung")
 
         _redact_rectification_requests(client_identified)
 

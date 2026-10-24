@@ -199,7 +199,6 @@ CASE = EntitySpec(
     export_entry=_case_export_entry,
     export_base_keys=(
         "title",
-        "description",
         "status",
         "created_at",
         "updated_at",
@@ -300,7 +299,6 @@ CLIENT = EntitySpec(
         "pseudonym",
         "contact_stage",
         "age_cluster",
-        "notes",
         "is_active",
         "k_anonymized",
         "created_at",

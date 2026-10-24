@@ -52,6 +52,7 @@ from core.services.case.deletion import (
     restore_case,
 )
 from core.services.dashboard import log_activity
+from tests._standard_text import record_text
 
 #: UUID-Literale, wie psycopg sie in ``connection.queries`` zurueckmeldet:
 #: ``last_executed_query`` gibt das mogrifizierte Statement zurueck, die
@@ -266,19 +267,13 @@ class TestPendingDeletionCaseIdsBleibtBeimZieltyp:
 
 @pytest.mark.django_db
 class TestRedactCaseContentSchreibtNurDieRedaktionsfelder:
-    """Die Redaktion ist ein Teil-Save, kein Voll-Save.
+    """Redaction saves only its content fields and preserves the activity timestamp.
 
-    ``Case.updated_at`` ist ``auto_now=True``. Mit expliziter
-    ``update_fields``-Liste ruft Django ``pre_save`` nur fuer die genannten
-    Felder auf — ``updated_at`` bleibt stehen und die Redaktion schreibt genau
-    fuenf Spalten. Ohne die Liste wird die komplette In-Memory-Instanz
-    zurueckgeschrieben: der Anonymisierungslauf haelt beim Redigieren keine
-    Row-Locks, ein parallel geaendertes Feld waere damit still ueberschrieben
-    (Lost-Update).
+    A full save would invoke auto_now and overwrite unrelated concurrent edits.
     """
 
     def test_updated_at_bleibt_stehen(self, facility, client_identified, staff_user):
-        """Pin: ``x_redact_case_content__mutmut_8`` — ``update_fields=[…5 Felder…]`` → ``update_fields=None``.
+        """Pin: ``x_redact_case_content__mutmut_8`` — ``update_fields`` → ``update_fields=None``.
 
         Original: ``updated_at`` unveraendert (nicht in ``update_fields``).
         Mutant: Voll-Save loest ``auto_now`` aus, ``updated_at`` springt auf
@@ -293,7 +288,7 @@ class TestRedactCaseContentSchreibtNurDieRedaktionsfelder:
         fall.refresh_from_db()
         assert fall.updated_at == vorher
         # Positiv-Kontrolle: die Redaktion hat wirklich stattgefunden.
-        assert fall.description == ""
+        assert record_text(fall) == ""
         assert fall.data_json == {}
         assert fall.document_type_id is None
         assert fall.anonymized_at is not None
