@@ -49,6 +49,7 @@ from django.utils import timezone
 
 from core.models import DocumentType, DocumentTypeField, FieldTemplate, WorkItem
 from core.services.system.facility_export import _serialize_document_type, _serialize_workitem
+from tests._dynamic_test_data import entity_details
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -109,7 +110,7 @@ class TestSerializeWorkitemFullDict:
             status=WorkItem.Status.IN_PROGRESS,
             priority=WorkItem.Priority.URGENT,
             title="Pin-Aufgabe facility_export-a",
-            description="Beschreibungstext fuer den Vollmutations-Pin.",
+            **entity_details(facility, "workitem", "Beschreibungstext fuer den Vollmutations-Pin."),
             completed_at=completed_at,
             due_date=due_date,
             remind_at=remind_at,
@@ -125,7 +126,8 @@ class TestSerializeWorkitemFullDict:
             "status": WorkItem.Status.IN_PROGRESS,
             "priority": WorkItem.Priority.URGENT,
             "title": "Pin-Aufgabe facility_export-a",
-            "description": "Beschreibungstext fuer den Vollmutations-Pin.",
+            "document_type_id": str(work_item.document_type_id),
+            "data_json": {"test-details-workitem": "Beschreibungstext fuer den Vollmutations-Pin."},
             "created_at": work_item.created_at.isoformat(),
             "updated_at": work_item.updated_at.isoformat(),
             "completed_at": completed_at.isoformat(),

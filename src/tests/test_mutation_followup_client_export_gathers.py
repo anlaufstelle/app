@@ -44,6 +44,7 @@ from core.services.client import (
     _gather_events,
     _gather_workitems,
 )
+from tests._dynamic_test_data import assign_details, entity_details
 from tests._mutation_followup_client_export_helpers import (
     _make_doc_type,
     _make_event,
@@ -1398,7 +1399,9 @@ class TestGatherWorkItems:
         assert len(result) == 1
         assert set(result[0].keys()) == {
             "title",
-            "description",
+            "document_type",
+            "dynamic_data",
+            "dynamic_data_orphaned",
             "item_type",
             "status",
             "priority",
@@ -1425,9 +1428,9 @@ class TestGatherWorkItems:
             client=client_identified,
             created_by=staff_user,
             title="X",
-            description="Lange Workitem-Beschreibung",
+            **entity_details(facility, "workitem", "Lange Workitem-Beschreibung"),
         )
-        assert _gather_workitems(client_identified)[0]["description"] == ("Lange Workitem-Beschreibung")
+        assert _gather_workitems(client_identified)[0]["dynamic_data"][0]["value"] == ("Lange Workitem-Beschreibung")
 
     def test_status_uses_display_label(self, sample_workitem):
         """Mutation ``get_status_display()`` → ``status`` würde Slug
@@ -1557,8 +1560,8 @@ class TestGatherWorkItems:
     def test_updated_at_is_isoformat_and_independent_of_created_at(self, sample_workitem):
         """Mutation ``wi.updated_at`` → ``wi.created_at`` würde die letzte
         Änderung verschweigen."""
-        sample_workitem.description = "Nachtrag"
-        sample_workitem.save(update_fields=["description", "updated_at"])
+        assign_details(sample_workitem, "Nachtrag")
+        sample_workitem.save(update_fields=["document_type", "data_json", "updated_at"])
         sample_workitem.refresh_from_db()
         result = _gather_workitems(sample_workitem.client)[0]
         assert isinstance(result["updated_at"], str)

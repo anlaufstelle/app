@@ -10,6 +10,7 @@ from django.utils import timezone
 from core.models import AuditLog, Case, Client, DeletionRequest, Episode, Event, WorkItem
 from core.models.activity import Activity
 from core.services.client import get_client_or_none, pending_deletion_client_ids, update_client
+from tests._dynamic_test_data import entity_details, read_details
 from tests._standard_text import record_text, set_record_text, text_fields
 
 
@@ -560,7 +561,7 @@ class TestClientAnonymize:
         episode = Episode.objects.create(
             case=case,
             title="Sensible Episode mit Klarnamen",
-            description="Freitext mit Personenbezug.",
+            **entity_details(case, "episode", "Freitext mit Personenbezug."),
             started_at=timezone.now().date(),
             created_by=staff_user,
         )
@@ -569,7 +570,7 @@ class TestClientAnonymize:
         episode.refresh_from_db()
 
         assert "Klarnamen" not in episode.title
-        assert episode.description == ""
+        assert read_details(episode) == ""
 
     def test_anonymize_clears_closed_workitems(self, facility, client_identified, staff_user):
         """Workitems with status DONE/DISMISSED must also be anonymized (Refs #529)."""
@@ -580,7 +581,7 @@ class TestClientAnonymize:
             item_type=WorkItem.ItemType.TASK,
             status=WorkItem.Status.DONE,
             title="Erledigte Aufgabe mit Klarnamen",
-            description="Sensible Beschreibung.",
+            **entity_details(facility, "workitem", "Sensible Beschreibung."),
         )
         dismissed = WorkItem.objects.create(
             facility=facility,
@@ -589,7 +590,7 @@ class TestClientAnonymize:
             item_type=WorkItem.ItemType.TASK,
             status=WorkItem.Status.DISMISSED,
             title="Verworfene Aufgabe mit Klarnamen",
-            description="Weitere sensible Daten.",
+            **entity_details(facility, "workitem", "Weitere sensible Daten."),
         )
 
         client_identified.anonymize()
@@ -597,9 +598,9 @@ class TestClientAnonymize:
         dismissed.refresh_from_db()
 
         assert done.title == "Aufgabe (anonymisiert)"
-        assert done.description == ""
+        assert read_details(done) == ""
         assert dismissed.title == "Aufgabe (anonymisiert)"
-        assert dismissed.description == ""
+        assert read_details(dismissed) == ""
 
     def test_anonymize_clears_open_workitems(self, facility, client_identified, staff_user):
         """Regression: open/in_progress workitems continue to be anonymized."""
@@ -610,7 +611,7 @@ class TestClientAnonymize:
             item_type=WorkItem.ItemType.TASK,
             status=WorkItem.Status.OPEN,
             title="Offene Aufgabe mit Klarnamen",
-            description="Details.",
+            **entity_details(facility, "workitem", "Details."),
         )
         in_progress = WorkItem.objects.create(
             facility=facility,
@@ -619,7 +620,7 @@ class TestClientAnonymize:
             item_type=WorkItem.ItemType.TASK,
             status=WorkItem.Status.IN_PROGRESS,
             title="Laufende Aufgabe",
-            description="Weiteres.",
+            **entity_details(facility, "workitem", "Weiteres."),
         )
 
         client_identified.anonymize()
@@ -627,9 +628,9 @@ class TestClientAnonymize:
         in_progress.refresh_from_db()
 
         assert open_item.title == "Aufgabe (anonymisiert)"
-        assert open_item.description == ""
+        assert read_details(open_item) == ""
         assert in_progress.title == "Aufgabe (anonymisiert)"
-        assert in_progress.description == ""
+        assert read_details(in_progress) == ""
 
 
 @pytest.mark.django_db

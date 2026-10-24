@@ -780,13 +780,15 @@ def _gather_workitems(client):
     """Serialize all work items linked to the client."""
     workitems = (
         WorkItem.objects.filter(client=client)
-        .select_related("created_by", "assigned_to", "deleted_by")
+        .select_related("created_by", "assigned_to", "deleted_by", "document_type")
         .order_by("-created_at", "pk")
     )
     return [
         {
             "title": wi.title,
-            "description": wi.description,
+            "document_type": wi.document_type.name if wi.document_type_id else None,
+            "dynamic_data": _gather_entity_dynamic_data(wi) or [],
+            "dynamic_data_orphaned": _gather_entity_orphan_data(wi) or [],
             # Refs #1752: bisher fehlende Kleinfelder — Typ, handelnde
             # Personen, Fristen und Papierkorb-Status.
             "item_type": wi.get_item_type_display(),
@@ -807,23 +809,19 @@ def _gather_workitems(client):
 
 
 def _gather_episodes(client):
-    """Serialize all episodes of the client's cases (Refs #1752).
-
-    Episoden waren komplett aus der Auskunft gefallen, obwohl sie Freitext
-    (``title``/``description``) zur Person tragen. Der Zugriff laeuft ueber den
-    ``case``-Join — ``Episode`` haengt nicht direkt an der Facility, RLS greift
-    hier als JOIN-Policy.
-    """
+    """Serialize episode metadata and decrypted dynamic values through the case scope."""
     episodes = (
         Episode.objects.filter(case__client=client)
-        .select_related("case", "created_by", "deleted_by")
+        .select_related("case", "created_by", "deleted_by", "document_type")
         .order_by("-started_at", "pk")
     )
     return [
         {
             "case": episode.case.title,
             "title": episode.title,
-            "description": episode.description,
+            "document_type": episode.document_type.name if episode.document_type_id else None,
+            "dynamic_data": _gather_entity_dynamic_data(episode) or [],
+            "dynamic_data_orphaned": _gather_entity_orphan_data(episode) or [],
             "started_at": episode.started_at.isoformat(),
             "ended_at": _isoformat(episode.ended_at),
             "created_at": episode.created_at.isoformat(),

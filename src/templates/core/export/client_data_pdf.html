@@ -260,7 +260,7 @@
             <tr>
                 <td>{{ episode.case }}</td>
                 <td>{{ episode.title }}</td>
-                <td>{{ episode.description|default:"-" }}</td>
+                <td>{% for entry in episode.dynamic_data %}<p>{{ entry.label }}: {{ entry.value|default_if_none:"" }}</p>{% endfor %}{% for entry in episode.dynamic_data_orphaned %}<p>{{ entry.label }}: {{ entry.value|default_if_none:"" }}</p>{% endfor %}</td>
                 <td>{{ episode.started_at }}</td>
                 <td>{{ episode.ended_at|default:"-" }}</td>
                 <td>{{ episode.created_by|default:"-" }}</td>
@@ -600,7 +600,7 @@
             {% for wi in work_items %}
             <tr>
                 <td>{{ wi.title }}</td>
-                <td>{{ wi.description|default:"-" }}</td>
+                <td>{% for entry in wi.dynamic_data %}<p>{{ entry.label }}: {{ entry.value|default_if_none:"" }}</p>{% endfor %}{% for entry in wi.dynamic_data_orphaned %}<p>{{ entry.label }}: {{ entry.value|default_if_none:"" }}</p>{% endfor %}</td>
                 <td>{{ wi.item_type }}</td>
                 <td>{{ wi.status }}</td>
                 <td>{{ wi.priority }}</td>

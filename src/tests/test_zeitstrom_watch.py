@@ -376,7 +376,7 @@ class TestZeitstromWatchVisibility:
         ("field", "value"),
         [
             ("status", WorkItem.Status.IN_PROGRESS),
-            ("description", "Neue sichtbare Beschreibung"),
+            ("data_json", {"detail": "Changed dynamic detail"}),
             ("title", "Neuer sichtbarer Titel"),
             ("priority", WorkItem.Priority.URGENT),
         ],

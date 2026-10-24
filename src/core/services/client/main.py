@@ -161,10 +161,12 @@ def _redact_case_goals(case_ids: list) -> None:
 
 
 def _redact_workitems(client) -> None:
-    """Anonymisiere alle WorkItems des Klienten (auch DONE/DISMISSED)."""
+    """Clear all task titles, dynamic values and types, including completed tasks."""
     client.work_items.all().update(
         title="Aufgabe (anonymisiert)",
         description="",
+        data_json={},
+        document_type=None,
     )
 
 
@@ -687,10 +689,10 @@ def anonymize_client(client, user=None):
       Quasi-Identifikator am Tombstone
     - ``Case.title`` / ``Case.data_json`` /
       ``Case.document_type`` (M2 P5, Refs #1058) aller verknüpften Fälle
-    - ``Episode.title`` / ``Episode.description`` aller Episoden dieser Fälle
+    - ``Episode.title`` / ``Episode.data_json`` / ``Episode.document_type`` of all episodes in these cases
     - ``OutcomeGoal.title`` / ``OutcomeGoal.description`` / ``Milestone.title``
       aller Wirkungsziele dieser Fälle (Refs #1751)
-    - alle Workitems (auch DONE/DISMISSED): title, description
+    - all tasks (including DONE/DISMISSED): title, data_json, document_type
     - ``Event.data_json``/``search_text`` aller noch nicht soft-deleteten
       Events des Klienten (Refs #1089) — die Live-Zeile bliebe sonst mit
       Klartext stehen, etwa im Trash-Expiry-Pfad vor dem Soft-Delete.

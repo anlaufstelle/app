@@ -61,6 +61,7 @@ from core.services.system.facility_export import (
     _serialize_goal,
     _serialize_milestone,
 )
+from tests._dynamic_test_data import entity_details
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -86,7 +87,7 @@ class TestSerializeEpisode:
         episode = Episode.objects.create(
             case=case_open,
             title="Kriseninterventionsphase",
-            description="Akute Stabilisierung nach Zuweisung.",
+            **entity_details(case_open, "episode", "Akute Stabilisierung nach Zuweisung."),
             started_at=started,
             ended_at=ended,
             created_by=staff_user,
@@ -98,7 +99,8 @@ class TestSerializeEpisode:
             "id": str(episode.pk),
             "case_id": str(case_open.pk),
             "title": "Kriseninterventionsphase",
-            "description": "Akute Stabilisierung nach Zuweisung.",
+            "document_type_id": str(episode.document_type_id),
+            "data_json": {"test-details-episode": "Akute Stabilisierung nach Zuweisung."},
             "started_at": started.isoformat(),
             "ended_at": ended.isoformat(),
             "created_by_id": str(staff_user.pk),

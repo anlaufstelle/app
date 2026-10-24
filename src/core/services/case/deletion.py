@@ -510,6 +510,8 @@ def redact_case_content(case) -> None:
     Episode.objects.filter(case_id=case.pk).update(
         title="Episode (anonymisiert)",
         description="",
+        data_json={},
+        document_type=None,
     )
 
 

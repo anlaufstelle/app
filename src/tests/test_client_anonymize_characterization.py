@@ -33,6 +33,7 @@ from core.models import (
     EventHistory,
 )
 from core.services.client import anonymize_client
+from tests._dynamic_test_data import entity_details, read_details
 from tests._standard_text import record_text, text_fields, text_path
 
 
@@ -249,7 +250,7 @@ class TestAnonymizeClientHelpers:
         episode = Episode.objects.create(
             case=case,
             title="Klartext-Episode",
-            description="Klartext-Beschreibung-Episode",
+            **entity_details(case, "episode", "Klartext-Beschreibung-Episode"),
             started_at=timezone.now().date(),
             created_by=staff_user,
         )
@@ -262,7 +263,7 @@ class TestAnonymizeClientHelpers:
         assert case.title.startswith("[Anonymisiert ")
         assert record_text(case) == ""
         assert episode.title == "Episode (anonymisiert)"
-        assert episode.description == ""
+        assert read_details(episode) == ""
 
     def test_redact_cases_returns_empty_list_when_no_cases(self, client_identified):
         from core.services.client import _redact_cases_and_episodes
@@ -279,7 +280,7 @@ class TestAnonymizeClientHelpers:
             item_type=WorkItem.ItemType.TASK,
             status=WorkItem.Status.OPEN,
             title="Offene Aufgabe",
-            description="Klartext",
+            **entity_details(facility, "workitem", "Klartext"),
             created_by=staff_user,
         )
         WorkItem.objects.create(
@@ -288,7 +289,7 @@ class TestAnonymizeClientHelpers:
             item_type=WorkItem.ItemType.TASK,
             status=WorkItem.Status.DONE,
             title="Erledigte Aufgabe",
-            description="Klartext",
+            **entity_details(facility, "workitem", "Klartext"),
             created_by=staff_user,
         )
 
@@ -296,7 +297,7 @@ class TestAnonymizeClientHelpers:
 
         for wi in client_identified.work_items.all():
             assert wi.title == "Aufgabe (anonymisiert)"
-            assert wi.description == ""
+            assert read_details(wi) == ""
 
     def test_event_ids_for_client_collects_the_event_ids(
         self, facility, staff_user, doc_type_contact, client_identified

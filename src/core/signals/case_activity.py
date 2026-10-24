@@ -23,7 +23,8 @@ _BUSINESS_FIELDS = {
     WorkItem: (
         "client_id",
         "title",
-        "description",
+        "document_type_id",
+        "data_json",
         "status",
         "priority",
         "assigned_to_id",

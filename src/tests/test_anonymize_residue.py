@@ -28,6 +28,7 @@ from core.models import (
     EventHistory,
     WorkItem,
 )
+from tests._dynamic_test_data import entity_details, read_details
 from tests._standard_text import record_text, text_fields
 
 
@@ -82,7 +83,7 @@ def client_with_full_history(facility, normal_doc_type, doc_type_client_profile,
     Episode.objects.create(
         case=case,
         title="Erstberatung",
-        description="Klient kam mit Mahnung",
+        **entity_details(case, "episode", "Klient kam mit Mahnung"),
         started_at=timezone.now() - timedelta(days=20),
     )
     event = Event.objects.create(
@@ -116,7 +117,7 @@ def client_with_full_history(facility, normal_doc_type, doc_type_client_profile,
         client=cli,
         created_by=admin_user,
         title=f"Termin mit {cli.pseudonym} koordinieren",
-        description="Adresse: Hauptstraße 5, telefonisch",
+        **entity_details(facility, "workitem", "Adresse: Hauptstraße 5, telefonisch"),
     )
     return cli, case, event
 
@@ -169,7 +170,7 @@ class TestAnonymizeResidueMatrix:
         assert "Hauptstraße" not in record_text(case)
         episode = Episode.objects.get(case=case)
         assert episode.title == "Episode (anonymisiert)"
-        assert episode.description == ""
+        assert read_details(episode) == ""
 
     def test_case_dynamic_data_redacted(self, client_with_full_history):
         """M2 P5 (Refs #1058): ``data_json`` leer, ``document_type`` geloest.
@@ -190,7 +191,7 @@ class TestAnonymizeResidueMatrix:
         cli.anonymize()
         wi = WorkItem.objects.get(client=cli)
         assert wi.title == "Aufgabe (anonymisiert)"
-        assert wi.description == ""
+        assert read_details(wi) == ""
 
     def test_event_history_redacted(self, client_with_full_history):
         cli, _, event = client_with_full_history

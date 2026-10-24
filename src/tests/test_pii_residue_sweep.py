@@ -156,8 +156,8 @@ def test_fixture_seeds_needles_everywhere(maximal_pii_graph):
 #   - create_client    -> core_client.{pseudonym,notes} + Activity "… angelegt"
 #   - update_client     -> Activity "… qualifiziert" (Stufenwechsel)
 #   - create_case       -> core_case.{title,description}
-#   - Episode.create    -> core_episode.{title,description} (kein Service)
-#   - create_workitem   -> core_workitem.{title,description} + Activity
+#   - Episode.create    -> core_episode.{title,data_json}
+#   - create_workitem   -> core_workitem.{title,data_json} + Activity
 #   - create_event      -> core_event.search_text (aus data_json/Field-Slug)
 #                          + core_eventhistory.data_after (CREATE) + Activity
 #   - EventHistory.create-> core_eventhistory.{data_before,data_after} (UPDATE)
@@ -270,26 +270,34 @@ def maximal_pii_graph(facility, admin_user, lead_user):
         ),
     )
 
-    # 3a) Episode unter dem Fall (core_episode.{title,description}). Kein
-    #     Episode-Service vorhanden — der Freitext IST der Needle, daher
-    #     direkter ``.objects.create`` (keine Ableitung noetig).
+    # Both carriers need plaintext sentinels so the raw SQL sweep can observe them.
+    dynamic_types = {}
+    for kind in ("episode", "workitem"):
+        record_type = DocumentType.objects.create(facility=facility, entity_type=kind, name=f"Residue {kind}")
+        field = FieldTemplate.objects.create(
+            facility=facility, name=f"Residue {kind} detail", slug=f"residue-{kind}", field_type="textarea"
+        )
+        DocumentTypeField.objects.create(document_type=record_type, field_template=field)
+        dynamic_types[kind] = (record_type, field)
+    episode_type, episode_field = dynamic_types["episode"]
     Episode.objects.create(
         case=case,
-        title="RESIDUEPROBE-Episodentitel",
-        description="RESIDUEPROBE-Episodenbeschreibung",
-        started_at=timezone.now().date(),
+        title="RESIDUEPROBE-Episode title",
+        description="RESIDUEPROBE-Episode fixed detail",
+        document_type=episode_type,
+        data_json={episode_field.slug: "RESIDUEPROBE-Episode details"},
+        started_at=timezone.localdate(),
         created_by=admin_user,
     )
-
-    # 3b) Arbeitsauftrag fuer die Person (core_workitem.{title,description})
-    #     ueber den Service, damit abgeleitete Senken realistisch befuellt
-    #     werden (Activity "Aufgabe: …").
+    task_type, task_field = dynamic_types["workitem"]
     create_workitem(
         facility,
         admin_user,
         client=client,
-        title="RESIDUEPROBE-Aufgabe",
-        description="RESIDUEPROBE-Aufgabenbeschreibung",
+        title="RESIDUEPROBE-Task title",
+        description="RESIDUEPROBE-Task fixed detail",
+        document_type=task_type,
+        data_json={task_field.slug: "RESIDUEPROBE-Task details"},
     )
 
     # 3c) Wirkungsziel + Meilenstein am Fall (core_outcomegoal.{title,

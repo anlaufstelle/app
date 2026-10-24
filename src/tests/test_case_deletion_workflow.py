@@ -33,6 +33,7 @@ from core.services.case.deletion import (
     soft_delete_case,
 )
 from core.services.dashboard import render_activity_summary
+from tests._dynamic_test_data import read_details
 from tests._standard_text import record_text
 
 pytestmark = pytest.mark.django_db
@@ -417,7 +418,7 @@ class TestTrashExpiryRedaction:
         outcome_goal.refresh_from_db()
         milestone.refresh_from_db()
         assert Episode.objects.filter(pk=episode.pk).exists()
-        assert episode.description == ""
+        assert read_details(episode) == ""
         assert "anonymisiert" in episode.title
         assert "anonymisiert" in outcome_goal.title
         assert "anonymisiert" in milestone.title

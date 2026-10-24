@@ -34,6 +34,7 @@ from core.services.client import (
     export_client_data,
 )
 from core.services.client.export import ATTACHMENT_FIELD_PLACEHOLDER
+from tests._dynamic_test_data import entity_details
 from tests._factories import make_client, make_document_type, make_event
 from tests._standard_text import set_record_text, text_fields, text_path
 
@@ -130,7 +131,7 @@ def sample_workitem(facility, admin_user, sample_client):
         client=sample_client,
         created_by=admin_user,
         title="Test-Aufgabe",
-        description="Test-Beschreibung",
+        **entity_details(facility, "workitem", "Test-Beschreibung"),
     )
 
 
@@ -891,7 +892,7 @@ class TestClientExportCrossTableCategories:
         Episode.objects.create(
             case=sample_case,
             title="Clearing",
-            description="Erstklaerung",
+            **entity_details(sample_case, "episode", "Erstklaerung"),
             started_at=timezone.now().date() - timedelta(days=10),
             created_by=admin_user,
         )
@@ -899,7 +900,7 @@ class TestClientExportCrossTableCategories:
         assert len(data["episodes"]) == 1
         episode = data["episodes"][0]
         assert episode["title"] == "Clearing"
-        assert episode["description"] == "Erstklaerung"
+        assert episode["dynamic_data"][0]["value"] == "Erstklaerung"
         assert episode["case"] == "Testfall"
         assert episode["created_by"] == "ce_admin"
         assert episode["ended_at"] is None
@@ -2385,7 +2386,7 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
     episode = Episode.objects.create(
         case=case,
         title="PDF-Episode",
-        description="Episoden-Text",
+        **entity_details(case, "episode", "Episoden-Text"),
         started_at=timezone.now().date(),
         created_by=admin_user,
     )
@@ -2451,7 +2452,7 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
         created_by=admin_user,
         assigned_to=lead_user,
         title="PDF-Aufgabe",
-        description="Aufgaben-Text",
+        **entity_details(facility, "workitem", "Aufgaben-Text"),
     )
     Activity.objects.create(
         facility=facility,
