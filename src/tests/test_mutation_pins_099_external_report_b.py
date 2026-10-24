@@ -229,10 +229,10 @@ class TestBuildExternalReportContactStagePersonsCollapse:
                 facility, staff_user, contact_stage=Client.ContactStage.IDENTIFIED, pseudonym=f"ID-{index:02d}"
             )
             _make_events(facility, client, doc_type, staff_user, 1)
-        # Eine einzige qualifizierte Person mit 6 Ereignissen: Ereigniszahl (6)
-        # liegt ueber der Schwelle, die Personenzahl (1) klar darunter. Drei
-        # anonyme Ereignisse halten die Ereignis-Randsumme der Stufen offen,
-        # sodass die gesperrte Stufe nicht aus Summe und Altersgruppe folgt.
+        # A single qualified person with 6 events: the event count (6) is above
+        # the threshold, the person count (1) clearly below it. Three anonymous
+        # events keep the stage marginal open, so the withheld stage does not
+        # follow from the total and the age row.
         lone_qualified = _make_client(
             facility, staff_user, contact_stage=Client.ContactStage.QUALIFIED, pseudonym="QU-lone"
         )
@@ -250,8 +250,8 @@ class TestBuildExternalReportContactStagePersonsCollapse:
         Five identified persons and one qualified person with six events: if the
         total (11), the identified stage (5) and the age row of all persons (11)
         were all published, the qualified stage would follow as 11 - 5 - (11 - 11) = 6.
-        That exact value shows that the stage fell because fewer than the threshold
-        of persons stand behind it. At least one of the three figures stays withheld.
+        The total cancels out (Q = A - I), so the identified stage and the age row
+        alone fix the value. At least one of these two figures stays withheld.
         """
         doc_type = DocumentType.objects.create(
             facility=facility, name="Kontakt", report_key="contact", tally_enabled=True
@@ -269,7 +269,7 @@ class TestBuildExternalReportContactStagePersonsCollapse:
         report = build_external_report(facility, *report_period)
 
         age_unknown = next(row["count"] for row in report["by_age_cluster"] if row["cluster"] == "unknown")
-        needed = (report["total_contacts"], report["by_contact_stage"]["identifiziert"], age_unknown)
+        needed = (report["by_contact_stage"]["identifiziert"], age_unknown)
         assert report["by_contact_stage"]["qualifiziert"] is None
         assert None in needed
 
