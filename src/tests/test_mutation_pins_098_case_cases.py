@@ -25,6 +25,7 @@ from __future__ import annotations
 import pytest
 
 from core.services.case.cases import create_case, update_case
+from tests._standard_text import record_text
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -34,7 +35,7 @@ def test_create_case_ohne_description_speichert_leerstring(facility, staff_user,
     ``description`` wird zum Literal ``"XXXX"``."""
     case = create_case(facility, staff_user, client_identified, title="Pin098-Fall")
 
-    assert case.description == ""
+    assert record_text(case) == ""
 
 
 def test_update_case_data_json_only_behaelt_den_bestehenden_dokumenttyp(

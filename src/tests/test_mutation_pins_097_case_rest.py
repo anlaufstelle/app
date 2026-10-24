@@ -70,6 +70,7 @@ from core.services.case.goals import (
     unachieve_goal,
     update_goal,
 )
+from tests._standard_text import record_text, text_fields
 
 #: ``FOR UPDATE``-Statements verraten die Sperre; der Tabellenname steht im
 #: ``FROM``. Gleiche Grob-Erkennung wie ``test_mutation_pins_096_events_crud.py``,
@@ -274,26 +275,18 @@ class TestCreateCaseConstructorKwargs:
     """Was der Aufrufer uebergibt, muss auch in der Zeile landen."""
 
     def test_create_case_speichert_die_uebergebene_description(self, facility, staff_user, client_identified):
-        """Pin: ``x_create_case__mutmut_50`` — ``description=description,`` im
-        ``Case(...)``-Konstruktor entfaellt.
-
-        ``Case.description`` hat kein ``default=`` (nur ``blank=True``); ohne
-        das Kwarg greift Djangos Feld-Fallback ``""``.
-
-        Abweichung beim Mutanten: ``case.description`` ist leer, die
-        uebergebene Beschreibung geht schon beim Anlegen verloren.
-        """
+        """Creating a case preserves typed text after reloading the record."""
         case = create_case(
             facility,
             staff_user,
             client_identified,
             title="Pin-Fall",
-            description="Wichtiger Kontext",
+            **text_fields(facility, "Wichtiger Kontext", entity="case", document_type=None, data_json=None),
         )
 
-        assert case.description == "Wichtiger Kontext"
+        assert record_text(case) == "Wichtiger Kontext"
         case.refresh_from_db()
-        assert case.description == "Wichtiger Kontext"
+        assert record_text(case) == "Wichtiger Kontext"
 
 
 @pytest.mark.django_db

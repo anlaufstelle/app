@@ -60,7 +60,7 @@ DYNAMIC_FIELD_PLAINTEXT_HINT = _(
 )
 
 
-def configure_entity_document_type(form, facility, entity_type):
+def configure_entity_document_type(form, facility, entity_type, *, user=None):
     """Scope type choices and apply the active-type default and requirement."""
     field = cast(forms.ModelChoiceField, form.fields["document_type"])
     field.empty_label = _("— Kein Typ —")
@@ -70,6 +70,10 @@ def configure_entity_document_type(form, facility, entity_type):
     active = []
     if facility is not None:
         types = DocumentType.objects.for_facility(facility).filter(entity_type=entity_type)
+        if user is not None:
+            from core.services.compliance import allowed_sensitivities_for_user
+
+            types = types.filter(sensitivity__in=allowed_sensitivities_for_user(user))
         if not form.instance._state.adding:
             assigned_pk = form.instance.document_type_id
         active = list(types.filter(is_active=True)[:2])

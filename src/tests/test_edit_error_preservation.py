@@ -11,6 +11,7 @@ from core.models import AuditLog, Client, EventHistory
 from core.services.case import update_case
 from core.services.client import update_client
 from core.services.events import update_event
+from tests._standard_text import record_text, set_record_text, text_fields
 
 pytestmark = pytest.mark.django_db
 
@@ -46,6 +47,9 @@ def _prepare_edit_target(request, kind, client, staff_user):
     target = request.getfixturevalue(
         {"client": "client_identified", "case": "case_open", "event": "sample_event"}[kind]
     )
+    if kind in {"client", "case"}:
+        set_record_text(target, "")
+        target.save(update_fields=["document_type", "data_json"])
     client.force_login(staff_user)
     url = reverse(f"core:{kind}_update", kwargs={"pk": target.pk})
     response = client.get(url)
@@ -53,12 +57,19 @@ def _prepare_edit_target(request, kind, client, staff_user):
     payload = hidden_values(response)
     if kind == "client":
         payload.update(
-            pseudonym=target.pseudonym, contact_stage=target.contact_stage, age_cluster=target.age_cluster, notes=""
+            pseudonym=target.pseudonym,
+            contact_stage=target.contact_stage,
+            age_cluster=target.age_cluster,
+            **{"client-notes": "", "document_type": str(target.document_type_id)},
         )
-        text_field = "notes"
+        text_field = "client-notes"
     elif kind == "case":
-        payload.update(title=target.title, description="", lead_user=str(target.lead_user_id or ""))
-        text_field = "description"
+        payload.update(
+            title=target.title,
+            lead_user=str(target.lead_user_id or ""),
+            **{"standard-description": "", "document_type": str(target.document_type_id)},
+        )
+        text_field = "standard-description"
     else:
         payload.update(dauer="15", notiz="")
         text_field = "notiz"
@@ -68,20 +79,26 @@ def _prepare_edit_target(request, kind, client, staff_user):
 def change_server(kind, target, user, text):
     target = type(target).objects.get(pk=target.pk)
     if kind == "client":
-        update_client(target, user, notes=text)
+        update_client(
+            target,
+            user,
+            **text_fields(target.facility, text, document_type=target.document_type, data_json=target.data_json),
+        )
     elif kind == "case":
-        update_case(target, user, description=text)
+        update_case(
+            target,
+            user,
+            **text_fields(
+                target.facility, text, entity="case", document_type=target.document_type, data_json=target.data_json
+            ),
+        )
     else:
         update_event(target, user, {"dauer": 42, "notiz": text})
 
 
 def saved_text(kind, target):
     target.refresh_from_db()
-    return (
-        target.data_json["notiz"]
-        if kind == "event"
-        else getattr(target, "notes" if kind == "client" else "description")
-    )
+    return target.data_json["notiz"] if kind == "event" else record_text(target)
 
 
 def test_conflict_keeps_draft_and_explicit_retry_saves_once(client, staff_user, edit_target):
@@ -94,7 +111,7 @@ def test_conflict_keeps_draft_and_explicit_retry_saves_once(client, staff_user, 
     response = client.post(url, payload)
     assert response.status_code == 200
     assert not response.has_header("Location")
-    own_form = response.context["data_form"] if kind == "event" else response.context["form"]
+    own_form = response.context["data_form"]
     assert own_form.is_bound
     assert own_form[field].value() == draft
     assert "Aktueller Stand" in response.content.decode()
@@ -123,7 +140,7 @@ def test_service_error_keeps_draft_and_original_guards(client, edit_target):
     ):
         response = client.post(url, payload)
     assert response.status_code == 200
-    own_form = response.context["data_form"] if kind == "event" else response.context["form"]
+    own_form = response.context["data_form"]
     assert own_form[field].value() == payload[field]
     assert "Service rejected" in response.content.decode()
     assert "Aktueller Stand" not in response.content.decode()
@@ -142,7 +159,7 @@ def test_invalid_or_stale_version_keeps_draft(client, edit_target, token):
     response = client.post(url, payload)
     assert response.status_code == 200
     assert response.context["has_edit_conflict"]
-    own_form = response.context["data_form"] if kind == "event" else response.context["form"]
+    own_form = response.context["data_form"]
     assert own_form[field].value() == payload[field]
 
 
@@ -197,7 +214,7 @@ def test_uploaded_file_is_named_for_reselection_and_staging_is_cleaned(client, e
     assert response.status_code == 200
     assert response.context["data_form"].is_bound
     assert response.context["data_form"][text_field.slug].value() == "Dynamic draft"
-    own_form = response.context["data_form"] if kind == "event" else response.context["form"]
+    own_form = response.context["data_form"]
     assert own_form[field].value() == "Main draft"
     html = response.content.decode()
     assert "Datei bitte erneut auswählen:" in html
@@ -351,7 +368,7 @@ def test_real_upload_failure_retains_text_without_encrypted_orphans(
     response = client.post(url, payload)
     assert response.status_code == 200
     assert response.context["data_form"][extra_field.slug].value() == payload[extra_field.slug]
-    own_form = response.context["data_form"] if kind == "event" else response.context["form"]
+    own_form = response.context["data_form"]
     assert own_form[field].value() == payload[field]
     assert "Datei bitte erneut auswählen:" in response.content.decode()
     assert not list(tmp_path.rglob("*.enc"))
@@ -371,7 +388,7 @@ def test_another_server_edit_after_comparison_still_conflicts(client, staff_user
     second = client.post(url, payload)
     assert second.status_code == 200
     assert second.context["has_edit_conflict"]
-    own_form = second.context["data_form"] if kind == "event" else second.context["form"]
+    own_form = second.context["data_form"]
     assert own_form[field].value() == "Own persistent draft"
     assert saved_text(kind, target) == "Second server version"
     assert "Second server version" in second.content.decode()

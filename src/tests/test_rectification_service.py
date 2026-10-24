@@ -25,6 +25,7 @@ from core.services.client.rectification import (
 )
 from core.services.file_vault import is_encrypted_value
 from tests._sensitivity_helpers import make_inherited_fields_explicit
+from tests._standard_text import record_text, text_fields, text_path
 
 
 def _paths(client, user):
@@ -68,7 +69,7 @@ def _add_typed_field(facility, document_type, name, field_type, sort_order=11):
 @pytest.mark.django_db
 class TestRectifiableFields:
     def test_core_fields_without_document_type(self, client_identified, staff_user):
-        assert _paths(client_identified, staff_user) == ["pseudonym", "age_cluster", "notes"]
+        assert _paths(client_identified, staff_user) == ["pseudonym", "age_cluster"]
 
     def test_contact_stage_is_not_rectifiable(self, client_identified, staff_user):
         """E10: der Stufenwechsel hat einen eigenen Workflow (Gates + Audit)."""
@@ -143,7 +144,9 @@ class TestRequestRectification:
         assert decode_rectification_value(rr.new_value) == "Neu-01"
 
     def test_values_are_encrypted_at_rest(self, client_identified, staff_user):
-        rr = request_rectification(client_identified, staff_user, "notes", "Neue Notiz", "Falsch protokolliert")
+        rr = request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Neue Notiz", "Falsch protokolliert"
+        )
         for column in ("old_value", "new_value", "reason"):
             assert is_encrypted_value(getattr(rr, column)), f"{column} liegt im Klartext"
         with connection.cursor() as cur:
@@ -180,12 +183,14 @@ class TestRequestRectification:
         assert not RectificationRequest.objects.filter(target_client=client_identified).exists()
 
     def test_audit_entry_without_values(self, client_identified, staff_user):
-        rr = request_rectification(client_identified, staff_user, "notes", "Neue Notiz", "Begruendungstext")
+        rr = request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Neue Notiz", "Begruendungstext"
+        )
         entry = AuditLog.objects.filter(
             action=AuditLog.Action.RECTIFICATION_REQUESTED,
             target_id=str(rr.pk),
         ).latest("timestamp")
-        assert entry.detail["field_path"] == "notes"
+        assert entry.detail["field_path"] == "data_json.client-notes"
         assert "Neue Notiz" not in str(entry.detail)
         assert "Begruendungstext" not in str(entry.detail)
         assert client_identified.pseudonym not in str(entry.detail)
@@ -199,13 +204,13 @@ class TestRequestRectification:
 @pytest.mark.django_db
 class TestApproveGuards:
     def test_closed_request_cannot_be_approved_twice(self, client_identified, staff_user, lead_user):
-        rr = request_rectification(client_identified, staff_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "A", "Grund")
         approve_rectification(rr, lead_user)
         with pytest.raises(ValidationError):
             approve_rectification(rr, lead_user)
 
     def test_self_review_is_refused(self, client_identified, lead_user):
-        rr = request_rectification(client_identified, lead_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, lead_user, text_path(client_identified), "A", "Grund")
         with pytest.raises(ValidationError):
             approve_rectification(rr, lead_user)
 
@@ -213,7 +218,7 @@ class TestApproveGuards:
         from core.models import User
 
         other_staff = User.objects.create_user(username="zweitkraft", role=User.Role.STAFF, facility=facility)
-        rr = request_rectification(client_identified, staff_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "A", "Grund")
         with pytest.raises(ValidationError):
             approve_rectification(rr, other_staff)
         rr.refresh_from_db()
@@ -226,7 +231,7 @@ class TestApproveGuards:
         Ein genehmigter Antrag schriebe sonst frischen Klartext in einen bereits
         redigierten Datensatz — die Anonymisierung waere rueckwirkend entwertet.
         """
-        rr = request_rectification(client_identified, staff_user, "notes", "Neuer Text", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Text", "Grund")
         setattr(client_identified, field, value)
         client_identified.save(update_fields=[field])
 
@@ -235,7 +240,7 @@ class TestApproveGuards:
         rr.refresh_from_db()
         assert rr.status == RectificationRequest.Status.PENDING
         client_identified.refresh_from_db()
-        assert client_identified.notes != "Neuer Text"
+        assert record_text(client_identified) != "Neuer Text"
 
     def test_path_revalidation_uses_the_reviewers_own_view(
         self, facility, client_identified, doc_type_client_profile, staff_user
@@ -295,15 +300,24 @@ class TestApproveGuards:
     def test_conflict_guard_when_value_changed_meanwhile(self, client_identified, staff_user, lead_user):
         from core.services.client import update_client
 
-        rr = request_rectification(client_identified, staff_user, "notes", "Antragswert", "Grund")
-        update_client(client_identified, lead_user, notes="Jemand anderes war schneller")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Antragswert", "Grund")
+        update_client(
+            client_identified,
+            lead_user,
+            **text_fields(
+                client_identified.facility,
+                "Jemand anderes war schneller",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
 
         with pytest.raises(ValidationError):
             approve_rectification(rr, lead_user)
         rr.refresh_from_db()
         assert rr.status == RectificationRequest.Status.PENDING
         client_identified.refresh_from_db()
-        assert client_identified.notes == "Jemand anderes war schneller"
+        assert record_text(client_identified) == "Jemand anderes war schneller"
 
     def test_conflict_guard_compares_plaintext_not_tokens(
         self, client_identified, doc_type_client_profile, staff_user, lead_user
@@ -343,7 +357,7 @@ class TestApproveGuards:
 
         client_identified.document_type = doc_type_client_profile
         client_identified.save(update_fields=["document_type", "data_json"])
-        rr = request_rectification(client_identified, staff_user, "notes", "Neu", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neu", "Grund")
 
         with CaptureQueriesContext(connection) as ctx:
             approve_rectification(rr, lead_user)
@@ -538,16 +552,20 @@ class TestApproveEndToEnd:
         assert client_identified.data_json[ft.slug] == "2026-02-02"
 
     def test_approving_frees_the_partial_unique_slot(self, client_identified, staff_user, lead_user):
-        rr = request_rectification(client_identified, staff_user, "notes", "Erste Korrektur", "Grund")
+        rr = request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Erste Korrektur", "Grund"
+        )
         approve_rectification(rr, lead_user)
-        again = request_rectification(client_identified, staff_user, "notes", "Zweite Korrektur", "Grund")
+        again = request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Zweite Korrektur", "Grund"
+        )
         assert again.status == RectificationRequest.Status.PENDING
 
 
 @pytest.mark.django_db
 class TestReject:
     def test_reject_sets_status_and_audits(self, client_identified, staff_user, lead_user):
-        rr = request_rectification(client_identified, staff_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "A", "Grund")
         reject_rectification(rr, lead_user, "Wahrnehmungsfrage, kein Faktenfehler")
 
         rr.refresh_from_db()
@@ -555,7 +573,7 @@ class TestReject:
         assert rr.reviewed_by == lead_user
         assert decode_rectification_text(rr.review_note) == "Wahrnehmungsfrage, kein Faktenfehler"
         client_identified.refresh_from_db()
-        assert client_identified.notes != "A"
+        assert record_text(client_identified) != "A"
 
         entry = AuditLog.objects.filter(
             action=AuditLog.Action.RECTIFICATION_REJECTED,
@@ -564,7 +582,7 @@ class TestReject:
         assert "Wahrnehmungsfrage" not in str(entry.detail)
 
     def test_review_note_is_encrypted_at_rest(self, client_identified, staff_user, lead_user):
-        rr = request_rectification(client_identified, staff_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "A", "Grund")
         reject_rectification(rr, lead_user, "Vertraulicher Pruefvermerk")
         rr.refresh_from_db()
         assert is_encrypted_value(rr.review_note)
@@ -575,7 +593,7 @@ class TestReject:
         assert "gAAAA" in stored
 
     def test_self_review_rejection_is_refused(self, client_identified, lead_user):
-        rr = request_rectification(client_identified, lead_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, lead_user, text_path(client_identified), "A", "Grund")
         with pytest.raises(ValidationError):
             reject_rectification(rr, lead_user, "Vermerk")
 
@@ -583,12 +601,12 @@ class TestReject:
         from core.models import User
 
         other_staff = User.objects.create_user(username="zweitkraft2", role=User.Role.STAFF, facility=facility)
-        rr = request_rectification(client_identified, staff_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "A", "Grund")
         with pytest.raises(ValidationError):
             reject_rectification(rr, other_staff, "Vermerk")
 
     def test_closed_request_cannot_be_rejected(self, client_identified, staff_user, lead_user):
-        rr = request_rectification(client_identified, staff_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "A", "Grund")
         reject_rectification(rr, lead_user, "Vermerk")
         with pytest.raises(ValidationError):
             reject_rectification(rr, lead_user, "Nochmal")
@@ -599,7 +617,7 @@ class TestReject:
         im Status PENDING und leert ihre Wertspalten — eine Ablehnung schriebe
         danach einen FRISCHEN verschluesselten Pruefvermerk auf die redigierte
         Zeile und entwertete die ADR-041-Zusage. Widerruf-Guard analog approve."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Neu", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neu", "Grund")
         setattr(client_identified, field, value)
         client_identified.save(update_fields=[field])
 
@@ -613,7 +631,7 @@ class TestReject:
 @pytest.mark.django_db
 def test_decode_helpers_survive_corrupt_tokens(client_identified, staff_user):
     """``safe_decrypt``-Fallback darf nicht als ``json.loads``-Crash durchschlagen."""
-    rr = request_rectification(client_identified, staff_user, "notes", "A", "Grund")
+    rr = request_rectification(client_identified, staff_user, text_path(client_identified), "A", "Grund")
     rr.new_value = {"__encrypted__": True, "value": "gAAAAABkaputt"}
     assert isinstance(decode_rectification_value(rr.new_value), str)
     assert json.dumps(decode_rectification_value(rr.old_value)) is not None

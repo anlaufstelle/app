@@ -32,6 +32,7 @@ from core.services.system.ban_revision import (
 )
 from core.services.zeitstrom_filters import resolve_zeitstrom_state
 from core.services.zeitstrom_watch import build_zeitstrom_component_validator
+from tests._standard_text import text_fields
 from tests.test_zeitstrom_watch import _scope_for_client, _watch
 
 FUTURE = (date.today() + timedelta(days=30)).isoformat()
@@ -482,7 +483,16 @@ class TestClientWriteBoundaries:
         )
         baseline = _revisions(facility)
 
-        update_client(client_identified, staff_user, notes="Nur eine Notiz")
+        update_client(
+            client_identified,
+            staff_user,
+            **text_fields(
+                client_identified.facility,
+                "Nur eine Notiz",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
 
         assert _revisions(facility) == baseline
 

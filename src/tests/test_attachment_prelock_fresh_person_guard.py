@@ -36,6 +36,7 @@ from core.models import Case, Client, DocumentType, DocumentTypeField, Event, Fi
 from core.services.attachments import crud
 from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, EVENT_WRITE_GONE_MESSAGE
 from core.services.client.merge import merge_clients
+from tests._standard_text import text_fields
 
 pytestmark = pytest.mark.postgres
 
@@ -259,9 +260,7 @@ class TestFallBearbeitungNachZusammenfuehrung:
             facility=facility,
             client=alt,
             title="Sperr-Sonde Fall",
-            description="alt",
-            document_type=doc_type,
-            data_json={},
+            **text_fields(facility, "alt", entity="case", document_type=doc_type, data_json={}),
             created_by=staff_user,
         )
         from core.services.file_vault import store_encrypted_file

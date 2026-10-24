@@ -640,7 +640,6 @@ def available_targets(job: ImportJob) -> list[ImportTarget]:
             ImportTarget("pseudonym", gettext("Pseudonym"), required=True),
             ImportTarget("contact_stage", gettext("Kontaktstufe"), required=False),
             ImportTarget("age_cluster", gettext("Altersgruppe"), required=False),
-            ImportTarget("notes", gettext("Notizen"), required=False),
         ]
     else:
         targets = [
@@ -928,8 +927,6 @@ def _import_client_row(job: ImportJob, user, values: dict, columns: dict) -> Non
         )
     if values.get("age_cluster"):
         payload["age_cluster"] = _coerce_choice(values["age_cluster"], Client.AgeCluster, columns.get("age_cluster"))
-    if values.get("notes"):
-        payload["notes"] = values["notes"]
     if job.document_type_id:
         payload["document_type"] = job.document_type
         payload["data_json"] = _collect_data_json(job, values, columns)

@@ -124,7 +124,7 @@ class TestRectificationRequestCount:
         # Pro (Person, Feld) erlaubt die DB nur EINEN offenen Antrag
         # (unique_pending_rectification_request) — zweiter Antrag anderes Feld.
         _pending_rectification(facility, client_identified, staff_user)
-        _pending_rectification(facility, client_identified, staff_user, field_path="notes")
+        _pending_rectification(facility, client_identified, staff_user, field_path="data_json.client-notes")
 
         ctx = review_counts(_make_request(lead_user, facility))
 

@@ -38,7 +38,7 @@ class TestCompleteWorkflow:
         # --- 2. Fall eröffnen ---
         page.goto(f"{base_url}/cases/new/")
         page.fill('input[name="title"]', f"WF-Fall-{tag}")
-        page.fill('textarea[name="description"]', "Workflow-Test")
+        page.fill('textarea[name="standard-description"]', "Workflow test")
         page.select_option('select[name="lead_user"]', index=1)
         # Refs #748: Case.client ist Pflichtfeld — Person via Autocomplete auswählen
         autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")

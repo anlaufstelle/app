@@ -14,6 +14,7 @@ from core.services.case import (
     reopen_case,
     update_case,
 )
+from tests._standard_text import record_text, text_fields
 
 
 @pytest.mark.django_db
@@ -79,7 +80,7 @@ class TestCaseService:
             user=staff_user,
             client=client_identified,
             title="Testfall",
-            description="Beschreibung",
+            **text_fields(facility, "Beschreibung", entity="case", document_type=None, data_json=None),
         )
         assert case.pk is not None
         assert case.status == Case.Status.OPEN
@@ -136,11 +137,11 @@ class TestCaseService:
         title/description per Queryset-Update ohne ``updated_at``-Bump — ein
         staler Save, der nur andere Felder aktualisiert, darf den Klartext
         nicht re-publizieren."""
-        Case.objects.filter(pk=case_open.pk).update(title="Fall (anonymisiert)", description="")
+        Case.objects.filter(pk=case_open.pk).update(title="Fall (anonymisiert)", data_json={"standard-description": ""})
         update_case(case_open, staff_user, lead_user=lead_user)
         refreshed = Case.objects.get(pk=case_open.pk)
         assert refreshed.title == "Fall (anonymisiert)"
-        assert refreshed.description == ""
+        assert record_text(refreshed) == ""
         assert refreshed.lead_user == lead_user
 
     def test_close_case(self, facility, staff_user, case_open):

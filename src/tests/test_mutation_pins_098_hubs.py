@@ -49,6 +49,7 @@ from core.models import AuditLog, Client, DocumentType, ImportJob, RetentionProp
 from core.models.workitem import DeletionRequest
 from core.services import hubs as hubs_module
 from core.services.hubs import datenschutz_overview, verwaltung_metrics
+from tests._standard_text import text_path
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -151,7 +152,9 @@ class TestDatenschutzIsActionableThresholds:
 
         assert _metric(datenschutz_overview(facility, admin_user), "rectification-requests").is_actionable is False
 
-        request_rectification(client_identified, staff_user, "notes", "Pin-098-Wert", "Pin-098-Grund")
+        request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Pin-098-Wert", "Pin-098-Grund"
+        )
 
         assert _metric(datenschutz_overview(facility, admin_user), "rectification-requests").is_actionable is True
 
@@ -203,23 +206,23 @@ def test_rectifications_count_applies_status_deletion_and_active_filters_indepen
     # Die Wahrheit: zwei offene Antraege aktiver, nicht geloeschter Personen.
     for i in range(2):
         wahr = _make_client(f"PIN098-WAHR-{i}")
-        request_rectification(wahr, staff_user, "notes", "Pin-098-Wert", "Pin-098-Grund")
+        request_rectification(wahr, staff_user, text_path(wahr), "Pin-098-Wert", "Pin-098-Grund")
 
     # Koeder fuer mutmut_40: ein ENTSCHIEDENER Antrag einer aktiven Person.
     entschieden = _make_client("PIN098-ENTSCHIEDEN")
-    request_rectification(entschieden, staff_user, "notes", "Pin-098-Wert", "Pin-098-Grund")
+    request_rectification(entschieden, staff_user, text_path(entschieden), "Pin-098-Wert", "Pin-098-Grund")
     from core.models import RectificationRequest
 
     RectificationRequest.objects.filter(target_client=entschieden).update(status=RectificationRequest.Status.APPROVED)
 
     # Koeder fuer mutmut_41: ein offener Antrag einer GELOESCHTEN Person.
     geloescht = _make_client("PIN098-GELOESCHT")
-    request_rectification(geloescht, staff_user, "notes", "Pin-098-Wert", "Pin-098-Grund")
+    request_rectification(geloescht, staff_user, text_path(geloescht), "Pin-098-Wert", "Pin-098-Grund")
     Client.objects.filter(pk=geloescht.pk).update(is_deleted=True)
 
     # Koeder fuer mutmut_45: ein offener Antrag einer INAKTIVEN Person.
     inaktiv = _make_client("PIN098-INAKTIV")
-    request_rectification(inaktiv, staff_user, "notes", "Pin-098-Wert", "Pin-098-Grund")
+    request_rectification(inaktiv, staff_user, text_path(inaktiv), "Pin-098-Wert", "Pin-098-Grund")
     Client.objects.filter(pk=inaktiv.pk).update(is_active=False)
 
     assert _metric(datenschutz_overview(facility, admin_user), "rectification-requests").value == 2

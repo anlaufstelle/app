@@ -25,6 +25,7 @@ from core.models import AuditLog, Client, RectificationRequest
 from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE, update_client
 from core.services.client.rectification import approve_rectification, reject_rectification, request_rectification
 from tests._row_lock_helpers import mitschnitt
+from tests._standard_text import text_fields, text_path
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -44,8 +45,19 @@ def _approvals():
 @pytest.fixture
 def changed_request(client_identified, staff_user, lead_user):
     """A pending request whose old value no longer matches the person's current value."""
-    rr = request_rectification(client_identified, staff_user, "notes", "Requested text", "Wrong entry")
-    update_client(client_identified, lead_user, notes="Someone else was faster")
+    rr = request_rectification(
+        client_identified, staff_user, text_path(client_identified), "Requested text", "Wrong entry"
+    )
+    update_client(
+        client_identified,
+        lead_user,
+        **text_fields(
+            client_identified.facility,
+            "Someone else was faster",
+            document_type=client_identified.document_type,
+            data_json=client_identified.data_json,
+        ),
+    )
     return rr
 
 
@@ -84,7 +96,9 @@ class TestGuardReviewerFacility:
         """x__guard_reviewer_facility__mutmut_5: ``getattr(reviewer,
         "facility_id")`` without default raises ``AttributeError`` instead of
         the refusal."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Requested text", "Wrong entry")
+        rr = request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Requested text", "Wrong entry"
+        )
 
         with mitschnitt() as log, pytest.raises(ValidationError) as excinfo:
             approve_rectification(rr, reviewer)
@@ -98,7 +112,9 @@ class TestGuardReviewerFacility:
     def test_rejection_is_refused_with_the_facility_message(self, client_identified, staff_user, reviewer):
         """x__guard_reviewer_facility__mutmut_5: the rejection runs through the
         same guard."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Requested text", "Wrong entry")
+        rr = request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Requested text", "Wrong entry"
+        )
 
         with mitschnitt() as log, pytest.raises(ValidationError) as excinfo:
             reject_rectification(rr, reviewer, "Not plausible")

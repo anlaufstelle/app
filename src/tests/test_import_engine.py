@@ -29,6 +29,7 @@ from core.models import (
 )
 from core.services import import_engine
 from core.services.file_vault import decrypt_field, encrypt_file
+from tests._standard_text import job_text_target, record_text
 
 PSEUDONYM_HEADER = "Pseudonym;Kontaktstufe;Altersgruppe;Notizen\n"
 
@@ -67,7 +68,7 @@ def client_job(facility, admin_user, media_root):
             "Pseudonym": "pseudonym",
             "Kontaktstufe": "contact_stage",
             "Altersgruppe": "age_cluster",
-            "Notizen": "notes",
+            "Notizen": job_text_target(job),
         },
     )
     return job
@@ -428,9 +429,9 @@ class TestAvailableTargets:
             facility, admin_user, _upload(PSEUDONYM_HEADER), target_type=ImportJob.TargetType.CLIENT
         )
         keys = {t.key: t for t in import_engine.available_targets(job)}
-        assert set(keys) == {"pseudonym", "contact_stage", "age_cluster", "notes"}
+        assert set(keys) == {"pseudonym", "contact_stage", "age_cluster"}
         assert keys["pseudonym"].required is True
-        assert keys["notes"].required is False
+        assert "notes" not in keys
 
     def test_event_targets_require_timestamp_and_pseudonym(self, facility, admin_user, doc_type_contact, media_root):
         job = import_engine.store_import_upload(
@@ -498,7 +499,7 @@ class TestApplyMapping:
     def test_missing_required_target_is_rejected(self, facility, admin_user, media_root):
         job = self._job(facility, admin_user)
         with pytest.raises(ValidationError, match="Diese Pflichtfelder brauchen eine Spalte: Pseudonym"):
-            import_engine.apply_mapping(job, {"Notizen": "notes"})
+            import_engine.apply_mapping(job, {"Notizen": job_text_target(job)})
 
     def test_duplicate_target_is_rejected(self, facility, admin_user, media_root):
         job = self._job(facility, admin_user)
@@ -513,7 +514,7 @@ class TestApplyMapping:
     def test_unknown_column_is_rejected(self, facility, admin_user, media_root):
         job = self._job(facility, admin_user)
         with pytest.raises(ValidationError, match="Die Spalte „Gibtsnicht“ gibt es in der Datei nicht\\."):
-            import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Gibtsnicht": "notes"})
+            import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Gibtsnicht": job_text_target(job)})
 
     def test_unknown_column_wins_over_unknown_target_and_missing_required(self, facility, admin_user, media_root):
         job = self._job(facility, admin_user)
@@ -753,7 +754,7 @@ class TestCommitRun:
         first = created.get(pseudonym="IMP-01")
         assert first.contact_stage == Client.ContactStage.IDENTIFIED
         assert first.age_cluster == Client.AgeCluster.U18
-        assert first.notes == "Erste"
+        assert record_text(first) == "Erste"
         assert AuditLog.objects.filter(action=AuditLog.Action.CLIENT_CREATE, target_id=str(first.pk)).exists()
         activity = Activity.objects.get(verb=Activity.Verb.CREATED, target_id=first.pk)
         assert activity.context["action"] == Activity.Action.CLIENT_CREATED
@@ -1089,7 +1090,7 @@ class TestValueCoercion:
             _upload(PSEUDONYM_HEADER + ";identified;;Ohne Pseudonym\n"),
             target_type=ImportJob.TargetType.CLIENT,
         )
-        import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Notizen": "notes"})
+        import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Notizen": job_text_target(job)})
         result = import_engine.run_import(job, admin_user, commit=False)
         assert result["errors"][0]["code"] == "required_missing"
 
@@ -1110,7 +1111,7 @@ class TestErrorReportIsPiiFree:
             facility, admin_user, _upload(content), target_type=ImportJob.TargetType.CLIENT
         )
         import_engine.apply_mapping(
-            job, {"Pseudonym": "pseudonym", "Kontaktstufe": "contact_stage", "Notizen": "notes"}
+            job, {"Pseudonym": "pseudonym", "Kontaktstufe": "contact_stage", "Notizen": job_text_target(job)}
         )
 
         import_engine.run_import(job, admin_user, commit=False)
@@ -1462,7 +1463,7 @@ class TestConcurrentTransitionsAreSerialized:
         "Pseudonym": "pseudonym",
         "Kontaktstufe": "contact_stage",
         "Altersgruppe": "age_cluster",
-        "Notizen": "notes",
+        "Notizen": "data_json.client-notes",
     }
 
     def _validated_job_and_stale_copy(self, client_job, admin_user):
@@ -1540,7 +1541,7 @@ class TestConcurrentTransitionsAreSerialized:
             _upload("Pseudonym;Wert\nLOCK-MAP;identified\n"),
             target_type=ImportJob.TargetType.CLIENT,
         )
-        mapping_a = {"Pseudonym": "pseudonym", "Wert": "notes"}
+        mapping_a = {"Pseudonym": "pseudonym", "Wert": job_text_target(first_request_job)}
         mapping_b = {"Pseudonym": "pseudonym", "Wert": "contact_stage"}
         import_engine.probe_import(first_request_job, admin_user, mapping_a)
 
@@ -1552,7 +1553,7 @@ class TestConcurrentTransitionsAreSerialized:
         imported = Client.objects.get(facility=facility, pseudonym="LOCK-MAP")
         assert first_request_job.mapping_json["columns"] == mapping_b
         assert imported.contact_stage == Client.ContactStage.IDENTIFIED
-        assert imported.notes == ""
+        assert record_text(imported) == ""
 
 
 @pytest.mark.django_db
@@ -1758,12 +1759,12 @@ def test_quote_positions_preserve_valid_upload_and_commit(facility, admin_user, 
         target_type=ImportJob.TargetType.CLIENT,
         delimiter=delimiter,
     )
-    import_engine.probe_import(job, admin_user, {"Pseudonym": "pseudonym", "Notizen": "notes"})
+    import_engine.probe_import(job, admin_user, {"Pseudonym": "pseudonym", "Notizen": job_text_target(job)})
     assert job.result_json["summary"]["errors"] == 0
     import_engine.commit_import(job, admin_user)
     job.refresh_from_db()
     assert job.status == ImportJob.Status.COMMITTED
-    assert Client.objects.for_facility(facility).get(pseudonym="P-1").notes == notes
+    assert record_text(Client.objects.for_facility(facility).get(pseudonym="P-1")) == notes
 
 
 @pytest.mark.parametrize("delimiter", [";", ",", "\t"])

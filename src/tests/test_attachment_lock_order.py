@@ -47,6 +47,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Case, Client, DocumentType, DocumentTypeField, Event, FieldTemplate
+from tests._standard_text import text_fields
 
 pytestmark = pytest.mark.postgres
 
@@ -545,9 +546,7 @@ class TestSequenzReihenfolge:
             facility=facility,
             pseudonym="Sperr-Sonde",
             contact_stage=Client.ContactStage.IDENTIFIED,
-            document_type=doc_type,
-            data_json={},
-            notes="alt",
+            **text_fields(facility, "alt", document_type=doc_type, data_json={}),
             created_by=staff_user,
         )
         attachment = _attach(facility, person, ft_file, staff_user)
@@ -560,7 +559,7 @@ class TestSequenzReihenfolge:
                     "pseudonym": "Sperr-Sonde",
                     "contact_stage": Client.ContactStage.IDENTIFIED,
                     "age_cluster": Client.AgeCluster.UNKNOWN,
-                    "notes": "geaendert",
+                    "client-notes": "geaendert",
                     "document_type": str(doc_type.pk),
                     ft_text.slug: "geaendert",
                     f"{ft_file.slug}__remove": str(attachment.entry_id),
@@ -577,9 +576,7 @@ class TestSequenzReihenfolge:
             facility=facility,
             client=client_identified,
             title="Sperr-Sonde Fall",
-            description="alt",
-            document_type=doc_type,
-            data_json={},
+            **text_fields(facility, "alt", entity="case", document_type=doc_type, data_json={}),
             created_by=staff_user,
         )
         attachment = _attach(facility, case, ft_file, staff_user)
@@ -591,7 +588,7 @@ class TestSequenzReihenfolge:
                 {
                     "client": str(client_identified.pk),
                     "title": "Sperr-Sonde Fall",
-                    "description": "geaendert",
+                    "standard-description": "geaendert",
                     "lead_user": "",
                     "document_type": str(doc_type.pk),
                     ft_text.slug: "geaendert",
@@ -747,9 +744,7 @@ class TestSequenzReihenfolge:
             facility=facility,
             pseudonym="Sperr-Sonde Typ",
             contact_stage=Client.ContactStage.IDENTIFIED,
-            document_type=doc_type,
-            data_json={},
-            notes="alt",
+            **text_fields(facility, "alt", document_type=doc_type, data_json={}),
             created_by=staff_user,
         )
         _attach(facility, person, ft_file, staff_user)
@@ -765,7 +760,7 @@ class TestSequenzReihenfolge:
                     "pseudonym": "Sperr-Sonde Typ",
                     "contact_stage": Client.ContactStage.IDENTIFIED,
                     "age_cluster": Client.AgeCluster.UNKNOWN,
-                    "notes": "geaendert",
+                    "client-notes": "geaendert",
                     "document_type": "",
                 },
             )
@@ -784,9 +779,7 @@ class TestSequenzReihenfolge:
             facility=facility,
             client=client_identified,
             title="Sperr-Sonde Fall Typ",
-            description="alt",
-            document_type=doc_type,
-            data_json={},
+            **text_fields(facility, "alt", entity="case", document_type=doc_type, data_json={}),
             created_by=staff_user,
         )
         _attach(facility, case, ft_file, staff_user)
@@ -801,7 +794,7 @@ class TestSequenzReihenfolge:
                 {
                     "client": str(client_identified.pk),
                     "title": "Sperr-Sonde Fall Typ",
-                    "description": "geaendert",
+                    "standard-description": "geaendert",
                     "lead_user": "",
                     "document_type": "",
                 },
@@ -1349,9 +1342,7 @@ def test_personen_typwechsel_ohne_upload_wartet_zuerst_auf_die_personenzeile(cli
         facility=facility,
         pseudonym="Sperr-Sonde Typwechsel",
         contact_stage=Client.ContactStage.IDENTIFIED,
-        document_type=alt,
-        data_json={},
-        notes="alt",
+        **text_fields(facility, "alt", document_type=alt, data_json={}),
         created_by=staff_user,
     )
     _attach(facility, person, ft_alt, staff_user)
@@ -1364,7 +1355,7 @@ def test_personen_typwechsel_ohne_upload_wartet_zuerst_auf_die_personenzeile(cli
                 "pseudonym": "Sperr-Sonde Typwechsel",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "geaendert",
+                "client-notes": "geaendert",
                 "document_type": str(neu.pk),
                 text_neu.slug: "neu",
             },
@@ -1394,9 +1385,7 @@ def test_fall_typwechsel_ohne_upload_wartet_zuerst_auf_die_personenzeile(
         facility=facility,
         client=client_identified,
         title="Sperr-Sonde Fall Typwechsel",
-        description="alt",
-        document_type=alt,
-        data_json={},
+        **text_fields(facility, "alt", entity="case", document_type=alt, data_json={}),
         created_by=staff_user,
     )
     _attach(facility, case, ft_alt, staff_user)
@@ -1408,7 +1397,7 @@ def test_fall_typwechsel_ohne_upload_wartet_zuerst_auf_die_personenzeile(
             {
                 "client": str(client_identified.pk),
                 "title": "Sperr-Sonde Fall Typwechsel",
-                "description": "geaendert",
+                "standard-description": "geaendert",
                 "lead_user": "",
                 "document_type": str(neu.pk),
                 text_neu.slug: "neu",

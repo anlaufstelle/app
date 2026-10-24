@@ -37,6 +37,7 @@ from core.models import (
     User,
     WorkItem,
 )
+from tests._standard_text import text_path
 
 pytest_plugins = ["tests._skip_profile"]
 
@@ -1110,7 +1111,7 @@ def rectification_request(facility, client_identified, staff_user):
     return request_rectification(
         client_identified,
         staff_user,
-        "notes",
+        text_path(client_identified),
         "AuthZ-Matrix-Wunschwert",
         "AuthZ-Matrix-Test",
     )
@@ -1123,7 +1124,7 @@ def foreign_rectification_request(second_facility, foreign_client, foreign_staff
     return request_rectification(
         foreign_client,
         foreign_staff,
-        "notes",
+        text_path(foreign_client),
         "AuthZ-IDOR-Wunschwert",
         "AuthZ-IDOR-Test",
     )

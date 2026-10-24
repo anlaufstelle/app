@@ -74,34 +74,60 @@ class TestRejectedUploadKeepsInput:
         text = _long_text("Eigene Personennotiz")
         page.goto(f"{base_url}/clients/{m24_scene['client_pk']}/edit/", wait_until="domcontentloaded")
         page.wait_for_selector(f"input[name='{FILE_FIELD}']", timeout=10000)
-        page.locator("textarea[name='notes']").fill(text)
+        page.locator("textarea[name='client-notes']").fill(text)
         page.set_input_files(f"input[name='{FILE_FIELD}']", rejected_file)
         save_button(page).click()
         page.wait_for_load_state("domcontentloaded")
 
-        _assert_rejected_upload_view(page, "textarea[name='notes']", text, "E2E-M24-Nachweis")
-        assert _db(e2e_env, f"Client.objects.get(pk='{m24_scene['client_pk']}').notes") != text
+        _assert_rejected_upload_view(page, "textarea[name='client-notes']", text, "E2E-M24-Nachweis")
+        assert (
+            _db(
+                e2e_env,
+                f"safe_decrypt(Client.objects.get(pk='{m24_scene['client_pk']}').data_json.get('client-notes', ''))",
+            )
+            != text
+        )
 
         save_button(page).click()
         page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
-        assert _db(e2e_env, f"Client.objects.get(pk='{m24_scene['client_pk']}').notes") == text
+        assert (
+            _db(
+                e2e_env,
+                f"safe_decrypt(Client.objects.get(pk='{m24_scene['client_pk']}').data_json.get('client-notes', ''))",
+            )
+            == text
+        )
 
     def test_case_edit(self, staff_page, base_url, e2e_env, m24_scene, rejected_file):
         page = staff_page
         text = _long_text("Eigene Fallbeschreibung")
         page.goto(f"{base_url}/cases/{m24_scene['case_pk']}/edit/", wait_until="domcontentloaded")
         page.wait_for_selector(f"input[name='{FILE_FIELD}']", timeout=10000)
-        page.locator("textarea[name='description']").fill(text)
+        page.locator("textarea[name='standard-description']").fill(text)
         page.set_input_files(f"input[name='{FILE_FIELD}']", rejected_file)
         save_button(page).click()
         page.wait_for_load_state("domcontentloaded")
 
-        _assert_rejected_upload_view(page, "textarea[name='description']", text, "E2E-M24-Nachweis")
-        assert _db(e2e_env, f"Case.objects.get(pk='{m24_scene['case_pk']}').description") != text
+        _assert_rejected_upload_view(page, "textarea[name='standard-description']", text, "E2E-M24-Nachweis")
+        assert (
+            _db(
+                e2e_env,
+                f"safe_decrypt(Case.objects.get(pk='{m24_scene['case_pk']}')"
+                ".data_json.get('standard-description', ''))",
+            )
+            != text
+        )
 
         save_button(page).click()
         page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
-        assert _db(e2e_env, f"Case.objects.get(pk='{m24_scene['case_pk']}').description") == text
+        assert (
+            _db(
+                e2e_env,
+                f"safe_decrypt(Case.objects.get(pk='{m24_scene['case_pk']}')"
+                ".data_json.get('standard-description', ''))",
+            )
+            == text
+        )
 
 
 class TestAssistantOwnEventUploadError:

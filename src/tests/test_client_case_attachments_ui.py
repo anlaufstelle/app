@@ -20,6 +20,7 @@ from django.urls import reverse
 
 from core.models import Case, Client, DocumentType, DocumentTypeField, FieldCondition, FieldTemplate
 from core.models.attachment import Attachment
+from tests._standard_text import record_text, text_fields
 
 pytestmark = pytest.mark.django_db
 
@@ -103,7 +104,7 @@ class TestClientAttachmentForm:
                 "pseudonym": "Datei-Anlage",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
                 "document_type": str(dt.pk),
                 "vermerk": "Text",
                 "ausweis": _pdf("anlage.pdf"),
@@ -135,7 +136,7 @@ class TestClientAttachmentForm:
                 "pseudonym": "Datei-Update",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
                 "document_type": str(dt.pk),
                 "vermerk": "Text",
                 "ausweis": _pdf("nachtrag.pdf"),
@@ -162,7 +163,7 @@ class TestClientAttachmentForm:
             "pseudonym": "Text-Edit",
             "contact_stage": Client.ContactStage.IDENTIFIED,
             "age_cluster": Client.AgeCluster.UNKNOWN,
-            "notes": "",
+            "client-notes": "",
             "document_type": str(dt.pk),
         }
         client.post(
@@ -193,7 +194,7 @@ class TestClientAttachmentForm:
             "pseudonym": "Ersetzen",
             "contact_stage": Client.ContactStage.IDENTIFIED,
             "age_cluster": Client.AgeCluster.UNKNOWN,
-            "notes": "",
+            "client-notes": "",
             "document_type": str(dt.pk),
             "vermerk": "Text",
         }
@@ -230,7 +231,7 @@ class TestClientAttachmentForm:
             "pseudonym": "Entfernen",
             "contact_stage": Client.ContactStage.IDENTIFIED,
             "age_cluster": Client.AgeCluster.UNKNOWN,
-            "notes": "",
+            "client-notes": "",
             "document_type": str(dt.pk),
             "vermerk": "Text",
         }
@@ -268,7 +269,7 @@ class TestClientAttachmentForm:
             "pseudonym": "Re-Render",
             "contact_stage": Client.ContactStage.IDENTIFIED,
             "age_cluster": Client.AgeCluster.UNKNOWN,
-            "notes": "",
+            "client-notes": "",
             "document_type": str(dt.pk),
             "vermerk": "Text",
         }
@@ -304,7 +305,7 @@ class TestClientAttachmentForm:
             "pseudonym": "Typwechsel",
             "contact_stage": Client.ContactStage.IDENTIFIED,
             "age_cluster": Client.AgeCluster.UNKNOWN,
-            "notes": "",
+            "client-notes": "",
         }
         client.post(
             reverse("core:client_update", kwargs={"pk": person.pk}),
@@ -356,7 +357,7 @@ class TestClientAttachmentForm:
             "pseudonym": "Geteilte-Vorlage",
             "contact_stage": Client.ContactStage.IDENTIFIED,
             "age_cluster": Client.AgeCluster.UNKNOWN,
-            "notes": "",
+            "client-notes": "",
         }
         client.post(
             reverse("core:client_update", kwargs={"pk": person.pk}),
@@ -539,7 +540,7 @@ class TestCreateStagingLeavesNoOrphans:
                 "pseudonym": "Staging-Person",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
                 "document_type": str(dt.pk),
                 ft_file.slug: [_pdf("echt.pdf"), _fake_pdf("unecht.pdf")],
             },
@@ -603,8 +604,7 @@ class TestUpdateStagingLeavesNoOrphans:
             facility=facility,
             pseudonym="Staging-Update-Person",
             contact_stage=Client.ContactStage.IDENTIFIED,
-            document_type=dt,
-            notes="alt",
+            **text_fields(facility, "alt", document_type=dt, data_json=None),
             created_by=staff_user,
         )
         before = _enc_files(tmp_path)
@@ -616,14 +616,14 @@ class TestUpdateStagingLeavesNoOrphans:
                 "pseudonym": "Staging-Update-Person",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "geaendert",
+                "client-notes": "geaendert",
                 "document_type": str(dt.pk),
                 ft_file.slug: [_pdf("echt3.pdf"), _fake_pdf("unecht3.pdf")],
             },
         )
 
         assert response.status_code == 200
-        assert response.context["form"]["notes"].value() == "geaendert"
+        assert response.context["data_form"]["client-notes"].value() == "geaendert"
         assert "Datei bitte erneut auswählen:" in response.content.decode()
         person.refresh_from_db()
         assert not Attachment.objects.filter(client=person).exists()
@@ -631,7 +631,7 @@ class TestUpdateStagingLeavesNoOrphans:
         # Und keine verwaiste .enc: die erste Datei war bereits gestagt.
         assert _enc_files(tmp_path) == before
         # Der Update rollt mit zurueck — das Staging scheitert VOR der Transaktion.
-        assert person.notes == "alt"
+        assert record_text(person) == "alt"
 
     def test_case_update_unlinks_staged_files_on_policy_reject(
         self, client, staff_user, facility, client_identified, settings, tmp_path
@@ -642,8 +642,7 @@ class TestUpdateStagingLeavesNoOrphans:
             facility=facility,
             client=client_identified,
             title="Staging-Update-Fall",
-            description="alt",
-            document_type=dt,
+            **text_fields(facility, "alt", entity="case", document_type=dt, data_json=None),
             created_by=staff_user,
         )
         before = _enc_files(tmp_path)
@@ -654,7 +653,7 @@ class TestUpdateStagingLeavesNoOrphans:
             {
                 "client": str(client_identified.pk),
                 "title": "Staging-Update-Fall",
-                "description": "geaendert",
+                "standard-description": "geaendert",
                 "lead_user": "",
                 "document_type": str(dt.pk),
                 ft_file.slug: [_pdf("echt4.pdf"), _fake_pdf("unecht4.pdf")],
@@ -662,13 +661,13 @@ class TestUpdateStagingLeavesNoOrphans:
         )
 
         assert response.status_code == 200
-        assert response.context["form"]["description"].value() == "geaendert"
+        assert response.context["data_form"]["standard-description"].value() == "geaendert"
         assert "Datei bitte erneut auswählen:" in response.content.decode()
         case.refresh_from_db()
         assert not Attachment.objects.filter(case=case).exists()
         assert ft_file.slug not in (case.data_json or {})
         assert _enc_files(tmp_path) == before
-        assert case.description == "alt"
+        assert record_text(case) == "alt"
 
     def test_client_update_unlinks_staged_files_when_transaction_rolls_back(
         self, client, staff_user, facility, settings, tmp_path
@@ -688,8 +687,7 @@ class TestUpdateStagingLeavesNoOrphans:
             facility=facility,
             pseudonym="Konflikt-Person",
             contact_stage=Client.ContactStage.IDENTIFIED,
-            document_type=dt,
-            notes="alt",
+            **text_fields(facility, "alt", document_type=dt, data_json=None),
             created_by=staff_user,
         )
         before = _enc_files(tmp_path)
@@ -701,7 +699,7 @@ class TestUpdateStagingLeavesNoOrphans:
                 "pseudonym": "Konflikt-Person",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "geaendert",
+                "client-notes": "geaendert",
                 "document_type": str(dt.pk),
                 # Veralteter Versions-Token -> ``version_conflict`` im Service.
                 "expected_updated_at": "2020-01-01T00:00:00+00:00",
@@ -710,10 +708,10 @@ class TestUpdateStagingLeavesNoOrphans:
         )
 
         assert response.status_code == 200
-        assert response.context["form"]["notes"].value() == "geaendert"
+        assert response.context["data_form"]["client-notes"].value() == "geaendert"
         assert "Datei bitte erneut auswählen:" in response.content.decode()
         person.refresh_from_db()
-        assert person.notes == "alt", "Versionskonflikt haette den Update verhindern muessen"
+        assert record_text(person) == "alt", "Versionskonflikt haette den Update verhindern muessen"
         assert not Attachment.objects.filter(client=person).exists()
         assert _enc_files(tmp_path) == before
 
@@ -771,7 +769,7 @@ class TestInvalidMetaFormKeepsFileMarkers:
                 "pseudonym": "Bedingt",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
                 "document_type": str(dt.pk),
                 ft_source.slug: "Grund",
                 ft_file.slug: _pdf("bestand.pdf"),
@@ -787,7 +785,7 @@ class TestInvalidMetaFormKeepsFileMarkers:
                 "pseudonym": "",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
                 "document_type": str(dt.pk),
                 ft_source.slug: "Grund",
             },

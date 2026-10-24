@@ -31,7 +31,7 @@ def test_deactivate_save_reactivate_retains_value(facility, lead_user, rf, entit
     if entity == "event":
         update_event(record, lead_user, {})
     elif entity == "client":
-        update_client(record, lead_user, data_json={}, notes="Other edit")
+        update_client(record, lead_user, data_json={}, pseudonym="Other edit")
     else:
         update_case(record, lead_user, data_json={}, title="Other edit")
     record.refresh_from_db()
@@ -67,7 +67,7 @@ def test_public_update_preserves_inactive_value_without_form(facility, lead_user
     if entity == "event":
         update_event(record, lead_user, {})
     elif entity == "client":
-        update_client(record, lead_user, data_json={}, notes="Other edit")
+        update_client(record, lead_user, data_json={}, pseudonym="Other edit")
     else:
         update_case(record, lead_user, data_json={}, title="Other edit")
     record.refresh_from_db()

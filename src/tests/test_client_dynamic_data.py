@@ -36,6 +36,7 @@ from core.models import AuditLog, Client, DocumentType
 from core.services.client import anonymize_client, create_client, update_client
 from core.services.compliance import k_anonymize_client
 from core.services.file_vault import is_encrypted_value, safe_decrypt
+from tests._standard_text import set_record_text
 
 
 def raw_data_json(client) -> dict:
@@ -102,7 +103,7 @@ class TestClientDataJsonEncryption:
                 document_type=doc_type_client_profile,
                 data_json={"diagnose": "Einmal"},
             )
-            client.notes = "geaendert"
+            set_record_text(client, "geaendert")
             client.save()
 
             assert safe_decrypt(raw_data_json(client)["diagnose"]) == "Einmal"

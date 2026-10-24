@@ -879,7 +879,7 @@ def _bump_ban_revision_before_client_save(client, changed_fields) -> None:
 def update_client(client, user, *, old_stage=None, expected_updated_at=None, **fields):
     """Update a client with activity logging and stage-change auditing.
 
-    Accepts a dict of allowed fields (pseudonym, contact_stage, age_cluster, notes,
+    Accepts a dict of allowed fields (pseudonym, contact_stage, age_cluster,
     document_type, data_json). Handles AuditLog for stage changes and Activity for
     qualification transitions.
 
@@ -948,7 +948,7 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     # durchgereichte Felder (z.B. ``facility``, ``id``, ``created_at``). Liste
     # spiegelt die Felder von ``ClientForm`` wider. Läuft ZUERST — die
     # Mass-Assignment-Prüfung darf nicht vom Diff abhängen.
-    allowed = {"pseudonym", "contact_stage", "age_cluster", "notes", "document_type", "data_json"}
+    allowed = {"pseudonym", "contact_stage", "age_cluster", "document_type", "data_json"}
     check_update_allowlist(fields, allowed)
 
     # M2 P4b (Refs #1058): Dynamikdaten gegen den *effektiven* Typ pruefen —

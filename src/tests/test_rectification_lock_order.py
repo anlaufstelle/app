@@ -29,6 +29,7 @@ from core.services.client.rectification import (
     request_rectification,
 )
 from tests._row_lock_helpers import mitschnitt
+from tests._standard_text import text_path
 
 CLIENT_TABLE = "core_client"
 REQUEST_TABLE = "core_rectificationrequest"
@@ -95,7 +96,7 @@ class TestDecisionWaitsAtThePersonWithoutHoldingTheRequest:
             pseudonym="Lock-Order-01",
             created_by=requester,
         )
-        rr = request_rectification(person, requester, "notes", "Corrected note", "Reason")
+        rr = request_rectification(person, requester, text_path(person), "Corrected note", "Reason")
         yield person, rr, reviewer
         connections.close_all()
 
@@ -168,7 +169,9 @@ class TestLockOrder:
     @pytest.mark.parametrize("decision", sorted(DECISIONS))
     def test_person_is_locked_before_the_request(self, decision, client_identified, staff_user, lead_user):
         call, expected_status = DECISIONS[decision]
-        rr = request_rectification(client_identified, staff_user, "notes", "Corrected note", "Reason")
+        rr = request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Corrected note", "Reason"
+        )
 
         with mitschnitt() as log:
             call(rr, lead_user)
@@ -192,7 +195,9 @@ class TestLockOrder:
             role=User.Role.LEAD,
             facility=second_facility if reviewer_kind == "foreign" else None,
         )
-        rr = request_rectification(client_identified, staff_user, "notes", "Corrected note", "Reason")
+        rr = request_rectification(
+            client_identified, staff_user, text_path(client_identified), "Corrected note", "Reason"
+        )
 
         with mitschnitt() as log, pytest.raises(ValidationError) as excinfo:
             call(rr, reviewer)

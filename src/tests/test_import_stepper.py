@@ -16,6 +16,7 @@ from django.urls import reverse
 
 from core.models import ImportJob
 from core.services import import_engine
+from tests._standard_text import job_text_target
 
 CSV = "Pseudonym;Kontaktstufe;Notizen\nSTEP-01;identified;Erste\n"
 
@@ -89,7 +90,7 @@ class TestStepperRendersPerPage:
     def test_preview_page_shows_stepper_with_step_3_active(self, admin_client_logged_in, uploaded_job):
         admin_client_logged_in.post(
             reverse("core:import_mapping", kwargs={"pk": uploaded_job.pk}),
-            {"column-0": "pseudonym", "column-1": "contact_stage", "column-2": "notes"},
+            {"column-0": "pseudonym", "column-1": "contact_stage", "column-2": job_text_target(uploaded_job)},
         )
         content = admin_client_logged_in.get(
             reverse("core:import_preview", kwargs={"pk": uploaded_job.pk})
@@ -121,7 +122,7 @@ class TestDetailStepFourState:
     def test_committed_job_shows_the_completed_state(self, admin_client_logged_in, uploaded_job):
         admin_client_logged_in.post(
             reverse("core:import_mapping", kwargs={"pk": uploaded_job.pk}),
-            {"column-0": "pseudonym", "column-1": "contact_stage", "column-2": "notes"},
+            {"column-0": "pseudonym", "column-1": "contact_stage", "column-2": job_text_target(uploaded_job)},
         )
         admin_client_logged_in.post(reverse("core:import_commit", kwargs={"pk": uploaded_job.pk}))
         content = admin_client_logged_in.get(

@@ -34,6 +34,7 @@ from django.utils import translation
 
 from core.models import AuditLog, Client, DocumentType, Event, ImportJob
 from core.services import import_engine
+from tests._standard_text import job_text_target
 
 PSEUDONYM_HEADER = "Pseudonym;Kontaktstufe;Altersgruppe;Notizen\n"
 
@@ -85,7 +86,7 @@ def client_job(facility, admin_user, media_root):
             "Pseudonym": "pseudonym",
             "Kontaktstufe": "contact_stage",
             "Altersgruppe": "age_cluster",
-            "Notizen": "notes",
+            "Notizen": job_text_target(job),
         },
     )
     return job
@@ -210,17 +211,17 @@ class TestRowValuesShortRowFallback:
     def test_missing_cell_becomes_the_empty_string(self):
         """Pin: ``x__row_values__mutmut_10`` — Fallback ``""`` -> ``"XXXX"``.
 
-        Original: ``values == {"pseudonym": "ABC", "notes": ""}``.
-        Mutant: ``values["notes"] == "XXXX"``.
+        Original: ``values == {"pseudonym": "ABC", "data_json.client-notes": ""}``.
+        Mutant: ``values["data_json.client-notes"] == "XXXX"``.
         """
         values, columns = import_engine._row_values(
             ["Pseudonym", "Notizen"],
             ["ABC"],
-            {"Pseudonym": "pseudonym", "Notizen": "notes"},
+            {"Pseudonym": "pseudonym", "Notizen": "data_json.client-notes"},
         )
 
-        assert values == {"pseudonym": "ABC", "notes": ""}
-        assert columns == {"pseudonym": "Pseudonym", "notes": "Notizen"}
+        assert values == {"pseudonym": "ABC", "data_json.client-notes": ""}
+        assert columns == {"pseudonym": "Pseudonym", "data_json.client-notes": "Notizen"}
 
     @pytest.mark.django_db
     def test_empty_required_cell_is_a_row_error(self, facility, admin_user, media_root):
@@ -235,7 +236,7 @@ class TestRowValuesShortRowFallback:
             _upload("Notizen;Pseudonym\nOnly a note;\n"),
             target_type=ImportJob.TargetType.CLIENT,
         )
-        import_engine.apply_mapping(job, {"Notizen": "notes", "Pseudonym": "pseudonym"})
+        import_engine.apply_mapping(job, {"Notizen": job_text_target(job), "Pseudonym": "pseudonym"})
 
         result = import_engine.run_import(job, admin_user, commit=False)
 

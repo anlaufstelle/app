@@ -39,6 +39,7 @@ from core.services.client.main import (
     update_client,
 )
 from tests._row_lock_helpers import mitschnitt
+from tests._standard_text import text_fields
 
 pytestmark = pytest.mark.django_db
 
@@ -155,8 +156,18 @@ class TestUpdateClientActorWithoutFacility:
         default raises ``AttributeError`` instead of the refusal."""
         before = _snapshot(client_identified)
 
+        text_payload = text_fields(
+            client_identified.facility,
+            "Written without an actor",
+            document_type=client_identified.document_type,
+            data_json=client_identified.data_json,
+        )
         with mitschnitt() as log, pytest.raises(ValidationError) as excinfo:
-            update_client(client_identified, actor, notes="Written without an actor")
+            update_client(
+                client_identified,
+                actor,
+                **text_payload,
+            )
 
         assert excinfo.value.messages == [str(CLIENT_OTHER_FACILITY_MESSAGE)]
         assert log.sperrfolge() == []
@@ -174,7 +185,16 @@ class TestUpdateClientMovedPerson:
         foreign_row = _snapshot(client_identified)
 
         with pytest.raises(Client.DoesNotExist) as excinfo:
-            update_client(client_identified, staff_user, notes="Written across the boundary")
+            update_client(
+                client_identified,
+                staff_user,
+                **text_fields(
+                    client_identified.facility,
+                    "Written across the boundary",
+                    document_type=client_identified.document_type,
+                    data_json=client_identified.data_json,
+                ),
+            )
 
         assert excinfo.value.args == ("Client matching query does not exist.",)
         assert str(excinfo.value) == "Client matching query does not exist."

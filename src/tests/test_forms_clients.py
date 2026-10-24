@@ -16,8 +16,8 @@ from tests._form_helpers import (
     assert_clean_value,
     assert_field_error,
     assert_form_valid,
-    assert_no_field_errors,
 )
+from tests._standard_text import record_text
 
 
 @pytest.mark.django_db
@@ -33,7 +33,7 @@ class TestClientForm:
                 "pseudonym": "Neu-01",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.AGE_18_26,
-                "notes": "",
+                "client-notes": "",
             },
             facility=facility,
         )
@@ -58,7 +58,7 @@ class TestClientForm:
                 "pseudonym": client_identified.pseudonym,
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
             },
             facility=facility,
         )
@@ -71,7 +71,7 @@ class TestClientForm:
                 "pseudonym": client_identified.pseudonym,
                 "contact_stage": client_identified.contact_stage,
                 "age_cluster": client_identified.age_cluster,
-                "notes": client_identified.notes,
+                "client-notes": record_text(client_identified),
             },
             instance=client_identified,
             facility=facility,
@@ -92,7 +92,7 @@ class TestClientForm:
                 "pseudonym": "X-99",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
             },
             facility=facility,
         )
@@ -110,7 +110,7 @@ class TestClientForm:
                 "pseudonym": "",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
             },
             facility=facility,
         )
@@ -124,7 +124,7 @@ class TestClientForm:
                 "pseudonym": "Mond-\U0001f319-42",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
             },
             facility=facility,
         )
@@ -140,7 +140,7 @@ class TestClientForm:
                 "pseudonym": value,
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
             },
             facility=facility,
         )
@@ -156,7 +156,7 @@ class TestClientForm:
                 "pseudonym": value,
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
             },
             facility=facility,
         )
@@ -174,7 +174,7 @@ class TestClientForm:
                 "pseudonym": "Stage-Bad-01",
                 "contact_stage": "lolnope",
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
             },
             facility=facility,
         )
@@ -188,7 +188,7 @@ class TestClientForm:
                 "pseudonym": "Age-Bad-01",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": "lolnope",
-                "notes": "",
+                "client-notes": "",
             },
             facility=facility,
         )
@@ -202,10 +202,9 @@ class TestClientForm:
                 "pseudonym": "Notes-01",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "",
+                "client-notes": "",
             },
             facility=facility,
         )
         assert_form_valid(form)
-        assert_no_field_errors(form, "notes")
-        assert_clean_value(form, "notes", "")
+        assert "notes" not in form.fields

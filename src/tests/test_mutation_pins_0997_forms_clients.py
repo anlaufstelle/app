@@ -11,6 +11,7 @@ from django.utils.translation import gettext as _
 
 from core.forms.clients import ClientForm
 from core.models import Client, Event
+from tests._standard_text import record_text
 
 pytestmark = pytest.mark.django_db
 
@@ -21,7 +22,7 @@ def _form(person, stage):
             "pseudonym": person.pseudonym,
             "contact_stage": stage,
             "age_cluster": person.age_cluster,
-            "notes": person.notes,
+            "client-notes": record_text(person),
         },
         instance=person,
         facility=person.facility,

@@ -40,7 +40,7 @@ from core.services.file_vault import encrypt_field, is_encrypted_value, safe_dec
 #: mitzufuehren wuerde diese Gates hinter dem Berichtigungspfad verstecken.
 #: ``document_type`` fehlt ebenso — ein Typwechsel ist eine Konfigurations-,
 #: keine Datenberichtigung, und verwirft nach E11-Merge-Policy fremde Slugs.
-CORE_FIELDS: tuple[str, ...] = ("pseudonym", "age_cluster", "notes")
+CORE_FIELDS: tuple[str, ...] = ("pseudonym", "age_cluster")
 
 
 # Only the approved workflow supplies a single, client-bound correction (Refs #2573).

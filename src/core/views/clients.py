@@ -406,7 +406,11 @@ class ClientCreateView(StaffRequiredMixin, View):
 
     def get(self, request):
         form = ClientForm(facility=request.current_facility, user=request.user)
-        context = {"form": form, "data_form": DynamicClientDataForm(), "is_edit": False}
+        context = {
+            "form": form,
+            "data_form": _rerender_data_form(request, form["document_type"].value()),
+            "is_edit": False,
+        }
         return render(request, "core/clients/form.html", context)
 
     def post(self, request):
@@ -416,7 +420,7 @@ class ClientCreateView(StaffRequiredMixin, View):
         if not form.is_valid():
             context = {
                 "form": form,
-                "data_form": _rerender_data_form(request, request.POST.get("document_type"), files=request.FILES),
+                "data_form": _rerender_data_form(request, form["document_type"].value(), files=request.FILES),
                 "is_edit": False,
             }
             return render(request, "core/clients/form.html", context)
@@ -463,7 +467,6 @@ class ClientCreateView(StaffRequiredMixin, View):
                         pseudonym=form.cleaned_data["pseudonym"],
                         contact_stage=form.cleaned_data["contact_stage"],
                         age_cluster=form.cleaned_data["age_cluster"],
-                        notes=form.cleaned_data["notes"],
                         document_type=doc_type,
                         data_json=data_json,
                     )
@@ -648,7 +651,9 @@ class ClientUpdateView(StaffRequiredMixin, View):
         # encrypted-Slugs liegen als Fernet-Token im JSONB.
         data_form, _restricted = _client_data_form(
             request,
-            None if type_locked else client.document_type,
+            None
+            if type_locked
+            else form.fields["document_type"].queryset.filter(pk=form["document_type"].value()).first(),
             initial_data=decrypt_dynamic_text_data(client.data_json),
             existing_file_slugs=file_marker_slugs(client.data_json),
         )

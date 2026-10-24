@@ -118,15 +118,21 @@ def _make_client(e2e_env, rect_run, label, *, notes="", with_doc_type=False, dat
     daran, welche Felder eine Rolle im Formular sieht.
     """
     pseudonym = f"{rect_run['prefix']}-{label}-{uuid.uuid4().hex[:4]}"
-    doc_type = f"'{rect_run['doc_type_pk']}'" if with_doc_type else "None"
-    data_json = json.dumps({rect_run["slug"]: data_value}) if data_value is not None else "{}"
+    doc_type = (
+        f"'{rect_run['doc_type_pk']}'"
+        if with_doc_type
+        else "DocumentType.objects.get(facility=f, slug='standard-client').pk"
+    )
+    data_json = (
+        json.dumps({rect_run["slug"]: data_value}) if data_value is not None else json.dumps({"client-notes": notes})
+    )
     out = _shell(
         e2e_env,
-        "from core.models import Client, Facility; "
+        "from core.models import Client, DocumentType, Facility; "
         "import json; "
         "f = Facility.objects.get(name='Hauptstelle'); "
         f"c = Client.objects.create(facility=f, pseudonym='{pseudonym}', contact_stage='identified', "
-        f"  age_cluster='18_26', notes={notes!r}, document_type_id={doc_type}, "
+        f"  age_cluster='18_26', document_type_id={doc_type}, "
         f"  data_json=json.loads({data_json!r})); "
         "print('client=' + json.dumps({'pk': str(c.pk)}))",
     )
@@ -184,7 +190,7 @@ class TestRectificationApprovalWorkflow:
             staff_page,
             base_url,
             client_pk,
-            field_path="notes",
+            field_path="data_json.client-notes",
             new_value=new_note,
             reason="Eintrag beruhte auf einer Verwechslung.",
         )
@@ -279,7 +285,7 @@ class TestSelfReviewIsBlocked:
             lead,
             base_url,
             client_pk,
-            field_path="notes",
+            field_path="data_json.client-notes",
             new_value="Von der Leitung selbst beantragt",
             reason="Prüfung der Selbst-Review-Sperre.",
         )
@@ -317,11 +323,12 @@ class TestSelfReviewIsBlocked:
 
         out = _shell(
             e2e_env,
-            "from core.models import Client, RectificationRequest; "
+            "from core.models import Client, RectificationRequest; from core.services.file_vault import safe_decrypt; "
             "import json; "
             f"rr = RectificationRequest.objects.get(pk='{rr_pk}'); "
             f"c = Client.objects.get(pk='{client_pk}'); "
-            "print('state=' + json.dumps({'status': rr.status, 'notes': c.notes}))",
+            "print('state=' + json.dumps({'status': rr.status, "
+            "'notes': safe_decrypt(c.data_json.get('client-notes', ''))}))",
         )
         state = _json_line(out, "state")
         assert state["status"] == "pending", "Antrag darf nach dem Umgehungsversuch nicht genehmigt sein"
@@ -338,7 +345,7 @@ class TestRejectionRequiresReviewNote:
             staff_page,
             base_url,
             client_pk,
-            field_path="notes",
+            field_path="data_json.client-notes",
             new_value="Abzulehnender Wunschwert",
             reason="Strittige Wahrnehmung — bewusst zur Ablehnung.",
         )
@@ -363,11 +370,12 @@ class TestRejectionRequiresReviewNote:
 
         out = _shell(
             e2e_env,
-            "from core.models import Client, RectificationRequest; "
+            "from core.models import Client, RectificationRequest; from core.services.file_vault import safe_decrypt; "
             "import json; "
             f"rr = RectificationRequest.objects.get(pk='{rr_pk}'); "
             f"c = Client.objects.get(pk='{client_pk}'); "
-            "print('state=' + json.dumps({'status': rr.status, 'notes': c.notes}))",
+            "print('state=' + json.dumps({'status': rr.status, "
+            "'notes': safe_decrypt(c.data_json.get('client-notes', ''))}))",
         )
         state = _json_line(out, "state")
         assert state["status"] == "rejected"

@@ -26,6 +26,7 @@ from django.utils import timezone
 from core.constants import DATA_JSON_PREFIX
 from core.models import AuditLog, Client, Event, EventHistory, FieldTemplate, ImportJob
 from core.services import import_engine
+from tests._standard_text import job_text_target
 
 
 def _upload(content, name="import.csv", encoding="utf-8"):
@@ -189,10 +190,12 @@ class TestApplyMappingAndRowValuesSkipUnmappedColumns:
             target_type=ImportJob.TargetType.CLIENT,
         )
 
-        import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Kontaktstufe": "", "Notizen": "notes"})
+        import_engine.apply_mapping(
+            job, {"Pseudonym": "pseudonym", "Kontaktstufe": "", "Notizen": job_text_target(job)}
+        )
 
         job.refresh_from_db()
-        assert job.mapping_json["columns"] == {"Pseudonym": "pseudonym", "Notizen": "notes"}
+        assert job.mapping_json["columns"] == {"Pseudonym": "pseudonym", "Notizen": job_text_target(job)}
 
     def test_row_values_keeps_a_later_target_after_an_unmapped_column(self):
         """Gleiches Muster fuer ``_row_values`` (mutmut_7, reiner Helfer ohne
@@ -201,12 +204,12 @@ class TestApplyMappingAndRowValuesSkipUnmappedColumns:
         """
         header = ["Pseudonym", "Kontaktstufe", "Notizen"]
         row = ["MAP-02", "wird-nicht-gemappt", "Zweite Notiz"]
-        columns_map = {"Pseudonym": "pseudonym", "Notizen": "notes"}
+        columns_map = {"Pseudonym": "pseudonym", "Notizen": "data_json.client-notes"}
 
         values, columns = import_engine._row_values(header, row, columns_map)
 
-        assert values == {"pseudonym": "MAP-02", "notes": "Zweite Notiz"}
-        assert columns == {"pseudonym": "Pseudonym", "notes": "Notizen"}
+        assert values == {"pseudonym": "MAP-02", "data_json.client-notes": "Zweite Notiz"}
+        assert columns == {"pseudonym": "Pseudonym", "data_json.client-notes": "Notizen"}
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ from django.urls import reverse
 from core.models import Activity, AuditLog
 from core.services.client import update_client
 from core.services.dashboard import render_activity_summary
+from tests._standard_text import text_fields
 
 
 @pytest.mark.django_db
@@ -121,7 +122,16 @@ class TestClientRenameActivity:
         assert new_pseudonym not in json.dumps(audit.detail)
 
     def test_non_rename_update_keeps_generic_activity(self, client_identified, staff_user):
-        update_client(client_identified, staff_user, notes="Nur eine Notiz")
+        update_client(
+            client_identified,
+            staff_user,
+            **text_fields(
+                client_identified.facility,
+                "Nur eine Notiz",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
 
         activity = Activity.objects.filter(target_id=client_identified.pk).latest("occurred_at")
         assert activity.context == {"schema": 1, "action": Activity.Action.CLIENT_UPDATED}

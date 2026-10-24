@@ -24,6 +24,7 @@ from core.services.client.rectification import (
     reject_rectification,
     request_rectification,
 )
+from tests._standard_text import record_text, text_path
 
 pytestmark = pytest.mark.django_db
 
@@ -52,11 +53,11 @@ def facilityless_lead():
 
 @pytest.fixture
 def antrag(client_identified, staff_user):
-    return request_rectification(client_identified, staff_user, "notes", "Neuer Wert", "Grund")
+    return request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Wert", "Grund")
 
 
 def _assert_refused(callable_, rr, client_pk):
-    notes_vorher = Client.objects.get(pk=client_pk).notes
+    notes_vorher = record_text(Client.objects.get(pk=client_pk))
     audit_vorher = AuditLog.objects.count()
     with pytest.raises(ValidationError) as excinfo:
         callable_()
@@ -65,7 +66,7 @@ def _assert_refused(callable_, rr, client_pk):
     assert rr.status == RectificationRequest.Status.PENDING
     assert rr.reviewed_by_id is None
     assert rr.reviewed_at is None
-    assert Client.objects.get(pk=client_pk).notes == notes_vorher
+    assert record_text(Client.objects.get(pk=client_pk)) == notes_vorher
     assert AuditLog.objects.count() == audit_vorher
 
 
@@ -93,7 +94,7 @@ class TestOwnFacilityReviewerStillPasses:
         approve_rectification(antrag, lead_user)
         antrag.refresh_from_db()
         assert antrag.status == RectificationRequest.Status.APPROVED
-        assert Client.objects.get(pk=client_identified.pk).notes == "Neuer Wert"
+        assert record_text(Client.objects.get(pk=client_identified.pk)) == "Neuer Wert"
 
     def test_reject_passes(self, antrag, lead_user):
         reject_rectification(antrag, lead_user, "Vermerk")

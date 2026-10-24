@@ -12,6 +12,14 @@ from core.services.case import update_case
 from core.services.client import update_client
 from core.services.events import update_event
 from core.services.system import update_settings
+from tests._standard_text import record_text, set_record_text, text_fields
+
+
+@pytest.fixture
+def client_identified(client_identified):
+    set_record_text(client_identified, "")
+    client_identified.save(update_fields=["document_type", "data_json"])
+    return client_identified
 
 
 class _HiddenInputs(HTMLParser):
@@ -104,7 +112,7 @@ def _case_payload(case, slug, token, **overrides):
     payload = {
         "expected_updated_at": token,
         "title": case.title,
-        "description": case.description,
+        "standard-description": record_text(case),
         "lead_user": str(case.lead_user_id or ""),
         "document_type": str(case.document_type_id),
         slug: "Wert aus Tab A",
@@ -116,7 +124,18 @@ def _case_payload(case, slug, token, **overrides):
 @pytest.mark.django_db
 class TestCaseInvalidRerender:
     def _parallel_change(self, case, staff_user):
-        update_case(Case.objects.get(pk=case.pk), staff_user, description="Parallel gespeichert")
+        current = Case.objects.get(pk=case.pk)
+        update_case(
+            current,
+            staff_user,
+            **text_fields(
+                current.facility,
+                "Saved in another tab",
+                entity="case",
+                document_type=current.document_type,
+                data_json=current.data_json,
+            ),
+        )
 
     def _assert_conflict_after_rerender(self, client, staff_user, case, slug, invalid_overrides):
         client.force_login(staff_user)
@@ -136,7 +155,7 @@ class TestCaseInvalidRerender:
         assert response.status_code == 200
         assert response.context["has_edit_conflict"]
         case.refresh_from_db()
-        assert case.description == "Parallel gespeichert"
+        assert record_text(case) == "Saved in another tab"
 
     def test_invalid_model_form_keeps_conflict(self, client, staff_user, case_with_required_data):
         case, slug = case_with_required_data
@@ -162,7 +181,7 @@ def _client_payload(person, token, **overrides):
         "pseudonym": person.pseudonym,
         "contact_stage": person.contact_stage,
         "age_cluster": person.age_cluster,
-        "notes": person.notes,
+        "client-notes": record_text(person),
         "document_type": str(person.document_type_id or ""),
     }
     payload.update(overrides)
@@ -178,7 +197,12 @@ class TestClientInvalidRerender:
         update_client(
             Client.objects.get(pk=client_identified.pk),
             staff_user,
-            notes="Parallel gespeichert",
+            **text_fields(
+                Client.objects.get(pk=client_identified.pk).facility,
+                "Parallel gespeichert",
+                document_type=Client.objects.get(pk=client_identified.pk).document_type,
+                data_json=Client.objects.get(pk=client_identified.pk).data_json,
+            ),
         )
 
         invalid = client.post(url, _client_payload(client_identified, token, pseudonym=""))
@@ -197,7 +221,7 @@ class TestClientInvalidRerender:
         assert response.status_code == 200
         assert response.context["has_edit_conflict"]
         client_identified.refresh_from_db()
-        assert client_identified.notes == "Parallel gespeichert"
+        assert record_text(client_identified) == "Parallel gespeichert"
         assert client_identified.pseudonym != "Stand-aus-Tab-A"
 
     def test_empty_token_stays_empty(self, client, staff_user, client_identified):

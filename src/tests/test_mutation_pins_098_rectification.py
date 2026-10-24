@@ -50,20 +50,17 @@ from core.services.client.rectification import (
     reject_rectification,
     request_rectification,
 )
+from tests._standard_text import text_path
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
 
 class TestValidateNewValue:
-    def test_pseudonym_none_wird_abgelehnt_notes_none_ist_leerstring(self):
-        """Pins ``x__validate_new_value__mutmut_13``: der Leer-Fallback
-        (``new_value is None``) wird zum Literal ``"XXXX"`` — ein
-        ``None``-Pseudonym liefe dann NICHT mehr in den Leer-Guard, sondern
-        würde akzeptiert; ein ``None``-Notizfeld läse fälschlich ``"XXXX"``
-        statt eines leeren Strings."""
+    def test_pseudonym_none_is_rejected_and_dynamic_null_is_preserved(self):
+        """Dynamic values retain their type until field validation on approval."""
         with pytest.raises(ValidationError):
             _validate_new_value("pseudonym", None)
-        assert _validate_new_value("notes", None) == ""
+        assert _validate_new_value("data_json.client-notes", None) is None
 
     def test_pseudonym_grenzwert_von_100_zeichen_ist_gueltig(self):
         """Pins ``x__validate_new_value__mutmut_36``: ``len(text) >
@@ -83,7 +80,7 @@ class TestAuditTargetTypeExaktheit:
         mit XX-Markern/Groß-Kleinschreibung verfälscht. Kein Meldungstext,
         sondern das gespeicherte Typkennzeichen der Audit-Zeile — Vergleich
         exakt, nie per Teilstring."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Neuer Text", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Text", "Grund")
 
         approve_rectification(rr, lead_user)
 
@@ -94,7 +91,7 @@ class TestAuditTargetTypeExaktheit:
     def test_ablehnung_auditiert_den_exakten_zieltyp(self, client_identified, staff_user, lead_user):
         """Pins ``x_reject_rectification__mutmut_38/44/47/48/49`` — Spiegel von
         ``approve_rectification`` für den Ablehnungspfad."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Neuer Text", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Text", "Grund")
 
         reject_rectification(rr, lead_user, "Nicht nachvollziehbar")
 

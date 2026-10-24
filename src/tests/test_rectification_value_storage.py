@@ -10,6 +10,7 @@ from core.services.client import update_client
 from core.services.client.rectification import approve_rectification, request_rectification
 from core.services.dynamic_data import validate_data_json
 from core.services.file_vault import encrypt_field, is_encrypted_value, safe_decrypt
+from tests._standard_text import record_text, text_fields
 from tests.test_sensitivity_transitions import make_record
 
 pytestmark = pytest.mark.django_db
@@ -108,13 +109,13 @@ def test_failed_number_rectification_rolls_back_without_approval(
     record, _ = make_record(facility, staff_user, "client", field=field, value=45)
     request = request_rectification(record, staff_user, f"data_json.{field.slug}", 46.0, "Correction")
     before_data = record.data_json.copy()
-    before_notes = record.notes
+    before_notes = record_text(record)
     before_updated_at = record.updated_at
     before_audit = AuditLog.objects.for_facility(facility).count()
     before_review_note = request.review_note
 
     def update_with_wrong_storage(*args, **kwargs):
-        kwargs["notes"] = "Unexpected persisted note"
+        kwargs.update(text_fields(record.facility, "Unexpected persisted note", document_type=record.document_type))
         update_client(*args, **kwargs)
         wrong_value = {"old_value": 45, "wrong_value": 47.0, "plaintext_number_text": "46.0"}[failure]
         stored = encrypt_field(wrong_value) if encrypted and failure != "plaintext_number_text" else wrong_value
@@ -132,7 +133,7 @@ def test_failed_number_rectification_rolls_back_without_approval(
     assert request.review_note == before_review_note
     assert record.data_json == before_data
     assert safe_decrypt(record.data_json[field.slug]) == 45
-    assert record.notes == before_notes
+    assert record_text(record) == before_notes
     assert record.updated_at == before_updated_at
     assert AuditLog.objects.for_facility(facility).count() == before_audit
     assert (

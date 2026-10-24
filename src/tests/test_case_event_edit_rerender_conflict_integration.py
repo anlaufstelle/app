@@ -31,6 +31,7 @@ from core.services.case import assign_event_to_case, close_case, remove_event_fr
 from core.services.case.cases import case_form_state_token
 from core.services.events import update_event
 from core.services.events.crud import event_form_state_token
+from tests._standard_text import record_text, set_record_text
 
 CONFLICT_TEXT = "zwischenzeitlich bearbeitet"
 
@@ -99,20 +100,22 @@ def _case_payload(case, hidden, **overrides):
     payload.update(
         {
             "title": case.title,
-            "description": case.description or "",
+            "standard-description": record_text(case) or "",
             "lead_user": str(case.lead_user_id or ""),
             "document_type": str(case.document_type_id or ""),
             "client": str(case.client_id),
         }
     )
+    if "description" in overrides:
+        overrides["standard-description"] = overrides.pop("description")
     payload.update(overrides)
     return payload
 
 
 @pytest.fixture
 def described_case(case_open):
-    case_open.description = "Beschreibung aus dem ersten Laden."
-    case_open.save(update_fields=["description", "updated_at"])
+    set_record_text(case_open, "Beschreibung aus dem ersten Laden.")
+    case_open.save(update_fields=["document_type", "data_json", "updated_at"])
     return case_open
 
 
@@ -145,7 +148,7 @@ class TestCaseEditRerenderThenSubmit:
         assert CONFLICT_TEXT in response.content.decode()
         described_case.refresh_from_db()
         assert described_case.title == "Titel aus Tab B", "Parallele Änderung darf nicht still überschrieben werden"
-        assert described_case.description == snapshot.description, "Konflikt darf nichts teilweise schreiben"
+        assert record_text(described_case) == record_text(snapshot), "Konflikt darf nichts teilweise schreiben"
 
     def test_parallel_close_is_saved_across_rerender(self, client, staff_user, lead_user, described_case):
         client.force_login(staff_user)
@@ -168,7 +171,7 @@ class TestCaseEditRerenderThenSubmit:
         assert described_case.title == "Titel aus Tab A", "Eingabe aus Tab A muss gespeichert werden"
         assert described_case.status == Case.Status.CLOSED, "Parallel gesetzter Status muss erhalten bleiben"
         assert described_case.closed_at is not None
-        assert described_case.description == snapshot.description
+        assert record_text(described_case) == record_text(snapshot)
 
     def test_empty_token_stays_empty_on_rerender(self, client, staff_user, described_case):
         client.force_login(staff_user)
@@ -212,6 +215,8 @@ def _event_url(event):
 def _event_payload(hidden, **overrides):
     payload = dict(hidden)
     payload.update({"dauer": "15", "notiz": "Notiz aus Tab A"})
+    if "description" in overrides:
+        overrides["standard-description"] = overrides.pop("description")
     payload.update(overrides)
     return payload
 

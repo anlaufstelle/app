@@ -10,6 +10,7 @@ from django.utils import timezone
 from core.models import AuditLog, Case, Client, DeletionRequest, Episode, Event, WorkItem
 from core.models.activity import Activity
 from core.services.client import get_client_or_none, pending_deletion_client_ids, update_client
+from tests._standard_text import record_text, set_record_text, text_fields
 
 
 @pytest.mark.django_db
@@ -131,8 +132,8 @@ class TestClientDetail:
     def test_client_detail_hides_notes_for_assistant(self, client, assistant_user, client_identified):
         # Refs #1068: notes sind staff-stufig (analog offline.py notes_visible)
         # und dürfen für Assistants nicht im Web-Detail gerendert werden.
-        client_identified.notes = "Vertrauliche-Staff-Notiz-1068"
-        client_identified.save(update_fields=["notes"])
+        set_record_text(client_identified, "Vertrauliche-Staff-Notiz-1068")
+        client_identified.save(update_fields=["document_type", "data_json"])
         client.force_login(assistant_user)
         response = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk}))
         assert response.status_code == 200
@@ -140,8 +141,8 @@ class TestClientDetail:
 
     def test_client_detail_shows_notes_for_staff(self, client, staff_user, client_identified):
         # Refs #1068: staff+ sieht die Notizen weiterhin.
-        client_identified.notes = "Vertrauliche-Staff-Notiz-1068"
-        client_identified.save(update_fields=["notes"])
+        set_record_text(client_identified, "Vertrauliche-Staff-Notiz-1068")
+        client_identified.save(update_fields=["document_type", "data_json"])
         client.force_login(staff_user)
         response = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk}))
         assert response.status_code == 200
@@ -200,22 +201,15 @@ class TestClientCreate:
         response = client.get(reverse("core:client_create"))
         assert response.status_code == 200
 
-    def test_client_form_renders_privacy_notice_without_markdown_or_code_names(self, client, staff_user):
-        """Refs #1805 (R10/T2/T3): der Notizen-Hinweis war Markdown-im-HTML.
-
-        ``components/_form_field.html`` rendert ``help_text`` ohne ``|safe``,
-        die Fachkraft sah also literal ``**Nicht feldverschluesselt**``. Und
-        er verwies auf ``FieldTemplate``/``Sensitivity=HOCH`` — Namen, die in
-        keinem sichtbaren Label vorkommen.
-        """
+    def test_client_form_omits_removed_text_field_and_legacy_notice(self, client, staff_user):
+        """The dedicated plaintext note warning disappears with its field."""
         client.force_login(staff_user)
         content = client.get(reverse("core:client_create")).content.decode()
         assert "**" not in content
         for code_name in ("FieldTemplate", "Sensitivity=", "Art-9"):
             assert code_name not in content
-        # Der Ersatz nennt das sichtbare Label und die Rechtsgrundlage.
-        assert "Zusatzfeld" in content
-        assert "Art. 9 DSGVO" in content
+        assert 'name="notes"' not in content
+        assert "Dieses Feld wird nicht verschlüsselt gespeichert" not in content
 
     def test_client_create_success(self, client, staff_user, facility):
         client.force_login(staff_user)
@@ -293,7 +287,16 @@ class TestUpdateClientService:
         assert updated.age_cluster == Client.AgeCluster.AGE_18_26
 
     def test_logs_updated_activity(self, client_identified, staff_user):
-        update_client(client_identified, staff_user, notes="Neue Notiz")
+        update_client(
+            client_identified,
+            staff_user,
+            **text_fields(
+                client_identified.facility,
+                "Neue Notiz",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
         assert Activity.objects.filter(
             verb=Activity.Verb.UPDATED,
             target_id=client_identified.pk,
@@ -323,15 +326,33 @@ class TestUpdateClientService:
         ).exists()
 
     def test_no_stage_change_no_audit(self, client_identified, staff_user):
-        update_client(client_identified, staff_user, notes="Nur Notiz")
+        update_client(
+            client_identified,
+            staff_user,
+            **text_fields(
+                client_identified.facility,
+                "Nur Notiz",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
         assert not AuditLog.objects.filter(
             action=AuditLog.Action.STAGE_CHANGE,
         ).exists()
 
     def test_returns_updated_client(self, client_identified, staff_user):
-        result = update_client(client_identified, staff_user, notes="Test")
+        result = update_client(
+            client_identified,
+            staff_user,
+            **text_fields(
+                client_identified.facility,
+                "Test",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
         assert result.pk == client_identified.pk
-        assert result.notes == "Test"
+        assert record_text(result) == "Test"
 
     def test_update_client_erhaelt_parallelen_soft_delete(self, client_identified, staff_user):
         """#1789-Folge (Review-Befund): Ein staler Save darf eine parallel
@@ -349,7 +370,13 @@ class TestUpdateClientService:
             is_deleted=True, deleted_at=timezone.now(), is_active=False
         )
         with pytest.raises(ValidationError) as excinfo:
-            update_client(stale, staff_user, notes="Nur Notiz")
+            update_client(
+                stale,
+                staff_user,
+                **text_fields(
+                    stale.facility, "Nur Notiz", document_type=stale.document_type, data_json=stale.data_json
+                ),
+            )
         assert excinfo.value.messages == [
             "Diese Person wurde gelöscht oder anonymisiert — es können keine Daten mehr zu ihr gespeichert werden."
         ]
@@ -357,7 +384,7 @@ class TestUpdateClientService:
         assert refreshed.is_deleted is True
         assert refreshed.deleted_at is not None
         assert refreshed.is_active is False
-        assert refreshed.notes != "Nur Notiz"
+        assert record_text(refreshed) != "Nur Notiz"
 
     def test_update_client_erhaelt_parallele_redaktion(self, client_identified, staff_user):
         """Ein parallel redigiertes Pseudonym uebersteht einen stalen Save,
@@ -410,12 +437,17 @@ class TestOptimisticLockingClient:
             update_client(
                 client_identified,
                 staff_user,
-                notes="Parallel-Edit",
+                **text_fields(
+                    client_identified.facility,
+                    "Parallel-Edit",
+                    document_type=client_identified.document_type,
+                    data_json=client_identified.data_json,
+                ),
                 expected_updated_at=stale,
             )
         # DB unchanged
         client_identified.refresh_from_db()
-        assert client_identified.notes != "Parallel-Edit"
+        assert record_text(client_identified) != "Parallel-Edit"
 
     def test_optimistic_locking_client_success_with_current_timestamp(self, client_identified, staff_user):
         """Matching ``expected_updated_at`` must succeed."""
@@ -424,22 +456,32 @@ class TestOptimisticLockingClient:
         update_client(
             client_identified,
             staff_user,
-            notes="OK-Edit",
+            **text_fields(
+                client_identified.facility,
+                "OK-Edit",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
             expected_updated_at=current,
         )
         client_identified.refresh_from_db()
-        assert client_identified.notes == "OK-Edit"
+        assert record_text(client_identified) == "OK-Edit"
 
     def test_optimistic_locking_client_none_disables_check(self, client_identified, staff_user):
         """``expected_updated_at=None`` bypasses the check for backwards compatibility."""
         update_client(
             client_identified,
             staff_user,
-            notes="Legacy-Caller",
+            **text_fields(
+                client_identified.facility,
+                "Legacy-Caller",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
             expected_updated_at=None,
         )
         client_identified.refresh_from_db()
-        assert client_identified.notes == "Legacy-Caller"
+        assert record_text(client_identified) == "Legacy-Caller"
 
 
 @pytest.mark.django_db
@@ -450,15 +492,15 @@ class TestClientAnonymize:
     and all workitems (not only open/in_progress ones)."""
 
     def test_anonymize_clears_client_fields(self, client_identified):
-        client_identified.notes = "Sensible Notiz"
+        set_record_text(client_identified, "Sensible Notiz")
         client_identified.age_cluster = Client.AgeCluster.AGE_18_26
-        client_identified.save(update_fields=["notes", "age_cluster"])
+        client_identified.save(update_fields=["document_type", "data_json", "age_cluster"])
 
         client_identified.anonymize()
         client_identified.refresh_from_db()
 
         assert client_identified.pseudonym.startswith("Gelöscht-")
-        assert client_identified.notes == ""
+        assert record_text(client_identified) == ""
         assert client_identified.age_cluster == Client.AgeCluster.UNKNOWN
         assert client_identified.is_active is False
 
@@ -467,7 +509,13 @@ class TestClientAnonymize:
             facility=facility,
             client=client_identified,
             title="Sensibler Falltitel mit Klarnamen",
-            description="Detailreiche, personenbezogene Beschreibung.",
+            **text_fields(
+                facility,
+                "Detailreiche, personenbezogene Beschreibung.",
+                entity="case",
+                document_type=None,
+                data_json=None,
+            ),
             status=Case.Status.OPEN,
             created_by=staff_user,
         )
@@ -477,7 +525,7 @@ class TestClientAnonymize:
 
         assert "Klarnamen" not in case.title
         assert case.title.startswith("[Anonymisiert ")
-        assert case.description == ""
+        assert record_text(case) == ""
 
     def test_anonymize_clears_closed_case_title(self, facility, client_identified, staff_user):
         """Closed cases must also be anonymized."""
@@ -487,7 +535,7 @@ class TestClientAnonymize:
             facility=facility,
             client=client_identified,
             title="Abgeschlossener Fall mit Klarnamen",
-            description="Sensible Historie.",
+            **text_fields(facility, "Sensible Historie.", entity="case", document_type=None, data_json=None),
             status=Case.Status.CLOSED,
             closed_at=timezone.now(),
             created_by=staff_user,
@@ -497,7 +545,7 @@ class TestClientAnonymize:
         case.refresh_from_db()
 
         assert "Klarnamen" not in case.title
-        assert case.description == ""
+        assert record_text(case) == ""
 
     def test_anonymize_clears_episode_notes(self, facility, client_identified, staff_user):
         from django.utils import timezone

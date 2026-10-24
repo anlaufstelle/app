@@ -66,6 +66,10 @@ for key, (name, entity, sens) in {
     if key != "p2":
         template = ft_high if key == "h" else ft
         DocumentTypeField.objects.get_or_create(document_type=dt, field_template=template, defaults={"sort_order": 0})
+    if key in {"p", "p2", "f"}:
+        slug = "client-notes" if entity == "client" else "standard-description"
+        text_field = FieldTemplate.objects.get(facility=fac, slug=slug)
+        DocumentTypeField.objects.get_or_create(document_type=dt, field_template=text_field, defaults={"sort_order": 1})
     dts[key] = dt
 cli, _ = Client.objects.get_or_create(
     facility=fac, pseudonym="E2E-M24-Person",

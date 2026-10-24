@@ -89,7 +89,7 @@ def get_case_or_none(facility, case_id):
 
 
 @transaction.atomic
-def create_case(facility, user, client, title, description="", lead_user=None, document_type=None, data_json=None):
+def create_case(facility, user, client, title, lead_user=None, document_type=None, data_json=None):
     """Create a new Case with status OPEN.
 
     M2 P5 (Refs #1058): ``document_type``/``data_json`` laufen durch
@@ -138,7 +138,6 @@ def create_case(facility, user, client, title, description="", lead_user=None, d
         facility=facility,
         client=client,
         title=title,
-        description=description,
         status=Case.Status.OPEN,
         created_by=user,
         lead_user=lead_user,
@@ -162,7 +161,6 @@ def create_case(facility, user, client, title, description="", lead_user=None, d
 # kein Konflikt mit dem Formular.
 CASE_FORM_STATE_FIELDS = (
     "title",
-    "description",
     "lead_user_id",
     "document_type_id",
     "data_json",
@@ -208,7 +206,7 @@ def _case_form_state_unchanged(case, expected_form_state):
 
 @transaction.atomic
 def update_case(case, user, *, expected_updated_at=None, expected_form_state=None, **fields):
-    """Update mutable fields on a case (title, description, lead_user,
+    """Update mutable fields on a case (title, lead_user,
     document_type, data_json).
 
     Writes an AuditLog entry with the names of changed fields (no PII values).
@@ -270,7 +268,7 @@ def update_case(case, user, *, expected_updated_at=None, expected_form_state=Non
     # versehentlich durchgereichte Felder. Läuft ZUERST — die
     # Mass-Assignment-Prüfung darf nicht vom Diff abhängen (Muster
     # ``update_client``, P4b).
-    allowed = {"title", "description", "lead_user", "document_type", "data_json"}
+    allowed = {"title", "lead_user", "document_type", "data_json"}
     check_update_allowlist(fields, allowed)
 
     # M2 P5 (Refs #1058): Dynamikdaten gegen den *effektiven* Typ pruefen —

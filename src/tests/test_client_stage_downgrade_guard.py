@@ -13,6 +13,7 @@ from django.core.exceptions import ValidationError
 
 from core.models import Client
 from core.services.client import update_client
+from tests._standard_text import record_text, text_fields
 
 pytestmark = pytest.mark.django_db
 
@@ -59,8 +60,13 @@ def test_staff_may_edit_nonstage_fields_on_qualified_client(client_qualified, st
         staff_user,
         old_stage=Client.ContactStage.QUALIFIED,
         contact_stage=Client.ContactStage.QUALIFIED,
-        notes="aktualisiert",
+        **text_fields(
+            client_qualified.facility,
+            "aktualisiert",
+            document_type=client_qualified.document_type,
+            data_json=client_qualified.data_json,
+        ),
     )
     client_qualified.refresh_from_db()
     assert client_qualified.contact_stage == Client.ContactStage.QUALIFIED
-    assert client_qualified.notes == "aktualisiert"
+    assert record_text(client_qualified) == "aktualisiert"

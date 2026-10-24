@@ -6,6 +6,7 @@ import pytest
 from django.urls import reverse
 
 from core.models import AuditLog, Client
+from tests._standard_text import record_text
 
 
 @pytest.mark.django_db
@@ -158,7 +159,7 @@ class TestClientInlineCreateView:
                 "contact_stage": Client.ContactStage.QUALIFIED,
                 "min_stage": Client.ContactStage.QUALIFIED,
                 "age_cluster": Client.AgeCluster.AGE_18_26,
-                "notes": "darf nicht uebernommen werden",
+                "client-notes": "darf nicht uebernommen werden",
                 "processing_restricted": "1",
             },
             HTTP_HX_REQUEST="true",
@@ -171,7 +172,7 @@ class TestClientInlineCreateView:
         assert created.created_by == staff_user
         assert created.contact_stage == Client.ContactStage.QUALIFIED
         assert created.age_cluster == Client.AgeCluster.UNKNOWN
-        assert created.notes == ""
+        assert record_text(created) == ""
         assert created.processing_restricted is False
         assert created.is_active is True
         assert created.is_deleted is False

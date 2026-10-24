@@ -16,6 +16,7 @@ from core.services.client.rectification import (
     decode_rectification_value,
     request_rectification,
 )
+from tests._standard_text import record_text, text_fields, text_path
 
 
 def _login(client, user):
@@ -40,7 +41,11 @@ class TestCreateView:
         _login(client, staff_user)
         response = client.post(
             reverse("core:rectification_create", args=[client_identified.pk]),
-            {"field_path": "notes", "new_value": "Korrigierte Notiz", "reason": "Falsch protokolliert"},
+            {
+                "field_path": text_path(client_identified),
+                "new_value": "Korrigierte Notiz",
+                "reason": "Falsch protokolliert",
+            },
         )
         assert response.status_code == 302
         rr = RectificationRequest.objects.get(target_client=client_identified)
@@ -48,7 +53,7 @@ class TestCreateView:
         assert rr.requested_by == staff_user
         # Nichts wird sofort angewendet — erst die Genehmigung schreibt.
         client_identified.refresh_from_db()
-        assert client_identified.notes != "Korrigierte Notiz"
+        assert record_text(client_identified) != "Korrigierte Notiz"
 
     def test_date_field_post_is_no_500(self, client, facility, client_identified, doc_type_client_profile, staff_user):
         """DATE-Slug ueber das FORMULAR — ``parse_default`` liefert ein ``date``.
@@ -87,11 +92,11 @@ class TestCreateView:
         assert not RectificationRequest.objects.filter(target_client=client_identified).exists()
 
     def test_second_open_request_shows_form_error(self, client, client_identified, staff_user):
-        request_rectification(client_identified, staff_user, "notes", "A", "Grund")
+        request_rectification(client_identified, staff_user, text_path(client_identified), "A", "Grund")
         _login(client, staff_user)
         response = client.post(
             reverse("core:rectification_create", args=[client_identified.pk]),
-            {"field_path": "notes", "new_value": "B", "reason": "Grund"},
+            {"field_path": text_path(client_identified), "new_value": "B", "reason": "Grund"},
         )
         assert response.status_code == 200
         assert response.context["form"].non_field_errors()
@@ -109,7 +114,7 @@ class TestCreateView:
         _login(client, staff_user)
         response = client.post(
             reverse("core:rectification_create", args=[foreign_client.pk]),
-            {"field_path": "notes", "new_value": "X", "reason": "Grund"},
+            {"field_path": "data_json.client-notes", "new_value": "X", "reason": "Grund"},
         )
         assert response.status_code == 404
         assert not RectificationRequest.objects.filter(target_client=foreign_client).exists()
@@ -136,10 +141,10 @@ class TestListView:
         response = client.get(reverse("core:rectification_list"))
         content = response.content.decode()
         assert "Notizen" in content
-        assert "(notes)" in content
+        assert "(data_json.client-notes)" in content
 
     def test_own_request_shows_no_review_link(self, client, client_identified, lead_user):
-        request_rectification(client_identified, lead_user, "notes", "A", "Grund")
+        request_rectification(client_identified, lead_user, text_path(client_identified), "A", "Grund")
         _login(client, lead_user)
         response = client.get(reverse("core:rectification_list"))
         content = response.content.decode()
@@ -164,7 +169,7 @@ class TestReviewView:
         )
         assert response.status_code == 302
         client_identified.refresh_from_db()
-        assert client_identified.notes == "AuthZ-Matrix-Wunschwert"
+        assert record_text(client_identified) == "AuthZ-Matrix-Wunschwert"
         rectification_request.refresh_from_db()
         assert rectification_request.status == RectificationRequest.Status.APPROVED
         assert decode_rectification_text(rectification_request.review_note) == "Nachweis lag vor"
@@ -190,7 +195,7 @@ class TestReviewView:
         assert rectification_request.status == RectificationRequest.Status.REJECTED
 
     def test_self_review_is_blocked_in_the_view(self, client, client_identified, lead_user):
-        rr = request_rectification(client_identified, lead_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, lead_user, text_path(client_identified), "A", "Grund")
         _login(client, lead_user)
 
         page = client.get(reverse("core:rectification_review", args=[rr.pk]))
@@ -205,7 +210,7 @@ class TestReviewView:
         rr.refresh_from_db()
         assert rr.status == RectificationRequest.Status.PENDING
         client_identified.refresh_from_db()
-        assert client_identified.notes != "A"
+        assert record_text(client_identified) != "A"
 
     def test_invisible_field_hides_the_values_and_the_buttons(
         self, client, facility, client_identified, doc_type_client_profile, staff_user, lead_user
@@ -257,7 +262,16 @@ class TestReviewView:
     def test_conflict_shows_message_not_500(self, client, rectification_request, client_identified, lead_user):
         from core.services.client import update_client
 
-        update_client(client_identified, lead_user, notes="Jemand anderes war schneller")
+        update_client(
+            client_identified,
+            lead_user,
+            **text_fields(
+                client_identified.facility,
+                "Jemand anderes war schneller",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
         _login(client, lead_user)
         response = client.post(
             reverse("core:rectification_review", args=[rectification_request.pk]),

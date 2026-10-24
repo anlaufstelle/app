@@ -25,7 +25,9 @@ pytestmark = pytest.mark.django_db
 
 def test_restricted_trash_person_keeps_identity(client_trashed, lead_user):
     """Restriction blocks erasure and its audit: x_anonymize_client_now__mutmut_39."""
-    Client.objects.filter(pk=client_trashed.pk).update(processing_restricted=True, notes="Keep this text")
+    Client.objects.filter(pk=client_trashed.pk).update(
+        processing_restricted=True, data_json={"client-notes": "Keep this text"}
+    )
     before = Client.objects.filter(pk=client_trashed.pk).values().get()
     audits = AuditLog.objects.count()
 

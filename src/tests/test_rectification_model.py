@@ -48,7 +48,7 @@ class TestPendingUniqueness:
 
     def test_second_pending_for_another_field_path_is_allowed(self, facility, client_identified, staff_user):
         _make(facility, client_identified, staff_user)
-        _make(facility, client_identified, staff_user, field_path="notes")
+        _make(facility, client_identified, staff_user, field_path="data_json.client-notes")
         assert RectificationRequest.objects.for_facility(facility).count() == 2
 
     def test_closed_request_does_not_block_a_new_one(self, facility, client_identified, staff_user, lead_user):

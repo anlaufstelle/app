@@ -28,6 +28,7 @@ from django.utils import timezone
 from core.models import AuditLog, Client, RetentionProposal
 from core.models.workitem import DeletionRequest
 from core.services.hubs import datenschutz_overview, verwaltung_metrics, verwaltung_overview
+from tests._standard_text import text_path
 
 pytestmark = pytest.mark.django_db
 
@@ -73,7 +74,7 @@ def hub_data(facility, staff_user, lead_user, client_identified, sample_event):
         created_by=staff_user,
     )
     for target in (client_identified, inactive):
-        request_rectification(target, staff_user, "notes", "Hub-Wunschwert", "Hub-Kennzahl")
+        request_rectification(target, staff_user, text_path(target), "Hub-Wunschwert", "Hub-Kennzahl")
     Client.objects.filter(pk=inactive.pk).update(is_active=False)
 
     # 1 offener Löschvorschlag + 1 zurückgestellter (Köder).

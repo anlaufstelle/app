@@ -78,6 +78,7 @@ from core.services.client.rectification import (
     reject_rectification,
     request_rectification,
 )
+from tests._standard_text import record_text, text_fields, text_path
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -142,7 +143,7 @@ class TestApproveRectificationDefaultPruefvermerk:
         ``review_note`` wird von ``""`` auf das Literal ``"XXXX"`` verfälscht —
         ein Aufruf der Service-Funktion ohne Prüfvermerk speicherte dann einen
         erfundenen Text, als hätte die Leitung tatsächlich etwas notiert."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Neuer Text", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Text", "Grund")
 
         approve_rectification(rr, lead_user)  # kein review_note uebergeben -> Default greift
 
@@ -167,10 +168,10 @@ class TestApplyRectificationVersionsGuard:
         Client.objects.filter(pk=client_identified.pk).update(updated_at=timezone.now())
 
         with pytest.raises(ValidationError, match="zwischenzeitlich bearbeitet"):
-            _apply_rectification(stale_client, lead_user, "notes", "Sollte nicht greifen")
+            _apply_rectification(stale_client, lead_user, "data_json.client-notes", "Sollte nicht greifen")
 
         client_identified.refresh_from_db()
-        assert client_identified.notes == ""
+        assert record_text(client_identified) == ""
 
 
 class TestExakteFehlermeldungAnDenGuards:
@@ -219,17 +220,19 @@ class TestExakteFehlermeldungAnDenGuards:
     def test_doppelter_offener_antrag_meldet_den_exakten_wortlaut(self, client_identified, staff_user):
         """Pins ``x_request_rectification__mutmut_35`` (``ValidationError(None, ...)``); die
         ``_(None)``-Variante derselben Stelle war bereits vor dieser Batch getötet."""
-        request_rectification(client_identified, staff_user, "notes", "Erster Wunschwert", "Grund")
+        request_rectification(client_identified, staff_user, text_path(client_identified), "Erster Wunschwert", "Grund")
 
         with pytest.raises(ValidationError) as exc_info:
-            request_rectification(client_identified, staff_user, "notes", "Zweiter Wunschwert", "Grund")
+            request_rectification(
+                client_identified, staff_user, text_path(client_identified), "Zweiter Wunschwert", "Grund"
+            )
 
         assert exc_info.value.messages == ["Für dieses Feld läuft bereits ein Berichtigungsantrag."]
 
     def test_bereits_abgeschlossener_antrag_meldet_den_exakten_wortlaut(self, client_identified, staff_user, lead_user):
         """Pins ``x__guard_reviewable__mutmut_2`` (``ValidationError(None)``) und
         ``…__mutmut_3`` (``ValidationError(_(None))``)."""
-        rr = request_rectification(client_identified, staff_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "A", "Grund")
         approve_rectification(rr, lead_user)
 
         with pytest.raises(ValidationError) as exc_info:
@@ -240,7 +243,7 @@ class TestExakteFehlermeldungAnDenGuards:
     def test_selbst_review_meldet_den_exakten_wortlaut(self, client_identified, lead_user):
         """Pins ``x__guard_reviewable__mutmut_10`` (``ValidationError(None)``); die
         ``_(None)``-Variante derselben Stelle war bereits vor dieser Batch getötet."""
-        rr = request_rectification(client_identified, lead_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, lead_user, text_path(client_identified), "A", "Grund")
 
         with pytest.raises(ValidationError) as exc_info:
             approve_rectification(rr, lead_user)
@@ -253,7 +256,7 @@ class TestExakteFehlermeldungAnDenGuards:
         """Pins ``x__guard_reviewable__mutmut_16`` (``ValidationError(None)``) und
         ``…__mutmut_17`` (``ValidationError(_(None))``)."""
         other_staff = User.objects.create_user(username="pin099-zweitkraft", role=User.Role.STAFF, facility=facility)
-        rr = request_rectification(client_identified, staff_user, "notes", "A", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "A", "Grund")
 
         with pytest.raises(ValidationError) as exc_info:
             approve_rectification(rr, other_staff)
@@ -265,7 +268,7 @@ class TestExakteFehlermeldungAnDenGuards:
     ):
         """Pins ``x_approve_rectification__mutmut_24``: ``raise
         ValidationError(CLIENT_WRITE_REVOKED_MESSAGE)`` wird zu ``raise ValidationError(None)``."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Neuer Text", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Text", "Grund")
         client_identified.is_deleted = True
         client_identified.save(update_fields=["is_deleted"])
 
@@ -278,8 +281,17 @@ class TestExakteFehlermeldungAnDenGuards:
         """Pins ``x_approve_rectification__mutmut_38``: ``ValidationError(_(text))`` wird zu
         ``ValidationError(None, ...)``; die ``_(None)``-Variante derselben Stelle war bereits
         vor dieser Batch getötet."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Antragswert", "Grund")
-        update_client(client_identified, lead_user, notes="Jemand anderes war schneller")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Antragswert", "Grund")
+        update_client(
+            client_identified,
+            lead_user,
+            **text_fields(
+                client_identified.facility,
+                "Jemand anderes war schneller",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
 
         with pytest.raises(ValidationError) as exc_info:
             approve_rectification(rr, lead_user)
@@ -303,7 +315,7 @@ class TestExakteFehlermeldungAnDenGuards:
         """Pins ``x_reject_rectification__mutmut_20``: Spiegel von
         ``test_genehmigung_einer_geloeschten_person_meldet_den_exakten_wortlaut`` für den
         Ablehnungspfad."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Neuer Text", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Text", "Grund")
         client_identified.is_deleted = True
         client_identified.save(update_fields=["is_deleted"])
 

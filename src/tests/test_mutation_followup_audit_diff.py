@@ -83,7 +83,7 @@ class TestApplyAllowlistedUpdate:
             apply_allowlisted_update(
                 case_open,
                 {"status": "closed"},
-                allowed_fields={"title", "description"},
+                allowed_fields={"title", "data_json"},
             )
 
         diff_spy.assert_not_called()
@@ -104,20 +104,22 @@ class TestApplyAllowlistedUpdate:
         assert case_open.title == "Bereits in-memory gesetzt"
 
     def test_saves_only_supplied_fields_plus_updated_at_in_order(self, case_open):
-        fields = {
-            "title": "Neuer Titel",
-            "description": "Neue Beschreibung",
-        }
+        from tests._standard_text import text_fields
+
+        typed = text_fields(case_open.facility, "New description", entity="case")
+        case_open.document_type = typed["document_type"]
+        case_open.save(update_fields=["document_type", "data_json"])
+        fields = {"title": "New title", "data_json": typed["data_json"]}
 
         with patch.object(case_open, "save", wraps=case_open.save) as save_spy:
             changed_fields = apply_allowlisted_update(
                 case_open,
                 fields,
-                allowed_fields={"title", "description"},
+                allowed_fields={"title", "data_json"},
             )
 
-        assert changed_fields == ["title", "description"]
-        save_spy.assert_called_once_with(update_fields=["title", "description", "updated_at"])
+        assert changed_fields == ["title", "data_json"]
+        save_spy.assert_called_once_with(update_fields=["title", "data_json", "updated_at"])
 
     def test_before_save_hook_runs_after_assignment_and_before_write(self, case_open):
         observed = []

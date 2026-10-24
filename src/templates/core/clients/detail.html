@@ -193,16 +193,6 @@ und Badge sagen, WAS beantragt ist (und wohin zusammengeführt würde).{% endcom
 </div>
 {% endif %}
 
-{# Notizen — staff-stufig, analog notes_visible in services/system/offline.py (Refs #1068) #}
-{% if user.is_staff_or_above %}
-{% if client.notes %}
-<div class="bg-surface border border-subtle rounded-[10px] px-4 py-3.5 mb-5">
-    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2">{% trans "Notizen" %}</h2>
-    <p class="text-[13px] text-ink-soft leading-relaxed whitespace-pre-wrap">{{ client.notes }}</p>
-</div>
-{% endif %}
-{% endif %}
-
 {# Zusatzfelder (M2/P7, Refs #1058, E18) — gemeinsames Read-only-Partial mit dem Fall-Detail. #}
 {% include "core/partials/dynamic_data_display.html" %}
 

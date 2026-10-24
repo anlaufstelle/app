@@ -99,6 +99,7 @@ from core.services.client.main import (
     update_client,
 )
 from core.services.client.merge import request_client_merge
+from tests._standard_text import record_text, text_fields
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -313,7 +314,16 @@ class TestUpdateClientLocksTheRow:
         spaeteren Write ist damit geschlossen. Mutant: dieselbe Query ohne
         Zeilensperre."""
         with CaptureQueriesContext(connection) as ctx:
-            update_client(client_identified, staff_user, notes="Pin099-MainA-Sperrpruefung")
+            update_client(
+                client_identified,
+                staff_user,
+                **text_fields(
+                    client_identified.facility,
+                    "Pin099-MainA-Sperrpruefung",
+                    document_type=client_identified.document_type,
+                    data_json=client_identified.data_json,
+                ),
+            )
 
         table = Client._meta.db_table
         client_queries = [q["sql"] for q in ctx.captured_queries if table in q["sql"]]
@@ -337,10 +347,19 @@ class TestUpdateClientContactStageDefault:
         trotzdem eine CLIENT_QUALIFIED-Activity aus). ``client_qualified``
         bleibt QUALIFIZIERT, nur ``notes`` wird von einer NICHT-leitenden
         Rolle aktualisiert."""
-        update_client(client_qualified, staff_user, notes="Pin099-MainA-KeineStufenaenderung")
+        update_client(
+            client_qualified,
+            staff_user,
+            **text_fields(
+                client_qualified.facility,
+                "Pin099-MainA-KeineStufenaenderung",
+                document_type=client_qualified.document_type,
+                data_json=client_qualified.data_json,
+            ),
+        )
 
         client_qualified.refresh_from_db()
-        assert client_qualified.notes == "Pin099-MainA-KeineStufenaenderung"
+        assert record_text(client_qualified) == "Pin099-MainA-KeineStufenaenderung"
         assert client_qualified.contact_stage == Client.ContactStage.QUALIFIED
         assert not Activity.objects.filter(target_id=client_qualified.pk, verb=Activity.Verb.QUALIFIED).exists()
 
@@ -438,7 +457,16 @@ class TestUpdateClientAudit:
         """Pin: ``x_update_client__mutmut_120`` — ``log_activity(...,
         actor=user, ...)`` -> ``actor=None`` im abschliessenden UPDATED-Zweig
         (laeuft bei JEDEM erfolgreichen Aufruf)."""
-        update_client(client_identified, staff_user, notes="Pin099-MainA-AutorenNachweis")
+        update_client(
+            client_identified,
+            staff_user,
+            **text_fields(
+                client_identified.facility,
+                "Pin099-MainA-AutorenNachweis",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
 
         activity = Activity.objects.get(target_id=client_identified.pk, verb=Activity.Verb.UPDATED)
         assert activity.actor_id == staff_user.pk

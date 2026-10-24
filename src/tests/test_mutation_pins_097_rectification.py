@@ -42,6 +42,7 @@ from core.services.client.rectification import (
     reject_rectification,
     request_rectification,
 )
+from tests._standard_text import record_text, text_path
 
 # ``_encryption_key``: der Antrag verschluesselt Wunsch-, Alt- und Freitextwerte
 # (``encrypt_field``). Der Schluessel kommt im Repo aus ``.env`` — im
@@ -80,7 +81,7 @@ def _request_with_foreign_target(facility, second_facility, second_facility_user
     gestellt, ohne Produktionslogik nachzubauen.
     """
     foreign = _foreign_client(second_facility, second_facility_user)
-    rr = request_rectification(foreign, second_facility_user, "notes", "Fremd berichtigt", "Grund")
+    rr = request_rectification(foreign, second_facility_user, text_path(foreign), "Fremd berichtigt", "Grund")
     RectificationRequest.objects.filter(pk=rr.pk).update(facility=facility)
     return RectificationRequest.objects.get(pk=rr.pk), foreign
 
@@ -95,8 +96,8 @@ class TestApproveZieltreue:
         ``select_for_update``-Reload sperrt und genehmigt der Service einen
         beliebigen Antrag DERSELBEN Einrichtung statt des uebergebenen."""
         other = _second_client(facility, staff_user)
-        rr_a = request_rectification(client_identified, staff_user, "notes", "Text A", "Grund A")
-        rr_b = request_rectification(other, staff_user, "notes", "Text B", "Grund B")
+        rr_a = request_rectification(client_identified, staff_user, text_path(client_identified), "Text A", "Grund A")
+        rr_b = request_rectification(other, staff_user, text_path(other), "Text B", "Grund B")
 
         approve_rectification(rr_a, lead_user)
 
@@ -106,8 +107,8 @@ class TestApproveZieltreue:
         assert rr_b.status == RectificationRequest.Status.PENDING
         client_identified.refresh_from_db()
         other.refresh_from_db()
-        assert client_identified.notes == "Text A"
-        assert other.notes == ""
+        assert record_text(client_identified) == "Text A"
+        assert record_text(other) == ""
 
     def test_antrags_reload_ist_an_die_einrichtung_des_antrags_gebunden(
         self, client_identified, second_facility, staff_user, lead_user
@@ -117,7 +118,7 @@ class TestApproveZieltreue:
         weg, laedt und genehmigt der Service allein anhand der PK — also auch
         einen Antrag, der nicht zur Einrichtung des uebergebenen Vorgangs
         gehoert, und die Grenze haengt nur noch an der DB-seitigen RLS."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Neuer Text", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Text", "Grund")
         mismatched = RectificationRequest.objects.get(pk=rr.pk)
         mismatched.facility_id = second_facility.pk
 
@@ -127,7 +128,7 @@ class TestApproveZieltreue:
         rr.refresh_from_db()
         assert rr.status == RectificationRequest.Status.PENDING
         client_identified.refresh_from_db()
-        assert client_identified.notes == ""
+        assert record_text(client_identified) == ""
 
     def test_personen_reload_ist_an_die_einrichtung_des_antrags_gebunden(
         self, facility, second_facility, second_facility_user, lead_user
@@ -143,7 +144,7 @@ class TestApproveZieltreue:
         rr.refresh_from_db()
         assert rr.status == RectificationRequest.Status.PENDING
         foreign.refresh_from_db()
-        assert foreign.notes == ""
+        assert record_text(foreign) == ""
 
 
 class TestApproveRechenschaft:
@@ -155,7 +156,7 @@ class TestApproveRechenschaft:
         Reviewers an ``update_client`` durch. Die angewendete Korrektur entstuende
         dann ohne handelnde Person — die Vier-Augen-Genehmigung waere im
         ``CLIENT_UPDATE``-Audit nicht mehr belegt."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Berichtigt", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Berichtigt", "Grund")
         approve_rectification(rr, lead_user)
 
         entry = _audit(AuditLog.Action.CLIENT_UPDATE, client_identified.pk)
@@ -163,7 +164,7 @@ class TestApproveRechenschaft:
         assert entry.facility_id == facility.pk
         assert entry.target_type == "Client"
         client_identified.refresh_from_db()
-        assert client_identified.notes == "Berichtigt"
+        assert record_text(client_identified) == "Berichtigt"
 
     def test_genehmigungs_audit_traegt_person_einrichtung_und_bezug(
         self, facility, client_identified, staff_user, lead_user
@@ -174,13 +175,13 @@ class TestApproveRechenschaft:
         (``target_client='None'``). ``audit_event`` laesst alle vier Faelle
         klaglos zu — der Nachweis der Genehmigung waere ohne Akteurin, ohne
         Einrichtung bzw. ohne Feld- und Personenbezug."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Berichtigt", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Berichtigt", "Grund")
         approve_rectification(rr, lead_user)
 
         entry = _audit(AuditLog.Action.RECTIFICATION_APPROVED, rr.pk)
         assert entry.user_id == lead_user.pk
         assert entry.facility_id == facility.pk
-        assert entry.detail == {"field_path": "notes", "target_client": str(client_identified.pk)}
+        assert entry.detail == {"field_path": text_path(client_identified), "target_client": str(client_identified.pk)}
 
 
 class TestRejectZieltreue:
@@ -189,8 +190,8 @@ class TestRejectZieltreue:
         ``select_for_update``-Reload lehnt der Service einen beliebigen Antrag
         derselben Einrichtung ab — mit endgueltiger Statusaenderung."""
         other = _second_client(facility, staff_user)
-        rr_a = request_rectification(client_identified, staff_user, "notes", "Text A", "Grund A")
-        rr_b = request_rectification(other, staff_user, "notes", "Text B", "Grund B")
+        rr_a = request_rectification(client_identified, staff_user, text_path(client_identified), "Text A", "Grund A")
+        rr_b = request_rectification(other, staff_user, text_path(other), "Text B", "Grund B")
 
         reject_rectification(rr_a, lead_user, "Nicht nachvollziehbar")
 
@@ -206,7 +207,7 @@ class TestRejectZieltreue:
         """Pins ``x_reject_rectification__mutmut_5``: ohne ``facility`` im
         Antrags-Reload wird ein Antrag einer FREMDEN Einrichtung geladen,
         abgelehnt und mit einem verschluesselten Pruefvermerk beschrieben."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Neuer Text", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Text", "Grund")
         mismatched = RectificationRequest.objects.get(pk=rr.pk)
         mismatched.facility_id = second_facility.pk
 
@@ -225,7 +226,7 @@ class TestRejectZieltreue:
         Ablehnung schriebe dann einen frischen verschluesselten Pruefvermerk auf
         eine bereits redigierte Zeile."""
         _second_client(facility, staff_user)
-        rr = request_rectification(client_identified, staff_user, "notes", "Neuer Text", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Text", "Grund")
         client_identified.is_deleted = True
         client_identified.save(update_fields=["is_deleted"])
 
@@ -261,13 +262,13 @@ class TestRejectUndRequestRechenschaft:
         (``target_client='None'``). Gerade die Ablehnung dokumentiert die
         fachliche Abwaegung (ADR-013/041) — ohne Akteurin, Einrichtung und
         Bezug ist sie inhaltsleer."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Neuer Text", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Text", "Grund")
         reject_rectification(rr, lead_user, "Nicht nachvollziehbar")
 
         entry = _audit(AuditLog.Action.RECTIFICATION_REJECTED, rr.pk)
         assert entry.user_id == lead_user.pk
         assert entry.facility_id == facility.pk
-        assert entry.detail == {"field_path": "notes", "target_client": str(client_identified.pk)}
+        assert entry.detail == {"field_path": text_path(client_identified), "target_client": str(client_identified.pk)}
 
     def test_antrags_audit_traegt_antragstellende_person_und_bezug(self, facility, client_identified, staff_user):
         """Pins ``x_request_rectification__mutmut_41`` (``user=None``) und
@@ -275,9 +276,9 @@ class TestRejectUndRequestRechenschaft:
         Klientel-Self-Service gibt, ist genau diese Zurechnung der Nachweis, wer
         die Korrektur angestossen hat — und welche Person sie betrifft (die
         Werte selbst liegen bewusst nur verschluesselt am Antrag)."""
-        rr = request_rectification(client_identified, staff_user, "notes", "Neuer Text", "Grund")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Text", "Grund")
 
         entry = _audit(AuditLog.Action.RECTIFICATION_REQUESTED, rr.pk)
         assert entry.user_id == staff_user.pk
         assert entry.facility_id == facility.pk
-        assert entry.detail == {"field_path": "notes", "target_client": str(client_identified.pk)}
+        assert entry.detail == {"field_path": text_path(client_identified), "target_client": str(client_identified.pk)}

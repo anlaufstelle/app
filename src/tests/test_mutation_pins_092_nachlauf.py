@@ -67,6 +67,7 @@ from core.services.security.mfa import (
     remaining_backup_codes,
     verify_backup_code,
 )
+from tests._standard_text import text_fields
 
 pytestmark = pytest.mark.django_db
 
@@ -949,7 +950,7 @@ class TestTrashSweepGatesAndDefers:
             facility=facility,
             pseudonym=pseudonym,
             contact_stage=Client.ContactStage.IDENTIFIED,
-            notes="Interne Notiz im Klartext",
+            **text_fields(facility, "Interne Notiz im Klartext", document_type=None, data_json=None),
         )
         _make_event(facility, person, doc_type, user)
         person.soft_delete(user=user)

@@ -58,7 +58,6 @@ def _case_post_data(request: FixtureRequest, identity: str, extra: dict[str, Any
     data = {
         "title": identity,
         "client": str(request.getfixturevalue("client_identified").pk),
-        "description": "",
         "lead_user": "",
     }
     data.update(extra)
@@ -71,7 +70,6 @@ def _client_post_data(request: FixtureRequest, identity: str, extra: dict[str, A
         "pseudonym": identity,
         "contact_stage": Client.ContactStage.IDENTIFIED,
         "age_cluster": Client.AgeCluster.UNKNOWN,
-        "notes": "",
     }
     data.update(extra)
     return data
@@ -237,7 +235,7 @@ CASE = EntitySpec(
         ("conditional_target", "betreuungsdetails"),
         ("file_source", "kostenbescheid"),
         ("file_target", "bescheid-erlaeuterung"),
-        ("meta", "description"),
+        ("meta", "title"),
     ),
     labels=(
         ("primary", "Anlass"),
@@ -268,7 +266,7 @@ CASE = EntitySpec(
         ("visible_error_new_identity", "Sichtbar-Neu"),
         ("visible_error_doctype_name", "Fall-Sichtbarfehler"),
         ("lock_identity", "Lock-Typ-01"),
-        ("meta_updated", "Neue Beschreibung"),
+        ("meta_updated", "Renamed case"),
         ("select", "ambulant"),
         ("select_label", "Ambulant"),
     ),
@@ -336,7 +334,7 @@ CLIENT = EntitySpec(
         ("conditional_target", "betreuungsdetails"),
         ("file_source", "nachweis"),
         ("file_target", "nachweis-erlaeuterung"),
-        ("meta", "notes"),
+        ("meta", "pseudonym"),
     ),
     labels=(
         ("primary", "Wohnsituation"),
@@ -367,7 +365,7 @@ CLIENT = EntitySpec(
         ("visible_error_new_identity", "Sichtbar-Neu"),
         ("visible_error_doctype_name", "Personen-Sichtbarfehler"),
         ("lock_identity", "Lock-01"),
-        ("meta_updated", "Neue Notiz"),
+        ("meta_updated", "Renamed person"),
         ("select", "wohnungslos"),
         ("select_label", "Wohnungslos"),
     ),

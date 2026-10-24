@@ -801,7 +801,7 @@ def test_seed_flush_survives_import_job_with_document_type():
     RectificationRequest.objects.create(
         facility=facility,
         target_client=Client.objects.filter(facility=facility).first(),
-        field_path="notes",
+        field_path="data_json.client-notes",
     )
 
     call_command("seed", flush=True)

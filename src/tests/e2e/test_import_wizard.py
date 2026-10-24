@@ -182,7 +182,7 @@ class TestImportClientHappyPath:
             ],
         )
 
-        job_pk = _upload(page, base_url, csv_path, target_type="client")
+        job_pk = _upload(page, base_url, csv_path, target_type="client", document_type_label="Person")
         import_run["jobs"].append(job_pk)
 
         # Schritt 2: die Beispielwerte der Datei stehen sichtbar neben jeder
@@ -197,7 +197,7 @@ class TestImportClientHappyPath:
                 "Pseudonym": "pseudonym",
                 "Kontaktstufe": "contact_stage",
                 "Altersgruppe": "age_cluster",
-                "Notizen": "notes",
+                "Notizen": "data_json.client-notes",
             },
         )
         page.wait_for_url(_PREVIEW_RE)

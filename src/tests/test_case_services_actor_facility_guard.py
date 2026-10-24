@@ -33,6 +33,7 @@ from core.services.case import (
 from core.services.case.state_contract import STATUS_CHANGE_GONE_MESSAGE
 from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 from tests._row_lock_helpers import mitschnitt
+from tests._standard_text import record_text, text_fields
 
 pytestmark = pytest.mark.django_db
 
@@ -74,10 +75,13 @@ class TestUpdateCase:
         user = request.getfixturevalue(akteur)
         fall = Case.objects.get(pk=case_open.pk)
 
-        _abgewiesen_ohne_sperre(lambda: update_case(fall, user, title="Fremd", description="Fremd"))
+        fields = text_fields(
+            fall.facility, "Foreign draft", entity="case", document_type=fall.document_type, data_json=fall.data_json
+        )
+        _abgewiesen_ohne_sperre(lambda: update_case(fall, user, title="Foreign draft", **fields))
 
         frisch = Case.objects.get(pk=case_open.pk)
-        assert (frisch.title, frisch.description) == ("Offener Fall", "")
+        assert (frisch.title, record_text(frisch)) == ("Offener Fall", "")
         assert not AuditLog.objects.filter(action=AuditLog.Action.CASE_UPDATE, target_id=str(case_open.pk)).exists()
 
     def test_eigene_einrichtung_schreibt(self, case_open, staff_user):

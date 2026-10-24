@@ -11,6 +11,7 @@ from django.urls import reverse
 from core.models import DocumentTypeField, FieldCondition, FieldTemplate
 from core.services.conditions import evaluate_conditions
 from tests._factories import make_document_type
+from tests._standard_text import set_record_text
 from tests.test_edit_error_preservation import hidden_values
 
 pytestmark = pytest.mark.django_db
@@ -27,6 +28,8 @@ def conditional_edit(request, client, staff_user, facility):
     target.document_type = document_type
     if kind == "documentation":
         target.client = None
+    if owner_kind in {"client", "case"}:
+        set_record_text(target, "")
     target.save()
     client.force_login(staff_user)
     url = reverse(f"core:{owner_kind}_update", args=[target.pk])
@@ -36,10 +39,10 @@ def conditional_edit(request, client, staff_user, facility):
             pseudonym=target.pseudonym,
             contact_stage=target.contact_stage,
             age_cluster=target.age_cluster,
-            notes="Own permitted person draft",
+            **{"client-notes": "Own permitted person draft"},
         )
     elif owner_kind == "case":
-        payload.update(title=target.title, description="Own permitted case draft", lead_user="")
+        payload.update(title=target.title, lead_user="", **{"standard-description": "Own permitted case draft"})
     return owner_kind, target, document_type, url, payload
 
 

@@ -14,6 +14,7 @@ from django.urls import reverse
 
 from core.models import Client, FieldTemplate, ImportJob
 from core.services import import_engine
+from tests._standard_text import job_text_target, record_text
 
 CSV = "Pseudonym;Kontaktstufe;Notizen\nVIEW-01;identified;Erste\nVIEW-02;qualified;Zweite\n"
 
@@ -106,7 +107,7 @@ class TestWizardRoundtrip:
 
         mapped = admin_client_logged_in.post(
             reverse("core:import_mapping", kwargs={"pk": job.pk}),
-            {"column-0": "pseudonym", "column-1": "contact_stage", "column-2": "notes"},
+            {"column-0": "pseudonym", "column-1": "contact_stage", "column-2": job_text_target(job)},
         )
         assert mapped.url == reverse("core:import_preview", kwargs={"pk": job.pk})
         job.refresh_from_db()
@@ -146,7 +147,7 @@ class TestWizardRoundtrip:
     def test_invalid_mapping_is_rendered_with_errors(self, admin_client_logged_in, uploaded_job):
         response = admin_client_logged_in.post(
             reverse("core:import_mapping", kwargs={"pk": uploaded_job.pk}),
-            {"column-0": "notes", "column-1": "", "column-2": ""},
+            {"column-0": job_text_target(uploaded_job), "column-1": "", "column-2": ""},
         )
         assert response.status_code == 400
         assert b"import-mapping-errors" in response.content
@@ -208,7 +209,7 @@ class TestWizardRoundtrip:
             target_type=ImportJob.TargetType.CLIENT,
         )
         mapping_url = reverse("core:import_mapping", kwargs={"pk": job.pk})
-        first_client.post(mapping_url, {"column-0": "pseudonym", "column-1": "notes"})
+        first_client.post(mapping_url, {"column-0": "pseudonym", "column-1": job_text_target(job)})
         real_commit_import = import_engine.commit_import
         second_responses = []
 
@@ -228,7 +229,7 @@ class TestWizardRoundtrip:
         imported = Client.objects.get(facility=facility, pseudonym="VIEW-LOCK")
         assert job.mapping_json["columns"] == {"Pseudonym": "pseudonym", "Wert": "contact_stage"}
         assert imported.contact_stage == Client.ContactStage.IDENTIFIED
-        assert imported.notes == ""
+        assert record_text(imported) == ""
 
     def test_upload_rejects_an_event_job_without_document_type(self, admin_client_logged_in, facility, media_root):
         response = admin_client_logged_in.post(
@@ -324,7 +325,7 @@ class TestDetailCountLabel:
     def _dry_run(self, client, job):
         client.post(
             reverse("core:import_mapping", kwargs={"pk": job.pk}),
-            {"column-0": "pseudonym", "column-1": "contact_stage", "column-2": "notes"},
+            {"column-0": "pseudonym", "column-1": "contact_stage", "column-2": job_text_target(job)},
         )
 
     def test_dry_run_count_is_labelled_as_hypothetical(self, admin_client_logged_in, uploaded_job):

@@ -64,7 +64,6 @@ FORM_FACTORIES = {
 EXPECTED = {
     "CaseForm": {
         "title": ("TextInput", True, {"maxlength": "200"}),
-        "description": ("Textarea", True, {"rows": 4, "cols": "40"}),
         "lead_user": ("Select", True, {}),
         "document_type": (
             "Select",
@@ -82,7 +81,6 @@ EXPECTED = {
         "pseudonym": ("TextInput", True, {"maxlength": "100"}),
         "contact_stage": ("Select", True, {}),
         "age_cluster": ("Select", True, {}),
-        "notes": ("Textarea", True, {"rows": 4, "cols": "40"}),
         "document_type": (
             "Select",
             True,

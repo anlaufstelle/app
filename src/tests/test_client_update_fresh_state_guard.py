@@ -24,6 +24,7 @@ from django.utils import timezone
 from core.models import Activity, AuditLog, Client
 from core.services.client import update_client
 from tests._row_lock_helpers import mitschnitt
+from tests._standard_text import record_text, set_record_text, text_fields
 
 pytestmark = pytest.mark.django_db
 
@@ -37,18 +38,29 @@ _ORIGINAL_NOTES = "Ausgangsstand"
 
 @pytest.fixture
 def person(client_identified):
-    Client.objects.filter(pk=client_identified.pk).update(notes=_ORIGINAL_NOTES)
+    set_record_text(client_identified, _ORIGINAL_NOTES)
+    client_identified.save(update_fields=["document_type", "data_json"])
     return Client.objects.get(pk=client_identified.pk)
 
 
 def _refused(client, user):
+    text_payload = text_fields(
+        client.facility,
+        "Nachtrag, der nie ankommen darf",
+        document_type=client.document_type,
+        data_json=client.data_json,
+    )
     with mitschnitt() as abfragen, pytest.raises(ValidationError) as excinfo:
-        update_client(client, user, notes="Nachtrag, der nie ankommen darf")
+        update_client(
+            client,
+            user,
+            **text_payload,
+        )
     return excinfo.value.messages, abfragen
 
 
 def _assert_unchanged(client):
-    assert Client.objects.get(pk=client.pk).notes == _ORIGINAL_NOTES
+    assert record_text(Client.objects.get(pk=client.pk)) == _ORIGINAL_NOTES
     assert not AuditLog.objects.filter(action=AuditLog.Action.CLIENT_UPDATE, target_id=str(client.pk)).exists()
     assert not Activity.objects.filter(context__action=str(Activity.Action.CLIENT_UPDATED)).exists()
 
@@ -65,10 +77,17 @@ class TestHandelndePersonAusFremderEinrichtung:
         _assert_unchanged(person)
 
     def test_gegenprobe_lokale_fachkraft_bearbeitet(self, staff_user, person):
+        text_payload = text_fields(
+            person.facility, "Neuer Stand", document_type=person.document_type, data_json=person.data_json
+        )
         with mitschnitt() as abfragen:
-            update_client(person, staff_user, notes="Neuer Stand")
+            update_client(
+                person,
+                staff_user,
+                **text_payload,
+            )
 
-        assert Client.objects.get(pk=person.pk).notes == "Neuer Stand"
+        assert record_text(Client.objects.get(pk=person.pk)) == "Neuer Stand"
         assert abfragen.sperrfolge()[0] == "core_client"
         assert AuditLog.objects.filter(action=AuditLog.Action.CLIENT_UPDATE, target_id=str(person.pk)).exists()
 
@@ -112,7 +131,14 @@ class TestVeralteteInstanz:
         )
 
         with pytest.raises(ValidationError) as excinfo:
-            update_client(person, staff_user, expected_updated_at=stale_version, notes="Nachtrag")
+            update_client(
+                person,
+                staff_user,
+                expected_updated_at=stale_version,
+                **text_fields(
+                    person.facility, "Nachtrag", document_type=person.document_type, data_json=person.data_json
+                ),
+            )
 
         assert excinfo.value.messages == [_REVOKED_MESSAGE]
         _assert_unchanged(person)
@@ -129,8 +155,18 @@ class TestSperreAnDerEinrichtungDerHandelndenPerson:
     def test_abweichender_datenbankstand_sperrt_keine_fremde_zeile(self, staff_user, person, facility, second_facility):
         Client.objects.filter(pk=person.pk).update(facility=second_facility)
 
+        text_payload = text_fields(
+            person.facility,
+            "Nachtrag, der nie ankommen darf",
+            document_type=person.document_type,
+            data_json=person.data_json,
+        )
         with mitschnitt() as abfragen, pytest.raises(Client.DoesNotExist):
-            update_client(person, staff_user, notes="Nachtrag, der nie ankommen darf")
+            update_client(
+                person,
+                staff_user,
+                **text_payload,
+            )
 
         client_locks = abfragen.sperren("core_client")
         assert client_locks
@@ -138,9 +174,16 @@ class TestSperreAnDerEinrichtungDerHandelndenPerson:
         _assert_unchanged(person)
 
     def test_gegenprobe_erste_sperre_traegt_die_einrichtung(self, staff_user, person, facility):
+        text_payload = text_fields(
+            person.facility, "Neuer Stand", document_type=person.document_type, data_json=person.data_json
+        )
         with mitschnitt() as abfragen:
-            update_client(person, staff_user, notes="Neuer Stand")
+            update_client(
+                person,
+                staff_user,
+                **text_payload,
+            )
 
         assert abfragen.sperrfolge()[0] == "core_client"
         assert abfragen.sperren("core_client")[0].traegt(facility_id=[facility.pk])
-        assert Client.objects.get(pk=person.pk).notes == "Neuer Stand"
+        assert record_text(Client.objects.get(pk=person.pk)) == "Neuer Stand"

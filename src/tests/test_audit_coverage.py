@@ -22,30 +22,60 @@ from core.services.case.episodes import episode_basis_token
 from core.services.client import update_client
 from core.services.events import update_event
 from core.services.system import log_settings_change, snapshot_settings, update_settings
+from tests._standard_text import record_text, set_record_text, text_fields
 
 
 @pytest.mark.django_db
 class TestClientUpdateAudit:
     def test_update_client_writes_audit_log(self, client_identified, staff_user):
         before = AuditLog.objects.filter(action=AuditLog.Action.CLIENT_UPDATE).count()
-        update_client(client_identified, staff_user, notes="Geändert")
+        update_client(
+            client_identified,
+            staff_user,
+            **text_fields(
+                client_identified.facility,
+                "Geändert",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
         after = AuditLog.objects.filter(action=AuditLog.Action.CLIENT_UPDATE).count()
         assert after == before + 1
 
     def test_update_client_audit_has_changed_field_names(self, client_identified, staff_user):
-        update_client(client_identified, staff_user, notes="Neue Notiz")
+        update_client(
+            client_identified,
+            staff_user,
+            **text_fields(
+                client_identified.facility,
+                "Neue Notiz",
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
         entry = AuditLog.objects.filter(
             action=AuditLog.Action.CLIENT_UPDATE,
             target_id=str(client_identified.pk),
         ).latest("timestamp")
         assert "changed_fields" in entry.detail
-        assert "notes" in entry.detail["changed_fields"]
+        assert "data_json" in entry.detail["changed_fields"]
         # No PII value in detail payload
         assert "Neue Notiz" not in str(entry.detail)
 
     def test_update_client_no_audit_when_nothing_changed(self, client_identified, staff_user):
+        set_record_text(client_identified, "")
+        client_identified.save(update_fields=["document_type", "data_json"])
         before = AuditLog.objects.filter(action=AuditLog.Action.CLIENT_UPDATE).count()
-        update_client(client_identified, staff_user, notes=client_identified.notes)
+        update_client(
+            client_identified,
+            staff_user,
+            **text_fields(
+                client_identified.facility,
+                record_text(client_identified),
+                document_type=client_identified.document_type,
+                data_json=client_identified.data_json,
+            ),
+        )
         after = AuditLog.objects.filter(action=AuditLog.Action.CLIENT_UPDATE).count()
         assert after == before
 
@@ -298,6 +328,8 @@ class TestUpdateViewAuditCoverage:
         captured ``old_stage`` vor ``is_valid``) und maskiert den Befund, dass
         ``CLIENT_UPDATE`` über den View nie geschrieben wird.
         """
+        set_record_text(client_identified, "")
+        client_identified.save(update_fields=["document_type", "data_json"])
         client.force_login(staff_user)
         url = reverse("core:client_update", kwargs={"pk": client_identified.pk})
         before = AuditLog.objects.filter(
@@ -312,7 +344,7 @@ class TestUpdateViewAuditCoverage:
                 "pseudonym": client_identified.pseudonym,
                 "contact_stage": client_identified.contact_stage,
                 "age_cluster": client_identified.age_cluster,
-                "notes": "Geänderte Notiz",
+                "client-notes": "Geänderte Notiz",
             },
         )
         assert response.status_code == 302
@@ -328,11 +360,13 @@ class TestUpdateViewAuditCoverage:
         entry = AuditLog.objects.filter(
             action=AuditLog.Action.CLIENT_UPDATE, target_id=str(client_identified.pk)
         ).latest("timestamp")
-        assert "notes" in entry.detail.get("changed_fields", [])
+        assert "data_json" in entry.detail.get("changed_fields", [])
         assert "Geänderte Notiz" not in str(entry.detail)
 
     def test_client_update_view_no_audit_on_identical_post(self, client, staff_user, client_identified):
         """Negativfall Klient: identischer POST ⇒ keine neue ``CLIENT_UPDATE``-Zeile."""
+        set_record_text(client_identified, "")
+        client_identified.save(update_fields=["document_type", "data_json"])
         client.force_login(staff_user)
         url = reverse("core:client_update", kwargs={"pk": client_identified.pk})
         before = AuditLog.objects.filter(
@@ -344,7 +378,7 @@ class TestUpdateViewAuditCoverage:
                 "pseudonym": client_identified.pseudonym,
                 "contact_stage": client_identified.contact_stage,
                 "age_cluster": client_identified.age_cluster,
-                "notes": client_identified.notes,
+                "client-notes": record_text(client_identified),
             },
         )
         assert response.status_code == 302
@@ -411,7 +445,7 @@ class TestUpdateRouteAuditEnrollment:
             reverse("core:case_update", kwargs={"pk": case_open.pk}),
             {
                 "title": "Geänderter Falltitel",
-                "description": case_open.description or "",
+                "description": record_text(case_open) or "",
                 "client": str(client_identified.pk),
             },
         )

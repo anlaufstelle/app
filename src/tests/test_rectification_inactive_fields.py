@@ -7,6 +7,7 @@ from core.models import AuditLog, RectificationRequest
 from core.services.client import update_client
 from core.services.client.rectification import approve_rectification, request_rectification
 from core.services.file_vault import safe_decrypt
+from tests._standard_text import record_text, text_fields
 from tests.test_sensitivity_transitions import make_record
 
 pytestmark = pytest.mark.django_db
@@ -59,7 +60,7 @@ def test_failed_rectification_leaves_request_pending_without_success_audit(
             raise ValidationError("Persistence failed")
         if failure == "wrong_value":
             # A successful write of another value must also roll back its audit.
-            kwargs["notes"] = "Unexpected persisted note"
+            kwargs.update(text_fields(record.facility, "Unexpected persisted note", document_type=record.document_type))
             update_client(*args, **kwargs)
             type(record).objects.for_facility(facility).filter(pk=record.pk).update(
                 data_json={field.slug: "Wrong stored value"}
@@ -74,7 +75,7 @@ def test_failed_rectification_leaves_request_pending_without_success_audit(
     assert request.reviewed_by is None
     assert request.reviewed_at is None
     assert safe_decrypt(record.data_json[field.slug]) == "Incorrect old value"
-    assert record.notes != "Unexpected persisted note"
+    assert record_text(record) != "Unexpected persisted note"
     assert AuditLog.objects.for_facility(facility).count() == before_audit
     assert (
         not AuditLog.objects.for_facility(facility)

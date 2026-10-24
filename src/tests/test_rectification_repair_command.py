@@ -27,6 +27,7 @@ from core.services.client import anonymize_client
 from core.services.events import create_event
 from core.services.file_vault.encryption import encrypt_field
 from tests._row_lock_helpers import mitschnitt
+from tests._standard_text import text_path
 from tests.test_eventhistory_repair_command import _non_owner_with_rls_bypass
 from tests.test_redaction_repair_command import _count, _line, _reads_any, _row_state, _run, _table_snapshot
 from tests.test_rls_functional import as_rls_role, rls_test_role  # noqa: F401
@@ -74,7 +75,7 @@ class _Stock:
         fields = {
             "facility_id": client.facility_id,
             "target_client": client,
-            "field_path": "notes",
+            "field_path": text_path(client),
             "old_value": values["old_value"],
             "new_value": values["new_value"],
             "reason": values["reason"],

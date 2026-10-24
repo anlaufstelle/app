@@ -380,7 +380,7 @@ _ENSURE_RECTIFICATION_REQUEST = """
     INSERT INTO core_rectificationrequest
         (id, facility_id, target_client_id, field_path, old_value, new_value, reason,
          review_note, status, requested_by_id, reviewed_by_id, created_at, reviewed_at)
-    SELECT gen_random_uuid(), %(fac)s, c.id, 'notes', NULL, NULL, NULL,
+    SELECT gen_random_uuid(), %(fac)s, c.id, 'data_json.client-notes', NULL, NULL, NULL,
            NULL, 'pending', u.id, NULL, now(), NULL
     FROM (
         SELECT id FROM core_client

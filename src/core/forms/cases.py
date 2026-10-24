@@ -2,12 +2,10 @@
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.db.models import Q
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
-from core.forms.dynamic import DynamicDataForm
-from core.forms.dynamic import document_type_label as _document_type_label
+from core.forms.dynamic import DynamicDataForm, configure_entity_document_type
 from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
 from core.models import Case, DocumentType, User
 from core.services.case.cases import case_form_state_token
@@ -40,13 +38,8 @@ class CaseForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
 
     class Meta:
         model = Case
-        fields = ["title", "description", "lead_user", "document_type"]
+        fields = ["title", "lead_user", "document_type"]
         widgets = {
-            "description": forms.Textarea(
-                attrs={
-                    "rows": 4,
-                }
-            ),
             # M2 P8 (Refs #1058): HTMX-Attribute exakt wie am Personen-/Event-
             # Select (``forms/clients.py`` / ``core/events/create.html``) —
             # CSP-strikt, also KEIN Inline-Handler; das Nachladen der
@@ -107,34 +100,8 @@ class CaseForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
             else:
                 self.form_state_token = case_form_state_token(self.instance)
 
+        configure_entity_document_type(self, facility, DocumentType.EntityType.CASE, user=user)
         doc_type_field = self.fields["document_type"]
-        doc_type_field.required = False
-        doc_type_field.empty_label = _("— Kein Typ —")  # type: ignore[attr-defined]
-        doc_type_field.label_from_instance = _document_type_label  # type: ignore[attr-defined]
-        if facility:
-            qs = DocumentType.objects.for_facility(facility).filter(entity_type=DocumentType.EntityType.CASE)
-            # Sensitivity-Filter laeuft VOR der Inaktiv-Ausnahme unten: ein
-            # zugewiesener, aber fuer diese Rolle unsichtbarer Typ darf auch
-            # dann nicht in die Auswahl geraten, wenn er inaktiv ist. Fuer
-            # diesen Fall entfernt die View das Feld ganz
-            # (``_lock_invisible_document_type``).
-            if user is not None:
-                from core.services.compliance import allowed_sensitivities_for_user
-
-                qs = qs.filter(sensitivity__in=allowed_sensitivities_for_user(user))
-            # Refs #1058 (P7, Entscheid E-10): Der AKTUELL
-            # zugewiesene Typ bleibt waehlbar, auch wenn er zwischenzeitlich
-            # deaktiviert wurde. Ohne diese Ausnahme faellt er aus dem Queryset,
-            # das Select zeigt „— Kein Typ —" vorausgewaehlt, und ein ganz
-            # normaler Submit loescht Typ UND alle Zusatzfeld-Werte, ohne dass
-            # die Bearbeiterin etwas davon merkt. Muster #1160
-            # (``_select_choices``): der deaktivierte Wert des BEARBEITETEN
-            # Datensatzes bleibt erhalten — Neuanlagen bekommen ihn nicht.
-            assigned_pk = self.instance.document_type_id if is_editing else None
-            qs = qs.filter(Q(is_active=True) | Q(pk=assigned_pk)) if assigned_pk else qs.filter(is_active=True)
-        else:
-            qs = DocumentType.objects.none()
-        doc_type_field.queryset = qs  # type: ignore[attr-defined]
 
         # Refs #1058 (P7, Entscheid E-12): Beim BEARBEITEN traegt das
         # HTMX-Nachladen die PK des Falls mit. Nur damit kann die Partial-View

@@ -54,7 +54,7 @@ class TestCaseCRUD:
 
         page.goto(f"{base_url}/cases/new/")
         page.fill('input[name="title"]', unique_title)
-        page.fill('textarea[name="description"]', "Automatisch erstellt durch E2E-Test")
+        page.fill('textarea[name="standard-description"]', "Automatisch erstellt durch E2E-Test")
         page.select_option('select[name="lead_user"]', index=1)
         _select_first_client_in_form(page)
         page.locator("#main-content button[type='submit']").click()

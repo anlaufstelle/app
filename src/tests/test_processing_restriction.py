@@ -24,6 +24,7 @@ from core.services.client.restriction import (
     lift_processing_restriction,
     restrict_processing,
 )
+from tests._standard_text import record_text, text_fields, text_path
 
 
 def _login(client, user):
@@ -99,10 +100,19 @@ class TestWriteGate:
     def test_update_client_blocked(self, client_identified, staff_user):
         _restrict(client_identified, staff_user)
         with pytest.raises(ValidationError) as exc:
-            update_client(client_identified, staff_user, notes="Neue Notiz")
+            update_client(
+                client_identified,
+                staff_user,
+                **text_fields(
+                    client_identified.facility,
+                    "Neue Notiz",
+                    document_type=client_identified.document_type,
+                    data_json=client_identified.data_json,
+                ),
+            )
         assert str(PROCESSING_RESTRICTED_MESSAGE) in "; ".join(exc.value.messages)
         client_identified.refresh_from_db()
-        assert client_identified.notes != "Neue Notiz"
+        assert record_text(client_identified) != "Neue Notiz"
 
     def test_update_client_allowed_for_rectification_workflow(self, client_identified, staff_user):
         """Der Ausstieg ist seit dem Cross-Review (Befund 4) ein modul-privater
@@ -113,9 +123,18 @@ class TestWriteGate:
 
         _restrict(client_identified, staff_user)
         with _rectification_write():
-            update_client(client_identified, staff_user, notes="Berichtigt")
+            update_client(
+                client_identified,
+                staff_user,
+                **text_fields(
+                    client_identified.facility,
+                    "Berichtigt",
+                    document_type=client_identified.document_type,
+                    data_json=client_identified.data_json,
+                ),
+            )
         client_identified.refresh_from_db()
-        assert client_identified.notes == "Berichtigt"
+        assert record_text(client_identified) == "Berichtigt"
 
     def test_resolve_writable_client_blocked(self, facility, client_identified, staff_user):
         _restrict(client_identified, staff_user)
@@ -217,11 +236,11 @@ class TestRectificationException:
     def test_approve_applies_despite_restriction(self, client_identified, staff_user, lead_user):
         from core.services.client.rectification import approve_rectification, request_rectification
 
-        rr = request_rectification(client_identified, staff_user, "notes", "Richtig", "bestritten")
+        rr = request_rectification(client_identified, staff_user, text_path(client_identified), "Richtig", "bestritten")
         _restrict(client_identified, staff_user)
         approve_rectification(rr, lead_user)
         client_identified.refresh_from_db()
-        assert client_identified.notes == "Richtig"
+        assert record_text(client_identified) == "Richtig"
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +316,7 @@ class TestRectificationOptIn:
         response = client.post(
             reverse("core:rectification_create", args=[client_identified.pk]),
             {
-                "field_path": "notes",
+                "field_path": text_path(client_identified),
                 "new_value": "Korrigiert",
                 "reason": "Falsch protokolliert",
                 "restrict_processing": "on",
@@ -312,7 +331,7 @@ class TestRectificationOptIn:
         _login(client, staff_user)
         client.post(
             reverse("core:rectification_create", args=[client_identified.pk]),
-            {"field_path": "notes", "new_value": "Korrigiert", "reason": "Falsch protokolliert"},
+            {"field_path": text_path(client_identified), "new_value": "Korrigiert", "reason": "Falsch protokolliert"},
         )
         client_identified.refresh_from_db()
         assert client_identified.processing_restricted is False

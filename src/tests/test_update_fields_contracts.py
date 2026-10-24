@@ -14,6 +14,7 @@ from core.services.client import main as client_main
 from core.services.client.merge import merge_clients
 from core.services.security.credentials import RevocationReason, revoke_credentials
 from tests._factories import make_event
+from tests._standard_text import job_text_target
 
 pytestmark = pytest.mark.django_db
 
@@ -79,7 +80,7 @@ def test_apply_mapping_only_saves_mapping_status_and_timestamp(facility, admin_u
         "Pseudonym": "pseudonym",
         "Kontaktstufe": "contact_stage",
         "Altersgruppe": "age_cluster",
-        "Notizen": "notes",
+        "Notizen": job_text_target(client_job),
     }
 
     with _captured_update_fields(ImportJob) as seen:

@@ -33,6 +33,7 @@ from core.services.case import (
     soft_delete_case,
     update_case,
 )
+from tests._standard_text import record_text, set_record_text
 
 CONFLICT_TEXT = "zwischenzeitlich bearbeitet"
 
@@ -55,6 +56,9 @@ class _HiddenInputs(HTMLParser):
 
 def _render_edit_form(http, case):
     """Tab A: Formular laden und die versteckten Felder übernehmen."""
+    if case.document_type_id is None:
+        set_record_text(case, "")
+        case.save(update_fields=["document_type", "data_json"])
     response = http.get(reverse("core:case_update", kwargs={"pk": case.pk}))
     assert response.status_code == 200
     parser = _HiddenInputs()
@@ -69,12 +73,14 @@ def _form_payload(case, hidden, **overrides):
     payload.update(
         {
             "title": case.title,
-            "description": case.description or "",
+            "standard-description": record_text(case) or "",
             "lead_user": str(case.lead_user_id or ""),
             "document_type": str(case.document_type_id or ""),
             "client": str(case.client_id),
         }
     )
+    if "description" in overrides:
+        overrides["standard-description"] = overrides.pop("description")
     payload.update(overrides)
     return payload
 
@@ -102,8 +108,8 @@ def _reopen_in_other_tab(lead_user, case):
 
 @pytest.fixture
 def described_case(case_open):
-    case_open.description = "Langer Beschreibungstext, der nicht verloren gehen darf."
-    case_open.save(update_fields=["description", "updated_at"])
+    set_record_text(case_open, "Langer Beschreibungstext, der nicht verloren gehen darf.")
+    case_open.save(update_fields=["document_type", "data_json", "updated_at"])
     return case_open
 
 
@@ -129,7 +135,7 @@ class TestParallelStatusChangeKeepsCaseEdit:
         assert described_case.title == "Titel aus Tab A", "Eingabe aus Tab A darf nicht verloren gehen"
         assert described_case.status == Case.Status.CLOSED, "Parallel gesetzter Status muss erhalten bleiben"
         assert described_case.closed_at is not None
-        assert described_case.description == snapshot.description
+        assert record_text(described_case) == record_text(snapshot)
 
     def test_description_edit_survives_parallel_reopen(self, client, staff_user, lead_user, case_closed):
         client.force_login(staff_user)
@@ -146,7 +152,7 @@ class TestParallelStatusChangeKeepsCaseEdit:
         assert response.status_code == 302
         assert response.url == reverse("core:case_detail", kwargs={"pk": case_closed.pk})
         case_closed.refresh_from_db()
-        assert case_closed.description == "Neuer Text aus Tab A."
+        assert record_text(case_closed) == "Neuer Text aus Tab A."
         assert case_closed.status == Case.Status.OPEN
         assert case_closed.closed_at is None
 
@@ -187,12 +193,12 @@ class TestParallelFormFieldChangeStaysCaseConflict:
 
         assert response.status_code == 200
         assert response.redirect_chain == []
-        assert response.context["form"]["description"].value() == "Beschreibung aus Tab A"
+        assert response.context["data_form"]["standard-description"].value() == "Beschreibung aus Tab A"
         assert response.context["has_edit_conflict"]
         assert CONFLICT_TEXT in response.content.decode()
         described_case.refresh_from_db()
         assert described_case.title == "Titel aus Tab B", "Paralleler Titel darf nicht still überschrieben werden"
-        assert described_case.description == snapshot.description, "Konflikt darf nichts teilweise schreiben"
+        assert record_text(described_case) == record_text(snapshot), "Konflikt darf nichts teilweise schreiben"
 
     def test_close_plus_title_change_is_conflict(self, client, staff_user, lead_user, described_case):
         client.force_login(staff_user)
@@ -241,14 +247,16 @@ class TestCaseFormStateService:
     def test_token_ignores_status_but_tracks_form_fields(self, case_open, lead_user):
         from core.services.case.cases import case_form_state_token
 
+        set_record_text(case_open, "")
+        case_open.save(update_fields=["document_type", "data_json"])
         before = case_form_state_token(case_open)
         case_open.status = Case.Status.CLOSED
         assert case_form_state_token(case_open) == before
         for attr, value in (
             ("title", "Anders"),
-            ("description", "Anders"),
             ("lead_user_id", lead_user.pk),
-            ("data_json", {"x": 1}),
+            ("data_json", {"standard-description": "Changed text"}),
+            ("document_type_id", None),
         ):
             probe = Case.objects.get(pk=case_open.pk)
             setattr(probe, attr, value)

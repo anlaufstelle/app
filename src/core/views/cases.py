@@ -325,7 +325,7 @@ class CaseCreateView(StaffRequiredMixin, View):
 
         context = {
             "form": form,
-            "data_form": DynamicCaseDataForm(),
+            "data_form": _rerender_data_form(request, form["document_type"].value()),
             "is_edit": False,
             "client_id": client_id or "",
             "client_pseudonym": client_pseudonym,
@@ -340,7 +340,7 @@ class CaseCreateView(StaffRequiredMixin, View):
         if not form.is_valid():
             context = {
                 "form": form,
-                "data_form": _rerender_data_form(request, request.POST.get("document_type"), files=request.FILES),
+                "data_form": _rerender_data_form(request, form["document_type"].value(), files=request.FILES),
                 "is_edit": False,
                 "client_id": request.POST.get("client", ""),
                 "client_pseudonym": "",
@@ -391,7 +391,6 @@ class CaseCreateView(StaffRequiredMixin, View):
                         user=request.user,
                         client=form.cleaned_data.get("client"),
                         title=form.cleaned_data["title"],
-                        description=form.cleaned_data.get("description", ""),
                         lead_user=form.cleaned_data.get("lead_user"),
                         document_type=doc_type,
                         data_json=data_json,
@@ -520,7 +519,9 @@ class CaseUpdateView(StaffRequiredMixin, View):
         # encrypted-Slugs liegen als Fernet-Token im JSONB.
         data_form, _restricted = _case_data_form(
             request,
-            None if type_locked else case.document_type,
+            None
+            if type_locked
+            else form.fields["document_type"].queryset.filter(pk=form["document_type"].value()).first(),
             initial_data=decrypt_dynamic_text_data(case.data_json),
             existing_file_slugs=file_marker_slugs(case.data_json),
         )

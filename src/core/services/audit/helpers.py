@@ -33,7 +33,7 @@ Beispiele:
 
     # Service-Kontext (kein Request)
     audit_client_event(client, user, AuditLog.Action.CLIENT_UPDATE,
-                       changed_fields=["notes"])
+                       changed_fields=["data_json"])
 """
 
 from __future__ import annotations

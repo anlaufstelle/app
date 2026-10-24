@@ -25,6 +25,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate
+from tests._standard_text import text_fields
 
 # Refs #1829: @pytest.mark.postgres ersetzt den vormaligen
 # connection.vendor-Skipif (Advisory-Lock-Serialisierung ist nur auf
@@ -236,8 +237,7 @@ def test_client_update_scan_does_not_hold_audit_chain_lock(client, staff_user, f
         facility=facility,
         pseudonym="Lock-Sonde Person",
         contact_stage=Client.ContactStage.IDENTIFIED,
-        document_type=doc_type,
-        notes="alt",
+        **text_fields(facility, "alt", document_type=doc_type, data_json=None),
         created_by=staff_user,
     )
     client.force_login(staff_user)
@@ -255,7 +255,7 @@ def test_client_update_scan_does_not_hold_audit_chain_lock(client, staff_user, f
                 "pseudonym": "Lock-Sonde Person",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "geaendert",
+                "client-notes": "geaendert",
                 "document_type": str(doc_type.pk),
                 "anhang": upload,
             },
@@ -279,8 +279,7 @@ def test_case_update_scan_does_not_hold_audit_chain_lock(client, staff_user, fac
         facility=facility,
         client=client_identified,
         title="Lock-Sonde Fall",
-        description="alt",
-        document_type=doc_type,
+        **text_fields(facility, "alt", entity="case", document_type=doc_type, data_json=None),
         created_by=staff_user,
     )
     client.force_login(staff_user)
@@ -297,7 +296,7 @@ def test_case_update_scan_does_not_hold_audit_chain_lock(client, staff_user, fac
             {
                 "client": str(client_identified.pk),
                 "title": "Lock-Sonde Fall",
-                "description": "geaendert",
+                "standard-description": "geaendert",
                 "lead_user": "",
                 "document_type": str(doc_type.pk),
                 "anhang": upload,

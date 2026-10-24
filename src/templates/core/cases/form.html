@@ -71,9 +71,6 @@
             {% include "components/_client_autocomplete.html" with autocomplete_component="clientAutocomplete" client_form=form required_field=True %}
             {% endif %}
 
-            {# Beschreibung #}
-            {% include "components/_form_field.html" with field=form.description %}
-
             {# Fallverantwortlich #}
             {% include "components/_form_field.html" with field=form.lead_user %}
 

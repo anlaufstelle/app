@@ -31,6 +31,7 @@ from django.core.exceptions import ValidationError
 from core.models import Client, Event, WorkItem
 from core.services.case.episodes import episode_basis_token
 from core.services.client.restriction import restrict_processing
+from tests._standard_text import record_text, text_fields, text_path
 
 BERLIN = ZoneInfo("Europe/Berlin")
 
@@ -363,10 +364,10 @@ class TestDataSubjectRightsStayOpen:
     def test_rectification_approval_allowed(self, restricted_client, staff_user, lead_user):
         from core.services.client.rectification import approve_rectification, request_rectification
 
-        rr = request_rectification(restricted_client, staff_user, "notes", "Richtig", "bestritten")
+        rr = request_rectification(restricted_client, staff_user, text_path(restricted_client), "Richtig", "bestritten")
         approve_rectification(rr, lead_user)
         restricted_client.refresh_from_db()
-        assert restricted_client.notes == "Richtig"
+        assert record_text(restricted_client) == "Richtig"
 
     def test_lifting_the_restriction_allowed(self, restricted_client, lead_user):
         from core.services.client import lift_processing_restriction
@@ -402,15 +403,34 @@ class TestRectificationExitIsNotASkeletonKey:
         from core.services.client import update_client
 
         with pytest.raises(ValidationError):
-            update_client(restricted_client, staff_user, notes="X", allow_restricted=True)
+            update_client(
+                restricted_client,
+                staff_user,
+                **text_fields(
+                    restricted_client.facility,
+                    "X",
+                    document_type=restricted_client.document_type,
+                    data_json=restricted_client.data_json,
+                ),
+                allow_restricted=True,
+            )
         restricted_client.refresh_from_db()
-        assert restricted_client.notes != "X"
+        assert record_text(restricted_client) != "X"
 
     def test_generic_update_outside_the_context_stays_blocked(self, restricted_client, staff_user):
         from core.services.client import update_client
 
         with pytest.raises(ValidationError):
-            update_client(restricted_client, staff_user, notes="Ohne Berichtigungsantrag")
+            update_client(
+                restricted_client,
+                staff_user,
+                **text_fields(
+                    restricted_client.facility,
+                    "Ohne Berichtigungsantrag",
+                    document_type=restricted_client.document_type,
+                    data_json=restricted_client.data_json,
+                ),
+            )
 
     def test_context_closes_again_after_use(self, facility, restricted_client, doc_type_contact, staff_user):
         """Der Kontext gilt fuer seinen Block — danach greift das Gate wieder.
@@ -442,7 +462,11 @@ class TestGateReadsFreshState:
         restrict_processing(client_identified, staff_user, reason=Client.RestrictionReason.ACCURACY_DISPUTED)
         assert stale.processing_restricted is False  # die Instanz ist veraltet
         with pytest.raises(ValidationError):
-            update_client(stale, staff_user, notes="Neu")
+            update_client(
+                stale,
+                staff_user,
+                **text_fields(stale.facility, "Neu", document_type=stale.document_type, data_json=stale.data_json),
+            )
 
     def test_restrict_is_idempotent_on_a_stale_instance(self, client_identified, staff_user, lead_user):
         """Die Idempotenz-Zusage haengt am DB-Stand, nicht am Objekt.

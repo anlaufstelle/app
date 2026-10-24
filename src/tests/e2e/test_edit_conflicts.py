@@ -40,9 +40,11 @@ def _seed(e2e_env) -> dict[str, str]:
         "u = User.objects.get(username='miriam'); "
         "dt = DocumentType.objects.get(facility=f, name='Kontakt'); "
         f"c = Client.objects.create(facility=f, contact_stage='identified', pseudonym='CONF-{marker}', "
-        "  notes='Ausgangsnotiz', created_by=u); "
+        "  document_type=DocumentType.objects.get(facility=f, slug='standard-client'), "
+        "data_json={'client-notes': 'Initial note'}, created_by=u); "
         f"case = Case.objects.create(facility=f, client=c, title='CONF-Fall-{marker}', "
-        "  description='Ausgangsbeschreibung', created_by=u, lead_user=u); "
+        "  document_type=DocumentType.objects.get(facility=f, slug='standard-case'), "
+        "data_json={'standard-description': 'Initial description'}, created_by=u, lead_user=u); "
         f"ep = Episode.objects.create(case=case, title='CONF-Episode-{marker}', description='Ausgangsepisode', "
         "  started_at=date.today() - timedelta(days=10), created_by=u); "
         f"g = OutcomeGoal.objects.create(case=case, title='CONF-Ziel-{marker}', created_by=u); "
@@ -63,7 +65,11 @@ def _seed(e2e_env) -> dict[str, str]:
 
 def _db(e2e_env, expression: str, imports: str = "Client, Case, Episode, Event, OutcomeGoal, User") -> str:
     """Evaluate one expression against the E2E database and return its printed value."""
-    script = f"from core.models import {imports}; print('val=' + str({expression}))"
+    script = (
+        f"from core.models import {imports}; "
+        "from core.services.file_vault import safe_decrypt; "
+        f"print('val=' + str({expression}))"
+    )
     for line in django_shell(e2e_env, script):
         if line.startswith("val="):
             return line.removeprefix("val=")
@@ -159,9 +165,9 @@ class TestEditConflicts:
             _staff_storage_state,
             staff_page,
             f"{base_url}/clients/{ids['client']}/edit/",
-            "textarea[name='notes']",
+            "textarea[name='client-notes']",
             _submit,
-            f"Client.objects.get(pk='{ids['client']}').notes",
+            f"safe_decrypt(Client.objects.get(pk='{ids['client']}').data_json.get('client-notes', ''))",
             e2e_env,
             re.compile(r"/clients/[0-9a-f-]{36}/$"),
         )
@@ -173,9 +179,9 @@ class TestEditConflicts:
             _staff_storage_state,
             staff_page,
             f"{base_url}/cases/{ids['case']}/edit/",
-            "textarea[name='description']",
+            "textarea[name='standard-description']",
             _submit,
-            f"Case.objects.get(pk='{ids['case']}').description",
+            f"safe_decrypt(Case.objects.get(pk='{ids['case']}').data_json.get('standard-description', ''))",
             e2e_env,
             re.compile(r"/cases/[0-9a-f-]{36}/$"),
         )

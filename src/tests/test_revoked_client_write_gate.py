@@ -38,6 +38,7 @@ from core.forms.workitems import WorkItemForm
 from core.models import Attachment, Case, Client, DocumentType, DocumentTypeField, Event, FieldTemplate, WorkItem
 from core.services.events import create_event
 from tests._form_helpers import assert_field_error, assert_form_valid
+from tests._standard_text import record_text
 
 pytestmark = pytest.mark.django_db
 
@@ -286,13 +287,13 @@ class TestClientUpdateViewRejectsAnonymized:
                 "pseudonym": "Wieder-Klartext",
                 "contact_stage": Client.ContactStage.IDENTIFIED,
                 "age_cluster": Client.AgeCluster.UNKNOWN,
-                "notes": "frischer Klartext an anonymisierter Person",
+                "client-notes": "frischer Klartext an anonymisierter Person",
             },
         )
         assert response.status_code == 404
         client_anonymized.refresh_from_db()
         assert client_anonymized.pseudonym != "Wieder-Klartext"
-        assert client_anonymized.notes == ""
+        assert record_text(client_anonymized) == ""
         assert client_anonymized.is_active is False
 
     def test_multipart_post_creates_no_attachment_and_no_enc_file(
@@ -320,7 +321,7 @@ class TestClientUpdateViewRejectsAnonymized:
                     "pseudonym": "Gelöscht-x",
                     "contact_stage": Client.ContactStage.IDENTIFIED,
                     "age_cluster": Client.AgeCluster.UNKNOWN,
-                    "notes": "",
+                    "client-notes": "",
                     "document_type": str(doc_type.pk),
                     ft_file.slug: upload,
                 },

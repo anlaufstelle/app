@@ -38,6 +38,7 @@ from core.models import AuditLog, Case, DocumentType
 from core.services.case import create_case, update_case
 from core.services.client import anonymize_client
 from core.services.file_vault import is_encrypted_value, safe_decrypt
+from tests._standard_text import set_record_text
 
 
 def raw_data_json(case) -> dict:
@@ -110,7 +111,7 @@ class TestCaseDataJsonEncryption:
                 document_type=doc_type_case_form,
                 data_json={"verlauf": "Einmal"},
             )
-            case.description = "geaendert"
+            set_record_text(case, "geaendert")
             case.save()
 
             assert safe_decrypt(raw_data_json(case)["verlauf"]) == "Einmal"

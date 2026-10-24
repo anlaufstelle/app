@@ -44,6 +44,7 @@ from django.utils import translation
 
 from core.models import AuditLog, Client, ImportJob
 from core.services import import_engine
+from tests._standard_text import job_text_target
 
 PSEUDONYM_HEADER = "Pseudonym;Kontaktstufe;Altersgruppe;Notizen\n"
 
@@ -73,7 +74,7 @@ def client_job(facility, admin_user, media_root):
         _upload(content),
         target_type=ImportJob.TargetType.CLIENT,
     )
-    import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Notizen": "notes"})
+    import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Notizen": job_text_target(job)})
     return job
 
 
@@ -222,13 +223,12 @@ class TestAvailableTargets:
             "pseudonym": "Pseudonym",
             "contact_stage": "Kontaktstufe",
             "age_cluster": "Altersgruppe",
-            "notes": "Notizen",
         }
         flags = {target.key: target.required for target in targets}
         assert flags["pseudonym"] is True
         assert flags["contact_stage"] is False
         assert flags["age_cluster"] is False
-        assert flags["notes"] is False
+        assert "notes" not in flags
 
     def test_event_targets_carry_their_exact_labels_and_flags(self, event_job):
         """Pin: x_available_targets__mutmut_57 — Label von ``occurred_at`` -> ``None``;
@@ -298,7 +298,7 @@ class TestMappingErrorMessages:
         Original: ``Diese Pflichtfelder brauchen eine Spalte: Pseudonym``
         """
         with translation.override("de"), pytest.raises(ValidationError) as exc_info:
-            import_engine.apply_mapping(unmapped_client_job, {"Notizen": "notes"})
+            import_engine.apply_mapping(unmapped_client_job, {"Notizen": job_text_target(unmapped_client_job)})
 
         assert exc_info.value.messages == ["Diese Pflichtfelder brauchen eine Spalte: Pseudonym"]
 

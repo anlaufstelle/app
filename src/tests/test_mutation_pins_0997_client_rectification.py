@@ -9,13 +9,16 @@ import pytest
 from core.models import AuditLog, Client, RectificationRequest
 from core.services.client.rectification import approve_rectification, request_rectification
 from tests._row_lock_helpers import mitschnitt as capture_locks
+from tests._standard_text import record_text, text_path
 
 pytestmark = pytest.mark.django_db
 
 
 def test_request_moved_after_person_lock_is_not_locked(client_identified, staff_user, lead_user, second_facility):
     """A moved request is absent from the scoped lock: x__lock_client_then_request__mutmut_28."""
-    request = request_rectification(client_identified, staff_user, "notes", "Corrected text", "Wrong text")
+    request = request_rectification(
+        client_identified, staff_user, text_path(client_identified), "Corrected text", "Wrong text"
+    )
     audits = AuditLog.objects.count()
     with capture_locks() as captured:
         captured.nach_sperre(
@@ -37,5 +40,5 @@ def test_request_moved_after_person_lock_is_not_locked(client_identified, staff_
     client_identified.refresh_from_db()
     assert request.facility_id == client_identified.facility_id
     assert request.status == RectificationRequest.Status.PENDING
-    assert client_identified.notes == ""
+    assert record_text(client_identified) == ""
     assert AuditLog.objects.count() == audits

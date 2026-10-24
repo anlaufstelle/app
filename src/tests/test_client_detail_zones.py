@@ -16,6 +16,7 @@ from django.utils import timezone
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
 from core.services.client import request_client_deletion
 from core.services.client.rectification import request_rectification
+from tests._standard_text import text_path
 
 pytestmark = pytest.mark.django_db
 
@@ -59,7 +60,7 @@ class TestStateBannersPrecedeContent:
         """Hausverbot → Löschantrag → Berichtigung, alle drei vor der
         Kontakt-Chronik (dem ersten Inhaltsblock)."""
         request_client_deletion(client_identified, staff_user, "Widerruf")
-        request_rectification(client_identified, staff_user, "notes", "Neuer Wert", "Grund")
+        request_rectification(client_identified, staff_user, text_path(client_identified), "Neuer Wert", "Grund")
 
         client.force_login(staff_user)
         content = client.get(reverse("core:client_detail", args=[client_identified.pk])).content.decode()
