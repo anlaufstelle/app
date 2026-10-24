@@ -143,6 +143,7 @@ EXPECTED = {
     "EpisodeForm": {
         "title": ("TextInput", True, {"maxlength": "200"}),
         "description": ("Textarea", True, {"rows": 4, "cols": "40"}),
+        "document_type": ("Select", True, {}),
         "started_at": ("AppDateInput", True, {}),
         "ended_at": ("AppDateInput", True, {}),
     },
@@ -196,6 +197,7 @@ EXPECTED = {
         "item_type": ("Select", True, {}),
         "title": ("TextInput", True, {"maxlength": "200"}),
         "description": ("Textarea", True, {"rows": 4, "cols": "40"}),
+        "document_type": ("Select", True, {}),
         "priority": ("Select", True, {}),
         "due_date": (
             "AppDateInput",

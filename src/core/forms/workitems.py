@@ -8,8 +8,9 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
+from core.forms.dynamic import configure_entity_document_type
 from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
-from core.models import User, WorkItem
+from core.models import DocumentType, User, WorkItem
 from core.services.case.workitems import assignable_workitem_users
 from core.utils.date_input import AppDateInput
 
@@ -46,6 +47,7 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
             "item_type",
             "title",
             "description",
+            "document_type",
             "priority",
             "due_date",
             "remind_at",
@@ -70,6 +72,7 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
 
     def __init__(self, *args, facility=None, pinned_client=None, **kwargs):
         super().__init__(*args, **kwargs)
+        configure_entity_document_type(self, facility, DocumentType.EntityType.WORKITEM)
         self.facility = facility
         # Ursprungs-Pinning (Refs #1786): nur beim Bearbeiten einer Aufgabe,
         # die bereits eine Person trägt. Eine personenlose Aufgabe bekommt

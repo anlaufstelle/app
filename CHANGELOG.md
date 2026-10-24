@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **Verschlüsselte Standardfelder für Personen, Fälle, Episoden und Aufgaben** (#2666) — Alle fünf Dokumentationspakete liefern geschützte Textbereiche; die Schreibdienste wählen einen einzigen aktiven Typ vor und verlangen bei mehreren Typen eine Auswahl, während Demo-Daten passende verschlüsselte Beispielwerte enthalten.
+- **Verschlüsselte Standardfelder für Personen, Fälle, Episoden und Aufgaben** (#2666) — Alle fünf Dokumentationspakete liefern geschützte Textbereiche; die Schreibdienste wählen einen einzigen aktiven Typ vor und verlangen bei mehreren Typen eine Auswahl, während Demo-Daten passende verschlüsselte Beispielwerte enthalten; Episoden- und Aufgabenformulare bieten die passende Typauswahl.
 
 - **Einzelschlüssel `ENCRYPTION_KEY` entfernt — Breaking Change** (#2363) — Die Feldverschlüsselung liest ihre Schlüssel ausschließlich aus dem Schlüsselring `ENCRYPTION_KEYS`; ein gesetztes `ENCRYPTION_KEY` stoppt den Start in jedem Settings-Profil mit Umbenennungshinweis (auch neben einem gesetzten Ring) und wird nicht mehr stillschweigend ignoriert. Die Systemprüfung `core.W005` entfällt. Lokaler Stack, Setup-/Worktree-Werkzeuge, Compose-Vorlagen, Workflows und Release-Prüfungen sind auf den Ring umgestellt; eine lokale Schlüsseldatei füllt den Ring mit einem Eintrag. Schlüsselwert, Verschlüsselung und der aus dem ersten Schlüssel abgeleitete Idempotenz-Pepper bleiben unverändert. Upgrade-Schritte siehe „Erforderliche Betreiber-Aktionen“.
 - **Offline-Skripte minifiziert** (#2011) — Neun eigene Kernmodule werden als reproduzierbare, kleinere Dateien ausgeliefert; lesbare Quellen und Skriptreihenfolge bleiben erhalten.

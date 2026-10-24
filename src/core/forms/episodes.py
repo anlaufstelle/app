@@ -4,7 +4,9 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from core.forms.dynamic import configure_entity_document_type
 from core.forms.mixins import TailwindFormMixin
+from core.models import DocumentType
 from core.models.episode import Episode
 from core.services.case.episodes import episode_basis_token, validate_episode_dates
 from core.utils.date_input import AppDateInput
@@ -17,7 +19,7 @@ class EpisodeForm(TailwindFormMixin, forms.ModelForm):
 
     class Meta:
         model = Episode
-        fields = ["title", "description", "started_at", "ended_at"]
+        fields = ["title", "description", "started_at", "ended_at", "document_type"]
         widgets = {
             "description": forms.Textarea(
                 attrs={
@@ -36,8 +38,9 @@ class EpisodeForm(TailwindFormMixin, forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, facility=None, **kwargs):
         super().__init__(*args, **kwargs)
+        configure_entity_document_type(self, facility, DocumentType.EntityType.EPISODE)
         if self.instance.pk and not self.instance._state.adding:
             self.initial["basis_token"] = episode_basis_token(self.instance)
         else:

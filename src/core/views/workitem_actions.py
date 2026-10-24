@@ -34,6 +34,7 @@ from core.services.scoping import get_scoped_object
 from core.services.workitem_visibility import workitems_for_read
 from core.utils.formatting import isoformat_or_none
 from core.utils.ratelimit import ratelimit
+from core.views._dynamic_errors import add_dynamic_service_errors
 from core.views._json_contracts import (
     _conflict_response,
     _invalid_form_response,
@@ -376,6 +377,7 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
                         client=form.cleaned_data.get("client"),
                         item_type=form.cleaned_data["item_type"],
                         title=form.cleaned_data["title"],
+                        document_type=form.cleaned_data["document_type"],
                         description=form.cleaned_data.get("description", ""),
                         priority=form.cleaned_data["priority"],
                         due_date=form.cleaned_data.get("due_date"),
@@ -407,7 +409,7 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
                 # Person, die seit der Formularpruefung geloescht wurde): als
                 # Formularfehler zeigen — der Offline-Abgleich bekommt darueber
                 # die 422-Antwort unten, statt dass die Anlage mit 500 endet.
-                form.add_error(None, exc)
+                add_dynamic_service_errors(form, exc)
             else:
                 # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel
                 # merken, damit ein späterer Replay (#1329) hier oben kurzschließt
@@ -526,6 +528,7 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
                     require_version_token=wants_json,
                     item_type=form.cleaned_data["item_type"],
                     title=form.cleaned_data["title"],
+                    document_type=form.cleaned_data["document_type"],
                     description=form.cleaned_data.get("description", ""),
                     priority=form.cleaned_data["priority"],
                     due_date=form.cleaned_data.get("due_date"),
@@ -538,45 +541,24 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
                 # re-owned since the check above) -> the same 403 answer.
                 return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
             except ValidationError as e:
-                # Refs #1351 Task 7: JSON/HTMX-Clients erhalten einen 409 mit
-                # dem aktuellen Server-Stand, damit der Offline-Konflikt
-                # sichtbar bleibt statt von der generischen Queue (die jedem
-                # 200/redirect als Erfolg folgt) stillschweigend als
-                # "synchronisiert" verworfen zu werden. Normale
-                # Browser-Requests behalten das bisherige
-                # redirect+Flash-Verhalten.
-                # Refs #2385: unlike the inbox row button
-                # (``WorkItemStatusUpdateView``), this branch stays on
-                # ``_wants_json_response`` (HTMX included) — no template
-                # calls ``core:workitem_update`` via ``hx-post``, so there is
-                # no row-swap target that a 409-JSON body could erase, and
-                # the Edit path's 422-invalid/409-conflict contract already
-                # requires the version token for every JSON/HTMX caller
-                # (unlike the status-toggle path, see the class docstring
-                # above). No behavior change here.
-                if wants_json:
-                    # Aktuellen Server-Stand nachladen, nicht die
-                    # In-Memory-Kopie, mit der diese View gestartet ist.
+                if hasattr(e, "error_dict"):
+                    add_dynamic_service_errors(form, e)
+                elif wants_json:
+                    # Keep version conflicts distinct from invalid field input.
                     workitem.refresh_from_db()
                     if getattr(e, "code", None) == "missing_token":
-                        # Refs #1338/#1351: fehlender Token ist kein
-                        # Merge-Konflikt im eigentlichen Sinn (es wurde
-                        # nichts verglichen) — eigene Fehlerkennung, damit
-                        # der Client zwischen "bitte Token nachreichen" und
-                        # "echter Konflikt" unterscheiden kann.
-                        # client_expected ist null, weil kein sinnvoller
-                        # roher Client-Wert vorliegt.
                         return _workitem_conflict_response(workitem, None, error="missing-token")
                     return _workitem_conflict_response(workitem, expected_updated_at)
-                messages.error(request, e.message if hasattr(e, "message") else str(e))
-                return redirect("core:workitem_update", pk=workitem.pk)
-            # Refs #2289: belastbare Erfolgsbestaetigung fuer den
-            # Offline-Replay statt des Redirects (siehe EventCreateView).
-            confirmation = saved_confirmation(request, workitem.pk)
-            if confirmation is not None:
-                return confirmation
-            messages.success(request, _("Aufgabe wurde aktualisiert."))
-            return redirect("core:workitem_inbox")
+                else:
+                    messages.error(request, e.message if hasattr(e, "message") else str(e))
+                    return redirect("core:workitem_update", pk=workitem.pk)
+            else:
+                # Confirm a committed update to offline replay clients (Refs #2289).
+                confirmation = saved_confirmation(request, workitem.pk)
+                if confirmation is not None:
+                    return confirmation
+                messages.success(request, _("Aufgabe wurde aktualisiert."))
+                return redirect("core:workitem_inbox")
 
         # Formular ungueltig. Refs #1351 Task 7 (analog #1111 bei Events):
         # der Offline-Replay (Accept: application/json) darf ein ungueltiges

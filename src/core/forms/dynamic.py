@@ -16,10 +16,11 @@ entfallen — Event-, Personen- und Fall-Form sind jetzt vollstaendig identisch.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from django import forms
 from django.conf import settings as django_settings
+from django.db.models import Q
 from django.forms.boundfield import BoundField
 from django.utils.translation import gettext_lazy as _
 
@@ -56,6 +57,25 @@ logger = logging.getLogger(__name__)
 DYNAMIC_FIELD_PLAINTEXT_HINT = _(
     "Bitte keine Klarnamen eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden."
 )
+
+
+def configure_entity_document_type(form, facility, entity_type):
+    """Scope type choices and apply the active-type default and requirement."""
+    field = cast(forms.ModelChoiceField, form.fields["document_type"])
+    field.empty_label = _("— Kein Typ —")
+    field.label_from_instance = document_type_label  # type: ignore[method-assign, assignment]
+    types = DocumentType.objects.none()
+    assigned_pk = None
+    active = []
+    if facility is not None:
+        types = DocumentType.objects.for_facility(facility).filter(entity_type=entity_type)
+        if not form.instance._state.adding:
+            assigned_pk = form.instance.document_type_id
+        active = list(types.filter(is_active=True)[:2])
+    field.queryset = types.filter(Q(is_active=True) | Q(pk=assigned_pk))
+    field.required = bool(active)
+    if not assigned_pk and len(active) == 1:
+        form.initial["document_type"] = active[0].pk
 
 
 def document_type_label(document_type: DocumentType) -> str:

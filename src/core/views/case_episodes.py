@@ -19,6 +19,7 @@ from core.services.case.episodes import close_episode, create_episode
 from core.services.form_state import FormStateConflictError
 from core.services.scoping import get_scoped_object
 from core.utils.ratelimit import ratelimit
+from core.views._dynamic_errors import add_dynamic_service_errors
 from core.views.mixins import StaffRequiredMixin, htmx_absage
 from core.views.utils import object_back_link
 
@@ -77,7 +78,7 @@ class EpisodeCreateView(StaffRequiredMixin, View):
             messages.error(request, _("Episoden können nur für offene Fälle erstellt werden."))
             return redirect("core:case_detail", pk=case.pk)
 
-        form = EpisodeForm()
+        form = EpisodeForm(facility=request.current_facility)
         context = _episode_context(case, form, is_edit=False)
         return render(request, "core/cases/episode_form.html", context)
 
@@ -88,13 +89,14 @@ class EpisodeCreateView(StaffRequiredMixin, View):
             messages.error(request, _("Episoden können nur für offene Fälle erstellt werden."))
             return redirect("core:case_detail", pk=case.pk)
 
-        form = EpisodeForm(request.POST)
+        form = EpisodeForm(request.POST, facility=request.current_facility)
         if form.is_valid():
             try:
                 create_episode(
                     case,
                     request.user,
                     title=form.cleaned_data["title"],
+                    document_type=form.cleaned_data["document_type"],
                     description=form.cleaned_data.get("description", ""),
                     started_at=form.cleaned_data["started_at"],
                     ended_at=form.cleaned_data["ended_at"],
@@ -102,6 +104,10 @@ class EpisodeCreateView(StaffRequiredMixin, View):
             except ValidationError as exc:
                 if hasattr(exc, "error_dict") and set(exc.error_dict) == {"ended_at"}:
                     form.add_error(None, exc)
+                    context = _episode_context(case, form, is_edit=False)
+                    return render(request, "core/cases/episode_form.html", context)
+                if hasattr(exc, "error_dict"):
+                    add_dynamic_service_errors(form, exc)
                     context = _episode_context(case, form, is_edit=False)
                     return render(request, "core/cases/episode_form.html", context)
                 # The service rejected the freshly locked state; do not recheck the case here.
@@ -122,14 +128,14 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
     def get(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         episode = get_object_or_404(Episode, pk=pk, case=case)
-        form = EpisodeForm(instance=episode)
+        form = EpisodeForm(instance=episode, facility=request.current_facility)
         context = _episode_context(case, form, is_edit=True, episode=episode)
         return render(request, "core/cases/episode_form.html", context)
 
     def post(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         episode = get_object_or_404(Episode, pk=pk, case=case)
-        form = EpisodeForm(request.POST, instance=episode)
+        form = EpisodeForm(request.POST, instance=episode, facility=request.current_facility)
         if form.is_valid():
             # ModelForm mutates its instance; the service compares and writes the locked row.
             try:
@@ -140,10 +146,10 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
                     **{field: form.cleaned_data[field] for field in EpisodeForm.Meta.fields},
                 )
             except FormStateConflictError as exc:
-                current_form = EpisodeForm(instance=exc.current)
+                current_form = EpisodeForm(instance=exc.current, facility=request.current_facility)
                 data = request.POST.copy()
                 data["basis_token"] = current_form.initial["basis_token"]
-                form = EpisodeForm(data, instance=episode)
+                form = EpisodeForm(data, instance=episode, facility=request.current_facility)
                 form.is_valid()
                 form.add_error(None, exc)
                 context = _episode_context(case, form, is_edit=True, episode=episode)
@@ -152,6 +158,10 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
             except ValidationError as exc:
                 if hasattr(exc, "error_dict") and set(exc.error_dict) == {"ended_at"}:
                     form.add_error(None, exc)
+                    context = _episode_context(case, form, is_edit=True, episode=episode)
+                    return render(request, "core/cases/episode_form.html", context)
+                if hasattr(exc, "error_dict"):
+                    add_dynamic_service_errors(form, exc)
                     context = _episode_context(case, form, is_edit=True, episode=episode)
                     return render(request, "core/cases/episode_form.html", context)
                 # The service rejected the freshly locked state; do not recheck the case here.
