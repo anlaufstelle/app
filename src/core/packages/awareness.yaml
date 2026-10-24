@@ -36,6 +36,24 @@
 schema_version: 1
 
 field_templates:
+  - slug: client-notes
+    name: Notizen
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: elevated
+
+  - slug: standard-description
+    name: Beschreibung
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: elevated
+
+  - slug: workitem-details
+    name: Details
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: normal
+
   - slug: anliegen
     name: Anliegen
     field_type: multi_select
@@ -217,6 +235,38 @@ field_templates:
     sensitivity: ""
 
 document_types:
+  - slug: standard-client
+    name: Person
+    entity_type: client
+    sensitivity: normal
+    field_refs:
+      - template_slug: client-notes
+        sort_order: 0
+
+  - slug: standard-case
+    name: Fall
+    entity_type: case
+    sensitivity: normal
+    field_refs:
+      - template_slug: standard-description
+        sort_order: 0
+
+  - slug: standard-episode
+    name: Episode
+    entity_type: episode
+    sensitivity: normal
+    field_refs:
+      - template_slug: standard-description
+        sort_order: 0
+
+  - slug: standard-workitem
+    name: Aufgabe
+    entity_type: workitem
+    sensitivity: normal
+    field_refs:
+      - template_slug: workitem-details
+        sort_order: 0
+
   - slug: awareness-kontakt
     name: Awareness-Kontakt
     entity_type: event

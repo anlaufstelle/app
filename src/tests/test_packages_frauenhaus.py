@@ -57,6 +57,9 @@ EXPECTED_TYPES = {
 }
 
 EXPECTED_FIELDS = {
+    "client-notes": "textarea",
+    "standard-description": "textarea",
+    "workitem-details": "textarea",
     "anliegen": "multi_select",
     "art": "select",
     "aufnahme-moeglich": "boolean",
@@ -152,7 +155,7 @@ def _load_package(facility):
 
 def _loaded_types(facility) -> dict[str, DocumentType]:
     _load_package(facility)
-    return {item.slug: item for item in DocumentType.objects.for_facility(facility)}
+    return {item.slug: item for item in DocumentType.objects.for_facility(facility).filter(entity_type="event")}
 
 
 def _option_slugs(package, field_slug: str) -> list[str]:
@@ -174,8 +177,9 @@ def test_frauenhaus_package_parses_strictly_with_exact_catalog_contract():
             item.report_key,
         )
         for item in package.document_types
+        if item.entity_type == "event"
     } == EXPECTED_TYPES
-    assert all(item.entity_type == "event" for item in package.document_types)
+    assert {item.entity_type for item in package.document_types} == {"event", "client", "case", "episode", "workitem"}
     assert {slug: _option_slugs(package, slug) for slug in EXPECTED_OPTIONS} == EXPECTED_OPTIONS
 
     fields = {item.slug: item for item in package.field_templates}
@@ -188,7 +192,9 @@ def test_frauenhaus_package_parses_strictly_with_exact_catalog_contract():
     assert [item.slug for item in package.field_templates if item.field_type == "file"] == ["scan-dokument"]
 
     assert {
-        item.slug: [ref.template_slug for ref in item.field_refs] for item in package.document_types
+        item.slug: [ref.template_slug for ref in item.field_refs]
+        for item in package.document_types
+        if item.entity_type == "event"
     } == EXPECTED_FIELDS_BY_TYPE
 
 
@@ -202,14 +208,14 @@ def test_frauenhaus_package_load_is_warning_free_and_idempotent(facility):
     assert first.errors == first.warnings == []
     assert first.field_templates.created == [item.slug for item in package.field_templates]
     assert first.document_types.created == [item.slug for item in package.document_types]
-    assert len(first.field_refs.created) == 21
+    assert len(first.field_refs.created) == 25
     assert second.errors == second.warnings == []
     for _section_name, section in second.sections():
         assert section.created == []
         assert section.updated == []
     assert second.field_templates.unchanged == [item.slug for item in package.field_templates]
     assert second.document_types.unchanged == [item.slug for item in package.document_types]
-    assert len(second.field_refs.unchanged) == 21
+    assert len(second.field_refs.unchanged) == 25
     assert second.groups.unchanged == second.conditions.unchanged == []
     assert _counts() == before
 
@@ -224,7 +230,12 @@ def test_setup_facility_installs_only_frauenhaus_and_exact_comfort_objects():
         call_command("setup_facility", package="frauenhaus", stdout=out)
 
     facility = Organization.objects.get(name="Frauenhaus-Träger").facilities.get(name="Schutzwohnung")
-    assert set(DocumentType.objects.for_facility(facility).values_list("slug", flat=True)) == set(EXPECTED_TYPES)
+    assert set(DocumentType.objects.for_facility(facility).values_list("slug", flat=True)) == set(EXPECTED_TYPES) | {
+        "standard-client",
+        "standard-case",
+        "standard-episode",
+        "standard-workitem",
+    }
     assert (
         not DocumentType.objects.for_facility(facility)
         .filter(slug__in={"spritzentausch", "medizinische-versorgung"})
@@ -245,7 +256,7 @@ def test_setup_facility_installs_only_frauenhaus_and_exact_comfort_objects():
         ),
         ("Belegstand vermerkt", "notiz", {}),
     ]
-    assert "Frauenhaus eingespielt: 8 Dokumentationstypen angelegt" in out.getvalue()
+    assert "Frauenhaus eingespielt: 12 Dokumentationstypen angelegt" in out.getvalue()
 
 
 def test_quick_templates_reference_only_normal_types_and_valid_active_options():

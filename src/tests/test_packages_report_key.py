@@ -189,7 +189,7 @@ class TestStandardpaket:
         assert report.errors == []
         assert report.document_types.updated == []
         assert report.field_templates.updated == []
-        assert len(report.document_types.unchanged) == 9
+        assert len(report.document_types.unchanged) == 13
 
     @staticmethod
     def _schluessel(facility):
@@ -274,10 +274,14 @@ class TestStandardpaket:
         assert self._schluessel(facility) != aus_dem_paket
 
     def test_katalog_fuehrt_den_schluessel_an_jedem_typ_mit(self):
-        """Kein Typ ohne Aussage — sonst faellt er nach der Umstellung in den
-        Vollstaendigkeitshinweis, obwohl der Katalog ihn kennt.
-        """
+        """Event types carry reporting keys; entity fields do not create report categories."""
         package = parse_package(load_default_package_data())
-
-        ohne = [definition.slug for definition in package.document_types if definition.report_key is None]
-        assert ohne == []
+        missing_event_keys = [
+            definition.slug
+            for definition in package.document_types
+            if definition.entity_type == "event" and definition.report_key is None
+        ]
+        assert missing_event_keys == []
+        entity_types = [definition for definition in package.document_types if definition.entity_type != "event"]
+        assert {definition.entity_type for definition in entity_types} == {"client", "case", "episode", "workitem"}
+        assert all(definition.report_key is None for definition in entity_types)

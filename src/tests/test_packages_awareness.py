@@ -41,6 +41,9 @@ EXPECTED_TYPES = {
 }
 
 EXPECTED_FIELDS = {
+    "client-notes": "textarea",
+    "standard-description": "textarea",
+    "workitem-details": "textarea",
     "aktiv": "boolean",
     "alterscluster": "select",
     "anliegen": "multi_select",
@@ -75,7 +78,7 @@ def _counts() -> tuple[int, int, int, int, int]:
 
 def _loaded_types(facility) -> dict[str, DocumentType]:
     load_package(facility, parse_catalog_package("awareness"))
-    return {item.slug: item for item in DocumentType.objects.for_facility(facility)}
+    return {item.slug: item for item in DocumentType.objects.for_facility(facility).filter(entity_type="event")}
 
 
 def _option_slugs(package, field_slug: str) -> list[str]:
@@ -96,8 +99,9 @@ def test_awareness_package_parses_strictly_with_exact_catalog_contract():
             item.report_key,
         )
         for item in package.document_types
+        if item.entity_type == "event"
     } == EXPECTED_TYPES
-    assert all(item.entity_type == "event" for item in package.document_types)
+    assert {item.entity_type for item in package.document_types} == {"event", "client", "case", "episode", "workitem"}
     assert all(item.min_contact_stage is None for item in package.document_types)
     assert all(item.field_type != "file" for item in package.field_templates)
     assert _option_slugs(package, "art-des-vorfalls") == [
@@ -159,7 +163,7 @@ def test_awareness_package_load_is_warning_free_and_idempotent(facility):
         assert section.updated == []
     assert second.field_templates.unchanged == [item.slug for item in package.field_templates]
     assert second.document_types.unchanged == [item.slug for item in package.document_types]
-    assert len(second.field_refs.unchanged) == 21
+    assert len(second.field_refs.unchanged) == 25
     assert second.groups.unchanged == second.conditions.unchanged == []
     assert _counts() == before
 
@@ -175,7 +179,12 @@ def test_setup_facility_installs_only_awareness_and_its_comfort_objects():
         call_command("setup_facility", package="awareness", stdout=out)
 
     facility = Organization.objects.get(name="Awareness-Orga").facilities.get(name="Awareness-Team")
-    assert set(DocumentType.objects.for_facility(facility).values_list("slug", flat=True)) == set(EXPECTED_TYPES)
+    assert set(DocumentType.objects.for_facility(facility).values_list("slug", flat=True)) == set(EXPECTED_TYPES) | {
+        "standard-client",
+        "standard-case",
+        "standard-episode",
+        "standard-workitem",
+    }
     assert (
         not DocumentType.objects.for_facility(facility)
         .filter(slug__in={"spritzentausch", "medizinische-versorgung"})
@@ -188,7 +197,7 @@ def test_setup_facility_installs_only_awareness_and_its_comfort_objects():
         ("Wasser gegeben", "versorgung", {"bedarf": ["wasser"]}),
         ("Ruheraum begleitet", "versorgung", {"bedarf": ["ruheraum"]}),
     ]
-    assert "Awareness eingespielt: 7 Dokumentationstypen angelegt" in out.getvalue()
+    assert "Awareness eingespielt: 11 Dokumentationstypen angelegt" in out.getvalue()
 
 
 @pytest.mark.django_db

@@ -62,7 +62,12 @@ def _load_package(facility):
 
 def _assert_catalog(facility):
     types = DocumentType.objects.for_facility(facility)
-    assert set(types.values_list("slug", flat=True)) == set(EXPECTED_TYPES)
+    assert set(types.values_list("slug", flat=True)) == set(EXPECTED_TYPES) | {
+        "standard-client",
+        "standard-case",
+        "standard-episode",
+        "standard-workitem",
+    }
     assert not types.filter(slug__in=("spritzentausch", "medizinische-versorgung")).exists()
 
     by_slug = {doc_type.slug: doc_type for doc_type in types}
@@ -118,6 +123,9 @@ def _assert_catalog(facility):
 
     templates = {template.slug: template for template in FieldTemplate.objects.for_facility(facility)}
     assert set(templates) == {
+        "client-notes",
+        "standard-description",
+        "workitem-details",
         "dauer",
         "notiz",
         "leistungen",
@@ -188,6 +196,9 @@ def test_parse_und_erstlauf_gegen_frische_einrichtung(facility):
     assert report.errors == []
     assert report.warnings == []
     assert report.field_templates.created == [
+        "client-notes",
+        "standard-description",
+        "workitem-details",
         "dauer",
         "notiz",
         "leistungen",
@@ -209,7 +220,12 @@ def test_parse_und_erstlauf_gegen_frische_einrichtung(facility):
         "bis",
         "aktiv",
     ]
-    assert report.document_types.created == list(EXPECTED_TYPES)
+    assert report.document_types.created == [
+        "standard-client",
+        "standard-case",
+        "standard-episode",
+        "standard-workitem",
+    ] + list(EXPECTED_TYPES)
     _assert_catalog(facility)
 
 

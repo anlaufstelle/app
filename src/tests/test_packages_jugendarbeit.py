@@ -50,6 +50,9 @@ EXPECTED_TYPES = {
 }
 
 EXPECTED_FIELDS = {
+    "client-notes",
+    "standard-description",
+    "workitem-details",
     "aktiv",
     "alterscluster",
     "anlass",
@@ -97,7 +100,7 @@ def _counts() -> tuple[int, int, int, int, int]:
 
 def _loaded_types(facility) -> dict[str, DocumentType]:
     load_package(facility, parse_catalog_package("jugendarbeit"))
-    return {item.slug: item for item in DocumentType.objects.for_facility(facility)}
+    return {item.slug: item for item in DocumentType.objects.for_facility(facility).filter(entity_type="event")}
 
 
 def _option_slugs(package, field_slug: str) -> list[str]:
@@ -119,11 +122,14 @@ def test_jugendarbeit_package_parses_strictly_with_exact_catalog_contract():
             item.report_key,
         )
         for item in package.document_types
+        if item.entity_type == "event"
     } == EXPECTED_TYPES
     assert {
-        item.slug: [field_ref.template_slug for field_ref in item.field_refs] for item in package.document_types
+        item.slug: [field_ref.template_slug for field_ref in item.field_refs]
+        for item in package.document_types
+        if item.entity_type == "event"
     } == EXPECTED_FIELD_REFS
-    assert all(item.entity_type == "event" for item in package.document_types)
+    assert {item.entity_type for item in package.document_types} == {"event", "client", "case", "episode", "workitem"}
     assert all(item.field_type != "file" for item in package.field_templates)
     assert _option_slugs(package, "leistungen") == [
         "essen",
@@ -201,6 +207,11 @@ def test_jugendarbeit_package_load_is_warning_free_and_idempotent(facility):
     assert second.field_templates.unchanged == [item.slug for item in package.field_templates]
     assert second.document_types.unchanged == [item.slug for item in package.document_types]
     assert second.field_refs.unchanged == [
+        "standard-client/client-notes",
+        "standard-case/standard-description",
+        "standard-episode/standard-description",
+        "standard-workitem/workitem-details",
+    ] + [
         f"{type_slug}/{field_slug}"
         for type_slug, field_slugs in EXPECTED_FIELD_REFS.items()
         for field_slug in field_slugs
@@ -220,7 +231,12 @@ def test_setup_facility_installs_only_jugendarbeit_and_safe_comfort_objects():
         call_command("setup_facility", package="jugendarbeit", stdout=out)
 
     facility = Organization.objects.get(name="Jugendarbeit-Orga").facilities.get(name="Jugendzentrum")
-    assert set(DocumentType.objects.for_facility(facility).values_list("slug", flat=True)) == set(EXPECTED_TYPES)
+    assert set(DocumentType.objects.for_facility(facility).values_list("slug", flat=True)) == set(EXPECTED_TYPES) | {
+        "standard-client",
+        "standard-case",
+        "standard-episode",
+        "standard-workitem",
+    }
     assert (
         not DocumentType.objects.for_facility(facility)
         .filter(slug__in={"spritzentausch", "medizinische-versorgung"})
@@ -236,7 +252,7 @@ def test_setup_facility_installs_only_jugendarbeit_and_safe_comfort_objects():
         ("Kontakt JZ-Raum", "kontakt", {"leistungen": ["aufenthaltsraum"]}),
         ("Veranstaltung (Personenzahl)", "veranstaltungsteilnahme", {"teilnehmende": 10}),
     ]
-    assert "Jugendarbeit eingespielt: 8 Dokumentationstypen angelegt" in out.getvalue()
+    assert "Jugendarbeit eingespielt: 12 Dokumentationstypen angelegt" in out.getvalue()
 
 
 def test_quick_templates_reference_normal_types_and_valid_fields():
