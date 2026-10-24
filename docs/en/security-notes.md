@@ -41,4 +41,5 @@ Snapshot event cohorts use additive weights, separate from current event identit
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-23 -->
-<!-- source-hash: 3527133534d18f1f698eef54299fe3c78f6b1537 -->
+<!-- source-hash: bd92c4c20a46adc635f2ca2c7d48a30f23b3acff -->
+<!-- translation-date: 2026-10-24 -->
