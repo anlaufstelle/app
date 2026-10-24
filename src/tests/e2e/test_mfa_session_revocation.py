@@ -213,7 +213,7 @@ def _raw_queue_count(page):
 
 
 def _dispatch_online_and_await_sync(page):
-    """Dispatch reconnect and await the sync orchestrator's real completion event."""
+    """Dispatch reconnect and await the real completion event of the offline sync run."""
     return page.evaluate(
         """async () => {
             const syncOrchestrator = window.syncOrchestrator;
