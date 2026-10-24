@@ -224,13 +224,43 @@ class TestBuildExternalReportContactStagePersonsCollapse:
         doc_type = DocumentType.objects.create(
             facility=facility, name="Kontakt", report_key="contact", tally_enabled=True
         )
-        for index in range(5):
+        for index in range(6):
             client = _make_client(
                 facility, staff_user, contact_stage=Client.ContactStage.IDENTIFIED, pseudonym=f"ID-{index:02d}"
             )
             _make_events(facility, client, doc_type, staff_user, 1)
         # Eine einzige qualifizierte Person mit 6 Ereignissen: Ereigniszahl (6)
-        # liegt ueber der Schwelle, die Personenzahl (1) klar darunter.
+        # liegt ueber der Schwelle, die Personenzahl (1) klar darunter. Drei
+        # anonyme Ereignisse halten die Ereignis-Randsumme der Stufen offen,
+        # sodass die gesperrte Stufe nicht aus Summe und Altersgruppe folgt.
+        lone_qualified = _make_client(
+            facility, staff_user, contact_stage=Client.ContactStage.QUALIFIED, pseudonym="QU-lone"
+        )
+        _make_events(facility, lone_qualified, doc_type, staff_user, 6)
+        _make_events(facility, None, doc_type, staff_user, 3, is_anonymous=True)
+
+        report = build_external_report(facility, *report_period)
+
+        assert report["by_contact_stage"]["identifiziert"] == 6
+        assert report["by_contact_stage"]["qualifiziert"] is None
+
+    def test_person_gated_stage_is_not_recoverable_from_total_and_age_row(self, facility, staff_user, report_period):
+        """Without anonymous events the stage figure would be fixed by two other figures.
+
+        Five identified persons and one qualified person with six events: if the
+        total (11), the identified stage (5) and the age row of all persons (11)
+        were all published, the qualified stage would follow as 11 - 5 - (11 - 11) = 6.
+        That exact value shows that the stage fell because fewer than the threshold
+        of persons stand behind it. At least one of the three figures stays withheld.
+        """
+        doc_type = DocumentType.objects.create(
+            facility=facility, name="Kontakt", report_key="contact", tally_enabled=True
+        )
+        for index in range(5):
+            client = _make_client(
+                facility, staff_user, contact_stage=Client.ContactStage.IDENTIFIED, pseudonym=f"ID-{index:02d}"
+            )
+            _make_events(facility, client, doc_type, staff_user, 1)
         lone_qualified = _make_client(
             facility, staff_user, contact_stage=Client.ContactStage.QUALIFIED, pseudonym="QU-lone"
         )
@@ -238,8 +268,10 @@ class TestBuildExternalReportContactStagePersonsCollapse:
 
         report = build_external_report(facility, *report_period)
 
-        assert report["by_contact_stage"]["identifiziert"] == 5
+        age_unknown = next(row["count"] for row in report["by_age_cluster"] if row["cluster"] == "unknown")
+        needed = (report["total_contacts"], report["by_contact_stage"]["identifiziert"], age_unknown)
         assert report["by_contact_stage"]["qualifiziert"] is None
+        assert None in needed
 
 
 class TestBuildExternalReportPopulationsMetadata:
