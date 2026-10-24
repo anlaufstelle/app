@@ -140,8 +140,17 @@ EXPECTED = {
     },
     "EpisodeForm": {
         "title": ("TextInput", True, {"maxlength": "200"}),
-        "description": ("Textarea", True, {"rows": 4, "cols": "40"}),
-        "document_type": ("Select", True, {}),
+        "document_type": (
+            "Select",
+            True,
+            {
+                "hx-get": ANY,
+                "hx-target": "#dynamic-fields",
+                "hx-trigger": "change",
+                "hx-include": "[name='document_type']",
+            },
+        ),
+        "confirm_data_loss": ("HiddenInput", False, {}),
         "started_at": ("AppDateInput", True, {}),
         "ended_at": ("AppDateInput", True, {}),
     },
@@ -194,8 +203,17 @@ EXPECTED = {
     "WorkItemForm": {
         "item_type": ("Select", True, {}),
         "title": ("TextInput", True, {"maxlength": "200"}),
-        "description": ("Textarea", True, {"rows": 4, "cols": "40"}),
-        "document_type": ("Select", True, {}),
+        "document_type": (
+            "Select",
+            True,
+            {
+                "hx-get": ANY,
+                "hx-target": "#dynamic-fields",
+                "hx-trigger": "change",
+                "hx-include": "[name='document_type']",
+            },
+        ),
+        "confirm_data_loss": ("HiddenInput", False, {}),
         "priority": ("Select", True, {}),
         "due_date": (
             "AppDateInput",

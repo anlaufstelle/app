@@ -30,6 +30,7 @@ from core.services.case import (
 )
 from core.services.case.workitems import filter_completed_workitems, workitem_form_state_token
 from core.services.client import resolve_writable_client
+from core.services.entity_details import entity_details_context
 from core.services.scoping import get_scoped_object
 from core.services.workitem_visibility import workitems_for_read
 from core.utils.formatting import isoformat_or_none
@@ -307,7 +308,7 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
 
     def get(self, request):
         facility = request.current_facility
-        form = WorkItemForm(facility=facility)
+        form = WorkItemForm(facility=facility, user=request.user)
 
         client_id = request.GET.get("client")
         client_pseudonym = ""
@@ -330,6 +331,7 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
             "client_id": client_id or "",
             "client_pseudonym": client_pseudonym,
         }
+        context.update(entity_details_context(form))
         return render(request, "core/workitems/form.html", context)
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
@@ -362,7 +364,7 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
             if existing_pk:
                 return redirect("core:workitem_inbox")
 
-        form = WorkItemForm(request.POST, facility=facility)
+        form = WorkItemForm(request.POST, facility=facility, user=request.user)
 
         if form.is_valid():
             try:
@@ -378,7 +380,7 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
                         item_type=form.cleaned_data["item_type"],
                         title=form.cleaned_data["title"],
                         document_type=form.cleaned_data["document_type"],
-                        description=form.cleaned_data.get("description", ""),
+                        **form.dynamic_payload(),
                         priority=form.cleaned_data["priority"],
                         due_date=form.cleaned_data.get("due_date"),
                         remind_at=form.cleaned_data.get("remind_at"),
@@ -441,6 +443,7 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
             "client_id": request.POST.get("client", ""),
             "client_pseudonym": "",
         }
+        context.update(entity_details_context(form))
         return render(request, "core/workitems/form.html", context)
 
 
@@ -463,7 +466,9 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
         # innerhalb ihrer Facility.
         if not can_user_mutate_workitem(request.user, workitem):
             return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
-        form = WorkItemForm(instance=workitem, facility=request.current_facility, pinned_client=workitem.client)
+        form = WorkItemForm(
+            instance=workitem, facility=request.current_facility, user=request.user, pinned_client=workitem.client
+        )
         context = {
             "form": form,
             "workitem": workitem,
@@ -480,6 +485,7 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             # mitgeschickten Wert durch und erzeugt nie einen neuen.
             "expected_updated_at": workitem.updated_at.isoformat(),
         }
+        context.update(entity_details_context(form))
         return render(request, "core/workitems/form.html", context)
 
     def post(self, request, pk):
@@ -498,6 +504,7 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             request.POST,
             instance=workitem,
             facility=request.current_facility,
+            user=request.user,
             pinned_client=pinned_client,
         )
 
@@ -526,10 +533,11 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
                     # klassische HTML-Formular-Pfad bleibt unverändert
                     # (kein require).
                     require_version_token=wants_json,
+                    confirm_data_loss=form.cleaned_data.get("confirm_data_loss", False),
                     item_type=form.cleaned_data["item_type"],
                     title=form.cleaned_data["title"],
                     document_type=form.cleaned_data["document_type"],
-                    description=form.cleaned_data.get("description", ""),
+                    **form.dynamic_payload(),
                     priority=form.cleaned_data["priority"],
                     due_date=form.cleaned_data.get("due_date"),
                     remind_at=form.cleaned_data.get("remind_at"),
@@ -589,4 +597,5 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             # sonst entginge ein HTMX-Absenden ohne Token der Ablehnung.
             "expected_updated_at": request.POST.get("expected_updated_at", ""),
         }
+        context.update(entity_details_context(form))
         return render(request, "core/workitems/form.html", context)

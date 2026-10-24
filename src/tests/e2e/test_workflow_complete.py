@@ -231,7 +231,7 @@ class TestIntegrationWorkflow:
         page.fill('input[name="title"]', title)
         page.select_option('select[name="item_type"]', "task")
         page.select_option('select[name="priority"]', "normal")
-        page.fill('textarea[name="description"]', "E2E-Test Integration.")
+        page.fill('textarea[name="workitem-details"]', "E2E-Test Integration.")
         page.locator(SUBMIT).click()
         page.wait_for_load_state("domcontentloaded")
 

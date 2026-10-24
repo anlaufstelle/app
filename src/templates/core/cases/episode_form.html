@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n nav_tags %}
+{% load i18n nav_tags core_tags %}
 
 {% block title %}{% if is_edit %}{% trans "Episode bearbeiten" %}{% else %}{% trans "Neue Episode" %}{% endif %} – Anlaufstelle{% endblock %}
 
@@ -24,7 +24,7 @@
         {% endif %}
     </div>
 
-    <form method="post" class="space-y-4">
+    <form method="post" class="space-y-4" {% include "core/partials/_dynamic_loss_confirm_attrs.html" %}>
         {% csrf_token %}
         {% for field in form.hidden_fields %}{{ field }}{% endfor %}
         {% include "core/_form_errors.html" %}
@@ -36,14 +36,18 @@
                 <div><dt class="font-medium">{{ field.label }}</dt><dd class="whitespace-pre-wrap">{{ field.value|default:"—" }}</dd></div>
                 {% endfor %}
             </dl>
+            {% entity_dynamic_details current_episode_form.instance request.user %}
         </section>
         {% endif %}
 
         <div class="card p-5 space-y-4">
             {% for field in form.visible_fields %}
-            {% include "components/_form_field.html" with field=field %}
+            {% if field.name != "confirm_data_loss" %}{% include "components/_form_field.html" with field=field %}{% endif %}
             {% endfor %}
         </div>
+
+        {% include "core/partials/_dynamic_loss_warning.html" %}
+        <div id="dynamic-fields">{% include "core/partials/dynamic_fields.html" %}</div>
 
         <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
             <button type="submit" class="w-full sm:w-auto px-4 py-2 btn-primary">

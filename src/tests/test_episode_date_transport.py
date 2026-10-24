@@ -7,6 +7,7 @@ import pytest
 from django.urls import reverse
 
 from core.services.case.episodes import episode_basis_token
+from tests._dynamic_test_data import detail_form_values
 
 pytestmark = pytest.mark.django_db
 
@@ -42,7 +43,7 @@ def test_title_edit_preserves_rendered_date_range(client, staff_user, case_open,
         url,
         {
             "title": "Changed title",
-            "description": episode.description,
+            **detail_form_values(episode),
             "started_at": inputs["started_at"],
             "ended_at": inputs["ended_at"],
             "basis_token": episode_basis_token(episode),

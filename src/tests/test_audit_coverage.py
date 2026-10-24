@@ -22,6 +22,7 @@ from core.services.case.episodes import episode_basis_token
 from core.services.client import update_client
 from core.services.events import update_event
 from core.services.system import log_settings_change, snapshot_settings, update_settings
+from tests._dynamic_test_data import detail_form_values
 from tests._standard_text import record_text, set_record_text, text_fields
 
 
@@ -502,7 +503,7 @@ class TestUpdateRouteAuditEnrollment:
         data = {
             "basis_token": episode_basis_token(episode),
             "title": episode.title,
-            "description": episode.description or "",
+            **detail_form_values(episode),
             "started_at": episode.started_at.isoformat(),
             "ended_at": episode.ended_at.isoformat() if episode.ended_at else "",
         }

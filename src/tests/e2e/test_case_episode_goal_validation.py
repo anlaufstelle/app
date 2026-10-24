@@ -94,7 +94,7 @@ class TestEpisodeDates:
             page.goto(f"{base_url}/cases/{case_pk}/episodes/{pk}/edit/", wait_until="domcontentloaded")
             expect_date_value(page, "input[name='started_at']", started)
             expect_date_value(page, "input[name='ended_at']", expected_end)
-            page.fill("textarea[name='description']", f"Beschreibung {title}")
+            page.fill("textarea[name='standard-description']", f"Beschreibung {title}")
             page.locator("#main-content button[type='submit']").last.click()
             page.wait_for_url(re.compile(r"/cases/[0-9a-f-]{36}/$"), timeout=10000)
             assert _db(e2e_env, f"Episode.objects.get(pk='{pk}').started_at") == started

@@ -949,6 +949,8 @@ EXPECTATIONS = (
     # M2 P7 (Refs #1058): STAFF_PLUS — bewusst enger als das Event-Partial.
     # Personen anlegen/bearbeiten ist STAFF_PLUS (``client_create``), also darf
     # auch die Feldflaeche dieses Formulars nicht tiefer aufgehen.
+    E("core:episode_fields_partial", "partials-htmx", get=STAFF_PLUS),
+    E("core:workitem_fields_partial", "partials-htmx", get=STAFF_PLUS),
     E("core:client_fields_partial", "partials-htmx", get=STAFF_PLUS),
     E("core:event_fields_partial", "partials-htmx", get=ASSISTANT_PLUS),
     # Strichlisten-„+1" (Refs #1349/#1906): document_type kommt in Query/POST

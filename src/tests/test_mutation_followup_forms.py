@@ -33,14 +33,7 @@ from core.forms.workitems import WorkItemForm
 
 @pytest.mark.django_db
 class TestEpisodeFormFieldRequired:
-    """Identitäts-Checks für ``required is False`` in EpisodeForm.__init__.
-
-    Bestehender Test ``test_ended_at_and_description_optional`` (in
-    test_forms_cases.py) prüft VERHALTEN (Form ist valide ohne diese
-    Felder) — aber ``required = None`` würde Django auch akzeptieren,
-    weil Django ``None`` als falsy auswertet. Daher hier ein expliziter
-    ``is False``-Check.
-    """
+    """Check optional metadata and the absence of fixed episode details."""
 
     def test_ended_at_required_is_explicitly_false(self):
         form = EpisodeForm()
@@ -48,9 +41,10 @@ class TestEpisodeFormFieldRequired:
         # Mutationen wie ``required = None`` (None is False → False).
         assert form.fields["ended_at"].required is False
 
-    def test_description_required_is_explicitly_false(self):
+    def test_fixed_description_is_absent(self):
         form = EpisodeForm()
-        assert form.fields["description"].required is False
+        assert "description" not in form.fields
+        assert form.data_form.fields == {}
 
 
 @pytest.mark.django_db
@@ -61,9 +55,10 @@ class TestWorkItemFormFieldRequired:
         form = WorkItemForm(facility=facility)
         assert form.fields["assigned_to"].required is False
 
-    def test_description_required_is_explicitly_false(self, facility):
+    def test_fixed_description_is_absent(self, facility):
         form = WorkItemForm(facility=facility)
-        assert form.fields["description"].required is False
+        assert "description" not in form.fields
+        assert form.data_form.fields == {}
 
     def test_recurrence_required_is_explicitly_false(self, facility):
         form = WorkItemForm(facility=facility)

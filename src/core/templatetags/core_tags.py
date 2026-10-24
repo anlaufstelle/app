@@ -277,3 +277,11 @@ def activity_target_url(activity):
         return reverse(url_name, args=[activity.target_id])
     except Exception:
         return ""
+
+
+@register.inclusion_tag("core/partials/dynamic_data_display.html")
+def entity_dynamic_details(record, user):
+    """Render role-filtered dynamic values in entity rows and details."""
+    from core.services.dynamic_data import build_dynamic_data_context
+
+    return build_dynamic_data_context(record.document_type, record.data_json, user)

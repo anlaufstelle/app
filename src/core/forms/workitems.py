@@ -9,6 +9,7 @@ from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.dynamic import configure_entity_document_type
+from core.forms.entity_details import EntityDetailsMixin
 from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
 from core.models import DocumentType, User, WorkItem
 from core.services.case.workitems import assignable_workitem_users
@@ -36,7 +37,7 @@ def min_workitem_date() -> date:
     return timezone.localdate()
 
 
-class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
+class WorkItemForm(EntityDetailsMixin, TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
     """Form for creating and editing WorkItems."""
 
     client = forms.UUIDField(required=False, widget=forms.HiddenInput())
@@ -46,7 +47,6 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
         fields = [
             "item_type",
             "title",
-            "description",
             "document_type",
             "priority",
             "due_date",
@@ -55,11 +55,6 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
             "assigned_to",
         ]
         widgets = {
-            "description": forms.Textarea(
-                attrs={
-                    "rows": 4,
-                }
-            ),
             # Explizites ISO-Format (Refs #619): HTML5 `<input type="date">`
             # akzeptiert nur `YYYY-MM-DD`; ohne `format=` nimmt Django den
             # ersten Eintrag aus DATE_INPUT_FORMATS — unter LANGUAGE_CODE=de-DE
@@ -70,9 +65,11 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
             "remind_at": AppDateInput(format="%Y-%m-%d", attrs={"type": "date"}),
         }
 
-    def __init__(self, *args, facility=None, pinned_client=None, **kwargs):
+    def __init__(self, *args, facility=None, user=None, pinned_client=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.details_original_keys = set(self.data)
         configure_entity_document_type(self, facility, DocumentType.EntityType.WORKITEM)
+        self.configure_details(facility, user, "workitem")
         self.facility = facility
         # Ursprungs-Pinning (Refs #1786): nur beim Bearbeiten einer Aufgabe,
         # die bereits eine Person trägt. Eine personenlose Aufgabe bekommt
@@ -96,7 +93,6 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
         # Refs #2381: Django 6.1 faellt ohne eigenes ``empty_label`` auf den
         # unuebersetzten Blank-Choice-Text ("- Select an option -") zurueck.
         self.fields["assigned_to"].empty_label = _("— Nicht zugewiesen —")  # type: ignore[attr-defined]
-        self.fields["description"].required = False
         # Recurrence has a DB default (NONE) — allow omitting it in POST.
         self.fields["recurrence"].required = False
 
@@ -137,7 +133,7 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
         # Maintainer-Entscheid 2026-08-05).
         #
         # Refs #1771: Der WorkItem-Pfad ist der heikelste Bestand am Gate:
-        # ``title`` und ``description`` sind Freitext, und es gibt KEINEN
+        # Task titles and dynamic values require the revocation gate; there is no
         # nachgelagerten Prune — ``_redact_workitems`` laeuft ausschliesslich
         # aus den beiden Anonymisierungs-Kaskaden. Ein Replay nach der
         # Anonymisierung bliebe also unbefristet als Klartext an einer

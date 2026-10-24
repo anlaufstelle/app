@@ -75,6 +75,7 @@ from core.views.clients import (
 )
 from core.views.dashboard import RoleDashboardView
 from core.views.dsgvo import DSGVODocumentDownloadView, DSGVOPackageView
+from core.views.entity_details import EpisodeFieldsPartialView, WorkItemFieldsPartialView
 from core.views.event_deletion import (
     DeletionRequestListView,
     DeletionRequestReviewView,
@@ -411,6 +412,8 @@ urlpatterns = [
     path("partials/clients/rename-warning/", ClientRenameWarningView.as_view(), name="client_rename_warning"),
     # Refs #1876: nicht-blockierender Duplikat-Hinweis im Personen-Anlagepfad.
     path("partials/clients/similar/", ClientSimilarHintView.as_view(), name="client_similar_hint"),
+    path("partials/episodes/fields/", EpisodeFieldsPartialView.as_view(), name="episode_fields_partial"),
+    path("partials/workitems/fields/", WorkItemFieldsPartialView.as_view(), name="workitem_fields_partial"),
     path("partials/clients/fields/", ClientFieldsPartialView.as_view(), name="client_fields_partial"),
     path("partials/events/fields/", EventFieldsPartialView.as_view(), name="event_fields_partial"),
     path("partials/tally/increment/", TallyIncrementView.as_view(), name="tally_increment"),

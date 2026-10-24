@@ -70,6 +70,7 @@ from core.services.case.goals import (
     unachieve_goal,
     update_goal,
 )
+from tests._dynamic_test_data import entity_details, read_details
 from tests._standard_text import record_text, text_fields
 
 #: ``FOR UPDATE``-Statements verraten die Sperre; der Tabellenname steht im
@@ -550,9 +551,11 @@ class TestCreateEpisodePassesItsArguments:
         Abweichung beim Mutanten: es greift der Modell-Default ``""``, die
         uebergebene Beschreibung geht verloren.
         """
-        created = create_episode(case_open, staff_user, title="Etappe", description="Wichtiger Kontext")
+        created = create_episode(
+            case_open, staff_user, title="Etappe", **entity_details(case_open, "episode", "Wichtiger Kontext")
+        )
 
-        assert created.description == "Wichtiger Kontext"
+        assert read_details(created) == "Wichtiger Kontext"
 
 
 # ---------------------------------------------------------------------------

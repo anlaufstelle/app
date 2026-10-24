@@ -462,7 +462,6 @@ def _locked_client_id(workitem):
 WORKITEM_FORM_STATE_FIELDS = (
     "item_type",
     "title",
-    "description",
     "document_type_id",
     "data_json",
     "priority",
@@ -573,7 +572,7 @@ def _maybe_duplicate_recurring(workitem, user, new_status) -> None:
     duplicate_recurring_workitem(workitem, user)
 
 
-def _locked_workitems(workitems, user):
+def _locked_workitems(workitems, user, *, protect_dynamic=False):
     """Refs #1022 (B2): Items innerhalb der Transaktion per
     ``select_for_update`` neu laden+locken — deterministisch nach ``pk``
     geordnet zur Deadlock-Vermeidung —, damit die Bulk-Pfade auf frischem
@@ -601,6 +600,10 @@ def _locked_workitems(workitems, user):
     for workitem in workitems:
         _assert_actor_in_facility(user, workitem.facility_id)
     facility_id = getattr(user, "facility_id", None)
+    if protect_dynamic and workitems:
+        from core.services.dynamic_protection import lock_dynamic_protection
+
+        lock_dynamic_protection(facility_id)
     pks = [w.pk for w in workitems]
     # KANONISCHE SPERR-REIHENFOLGE: Client VOR WorkItem (Modul-Docstring).
     # Die Personenbezuege werden dafuer UNGESPERRT vorgelesen — sie bestimmen
@@ -734,39 +737,32 @@ def update_workitem(
     expected_updated_at=None,
     require_version_token=False,
     expected_form_state=None,
+    confirm_data_loss=False,
     **fields,
 ):
-    """Update a work item with activity logging and audit logging.
+    """Update allowed task fields with activity and audit logging.
 
-    Accepts allowed fields (item_type, title, description, priority, due_date,
-    remind_at, recurrence, assigned_to, client) and persists them — die Liste im
-    Code ist die Wahrheit, dieser Satz ihr Spiegel. Writes an AuditLog entry with
-    the names of changed fields (no PII values).
+    The allowlist below defines the editable fields. Audit entries contain
+    changed field names without personal values.
 
-    ``expected_updated_at`` enables optimistic locking (Refs #531) — when the
-    DB-side ``updated_at`` differs, a ``ValidationError`` is raised.
+    ``expected_updated_at`` enables optimistic locking (Refs #531). A database
+    version mismatch raises a validation error unless the form-state contract
+    proves that only unrelated metadata changed.
 
-    ``require_version_token`` (Refs #1338, #1351): wird 1:1 an
-    ``check_version_conflict`` durchgereicht. ``WorkItemUpdateView`` setzt es
-    auf das Ergebnis von ``_wants_json_response`` — JSON-/Offline-Replay-
-    Clients müssen dadurch einen Token mitschicken, während der klassische
-    HTML-Formular-Pfad beim Default ``False`` bleibt (kein Verhaltensbruch).
+    ``require_version_token`` (Refs #1338, #1351) is forwarded to
+    ``check_version_conflict``. JSON and offline replay clients must supply a
+    token; ordinary HTML forms retain the default ``False``.
 
-    ``expected_form_state`` (Refs #2331): Fingerabdruck der Formularfelder zum
-    Renderzeitpunkt (:func:`workitem_form_state_token`). Weicht nur
-    ``updated_at`` ab, die Formularfelder in der Datenbank aber nicht — etwa
-    weil parallel nur der Status gewechselt wurde —, ist das kein Konflikt mit
-    dem Formular: die Eingabe wird gespeichert, der parallele Status bleibt.
-    Jede parallele Aenderung eines Formularfelds bleibt ein Konflikt. Ohne
-    Fingerabdruck (Default, JSON-/Offline-Replay) gilt der Versionsvertrag
-    unveraendert.
+    ``expected_form_state`` (Refs #2331) is the fingerprint captured when the
+    form was rendered. If only ``updated_at`` changed, for example because of a
+    concurrent status transition, saving preserves that transition. Concurrent
+    changes to any editable field remain conflicts. Without a fingerprint,
+    JSON and offline replay retain the original version contract.
 
-    Ursprungs-Pinning (Refs #1786, Maintainer-Entscheid 2026-08-05): Anders
-    als beim Fall (dort strikt) bleibt bei der Aufgabe das nachträgliche
-    Zuordnen erlaubt — eine personenlose Aufgabe darf einer Person zugeordnet
-    werden. Verboten sind Wechsel und Entfernen: ``title``/``description``
-    sind Freitext und es gibt keinen nachgelagerten Prune, ein Umhängen
-    schriebe also fremden Klartext an eine andere Person fest.
+    Client pinning (Refs #1786): an unassigned task may be associated with a
+    client later. An existing client cannot be changed or removed: titles and
+    dynamic values may contain personal details, and no later pruning would
+    prevent those details from being reassigned to another person.
     """
     from core.models import DocumentType
     from core.services.client.restriction import assert_processing_allowed
@@ -864,7 +860,6 @@ def update_workitem(
     allowed = {
         "item_type",
         "title",
-        "description",
         "document_type",
         "data_json",
         "priority",
@@ -881,6 +876,8 @@ def update_workitem(
         entity_type=DocumentType.EntityType.WORKITEM,
         use_default="document_type" not in fields,
     )
+    from core.services.entity_details import require_confirmed_type_loss
+
     if effective_type != locked_state.document_type:
         fields["document_type"] = effective_type
     if "document_type" in fields or "data_json" in fields:
@@ -891,9 +888,9 @@ def update_workitem(
             entity_type=DocumentType.EntityType.WORKITEM,
             entity_type_error=_("Der Dokumentationstyp muss für Aufgaben gelten."),
             old_data=locked_state.data_json,
-            prevent_data_loss=effective_type != locked_state.document_type and "data_json" not in fields,
         )
 
+    discarded_count = require_confirmed_type_loss(locked_state, effective_type, confirmed=confirm_data_loss)
     if "client" in fields:
         # Refs #1786 (TOCTOU): Der Pin-Zustand wird gegen den **DB-Stand unter
         # Row-Lock** entschieden, nicht gegen ``workitem.client_id``. Die
@@ -934,17 +931,13 @@ def update_workitem(
     # bereits mutiert — ein ``getattr(workitem, key) != value`` sähe hier
     # ``neu == neu`` und schriebe nie ``WORKITEM_UPDATE`` (TB6). Der Helper
     # liest die noch unveränderte DB-Zeile (FK-Vergleich über ``attname``).
-    # Refs #1789: NUR die genannten Spalten schreiben. Ein volles ``save()``
-    # schriebe alle Felder der uebergebenen Instanz zurueck — und die stammt
-    # aus einem frueheren Read. Alles ausserhalb dieser Allowlist (``status``/
-    # ``completed_at``, der Recurrence-Marker, die Soft-Delete-Felder und vor
-    # allem per ``_redact_workitems`` redigierte ``title``/``description``)
-    # waere damit auf den stalen Stand zurueckgesetzt. ``updated_at`` muss
-    # explizit mitgenannt werden: ``auto_now`` bumpt bei ``update_fields``
-    # nicht von allein (gleiches Muster wie ``bulk_update_workitem_status``).
-    # ``fields`` enthaelt nach dem ``client``-Pop exakt die zu schreibenden
-    # Spalten; Django akzeptiert dabei den Feldnamen (``assigned_to``) ebenso
-    # wie den ``attname``.
+    # Refs #1789: Write only the allowed columns. A full save would restore
+    # stale status/completion fields, recurrence markers, deletion flags, or
+    # titles and dynamic values cleared by ``_redact_workitems``.
+    # Include ``updated_at`` explicitly: ``auto_now`` does not add it when
+    # ``update_fields`` is used (as in ``bulk_update_workitem_status``).
+    # After removing ``client``, ``fields`` contains exactly the columns to
+    # write; Django accepts both field names and foreign-key attnames.
     changed_fields = apply_allowlisted_update(workitem, fields, allowed_fields=allowed)
 
     if changed_fields:
@@ -953,7 +946,11 @@ def update_workitem(
             user=user,
             facility=workitem.facility,
             target_obj=workitem,
-            detail={"changed_fields": changed_fields},
+            detail=(
+                {"changed_fields": changed_fields, "discarded_field_count": discarded_count}
+                if discarded_count
+                else {"changed_fields": changed_fields}
+            ),
         )
 
     log_activity(
@@ -1008,6 +1005,10 @@ def update_workitem_status(workitem, new_status, user, *, expected_updated_at=No
 
     # Einrichtungsgrenze der handelnden Person vor jeder Lesung und Sperre.
     _assert_actor_in_facility(user, workitem.facility_id)
+    from core.services.dynamic_protection import lock_dynamic_protection
+
+    if new_status == WorkItem.Status.DONE:
+        lock_dynamic_protection(workitem.facility_id)
     # Innerhalb der Transaktion neu laden + locken — Facility-Filter
     # explizit, damit RLS- und Tenant-Isolation greifen.
     # KANONISCHE SPERR-REIHENFOLGE: Client VOR WorkItem (Modul-Docstring).
@@ -1080,7 +1081,7 @@ def update_workitem_status(workitem, new_status, user, *, expected_updated_at=No
 def duplicate_recurring_workitem(workitem, user):
     """Create a follow-up WorkItem for a recurring task (Refs #266, #596).
 
-    Copies relevant fields (title, description, priority, assigned_to, client,
+    Copies relevant fields (title, data_json, priority, assigned_to, client,
     item_type, facility, recurrence, remind_at) and bumps ``due_date`` by the
     recurrence interval. If the source has no ``due_date`` the interval is
     applied to today so the new item still has a valid deadline.
@@ -1098,6 +1099,9 @@ def duplicate_recurring_workitem(workitem, user):
 
     # Einrichtungsgrenze der handelnden Person vor jeder Lesung und Sperre.
     _assert_actor_in_facility(user, workitem.facility_id)
+    from core.services.dynamic_protection import lock_dynamic_protection
+
+    lock_dynamic_protection(workitem.facility_id)
     # Art.-18-Gate (Refs #2045): Die Folgeaufgabe wird mit DEMSELBEN
     # Personenbezug neu angelegt — eine Neuanlage, kein Fortschreiben. Ohne
     # Guard entstand an einer eingeschraenkten Person auf dem DONE-Uebergang
@@ -1143,7 +1147,8 @@ def duplicate_recurring_workitem(workitem, user):
         assigned_to_id=source.assigned_to_id,
         item_type=source.item_type,
         title=source.title,
-        description=source.description,
+        document_type=source.document_type,
+        data_json=dict(source.data_json),
         priority=source.priority,
         due_date=new_due_date,
         remind_at=new_remind_at,
@@ -1186,7 +1191,7 @@ def bulk_update_workitem_status(workitems, user, status):
         raise ValueError(f"Invalid status: {status}")
 
     count = 0
-    for workitem in _locked_workitems(workitems, user):
+    for workitem in _locked_workitems(workitems, user, protect_dynamic=status == WorkItem.Status.DONE):
         # Refs #906: gemeinsame Transition-Logik mit dem Single-Pfad. Bulk
         # uebernimmt kein Auto-Assign (Designentscheidung, Refs #593).
         if not _apply_status_transition(workitem, status, user, auto_assign=False):

@@ -11,6 +11,7 @@ from core.services.case.cases import close_case, create_case
 from core.services.case.workitems import create_workitem
 from core.services.client import approve_client_deletion, request_client_deletion, restore_client
 from core.services.zeitstrom_watch import build_zeitstrom_page_scope
+from tests._dynamic_test_data import entity_details, read_details
 from tests._factories import make_client, make_document_type, make_event
 from tests.conftest import _make_attachment
 
@@ -187,7 +188,11 @@ def test_event_read_boundary(client, facility, reader, person_boundary, surface,
 def test_status_responses_hide_revoked_task(client, facility, reader, person_boundary, replay):
     person, revoke, restore = person_boundary
     task = create_workitem(
-        facility, reader, client=person, title="PRIVATE_TASK_MARKER", description="PRIVATE_DESCRIPTION_MARKER"
+        facility,
+        reader,
+        client=person,
+        title="PRIVATE_TASK_MARKER",
+        **entity_details(facility, "workitem", "PRIVATE_DESCRIPTION_MARKER"),
     )
     url = reverse("core:workitem_status_update", kwargs={"pk": task.pk})
     headers = (
@@ -206,7 +211,7 @@ def test_status_responses_hide_revoked_task(client, facility, reader, person_bou
     response = client.post(url, data if not replay else {"status": "done"}, **headers)
     assert response.status_code == 404
     assert task.title not in response.content.decode()
-    assert task.description not in response.content.decode()
+    assert read_details(task) not in response.content.decode()
     task.refresh_from_db()
     assert task.status == ("done" if replay else "open")
     restore()

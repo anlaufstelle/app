@@ -411,9 +411,12 @@ document.addEventListener("alpine:init", () => {
             });
         },
         confirmDiscard(event) {
-            if (!this._fieldsReloaded) return;
             const form = event && event.target;
             if (!form || typeof form.getAttribute !== "function") return;
+            const consent = form.querySelector("input[name='confirm_data_loss']");
+            if (consent) consent.value = "";
+            // Explicit consent is checked by the server even if HTMX did not swap.
+            if (!this._fieldsReloaded && !consent) return;
             // Refs #1776: zurueck auf den gespeicherten Ausgangstyp (Select-
             // Wert unveraendert) verwirft nichts — kein Grund fuer die
             // Rueckfrage. Fehlt das Select (theoretisch, z. B. gesperrter
@@ -423,7 +426,9 @@ document.addEventListener("alpine:init", () => {
             const msg = form.getAttribute("data-confirm-discard");
             if (msg && !window.confirm(msg)) {
                 event.preventDefault();
+                return;
             }
+            if (msg && consent) consent.value = "1";
         },
     }));
 

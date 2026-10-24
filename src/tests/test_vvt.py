@@ -28,6 +28,7 @@ from core.services.compliance import (
     get_activity,
     get_processing_activities,
 )
+from tests._dynamic_test_data import detail_form_values
 
 #: Wurzel des Anwendungs-Quellbaums (``src/``) — fuer die Quelltext-Guards
 #: unten, analog ``PO_PATH`` in ``test_i18n_catalog.py``.
@@ -406,7 +407,7 @@ class TestEpisodeAndGoalEditsAreAudited:
             {
                 "basis_token": episode_basis_token(episode),
                 "title": "Geaenderte Episode",
-                "description": episode.description or "",
+                **detail_form_values(episode),
                 "started_at": episode.started_at.isoformat(),
                 "ended_at": episode.ended_at.isoformat() if episode.ended_at else "",
             },

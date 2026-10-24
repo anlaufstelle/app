@@ -16,6 +16,7 @@ from core.models import Case
 from core.models.episode import Episode
 from core.services.case import cases_with_live_client, update_episode
 from core.services.case.episodes import close_episode, create_episode
+from core.services.entity_details import entity_details_context
 from core.services.form_state import FormStateConflictError
 from core.services.scoping import get_scoped_object
 from core.utils.ratelimit import ratelimit
@@ -39,6 +40,7 @@ def _episode_context(case, form, *, is_edit: bool, episode=None) -> dict:
     }
     if episode is not None:
         context["episode"] = episode
+    context.update(entity_details_context(form))
     return context
 
 
@@ -78,7 +80,7 @@ class EpisodeCreateView(StaffRequiredMixin, View):
             messages.error(request, _("Episoden können nur für offene Fälle erstellt werden."))
             return redirect("core:case_detail", pk=case.pk)
 
-        form = EpisodeForm(facility=request.current_facility)
+        form = EpisodeForm(facility=request.current_facility, user=request.user)
         context = _episode_context(case, form, is_edit=False)
         return render(request, "core/cases/episode_form.html", context)
 
@@ -89,7 +91,7 @@ class EpisodeCreateView(StaffRequiredMixin, View):
             messages.error(request, _("Episoden können nur für offene Fälle erstellt werden."))
             return redirect("core:case_detail", pk=case.pk)
 
-        form = EpisodeForm(request.POST, facility=request.current_facility)
+        form = EpisodeForm(request.POST, facility=request.current_facility, user=request.user)
         if form.is_valid():
             try:
                 create_episode(
@@ -97,7 +99,7 @@ class EpisodeCreateView(StaffRequiredMixin, View):
                     request.user,
                     title=form.cleaned_data["title"],
                     document_type=form.cleaned_data["document_type"],
-                    description=form.cleaned_data.get("description", ""),
+                    **form.dynamic_payload(),
                     started_at=form.cleaned_data["started_at"],
                     ended_at=form.cleaned_data["ended_at"],
                 )
@@ -128,14 +130,14 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
     def get(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         episode = get_object_or_404(Episode, pk=pk, case=case)
-        form = EpisodeForm(instance=episode, facility=request.current_facility)
+        form = EpisodeForm(instance=episode, facility=request.current_facility, user=request.user)
         context = _episode_context(case, form, is_edit=True, episode=episode)
         return render(request, "core/cases/episode_form.html", context)
 
     def post(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         episode = get_object_or_404(Episode, pk=pk, case=case)
-        form = EpisodeForm(request.POST, instance=episode, facility=request.current_facility)
+        form = EpisodeForm(request.POST, instance=episode, facility=request.current_facility, user=request.user)
         if form.is_valid():
             # ModelForm mutates its instance; the service compares and writes the locked row.
             try:
@@ -144,12 +146,14 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
                     request.user,
                     basis_token=form.cleaned_data["basis_token"],
                     **{field: form.cleaned_data[field] for field in EpisodeForm.Meta.fields},
+                    **form.dynamic_payload(),
+                    confirm_data_loss=form.cleaned_data.get("confirm_data_loss", False),
                 )
             except FormStateConflictError as exc:
-                current_form = EpisodeForm(instance=exc.current, facility=request.current_facility)
+                current_form = EpisodeForm(instance=exc.current, facility=request.current_facility, user=request.user)
                 data = request.POST.copy()
                 data["basis_token"] = current_form.initial["basis_token"]
-                form = EpisodeForm(data, instance=episode, facility=request.current_facility)
+                form = EpisodeForm(data, instance=episode, facility=request.current_facility, user=request.user)
                 form.is_valid()
                 form.add_error(None, exc)
                 context = _episode_context(case, form, is_edit=True, episode=episode)

@@ -141,13 +141,20 @@ def test_standard_field_role_matrix_and_type_switch(entity, facility, assistant_
         facility=facility, name="Replacement", slug="replacement", field_type="textarea", is_encrypted=True
     )
     DocumentTypeField.objects.create(document_type=alternative, field_template=replacement)
-    update(record, document_type=alternative, data_json={field.slug: "Old", replacement.slug: "New"})
+    consent = {"confirm_data_loss": True} if kind in {"episode", "workitem"} else {}
+    if kind in {"episode", "workitem"}:
+        with pytest.raises(ValidationError):
+            update(record, document_type=alternative, data_json={field.slug: "Old", replacement.slug: "New"})
+        record.refresh_from_db()
+        assert record.document_type == standard
+        assert safe_decrypt(record.data_json[field.slug]) == "Protected standard text"
+    update(record, document_type=alternative, data_json={field.slug: "Old", replacement.slug: "New"}, **consent)
     record.refresh_from_db()
     assert set(record.data_json) == {replacement.slug}
     assert is_encrypted_value(record.data_json[replacement.slug])
     assert safe_decrypt(record.data_json[replacement.slug]) == "New"
     DocumentType.objects.for_facility(facility).filter(entity_type=kind).update(is_active=False)
-    update(record, document_type=None, data_json={})
+    update(record, document_type=None, data_json={}, **consent)
     record.refresh_from_db()
     assert record.document_type is None
     assert record.data_json == {}

@@ -144,7 +144,6 @@ class TestEpisodeForm:
         form = EpisodeForm(
             data={
                 "title": "Test",
-                "description": "",
                 "started_at": "2026-01-01",
                 "ended_at": "",
             },
@@ -152,9 +151,8 @@ class TestEpisodeForm:
         assert_form_valid(form)
         assert form.cleaned_data["title"] == "Test"
 
-    def test_ended_at_and_description_optional(self):
-        """``__init__`` setzt ``ended_at.required = False`` und
-        ``description.required = False`` — Form ist mit nur Titel + Start valide."""
+    def test_minimal_episode_has_optional_end_and_no_fixed_details(self):
+        """An episode without a type needs only its title and start date."""
         form = EpisodeForm(
             data={
                 "title": "Minimal",
@@ -163,14 +161,14 @@ class TestEpisodeForm:
         )
         assert_form_valid(form)
         assert form.cleaned_data["ended_at"] is None
-        assert form.cleaned_data["description"] == ""
+        assert "description" not in form.fields
+        assert form.instance.data_json == {}
 
     def test_started_at_required(self):
         """``started_at`` bleibt Pflichtfeld (Django-Default des Model-Fields)."""
         form = EpisodeForm(
             data={
                 "title": "Ohne Start",
-                "description": "",
             },
         )
         assert_field_error(form, "started_at", "")
@@ -180,7 +178,6 @@ class TestEpisodeForm:
         form = EpisodeForm(
             data={
                 "title": "Rückdatierte Episode",
-                "description": "",
                 "started_at": "2026-06-01",
                 "ended_at": "2026-05-01",
             },

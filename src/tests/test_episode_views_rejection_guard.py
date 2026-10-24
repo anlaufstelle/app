@@ -95,7 +95,7 @@ MODI = [pytest.param(False, id="formular"), pytest.param(True, id="htmx")]
 
 
 def _episodenbestand(case_pk):
-    return sorted(Episode.objects.filter(case_id=case_pk).values_list("pk", "title", "description", "ended_at"))
+    return sorted(Episode.objects.filter(case_id=case_pk).values_list("pk", "title", "data_json", "ended_at"))
 
 
 def _meldungen(response):

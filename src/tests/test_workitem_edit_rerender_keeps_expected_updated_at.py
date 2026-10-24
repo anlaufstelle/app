@@ -19,6 +19,7 @@ from django.urls import reverse
 
 from core.models import WorkItem
 from core.services.case import update_workitem
+from tests._dynamic_test_data import detail_form_values, entity_details
 
 
 class _HiddenInputs(HTMLParser):
@@ -54,7 +55,7 @@ def _form_payload(workitem, hidden, **overrides):
         {
             "item_type": workitem.item_type,
             "title": workitem.title,
-            "description": workitem.description or "",
+            **detail_form_values(workitem),
             "priority": workitem.priority,
             "due_date": "",
             "remind_at": "",
@@ -76,7 +77,7 @@ def workitem(facility, client_identified, staff_user):
         status=WorkItem.Status.OPEN,
         priority=WorkItem.Priority.URGENT,
         title="Ursprünglicher Titel",
-        description="Beschreibung aus dem ersten Laden.",
+        **entity_details(facility, "workitem", "Beschreibung aus dem ersten Laden."),
     )
 
 

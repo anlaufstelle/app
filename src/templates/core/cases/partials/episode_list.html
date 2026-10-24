@@ -1,3 +1,4 @@
+{% load core_tags %}
 {% load i18n %}
 
 <div>
@@ -40,9 +41,7 @@
                 </div>
             </div>
 
-            {% if episode.description %}
-            <p class="text-sm text-ink-muted mt-2 whitespace-pre-wrap">{{ episode.description }}</p>
-            {% endif %}
+            {% entity_dynamic_details episode request.user %}
 
             <div class="mt-3 flex space-x-2">
                 <a href="{% url 'core:episode_update' case_pk=case.pk pk=episode.pk %}"

@@ -99,7 +99,7 @@ class TestWorkItemInbox:
 
         page.select_option("select[name='item_type']", value="task")
         page.fill("input[name='title']", "E2E-Testaufgabe")
-        page.fill("textarea[name='description']", "Testbeschreibung")
+        page.fill("textarea[name='workitem-details']", "Testbeschreibung")
         page.select_option("select[name='priority']", value="urgent")
 
         page.click("button:has-text('Speichern')")

@@ -30,12 +30,11 @@ from core.services.case.episodes import create_episode
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
 
-def test_create_episode_ohne_description_speichert_leerstring(staff_user, case_open):
-    """Pins ``x_create_episode__mutmut_1``: der Default-Parameterwert von
-    ``description`` wird zum Literal ``"XXXX"``."""
-    episode = create_episode(case_open, staff_user, title="Pin098-Etappe")
-
-    assert episode.description == ""
+def test_create_episode_without_details_keeps_empty_data(staff_user, case_open):
+    """Creating without a type or payload leaves no detail values."""
+    episode = create_episode(case_open, staff_user, title="Empty episode")
+    assert episode.data_json == {}
+    assert episode.document_type_id is None
 
 
 def test_create_episode_uebernimmt_das_angegebene_startdatum(staff_user, case_open):

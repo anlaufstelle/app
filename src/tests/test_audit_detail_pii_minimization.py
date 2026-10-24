@@ -28,6 +28,7 @@ from django.urls import reverse
 from core.models import AuditLog
 from core.services.audit.hash import hmac_hash_value
 from core.services.case.episodes import episode_basis_token
+from tests._dynamic_test_data import entity_details
 
 pytestmark = pytest.mark.django_db
 
@@ -250,12 +251,12 @@ class TestEpisodeAndGoalUpdateDetailMinimized:
             staff_user,
             basis_token=episode_basis_token(episode),
             title="Klartext-Titel",
-            description="Klartext-Verlauf",
+            **entity_details(episode, "episode", "Klartext-Verlauf"),
         )
 
         log = AuditLog.objects.get(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk))
         assert set(log.detail) == {"case_id", "changed_fields"}
-        assert log.detail["changed_fields"] == ["title", "description"]
+        assert log.detail["changed_fields"] == ["title", "document_type", "data_json"]
         assert "Klartext" not in str(log.detail), "Feldwerte gehoeren nicht ins append-only AuditLog"
         assert log.target_type == "Episode"
 

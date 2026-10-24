@@ -9,6 +9,7 @@ from django.utils import timezone
 from core.models import Case, Client
 from core.models.episode import Episode
 from core.services.case.episodes import episode_basis_token
+from tests._dynamic_test_data import entity_details, read_details
 
 
 def _other_facility_case(other_facility):
@@ -38,7 +39,7 @@ class TestCaseCreateEpisode:
         episode = case_open.create_episode(
             user=staff_user,
             title="Erste Episode",
-            description="Beschreibung",
+            **entity_details(case_open, "episode", "Beschreibung"),
             started_at=timezone.localdate(),
         )
         assert episode.pk is not None
@@ -240,7 +241,7 @@ class TestUpdateEpisodeService:
             staff_user,
             basis_token=episode_basis_token(episode),
             title="Klartext-Titel",
-            description="Klartext-Verlauf",
+            **entity_details(episode, "episode", "Klartext-Verlauf"),
         )
 
         log = AuditLog.objects.get(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk))
@@ -256,7 +257,8 @@ class TestUpdateEpisodeService:
             staff_user,
             basis_token=episode_basis_token(episode),
             title=episode.title,
-            description=episode.description,
+            document_type=episode.document_type,
+            data_json=episode.data_json,
         )
 
         assert not AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE).exists()
@@ -281,7 +283,7 @@ class TestUpdateEpisodeService:
         laufende Redaktions-Kaskade mit dem stalen Klartext (Refs #1789)."""
         from core.services.case import update_episode
 
-        Episode.objects.filter(pk=episode.pk).update(description="Aus der Redaktion")
+        Episode.objects.filter(pk=episode.pk).update(**entity_details(episode, "episode", "Aus der Redaktion"))
         update_episode(
             episode,
             staff_user,
@@ -291,4 +293,4 @@ class TestUpdateEpisodeService:
 
         episode.refresh_from_db()
         assert episode.title == "Nur der Titel"
-        assert episode.description == "Aus der Redaktion"
+        assert read_details(episode) == "Aus der Redaktion"

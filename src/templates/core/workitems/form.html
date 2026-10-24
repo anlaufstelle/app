@@ -9,8 +9,9 @@
     {% back_link %}
     <h1 class="text-[22px] font-bold text-ink mb-6">{% if workitem %}{% trans "Aufgabe bearbeiten" %}{% else %}{% trans "Aufgabe erstellen" %}{% endif %}</h1>
 
-    <form method="post" class="space-y-5">
+    <form method="post" class="space-y-5" {% include "core/partials/_dynamic_loss_confirm_attrs.html" %}>
         {% csrf_token %}
+        {{ form.confirm_data_loss }}
         {% include "core/_form_errors.html" %}
         {% if workitem %}
         {# Token aus dem View-Kontext: beim ersten Laden der aktuelle Stand, bei der Neu-Anzeige der mitgeschickte Wert (Refs #2361). #}
@@ -25,8 +26,6 @@
             {# Titel #}
             {% include "components/_form_field.html" with field=form.title %}
 
-            {# Beschreibung #}
-            {% include "components/_form_field.html" with field=form.description %}
             {% include "components/_form_field.html" with field=form.document_type %}
 
             {# Priorität #}
@@ -115,6 +114,9 @@
             {# Zugewiesen an #}
             {% include "components/_form_field.html" with field=form.assigned_to %}
         </div>
+
+        {% include "core/partials/_dynamic_loss_warning.html" %}
+        <div id="dynamic-fields">{% include "core/partials/dynamic_fields.html" %}</div>
 
         <div class="flex flex-col sm:flex-row gap-2.5">
             <button type="submit" class="w-full sm:w-auto px-4 py-2 btn-primary">

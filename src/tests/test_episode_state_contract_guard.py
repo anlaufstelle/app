@@ -31,6 +31,7 @@ from core.models import Activity, AuditLog, Case, Client, Episode, User
 from core.services.case.episodes import close_episode, create_episode, episode_basis_token, update_episode
 from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, CASE_WRITE_REDACTED_MESSAGE
 from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
+from tests._dynamic_test_data import entity_details, read_details
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
@@ -147,13 +148,14 @@ class TestCreateEpisode:
 
     def test_eigene_einrichtung_legt_an_der_gesperrten_akte_an(self, case_open, staff_user):
         fall = Case.objects.get(pk=case_open.pk)
+        details = entity_details(fall, "episode", "Text")
 
         with mitschnitt() as m:
-            episode = create_episode(fall, staff_user, title="Neu", description="Text")
+            episode = create_episode(fall, staff_user, title="Neu", **details)
 
         assert m.sperrfolge()[:2] == [_PERSON, _FALL]
         frisch = Episode.objects.get(pk=episode.pk)
-        assert (frisch.case_id, frisch.title, frisch.description) == (case_open.pk, "Neu", "Text")
+        assert (frisch.case_id, frisch.title, read_details(frisch)) == (case_open.pk, "Neu", "Text")
         assert frisch.created_by_id == staff_user.pk
 
 
@@ -162,7 +164,7 @@ def _episode_geloescht(episode_id):
 
 
 def _episodenstand(episode_id):
-    return Episode.objects.filter(pk=episode_id).values_list("title", "description", "ended_at").get()
+    return Episode.objects.filter(pk=episode_id).values_list("title", "data_json", "ended_at").get()
 
 
 def _episode_entfernt(episode_id):

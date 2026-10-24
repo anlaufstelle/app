@@ -18,6 +18,8 @@ import re
 import pytest
 from django.urls import reverse
 
+from tests._dynamic_test_data import assign_details
+
 #: Die Abschnittsmarken der Detailseite in Renderreihenfolge.
 SECTION_LABELS = [
     "Typ",
@@ -28,7 +30,7 @@ SECTION_LABELS = [
     "Erstellt am",
     "Erstellt von",
     "Zugewiesen an",
-    "Beschreibung",
+    "Zusatzfelder",
 ]
 
 #: Die Pixelform, die die Marken tragen — identisch vor und nach dem Umbau.
@@ -38,9 +40,9 @@ LABEL_CLASSES = "text-[12px] font-bold uppercase tracking-wider text-ink-muted"
 @pytest.fixture
 def assigned_workitem(sample_workitem, staff_user):
     """Eine Aufgabe mit Beschreibung und Zuweisung — sonst fehlen zwei Marken."""
-    sample_workitem.description = "Rueckruf vereinbaren"
+    assign_details(sample_workitem, "Rueckruf vereinbaren")
     sample_workitem.assigned_to = staff_user
-    sample_workitem.save(update_fields=["description", "assigned_to"])
+    sample_workitem.save(update_fields=["document_type", "data_json", "assigned_to"])
     return sample_workitem
 
 
@@ -54,7 +56,7 @@ class TestWorkitemDetailHeadings:
     def test_section_label_is_a_real_h2(self, client, staff_user, assigned_workitem, label):
         content = self._content(client, staff_user, assigned_workitem)
 
-        assert re.search(rf"<h2[^>]*>\s*{re.escape(label)}\s*</h2>", content), (
+        assert re.search(rf"<h2[^>]*>\s*{re.escape(label)}(?:\s*<span[^>]*>[^<]*</span>)?\s*</h2>", content), (
             f"Abschnittsmarke {label!r} ist keine echte <h2>"
         )
 

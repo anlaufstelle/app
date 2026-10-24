@@ -1,3 +1,4 @@
+{% load core_tags %}
 {% load i18n date_tags %}
 {% if compact %}
 {# Compact mode: title + badges + due-date, no status buttons #}
@@ -86,9 +87,7 @@ kann.
     </div>
     {% endif %}
 
-    {% if wi.description %}
-    <p class="text-[13px] text-ink-soft mb-3">{{ wi.description|truncatewords:20 }}</p>
-    {% endif %}
+    {% entity_dynamic_details wi request.user %}
 
     {# Status-Buttons. Refs #1419: expected_updated_at gehoert in jeden Status-POST — es ist das Optimistic-Lock-Token des Offline-Payloads (der SW friert den Button-Body beim Queueing ein); online wertet der Server es bewusst nicht aus (Status-LWW bleibt). #}
     <div class="flex items-center gap-2">

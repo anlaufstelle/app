@@ -8,6 +8,7 @@ from django.urls import reverse
 
 from core.models import AuditLog, Episode
 from core.services.case import update_episode
+from tests._dynamic_test_data import assign_details, read_details
 
 pytestmark = pytest.mark.django_db
 
@@ -15,7 +16,7 @@ pytestmark = pytest.mark.django_db
 def episode_data(episode):
     return {
         "title": "My title",
-        "description": "My submitted draft",
+        "test-details-episode": "My submitted draft",
         "started_at": episode.started_at.isoformat(),
         "ended_at": "",
     }
@@ -29,7 +30,9 @@ def episode_token(client, episode):
     return client.get(episode_url(episode)).context["form"].initial.get("basis_token", "")
 
 
-@pytest.mark.parametrize("changed", [{"description": "Other draft"}, {"ended_at": date(2026, 10, 13)}])
+@pytest.mark.parametrize(
+    "changed", [{"data_json": {"test-details-episode": "Other draft"}}, {"ended_at": date(2026, 10, 13)}]
+)
 def test_stale_episode_retains_inputs_without_overwriting(client, staff_user, episode, changed):
     client.force_login(staff_user)
     data = episode_data(episode) | {"basis_token": episode_token(client, episode)}
@@ -38,7 +41,7 @@ def test_stale_episode_retains_inputs_without_overwriting(client, staff_user, ep
     response = client.post(episode_url(episode), data)
     assert response.status_code == 200
     assert response.context["form"].non_field_errors()
-    assert response.context["form"]["description"].value() == "My submitted draft"
+    assert response.context["data_form"]["test-details-episode"].value() == "My submitted draft"
     assert "My submitted draft" in response.content.decode()
     episode.refresh_from_db()
     assert all(getattr(episode, key) == value for key, value in changed.items())
@@ -46,7 +49,7 @@ def test_stale_episode_retains_inputs_without_overwriting(client, staff_user, ep
     data["basis_token"] = response.context["form"]["basis_token"].value()
     assert client.post(episode_url(episode), data).status_code == 302
     episode.refresh_from_db()
-    assert episode.description == "My submitted draft"
+    assert read_details(episode) == "My submitted draft"
     assert episode.ended_at is None
 
 
@@ -63,12 +66,12 @@ def test_invalid_episode_basis_is_rejected(client, staff_user, episode, kind):
             case=episode.case, title="Other", started_at=episode.started_at, created_by=staff_user
         )
         token = episode_token(client, other)
-    original = episode.description
+    original = read_details(episode)
     response = client.post(episode_url(episode), episode_data(episode) | {"basis_token": token})
     assert response.status_code == 200
     assert response.context["form"].non_field_errors()
     episode.refresh_from_db()
-    assert episode.description == original
+    assert read_details(episode) == original
 
 
 def test_episode_service_requires_basis(episode, staff_user):
@@ -89,7 +92,15 @@ def test_episode_service_checks_locked_state(client, episode, staff_user):
 def test_episode_service_returns_current_locked_object(client, episode, staff_user):
     client.force_login(staff_user)
     token = episode_token(client, episode)
-    episode.description = "Unsaved value outside requested fields"
+    assign_details(episode, "Unsaved value outside requested fields")
     updated = update_episode(episode, staff_user, basis_token=token, title="Saved")
-    assert updated.description != episode.description
+    assert read_details(updated) != read_details(episode)
     assert updated.title == "Saved"
+
+
+@pytest.fixture(autouse=True)
+def episode_detail_schema(facility):
+    """Use a real typed detail field without creating another episode."""
+    from tests._dynamic_test_data import entity_details
+
+    entity_details(facility, "episode", "")

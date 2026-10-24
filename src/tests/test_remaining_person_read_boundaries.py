@@ -11,6 +11,7 @@ from core.services.case.workitems import create_workitem, update_workitem
 from core.services.client import approve_client_deletion, request_client_deletion, restore_client
 from core.services.dashboard.activity import log_activity
 from core.services.zeitstrom_watch import build_zeitstrom_page_scope
+from tests._dynamic_test_data import entity_details
 from tests._factories import make_client, make_document_type, make_event
 
 pytestmark = pytest.mark.django_db
@@ -46,7 +47,13 @@ def revoked_person(request, facility, staff_user, lead_user):
 @pytest.mark.parametrize("method", ["get", "post"])
 def test_edit_reads_follow_person_revocation(client, facility, reader, revoked_person, method):
     person, revoke, restore = revoked_person
-    item = create_workitem(facility, reader, client=person, title="REVOKED_TASK_MARKER", description="Private detail")
+    item = create_workitem(
+        facility,
+        reader,
+        client=person,
+        title="REVOKED_TASK_MARKER",
+        **entity_details(facility, "workitem", "Private detail"),
+    )
     team = create_workitem(facility, reader, title="Team task")
     client.force_login(reader)
     request = getattr(client, method)

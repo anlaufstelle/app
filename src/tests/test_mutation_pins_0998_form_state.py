@@ -11,7 +11,7 @@ from core.models import Episode
 from core.services.form_state import FormStateConflictError, require_form_state, sign_form_state
 
 pytestmark = pytest.mark.django_db
-FIELDS = ("title", "description")
+FIELDS = ("title", "data_json")
 SALT = "baseline-test"
 
 
@@ -32,7 +32,8 @@ def test_identical_editable_values_do_not_share_object_identity(episode, facilit
     other = Episode.objects.create(
         case=episode.case,
         title=episode.title,
-        description=episode.description,
+        document_type=episode.document_type,
+        data_json=dict(episode.data_json),
         started_at=episode.started_at,
         created_by=staff_user,
     )
@@ -41,7 +42,7 @@ def test_identical_editable_values_do_not_share_object_identity(episode, facilit
         require_form_state(token, other, fields=FIELDS, facility_id=facility.pk, salt=SALT)
     assert error.value.current is other
     other.refresh_from_db()
-    assert (other.title, other.description) == (episode.title, episode.description)
+    assert (other.title, other.data_json) == (episode.title, episode.data_json)
 
 
 def test_invalid_token_explains_recovery(episode, facility):

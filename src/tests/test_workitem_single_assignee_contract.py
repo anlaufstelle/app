@@ -8,6 +8,7 @@ from django.urls import reverse
 from core.forms.workitems import WorkItemForm
 from core.models import Activity, AuditLog, User, WorkItem
 from core.services.case.workitems import update_workitem, update_workitem_status
+from tests._dynamic_test_data import entity_details, read_details
 
 pytestmark = pytest.mark.django_db
 
@@ -112,13 +113,15 @@ def test_unchanged_assignment_uses_locked_identity(item, staff_user, lead_user):
     # Another assignee on the passed instance must not become the comparison baseline.
     item.assigned_to = staff_user
     User.objects.filter(pk=lead_user.pk).update(is_active=False)
-    update_workitem(item, staff_user, assigned_to=lead_user, description="Historical assignment")
+    update_workitem(
+        item, staff_user, assigned_to=lead_user, **entity_details(item, "workitem", "Historical assignment")
+    )
     item.refresh_from_db()
     assert item.assigned_to_id == lead_user.pk
-    assert item.description == "Historical assignment"
+    assert read_details(item) == "Historical assignment"
     assert AuditLog.objects.filter(action=AuditLog.Action.WORKITEM_UPDATE).latest("timestamp").detail[
         "changed_fields"
-    ] == ["description"]
+    ] == ["document_type", "data_json"]
 
 
 @pytest.mark.parametrize("role", [User.Role.FACILITY_ADMIN, User.Role.LEAD, User.Role.STAFF, User.Role.ASSISTANT])

@@ -78,7 +78,8 @@ NAV_ROUTE_PREFIXES = (
 # #2521 adds the contact list route core:event_list: 174 -> 175.
 # #2524 adds record protection and downgrade routes: 175 -> 183.
 # Free-text review adds a list and one source-field review route.
-_EXPECTED_TOTAL_PATTERNS = 185
+# Refs #2668: Episode and task forms each add a dynamic-fields partial route.
+_EXPECTED_TOTAL_PATTERNS = 187
 
 
 def _prefixed_route_names() -> dict[str, str]:
@@ -130,6 +131,8 @@ def test_total_pattern_count_is_stable():
     sobald beim Split ein Pattern verloren geht oder sich verdoppelt.
     """
     assert _count_all_patterns(core_urlpatterns) == _EXPECTED_TOTAL_PATTERNS
+    assert reverse("core:episode_fields_partial") == "/partials/episodes/fields/"
+    assert reverse("core:workitem_fields_partial") == "/partials/workitems/fields/"
 
 
 def test_offline_client_list_shell_resolves_to_its_own_path():

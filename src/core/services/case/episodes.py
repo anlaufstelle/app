@@ -12,6 +12,7 @@ from core.services.audit import audit_event
 from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, lock_case_for_write
 from core.services.dynamic_data import clean_dynamic_data, resolve_entity_document_type
 from core.services.dynamic_protection import lock_dynamic_protection
+from core.services.entity_details import require_confirmed_type_loss
 from core.services.form_state import require_form_state, sign_form_state
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ EPISODE_CASE_NOT_OPEN_MESSAGE = _("Episoden können nur für offene Fälle erste
 #: Mass-Assignment durch versehentlich durchgereichte Felder — insbesondere
 #: ``case`` (ein Umhaengen der Episode in einen fremden Fall) und die
 #: Soft-Delete-Marker.
-_UPDATABLE_FIELDS = frozenset({"title", "description", "started_at", "ended_at", "document_type", "data_json"})
+_UPDATABLE_FIELDS = frozenset({"title", "started_at", "ended_at", "document_type", "data_json"})
 _EPISODE_STATE_FIELDS = (_UPDATABLE_FIELDS - {"document_type"}) | {"document_type_id"}
 _EPISODE_DOCUMENT_TYPE_ERROR = _("Der Dokumentationstyp muss für Episoden gelten.")
 
@@ -85,7 +86,7 @@ def _lock_episode_for_write(episode) -> Episode:
 
 
 @transaction.atomic
-def update_episode(episode, user, *, basis_token=None, **fields):
+def update_episode(episode, user, *, basis_token=None, confirm_data_loss=False, **fields):
     """Apply reviewed fields to the fresh locked row after the state contract."""
     for key in fields:
         if key not in _UPDATABLE_FIELDS:
@@ -120,8 +121,8 @@ def update_episode(episode, user, *, basis_token=None, **fields):
             entity_type=DocumentType.EntityType.EPISODE,
             entity_type_error=_EPISODE_DOCUMENT_TYPE_ERROR,
             old_data=locked.data_json,
-            prevent_data_loss=effective_type != locked.document_type and "data_json" not in fields,
         )
+    discarded_count = require_confirmed_type_loss(locked, effective_type, confirmed=confirm_data_loss)
     changed_fields = [key for key, value in fields.items() if getattr(locked, key) != value]
     if "document_type" in changed_fields and "data_json" not in changed_fields:
         changed_fields.append("data_json")
@@ -136,15 +137,17 @@ def update_episode(episode, user, *, basis_token=None, **fields):
         facility=locked.case.facility,
         target_obj=locked,
         # Episode plaintext must not survive redaction in the append-only audit.
-        detail={"case_id": str(locked.case_id), "changed_fields": changed_fields},
+        detail=(
+            {"case_id": str(locked.case_id), "changed_fields": changed_fields, "discarded_field_count": discarded_count}
+            if discarded_count
+            else {"case_id": str(locked.case_id), "changed_fields": changed_fields}
+        ),
     )
     return locked
 
 
 @transaction.atomic
-def create_episode(
-    case, user, *, title, description="", started_at=None, ended_at=None, document_type=None, data_json=None
-):
+def create_episode(case, user, *, title, started_at=None, ended_at=None, document_type=None, data_json=None):
     """Episode anlegen — Service-Naht ueber ``Case.create_episode`` (Refs #2045).
 
     Das Anlegen lag bisher als reine Modell-Methode vor und wurde von der View
@@ -191,7 +194,6 @@ def create_episode(
     return locked_case.create_episode(
         user=user,
         title=title,
-        description=description,
         started_at=started_at,
         ended_at=ended_at,
         document_type=document_type,

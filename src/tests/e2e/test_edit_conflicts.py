@@ -45,8 +45,10 @@ def _seed(e2e_env) -> dict[str, str]:
         f"case = Case.objects.create(facility=f, client=c, title='CONF-Fall-{marker}', "
         "  document_type=DocumentType.objects.get(facility=f, slug='standard-case'), "
         "data_json={'standard-description': 'Initial description'}, created_by=u, lead_user=u); "
-        f"ep = Episode.objects.create(case=case, title='CONF-Episode-{marker}', description='Ausgangsepisode', "
-        "  started_at=date.today() - timedelta(days=10), created_by=u); "
+        f"ep = Episode.objects.create(case=case, title='CONF-Episode-{marker}', "
+        "  started_at=date.today() - timedelta(days=10), created_by=u, "
+        "document_type=DocumentType.objects.get(facility=f, slug='standard-episode'), "
+        "data_json={'standard-description': 'Initial episode details'}); "
         f"g = OutcomeGoal.objects.create(case=case, title='CONF-Ziel-{marker}', created_by=u); "
         "e = Event.objects.create(facility=f, client=c, document_type=dt, occurred_at=timezone.now(), "
         "  data_json={'notiz': 'Ausgangsnotiz'}, created_by=u); "
@@ -217,12 +219,12 @@ class TestEditConflicts:
             assert _db(e2e_env, f"Episode.objects.get(pk='{ids['episode']}').ended_at") == _end_date()
 
             draft = _long_text("Entwurf von B mit leerem Ende")
-            page_b.fill("textarea[name='description']", draft)
+            page_b.fill("textarea[name='standard-description']", draft)
             _submit(page_b)
             current = page_b.locator("#current-episode-heading")
             expect(current).to_be_visible(timeout=10000)
             expect(current).to_have_text("Aktueller Episodenstand")
-            expect(page_b.locator("textarea[name='description']")).to_have_value(draft)
+            expect(page_b.locator("textarea[name='standard-description']")).to_have_value(draft)
             expect_date_value(page_b, "input[name='ended_at']", "")
             # The shown current state carries A's end date; the episode is still closed.
             end_row = page_b.locator("section[aria-labelledby='current-episode-heading'] div:has(> dt)").filter(
@@ -235,7 +237,12 @@ class TestEditConflicts:
             _submit(page_b)
             _wait_saved(page_b, detail)
             assert _db(e2e_env, f"Episode.objects.get(pk='{ids['episode']}').ended_at") == "None"
-            assert _db(e2e_env, f"Episode.objects.get(pk='{ids['episode']}').description") == draft
+            stored = _db(
+                e2e_env,
+                "__import__('core.services.file_vault', fromlist=['safe_decrypt']).safe_decrypt("
+                f"Episode.objects.get(pk='{ids['episode']}').data_json['standard-description'])",
+            )
+            assert stored == draft
         finally:
             context_b.close()
 

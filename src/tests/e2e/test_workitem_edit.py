@@ -31,7 +31,7 @@ def _create_overdue_task_for(username: str, title: str, e2e_env) -> str:
             "-c",
             (
                 "from datetime import timedelta; from django.utils import timezone; "
-                "from core.models import User, WorkItem; "
+                "from core.models import DocumentType, User, WorkItem; "
                 f"u = User.objects.get(username='{username}'); "
                 "past = timezone.localdate() - timedelta(days=10); "
                 "wi = WorkItem.objects.create(facility=u.facility, created_by=u, "
@@ -58,11 +58,13 @@ def _create_urgent_task_for(username: str, title: str, e2e_env) -> str:
             "--no-imports",
             "-c",
             (
-                "from core.models import User, WorkItem; "
+                "from core.models import DocumentType, User, WorkItem; "
                 f"u = User.objects.get(username='{username}'); "
                 "wi = WorkItem.objects.create(facility=u.facility, created_by=u, "
                 f"assigned_to=u, title='{title}', priority='urgent', status='open', "
-                "item_type='task', description='Langer Text, der nicht verloren gehen darf.'); "
+                "item_type='task', "
+                "document_type=DocumentType.objects.get(facility=u.facility, slug='standard-workitem'), "
+                "data_json={'workitem-details': 'Langer Text, der nicht verloren gehen darf.'}); "
                 "print(wi.pk)"
             ),
         ],

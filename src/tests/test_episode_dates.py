@@ -24,7 +24,7 @@ def url(name, case, episode=None):
 @pytest.mark.parametrize("end", ["2026-01-02", ""])
 def test_create_end_survives_reopening(client, staff_user, case_open, end):
     client.force_login(staff_user)
-    data = {"title": "Phase", "description": "Draft", "started_at": "2026-01-01", "ended_at": end}
+    data = {"title": "Phase", "test-details-episode": "Draft", "started_at": "2026-01-01", "ended_at": end}
     response = client.post(url("create", case_open), data)
     assert response.status_code == 302
     episode = Episode.objects.get(case=case_open)
@@ -33,7 +33,7 @@ def test_create_end_survives_reopening(client, staff_user, case_open, end):
     assert form.initial["started_at"] == date(2026, 1, 1)
     assert form.initial["ended_at"] == episode.ended_at
     assert form.initial["title"] == data["title"]
-    assert form.initial["description"] == data["description"]
+    assert form.data_form["test-details-episode"].value() == data["test-details-episode"]
     listing = client.get(reverse("core:case_detail", kwargs={"pk": case_open.pk})).content.decode()
     assert ("abgeschlossen" if end else "aktiv") in listing
 
@@ -41,7 +41,12 @@ def test_create_end_survives_reopening(client, staff_user, case_open, end):
 @pytest.mark.parametrize("editing", [False, True])
 def test_invalid_dates_retain_every_input(client, staff_user, case_open, episode, editing):
     client.force_login(staff_user)
-    data = {"title": "Draft title", "description": "Draft body", "started_at": "2026-02-02", "ended_at": "2026-02-01"}
+    data = {
+        "title": "Draft title",
+        "test-details-episode": "Draft body",
+        "started_at": "2026-02-02",
+        "ended_at": "2026-02-01",
+    }
     if editing:
         data["basis_token"] = episode_basis_token(episode)
     count = Episode.objects.count()
@@ -50,7 +55,9 @@ def test_invalid_dates_retain_every_input(client, staff_user, case_open, episode
     assert response.status_code == 200
     form = response.context["form"]
     assert "ended_at" in form.errors
-    assert all(form[key].value() == value for key, value in data.items())
+    assert all(
+        (form.data_form if key == "test-details-episode" else form)[key].value() == value for key, value in data.items()
+    )
     assert Episode.objects.count() == count
     episode.refresh_from_db()
     assert (episode.title, episode.started_at, episode.ended_at) == original
@@ -95,7 +102,7 @@ def test_future_start_cannot_close(episode, staff_user, direct):
 @pytest.mark.parametrize("editing", [False, True])
 def test_service_date_rejection_is_a_field_error(client, staff_user, case_open, episode, editing):
     client.force_login(staff_user)
-    data = {"title": "Draft", "description": "Retained", "started_at": "2026-02-02", "ended_at": "2026-02-02"}
+    data = {"title": "Draft", "test-details-episode": "Retained", "started_at": "2026-02-02", "ended_at": "2026-02-02"}
     if editing:
         data["basis_token"] = episode_basis_token(episode)
     service = "update_episode" if editing else "create_episode"
@@ -103,7 +110,7 @@ def test_service_date_rejection_is_a_field_error(client, staff_user, case_open, 
         response = client.post(url("update" if editing else "create", case_open, episode if editing else None), data)
     assert response.status_code == 200
     assert "ended_at" in response.context["form"].errors
-    assert response.context["form"]["description"].value() == "Retained"
+    assert response.context["data_form"]["test-details-episode"].value() == "Retained"
 
 
 def test_future_start_close_view_reports_rejection(client, episode, staff_user):
@@ -123,7 +130,7 @@ def test_invalid_existing_dates_can_be_corrected(client, episode, staff_user):
     episode.refresh_from_db()
     data = {
         "title": episode.title,
-        "description": "Correction",
+        "test-details-episode": "Correction",
         "started_at": "2026-02-02",
         "ended_at": "2026-02-01",
         "basis_token": episode_basis_token(episode),
@@ -184,3 +191,11 @@ def test_create_defaults_to_local_day_after_midnight(case_open, staff_user, dire
             else create_episode(case_open, staff_user, title="Local day")
         )
     assert episode.started_at == date(2026, 10, 15)
+
+
+@pytest.fixture(autouse=True)
+def episode_detail_schema(facility):
+    """Use a real typed detail field without creating another episode."""
+    from tests._dynamic_test_data import entity_details
+
+    entity_details(facility, "episode", "")

@@ -11,6 +11,7 @@ from core.services.case import (
     duplicate_recurring_workitem,
     update_workitem_status,
 )
+from tests._dynamic_test_data import entity_details, read_details
 
 
 @pytest.fixture
@@ -22,7 +23,7 @@ def recurring_monthly_workitem(facility, client_identified, staff_user):
         assigned_to=staff_user,
         item_type=WorkItem.ItemType.TASK,
         title="Monatliche Statistik",
-        description="Statistik zum Monatsende erstellen",
+        **entity_details(facility, "workitem", "Statistik zum Monatsende erstellen"),
         priority=WorkItem.Priority.IMPORTANT,
         status=WorkItem.Status.IN_PROGRESS,
         due_date=date(2026, 4, 30),
@@ -87,7 +88,7 @@ class TestWorkItemRecurrence:
         assert new_wi is not None
         assert new_wi.pk != recurring_monthly_workitem.pk
         assert new_wi.title == recurring_monthly_workitem.title
-        assert new_wi.description == recurring_monthly_workitem.description
+        assert read_details(new_wi) == read_details(recurring_monthly_workitem)
         assert new_wi.priority == recurring_monthly_workitem.priority
         assert new_wi.assigned_to_id == recurring_monthly_workitem.assigned_to_id
         assert new_wi.client_id == recurring_monthly_workitem.client_id

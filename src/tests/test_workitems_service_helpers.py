@@ -15,6 +15,7 @@ import pytest
 from core.models import WorkItem
 from core.models.activity import Activity
 from core.services.case import update_workitem
+from tests._dynamic_test_data import assign_details, entity_details, read_details
 
 
 @pytest.fixture
@@ -152,9 +153,11 @@ class TestUpdateWorkItemService:
         assert workitem_unassigned.title == "Neuer Titel"
 
     def test_returns_updated_workitem(self, facility, staff_user, workitem_open):
-        result = update_workitem(workitem_open, staff_user, description="Neue Beschreibung")
+        result = update_workitem(
+            workitem_open, staff_user, **entity_details(workitem_open, "workitem", "Neue Beschreibung")
+        )
         assert result.pk == workitem_open.pk
-        assert result.description == "Neue Beschreibung"
+        assert read_details(result) == "Neue Beschreibung"
 
     def test_update_workitem_erhaelt_parallelen_statuswechsel(self, workitem_open, staff_user):
         """Lost Update (Refs #1789): der Service schreibt nur die genannten Spalten.
@@ -215,15 +218,15 @@ class TestUpdateWorkItemService:
         from core.services.client.main import _redact_workitems
 
         workitem_open.title = "Klartext-Titel"
-        workitem_open.description = "Klartext-Beschreibung"
-        workitem_open.save(update_fields=["title", "description"])
+        assign_details(workitem_open, "Klartext-Beschreibung")
+        workitem_open.save(update_fields=["title", "document_type", "data_json"])
         _redact_workitems(client_identified)
 
         update_workitem(workitem_open, staff_user, priority=WorkItem.Priority.URGENT)
 
         workitem_open.refresh_from_db()
         assert workitem_open.title == "Aufgabe (anonymisiert)"
-        assert workitem_open.description == ""
+        assert read_details(workitem_open) == ""
         assert workitem_open.priority == WorkItem.Priority.URGENT
 
 

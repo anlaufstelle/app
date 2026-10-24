@@ -57,7 +57,8 @@ def test_type_choices_default_and_requirement(client, facility, second_facility,
     assert field.field.required is bool(count)
     assert field.value() == (active[0].pk if count == 1 else None)
     assert 'name="document_type"' in response.content.decode()
-    assert not any(key.startswith("hx-") for key in field.field.widget.attrs)
+    assert field.field.widget.attrs["hx-get"] == reverse(f"core:{kind}_fields_partial")
+    assert field.field.widget.attrs["hx-target"] == "#dynamic-fields"
 
 
 @pytest.mark.django_db

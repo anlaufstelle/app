@@ -19,6 +19,7 @@ from django.urls import reverse
 
 from core.models import WorkItem
 from core.services.case import update_workitem
+from tests._dynamic_test_data import detail_form_values, entity_details, read_details
 
 
 class _HiddenInputs(HTMLParser):
@@ -54,7 +55,7 @@ def _form_payload(workitem, hidden, **overrides):
         {
             "item_type": workitem.item_type,
             "title": workitem.title,
-            "description": workitem.description or "",
+            **detail_form_values(workitem),
             "priority": workitem.priority,
             "due_date": "",
             "remind_at": "",
@@ -76,7 +77,7 @@ def urgent_workitem(facility, client_identified, staff_user):
         status=WorkItem.Status.OPEN,
         priority=WorkItem.Priority.URGENT,
         title="Parallel bearbeitet",
-        description="Langer Beschreibungstext, der nicht verloren gehen darf.",
+        **entity_details(facility, "workitem", "Langer Beschreibungstext, der nicht verloren gehen darf."),
     )
 
 
@@ -112,7 +113,7 @@ class TestParallelStatusChangeKeepsEdit:
         assert urgent_workitem.status == WorkItem.Status.DONE, "Parallel gesetzter Status muss erhalten bleiben"
         assert urgent_workitem.completed_at is not None
         assert urgent_workitem.priority == WorkItem.Priority.NORMAL, "Eingabe aus Tab A darf nicht verloren gehen"
-        assert urgent_workitem.description == snapshot.description
+        assert read_details(urgent_workitem) == read_details(snapshot)
 
     def test_description_edit_survives_parallel_status_change(self, client, staff_user, urgent_workitem):
         client.force_login(staff_user)
@@ -123,13 +124,13 @@ class TestParallelStatusChangeKeepsEdit:
 
         response = client.post(
             reverse("core:workitem_update", kwargs={"pk": urgent_workitem.pk}),
-            _form_payload(snapshot, hidden, description="Neuer, langer Text aus Tab A."),
+            _form_payload(snapshot, hidden, **{"test-details-workitem": "Changed long task detail from tab A."}),
         )
 
         assert response.status_code == 302
         urgent_workitem.refresh_from_db()
         assert urgent_workitem.status == WorkItem.Status.DONE
-        assert urgent_workitem.description == "Neuer, langer Text aus Tab A."
+        assert read_details(urgent_workitem) == "Changed long task detail from tab A."
 
 
 @pytest.mark.django_db
