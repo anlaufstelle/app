@@ -59,6 +59,10 @@ def test_services_reject_invalid_type(carrier, staff_user, operation, invalid):
         doc_type = DocumentType.objects.create(
             facility=facility, name="Invalid type", entity_type="client" if invalid == "entity" else carrier[0]
         )
+    if invalid == "missing" and operation == "create":
+        # With no active type, an untyped payload is still rejected; a sole active type is now defaulted.
+        carrier[3].is_active = False
+        carrier[3].save(update_fields=["is_active"])
     record = make_record(carrier) if operation == "update" else None
     with pytest.raises(ValidationError):
         if record is None:

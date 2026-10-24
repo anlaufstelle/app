@@ -20,7 +20,7 @@ from core.services.case.state_contract import (
 )
 from core.services.compliance import user_can_see_event
 from core.services.dashboard import log_activity
-from core.services.dynamic_data import clean_dynamic_data
+from core.services.dynamic_data import clean_dynamic_data, resolve_entity_document_type
 from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.security import check_version_conflict
 
@@ -124,6 +124,9 @@ def create_case(facility, user, client, title, description="", lead_user=None, d
     if lead_user and lead_user.facility_id != facility.pk:
         raise ValueError(_("Fallverantwortlicher gehört nicht zur Einrichtung."))
 
+    document_type = resolve_entity_document_type(
+        facility, document_type, entity_type=DocumentType.EntityType.CASE, use_default=True
+    )
     data_json = clean_dynamic_data(
         facility,
         document_type,
@@ -275,10 +278,17 @@ def update_case(case, user, *, expected_updated_at=None, expected_form_state=Non
     # der Typ gewechselt, laeuft das bestehende ``data_json`` erneut durch die
     # Whitelist des NEUEN Typs: Slugs des alten Typs fallen weg (E11-Merge-
     # Policy), statt als unsichtbarer Ballast im JSONB liegenzubleiben.
+    effective_type = resolve_entity_document_type(
+        case.facility,
+        fields.get("document_type", locked.document_type),
+        entity_type=DocumentType.EntityType.CASE,
+        use_default="document_type" not in fields,
+    )
+    if effective_type != locked.document_type:
+        fields["document_type"] = effective_type
     if "document_type" in fields or "data_json" in fields:
         # ``.get(key, default)`` liefert bei vorhandenem Key auch ein explizites
         # ``None`` zurueck — ein bewusstes Leeren des Typs bleibt also erhalten.
-        effective_type = fields.get("document_type", case.document_type)
         raw_data = fields.get("data_json", case.data_json)
         fields["data_json"] = clean_dynamic_data(
             case.facility,

@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from core.models import AuditLog, DocumentType, Episode
 from core.services.audit import audit_event
 from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, lock_case_for_write
-from core.services.dynamic_data import clean_dynamic_data
+from core.services.dynamic_data import clean_dynamic_data, resolve_entity_document_type
 from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.form_state import require_form_state, sign_form_state
 
@@ -104,10 +104,18 @@ def update_episode(episode, user, *, basis_token=None, **fields):
         salt=_EPISODE_STATE_SALT,
     )
     validate_episode_dates(fields.get("started_at", locked.started_at), fields.get("ended_at", locked.ended_at))
+    effective_type = resolve_entity_document_type(
+        locked.facility,
+        fields.get("document_type", locked.document_type),
+        entity_type=DocumentType.EntityType.EPISODE,
+        use_default="document_type" not in fields,
+    )
+    if effective_type != locked.document_type:
+        fields["document_type"] = effective_type
     if "document_type" in fields or "data_json" in fields:
         fields["data_json"] = clean_dynamic_data(
             locked.facility,
-            fields.get("document_type", locked.document_type),
+            effective_type,
             fields.get("data_json", locked.data_json),
             entity_type=DocumentType.EntityType.EPISODE,
             entity_type_error=_EPISODE_DOCUMENT_TYPE_ERROR,
@@ -169,6 +177,9 @@ def create_episode(
         raise ValidationError(EPISODE_CASE_NOT_OPEN_MESSAGE)
     started_at = started_at or timezone.localdate()
     validate_episode_dates(started_at, ended_at)
+    document_type = resolve_entity_document_type(
+        locked_case.facility, document_type, entity_type=DocumentType.EntityType.EPISODE, use_default=True
+    )
     cleaned = clean_dynamic_data(
         locked_case.facility,
         document_type,

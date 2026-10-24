@@ -822,12 +822,7 @@ class TestEntityUpdateWithDynamicData:
     def test_removing_type_clears_data_json_without_error(
         self, client, staff_user, facility, request, entity: EntitySpec
     ):
-        """P5/P4b-Review: ``document_type=None`` + befuelltes ``data_json`` ist fail-closed.
-
-        Die View MUSS das Paar gemeinsam senden — sonst wirft der Service
-        ``ValidationError`` und der Benutzer bekaeme einen Fehler statt eines
-        geleerten Datensatzes.
-        """
+        """Removing a type clears its values when no active type remains."""
         doc_type = entity.doctype(request, "form")
         target = self._target(
             request,
@@ -838,6 +833,8 @@ class TestEntityUpdateWithDynamicData:
             doc_type,
             {entity.field("primary"): entity.value("primary")},
         )
+        doc_type.is_active = False
+        doc_type.save(update_fields=["is_active"])
         client.force_login(staff_user)
         response = client.post(
             reverse(entity.url("update"), args=[target.pk]),

@@ -753,6 +753,9 @@ class TestSequenzReihenfolge:
             created_by=staff_user,
         )
         _attach(facility, person, ft_file, staff_user)
+        # Type removal is permitted only when no active type remains.
+        doc_type.is_active = False
+        doc_type.save(update_fields=["is_active"])
         client.force_login(staff_user)
 
         with _Sperrmitschnitt() as captured:
@@ -787,6 +790,9 @@ class TestSequenzReihenfolge:
             created_by=staff_user,
         )
         _attach(facility, case, ft_file, staff_user)
+        # Type removal is permitted only when no active type remains.
+        doc_type.is_active = False
+        doc_type.save(update_fields=["is_active"])
         client.force_login(staff_user)
 
         with _Sperrmitschnitt() as captured:

@@ -687,7 +687,7 @@ def create_workitem(facility, user, *, client=None, **data):
     """
     from core.models import DocumentType
     from core.services.client.restriction import assert_processing_allowed
-    from core.services.dynamic_data import clean_dynamic_data
+    from core.services.dynamic_data import clean_dynamic_data, resolve_entity_document_type
     from core.services.dynamic_protection import lock_dynamic_protection
 
     facility_id = getattr(facility, "pk", facility)
@@ -698,6 +698,9 @@ def create_workitem(facility, user, *, client=None, **data):
     assert_processing_allowed(client, lock=True)
     if client is not None:
         _raise_if_clients_revoked([getattr(client, "pk", client)], facility_id)
+    data["document_type"] = resolve_entity_document_type(
+        facility, data.get("document_type"), entity_type=DocumentType.EntityType.WORKITEM, use_default=True
+    )
     data["data_json"] = clean_dynamic_data(
         facility,
         data.get("document_type"),
@@ -767,7 +770,7 @@ def update_workitem(
     """
     from core.models import DocumentType
     from core.services.client.restriction import assert_processing_allowed
-    from core.services.dynamic_data import clean_dynamic_data
+    from core.services.dynamic_data import clean_dynamic_data, resolve_entity_document_type
     from core.services.dynamic_protection import lock_dynamic_protection
     from core.services.security import check_version_conflict
 
@@ -872,10 +875,18 @@ def update_workitem(
         "recurrence",
     }
     check_update_allowlist(fields, allowed)
+    effective_type = resolve_entity_document_type(
+        workitem.facility,
+        fields.get("document_type", locked_state.document_type),
+        entity_type=DocumentType.EntityType.WORKITEM,
+        use_default="document_type" not in fields,
+    )
+    if effective_type != locked_state.document_type:
+        fields["document_type"] = effective_type
     if "document_type" in fields or "data_json" in fields:
         fields["data_json"] = clean_dynamic_data(
             workitem.facility,
-            fields.get("document_type", locked_state.document_type),
+            effective_type,
             fields.get("data_json", locked_state.data_json),
             entity_type=DocumentType.EntityType.WORKITEM,
             entity_type_error=_("Der Dokumentationstyp muss für Aufgaben gelten."),

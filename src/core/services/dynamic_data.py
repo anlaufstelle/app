@@ -211,6 +211,24 @@ def check_document_type(
     return document_type
 
 
+def resolve_entity_document_type(facility, document_type, *, entity_type, use_default=False):
+    """Resolve the sole active type or require an explicit selection (Refs #2666).
+
+    Explicit removals on update never trigger a default. Callers hold the
+    shared configuration lock while resolving and saving the entity.
+    """
+    from core.models import DocumentType
+
+    if document_type is not None:
+        return document_type
+    active = list(DocumentType.objects.for_facility(facility).filter(entity_type=entity_type, is_active=True)[:2])
+    if use_default and len(active) == 1:
+        return active[0]
+    if active:
+        raise ValidationError({"document_type": _("Bitte wählen Sie einen Dokumentationstyp aus.")})
+    return None
+
+
 def clean_dynamic_data(
     facility,
     document_type,

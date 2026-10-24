@@ -25,7 +25,7 @@ from core.services.client.locking import lock_clients
 from core.services.client.restriction import assert_processing_allowed
 from core.services.client.targets import client_activity_targets_q, client_legal_hold_targets_q
 from core.services.dashboard import log_activity
-from core.services.dynamic_data import clean_dynamic_data
+from core.services.dynamic_data import clean_dynamic_data, resolve_entity_document_type
 from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.events.history_diff import build_anonymization_marker
 from core.services.security import check_version_conflict
@@ -828,7 +828,10 @@ def create_client(facility, user, **data):
     if actor_facility_id is None or actor_facility_id != facility.pk:
         raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
     lock_dynamic_protection(facility.pk)
-    document_type = _normalize_document_type_kwarg(data)
+    document_type = resolve_entity_document_type(
+        facility, _normalize_document_type_kwarg(data), entity_type=DocumentType.EntityType.CLIENT, use_default=True
+    )
+    data["document_type"] = document_type
     data["data_json"] = clean_dynamic_data(
         facility,
         document_type,
@@ -953,10 +956,17 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     # Typ gewechselt, laeuft das bestehende ``data_json`` erneut durch die
     # Whitelist des NEUEN Typs: Slugs des alten Typs fallen weg (E11-Merge-
     # Policy), statt als unsichtbarer Ballast im JSONB liegenzubleiben.
+    effective_type = resolve_entity_document_type(
+        client.facility,
+        fields.get("document_type", locked.document_type),
+        entity_type=DocumentType.EntityType.CLIENT,
+        use_default="document_type" not in fields,
+    )
+    if effective_type != locked.document_type:
+        fields["document_type"] = effective_type
     if "document_type" in fields or "data_json" in fields:
         # ``.get(key, default)`` liefert bei vorhandenem Key auch ein explizites
         # ``None`` zurueck — ein bewusstes Leeren des Typs bleibt also erhalten.
-        effective_type = fields.get("document_type", client.document_type)
         raw_data = fields.get("data_json", client.data_json)
         fields["data_json"] = clean_dynamic_data(
             client.facility,
