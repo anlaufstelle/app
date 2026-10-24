@@ -22,6 +22,7 @@ from django import forms
 from django.conf import settings as django_settings
 from django.db.models import Q
 from django.forms.boundfield import BoundField
+from django.utils import translation
 from django.utils.translation import gettext_lazy as _
 
 from core.constants import DEFAULT_ALLOWED_FILE_TYPES, DEFAULT_MAX_FILE_SIZE_MB
@@ -203,7 +204,7 @@ def build_dynamic_form_field(ft, initial_data):
     kwargs_copy: dict[str, Any] = {
         "widget": widget,
         "required": ft.is_required,
-        "label": ft.name,
+        "label": translation.gettext(ft.name),
     }
     if ft.field_type == NUMBER:
         kwargs_copy["min_value"] = ft.min_value
