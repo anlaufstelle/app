@@ -59,8 +59,8 @@ def get_fernet():
     pro Row, Refs #644) spart das die wiederholte Fernet-Instantiierung
     und Key-Normalisierung.
 
-    Cache wird bei Test-``override_settings`` auf ``ENCRYPTION_KEYS``
-    über den ``setting_changed``-Signal-Receiver invalidiert.
+    The cache is invalidated by the ``setting_changed`` signal receiver when
+    tests use ``override_settings`` on ``ENCRYPTION_KEYS``.
     """
     keys = _get_keys()
     if not keys:
@@ -167,8 +167,8 @@ def safe_decrypt(value, default="[verschlüsselt]"):
         return decrypt_field(value)
     except EncryptionKeyMissing:
         logger.error(
-            "safe_decrypt: Entschlüsselung unmöglich — ENCRYPTION_KEYS "
-            "fehlt oder ist fehlkonfiguriert. Fehler wird durchgereicht statt maskiert."
+            "safe_decrypt: decryption impossible - ENCRYPTION_KEYS "
+            "is missing or misconfigured. Re-raising the error instead of masking it."
         )
         raise
     except EncryptionError:

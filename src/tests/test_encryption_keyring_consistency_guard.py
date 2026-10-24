@@ -99,14 +99,14 @@ def test_prod_startgate_rejects_separator_only_ring():
     result = _prod_import()
 
     assert result.returncode != 0
-    assert "Schlüsselring enthält keinen Schlüssel" in result.stderr
+    assert "The key ring contains no key" in result.stderr
 
 
 def test_prod_startgate_keeps_missing_key_message_when_nothing_is_set():
     result = _prod_import(key_ring="")
 
     assert result.returncode != 0
-    assert "ENCRYPTION_KEYS muss in Produktion gesetzt sein." in result.stderr
+    assert "ENCRYPTION_KEYS must be set in production." in result.stderr
 
 
 def test_prod_startgate_accepts_a_ring_with_separators_around_the_key():

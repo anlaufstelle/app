@@ -9,16 +9,15 @@ Getoetete Mutante (voller ``x...__mutmut_N``-Name, Modul
 
 * **``x__fingerprint_pepper__mutmut_3``**: das ``EncryptionKeyMissing``
   bekommt statt des Diagnosetexts ``None`` als einziges Argument
-  (Meldungsverlust). Ohne konfigurierten ``ENCRYPTION_KEYS``/
-  ``ENCRYPTION_KEYS`` bricht ``_fingerprint_pepper()`` bewusst ab, statt auf
-  einen ungepfefferten Digest zurueckzufallen (Refs #1942) — die Meldung
+  (Meldungsverlust). Ohne konfigurierten Schluesselring ``ENCRYPTION_KEYS``
+  bricht ``_fingerprint_pepper()`` bewusst ab, statt auf einen ungepfefferten
+  Digest zurueckzufallen (Refs #1942) — die Meldung
   benennt genau diesen Grund. Pin: exakte Assertion auf
   ``exc_info.value.args[0]``.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112, wie in den bestehenden
 099-Pin-Dateien) — fuer diesen einen Pin wird der so gesetzte Schluessel im
-Testkoerper GEZIELT wieder geleert (``settings.ENCRYPTION_KEYS`` /
-``settings.ENCRYPTION_KEYS`` auf leer), damit ``_get_keys()``
+Testkoerper GEZIELT wieder geleert (``settings.ENCRYPTION_KEYS`` auf leer), damit ``_get_keys()``
 (``core/services/file_vault/encryption.py``) eine leere Liste liefert und der
 Fehlerpfad ueberhaupt erreichbar wird.
 """
@@ -34,12 +33,11 @@ pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
 
 def test_fingerprint_pepper_ohne_schluessel_wirft_die_volle_diagnosemeldung(settings):
-    """``xǁ_fingerprint_pepperǁmutmut_3``: fehlt ``ENCRYPTION_KEYS``/
-    ``ENCRYPTION_KEYS``, muss ``EncryptionKeyMissing`` mit dem vollen
-    Diagnosetext ausgeloest werden — nicht mit ``None`` als einzigem
-    Argument. Der Schluessel wird hier gezielt geleert (die modulweite
-    ``_encryption_key``-Fixture setzt ihn zuvor), damit ``_get_keys()``
-    tatsaechlich ``[]`` liefert."""
+    """``xǁ_fingerprint_pepperǁmutmut_3``: when ``ENCRYPTION_KEYS`` is missing,
+    ``EncryptionKeyMissing`` must be raised with the full diagnostic text, not
+    with ``None`` as the only argument. The key is cleared on purpose here (the
+    module-wide ``_encryption_key`` fixture sets it beforehand) so that
+    ``_get_keys()`` really returns ``[]``."""
     settings.ENCRYPTION_KEYS = ""
 
     with pytest.raises(EncryptionKeyMissing) as exc_info:

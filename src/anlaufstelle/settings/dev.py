@@ -60,16 +60,16 @@ WHITENOISE_AUTOREFRESH = True
 WHITENOISE_USE_FINDERS = True
 
 # --- Feldverschlüsselung in Dev (Refs #1276) ---
-# Encryption ist in Dev optional, damit lokal ohne Key-Setup gearbeitet werden
-# kann. ABER: ohne Schlüsselring (ENCRYPTION_KEYS) werden sensible Felder (inkl. besonderer
-# Kategorien nach Art. 9 DSGVO) im KLARTEXT persistiert. Eine Staging-Box, die
-# versehentlich auf dev-Settings läuft, täte das bisher still (nur eine
-# einzeilige Log-Warnung). Daher:
-#   1) eine unübersehbar laute Warnung (Banner auf stderr, nicht nur Log), und
-#   2) ein opt-in-Guard REQUIRE_ENCRYPTION: ist er gesetzt (z. B. auf einer
-#      Staging-/Nicht-lokal-Box), verweigert dev.py den Start ohne Key —
-#      analog zum prod-Fail-Closed.
-# Lokal (Default, Flag ungesetzt) bleibt der Start ohne Key bewusst möglich.
+# Encryption is optional in dev so that local work needs no key setup.
+# BUT: without a key ring (ENCRYPTION_KEYS), sensitive fields (including special
+# categories under GDPR Art. 9) are persisted in PLAINTEXT. A staging box that
+# accidentally runs on dev settings used to do this silently (a single-line
+# log warning only). Hence:
+#   1) a loud warning (banner on stderr, not just the log), and
+#   2) an opt-in guard REQUIRE_ENCRYPTION: when set (e.g. on a staging or
+#      non-local box), dev.py refuses to start without a key, mirroring the
+#      fail-closed behavior of prod.
+# Locally (default, flag unset) starting without a key stays possible on purpose.
 REQUIRE_ENCRYPTION = os.environ.get("REQUIRE_ENCRYPTION", "").lower() in ("true", "1", "yes")
 
 # --- Lokaler One-Command-Stack: Schlüssel aus einer Datei (Refs #1062) ---
@@ -80,11 +80,11 @@ REQUIRE_ENCRYPTION = os.environ.get("REQUIRE_ENCRYPTION", "").lower() in ("true"
 # unten und schriebe Art.-9-Felder unverschlüsselt, während die Lesepfade an
 # bereits verschlüsselten Daten mit ``EncryptionKeyMissing`` abbrechen.
 #
-# Das lokale Compose reicht deshalb einen PFAD durch statt eines Wertes; jeder
-# Prozess im Container liest denselben Schlüssel aus derselben Datei. Strikt
-# opt-in: ohne ``LOCAL_ENCRYPTION_KEY_FILE`` ändert sich nichts — auch nicht in
-# ``test.py``/``e2e.py``, die von hier erben. Der Dateiinhalt wird zum einzigen
-# Eintrag des Schlüsselrings; ein gesetzter ``ENCRYPTION_KEYS`` gewinnt weiterhin.
+# The local compose stack therefore passes a PATH instead of a value; every
+# process in the container reads the same key from the same file. Strictly
+# opt-in: without ``LOCAL_ENCRYPTION_KEY_FILE`` nothing changes, not even in
+# ``test.py``/``e2e.py``, which inherit from here. The file content becomes the
+# only entry of the key ring; a set ``ENCRYPTION_KEYS`` still wins.
 _LOCAL_ENCRYPTION_KEY_FILE = os.environ.get("LOCAL_ENCRYPTION_KEY_FILE", "")
 
 
@@ -112,10 +112,10 @@ if not _ring_has_keys(ENCRYPTION_KEYS):  # noqa: F405
     import logging
 
     _plaintext_msg = (
-        "KLARTEXT-MODUS: ENCRYPTION_KEYS ist NICHT gesetzt — sensible Felder (inkl. "
-        "besonderer Kategorien nach Art. 9 DSGVO) werden UNVERSCHLÜSSELT gespeichert. "
-        "Nur für lokale Entwicklung mit Wegwerf-Daten zulässig. Für jede nicht-lokale "
-        "Umgebung ENCRYPTION_KEYS setzen oder mit REQUIRE_ENCRYPTION=1 hart absichern."
+        "PLAINTEXT MODE: ENCRYPTION_KEYS is NOT set - sensitive fields (including "
+        "special categories under GDPR Art. 9) are stored UNENCRYPTED. "
+        "Acceptable only for local development with throwaway data. For any non-local "
+        "environment set ENCRYPTION_KEYS or enforce it with REQUIRE_ENCRYPTION=1."
     )
     _border = "!" * 80
     logging.getLogger("core").warning("\n%s\n  %s\n%s", _border, _plaintext_msg, _border)

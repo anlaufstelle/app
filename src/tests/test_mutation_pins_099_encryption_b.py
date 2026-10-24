@@ -14,20 +14,14 @@ Survivor-Mutanten desselben Moduls — diese Datei behandelt ausschliesslich die
 
 Zwei Themen:
 
-* **``_reset_fernet_cache`` — Cache-Invalidierung nach Schluessel-Rotation.** ``get_fernet()``
-  ist mit ``lru_cache(maxsize=1)`` prozessweit gecacht; der ``setting_changed``-Signal-Receiver
-  ``_reset_fernet_cache`` muss den Cache bei JEDER Aenderung von ``ENCRYPTION_KEYS`` ODER
-  ``ENCRYPTION_KEYS`` leeren, sonst bleibt nach einer Schluessel-Rotation der ALTE
-  ``MultiFernet`` aktiv und ein bereits entfernter Schluessel entschluesselt weiterhin
-  (Schluessel-Verwechslung). ``mutmut_7``/``mutmut_8`` verstuemmeln ausschliesslich das
-  ``ENCRYPTION_KEYS``-Tupelelement — bestehende Tests (``test_encryption.py``) ueberleben, weil
-  sie ``ENCRYPTION_KEYS`` und ``ENCRYPTION_KEYS`` fast immer GEMEINSAM in derselben
-  ``override_settings``-Anweisung aendern: das ungestoerte ``ENCRYPTION_KEYS``-Signal loescht den
-  Cache dann trotzdem und verdeckt den Fehler in der ``ENCRYPTION_KEYS``-Haelfte. Der Pin aendert
-  ``ENCRYPTION_KEYS`` daher ueber ZWEI GETRENNTE ``settings``-Einzelzuweisungen (jede Zuweisung
-  feuert das ``setting_changed``-Signal genau einmal fuer genau diesen Namen, siehe
-  ``pytest_django.fixtures.Settings.__setattr__``), ohne ``ENCRYPTION_KEYS`` im selben Schritt
-  anzufassen.
+* **``_reset_fernet_cache`` — cache invalidation after key rotation.** ``get_fernet()`` is
+  cached process-wide with ``lru_cache(maxsize=1)``; the ``setting_changed`` signal receiver
+  ``_reset_fernet_cache`` must clear the cache on every change of ``ENCRYPTION_KEYS``, otherwise
+  the OLD ``MultiFernet`` stays active after a key rotation and a key that was already removed
+  keeps decrypting (key mix-up). ``mutmut_7``/``mutmut_8`` mangle the ``ENCRYPTION_KEYS`` name the
+  receiver compares against. The pin changes ``ENCRYPTION_KEYS`` through plain ``settings``
+  assignments (each assignment fires ``setting_changed`` exactly once for exactly this name, see
+  ``pytest_django.fixtures.Settings.__setattr__``).
 * **``_chunk_context`` — Header-Feldbreite bleibt UNSIGNED.** Der Datei-Header dokumentiert
   ``chunk_index``/``total`` explizit als 4-Byte-UNSIGNED-Felder (Kommentar Zeile 204-211,
   ``_HEADER_LEN``/``_CHUNK_RECORD_MIN_BYTES``). ``mutmut_9`` tauscht das Pack-Format ``">II"``
@@ -57,26 +51,21 @@ pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
 
 def test_encryption_keys_only_rotation_invalidates_fernet_cache(settings):
-    """Pinnt ``x__reset_fernet_cache__mutmut_7`` (Tupelelement ``ENCRYPTION_KEYS`` ->
-    ``XXENCRYPTION_KEYSXX``) und ``x__reset_fernet_cache__mutmut_8`` (``ENCRYPTION_KEYS`` ->
-    ``encryption_keys``, Gross-/Kleinschreibung ist bei Settings-Namen signifikant): eine
-    ENCRYPTION_KEYS-ONLY-Aenderung (ohne begleitendes Signal eines anderen Settings im selben Schritt)
-    muss den ``get_fernet()``-Cache leeren. Ohne diese Invalidierung bleibt nach einer
-    Schluessel-Rotation der ALTE ``MultiFernet`` aktiv und ein bereits aus der Rotation
-    entfernter Schluessel entschluesselt weiterhin klaglos."""
+    """Pins ``x__reset_fernet_cache__mutmut_7`` (``ENCRYPTION_KEYS`` -> ``XXENCRYPTION_KEYSXX``)
+    and ``x__reset_fernet_cache__mutmut_8`` (``ENCRYPTION_KEYS`` -> ``encryption_keys``; setting
+    names are case-sensitive): changing ``ENCRYPTION_KEYS`` must clear the ``get_fernet()``
+    cache. Without this invalidation the OLD ``MultiFernet`` stays active after a rotation and a
+    key that was removed from the ring keeps decrypting without complaint."""
     get_fernet.cache_clear()
     key1 = generate_key()
     key2 = generate_key()
 
-    # Einzelzuweisung: feuert setting_changed(setting="ENCRYPTION_KEYS") genau einmal.
-    settings.ENCRYPTION_KEYS = ""
-    # Einzelzuweisung: feuert setting_changed(setting="ENCRYPTION_KEYS") genau einmal —
-    # populiert den Cache anschliessend frisch mit key1.
+    # Single assignment: fires setting_changed(setting="ENCRYPTION_KEYS") once and
+    # populates the cache with key1 on the next call.
     settings.ENCRYPTION_KEYS = key1
     encrypted_with_key1 = encrypt_field("Testinhalt")
 
-    # Rotation: NUR ENCRYPTION_KEYS aendert sich, in einer eigenen Einzelzuweisung — kein
-    # begleitendes Signal eines anderen Settings, das den Cache "zufaellig mit" leeren wuerde.
+    # Rotation in its own single assignment: the signal alone must drop the cached key1 ring.
     settings.ENCRYPTION_KEYS = key2
 
     with pytest.raises(EncryptionError):

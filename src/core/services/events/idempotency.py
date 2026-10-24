@@ -29,11 +29,11 @@ den Kandidatenraum durchprobiert, vergleicht Digests und liest den Klartext ab.
 Der Idempotenz-Zweck bleibt vollständig erhalten: verglichen wird ohnehin nur
 innerhalb derselben (scope, user, key)-Kette.
 
-Der Pepper wird aus dem vorhandenen Schlüsselring ``ENCRYPTION_KEYS``
-abgeleitet (Domain-Separation, :func:`_fingerprint_pepper`) — **kein neues
-Pflicht-ENV**: diese Anwendung betreiben Einrichtungen selbst, jede weitere
-Pflichtvariable ist ein zusätzlicher Weg, eine Installation fail-closed
-lahmzulegen. Der Fingerprint trägt die Pepper-Generation als Kennung mit
+The pepper is derived from the existing key ring ``ENCRYPTION_KEYS``
+(domain separation, :func:`_fingerprint_pepper`) — **no new mandatory env
+variable**: facilities operate this application themselves, and every further
+mandatory variable is one more way to take an installation down fail-closed.
+The fingerprint carries the pepper generation as an identifier
 (``h1:<pepper-id>:<hmac>``).
 
 **Schlüsselrotation erhält den Schutz** (Refs #1942, Cross-Review):
@@ -121,9 +121,9 @@ IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 # beide waeren sonst 64 Zeichen und ununterscheidbar.
 FINGERPRINT_SCHEME = "h1"
 
-# Domain-Separation der Pepper-Ableitung: derselbe erste ENCRYPTION_KEYS-Eintrag dient auch
-# der Feld-/Datei-Verschluesselung; der Pepper darf mit keinem anderen
-# Gebrauch zusammenfallen.
+# Domain separation of the pepper derivation: the same first ENCRYPTION_KEYS entry
+# also serves field/file encryption; the pepper must not coincide with any other
+# use.
 _PEPPER_DOMAIN = b"anlaufstelle:idempotency-fingerprint:v1:"
 
 # Laenge der Pepper-Kennung im Fingerprint. Sie unterscheidet
@@ -308,13 +308,12 @@ def _fingerprint_for_pepper(pepper: bytes, canonical: str) -> str:
 def _fingerprint_pepper() -> bytes:
     """Serverseitiger Pepper des Payload-Fingerprints (Refs #1942).
 
-    Abgeleitet aus dem vorhandenen Schluesselring ``ENCRYPTION_KEYS`` —
-    **kein** neues Pflicht-ENV, denn diese Anwendung betreiben Einrichtungen
-    selbst, und jede zusaetzliche Pflichtvariable ist ein weiterer Weg, eine
-    Installation fail-closed lahmzulegen. Die Domain-Separation
-    (:data:`_PEPPER_DOMAIN`) stellt sicher, dass der Pepper mit keinem anderen
-    Gebrauch desselben Schluessels zusammenfaellt; aus dem Pepper laesst sich
-    der Fernet-Schluessel nicht zurueckrechnen.
+    Derived from the existing key ring ``ENCRYPTION_KEYS`` — **no** new
+    mandatory env variable, because facilities operate this application
+    themselves and every additional mandatory variable is one more way to take
+    an installation down fail-closed. The domain separation
+    (:data:`_PEPPER_DOMAIN`) ensures the pepper does not coincide with any other
+    use of the same key; the Fernet key cannot be recomputed from the pepper.
 
     Kanonisch ist der ERSTE konfigurierte Schluessel — derselbe, mit dem
     ``MultiFernet`` verschluesselt. ``_get_keys`` ist bewusst die gemeinsame
@@ -322,8 +321,8 @@ def _fingerprint_pepper() -> bytes:
 
     Fehlt der Schluessel, bricht die Funktion ab statt auf einen ungepfefferten
     Digest zurueckzufallen — das waere genau die Luecke, die #1942 schliesst.
-    Eine Installation ohne ``ENCRYPTION_KEYS`` kann ohnehin kein
-    verschluesseltes Feld schreiben (:func:`get_fernet`).
+    An installation without ``ENCRYPTION_KEYS`` cannot write an
+    encrypted field anyway (:func:`get_fernet`).
 
     Bewusst NICHT gecacht: die Ableitung ist ein einzelner SHA-256 ueber
     wenige Bytes, und ein Prozess-Cache braeuchte dieselbe

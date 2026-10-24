@@ -337,9 +337,9 @@ def _split_encryption_key_ring(value):
 _encryption_key_ring = _split_encryption_key_ring(ENCRYPTION_KEYS)  # noqa: F405
 if not _IS_COLLECTSTATIC and not _encryption_key_ring:
     if ENCRYPTION_KEYS:  # noqa: F405
-        _encryption_key_error = "Schlüsselring enthält keinen Schlüssel (ENCRYPTION_KEYS). "
+        _encryption_key_error = "The key ring contains no key (ENCRYPTION_KEYS). "
     else:
-        _encryption_key_error = "ENCRYPTION_KEYS muss in Produktion gesetzt sein. "
+        _encryption_key_error = "ENCRYPTION_KEYS must be set in production. "
     raise ImproperlyConfigured(
         _encryption_key_error
         + 'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'

@@ -85,8 +85,8 @@ class TestSafeDecryptLogsExactErrorWhenKeyIsMissing:
         record = records[0]
         assert record.levelno == logging.ERROR
         assert record.getMessage() == (
-            "safe_decrypt: Entschlüsselung unmöglich — ENCRYPTION_KEYS "
-            "fehlt oder ist fehlkonfiguriert. Fehler wird durchgereicht statt maskiert."
+            "safe_decrypt: decryption impossible - ENCRYPTION_KEYS "
+            "is missing or misconfigured. Re-raising the error instead of masking it."
         )
 
 

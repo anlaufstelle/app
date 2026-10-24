@@ -150,7 +150,7 @@ class TestProdStillFailsClosedWithoutKey:
         result = _run_settings(module, {"ENCRYPTION_KEYS": " , "})
 
         assert result.returncode != 0
-        assert "Schlüsselring enthält keinen Schlüssel" in result.stderr
+        assert "The key ring contains no key" in result.stderr
 
 
 class TestDevWithoutKeyIsUnchanged:
@@ -159,7 +159,7 @@ class TestDevWithoutKeyIsUnchanged:
         result = _run_settings(module)
 
         assert result.returncode == 0, result.stderr
-        assert "KLARTEXT" in result.stderr
+        assert "PLAINTEXT MODE" in result.stderr
         assert "ENCRYPTION_KEYS" in result.stderr
 
     @pytest.mark.parametrize("module", LOCAL_MODULES)
@@ -175,14 +175,14 @@ class TestDevWithoutKeyIsUnchanged:
         result = _run_settings(module, {"ENCRYPTION_KEYS": KEY})
 
         assert result.returncode == 0, result.stderr
-        assert "KLARTEXT" not in result.stderr
+        assert "PLAINTEXT MODE" not in result.stderr
 
     @pytest.mark.parametrize("module", LOCAL_MODULES)
     def test_ring_only_satisfies_require_encryption(self, module):
         result = _run_settings(module, {"ENCRYPTION_KEYS": KEY, "REQUIRE_ENCRYPTION": "1"})
 
         assert result.returncode == 0, result.stderr
-        assert "KLARTEXT" not in result.stderr
+        assert "PLAINTEXT MODE" not in result.stderr
 
     @pytest.mark.parametrize("module", LOCAL_MODULES)
     def test_single_key_is_rejected_even_with_require_encryption_satisfied(self, module):
@@ -206,7 +206,7 @@ class TestLocalKeyFileFillsTheRing:
 
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == KEY
-        assert "KLARTEXT" not in result.stderr
+        assert "PLAINTEXT MODE" not in result.stderr
 
     def test_environment_ring_wins_over_the_file(self, tmp_path):
         key_file = tmp_path / "local.key"
@@ -225,7 +225,7 @@ class TestLocalKeyFileFillsTheRing:
         result = _run_settings("dev", {"LOCAL_ENCRYPTION_KEY_FILE": str(tmp_path / "absent.key")})
 
         assert result.returncode == 0, result.stderr
-        assert "KLARTEXT" in result.stderr
+        assert "PLAINTEXT MODE" in result.stderr
 
     def test_missing_file_still_honours_require_encryption(self, tmp_path):
         result = _run_settings(

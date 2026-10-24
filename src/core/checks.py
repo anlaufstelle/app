@@ -24,9 +24,9 @@ hinzugekommene Kopplung ``hops > 1`` ohne Proxy-Vertrauen bekommt darum die
 neue ID ``core.W003``, der unbrauchbare Bereich die neue ID ``core.E003``.
 ``core.W004`` bezeichnet seit #2002 einen Redis-Cache ohne Passwort.
 ``core.E004`` bezeichnet seit #2002 eine syntaktisch ungültige Redis-Cache-URL.
-``core.W005`` (abgekündigter Einzelschlüssel-Betrieb) ist entfallen: ein gesetztes
-``ENCRYPTION_KEY`` stoppt den Start schon in ``settings/base.py``. Die ID wird nicht
-wiederverwendet.
+``core.W005`` (deprecated single-key operation) was removed: a set
+``ENCRYPTION_KEY`` already stops the start in ``settings/base.py``. The ID is not
+reused.
 """
 
 from __future__ import annotations

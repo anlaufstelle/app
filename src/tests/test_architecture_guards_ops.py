@@ -1113,8 +1113,8 @@ class TestReadmeQuickStart:
                 f"{name} muss ENCRYPTION_KEYS unveraendert aus der Umgebung durchreichen "
                 f"(gefunden: {value!r}) — kein ausgelieferter Festschluessel (Refs #1977)."
             )
-            # Erkennungskanal: ein Altwert aus der .env muss die Settings erreichen und den
-            # Start mit Umbenennungshinweis stoppen, statt still ignoriert zu werden.
+            # Detection channel: a legacy value from the .env must reach the settings and
+            # stop the start with a rename hint instead of being silently ignored.
             legacy = environment["ENCRYPTION_KEY"]
             assert legacy == "${ENCRYPTION_KEY:-}", (
                 f"{name} muss einen Altwert ENCRYPTION_KEY durchreichen (gefunden: {legacy!r}) — "

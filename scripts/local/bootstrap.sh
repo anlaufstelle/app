@@ -40,13 +40,12 @@
 #
 # Env-Variablen (alle optional):
 #
-#   ENCRYPTION_KEYS           Schluesselring (Komma-Liste, erster Eintrag
-#                             verschluesselt). Ist er gesetzt, gewinnt er:
-#                             kein Dateizugriff, keine Erzeugung. Das ist der
-#                             dokumentierte Weg, einen eigenen Schluessel
-#                             mitzubringen.
-#   ENCRYPTION_KEY            Entfernt. Ein gesetzter Wert bricht den Start mit
-#                             Umbenennungshinweis ab (Wert nach ENCRYPTION_KEYS).
+#   ENCRYPTION_KEYS           Key ring (comma-separated list, the first entry
+#                             encrypts). If set, it wins: no file access, no
+#                             key generation. This is the documented way to
+#                             bring your own key.
+#   ENCRYPTION_KEY            Removed. A non-empty value aborts the start with a
+#                             rename hint (move the value to ENCRYPTION_KEYS).
 #   LOCAL_ENCRYPTION_KEY_FILE Ablage des erzeugten Schluessels
 #                             (Default: /home/appuser/encryption.key -- im
 #                             lokalen Compose ein benanntes Volume, damit der
@@ -72,11 +71,11 @@ SEED_SCALE="${SEED_SCALE:-small}"
 # gleichzeitig startenden Container unteilbar (ein Leser bekaeme sonst eine
 # angelegte, aber noch leere Datei zu sehen).
 ensure_key() {
-    # Ein stillschweigend ignorierter Altwert haette zur Folge, dass unten ein
-    # fremder Schluessel erzeugt wird und vorhandene Daten unlesbar bleiben.
+    # A silently ignored legacy value would make the code below generate an
+    # unrelated key, leaving existing data unreadable.
     if [ -n "${ENCRYPTION_KEY:-}" ]; then
-        printf 'FEHLER: ENCRYPTION_KEY wird nicht mehr unterstuetzt. Variable in ENCRYPTION_KEYS umbenennen (Wert unveraendert)\n' >&2
-        printf 'und ENCRYPTION_KEY aus der Umgebung/.env entfernen.\n' >&2
+        printf 'ERROR: ENCRYPTION_KEY is no longer supported. Rename the variable to ENCRYPTION_KEYS (value unchanged)\n' >&2
+        printf 'and remove ENCRYPTION_KEY from the environment/.env.\n' >&2
         return 1
     fi
 
@@ -116,8 +115,8 @@ with open(pfad, encoding="utf-8") as datei:
 # brauchbar ist. settings/dev.py liest sie ueber LOCAL_ENCRYPTION_KEY_FILE.
 if not schluessel:
     sys.stderr.write(
-        f"FEHLER: {pfad} ist leer — kein Verschluesselungsschluessel verfuegbar.\n"
-        "Datei loeschen und den Stack neu starten, oder ENCRYPTION_KEYS selbst setzen.\n"
+        f"ERROR: {pfad} is empty - no encryption key available.\n"
+        "Delete the file and restart the stack, or set ENCRYPTION_KEYS yourself.\n"
     )
     raise SystemExit(1)
 PY
