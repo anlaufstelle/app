@@ -10,10 +10,7 @@ share one account (context A acts, context B is the "other device"):
 3. Offline client B: work captured offline and not yet transmitted stays in the
    IndexedDB queue when the session is revoked and survives the login redirect
    and the next sign-in (never purged, never duplicated). Its replay to the
-   server after the sign-in is a strict xfail: the queued form body carries the
-   CSRF token of the revoked session, which Django prefers over the refreshed
-   header, so the replay ends as a 403 dead letter (finding recorded in the
-   acceptance report; the same happens after any plain re-login).
+   server after the sign-in uses the current CSRF token and saves exactly once.
 
 The account carries seeded TOTP devices while a test runs; the teardown removes
 them. Logins and sudo confirmations use backup codes, so no TOTP time window is
@@ -367,11 +364,6 @@ class TestZZOfflineClientKeepsUnsentWorkAcrossRevocation:
                         context.close()
             _cleanup(e2e_env)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Finding: the queued form body carries the CSRF token of the ended session; the replay after "
-        "the sign-in is rejected with 403 and parked as a dead letter (offline-queue.js _send/403 branch).",
-    )
     def test_unsent_work_is_replayed_after_sign_in(self, base_url, browser, e2e_env):
         codes = _seed_totp_with_codes(e2e_env)
         title = f"Revocation-Replay {uuid.uuid4().hex[:6]}"

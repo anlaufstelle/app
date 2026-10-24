@@ -325,6 +325,11 @@
     // Server einen Wiederholungs-POST nach Verbindungsabbruch als solchen
     // erkennt.
     async function _send(record, csrf) {
+        if (!csrf) {
+            const err = new Error("NoCsrfToken");
+            err.name = "NoCsrfTokenError";
+            throw err;
+        }
         // Zweite Grenze unmittelbar vor dem Netz: Altbestand oder manipulierte
         // IndexedDB-Zeilen duerfen die Enqueue-Pruefung nie umgehen.
         const blockedReason = _queueRequestBlockReason(
@@ -358,19 +363,23 @@
         // (kein Re-Intercept/Re-Queue) — sonst faenge er ihn bei >6s erneut ab
         // (Doppelkanal + spurious dead-letter).
         headers["X-Offline-Replay"] = REPLAY_PROTOCOL_VERSION;
-        // Refs #1419 (Bugfix, analog zum Idempotency-Key oben): die
-        // SW-Allowlist friert den x-csrftoken des Erstversuchs
-        // KLEINGESCHRIEBEN im Record ein. Zusammen mit dem frischen
-        // kanonischen X-CSRFToken ergaebe das ZWEI Case-Varianten desselben
-        // Headers, die die Headers-API zu "stale, fresh" zusammenfasst →
-        // Djangos CSRF-Check lehnt ab → JEDER Replay eines HTMX-/fetch-POSTs
-        // landete als 403-dead. Die Record-Variante nur entfernen, wenn ein
-        // frischer Token vorliegt — sonst bleibt sie der letzte Fallback.
-        if (csrf) {
-            for (const k of Object.keys(headers)) {
-                if (k.toLowerCase() === "x-csrftoken") delete headers[k];
+        // Refs #1419: send exactly one current CSRF header, regardless of
+        // the casing of any header saved with the original request.
+        for (const k of Object.keys(headers)) {
+            if (k.toLowerCase() === "x-csrftoken") delete headers[k];
+        }
+        headers["X-CSRFToken"] = csrf;
+        // Refs #2011: Django prefers the POST field over the header. Remove
+        // every saved form token so sign-in rotation cannot override the
+        // current header. Keep the encrypted original and all other fields.
+        let body = record.data.body;
+        const contentType = new Headers(headers).get("Content-Type") || "";
+        if (contentType.split(";")[0].trim().toLowerCase() === "application/x-www-form-urlencoded") {
+            const fields = new URLSearchParams(body);
+            if (fields.has("csrfmiddlewaretoken")) {
+                fields.delete("csrfmiddlewaretoken");
+                body = fields.toString();
             }
-            headers["X-CSRFToken"] = csrf;
         }
         if (record.idempotencyKey) headers["X-Idempotency-Key"] = record.idempotencyKey;
         // Refs #2528: check immediately before each write, including retries.
@@ -390,7 +399,7 @@
         }
         return fetch(record.url, {
             method: record.data.method,
-            body: record.data.body,
+            body: body,
             headers: headers,
             credentials: "same-origin",
         });
@@ -576,9 +585,8 @@
                     await _markQueueDead(record, "not-found", "" + response.status);
                     continue;
                 } else if (response.status === 403) {
-                    // Der CSRF-Refresh-Retry ist oben bereits gelaufen und
-                    // hat immer noch 403 kassiert — kein Token-, sondern ein
-                    // Rechteproblem. Via M8-UI manuell retry-bar.
+                    // A failed or unavailable CSRF refresh leaves the 403
+                    // visible for manual retry, including permission errors.
                     await _markQueueDead(record, "forbidden", "403");
                     continue;
                 } else if (response.status === 429) {

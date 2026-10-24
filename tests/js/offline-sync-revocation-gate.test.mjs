@@ -8,11 +8,14 @@ let failure;
 let fetchSpy;
 let editReplay;
 let editApi;
+let csrfUtils;
 
 beforeAll(async () => {
     window.Dexie = globalThis.Dexie = Dexie;
     document.head.innerHTML = '<meta name="csrf-token" content="fresh-token">';
     await import("../../src/static/js/url-patterns.js");
+    await import("../../src/static/js/csrf-utils.js");
+    csrfUtils = window.csrfUtils;
     await import("../../src/static/js/crypto.js");
     await window.crypto_session.ready();
     await window.crypto_session.deriveSessionKey("correct horse battery", "c2FsdHNhbHRzYWx0");
@@ -28,6 +31,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+    window.csrfUtils = csrfUtils;
     await store.purgeAll();
     await window.crypto_session.deriveSessionKey("correct horse battery", "c2FsdHNhbHRzYWx0");
     document.body.innerHTML = '<div data-offline-revocation-pending hidden>Synchronisation wartet auf Widerrufsprüfung</div>';

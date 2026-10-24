@@ -6,7 +6,7 @@ import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
 import Dexie from "dexie";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const scripts = ["url-patterns", "crypto", "offline-db", "offline-bundles", "offline-revocations", "offline-store", "offline-queue", "offline-client", "offline-edit", "sync-orchestrator"]
+const scripts = ["url-patterns", "csrf-utils", "crypto", "offline-db", "offline-bundles", "offline-revocations", "offline-store", "offline-queue", "offline-client", "offline-edit", "sync-orchestrator"]
     .map((name) => readFileSync(`src/static/js/${name}.js`, "utf8"));
 const eventPk = "33333333-3333-4333-8333-333333333333";
 const validPayload = () => ({ revocations: [], server_time: new Date().toISOString(), retention_seconds: 345600 });
@@ -18,11 +18,12 @@ function page(online = true) {
     });
     pages.push(dom);
     const w = dom.window;
+    w.document.head.innerHTML = '<meta name="csrf-token" content="current-token">';
     // Keep automatic boot checks out of the controlled HTTP sequence.
     w.document.addEventListener("DOMContentLoaded", (event) => event.stopImmediatePropagation(), true);
     Object.defineProperty(w.document, "readyState", { value: "loading", configurable: true });
     Object.defineProperty(w, "crypto", { value: webcrypto });
-    Object.assign(w, { Dexie, TextEncoder, TextDecoder, structuredClone, indexedDB: Dexie.dependencies.indexedDB, IDBKeyRange });
+    Object.assign(w, { Dexie, TextEncoder, TextDecoder, Headers, structuredClone, indexedDB: Dexie.dependencies.indexedDB, IDBKeyRange });
     Object.defineProperty(w.navigator, "onLine", { value: online, configurable: true });
     w.navigator.locks = { request: (_name, _options, fn) => {
         const result = lockTail.then(fn);
