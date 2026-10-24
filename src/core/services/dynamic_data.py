@@ -27,9 +27,9 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
-from django.utils import translation
 from django.utils.translation import gettext_lazy as _
 
+from core.packages.catalog import translate_standard_field_label
 from core.services.compliance import user_can_see_document_type, user_can_see_field
 from core.services.config import block_ordered_dtf_queryset
 
@@ -670,7 +670,7 @@ def build_dynamic_fields_display(
         if slug not in values:
             continue
         entry = _display_entry(
-            translation.gettext(ft.name),
+            translate_standard_field_label(ft.name),
             values[slug],
             field_sensitivity=ft.sensitivity or "",
             is_encrypted=ft.is_encrypted,
@@ -730,7 +730,7 @@ def build_orphan_fields_display(
         # M24/AP4 (Refs #1738): derselbe FILE-Zweig wie für zugeordnete Felder —
         # ein verwaister Datei-Slug darf ebenso wenig als Roh-Dict erscheinen.
         entry = _display_entry(
-            translation.gettext(ft.name) if ft is not None else slug,
+            translate_standard_field_label(ft.name) if ft is not None else slug,
             values[slug],
             field_sensitivity=orphan_gating_sensitivity(ft),
             is_encrypted=ft.is_encrypted if ft is not None else False,

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from importlib.resources.abc import Traversable
 from typing import Any
 
+from django.utils import translation
 from django.utils.translation import gettext_noop
 
 from core.packages.schema import PackageV1, parse_package
@@ -21,6 +22,12 @@ from core.packages.yaml_io import safe_load_unique
 
 # Keep catalog field labels available to gettext extraction without translating stored configuration.
 STANDARD_FIELD_LABELS = (gettext_noop("Notizen"), gettext_noop("Beschreibung"), gettext_noop("Details"))
+
+
+def translate_standard_field_label(label: str) -> str:
+    """Translate registered standard labels while preserving custom labels."""
+    return translation.gettext(label) if label in STANDARD_FIELD_LABELS else label
+
 
 _PACKAGE_ANCHOR = "core.packages"
 _package_data_cache: dict[str, dict[str, Any]] = {}

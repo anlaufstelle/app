@@ -32,3 +32,26 @@ def test_standard_labels_translate_at_render_time(facility, staff_user, kind, ou
         translate.assert_any_call(field.name)
     field.refresh_from_db()
     assert field.name in ("Notizen", "Beschreibung", "Details")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("output", ["form", "display", "orphan"])
+def test_custom_label_matching_ui_translation_is_preserved(facility, staff_user, output):
+    from core.models import DocumentTypeField, FieldTemplate
+    from tests._factories import make_document_type
+
+    document_type = make_document_type(facility=facility, name="Custom event", entity_type="event")
+    field = FieldTemplate.objects.create(facility=facility, name="Abbrechen", slug="custom-label", field_type="text")
+    DocumentTypeField.objects.create(document_type=document_type, field_template=field)
+    if output == "orphan":
+        document_type.fields.all().delete()
+    with override("en"):
+        assert gettext(field.name) == "Cancel"
+        if output == "form":
+            form = DynamicDataForm(document_type=document_type, facility=facility)
+            label = str(form[field.slug].label)
+        else:
+            context = build_dynamic_data_context(document_type, {field.slug: "Example"}, staff_user)
+            entries = context["dynamic_orphan_fields" if output == "orphan" else "dynamic_fields"]
+            label = str(entries[0]["label"])
+        assert label == "Abbrechen"
