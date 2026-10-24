@@ -194,13 +194,17 @@ _STATIC_PDF = (
 
 
 def _owner_doc_type(facility: Facility, name: str, entity_type: str, field_template: FieldTemplate) -> DocumentType:
-    """Dokumentationstyp mit genau der FILE-Feldvorlage (idempotent)."""
+    """Keep an inactive attachment example type with the protected standard field."""
+    from core.seed.standard_fields import standard_field
+
+    _standard_type, standard_template = standard_field(facility, entity_type)
     doc_type, _created = DocumentType.objects.get_or_create(
         facility=facility,
         name=name,
         defaults={
             "entity_type": entity_type,
             "sensitivity": DocumentType.Sensitivity.NORMAL,
+            "is_active": False,
             "icon": "paperclip",
             "color": "gray",
         },
@@ -209,6 +213,9 @@ def _owner_doc_type(facility: Facility, name: str, entity_type: str, field_templ
         document_type=doc_type,
         field_template=field_template,
         defaults={"sort_order": 0},
+    )
+    DocumentTypeField.objects.get_or_create(
+        document_type=doc_type, field_template=standard_template, defaults={"sort_order": 1}
     )
     return doc_type
 

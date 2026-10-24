@@ -15,6 +15,7 @@ from core.seed.constants import (
     GOAL_TITLES,
     MILESTONE_TITLES,
 )
+from core.seed.standard_fields import standard_field
 
 
 def seed_cases(facility: Facility, users: list[User], clients: list[Client], cfg: dict) -> int:
@@ -30,6 +31,7 @@ def seed_cases(facility: Facility, users: list[User], clients: list[Client], cfg
     if not qualified_clients:
         qualified_clients = clients
 
+    document_type, field = standard_field(facility, "case")
     to_create = []
     for i in range(count - existing):
         client = qualified_clients[i % len(qualified_clients)]
@@ -41,7 +43,8 @@ def seed_cases(facility: Facility, users: list[User], clients: list[Client], cfg
                 facility=facility,
                 client=client,
                 title=f"{title} ({facility.name})" if count > len(CASE_TITLES) else title,
-                description=CASE_DESCRIPTIONS.get(title, f"Fallarbeit: {title}"),
+                document_type=document_type,
+                data_json={field.slug: CASE_DESCRIPTIONS.get(title, f"Case work: {title}")},
                 status=status,
                 closed_at=closed_at,
                 created_by=random.choice(users),
@@ -64,6 +67,7 @@ def seed_episodes(facility: Facility, users: list[User], cases: list[Case], cfg:
     if not open_cases:
         return 0
 
+    document_type, field = standard_field(facility, "episode")
     to_create = []
     for _ in range(count):
         case = random.choice(open_cases)
@@ -78,7 +82,8 @@ def seed_episodes(facility: Facility, users: list[User], cases: list[Case], cfg:
             Episode(
                 case=case,
                 title=title,
-                description=EPISODE_DESCRIPTIONS.get(title, ""),
+                document_type=document_type,
+                data_json={field.slug: EPISODE_DESCRIPTIONS.get(title, "Demo episode description.")},
                 started_at=started_at,
                 ended_at=ended_at,
                 created_by=random.choice(users),

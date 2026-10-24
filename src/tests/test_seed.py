@@ -39,6 +39,8 @@ from core.packages import catalog as packages_catalog  # noqa: E402
 from core.seed import doc_types  # noqa: E402
 from core.seed.scale import FACILITY_NAMES, FACILITY_PACKAGES, SCALE_CONFIG  # noqa: E402
 
+STANDARD_TYPE_SLUGS = ["standard-client", "standard-case", "standard-episode", "standard-workitem"]
+
 
 @pytest.fixture(scope="module")
 def _medium_seed(django_db_setup, django_db_blocker):
@@ -279,12 +281,11 @@ EXPECTED_BERATUNGSSTELLE_TYPES = {
 @pytest.mark.slow
 @pytest.mark.django_db
 def _test_seed_medium_zweigstelle_nord_traegt_nur_beratungsstelle_typen(_medium_seed):
-    """R-L5c-1: Zweigstelle Nord bekommt das Paket ``beratungsstelle`` statt
-    des Standardkatalogs — genau dessen 8 Typen, keinen Standard-Typ."""
+    """The branch receives its package event types plus the four shared entity types."""
     nord = Facility.objects.get(name="Zweigstelle Nord")
     slugs = set(DocumentType.objects.filter(facility=nord).values_list("slug", flat=True))
 
-    assert slugs == EXPECTED_BERATUNGSSTELLE_TYPES
+    assert slugs == EXPECTED_BERATUNGSSTELLE_TYPES | set(STANDARD_TYPE_SLUGS)
     assert "spritzentausch" not in slugs
     assert "medizinische-versorgung" not in slugs
 
@@ -650,7 +651,7 @@ def _test_seed_large_facility_matches_its_package_catalog_exactly(_large_seed, i
         f"{package_name}: Ist {sorted(actual_slugs)} != Soll {sorted(expected_slugs)}"
     )
 
-    for slug in expected_slugs:
+    for slug in (dt.slug for dt in package_data.document_types if dt.entity_type == "event"):
         assert event_model.objects.filter(facility=facility, document_type__slug=slug).exists(), (
             f"{package_name}.{slug}: keine Ereignisse erzeugt."
         )
@@ -1299,7 +1300,7 @@ def test_default_package_ships_next_to_the_loader():
 
     data = doc_types.load_default_package_data()
     assert data["schema_version"] == 1
-    assert [dt["slug"] for dt in data["document_types"]] == list(EXPECTED_DOCUMENT_TYPES)
+    assert [dt["slug"] for dt in data["document_types"]] == STANDARD_TYPE_SLUGS + list(EXPECTED_DOCUMENT_TYPES)
 
 
 def test_default_package_data_is_returned_as_a_copy():
@@ -1307,7 +1308,9 @@ def test_default_package_data_is_returned_as_a_copy():
     first = doc_types.load_default_package_data()
     first["document_types"].clear()
 
-    assert len(doc_types.load_default_package_data()["document_types"]) == len(EXPECTED_DOCUMENT_TYPES)
+    assert len(doc_types.load_default_package_data()["document_types"]) == len(STANDARD_TYPE_SLUGS) + len(
+        EXPECTED_DOCUMENT_TYPES
+    )
 
 
 def test_default_package_declares_no_conditions():
@@ -1327,10 +1330,7 @@ def test_seed_document_type_catalog_matches_expected():
     call_command("seed")
 
     facility = Facility.objects.get(name="Hauptstelle")
-    # M24 (Refs #1738): Der PAKET-Katalog ist weiterhin rein ereignisbezogen.
-    # Die beiden owner-generischen Beispieltypen kommen nicht aus
-    # ``default.yaml``, sondern aus ``core/seed/attachments.py`` — sie werden
-    # unten getrennt gepinnt, damit dieser Vergleich der Paket-Vertrag bleibt.
+    # Preserve the event catalog contract separately from the standard entity and attachment example types.
     package_types = DocumentType.objects.filter(facility=facility, entity_type=DocumentType.EntityType.EVENT)
     actual = {
         dt.slug: (
@@ -1351,7 +1351,14 @@ def test_seed_document_type_catalog_matches_expected():
         .exclude(entity_type=DocumentType.EntityType.EVENT)
         .values_list("name", "entity_type")
     )
-    assert non_event == {("Personenakte", "client"), ("Fallakte", "case")}
+    assert non_event == {
+        ("Personenakte", "client"),
+        ("Fallakte", "case"),
+        ("Person", "client"),
+        ("Fall", "case"),
+        ("Episode", "episode"),
+        ("Aufgabe", "workitem"),
+    }
 
 
 @pytest.mark.django_db
@@ -1367,7 +1374,7 @@ def test_seed_shares_deduplicated_field_templates():
     facility = Facility.objects.get(name="Hauptstelle")
     assert FieldTemplate.objects.filter(facility=facility, slug="dauer").count() == 1
     assert FieldTemplate.objects.filter(facility=facility, slug="notiz").count() == 1
-    assert FieldTemplate.objects.filter(facility=facility).count() == 25
+    assert FieldTemplate.objects.filter(facility=facility).count() == 28
 
     dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
     assert dauer.field_type == "number"
@@ -1449,7 +1456,7 @@ def test_second_seed_run_reports_everything_unchanged(facility):
     """
     first = doc_types.seed_document_types(facility)
     assert first.errors == []
-    assert first.document_types.created == list(EXPECTED_DOCUMENT_TYPES)
+    assert first.document_types.created == STANDARD_TYPE_SLUGS + list(EXPECTED_DOCUMENT_TYPES)
 
     second = doc_types.seed_document_types(facility)
 
@@ -1461,7 +1468,7 @@ def test_second_seed_run_reports_everything_unchanged(facility):
     }
     assert changed == {}, f"Zweiter Seed-Lauf war nicht idempotent: {changed}"
     assert second.field_templates.unchanged
-    assert second.document_types.unchanged == list(EXPECTED_DOCUMENT_TYPES)
+    assert second.document_types.unchanged == STANDARD_TYPE_SLUGS + list(EXPECTED_DOCUMENT_TYPES)
 
 
 @pytest.mark.django_db

@@ -8,6 +8,7 @@ from django.utils import timezone
 from core.models import Client, Facility, User, WorkItem
 from core.seed.constants import WORK_ITEM_DESCRIPTIONS, WORK_ITEM_TITLES
 from core.seed.events import random_time_of_day, weighted_days_ago
+from core.seed.standard_fields import standard_field
 
 
 def random_due_date(today: date, priority: str, status: str) -> date | None:
@@ -44,6 +45,7 @@ def seed_work_items(facility: Facility, users: list[User], clients: list[Client]
     if existing >= count:
         return 0
 
+    document_type, field = standard_field(facility, "workitem")
     statuses = list(WorkItem.Status.values)
     priorities = list(WorkItem.Priority.values)
     item_types = list(WorkItem.ItemType.values)
@@ -84,7 +86,8 @@ def seed_work_items(facility: Facility, users: list[User], clients: list[Client]
                 status=status,
                 priority=priority,
                 title=title,
-                description=WORK_ITEM_DESCRIPTIONS.get(title, ""),
+                document_type=document_type,
+                data_json={field.slug: WORK_ITEM_DESCRIPTIONS.get(title, "Demo task details.")},
                 due_date=due_date,
                 completed_at=completed_at,
             )

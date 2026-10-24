@@ -4,11 +4,13 @@ import random
 
 from core.models import Client, Facility, User
 from core.seed.constants import SMALL_CLIENTS, SPITZNAMEN
+from core.seed.standard_fields import standard_field
 
 
 def seed_clients_small(facility: Facility, users: list[User]) -> None:
     """Create the seven hard-coded demo clients for the small scale."""
     admin = users[0]
+    document_type, field = standard_field(facility, "client")
     for pseudonym, stage, age in SMALL_CLIENTS:
         Client.objects.get_or_create(
             facility=facility,
@@ -17,6 +19,8 @@ def seed_clients_small(facility: Facility, users: list[User]) -> None:
                 "contact_stage": stage,
                 "age_cluster": age,
                 "created_by": admin,
+                "document_type": document_type,
+                "data_json": {field.slug: f"Demo note for {pseudonym}."},
             },
         )
 
@@ -26,6 +30,7 @@ def seed_clients_bulk(facility: Facility, users: list[User], cfg: dict) -> list[
     count = cfg["clients_per_facility"]
     existing = set(Client.objects.filter(facility=facility).values_list("pseudonym", flat=True))
     admin = users[0]
+    document_type, field = standard_field(facility, "client")
     stages = list(Client.ContactStage.values)
     ages = list(Client.AgeCluster.values)
 
@@ -48,6 +53,8 @@ def seed_clients_bulk(facility: Facility, users: list[User], cfg: dict) -> list[
                 contact_stage=random.choice(stages),
                 age_cluster=random.choice(ages),
                 created_by=admin,
+                document_type=document_type,
+                data_json={field.slug: f"Demo note for {pseudonym}."},
             )
         )
 
