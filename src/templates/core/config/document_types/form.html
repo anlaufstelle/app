@@ -56,8 +56,8 @@
              data-report-key-excluded-label="{% trans 'Gehört ausdrücklich in keinen Bericht.' %}"
              data-report-key-unbound-label="{% trans 'Dieser Schlüssel speist keinen registrierten Bericht.' %}">
             {% include "components/_form_field.html" with field=form.name %}
-            {% trans "Legt fest, wofür der Typ gilt: Ereignis, Person oder Fall. Nach dem Anlegen nicht änderbar." as help_entity_type_inline %}
-            {% trans "Ereignis-Typen dokumentieren Kontakte im Zeitstrom; nur sie nutzen Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und Strichliste. Person-Typen ergänzen die Personenakte um eigene Felder, Fall-Typen den Fall." as help_entity_type_effect %}
+            {% trans "Legt fest, wofür der Typ gilt: Ereignis, Person, Fall, Episode oder Aufgabe. Nach dem Anlegen nicht änderbar." as help_entity_type_inline %}
+            {% trans "Ereignis-Typen dokumentieren Kontakte im Zeitstrom; nur sie nutzen Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und Strichliste. Person-Typen ergänzen die Personenakte um eigene Felder, Fall-Typen den Fall, Episoden-Typen die Episode und Aufgaben-Typen die Aufgabe." as help_entity_type_effect %}
             {% trans "Nach dem Anlegen unveränderbar. Falsch gewählt? Den Typ deaktivieren und einen neuen anlegen." as help_entity_type_change %}
             {% trans "Ein Typ „Beratungsgespräch“ hält Kontakte fest und ist ein Ereignis-Typ. Ein Typ „Zusatzangaben zur Wohnsituation“ ergänzt die Personenakte und ist ein Person-Typ." as help_entity_type_example %}
             {% include "components/_form_field.html" with field=form.entity_type inline_help=help_entity_type_inline deep_help_effect=help_entity_type_effect deep_help_change=help_entity_type_change deep_help_example=help_entity_type_example %}

@@ -185,11 +185,22 @@ class DynamicDataEncryptionMixin(models.Model):
     class Meta:
         abstract = True
 
+    def clean(self):
+        super().clean()
+        self._validate_dynamic_document_type()
+
+    def _validate_dynamic_document_type(self):
+        """Reject mismatched entity types on carriers declaring their expected type."""
+        expected = getattr(self, "dynamic_entity_type", None)
+        if expected and self.document_type_id and self.document_type.entity_type != expected:
+            raise ValidationError({"document_type": _("Der Dokumentationstyp passt nicht zur Entität.")})
+
     def _encrypt_sensitive_fields(self):
         """Encrypt fields that are marked as encrypted in the field template."""
         from core.services.compliance.sensitivity import validate_explicit_high_field
         from core.services.file_vault import encrypt_field, is_encrypted_value
 
+        self._validate_dynamic_document_type()
         if not self.document_type_id or not self.data_json:
             return
 

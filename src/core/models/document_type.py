@@ -37,6 +37,8 @@ class DocumentType(ReportKeyMixin, SluggedModel):
         EVENT = "event", _("Ereignis")
         CLIENT = "client", _("Person")
         CASE = "case", _("Fall")
+        EPISODE = "episode", _("Episode")
+        WORKITEM = "workitem", _("Aufgabe")
 
     objects = FacilityScopedManager()
 

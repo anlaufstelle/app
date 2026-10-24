@@ -7,11 +7,21 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models.mixins import SoftDeletableModel
+from core.models.managers import FacilityScopedQuerySet
+from core.models.mixins import DynamicDataEncryptionMixin, SoftDeletableModel
 
 
-class Episode(SoftDeletableModel):
+class EpisodeQuerySet(FacilityScopedQuerySet):
+    """Scope episodes through their owning case without duplicating the facility."""
+
+    def for_facility(self, facility):
+        return self.filter(case__facility=facility)
+
+
+class Episode(DynamicDataEncryptionMixin, SoftDeletableModel):
     """Abgrenzbare Phase innerhalb eines Falls."""
+
+    objects = EpisodeQuerySet.as_manager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     case = models.ForeignKey(
@@ -43,10 +53,39 @@ class Episode(SoftDeletableModel):
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))
 
+    dynamic_entity_type = "episode"
+
+    document_type = models.ForeignKey(
+        "core.DocumentType",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="episodes",
+        verbose_name=_("Dokumentationstyp"),
+    )
+    data_json = models.JSONField(default=dict, blank=True, verbose_name=_("Daten (JSON)"))
+
     class Meta:
         verbose_name = _("Episode")
         verbose_name_plural = _("Episoden")
         ordering = ["-started_at"]
+
+    def save(self, *args, **kwargs):
+        from core.services.dynamic_protection import dynamic_data_write
+
+        with dynamic_data_write(self, kwargs.get("update_fields")):
+            self._validate_dynamic_document_type()
+            if kwargs.get("update_fields") is None or "data_json" in kwargs["update_fields"]:
+                self._encrypt_sensitive_fields()
+            super().save(*args, **kwargs)
+
+    @property
+    def facility_id(self):
+        return self.case.facility_id
+
+    @property
+    def facility(self):
+        return self.case.facility
 
     def __str__(self):
         return self.title

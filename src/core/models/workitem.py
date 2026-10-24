@@ -8,10 +8,10 @@ from django.utils.translation import gettext_lazy as _
 
 from core.constants import ApprovalStatus
 from core.models.managers import FacilityScopedManager
-from core.models.mixins import SoftDeletableModel
+from core.models.mixins import DynamicDataEncryptionMixin, SoftDeletableModel
 
 
-class WorkItem(SoftDeletableModel):
+class WorkItem(DynamicDataEncryptionMixin, SoftDeletableModel):
     """Work item or hint for the team."""
 
     class ItemType(models.TextChoices):
@@ -155,6 +155,18 @@ class WorkItem(SoftDeletableModel):
         ),
     )
 
+    dynamic_entity_type = "workitem"
+
+    document_type = models.ForeignKey(
+        "core.DocumentType",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="workitems",
+        verbose_name=_("Dokumentationstyp"),
+    )
+    data_json = models.JSONField(default=dict, blank=True, verbose_name=_("Daten (JSON)"))
+
     class Meta:
         verbose_name = _("Arbeitsauftrag")
         verbose_name_plural = _("Arbeitsaufträge")
@@ -176,6 +188,15 @@ class WorkItem(SoftDeletableModel):
                 name="workitem_idem_key_per_user_uniq",
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        from core.services.dynamic_protection import dynamic_data_write
+
+        with dynamic_data_write(self, kwargs.get("update_fields")):
+            self._validate_dynamic_document_type()
+            if kwargs.get("update_fields") is None or "data_json" in kwargs["update_fields"]:
+                self._encrypt_sensitive_fields()
+            super().save(*args, **kwargs)
 
     def __str__(self):
         return self.title
