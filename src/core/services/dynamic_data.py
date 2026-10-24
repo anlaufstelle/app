@@ -239,8 +239,9 @@ def clean_dynamic_data(
     entity_type_error,
     facility_error: Exception | None = None,
     old_data: Mapping[str, Any] | None = None,
+    prevent_data_loss: bool = False,
 ) -> dict[str, Any]:
-    """Guard a document type and whitelist its dynamic payload (Refs #1833)."""
+    """Guard the type, whitelist its payload and optionally reject implicit loss."""
     document_type = check_document_type(
         facility,
         document_type,
@@ -252,7 +253,23 @@ def clean_dynamic_data(
         if data_json:
             raise ValidationError(_("Ohne Dokumentationstyp können keine dynamischen Daten gespeichert werden."))
         return {}
-    return validate_data_json(document_type, data_json, old_data=old_data)
+    cleaned = validate_data_json(document_type, data_json, old_data=old_data)
+    if prevent_data_loss:
+        from core.services.file_vault import safe_decrypt
+
+        removed = {
+            slug: safe_decrypt(value, default=value) for slug, value in (old_data or {}).items() if slug not in cleaned
+        }
+        if count_filled_dynamic_values(removed):
+            raise ValidationError(
+                {
+                    "document_type": _(
+                        "Der Dokumentationstyp kann nicht gewechselt werden, "
+                        "solange dadurch ausgefüllte Felder verloren gehen."
+                    )
+                }
+            )
+    return cleaned
 
 
 def preserve_inactive_values(document_type, data_json, old_data=None) -> dict[str, Any]:

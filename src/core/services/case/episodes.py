@@ -120,6 +120,7 @@ def update_episode(episode, user, *, basis_token=None, **fields):
             entity_type=DocumentType.EntityType.EPISODE,
             entity_type_error=_EPISODE_DOCUMENT_TYPE_ERROR,
             old_data=locked.data_json,
+            prevent_data_loss=effective_type != locked.document_type and "data_json" not in fields,
         )
     changed_fields = [key for key, value in fields.items() if getattr(locked, key) != value]
     if "document_type" in changed_fields and "data_json" not in changed_fields:

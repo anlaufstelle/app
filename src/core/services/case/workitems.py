@@ -891,6 +891,7 @@ def update_workitem(
             entity_type=DocumentType.EntityType.WORKITEM,
             entity_type_error=_("Der Dokumentationstyp muss für Aufgaben gelten."),
             old_data=locked_state.data_json,
+            prevent_data_loss=effective_type != locked_state.document_type and "data_json" not in fields,
         )
 
     if "client" in fields:
