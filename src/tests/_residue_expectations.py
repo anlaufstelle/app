@@ -117,7 +117,6 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     ),
     # ---- core_workitem ---------------------------------------------------
     pii("core_workitem", "title"),
-    pii("core_workitem", "description"),
     pii("core_workitem", "data_json"),
     non_pii("core_workitem", "item_type", reason="Enum (hint/task), kein Freitext."),
     non_pii("core_workitem", "status", reason="Enum (open/in_progress/done/dismissed), kein Freitext."),
@@ -265,7 +264,6 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     ),
     # ---- core_episode ----------------------------------------------------
     pii("core_episode", "title"),
-    pii("core_episode", "description"),
     pii("core_episode", "data_json"),
     # ---- core_outcomegoal ------------------------------------------------
     pii("core_outcomegoal", "title"),

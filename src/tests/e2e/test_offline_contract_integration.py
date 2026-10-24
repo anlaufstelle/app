@@ -199,7 +199,7 @@ class TestIdempotencyKeyBridge:
                 """async (key) => {
                     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
                     const body = new URLSearchParams({
-                        item_type: 'task', title: 'E2E idem', description: '',
+                        item_type: 'task', title: 'E2E idem',
                         priority: 'normal', recurrence: '',
                     }).toString();
                     try {
@@ -422,7 +422,7 @@ class TestReplayMarker:
                 """async () => {
                     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
                     const body = new URLSearchParams({
-                        item_type: 'task', title: 'E2E replay-marker', description: '',
+                        item_type: 'task', title: 'E2E replay-marker',
                         priority: 'normal', recurrence: '',
                     }).toString();
                     let threw = false;
@@ -659,7 +659,7 @@ class TestWorkItemReplayContract:
             result = page.evaluate(
                 """async (args) => {
                     const rec = await window.offlineEdit.markWorkItemNew(args.clientPk, {
-                        item_type: 'task', title: 'Offline-Aufgabe', description: 'Notiz',
+                        item_type: 'task', title: 'Offline-Aufgabe',
                         priority: 'important', due_date: '2026-08-01', remind_at: '2026-07-20',
                         recurrence: 'weekly', assigned_to: args.userPk,
                     });
@@ -675,7 +675,6 @@ class TestWorkItemReplayContract:
                 f"client={client_pk}",
                 "item_type=task",
                 "title=Offline-Aufgabe",
-                "description=Notiz",
                 "priority=important",
                 "due_date=2026-08-01",
                 "remind_at=2026-07-20",
@@ -847,7 +846,7 @@ class TestWorkItemReplayContract:
                 route.fulfill(
                     status=409,
                     content_type="application/json",
-                    body='{"error":"conflict","server_state":{"title":"Server-Titel","description":"",'
+                    body='{"error":"conflict","server_state":{"title":"Server-Titel",'
                     '"status":"open","updated_at":"2026-02-02T00:00:00Z"}}',
                 )
 

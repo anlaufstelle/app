@@ -152,8 +152,13 @@ def test_offline_client_fields_link_labels_to_unique_controls() -> None:
     detail = _source("core/clients/offline_detail.html")
     assert ":for=\"'offline-create-field-' + field.slug\"" in event_fields
     assert event_fields.count(":id=\"'offline-create-field-' + field.slug\"") == 5
-    assert workitem_fields.count('for="{{ id_prefix }}-') == 8
-    assert workitem_fields.count('id="{{ id_prefix }}-') == 8
+    expected_fields = ("title", "item-type", "priority", "due-date", "remind-at", "recurrence", "assigned-to")
+    assert workitem_fields.count('for="{{ id_prefix }}-') == len(expected_fields)
+    assert workitem_fields.count('id="{{ id_prefix }}-') == len(expected_fields)
+    for field in expected_fields:
+        assert workitem_fields.count(f'for="{{{{ id_prefix }}}}-{field}"') == 1
+        assert workitem_fields.count(f'id="{{{{ id_prefix }}}}-{field}"') == 1
+    assert "wiValues.description" not in workitem_fields
     assert 'with id_prefix="offline-wi-create"' in detail
     assert 'with id_prefix="offline-wi-edit"' in detail
     assert ":for=\"'offline-edit-field-' + field.slug\"" in detail

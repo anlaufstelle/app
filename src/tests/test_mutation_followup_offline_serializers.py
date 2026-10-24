@@ -35,6 +35,7 @@ from core.services.system import (
 # ueber ``core.services.system`` re-exportiert — Direktimport aus dem Submodul,
 # wie ``test_field_template_ranges`` es fuer ``_serialize_field_template`` tut.
 from core.services.system.offline import _serialize_assignable_users
+from tests._dynamic_test_data import entity_details
 from tests._mutation_followup_offline_helpers import (
     _attach,
     _make_doc_type,
@@ -418,13 +419,12 @@ class TestSerializeWorkitem:
             status=WorkItem.Status.OPEN,
             priority=WorkItem.Priority.IMPORTANT,
             title="T",
-            description="D",
+            **entity_details(facility, "workitem", "D"),
         )
         out = _serialize_workitem(staff_user, wi)
         assert set(out.keys()) == {
             "pk",
             "title",
-            "description",
             "status",
             "priority",
             "item_type",
@@ -453,11 +453,12 @@ class TestSerializeWorkitem:
             client=client_identified,
             created_by=staff_user,
             title="MyTitle",
-            description="MyDesc",
+            **entity_details(facility, "workitem", "MyDesc"),
         )
         out = _serialize_workitem(staff_user, wi)
         assert out["title"] == "MyTitle"
-        assert out["description"] == "MyDesc"
+        assert "description" not in out
+        assert "data_json" not in out
 
     def test_workitem_status_passthrough(self, facility, client_identified, staff_user):
         wi = WorkItem.objects.create(

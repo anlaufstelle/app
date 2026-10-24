@@ -157,7 +157,6 @@ def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
                     'csrfmiddlewaretoken': csrf,
                     'item_type': 'task',
                     'title': 'E2E offline POST',
-                    'description': '',
                     'priority': 'normal',
                     'recurrence': '',
                 }).toString();
@@ -297,7 +296,7 @@ def test_offline_queue_replay_syncs_despite_stale_csrf(browser, base_url):
             """async (title) => {
                 await window.crypto_session.ready();
                 const body = new URLSearchParams({
-                    item_type: 'task', title: title, description: '',
+                    item_type: 'task', title: title,
                     priority: 'normal', recurrence: '',
                 }).toString();
                 await window.offlineQueue.enqueueRequest(

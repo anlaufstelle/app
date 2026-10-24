@@ -13,7 +13,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def marked_targets(request, facility, staff_user):
     targets = {"Client": request.getfixturevalue("client_identified"), "Case": request.getfixturevalue("case_open")}
-    for target_type in ["Episode", "WorkItem", "Event"]:
+    for target_type in ["Event"]:
         obj, field = populate(request, target_type)
         entry = get_entry(facility, staff_user, target_type, obj.pk, field)
         mark_review(facility, staff_user, target_type, obj.pk, field, timezone.localdate(), entry.fingerprint)
@@ -21,7 +21,7 @@ def marked_targets(request, facility, staff_user):
     return targets
 
 
-@pytest.mark.parametrize("target_type", ["Episode", "WorkItem", "Event"])
+@pytest.mark.parametrize("target_type", ["Event"])
 def test_physical_delete_removes_markers(marked_targets, facility, target_type):
     obj = marked_targets[target_type]
     target_id = obj.pk

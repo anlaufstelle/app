@@ -283,7 +283,6 @@ def maximal_pii_graph(facility, admin_user, lead_user):
     Episode.objects.create(
         case=case,
         title="RESIDUEPROBE-Episode title",
-        description="RESIDUEPROBE-Episode fixed detail",
         document_type=episode_type,
         data_json={episode_field.slug: "RESIDUEPROBE-Episode details"},
         started_at=timezone.localdate(),
@@ -295,7 +294,6 @@ def maximal_pii_graph(facility, admin_user, lead_user):
         admin_user,
         client=client,
         title="RESIDUEPROBE-Task title",
-        description="RESIDUEPROBE-Task fixed detail",
         document_type=task_type,
         data_json={task_field.slug: "RESIDUEPROBE-Task details"},
     )

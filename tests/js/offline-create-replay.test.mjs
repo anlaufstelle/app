@@ -33,6 +33,28 @@ beforeEach(() => {
     vi.clearAllMocks();
 });
 
+it.each(["new", "modified"])("drops obsolete task details from %s replay", async (localStatus) => {
+    const fetchMock = vi.fn(async () => ({
+        redirected: false,
+        status: 422,
+        json: async () => ({ error: "invalid", errors: {} }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    await window.offlineEdit.replayModifiedEvent({
+        pk: eventPk,
+        localStatus,
+        data: {
+            kind: "workitem",
+            expectedUpdatedAt: "2026-01-01T00:00:00Z",
+            formData: { title: "Offline task", description: "Obsolete detail" },
+            idempotencyKey: "task-idempotency",
+        },
+    }, { replay: true });
+    const body = new URLSearchParams(fetchMock.mock.calls[0][1].body);
+    expect(body.get("title")).toBe("Offline task");
+    expect(body.has("description")).toBe(false);
+});
+
 describe("#2187 — pk-lose Create-Replay-Klassifikation", () => {
     it("markiert einen 422-Create als dead und meldet Feldfehler", async () => {
         const errors = { occurred_at_fold: [{ message: "Bitte Sommer- oder Winterzeit wählen.", code: "fold_required" }] };

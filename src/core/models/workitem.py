@@ -95,17 +95,6 @@ class WorkItem(DynamicDataEncryptionMixin, SoftDeletableModel):
         help_text=_("Dringend = sofortige Bearbeitung, Wichtig = zeitnah, Normal = regulär"),
     )
     title = models.CharField(max_length=200, verbose_name=_("Titel"))
-    description = models.TextField(
-        blank=True,
-        verbose_name=_("Beschreibung"),
-        help_text=_(
-            "Frei-Text zur Aufgabe. Dieses Feld wird nicht verschlüsselt "
-            "gespeichert — bitte keine Klarnamen und keine besonders "
-            "schützenswerten Angaben zu Gesundheit, Sucht, Herkunft, Religion "
-            "oder Sexualität (besondere Kategorien personenbezogener Daten, "
-            "Art. 9 DSGVO)."
-        ),
-    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Aktualisiert am"))
     completed_at = models.DateTimeField(

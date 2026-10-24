@@ -20,18 +20,16 @@ from core.services.audit import audit_event
 from core.services.compliance.sensitivity import user_can_see_field
 from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.sensitive_patterns import PATTERN_LABELS, detect_patterns
-from core.services.workitem_visibility import readable_person_filter, workitems_for_read
+from core.services.workitem_visibility import readable_person_filter
 
 TARGET_LABELS = {
-    "Episode": _("Episodenbeschreibungen"),
-    "WorkItem": _("Aufgabenbeschreibungen"),
     "Event": _("Ereignis-Freitexte"),
 }
 PAGE_SIZE = 50
 # Far beyond any realistic table; keeps the SQL offset inside the database integer range.
 MAX_PAGE = 1_000_000
 SCAN_BATCH = 200
-STATIC_FIELDS = {"Episode": "description", "WorkItem": "description"}
+STATIC_FIELDS: dict[str, str] = {}
 
 
 @dataclass
@@ -81,17 +79,6 @@ def _targets(facility, user, target_type):
         qs = Case.objects.for_facility(facility).filter(
             is_deleted=False, client__is_deleted=False, client__is_active=True, client__facility=facility
         )
-    elif target_type == "Episode":
-        qs = Episode.objects.filter(
-            case__facility=facility,
-            case__is_deleted=False,
-            case__client__facility=facility,
-            case__client__is_deleted=False,
-            case__client__is_active=True,
-            is_deleted=False,
-        ).select_related("case")
-    elif target_type == "WorkItem":
-        return workitems_for_read(facility).filter(is_deleted=False)
     elif target_type == "Event":
         return (
             Event.objects.for_facility(facility)

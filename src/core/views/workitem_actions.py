@@ -54,30 +54,15 @@ from core.views.utils import safe_redirect_path
 
 
 def _workitem_conflict_response(workitem, client_expected, *, error="conflict"):
-    """Build the 409-Conflict JSON payload for a stale optimistic-concurrency WorkItem edit.
-
-    Refs #1351 Task 7: Analog zu ``core.views.events._event_conflict_response``,
-    aber mit einer anderen ``server_state``-Form — WorkItems halten ihre
-    Felder direkt als Modell-Spalten (kein dynamisches ``data_json`` wie bei
-    Events), daher trägt der Payload die vier Felder, die
-    :file:`conflict-resolver.js` für ein WorkItem zum Diff-Rendern braucht:
-
-    - ``title`` — aktueller Titel
-    - ``description`` — aktuelle Freitext-Beschreibung
-    - ``status`` — aktueller Workflow-Status (``open``/``in_progress``/…)
-    - ``updated_at`` — ISO-Timestamp, wird nach Konfliktauflösung zum neuen
-      ``expected_updated_at``
-
-    Keine Sensitivitäts-Filterung nötig (anders als bei Events): WorkItems
-    haben keine dynamischen, pro-DocumentType klassifizierten Felder.
-
-    ``error`` unterscheidet wie beim Event-Pendant ``"conflict"`` (echter
-    Versions-Mismatch, auch defensiv für einen korrupten Token) von
-    ``"missing-token"`` (JSON-/HTMX-Edit ohne ``expected_updated_at``).
-    """
+    """Return version conflicts containing only offline-editable task metadata."""
     server_state = {
         "title": workitem.title,
-        "description": workitem.description,
+        "item_type": workitem.item_type,
+        "priority": workitem.priority,
+        "due_date": isoformat_or_none(workitem.due_date),
+        "remind_at": isoformat_or_none(workitem.remind_at),
+        "recurrence": workitem.recurrence,
+        "assigned_to": str(workitem.assigned_to_id or ""),
         "status": workitem.status,
         "updated_at": isoformat_or_none(workitem.updated_at),
     }

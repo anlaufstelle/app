@@ -625,7 +625,7 @@ class TestOfflineConflictResolverCluster:
                             + '&expected_updated_at=2000-01-01T00%3A00%3A00%2B00%3A00',
                         headers: {},
                         conflict: { error: error, serverState: {
-                            title: serverTitle, description: '', status: 'open',
+                            title: serverTitle, status: 'open',
                             updated_at: '2026-07-08T10:00:00+00:00' } },
                     },
                 });

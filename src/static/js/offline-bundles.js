@@ -241,7 +241,6 @@
         return {
             pk: r.pk,
             title: fd.title || "",
-            description: fd.description || "",
             priority: fd.priority || "normal",
             item_type: fd.item_type || "task",
             due_date: fd.due_date || "",
@@ -276,7 +275,6 @@
             overlay.delete(wi.pk);
             return Object.assign({}, wi, {
                 title: ov.title,
-                description: ov.description,
                 priority: ov.priority,
                 item_type: ov.item_type,
                 due_date: ov.due_date,

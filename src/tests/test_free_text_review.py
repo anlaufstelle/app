@@ -20,8 +20,6 @@ def populate(request, target_type):
     fixture, field = {
         "Client": ("client_identified", "notes"),
         "Case": ("case_open", "description"),
-        "Episode": ("episode", "description"),
-        "WorkItem": ("sample_workitem", "description"),
         "Event": ("sample_event", "notiz"),
     }[target_type]
     obj = request.getfixturevalue(fixture)
@@ -36,7 +34,7 @@ def populate(request, target_type):
     return obj, field
 
 
-@pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
+@pytest.mark.parametrize("target_type", ["Client", "Case", "Event"])
 @pytest.mark.parametrize("role", ["assistant_user", "staff_user", "lead_user", "admin_user", "super_admin_user"])
 def test_role_matrix(request, facility, target_type, role):
     obj, field = populate(request, target_type)
@@ -60,7 +58,7 @@ def test_role_matrix(request, facility, target_type, role):
     assert [(entry.target_id, entry.field_key) for entry in entries] == ([(obj.pk, field)] if allowed else [])
 
 
-@pytest.mark.parametrize("target_type", ["Episode", "WorkItem", "Event"])
+@pytest.mark.parametrize("target_type", ["Event"])
 @pytest.mark.parametrize("state", ["deleted", "inactive", "foreign"])
 def test_unavailable_targets_are_hidden(request, facility, staff_user, target_type, state, second_facility):
     obj, field = populate(request, target_type)
@@ -79,7 +77,7 @@ def test_unavailable_targets_are_hidden(request, facility, staff_user, target_ty
         service().mark_review(facility, staff_user, target_type, obj.pk, field, timezone.localdate(), "stale")
 
 
-@pytest.mark.parametrize("target_type", ["Episode", "WorkItem", "Event"])
+@pytest.mark.parametrize("target_type", ["Event"])
 def test_review_roundtrip_revocation_and_content_change(request, facility, staff_user, target_type):
     from core.models import AuditLog, FreeTextReview
 
@@ -116,7 +114,7 @@ def test_review_roundtrip_revocation_and_content_change(request, facility, staff
         service().mark_review(facility, staff_user, target_type, obj.pk, field, until, entry.fingerprint)
 
 
-@pytest.mark.parametrize("target_type", ["Event", "WorkItem"])
+@pytest.mark.parametrize("target_type", ["Event"])
 def test_personless_targets_remain_visible(request, facility, assistant_user, target_type):
     obj, field = populate(request, target_type)
     obj.client = None

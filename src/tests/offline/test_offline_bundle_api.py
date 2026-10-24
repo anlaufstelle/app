@@ -19,6 +19,7 @@ from django.utils import timezone
 
 from core.models import AuditLog, Case, DocumentType, DocumentTypeField, FieldTemplate, User, WorkItem
 from core.services.system import BUNDLE_SCHEMA_VERSION, build_client_offline_bundle
+from tests._dynamic_test_data import entity_details
 from tests._factories import make_document_type, make_event
 from tests._standard_text import set_record_text, text_fields
 
@@ -1108,7 +1109,7 @@ class TestBundleWorkItemAuthoring:
             facility,
             client_identified,
             staff_user,
-            description="desc",
+            **entity_details(facility, "workitem", "desc"),
             priority=WorkItem.Priority.URGENT,
             item_type=WorkItem.ItemType.HINT,
             recurrence=WorkItem.Recurrence.WEEKLY,

@@ -26,7 +26,7 @@ def target_url(obj, field):
 
 
 @pytest.mark.parametrize("role", ["assistant_user", "staff_user", "lead_user", "admin_user", "super_admin_user"])
-@pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
+@pytest.mark.parametrize("target_type", ["Client", "Case", "Event"])
 def test_view_role_matrix(request, client, facility, role, target_type):
     obj, field = populate(request, target_type)
     user = request.getfixturevalue(role)
@@ -96,13 +96,11 @@ def test_stale_and_invalid_posts_never_mark(client, facility, staff_user, sample
     assert client.post(url, {"action": "mark"}).status_code == 404
 
 
-@pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
+@pytest.mark.parametrize("target_type", ["Client", "Case", "Event"])
 def test_foreign_target_is_404(request, client, staff_user, target_type):
     fixture, field = {
         "Client": ("foreign_client", "notes"),
         "Case": ("foreign_case", "description"),
-        "Episode": ("foreign_episode", "description"),
-        "WorkItem": ("foreign_workitem", "description"),
         "Event": ("foreign_event", "notiz"),
     }[target_type]
     obj = request.getfixturevalue(fixture)

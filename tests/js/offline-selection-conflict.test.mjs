@@ -41,6 +41,47 @@ beforeEach(() => {
     window.syncOrchestrator = { runExclusive: vi.fn(async (fn) => fn()) };
 });
 
+it("compares task metadata and omits obsolete details from conflict replay", async () => {
+    record.data = {
+        kind: "workitem",
+        formData: { title: "Local task", description: "Obsolete local detail" },
+        serverState: {
+            title: "Server task", status: "open", description: "Obsolete server detail",
+            updated_at: "2026-10-09T10:00:00+00:00",
+        },
+    };
+    const component = factory();
+    component.eventPk = record.pk;
+    await component.load();
+    expect(component.diffKeys).not.toContain("description");
+    expect(component.serverData.title).toBe("Server task");
+    await component.keepLocal();
+    const replayed = window.offlineEdit.replayModifiedEvent.mock.calls[0][0];
+    expect(replayed.data.formData).not.toHaveProperty("description");
+    expect(replayed.data.formData.title).toBe("Local task");
+});
+
+it("replays complete task metadata when all merge fields choose the server", async () => {
+    record.data = {
+        kind: "workitem",
+        formData: { title: "Local task", item_type: "task", priority: "normal" },
+        serverState: {
+            title: "Server task", item_type: "hint", priority: "urgent", recurrence: "weekly",
+            assigned_to: "assignee", due_date: "2026-11-01", remind_at: "2026-10-31",
+            status: "open", updated_at: "2026-10-09T10:00:00+00:00",
+        },
+    };
+    const component = factory();
+    component.eventPk = record.pk;
+    await component.load();
+    for (const row of component.diffRows) row.choice = "server";
+    await component.keepMerged();
+    const replayed = window.offlineEdit.replayModifiedEvent.mock.calls[0][0];
+    expect(replayed.data.formData).toMatchObject({ title: "Server task", item_type: "hint", priority: "urgent" });
+    expect(replayed.data.formData.assigned_to).toBe("assignee");
+    expect(replayed.data.formData).not.toHaveProperty("description");
+});
+
 describe("Selection conflict rendering and resolution", () => {
     it("renders each label on its own line without changing the raw arrays", async () => {
         const component = factory();

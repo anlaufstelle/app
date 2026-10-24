@@ -164,7 +164,6 @@ def _redact_workitems(client) -> None:
     """Clear all task titles, dynamic values and types, including completed tasks."""
     client.work_items.all().update(
         title="Aufgabe (anonymisiert)",
-        description="",
         data_json={},
         document_type=None,
     )

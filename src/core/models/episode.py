@@ -31,17 +31,6 @@ class Episode(DynamicDataEncryptionMixin, SoftDeletableModel):
         verbose_name=_("Fall"),
     )
     title = models.CharField(max_length=200, verbose_name=_("Titel"))
-    description = models.TextField(
-        blank=True,
-        verbose_name=_("Beschreibung"),
-        help_text=_(
-            "Frei-Text zur Episode. Dieses Feld wird nicht verschlüsselt "
-            "gespeichert — bitte keine Klarnamen und keine besonders "
-            "schützenswerten Angaben zu Gesundheit, Sucht, Herkunft, Religion "
-            "oder Sexualität (besondere Kategorien personenbezogener Daten, "
-            "Art. 9 DSGVO)."
-        ),
-    )
     started_at = models.DateField(verbose_name=_("Beginn"))
     ended_at = models.DateField(null=True, blank=True, verbose_name=_("Ende"))
     created_by = models.ForeignKey(

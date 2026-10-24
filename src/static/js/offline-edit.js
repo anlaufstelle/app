@@ -529,8 +529,9 @@
      * aus replayNewEvent/replayModifiedEvent extrahiert (dort identische
      * Schleifen), damit der WorkItem-Track sie mitnutzt — verhaltensneutral.
      */
-    function _appendFormFields(form, fd) {
+    function _appendFormFields(form, fd, workitem = false) {
         for (const [key, value] of Object.entries(fd || {})) {
+            if (workitem && key === "description") continue;
             if (value === null || value === undefined) continue;
             if (Array.isArray(value)) {
                 for (const item of value) {
@@ -684,7 +685,7 @@
      * client-generierter pk, Idempotenz-Key gegen Doppel-Anlage bei
      * Verbindungsabbruch nach dem Server-Write (F-09/#1109, #1329).
      * `formData` traegt die WorkItemForm-Felder flach (item_type, title,
-     * description, priority, due_date, remind_at, recurrence, assigned_to);
+     * priority, due_date, remind_at, recurrence, assigned_to);
      * `kind: "workitem"` in `data` waehlt beim Replay den
      * /workitems/new/-Track.
      */
@@ -781,7 +782,7 @@
         const data = record.data || {};
         const form = new URLSearchParams();
         if (record.clientPk) form.set("client", record.clientPk);
-        _appendFormFields(form, data.formData);
+        _appendFormFields(form, data.formData, true);
         const response = await _postFormWithCsrfRetry("/workitems/new/", form.toString(), csrf, {
             "X-Idempotency-Key": data.idempotencyKey || record.pk,
         });
@@ -813,7 +814,7 @@
         }
 
         const form = new URLSearchParams();
-        _appendFormFields(form, record.data && record.data.formData);
+        _appendFormFields(form, record.data && record.data.formData, _isWorkItemRecord(record));
         // Refs #1109 (F-07): Token mitschicken, damit der Server-Konflikt-Check
         // greift. Fehlt er am Record (z.B. ein vor diesem Fix angelegter Edit),
         // einmalig aus dem gecachten Bundle-Event nachladen.

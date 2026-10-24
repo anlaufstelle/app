@@ -138,9 +138,14 @@
                         return;
                     }
                     const envelope = record.data || {};
-                    this.localData = envelope.formData || {};
+                    const isWorkItem = envelope.kind === "workitem";
+                    this.localData = isWorkItem
+                        ? window.offlineFormFields.workItemFormData(envelope.formData || {})
+                        : envelope.formData || {};
                     const serverState = envelope.serverState || {};
-                    this.serverData = serverState.data_json || {};
+                    this.serverData = isWorkItem
+                        ? { ...window.offlineFormFields.workItemFormData(serverState), status: serverState.status }
+                        : serverState.data_json || {};
                     const fieldOptions = serverState.field_options || {};
                     const fieldValue = window.offlineFormFields.getFieldValue;
                     this.documentTypeName = serverState.document_type_name || envelope.documentTypeName || "";

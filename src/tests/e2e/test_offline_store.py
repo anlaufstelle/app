@@ -1920,7 +1920,7 @@ class TestWorkItemStoreMerge:
                     expires_at: future, ttl: 3600,
                     schema_version: s.BUNDLE_SCHEMA_VERSION,
                     workitems: [{
-                        pk: args.w1, title: 'Bundle-Aufgabe', description: 'Basis',
+                        pk: args.w1, title: 'Bundle-Aufgabe',
                         status: 'open', priority: 'normal', item_type: 'task',
                         due_date: null, updated_at: '2026-01-01T00:00:00Z',
                         remind_at: null, recurrence: 'none', assigned_to_pk: null,
@@ -1957,7 +1957,7 @@ class TestWorkItemStoreMerge:
                     clientPk: args.pk, occurredAt: '',
                     localStatus: 'new',
                     data: {kind: 'workitem', formData: {
-                        item_type: 'task', title: 'Offline neu (Store)', description: '',
+                        item_type: 'task', title: 'Offline neu (Store)',
                         priority: 'urgent', due_date: '2026-08-01', remind_at: '',
                         recurrence: 'none', assigned_to: args.u1,
                     }, idempotencyKey: 'idem-1'},
@@ -1997,7 +1997,7 @@ class TestWorkItemStoreMerge:
                     pk: args.w1, clientPk: args.pk, occurredAt: '',
                     localStatus: 'modified',
                     data: {kind: 'workitem', formData: {
-                        item_type: 'task', title: 'Geaendert offline', description: 'Basis',
+                        item_type: 'task', title: 'Geaendert offline',
                         priority: 'important', due_date: '', remind_at: '',
                         recurrence: 'none', assigned_to: '',
                     }, expectedUpdatedAt: '2026-01-01T00:00:00Z'},

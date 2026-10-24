@@ -822,7 +822,7 @@ class TestWorkItemUpdateConflict:
         server_state = response.json()["server_state"]
         # sample_workitem: title="Test-Aufgabe", status=OPEN, description="".
         assert server_state["title"] == "Test-Aufgabe"
-        assert server_state["description"] == ""
+        assert "description" not in server_state
         assert server_state["status"] == "open"
         assert server_state["updated_at"] is not None
 

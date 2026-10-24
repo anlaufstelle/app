@@ -244,7 +244,6 @@ def _serialize_workitem(user, workitem) -> dict[str, Any]:
     return {
         "pk": str(workitem.pk),
         "title": workitem.title,
-        "description": workitem.description,
         "status": workitem.status,
         "priority": workitem.priority,
         "item_type": workitem.item_type,

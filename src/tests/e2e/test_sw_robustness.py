@@ -587,7 +587,7 @@ def test_queue_ack_handshake_survives_multiple_open_tabs(browser, base_url):
                 const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
                 const body = new URLSearchParams({
                     csrfmiddlewaretoken: csrf, item_type: 'task',
-                    title: 'E2E ACK Multi-Tab', description: '',
+                    title: 'E2E ACK Multi-Tab',
                     priority: 'normal', recurrence: '',
                 }).toString();
                 const response = await fetch('/workitems/new/', {

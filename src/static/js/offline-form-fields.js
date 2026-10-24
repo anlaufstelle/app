@@ -147,7 +147,6 @@
         return {
             item_type: "task",
             title: "",
-            description: "",
             priority: "normal",
             due_date: "",
             remind_at: "",
@@ -164,7 +163,6 @@
         return {
             item_type: wiValues.item_type,
             title: normalizeWorkItemTitle(wiValues.title),
-            description: wiValues.description,
             priority: wiValues.priority,
             due_date: wiValues.due_date,
             remind_at: wiValues.remind_at,

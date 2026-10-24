@@ -8,7 +8,7 @@ domänen-neutrale Teil: die Entscheidung "will der Caller JSON?" und die
 Zusammenbauen des eigentlichen ``server_state``-Payloads bleibt bei jeder
 View/jedem Service, weil die Felder je Ressource verschieden sind (Event:
 ``data_json``/``document_type_name``, sensitivitätsgefiltert; WorkItem:
-rohe Modellfelder ``title``/``description``/``status``/``updated_at``, keine
+task metadata ``title``/``status``/``updated_at`` without dynamic details; no
 Filterung nötig) — ein generischer Payload-Builder wäre hier unnötige
 Abstraktion (YAGNI).
 

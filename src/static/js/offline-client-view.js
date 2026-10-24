@@ -655,7 +655,6 @@
                 this.wiValues = {
                     item_type: wi.item_type || "task",
                     title: wi.title || "",
-                    description: wi.description || "",
                     priority: wi.priority || "normal",
                     due_date: this._dateOnly(wi.due_date),
                     remind_at: this._dateOnly(wi.remind_at),

@@ -43,7 +43,6 @@ describe("WorkItem-Form-Helfer (Feldnamen 1:1 zur Server-WorkItemForm)", () => {
         expect(helpers.emptyWorkItemValues()).toEqual({
             item_type: "task",
             title: "",
-            description: "",
             priority: "normal",
             due_date: "",
             remind_at: "",
@@ -60,7 +59,6 @@ describe("WorkItem-Form-Helfer (Feldnamen 1:1 zur Server-WorkItemForm)", () => {
         const wiValues = {
             item_type: "hint",
             title: "T",
-            description: "D",
             priority: "urgent",
             due_date: "2026-09-01",
             remind_at: "2026-08-30",
@@ -71,7 +69,6 @@ describe("WorkItem-Form-Helfer (Feldnamen 1:1 zur Server-WorkItemForm)", () => {
         expect(helpers.workItemFormData(wiValues)).toEqual({
             item_type: "hint",
             title: "T",
-            description: "D",
             priority: "urgent",
             due_date: "2026-09-01",
             remind_at: "2026-08-30",
