@@ -26,7 +26,7 @@ SRC_DIR = REPO_ROOT / "src"
 
 _FERNET_KEY = "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE="
 
-_BANNER_MARKER = "KLARTEXT"
+_BANNER_MARKER = "PLAINTEXT MODE"
 
 
 def _run_dev_import(env_overrides=None, expr="import anlaufstelle.settings.dev  # noqa"):
