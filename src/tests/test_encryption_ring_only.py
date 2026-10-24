@@ -274,13 +274,12 @@ class TestRuntimeReadsOnlyTheRing:
         assert first is not second
 
     def test_missing_key_message_names_only_the_ring(self):
-        from core.services.file_vault.encryption import EncryptionKeyMissing, encrypt_field
+        from core.services.file_vault.encryption import EncryptionError, encrypt_field
 
         with override_settings(ENCRYPTION_KEYS=""):
-            with pytest.raises(Exception) as excinfo:
+            with pytest.raises(EncryptionError) as excinfo:
                 encrypt_field("secret")
 
-        assert isinstance(excinfo.value, (EncryptionKeyMissing, Exception))
         assert "ENCRYPTION_KEYS" in str(excinfo.value)
         assert "ENCRYPTION_KEY " not in str(excinfo.value)
 
