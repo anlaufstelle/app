@@ -2149,7 +2149,7 @@ Das Audit-Log ist **append-only** und unveränderlich. Es protokolliert automati
 |---|---|
 | Anmeldung, Abmeldung | Jeder Login/Logout |
 | Anmeldung fehlgeschlagen | Falsches Passwort |
-| Daten der Stufe „Mit Zusatzangaben" eingesehen | Aufruf der **Personen-Detailseite** (`/clients/<id>/`) einer Person dieser Stufe — nicht der Aufruf der Personenliste, eines Ereignisses, eines Falls oder eines Suchtreffers |
+| Daten der Stufe „Mit Zusatzangaben" eingesehen | Aufruf der **Personen-Detailseite** (`/clients/<id>/`) einer Person dieser Stufe und Anzeige ihrer Freitext-Notizen in der **Freitext-Prüfliste** (`VIEW_QUALIFIED`, einmal je angezeigter Person und Seitenaufruf, auch in der Einzeltextansicht); Personenliste, Bearbeiten-Formular, Ereignis, Fall und Suchtreffer erzeugen keinen solchen Eintrag |
 | Export | Datenexport durch Benutzer — auch Datenauskünfte zu einzelnen Personen und der Aufruf des externen Berichts am Bildschirm. **Herausgegebene Berichtsdateien** (CSV/PDF/JSON/XML mit Berichtszeitraum) sind eine Teilmenge davon: nur sie unterliegen nicht der Aufbewahrungsfrist und erscheinen in der [Freigabe-Übersicht](#8-statistik-snapshots--materialized-view) |
 | Löschung | Manuell oder durch `enforce_retention` |
 | Stufenwechsel | Änderung des Kontaktstatus einer Person |

@@ -2150,7 +2150,7 @@ The audit log is **append-only** and immutable. Among other things, it automatic
 |---|---|
 | Anmeldung, Abmeldung (login, logout) | Every login/logout |
 | Anmeldung fehlgeschlagen (failed login) | Incorrect password |
-| Data at the "With additional details" level viewed | Opening the **person detail page** (`/clients/<id>/`) of a person at that level — not the person list, an event, a case or a search result |
+| Data at the "With additional details" level viewed | Opening the **person detail page** (`/clients/<id>/`) of a person at that level and displaying their free-text notes in the **free-text review list** (`VIEW_QUALIFIED`, once per displayed person and page request, including the individual text view); the person list, edit form, event, case and search result do not generate such an entry |
 | Export | Data export by a user — including data subject access requests for individual people and on-screen views of the external report. **Released report files** (CSV/PDF/JSON/XML with a reporting period) are a subset: only those are exempt from the retention deadline and appear in the [release overview](#8-statistics-snapshots--materialized-view) |
 | Deletion | Manual or via `enforce_retention` |
 | Level change | Change in a person's contact status |
@@ -2574,7 +2574,7 @@ Agree review dates and responsibilities organisationally. Local pattern detectio
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- source-hash: ca0ce3ac2c0bb116cc4de3ae6965ea0c91667e59 -->
+<!-- translation-date: 2026-10-24 -->
+<!-- source-hash: 7a4ff6eea24ccf84da2eea7ab14ee216ffcba7df -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-14 -->

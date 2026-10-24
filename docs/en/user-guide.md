@@ -438,9 +438,9 @@ Each person has a **contact stage**:
 | Level | Description |
 |---|---|
 | **Pseudonym only** | Only the pseudonym is stored, plus the age group |
-| **With additional details** | Additional personal details are stored (restricted access, opening the detail page is logged) |
+| **With additional details** | Additional personal details are stored (restricted access, opening the person detail page and displaying their free-text notes in the free-text review list (once per displayed person and page request, including the individual text view) are logged) |
 
-> **Note:** Opening the **detail page** (`/clients/<id>/`) of a person at the "With additional details" contact stage is logged — and only that. The people list, the edit form for the same person, an event, a case and a search result generate **no** entry, even if additional details are visible there.
+> **Note:** Opening the **detail page** (`/clients/<id>/`) of a person at the "With additional details" contact stage and displaying their free-text notes in the **free-text review list** are logged (`VIEW_QUALIFIED`, once per displayed person and page request, including the individual text view). The people list, the edit form for the same person, an event, a case and a search result generate **no** entry, even if additional details are visible there.
 
 ### Creating a Person
 
@@ -954,7 +954,7 @@ Effective sensitivity is the higher level of documentation type and field. Field
 
 ### Audit Log (Application support Only)
 
-The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, opening person detail pages at the "With additional details" level, exports, deletions, and contact stage changes. It cannot be modified and serves traceability purposes in accordance with the GDPR. Access is granted to the Application support (`facility_admin`) for their own facility.
+The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, opening person detail pages and displaying free-text notes at the "With additional details" level in the free-text review list (`VIEW_QUALIFIED`, once per displayed person and page request, including the individual text view), exports, deletions, and contact stage changes. It cannot be modified and serves traceability purposes in accordance with the GDPR. Access is granted to the Application support (`facility_admin`) for their own facility.
 
 ---
 
@@ -1181,8 +1181,8 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- source-hash: 4ae7c4ae45121b0afa1054cc1a5d4d6a50ec6fe3 -->
+<!-- translation-date: 2026-10-24 -->
+<!-- source-hash: 079cf824eb2eb8cff291ec75f3245bdee8e84889 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->

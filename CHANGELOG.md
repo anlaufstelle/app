@@ -31,6 +31,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
 ### Fixed
 
+- **Protokollzusage für Zusatzangaben präzisiert** (#918) — Die Dokumentation benennt neben der Personen-Detailseite auch angezeigte Freitext-Notizen in der Freitext-Prüfliste als protokollierte Lesezugriffe und grenzt sie weiterhin von nicht protokollierten Aufrufen ab.
+
 - **Offline-Eingaben nach erneuter Anmeldung übertragen** (#2011) — Automatisches Übertragen und erneuter Versuch gescheiterter Formularanfragen verwenden das aktuelle CSRF-Token statt des gespeicherten Formular-Tokens; fehlt ein aktuelles Token auch nach dem Aktualisieren, bleiben die Eingaben ohne Schreibversuch erhalten.
 - **Unterbrochene Delta-Mutationsläufe fortsetzen** (#2608) — `RESUME=1` prüft nur offene Mutanten derselben Lauf-Identität weiter; frühe atomare Stats und Teilurteile sichern den Fortschritt, während ein geänderter Dateibaum oder Werkzeugstand die Wiederaufnahme verweigert und Befunde auch nach dem Fortsetzen Exit 3 erzwingen. Im Standardpfad ändern sich drei Dinge: Der Watchdog wertet einen Lauf nur bei Exit 0 als erfolgreich, ein Abbruchsignal (SIGTERM/SIGINT) beendet den Lauf mit Exit ≠ 0, und ein frischer Delta-Lauf setzt die Urteile seiner Delta-Menge zunächst auf offen.
 - **Ticketnummern im Testmatrix-Index ohne falsche Verlinkung** (#2648) — Der Generator schreibt Ticketreferenzen als Klartext, damit unabhängige Nummernräume anderer Repositories keine sachfremden Links erzeugen.

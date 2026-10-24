@@ -436,9 +436,9 @@ Jede Person hat eine **Kontaktstufe**:
 | Stufe | Beschreibung |
 |---|---|
 | **Nur Pseudonym** | Es ist nur das Pseudonym hinterlegt, dazu die Altersgruppe |
-| **Mit Zusatzangaben** | Zusätzliche persönliche Angaben sind hinterlegt (eingeschränkter Zugriff, das Öffnen der Detailseite wird protokolliert) |
+| **Mit Zusatzangaben** | Zusätzliche persönliche Angaben sind hinterlegt (eingeschränkter Zugriff, das Öffnen der Personen-Detailseite und die Anzeige ihrer Freitext-Notizen in der Freitext-Prüfliste (einmal je angezeigter Person und Seitenaufruf, auch in der Einzeltextansicht) werden protokolliert) |
 
-> **Hinweis:** Protokolliert wird das Öffnen der **Detailseite** (`/clients/<id>/`) einer Person der Kontaktstufe „Mit Zusatzangaben" — und nur das. Die Personenliste, das Bearbeiten-Formular derselben Person, ein Ereignis, ein Fall und ein Suchtreffer erzeugen **keinen** Eintrag, auch wenn dort Zusatzangaben zu sehen sind.
+> **Hinweis:** Protokolliert (`VIEW_QUALIFIED`) werden das Öffnen der **Detailseite** (`/clients/<id>/`) einer Person der Kontaktstufe „Mit Zusatzangaben" und die Anzeige ihrer Freitext-Notizen in der **Freitext-Prüfliste** (einmal je angezeigter Person und Seitenaufruf, auch in der Einzeltextansicht). Die Personenliste, das Bearbeiten-Formular derselben Person, ein Ereignis, ein Fall und ein Suchtreffer erzeugen **keinen** Eintrag, auch wenn dort Zusatzangaben zu sehen sind.
 
 ### Person anlegen
 
@@ -954,7 +954,7 @@ Die wirksame Sensibilität ist die höhere Stufe aus Dokumentationstyp und Feld.
 
 ### Audit-Log (nur Anwendungsbetreuung)
 
-Das Audit-Log (`/audit/`) protokolliert automatisch sicherheitsrelevante Aktionen: Anmeldungen, Zugriffe auf Daten der Stufe „Mit Zusatzangaben", Exporte, Löschungen und Stufenwechsel. Es kann nicht verändert werden und dient der Nachvollziehbarkeit im Sinne der DSGVO. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung.
+Das Audit-Log (`/audit/`) protokolliert automatisch sicherheitsrelevante Aktionen: Anmeldungen, das Öffnen der Personen-Detailseite und die Anzeige von Freitext-Notizen der Stufe „Mit Zusatzangaben" in der Freitext-Prüfliste (`VIEW_QUALIFIED`, einmal je angezeigter Person und Seitenaufruf, auch in der Einzeltextansicht), Exporte, Löschungen und Stufenwechsel. Es kann nicht verändert werden und dient der Nachvollziehbarkeit im Sinne der DSGVO. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung.
 
 ---
 

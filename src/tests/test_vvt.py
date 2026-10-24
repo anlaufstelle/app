@@ -64,10 +64,9 @@ _LOGGED_SUBOBJECT_RE = re.compile(r"Episode|Wirkungsziel", re.IGNORECASE)
 #: treffen darf — sie war bis dahin die einzige zutreffende.
 _UNLOGGED_SUBOBJECT_PHRASE = "gar nicht protokolliert"
 
-#: Refs #1862: ``VIEW_QUALIFIED`` entsteht ausschliesslich beim Aufruf der
-#: Personen-Detailseite (``core/views/clients.py``). Eine pauschale Zusage
-#: "jeder Zugriff wird protokolliert" ist damit falsch — das Bearbeiten-
-#: Formular zeigt dieselben Zusatzangaben entschluesselt und schreibt nichts.
+#: Refs #918, #1862: qualified reads are audited by the person detail and
+#: free-text review views. The edit form still shows additional details
+#: without an audit entry, so blanket access-logging claims remain false.
 _BLANKET_CLIENT_ACCESS_CLAIM_RE = re.compile(
     r"jede[rn]?\s+Zugriff\w*(\s+darauf)?\s+wird\s+(automatisch\s+)?protokolliert"
     r"|every\s+access\s+is\s+logged",
@@ -133,19 +132,14 @@ class TestProcessingActivitiesSchema:
                 )
 
     def test_toms_do_not_claim_blanket_read_logging(self):
-        """Refs #1862: keine TOM darf eine flaechendeckende Lese-Protokollierung
-        behaupten.
+        """Refs #918, #1862: TOMs must not promise blanket read logging.
 
-        Von Lesezugriffen protokolliert die Anwendung ausschliesslich benannte
-        Ausnahmen: den Aufruf einer Person der Stufe „Mit Zusatzangaben"
-        (``VIEW_QUALIFIED``, ``views/clients.py``), Auskunft/Export
-        (``EXPORT``), Datei-Downloads (``DOWNLOAD``), die Offline-Mitnahme
-        (``OFFLINE_*_READ``) und facility-uebergreifende Zugriffe
-        (``SYSTEM_VIEW``). Gewoehnliche Listen-, Detail- und Suchaufrufe
-        erzeugen keinen Eintrag. Eine TOM, die pauschal „Lese- und
-        Schreibzugriffe" protokolliert nennt, waere eine unzutreffende Angabe
-        im Verzeichnis nach Art. 30 DSGVO — dieselbe Fehlerklasse wie die
-        Hash-Chain-Behauptung oben.
+        Named read exceptions include qualified-person detail and free-text
+        review views (VIEW_QUALIFIED), subject access and exports (EXPORT),
+        file downloads (DOWNLOAD), offline take-out (OFFLINE_*_READ) and
+        cross-facility administration (SYSTEM_VIEW). Ordinary list, detail
+        and search requests do not create entries. A blanket TOM promise
+        would misstate the processing inventory under GDPR Art. 30.
         """
         for entry in PROCESSING_ACTIVITIES:
             for tom in entry["toms"]:
@@ -446,18 +440,16 @@ class TestEpisodeAndGoalEditsAreAudited:
 
 
 class TestQualifiedAccessClaimStaysScoped:
-    """Refs #1862: die Zusage "jeder Zugriff wird protokolliert" ist falsch.
+    """Refs #918, #1862: keep qualified-read promises scoped to both writers.
 
-    ``VIEW_QUALIFIED`` entsteht projektweit an genau einer Stelle — im GET der
-    Personen-Detailseite (``core/views/clients.py``). Das Bearbeiten-Formular
-    derselben Person zeigt die Zusatzangaben entschluesselt im Klartext und
-    schreibt **nichts**; Liste, Ereignis, Fall und Suchtreffer ebenfalls nicht.
-    Der Guard deckt die Nutzerdokumentation ab; die beiden Oberflaechen-
-    Bausteine (Badge-``title``, Legendenzeile) und der ``help_text`` haengen in
-    ``test_contact_stage_explanations.py``.
+    The person detail view and free-text review views write VIEW_QUALIFIED.
+    Review views audit once per displayed qualified person and page request.
+    The edit form, person list, event, case and search result do not write it.
+    UI badges, legends and model help text are covered separately by
+    test_contact_stage_explanations.py.
     """
 
-    def test_view_qualified_is_written_in_exactly_one_module(self):
+    def test_view_qualified_is_written_only_by_detail_and_review_views(self):
         hits = sorted(
             path.relative_to(_SRC_ROOT).as_posix()
             for path in _SRC_ROOT.rglob("*.py")
@@ -465,12 +457,13 @@ class TestQualifiedAccessClaimStaysScoped:
             and path.name != "audit.py"
             and "tests" not in path.parts
         )
-        assert hits == ["core/views/clients.py"], (
-            f"VIEW_QUALIFIED wird jetzt in {hits} geschrieben — die auf die "
-            "Personen-Detailseite eingegrenzten Zusagen in Oberflaeche, "
-            "Handbuch, Glossar und Fachkonzept muessen nachgezogen werden."
+        assert hits == ["core/views/clients.py", "core/views/free_text_review.py"], (
+            f"VIEW_QUALIFIED writers changed to {hits}; update the scoped promises "
+            "in the user guide, glossary and domain concept if the person detail "
+            "and free-text review views are no longer the only writers."
         )
 
+    @pytest.mark.architecture
     def test_stage_docs_do_not_promise_blanket_access_logging(self):
         for relative in _STAGE_DOC_PATHS:
             doc = Path(relative)
@@ -483,10 +476,10 @@ class TestQualifiedAccessClaimStaysScoped:
             text = doc.read_text(encoding="utf-8")
             match = _BLANKET_CLIENT_ACCESS_CLAIM_RE.search(text)
             assert match is None, (
-                f'{relative} sagt "{match.group(0)}" zu — protokolliert wird nur '
-                "der Aufruf der Personen-Detailseite (VIEW_QUALIFIED), nicht das "
-                "Bearbeiten-Formular, die Liste, ein Ereignis, ein Fall oder ein "
-                "Suchtreffer."
+                f'{relative} promises "{match.group(0)}"; VIEW_QUALIFIED covers '
+                "the person detail page and displayed qualified-person notes in "
+                "the free-text review views, not the edit form, person list, "
+                "event, case or search result."
             )
 
 
