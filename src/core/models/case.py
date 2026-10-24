@@ -38,18 +38,6 @@ class Case(DynamicDataEncryptionMixin, SoftDeletableModel):
         ),
     )
     title = models.CharField(max_length=200, verbose_name=_("Titel"))
-    description = models.TextField(
-        blank=True,
-        verbose_name=_("Beschreibung"),
-        help_text=_(
-            "Frei-Text zum Fall. Dieses Feld wird nicht verschlüsselt "
-            "gespeichert — bitte keine Klarnamen und keine besonders "
-            "schützenswerten Angaben zu Gesundheit, Sucht, Herkunft, Religion "
-            "oder Sexualität (besondere Kategorien personenbezogener Daten, "
-            "Art. 9 DSGVO). Solche Angaben gehören in ein Zusatzfeld eines "
-            "Kontakts mit der Sensibilität „Hoch“."
-        ),
-    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

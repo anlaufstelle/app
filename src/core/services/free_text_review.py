@@ -23,8 +23,6 @@ from core.services.sensitive_patterns import PATTERN_LABELS, detect_patterns
 from core.services.workitem_visibility import readable_person_filter, workitems_for_read
 
 TARGET_LABELS = {
-    "Client": _("Personen-Notizen"),
-    "Case": _("Fallbeschreibungen"),
     "Episode": _("Episodenbeschreibungen"),
     "WorkItem": _("Aufgabenbeschreibungen"),
     "Event": _("Ereignis-Freitexte"),
@@ -33,7 +31,7 @@ PAGE_SIZE = 50
 # Far beyond any realistic table; keeps the SQL offset inside the database integer range.
 MAX_PAGE = 1_000_000
 SCAN_BATCH = 200
-STATIC_FIELDS = {"Client": "notes", "Case": "description", "Episode": "description", "WorkItem": "description"}
+STATIC_FIELDS = {"Episode": "description", "WorkItem": "description"}
 
 
 @dataclass
@@ -75,6 +73,8 @@ def _authorize(facility, user):
 
 def _targets(facility, user, target_type):
     _authorize(facility, user)
+    if target_type not in TARGET_LABELS:
+        raise Http404("Review target not found")
     if target_type == "Client":
         qs = Client.objects.for_facility(facility).filter(is_active=True, is_deleted=False)
     elif target_type == "Case":

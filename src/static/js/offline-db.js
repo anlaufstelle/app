@@ -71,7 +71,7 @@
     // Refs #1529/#1499: v1->v2 (client.lastContact neu im Bundle) -- Alt-v1-
     // Bundles fallen dadurch im getOfflineClient/listOfflineClientsDetailed-
     // Gate raus und werden gepurged.
-    const BUNDLE_SCHEMA_VERSION = 2;
+    const BUNDLE_SCHEMA_VERSION = 3;
     // Refs #1520/#1499: eigene Schema-Version fuers personenlose
     // Facility-Meta-Bundle -- UNABHAENGIG von BUNDLE_SCHEMA_VERSION (Klient),
     // damit beide Bundles getrennt evolvieren koennen. Muss mit

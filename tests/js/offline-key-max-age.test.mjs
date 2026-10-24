@@ -143,7 +143,7 @@ describe("bundle expiry fails closed", () => {
     ))("rejects expired/invalid expires_at %s at the %s gate", async (expiry, gate) => {
         await store.saveClientBundle({
             client: { pk: PK, pseudonym: "Test" }, cases: [], events: [], workitems: [],
-            schema_version: 2, generated_at: new Date(now).toISOString(), expires_at: expiry,
+            schema_version: 3, generated_at: new Date(now).toISOString(), expires_at: expiry,
         });
         if (gate === "read") expect(await store.getOfflineClient(PK)).toBeNull();
         else expect(await store.listOfflineClientsDetailed()).toEqual([]);

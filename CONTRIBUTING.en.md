@@ -699,7 +699,7 @@ hurt:** [docs/packages.md](docs/packages.md) (German) ·
 [ADR-035](docs/adr/035-evaluator-semantik-bedingte-feldlogik.md) (field-condition operators).
 The reverse direction — exporting an entire existing facility as versioned JSON
 (`manage.py export_facility`) — is described in
-[docs/facility-export-schema.md](docs/facility-export-schema.md) (German).
+[docs/en/facility-export-schema.md](docs/en/facility-export-schema.md).
 
 ---
 

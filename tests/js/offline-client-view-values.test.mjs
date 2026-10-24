@@ -41,6 +41,31 @@ it("renders option and translated boolean labels without changing stored values 
 
 afterEach(() => { document.documentElement.lang = ""; document.body.innerHTML = ""; });
 
+it("renders typed person fields with metadata and preserves their values", async () => {
+    const cached = {
+        client: {
+            data_fields: { "client-notes": "Private note", flags: ["a"] },
+            field_metadata: [
+                { slug: "client-notes", name: "Notes", field_type: "textarea" },
+                { slug: "flags", name: "Flags", field_type: "multi_select", options: [{ value: "a", label: "First" }] },
+            ],
+        },
+        events: [],
+        lastSynced: Date.now(),
+    };
+    window.offlineClient = { getOfflineClient: vi.fn(async () => cached) };
+    const component = factory();
+    component.$el = document.createElement("div");
+    component._pk = "client-1";
+    await component.load();
+    expect(component.data.client.data_fields_pairs).toEqual([
+        { slug: "client-notes", label: "Notes", value_fmt: "Private note" },
+        { slug: "flags", label: "Flags", value_fmt: "First" },
+    ]);
+    expect(component.data.client.has_data_fields).toBe(true);
+    expect(cached.client.data_fields.flags).toEqual(["a"]);
+});
+
 it.each(["de", "en"])("formats offline date/time displays in app language %s without changing stored values", async language => {
     document.documentElement.lang = language;
     const values = { date: "2026-10-14", time: "13:45:17", text: "2026-10-14" };

@@ -12,8 +12,8 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def marked_targets(request, facility, staff_user):
-    targets = {}
-    for target_type in ["Client", "Case", "Episode", "WorkItem", "Event"]:
+    targets = {"Client": request.getfixturevalue("client_identified"), "Case": request.getfixturevalue("case_open")}
+    for target_type in ["Episode", "WorkItem", "Event"]:
         obj, field = populate(request, target_type)
         entry = get_entry(facility, staff_user, target_type, obj.pk, field)
         mark_review(facility, staff_user, target_type, obj.pk, field, timezone.localdate(), entry.fingerprint)
@@ -21,12 +21,10 @@ def marked_targets(request, facility, staff_user):
     return targets
 
 
-@pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
+@pytest.mark.parametrize("target_type", ["Episode", "WorkItem", "Event"])
 def test_physical_delete_removes_markers(marked_targets, facility, target_type):
     obj = marked_targets[target_type]
     target_id = obj.pk
-    if target_type == "Client":
-        marked_targets["Case"].delete()
     obj.delete()
     assert (
         not FreeTextReview.objects.for_facility(facility).filter(target_type=target_type, target_id=target_id).exists()
@@ -58,7 +56,7 @@ def test_case_revocation_cleans_case_and_episode(marked_targets, facility, staff
 
         anonymize_case(case, user=staff_user, trigger="manual")
     assert not FreeTextReview.objects.for_facility(facility).filter(target_type__in=["Case", "Episode"]).exists()
-    assert FreeTextReview.objects.for_facility(facility).filter(target_type="Client").exists()
+    assert FreeTextReview.objects.for_facility(facility).filter(target_type="WorkItem").exists()
 
 
 def test_marked_event_soft_delete_removes_metadata(facility, staff_user, sample_event):

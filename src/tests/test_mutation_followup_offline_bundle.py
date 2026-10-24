@@ -16,6 +16,7 @@ from core.services.system import (
     BUNDLE_TTL_SECONDS,
     build_client_offline_bundle,
 )
+from tests._standard_text import set_record_text
 
 # ---------------------------------------------------------------------------
 # build_client_offline_bundle — Top-Level-Aggregat (33 Survivors)
@@ -30,7 +31,7 @@ class TestBundleEnvelope:
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         # Refs #1529/#1499: Schema-Bump 1->2 (Purge der Alt-v1-Bundles).
         # Mutation BUNDLE_SCHEMA_VERSION 2->x oder Verschmelzung mit anderem Key.
-        assert bundle["schema_version"] == BUNDLE_SCHEMA_VERSION == 2
+        assert bundle["schema_version"] == BUNDLE_SCHEMA_VERSION == 3
 
     def test_ttl_is_48_hours_in_seconds(self, facility, client_identified, staff_user):
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
@@ -74,7 +75,7 @@ class TestBundleEnvelope:
 
 @pytest.mark.django_db
 class TestBundleClientFields:
-    """``bundle["client"]`` enthält genau die acht spezifizierten Felder."""
+    """The person envelope exposes exactly the declared metadata and typed fields."""
 
     def test_client_dict_contains_all_required_keys(self, facility, client_identified, staff_user):
         """Mutation eines Feld-Keys (``pseudonym`` → ``pseudo`` etc.) wird
@@ -87,7 +88,8 @@ class TestBundleClientFields:
             "contact_stage_display",
             "age_cluster",
             "age_cluster_display",
-            "notes",
+            "data_fields",
+            "field_metadata",
             "is_active",
             # Refs #1529/#1499: Letzter-Kontakt-Spaltenwert fuer die
             # Offline-Personenliste (Max(events__occurred_at), wie ClientListView).
@@ -135,36 +137,36 @@ class TestBundleClientFields:
 
 @pytest.mark.django_db
 class TestNotesVisibilityGate:
-    """Notes-Gate: ``is_staff_or_above`` schaltet ``client.notes`` frei.
+    """Notes-Gate: ``is_staff_or_above`` schaltet ``client.data_json`` frei.
 
     Mutation der Negation, des Property-Namens oder des Fallback-``""``
     werden gefangen.
     """
 
     def test_assistant_sees_empty_notes(self, facility, client_identified, assistant_user):
-        client_identified.notes = "geheim"
-        client_identified.save(update_fields=["notes"])
+        set_record_text(client_identified, "geheim")
+        client_identified.save(update_fields=["document_type", "data_json"])
         bundle = build_client_offline_bundle(assistant_user, facility, client_identified)
         # Mutation ``"" → "geheim"`` würde Klartext leaken.
-        assert bundle["client"]["notes"] == ""
+        assert bundle["client"]["data_fields"].get("client-notes", "") == ""
 
     def test_staff_sees_full_notes(self, facility, client_identified, staff_user):
-        client_identified.notes = "Aktennotiz"
-        client_identified.save(update_fields=["notes"])
+        set_record_text(client_identified, "Aktennotiz")
+        client_identified.save(update_fields=["document_type", "data_json"])
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
-        assert bundle["client"]["notes"] == "Aktennotiz"
+        assert bundle["client"]["data_fields"].get("client-notes", "") == "Aktennotiz"
 
     def test_lead_sees_notes(self, facility, client_identified, lead_user):
-        client_identified.notes = "Lead-Sicht"
-        client_identified.save(update_fields=["notes"])
+        set_record_text(client_identified, "Lead-Sicht")
+        client_identified.save(update_fields=["document_type", "data_json"])
         bundle = build_client_offline_bundle(lead_user, facility, client_identified)
-        assert bundle["client"]["notes"] == "Lead-Sicht"
+        assert bundle["client"]["data_fields"].get("client-notes", "") == "Lead-Sicht"
 
     def test_facility_admin_sees_notes(self, facility, client_identified, admin_user):
-        client_identified.notes = "Admin-Sicht"
-        client_identified.save(update_fields=["notes"])
+        set_record_text(client_identified, "Admin-Sicht")
+        client_identified.save(update_fields=["document_type", "data_json"])
         bundle = build_client_offline_bundle(admin_user, facility, client_identified)
-        assert bundle["client"]["notes"] == "Admin-Sicht"
+        assert bundle["client"]["data_fields"].get("client-notes", "") == "Admin-Sicht"
 
     def test_user_without_property_falls_back_to_empty(self, facility, client_identified):
         """Mutation ``hasattr(user, "is_staff_or_above")`` → ``True`` oder
@@ -175,8 +177,8 @@ class TestNotesVisibilityGate:
             role = "assistant"
             pk = 999
 
-        client_identified.notes = "wuerde-leaken"
-        client_identified.save(update_fields=["notes"])
+        set_record_text(client_identified, "wuerde-leaken")
+        client_identified.save(update_fields=["document_type", "data_json"])
         bundle = build_client_offline_bundle(_StubUser(), facility, client_identified)
         # Ohne is_staff_or_above-Property → notes_visible False → leerer String.
-        assert bundle["client"]["notes"] == ""
+        assert bundle["client"]["data_fields"].get("client-notes", "") == ""

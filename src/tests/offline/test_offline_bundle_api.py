@@ -20,6 +20,7 @@ from django.utils import timezone
 from core.models import AuditLog, Case, DocumentType, DocumentTypeField, FieldTemplate, User, WorkItem
 from core.services.system import BUNDLE_SCHEMA_VERSION, build_client_offline_bundle
 from tests._factories import make_document_type, make_event
+from tests._standard_text import set_record_text, text_fields
 
 
 @pytest.fixture
@@ -74,14 +75,14 @@ class TestBuildClientOfflineBundleService:
         assert bundle["ttl"] == 48 * 3600
         assert bundle["client"]["pk"] == str(client_identified.pk)
 
-    def test_bundle_schema_version_is_2(self, facility, client_identified, staff_user):
+    def test_bundle_schema_version_is_3(self, facility, client_identified, staff_user):
         """Refs #1529, #1499: Schema-Bump 1->2 zwingt den JS-Lesepfad, alte
         v1-Bundles zu purgen (``_isSchemaMismatch`` in offline-db.js — seit
         dem Verbund-Split #1838 liegt der Lesepfad dort, nicht mehr in
         offline-store.js)."""
-        assert BUNDLE_SCHEMA_VERSION == 2
+        assert BUNDLE_SCHEMA_VERSION == 3
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
-        assert bundle["schema_version"] == 2
+        assert bundle["schema_version"] == 3
 
     def test_bundle_client_last_contact_is_max_event(self, facility, client_identified, doc_type_contact, staff_user):
         """``last_contact`` = juengstes ``occurred_at`` als ISO-String."""
@@ -265,18 +266,18 @@ class TestBuildClientOfflineBundleService:
         assert lead_bundle["events"][0]["data_fields"]["risiko"] == "muss-lead-sehen"
 
     def test_assistant_cannot_see_notes(self, facility, client_identified, assistant_user):
-        client_identified.notes = "interne notiz"
-        client_identified.save(update_fields=["notes"])
+        set_record_text(client_identified, "interne notiz")
+        client_identified.save(update_fields=["document_type", "data_json"])
 
         bundle = build_client_offline_bundle(assistant_user, facility, client_identified)
-        assert bundle["client"]["notes"] == ""
+        assert bundle["client"]["data_fields"].get("client-notes", "") == ""
 
     def test_staff_sees_notes(self, facility, client_identified, staff_user):
-        client_identified.notes = "interne notiz"
-        client_identified.save(update_fields=["notes"])
+        set_record_text(client_identified, "interne notiz")
+        client_identified.save(update_fields=["document_type", "data_json"])
 
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
-        assert bundle["client"]["notes"] == "interne notiz"
+        assert bundle["client"]["data_fields"].get("client-notes", "") == "interne notiz"
 
     def test_assistant_case_bundle_excludes_closed_and_blanks_open_description(
         self, facility, client_identified, assistant_user, staff_user
@@ -292,7 +293,7 @@ class TestBuildClientOfflineBundleService:
             facility=facility,
             client=client_identified,
             title="Offener Fall",
-            description="Sensible Fallbeschreibung",
+            **text_fields(facility, "Sensible Fallbeschreibung", entity="case", document_type=None, data_json=None),
             status=Case.Status.OPEN,
             created_by=staff_user,
         )
@@ -300,7 +301,7 @@ class TestBuildClientOfflineBundleService:
             facility=facility,
             client=client_identified,
             title="Geschlossener Fall",
-            description="Sollte offline nicht landen",
+            **text_fields(facility, "Sollte offline nicht landen", entity="case", document_type=None, data_json=None),
             status=Case.Status.CLOSED,
             closed_at=timezone.now(),
             created_by=staff_user,
@@ -311,8 +312,8 @@ class TestBuildClientOfflineBundleService:
         assert str(open_case.pk) in pks
         assert str(closed_case.pk) not in pks
         serialized_open = next(c for c in bundle["cases"] if c["pk"] == str(open_case.pk))
-        assert serialized_open["description"] == ""
-        assert "description" in serialized_open
+        assert serialized_open["data_fields"].get("standard-description", "") == ""
+        assert "description" not in serialized_open
 
     def test_staff_case_bundle_includes_closed_with_description(self, facility, client_identified, staff_user):
         """Gegenprobe: Staff+ sieht online via CaseListView/CaseDetailView
@@ -322,7 +323,7 @@ class TestBuildClientOfflineBundleService:
             facility=facility,
             client=client_identified,
             title="Offener Fall",
-            description="Offene Beschreibung",
+            **text_fields(facility, "Offene Beschreibung", entity="case", document_type=None, data_json=None),
             status=Case.Status.OPEN,
             created_by=staff_user,
         )
@@ -330,7 +331,7 @@ class TestBuildClientOfflineBundleService:
             facility=facility,
             client=client_identified,
             title="Geschlossener Fall",
-            description="Geschlossene Beschreibung",
+            **text_fields(facility, "Geschlossene Beschreibung", entity="case", document_type=None, data_json=None),
             status=Case.Status.CLOSED,
             closed_at=timezone.now(),
             created_by=staff_user,
@@ -339,7 +340,7 @@ class TestBuildClientOfflineBundleService:
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         pks = {c["pk"] for c in bundle["cases"]}
         assert pks == {str(open_case.pk), str(closed_case.pk)}
-        descriptions = {c["pk"]: c["description"] for c in bundle["cases"]}
+        descriptions = {c["pk"]: c["data_fields"].get("standard-description", "") for c in bundle["cases"]}
         assert descriptions[str(open_case.pk)] == "Offene Beschreibung"
         assert descriptions[str(closed_case.pk)] == "Geschlossene Beschreibung"
 

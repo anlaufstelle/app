@@ -48,7 +48,7 @@ class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
         page_number = _page_number(request.GET.get("page"))
         data = request.GET.copy()
         if not data.get("model"):
-            data["model"] = "Client" if request.user.is_staff_or_above else "WorkItem"
+            data["model"] = "Event" if request.user.is_staff_or_above else "WorkItem"
         editor_ids = (
             list_editor_ids(request.current_facility, request.user, data["model"])
             if data["model"] in TARGET_LABELS

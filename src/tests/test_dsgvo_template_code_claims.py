@@ -981,9 +981,7 @@ class TestAuditLoggingClaims:
 
 # Plain-text free-text fields outside the field encryption (TOM § 1.5).
 FREE_TEXT_FIELDS = (
-    ("Client", "notes"),
     ("Case", "title"),
-    ("Case", "description"),
     ("Episode", "title"),
     ("Episode", "description"),
     ("WorkItem", "title"),

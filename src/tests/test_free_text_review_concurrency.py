@@ -12,17 +12,23 @@ from core.services.free_text_review import get_entry, mark_review
 
 
 @pytest.mark.django_db(transaction=True)
-def test_parallel_marks_keep_one_row_and_audit_both(facility, staff_user, client_identified):
-    client_identified.notes = "Neutral review content"
-    client_identified.save()
-    entry = get_entry(facility, staff_user, "Client", client_identified.pk, "notes")
+def test_parallel_marks_keep_one_row_and_audit_both(facility, staff_user, sample_workitem):
+    sample_workitem.description = "Neutral review content"
+    sample_workitem.save()
+    entry = get_entry(facility, staff_user, "WorkItem", sample_workitem.pk, "description")
     start = Barrier(2)
 
     def mark():
         try:
             start.wait(timeout=10)
             review = mark_review(
-                facility, staff_user, "Client", client_identified.pk, "notes", timezone.localdate(), entry.fingerprint
+                facility,
+                staff_user,
+                "WorkItem",
+                sample_workitem.pk,
+                "description",
+                timezone.localdate(),
+                entry.fingerprint,
             )
             return review.pk
         finally:

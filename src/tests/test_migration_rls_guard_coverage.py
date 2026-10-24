@@ -563,7 +563,7 @@ from django.db import migrations
 def backfill(apps, schema_editor):
     """Ohne Guard."""
     Client = apps.get_model("core", "Client")
-    Client.objects.all().update(notes="")
+    Client.objects.all().update(data_json={})
 
 
 class Migration(migrations.Migration):
@@ -580,7 +580,7 @@ def backfill(apps, schema_editor):
     """Mit Guard."""
     assert_migration_role_bypasses_rls(schema_editor)
     Client = apps.get_model("core", "Client")
-    Client.objects.all().update(notes="")
+    Client.objects.all().update(data_json={})
 
 
 class Migration(migrations.Migration):
@@ -596,7 +596,7 @@ from core.utils.migration_guards import assert_migration_role_bypasses_rls
 def backfill(apps, schema_editor):
     Client = apps.get_model("core", "Client")
     assert_migration_role_bypasses_rls(schema_editor)
-    Client.objects.all().update(notes="")
+    Client.objects.all().update(data_json={})
 
 
 class Migration(migrations.Migration):

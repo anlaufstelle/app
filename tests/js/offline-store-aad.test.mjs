@@ -40,7 +40,7 @@ function bundle(pk, pseudonym) {
         generated_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 3600_000).toISOString(),
         ttl: 3600,
-        schema_version: 2,
+        schema_version: 3,
     };
 }
 
@@ -99,6 +99,20 @@ it("encrypts selection arrays in bundles, pending edits and conflict states", as
     } finally {
         db.close();
     }
+});
+
+it("keeps typed person fields in schema 3 and discards a schema 2 bundle", async () => {
+    const payload = bundle("typed-person", "Typed person");
+    payload.client.data_fields = { "client-notes": "Private person note" };
+    payload.client.field_metadata = [{ slug: "client-notes", name: "Notes", field_type: "textarea" }];
+    await store.saveClientBundle(payload);
+    const cached = await store.getOfflineClient("typed-person");
+    expect(cached.client.data_fields).toEqual(payload.client.data_fields);
+    expect(cached.client.field_metadata).toEqual(payload.client.field_metadata);
+    expect(cached.client).not.toHaveProperty("notes");
+    payload.schema_version = 2;
+    await store.saveClientBundle(payload);
+    expect(await store.getOfflineClient("typed-person")).toBeNull();
 });
 
 describe("R7 — AAD-Bindung im offline-store", () => {

@@ -9,7 +9,7 @@ from django.utils import timezone
 from core.models import Activity, Case, Event, EventHistory, WorkItem
 
 _BUSINESS_FIELDS = {
-    Case: ("title", "description", "status", "closed_at", "lead_user_id", "document_type_id", "data_json"),
+    Case: ("title", "status", "closed_at", "lead_user_id", "document_type_id", "data_json"),
     Event: (
         "client_id",
         "case_id",

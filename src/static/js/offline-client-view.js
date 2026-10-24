@@ -181,6 +181,18 @@
                         this.available = false;
                         return;
                     }
+                    if (cached.client) {
+                        const fields = cached.client.data_fields || {};
+                        const metadata = new Map((cached.client.field_metadata || []).map((field) => [field.slug, field]));
+                        cached.client = Object.assign({}, cached.client, {
+                            data_fields_pairs: Object.keys(fields).map((slug) => ({
+                                slug: slug,
+                                label: metadata.get(slug)?.name || slug,
+                                value_fmt: this.formatFieldValue(fields[slug], metadata.get(slug)?.options, metadata.get(slug)?.field_type),
+                            })),
+                            has_data_fields: Object.keys(fields).length > 0,
+                        });
+                    }
                     // Vorab-Formatierung fuer CSP-konforme Templates (Refs #693).
                     if (cached.events) {
                         cached.events = cached.events.map((ev) => {

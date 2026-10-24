@@ -1,4 +1,4 @@
-# Facility-Export — Schema-Referenz (v1)
+# Facility-Export — Schema-Referenz (v2)
 
 Versionierter JSON-Gesamtexport **einer** Einrichtung (DSGVO Art. 20 Datenportabilität; Milestone M4, Refs #1060). Erzeugt durch [`manage.py export_facility`](../src/core/management/commands/export_facility.py) über den Service [`build_facility_export`](../src/core/services/system/facility_export.py). Betriebshinweise (Admin-DB-Rolle, Umgang mit der Klartext-Datei): [ops-runbook.md § 3.5](ops-runbook.md#35-manuelle-ausfuehrung).
 
@@ -16,6 +16,8 @@ python manage.py export_facility --facility <uuid-oder-name> --output <pfad> [--
 
 `schema_version` ist eine ganze Zahl und wird bei **jeder rückwärts-inkompatiblen** Änderung erhöht (Feld entfernt/umbenannt, Bedeutung geändert, Struktur verschoben). Rein **additive** Felder erhöhen die Version nicht — Konsumenten müssen unbekannte Schlüssel ignorieren. Die jeweils gültige Feldliste dieses Dokuments ist die Referenz; Änderungen laufen über ein Issue + Aktualisierung hier.
 
+Personen-Notizen und Fallbeschreibungen stehen ausschließlich im typgebundenen `data_json`; `clients[].notes` und `cases[].description` gehören nicht zum Schema. Betreiberhinweise zu Standardtypen und Sicherungen stehen im [Changelog](../CHANGELOG.md#unreleased).
+
 ## Grundsätze
 
 - **Entschlüsselter Klartext ist gewollt** (Art.-20-Pfad): feldverschlüsselte Werte (`data_json`, Freitexte, Anhang-Dateinamen) erscheinen entschlüsselt. Die Datei ist wie ein DB-Backup zu behandeln. Nicht entschlüsselbare Einzelwerte erscheinen als Platzhaltertext (`safe_decrypt`-Konvention); eine fehlende Schlüsselkonfiguration bricht den Export ab.
@@ -26,10 +28,10 @@ python manage.py export_facility --facility <uuid-oder-name> --output <pfad> [--
 - **Konfiguration unfiltriert:** `document_types`/`field_templates` sind nicht soft-löschbar; `is_active` ist dort ein UI-Schalter und wird als Information exportiert, nicht als Filter verwendet.
 - Datetimes ISO-8601 (UTC), reine JSON-Typen, kein Custom-Encoder nötig.
 
-## Schema v1 — Feldliste
+## Schema v2 — Feldliste
 
 ```text
-schema_version: 1
+schema_version: 2
 exported_at: ISO-8601 UTC
 facility: {id, name, organization: {id, name}}
 configuration:
@@ -43,12 +45,12 @@ configuration:
   field_groups[]:    {id, document_type_id, name, slug, sort_order, is_collapsible}
   field_conditions[]:{id, target_field_id, depends_on_field_id, operator, value, group_index}
 entities:
-  clients[]:   {id, pseudonym, contact_stage, age_cluster, notes, document_type_id,
+  clients[]:   {id, pseudonym, contact_stage, age_cluster, document_type_id,
                 data_json, is_active, k_anonymized, is_anonymized, created_at,
                 updated_at, created_by_id, attachments[]}
   events[]:    {id, client_id, case_id, episode_id, document_type_id, occurred_at,
                 data_json, is_anonymous, created_by_id, created_at, updated_at, attachments[]}
-  cases[]:     {id, client_id, document_type_id, title, description, status, data_json,
+  cases[]:     {id, client_id, document_type_id, title, status, data_json,
                 lead_user_id, created_by_id, created_at, updated_at, closed_at, attachments[]}
   episodes[]:  {id, case_id, title, description, started_at, ended_at, created_by_id, created_at}
   goals[]:     {id, case_id, title, description, is_achieved, achieved_at, created_by_id,

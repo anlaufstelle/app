@@ -25,6 +25,8 @@ def populate(request, target_type):
         "Event": ("sample_event", "notiz"),
     }[target_type]
     obj = request.getfixturevalue(fixture)
+    if target_type in {"Client", "Case"}:
+        return obj, field
     if target_type == "Event":
         obj.data_json = {"notiz": "Private test content"}
         obj.save(update_fields=["data_json"])
@@ -43,12 +45,22 @@ def test_role_matrix(request, facility, target_type, role):
         with pytest.raises(PermissionDenied):
             service().list_page(facility, user, target_type)
         return
+    if target_type in {"Client", "Case"}:
+        with pytest.raises(Http404):
+            service().list_page(facility, user, target_type)
+        with pytest.raises(Http404):
+            service().get_entry(facility, user, target_type, obj.pk, field)
+        with pytest.raises(Http404):
+            service().mark_review(facility, user, target_type, obj.pk, field, timezone.localdate(), "stale")
+        with pytest.raises(Http404):
+            service().revoke_review(facility, user, target_type, obj.pk, field)
+        return
     entries = service().list_page(facility, user, target_type).entries
     allowed = role != "assistant_user" or target_type in {"WorkItem", "Event"}
     assert [(entry.target_id, entry.field_key) for entry in entries] == ([(obj.pk, field)] if allowed else [])
 
 
-@pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
+@pytest.mark.parametrize("target_type", ["Episode", "WorkItem", "Event"])
 @pytest.mark.parametrize("state", ["deleted", "inactive", "foreign"])
 def test_unavailable_targets_are_hidden(request, facility, staff_user, target_type, state, second_facility):
     obj, field = populate(request, target_type)
@@ -67,7 +79,7 @@ def test_unavailable_targets_are_hidden(request, facility, staff_user, target_ty
         service().mark_review(facility, staff_user, target_type, obj.pk, field, timezone.localdate(), "stale")
 
 
-@pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
+@pytest.mark.parametrize("target_type", ["Episode", "WorkItem", "Event"])
 def test_review_roundtrip_revocation_and_content_change(request, facility, staff_user, target_type):
     from core.models import AuditLog, FreeTextReview
 
@@ -143,17 +155,17 @@ def test_event_fields_fail_closed(facility, assistant_user, lead_user, sample_ev
         service().get_entry(facility, assistant_user, "Event", sample_event.pk, "notiz")
 
 
-def test_expired_review_and_key_change(facility, staff_user, client_identified, settings):
-    client_identified.notes = "Original content"
-    client_identified.save()
-    entry = service().get_entry(facility, staff_user, "Client", client_identified.pk, "notes")
+def test_expired_review_and_key_change(facility, staff_user, sample_workitem, settings):
+    sample_workitem.description = "Original content"
+    sample_workitem.save()
+    entry = service().get_entry(facility, staff_user, "WorkItem", sample_workitem.pk, "description")
     yesterday = timezone.localdate() - timedelta(days=1)
     with pytest.raises(ValidationError):
         service().mark_review(
-            facility, staff_user, "Client", client_identified.pk, "notes", yesterday, entry.fingerprint
+            facility, staff_user, "WorkItem", sample_workitem.pk, "description", yesterday, entry.fingerprint
         )
     service().mark_review(
-        facility, staff_user, "Client", client_identified.pk, "notes", timezone.localdate(), entry.fingerprint
+        facility, staff_user, "WorkItem", sample_workitem.pk, "description", timezone.localdate(), entry.fingerprint
     )
     settings.SECRET_KEY = "different-server-secret"
-    assert not service().get_entry(facility, staff_user, "Client", client_identified.pk, "notes").is_reviewed
+    assert not service().get_entry(facility, staff_user, "WorkItem", sample_workitem.pk, "description").is_reviewed

@@ -49,6 +49,7 @@ TRANSLATED_FILES = [
     "docs/en/adr/030-offline-sync-orchestration-replay-contract.md",
     "docs/en/disaster-recovery.md",
     "docs/en/dsfa.md",
+    "docs/en/facility-export-schema.md",
     "docs/en/faq.md",
     "docs/en/faq-mfa-recovery.md",
     "docs/en/security-notes.md",

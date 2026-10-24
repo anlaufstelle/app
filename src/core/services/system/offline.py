@@ -6,7 +6,7 @@ views apply, so an offline cache can never leak data the user would not see
 online. Field-level sensitivity is respected by dropping restricted keys from
 the ``data_fields`` dict before the payload leaves the server. Cases are
 gated the same way (Refs #1355): non-staff only receive ``status=OPEN``
-cases with ``description`` blanked, mirroring what ``CaseListView``/
+cases without dynamic field values, mirroring what ``CaseListView``/
 ``CaseDetailView`` and the client-detail case list already restrict online.
 
 The bundle is intentionally small — metadata + visible field values — so that
@@ -25,7 +25,8 @@ from django.utils import timezone
 
 from core.models import Case as CaseModel
 from core.models import Client, DocumentType, Event, User, WorkItem
-from core.services.compliance import allowed_sensitivities_for_user, user_can_see_field
+from core.packages.catalog import translate_standard_field_label
+from core.services.compliance import allowed_sensitivities_for_user, user_can_see_document_type, user_can_see_field
 from core.services.config import iter_fields_in_block_order
 from core.services.dynamic_data import orphan_gating_sensitivity, resolve_orphan_field_templates
 from core.services.file_vault import safe_decrypt
@@ -41,11 +42,9 @@ BUNDLE_TTL_SECONDS = 48 * 3600
 
 # Schema version embedded in the bundle. Increment whenever the bundle layout
 # changes in a non-backwards-compatible way so the client can purge stale
-# caches after an app upgrade. MUSS mit ``BUNDLE_SCHEMA_VERSION`` in
-# ``src/static/js/offline-store.js`` synchron bleiben (kein Build-Sync).
-# v1->v2 (#1529/#1499): ``client.last_contact`` neu im Bundle -> ein
-# Alt-v1-Bundle wird beim naechsten Read/Listing per Schema-Mismatch gepurged.
-BUNDLE_SCHEMA_VERSION = 2
+# caches after an app upgrade. Keep this in sync with offline-db.js.
+# Version 3 replaces fixed person/case text with role-filtered dynamic fields.
+BUNDLE_SCHEMA_VERSION = 3
 
 # Refs #1518 (#1499): eigene Schema-Version fuer das personenlose Facility-Meta-
 # Bundle. Bewusst UNABHAENGIG von ``BUNDLE_SCHEMA_VERSION`` — Klient- und
@@ -169,7 +168,7 @@ def _visible_data_fields(user, event) -> dict[str, Any]:
     sind getrennt — das Gate entscheidet VOR jeder Transformation, ob ein
     Wert das Bundle überhaupt verlassen darf (Leak-Grenze der Offline-Bundles).
     """
-    if not event.data_json:
+    if not event.data_json or event.document_type is None or not user_can_see_document_type(user, event.document_type):
         return {}
     doc_type = event.document_type
     # Map slug → FieldTemplate so we can look up per-field sensitivity.
@@ -221,14 +220,10 @@ def _serialize_event(user, event) -> dict[str, Any]:
 
 
 def _serialize_case(user, case) -> dict[str, Any]:
-    # Refs #1355: description is STAFF_PLUS-only online (CaseDetailView,
-    # cases.py:70) — non-staff still get the key (schema-stable) but blanked,
-    # same idiom as _serialize_event's can_edit.
-    is_staff_or_above = getattr(user, "is_staff_or_above", False)
     return {
         "pk": str(case.pk),
         "title": case.title,
-        "description": case.description if is_staff_or_above else "",
+        "data_fields": _visible_data_fields(user, case) if getattr(user, "is_staff_or_above", False) else {},
         "status": case.status,
         "status_display": case.get_status_display(),
         "created_at": case.created_at.isoformat(),
@@ -339,7 +334,12 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
     """
 
     # Refs #2579: recheck persisted owner state even for stale service arguments.
-    client = Client.objects.for_facility(facility).filter(pk=client.pk, is_deleted=False, is_active=True).first()
+    client = (
+        Client.objects.for_facility(facility)
+        .filter(pk=client.pk, is_deleted=False, is_active=True)
+        .select_related("document_type")
+        .first()
+    )
     if client is None:
         raise Http404("Person not found")
 
@@ -380,7 +380,7 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
         cases_with_live_client()
         .for_facility(facility)
         .filter(client=client)
-        .select_related("lead_user")
+        .select_related("lead_user", "document_type")
         .order_by("-created_at")
     )
     if not is_staff_or_above:
@@ -415,7 +415,15 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
             "contact_stage_display": client.get_contact_stage_display(),
             "age_cluster": client.age_cluster,
             "age_cluster_display": client.get_age_cluster_display(),
-            "notes": client.notes if is_staff_or_above else "",
+            "data_fields": _visible_data_fields(user, client),
+            "field_metadata": [
+                {**field, "name": translate_standard_field_label(field["name"])}
+                for field in (
+                    _serialize_document_type(user, client.document_type)["fields"]
+                    if client.document_type is not None and user_can_see_document_type(user, client.document_type)
+                    else []
+                )
+            ],
             "is_active": client.is_active,
             "last_contact": isoformat_or_none(last_contact),
         },

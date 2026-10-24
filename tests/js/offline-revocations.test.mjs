@@ -55,7 +55,7 @@ function bundle(pk, pseudonym) {
         generated_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 3600_000).toISOString(),
         ttl: 3600,
-        schema_version: 2,
+        schema_version: 3,
     };
 }
 

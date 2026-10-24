@@ -716,7 +716,7 @@ describe("inventory action notifications", () => {
         if (table === "clients") {
             const pk = "11111111-1111-4111-8111-111111111111";
             w.fetch = async () => ({ ok: true, headers: { get: () => null }, json: async () => ({
-                client: { pk }, events: [], cases: [], document_types: [], schema_version: 2,
+                client: { pk }, events: [], cases: [], document_types: [], schema_version: 3,
                 generated_at: new Date().toISOString(), expires_at: new Date(Date.now() + 3600000).toISOString(), ttl: 3600,
             }) });
             await w.offlineClient.takeClientOffline(pk);
@@ -749,7 +749,7 @@ it("hides the notice when the last offline client is removed", async () => {
     await w.crypto_session.deriveSessionKey("synthetic inventory password", "c2FsdHNhbHRzYWx0");
     const pk = "11111111-1111-4111-8111-111111111111";
     await w.offlineStore.saveClientBundle({
-        client: { pk }, events: [], cases: [], document_types: [], schema_version: 2,
+        client: { pk }, events: [], cases: [], document_types: [], schema_version: 3,
         generated_at: new Date().toISOString(), expires_at: new Date(Date.now() + 3600000).toISOString(), ttl: 3600,
     });
     await w.offlineStore.isRevocationPending();

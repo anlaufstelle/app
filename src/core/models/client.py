@@ -30,16 +30,10 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         UNKNOWN = "unknown", _("Unbekannt")
 
     class RestrictionReason(models.TextChoices):
-        """Die vier Tatbestaende des Art. 18 Abs. 1 DSGVO — bewusst als
-        Werteliste statt als Freitext (Refs #2045).
+        """The four legal grounds of Article 18(1), represented as choices.
 
-        Der Grund der Einschraenkung ist rechtlich abschliessend aufgezaehlt
-        (lit. a–d). Eine Werteliste haelt das Feld frei von Personenbezug (die
-        strittige *Sache* steht verschluesselt am Berichtigungsantrag, nicht
-        hier), macht die Einschraenkung filterbar und erspart dem Banner die
-        Entscheidung, wie viel Freitext es einer nur lesenden Rolle zeigen
-        darf. ``notes`` zeigt, wohin ein unverschluesseltes Freitextfeld an
-        diesem Modell fuehrt — dort steht deshalb eine ausdrueckliche Warnung.
+        A fixed list avoids identifying free text in the restriction banner.
+        The disputed content belongs to the encrypted rectification request.
         """
 
         ACCURACY_DISPUTED = "accuracy_disputed", _("Richtigkeit bestritten (Art. 18 Abs. 1 lit. a)")
@@ -84,20 +78,6 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         default=AgeCluster.UNKNOWN,
         verbose_name=_("Altersgruppe"),
         help_text=_("Altersgruppe der Person zum Zeitpunkt der Erfassung"),
-    )
-    notes = models.TextField(
-        blank=True,
-        verbose_name=_("Notizen"),
-        help_text=_(
-            "Interne Notizen, nur für Fachkräfte sichtbar. Dieses Feld wird "
-            "nicht verschlüsselt gespeichert — bitte hier keine Klarnamen "
-            "notieren und keine besonders schützenswerten Angaben zu "
-            "Gesundheit, Sucht, Herkunft, Religion oder Sexualität (besondere "
-            "Kategorien personenbezogener Daten, Art. 9 DSGVO). Solche Angaben "
-            "gehören in ein Zusatzfeld mit der Sensibilität „Hoch“; das wird "
-            "verschlüsselt gespeichert. Einrichten kann das die "
-            "Anwendungsbetreuung."
-        ),
     )
     # M2/P4b (Refs #1058, Entscheid E4): Personen bekommen dieselbe dynamische
     # Feldmechanik wie Ereignisse. ``null=True`` weil der Bestand (und jede

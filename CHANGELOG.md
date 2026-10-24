@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Erforderliche Betreiber-Aktionen
 
+- **Personen- und Fallspalten entfallen ersatzlos** (#2667) — Vor dem Update ein Datenbankabbild und nötige Textinhalte sichern, da `Client.notes` und `Case.description` ohne Inhaltsübernahme entfernt werden; die Standardtypen per `load_package` laden, Exportkonsumenten auf Einrichtungsschema 2 umstellen und Offline-Personenpakete mit Schema 3 neu laden.
+
 - **`ENCRYPTION_KEY` in `ENCRYPTION_KEYS` umbenennen** (#2363) — Vor dem Update in `.env` bzw. `.env.demo`/`.env.dev`/`.env.staging` den Wert von `ENCRYPTION_KEY` **unverändert** als einzigen Eintrag nach `ENCRYPTION_KEYS` übernehmen (`ENCRYPTION_KEYS=<bisheriger-wert>`; Komma-Liste, der erste Eintrag verschlüsselt) und die Zeile `ENCRYPTION_KEY` entfernen; ein bereits vorhandener Ring wird nicht überschrieben. Danach die Container **neu erzeugen** (`docker compose … up -d --force-recreate web`, nicht nur `restart`) und prüfen: `docker compose … exec -T web python manage.py check --deploy` ohne Fehler, `/health/` antwortet mit 200, ein vorhandener verschlüsselter Inhalt ist mit berechtigter Rolle lesbar. Ohne diese Umstellung startet die Anwendung nicht mehr. Lokale Entwicklungs-`.env`-Dateien, Secret-Overrides und CI-Variablen ebenso umstellen. Anleitung: Admin-Guide, Abschnitt „Von `ENCRYPTION_KEY` auf `ENCRYPTION_KEYS` umstellen“.
 
 ### Security
@@ -17,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Sicherheitsupdates für Python-Abhängigkeiten** (#2593) — django-otp 1.7.5 übernimmt die Sicherheitskorrektur des Upstream-Projekts; die transitive Abhängigkeit Brotli 1.2.1 schließt PYSEC-2026-4322. Beide Hash-Locks sind aktualisiert.
 
 ### Changed
+
+- **Personen- und Falltexte in typgebundenen Feldern** (#2667) — Personen-Notizen und Fallbeschreibungen nutzen typgebundene Zusatzfelder statt eigener Textspalten, mit Pflichtauswahl bei aktiven Typen sowie angepassten Auskünften, Einrichtungsexporten und rollengefilterten Offline-Daten.
 
 - **Verschlüsselte Standardfelder für Personen, Fälle, Episoden und Aufgaben** (#2666) — Alle fünf Dokumentationspakete liefern geschützte Textbereiche; die Schreibdienste wählen einen einzigen aktiven Typ vor und verlangen bei mehreren Typen eine Auswahl, während Demo-Daten passende verschlüsselte Beispielwerte enthalten; Episoden- und Aufgabenformulare bieten die passende Typauswahl.
 

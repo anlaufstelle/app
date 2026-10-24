@@ -10,6 +10,7 @@ from core.services.client.export import export_client_data, render_client_export
 from core.services.client.rectification import rectifiable_fields, request_rectification
 from core.services.import_engine import available_targets
 from core.services.system.facility_export import build_facility_export
+from core.services.system.offline import build_client_offline_bundle
 
 pytestmark = pytest.mark.django_db
 
@@ -113,3 +114,38 @@ def test_facility_export_schema_and_typed_text(text_record, facility):
     entry = data["entities"]["clients" if entity == "client" else "cases"][0]
     assert ("notes" if entity == "client" else "description") not in entry
     assert entry["data_json"][field.slug] == "Exported confidential text"
+
+
+def test_offline_schema_and_role_filtered_text(text_record, facility, client_identified, staff_user, assistant_user):
+    entity, record, field = text_record
+    for user in (staff_user, assistant_user):
+        data = build_client_offline_bundle(user, facility, client_identified)
+        assert data["schema_version"] == 3
+        entry = data["client"] if entity == "client" else data["cases"][0]
+        assert ("notes" if entity == "client" else "description") not in entry
+        assert entry["data_fields"] == ({field.slug: "Exported confidential text"} if user == staff_user else {})
+
+
+@pytest.mark.parametrize("model,legacy_field", [(Client, "notes"), (Case, "description")])
+def test_models_have_no_legacy_text_column(model, legacy_field):
+    assert legacy_field not in {field.name for field in model._meta.get_fields()}
+
+
+def test_offline_normal_fields_follow_entity_access(text_record, facility, client_identified, assistant_user):
+    entity, record, field = text_record
+    field.sensitivity = "normal"
+    field.save(update_fields=["sensitivity"])
+    bundle = build_client_offline_bundle(assistant_user, facility, client_identified)
+    entry = bundle["client"] if entity == "client" else bundle["cases"][0]
+    assert entry["data_fields"] == ({field.slug: "Exported confidential text"} if entity == "client" else {})
+
+
+def test_offline_person_standard_label_uses_translation(facility, client_identified, staff_user, monkeypatch):
+    from core.packages import catalog
+    from tests._standard_text import set_record_text
+
+    set_record_text(client_identified, "Text")
+    client_identified.save(update_fields=["document_type", "data_json"])
+    monkeypatch.setattr(catalog.translation, "gettext", lambda text: "Translated notes" if text == "Notizen" else text)
+    bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+    assert bundle["client"]["field_metadata"][0]["name"] == "Translated notes"

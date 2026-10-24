@@ -40,6 +40,7 @@ from core.services.system.export import restricted_url_fetcher
 from core.services.system.offline import _bundle_document_types, _field_gate_sensitivity, _serialize_assignable_users
 from core.services.system.settings import _AUDIT_FIELDS, _jsonable
 from tests._mutation_followup_offline_helpers import _make_event, _make_field_template
+from tests._standard_text import text_fields
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -209,12 +210,13 @@ class TestSerializeCaseDescriptionWithoutStaffProperty:
             facility=facility,
             client=client_identified,
             title="Fall",
-            description="Vertrauliche Akteninformation",
+            **text_fields(facility, "Vertrauliche Akteninformation", entity="case", document_type=None, data_json=None),
             status=Case.Status.OPEN,
             created_by=staff_user,
         )
         result = _serialize_case(object(), case)
-        assert result["description"] == ""
+        assert result["data_fields"] == {}
+        assert "description" not in result
 
 
 class TestSerializeAssignableUsersShapeAndName:

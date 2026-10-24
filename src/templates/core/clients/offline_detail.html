@@ -115,10 +115,17 @@
                 </div>
             </div>
 
-            <template x-if="data.client.notes">
-                <div class="card p-4 mb-5">
-                    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Notizen" %}</h2>
-                    <p class="text-sm text-ink-soft whitespace-pre-wrap" x-text="data.client.notes"></p>
+            <template x-if="data.client.has_data_fields">
+                <div class="card p-4 mb-5" data-testid="offline-client-fields">
+                    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Zusatzfelder" %}</h2>
+                    <dl>
+                        <template x-for="pair in data.client.data_fields_pairs" :key="pair.slug">
+                            <div class="mb-2">
+                                <dt class="text-xs font-medium text-ink-muted" x-text="pair.label"></dt>
+                                <dd class="text-sm text-ink-soft whitespace-pre-wrap" x-text="pair.value_fmt"></dd>
+                            </div>
+                        </template>
+                    </dl>
                 </div>
             </template>
 

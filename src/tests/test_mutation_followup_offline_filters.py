@@ -29,6 +29,7 @@ from tests._mutation_followup_offline_helpers import (
     _make_event,
     _make_field_template,
 )
+from tests._standard_text import text_fields
 
 # ---------------------------------------------------------------------------
 # Event-Filter (Slice / Cutoff / Soft-Delete / visible_to)
@@ -406,7 +407,7 @@ class TestCasesFilter:
             facility=facility,
             client=client_identified,
             title="GEHEIMER FALLTITEL",
-            description="Papierkorb-Beschreibung",
+            **text_fields(facility, "Papierkorb-Beschreibung", entity="case", document_type=None, data_json=None),
             created_by=staff_user,
         )
         trashed.soft_delete(user=staff_user)

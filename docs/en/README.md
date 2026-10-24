@@ -61,7 +61,7 @@ Templates included:
 | [packages-awareness.md](../packages-awareness.md) | “Awareness” package: seven documentation types, sensitivity matrix, reports, and operator recommendations (Refs #2137) |
 | [packages-frauenhaus.md](../packages-frauenhaus.md) | “Frauenhaus” package: eight documentation types, effective sensitivity matrix, reports, and recommendations for 24/7 operation (Refs #2138) |
 | [packages-jugendarbeit.md](../packages-jugendarbeit.md) | “Jugendarbeit” package: eight documentation types, sensitivity matrix, reports, and operator recommendations (Refs #2139) |
-| [facility-export-schema.md](../facility-export-schema.md) | Full facility export (JSON, schema v1): field list, versioning rule, trash/anonymization boundaries, attachment hashes, `manage.py export_facility` (Refs #1060) |
+| [facility-export-schema.md](facility-export-schema.md) | Full facility export (JSON, schema v1): field list, versioning rule, trash/anonymization boundaries, attachment hashes, `manage.py export_facility` (Refs #1060) |
 | [monitoring-guide.md](../monitoring-guide.md) | `/health/` endpoint: fields, HTTP status codes, liveness vs. detail, hooking up uptime/monitoring tools (Refs #1071) |
 | (DE: [disaster-recovery.md](../disaster-recovery.md)) | Total-loss recovery: obtaining an off-site backup, key escrow, restore on a fresh host, RTO/RPO (Refs #1071) |
 | [faq.md](../faq.md) ([English offline excerpt](faq.md)) | Authoritative source for frequently asked questions about operations, troubleshooting, and organizational workflows |
@@ -82,5 +82,5 @@ Templates included:
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-06 -->
+<!-- translation-date: 2026-10-24 -->
 <!-- source-hash: d497f883a851f57579488f54abecc401d93f70af -->

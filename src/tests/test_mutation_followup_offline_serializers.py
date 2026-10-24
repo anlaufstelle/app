@@ -41,6 +41,7 @@ from tests._mutation_followup_offline_helpers import (
     _make_event,
     _make_field_template,
 )
+from tests._standard_text import text_fields
 
 # ---------------------------------------------------------------------------
 # _serialize_event — Felder einzeln verifizieren (Mutmut killt einzelne Keys)
@@ -262,12 +263,12 @@ class TestSerializeCase:
             facility=facility,
             client=client_identified,
             title="Mein Fall",
-            description="Beschreibung X",
+            **text_fields(facility, "Beschreibung X", entity="case", document_type=None, data_json=None),
             created_by=staff_user,
         )
         out = _serialize_case(staff_user, c)
         assert out["title"] == "Mein Fall"
-        assert out["description"] == "Beschreibung X"
+        assert out["data_fields"].get("standard-description", "") == "Beschreibung X"
 
     def test_description_blanked_for_non_staff(self, facility, client_identified, assistant_user, staff_user):
         """Refs #1355: description ist STAFF_PLUS-only online (CaseDetailView,
@@ -277,12 +278,18 @@ class TestSerializeCase:
             facility=facility,
             client=client_identified,
             title="t",
-            description="Sollte nicht offline zu Assistenz gelangen",
+            **text_fields(
+                facility,
+                "Sollte nicht offline zu Assistenz gelangen",
+                entity="case",
+                document_type=None,
+                data_json=None,
+            ),
             created_by=staff_user,
         )
         out = _serialize_case(assistant_user, c)
-        assert out["description"] == ""
-        assert "description" in out
+        assert out["data_fields"].get("standard-description", "") == ""
+        assert "description" not in out
 
     def test_status_and_display_both_set(self, facility, client_identified, staff_user):
         c = Case.objects.create(
@@ -386,7 +393,7 @@ class TestSerializeCase:
         assert set(out.keys()) == {
             "pk",
             "title",
-            "description",
+            "data_fields",
             "status",
             "status_display",
             "created_at",
