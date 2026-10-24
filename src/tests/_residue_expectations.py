@@ -107,9 +107,20 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     # Fachlich: reiner Konfig-FK ohne Klientenbezug; er wird bei der
     # Anonymisierung trotzdem auf NULL gesetzt, damit der PROTECT-Verweis den
     # Typ nicht dauerhaft blockiert.
+    # Review metadata stores identifiers and a keyed digest, never field content.
+    non_pii("core_freetextreview", "target_type", reason="Closed target model identifier, no free text."),
+    non_pii(
+        "core_freetextreview", "field_key", reason="Static field name or configured field slug, not field content."
+    ),
+    non_pii(
+        "core_freetextreview",
+        "content_fingerprint",
+        reason="Keyed SHA-256 digest bound to facility, target and content; no plaintext.",
+    ),
     # ---- core_workitem ---------------------------------------------------
     pii("core_workitem", "title"),
     pii("core_workitem", "description"),
+    pii("core_workitem", "data_json"),
     non_pii("core_workitem", "item_type", reason="Enum (hint/task), kein Freitext."),
     non_pii("core_workitem", "status", reason="Enum (open/in_progress/done/dismissed), kein Freitext."),
     non_pii("core_workitem", "priority", reason="Enum (normal/important/urgent), kein Freitext."),
@@ -257,6 +268,7 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     # ---- core_episode ----------------------------------------------------
     pii("core_episode", "title"),
     pii("core_episode", "description"),
+    pii("core_episode", "data_json"),
     # ---- core_outcomegoal ------------------------------------------------
     pii("core_outcomegoal", "title"),
     pii("core_outcomegoal", "description"),
