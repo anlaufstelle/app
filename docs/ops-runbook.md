@@ -116,7 +116,7 @@ fi
 ```
 
 
-> **Einzelschlüssel entfernt (#2363):** Die Variable `ENCRYPTION_KEY` wird nicht mehr gelesen. Ist sie noch gesetzt, stoppt der Start mit einem Umbenennungshinweis — vor dem Update den Wert unverändert als einzigen Eintrag nach `ENCRYPTION_KEYS` übernehmen, `ENCRYPTION_KEY` entfernen und die Container neu erzeugen (nicht nur neu starten). Anleitung im [Admin-Guide, Abschnitt „Von `ENCRYPTION_KEY` auf `ENCRYPTION_KEYS` umstellen“](admin-guide.md#vollständige-umgebungsvariablen-referenz). Bei Neuinstallation und Notfall-Wiederherstellung wird der Schlüssel von Anfang an als `ENCRYPTION_KEYS` in die `.env` eingetragen.
+> **Schlüsselring (#2363):** Die Anwendung bezieht ihre Schlüssel ausschließlich aus `ENCRYPTION_KEYS` (komma-separierter Schlüsselring, der erste Eintrag verschlüsselt). Ein nicht leerer Wert für `ENCRYPTION_KEY` verhindert den Start und erzeugt einen Umbenennungshinweis, auch wenn `ENCRYPTION_KEYS` gesetzt ist. Prüfen Sie die Umgebungsdatei des Stacks und die Prozessumgebung auf diese Vorgabe. Die Referenz und die Anleitung zur Umbenennung stehen im [Admin-Guide, Abschnitt „Von `ENCRYPTION_KEY` auf `ENCRYPTION_KEYS` umstellen“](admin-guide.md#vollständige-umgebungsvariablen-referenz). Bei Neuinstallation und Notfall-Wiederherstellung steht der Schlüssel als `ENCRYPTION_KEYS` in der `.env`.
 
 ### 1.2 Deploy-Schritte
 

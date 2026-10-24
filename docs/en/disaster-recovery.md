@@ -4,6 +4,8 @@ This excerpt translates the key rotation requirements in the [German recovery gu
 
 An older backup set can contain database fields and attachments encrypted under several key generations. Restore requires every key used in that set in `ENCRYPTION_KEYS`, even after the live data has been fully rotated using `reencrypt_fields` and `reencrypt_files`. Rotation does not change existing backups. Keep the key history in escrow separately from backups until the last affected local or off-site set actually expires; longer retention requires longer key retention. A restore using only today's primary key can otherwise leave contents unreadable. Follow [Ops Runbook § 9.5](ops-runbook.md#file-rotation-and-old-key-removal), including its import/staging limits, before removing keys from the active ring. Backup encryption uses the separate `BACKUP_ENCRYPTION_KEY`; successful backup HMAC verification does not prove inner field or attachment decryption.
 
+Field and file encryption uses `ENCRYPTION_KEYS`, a comma-separated ring of Fernet keys (one entry for a single key; the first entry encrypts). A non-empty `ENCRYPTION_KEY` value prevents startup and produces a rename hint.
+
 ## Audit anchor and media verification
 
 The audit high-water mark uses `DJANGO_AUDIT_HWM_PATH` or the Compose default `/data/audit_hwm.json`, including when the variable is empty or absent. It lives on the separate `audit-anchor` volume. Maintenance services write it; `web` has read access. Initialize the signed anchor before the first backup and preserve the original `DJANGO_AUDIT_HASH_KEY` for recovery. Follow [Ops Runbook § 6.7](ops-runbook.md#67-back-up-and-verify-the-audit-high-water-mark-refs-2022) for volume permissions, migration of an existing anchor and the limitation that this does not protect against the host or owner.
@@ -30,5 +32,5 @@ If anchor installation or media activation fails after the database switch, the 
 
 <!-- translation-source: docs/disaster-recovery.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- source-hash: 9d8f14b7d2735bd2d1a1a851e4499fd1bf6cc43b -->
+<!-- translation-date: 2026-10-24 -->
+<!-- source-hash: 7da4ab9612ba01b75d37f090ee75f9b68d557f6d -->

@@ -119,7 +119,7 @@ fi
 ```
 
 
-> **Single key removed (#2363):** The `ENCRYPTION_KEY` variable is no longer read. If it is still set, the start stops with a rename hint -- before updating, copy the value unchanged as the only entry into `ENCRYPTION_KEYS`, remove `ENCRYPTION_KEY`, and recreate the containers (do not just restart them). See the [admin guide, "Switching from `ENCRYPTION_KEY` to `ENCRYPTION_KEYS`"](admin-guide.md#full-environment-variable-reference). For fresh installs and emergency restores the key goes into `.env` as `ENCRYPTION_KEYS` from the start.
+> **Key ring (#2363):** The application obtains its keys exclusively from `ENCRYPTION_KEYS` (a comma-separated key ring; the first entry encrypts). A non-empty `ENCRYPTION_KEY` value prevents startup and produces a rename hint, including when `ENCRYPTION_KEYS` is set. Check the stack’s environment file and the process environment against this requirement. The reference and renaming instructions are in the [admin guide, "Switching from `ENCRYPTION_KEY` to `ENCRYPTION_KEYS`"](admin-guide.md#full-environment-variable-reference). For fresh installs and emergency restores the key is stored in `.env` as `ENCRYPTION_KEYS`.
 
 ### 1.2 Deploy Steps
 
@@ -3310,5 +3310,5 @@ Check lock-file drift     make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- source-hash: 187c84b6e39781c5cbfa18735178f06f3c19bca9 -->
+<!-- translation-date: 2026-10-24 -->
+<!-- source-hash: e8673cf4a6a896ca2b2bfde4afed9371cc274a6e -->

@@ -1978,7 +1978,7 @@ Sensitive fields in the database are stored encrypted using the `ENCRYPTION_KEYS
 
 **Visibility vs. encryption:** Field encryption (`is_encrypted`) and sensitivity (`sensitivity`) have separate effects; a field's own High level nevertheless enforces encryption. An encrypted field may be visible to all roles, and a non-encrypted field can be restricted to certain roles.
 
-- The key is provided via the `ENCRYPTION_KEYS` environment variable (key ring, the first entry encrypts). The former `ENCRYPTION_KEY` variable no longer exists; a set value stops the start.
+- The key is provided via the `ENCRYPTION_KEYS` environment variable (key ring, the first entry encrypts). A non-empty `ENCRYPTION_KEY` value prevents application startup and produces a rename hint.
 - In production, the application refuses to start if no key is set.
 - Loss of the key means permanent loss of the encrypted data.
 
@@ -2575,6 +2575,6 @@ Agree review dates and responsibilities organisationally. Local pattern detectio
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
 <!-- translation-date: 2026-10-24 -->
-<!-- source-hash: 7a4ff6eea24ccf84da2eea7ab14ee216ffcba7df -->
+<!-- source-hash: 0decbf6df69c9243882fe8d5850acd16f726aa66 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-14 -->

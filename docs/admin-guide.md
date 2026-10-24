@@ -1976,7 +1976,7 @@ Sensible Felder in der Datenbank werden mit dem Schlüsselring `ENCRYPTION_KEYS`
 
 **Sichtbarkeit vs. Verschlüsselung:** Die Verschlüsselung (`is_encrypted`) und Sichtbarkeitsstufe (`sensitivity`) eines Feldes haben getrennte Wirkungen; eine eigene Feldstufe Hoch erzwingt jedoch Verschlüsselung. Ein verschlüsseltes Feld kann für alle Rollen sichtbar sein, und ein nicht-verschlüsseltes Feld kann auf bestimmte Rollen eingeschränkt werden.
 
-- Der Schlüssel wird über die Umgebungsvariable `ENCRYPTION_KEYS` (Schlüsselring, erster Eintrag verschlüsselt) bereitgestellt. Die frühere Variable `ENCRYPTION_KEY` gibt es nicht mehr; ein gesetzter Wert stoppt den Start.
+- Der Schlüssel wird über die Umgebungsvariable `ENCRYPTION_KEYS` (Schlüsselring, erster Eintrag verschlüsselt) bereitgestellt. Ein nicht leerer Wert für `ENCRYPTION_KEY` verhindert den Start der Anwendung und erzeugt einen Umbenennungshinweis.
 - In der Produktion verweigert die Anwendung den Start, wenn kein Schlüssel gesetzt ist.
 - Ein Schlüsselverlust bedeutet den dauerhaften Verlust der verschlüsselten Daten.
 

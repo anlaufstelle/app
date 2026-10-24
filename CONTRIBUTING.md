@@ -163,7 +163,7 @@ POSTGRES_PASSWORD=mein-passwort
 
 `DEBUG` gibt es nicht als Umgebungsvariable: Das Settings-Profil entscheidet. `manage.py` startet mit `anlaufstelle.settings.dev` (`DEBUG = True`); die Produktions-Settings setzen `DEBUG = False`. Ohne `DJANGO_SECRET_KEY` setzen die Entwicklungs-Settings einen unsicheren Dev-Wert, die Produktions-Settings verlangen ihn. Ohne `ENCRYPTION_KEYS` laufen die Entwicklungs-Settings mit lauter Warnung im Klartextmodus (sensible Felder werden unverschlüsselt gespeichert).
 
-Einen Schlüssel für `ENCRYPTION_KEYS` erzeugen (komma-separierter Ring; ein Schlüssel = ein Eintrag; die frühere Variable `ENCRYPTION_KEY` stoppt den Start):
+Einen Schlüssel für `ENCRYPTION_KEYS` erzeugen (komma-separierter Ring; ein Schlüssel = ein Eintrag; ein nicht leerer Wert für `ENCRYPTION_KEY` verhindert den Start und erzeugt einen Umbenennungshinweis):
 
 ```bash
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
