@@ -20,10 +20,12 @@ def populate(request, target_type):
     fixture, field = {
         "Client": ("client_identified", "notes"),
         "Case": ("case_open", "description"),
+        "Episode": ("episode", "description"),
+        "WorkItem": ("sample_workitem", "description"),
         "Event": ("sample_event", "notiz"),
     }[target_type]
     obj = request.getfixturevalue(fixture)
-    if target_type in {"Client", "Case"}:
+    if target_type in {"Client", "Case", "Episode", "WorkItem"}:
         return obj, field
     if target_type == "Event":
         obj.data_json = {"notiz": "Private test content"}
@@ -34,7 +36,7 @@ def populate(request, target_type):
     return obj, field
 
 
-@pytest.mark.parametrize("target_type", ["Client", "Case", "Event"])
+@pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
 @pytest.mark.parametrize("role", ["assistant_user", "staff_user", "lead_user", "admin_user", "super_admin_user"])
 def test_role_matrix(request, facility, target_type, role):
     obj, field = populate(request, target_type)
@@ -43,7 +45,7 @@ def test_role_matrix(request, facility, target_type, role):
         with pytest.raises(PermissionDenied):
             service().list_page(facility, user, target_type)
         return
-    if target_type in {"Client", "Case"}:
+    if target_type in {"Client", "Case", "Episode", "WorkItem"}:
         with pytest.raises(Http404):
             service().list_page(facility, user, target_type)
         with pytest.raises(Http404):
@@ -153,17 +155,15 @@ def test_event_fields_fail_closed(facility, assistant_user, lead_user, sample_ev
         service().get_entry(facility, assistant_user, "Event", sample_event.pk, "notiz")
 
 
-def test_expired_review_and_key_change(facility, staff_user, sample_workitem, settings):
-    sample_workitem.description = "Original content"
-    sample_workitem.save()
-    entry = service().get_entry(facility, staff_user, "WorkItem", sample_workitem.pk, "description")
+def test_expired_review_and_key_change(facility, staff_user, sample_event, settings):
+    sample_event.data_json = {"notiz": "Original content"}
+    sample_event.save()
+    entry = service().get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
     yesterday = timezone.localdate() - timedelta(days=1)
     with pytest.raises(ValidationError):
-        service().mark_review(
-            facility, staff_user, "WorkItem", sample_workitem.pk, "description", yesterday, entry.fingerprint
-        )
+        service().mark_review(facility, staff_user, "Event", sample_event.pk, "notiz", yesterday, entry.fingerprint)
     service().mark_review(
-        facility, staff_user, "WorkItem", sample_workitem.pk, "description", timezone.localdate(), entry.fingerprint
+        facility, staff_user, "Event", sample_event.pk, "notiz", timezone.localdate(), entry.fingerprint
     )
     settings.SECRET_KEY = "different-server-secret"
-    assert not service().get_entry(facility, staff_user, "WorkItem", sample_workitem.pk, "description").is_reviewed
+    assert not service().get_entry(facility, staff_user, "Event", sample_event.pk, "notiz").is_reviewed

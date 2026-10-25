@@ -26,20 +26,14 @@ def target_url(obj, field):
 
 
 @pytest.mark.parametrize("role", ["assistant_user", "staff_user", "lead_user", "admin_user", "super_admin_user"])
-@pytest.mark.parametrize("target_type", ["Client", "Case", "Event"])
+@pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
 def test_view_role_matrix(request, client, facility, role, target_type):
     obj, field = populate(request, target_type)
     user = request.getfixturevalue(role)
     client.force_login(user)
     url = target_url(obj, field)
     response = client.get(url)
-    expected = (
-        403
-        if role == "super_admin_user"
-        else (
-            404 if target_type in {"Client", "Case"} or (role == "assistant_user" and target_type == "Episode") else 200
-        )
-    )
+    expected = 403 if role == "super_admin_user" else (200 if target_type == "Event" else 404)
     assert response.status_code == expected
     response = client.post(url, {"action": "revoke"})
     assert response.status_code == (302 if expected == 200 else expected)
@@ -96,11 +90,13 @@ def test_stale_and_invalid_posts_never_mark(client, facility, staff_user, sample
     assert client.post(url, {"action": "mark"}).status_code == 404
 
 
-@pytest.mark.parametrize("target_type", ["Client", "Case", "Event"])
+@pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
 def test_foreign_target_is_404(request, client, staff_user, target_type):
     fixture, field = {
         "Client": ("foreign_client", "notes"),
         "Case": ("foreign_case", "description"),
+        "Episode": ("foreign_episode", "description"),
+        "WorkItem": ("foreign_workitem", "description"),
         "Event": ("foreign_event", "notiz"),
     }[target_type]
     obj = request.getfixturevalue(fixture)
@@ -110,7 +106,7 @@ def test_foreign_target_is_404(request, client, staff_user, target_type):
         field_template = FieldTemplate.objects.create(facility=obj.facility, name="Notiz", field_type="textarea")
         DocumentTypeField.objects.create(document_type=obj.document_type, field_template=field_template)
         obj.data_json = {field_template.slug: "Foreign private content"}
-    elif target_type not in {"Client", "Case"}:
+    elif target_type not in {"Client", "Case", "Episode", "WorkItem"}:
         setattr(obj, field, "Foreign private content")
     obj.save()
     client.force_login(staff_user)
@@ -215,14 +211,14 @@ def test_read_audit_only_for_displayed_qualified_persons(
 
 
 def test_model_change_refreshes_editor_choices(client, facility, staff_user, lead_user, sample_workitem, sample_event):
-    sample_workitem.description = "Neutral source text"
-    sample_workitem.save(update_fields=["description"])
+
     sample_event.created_by = lead_user
     sample_event.save(update_fields=["created_by"])
     client.force_login(staff_user)
     url = reverse("core:free_text_review_list")
     initial = client.get(url, {"model": "WorkItem"})
-    assert str(lead_user.pk) not in dict(initial.context["filter_form"].fields["editor"].choices)
+    assert initial.status_code == 404
+    assert b"Neutral source text" not in initial.content
     response = client.get(url, {"model": "Event"}, HTTP_HX_REQUEST="true")
     assert response.status_code == 200
     assert str(lead_user.pk) in dict(response.context["filter_form"].fields["editor"].choices)
@@ -234,15 +230,14 @@ def test_model_change_refreshes_editor_choices(client, facility, staff_user, lea
 def test_stale_editor_selection_is_discarded_on_model_change(
     client, facility, staff_user, lead_user, sample_workitem, sample_event
 ):
-    sample_workitem.description = "Neutral source text"
-    sample_workitem.save(update_fields=["description"])
+
     sample_event.created_by = staff_user
     sample_event.save(update_fields=["created_by"])
     sample_workitem.created_by = lead_user
     sample_workitem.save(update_fields=["created_by"])
     client.force_login(staff_user)
     url = reverse("core:free_text_review_list")
-    # The lead authored only the work item; after switching to events the choice no longer exists.
+    # The removed task cannot contribute an editor choice to the event list.
     for extra in ({}, {"HTTP_HX_REQUEST": "true"}):
         response = client.get(url, {"model": "Event", "editor": str(lead_user.pk), "page": 1}, **extra)
         assert response.status_code == 200

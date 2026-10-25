@@ -8,7 +8,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, FreeTextReview, WorkItem
+from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, FreeTextReview
 from core.services import free_text_review as review_service
 
 pytestmark = pytest.mark.django_db
@@ -16,21 +16,26 @@ pytestmark = pytest.mark.django_db
 PAGE_SIZE = 50
 
 
-def make_workitems(facility, user, count, description="Neutral note {}", prefix="Bulk"):
+def make_review_events(facility, user, count, text="Neutral note {}", prefix="Bulk"):
+    document_type = DocumentType.objects.create(facility=facility, name=f"{prefix} review")
+    field, _ = FieldTemplate.objects.get_or_create(
+        facility=facility, slug="notiz", defaults={"name": "Notiz", "field_type": "textarea"}
+    )
+    DocumentTypeField.objects.create(document_type=document_type, field_template=field)
     now = timezone.now()
-    rows = [
-        WorkItem(
+    created = Event.objects.bulk_create(
+        Event(
             facility=facility,
-            title=f"{prefix}-{index:03d}",
-            description=description.format(index),
+            document_type=document_type,
+            occurred_at=now,
+            data_json={"notiz": text.format(index)},
             created_by=user,
         )
         for index in range(count)
-    ]
-    created = WorkItem.objects.bulk_create(rows)
+    )
     # Distinct, strictly ordered change times: index 0 is the oldest row.
-    for index, person in enumerate(created):
-        WorkItem.objects.filter(pk=person.pk).update(updated_at=now - timedelta(minutes=count - index))
+    for index, event in enumerate(created):
+        Event.objects.filter(pk=event.pk).update(updated_at=now - timedelta(minutes=count - index))
     return created
 
 
@@ -70,16 +75,13 @@ def test_event_list_query_count_is_independent_of_row_count(
     assert many == few
 
 
-@pytest.mark.parametrize("model", ["WorkItem", "Event"])
+@pytest.mark.parametrize("model", ["Event"])
 def test_list_query_count_is_constant_across_pages(
     client, facility, staff_user, client_identified, doc_type_contact, model
 ):
     client.force_login(staff_user)
     url = reverse("core:free_text_review_list")
-    if model == "WorkItem":
-        make_workitems(facility, staff_user, 2 * PAGE_SIZE + 5)
-    else:
-        make_events(facility, staff_user, doc_type_contact, client_identified, 2 * PAGE_SIZE + 5)
+    make_events(facility, staff_user, doc_type_contact, client_identified, 2 * PAGE_SIZE + 5)
     counts = {}
     for page in (1, 2, 3):
         counts[page], response = count_queries(client, url, {"model": model, "page": page})
@@ -88,7 +90,7 @@ def test_list_query_count_is_constant_across_pages(
 
 
 def test_only_the_displayed_page_is_processed(client, facility, staff_user, monkeypatch):
-    make_workitems(facility, staff_user, PAGE_SIZE + 10)
+    make_review_events(facility, staff_user, PAGE_SIZE + 10)
     built = []
     original = review_service.salted_hmac
 
@@ -99,12 +101,12 @@ def test_only_the_displayed_page_is_processed(client, facility, staff_user, monk
     monkeypatch.setattr(review_service, "salted_hmac", counting_hmac)
     client.force_login(staff_user)
     url = reverse("core:free_text_review_list")
-    first = client.get(url, {"model": "WorkItem"}).context
+    first = client.get(url, {"model": "Event"}).context
     assert len(first["entries"]) == PAGE_SIZE
     assert len(built) == PAGE_SIZE
     assert first["page_obj"].has_next()
     built.clear()
-    second = client.get(url, {"model": "WorkItem", "page": 2}).context
+    second = client.get(url, {"model": "Event", "page": 2}).context
     assert len(second["entries"]) == 10
     assert len(built) == 10
     assert second["page_obj"].has_previous()
@@ -112,24 +114,24 @@ def test_only_the_displayed_page_is_processed(client, facility, staff_user, monk
 
 
 def test_pages_are_ordered_newest_first_without_gaps(client, facility, staff_user):
-    people = make_workitems(facility, staff_user, PAGE_SIZE + 3)
+    people = make_review_events(facility, staff_user, PAGE_SIZE + 3)
     client.force_login(staff_user)
     url = reverse("core:free_text_review_list")
     seen = [
         entry.target_id
         for page in (1, 2)
-        for entry in client.get(url, {"model": "WorkItem", "page": page}).context["entries"]
+        for entry in client.get(url, {"model": "Event", "page": page}).context["entries"]
     ]
     assert seen == [person.pk for person in reversed(people)]
 
 
 def test_risk_filter_pages_across_the_whole_table(client, facility, staff_user):
-    make_workitems(facility, staff_user, PAGE_SIZE + 5, description="Mail me at person{}@example.org")
-    make_workitems(facility, staff_user, 7, description="Nothing special {}", prefix="Other")
+    make_review_events(facility, staff_user, PAGE_SIZE + 5, text="Mail me at person{}@example.org")
+    make_review_events(facility, staff_user, 7, text="Nothing special {}", prefix="Other")
     client.force_login(staff_user)
     url = reverse("core:free_text_review_list")
-    first = client.get(url, {"model": "WorkItem", "risk": "email"}).context
-    second = client.get(url, {"model": "WorkItem", "risk": "email", "page": 2}).context
+    first = client.get(url, {"model": "Event", "risk": "email"}).context
+    second = client.get(url, {"model": "Event", "risk": "email", "page": 2}).context
     assert len(first["entries"]) == PAGE_SIZE
     assert first["page_obj"].has_next()
     assert len(second["entries"]) == 5
@@ -138,29 +140,29 @@ def test_risk_filter_pages_across_the_whole_table(client, facility, staff_user):
 
 
 def test_changed_before_and_editor_filters_apply_before_paging(client, facility, staff_user, lead_user):
-    people = make_workitems(facility, staff_user, PAGE_SIZE + 4)
-    WorkItem.objects.filter(pk=people[0].pk).update(created_by=lead_user)
+    people = make_review_events(facility, staff_user, PAGE_SIZE + 4)
+    Event.objects.filter(pk=people[0].pk).update(created_by=lead_user)
     client.force_login(staff_user)
     url = reverse("core:free_text_review_list")
-    only_lead = client.get(url, {"model": "WorkItem", "editor": str(lead_user.pk)}).context
+    only_lead = client.get(url, {"model": "Event", "editor": str(lead_user.pk)}).context
     assert [entry.target_id for entry in only_lead["entries"]] == [people[0].pk]
     assert not only_lead["page_obj"].has_next()
     future = (timezone.localdate() - timedelta(days=1)).isoformat()
-    assert not client.get(url, {"model": "WorkItem", "changed_before": future}).context["entries"]
+    assert not client.get(url, {"model": "Event", "changed_before": future}).context["entries"]
 
 
-def test_get_entry_ignores_marks_of_other_targets(facility, staff_user, lead_user, sample_workitem):
-    sample_workitem.description = "Target text"
-    sample_workitem.save(update_fields=["description"])
+def test_get_entry_ignores_marks_of_other_targets(facility, staff_user, lead_user, sample_event):
+    sample_event.data_json = {"notiz": "Target text"}
+    sample_event.save(update_fields=["data_json"])
     with CaptureQueriesContext(connection) as baseline:
-        review_service.get_entry(facility, staff_user, "WorkItem", sample_workitem.pk, "description")
-    others = make_workitems(facility, staff_user, 25)
+        review_service.get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
+    others = make_review_events(facility, staff_user, 25)
     FreeTextReview.objects.bulk_create(
         FreeTextReview(
             facility=facility,
-            target_type="WorkItem",
+            target_type="Event",
             target_id=person.pk,
-            field_key="description",
+            field_key="notiz",
             reviewed_until=timezone.localdate(),
             reviewed_by=lead_user,
             content_fingerprint="x" * 64,
@@ -168,12 +170,12 @@ def test_get_entry_ignores_marks_of_other_targets(facility, staff_user, lead_use
         for person in others
     )
     with CaptureQueriesContext(connection) as loaded:
-        entry = review_service.get_entry(facility, staff_user, "WorkItem", sample_workitem.pk, "description")
+        entry = review_service.get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
     assert entry.review is None
     assert len(loaded) == len(baseline)
     reviews_sql = [q["sql"] for q in loaded if "core_freetextreview" in q["sql"]]
     assert reviews_sql
-    assert all(str(sample_workitem.pk).replace("-", "") in sql.replace("-", "") for sql in reviews_sql)
+    assert all(str(sample_event.pk).replace("-", "") in sql.replace("-", "") for sql in reviews_sql)
 
 
 def test_editor_filter_ignores_marks_of_hidden_event_fields_before_paging(
@@ -219,9 +221,9 @@ def test_event_pages_skip_events_without_a_nonblank_text_value(
 
 @pytest.mark.parametrize("raw", ["-3", "0", "abc", "1.5", "", "9" * 5000], ids=lambda raw: raw[:12] or "empty")
 def test_malformed_page_numbers_fall_back_to_the_first_page(client, facility, staff_user, raw):
-    make_workitems(facility, staff_user, 3)
+    make_review_events(facility, staff_user, 3)
     client.force_login(staff_user)
-    response = client.get(reverse("core:free_text_review_list"), {"model": "WorkItem", "page": raw})
+    response = client.get(reverse("core:free_text_review_list"), {"model": "Event", "page": raw})
     assert response.status_code == 200
     assert response.context["page_obj"].number == 1
     assert len(response.context["entries"]) == 3
@@ -232,20 +234,20 @@ def test_malformed_page_numbers_fall_back_to_the_first_page(client, facility, st
 )
 @pytest.mark.parametrize("risk", ["", "email"])
 def test_page_numbers_beyond_the_supported_range_are_not_found(client, facility, staff_user, raw, risk):
-    make_workitems(facility, staff_user, 1)
+    make_review_events(facility, staff_user, 1)
     client.force_login(staff_user)
     client.raise_request_exception = False
     with CaptureQueriesContext(connection) as queries:
-        response = client.get(reverse("core:free_text_review_list"), {"model": "WorkItem", "page": raw, "risk": risk})
+        response = client.get(reverse("core:free_text_review_list"), {"model": "Event", "page": raw, "risk": risk})
     assert response.status_code == 404
     # No review query ran (the error page's own navigation counters are unrelated).
-    assert not [q for q in queries if '"core_workitem"."description"' in q["sql"] or "core_freetextreview" in q["sql"]]
+    assert not [q for q in queries if '"core_workitem"."notiz"' in q["sql"] or "core_freetextreview" in q["sql"]]
 
 
 def test_last_supported_page_is_an_empty_page_not_an_error(client, facility, staff_user):
-    make_workitems(facility, staff_user, 1)
+    make_review_events(facility, staff_user, 1)
     client.force_login(staff_user)
-    response = client.get(reverse("core:free_text_review_list"), {"model": "WorkItem", "page": review_service.MAX_PAGE})
+    response = client.get(reverse("core:free_text_review_list"), {"model": "Event", "page": review_service.MAX_PAGE})
     assert response.status_code == 200
     assert response.context["entries"] == []
     assert not response.context["page_obj"].has_next()

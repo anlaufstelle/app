@@ -47,15 +47,20 @@ class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
     def get(self, request):
         page_number = _page_number(request.GET.get("page"))
         data = request.GET.copy()
+        if data.get("model") and data["model"] not in TARGET_LABELS:
+            raise Http404("Review target not found")
         if not data.get("model"):
-            data["model"] = "Event" if request.user.is_staff_or_above else "WorkItem"
+            data["model"] = next(
+                (key for key in TARGET_LABELS if request.user.is_staff_or_above or key in {"WorkItem", "Event"}),
+                "",
+            )
         editor_ids = (
             list_editor_ids(request.current_facility, request.user, data["model"])
             if data["model"] in TARGET_LABELS
             else ()
         )
         form = ReviewFilterForm(data, facility=request.current_facility, user=request.user, editor_ids=editor_ids)
-        if form.is_valid():
+        if form.is_valid() and form.cleaned_data["model"]:
             page = list_page(
                 request.current_facility,
                 request.user,

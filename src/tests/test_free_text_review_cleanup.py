@@ -18,6 +18,16 @@ def marked_targets(request, facility, staff_user):
         entry = get_entry(facility, staff_user, target_type, obj.pk, field)
         mark_review(facility, staff_user, target_type, obj.pk, field, timezone.localdate(), entry.fingerprint)
         targets[target_type] = obj
+    targets["Episode"] = request.getfixturevalue("episode")
+    for target_type in ["Client", "Case", "Episode"]:
+        FreeTextReview.objects.create(
+            facility=facility,
+            target_type=target_type,
+            target_id=targets[target_type].pk,
+            field_key="notes" if target_type == "Client" else "description",
+            reviewed_until=timezone.localdate(),
+            content_fingerprint="0" * 64,
+        )
     return targets
 
 
@@ -56,7 +66,7 @@ def test_case_revocation_cleans_case_and_episode(marked_targets, facility, staff
 
         anonymize_case(case, user=staff_user, trigger="manual")
     assert not FreeTextReview.objects.for_facility(facility).filter(target_type__in=["Case", "Episode"]).exists()
-    assert FreeTextReview.objects.for_facility(facility).filter(target_type="WorkItem").exists()
+    assert FreeTextReview.objects.for_facility(facility).filter(target_type="Event").exists()
 
 
 def test_marked_event_soft_delete_removes_metadata(facility, staff_user, sample_event):

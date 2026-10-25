@@ -34,6 +34,7 @@ class ReviewFilterForm(forms.Form):
             for key, label in TARGET_LABELS.items()
             if user.is_staff_or_above or key in {"WorkItem", "Event"}
         ]
+        self.fields["model"].required = bool(cast(forms.ChoiceField, self.fields["model"]).choices)
         editor = cast(forms.ChoiceField, self.fields["editor"])
         editor.choices = [
             ("", _("Alle")),

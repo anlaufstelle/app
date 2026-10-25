@@ -6,7 +6,7 @@ import pytest
 from django.db import DatabaseError, transaction
 from django.utils import timezone
 
-from core.models import FreeTextReview
+from core.models import DocumentTypeField, FieldTemplate, FreeTextReview
 from core.services.free_text_review import get_entry, mark_review
 from tests.test_rls_functional import as_rls_role, rls_test_role  # noqa: F401
 
@@ -16,22 +16,22 @@ def test_review_policy_hides_foreign_rows_and_rejects_foreign_writes(
     rls_test_role,  # noqa: F811
     facility,
     staff_user,
-    sample_workitem,
+    sample_event,
     second_facility,
     foreign_staff,
-    foreign_workitem,
+    foreign_event,
 ):
+    field = FieldTemplate.objects.create(facility=second_facility, name="Notiz", field_type="textarea")
+    DocumentTypeField.objects.create(document_type=foreign_event.document_type, field_template=field)
     reviews = []
     for scope, user, person in [
-        (facility, staff_user, sample_workitem),
-        (second_facility, foreign_staff, foreign_workitem),
+        (facility, staff_user, sample_event),
+        (second_facility, foreign_staff, foreign_event),
     ]:
-        person.description = "Neutral source content"
+        person.data_json = {"notiz": "Neutral source content"}
         person.save()
-        entry = get_entry(scope, user, "WorkItem", person.pk, "description")
-        reviews.append(
-            mark_review(scope, user, "WorkItem", person.pk, "description", timezone.localdate(), entry.fingerprint)
-        )
+        entry = get_entry(scope, user, "Event", person.pk, "notiz")
+        reviews.append(mark_review(scope, user, "Event", person.pk, "notiz", timezone.localdate(), entry.fingerprint))
     with as_rls_role(rls_test_role, facility_id=facility.pk) as cursor:
         cursor.execute("SELECT set_config('app.is_super_admin', 'false', false)")
         assert list(FreeTextReview.objects.values_list("pk", flat=True)) == [reviews[0].pk]
@@ -39,9 +39,9 @@ def test_review_policy_hides_foreign_rows_and_rejects_foreign_writes(
             FreeTextReview.objects.create(
                 id=uuid4(),
                 facility=second_facility,
-                target_type="WorkItem",
-                target_id=foreign_workitem.pk,
-                field_key="description",
+                target_type="Event",
+                target_id=foreign_event.pk,
+                field_key="notiz",
                 reviewed_until=timezone.localdate(),
                 content_fingerprint="0" * 64,
             )
