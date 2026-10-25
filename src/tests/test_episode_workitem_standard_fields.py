@@ -245,3 +245,24 @@ def test_recurrence_locks_configuration_before_data_rows(facility, staff_user, c
     gate = next(index for index, sql in enumerate(statements) if "pg_advisory_xact_lock_shared(2525" in sql)
     row_lock = next(index for index, sql in enumerate(statements) if "for update" in sql)
     assert gate < row_lock
+
+
+def test_task_metadata_update_reuses_the_locked_document_type(facility, staff_user):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from core.services.case.workitems import update_workitem
+    from tests._dynamic_test_data import entity_details
+
+    task = WorkItem.objects.create(
+        facility=facility,
+        created_by=staff_user,
+        title="Initial task",
+        **entity_details(facility, "workitem", "Protected details"),
+    )
+    with CaptureQueriesContext(connection) as captured:
+        update_workitem(task, staff_user, title="Updated task")
+    type_reads = [q["sql"] for q in captured if 'FROM "core_documenttype"' in q["sql"]]
+    assert type_reads == []
+    task.refresh_from_db()
+    assert task.title == "Updated task"

@@ -56,7 +56,12 @@ def _first_index(sequence, table):
 #: and facility existence validation before the unchanged person/task locks.
 #: Refs #2524 adds business activity: one snapshot read, one feed lookup and
 #: two scoped case updates (16 + 4 + 4 = 24).
-EXPECTED_UPDATE_WORKITEM_QUERIES = 24
+#: Refs #2668: dynamic task updates also take the configuration gate before
+#: any person/task row lock (key ordering, shared lock, facility validation:
+#: three statements), including personless tasks. Resolving the active type
+#: adds one required read so a metadata-only update cannot bypass type selection.
+#: The restriction helper keeps its independent cross-facility gate contract.
+EXPECTED_UPDATE_WORKITEM_QUERIES = 28
 
 
 @pytest.mark.django_db(transaction=False)

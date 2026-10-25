@@ -832,7 +832,7 @@ def update_workitem(
     # assignee on it.
     locked_state = (
         type(workitem)
-        ._base_manager.select_related("created_by", "assigned_to")
+        ._base_manager.select_related("created_by", "assigned_to", "document_type")
         .only("pk", "is_deleted", "created_by", "assigned_to", "document_type", "data_json")
         .get(pk=workitem.pk, facility_id=workitem.facility_id)
     )
