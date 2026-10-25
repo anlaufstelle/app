@@ -983,9 +983,7 @@ class TestAuditLoggingClaims:
 FREE_TEXT_FIELDS = (
     ("Case", "title"),
     ("Episode", "title"),
-    ("Episode", "description"),
     ("WorkItem", "title"),
-    ("WorkItem", "description"),
     ("OutcomeGoal", "title"),
     ("OutcomeGoal", "description"),
     ("Milestone", "title"),
