@@ -27,10 +27,12 @@ from core.models import (
     Client,
     DocumentType,
     DocumentTypeField,
+    Episode,
     Event,
     FieldCondition,
     FieldGroup,
     QuickTemplate,
+    WorkItem,
 )
 from core.reporting.registry import describe_type_bindings, diagnose_type_bindings
 from core.services import config as config_service
@@ -207,6 +209,12 @@ class ConfigDocumentTypeDetailView(FacilityAdminRequiredMixin, View):
             usage_count = Client.objects.filter(document_type=doc_type).count()
         elif doc_type.entity_type == DocumentType.EntityType.CASE:
             usage_count = Case.objects.filter(document_type=doc_type).count()
+        elif doc_type.entity_type == DocumentType.EntityType.EPISODE:
+            usage_count = Episode.objects.filter(
+                document_type=doc_type, case__facility=request.current_facility
+            ).count()
+        elif doc_type.entity_type == DocumentType.EntityType.WORKITEM:
+            usage_count = WorkItem.objects.for_facility(request.current_facility).filter(document_type=doc_type).count()
         else:
             usage_count = Event.objects.filter(document_type=doc_type).count()
         context = {
@@ -270,6 +278,8 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
         # danach mit ConfigDeleteBlocked scheitert (kein 500, aber irreführende UX).
         client_count = Client.objects.filter(document_type=doc_type).count()
         case_count = Case.objects.filter(document_type=doc_type).count()
+        episode_count = Episode.objects.filter(document_type=doc_type, case__facility=request.current_facility).count()
+        workitem_count = WorkItem.objects.for_facility(request.current_facility).filter(document_type=doc_type).count()
         # Refs #1737 (A): Wieviel der Blockade steckt im Papierkorb? Ohne diese
         # Zahl verlangt der Dialog einen Schritt, den man im Fach-UI gar nicht
         # gehen kann — der Datensatz ist dort nicht mehr erreichbar.
@@ -291,6 +301,8 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
                 "event_count": event_count,
                 "client_count": client_count,
                 "case_count": case_count,
+                "episode_count": episode_count,
+                "workitem_count": workitem_count,
                 "client_trashed_count": client_trashed_count,
                 "case_trashed_count": case_trashed_count,
                 "quick_template_count": quick_template_count,

@@ -102,11 +102,15 @@
             {% endif %}
             <div>
                 {# #1728: Label folgt der entity_type-Weiche (Muster Badge oben) — #}
-                {# usage_count zählt je nach Typ Client-/Case-/Event-Referenzen.     #}
+                {# Count references through the document type's own carrier. #}
                 {% if doc_type.entity_type == "client" %}
                 <dt class="text-ink-muted">{% trans "Personen" %}</dt>
                 {% elif doc_type.entity_type == "case" %}
                 <dt class="text-ink-muted">{% trans "Fälle" %}</dt>
+                {% elif doc_type.entity_type == "episode" %}
+                <dt class="text-ink-muted">{% trans "Episoden" %}</dt>
+                {% elif doc_type.entity_type == "workitem" %}
+                <dt class="text-ink-muted">{% trans "Aufgaben" %}</dt>
                 {% else %}
                 <dt class="text-ink-muted">{% trans "Ereignisse" %}</dt>
                 {% endif %}
@@ -167,6 +171,10 @@
             {% url 'core:client_fields_partial' as preview_partial_url %}
             {% elif doc_type.entity_type == "case" %}
             {% url 'core:case_fields_partial' as preview_partial_url %}
+            {% elif doc_type.entity_type == "episode" %}
+            {% url 'core:episode_fields_partial' as preview_partial_url %}
+            {% elif doc_type.entity_type == "workitem" %}
+            {% url 'core:workitem_fields_partial' as preview_partial_url %}
             {% else %}
             {% url 'core:event_fields_partial' as preview_partial_url %}
             {% endif %}

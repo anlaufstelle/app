@@ -40,6 +40,22 @@
     </div>
     {% endif %}
 
+    {% if episode_count %}
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="doctype-delete-blocker-episode">
+        <p class="text-[13px] text-amber-800">
+            {% blocktrans count n=episode_count %}{{ n }} Episode verweist auf diesen Typ — ein Löschen ist daher nicht möglich.{% plural %}{{ n }} Episoden verweisen auf diesen Typ — ein Löschen ist daher nicht möglich.{% endblocktrans %}
+        </p>
+    </div>
+    {% endif %}
+
+    {% if workitem_count %}
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="doctype-delete-blocker-workitem">
+        <p class="text-[13px] text-amber-800">
+            {% blocktrans count n=workitem_count %}{{ n }} Aufgabe verweist auf diesen Typ — ein Löschen ist daher nicht möglich.{% plural %}{{ n }} Aufgaben verweisen auf diesen Typ — ein Löschen ist daher nicht möglich.{% endblocktrans %}
+        </p>
+    </div>
+    {% endif %}
+
     {% if quick_template_count %}
     {# Refs #2068 (b): QuickTemplate.document_type ist jetzt PROTECT — vorher #}
     {# fielen die Schnellvorlagen samt prefilled_data still mit. Gleiche #}
@@ -64,7 +80,7 @@
 
     <form method="post" class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         {% csrf_token %}
-        <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50" {% if event_count or client_count or case_count or quick_template_count %}disabled aria-disabled="true"{% endif %} data-testid="doctype-delete-confirm">
+        <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50" {% if event_count or client_count or case_count or episode_count or workitem_count or quick_template_count %}disabled aria-disabled="true"{% endif %} data-testid="doctype-delete-confirm">
             {% trans "Endgültig löschen" %}
         </button>
         <a href="{% url 'core:config_doctype_detail' doc_type.pk %}" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
