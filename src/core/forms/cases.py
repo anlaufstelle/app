@@ -40,6 +40,12 @@ class CaseForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
     class Meta:
         model = Case
         fields = ["title", "lead_user", "document_type"]
+        help_texts = {
+            "title": _(
+                "Kurz halten: keine Klarnamen und keine Angaben nach Art. 9 DSGVO. "
+                "Dieses Feld wird unverschlüsselt gespeichert."
+            )
+        }
         widgets = {
             # M2 P8 (Refs #1058): HTMX-Attribute exakt wie am Personen-/Event-
             # Select (``forms/clients.py`` / ``core/events/create.html``) —

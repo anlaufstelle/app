@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Hinweise zu Pseudonymen und Titeln** (#2670) — Die Online-Formulare zum Anlegen und Bearbeiten von Personen, Fällen, Episoden und Aufgaben warnen vor Klarnamen und Art.-9-Angaben und benennen die unverschlüsselte Speicherung; das Handbuch erläutert die Eingabegrenze und die Standardfelder.
+
 - **Freitext-Review auf Ereignisse begrenzt** (#2669) — Die Prüfliste bietet nur noch unverschlüsselte Ereignis-Freitexte an; frühere statische Ziele und ihre Hilfetexte entfallen, die neuen dynamischen Trägerfelder sowie Titel und Pseudonyme bleiben außerhalb der Liste.
 
 - **Personen- und Falltexte in typgebundenen Feldern** (#2667) — Personen-Notizen und Fallbeschreibungen nutzen typgebundene Zusatzfelder statt eigener Textspalten, mit Pflichtauswahl bei aktiven Typen sowie angepassten Auskünften, Einrichtungsexporten und rollengefilterten Offline-Daten.

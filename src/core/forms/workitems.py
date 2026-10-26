@@ -54,6 +54,12 @@ class WorkItemForm(EntityDetailsMixin, TailwindFormMixin, PinnedClientMixin, for
             "recurrence",
             "assigned_to",
         ]
+        help_texts = {
+            "title": _(
+                "Kurz halten: keine Klarnamen und keine Angaben nach Art. 9 DSGVO. "
+                "Dieses Feld wird unverschlüsselt gespeichert."
+            )
+        }
         widgets = {
             # Explizites ISO-Format (Refs #619): HTML5 `<input type="date">`
             # akzeptiert nur `YYYY-MM-DD`; ohne `format=` nimmt Django den

@@ -110,6 +110,12 @@ class ClientForm(_FacilityScopedPseudonymMixin, TailwindFormMixin, forms.ModelFo
     class Meta:
         model = Client
         fields = ["pseudonym", "contact_stage", "age_cluster", "document_type"]
+        help_texts = {
+            "pseudonym": _(
+                "Kurz halten: keine Klarnamen und keine Angaben nach Art. 9 DSGVO. "
+                "Dieses Feld wird unverschlüsselt gespeichert."
+            )
+        }
         widgets = {
             # M2 P7 (Refs #1058): HTMX-Attribute exakt wie am Event-Select
             # (``core/events/create.html``) — CSP-strikt, also KEIN Inline-

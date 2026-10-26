@@ -429,7 +429,9 @@ Next to the download, every row carries a trash icon for **managers and administ
 
 ## 4. Managing People
 
-People in Anlaufstelle are recorded **exclusively using pseudonyms** -- no real names. The pseudonym is the primary identifier.
+People in Anlaufstelle are intended to be recorded using pseudonyms. The pseudonym is the primary identifier; the application cannot technically prevent real names.
+
+**Pseudonyms and titles:** Keep person pseudonyms and case, episode and task titles short. Do not enter real names or GDPR Art. 9 data: these navigation labels are stored unencrypted, and no technical check detects all such content. Use the appropriate additional field for details. The shipped `client-notes` and `standard-description` fields are encrypted and elevated; `workitem-details` is encrypted and normal. This remains true only while their encryption configuration stays enabled. Assistants can read task details but not the elevated person, case or episode standard fields.
 
 ### Contact Stages
 
@@ -438,9 +440,9 @@ Each person has a **contact stage**:
 | Level | Description |
 |---|---|
 | **Pseudonym only** | Only the pseudonym is stored, plus the age group |
-| **With additional details** | Additional personal details are stored (restricted access, opening the person detail page and displaying their free-text notes in the free-text review list (once per displayed person and page request, including the individual text view) are logged) |
+| **With additional details** | Additional personal details are stored (restricted access, opening the person detail page (once per page request) is logged) |
 
-> **Note:** Opening the **detail page** (`/clients/<id>/`) of a person at the "With additional details" contact stage and displaying their free-text notes in the **free-text review list** are logged (`VIEW_QUALIFIED`, once per displayed person and page request, including the individual text view). The people list, the edit form for the same person, an event, a case and a search result generate **no** entry, even if additional details are visible there.
+> **Note:** Opening the **detail page** (`/clients/<id>/`) of a person at the "With additional details" contact stage is logged (`VIEW_QUALIFIED`, once per page request). The people list, free-text review, the edit form for the same person, an event, a case and a search result generate **no** entry, even if additional details are visible there.
 
 ### Creating a Person
 
@@ -555,7 +557,7 @@ The list updates without a page reload.
 2. Fill in the form:
    - **Type:** "Task" or "Hint"
    - **Title:** A brief, concise description
-   - **Description:** More detailed information (optional)
+   - **Documentation type and standard field:** Enter details in the configured additional field; the shipped type encrypts this field.
    - **Priority:** Normal, Important, or Urgent
    - **Assigned to:** A specific person from your facility (optional -- leave blank if the task applies to everyone)
    - **Person:** If the task concerns a specific person (optional)
@@ -839,6 +841,8 @@ The installed app behaves like a regular program and is accessible via the Start
 
 ### Offline Capture (Streetwork)
 
+**Offline tasks:** Capture tasks without a detail field while offline. Add details online in the type-bound standard field; putting them in the title would leave them unencrypted.
+
 “Last contact” in the person list and offline bundle, and the ordering of person suggestions, use only contacts that are not deleted and whose documentation type is visible to the current role. With no visible contact the value is empty. Contacts older than the bundle event list’s 90-day window still count toward this value.
 
 People in the trash and inactive or already anonymized people cannot be fetched again as offline bundles, including conditional requests. A pending deletion request alone does not block fetching; restoring a person who remains active permits it again.
@@ -909,7 +913,7 @@ Anlaufstelle distinguishes five roles. Your role is assigned by the application 
 
 | Role | Display Name | Brief Description |
 |---|---|---|
-| `assistant` | Assistant | Limited data entry; view people at either contact stage, additional fields only at effective sensitivity "Normal"; no internal person notes |
+| `assistant` | Assistant | Limited data entry; view people at either contact stage, additional fields only at effective sensitivity "Normal"; no elevated standard person notes |
 | `staff` | Social worker | Default role for employees doing documentation |
 | `lead` | Manager | All social worker functions plus reports and management tasks |
 | `facility_admin` | Application support | Full access to all areas and settings **of your facility** (audit log, GDPR package, user management) |
@@ -931,7 +935,7 @@ Table covers the four facility-bound roles only -- `super_admin` is excluded her
 | View and search for people | Yes (both contact stages) | Yes | Yes | Yes |
 | Create and edit people | No | Yes | Yes | Yes |
 | View additional fields on people | Effective "Normal" only | Up to effective "Elevated" | All levels | All levels |
-| View internal person notes | No | Yes | Yes | Yes |
+| View elevated standard person notes | No | Yes | Yes | Yes |
 | Edit own events | Yes | Yes | Yes | Yes |
 | Edit other users' events | No | Yes | Yes | Yes |
 | Create and edit work items | No | Yes | Yes | Yes |
@@ -954,7 +958,7 @@ Effective sensitivity is the higher level of documentation type and field. Field
 
 ### Audit Log (Application support Only)
 
-The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, opening person detail pages and displaying free-text notes at the "With additional details" level in the free-text review list (`VIEW_QUALIFIED`, once per displayed person and page request, including the individual text view), exports, deletions, and contact stage changes. It cannot be modified and serves traceability purposes in accordance with the GDPR. Access is granted to the Application support (`facility_admin`) for their own facility.
+The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, opening detail pages of people with additional details (`VIEW_QUALIFIED`, once per page request), exports, deletions, and contact stage changes. It cannot be modified and serves traceability purposes in accordance with the GDPR. Access is granted to the Application support (`facility_admin`) for their own facility.
 
 ---
 
@@ -978,8 +982,8 @@ A case is a **bracket** around thematically related contacts. Case management is
 1. Click **Create case** on the case list (or navigate to `/cases/new/`).
 2. Fill in the form:
    - **Title** (required): A short label for the case (e.g., "Housing search", "Addiction counseling").
-   - **Person:** Start typing the pseudonym -- a suggestion list appears. Select the matching person. A case can also be created without a person.
-   - **Description:** More detailed information about the case (optional).
+   - **Person:** Start typing the pseudonym -- a suggestion list appears. Select the matching person. A case requires an assigned person.
+   - **Documentation type and standard field:** Enter details in the configured additional field; the shipped type encrypts this field.
    - **Case owner:** Select the responsible person from the dropdown (optional). Only social workers, managers, and administrators from your facility are available.
 3. Click **Create case**.
 
@@ -995,7 +999,7 @@ The detail page of a case (`/cases/<id>/`) is divided into three sections:
 - Title and status badge (Open / Closed)
 - Link to the associated person
 - Case owner, created on, created by
-- Description (if available)
+- Type-bound additional fields, including the standard description when visible
 - Buttons: **Edit**, **Close** or **Reopen**
 
 **Left column -- Contacts:**
@@ -1014,7 +1018,7 @@ If an episode has changed since its edit form was opened, saving is refused. A m
 
 1. Open the case detail page.
 2. Click **Edit**.
-3. Change the title, person, description, or case owner.
+3. Change the title, case owner, documentation type or its additional fields. The assigned person stays fixed.
 4. Click **Save**.
 
 ### Closing and Reopening a Case
@@ -1077,7 +1081,7 @@ An **episode** is a distinct phase within a case. For example, if a person enter
 2. Fill in the form:
    - **Title** (required): A label for the phase (e.g., "Crisis episode March 2026").
    - **Start** (required): The start date of the episode.
-   - **Description:** Additional details (optional).
+   - **Documentation type and standard field:** Enter details in the configured additional field; the shipped type encrypts this field.
    - **End:** End date (optional -- leave blank if the episode is still ongoing).
 3. Click **Save**.
 
@@ -1177,27 +1181,11 @@ Open **Free-text review** in navigation at `/free-text-review/`. The list contai
 
 The only model is **Event free text**. Optionally filter by **Changed through**, **Created or reviewed by**, and a **Pattern hint**. The facility comes from the signed-in session. **Review text** opens an individual text, where you can mark it through the selected day, inclusive, or revoke the mark. Changed content or an expired date requires another review. Marking and revocation are audited without text content and do not change the original text. **Open source text** links to the event detail page.
 
-The former fixed person notes and case, episode and task descriptions are no longer review targets. The new dynamic standard fields for these records are encrypted and excluded from the list; dynamic fields configured without encryption for these records are also excluded. Titles and pseudonyms remain plaintext navigation anchors outside the review list.
+The former fixed person notes and case, episode and task descriptions are no longer review targets. The dynamic standard fields for these records are encrypted in the shipped configuration and excluded from the list; dynamic fields configured without encryption for these records are also excluded. Titles and pseudonyms remain plaintext navigation anchors outside the review list.
 
 Phone, email, date and address patterns are detected heuristically and locally on the server. Hints can be false and miss sensitive information; they do not guarantee GDPR compliance. The first suggestion only opens contact creation without prefilled content. Choose an actually encrypted field if you manually create a new record. Other suggestions recommend checking protection levels with the responsible administrator or manually neutralising the source text. Suggestions never automatically copy, decrypt or change content or protection. Review is available online only.
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.8 -->
+<!-- source-hash: c3e7403f86b71ec2fabd19090827e74e8062c777 -->
 <!-- translation-date: 2026-10-26 -->
-<!-- source-hash: dad8069b790b933d52dae9141a5fcd5df18cac68 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-23 -->

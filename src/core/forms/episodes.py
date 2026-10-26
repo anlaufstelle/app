@@ -21,6 +21,12 @@ class EpisodeForm(EntityDetailsMixin, TailwindFormMixin, forms.ModelForm):
     class Meta:
         model = Episode
         fields = ["title", "started_at", "ended_at", "document_type"]
+        help_texts = {
+            "title": _(
+                "Kurz halten: keine Klarnamen und keine Angaben nach Art. 9 DSGVO. "
+                "Dieses Feld wird unverschlüsselt gespeichert."
+            )
+        }
         widgets = {
             "started_at": AppDateInput(
                 attrs={

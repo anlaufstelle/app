@@ -427,7 +427,9 @@ Neben dem Download trägt jede Zeile für **Leitungen und Administration** ein P
 
 ## 4. Personen verwalten
 
-Personen werden in Anlaufstelle **ausschließlich mit Pseudonymen** erfasst – keine Klarnamen. Das Pseudonym ist der primäre Identifikator.
+Personen sollen in Anlaufstelle unter Pseudonymen erfasst werden. Das Pseudonym ist der primäre Identifikator; die Anwendung kann Klarnamen technisch nicht verhindern.
+
+**Pseudonyme und Titel:** Pseudonyme von Personen sowie Titel von Fällen, Episoden und Aufgaben kurz halten. Keine Klarnamen und keine Angaben nach Art. 9 DSGVO eintragen: Diese Navigationsfelder werden unverschlüsselt gespeichert; eine technische Erkennung aller solchen Inhalte gibt es nicht. Details gehören ins passende Zusatzfeld. Die mitgelieferten Standardfelder `client-notes` und `standard-description` sind verschlüsselt und erhöht, `workitem-details` ist verschlüsselt und normal. Das gilt nur, solange die jeweilige Feldverschlüsselung aktiviert bleibt. Assistenz kann Aufgabendetails lesen, nicht die erhöhten Standardfelder von Person, Fall oder Episode.
 
 ### Kontaktstufen
 
@@ -436,9 +438,9 @@ Jede Person hat eine **Kontaktstufe**:
 | Stufe | Beschreibung |
 |---|---|
 | **Nur Pseudonym** | Es ist nur das Pseudonym hinterlegt, dazu die Altersgruppe |
-| **Mit Zusatzangaben** | Zusätzliche persönliche Angaben sind hinterlegt (eingeschränkter Zugriff, das Öffnen der Personen-Detailseite und die Anzeige ihrer Freitext-Notizen in der Freitext-Prüfliste (einmal je angezeigter Person und Seitenaufruf, auch in der Einzeltextansicht) werden protokolliert) |
+| **Mit Zusatzangaben** | Zusätzliche persönliche Angaben sind hinterlegt (eingeschränkter Zugriff, das Öffnen der Personen-Detailseite (einmal je Seitenaufruf) wird protokolliert) |
 
-> **Hinweis:** Protokolliert (`VIEW_QUALIFIED`) werden das Öffnen der **Detailseite** (`/clients/<id>/`) einer Person der Kontaktstufe „Mit Zusatzangaben" und die Anzeige ihrer Freitext-Notizen in der **Freitext-Prüfliste** (einmal je angezeigter Person und Seitenaufruf, auch in der Einzeltextansicht). Die Personenliste, das Bearbeiten-Formular derselben Person, ein Ereignis, ein Fall und ein Suchtreffer erzeugen **keinen** Eintrag, auch wenn dort Zusatzangaben zu sehen sind.
+> **Hinweis:** Protokolliert (`VIEW_QUALIFIED`) wird das Öffnen der **Detailseite** (`/clients/<id>/`) einer Person der Kontaktstufe „Mit Zusatzangaben" (einmal je Seitenaufruf). Die Personenliste, die Freitext-Prüfliste, das Bearbeiten-Formular derselben Person, ein Ereignis, ein Fall und ein Suchtreffer erzeugen **keinen** Eintrag, auch wenn dort Zusatzangaben zu sehen sind.
 
 ### Person anlegen
 
@@ -447,7 +449,7 @@ Jede Person hat eine **Kontaktstufe**:
    - **Pseudonym:** Einzigartiger Name innerhalb Ihrer Einrichtung (z. B. ein selbstgewählter Spitzname). Das Pseudonym darf innerhalb einer Einrichtung nur einmal vorkommen.
    - **Kontaktstufe:** Wählen Sie „Nur Pseudonym" oder „Mit Zusatzangaben".
    - **Altersgruppe:** „Unter 18", „18–26", „27+" oder „Unbekannt".
-   - **Notizen:** Interne Anmerkungen zur Person (optional).
+   - **Dokumentationstyp und Zusatzfelder:** Im mitgelieferten Personentyp stehen Notizen im Standardfeld `client-notes` (optional, sichtbar nach Rolle und Sensibilität).
 3. Klicken Sie auf **Speichern**.
 
 ### Personen suchen
@@ -553,7 +555,7 @@ Die Liste aktualisiert sich ohne Seitenneuladung.
 2. Füllen Sie das Formular aus:
    - **Typ:** „Aufgabe" oder „Hinweis"
    - **Titel:** Kurze, prägnante Beschreibung
-   - **Beschreibung:** Ausführlichere Details (optional)
+   - **Dokumentationstyp und Standardfeld:** Details stehen im konfigurierten Zusatzfeld; der mitgelieferte Typ verschlüsselt dieses Feld.
    - **Priorität:** Normal, Wichtig oder Dringend
    - **Zugewiesen an:** Eine bestimmte Person aus Ihrer Einrichtung (optional – leer lassen, wenn die Aufgabe für alle gilt)
    - **Person:** Falls die Aufgabe eine bestimmte Person betrifft (optional)
@@ -839,6 +841,8 @@ Die installierte App verhält sich wie ein normales Programm und ist über das S
 
 ### Offline-Erfassung (Streetwork)
 
+**Offline-Aufgaben:** Aufgaben werden offline ohne Detailfeld erfasst. Details erst online im typgebundenen Standardfeld ergänzen; im Titel wären sie unverschlüsselt.
+
 „Letzter Kontakt“ in Personenliste und Offline-Bundle sowie die Reihenfolge der Personenauswahl berücksichtigen nur nicht gelöschte Kontakte, deren Dokumentationstyp für die eigene Rolle sichtbar ist. Ohne sichtbaren Kontakt bleibt der Wert leer. Auch Kontakte vor dem 90-Tage-Fenster der Bundle-Ereignisliste zählen für diesen Wert.
 
 Personen im Papierkorb sowie inaktive oder bereits anonymisierte Personen können nicht erneut als Offline-Bundle abgerufen werden, auch nicht mit einer bedingten Anfrage. Ein offener Löschantrag allein sperrt den Abruf nicht; nach Wiederherstellung einer weiterhin aktiven Person ist er wieder möglich.
@@ -909,7 +913,7 @@ Anlaufstelle unterscheidet fünf Rollen. Ihre Rolle wird von der Anwendungsbetre
 
 | Rolle | Anzeigename | Kurzbeschreibung |
 |---|---|---|
-| `assistant` | Assistenz | Eingeschränkte Erfassung; Personen beider Kontaktstufen einsehen, Zusatzfelder nur bei wirksamer Sensibilität „Normal“; keine internen Personennotizen |
+| `assistant` | Assistenz | Eingeschränkte Erfassung; Personen beider Kontaktstufen einsehen, Zusatzfelder nur bei wirksamer Sensibilität „Normal“; keine erhöhten Standard-Notizen der Person |
 | `staff` | Fachkraft | Standardrolle für Mitarbeitende in der Dokumentation |
 | `lead` | Leitung | Alle Fachkraft-Funktionen plus Auswertungen und Leitungsaufgaben |
 | `facility_admin` | Anwendungsbetreuung | Vollzugriff auf alle Bereiche und Einstellungen **Ihrer Einrichtung** (Audit-Log, DSGVO-Paket, Benutzerverwaltung) |
@@ -931,7 +935,7 @@ Tabelle nur für die vier facility-gebundenen Rollen — `super_admin` ist hier 
 | Personen einsehen und suchen | Ja (beide Kontaktstufen) | Ja | Ja | Ja |
 | Personen anlegen und bearbeiten | Nein | Ja | Ja | Ja |
 | Zusatzfelder an Personen einsehen | Nur wirksam „Normal“ | Bis wirksam „Erhöht“ | Alle Stufen | Alle Stufen |
-| Interne Personennotizen einsehen | Nein | Ja | Ja | Ja |
+| Erhöhte Standard-Notizen der Person einsehen | Nein | Ja | Ja | Ja |
 | Eigene Ereignisse bearbeiten | Ja | Ja | Ja | Ja |
 | Fremde Ereignisse bearbeiten | Nein | Ja | Ja | Ja |
 | WorkItems erstellen und bearbeiten | Nein | Ja | Ja | Ja |
@@ -954,7 +958,7 @@ Die wirksame Sensibilität ist die höhere Stufe aus Dokumentationstyp und Feld.
 
 ### Audit-Log (nur Anwendungsbetreuung)
 
-Das Audit-Log (`/audit/`) protokolliert automatisch sicherheitsrelevante Aktionen: Anmeldungen, das Öffnen der Personen-Detailseite und die Anzeige von Freitext-Notizen der Stufe „Mit Zusatzangaben" in der Freitext-Prüfliste (`VIEW_QUALIFIED`, einmal je angezeigter Person und Seitenaufruf, auch in der Einzeltextansicht), Exporte, Löschungen und Stufenwechsel. Es kann nicht verändert werden und dient der Nachvollziehbarkeit im Sinne der DSGVO. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung.
+Das Audit-Log (`/audit/`) protokolliert automatisch sicherheitsrelevante Aktionen: Anmeldungen, das Öffnen der Detailseite einer Person mit Zusatzangaben (`VIEW_QUALIFIED`, einmal je Seitenaufruf), Exporte, Löschungen und Stufenwechsel. Es kann nicht verändert werden und dient der Nachvollziehbarkeit im Sinne der DSGVO. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung.
 
 ---
 
@@ -978,8 +982,8 @@ Ein Fall ist eine **Klammer** um thematisch zusammengehörige Kontakte. Das Fall
 1. Klicken Sie auf der Fallliste auf **Fall anlegen** (oder navigieren Sie zu `/cases/new/`).
 2. Füllen Sie das Formular aus:
    - **Titel** (Pflichtfeld): Eine kurze Bezeichnung für den Fall (z. B. „Wohnungssuche", „Suchtberatung").
-   - **Person:** Beginnen Sie mit der Eingabe des Pseudonyms – es erscheint eine Vorschlagsliste. Wählen Sie die passende Person aus. Ein Fall kann auch ohne Person erstellt werden.
-   - **Beschreibung:** Ausführlichere Informationen zum Fall (optional).
+   - **Person:** Beginnen Sie mit der Eingabe des Pseudonyms – es erscheint eine Vorschlagsliste. Wählen Sie die passende Person aus. Ein Fall benötigt eine zugeordnete Person.
+   - **Dokumentationstyp und Standardfeld:** Details stehen im konfigurierten Zusatzfeld; der mitgelieferte Typ verschlüsselt dieses Feld.
    - **Fallverantwortlich:** Wählen Sie die zuständige Person aus dem Dropdown (optional). Nur Fachkräfte, Leitungen und Administratoren Ihrer Einrichtung stehen zur Auswahl.
 3. Klicken Sie auf **Fall anlegen**.
 
@@ -995,7 +999,7 @@ Die Detailseite eines Falls (`/cases/<id>/`) gliedert sich in drei Bereiche:
 - Titel und Status-Badge (Offen / Geschlossen)
 - Link zur zugehörigen Person
 - Fallverantwortlicher, Erstellt am, Erstellt von
-- Beschreibung (falls vorhanden)
+- Typgebundene Zusatzfelder einschließlich der Standardbeschreibung, soweit sichtbar
 - Buttons: **Bearbeiten**, **Schließen** bzw. **Wiedereröffnen**
 
 **Linke Spalte – Kontakte:**
@@ -1014,7 +1018,7 @@ Hat sich eine Episode seit dem Öffnen ihres Bearbeitungsformulars geändert, wi
 
 1. Öffnen Sie die Fall-Detailseite.
 2. Klicken Sie auf **Bearbeiten**.
-3. Ändern Sie Titel, Person, Beschreibung oder Fallverantwortlichen.
+3. Ändern Sie Titel, Fallverantwortung, Dokumentationstyp oder dessen Zusatzfelder. Die zugeordnete Person bleibt fest.
 4. Klicken Sie auf **Speichern**.
 
 ### Fall schließen und wiedereröffnen
@@ -1046,7 +1050,7 @@ Was dabei passiert:
 
 - Der Fall verschwindet aus Fallliste, Statistik und Zeitstrom und liegt im **Papierkorb**. Episoden, Wirkungsziele und Dateianhänge gehen mit — sie kommen beim Wiederherstellen vollständig zurück.
 - **Zugeordnete Kontakte bleiben bei der Person.** Sie werden nicht mitgelöscht und blockieren die Löschung auch nicht; sie verlieren ihre Fallzuordnung erst, wenn der Fall endgültig getilgt wird.
-- Nach Ablauf der Papierkorb-Frist (Standard 30 Tage, dieselbe wie für gelöschte Personen) wird der Fall automatisch **anonymisiert**: Titel, Beschreibung, Zusatzfelder, Episoden, Wirkungsziele und Dateien sind dann unwiderruflich weg. Danach ist keine Wiederherstellung mehr möglich.
+- Nach Ablauf der Papierkorb-Frist (Standard 30 Tage, dieselbe wie für gelöschte Personen) wird der Fall automatisch **anonymisiert**: Titel, typgebundene Zusatzfelder einschließlich Standardbeschreibung, Episoden, Wirkungsziele und Dateien sind dann unwiderruflich weg. Danach ist keine Wiederherstellung mehr möglich.
 - In einer Datenauskunft nach Art. 15 DSGVO erscheint ein Fall im Papierkorb bis zu diesem Zeitpunkt in einem **eigenen Abschnitt** „Fälle im Papierkorb" — mit dem Hinweis, seit wann er gelöscht und ob er bereits endgültig anonymisiert ist.
 
 > **Wiederherstellen** kann nur die **Anwendungsbetreuung** — über **Papierkorb** in der Kopfzeile der Fallliste. Dort steht auch **Jetzt endgültig anonymisieren**, wenn nicht auf die Frist gewartet werden soll.
@@ -1077,13 +1081,13 @@ Eine **Episode** ist eine abgrenzbare Phase innerhalb eines Falls. Wenn z. B. ei
 2. Füllen Sie das Formular aus:
    - **Titel** (Pflichtfeld): Bezeichnung der Phase (z. B. „Krisenepisode März 2026").
    - **Beginn** (Pflichtfeld): Startdatum der Episode.
-   - **Beschreibung:** Zusätzliche Details (optional).
+   - **Dokumentationstyp und Standardfeld:** Details stehen im konfigurierten Zusatzfeld; der mitgelieferte Typ verschlüsselt dieses Feld.
    - **Ende:** Enddatum (optional – leer lassen, wenn die Episode noch läuft).
 3. Klicken Sie auf **Speichern**.
 
 > **Hinweis:** Episoden können nur für **offene** Fälle erstellt werden.
 
-**Episode bearbeiten:** Klicken Sie bei der Episode auf **Bearbeiten**, um Titel, Beschreibung, Beginn oder Ende anzupassen.
+**Episode bearbeiten:** Klicken Sie bei der Episode auf **Bearbeiten**, um Titel, typgebundene Zusatzfelder, Beginn oder Ende anzupassen.
 
 **Episode abschließen:** Klicken Sie auf **Abschließen**. Das Enddatum wird automatisch auf das heutige Datum gesetzt. Liegt der Beginn in der Zukunft, wird der Abschluss mit einer Meldung abgewiesen; bearbeiten Sie die Episode, um den Beginn zu korrigieren oder ein passendes Ende einzutragen.
 
@@ -1179,6 +1183,6 @@ manueller Ereignislöschung unbefristet erhalten.
 
 Als Modell steht nur **Ereignis-Freitexte** zur Verfügung. Filtern Sie bei Bedarf nach **Geändert bis**, **Erfasst oder geprüft von** und einem **Musterhinweis**. Die Einrichtung kommt aus der angemeldeten Sitzung. Mit **Text prüfen** öffnen Sie den einzelnen Text und können ihn bis einschließlich des gewählten Tages markieren oder die Markierung zurücknehmen. Geänderter Inhalt oder eine abgelaufene Frist benötigt eine erneute Prüfung. Das Markieren und Zurücknehmen wird ohne Textinhalt auditiert; der Ursprungstext wird dabei nicht geändert. **Ursprungstext öffnen** führt zur Ereignis-Detailseite.
 
-Die früheren festen Personen-Notizen und Fall-, Episoden- und Aufgabenbeschreibungen sind keine Review-Ziele mehr. Die neuen dynamischen Standardfelder dieser Träger sind verschlüsselt und nicht Teil der Liste; auch unverschlüsselt konfigurierte dynamische Felder dieser Träger werden hier nicht geprüft. Titel und Pseudonyme bleiben Klartext-Navigationsanker außerhalb der Prüfliste.
+Die früheren festen Personen-Notizen und Fall-, Episoden- und Aufgabenbeschreibungen sind keine Review-Ziele mehr. Die dynamischen Standardfelder dieser Träger sind in der mitgelieferten Konfiguration verschlüsselt und nicht Teil der Liste; auch unverschlüsselt konfigurierte dynamische Felder dieser Träger werden hier nicht geprüft. Titel und Pseudonyme bleiben Klartext-Navigationsanker außerhalb der Prüfliste.
 
 Telefon-, E-Mail-, Datums- und Adressmuster werden ausschließlich lokal auf dem Server heuristisch erkannt. Die Hinweise können falsch sein und sensible Angaben übersehen; sie sind keine DSGVO-Garantie. Der erste Vorschlag öffnet nur die Kontakterfassung ohne Vorbefüllung. Verwenden Sie bei einer eigenen Neuerfassung ein tatsächlich verschlüsseltes Feld. Die weiteren Hinweise empfehlen, die Schutzstufe organisatorisch zu prüfen oder den Ursprungstext manuell zu neutralisieren. Keiner der Hinweise kopiert, entschlüsselt oder verändert Inhalte oder Schutzstufen automatisch. Der Review ist nur online verfügbar.
