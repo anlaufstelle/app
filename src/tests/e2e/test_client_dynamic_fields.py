@@ -516,11 +516,15 @@ class TestTypeChangeDiscardConfirm:
         ft_own = _cli_name("notiz")
         slug_own = _slug_of(ft_own)
         type_own = _cli_name("TypConfirm")
+        type_other = _cli_name("TypAndere")
         value_own = "Erstkontakt am Bahnhofsvorplatz"
 
         _create_field_template(page, base_url, ft_own, "text")
         pk_own = _create_entity_doctype(page, base_url, type_own, "client")
         _assign_free_field(page, ft_own)
+        # Ein bestehender Typ lässt sich nicht mehr entfernen, solange aktive Typen der Entität
+        # bestehen (31dc64200, Refs #2666): der Verlust-Fall ist der Wechsel auf einen Typ ohne dieses Feld.
+        pk_other = _create_entity_doctype(page, base_url, type_other, "client")
 
         # Ein einziger Dialog-Handler für den ganzen Fluss; ``mode`` schaltet
         # zwischen Bestätigen und Abbrechen um (mehrere ``page.once``-Handler
@@ -558,10 +562,10 @@ class TestTypeChangeDiscardConfirm:
             page.wait_for_url(CLIENT_DETAIL_RE)
             assert dialogs == [], f"Speichern ohne Typwechsel darf nicht nachfragen: {dialogs}"
 
-            # --- Typ entfernen + Abbrechen: kein Submit, Formular bleibt bedienbar
+            # --- Typ wechseln + Abbrechen: kein Submit, Formular bleibt bedienbar
             mode["accept"] = False
             page.goto(edit_url, wait_until="domcontentloaded")
-            switch_document_type(page, value="")
+            switch_document_type(page, label=type_other)
             submit = page.locator(ENTITY_SUBMIT)
             submit.click()
             _wait_for_dialogs(page, dialogs, 1)
@@ -593,7 +597,8 @@ class TestTypeChangeDiscardConfirm:
             assert errors == [], f"Konsolen-Errors/CSP-Verstöße im Confirm-Fluss: {errors}"
         finally:
             page.remove_listener("dialog", _handle)
-            if client_pk:
-                _detach_document_type(page, base_url, f"{base_url}/clients/{client_pk}/edit/", CLIENT_DETAIL_RE)
-            _delete_doctype_safe(page, base_url, pk_own)
+            # The person keeps a type (it cannot be removed), so the throw-away types cannot be deleted
+            # while it exists; deactivate them so that they do not offer themselves to other tests.
+            _set_doctype_active(page, base_url, pk_other, False)
+            _set_doctype_active(page, base_url, pk_own, False)
             _delete_field_template(page, base_url, ft_own)
