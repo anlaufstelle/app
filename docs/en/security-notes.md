@@ -22,11 +22,19 @@ Branch protection/rulesets are unavailable for the private development repositor
 
 Two separate rulesets are planned for `refs/heads/main`: `main-integrity` blocks force pushes and deletions without bypass actors; `main-pr` requires pull requests and status checks, with an “Always” bypass only for the named release identity and no restrict-updates rule; check names must be compared with an app run before configuration.
 
+## Plaintext free text outside the sensitivity model
+
+Person notes and descriptions for cases, episodes and tasks use type-bound standard fields in `data_json`. All five shipped packages set `is_encrypted: true` on `client-notes`, `standard-description` and `workitem-details`. Encryption depends on the current field configuration; an administrator can loosen it. Sensitivity and encryption are separate properties. This does not promise encryption of all free text.
+
+`Client.pseudonym`, `Case.title`, `Episode.title` and `WorkItem.title` remain plaintext navigation labels: keep them short, without real names or GDPR Art. 9 data. Their online form guidance is not technical content validation. Outcome goal titles/descriptions, milestone titles and deletion-request/legal-hold reasons also remain plaintext. The shipped event `notiz` is unencrypted; other event fields follow their own configuration.
+
+Anonymization clears dynamic person/case/episode/task data and redacts related titles, goal text and reasons. `AuditLog.detail` remains unchanged until its own retention expires; minimization must happen when writing. Permitted free-text keys do not guarantee PII-free values. Only `recipient` and `purpose` have an additional limited value heuristic. The database itself is not encrypted; backups, tenant isolation and role permissions do not replace field encryption or careful input.
+
 ## Limits of free-text review (#918)
 
-Online review is an organisational aid for the four fixed long-text fields and configured unencrypted event text/textarea values. It does not extend read permissions, decrypt values or encrypt existing data. Pseudonyms, titles, dynamic person/case fields and the derived search index are outside this list. Local phone/email/date/address heuristics can produce false positives or miss sensitive content; neither the absence of a match nor a review mark guarantees GDPR compliance.
+Online review is an organisational aid exclusively for configured unencrypted event text/textarea values. It does not extend read permissions, decrypt values or change field encryption. Pseudonyms, titles, dynamic person/case/episode/task fields and the derived search index are outside this list. Local phone/email/date/address heuristics can produce false positives or miss sensitive content; neither the absence of a match nor a review mark guarantees GDPR compliance.
 
-Marks contain no source text: only target, field, date, account, timestamp and a purpose-separated HMAC bound to content and target. Validity is checked against current content and date; changing `SECRET_KEY` invalidates earlier HMACs. Restoring exactly the previous text produces the same content fingerprint. This does not prove a complete modification history. RLS isolates facilities' metadata rather than encrypting source text. Marking and revocation log neither text values nor matched snippets. Displaying notes of a person with additional details writes the same read entry as the person detail page (once per displayed person, without text); other target types keep the existing behaviour of their detail pages. Suggestions about contact creation, sensitivity and neutralisation do not change data themselves. Review responses carry `no-store`; no separate offline review data store is created.
+Marks contain no source text: only target, field, date, account, timestamp and a purpose-separated HMAC bound to content and target. Validity is checked against current content and date; changing `SECRET_KEY` invalidates earlier HMACs. Restoring exactly the previous text produces the same content fingerprint. This does not prove a complete modification history. RLS isolates facilities' metadata rather than encrypting source text. Marking and revocation log neither text values nor matched snippets. The review does not display person notes or write a `VIEW_QUALIFIED` read entry; only opening the detail page of a person with additional details writes that entry. Suggestions about contact creation, sensitivity and neutralisation do not change data themselves. Review responses carry `no-store`; no separate offline review data store is created.
 
 ## K4a — shared statistical count decisions
 
@@ -40,6 +48,5 @@ Snapshot event cohorts use additive weights, separate from current event identit
 
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- source-hash: bd92c4c20a46adc635f2ca2c7d48a30f23b3acff -->
-<!-- translation-date: 2026-10-24 -->
+<!-- source-hash: c2fa6969cbf14459fc9d9ca1e42925b6a200e2ac -->
+<!-- translation-date: 2026-10-26 -->

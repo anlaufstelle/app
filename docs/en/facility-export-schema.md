@@ -16,7 +16,7 @@ python manage.py export_facility --facility <uuid-or-name> --output <path> [--in
 
 `schema_version` is an integer incremented for **every incompatible change**: removal or renaming of a field, changed meaning or a moved structure. Additive fields do not increment the version; consumers must ignore unknown keys. The field list below is the reference, updated together with the corresponding issue.
 
-Person notes and case descriptions are stored exclusively in typed `data_json`; `clients[].notes` and `cases[].description` are not schema fields. See the [operator actions in the changelog](../../CHANGELOG.md#unreleased) for standard types and backups.
+Person notes and case, episode and task descriptions are stored exclusively in typed `data_json` with `document_type_id`; `clients[].notes` and separate `description` keys for cases, episodes and tasks are not schema fields. See the [operator actions in the changelog](../../CHANGELOG.md#unreleased) for standard types and backups.
 
 ## Principles
 
@@ -52,11 +52,11 @@ entities:
                 data_json, is_anonymous, created_by_id, created_at, updated_at, attachments[]}
   cases[]:     {id, client_id, document_type_id, title, status, data_json,
                 lead_user_id, created_by_id, created_at, updated_at, closed_at, attachments[]}
-  episodes[]:  {id, case_id, title, description, started_at, ended_at, created_by_id, created_at}
+  episodes[]:  {id, case_id, title, document_type_id, data_json, started_at, ended_at, created_by_id, created_at}
   goals[]:     {id, case_id, title, description, is_achieved, achieved_at, created_by_id,
                 created_at, milestones[]: {id, title, is_completed, completed_at, sort_order, created_at}}
   work_items[]:{id, client_id, created_by_id, assigned_to_id, item_type, status,
-                priority, title, description, created_at, updated_at, completed_at,
+                priority, title, document_type_id, data_json, created_at, updated_at, completed_at,
                 due_date, remind_at, recurrence}
 
 attachments[] (embedded under client/event/case):
@@ -75,5 +75,5 @@ User references (`created_by_id`, `lead_user_id`, `assigned_to_id`) are UUID str
 
 <!-- translation-source: docs/facility-export-schema.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-24 -->
-<!-- source-hash: 97631a52a2e14201621d04b29046bed42704d06e -->
+<!-- source-hash: d4111994967cda932cd756ef231ccf4315b32667 -->
+<!-- translation-date: 2026-10-26 -->

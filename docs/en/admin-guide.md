@@ -748,7 +748,7 @@ Anlaufstelle has five roles -- four facility-bound, one facility-spanning:
 | `facility_admin` | Application support | one facility | Full access within their own facility: user management, type/sensitivity configuration, audit log (`/audit/`), GDPR package. **Cannot** view other facilities. |
 | `lead` | Manager | one facility | Reports, approve deletion requests, view all cases in the facility, data export |
 | `staff` | Social worker | one facility | Record and edit contacts, cases, and documentation |
-| `assistant` | Assistant | one facility | Limited data entry; view people at either contact stage, additional fields only at effective sensitivity "Normal"; no internal person notes |
+| `assistant` | Assistant | one facility | Limited data entry; view people at either contact stage, additional fields only at effective sensitivity "Normal"; no elevated standard person notes |
 
 > **System ↔ application separation:** `super_admin` manages hosting and bootstrap; `facility_admin` manages configuration and users **within** a facility. This separation is GDPR-relevant: the super-admin cannot view the substantive content of a facility without this being logged in the AuditLog (`SYSTEM_VIEW`). Architecture decision: [ADR-018](../adr/018-rollenmodell-superadmin.md).
 
@@ -2150,7 +2150,7 @@ The audit log is **append-only** and immutable. Among other things, it automatic
 |---|---|
 | Anmeldung, Abmeldung (login, logout) | Every login/logout |
 | Anmeldung fehlgeschlagen (failed login) | Incorrect password |
-| Data at the "With additional details" level viewed | Opening the **person detail page** (`/clients/<id>/`) of a person at that level and displaying their free-text notes in the **free-text review list** (`VIEW_QUALIFIED`, once per displayed person and page request, including the individual text view); the person list, edit form, event, case and search result do not generate such an entry |
+| Data at the "With additional details" level viewed | Opening the **person detail page** (`/clients/<id>/`) of a person at that level (`VIEW_QUALIFIED`, once per page request); the person list, edit form, free-text review, event, case and search result do not generate such an entry |
 | Export | Data export by a user — including data subject access requests for individual people and on-screen views of the external report. **Released report files** (CSV/PDF/JSON/XML with a reporting period) are a subset: only those are exempt from the retention deadline and appear in the [release overview](#8-statistics-snapshots--materialized-view) |
 | Deletion | Manual or via `enforce_retention` |
 | Level change | Change in a person's contact status |
@@ -2246,8 +2246,8 @@ Next to "Restore", that page offers the action **"Anonymize permanently now"**, 
 
 | Aspect | Behaviour |
 |---|---|
-| **Effect** | **Irreversible.** Pseudonym, notes, custom fields as well as case and event content are removed; what remains is an anonymous statistical aggregate. Restoring is **no longer** possible afterwards. A confirmation dialog states this explicitly. |
-| **What happens immediately — and what with the nightly run** (Refs #2085) | **Immediately:** pseudonym, notes, custom fields, case and episode content, the content of the events themselves, the timestamp generalization and the file attachments. The person carries no personal data afterwards. **With the next retention run** (`enforce_retention`, 03:00 at night by default): the **older versions** of the event documentation — the version history that every save of an event creates. The reason is the database role split: those versions are write-protected, and the web process deliberately does **not** hold the required privileges (see `ops-runbook.md` § 9.5). The success message and the confirmation dialog say so explicitly. If an erasure has to be completed immediately, the system operators run the retention run once by hand. A **legal hold** that arrives within this window defers the versions — they are then kept in full. |
+| **Effect** | **Irreversible.** Pseudonym and type-bound additional fields (including standard notes) as well as case and event content are removed; what remains is an anonymous statistical aggregate. Restoring is **no longer** possible afterwards. A confirmation dialog states this explicitly. |
+| **What happens immediately — and what with the nightly run** (Refs #2085) | **Immediately:** pseudonym, type-bound additional fields (including standard notes), case, episode and task content, the content of the events themselves, the timestamp generalization and the file attachments. The person carries no personal data afterwards. **With the next retention run** (`enforce_retention`, 03:00 at night by default): the **older versions** of the event documentation — the version history that every save of an event creates. The reason is the database role split: those versions are write-protected, and the web process deliberately does **not** hold the required privileges (see `ops-runbook.md` § 9.5). The success message and the confirmation dialog say so explicitly. If an erasure has to be completed immediately, the system operators run the retention run once by hand. A **legal hold** that arrives within this window defers the versions — they are then kept in full. |
 | **Purpose** | (a) **Immediate erasure under Art. 17** when a data subject insists on erasure without delay and 30 days of trash are not defensible. (b) **Resolving configuration blockers**: a person in the trash keeps their document type and field values and thereby blocks deleting that type or field template. Previously the only options were restoring (a short-lived data resurrection) or waiting. The blocker message in the configuration UI now names the trash share and links there. |
 | **Limit: legal hold** | If an **active legal hold** exists on the person or on one of their events, the action is rejected with an error message — exactly like the nightly retention run (Refs #1066, #1756). A manual action must not override a hold. Lift the hold first, then anonymize. |
 | **Limit: trash only** | The action applies exclusively to records that are already soft-deleted. The four-eyes request path remains the only way **into** the trash — there is no shortcut around approval. |
@@ -2332,10 +2332,10 @@ Included (Refs #1752):
 
 | Category | Content |
 |---|---|
-| Master data | Pseudonym, contact stage, age group, **notes**, active flag, k-anonymization flag, trash status (deleted at/by), creation and modification timestamps, custom fields including orphaned fields (decrypted) |
-| Cases | Title, description, status, dates, case lead, trash status, custom fields |
+| Master data | Pseudonym, contact stage, age group, active flag, k-anonymization flag, trash status (deleted at/by), creation and modification timestamps, documentation type and custom fields including orphaned fields (decrypted, including standard notes) |
+| Cases | Title, status, dates, case lead, trash status, documentation type and decrypted additional fields (including the standard description) |
 | Deleted cases | Cases in the trash as a **separate section** (Refs #1818): the same fields plus "deleted at/by" and the purge timestamp — until the final anonymization they are stored data and belong in the access record |
-| Episodes | Title, description, start/end per case |
+| Episodes | Title, start/end per case, documentation type, decrypted additional fields and orphaned fields (including the standard description) |
 | Outcome goals | Goals with milestones and achievement status |
 | Events | Document type, timestamp, case/episode reference, field data (decrypted) |
 | Deleted events | Existence of events not yet purged (trash) together with the **deletion timestamp and the user who triggered it** (Refs #2157) -- for a deletion by the retention run the user stays empty, because nobody acts there |
@@ -2344,7 +2344,7 @@ Included (Refs #1752):
 | Rectification requests | Art. 16 requests concerning the client (Refs #1796, [ADR-041](../adr/041-berichtigungsworkflow-intern.md)) in **all** states (pending, approved, rejected): the field concerned, previous and requested value (decrypted), reason, review note, requesting and reviewing user, timestamps |
 | Retention | Legal holds (Art. 17(3) — **not** Art. 18) and open deletion proposals with due date and category |
 | Restriction of processing | Art. 18 restriction marker (Refs #2045), where set: legal ground, timestamp and the person who set it |
-| Tasks | Title, description, type, status, priority, assignment, dates |
+| Tasks | Title, item type, status, priority, assignment, dates, documentation type, decrypted additional fields and orphaned fields (including standard details) |
 | Activities | Activity feed entries about the client, their cases, events and tasks |
 | Recently viewed | Timestamps at which the client record was opened or bookmarked |
 | Merges | Provenance after duplicate merges (Refs #1876, [ADR-045](../adr/045-personen-merge.md) §7): which record was merged into this one and when, and whether it has already been anonymized for good; the access record of the dissolved record conversely states "Merged into" |
@@ -2566,15 +2566,19 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 ## Organising free-text reviews
 
-The **Free-text review** navigation item (`/free-text-review/`) provides model-specific lists in the current facility. Person notes and case and episode descriptions require staff or higher facility roles; task descriptions and unencrypted event text fields are available to assistants and above within existing read permissions. Event type and field protection also apply. System administrators gain no clinical review permissions.
+The **Free-text review** navigation item (`/free-text-review/`) shows only non-empty, unencrypted event text/textarea values in the current facility. Assistants and higher facility roles read only within existing type and field visibility. Titles, pseudonyms and dynamic person/case/episode/task fields are outside the review. System administrators gain no clinical review permissions.
 
 A review stores target model, target UUID, field key, expiry date, reviewing account, timestamp and a server-side HMAC content fingerprint, without copying free text. Facility scoping and a direct RLS policy protect this metadata. Content changes, expiry and a change of `SECRET_KEY` invalidate existing marks. Manual marking and revocation are audited with target/field/date rather than text or matched snippets. Deletion and anonymisation through supported write paths remove associated marks; audit history remains.
 
 Agree review dates and responsibilities organisationally. Local pattern detection is heuristic and offers no GDPR guarantee. Suggestions do not transfer or decrypt content, change sensitivity or edit source text. An actually encrypted field must be selected deliberately when creating a contact. Review supplements existing plaintext fields without encrypting them and is available online only. Activation uses the regular schema migrations without copying source data or running an additional seed command.
 
+## Type-bound standard fields
+
+All five shipped packages provide person, case, episode and task types with normal type sensitivity. Their `client-notes` and `standard-description` fields are encrypted and elevated; `workitem-details` is encrypted and normal. Assistants can read task details but not the other three standard fields. Effective visibility follows the higher type/field sensitivity and the role; encryption follows the field configuration. `load_package --package <name>` loads these definitions. With one active type it is selected automatically; multiple active types require a choice. A type change that loses populated fields requires confirmation and is refused if original values are not visible to the acting user. There is no free-text detail input without a type. Offline tasks have no detail field; add details online.
+
+Person anonymization clears these dynamic fields as well as related titles and goal text. Art. 15 exports include documentation types, decrypted standard/additional fields and orphaned values; they do not use separate person-note or case/episode/task description columns. The [facility export uses schema v2](facility-export-schema.md). Update, backup, manual text saving and key-ring/restore steps are listed in the [changelog](../../CHANGELOG.md#unreleased).
+
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-24 -->
-<!-- source-hash: 0decbf6df69c9243882fe8d5850acd16f726aa66 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- translation-date: 2026-10-14 -->
+<!-- source-hash: b21694a520ae7b7e56003e9d4abd5b8107b92efc -->
+<!-- translation-date: 2026-10-26 -->

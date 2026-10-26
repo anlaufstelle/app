@@ -161,54 +161,25 @@ Nicht betroffen ist die CSSOM-API: `el.style.setProperty(…)` / `el.style.displ
 
 ## Klartext-Freitexte ausserhalb des Sensitivity-Modells (Issue #716)
 
-**Status:** Inventarisierung + UI-Warnung umgesetzt; feldweise Encryption deferred bis post-v1.0 (Audit-Item 17).
+Personen-Notizen sowie Beschreibungen von Fällen, Episoden und Aufgaben liegen in typgebundenen Standardfeldern in `data_json`. Alle fünf mitgelieferten Pakete setzen `is_encrypted: true` für `client-notes`, `standard-description` und `workitem-details`. Die Verschlüsselung gilt **je nach Konfiguration** des jeweiligen Feldes; eine administrative Änderung kann sie lockern. Sensibilität und Verschlüsselung sind getrennte Eigenschaften. Es gibt keine Zusage, dass sämtliche Freitexte verschlüsselt sind.
 
 ### Inventar
 
-Diese Freitext-Felder folgen **nicht** dem Sensitivity/Encryption/Retention-Modell der Event-`data_json`-Felder. Klartext liegt facility-gescoped in der DB und im Backup (Backup ist AES-256-CBC verschlüsselt; DB selbst nicht).
+| Feld | Einordnung | Grenze |
+|---|---|---|
+| `Client.pseudonym` | Such- und Navigationsanker im Klartext | Kurz halten, keine Klarnamen und keine Angaben nach Art. 9 DSGVO |
+| `Case.title`, `Episode.title`, `WorkItem.title` | Titel im Klartext | Dieselbe Grenze; Hinweise in den Online-Formularen |
+| `OutcomeGoal.title`, `OutcomeGoal.description`, `Milestone.title` | Zielbeschreibungen und Titel im Klartext | Kein Schutz durch die Feldverschlüsselung der Standardfelder |
+| `DeletionRequest.reason`, `LegalHold.reason` | Begründungen im Klartext | Bis zur Anonymisierung; dann „[Anonymisiert]“ |
+| Ereignis-Notiz und weitere unverschlüsselte Ereignisfelder | Dynamische Werte nach Feldkonfiguration; `notiz` ist in den Paketen unverschlüsselt | Hinweise am Feld und organisatorische Prüfung; keine automatische Erkennung aller sensiblen Angaben |
+| [`AuditLog.detail`](../src/core/models/audit.py) | JSON mit `changed_fields` (nur Feldnamen), technischen Metadaten und den in [`AUDIT_DETAIL_KEYS`](../src/core/services/audit/detail_policy.py) zugelassenen Freitext-Schlüsseln `name`, `username`, `actor_username`, `note`, `recipient`, `purpose` (`message` ist eine feste Codekonstante) | mittel: Dateiname, Meilenstein-Titel und Pseudonym schreibt die Anwendung nicht (#1751); nur `recipient`/`purpose` unterliegen einer zusätzlichen Werteheuristik; die übrigen Freitextwerte prüft sie nicht — ein Klientenname etwa im `purpose` einer Berichts-Freigabe bleibt im Klartext stehen, die Minimierung dort ist Betreiber-Obliegenheit |
 
-| Feld | Modell | Typische Inhalte | Risiko |
-|---|---|---|---|
-| [`Client.notes`](../src/core/models/client.py) | `Client` | Freie Notizen über die Person | hoch (Klarname-Risiko) |
-| [`Case.description`](../src/core/models/case.py) | `Case` | Fall-Beschreibung | mittel |
-| [`Episode.description`](../src/core/models/episode.py) | `Episode` | Episoden-Verlauf | mittel |
-| [`WorkItem.description`](../src/core/models/workitem.py) | `WorkItem` | Aufgaben-Beschreibung | mittel |
-| [`AuditLog.detail`](../src/core/models/audit.py) | `AuditLog` | JSON mit `changed_fields` (nur Feldnamen), technischen Metadaten und den in [`AUDIT_DETAIL_KEYS`](../src/core/services/audit/detail_policy.py) zugelassenen Freitext-Schlüsseln `name`, `username`, `actor_username`, `note`, `recipient`, `purpose` (`message` ist eine feste Codekonstante) | mittel: Dateiname, Meilenstein-Titel und Pseudonym schreibt die Anwendung nicht (#1751); nur `recipient`/`purpose` unterliegen einer zusätzlichen Werteheuristik; die übrigen Freitextwerte prüft sie nicht — ein Klientenname etwa im `purpose` einer Berichts-Freigabe bleibt im Klartext stehen, die Minimierung dort ist Betreiber-Obliegenheit |
+Die Hinweise an Pseudonym und den drei Titelfeldern sind Eingabehilfen, keine technische Inhaltskontrolle. Die Freitext-Prüfliste erfasst nur berechtigte, nicht leere, unverschlüsselte Ereignis-Text-/Textarea-Werte; Titel, Pseudonyme und dynamische Personen-, Fall-, Episoden- und Aufgabenfelder gehören nicht dazu.
 
-### Was bereits umgesetzt ist (Audit-Item 16)
+### Schutz und verbleibende Grenzen
 
-Der `help_text` der vier Freitextfelder (`Client.notes`, `Case.description`, `Episode.description`, `WorkItem.description`) warnt, dass das Feld nicht verschlüsselt gespeichert wird, dass dort keine Klarnamen und keine Angaben nach Art. 9 DSGVO stehen sollen und dass solche Angaben in ein verschlüsseltes Zusatzfeld gehören (Wortlaut in den Modellen). `AuditLog.detail` hat keinen `help_text`; es ist kein Formularfeld. Django rendert `help_text` automatisch unter den Form-Widgets.
+Die Anonymisierung leert die dynamischen Personen-, Fall-, Episoden- und Aufgabenwerte und redigiert die zugehörigen Titel, Zieltexte und Begründungen. Das HMAC-verkettete `AuditLog.detail` bleibt bis zum Ablauf seiner eigenen Frist unverändert; Minimierung muss beim Schreiben erfolgen. Die zugelassenen Freitext-Schlüssel `name`, `username`, `actor_username`, `note`, `recipient`, `purpose` sind keine Zusage personenfreier Werte; nur `recipient`/`purpose` haben zusätzlich eine begrenzte Werteheuristik (siehe [technischer Guard](#technischer-guard-statt-call-site-konvention-1944) und [Audit-Restdaten](#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753)). Die Datenbank selbst ist nicht verschlüsselt. Backup-Verschlüsselung, Einrichtungstrennung und Rollenrechte ersetzen keine feldweise Verschlüsselung und keine sparsame Eingabepraxis.
 
-### Was bewusst nicht jetzt umgesetzt wird (Audit-Item 17)
-
-Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Felder) ist im internen Code-Audit (dev-only) als Maßnahme mit mittlerem Aufwand nach v1.0 eingestuft. Voll-Implementation würde:
-- Schema-Migration (TextField → JSONField mit `{"__encrypted__": True, "value": ...}`)
-- Existing-Data-Migration (Bestand verschlüsseln)
-- Search/Sort/Export anpassen — `Client.notes` wird in Detail-Views, Exports und ggf. Volltext-Suche gerendert
-- Decrypt-Pfad in allen Views, die das Feld lesen
-
-### Trade-off
-
-**Aktueller Schutz:**
-- Backup-Encryption AES-256-CBC + PBKDF2 mit `BACKUP_ENCRYPTION_KEY`
-- RLS + Role-Mixin verhindern Cross-Facility-Reads
-- DSGVO-Anonymize-Cascade (#715) säubert die **vier Fach-Freitexte** (`Client.notes`, `Case.description`, `Episode.description`, `WorkItem.description`) — **nicht** `AuditLog.detail`: das Audit-Log ist append-only (DB-Trigger aus Migration `0024` + HMAC-Kette), eine nachträgliche Redaktion ist dort strukturell unmöglich. Der einzige Hebel ist Minimierung **beim Schreiben**: Die Schreibstellen für Upload-Dateinamen (HMAC + Endung), Meilensteine (kein Titel) und den Art.-15-/20-Export (kein Pseudonym) schreiben keine Klienten-PII (#1751); die zugelassenen Freitext-Schlüssel (`name`, `username`, `actor_username`, `note`, `recipient`, `purpose`) übernehmen dagegen, was eingegeben wird — siehe [§ Technischer Guard statt Call-Site-Konvention](#technischer-guard-statt-call-site-konvention-1944). Bereits geschriebene Zeilen bleiben unverändert stehen — siehe [§ Audit-Log-Restdaten überleben die Art.-17-Löschung](#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753)
-
-**Wenn jetzt durchgezogen:** ~1–2 Tage Arbeit + Risiko in Search/Export, ohne Live-Feedback aus Pilot zu haben.
-
-### Trigger für Re-Evaluation (Audit-Item 17 angehen)
-
-- Pilot-Einrichtung beginnt v1.0-Roll-Out — dann wird das Risiko real
-- Externer Audit fordert Encryption-at-Rest auch für freie Notizen
-- DPA mit Pilot-Träger fordert Field-Level-Encryption explizit
-- Backup-Storage wechselt zu System ohne Object-Lock/Encryption-at-Rest
-
-### Verifikation
-
-- Die `help_text`-Werte stehen an den vier Modellfeldern (`client.py`, `case.py`, `episode.py`, `workitem.py`) und erscheinen in den zugehörigen ModelForms.
-- Threat-Model-Eintrag: [`threat-model.md` § TB2/TB3, Zeile *I Sensitive Felder ohne Encryption*](threat-model.md#tb2tb3--django--postgresql)
-
----
 
 ## Audit-Log-Restdaten überleben die Art.-17-Löschung (Issue #1753)
 
@@ -2475,6 +2446,6 @@ Auf den beiden bereits gesperrten, frisch gelesenen Personenzeilen (`_locked_cli
 
 ## Grenzen des Freitext-Reviews (#918)
 
-Der Online-Review ist eine organisatorische Prüfhilfe für die vier festen Langtexte und konfigurierte unverschlüsselte Ereignis-Text-/Textarea-Werte. Er erweitert keine fachlichen Leserechte, führt keine Entschlüsselung aus und verschlüsselt keine Bestandsdaten. Pseudonyme, Titel, dynamische Personen-/Fallfelder und der abgeleitete Suchindex gehören nicht zu dieser Review-Liste. Lokale Telefon-/E-Mail-/Datums-/Adressheuristiken können falsch anschlagen oder sensible Inhalte übersehen; weder Trefferfreiheit noch eine Markierung ist eine DSGVO-Garantie.
+Der Online-Review ist eine organisatorische Prüfhilfe ausschließlich für konfigurierte unverschlüsselte Ereignis-Text-/Textarea-Werte. Er erweitert keine fachlichen Leserechte, führt keine Entschlüsselung aus und ändert keine Feldverschlüsselung. Pseudonyme, Titel, dynamische Personen-/Fall-/Episoden-/Aufgabenfelder und der abgeleitete Suchindex gehören nicht zu dieser Review-Liste. Lokale Telefon-/E-Mail-/Datums-/Adressheuristiken können falsch anschlagen oder sensible Inhalte übersehen; weder Trefferfreiheit noch eine Markierung ist eine DSGVO-Garantie.
 
-Die Markierung enthält keinen Text, sondern Ziel, Feld, Datum, Konto, Zeit und einen zweckgetrennten HMAC über Inhalt und Zielbindung. Die Gültigkeit wird anhand des aktuellen Texts und des Datums geprüft; ein Wechsel von `SECRET_KEY` invalidiert frühere HMACs. Ein später auf denselben Inhalt zurückgesetzter Text hat wieder denselben Inhaltsfingerprint. Dies ist kein Nachweis einer lückenlosen Änderungshistorie. RLS schützt die Einrichtungstrennung der Metadaten, nicht die Verschlüsselung der Quelltexte. Markieren und Zurücknehmen protokollieren keine Textwerte oder Musterfundstellen. Die Anzeige von Notizen einer Person mit Zusatzangaben schreibt denselben Lese-Eintrag wie die Personendetailseite (je angezeigter Person, ohne Text); andere Zieltypen folgen weiterhin dem bestehenden Verhalten ihrer Detailseiten. Hinweise zur Kontakterfassung, Sensitivity und Neutralisierung ändern selbst keine Daten. Antworten der Review-Views tragen `no-store`; ein eigener Offline-Review-Datenbestand wird nicht aufgebaut.
+Die Markierung enthält keinen Text, sondern Ziel, Feld, Datum, Konto, Zeit und einen zweckgetrennten HMAC über Inhalt und Zielbindung. Die Gültigkeit wird anhand des aktuellen Texts und des Datums geprüft; ein Wechsel von `SECRET_KEY` invalidiert frühere HMACs. Ein später auf denselben Inhalt zurückgesetzter Text hat wieder denselben Inhaltsfingerprint. Dies ist kein Nachweis einer lückenlosen Änderungshistorie. RLS schützt die Einrichtungstrennung der Metadaten, nicht die Verschlüsselung der Quelltexte. Markieren und Zurücknehmen protokollieren keine Textwerte oder Musterfundstellen. Die Prüfliste zeigt keine Personen-Notizen und schreibt keinen `VIEW_QUALIFIED`-Leseeintrag; dieser entsteht nur beim Öffnen der Detailseite einer Person mit Zusatzangaben. Hinweise zur Kontakterfassung, Sensitivity und Neutralisierung ändern selbst keine Daten. Antworten der Review-Views tragen `no-store`; ein eigener Offline-Review-Datenbestand wird nicht aufgebaut.

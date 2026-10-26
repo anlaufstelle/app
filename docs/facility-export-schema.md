@@ -16,7 +16,7 @@ python manage.py export_facility --facility <uuid-oder-name> --output <pfad> [--
 
 `schema_version` ist eine ganze Zahl und wird bei **jeder rückwärts-inkompatiblen** Änderung erhöht (Feld entfernt/umbenannt, Bedeutung geändert, Struktur verschoben). Rein **additive** Felder erhöhen die Version nicht — Konsumenten müssen unbekannte Schlüssel ignorieren. Die jeweils gültige Feldliste dieses Dokuments ist die Referenz; Änderungen laufen über ein Issue + Aktualisierung hier.
 
-Personen-Notizen und Fallbeschreibungen stehen ausschließlich im typgebundenen `data_json`; `clients[].notes` und `cases[].description` gehören nicht zum Schema. Betreiberhinweise zu Standardtypen und Sicherungen stehen im [Changelog](../CHANGELOG.md#unreleased).
+Personen-Notizen sowie Fall-, Episoden- und Aufgabenbeschreibungen stehen ausschließlich im typgebundenen `data_json` mit `document_type_id`; `clients[].notes` und die separaten `description`-Schlüssel von Fällen, Episoden und Aufgaben gehören nicht zum Schema. Betreiberhinweise zu Standardtypen und Sicherungen stehen im [Changelog](../CHANGELOG.md#unreleased).
 
 ## Grundsätze
 
@@ -52,11 +52,11 @@ entities:
                 data_json, is_anonymous, created_by_id, created_at, updated_at, attachments[]}
   cases[]:     {id, client_id, document_type_id, title, status, data_json,
                 lead_user_id, created_by_id, created_at, updated_at, closed_at, attachments[]}
-  episodes[]:  {id, case_id, title, description, started_at, ended_at, created_by_id, created_at}
+  episodes[]:  {id, case_id, title, document_type_id, data_json, started_at, ended_at, created_by_id, created_at}
   goals[]:     {id, case_id, title, description, is_achieved, achieved_at, created_by_id,
                 created_at, milestones[]: {id, title, is_completed, completed_at, sort_order, created_at}}
   work_items[]:{id, client_id, created_by_id, assigned_to_id, item_type, status,
-                priority, title, description, created_at, updated_at, completed_at,
+                priority, title, document_type_id, data_json, created_at, updated_at, completed_at,
                 due_date, remind_at, recurrence}
 
 attachments[] (eingebettet unter client/event/case):
@@ -71,4 +71,4 @@ Nur **Metadaten**, nie Binärinhalte. `owner` benennt den Owner-Typ (`client`/`e
 - `--no-file-hashes` → `sha256: null` bei allen Anhängen (deutlich schneller bei großen Beständen). Der Schlüssel ist in beiden Fällen **immer vorhanden** — ein Vertrag, nicht zwei.
 - Fehlende Schlüsselkonfiguration (`EncryptionKeyMissing`) bricht den Export ab (fail-loud, keine Maskierung als `null`).
 
-User-Referenzen (`created_by_id`, `lead_user_id`, `assigned_to_id`) sind UUID-Strings ohne eigenen `users`-Zweig — bewusste v1-Entscheidung (Personal-Stammdaten sind nicht Teil des fachlichen Facility-Datenbestands).
+User-Referenzen (`created_by_id`, `lead_user_id`, `assigned_to_id`) sind UUID-Strings ohne eigenen `users`-Zweig — bewusste Schema-Entscheidung (Personal-Stammdaten sind nicht Teil des fachlichen Facility-Datenbestands).

@@ -1,6 +1,6 @@
 # Paket „Frauenhaus“
 
-Das Paket richtet eine Schutzwohnung oder Fachberatungsstelle gegen Gewalt mit acht passenden Dokumentationstypen ein. Personen werden unter Pseudonym dokumentiert; eine identifizierte oder qualifizierte Kontaktstufe beschreibt den Arbeitsstand und ist kein Klarnamen-Zwang. Wegen der hohen Dichte an Gewalt-, Gesundheits- und Schutzinformationen trennt der Katalog Empfangsdaten, Fachberatung und Gefährdungslagen durch Sensitivitätsstufen. Korrespondenz bleibt außerhalb der Anwendung, etwa am Telefon oder auf Papier: Die Anwendung dokumentiert die Arbeit, sie ist keine vollständige Akte.
+Das Paket richtet eine Schutzwohnung oder Fachberatungsstelle gegen Gewalt mit acht passenden Ereignistypen sowie vier Standardtypen für Person, Fall, Episode und Aufgabe ein (zwölf Typen insgesamt). Personen werden unter Pseudonym dokumentiert; eine identifizierte oder qualifizierte Kontaktstufe beschreibt den Arbeitsstand und ist kein Klarnamen-Zwang. Wegen der hohen Dichte an Gewalt-, Gesundheits- und Schutzinformationen trennt der Katalog Empfangsdaten, Fachberatung und Gefährdungslagen durch Sensitivitätsstufen. Korrespondenz bleibt außerhalb der Anwendung, etwa am Telefon oder auf Papier: Die Anwendung dokumentiert die Arbeit, sie ist keine vollständige Akte.
 
 ## Einspielen
 
@@ -14,7 +14,7 @@ Die Befehle laufen im Dienst `maintenance` (Admin-Rolle, [Ops-Runbook § 9](ops-
 
 Das Frauenhaus-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalogfreie Einrichtung eingespielt und nicht auf den Standardkatalog aufgesetzt. Ein bewusstes erneutes Laden erfolgt mit `docker compose -f docker-compose.prod.yml run --rm maintenance load_package --package frauenhaus --facility <UUID>`; `--dry-run` zeigt die Änderungen vorab.
 
-## Dokumentationstypen
+## Ereignistypen
 
 `tally` kennzeichnet Typen, die zusätzlich für die Strichliste vorgesehen sind.
 
@@ -77,7 +77,7 @@ Felder erben mindestens die Sensitivität ihres Typs. Die folgende Matrix nennt 
 | Vermittlung | `vermittelt-an` | normal | sichtbar | sichtbar | sichtbar | sichtbar |
 | Notiz | `notiz` (unverschlüsselt, Hinweis am Feld) | normal | sichtbar | sichtbar | sichtbar | sichtbar |
 
-`ziel` und `notiz` sind für alle Rollen sichtbar und werden unverschlüsselt gespeichert. Deshalb steht an beiden Feldern der Hinweis „Keine Adressen, Klarnamen oder Verfahrensdaten eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden.“ Gefährdungs- und Begleitdetails gehören stattdessen in die verschlüsselten Felder `notiz-gefaehrdung` beziehungsweise `notiz-begleitung`. Das verbleibende Risiko ordnet [„Klartext-Freitexte ausserhalb des Sensitivity-Modells“](security-notes.md#klartext-freitexte-ausserhalb-des-sensitivity-modells-issue-716) ein.
+`ziel` und `notiz` sind für alle Rollen sichtbar und werden unverschlüsselt gespeichert. Deshalb steht an beiden Feldern der Hinweis „Keine Adressen, Klarnamen oder Verfahrensdaten eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden.“ Gefährdungs- und Begleitdetails gehören stattdessen in die verschlüsselten Felder `notiz-gefaehrdung` beziehungsweise `notiz-begleitung`. Dies betrifft Ereignisfelder. Zusätzlich liefert das Paket normale Typen für Person, Fall, Episode und Aufgabe: `client-notes` und `standard-description` sind verschlüsselt und erhöht (Assistenz sieht sie nicht); `workitem-details` ist verschlüsselt und normal (Assistenz kann es lesen), solange die Feldkonfiguration unverändert bleibt. Titel und Pseudonyme bleiben Klartext und müssen kurz sowie frei von Klarnamen und Art.-9-Angaben bleiben. Offline-Aufgaben haben kein Detailfeld; Details werden online ergänzt. Das verbleibende Risiko ordnet [„Klartext-Freitexte ausserhalb des Sensitivity-Modells“](security-notes.md#klartext-freitexte-ausserhalb-des-sensitivity-modells-issue-716) ein.
 
 Damit sind Auslöser und Eskalationskanal einer Gefährdungslage trotz unverschlüsselter Kategoriewerte niemals unterhalb `lead` sichtbar. Freitext und Dateiinhalt mit eigener `sensitivity: high` werden zusätzlich feldverschlüsselt gespeichert.
 

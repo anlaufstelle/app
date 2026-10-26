@@ -40,7 +40,7 @@ Die Doku beschreibt den **Ist-Stand**. Historie gehört ins [CHANGELOG.md](../CH
 | [packages-frauenhaus.md](packages-frauenhaus.md) | Frauenhaus-Paket: acht Typen, Sensitivitätsmatrix, Berichte und Betreiber-Empfehlungen für den 24/7-Betrieb (Refs #2138) | IT-Admins, Einrichtungsleitung |
 | [packages-jugendarbeit.md](packages-jugendarbeit.md) | Jugendarbeit-Paket: acht Typen, Sensitivitätsmatrix, Berichte und Betreiber-Empfehlungen (Refs #2139) | IT-Admins, Anwendungsbetreuung |
 | [ops-runbook.md](ops-runbook.md) | Betriebs-Runbook: Deployment, Rollback, Cron-Jobs, Log-Analyse, Troubleshooting, RLS, Backup/Restore, Restore-Drill | IT-Admins, DevOps |
-| [facility-export-schema.md](facility-export-schema.md) | Facility-Gesamtexport (JSON, Schema v1): Feldliste, Versionierungsregel, Papierkorb-/Anonymisierungs-Grenzen, Anhang-Hashes, `manage.py export_facility` (Refs #1060) | IT-Admins, Entwickler |
+| [facility-export-schema.md](facility-export-schema.md) | Facility-Gesamtexport (JSON, Schema v2): Feldliste, Versionierungsregel, Papierkorb-/Anonymisierungs-Grenzen, Anhang-Hashes, `manage.py export_facility` (Refs #1060) | IT-Admins, Entwickler |
 | [monitoring-guide.md](monitoring-guide.md) | `/health/`-Endpoint: Felder, HTTP-Status-Codes, Liveness vs. Detail, Anbindung an Uptime-/Monitoring-Tools (Refs #1071) | IT-Admins, DevOps |
 | [disaster-recovery.md](disaster-recovery.md) | Totalverlust-Wiederherstellung: Off-Site-Backup beschaffen, Schlüssel-Eskrow, Restore auf frischem Host, RTO/RPO (Refs #1071) | IT-Admins, DevOps |
 

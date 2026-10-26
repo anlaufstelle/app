@@ -18,15 +18,28 @@ Mitgelieferte Pakete liegen flach unter `core/packages/<name>.yaml`. Der technis
 
 | Name | Domäne | Typen | Besonderheiten | Doku |
 |---|---|---:|---|---|
-| `default` | Niedrigschwellige Hilfe | 9 | Drei Standardschichten und zwei Schnellvorlagen am Typ „Kontakt“ | [Standardkatalog und Schema v1](#1-aufbau) |
-| `beratungsstelle` | Offene Sprechstunde / Sozialberatung | 8 | Anonyme Kurzberatung, Beratungsgespräch ab Pseudonym, deaktivierbares Hausverbot | [Beratungsstelle-Paket](packages-beratungsstelle.md) |
-| `awareness` | Awareness-Teams bei Veranstaltungen | 7 | Anonyme Kurzkontakte, sensibles Vorfallsprofil, kein Datei-Feld | [Awareness-Paket](packages-awareness.md) |
-| `frauenhaus` | Schutzwohnung / Gewalt-Fachberatung | 8 | Pseudonyme Dokumentation, hochsensible Gefährdungslage, Schutzmaßnahmen ohne Hausverbotslogik | [Frauenhaus-Paket](packages-frauenhaus.md) |
-| `jugendarbeit` | Mobile und offene Jugendarbeit | 8 | Anonyme Strichlisten, Gruppenangebote und U18-orientierte Fallarbeit | [Jugendarbeit-Paket](packages-jugendarbeit.md) |
+| `default` | Niedrigschwellige Hilfe | 13 | Drei Standardschichten und zwei Schnellvorlagen am Typ „Kontakt“ | [Standardkatalog und Schema v1](#1-aufbau) |
+| `beratungsstelle` | Offene Sprechstunde / Sozialberatung | 12 | Anonyme Kurzberatung, Beratungsgespräch ab Pseudonym, deaktivierbares Hausverbot | [Beratungsstelle-Paket](packages-beratungsstelle.md) |
+| `awareness` | Awareness-Teams bei Veranstaltungen | 11 | Anonyme Kurzkontakte, sensibles Vorfallsprofil, kein Datei-Feld | [Awareness-Paket](packages-awareness.md) |
+| `frauenhaus` | Schutzwohnung / Gewalt-Fachberatung | 12 | Pseudonyme Dokumentation, hochsensible Gefährdungslage, Schutzmaßnahmen ohne Hausverbotslogik | [Frauenhaus-Paket](packages-frauenhaus.md) |
+| `jugendarbeit` | Mobile und offene Jugendarbeit | 12 | Anonyme Strichlisten, Gruppenangebote und U18-orientierte Fallarbeit | [Jugendarbeit-Paket](packages-jugendarbeit.md) |
 
 Domänen-Pakete: siehe die Zeilen, die die jeweiligen Paket-Issues ergänzen (#2145 Beratungsstelle, #2137 Awareness, #2138 Frauenhaus, #2139 Jugendarbeit).
 
 ---
+
+## Standardtypen für Personen, Fälle, Episoden und Aufgaben
+
+Alle fünf Pakete liefern zusätzlich zu ihren Ereignistypen je einen Typ für `client`, `case`, `episode` und `workitem`. Die Typstufe ist jeweils `normal`; die Feldstufen bestimmen die wirksame Sichtbarkeit mit.
+
+| Entität | Standardfeld | Feldstufe | Verschlüsselt | Assistenz liest |
+|---|---|---|---|---|
+| Person | `client-notes` | `elevated` | ja | nein |
+| Fall | `standard-description` | `elevated` | ja | nein |
+| Episode | `standard-description` | `elevated` | ja | nein |
+| Aufgabe | `workitem-details` | `normal` | ja | ja |
+
+Die Verschlüsselungszusage gilt nur bei aktivierter Feldverschlüsselung. `load_package --package <name>` lädt die Standardtypen mit; bei einem einzigen aktiven Typ wird er vorgewählt, bei mehreren ist die Auswahl erforderlich. Ohne Typ gibt es kein Detail-Freitextfeld. Typwechsel mit befüllten, wegfallenden Feldern erfordern eine Verlustbestätigung; sind Ursprungswerte für die handelnde Person unsichtbar, wird der Wechsel abgewiesen. Offline-Aufgaben werden ohne Detailfeld erfasst, Details werden online ergänzt. Pseudonyme und Titel bleiben unverschlüsselt: kurz halten, keine Klarnamen und keine Angaben nach Art. 9 DSGVO. Das Paketformat bleibt Schema v1; der getrennte [Facility-Export](facility-export-schema.md) verwendet Schema v2.
 
 ## 1. Aufbau
 
@@ -96,7 +109,7 @@ field_templates:
 document_types:
   - slug: kontakt            # Lookup-Key — muss exakt stimmen
     name: Kontakt
-    entity_type: event       # event | client | case — unveränderlich
+    entity_type: event       # event | client | case | episode | workitem — unveränderlich
     tally_enabled: true      # explizites Opt-in für die Strichliste
     # system_type: crisis    # nur ban | crisis, nur bei entity_type: event;
     #                        # wo einer existiert, immer mitführen
@@ -184,7 +197,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 |---|---|---|---|
 | `slug` | Slug | **Pflicht** | Lookup-Key, facility-weit eindeutig, unveränderlich |
 | `name` | nicht-leerer String | **Pflicht** | muss im Paket eindeutig sein |
-| `entity_type` | `event`, `client`, `case` | `event` | **Unveränderlich** nach dem Anlegen |
+| `entity_type` | `event`, `client`, `case`, `episode`, `workitem` | `event` | **Unveränderlich** nach dem Anlegen |
 | `tally_enabled` | Bool oder Schlüssel weglassen | *(nicht anfassen)* | Explizites Opt-in für die Strichliste. `true`/`false` wird geschrieben; fehlt der Schlüssel, bleibt ein bestehender Konfigurationswert erhalten, bei einem neuen Typ gilt der Modell-Default `false` |
 | `system_type` | `ban`, `crisis` oder `null` | `null` | Nur bei `entity_type: event`. **Unveränderlich**, Ausnahme `null → Wert`. Nur die beiden Werte mit App-Wirkung (#1850) |
 | `sensitivity` | `normal`, `elevated`, `high` | `normal` | steuert Rollen-Sichtbarkeit |

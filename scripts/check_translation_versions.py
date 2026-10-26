@@ -55,6 +55,8 @@ TRANSLATED_FILES = [
     "docs/en/security-notes.md",
     "docs/en/threat-model.md",
     "docs/en/toms.md",
+    "docs/en/package-standard-fields.md",
+    "docs/en/shelter-standard-fields.md",
 ]
 
 

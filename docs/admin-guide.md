@@ -750,7 +750,7 @@ Anlaufstelle kennt fünf Rollen — vier facility-gebunden, eine facility-überg
 | `facility_admin` | Anwendungsbetreuung | eine Einrichtung | Vollzugriff in der eigenen Einrichtung: Benutzerverwaltung, Typ-/Sensitivitätskonfiguration, Audit-Log (`/audit/`), DSGVO-Paket. Kann **nicht** in andere Einrichtungen schauen. |
 | `lead` | Leitung | eine Einrichtung | Auswertungen, Löschanträge genehmigen, alle Fälle der Einrichtung einsehen, Datenexport |
 | `staff` | Fachkraft | eine Einrichtung | Kontakte, Fälle, Dokumentation erfassen und bearbeiten |
-| `assistant` | Assistenz | eine Einrichtung | Eingeschränkte Erfassung; Personen beider Kontaktstufen einsehen, Zusatzfelder nur bei wirksamer Sensibilität „Normal“; keine internen Personennotizen |
+| `assistant` | Assistenz | eine Einrichtung | Eingeschränkte Erfassung; Personen beider Kontaktstufen einsehen, Zusatzfelder nur bei wirksamer Sensibilität „Normal“; keine erhöhten Standard-Notizen der Person |
 
 > **Trennung System ↔ Anwendung:** `super_admin` betreut Hosting und Bootstrap, `facility_admin` betreut Konfiguration und Nutzer **innerhalb** einer Einrichtung. Diese Trennung ist DSGVO-relevant: Der Super-Admin sieht keine fachlichen Inhalte einer Einrichtung, ohne dass dies im AuditLog (`SYSTEM_VIEW`) auftaucht. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md).
 
@@ -2149,14 +2149,14 @@ Das Audit-Log ist **append-only** und unveränderlich. Es protokolliert automati
 |---|---|
 | Anmeldung, Abmeldung | Jeder Login/Logout |
 | Anmeldung fehlgeschlagen | Falsches Passwort |
-| Daten der Stufe „Mit Zusatzangaben" eingesehen | Aufruf der **Personen-Detailseite** (`/clients/<id>/`) einer Person dieser Stufe und Anzeige ihrer Freitext-Notizen in der **Freitext-Prüfliste** (`VIEW_QUALIFIED`, einmal je angezeigter Person und Seitenaufruf, auch in der Einzeltextansicht); Personenliste, Bearbeiten-Formular, Ereignis, Fall und Suchtreffer erzeugen keinen solchen Eintrag |
+| Daten der Stufe „Mit Zusatzangaben" eingesehen | Aufruf der **Personen-Detailseite** (`/clients/<id>/`) einer Person dieser Stufe (`VIEW_QUALIFIED`, einmal je Seitenaufruf); Personenliste, Bearbeiten-Formular, Freitext-Prüfliste, Ereignis, Fall und Suchtreffer erzeugen keinen solchen Eintrag |
 | Export | Datenexport durch Benutzer — auch Datenauskünfte zu einzelnen Personen und der Aufruf des externen Berichts am Bildschirm. **Herausgegebene Berichtsdateien** (CSV/PDF/JSON/XML mit Berichtszeitraum) sind eine Teilmenge davon: nur sie unterliegen nicht der Aufbewahrungsfrist und erscheinen in der [Freigabe-Übersicht](#8-statistik-snapshots--materialized-view) |
 | Löschung | Manuell oder durch `enforce_retention` |
 | Stufenwechsel | Änderung des Kontaktstatus einer Person |
 | Einstellungen geändert | Änderungen an Einrichtungseinstellungen |
 | Download | Herunterladen eines Anhangs aus dem Dateitresor |
 | Ereignis aktualisiert | Inhaltliche Änderung eines Ereignisses; im Detail stehen nur Dokumentationstyp und geänderte Feldbezeichner |
-| Episode aktualisiert | Änderung von Titel, Beschreibung oder Zeitraum einer Episode |
+| Episode aktualisiert | Änderung von Titel, Zusatzfeldern oder Zeitraum einer Episode |
 | Wirkungsziel aktualisiert | Änderung von Titel oder Beschreibung eines Wirkungsziels |
 | Ereignis dem Fall zugeordnet | Neue oder geänderte Zuordnung eines Ereignisses zu einem Fall |
 | Ereignis vom Fall gelöst | Entfernen der Zuordnung eines Ereignisses zu einem Fall |
@@ -2246,8 +2246,8 @@ Neben „Wiederherstellen" steht dort die Aktion **„Jetzt endgültig anonymisi
 
 | Aspekt | Verhalten |
 |---|---|
-| **Wirkung** | **Unwiderruflich.** Pseudonym, Notizen, Zusatzfelder sowie Fall- und Ereignisinhalte werden entfernt; es bleibt ein anonymes Statistik-Aggregat. Eine Wiederherstellung ist danach **nicht** mehr möglich. Ein Bestätigungsdialog nennt das ausdrücklich. |
-| **Was sofort passiert — und was mit dem nächtlichen Lauf** (Refs #2085) | **Sofort:** Pseudonym, Notizen, Zusatzfelder, Fall- und Episodeninhalte, die Inhalte der Ereignisse selbst, die Zeitstempel-Generalisierung und die Dateianhänge. Die Person trägt danach kein Personendatum mehr. **Mit dem nächsten Aufbewahrungslauf** (`enforce_retention`, in der Voreinstellung nachts um 3 Uhr): die **älteren Fassungen** der Ereignis-Dokumentation — also die Versionshistorie, die jede Speicherung eines Ereignisses anlegt. Grund ist die Rollentrennung der Datenbank: diese Fassungen sind schreibgeschützt, und der Webprozess hat die dafür nötigen Rechte bewusst **nicht** (siehe `ops-runbook.md` § 9.5). Erfolgsmeldung und Bestätigungsdialog sagen das ausdrücklich. Muss eine Tilgung sofort vollständig abgeschlossen sein, lässt die Systembetreuung den Aufbewahrungslauf einmal von Hand laufen. Ein **Legal Hold**, der in diesem Fenster eintrifft, stellt die Fassungen zurück — sie bleiben dann vollständig erhalten. |
+| **Wirkung** | **Unwiderruflich.** Pseudonym und typgebundene Zusatzfelder (einschließlich Standard-Notizen) sowie Fall- und Ereignisinhalte werden entfernt; es bleibt ein anonymes Statistik-Aggregat. Eine Wiederherstellung ist danach **nicht** mehr möglich. Ein Bestätigungsdialog nennt das ausdrücklich. |
+| **Was sofort passiert — und was mit dem nächtlichen Lauf** (Refs #2085) | **Sofort:** Pseudonym, typgebundene Zusatzfelder (einschließlich Standard-Notizen), Fall-, Episoden- und Aufgabeninhalte, die Inhalte der Ereignisse selbst, die Zeitstempel-Generalisierung und die Dateianhänge. Die Person trägt danach kein Personendatum mehr. **Mit dem nächsten Aufbewahrungslauf** (`enforce_retention`, in der Voreinstellung nachts um 3 Uhr): die **älteren Fassungen** der Ereignis-Dokumentation — also die Versionshistorie, die jede Speicherung eines Ereignisses anlegt. Grund ist die Rollentrennung der Datenbank: diese Fassungen sind schreibgeschützt, und der Webprozess hat die dafür nötigen Rechte bewusst **nicht** (siehe `ops-runbook.md` § 9.5). Erfolgsmeldung und Bestätigungsdialog sagen das ausdrücklich. Muss eine Tilgung sofort vollständig abgeschlossen sein, lässt die Systembetreuung den Aufbewahrungslauf einmal von Hand laufen. Ein **Legal Hold**, der in diesem Fenster eintrifft, stellt die Fassungen zurück — sie bleiben dann vollständig erhalten. |
 | **Wozu** | (a) **Art.-17-Sofortlöschung**, wenn eine betroffene Person auf unverzüglicher Löschung besteht und 30 Tage Papierkorb nicht vertretbar sind. (b) **Auflösen von Konfigurations-Blockaden**: eine Person im Papierkorb behält ihren Dokumentationstyp und ihre Feldwerte und blockiert damit das Löschen dieses Typs bzw. der Feldvorlage. Bisher blieb nur Wiederherstellen (kurzzeitige Daten-Auferstehung) oder Warten. Die Blocker-Meldung der Konfigurations-Oberfläche weist den Papierkorb-Anteil jetzt aus und verlinkt dorthin. |
 | **Grenze: Aufbewahrungssperre** | Besteht ein **aktiver Legal Hold** auf der Person oder auf einem ihrer Ereignisse, wird die Aktion mit einer Fehlermeldung abgewiesen — genau wie der nächtliche Retention-Lauf (Refs #1066, #1756). Eine manuelle Aktion darf eine Aufbewahrungssperre nicht aushebeln. Erst Hold aufheben, dann anonymisieren. |
 | **Grenze: nur im Papierkorb** | Die Aktion wirkt ausschließlich auf bereits soft-gelöschte Personen. Der Vier-Augen-Antragsweg bleibt der einzige Weg **in** den Papierkorb — es gibt keinen Direktpfad an der Genehmigung vorbei. |
@@ -2264,7 +2264,7 @@ Seit [ADR-044](adr/044-fall-loeschpfad.md) lässt sich ein **einzelner Fall** l�
 | **Wer löscht?** | Fachkräfte und aufwärts, aus der Fallakte heraus (Menü „Weitere Aktionen" → **Löschen**). |
 | **Vier Augen oder direkt?** | **Gestaffelt nach der Kontaktstufe der Person** — steht sie auf „Mit Zusatzangaben", entsteht ein Löschantrag, der von einer zweiten Person mit dem Recht *Löschbestätigung* bestätigt werden muss; sonst wandert der Fall direkt in den Papierkorb. Dieselbe Staffelung gilt schon beim Löschen eines **Ereignisses** derselben Person. Bestätigt wird über dieselbe Liste **Datenschutz → Löschanträge** wie bei Personen und Ereignissen. |
 | **Welche Frist?** | **Keine eigene.** Es gilt `client_trash_days` (§ 2.3) — bewusst kein zweiter Fristbegriff, der in Datenschutzerklärung und Folgenabschätzung erklärt und gepflegt werden müsste. |
-| **Was passiert nach Fristablauf?** | Der Fall wird **redigiert, nicht hart gelöscht**: Titel, Beschreibung, Zusatzfelder, Episoden, Wirkungsziele, Meilensteine und die fall-eigenen Dateien (samt verschlüsselter Ablage) sind weg; die Fall-Zeile bleibt als anonymes Aggregat stehen. Ein Hard-Delete risse Episoden, Ziele und Meilensteine per Kaskade mit. |
+| **Was passiert nach Fristablauf?** | Der Fall wird **redigiert, nicht hart gelöscht**: Titel, typgebundene Zusatzfelder (einschließlich Standardbeschreibung), Episoden, Wirkungsziele, Meilensteine und die fall-eigenen Dateien (samt verschlüsselter Ablage) sind weg; die Fall-Zeile bleibt als anonymes Aggregat stehen. Ein Hard-Delete risse Episoden, Ziele und Meilensteine per Kaskade mit. |
 
 Den **Papierkorb** (`/cases/trash/`) öffnet die Anwendungsbetreuung über die Kopfzeile der Fallliste; er steht wie der Personen-Papierkorb in keiner Navigation. Dort stehen je Zeile **„Wiederherstellen"** (holt Episoden, Ziele und Anhänge vollständig zurück) und **„Jetzt endgültig anonymisieren"** — dieselbe Vorzieh-Aktion wie bei Personen, mit denselben Grenzen: nur aus dem Papierkorb heraus, nicht zweimal, und **nicht** bei einer aktiven Aufbewahrungssperre (Legal Hold auf dem Fall, auf einem seiner Ereignisse oder auf der Person). Ein bereits endgültig anonymisierter Fall ist als solcher ausgewiesen und bietet kein „Wiederherstellen" mehr an — es holte nur eine leere Hülle zurück.
 
@@ -2332,10 +2332,10 @@ Enthalten sind (Refs #1752):
 
 | Kategorie | Inhalt |
 |---|---|
-| Stammdaten | Pseudonym, Kontaktstufe, Altersgruppe, **Notizen**, Aktiv-Status, K-Anonymisierungs-Status, Papierkorb-Status (gelöscht am/von), Erstell- und Änderungszeitpunkt, Zusatzfelder inkl. nicht mehr zugeordneter Felder (entschlüsselt) |
-| Fälle | Titel, Beschreibung, Status, Fristen, Fallverantwortung, Papierkorb-Status, Zusatzfelder |
+| Stammdaten | Pseudonym, Kontaktstufe, Altersgruppe, Aktiv-Status, K-Anonymisierungs-Status, Papierkorb-Status (gelöscht am/von), Erstell- und Änderungszeitpunkt, Dokumentationstyp und Zusatzfelder inkl. nicht mehr zugeordneter Felder (entschlüsselt, einschließlich Standard-Notizen) |
+| Fälle | Titel, Status, Fristen, Fallverantwortung, Papierkorb-Status, Dokumentationstyp und entschlüsselte Zusatzfelder (einschließlich Standardbeschreibung) |
 | Gelöschte Fälle | Fälle im Papierkorb als **eigener Abschnitt** (Refs #1818): dieselben Angaben plus „gelöscht am/von" und der Tilgungsstempel — bis zur endgültigen Anonymisierung sind sie gespeicherter Datenbestand und gehören in die Auskunft |
-| Episoden | Titel, Beschreibung, Beginn/Ende je Fall |
+| Episoden | Titel, Beginn/Ende je Fall, Dokumentationstyp, entschlüsselte Zusatzfelder und verwaiste Felder (einschließlich Standardbeschreibung) |
 | Wirkungsziele | Ziele samt Meilensteinen und Erreichungsstand |
 | Ereignisse | Dokumentationstyp, Zeitpunkt, Fall-/Episoden-Bezug, Felddaten (entschlüsselt) |
 | Gelöschte Ereignisse | Existenz der noch nicht endgültig entfernten Ereignisse (Papierkorb) samt **Löschzeitpunkt und auslösender Person** (Refs #2157) — bei einer Löschung durch den Aufbewahrungslauf bleibt die Person leer, weil dort niemand handelt |
@@ -2344,7 +2344,7 @@ Enthalten sind (Refs #1752):
 | Berichtigungsanträge | Art.-16-Anträge zur Person (Refs #1796, [ADR-041](adr/041-berichtigungsworkflow-intern.md)) in **allen** Status (offen, genehmigt, abgelehnt): betroffenes Feld, bisheriger und gewünschter Wert (entschlüsselt), Begründung, Prüfvermerk, beantragende und prüfende Person, Zeitpunkte |
 | Aufbewahrung | Aufbewahrungssperren (Legal Holds, Art. 17 Abs. 3 — **nicht** Art. 18) und offene Löschvorschläge samt Frist und Kategorie |
 | Einschränkung der Verarbeitung | Sperrvermerk nach Art. 18 DSGVO (Refs #2045), sofern gesetzt: Rechtsgrund, Zeitpunkt und setzende Person |
-| Aufgaben | Titel, Beschreibung, Typ, Status, Priorität, Zuständigkeit, Fristen |
+| Aufgaben | Titel, Aufgabentyp, Status, Priorität, Zuständigkeit, Fristen, Dokumentationstyp, entschlüsselte Zusatzfelder und verwaiste Felder (einschließlich Standarddetails) |
 | Aktivitäten | Zeitstrom-Einträge zur Person, ihren Fällen, Ereignissen und Aufgaben |
 | Merkliste | Zeitpunkte, zu denen die Personenakte aufgerufen bzw. als Favorit markiert wurde |
 | Zusammenführungen | Herkunft nach Duplikat-Merges (Refs #1876, [ADR-045](adr/045-personen-merge.md) §7): welche Akte wann in diese überführt wurde und ob sie schon endgültig anonymisiert ist; die Auskunft der aufgelösten Akte nennt umgekehrt „Zusammengeführt in" |
@@ -2566,8 +2566,14 @@ Snapshots sind im Django-Admin unter **Statistik-Snapshots** einsehbar (nur Lese
 
 ## Freitext-Review organisieren
 
-Der Navigationseintrag **Freitext-Review** (`/free-text-review/`) stellt modellbezogene Listen innerhalb der aktuellen Einrichtung bereit. Personen-Notizen, Fall- und Episodenbeschreibungen sind Fachkräften aufwärts vorbehalten; Aufgabenbeschreibungen und unverschlüsselte Ereignis-Textfelder sind ab Assistenz innerhalb ihrer bestehenden Leserechte zugänglich. Typ- und Feldschutz von Ereignissen gelten zusätzlich. Systemadministration bekommt keine fachlichen Reviewrechte.
+Der Navigationseintrag **Freitext-Review** (`/free-text-review/`) zeigt ausschließlich nicht leere, unverschlüsselte Ereignis-Text-/Textarea-Werte innerhalb der aktuellen Einrichtung. Assistenz und höhere Einrichtungsrollen lesen nur nach bestehender Typ- und Feldsichtbarkeit. Titel, Pseudonyme und dynamische Personen-, Fall-, Episoden- und Aufgabenfelder gehören nicht zur Prüfliste. Systemadministration bekommt keine fachlichen Reviewrechte.
 
 Die Prüfung speichert Zielmodell, Ziel-UUID, Feldschlüssel, „geprüft bis“, prüfendes Konto, Prüfzeit und einen serverseitigen HMAC-Inhaltsfingerprint, keine Kopie des Freitexts. Facility-Scoping und eine direkte RLS-Policy schützen diese Metadaten. Textänderungen, Ablauf des Datums und ein Wechsel von `SECRET_KEY` machen bisherige Markierungen unwirksam. Manuelles Markieren und Zurücknehmen werden mit Ziel/Feld/Datum statt Text oder Musterfundstellen auditiert. Bei Löschung und Anonymisierung über die vorgesehenen Speicherpfade werden nicht mehr zugehörige Markierungen entfernt; die Audit-Historie bleibt bestehen.
 
 Vereinbaren Sie Prüffristen und Verantwortlichkeiten organisatorisch. Die lokale Mustererkennung ist heuristisch und bietet keine DSGVO-Garantie. Hinweise führen keine Übernahme, Entschlüsselung, Sensitivity- oder Textänderung aus. Für die Kontakterfassung ist ein tatsächlich verschlüsseltes Feld bewusst auszuwählen. Der Review ergänzt die vorhandenen Klartextfelder und verschlüsselt sie nicht; er ist nur online verfügbar. Für die Aktivierung genügen die regulären Schema-Migrationen, ohne Datenübernahme oder zusätzlichen Seed-Lauf.
+
+## Typgebundene Standardfelder
+
+Alle fünf mitgelieferten Pakete enthalten Typen für Person, Fall, Episode und Aufgabe mit normaler Typ-Sensibilität. Deren Felder `client-notes` und `standard-description` sind verschlüsselt und erhöht, `workitem-details` ist verschlüsselt und normal. Assistenz liest Aufgabendetails, nicht die anderen drei Standardfelder. Sichtbarkeit folgt der höheren Typ-/Feldstufe und der Rolle; Verschlüsselung folgt der Feldkonfiguration. `load_package --package <name>` lädt diese Definitionen. Ein einziger aktiver Typ wird vorgewählt, mehrere aktive Typen verlangen eine Auswahl. Typwechsel mit Verlust gefüllter Felder brauchen eine Bestätigung und werden abgewiesen, wenn ursprüngliche Werte für die handelnde Person unsichtbar sind. Ohne Typ gibt es kein Freitext-Detailfeld. Offline-Aufgaben haben kein Detailfeld; Details werden online ergänzt.
+
+Die Personenanonymisierung leert diese dynamischen Felder sowie zugehörige Titel und Zieltexte. Art.-15-Auskünfte enthalten Dokumentationstypen, entschlüsselte Standard-/Zusatzfelder und verwaiste Werte statt eigener Notiz- oder Beschreibungsspalten für Person, Fall, Episode und Aufgabe. Der [Facility-Export nutzt Schema v2](facility-export-schema.md). Update, Sicherung, manuelles Sichern von Texten und Schlüsselring-/Restore-Prüfung stehen im [Changelog](../CHANGELOG.md#unreleased).
