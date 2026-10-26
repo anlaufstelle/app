@@ -436,11 +436,10 @@ verify-translation-versions:
 changelog-check:
 	$(PYTHON) scripts/check_changelog_unreleased.py
 
-# Guard (Refs #1137): kein ausgelieferter Test (src/tests/) darf hart auf
-# Pfade verweisen, die der Public-/Stage-Release-Snapshot strippt
-# (dev-ops/, scripts/dev/, docs/ai/, CLAUDE.md, …) — sonst fällt der Test erst
-# auf der public Stage-CI mit FileNotFoundError um. Exclude-Liste als Single
-# Source aus dev-ops/release/verify-leak.sh. Frühes Dev-Gate vor pytest.
+# Guard (Refs #1137): shipped tests must not reference development-only
+# paths removed from release snapshots. Otherwise public CI fails with
+# FileNotFoundError. Read exclusions from dev-ops/release/verify-leak.sh
+# as the single source of truth; check before pytest.
 verify-release-test-guard:
 	$(PYTHON) scripts/verify_release_test_guard.py
 # Drift-Guard fuer vendored JS-Libs (Refs #1076): vergleicht die in
@@ -465,14 +464,9 @@ verify-css-fresh:
 	rm -f "$$tmp"; \
 	echo "✓ styles.css ist frisch"
 
-# Drift-Guard (Refs #1403): AGENTS.md ist die tool-neutrale SSOT der Agent-
-# Konventionen; CLAUDE.md verweist darauf und dupliziert sie nicht (12.11).
-#
-# Public-Tree-Verhalten: build-release strippt AGENTS.md + CLAUDE.md, das
-# Guard-Skript (scripts/, nicht scripts/dev/) bleibt aber im Snapshot. Ohne
-# die zu pruefenden Dateien wuerde `make ci` im Public-/Stage-Tree strukturell
-# failen. Darum hier ein sauberer Skip mit Hinweis, wenn AGENTS.md ODER das
-# Skript fehlt (Doku: docs/dev/release-exclusions.md).
+# Documentation consistency guard (Refs #1403).
+# Release snapshots omit internal instructions and development tools.
+# The target remains available and skips when its inputs are absent.
 verify-agent-docs-sync:
 	@if [ -f AGENTS.md ] && [ -f scripts/dev/verify_agent_docs_sync.py ]; then \
 		$(PYTHON) scripts/dev/verify_agent_docs_sync.py; \
