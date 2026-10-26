@@ -294,15 +294,15 @@ def test_precache_includes_offline_sync_core_assets(browser, base_url):
         for asset in (
             "/static/js/csrf.js",
             "/static/js/url-patterns.js",
-            "/static/js/offline-queue.js",
-            "/static/js/offline-client.js",
-            "/static/js/offline-edit.js",
+            "/static/js/offline-queue.min.js",
+            "/static/js/offline-client.min.js",
+            "/static/js/offline-edit.min.js",
             # Refs #1482: Renderer/Nav/Koordinator der base.html-basierten
             # In-Place-Shells — ohne Pre-Cache rendert ein Offline-Kaltstart
             # (leerer SWR-Runtime-Cache nach CACHE_NAME-Bump) nichts.
             "/static/js/alpine-csp.min.js",
             "/static/js/alpine/base-layout.js",
-            "/static/js/sync-orchestrator.js",
+            "/static/js/sync-orchestrator.min.js",
             # Refs #1523 (#1499): Renderer der pk-losen Create-Shells
             # (Event/WorkItem) — ohne Pre-Cache faellt der Kalt-Offline-Pfad
             # (/events/new/, /workitems/new/) nach einem SW-Update ohne Renderer.
