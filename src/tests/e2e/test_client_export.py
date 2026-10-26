@@ -39,11 +39,15 @@ def _seed_qualified_client(e2e_env):
     suffix = uuid.uuid4().hex[:8]
     pseudonym = f"E2E-Auskunft-{suffix}"
     script = (
-        "from core.models import Client, Facility;"
+        "from core.models import Client, DocumentType, Facility;"
         " from core.models.user import User;"
         " f = Facility.objects.get(name='Hauptstelle');"
         " u = User.objects.get(username='emma');"
-        f" Client.objects.create(facility=f, contact_stage='qualified', pseudonym='{pseudonym}', created_by=u)"
+        # The export carries ``document_type``/``dynamic_data`` only for a typed person.
+        " t = DocumentType.objects.filter(facility=f, entity_type='client', is_active=True).first();"
+        " assert t is not None, 'the seed provides an active person type';"
+        f" Client.objects.create(facility=f, contact_stage='qualified', pseudonym='{pseudonym}', created_by=u,"
+        "  document_type=t)"
     )
     _shell(e2e_env, script)
     return pseudonym
