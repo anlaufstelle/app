@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 15:21+0200\n"
+"POT-Creation-Date: 2026-10-26 20:51+0100\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1196,20 +1196,6 @@ msgstr "Titel"
 msgid "Beschreibung"
 msgstr "Beschreibung"
 
-#: src/core/models/case.py:45
-msgid ""
-"Frei-Text zum Fall. Dieses Feld wird nicht verschlüsselt gespeichert — bitte "
-"keine Klarnamen und keine besonders schützenswerten Angaben zu Gesundheit, "
-"Sucht, Herkunft, Religion oder Sexualität (besondere Kategorien "
-"personenbezogener Daten, Art. 9 DSGVO). Solche Angaben gehören in ein "
-"Zusatzfeld eines Kontakts mit der Sensibilität „Hoch“."
-msgstr ""
-"Frei-Text zum Fall. Dieses Feld wird nicht verschlüsselt gespeichert — bitte "
-"keine Klarnamen und keine besonders schützenswerten Angaben zu Gesundheit, "
-"Sucht, Herkunft, Religion oder Sexualität (besondere Kategorien "
-"personenbezogener Daten, Art. 9 DSGVO). Solche Angaben gehören in ein "
-"Zusatzfeld eines Kontakts mit der Sensibilität „Hoch“."
-
 #: src/core/models/case.py:57 src/core/models/import_job.py:104
 #: src/core/models/rectification.py:94 src/core/models/retention.py:47
 #: src/core/models/workitem.py:87 src/core/models/workitem.py:211
@@ -1359,24 +1345,6 @@ msgstr "Altersgruppe der Person zum Zeitpunkt der Erfassung"
 #: src/templates/core/export/client_data_pdf.html:40
 msgid "Notizen"
 msgstr "Notizen"
-
-#: src/core/models/client.py:69
-msgid ""
-"Interne Notizen, nur für Fachkräfte sichtbar. Dieses Feld wird nicht "
-"verschlüsselt gespeichert — bitte hier keine Klarnamen notieren und keine "
-"besonders schützenswerten Angaben zu Gesundheit, Sucht, Herkunft, Religion "
-"oder Sexualität (besondere Kategorien personenbezogener Daten, Art. 9 "
-"DSGVO). Solche Angaben gehören in ein Zusatzfeld mit der Sensibilität "
-"„Hoch“; das wird verschlüsselt gespeichert. Einrichten kann das die "
-"Anwendungsbetreuung."
-msgstr ""
-"Interne Notizen, nur für Fachkräfte sichtbar. Dieses Feld wird nicht "
-"verschlüsselt gespeichert — bitte hier keine Klarnamen notieren und keine "
-"besonders schützenswerten Angaben zu Gesundheit, Sucht, Herkunft, Religion "
-"oder Sexualität (besondere Kategorien personenbezogener Daten, Art. 9 "
-"DSGVO). Solche Angaben gehören in ein Zusatzfeld mit der Sensibilität "
-"„Hoch“; das wird verschlüsselt gespeichert. Einrichten kann das die "
-"Anwendungsbetreuung."
 
 #: src/core/models/client.py:95 src/core/models/document_type.py:98
 #: src/core/models/field_template.py:83 src/core/models/organization.py:37
@@ -1576,18 +1544,6 @@ msgstr "Dokumentationstyp-Felder"
 #: src/core/models/document_type_field.py:73
 msgid "Die Feldgruppe muss zum selben Dokumentationstyp gehören."
 msgstr "Die Feldgruppe muss zum selben Dokumentationstyp gehören."
-
-#: src/core/models/episode.py:28
-msgid ""
-"Frei-Text zur Episode. Dieses Feld wird nicht verschlüsselt gespeichert — "
-"bitte keine Klarnamen und keine besonders schützenswerten Angaben zu "
-"Gesundheit, Sucht, Herkunft, Religion oder Sexualität (besondere Kategorien "
-"personenbezogener Daten, Art. 9 DSGVO)."
-msgstr ""
-"Frei-Text zur Episode. Dieses Feld wird nicht verschlüsselt gespeichert — "
-"bitte keine Klarnamen und keine besonders schützenswerten Angaben zu "
-"Gesundheit, Sucht, Herkunft, Religion oder Sexualität (besondere Kategorien "
-"personenbezogener Daten, Art. 9 DSGVO)."
 
 #: src/core/models/episode.py:47 src/core/models/event.py:53
 #: src/templates/core/export/client_data_pdf.html:247
@@ -2747,18 +2703,6 @@ msgstr "Priorität"
 #: src/core/models/workitem.py:95
 msgid "Dringend = sofortige Bearbeitung, Wichtig = zeitnah, Normal = regulär"
 msgstr "Dringend = sofortige Bearbeitung, Wichtig = zeitnah, Normal = regulär"
-
-#: src/core/models/workitem.py:102
-msgid ""
-"Frei-Text zur Aufgabe. Dieses Feld wird nicht verschlüsselt gespeichert — "
-"bitte keine Klarnamen und keine besonders schützenswerten Angaben zu "
-"Gesundheit, Sucht, Herkunft, Religion oder Sexualität (besondere Kategorien "
-"personenbezogener Daten, Art. 9 DSGVO)."
-msgstr ""
-"Frei-Text zur Aufgabe. Dieses Feld wird nicht verschlüsselt gespeichert — "
-"bitte keine Klarnamen und keine besonders schützenswerten Angaben zu "
-"Gesundheit, Sucht, Herkunft, Religion oder Sexualität (besondere Kategorien "
-"personenbezogener Daten, Art. 9 DSGVO)."
 
 #: src/core/models/workitem.py:120
 #: src/templates/components/_workitem_row.html:59
@@ -12581,14 +12525,6 @@ msgstr "Änderbar:"
 msgid "Beispiel:"
 msgstr "Beispiel:"
 
-#: src/templates/core/config/document_types/form.html:56
-msgid "Legt fest, wofür der Typ gilt: Ereignis, Person oder Fall. Nach dem Anlegen nicht änderbar."
-msgstr "Legt fest, wofür der Typ gilt: Ereignis, Person oder Fall. Nach dem Anlegen nicht änderbar."
-
-#: src/templates/core/config/document_types/form.html:57
-msgid "Ereignis-Typen dokumentieren Kontakte im Zeitstrom; nur sie nutzen Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und Strichliste. Person-Typen ergänzen die Personenakte um eigene Felder, Fall-Typen den Fall."
-msgstr "Ereignis-Typen dokumentieren Kontakte im Zeitstrom; nur sie nutzen Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und Strichliste. Person-Typen ergänzen die Personenakte um eigene Felder, Fall-Typen den Fall."
-
 #: src/templates/core/config/document_types/form.html:58
 #: src/templates/core/config/document_types/form.html:68
 msgid "Nach dem Anlegen unveränderbar. Falsch gewählt? Den Typ deaktivieren und einen neuen anlegen."
@@ -14859,3 +14795,310 @@ msgstr "Konfigurierbare Ereignisfristen, ergänzt durch die Höchstfrist (verkü
 #: src/templates/base.html:217
 msgid "Offline-Schlüssel wird vorbereitet. Bitte kurz warten."
 msgstr "Offline-Schlüssel wird vorbereitet. Bitte kurz warten."
+
+#: src/core/forms/cases.py:45 src/core/forms/clients.py:115
+#: src/core/forms/episodes.py:26 src/core/forms/workitems.py:59
+msgid "Kurz halten: keine Klarnamen und keine Angaben nach Art. 9 DSGVO. Dieses Feld wird unverschlüsselt gespeichert."
+msgstr "Kurz halten: keine Klarnamen und keine Angaben nach Art. 9 DSGVO. Dieses Feld wird unverschlüsselt gespeichert."
+
+#: src/core/forms/cases.py:142 src/core/forms/clients.py:188
+#: src/core/forms/entity_details.py:68 src/core/forms/entity_details.py:88
+msgid "Keine Berechtigung für diesen Dokumentationstyp."
+msgstr "Keine Berechtigung für diesen Dokumentationstyp."
+
+#: src/core/forms/entity_details.py:72
+msgid "Bitte prüfen Sie die zusätzlichen Angaben."
+msgstr "Bitte prüfen Sie die zusätzlichen Angaben."
+
+#: src/core/forms/free_text_review.py:16
+msgid "Modell"
+msgstr "Modell"
+
+#: src/core/forms/free_text_review.py:18
+msgid "Geändert bis"
+msgstr "Geändert bis"
+
+#: src/core/forms/free_text_review.py:22
+msgid "Erfasst oder geprüft von"
+msgstr "Erfasst oder geprüft von"
+
+#: src/core/forms/free_text_review.py:24
+msgid "Musterhinweis"
+msgstr "Musterhinweis"
+
+#: src/core/forms/free_text_review.py:51
+#: src/templates/core/free_text_review/partials/target.html:17
+msgid "Als geprüft markieren"
+msgstr "Als geprüft markieren"
+
+#: src/core/forms/free_text_review.py:51
+#: src/templates/core/free_text_review/partials/target.html:18
+msgid "Prüfung zurücknehmen"
+msgstr "Prüfung zurücknehmen"
+
+#: src/core/forms/free_text_review.py:53 src/core/models/free_text_review.py:22
+#: src/templates/core/free_text_review/partials/entries.html:9
+#: src/templates/core/free_text_review/partials/target.html:7
+msgid "Geprüft bis"
+msgstr "Geprüft bis"
+
+#: src/core/forms/free_text_review.py:64
+#: src/core/services/free_text_review.py:278
+msgid "Bitte wählen Sie heute oder ein zukünftiges Datum."
+msgstr "Bitte wählen Sie heute oder ein zukünftiges Datum."
+
+#: src/core/forms/free_text_review.py:66
+msgid "Bitte laden Sie die Liste neu und prüfen Sie den Text erneut."
+msgstr "Bitte laden Sie die Liste neu und prüfen Sie den Text erneut."
+
+#: src/core/models/audit.py:17
+msgid "Freitext geprüft"
+msgstr "Freitext geprüft"
+
+#: src/core/models/audit.py:18
+msgid "Freitext-Prüfung zurückgenommen"
+msgstr "Freitext-Prüfung zurückgenommen"
+
+#: src/core/models/mixins.py:196
+msgid "Der Dokumentationstyp passt nicht zur Entität."
+msgstr "Der Dokumentationstyp passt nicht zur Entität."
+
+#: src/core/nav.py:666 src/templates/core/free_text_review/list.html:3
+#: src/templates/core/free_text_review/list.html:5
+msgid "Freitext-Review"
+msgstr "Freitext-Review"
+
+#: src/core/seed/scenarios.py:79
+msgid "Kontaktladen Wärmestube"
+msgstr "Kontaktladen Wärmestube"
+
+#: src/core/seed/scenarios.py:82
+msgid "Tagesoffene, niedrigschwellige Anlaufstelle mit Komm-Struktur: viele kurze Kontakte, Versorgung vor Ort, wenig Terminbindung."
+msgstr "Tagesoffene, niedrigschwellige Anlaufstelle mit Komm-Struktur: viele kurze Kontakte, Versorgung vor Ort, wenig Terminbindung."
+
+#: src/core/seed/scenarios.py:91
+msgid "Zeigt den Standardkatalog im Alltag eines offenen Kontaktladens: Kurzkontakte, Sachleistungen, gelegentliche Krisen- und Vermittlungsgespräche."
+msgstr "Zeigt den Standardkatalog im Alltag eines offenen Kontaktladens: Kurzkontakte, Sachleistungen, gelegentliche Krisen- und Vermittlungsgespräche."
+
+#: src/core/seed/scenarios.py:99
+msgid "Beratungsstelle Falkenweg"
+msgstr "Beratungsstelle Falkenweg"
+
+#: src/core/seed/scenarios.py:101
+msgid "Offene Sprechstunde und Sozialberatung mit Terminvergabe, Fallverläufen und Wirkungszielen."
+msgstr "Offene Sprechstunde und Sozialberatung mit Terminvergabe, Fallverläufen und Wirkungszielen."
+
+#: src/core/seed/scenarios.py:108
+msgid "Zeigt ein Team in der Sozialberatung: Beratungsgespräche, Fallakten, Episoden und Auswertung über einen längeren Zeitraum."
+msgstr "Zeigt ein Team in der Sozialberatung: Beratungsgespräche, Fallakten, Episoden und Auswertung über einen längeren Zeitraum."
+
+#: src/core/seed/scenarios.py:115
+msgid "Beratungspraxis Lindenhof"
+msgstr "Beratungspraxis Lindenhof"
+
+#: src/core/seed/scenarios.py:118
+msgid "Allein arbeitende Fachkraft mit eigener Klientel — Kontakte, Aufgaben/Wiedervorlagen, Verläufe und Auswertung ohne Team-Schichtbetrieb. Eine Vertretung sichert Freigaben (z. B. Löschbestätigungen) ab, ohne im Tagesgeschäft mitzuarbeiten."
+msgstr "Allein arbeitende Fachkraft mit eigener Klientel — Kontakte, Aufgaben/Wiedervorlagen, Verläufe und Auswertung ohne Team-Schichtbetrieb. Eine Vertretung sichert Freigaben (z. B. Löschbestätigungen) ab, ohne im Tagesgeschäft mitzuarbeiten."
+
+#: src/core/seed/scenarios.py:129
+msgid "Zeigt den Solo-Betrieb: eine Fachkraft führt Beratung, Dokumentation und Auswertung allein; eine Vertretung mit Freigabebefugnis bleibt sichtbar, aber im Hintergrund."
+msgstr "Zeigt den Solo-Betrieb: eine Fachkraft führt Beratung, Dokumentation und Auswertung allein; eine Vertretung mit Freigabebefugnis bleibt sichtbar, aber im Hintergrund."
+
+#: src/core/seed/scenarios.py:138
+msgid "Awareness-Team Nachtfalter"
+msgstr "Awareness-Team Nachtfalter"
+
+#: src/core/seed/scenarios.py:139
+msgid "Awareness-Team bei Veranstaltungen: mobile, anlassbezogene Einsätze."
+msgstr "Awareness-Team bei Veranstaltungen: mobile, anlassbezogene Einsätze."
+
+#: src/core/seed/scenarios.py:144
+msgid "Zeigt Awareness-Arbeit bei Veranstaltungen: kurze, oft anonyme Kontakte während Einsätzen."
+msgstr "Zeigt Awareness-Arbeit bei Veranstaltungen: kurze, oft anonyme Kontakte während Einsätzen."
+
+#: src/core/seed/scenarios.py:149
+msgid "Jugendtreff Wilhelmshöhe"
+msgstr "Jugendtreff Wilhelmshöhe"
+
+#: src/core/seed/scenarios.py:151
+msgid "Mobile und offene Jugendarbeit mit wiederkehrenden Kontakten und Gruppenangeboten."
+msgstr "Mobile und offene Jugendarbeit mit wiederkehrenden Kontakten und Gruppenangeboten."
+
+#: src/core/seed/scenarios.py:157
+msgid "Zeigt offene Jugendarbeit: wiederkehrende Besuche, Gruppenangebote, altersgerechte Themen."
+msgstr "Zeigt offene Jugendarbeit: wiederkehrende Besuche, Gruppenangebote, altersgerechte Themen."
+
+#: src/core/seed/scenarios.py:162
+msgid "Frauenhaus Amalie"
+msgstr "Frauenhaus Amalie"
+
+#: src/core/seed/scenarios.py:165
+msgid "Frauenhaus / Gewalt-Fachberatung mit hohem Schutzbedarf — Klarname der Einrichtung bewusst symbolisch, wie in der Praxis aus Diskretionsgründen üblich."
+msgstr "Frauenhaus / Gewalt-Fachberatung mit hohem Schutzbedarf — Klarname der Einrichtung bewusst symbolisch, wie in der Praxis aus Diskretionsgründen üblich."
+
+#: src/core/seed/scenarios.py:174
+msgid "Zeigt Fachberatung mit hohem Schutzbedarf: enge Zugriffsgrenzen, sensible Dokumentation."
+msgstr "Zeigt Fachberatung mit hohem Schutzbedarf: enge Zugriffsgrenzen, sensible Dokumentation."
+
+#: src/core/services/case/episodes.py:29
+msgid "Der Dokumentationstyp muss für Episoden gelten."
+msgstr "Der Dokumentationstyp muss für Episoden gelten."
+
+#: src/core/services/case/workitems.py:712
+#: src/core/services/case/workitems.py:889
+msgid "Der Dokumentationstyp muss für Aufgaben gelten."
+msgstr "Der Dokumentationstyp muss für Aufgaben gelten."
+
+#: src/core/services/config/delete_blockers.py:394
+#, python-format
+msgid "%(entity)s: %(n)d Datensatz/Datensätze enthalten Daten unter dem Slug „%(slug)s“."
+msgstr "%(entity)s: %(n)d Datensatz/Datensätze enthalten Daten unter dem Slug „%(slug)s“."
+
+#: src/core/services/dynamic_data.py:229
+msgid "Bitte wählen Sie einen Dokumentationstyp aus."
+msgstr "Bitte wählen Sie einen Dokumentationstyp aus."
+
+#: src/core/services/dynamic_data.py:267
+msgid "Der Dokumentationstyp kann nicht gewechselt werden, solange dadurch ausgefüllte Felder verloren gehen."
+msgstr "Der Dokumentationstyp kann nicht gewechselt werden, solange dadurch ausgefüllte Felder verloren gehen."
+
+#: src/core/services/entity_details.py:59
+msgid "Bitte bestätigen Sie den Verlust der ausgefüllten Zusatzfelder beim Typwechsel."
+msgstr "Bitte bestätigen Sie den Verlust der ausgefüllten Zusatzfelder beim Typwechsel."
+
+#: src/core/services/free_text_review.py:27
+msgid "Ereignis-Freitexte"
+msgstr "Ereignis-Freitexte"
+
+#: src/core/services/free_text_review.py:269
+msgid "Die Zuordnung wurde geändert. Bitte laden Sie die Liste neu."
+msgstr "Die Zuordnung wurde geändert. Bitte laden Sie die Liste neu."
+
+#: src/core/services/free_text_review.py:280
+msgid "Der Text wurde geändert. Bitte laden Sie die Liste neu und prüfen Sie ihn erneut."
+msgstr "Der Text wurde geändert. Bitte laden Sie die Liste neu und prüfen Sie ihn erneut."
+
+#: src/core/services/sensitive_patterns.py:8
+msgid "Mögliche Telefonnummer"
+msgstr "Mögliche Telefonnummer"
+
+#: src/core/services/sensitive_patterns.py:9
+msgid "Mögliche E-Mail-Adresse"
+msgstr "Mögliche E-Mail-Adresse"
+
+#: src/core/services/sensitive_patterns.py:10
+msgid "Mögliches Datum"
+msgstr "Mögliches Datum"
+
+#: src/core/services/sensitive_patterns.py:11
+msgid "Mögliche Adresse"
+msgstr "Mögliche Adresse"
+
+#: src/core/views/mfa.py:516 src/core/views/mfa.py:658
+msgid "Andere angemeldete Geräte wurden abgemeldet."
+msgstr "Andere angemeldete Geräte wurden abgemeldet."
+
+#: src/core/views/mfa.py:523 src/core/views/mfa.py:664
+msgid "Der zweite Faktor wurde nicht geändert. Bitte versuche es erneut oder wende dich an die Administration."
+msgstr "Der zweite Faktor wurde nicht geändert. Bitte versuche es erneut oder wende dich an die Administration."
+
+#: src/templates/auth/mfa_backup_codes.html:48
+#: src/templates/auth/mfa_disable_confirm.html:11
+msgid "Andere angemeldete Geräte werden abgemeldet."
+msgstr "Andere angemeldete Geräte werden abgemeldet."
+
+#: src/templates/core/clients/_offline_workitem_fields.html:27
+msgid "Details können Sie online ergänzen."
+msgstr "Details können Sie online ergänzen."
+
+#: src/templates/core/config/document_types/confirm_delete.html:46
+#, python-format
+msgid "%(n)s Episode verweist auf diesen Typ — ein Löschen ist daher nicht möglich."
+msgid_plural "%(n)s Episoden verweisen auf diesen Typ — ein Löschen ist daher nicht möglich."
+msgstr[0] "%(n)s Episode verweist auf diesen Typ — ein Löschen ist daher nicht möglich."
+msgstr[1] "%(n)s Episoden verweisen auf diesen Typ — ein Löschen ist daher nicht möglich."
+
+#: src/templates/core/config/document_types/confirm_delete.html:54
+#, python-format
+msgid "%(n)s Aufgabe verweist auf diesen Typ — ein Löschen ist daher nicht möglich."
+msgid_plural "%(n)s Aufgaben verweisen auf diesen Typ — ein Löschen ist daher nicht möglich."
+msgstr[0] "%(n)s Aufgabe verweist auf diesen Typ — ein Löschen ist daher nicht möglich."
+msgstr[1] "%(n)s Aufgaben verweisen auf diesen Typ — ein Löschen ist daher nicht möglich."
+
+#: src/templates/core/config/document_types/form.html:60
+msgid "Legt fest, wofür der Typ gilt: Ereignis, Person, Fall, Episode oder Aufgabe. Nach dem Anlegen nicht änderbar."
+msgstr "Legt fest, wofür der Typ gilt: Ereignis, Person, Fall, Episode oder Aufgabe. Nach dem Anlegen nicht änderbar."
+
+#: src/templates/core/config/document_types/form.html:61
+msgid "Ereignis-Typen dokumentieren Kontakte im Zeitstrom; nur sie nutzen Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und Strichliste. Person-Typen ergänzen die Personenakte um eigene Felder, Fall-Typen den Fall, Episoden-Typen die Episode und Aufgaben-Typen die Aufgabe."
+msgstr "Ereignis-Typen dokumentieren Kontakte im Zeitstrom; nur sie nutzen Systemtyp, Berichtsschlüssel, Mindest-Kontaktstufe, Aufbewahrungsfrist und Strichliste. Person-Typen ergänzen die Personenakte um eigene Felder, Fall-Typen den Fall, Episoden-Typen die Episode und Aufgaben-Typen die Aufgabe."
+
+#: src/templates/core/free_text_review/list.html:6
+msgid "Prüfen Sie unverschlüsselte Ereignis-Freitexte Ihrer Einrichtung. Musterhinweise sind rein lokal und heuristisch: Treffer können falsch sein und sensible Inhalte übersehen. Eine Prüfung ist keine DSGVO-Garantie."
+msgstr "Prüfen Sie unverschlüsselte Ereignis-Freitexte Ihrer Einrichtung. Musterhinweise sind rein lokal und heuristisch: Treffer können falsch sein und sensible Inhalte übersehen. Eine Prüfung ist keine DSGVO-Garantie."
+
+#: src/templates/core/free_text_review/partials/entries.html:2
+msgid "Bitte prüfen Sie die Filtereingaben."
+msgstr "Bitte prüfen Sie die Filtereingaben."
+
+#: src/templates/core/free_text_review/partials/entries.html:8
+#: src/templates/core/free_text_review/partials/target.html:4
+msgid "Kein Muster erkannt; bitte trotzdem inhaltlich prüfen."
+msgstr "Kein Muster erkannt; bitte trotzdem inhaltlich prüfen."
+
+#: src/templates/core/free_text_review/partials/entries.html:9
+msgid "Prüfung offen"
+msgstr "Prüfung offen"
+
+#: src/templates/core/free_text_review/partials/entries.html:10
+msgid "Text prüfen"
+msgstr "Text prüfen"
+
+#: src/templates/core/free_text_review/partials/entries.html:13
+msgid "Keine sichtbaren Freitexte für diese Filter."
+msgstr "Keine sichtbaren Freitexte für diese Filter."
+
+#: src/templates/core/free_text_review/partials/entries.html:17
+msgid "Weiter"
+msgstr "Weiter"
+
+#: src/templates/core/free_text_review/partials/target.html:5
+msgid "Die Mustererkennung ist heuristisch und keine DSGVO-Garantie."
+msgstr "Die Mustererkennung ist heuristisch und keine DSGVO-Garantie."
+
+#: src/templates/core/free_text_review/partials/target.html:9
+msgid "Prüfung offen. Ein geänderter Text oder eine abgelaufene Frist benötigt eine erneute Prüfung."
+msgstr "Prüfung offen. Ein geänderter Text oder eine abgelaufene Frist benötigt eine erneute Prüfung."
+
+#: src/templates/core/free_text_review/partials/target.html:13
+msgid "Bitte prüfen Sie die Eingaben."
+msgstr "Bitte prüfen Sie die Eingaben."
+
+#: src/templates/core/free_text_review/partials/target.html:20
+msgid "Ursprungstext öffnen"
+msgstr "Ursprungstext öffnen"
+
+#: src/templates/core/free_text_review/partials/target.html:21
+msgid "Hinweise für die manuelle Bearbeitung"
+msgstr "Hinweise für die manuelle Bearbeitung"
+
+#: src/templates/core/free_text_review/partials/target.html:23
+msgid "Kontakterfassung öffnen: Inhalt bei Bedarf in einem verschlüsselten Ereignisfeld neu erfassen."
+msgstr "Kontakterfassung öffnen: Inhalt bei Bedarf in einem verschlüsselten Ereignisfeld neu erfassen."
+
+#: src/templates/core/free_text_review/partials/target.html:24
+msgid "Sensitivity prüfen: Bei Bedarf die zuständige Anwendungsbetreuung um eine höhere Schutzstufe bitten."
+msgstr "Sensitivity prüfen: Bei Bedarf die zuständige Anwendungsbetreuung um eine höhere Schutzstufe bitten."
+
+#: src/templates/core/free_text_review/partials/target.html:25
+msgid "Text neutralisieren: Den Ursprungstext bei Bedarf über die reguläre Bearbeitung ändern."
+msgstr "Text neutralisieren: Den Ursprungstext bei Bedarf über die reguläre Bearbeitung ändern."
+
+#: src/templates/core/free_text_review/partials/target.html:27
+msgid "Diese Hinweise kopieren oder entschlüsseln nichts und ändern weder Text noch Schutzstufe. Nur die Prüfmarkierung wird hier gespeichert oder zurückgenommen. Der Review ist nur online verfügbar."
+msgstr "Diese Hinweise kopieren oder entschlüsseln nichts und ändern weder Text noch Schutzstufe. Nur die Prüfmarkierung wird hier gespeichert oder zurückgenommen. Der Review ist nur online verfügbar."
+
+#: src/templates/core/free_text_review/target.html:3
+#: src/templates/core/free_text_review/target.html:6
+msgid "Freitext prüfen"
+msgstr "Freitext prüfen"
