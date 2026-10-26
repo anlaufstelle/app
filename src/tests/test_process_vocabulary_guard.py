@@ -33,7 +33,8 @@ _PROCESS_WORDS = (
 _WORD_RE = re.compile(
     r"\btabu(?!l)\w*|\b(?:"
     + "|".join(re.escape(word) for word in _PROCESS_WORDS if word != "tabu")
-    + r")\w*|\bWelle [A-Z]\b|/work/|\bCLAUDE\.md\b",
+    + r")\w*|\bWelle [A-Z]\b|/work/|\bCLAUDE\.md\b"
+    + r"|\b(?:kimi|codex|opus|sonnet|haiku|ollama|claude)\b|\bglm-[a-z0-9][\w.-]*|\bgpt-[0-9][\w.-]*",
     re.IGNORECASE,
 )
 
@@ -319,6 +320,22 @@ def test_detects_internal_references_in_javascript_tests(tmp_path: Path, text: s
     hits = scan_process_vocabulary(tmp_path)
     assert len(hits) == 1
     assert hits[0].relpath == "tests/js/example.test.mjs"
+
+
+# Assemble the tool label so the release sanitizer preserves the detection fixture.
+@pytest.mark.parametrize(
+    "label",
+    ["kimi-k3", "KIMI", "glm-5", "Co" + "dex-Re-Review", "gpt-6", "Opus", "Sonnet", "Haiku", "Ollama", "Claude"],
+)
+def test_detects_model_and_tool_labels(tmp_path: Path, label: str) -> None:
+    (tmp_path / "sample.py").write_text(f"# {label} review\n", encoding="utf-8")
+    assert len(scan_release_vocabulary(tmp_path)) == 1
+
+
+@pytest.mark.parametrize("word", ["alchemist", "codexology", "opuses", "sonnets", "haikus", "claudette", "gpt-x"])
+def test_model_patterns_preserve_unrelated_words(tmp_path: Path, word: str) -> None:
+    (tmp_path / "sample.py").write_text(f"# {word}\n", encoding="utf-8")
+    assert scan_release_vocabulary(tmp_path) == []
 
 
 def test_sync_token_does_not_hide_internal_path(tmp_path: Path) -> None:
