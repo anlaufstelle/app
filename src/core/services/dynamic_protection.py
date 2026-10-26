@@ -230,6 +230,19 @@ def dynamic_data_write(record, update_fields=None):
         yield
 
 
+def remove_encrypted_field_reviews(document_types):
+    """Clear field metadata inside the caller's protected write transaction."""
+    from core.models import FieldTemplate
+    from core.services.free_text_review import remove_target_reviews
+
+    for document_type in document_types:
+        fields = FieldTemplate.objects.for_facility(document_type.facility_id).filter(
+            document_type_fields__document_type=document_type, is_encrypted=True
+        )
+        for field_template in fields:
+            remove_target_reviews(field_template)
+
+
 def rewrite_dynamic_records(document_types):
     """Rewrite scoped live and deleted carriers in the registry's lock order.
 
@@ -261,3 +274,4 @@ def rewrite_dynamic_records(document_types):
         for record in records.iterator(chunk_size=500):
             fields = ["data_json", "search_text"] if isinstance(record, Event) else ["data_json"]
             record.save(update_fields=fields)
+    remove_encrypted_field_reviews(document_types)

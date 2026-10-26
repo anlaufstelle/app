@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import connection, transaction
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from core.models import Case, Client, DocumentType, DocumentTypeField, Event, FieldCondition, FieldGroup, FieldTemplate
@@ -262,7 +263,8 @@ def test_loader_matches_standalone_configuration_and_protection(facility, other_
 def test_loader_rollback_clears_batch_and_keeps_savepoints(facility, lead_user, monkeypatch, outcome):
     record, field = make_record(facility, lead_user, "event")
     # The loader preserves its existing immutable-encryption contract.
-    FieldTemplate.objects.filter(pk=field.pk).update(is_encrypted=True)
+    # Bypass the bulk guard only to reproduce legacy protection state.
+    QuerySet.update(FieldTemplate.objects.filter(pk=field.pk), is_encrypted=True)
     field.refresh_from_db()
     package = package_for([record], field)
     before = configuration_snapshot(facility)
@@ -357,7 +359,8 @@ def test_batch_keeps_each_row_validation_and_message(facility, other_facility, l
     elif invalid == "type":
         field.field_type = "boolean"
     elif invalid == "high":
-        FieldTemplate.objects.filter(pk=field.pk).update(sensitivity="high", is_encrypted=True)
+        # Bypass the bulk guard only to reproduce legacy protection state.
+        QuerySet.update(FieldTemplate.objects.filter(pk=field.pk), sensitivity="high", is_encrypted=True)
         record.document_type.sensitivity = "high"
         record.document_type.save()
         field.sensitivity = ""
@@ -423,7 +426,8 @@ def test_concurrent_writer_waits_until_package_rewrite_and_commit(facility, lead
 
     record, field = make_record(facility, lead_user, "event")
     # The loader preserves its existing immutable-encryption contract.
-    FieldTemplate.objects.filter(pk=field.pk).update(is_encrypted=True)
+    # Bypass the bulk guard only to reproduce legacy protection state.
+    QuerySet.update(FieldTemplate.objects.filter(pk=field.pk), is_encrypted=True)
     field.refresh_from_db()
     package = package_for([record], field)
     paused, resume, started = ThreadEvent(), ThreadEvent(), ThreadEvent()
@@ -487,7 +491,8 @@ def test_caught_batch_rewrite_failure_rolls_back_before_outer_commit(facility, l
 @pytest.mark.parametrize("failure", ["validation", "integrity"])
 def test_deferred_rewrite_errors_keep_the_package_error_contract(facility, lead_user, monkeypatch, failure):
     record, field = make_record(facility, lead_user, "event")
-    FieldTemplate.objects.filter(pk=field.pk).update(is_encrypted=True)
+    # Bypass the bulk guard only to reproduce legacy protection state.
+    QuerySet.update(FieldTemplate.objects.filter(pk=field.pk), is_encrypted=True)
     field.refresh_from_db()
     package = package_for([record], field)
     before = configuration_snapshot(facility)

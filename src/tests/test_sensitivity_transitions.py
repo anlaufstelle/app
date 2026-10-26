@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from django.core.management import call_command
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from core.forms.config import DocumentTypeForm, FieldTemplateForm
@@ -79,7 +80,8 @@ def test_field_change_rewrites_all_assigned_entities_in_its_facility(facility, l
 def test_type_change_rewrites_values_and_index(facility, lead_user, rf, entity, level):
     record, field = make_record(facility, lead_user, entity)
     # An encrypted template may still have a pending plaintext value before this mutation.
-    FieldTemplate.objects.filter(pk=field.pk).update(is_encrypted=True)
+    # Bypass the bulk guard only to reproduce legacy protection state.
+    QuerySet.update(FieldTemplate.objects.filter(pk=field.pk), is_encrypted=True)
     doc_type = record.document_type
     form = DocumentTypeForm(
         {"name": doc_type.name, "sensitivity": level, "is_active": "on"}, instance=doc_type, facility=facility
@@ -164,7 +166,8 @@ def test_rotation_encrypts_plaintext_history_idempotently(facility, lead_user, d
         data_before={field.slug: value, "public": "PublicToken"},
         data_after={field.slug: value},
     )
-    FieldTemplate.objects.filter(pk=field.pk).update(is_encrypted=True)
+    # Bypass the bulk guard only to reproduce legacy protection state.
+    QuerySet.update(FieldTemplate.objects.filter(pk=field.pk), is_encrypted=True)
     call_command("reencrypt_fields", dry_run=dry_run, stdout=StringIO())
     history.refresh_from_db()
     for payload in (history.data_before, history.data_after):
@@ -206,7 +209,8 @@ def test_rotation_protects_historical_fields_without_a_current_assignment(facili
         action="update",
         data_after={field.slug: "ForeignToken"},
     )
-    FieldTemplate.objects.filter(pk=field.pk).update(is_encrypted=source == "removed-assignment")
+    # Bypass the bulk guard only to reproduce legacy protection state.
+    QuerySet.update(FieldTemplate.objects.filter(pk=field.pk), is_encrypted=source == "removed-assignment")
     DocumentTypeField.objects.filter(document_type=event.document_type, field_template=field).delete()
     call_command("reencrypt_fields", stdout=StringIO())
     history.refresh_from_db()

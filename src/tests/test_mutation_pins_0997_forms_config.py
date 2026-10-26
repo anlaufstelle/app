@@ -10,6 +10,7 @@ validation cannot conceal a missing form error. No rls_test_role is needed.
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import connection
+from django.db.models import QuerySet
 from django.test.utils import CaptureQueriesContext
 from django.utils.translation import gettext as _
 
@@ -129,7 +130,8 @@ def test_condition_sources_exclude_unencrypted_file_fields(facility):
     supported = FieldTemplate.objects.create(facility=facility, name="Supported source")
     file_assignment = DocumentTypeField.objects.create(document_type=target, field_template=unsupported, sort_order=0)
     text_assignment = DocumentTypeField.objects.create(document_type=target, field_template=supported, sort_order=1)
-    FieldTemplate.objects.filter(pk=unsupported.pk).update(field_type="file", is_encrypted=False)
+    # Bypass the bulk guard only to reproduce legacy protection state.
+    QuerySet.update(FieldTemplate.objects.filter(pk=unsupported.pk), field_type="file", is_encrypted=False)
     form = FieldConditionForm(document_type=target)
     assert list(form.fields["depends_on_field"].queryset.values_list("pk", flat=True)) == [text_assignment.pk]
     assert file_assignment.pk in form.fields["target_field"].queryset.values_list("pk", flat=True)

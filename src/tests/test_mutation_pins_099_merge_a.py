@@ -101,6 +101,7 @@ from datetime import timedelta
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import connection
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, DocumentType, Event, FieldTemplate
@@ -628,7 +629,8 @@ class TestUnmergeAccountability:
 
         # Verschluesselung wird NACHTRAEGLICH aktiviert — die DB traegt noch
         # den Klartext, der Save-Hook wuerde ihn ab jetzt verschluesseln.
-        FieldTemplate.objects.filter(facility=facility, name="Wohnsituation").update(is_encrypted=True)
+        # Bypass the bulk guard only to reproduce legacy protection state.
+        QuerySet.update(FieldTemplate.objects.filter(facility=facility, name="Wohnsituation"), is_encrypted=True)
 
         source.contact_stage = Client.ContactStage.QUALIFIED
         source.save()

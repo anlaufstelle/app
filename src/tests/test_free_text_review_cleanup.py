@@ -1,7 +1,9 @@
 """Review metadata disappears with erased or unavailable source records."""
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from core.models import AuditLog, DocumentTypeField, FieldTemplate, FreeTextReview
@@ -169,3 +171,110 @@ def test_encryption_upgrade_cleanup_rolls_back_with_configuration(marked_field_w
     for event in events:
         event.refresh_from_db()
         assert not is_encrypted_value(event.data_json[field.slug])
+
+
+@pytest.mark.parametrize("write", ["update", "bulk_update", "upsert"])
+def test_bulk_encryption_changes_are_rejected(marked_field_world, facility, write):
+    field, events, _reviews = marked_field_world
+    before = list(FreeTextReview.objects.for_facility(facility).values())
+    field.is_encrypted = True
+    queryset = FieldTemplate.objects.for_facility(facility).filter(pk=field.pk)
+    with pytest.raises(ValidationError, match="Encryption changes.*save"):
+        if write == "update":
+            queryset.update(is_encrypted=True)
+        elif write == "bulk_update":
+            queryset.bulk_update([field], ["is_encrypted"])
+        else:
+            queryset.bulk_create([field], update_conflicts=True, update_fields=["is_encrypted"], unique_fields=["id"])
+    field.refresh_from_db()
+    assert not field.is_encrypted
+    from core.services.file_vault.rotation import _reencrypt_events
+
+    _reencrypt_events(dry_run=False)
+    assert list(FreeTextReview.objects.for_facility(facility).values()) == before
+    for event in events:
+        event.refresh_from_db()
+        assert not is_encrypted_value(event.data_json[field.slug])
+
+
+def set_legacy_encryption_flag(field):
+    # Deliberately bypass the public guard to represent pre-existing inconsistent data.
+    QuerySet.update(FieldTemplate.objects.filter(pk=field.pk), is_encrypted=True)
+    field.refresh_from_db()
+
+
+def assert_only_encrypted_field_reviews_removed(field, reviews, facility, second_facility, kept):
+    assert not FreeTextReview.objects.for_facility(facility).filter(field_key=field.slug).exists()
+    for scope, review in ((facility, reviews[2]), (second_facility, reviews[3])):
+        assert list(FreeTextReview.objects.for_facility(scope).values()) == kept[review.pk]
+
+
+@pytest.mark.parametrize("write", ["full", "partial", "help_only"])
+def test_encrypted_template_save_removes_legacy_reviews(marked_field_world, facility, second_facility, write):
+    field, _events, reviews = marked_field_world
+    set_legacy_encryption_flag(field)
+    kept = {
+        review.pk: list(FreeTextReview.objects.for_facility(scope).filter(pk=review.pk).values())
+        for scope, review in ((facility, reviews[2]), (second_facility, reviews[3]))
+    }
+    for _ in range(2):
+        field.save(update_fields=None if write == "full" else ["is_encrypted" if write == "partial" else "help_text"])
+        assert_only_encrypted_field_reviews_removed(field, reviews, facility, second_facility, kept)
+
+
+@pytest.mark.parametrize("path", ["rotation", "rewrite"])
+@pytest.mark.parametrize("abort", [False, True])
+def test_encryption_rewrite_cleans_legacy_reviews_atomically(
+    marked_field_world, facility, second_facility, path, abort, monkeypatch
+):
+    from core.services import free_text_review
+    from core.services.dynamic_protection import configuration_write, rewrite_dynamic_records
+    from core.services.file_vault.rotation import _reencrypt_events
+
+    field, events, reviews = marked_field_world
+    set_legacy_encryption_flag(field)
+    before = list(FreeTextReview.objects.for_facility(facility).values())
+    kept = {
+        review.pk: list(FreeTextReview.objects.for_facility(scope).filter(pk=review.pk).values())
+        for scope, review in ((facility, reviews[2]), (second_facility, reviews[3]))
+    }
+    original = free_text_review.remove_target_reviews
+
+    def fail_after_cleanup(instance):
+        original(instance)
+        raise ValueError("Cleanup interrupted")
+
+    def rewrite():
+        if path == "rotation":
+            _reencrypt_events(dry_run=False)
+        else:
+            with configuration_write(facility.pk):
+                rewrite_dynamic_records([event.document_type for event in events])
+
+    if abort:
+        monkeypatch.setattr(free_text_review, "remove_target_reviews", fail_after_cleanup)
+        with pytest.raises(ValueError, match="Cleanup interrupted"):
+            rewrite()
+        assert list(FreeTextReview.objects.for_facility(facility).values()) == before
+    else:
+        if path == "rotation":
+            _reencrypt_events(dry_run=True)
+            assert list(FreeTextReview.objects.for_facility(facility).values()) == before
+        rewrite()
+        assert_only_encrypted_field_reviews_removed(field, reviews, facility, second_facility, kept)
+    for event in events:
+        event.refresh_from_db()
+        assert is_encrypted_value(event.data_json[field.slug]) is (not abort)
+
+
+@pytest.mark.parametrize("change", ["same", "sensitivity_only", "downgrade"])
+def test_unencrypted_save_keeps_existing_reviews(marked_field_world, facility, change):
+    field, _events, _reviews = marked_field_world
+    if change == "downgrade":
+        set_legacy_encryption_flag(field)
+        field.is_encrypted = False
+    if change == "sensitivity_only":
+        field.sensitivity = "elevated"
+    before = list(FreeTextReview.objects.for_facility(facility).values())
+    field.save()
+    assert list(FreeTextReview.objects.for_facility(facility).values()) == before

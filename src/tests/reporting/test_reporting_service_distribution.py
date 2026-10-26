@@ -197,7 +197,9 @@ class TestBuildDataset:
         assert [row["option"] for row in result.records] == ["gibt-es-nicht", "sachspenden"]
 
     def test_verschluesselter_feldwert_roundtrip(self, backend, facility, admin_user, krise_typ, date_range):
-        FieldTemplate.objects.filter(facility=facility, slug=KRISE_SLUG).update(is_encrypted=True)
+        field = FieldTemplate.objects.get(facility=facility, slug=KRISE_SLUG)
+        field.is_encrypted = True
+        field.save(update_fields=["is_encrypted"])
         _events(facility, krise_typ, admin_user, 1, {KRISE_SLUG: "suizidal"})
         assert Event.objects.get().data_json[KRISE_SLUG]["__encrypted__"] is True
 
@@ -596,7 +598,9 @@ def test_encrypted_multi_selection_counts_individual_slugs_once(backend, facilit
     from core.services.file_vault import generate_key
     from tests._factories import make_event
 
-    FieldTemplate.objects.filter(facility=facility, slug=LEISTUNGEN_SLUG).update(is_encrypted=True)
+    field = FieldTemplate.objects.get(facility=facility, slug=LEISTUNGEN_SLUG)
+    field.is_encrypted = True
+    field.save(update_fields=["is_encrypted"])
     with override_settings(ENCRYPTION_KEYS=generate_key()):
         event = make_event(
             facility=facility,

@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db.models import QuerySet
 from django.urls import reverse
 
 from core.models import AuditLog, Client, EventHistory
@@ -315,7 +316,8 @@ def test_field_restricted_during_submission_is_not_reflected(client, edit_target
     payload[field] = "Still allowed text"
 
     def refuse(*args, **kwargs):
-        FieldTemplate.objects.filter(pk=secret.pk).update(sensitivity="high", is_encrypted=True)
+        # Bypass the bulk guard only to reproduce legacy protection state.
+        QuerySet.update(FieldTemplate.objects.filter(pk=secret.pk), sensitivity="high", is_encrypted=True)
         raise ValidationError({secret.slug: "Secret minimum 99"})
 
     with patch(

@@ -14,6 +14,7 @@ from datetime import timedelta
 
 import pytest
 from django.db import connection, connections, transaction
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from core.models import Event, FieldTemplate
@@ -116,7 +117,8 @@ def test_rewrite_updates_protection_without_changing_modification_time(facility,
     record, field = make_record(facility, lead_user, entity)
     original_time = timezone.now() - timedelta(days=2)
     type(record).objects.filter(pk=record.pk).update(updated_at=original_time)
-    FieldTemplate.objects.filter(pk=field.pk).update(is_encrypted=True, sensitivity="high")
+    # Bypass the bulk guard only to reproduce legacy protection state.
+    QuerySet.update(FieldTemplate.objects.filter(pk=field.pk), is_encrypted=True, sensitivity="high")
     with transaction.atomic():
         protection.lock_dynamic_protection(facility.pk, exclusive=True)
         protection.rewrite_dynamic_records([record.document_type])

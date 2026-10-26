@@ -11,6 +11,7 @@ No test requires rls_test_role or timing-based synchronization.
 
 import pytest
 from django.db import connection
+from django.db.models import QuerySet
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
@@ -38,7 +39,8 @@ def test_rotation_rechecks_protection_after_candidate_preparation(facility, staf
     def change_before_lock(facility_id):
         nonlocal changed
         if not changed:
-            FieldTemplate.objects.filter(pk=field.pk).update(is_encrypted=True)
+            # Bypass the bulk guard only to reproduce legacy protection state.
+            QuerySet.update(FieldTemplate.objects.filter(pk=field.pk), is_encrypted=True)
             changed = True
         return original(facility_id)
 

@@ -319,14 +319,17 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
                     .filter(fields__field_template=self)
                     .order_by("pk")
                 )
-                if (
-                    not previous.is_encrypted
-                    and self.is_encrypted
-                    and (kwargs.get("update_fields") is None or "is_encrypted" in kwargs["update_fields"])
-                ):
-                    from core.services.free_text_review import remove_target_reviews
+            persisted_encrypted = self.is_encrypted
+            if (
+                previous is not None
+                and kwargs.get("update_fields") is not None
+                and "is_encrypted" not in kwargs["update_fields"]
+            ):
+                persisted_encrypted = previous.is_encrypted
+            if persisted_encrypted:
+                from core.services.free_text_review import remove_target_reviews
 
-                    remove_target_reviews(self)
+                remove_target_reviews(self)
 
     def delete(self, *args, **kwargs):
         from core.services.dynamic_protection import configuration_write

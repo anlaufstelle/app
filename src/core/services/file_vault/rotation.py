@@ -114,7 +114,12 @@ def _locked_compare_and_swap(model, pk, *, expected: dict, updates: dict) -> boo
                 updates["data_json"] = encrypt_dynamic_data(locked.document_type, updates["data_json"])
                 if model is Event:
                     updates["search_text"] = compute_event_search_text(updates["data_json"], locked.document_type)
-            return bool(model.objects.for_facility(facility_id).filter(pk=pk, **expected).update(**updates))
+            changed = bool(model.objects.for_facility(facility_id).filter(pk=pk, **expected).update(**updates))
+            if changed and model is Event and "data_json" in updates:
+                from core.services.dynamic_protection import remove_encrypted_field_reviews
+
+                remove_encrypted_field_reviews([locked.document_type])
+            return changed
         locked = model.objects.select_for_update().filter(pk=pk).only("pk").first()
         if locked is None:
             return False

@@ -1,4 +1,4 @@
-"""Reject option updates that bypass instance validation."""
+"""Reject bulk changes that bypass option validation or encryption cleanup."""
 
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
@@ -6,7 +6,11 @@ from django.utils.translation import gettext_lazy as _
 from core.models.managers import FacilityScopedManager, FacilityScopedQuerySet
 
 
-def _reject_options_bulk_write(fields):
+def _reject_unsafe_bulk_write(fields):
+    if "is_encrypted" in fields:
+        raise ValidationError(
+            {"is_encrypted": "Encryption changes through bulk writes are not allowed. Use FieldTemplate.save()."}
+        )
     if "options_json" in fields:
         raise ValidationError(
             {
@@ -19,18 +23,18 @@ def _reject_options_bulk_write(fields):
 
 
 class FieldTemplateQuerySet(FacilityScopedQuerySet):
-    """Keep ordinary bulk updates while rejecting unsafe option mutations.
+    """Reject option and encryption mutations that require instance saves.
 
     This guards supported ORM writes, not raw SQL or concurrent reference writes.
     """
 
     def update(self, **kwargs):
-        _reject_options_bulk_write(kwargs)
+        _reject_unsafe_bulk_write(kwargs)
         return super().update(**kwargs)
 
     def bulk_update(self, objs, fields, batch_size=None):
         fields = tuple(fields)
-        _reject_options_bulk_write(fields)
+        _reject_unsafe_bulk_write(fields)
         return super().bulk_update(objs, fields, batch_size=batch_size)
 
     def bulk_create(
@@ -45,7 +49,7 @@ class FieldTemplateQuerySet(FacilityScopedQuerySet):
         if update_fields is not None:
             update_fields = tuple(update_fields)
         if update_conflicts:
-            _reject_options_bulk_write(update_fields or ())
+            _reject_unsafe_bulk_write(update_fields or ())
         return super().bulk_create(
             objs,
             batch_size=batch_size,
