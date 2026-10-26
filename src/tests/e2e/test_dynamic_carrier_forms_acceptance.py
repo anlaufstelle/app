@@ -197,18 +197,7 @@ def test_type_change_asks_before_dropping_values(kind, staff_page, base_url, e2e
         page.remove_listener("dialog", handler)
 
 
-FIELD_LEVEL_REFUSAL_GAP = pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Known gap: person and case forms drop a value the role cannot see on a type change "
-    "(merge_dynamic_data keeps only the new type's slugs) instead of refusing like episode and task",
-)
-
-
-@pytest.mark.parametrize(
-    "kind",
-    [pytest.param(k, marks=FIELD_LEVEL_REFUSAL_GAP) if k in {"client", "case"} else k for k in KINDS],
-)
+@pytest.mark.parametrize("kind", KINDS)
 def test_staff_type_change_with_hidden_source_values_is_refused(kind, staff_page, base_url, e2e_env):
     seed = _seed(e2e_env, kind, "protected")
     page = staff_page

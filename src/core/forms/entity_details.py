@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from core.forms.dynamic import DynamicDataForm
 from core.services.compliance import allowed_sensitivities_for_user, user_can_see_document_type
 from core.services.dynamic_data import decrypt_dynamic_text_data, merge_dynamic_data, remove_restricted_fields
-from core.services.entity_details import visible_stored_details
+from core.services.entity_details import changes_hidden_source_values, visible_stored_details
 
 
 class EntityDetailsMixin(forms.ModelForm):
@@ -75,8 +75,11 @@ class EntityDetailsMixin(forms.ModelForm):
     def _changes_hidden_source_values(self):
         """Reject type changes when any stored value is outside the actor's source scope."""
         selected_id = self.details_type.pk if self.details_type else None
-        return self.details_old_type_id != selected_id and bool(
-            self.details_old_data.keys() - self.details_visible_old_data.keys()
+        return changes_hidden_source_values(
+            old_type_id=self.details_old_type_id,
+            selected_type_id=selected_id,
+            old_data=self.details_old_data,
+            visible_old_data=self.details_visible_old_data,
         )
 
     def dynamic_payload(self):

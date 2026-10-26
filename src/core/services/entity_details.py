@@ -1,4 +1,4 @@
-"""Loss accounting for episode and task document type changes."""
+"""Source protection and loss accounting for dynamic document type changes."""
 
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
@@ -38,6 +38,11 @@ def visible_stored_details(record, user):
         for slug, value in values.items()
         if user_can_see_field(user, source_level, orphan_gating_sensitivity(fields.get(slug)))
     }
+
+
+def changes_hidden_source_values(*, old_type_id, selected_type_id, old_data, visible_old_data):
+    """Reject type changes when any stored value is outside the actor's source scope."""
+    return old_type_id != selected_type_id and bool(old_data.keys() - visible_old_data.keys())
 
 
 def require_confirmed_type_loss(record, document_type, *, confirmed):

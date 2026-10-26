@@ -362,35 +362,19 @@ def merge_dynamic_data(
     old_data: Mapping[str, Any] | None,
     restricted_slugs: Iterable[str],
 ) -> dict[str, Any]:
-    """E11-Merge-Policy für ``data_json`` — **ein** Punkt für alle Entitäten.
+    """Build dynamic data from validated input, preserving restricted target fields.
 
-    Semantik (bewusst eng, damit ein Typwechsel keine Geister-Keys hinterlässt):
+    The result starts with the current document type's cleaned text data.
+    Restricted slugs retain their old values so edits cannot clear fields the
+    actor could not see. Validation then limits the result to the target schema.
 
-    1. Das Ergebnis wird **komplett** aus ``cleaned_text_data`` aufgebaut, also
-       aus dem validierten Formular des **aktuellen** ``document_type``. Alte
-       Werte werden NICHT als Basis übernommen.
-    2. Für Slugs in ``restricted_slugs`` — Felder, die der Benutzer wegen seiner
-       Sensitivity-Rolle gar nicht zu sehen bekam und die deshalb per
-       :func:`remove_restricted_fields` aus dem Formular entfernt wurden — wird
-       der Alt-Wert aus ``old_data`` nachgezogen. Sonst würde der Speichern-
-       Vorgang Daten löschen, die der Benutzer nie sehen (und daher auch nie
-       absichtlich leeren) konnte.
-    3. Der Nachzug greift **nur innerhalb desselben Typs**: das Ergebnis läuft
-       abschliessend durch :func:`validate_data_json`, dessen Whitelist die
-       Slugs des AKTUELLEN ``document_type`` sind. Wechselt der Typ, sind die
-       Alt-Slugs nicht mehr in der Whitelist und fallen weg — inklusive
-       restricted Alt-Werte. Das ist gewollt: ein Wert des alten Typs hat im
-       Feldset des neuen Typs keine Bedeutung mehr und wäre unsichtbarer
-       Ballast im ``data_json``.
+    A type change can discard source slugs outside that schema. Callers must
+    reject changes with hidden source values before merging, using the original
+    type and field protection; loss confirmation does not grant that permission.
 
-    Nebenwirkungsfrei: weder ``cleaned_text_data`` noch ``old_data`` werden
-    mutiert. Datums-/Zeitwerte werden wie überall auf ISO-Strings normalisiert.
-
-    :param document_type: der **aktuelle** Typ (nach einem etwaigen Wechsel).
-    :param cleaned_text_data: ``cleaned_data`` des Formulars ohne Datei-Uploads.
-    :param old_data: bisheriges ``data_json`` der Entität (``None`` = neu).
-    :param restricted_slugs: Slugs, die für diesen Benutzer aus dem Formular
-        entfernt wurden (Rückgabe von :func:`remove_restricted_fields`).
+    Neither input mapping is mutated. Date and time values are normalized to ISO
+    strings by validation. ``old_data=None`` denotes a new record, and
+    ``restricted_slugs`` comes from :func:`remove_restricted_fields`.
     """
     merged: dict[str, Any] = dict(cleaned_text_data)
     existing = old_data or {}

@@ -9,6 +9,7 @@ from core.forms.dynamic import DynamicDataForm, configure_entity_document_type
 from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
 from core.models import Case, DocumentType, User
 from core.services.case.cases import case_form_state_token
+from core.services.entity_details import changes_hidden_source_values, visible_stored_details
 
 
 class DynamicCaseDataForm(DynamicDataForm):
@@ -123,3 +124,14 @@ class CaseForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
         if not client_id:
             raise ValidationError(_("Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."))
         return self.resolve_client(client_id, missing_error=_("Person existiert nicht."))
+
+    def clean_document_type(self):
+        document_type = self.cleaned_data["document_type"]
+        if not self.instance._state.adding and changes_hidden_source_values(
+            old_type_id=self.instance.document_type_id,
+            selected_type_id=document_type.pk if document_type else None,
+            old_data=self.instance.data_json or {},
+            visible_old_data=visible_stored_details(self.instance, self.user),
+        ):
+            raise ValidationError(_("Keine Berechtigung für diesen Dokumentationstyp."))
+        return document_type

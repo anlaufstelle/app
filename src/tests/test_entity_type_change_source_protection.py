@@ -150,3 +150,61 @@ def test_event_update_does_not_accept_a_document_type_change(client, lead_user, 
     sample_event.refresh_from_db()
     assert sample_event.document_type_id == original_type
     assert sample_event.data_json["notiz"] == "Updated event value"
+
+
+@pytest.fixture
+def field_protected_record(protected_record, facility):
+    kind, record, source, target, secret_field = protected_record
+    source.sensitivity = "normal"
+    source.save(update_fields=["sensitivity"])
+    secret_field.sensitivity = "high"
+    secret_field.save(update_fields=["sensitivity"])
+    visible_field = FieldTemplate.objects.create(
+        facility=facility, name="Visible detail", slug="vis", field_type="textarea", sensitivity="normal"
+    )
+    replacement = FieldTemplate.objects.create(
+        facility=facility, name="Replacement detail", slug="nb", field_type="textarea", sensitivity="normal"
+    )
+    DocumentTypeField.objects.create(document_type=source, field_template=visible_field)
+    target.fields.all().delete()
+    DocumentTypeField.objects.create(document_type=target, field_template=replacement)
+    record.data_json = {visible_field.slug: "Visible original content", secret_field.slug: SECRET}
+    record.save(update_fields=["data_json"])
+    record.refresh_from_db()
+    assert is_encrypted_value(record.data_json[secret_field.slug])
+    return kind, record, source, target, replacement
+
+
+@pytest.mark.parametrize("protected_record", ["client", "case"], indirect=True)
+@pytest.mark.parametrize("confirmed", [False, True])
+@pytest.mark.parametrize("replay", [False, True])
+def test_update_refuses_type_change_with_field_protected_source_values(
+    client, staff_user, field_protected_record, confirmed, replay
+):
+    kind, record, source, target, replacement = field_protected_record
+    original = dict(record.data_json)
+    client.force_login(staff_user)
+    url, payload = update_request(kind, record)
+    payload.update(document_type=str(target.pk), **{replacement.slug: "Replacement content"})
+    if confirmed:
+        payload["confirm_data_loss"] = "1"
+    headers = {"accept": "application/json", "X-Offline-Replay": "2"} if replay else {}
+    response = client.post(url, payload, headers=headers)
+    assert response.status_code == 200
+    assert response.context["form"].errors["document_type"] == ["Keine Berechtigung für diesen Dokumentationstyp."]
+    assert SECRET not in response.content.decode()
+    record.refresh_from_db()
+    assert record.document_type_id == source.pk
+    assert record.data_json == original
+
+
+def test_lead_can_confirm_type_change_with_field_protected_source_values(client, lead_user, field_protected_record):
+    kind, record, _source, target, replacement = field_protected_record
+    client.force_login(lead_user)
+    url, payload = update_request(kind, record)
+    payload.update(document_type=str(target.pk), confirm_data_loss="1", **{replacement.slug: "Replacement content"})
+    response = client.post(url, payload)
+    assert response.status_code == 302
+    record.refresh_from_db()
+    assert record.document_type_id == target.pk
+    assert record.data_json == {replacement.slug: "Replacement content"}

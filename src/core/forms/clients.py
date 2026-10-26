@@ -11,6 +11,7 @@ from core.forms.dynamic import DynamicDataForm, configure_entity_document_type
 from core.forms.dynamic import document_type_label as _document_type_label  # noqa: F401
 from core.forms.mixins import TailwindFormMixin
 from core.models import Client, DocumentType
+from core.services.entity_details import changes_hidden_source_values, visible_stored_details
 
 # M2 P8 (Refs #1058): ``_document_type_label`` ist nach ``forms/dynamic.py``
 # gezogen (der Fall-Picker braucht dieselbe Beschriftung). Der Alt-Name bleibt
@@ -169,3 +170,14 @@ class ClientForm(_FacilityScopedPseudonymMixin, TailwindFormMixin, forms.ModelFo
         if is_editing:
             partial_url = reverse("core:client_fields_partial")
             doc_type_field.widget.attrs["hx-get"] = f"{partial_url}?client={self.instance.pk}"
+
+    def clean_document_type(self):
+        document_type = self.cleaned_data["document_type"]
+        if not self.instance._state.adding and changes_hidden_source_values(
+            old_type_id=self.instance.document_type_id,
+            selected_type_id=document_type.pk if document_type else None,
+            old_data=self.instance.data_json or {},
+            visible_old_data=visible_stored_details(self.instance, self.user),
+        ):
+            raise ValidationError(_("Keine Berechtigung für diesen Dokumentationstyp."))
+        return document_type
