@@ -34,7 +34,9 @@ _WORD_RE = re.compile(
     r"\btabu(?!l)\w*|\b(?:"
     + "|".join(re.escape(word) for word in _PROCESS_WORDS if word != "tabu")
     + r")\w*|\bWelle [A-Z]\b|/work/|\bCLAUDE\.md\b"
-    + r"|\b(?:kimi|codex|opus|sonnet|haiku|ollama|claude)\b|\bglm-[a-z0-9][\w.-]*|\bgpt-[0-9][\w.-]*",
+    + r"|\b(?:kimi|codex|sonnet|haiku|ollama|claude)\b|\bglm(?:-[a-z0-9][\w.-]*|\b)|\bgpt-[0-9][\w.-]*"
+    # The audio codec shares its name with a model label; only the codec context is exempt.
+    + r"|\bopus\b(?![\s-]*codec\b)",
     re.IGNORECASE,
 )
 
@@ -325,17 +327,49 @@ def test_detects_internal_references_in_javascript_tests(tmp_path: Path, text: s
 # Assemble the tool label so the release sanitizer preserves the detection fixture.
 @pytest.mark.parametrize(
     "label",
-    ["kimi-k3", "KIMI", "glm-5", "Co" + "dex-Re-Review", "gpt-6", "Opus", "Sonnet", "Haiku", "Ollama", "Claude"],
+    ["kimi-k3", "KIMI", "glm-5", "GLM", "Co" + "dex-Re-Review", "gpt-6", "Opus", "Sonnet", "Haiku", "Ollama", "Claude"],
 )
 def test_detects_model_and_tool_labels(tmp_path: Path, label: str) -> None:
     (tmp_path / "sample.py").write_text(f"# {label} review\n", encoding="utf-8")
     assert len(scan_release_vocabulary(tmp_path)) == 1
 
 
-@pytest.mark.parametrize("word", ["alchemist", "codexology", "opuses", "sonnets", "haikus", "claudette", "gpt-x"])
+@pytest.mark.parametrize(
+    "word",
+    [
+        "alchemist",
+        "codexology",
+        "opuses",
+        "sonnets",
+        "haikus",
+        "claudette",
+        "gpt-x",
+        "glmx",
+        "Opus codec",
+        "Opus-Codec",
+    ],
+)
 def test_model_patterns_preserve_unrelated_words(tmp_path: Path, word: str) -> None:
     (tmp_path / "sample.py").write_text(f"# {word}\n", encoding="utf-8")
     assert scan_release_vocabulary(tmp_path) == []
+
+
+def test_codec_exemption_keeps_other_labels_on_the_same_line(tmp_path: Path) -> None:
+    (tmp_path / "sample.py").write_text("# Opus codec, reviewed by " + "Claude\n", encoding="utf-8")
+    assert len(scan_release_vocabulary(tmp_path)) == 1
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "# Opus codechecks this module.",
+        "# Opus codec; Opus codechecks this module.",
+        "# Opus codec; opus codechecks this module.",
+    ],
+)
+def test_codec_exemption_requires_the_whole_word(tmp_path: Path, line: str) -> None:
+    (tmp_path / "sample.py").write_text(f"{line}\n", encoding="utf-8")
+    assert len(scan_release_vocabulary(tmp_path)) == 1
 
 
 def test_sync_token_does_not_hide_internal_path(tmp_path: Path) -> None:
