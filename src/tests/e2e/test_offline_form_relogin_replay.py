@@ -126,7 +126,8 @@ class TestOfflineFormRequestAfterNewSignIn:
             page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
             page.locator("[data-testid='queue-dead-item']").first.wait_for(state="visible", timeout=10000)
             assert _workitem_count(e2e_env, title) == 0, "a dead row must not be sent by itself"
-            page.locator("[data-testid^='queue-dead-retry-']").first.click()
+            # Exactly one row is parked, so the retry button of that row is unique (no ``.first``).
+            page.locator("[data-testid='queue-dead-item'] [data-testid^='queue-dead-retry-']").click()
             page.locator("[data-testid='queue-dead-item']").first.wait_for(state="detached", timeout=10000)
             assert _raw_queue_count(page) == 1, "retry releases the row, it does not send or drop it"
 
