@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **Hinweise zu Pseudonymen und Titeln** (#2670) — Die Online-Formulare zum Anlegen und Bearbeiten von Personen, Fällen, Episoden und Aufgaben warnen vor Klarnamen und Art.-9-Angaben und benennen die unverschlüsselte Speicherung; das Handbuch erläutert die Eingabegrenze und die Standardfelder.
+- **Standardfelder und verbleibenden Klartext erläutert** (#2670) — Handbücher und Datenschutzvorlagen beschreiben die konfigurationsabhängige Verschlüsselung der Standardfelder, Ereignis-Prüfliste, Einrichtungsexport-Schema 2 und Offline-Aufgaben ohne Detailfeld; Pseudonym- und Titelformulare warnen vor Klarnamen und Art.-9-Angaben.
 
 - **Freitext-Review auf Ereignisse begrenzt** (#2669) — Die Prüfliste bietet nur noch unverschlüsselte Ereignis-Freitexte an; frühere statische Ziele und ihre Hilfetexte entfallen, die neuen dynamischen Trägerfelder sowie Titel und Pseudonyme bleiben außerhalb der Liste.
 

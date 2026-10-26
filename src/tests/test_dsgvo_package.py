@@ -145,14 +145,21 @@ class TestTemplateCurrentState:
 
         assert "folgen **nicht** dem Sensitivity/Encryption/Retention-Modell" in content
         for field_name in (
-            "Client.notes",
-            "Case.description",
-            "Episode.description",
-            "WorkItem.description",
+            "Client.pseudonym",
+            "Case.title",
+            "Episode.title",
+            "WorkItem.title",
+            "OutcomeGoal.description",
+            "DeletionRequest.reason",
+            "LegalHold.reason",
             "AuditLog.detail",
         ):
             assert field_name in content
-        assert "feldweise Verschlüsselung ist bis post-v1.0 vertagt" in content
+        for removed in ("Client.notes", "Case.description", "Episode.description", "WorkItem.description"):
+            assert removed not in content
+        assert "feldweise Verschlüsselung ist bis post-v1.0 vertagt" not in content
+        assert "Standardfelder" in content
+        assert "je nach Konfiguration" in content
 
     @pytest.mark.parametrize("slug", ["informationspflichten", "verarbeitungsverzeichnis"])
     def test_legal_basis_is_facility_neutral(self, facility, slug):

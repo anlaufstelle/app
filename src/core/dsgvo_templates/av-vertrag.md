@@ -52,8 +52,8 @@ Folgende Datenkategorien werden verarbeitet:
 - Pseudonyme (vorgesehen ist die Pseudonymisierung, es gibt kein Pflichtfeld für Klarnamen; Pseudonym, Notizen, Freitextfelder und Anhänge können dennoch Namen enthalten)
 - Altersgruppe
 - Kontaktstufen
-- Kontaktdokumentation und Notizen (einzelne sensible Felder je nach Konfiguration verschlüsselt)
-- Fall- und Wirkungsziel-Freitexte (Titel, Beschreibungen, Episoden, Meilensteine)
+- Kontaktdokumentation und Notizen sowie Standardfelder für Personen, Fälle, Episoden und Aufgaben (je nach Konfiguration feldweise verschlüsselt; die mitgelieferten Standardfelder sind verschlüsselt)
+- Titel, Pseudonyme, Wirkungsziel-Beschreibungen, Meilensteine und Begründungen im Klartext; unverschlüsselte Ereignis-Notizen nach Feldkonfiguration. Pseudonym und Titel von Fall, Episode und Aufgabe kurz halten, keine Klarnamen und keine Angaben nach Art. 9 DSGVO eintragen; die Hinweise sind keine technische Inhaltskontrolle
 - Dateianhänge an Ereignissen, Personen und Fällen (z. B. Ausweiskopie, Bescheid; verschlüsselt gespeichert)
 - Besondere Kategorien personenbezogener Daten nach Art. 9 DSGVO (z. B. Gesundheitsdaten), soweit die Einrichtung sie dokumentiert
 - Protokolldaten (Audit-Log mit Benutzer, Zeitpunkt, Aktion und IP-Adresse)

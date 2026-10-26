@@ -981,6 +981,7 @@ class TestAuditLoggingClaims:
 
 # Plain-text free-text fields outside the field encryption (TOM § 1.5).
 FREE_TEXT_FIELDS = (
+    ("Client", "pseudonym"),
     ("Case", "title"),
     ("Episode", "title"),
     ("WorkItem", "title"),
@@ -1030,6 +1031,14 @@ def _anonymisation_clears(model: str, field: str) -> bool:
 
 @pytest.mark.django_db
 class TestFreeTextInventory:
+    @pytest.mark.parametrize("slug", ["toms", "av-vertrag"])
+    def test_rendered_documents_describe_standard_fields_and_remaining_plaintext(self, facility, slug):
+        content = _flat(render_document(slug, facility)[0])
+        for removed in ("Client.notes", "Case.description", "Episode.description", "WorkItem.description"):
+            assert removed not in content, removed
+        for current in ("Standardfelder", "je nach Konfiguration", "Pseudonym", "Titel", "Art. 9"):
+            assert current in content, current
+
     def test_premise_fields_are_plain_columns(self):
         from django.apps import apps
         from django.db import models as dj_models
@@ -1040,6 +1049,40 @@ class TestFreeTextInventory:
                 model_name,
                 field_name,
             )
+
+    @pytest.mark.architecture
+    @pytest.mark.parametrize(
+        "relative",
+        [
+            "docs/user-guide.md",
+            "docs/en/user-guide.md",
+            "docs/glossar.md",
+            "docs/en/glossary.md",
+            "docs/admin-guide.md",
+            "docs/en/admin-guide.md",
+            "docs/fachkonzept-anlaufstelle.md",
+            "docs/en/domain-concept-summary.md",
+            "docs/security-notes.md",
+            "docs/en/security-notes.md",
+        ],
+    )
+    def test_documentation_does_not_claim_removed_person_note_review(self, relative):
+        text = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        for stale in (
+            "Anzeige ihrer Freitext-Notizen",
+            "Anzeige von Freitext-Notizen",
+            "Anzeige von Notizen einer Person",
+            "displaying their free-text notes",
+            "displaying free-text notes",
+            "Displaying notes of a person",
+        ):
+            assert stale not in text, (relative, stale)
+
+    def test_toms_distinguish_anonymisation_from_completed_request_retention(self, facility):
+        content = _flat(render_document("toms", facility)[0])
+        assert "deletion_request_retention_days" in content
+        assert "reviewed_at" in content
+        assert "eine eigene Aufbewahrungsfrist für sie gibt es nicht" not in content
 
     def test_toms_name_every_plain_free_text_field(self, facility):
         content = render_document("toms", facility)[0]

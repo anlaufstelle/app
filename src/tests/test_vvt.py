@@ -65,8 +65,8 @@ _LOGGED_SUBOBJECT_RE = re.compile(r"Episode|Wirkungsziel", re.IGNORECASE)
 #: treffen darf — sie war bis dahin die einzige zutreffende.
 _UNLOGGED_SUBOBJECT_PHRASE = "gar nicht protokolliert"
 
-#: Refs #918, #1862: qualified reads are audited by the person detail and
-#: free-text review views. The edit form still shows additional details
+#: Refs #918, #1862: qualified reads are audited by the person
+#: detail view. The edit form still shows additional details
 #: without an audit entry, so blanket access-logging claims remain false.
 _BLANKET_CLIENT_ACCESS_CLAIM_RE = re.compile(
     r"jede[rn]?\s+Zugriff\w*(\s+darauf)?\s+wird\s+(automatisch\s+)?protokolliert"
@@ -135,8 +135,8 @@ class TestProcessingActivitiesSchema:
     def test_toms_do_not_claim_blanket_read_logging(self):
         """Refs #918, #1862: TOMs must not promise blanket read logging.
 
-        Named read exceptions include qualified-person detail and free-text
-        review views (VIEW_QUALIFIED), subject access and exports (EXPORT),
+        Named read exceptions include the qualified-person detail view
+        (VIEW_QUALIFIED), subject access and exports (EXPORT),
         file downloads (DOWNLOAD), offline take-out (OFFLINE_*_READ) and
         cross-facility administration (SYSTEM_VIEW). Ordinary list, detail
         and search requests do not create entries. A blanket TOM promise

@@ -83,27 +83,41 @@ Maßgeblich für das Lesen ist die höhere Sensitivität aus Dokumentationstyp u
 
 > Diese Freitext-Felder folgen **nicht** dem Sensitivity/Encryption/Retention-Modell der Event-`data_json`-Felder. Klartext liegt facility-gescoped in der DB und im Backup (Backup ist AES-256-CBC verschlüsselt; DB selbst nicht).
 
-Betroffen sind die Freitexte `Client.notes`, `Case.title`, `Case.description`,
-`Episode.title`, `Episode.description`, `WorkItem.title`,
-`WorkItem.description`, `OutcomeGoal.title`, `OutcomeGoal.description` und
-`Milestone.title`, die Begründungen `DeletionRequest.reason` und
-`LegalHold.reason` sowie `AuditLog.detail`. Die Notizen der Person und die
-Beschreibungen von Fall, Episode und Aufgabe warnen davor, Klarnamen oder
-Art.-9-Daten dort einzutragen; die Titelfelder und `OutcomeGoal.description`
-stehen ohne Warnhinweis. Die Anonymisierung einer Person (manuell oder durch
-den Aufbewahrungslauf, auch in der k-anonymisierenden Variante) überschreibt
-alle hier genannten Freitexte außer `AuditLog.detail`: Notizen, Titel und
-Beschreibungen von Person, Fall, Episode, Aufgabe, Wirkungsziel und
-Meilenstein sowie die Begründungen der Löschanträge und Aufbewahrungssperren
-zu dieser Person, ihren Fällen und Ereignissen, die durch „[Anonymisiert]“
-ersetzt werden. Die Antrags- und Sperrzeilen selbst (Status, beteiligte
-Personen, Zeitpunkte) bleiben als Nachweis bestehen; eine eigene
-Aufbewahrungsfrist für sie gibt es nicht. Bis zur Anonymisierung stehen die
-Begründungen im Klartext.
+Betroffen sind die Freitexte `Client.pseudonym`, `Case.title`,
+`Episode.title`, `WorkItem.title`, `OutcomeGoal.title`,
+`OutcomeGoal.description` und `Milestone.title`, die Begründungen
+`DeletionRequest.reason` und `LegalHold.reason` sowie `AuditLog.detail`.
+Pseudonym und Titel von Fall, Episode und Aufgabe tragen in den Online-Formularen
+den Hinweis: kurz halten, keine Klarnamen und keine Angaben nach Art. 9 DSGVO;
+eine technische Inhaltskontrolle ist das nicht. `OutcomeGoal.description`
+steht weiterhin ohne Warnhinweis. Unverschlüsselte Ereignis-Notizen richten
+sich nach der jeweiligen Feldkonfiguration und bleiben ebenfalls Klartext.
+
+Personen-Notizen sowie Beschreibungen von Fall, Episode und Aufgabe liegen
+in typgebundenen Standardfeldern in `data_json`, nicht in eigenen Textspalten.
+Die fünf mitgelieferten Pakete verschlüsseln diese Standardfelder:
+`client-notes` und `standard-description` sind erhöht, `workitem-details`
+ist normal. Der Schutz gilt je nach Konfiguration des Feldes; eine Änderung
+der Feldverschlüsselung kann ihn lockern. Assistenz sieht die normalen
+Aufgabendetails, nicht die erhöhten Standardfelder von Person, Fall und Episode.
+Daraus folgt keine Verschlüsselungszusage für alle Freitexte der Anwendung.
+
+Die Anonymisierung einer Person (manuell oder durch den Aufbewahrungslauf,
+auch in der k-anonymisierenden Variante) überschreibt alle hier genannten
+statischen Freitexte außer `AuditLog.detail`: Pseudonym, Titel und
+Zielbeschreibungen sowie die Begründungen der Löschanträge und
+Aufbewahrungssperren zu dieser Person, ihren Fällen und Ereignissen, die
+durch „[Anonymisiert]“ ersetzt werden. Die dynamischen Personen-, Fall-,
+Episoden- und Aufgabenwerte werden geleert. Die Antrags- und Sperrzeilen
+selbst (Status, beteiligte Personen, Zeitpunkte) werden bei der Anonymisierung
+nicht gelöscht. Abgeschlossene Löschanträge mit Prüfzeitpunkt `reviewed_at`
+werden nach der konfigurierten Frist `deletion_request_retention_days`
+bereinigt. Bis zur Anonymisierung stehen die Begründungen im Klartext.
+
 `AuditLog.detail` bleibt als Teil des HMAC-verketteten Protokolls unverändert
 bestehen, bis die Audit-Frist abläuft (Ausnahmen: Löschkonzept § 3.3), und wird
-beim Schreiben minimiert. Eine
-feldweise Verschlüsselung ist bis post-v1.0 vertagt.
+beim Schreiben minimiert. Die Standardfelder werden dagegen nach ihrer
+aktuellen Feldkonfiguration verschlüsselt.
 Das verbleibende organisatorische
 Risiko ist bei Einweisung, Datenminimierung und regelmäßiger TOM-Prüfung zu
 berücksichtigen.

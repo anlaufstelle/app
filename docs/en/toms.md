@@ -18,7 +18,13 @@ The facility must configure an off-site lifecycle with a maximum of 12 months fr
 
 An HTTP/network/processing error fetching revocations (including 500/429), or an invalid response structure, pauses queue and edit replay: “Synchronization is waiting for the revocation check”. The blocking state is stored in local IndexedDB. Each replay run also requires its own fresh, structurally valid, successfully applied and persisted revocation check; an earlier approval never authorizes a later run or another tab, even when metadata writes and fallback deletion both fail. Missing or unreadable metadata blocks replay; recovery from a read failure also requires another successful check. The next sync sequence checks again, as does a direct save from the offline client record. A failed check preserves unsent work in encrypted form. Existing idempotency keys remain intact, and the server gates (422 for revoked people, 409 for status conflicts) remain authoritative. Device encryption does not replace these server checks.
 
+## Standard fields and remaining plaintext
+
+Person notes and descriptions for cases, episodes and tasks use type-bound standard fields in `data_json`, with encryption depending on field configuration. All five shipped packages encrypt `client-notes` and `standard-description` at elevated sensitivity and `workitem-details` at normal sensitivity. Assistants can read task details but not the other three standard fields. Administrators can change field encryption; this is no blanket free-text encryption guarantee.
+
+Person pseudonyms and case/episode/task titles remain plaintext navigation labels; their online forms ask users to keep them short, without real names or GDPR Art. 9 data. This is not content validation. Goal descriptions remain plaintext without that warning; event notes follow their field configuration. Anonymization clears dynamic person/case/episode/task fields and redacts related labels, goals and reasons. Request and hold rows are not deleted by person anonymization. Completed deletion requests with a `reviewed_at` timestamp are pruned after the configured `deletion_request_retention_days` period; reasons are plaintext until anonymization. `AuditLog.detail` is minimized at write time and remains unchanged until its own retention expires.
+
 <!-- translation-source: src/core/dsgvo_templates/toms.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-14 -->
-<!-- source-hash: 76654739f46e8fad521c7ea166f111f9b01e8023 -->
+<!-- source-hash: 69d9c59d918f580907cca3bc8ded440fc4916b0a -->
+<!-- translation-date: 2026-10-26 -->
