@@ -237,8 +237,6 @@
     "Makefile:claude.md:e279251e48579efcb182f49031129a382e9812d3bf577200354a8e7c3b36de27": 1,
     "docs/adr/002-cbvs-and-service-layer.md:claude.md:82b330f9b03574443dfa07ad9c9be6eef2def2531e565e98cc4da5831c35a007": 1,
     "tests/js/conflict-list-export.test.mjs:orchestrator:f4b3160f81e95604013e8026a9acb8870314c9f06a45ba30d4a236cf121ca951": 1,
-    "tests/js/demo-scenario-switch-guard.test.mjs:fix-runde:3cdea7022684b0f5bf49eea42b1dbe2a7cd661cf382385d54a8a0c97ba7269cb": 1,
-    "tests/js/key-cleared-gate.test.mjs:orchestrator:398e56c0473a1bbfbacca5fa948ddceade3890bc35969234932107774483f8f7": 1,
     "tests/js/offline-revocation-boot.test.mjs:orchestrator:0c5490aeccd3793b0311ab80be0f09bd6890c5fb6080962054cd78f42263e453": 1,
     "tests/js/offline-revocation-boot.test.mjs:orchestrator:0e0275d6d46dc33bfef9952701087f8ad7b0d2724572f581d3324698ecfc6e29": 1,
     "tests/js/offline-revocation-boot.test.mjs:orchestrator:1b4fc392fc76215db64ab47a9bbec38bb36a6ea1ec432022d026dafef7241cb0": 1,
@@ -247,14 +245,7 @@
     "tests/js/offline-revocation-boot.test.mjs:orchestrator:3967bd7d72f8f2a1fe7907d1484fc93c30f153b2242227d0c6c7f20896256286": 1,
     "tests/js/offline-revocation-boot.test.mjs:orchestrator:aafdaa559fa7475aa1cbccc289f9932b399432d8a8b15c58d67a353a1c08f771": 1,
     "tests/js/offline-revocation-boot.test.mjs:orchestrator:e2a9f1587f7957f5c2f952245646a5daab8cfbf08bf2e6ddace037223ab1ec61": 12,
-    "tests/js/offline-store-split.test.mjs:orchestrator:9473f87e4576e88d6e47d940da0bb1d9ea6511309bc7673ed0c9c78900efcb99": 1,
-    "tests/js/offline-tally-fallback.test.mjs:orchestrator:5ceda7471c0c655b3aeda22fec971b1c650bc92ac8e7efb8a2ea05972a3ebbf9": 1,
     "tests/js/offline-tally-fallback.test.mjs:orchestrator:963b38b03e7aafa698a9ee451845c07af8c5b9d129408db4a72da93158d5cfaa": 1,
-    "tests/js/offline-tally-sync.test.mjs:orchestrator:09aa357ac93f0f1251d8b53d6da9880069559705f26dbc89531872495bd5239c": 1,
-    "tests/js/offline-tally.test.mjs:orchestrator:5c72ed31ba869d3ad34c4d7bdf46913d492ac3495a7090f1b68f67badc18bc99": 1,
-    "tests/js/sync-orchestrator-pending.test.mjs:orchestrator:180d5983c3c26485e6a8482278aa66b19927e7f4750c0e1a6e1e125c8b19ca43": 1,
-    "tests/js/sync-orchestrator-pending.test.mjs:orchestrator:1df0b786faa4fe0284882a94af7124772edbd12caff29de9497b0b8960febf50": 1,
-    "tests/js/sync-orchestrator-pending.test.mjs:orchestrator:54e4413538d2a3f91d45617d0823ed005a11dbb826c70f5839965f4d66def7e2": 1,
-    "tests/js/sync-orchestrator-pending.test.mjs:orchestrator:c7ef0f66c7ab96ac5e60b58acf27bac94bfb9196ce5199f1abd1c94daf0b9a32": 1
+    "tests/js/offline-tally.test.mjs:orchestrator:5c72ed31ba869d3ad34c4d7bdf46913d492ac3495a7090f1b68f67badc18bc99": 1
   }
 }

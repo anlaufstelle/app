@@ -1,7 +1,6 @@
-// Refs #2285 (Fix-Runde 1, Ticket-Punkt 9): Warnung vor ungespeicherter
-// Offline-Arbeit beim Demo-Start/-Wechsel. Zwei Faelle: ohne ausstehende
-// Eintraege direkter Wechsel, mit ausstehenden Eintraegen eine Bestaetigung
-// mit Anzahl (Abbruch bei "Abbrechen").
+// Refs #2285, item 9: warn about unsaved offline work when starting or
+// switching a demo. With no pending entries, switch immediately. Otherwise
+// show a confirmation with the entry count; canceling preserves the work.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 let guard;

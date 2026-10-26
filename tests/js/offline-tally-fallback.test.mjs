@@ -1,5 +1,5 @@
-// #1912: Falls der zentrale Orchestrator auf einer Alt-/Teilseite wirklich
-// fehlt, bleibt genau ein koaleszierter Online-Fallback erhalten.
+// #1912: if central sync is unavailable on an older or partial page,
+// retain exactly one coalesced online fallback.
 import { beforeAll, expect, it, vi } from "vitest";
 
 const revalidateCachedFacility = vi.fn(async () => "not-modified");

@@ -1,14 +1,11 @@
-// Refs #1828/#1838 (Integrator-Auflage): Der Pending-Drain-Pfad der
-// Orchestrator-Receiver war bisher ungetestet. base.html laedt crypto.js/
-// offline-queue.js/offline-edit.js VOR sync-orchestrator.js — sie legen ihre
-// Cross-Tab-Empfaenger in window.syncOrchestratorPending; der Orchestrator
-// draint die Liste beim Laden und ersetzt sie durch {push: onMessage}
-// (Sofort-Registrierung fuer Nachzuegler). Beide Wege muessen denselben
-// Empfangs-Effekt haben.
+// Refs #1828/#1838: cover pending sync message registration. base.html
+// loads crypto.js, offline-queue.js, and offline-edit.js before
+// sync-orchestrator.js. Receivers enter window.syncOrchestratorPending;
+// the sync module drains it and replaces it with {push: onMessage} for
+// later registrations. Both paths must deliver the same messages.
 //
-// jsdom hat kein BroadcastChannel — ein Stub VOR dem Import laesst den
-// Orchestrator seinen Channel real oeffnen, sodass eingehende Nachrichten
-// end-to-end bis zu den registrierten Handlern getrieben werden koennen.
+// jsdom has no BroadcastChannel. Install a stub before importing the sync
+// module so it opens its actual channel and delivers messages to handlers.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 let _channels;
@@ -41,8 +38,8 @@ async function loadOrchestrator({ pending } = {}) {
 }
 
 function receiveFromOtherTab(msg) {
-    // Der Orchestrator oeffnet seinen Channel lazy beim ersten onMessage —
-    // nach Drain/Registrierung existiert genau eine Instanz.
+    // The sync module opens its channel lazily on the first onMessage call.
+    // After draining or registering receivers, exactly one instance exists.
     expect(_channels.length).toBeGreaterThan(0);
     _channels[0].onmessage({ data: msg });
 }

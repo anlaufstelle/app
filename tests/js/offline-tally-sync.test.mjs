@@ -70,7 +70,7 @@ beforeAll(async () => {
     expect(document.querySelector("[data-offline-tally-status]").textContent).toBe(
         "+1 wird gesendet"
     );
-    // base.html laedt den zentralen Orchestrator erst danach.
+    // base.html loads the central sync module afterwards.
     await import("../../src/static/js/sync-orchestrator.js");
     publicRequestSync = vi.spyOn(window.syncOrchestrator, "requestSync");
     window.addEventListener("offline-tally-reconciled", reconciled);

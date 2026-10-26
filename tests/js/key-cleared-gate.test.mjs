@@ -77,10 +77,10 @@ function _delete(key) {
     );
 }
 
-// Minimaler Fake-Orchestrator mit EINEM exklusiven, origin-weiten Lock (eine
-// serielle Kette), wie navigator.locks ihn dem Sync-Orchestrator liefert.
-// ``runExclusive`` reiht Anforderungen hinter dem aktuell Haltenden ein;
-// ``isLockHeld`` spiegelt, ob gerade eine fn unter dem Lock laeuft.
+// Minimal fake sync coordinator with one exclusive origin-wide lock,
+// modeled as a serial promise chain like navigator.locks. ``runExclusive``
+// queues requests behind the current holder; ``isLockHeld`` reports whether
+// a function currently holds the lock.
 function makeOrchestrator() {
     let chain = Promise.resolve();
     let depth = 0;

@@ -149,12 +149,10 @@ describe("#1838 — Verbrauchs-Slot des offline-store-Verbunds", () => {
     });
 
     it("(d) online-Fallback treibt Widerruf + Revalidierung ueber die Fassade", async () => {
-        // Review-Befund (critical): Vor dem Fix riefen die beiden Aufrufe im
-        // Orchestrator-losen online-Listener freie Bezeichner aus fremden
-        // IIFE-Scopes — ReferenceError, vom try/catch STILL geschluckt; der
-        // Art.-17-Widerrufs-Purge waere auf login/password_change/offline.html
-        // bei jedem Reconnect tot gewesen. Dieser Pin treibt den Listener
-        // end-to-end und belegt beide Fassaden-Aufrufe.
+        // Regression: the online listener used identifiers from unrelated IIFE
+        // scopes when central sync was absent. Its catch block swallowed the
+        // ReferenceError, disabling revocation purges on reconnect. Exercise the
+        // listener through the store facade to cover revocation and revalidation.
         delete window.syncOrchestrator;
         const origApply = store.applyClientRevocations;
         const origReval = store.revalidateCachedClients;
