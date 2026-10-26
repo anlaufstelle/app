@@ -182,10 +182,9 @@ class TestEditierfensterDST:
         Wanduhrzeit existiert an diesem Tag, also greift die Dauer-ab-Start-
         Regel hier NICHT. Real dauert die Schicht dadurch nur **7 Stunden**
         (21:00Z bis 04:00Z): die Uhr ist waehrend der Schicht vorgesprungen.
-        Die frueher hier behauptete Dauer von 8 h war falsch Befund
-        E-09); die Dauer-ab-Start-Regel greift erst, wenn das Fensterende
-        selbst in der Luecke liegt — das prueft
-        ``TestDstFensterendeInDerGrenzstunde``.
+        The previously asserted duration of 8 h was incorrect (finding
+        E-09). The duration-from-start rule only applies when the window end
+        itself falls in the gap; ``TestDstFensterendeInDerGrenzstunde`` covers it.
         """
         _, tf_spaet, _ = schichten
         grenze = editable_until(facility, Shift(date(2026, 3, 28), tf_spaet))
@@ -750,10 +749,10 @@ class TestDstFensterendeInDerGrenzstunde:
     def test_editierfenster_endet_in_der_doppelten_stunde(self, facility):
         """Das EDITIERFENSTER — nicht das eigene Fenster — endet in der Doppelstunde.
 
-        Refs #2042 Befund E-13): Der frühere Test nahm die Nacht vom
-        24.10. als eigene Schicht und landete beim Editierende am **26.10.**
-        um 01:45Z — einem Montag, weit außerhalb der doppelten Stunde. Er
-        prüfte damit nicht, was sein Name behauptete.
+        Refs #2042 (finding E-13): the earlier test used the night of
+        October 24 as its own shift, ending the editing window on **October 26**
+        at 01:45Z, a Monday outside the repeated hour. It did not check what
+        its name claimed.
 
         Richtig ist die **Vorgänger**schicht: der Tagdienst des 24.10. hat als
         Folgeschicht die Nacht 20:00–02:45, und die endet am 25.10. auf der
@@ -847,11 +846,11 @@ class TestSchichtzeitenWerdenLokalAngezeigt:
 class TestSchichtfolgeIstUhrzeitunabhaengig:
     """E-16: die Schichtfolge der Wechsel-Tests gilt auch am Tagesrand.
 
-    Der Re-Review hat gezeigt, dass die frühere Konstruktion um
-    **00:00:30** kippte: „jetzt minus eine Minute" wurde nach dem Wegfall des
-    Datums zu ``23:59``, die zweite Schicht bekam ``23:59–23:59`` und übernahm
-    nie. Hier wird dieselbe Konstruktion mit **injiziertem** ``now`` geprüft —
-    ohne Browser und ohne von der Uhr des Testlaufs abzuhängen.
+    Reinspection showed that the earlier construction failed at
+    **00:00:30**: dropping the date from "now minus one minute" yielded
+    ``23:59``. The second shift became ``23:59-23:59`` and never took over.
+    This test checks the same construction with an injected ``now``, without
+    a browser or dependence on the test run's wall clock.
     """
 
     @staticmethod
@@ -913,14 +912,12 @@ class TestSchichtfolgeIstUhrzeitunabhaengig:
 class TestRevisionSchreitetGarantiertFort:
     """E-17: eine fachliche Änderung bekommt IMMER eine neue Revision.
 
-    ``updated_at`` ist ``auto_now`` und damit keine monotone Revisionsnummer —
-    Django setzt schlicht ``timezone.now()``, ohne den bisherigen Wert
-    anzusehen. In der Praxis lagen zwei aufeinanderfolgende Writes im
-    Stichprobenlauf mindestens 4,2 µs auseinander, aber das ist eine
-    Beobachtung und keine Zusage. Steht die Uhr still (angehaltene Testuhr,
-    Zeitsprung, gröbere Zeitquelle), trügen zwei verschiedene Fassungen
-    dieselbe Revision — und der Abgleich aus R-E-25 übersähe genau den
-    Zwischen-Write, den er verhindern soll.
+    ``updated_at`` uses ``auto_now`` and is not a monotonic revision number:
+    Django sets ``timezone.now()`` without checking the previous value.
+    Two consecutive writes in a sample run were at least 4.2 microseconds
+    apart, but this observation is no guarantee. A stopped clock, clock jump
+    or coarse time source could assign the same revision to different
+    versions, hiding the intervening write that R-E-25 must detect.
 
     Die Schreibstelle unter der Zeilensperre schreibt ``updated_at`` deshalb
     garantiert fort. Die Doku-Zusage „nie still überschrieben" gilt damit

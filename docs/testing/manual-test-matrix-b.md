@@ -6289,7 +6289,7 @@
 
 ### SETUP — Einrichtungs-/Konfigurationsassistent
 
-> **Forward-looking Bereich (Refs #908).** Feature wird in #917 implementiert und ist aktuell **roadmap-blocked** (geplante Custom-Admin-UI + Config-Loader). Cases werden mit dem Feature ergänzt. Vorgesehenes Schema gemäß Audit §4.5:
+> **Forward-looking Bereich (Refs #908).** Feature wird in #917 implementiert und ist aktuell **roadmap-blocked** (geplante Custom-Admin-UI + Config-Loader). Cases werden mit dem Feature ergänzt. Vorgesehenes Schema gemäß Sicherheitsprüfung, Abschnitt 4.5:
 >
 > - `ENT-SETUP-01` — Neue Facility per Assistent vollständig anlegen (End-to-End ohne Shell)
 > - `ENT-SETUP-02` — Dokumentationsbibliothek auswählen (Template-Übernahme und Anpassung)

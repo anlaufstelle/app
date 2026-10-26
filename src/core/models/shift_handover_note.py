@@ -70,7 +70,7 @@ class ShiftHandoverNote(models.Model):
     )
     time_filter = models.ForeignKey(
         "core.TimeFilter",
-        # Refs #2042 Befund E-02): **PROTECT**, nicht CASCADE.
+        # Refs #2042 (finding E-02): use **PROTECT**, not CASCADE.
         # ``CASCADE`` loeschte die Notizen eines Zeitfensters physisch mit —
         # am auditierten Loeschpfad und an der Aufbewahrungsfrist vorbei, ohne
         # eine einzige ``HANDOVER_NOTE_DELETED``-Zeile. Genau die stille
@@ -114,7 +114,7 @@ class ShiftHandoverNote(models.Model):
         related_name="updated_handover_notes",
         verbose_name=_("Zuletzt geändert von"),
     )
-    # -- Eingefrorene Fenstergrenzen (Refs #2042, Befund E-01) --------
+    # -- Frozen window boundaries (Refs #2042, finding E-01) --------------
     #
     # Die drei Instants werden bei der ANLAGE aus der damals gueltigen
     # Dienstplan-Konfiguration berechnet und danach nie mehr angefasst. Vorher

@@ -381,8 +381,8 @@ class TestCaseHoldLockOrder:
         assert sequence.index("core_client") < sequence.index("core_case"), (
             f"kanonische Ordnung verdreht (core_client vor core_case): {sequence}"
         )
-        # Die Ereignissperre wird auch ohne Ereignisse abgesetzt (SELECT ... FOR UPDATE
-        # auf core_event) — sie muss also immer in der Sequenz stehen (kimi-k3 B-6).
+        # SELECT ... FOR UPDATE on core_event runs even without events,
+        # so it must always appear in the sequence (security finding B-6).
         assert "core_event" in sequence, f"Fall-Hold sperrte die Ereigniszeilen nicht: {sequence}"
         assert sequence.index("core_case") < sequence.index("core_event"), (
             f"kanonische Ordnung verdreht (core_case vor core_event): {sequence}"
@@ -1119,17 +1119,17 @@ class TestActivityLockOrder:
 
 
 # ---------------------------------------------------------------------------
-# Refs #2123 (kimi-k3 B-1) — der Purge braucht die OWNER-Zeile
+# Refs #2123 (security finding B-1): purging requires the OWNER row
 # ---------------------------------------------------------------------------
 
 
 def _committed_purge_bestand(owner_art="ereignis", *, mit_person=True):
     """Committeter Anhang-Owner samt Ereignis der Person — fuer die Faden-Tests.
 
-    ``owner_art``: ``"ereignis"`` | ``"person"`` | ``"fall"``. Das Ereignis
-    existiert in allen drei Faellen — es ist das Ziel des DIREKTEN
-    Ereignis-Holds, den ``owner_has_active_hold`` bei Personen- und Fall-Ownern
-    transitiv mitprueft Re-Review, Abschnitt 1).
+    ``owner_art``: ``"ereignis"`` | ``"person"`` | ``"fall"``. The event exists
+    in all three cases and is the target of the DIRECT event hold.
+    ``owner_has_active_hold`` checks that hold transitively for client and case
+    owners (reinspection, section 1).
     """
     from tests.conftest import _make_attachment
 
@@ -1213,8 +1213,8 @@ class TestAttachmentPurgeSperrtDieOwnerZeile:
         sequence = _lock_sequence(captured)
         assert "core_client" in sequence, f"Der Purge nahm keinen Personen-Anker: {sequence}"
         assert "core_event" in sequence, (
-            f"Der Purge sperrt die Ereigniszeile nicht — kein gemeinsamer Anker mit der "
-            f"direkten Ereignis-Hold-Anlage (kimi-k3 B-1): {sequence}"
+            f"The purge does not lock the event row: no shared anchor with direct "
+            f"event hold creation (security finding B-1): {sequence}"
         )
         assert sequence.index("core_client") < sequence.index("core_event"), (
             f"kanonische Ordnung verdreht (core_client vor core_event): {sequence}"
@@ -1250,7 +1250,7 @@ class TestAttachmentPurgeSperrtDieOwnerZeile:
 
 @pytest.mark.django_db(transaction=True)
 class TestAttachmentPurgeUndDirekterEreignisHold:
-    """Renn-Nachweis zu kimi-k3 B-1 und Re-Review Abschnitt 1, beobachtend.
+    """Observe the race in security finding B-1 and reinspection section 1.
 
     Der Haken haengt an ``owner_has_active_hold`` — an dieser Stelle haelt der
     Purge alle Sperren, die er nimmt. Beobachtet wird, ob eine **direkte**
@@ -1346,8 +1346,8 @@ class TestAttachmentPurgeUndDirekterEreignisHold:
         facility, admin, _person, ereignis, owner, anhang = bestand_ereignis
         beobachtung = self._rennen(facility, admin, ereignis, owner, anhang, monkeypatch)
         assert beobachtung["hold_im_fenster_fertig"] is False, (
-            "Die direkte Ereignis-Hold-Anlage committete neben dem laufenden Purge her — "
-            "Purge und Hold-Anlage haben kein gemeinsames Sperrobjekt (kimi-k3 B-1)"
+            "Direct event hold creation committed during the purge: "
+            "purging and hold creation share no lock (security finding B-1)"
         )
 
     def test_personen_owner_hold_auf_ereignis_der_person_wartet(self, bestand_person, monkeypatch):
@@ -1355,8 +1355,8 @@ class TestAttachmentPurgeUndDirekterEreignisHold:
         facility, admin, _person, ereignis, owner, anhang = bestand_person
         beobachtung = self._rennen(facility, admin, ereignis, owner, anhang, monkeypatch)
         assert beobachtung["hold_im_fenster_fertig"] is False, (
-            "Der Purge eines PERSONEN-Owners prueft auch Ereignis-Holds der Person, "
-            "serialisierte aber nicht mit deren Anlage Re-Review Abschnitt 1)"
+            "Purging a CLIENT owner checks the client's event holds, "
+            "but did not serialize with their creation (reinspection section 1)"
         )
 
     def test_fall_owner_hold_auf_ereignis_der_person_wartet(self, bestand_fall, monkeypatch):
@@ -1364,8 +1364,8 @@ class TestAttachmentPurgeUndDirekterEreignisHold:
         facility, admin, _person, ereignis, owner, anhang = bestand_fall
         beobachtung = self._rennen(facility, admin, ereignis, owner, anhang, monkeypatch)
         assert beobachtung["hold_im_fenster_fertig"] is False, (
-            "Der Purge eines FALL-Owners prueft auch Ereignis-Holds der Person, "
-            "serialisierte aber nicht mit deren Anlage Re-Review Abschnitt 1)"
+            "Purging a CASE owner checks the client's event holds, "
+            "but did not serialize with their creation (reinspection section 1)"
         )
 
 
@@ -1401,8 +1401,8 @@ class TestEreignisHoldAnlageSperrtDiePersonenzeile:
             )
         sequence = _lock_sequence(captured)
         assert "core_client" in sequence, (
-            f"Die Ereignis-Hold-Anlage nahm keinen Personen-Anker — sie serialisiert damit weder "
-            f"mit dem Personen-Purge noch mit dem Fall-Purge Re-Review): {sequence}"
+            f"Event hold creation took no client anchor and therefore serializes with neither "
+            f"client nor case purging (reinspection): {sequence}"
         )
         assert "core_event" in sequence, f"Die Ereigniszeile wurde nicht gesperrt: {sequence}"
         assert sequence.index("core_client") < sequence.index("core_event"), (

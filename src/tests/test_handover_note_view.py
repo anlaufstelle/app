@@ -437,11 +437,10 @@ def _hidden_fields(html: str) -> dict[str, str]:
 class TestUebernehmenPruefetDieAngezeigteFassung:
     """E-15 (R-E-25): der Abgleich gilt genau der Fassung, die gezeigt wurde.
 
-    Reproduktion des Befundes: Waehrend die erste Person die beiden
-    Fassungen vergleicht, schreibt eine zweite ``NEWER-WINNER``. Das
-    unveraenderte Konfliktformular abzusenden darf diesen Text NICHT
-    ungesehen ueberschreiben — die Zeilensperre serialisiert zwar, sagt aber
-    nichts darueber, welche Fassung die Person gesehen hat.
+    Reproduce the finding: while the first person compares both versions,
+    a second person writes ``NEWER-WINNER``. Submitting the unchanged conflict
+    form must not overwrite this unseen text. The row lock serializes writes,
+    but does not establish which version the person saw.
     """
 
     @pytest.fixture

@@ -285,14 +285,13 @@ class HandoverNoteUpdateView(StaffRequiredMixin, View):
     steht der Assistenz offen) und noch einmal im Service, damit kein zweiter
     Aufrufer am Guard vorbeikommt.
 
-    **Zwei Schicht-Koordinatenpaare** (Refs #2042, Befund E-04): das
-    Formular sagt mit ``shift_date``/``time_filter``, WELCHE Notiz geschrieben
-    wird, und mit ``display_date``/``display_time_filter``, WELCHE Uebergabe
-    gerade auf dem Bildschirm steht. Vorher war beides dasselbe — nach dem
-    Speichern der laufenden Notiz verengte sich der Austausch auf genau diesen
-    Block, und die Notiz der abgebenden Schicht verschwand aus der Seite, bis
-    jemand neu lud. Fehlen oder taugen die Anzeigekoordinaten nicht, wird die
-    automatische Uebergabe neu aufgeloest — dieselbe Quelle wie im GET.
+    **Two pairs of shift coordinates** (Refs #2042, finding E-04): the form
+    identifies the note to write with ``shift_date``/``time_filter`` and the
+    handover on screen with ``display_date``/``display_time_filter``. Previously
+    both were the same: saving the current note narrowed the replacement to
+    that block and hid the outgoing shift's note until reload. Missing or
+    invalid display coordinates trigger automatic handover resolution using
+    the same source as GET.
     """
 
     http_method_names = ["get", "post"]

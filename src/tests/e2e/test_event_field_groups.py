@@ -53,8 +53,8 @@ def _open_kontakt_form(page, base_url):
     # steht also schon vor Alpine im DOM und ist kein Signal. Auch der
     # Komponenten-State taugt nicht: ``open`` ist in der Alpine-Data-Factory
     # bereits mit ``true`` vorbelegt (``static/js/alpine/widgets.js``), ein
-    # ``typeof ... === 'boolean'`` waere schon vor ``init()`` wahr (Befund der
-    # Re-Review).
+    # ``typeof ... === 'boolean'`` is already true before ``init()``
+    # (confirmed during reinspection).
     #
     # Der Chevron dagegen traegt ``:class="rotateClass"``; ``rotate-180`` steht
     # NICHT in der server-gerenderten Klassenliste und erscheint erst, wenn

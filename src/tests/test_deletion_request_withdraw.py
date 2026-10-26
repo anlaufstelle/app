@@ -279,10 +279,9 @@ class TestWithdrawUi:
     def test_confirmer_sees_withdrawn_end_status_in_list(self, client, own_request, staff_user, lead_user):
         """Der Nachweis haengt an der KARTE, nicht an Sektions-ID und Text.
 
-        Sektionsrahmen und Ueberschrift rendern auch bei leerem Bucket — ein
-        Test auf beides bliebe gruen, wenn die WITHDRAWN-Abfrage aus der View
-        verschwaende und gar keine Antragskarte mehr erschiene (Cross-Review
-        Runde 1, Befund 7).
+        Section frames and headings render even for an empty bucket.
+        Checking both would still pass if the WITHDRAWN query disappeared
+        from the view and no request card appeared (reinspection, finding 7).
         """
         withdraw_deletion_request(own_request, staff_user)
         client.force_login(lead_user)
@@ -361,7 +360,7 @@ class TestSharedEnumDoesNotLeakIntoRectification:
 
 
 # ---------------------------------------------------------------------------
-# 6. Cross-Review-Nachtrag Runde 1, Refs #2040)
+# 6. Reinspection follow-up (Refs #2040)
 # ---------------------------------------------------------------------------
 
 

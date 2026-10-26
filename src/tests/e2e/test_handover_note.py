@@ -126,11 +126,10 @@ def leere_notizen(e2e_env):
 def eine_laufende_schicht(e2e_env, leere_notizen):
     """Genau EIN Zeitfenster, das die aktuelle Uhrzeit sicher deckt.
 
-    Die Seed-Schichten (Frueh/Spaet/Nacht) machen den Test von der Uhrzeit des
-    Laufs abhaengig. Ein Fenster 00:00–23:59 waere ebenfalls nicht sekundengenau
-    richtig — und am Tagesrand riss die frueher hier gerechnete Grenze
-    „jetzt minus eine Minute" den Ablauf ganz auf (Refs #2042, Befund
-    E-16): um 00:00:30 wurde daraus 23:59, und der Wechsel fand nicht statt.
+    Seed shifts (early/late/night) make the test depend on the run's clock.
+    A 00:00-23:59 window would not cover every second either. Near midnight,
+    the earlier "now minus one minute" boundary broke the flow (Refs #2042,
+    finding E-16): at 00:00:30 it became 23:59 and no takeover occurred.
 
     Deshalb ein Fenster **relativ zu jetzt, mit Mitternachts-Ueberlauf**:
     ``start = jetzt - 5 min``, ``end = start - 1 min``. Weil ``start > end``

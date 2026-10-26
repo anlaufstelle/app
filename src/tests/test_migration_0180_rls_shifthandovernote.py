@@ -8,7 +8,7 @@ scheiterte das erneute Apply mit ``policy ... already exists`` — genau der
 Fehler, den ``test_migration_0104_reversible.py`` fuer die FK-Constraints
 festhaelt.
 
-Zwei Sicherungen, absichtlich beide (Refs #2042, Befund E-10):
+Two intentional safeguards (Refs #2042, finding E-10):
 
 * ``transaction=False`` — die Test-Transaktion rollt am Testende alles zurueck.
 * ein ``finally``, das ausdruecklich auf die zu Testbeginn ermittelten

@@ -183,9 +183,9 @@ def _window_is_open(fenster: ShiftWindow, now, *, ab_schichtbeginn: bool) -> boo
     haenge das Schreibrecht doch wieder an einer nachtraeglich verschobenen
     Schichtgrenze.
 
-    Das obere Ende ist **offen** (``<``, Befund E-08): R-E-4 sagt
-    ``now < editable_until``. ``get_time_range`` bleibt davon unberuehrt — dort
-    ist das Ereignis-Fenster weiterhin an beiden Enden geschlossen.
+    The upper bound is **open** (``<``, finding E-08): R-E-4 requires
+    ``now < editable_until``. ``get_time_range`` remains unchanged: its event
+    window is still closed at both ends.
     """
     jetzt = now.astimezone(UTC)
     if ab_schichtbeginn and jetzt < fenster.window_start.astimezone(UTC):
@@ -540,15 +540,12 @@ def save_note(
         # Rechenschaftsspur (dieselbe Regel wie ``changed_fields_vs_db``).
         return bestand
 
-    # Refs #2042 Befund E-17): ``updated_at`` ist die Revision, gegen die
-    # der Konflikt-Abgleich prueft — und ``auto_now`` ist dafuer keine Zusage.
-    # Django setzt dort schlicht ``timezone.now()``, ohne den bisherigen Wert
-    # anzusehen. Steht die Uhr still (angehaltene Testuhr, Zeitsprung, groebere
-    # Zeitquelle), truegen zwei verschiedene Fassungen dieselbe Revision, und
-    # der Abgleich uebersaehe genau den Zwischen-Write, den er verhindern soll.
-    # Deshalb hier eine garantierte Untergrenze: mindestens eine Mikrosekunde
-    # nach dem bisherigen Stand. Bei laufender Uhr aendert das nichts — es
-    # bleibt bei der echten Zeit.
+    # Refs #2042 (finding E-17): ``updated_at`` is the revision checked for
+    # conflicts. ``auto_now`` only uses ``timezone.now()``, ignoring the previous
+    # value. A stopped clock, clock jump or coarse time source could give two
+    # versions the same revision and conceal the intervening write.
+    # Enforce a lower bound of one microsecond after the previous revision.
+    # With an advancing clock, the actual current time remains unchanged.
     #
     # Geschrieben wird per ``update()``, nicht ``save()``: ``auto_now`` haengt
     # an ``Field.pre_save`` und ueberschriebe einen explizit gesetzten Wert bei
@@ -589,13 +586,12 @@ def save_note(
 def _range_label_from(fenster: ShiftWindow, shift: Shift) -> str:
     """Schichtzeiten fuer den Notizkopf — in der aktiven Zeitzone.
 
-    Refs #2042 Befund E-12): Die eingefrorenen Grenzen kommen aus
-    Postgres mit ``tzinfo=UTC``. Ein direktes ``strftime`` machte daraus im
-    Sommer „04:00 – 12:00" statt „06:00 – 14:00" — und zwar erst NACH dem
-    Speichern, weil eine noch nicht angelegte Notiz ihre Grenzen lokal aus
-    ``get_time_range`` bezieht. Die Instants waren immer richtig, nur ihre
-    Darstellung nicht. Das Template rechnet bei Datetime-Ausgaben selbst um;
-    hier wird der String gebaut, also muss es hier passieren.
+    Refs #2042 (finding E-12): Postgres returns frozen boundaries with
+    ``tzinfo=UTC``. Direct ``strftime`` rendered summer times as "04:00 - 12:00"
+    instead of "06:00 - 14:00" after saving; unsaved notes obtain local
+    boundaries from ``get_time_range``. The instants were correct, only their
+    display was wrong. Templates convert datetime values themselves; this
+    function builds a string, so it must convert to local time here.
     """
     if shift.time_filter is None:
         return "00:00 – 23:59"

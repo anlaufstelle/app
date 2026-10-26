@@ -886,7 +886,7 @@ class TestDropPurgedMarkerEntries:
 
 @pytest.mark.django_db
 class TestLockOwnerRow:
-    """Refs #2123 (kimi-k3 B-1): die Owner-Zeile selbst muss gesperrt werden.
+    """Refs #2123 (security finding B-1): the owner row itself must be locked.
 
     Die Bestandstests (``test_attachment_purge.py``) suchen im mitgeschnittenen
     SQL nach ``core_event`` + ``FOR UPDATE``. Beides steht auch dann im

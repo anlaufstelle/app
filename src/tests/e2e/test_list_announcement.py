@@ -243,9 +243,8 @@ class TestListAnnouncementAcrossMultiplePages:
         assert region.get_attribute("role") == "status"
         assert region.get_attribute("aria-live") == "polite"
 
-        # Die entscheidende Unterscheidung: Seite 1 zeigt hoechstens
-        # DEFAULT_PAGE_SIZE Zeilen, die Ansage nennt aber den STRENG
-        # GROESSEREN Gesamtwert — eine Reimplementierung ueber die sichtbare
-        # Zeilenzahl waere hier nachweisbar falsch Review MITTEL).
+        # Page 1 shows at most DEFAULT_PAGE_SIZE rows, but the announcement
+        # gives the strictly larger total. Counting visible rows would be
+        # incorrect here (review finding, medium severity).
         visible_rows = page.locator("[data-testid='client-row']").count()
         assert 0 < visible_rows < total, (visible_rows, total)
