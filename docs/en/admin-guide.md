@@ -2326,7 +2326,7 @@ This display rule applies **retroactively to the entire existing history**. Auth
 
 #### Scope of the Access Record (Art. 15)
 
-The access record is generated from the client view as **JSON** (machine-readable, Art. 20) or as **PDF** (human-readable document). Both formats cover the same scope; the PDF summarizes but omits no category. Only roles with export permission (lead, application support) may trigger it; the request requires re-authentication (sudo mode), is rate-limited, and is itself recorded in the audit log.
+The access record is generated from the client view as **JSON** (machine-readable, Art. 20) or as **PDF** (human-readable document). Both formats cover the same categories; the PDF summarizes. Documentation type names for episodes and tasks appear only in the JSON access record, not in the PDF. Only roles with export permission (lead, application support) may trigger it; the request requires re-authentication (sudo mode), is rate-limited, and is itself recorded in the audit log.
 
 Included (Refs #1752):
 
@@ -2335,7 +2335,7 @@ Included (Refs #1752):
 | Master data | Pseudonym, contact stage, age group, active flag, k-anonymization flag, trash status (deleted at/by), creation and modification timestamps, documentation type and custom fields including orphaned fields (decrypted, including standard notes) |
 | Cases | Title, status, dates, case lead, trash status, documentation type and decrypted additional fields (including the standard description) |
 | Deleted cases | Cases in the trash as a **separate section** (Refs #1818): the same fields plus "deleted at/by" and the purge timestamp — until the final anonymization they are stored data and belong in the access record |
-| Episodes | Title, start/end per case, documentation type, decrypted additional fields and orphaned fields (including the standard description) |
+| Episodes | Title, start/end per case, documentation type name (JSON only), decrypted additional fields and orphaned fields (including the standard description) |
 | Outcome goals | Goals with milestones and achievement status |
 | Events | Document type, timestamp, case/episode reference, field data (decrypted) |
 | Deleted events | Existence of events not yet purged (trash) together with the **deletion timestamp and the user who triggered it** (Refs #2157) -- for a deletion by the retention run the user stays empty, because nobody acts there |
@@ -2344,7 +2344,7 @@ Included (Refs #1752):
 | Rectification requests | Art. 16 requests concerning the client (Refs #1796, [ADR-041](../adr/041-berichtigungsworkflow-intern.md)) in **all** states (pending, approved, rejected): the field concerned, previous and requested value (decrypted), reason, review note, requesting and reviewing user, timestamps |
 | Retention | Legal holds (Art. 17(3) — **not** Art. 18) and open deletion proposals with due date and category |
 | Restriction of processing | Art. 18 restriction marker (Refs #2045), where set: legal ground, timestamp and the person who set it |
-| Tasks | Title, item type, status, priority, assignment, dates, documentation type, decrypted additional fields and orphaned fields (including standard details) |
+| Tasks | Title, item type, status, priority, assignment, dates, documentation type name (JSON only), decrypted additional fields and orphaned fields (including standard details) |
 | Activities | Activity feed entries about the client, their cases, events and tasks |
 | Recently viewed | Timestamps at which the client record was opened or bookmarked |
 | Merges | Provenance after duplicate merges (Refs #1876, [ADR-045](../adr/045-personen-merge.md) §7): which record was merged into this one and when, and whether it has already been anonymized for good; the access record of the dissolved record conversely states "Merged into" |
@@ -2580,5 +2580,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- source-hash: b21694a520ae7b7e56003e9d4abd5b8107b92efc -->
+<!-- source-hash: f5c1bdc4a8f71712b26755a39134f094105b060d -->
 <!-- translation-date: 2026-10-26 -->

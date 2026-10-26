@@ -2326,7 +2326,7 @@ Die Darstellung gilt **rückwirkend für den gesamten Bestand**. Damit können b
 
 #### Umfang der Auskunft (Art. 15)
 
-Die Auskunft wird in der Personenansicht als **JSON** (maschinenlesbar, Art. 20) oder als **PDF** (lesbares Dokument) erzeugt. Beide Formate decken denselben Umfang ab; das PDF fasst zusammen, lässt aber keine Kategorie aus. Auslösen dürfen die Rollen mit Export-Recht (Leitung, Anwendungsbetreuung); der Aufruf verlangt eine Re-Authentifizierung (Sudo-Mode), ist ratelimitiert und wird selbst im Audit-Log protokolliert.
+Die Auskunft wird in der Personenansicht als **JSON** (maschinenlesbar, Art. 20) oder als **PDF** (lesbares Dokument) erzeugt. Beide Formate decken dieselben Kategorien ab; das PDF fasst zusammen. Dokumentationstypnamen von Episoden und Aufgaben stehen nur in der JSON-Auskunft, nicht im PDF. Auslösen dürfen die Rollen mit Export-Recht (Leitung, Anwendungsbetreuung); der Aufruf verlangt eine Re-Authentifizierung (Sudo-Mode), ist ratelimitiert und wird selbst im Audit-Log protokolliert.
 
 Enthalten sind (Refs #1752):
 
@@ -2335,7 +2335,7 @@ Enthalten sind (Refs #1752):
 | Stammdaten | Pseudonym, Kontaktstufe, Altersgruppe, Aktiv-Status, K-Anonymisierungs-Status, Papierkorb-Status (gelöscht am/von), Erstell- und Änderungszeitpunkt, Dokumentationstyp und Zusatzfelder inkl. nicht mehr zugeordneter Felder (entschlüsselt, einschließlich Standard-Notizen) |
 | Fälle | Titel, Status, Fristen, Fallverantwortung, Papierkorb-Status, Dokumentationstyp und entschlüsselte Zusatzfelder (einschließlich Standardbeschreibung) |
 | Gelöschte Fälle | Fälle im Papierkorb als **eigener Abschnitt** (Refs #1818): dieselben Angaben plus „gelöscht am/von" und der Tilgungsstempel — bis zur endgültigen Anonymisierung sind sie gespeicherter Datenbestand und gehören in die Auskunft |
-| Episoden | Titel, Beginn/Ende je Fall, Dokumentationstyp, entschlüsselte Zusatzfelder und verwaiste Felder (einschließlich Standardbeschreibung) |
+| Episoden | Titel, Beginn/Ende je Fall, Dokumentationstypname (nur JSON), entschlüsselte Zusatzfelder und verwaiste Felder (einschließlich Standardbeschreibung) |
 | Wirkungsziele | Ziele samt Meilensteinen und Erreichungsstand |
 | Ereignisse | Dokumentationstyp, Zeitpunkt, Fall-/Episoden-Bezug, Felddaten (entschlüsselt) |
 | Gelöschte Ereignisse | Existenz der noch nicht endgültig entfernten Ereignisse (Papierkorb) samt **Löschzeitpunkt und auslösender Person** (Refs #2157) — bei einer Löschung durch den Aufbewahrungslauf bleibt die Person leer, weil dort niemand handelt |
@@ -2344,7 +2344,7 @@ Enthalten sind (Refs #1752):
 | Berichtigungsanträge | Art.-16-Anträge zur Person (Refs #1796, [ADR-041](adr/041-berichtigungsworkflow-intern.md)) in **allen** Status (offen, genehmigt, abgelehnt): betroffenes Feld, bisheriger und gewünschter Wert (entschlüsselt), Begründung, Prüfvermerk, beantragende und prüfende Person, Zeitpunkte |
 | Aufbewahrung | Aufbewahrungssperren (Legal Holds, Art. 17 Abs. 3 — **nicht** Art. 18) und offene Löschvorschläge samt Frist und Kategorie |
 | Einschränkung der Verarbeitung | Sperrvermerk nach Art. 18 DSGVO (Refs #2045), sofern gesetzt: Rechtsgrund, Zeitpunkt und setzende Person |
-| Aufgaben | Titel, Aufgabentyp, Status, Priorität, Zuständigkeit, Fristen, Dokumentationstyp, entschlüsselte Zusatzfelder und verwaiste Felder (einschließlich Standarddetails) |
+| Aufgaben | Titel, Aufgabentyp, Status, Priorität, Zuständigkeit, Fristen, Dokumentationstypname (nur JSON), entschlüsselte Zusatzfelder und verwaiste Felder (einschließlich Standarddetails) |
 | Aktivitäten | Zeitstrom-Einträge zur Person, ihren Fällen, Ereignissen und Aufgaben |
 | Merkliste | Zeitpunkte, zu denen die Personenakte aufgerufen bzw. als Favorit markiert wurde |
 | Zusammenführungen | Herkunft nach Duplikat-Merges (Refs #1876, [ADR-045](adr/045-personen-merge.md) §7): welche Akte wann in diese überführt wurde und ob sie schon endgültig anonymisiert ist; die Auskunft der aufgelösten Akte nennt umgekehrt „Zusammengeführt in" |
