@@ -231,8 +231,6 @@
     "CHANGELOG.md:claude.md:0b8d88b8d1dbf2ef789f07674e6e96beb6161b7c4b99f5b920a769a56ed46cb7": 1,
     "CHANGELOG.md:claude.md:80b2ef46e41ae0b7a774fa692f3f9707d65f3094ba2be24abc1ca0f114bb956f": 1,
     "CHANGELOG.md:orchestrator:afbeaf21cdb2b689cb34b0544e3a9c6d700272e08d53b9896927c46b13f08064": 1,
-    "CONTRIBUTING.md:tabu:ec4266ebbb8ac73f95f5363128ba6b59420f7e8ad7639f79f258cec8338259a9": 1,
-    "docs/adr/002-cbvs-and-service-layer.md:claude.md:82b330f9b03574443dfa07ad9c9be6eef2def2531e565e98cc4da5831c35a007": 1,
     "tests/js/conflict-list-export.test.mjs:orchestrator:f4b3160f81e95604013e8026a9acb8870314c9f06a45ba30d4a236cf121ca951": 1,
     "tests/js/offline-revocation-boot.test.mjs:orchestrator:0c5490aeccd3793b0311ab80be0f09bd6890c5fb6080962054cd78f42263e453": 1,
     "tests/js/offline-revocation-boot.test.mjs:orchestrator:0e0275d6d46dc33bfef9952701087f8ad7b0d2724572f581d3324698ecfc6e29": 1,

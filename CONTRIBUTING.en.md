@@ -1054,5 +1054,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-24 -->
-<!-- source-hash: a8dd24f0493482b6d9a5c81ff69f780c73e494ba -->
+<!-- translation-date: 2026-10-26 -->
+<!-- source-hash: 3d158e9ab14babf16f730566ff46c49ee53ecf41 -->

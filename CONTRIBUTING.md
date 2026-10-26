@@ -187,7 +187,7 @@ python src/manage.py seed --flush          # vorhandene Daten vorher löschen
 
 > **Umgebungs-Guard:** `seed` läuft nur, wenn die Settings `SEED_ALLOWED = True`
 > setzen (dev/test/e2e/devlive). Unter `prod`-Settings bricht das Command mit
-> `CommandError` ab — Demo-Logins und `--flush` sind dort tabu; die
+> `CommandError` ab — Demo-Logins und `--flush` sind dort untersagt; die
 > Ersteinrichtung läuft über `manage.py create_super_admin` (Refs #1040).
 
 **Dokumentationstypen kommen aus einem Paket:** Der Katalog (9 Dokumentationstypen,
