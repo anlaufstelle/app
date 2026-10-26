@@ -2257,6 +2257,8 @@ The record stays soft-deleted afterwards (anonymized, not restored) and does not
 
 #### Case trash and the two deletion paths (Refs #1818)
 
+**Assigning and removing contacts:** In the case file, both actions require an open case whose case type is visible to the acting role. Even team leads and facility administrators must reopen a closed case before removing contacts; incorrect assignments are therefore corrected after reopening.
+
 Since [ADR-044](../adr/044-fall-loeschpfad.md), a **single case** can be deleted — until then Art. 17 knew only two granularities (one event or the entire person). The path mirrors the one for persons, with four differences worth knowing:
 
 | Question | Answer |
@@ -2580,5 +2582,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- source-hash: f5c1bdc4a8f71712b26755a39134f094105b060d -->
+<!-- source-hash: a63bbbef5c4786f7d86949bad58a85ae85218710 -->
 <!-- translation-date: 2026-10-26 -->

@@ -248,8 +248,9 @@ def _get_case_event_context(case, facility, user):
         .select_related("document_type", "created_by")
         .order_by("-occurred_at")
     )
+    can_change_case_events = assignable_cases(facility, user).filter(pk=case.pk).exists()
     unassigned_events = []
-    if case.client and assignable_cases(facility, user).filter(pk=case.pk).exists():
+    if case.client and can_change_case_events:
         unassigned_events = (
             Event.objects.visible_to(user)
             .filter(
@@ -261,7 +262,11 @@ def _get_case_event_context(case, facility, user):
             .select_related("document_type")
             .order_by("-occurred_at")
         )
-    return {"events": events, "unassigned_events": unassigned_events}
+    return {
+        "events": events,
+        "unassigned_events": unassigned_events,
+        "can_change_case_events": can_change_case_events,
+    }
 
 
 class CaseListView(StaffRequiredMixin, FilteredPaginatedListMixin, HTMXPartialMixin, View):

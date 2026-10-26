@@ -2257,6 +2257,8 @@ Der Datensatz bleibt danach soft-gelöscht (anonymisiert, nicht wiederhergestell
 
 #### Fall-Papierkorb und die beiden Löschwege (Refs #1818)
 
+**Kontakte zuordnen und lösen:** In der Fallakte sind beide Aktionen nur bei offenen Fällen mit einem für die handelnde Rolle sichtbaren Falltyp erlaubt. Auch Leitung und Anwendungsbetreuung können Kontakte erst nach dem Wiederöffnen aus einem geschlossenen Fall lösen; die Korrektur einer Fehlzuordnung erfolgt daher nach dem Wiederöffnen.
+
 Seit [ADR-044](adr/044-fall-loeschpfad.md) lässt sich ein **einzelner Fall** löschen — bis dahin kannte Art. 17 nur zwei Größen (ein Ereignis oder die ganze Person). Der Weg ist derselbe wie bei Personen, mit vier Unterschieden, die Sie kennen sollten:
 
 | Frage | Antwort |

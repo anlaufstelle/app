@@ -1059,6 +1059,8 @@ Was dabei passiert:
 
 ### Kontakte zuordnen und entfernen
 
+Zuordnen und Lösen sind nur bei **offenen Fällen mit einem für Ihre Rolle sichtbaren Falltyp** möglich; für beide Richtungen gilt dieselbe Grenze. Geschlossene Fälle lehnen das Lösen für alle Rollen ab. Eine Fehlzuordnung in einem geschlossenen Fall kann erst korrigiert werden, nachdem die Leitung oder Anwendungsbetreuung den Fall wieder geöffnet hat.
+
 Auf der Fall-Detailseite sehen Sie unterhalb der zugeordneten Kontakte eine Liste der **nicht zugeordneten Kontakte** der Person. So ordnen Sie einen Kontakt zu:
 
 1. Klicken Sie bei dem gewünschten Kontakt auf die Zuordnen-Schaltfläche.

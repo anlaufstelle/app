@@ -446,14 +446,15 @@ def assign_event_to_case(case, event, user):
     # Papierkorb-Schritt oder eine regulaere Bearbeitung hinweg.
     # Die Pruefungen „anonymes Ereignis" und „andere Person" laufen im
     # Vertrag selbst, direkt nach den Personensperren.
-    locked, target, _previous = lock_event_for_case_link(event, case)
+    locked, target, previous = lock_event_for_case_link(event, case)
     # Refs #2533: apply the creation boundary to the freshly locked case.
-    from core.services.events.case_assignment import assignable_cases
+    from core.services.events.case_assignment import assert_case_assignable
 
     if user is not None and not user_can_see_event(user, locked):
         raise ValidationError(_("Ereignis ist für diese Rolle nicht sichtbar."))
-    if not assignable_cases(target.facility, user).filter(pk=target.pk).exists():
-        raise ValidationError(_("Der Fall ist nicht mehr verfügbar oder nicht zugänglich."))
+    assert_case_assignable(target, user)
+    if previous is not None and previous.pk != target.pk:
+        assert_case_assignable(previous, user)
     previous_case_id = locked.case_id
     if previous_case_id == target.pk:
         event.refresh_from_db()
@@ -527,6 +528,9 @@ def remove_event_from_case(event, user, *, expected_case=None):
     if previous_case is None:
         event.refresh_from_db()
         return event
+    from core.services.events.case_assignment import assert_case_assignable
+
+    assert_case_assignable(previous_case, user)
     locked.case = None
     locked.save(update_fields=["case", "updated_at"])
     audit_event(

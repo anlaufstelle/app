@@ -1059,6 +1059,8 @@ What happens:
 
 ### Assigning and Removing Contacts
 
+Assigning and removing contacts are only possible for **open cases whose case type is visible to your role**; both directions use the same boundary. Removal from closed cases is rejected for every role. To correct an incorrect assignment in a closed case, a team lead or facility administrator must first reopen the case.
+
 On the case detail page, below the assigned contacts, you see a list of the person's **unassigned contacts**. To assign a contact:
 
 1. Click the assign button next to the desired contact.
@@ -1187,5 +1189,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- source-hash: c3e7403f86b71ec2fabd19090827e74e8062c777 -->
+<!-- source-hash: acc89251cdb263286dc067f416ea4ed61d5f86fa -->
 <!-- translation-date: 2026-10-26 -->

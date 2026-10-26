@@ -2,6 +2,7 @@
 
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from django.utils.translation import gettext_lazy as _
 
 from core.models import Case
 from core.services.case import cases_with_live_client
@@ -20,3 +21,9 @@ def assignable_cases(facility, user):
     return cases.filter(
         Q(document_type__isnull=True) | Q(document_type__sensitivity__in=allowed_sensitivities_for_user(user))
     )
+
+
+def assert_case_assignable(case, user):
+    """Check a locked case before changing either end of an event link."""
+    if not assignable_cases(case.facility, user).filter(pk=case.pk).exists():
+        raise ValidationError(_("Der Fall ist nicht mehr verfügbar oder nicht zugänglich."))
