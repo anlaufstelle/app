@@ -10,6 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from core.forms.dynamic import DynamicDataForm
 from core.services.compliance import allowed_sensitivities_for_user, user_can_see_document_type
 from core.services.dynamic_data import decrypt_dynamic_text_data, merge_dynamic_data, remove_restricted_fields
+from core.services.entity_details import visible_stored_details
 
 
 class EntityDetailsMixin(forms.ModelForm):
@@ -20,6 +21,7 @@ class EntityDetailsMixin(forms.ModelForm):
     def configure_details(self, facility, user, entity_type):
         self.details_old_data = dict(self.instance.data_json or {})
         self.details_old_type_id = self.instance.document_type_id
+        self.details_visible_old_data = visible_stored_details(self.instance, user)
         field = cast(forms.ModelChoiceField, self.fields["document_type"])
         if field.queryset is None:
             raise ValueError("The document type field requires a scoped queryset.")
@@ -49,7 +51,7 @@ class EntityDetailsMixin(forms.ModelForm):
             and self.add_prefix("document_type") not in self.details_original_keys
             and not any(slug in self.data for slug in slugs)
         )
-        initial = decrypt_dynamic_text_data(self.details_old_data)
+        initial = decrypt_dynamic_text_data(self.details_visible_old_data)
         data = self.data if self.is_bound and not self.details_preserve else None
         self.data_form = DynamicDataForm(data, document_type=self.details_type, initial_data=initial, facility=facility)
         self.details_restricted = []
@@ -62,14 +64,25 @@ class EntityDetailsMixin(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        if self._changes_hidden_source_values():
+            self.add_error("document_type", _("Keine Berechtigung für diesen Dokumentationstyp."))
         if self.details_preserve:
             return cleaned
         if not self.data_form.is_valid():
             self.add_error(None, _("Bitte prüfen Sie die zusätzlichen Angaben."))
         return cleaned
 
+    def _changes_hidden_source_values(self):
+        """Reject type changes when any stored value is outside the actor's source scope."""
+        selected_id = self.details_type.pk if self.details_type else None
+        return self.details_old_type_id != selected_id and bool(
+            self.details_old_data.keys() - self.details_visible_old_data.keys()
+        )
+
     def dynamic_payload(self):
         """Keep absent offline details unchanged; merge only validated online input."""
+        if self._changes_hidden_source_values():
+            raise ValidationError(_("Keine Berechtigung für diesen Dokumentationstyp."))
         if self.details_preserve:
             return {}
         if self.details_type is None:
@@ -77,8 +90,8 @@ class EntityDetailsMixin(forms.ModelForm):
         values = dict(self.data_form.cleaned_data)
         if self.details_old_type_id != self.details_type.pk:
             for slug in self.data_form.fields:
-                if slug not in self.data and slug in self.details_old_data:
-                    values[slug] = self.details_old_data[slug]
+                if slug not in self.data and slug in self.details_visible_old_data:
+                    values[slug] = self.details_visible_old_data[slug]
         return {
             "data_json": merge_dynamic_data(
                 self.details_type,
