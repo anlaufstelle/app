@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.translation import gettext_lazy as _
 
-from core.models import AuditLog, Client, DocumentTypeField, Event, FreeTextReview
+from core.models import AuditLog, Client, DocumentTypeField, Event, FieldTemplate, FreeTextReview
 from core.services.audit import audit_event
 from core.services.compliance.sensitivity import user_can_see_field
 from core.services.dynamic_protection import lock_dynamic_protection
@@ -321,9 +321,11 @@ def revoke_review(facility, user, target_type, target_id, field_key):
 
 
 def remove_target_reviews(instance):
-    """Remove metadata for a removed target and its no-longer-readable descendants."""
+    """Remove metadata for an encrypted field, removed target or unreadable descendants."""
     facility_id = instance.facility_id
-    if isinstance(instance, Client):
+    if isinstance(instance, FieldTemplate):
+        targets = Q(field_key=instance.slug)
+    elif isinstance(instance, Client):
         events = Event.objects.for_facility(facility_id).filter(client_id=instance.pk, pk=OuterRef("target_id"))
         targets = Q(Exists(events), target_type=TARGET_EVENT)
     else:

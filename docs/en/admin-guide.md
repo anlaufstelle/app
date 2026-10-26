@@ -2570,7 +2570,7 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 The **Free-text review** navigation item (`/free-text-review/`) shows only non-empty, unencrypted event text/textarea values in the current facility. Assistants and higher facility roles read only within existing type and field visibility. Titles, pseudonyms and dynamic person/case/episode/task fields are outside the review. System administrators gain no clinical review permissions.
 
-A review stores target model, target UUID, field key, expiry date, reviewing account, timestamp and a server-side HMAC content fingerprint, without copying free text. Facility scoping and a direct RLS policy protect this metadata. Content changes, expiry and a change of `SECRET_KEY` invalidate existing marks. Manual marking and revocation are audited with target/field/date rather than text or matched snippets. Deletion and anonymisation through supported write paths remove associated marks; audit history remains.
+A review stores target model, target UUID, field key, expiry date, reviewing account, timestamp and a server-side HMAC content fingerprint, without copying free text. Facility scoping and a direct RLS policy protect this metadata. Content changes, expiry and a change of `SECRET_KEY` invalidate existing marks. Manual marking and revocation are audited with target/field/date rather than text or matched snippets. Deletion and anonymisation through supported write paths remove associated marks; audit history remains. Upgrading a field to encrypted removes all marks for its field key within the same facility in the protection-change transaction; a downgrade does not recreate marks.
 
 Agree review dates and responsibilities organisationally. Local pattern detection is heuristic and offers no GDPR guarantee. Suggestions do not transfer or decrypt content, change sensitivity or edit source text. An actually encrypted field must be selected deliberately when creating a contact. Review supplements existing plaintext fields without encrypting them and is available online only. Activation uses the regular schema migrations without copying source data or running an additional seed command.
 
@@ -2582,5 +2582,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- source-hash: 071d857224cc8d65ce82cd35e80bcab0ec7deaba -->
+<!-- source-hash: c729d3c626bb58fc5faf90d7dafce896d4717993 -->
 <!-- translation-date: 2026-10-26 -->
