@@ -255,3 +255,31 @@ def disable_mfa(user: User, *, ip_address: str | None = None) -> User | None:
             ip_address=ip_address,
         )
     return locked
+
+
+def remove_passkey(user: User, credential_pk: int, *, ip_address: str | None = None) -> User:
+    """Remove an owned passkey together with session revocation and audit."""
+    from django_otp_webauthn.models import WebAuthnCredential
+
+    with mfa_change_transaction(user, require_current_session=True) as locked:
+        credentials = WebAuthnCredential.objects.filter(user=locked)
+        credential = credentials.filter(pk=credential_pk).first()
+        if credential is None:
+            raise WebAuthnCredential.DoesNotExist("The passkey does not belong to this account.")
+        if (
+            credential.confirmed
+            and not TOTPDevice.objects.filter(user=locked, confirmed=True).exists()
+            and not credentials.filter(confirmed=True).exclude(pk=credential.pk).exists()
+        ):
+            raise PermissionDenied("The account's last second factor cannot be removed.")
+        revoke_mfa_sessions(locked)
+        credential.delete()
+        audit_event(
+            AuditLog.Action.WEBAUTHN_REMOVED,
+            user=locked,
+            facility=locked.facility,
+            target_obj=locked,
+            detail={"event": "webauthn_removed", "credential_pk": credential_pk, "sessions_revoked": True},
+            ip_address=ip_address,
+        )
+    return locked

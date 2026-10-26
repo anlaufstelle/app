@@ -53,7 +53,7 @@ from core.services.security import (
     remaining_backup_codes,
     verify_backup_code,
 )
-from core.services.security.mfa import confirm_totp_setup, disable_mfa
+from core.services.security.mfa import confirm_totp_setup, disable_mfa, remove_passkey
 from core.services.security.mfa_session import mfa_completion_session
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
 from core.services.security.sudo_mode import is_sudo_required, sudo_redirect_if_required, sudo_url
@@ -676,29 +676,31 @@ class MFADisableView(LoginRequiredMixin, RequireSudoModeMixin, TemplateView):
     name="dispatch",
 )
 class MFAPasskeyDeleteView(LoginRequiredMixin, RequireSudoModeMixin, View):
-    """Entfernt einen einzelnen Passkey des aktuellen Nutzers (ADR-032, Refs #1492).
-
-    Sudo-pflichtig wie ``MFADisableView`` (Refs #683): eine gestohlene Session
-    darf keinen zweiten Faktor stilllegen. Da ein Passkey nur ZUSAETZLICH zu TOTP
-    existiert, bleibt nach dem Entfernen stets TOTP + Backup-Codes als Faktor und
-    Recovery-Anker erhalten — kein Downgrade-Risiko.
-    """
+    """Remove an owned passkey under sudo while retaining another second factor."""
 
     def post(self, request, *args, **kwargs):
         from django_otp_webauthn.models import WebAuthnCredential
 
         user = request.user
-        credential = WebAuthnCredential.objects.filter(user=user, pk=kwargs["pk"]).first()
-        if credential is None:
+        response = redirect("mfa_settings")
+        try:
+            with mfa_completion_session(request, response):
+                changed_user = remove_passkey(user, kwargs["pk"], ip_address=get_client_ip(request))
+                user.password = changed_user.password
+                update_session_auth_hash(request, user)
+                messages.success(request, _("Passkey entfernt."))
+                messages.info(request, _("Andere angemeldete Geräte wurden abgemeldet."))
+        except WebAuthnCredential.DoesNotExist:
             messages.error(request, _("Passkey nicht gefunden."))
             return redirect("mfa_settings")
-        credential.delete()
-        log_audit_event(
-            request,
-            AuditLog.Action.WEBAUTHN_REMOVED,
-            target_obj=user,
-            detail={"event": "webauthn_removed", "credential_pk": kwargs["pk"]},
-            facility=getattr(user, "facility", None),
-        )
-        messages.success(request, _("Passkey entfernt."))
-        return redirect("mfa_settings")
+        except Exception:  # noqa: BLE001 -- report failure only after the transaction has rolled back
+            logger.error("Passkey removal could not be committed.")
+            messages.error(
+                request,
+                _(
+                    "Der zweite Faktor wurde nicht geändert. "
+                    "Bitte versuche es erneut oder wende dich an die Administration."
+                ),
+            )
+            return redirect("mfa_settings")
+        return response
