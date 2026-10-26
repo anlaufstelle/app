@@ -157,7 +157,7 @@ class TestServiceWorkerCachesOfflineFallback:
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
         # Refs #1904: v55 drops runtime entries stored with the earlier policy.
-        assert 'CACHE_NAME = "anlaufstelle-v65"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v66"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
             "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
@@ -750,7 +750,8 @@ class TestPrecachedShellBumpGuard:
     # fingerprint below is pinned together with this name.
     # Refs #1493: v62 -> v63 -- only the precached crypto.js changes; the shell
     # markup and the APP_SHELL block (and with them the hash) stay unchanged.
-    _PINNED_CACHE_NAME = "anlaufstelle-v65"
+    # Refs #2668: task forms and the shared person/task offline shell changed.
+    _PINNED_CACHE_NAME = "anlaufstelle-v66"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
@@ -839,7 +840,7 @@ class TestPrecachedShellBumpGuard:
     # The offline-availability notice in both shells now says "Person" instead
     # of "Klientel" (docs/sprachleitlinie.md). v61 already reached the dev host,
     # so the rendered shell change ships with v62 and this hash.
-    _PINNED_SHELL_HASH = "87631813f00da6336ab6e335b5f3994c997c5dacbfff48aebdfae8db79265138"
+    _PINNED_SHELL_HASH = "0fd9ff2d9681370dbe00f9eaa1fbe2af489d04752f56b7e2ffe3a3ea94b6e42a"
     # Refs #1904: SHA-256 over the Content-Security-Policy headers the server
     # delivers with the precached offline home (see _policy_fingerprint). Every
     # precached shell and every runtime entry keeps the policy it was stored
