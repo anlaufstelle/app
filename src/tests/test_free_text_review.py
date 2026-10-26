@@ -27,12 +27,8 @@ def populate(request, target_type):
     obj = request.getfixturevalue(fixture)
     if target_type in {"Client", "Case", "Episode", "WorkItem"}:
         return obj, field
-    if target_type == "Event":
-        obj.data_json = {"notiz": "Private test content"}
-        obj.save(update_fields=["data_json"])
-    else:
-        setattr(obj, field, "Private test content")
-        obj.save(update_fields=[field])
+    obj.data_json = {"notiz": "Private test content"}
+    obj.save(update_fields=["data_json"])
     return obj, field
 
 
@@ -56,8 +52,7 @@ def test_role_matrix(request, facility, target_type, role):
             service().revoke_review(facility, user, target_type, obj.pk, field)
         return
     entries = service().list_page(facility, user, target_type).entries
-    allowed = role != "assistant_user" or target_type in {"WorkItem", "Event"}
-    assert [(entry.target_id, entry.field_key) for entry in entries] == ([(obj.pk, field)] if allowed else [])
+    assert [(entry.target_id, entry.field_key) for entry in entries] == [(obj.pk, field)]
 
 
 @pytest.mark.parametrize("target_type", ["Event"])
@@ -105,12 +100,8 @@ def test_review_roundtrip_revocation_and_content_change(request, facility, staff
     assert {row.action for row in audit} == {"free_text_reviewed", "free_text_review_revoked"}
     assert all("Private test content" not in str(row.detail) for row in audit)
     service().mark_review(facility, staff_user, target_type, obj.pk, field, until, entry.fingerprint)
-    if target_type == "Event":
-        obj.data_json = {"notiz": "Changed content"}
-        obj.save(update_fields=["data_json"])
-    else:
-        setattr(obj, field, "Changed content")
-        obj.save(update_fields=[field])
+    obj.data_json = {"notiz": "Changed content"}
+    obj.save(update_fields=["data_json"])
     assert not service().get_entry(facility, staff_user, target_type, obj.pk, field).is_reviewed
     with pytest.raises(ValidationError):
         service().mark_review(facility, staff_user, target_type, obj.pk, field, until, entry.fingerprint)

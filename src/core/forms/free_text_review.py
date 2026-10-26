@@ -18,7 +18,6 @@ class ReviewFilterForm(forms.Form):
         label=_("Geändert bis"),
         required=False,
         widget=forms.DateInput(attrs={"type": "date"}),
-        help_text=_("Bei Episoden zählt das Erfassungsdatum, da kein Änderungsdatum vorliegt."),
     )
     editor = forms.ChoiceField(label=_("Erfasst oder geprüft von"), required=False)
     risk = forms.ChoiceField(
@@ -29,11 +28,7 @@ class ReviewFilterForm(forms.Form):
 
     def __init__(self, *args, facility, user, editor_ids=(), **kwargs):
         super().__init__(*args, **kwargs)
-        cast(forms.ChoiceField, self.fields["model"]).choices = [
-            (key, label)
-            for key, label in TARGET_LABELS.items()
-            if user.is_staff_or_above or key in {"WorkItem", "Event"}
-        ]
+        cast(forms.ChoiceField, self.fields["model"]).choices = list(TARGET_LABELS.items())
         self.fields["model"].required = bool(cast(forms.ChoiceField, self.fields["model"]).choices)
         editor = cast(forms.ChoiceField, self.fields["editor"])
         editor.choices = [

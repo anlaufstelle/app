@@ -11,41 +11,23 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def marked_targets(request, facility, staff_user):
-    targets = {"Client": request.getfixturevalue("client_identified"), "Case": request.getfixturevalue("case_open")}
-    for target_type in ["Event"]:
-        obj, field = populate(request, target_type)
-        entry = get_entry(facility, staff_user, target_type, obj.pk, field)
-        mark_review(facility, staff_user, target_type, obj.pk, field, timezone.localdate(), entry.fingerprint)
-        targets[target_type] = obj
-    targets["Episode"] = request.getfixturevalue("episode")
-    targets["WorkItem"] = request.getfixturevalue("sample_workitem")
-    for target_type in ["Client", "Case", "Episode", "WorkItem"]:
-        FreeTextReview.objects.create(
-            facility=facility,
-            target_type=target_type,
-            target_id=targets[target_type].pk,
-            field_key="notes" if target_type == "Client" else "description",
-            reviewed_until=timezone.localdate(),
-            content_fingerprint="0" * 64,
-        )
-    return targets
+def marked_event(request, facility, staff_user):
+    obj, field = populate(request, "Event")
+    entry = get_entry(facility, staff_user, "Event", obj.pk, field)
+    mark_review(facility, staff_user, "Event", obj.pk, field, timezone.localdate(), entry.fingerprint)
+    return obj
 
 
-@pytest.mark.parametrize("target_type", ["Episode", "WorkItem", "Event"])
-def test_physical_delete_removes_markers(marked_targets, facility, target_type):
-    obj = marked_targets[target_type]
-    target_id = obj.pk
-    assert FreeTextReview.objects.for_facility(facility).filter(target_type=target_type, target_id=target_id).exists()
-    obj.delete()
-    assert (
-        not FreeTextReview.objects.for_facility(facility).filter(target_type=target_type, target_id=target_id).exists()
-    )
+def test_physical_delete_removes_event_marker(marked_event, facility):
+    target_id = marked_event.pk
+    assert FreeTextReview.objects.for_facility(facility).filter(target_type="Event", target_id=target_id).exists()
+    marked_event.delete()
+    assert not FreeTextReview.objects.for_facility(facility).exists()
 
 
 @pytest.mark.parametrize("state", ["trash", "inactive", "anonymize"])
-def test_person_revocation_cleans_all_dependent_markers(marked_targets, facility, staff_user, state):
-    person = marked_targets["Client"]
+def test_person_revocation_cleans_event_marker(marked_event, facility, staff_user, state):
+    person = marked_event.client
     if state == "trash":
         person.soft_delete(user=staff_user)
     elif state == "inactive":
@@ -58,18 +40,17 @@ def test_person_revocation_cleans_all_dependent_markers(marked_targets, facility
     assert not FreeTextReview.objects.for_facility(facility).exists()
 
 
-@pytest.mark.parametrize("state", ["trash", "anonymize"])
-def test_case_revocation_cleans_case_and_episode(marked_targets, facility, staff_user, state):
-    case = marked_targets["Case"]
-    if state == "trash":
-        case.soft_delete(user=staff_user)
-    else:
-        from core.services.case.deletion import anonymize_case
+@pytest.mark.parametrize("fixture", ["case_open", "episode", "sample_workitem"])
+def test_removed_targets_do_not_own_review_markers(request, marked_event, facility, staff_user, fixture):
+    from django.http import Http404
 
-        anonymize_case(case, user=staff_user, trigger="manual")
-    assert not FreeTextReview.objects.for_facility(facility).filter(target_type__in=["Case", "Episode"]).exists()
-    assert FreeTextReview.objects.for_facility(facility).filter(target_type="Event").exists()
-    assert FreeTextReview.objects.for_facility(facility).filter(target_type="WorkItem").exists()
+    target = request.getfixturevalue(fixture)
+    with pytest.raises(Http404):
+        get_entry(facility, staff_user, type(target).__name__, target.pk, "description")
+    target.delete()
+    assert list(FreeTextReview.objects.for_facility(facility).values_list("target_type", "target_id")) == [
+        ("Event", marked_event.pk)
+    ]
 
 
 def test_marked_event_soft_delete_removes_metadata(facility, staff_user, sample_event):

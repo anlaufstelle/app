@@ -106,8 +106,6 @@ def test_foreign_target_is_404(request, client, staff_user, target_type):
         field_template = FieldTemplate.objects.create(facility=obj.facility, name="Notiz", field_type="textarea")
         DocumentTypeField.objects.create(document_type=obj.document_type, field_template=field_template)
         obj.data_json = {field_template.slug: "Foreign private content"}
-    elif target_type not in {"Client", "Case", "Episode", "WorkItem"}:
-        setattr(obj, field, "Foreign private content")
     obj.save()
     client.force_login(staff_user)
     url = target_url(obj, field)

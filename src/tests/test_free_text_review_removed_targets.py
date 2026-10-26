@@ -60,3 +60,12 @@ def test_review_without_remaining_targets_returns_an_empty_page(client, assistan
 def test_removed_review_list_target_is_not_found(client, staff_user, target):
     client.force_login(staff_user)
     assert client.get(reverse("core:free_text_review_list"), {"model": target}).status_code == 404
+
+
+def test_review_list_describes_only_event_texts(client, staff_user):
+    client.force_login(staff_user)
+    response = client.get(reverse("core:free_text_review_list"))
+    assert response.status_code == 200
+    assert list(response.context["filter_form"].fields["model"].choices) == [("Event", "Ereignis-Freitexte")]
+    assert "unverschlüsselte Ereignis-Freitexte" in response.content.decode()
+    assert "Bei Episoden zählt" not in response.content.decode()

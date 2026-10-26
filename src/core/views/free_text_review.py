@@ -9,8 +9,6 @@ from django.views.decorators.cache import never_cache
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.free_text_review import FreeTextReviewForm, ReviewFilterForm
-from core.models import AuditLog
-from core.services.audit import log_audit_event
 from core.services.free_text_review import (
     MAX_PAGE,
     TARGET_LABELS,
@@ -23,12 +21,6 @@ from core.services.free_text_review import (
 )
 from core.utils.ratelimit import ratelimit
 from core.views.mixins import AssistantOrAboveRequiredMixin
-
-
-def _audit_qualified_reads(request, entries):
-    """Write the existing qualified-read audit once per person whose notes are actually rendered."""
-    for client_id in dict.fromkeys(entry.qualified_client_id for entry in entries if entry.qualified_client_id):
-        log_audit_event(request, AuditLog.Action.VIEW_QUALIFIED, target_type="Client", target_id=str(client_id))
 
 
 def _page_number(raw):
@@ -50,10 +42,7 @@ class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
         if data.get("model") and data["model"] not in TARGET_LABELS:
             raise Http404("Review target not found")
         if not data.get("model"):
-            data["model"] = next(
-                (key for key in TARGET_LABELS if request.user.is_staff_or_above or key in {"WorkItem", "Event"}),
-                "",
-            )
+            data["model"] = next(iter(TARGET_LABELS), "")
         editor_ids = (
             list_editor_ids(request.current_facility, request.user, data["model"])
             if data["model"] in TARGET_LABELS
@@ -85,14 +74,12 @@ class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
             if request.headers.get("HX-Request")
             else ("core/free_text_review/list.html")
         )
-        _audit_qualified_reads(request, page.entries)
         return render(request, template, context, status=200 if form.is_valid() else 400)
 
 
 class FreeTextReviewTargetView(AssistantOrAboveRequiredMixin, View):
     def _render(self, request, entry, form, *, status=200):
         context = {"entry": entry, "form": form, "model_label": TARGET_LABELS[entry.target_type]}
-        _audit_qualified_reads(request, [entry])
         template = (
             "core/free_text_review/partials/target.html"
             if request.headers.get("HX-Request")
