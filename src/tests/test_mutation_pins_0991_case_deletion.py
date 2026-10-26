@@ -1,5 +1,4 @@
-"""Pin-Test des Mutations-Delta-Checkpoints der Welle M (release-0.99.1) zu
-``core.services.case.deletion``.
+"""Mutation regression tests for ``core.services.case.deletion``.
 
 Quelle: Ticket #2322 (#2322),
 Survivor-Triage des Checkpoint-Deltas ``6435c18e`` (BASE v0.99.0). Gepinnt

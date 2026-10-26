@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle J (0.97, Refs #2149) — Prio-1-Survivors der Fall-Services.
+"""Mutation regression tests for ``core.services.case.cases`` (Refs #2149).
 
 Quelle: Survivor-Triage des atomaren Mutations-Messlaufs
 (``welle-j-0.97/reports/triage-097-case-rest.json``, Batch ``case-rest``).

@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle K (0.98, Refs #2193) — Prio-2-Testlücken in
-``core.services.case.episodes``, Batch ``case-client``.
+"""Mutation regression tests for ``core.services.case.episodes`` (Refs #2193).
 
 Quelle: ``welle-k-0.98/reports/c-scratch/batch-case-client.json``
 (``triage-097-case-rest.json``). Drei Survivors, keine Überschneidung mit den

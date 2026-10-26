@@ -1,4 +1,4 @@
-"""Mutations-Pins Welle L (0.99), Vollmutation #2174, Nacharbeit Batch case-1n.
+"""Mutation regression tests for ``core.services.case.deletion.x__move_case_to_trash__mutmut_1`` (Refs #2174).
 
 Refs #2174.
 Refs #2193.

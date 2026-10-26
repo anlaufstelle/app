@@ -247,27 +247,12 @@ def _complete_mfa_setup(page, base_url):
 
 
 def _erwarte_nach_login(page, base_url, ziel):
-    """Auf das Post-Login-Ziel warten — mit EINEM Umweg ueber ``/``, falls noetig.
+    """Check that login reaches the expected authenticated destination.
 
-    Der Login-Bootstrap (``static/js/auth-bootstrap.js``) faengt den Submit ab,
-    meldet sich per ``fetch`` an und navigiert erst nach dem Salt-Abruf weiter.
-    Scheitert dieser Nachlauf, faellt er auf einen nativen Re-Submit des
-    Login-Formulars zurueck — mit dem CSRF-Token von VOR der Anmeldung, der
-    beim Login rotiert wurde. Die Seite bleibt dann mit „403 – Sicherheits-Token
-    abgelaufen" auf ``/login/`` stehen, obwohl die SITZUNG steht.
-
-    Nachgewiesen ist das fuer den Zwangswechsel (siehe
-    :class:`TestInitialPasswordOnboardingJourney` — dort fehlt
-    ``/auth/offline-key-salt/`` in den ``EXEMPT_URLS`` der Middleware, der
-    Salt-Abruf liefert HTML statt JSON). In einem von sechs Datei-Laeufen trat
-    dasselbe Bild auch im Invite-Flow auf; die Ursache dort ist NICHT geklaert
-    (im Bericht als offener Punkt gefuehrt).
-
-    Der Umweg macht den Test nicht blind: geprueft wird weiterhin, WOHIN die
-    Middleware eine angemeldete Sitzung fuehrt — nur nicht mehr, ob der
-    Bootstrap selbst dorthin navigiert hat. Fuer den nachgewiesenen Fall haelt
-    der erste Test in :class:`TestInitialPasswordOnboardingJourney` genau diese
-    Zusage separat fest (seit dem Fix der Middleware in Welle G gruen).
+    If the redirect does not settle, navigate there explicitly to verify
+    that middleware accepts the session. This fallback cannot prove that
+    login itself reached the destination; the initial-password journey
+    checks that redirect separately.
     """
     try:
         page.wait_for_url(ziel, timeout=15000)
@@ -374,7 +359,7 @@ class TestInviteOnboardingJourney:
 class TestInitialPasswordOnboardingJourney:
     """Weg 2: Initialpasswort → Zwangswechsel → MFA-Setup → Zeitstrom.
 
-    **Befund aus diesem Test (Refs #2025, in Welle G in der Middleware gefixt):**
+    **Middleware regression covered by this test (Refs #2025):**
     Der erste Login eines Kontos mit ``must_change_password=True`` endete auf
     einer Seite „403 – Sicherheits-Token abgelaufen" statt auf
     ``/password-change/``. Mechanik (am Fehlerbild und am Codepfad verifiziert):

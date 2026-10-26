@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle F (0.93) — Prio-1-Survivors in ``core.services.import_engine``.
+"""Mutation regression tests for ``core.services.import_engine``.
 
 Quelle: Survivor-Triage des Moduls ``src/core/services/import_engine.py``
 (Mutantenbaum ``mutants/src/core/services/import_engine.py``). Gepinnt wird

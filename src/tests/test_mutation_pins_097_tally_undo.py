@@ -1,5 +1,4 @@
-"""Mutation-Pins der Welle J (0.97, Refs #2149) — Bindungen der
-Strichlisten-Ruecknahme (``core.services.events.tally_undo``).
+"""Mutation regression tests for ``core.services.events.tally_undo`` (Refs #2149).
 
 Quelle: Prio-1-Survivors des atomaren Messlaufs
 (``welle-j-0.97/reports/triage-097-sec.json``, Batch ``sec``). Acht
@@ -22,8 +21,8 @@ bestaetigte Testluecken in drei Familien:
   ``and``-Paar, und die Eignungspruefung verliert die handelnde Person. Beides
   oeffnet den Loeschpfad fuer Akteure, die ihn nicht haben duerfen.
 
-Gepinnte Mutanten (Mutantenbaum ``/work/anlaufstelle/mutants``, Stand
-f5272d3e — ``tally_undo.py`` ist seitdem unveraendert):
+Pinned mutations from source revision ``f5272d3e``
+(the module has not changed since that revision):
 
 * ``x__matches_identity__mutmut_4``    — ``and`` -> ``or`` vor ``event.created_by_id == user.pk``
 * ``x_undo_tally_event__mutmut_28``    — ``target_id=str(event.pk)`` faellt aus dem Replay-Filter

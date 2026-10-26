@@ -1,17 +1,12 @@
-"""Pin-Tests Welle L (release-0.99) — Vollmutation #2174/#2193, Batch **handover_note-b**.
+"""Mutation regression tests for ``core.services.case.handover_note`` (Refs #2174, #2193).
 
-Modul ``core.services.case.handover_note`` (Schreibpfad der manuellen
-Schichtnotiz, Refs #2042), Batch-Teil **b** von drei disjunkten Batches
-(a/b/c teilen sich das Modul; ``handover_note-a``/``-c`` laufen parallel in
-eigenen Worktrees und eigenen Pin-Dateien). Dieser Batch deckt 70 Survivors
-in 13 Funktionen: ``next_shift`` (15), ``_build_block`` (9),
+Regression coverage for ``core.services.case.handover_note`` (Refs #2042),
+in one of three separate test files. These 70 surviving mutations span
+13 functions: ``next_shift`` (15), ``_build_block`` (9),
 ``is_shift_editable`` (8), ``assert_shift_identity`` (7), ``_fenster_zu`` (6),
-``_window_is_open`` (4), ``_schicht_unbestimmbar`` (4), ``_identitaet_ok``
-(4), ``can_read_notes`` (3), ``get_note`` (3), ``build_handover_note_context``
-(3), ``_active_time_filters`` (2), ``editable_until`` (2). Liste:
-``/work/wellen/welle-l-0.99/reports/m-scratch/batch-handover_note-b.json``.
-Quelle der Mutanten-Rümpfe: Mutantenbaum
-``mutants/src/core/services/case/handover_note.py``.
+``_window_is_open`` (4), ``_schicht_unbestimmbar`` (4), ``_identitaet_ok`` (4),
+``can_read_notes`` (3), ``get_note`` (3), ``build_handover_note_context`` (3),
+``_active_time_filters`` (2), and ``editable_until`` (2).
 
 Triage-Ergebnis (Details siehe ``reports/m-pins-handover_note-b-report.md``):
 alle 70 Mutanten sind entweder ``test`` (62, hier gepinnt) oder ``equivalent``

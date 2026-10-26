@@ -1,5 +1,4 @@
-"""Pin-Test der Welle L (0.99, Refs #2174/#2193) — Prio-3-Testluecke in
-``core.forms.events``, Batch ``forms-3`` (Vollmutation-Survivor-Triage).
+"""Mutation regression tests for ``core.forms.events`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-forms-3.json`` (Triage
 ``triage-099-forms-3.json``).

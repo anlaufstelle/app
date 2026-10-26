@@ -1,15 +1,10 @@
-"""Pin-Tests Welle L (release-0.99) — Vollmutation #2174/#2193, Batch
-**compliance-5**.
+"""Mutation regression tests for ``core.services.compliance.system_info`` (Refs #2174, #2193).
 
-Module: ``core.services.compliance.system_info`` (``_migration_checks``,
+Regression coverage for 54 surviving mutations in
+``core.services.compliance.system_info`` (``_migration_checks``,
 ``_version_checks``), ``core.services.compliance.app_superuser``
-(``_app_superuser_checks``), ``core.services.compliance.k_anonymization``
-(``_pseudonym_hash``, ``k_anonymize_client``). Liste der 54 Survivors:
-``/work/wellen/welle-l-0.99/reports/m-scratch/batch-compliance-5.json``.
-Triage: ``reports/m-scratch/pins-compliance-5/triage-099-compliance-5.json``.
-Quelle der Mutanten-Rümpfe: Mutantenbaum
-``mutants/src/core/services/compliance/{system_info,app_superuser,
-k_anonymization}.py``.
+(``_app_superuser_checks``), and ``core.services.compliance.k_anonymization``
+(``_pseudonym_hash``, ``k_anonymize_client``).
 
 ``_migration_checks``/``_app_superuser_checks`` teilen dieselbe Struktur
 (OK-Zweig ohne Treffer, CRITICAL-Zweig mit Top-5-Liste + „(+ n weitere)“-

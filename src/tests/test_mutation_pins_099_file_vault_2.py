@@ -1,6 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
-``core.services.file_vault.audit`` und ``core.services.file_vault.quota``
-(Batch ``file_vault-2``).
+"""Mutation regression tests for ``core.services.file_vault.audit``, ``core.services.file_vault.quota``.
 
 Refs #2174.
 Refs #2193.

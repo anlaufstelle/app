@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — ``core.services.dashboard.focus_box``,
-Batch ``dashboard-1`` (Vollmutation-Survivor-Triage, 52 Survivors in ``build_focus_box``).
+"""Mutation regression tests for ``core.services.dashboard.focus_box`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-dashboard-1.json`` (Triage
 ``reports/m-scratch/pins-dashboard-1/triage-099-dashboard-1.json``).

@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — Batch ``events-5``.
+"""Mutation regression tests for ``core.services.events.tally_undo`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``events-5``
 (``welle-l-0.99/reports/m-scratch/batch-events-5.json``, Triage
@@ -34,7 +34,7 @@ unveraendert. Zwoelf Mutanten sind echte Testluecken und werden hier gepinnt:
   weg, das Ergebnis bleibt gleich, die Abfragezahl steigt.
 * **Replay-Nachweis** (``undo_tally_event``, ``is_deleted``-Zweig): zwei
   weitere Filterfelder (``action``, ``target_type``) faellen aus der bereits
-  in Welle J teilweise gepinnten Audit-Existenzpruefung.
+  audit-existence check, which already has partial regression coverage.
 * **``current_tally_window``**: exportiert, aber im gesamten Baum nirgends
   aufgerufen (echte Testluecke) — ein Mutant stuerzt ab, der andere ignoriert
   die uebergebene Facility bei der Schichterkennung.

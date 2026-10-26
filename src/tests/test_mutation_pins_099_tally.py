@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.forms.tally``.
+"""Mutation regression tests for ``core.forms.tally`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``forms-2``
 (``welle-l-0.99/reports/m-scratch/batch-forms-2.json``,

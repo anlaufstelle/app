@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle K (0.98) — Prio-2-Survivors in ``core.services.events.crud``.
+"""Mutation regression tests for ``core.services.events.crud``.
 
 Quelle: Füllauftrag #2193,
 Batch ``merge-crud`` (``triage-096-events-import.json``). Acht Mutanten in vier

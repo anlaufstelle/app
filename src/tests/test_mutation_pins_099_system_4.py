@@ -1,6 +1,5 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174, Refs #2193) — Testlücken in
-``core.services.system.offline_revocation`` und ``core.services.system.ban_revision``,
-Batch ``system-4``.
+"""Mutation regression tests for ``core.services.system.offline_revocation``,
+``core.services.system.ban_revision`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-system-4.json`` (11 Survivor-
 Mutanten über die Offline-Widerrufsliste und die Hausverbots-Revision;

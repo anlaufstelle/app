@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174, Refs #2193) — Testlücken in
-``core.services.system.field_types``, Batch ``system-1``.
+"""Mutation regression tests for ``core.services.system.field_types`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-system-1.json`` (64
 Survivors/No-Tests über die Default-Wert-Validatoren und die

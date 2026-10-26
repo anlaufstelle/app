@@ -1,4 +1,4 @@
-"""Mutation-Pins Welle L (0.99) — ``core.forms.user_access`` (Vollmutation #2174).
+"""Mutation regression tests for ``core.forms.user_access`` (Refs #2174).
 
 Batch ``forms-1`` (Refs #2174, Refs #2193). 27 Survivors in
 ``_UserAccessForm.__init__`` (10), ``_UserAccessForm.clean_role`` (11) und

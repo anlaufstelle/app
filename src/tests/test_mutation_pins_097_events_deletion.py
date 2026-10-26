@@ -1,5 +1,4 @@
-"""Mutation-Pins der Welle J (0.97, Refs #2149) — Zieltreue der Lookups im
-Vier-Augen-Loeschworkflow fuer Ereignisse (``core.services.events.deletion``).
+"""Mutation regression tests for ``core.services.events.deletion`` (Refs #2149).
 
 Quelle: Prio-1-Survivors des atomaren Messlaufs
 (``welle-j-0.97/reports/triage-097-sec.json``, Batch ``sec``). Gepinnt werden
@@ -31,11 +30,10 @@ f5272d3e):
 * ``x_reject_deletion__mutmut_4``  — ``get(pk=…, facility=…)`` -> ``get(facility=…)``
 * ``x_reject_deletion__mutmut_5``  — ``get(pk=…, facility=…)`` -> ``get(pk=…)``
 
-Hinweis zur Numerierung: ``reject_deletion`` hat seit e2b5c276 (Welle J, B1)
-den Vier-Augen-Guard VOR der Sperre; im Mutantenbaum steht die Funktion noch
-ohne ihn, die Nummern ``4``/``5`` bezeichnen dort dieselbe Lookup-Stelle. Die
-Pins sind so gebaut, dass sie in beiden Faellen gelten: Antragsteller und
-Reviewer sind durchgehend verschiedene Personen.
+Numbering note: since e2b5c276, ``reject_deletion`` checks the two-person
+rule before taking the lock. Mutation numbers ``4``/``5`` refer to the same
+lookup in the earlier implementation without this guard. The tests work
+with both versions because requester and reviewer are always different users.
 
 Konventionen wie in den 096-Pin-Dateien: eine Testklasse je Funktion, jeder
 Test nennt seine Mutanten in der Docstring samt der Abweichung, Zusicherungen

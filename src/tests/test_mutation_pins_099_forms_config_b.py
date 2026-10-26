@@ -1,5 +1,4 @@
-"""Mutation-Pins Welle L (0.99) — ``core.forms.config``, Batch ``config-b``
-(Vollmutation #2174, Refs #2193).
+"""Mutation regression tests for ``core.forms.config`` (Refs #2174, #2193).
 
 ``core.forms.config`` ist auf drei Batches a/b/c verteilt (andere Funktionen,
 andere Dateien) — diese Datei deckt ausschließlich die 70 Survivors aus

@@ -15,7 +15,7 @@ REPORT_DIR = REPO_ROOT / "docs" / "archive" / "audits"
 #: Explicit report target; without it :func:`report_path` picks a dated name.
 REPORT_PATH_ENV = "AUTHZ_AUDIT_REPORT_PATH"
 
-# Seed-Logins (CLAUDE.md): Facility 1 ohne Suffix, Facility 2 mit _1.
+# Seed logins: facility 1 has no suffix; facility 2 uses _1.
 ACTOR_LOGINS = {
     "facility_admin": "admin",
     "lead": "emma",

@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle K (0.98) — Prio-2-Survivors in ``core.services.client.merge``.
+"""Mutation regression tests for ``core.services.client.merge``.
 
 Quelle: Füllauftrag #2193,
 Batch ``merge-crud`` (``triage-096-merge-1.json``/``triage-096-merge-2-misc.json``).

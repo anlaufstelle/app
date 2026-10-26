@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
-``core.services.compliance.breach_detection`` (Batch ``breach_detection-b``).
+"""Mutation regression tests for ``core.services.compliance.breach_detection``.
 
 Refs #2174.
 Refs #2193.

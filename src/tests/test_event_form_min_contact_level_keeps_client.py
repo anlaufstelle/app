@@ -1,12 +1,10 @@
 """Guard: Personenzuordnung bleibt nach Mindestkontaktstufen-Ablehnung erhalten (Refs #2345).
 
-Reproduziert den Fresh-Install-Befund aus #2173 (Welle N): eine frisch
-angelegte Person startet mit der Kontaktstufe "Nur Pseudonym". Mehrere Typen
-des mitgelieferten Standardkatalogs verlangen "Mit Zusatzangaben" (#2270),
-sodass der allererste Dokumentationsversuch abgewiesen wird. Beim erneut
-angezeigten Formular blieben bisher alle Eingaben erhalten AUSSER der
-Personenzuordnung — die Fachkraft musste die Person erneut suchen, und die
-Meldung nannte den Grund, aber nicht den Weg zur Abhilfe.
+Reproduces the fresh-install regression from #2173: a new person starts
+with contact stage "Nur Pseudonym". Several standard catalog types require
+"Mit Zusatzangaben" (Refs #2270), so the first documentation attempt is
+rejected. The bound form must retain the selected person when redisplayed
+after contact-stage validation fails (Refs #2345).
 
 Die Personenzuordnung haengt am Alpine-Autocomplete (``components/
 _client_autocomplete.html``): das versteckte ``<input name="client">`` ist

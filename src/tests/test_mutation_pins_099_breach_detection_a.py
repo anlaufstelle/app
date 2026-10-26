@@ -1,5 +1,4 @@
-"""Pin-Tests Welle L (release-0.99, Vollmutation #2174) — Batch
-**breach_detection-a** in ``core.services.compliance.breach_detection``.
+"""Mutation regression tests for ``core.services.compliance.breach_detection`` (Refs #2174).
 
 69 Survivors aus dem Voll-Mutationslauf auf ``d4eec1f8`` (Liste:
 ``reports/m-scratch/batch-breach_detection-a.json``), betroffene Funktionen

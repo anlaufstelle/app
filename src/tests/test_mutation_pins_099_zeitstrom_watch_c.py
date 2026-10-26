@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — Batch ``zeitstrom_watch-c``
-(Vollmutation-Survivor-Triage) in ``core.services.zeitstrom_watch``.
+"""Mutation regression tests for ``core.services.zeitstrom_watch`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-zeitstrom_watch-c.json``
 (Triage ``triage-099-zeitstrom_watch-c.json``). Deckt zwei Funktionen ab:

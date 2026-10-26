@@ -1,11 +1,8 @@
-"""Mutation-Pins Welle L (0.99) — ``core.services.system.facility_export``, Batch ``facility_export-b``
-(Vollmutation #2174, Refs #2193).
+"""Mutation regression tests for ``core.services.system.facility_export`` (Refs #2174, #2193).
 
-``core.services.system.facility_export`` ist auf vier Batches a/b/c/d verteilt
-(andere Funktionen, andere Testdateien) — diese Datei deckt ausschließlich die 62
-Survivors aus ``facility_export-b`` (Liste: ``/work/wellen/welle-l-0.99/
-reports/m-scratch/batch-facility_export-b.json``): ``_serialize_case`` (25),
-``_build_entities`` (19), ``_serialize_client`` (18).
+``core.services.system.facility_export`` is covered by four separate test
+files. This file covers 62 surviving mutations in ``_serialize_case`` (25),
+``_build_entities`` (19), and ``_serialize_client`` (18).
 
 **``_serialize_case``/``_serialize_client`` (43 Mutanten):** zwei
 Mutations-Familien je Funktion — (a) ein Dict-Schluessel wird umbenannt

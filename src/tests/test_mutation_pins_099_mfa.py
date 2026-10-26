@@ -1,10 +1,8 @@
-"""Pin-Tests Welle L (release-0.99) — Survivors in ``core.services.compliance.mfa``.
+"""Mutation regression tests for ``core.services.compliance.mfa``.
 
-Ticket-Auftrag #2174/#2193 (Batch **compliance-4**): 35 Survivors aus
-dem Vollmutations-Lauf (Prüfstand 25685845, Basis main e3c125e6). Liste:
-``/work/wellen/welle-l-0.99/reports/m-scratch/batch-compliance-4.json``.
-Quelle der Mutanten-Rümpfe: Mutantenbaum
-``mutants/src/core/services/compliance/mfa.py``.
+Regression cases for 35 surviving mutations in
+``mutants/src/core/services/compliance/mfa.py``
+(Refs #2174/#2193, source revision e3c125e6, test revision 25685845).
 
 ``_mfa_checks()`` hat vier Antwortpfade: UNKNOWN (``privileged_total == 0``),
 OK (``percent >= 100``), WARNING (``80 <= percent < 100``), CRITICAL

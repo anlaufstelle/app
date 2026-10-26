@@ -1,5 +1,5 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.services.attachments.crud``
-und ``core.services.attachments.context``, Batch ``attachments-1``.
+"""Mutation regression tests for ``core.services.attachments.crud``, ``core.services.attachments.context``
+(Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``attachments-1``
 (``welle-l-0.99/reports/m-scratch/batch-attachments-1.json``, Triage
@@ -38,10 +38,9 @@ Gruppierung der gepinnten Tests (Funktion -> Mutanten):
   gueltigen), Anzeige-Schluessel (4 Mutanten).
 * ``attachment_download_url`` — Meldungsverlust (1 Mutante).
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum
-(``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEYS``; ohne die Fixture waeren die Pins dort aus dem FALSCHEN
-Grund rot (Original-Dateiname/-Attribute werden verschluesselt gespeichert).
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 
 Fuenf ``continue``->``break``- und drei ``missing_ok``-Mutanten je Gruppe
 teilen sich EINEN Pin (siehe Docstrings der einzelnen Tests fuer die exakte

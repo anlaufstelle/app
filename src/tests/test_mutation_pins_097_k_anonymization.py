@@ -1,9 +1,6 @@
 """Pin-Test zum Meilenstein release-0.97 — Prio-1-Survivor in ``core.services.compliance.k_anonymization``.
 
-Quelle: atomic-Messlauf der Welle J (#2149),
-Batch ``client``. Gepinnt wird ``x_k_anonymize_client__mutmut_12``: die
-``update_fields``-Liste des Saves faellt auf ``None``, aus dem gezielten Write
-der sechs Generalisierungs-Spalten wird also ein VOLLER Save.
+Source: verified atomic mutation checks (Refs #2149).
 
 Anders als ``restrict_processing`` liest diese Primitive die Zeile **nicht**
 unter Sperre neu ein — geschrieben wird die Instanz, die der Retention-Lauf

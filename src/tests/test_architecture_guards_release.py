@@ -1,10 +1,9 @@
 """Architecture-Guards — Release-Test-Guard (Refs #1137).
 
-Verifiziert ``scripts/verify_release_test_guard.py``: kein ausgelieferter Test
-(``src/tests/``) darf hart auf Pfade verweisen, die der Public-/Stage-Release-
-Snapshot strippt (``dev-ops/``, ``scripts/dev/``, ``docs/ai/``, ``CLAUDE.md`` …).
-Solche Tests laufen im Dev-Tree grün und fallen erst auf der public Stage-CI mit
-``FileNotFoundError`` um (#1051/#1047-Fehlklasse).
+Verify ``scripts/verify_release_test_guard.py``: shipped tests must not
+reference paths removed from public releases, including development-only
+tools and documentation. Otherwise tests pass in the development checkout
+and fail with ``FileNotFoundError`` in public CI (Refs #1051/#1047).
 
 Die Tests rufen den Guard per ``subprocess.run`` auf (End-to-End: Argumente,
 Stderr, Exit-Code) und nutzen ``--tests-dir`` auf ein Tempverzeichnis, damit der
@@ -50,15 +49,11 @@ def _load_guard_module():
 
 
 def _strip_line(path: str, flag: str = "-rf") -> str:
-    """Eine kanonische Strip-Zeile ``  rm <flag> "$RELEASE_DIR/<path>"`` bauen.
+    """Build removal commands from neutral placeholder paths at runtime.
 
-    Bewusst zur Laufzeit zusammengesetzt mit NEUTRALEN Platzhalter-Pfaden (z.B.
-    ``some/strip-target``), nie mit einem real gestrippten Pfad — sonst stünde ein
-    Public-ausgeschlossener Prefix (``CLAUDE.md``, ``dev-ops/`` …) als Literal in
-    dieser ausgelieferten Test-Datei und der echte Guard-Lauf würde GENAU diese
-    Datei melden (Selbst-Trigger, siehe Modul-Docstring). ``$RELEASE_DIR`` wird aus
-    Teilstücken gefügt, damit auch das Quoting-/Klammer-Pinning unten ohne reale
-    Prefixe auskommt."""
+    Literal excluded paths would make this shipped test trigger the guard
+    itself. Assemble the release-directory variable from parts as well.
+    """
     var = "$" + "RELEASE_DIR"
     return f'  rm {flag}  "{var}/{path}"'
 

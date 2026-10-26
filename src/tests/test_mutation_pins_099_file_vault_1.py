@@ -1,7 +1,5 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — Vollmutation-Survivor-Triage
-fuer den Batch ``file_vault-1``: ``core.services.file_vault.storage``,
-``core.services.file_vault.cleanup`` und ``core.services.file_vault.rotation``
-(verschluesselter Dateispeicher, Waisen-Bereinigung, Schluesselrotation).
+"""Mutation regression tests for ``core.services.file_vault.storage``, ``core.services.file_vault.cleanup``,
+``core.services.file_vault.rotation`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-file_vault-1.json`` (Triage
 ``triage-099-file_vault-1.json``). 68 Survivor, davon 57 als ``test``

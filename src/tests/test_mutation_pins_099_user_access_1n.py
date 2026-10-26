@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.services.user_access``
-(Nacharbeits-Batch ``user_access-1n``).
+"""Mutation regression tests for ``core.services.user_access`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``user_access-1n``
 (``welle-l-0.99/reports/m-scratch/batch-user_access-1n.json``, Triage

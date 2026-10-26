@@ -1,7 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — ``core.services.dashboard.external_report``,
-Batch ``external_report-c`` (Vollmutation-Survivor-Triage, 10 Survivors in
-``_is_below_threshold``, ``_order_tiebreak``, ``_document_type_key``,
-``_category_key``, ``_audit_feasible_span``, ``_finalize_report``).
+"""Mutation regression tests for ``core.services.dashboard.external_report`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-external_report-c.json`` (Triage
 ``reports/m-scratch/pins-external_report-c/triage-099-external_report-c.json``).

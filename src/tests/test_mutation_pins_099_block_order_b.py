@@ -1,8 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — Vollmutation-Survivor-
-Triage in ``core.services.config.block_order``, Batch ``block_order-b``
-(deckt ausschliesslich ``iter_blocks_in_order`` ab; Batch ``block_order-a``
-deckt andere Funktionen derselben Datei in einer eigenen Pin-Datei/Worktree
-ab — keine Ueberschneidung).
+"""Mutation regression tests for ``core.services.config.block_order`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-block_order-b.json`` (Triage
 ``triage-099-block_order-b.json``).

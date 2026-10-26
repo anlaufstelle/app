@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
-``core.services.client.merge`` (Batch ``merge-b``).
+"""Mutation regression tests for ``core.services.client.merge``.
 
 Refs #2174.
 Refs #2193.

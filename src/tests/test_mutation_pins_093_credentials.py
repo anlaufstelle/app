@@ -1,4 +1,4 @@
-"""Mutations-Pins fuer ``core.services.security.credentials._write_audit`` (Welle F, 0.93).
+"""Mutation regression tests for ``core.services.security.credentials._write_audit``.
 
 Quelle: ``src/core/services/security/credentials.py`` (Funktion ``_write_audit``,
 Zeilen 240-258); Mutantenbaum ``mutants/src/core/services/security/credentials.py``

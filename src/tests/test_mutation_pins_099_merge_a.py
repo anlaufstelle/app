@@ -1,4 +1,4 @@
-"""Vollmutation Welle L (0.99), #2174/#2193 — Batch ``merge-a``.
+"""Mutation regression tests (Refs #2174, #2193).
 
 Quelle: ``reports/m-scratch/batch-merge-a.json`` (67 ``survived``-Mutanten,
 ausschliesslich in :func:`core.services.client.merge.unmerge_client`).

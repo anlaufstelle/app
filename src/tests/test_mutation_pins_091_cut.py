@@ -13,10 +13,9 @@ Datei pinnt das Prio-1-Set des Cuts — drei Bloecke:
   Karten, die App-Seite der Admin-Check-Zusicherungen und die erstmalige
   echte Ausfuehrung der ``_query_*``-pg_catalog-Schicht (Refs #902/ADR-020).
 
-Die uebrigen killbaren Survivors (merge/export/main/activity/deletion) sind
-bewusst NICHT hier: Follow-up-Ticket der Welle D, Muster wie Refs #2087.
-Als aequivalent BESTAETIGTE Mutanten sind in den Triage-Unterlagen der Welle
-dokumentiert (Ledger ``welle-d-0.91/pins/equivalents_*.md``), nicht gepinnt.
+The remaining killable survivors (merge/export/main/activity/deletion) are
+covered separately, following Refs #2087. Confirmed equivalent mutations
+are deliberately excluded from these regression tests.
 
 Konventionen wie ``test_mutation_pins_089/090/091.py``: Zusicherungen
 vergleichen EXAKT (``==``), nie per Teilstring (mutmut erzeugt
@@ -638,9 +637,7 @@ class TestRlsBypassKontextUnterNichtBypassRolle:
 #
 # Pin-Tests aus der Survivor-Triage zu ``core.services.compliance.db_roles``.
 #
-# Welle D (0.91), Quelle der Befunde: ``reports/triage-dbroles1.json`` +
-# ``triage-dbroles2.json``, gegengelesen in ``verify-dbroles1.json`` +
-# ``verify-dbroles2.json``.
+# Regression coverage for the verified database-role findings in release 0.91.
 #
 # ``db_roles`` ist die Auswertung des Drei-Rollen-Modells (ADR-020): sie traegt
 # das Deploy-Gate ``manage.py check_db_roles`` (Exit 1 blockiert den Rollout)

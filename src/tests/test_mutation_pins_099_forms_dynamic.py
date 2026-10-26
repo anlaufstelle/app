@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutation #2174/#2193, Batch ``dynamic-a``.
+"""Mutation regression tests for ``core.forms.dynamic`` (Refs #2174, #2193).
 
 Refs #2174,
 Refs #2193.
@@ -12,10 +12,9 @@ Begründung, Prio) steht in
 ``reports/m-scratch/pins-dynamic-a/triage-099-dynamic-a.json``; hier stehen
 nur die als ``test`` klassifizierten Survivor mit Pin.
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum
-(``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEYS``; ohne die Fixture wären Pins, deren Formulare
-verschlüsselte Felder anfassen, aus dem FALSCHEN Grund rot.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 """
 
 from __future__ import annotations

@@ -11,19 +11,16 @@ Konventionen wie ``test_mutation_pins_096_vault_audit.py``: echte
 Model-Objekte, Fixtures aus ``src/tests/conftest.py``, exakte Vergleiche.
 Jeder Test nennt seine gepinnten Mutanten in der Docstring.
 
-Hinweis zur Triage: mehrere ``diff_kurz``-Eintraege des Batches fuer
-``audit_attachment_quota_exceeded`` beschreiben NICHT exakt die Zeile, die im
-Mutantenbaum tatsaechlich veraendert ist (u.a. mutmut_2 aendert den
-``target_type``-Funktionsdefault statt ``_owner_reference``; mutmut_4 zerlegt
-``owner_type, owner_id = _owner_reference(owner)`` in
-``owner_type, owner_id = None`` statt ``user=None`` zu setzen; mutmut_6/12/13
-entfernen Pflichtargumente von ``audit_event`` (``action``/``user``) statt
-``target_type`` zu veraendern). Massgeblich war in jedem Fall der reale
-Quelltext unter ``/work/anlaufstelle/mutants`` (Funktionen
-``x_audit_attachment_quota_exceeded__mutmut_<n>``), nicht der Batch-Text.
-Der EINE direkte Aufruf unten deckt alle diese Ueberlebenden trotzdem ab:
-fehlende Pflichtargumente lassen den Aufruf crashen (rot), falsche Werte
-lassen die Assertions fehlschlagen (rot).
+Several mutation summaries for ``audit_attachment_quota_exceeded`` did
+not match the actual changed source. ``mutmut_2`` changes the ``target_type``
+function default rather than ``_owner_reference``; ``mutmut_4`` changes
+``owner_type, owner_id = _owner_reference(owner)`` to
+``owner_type, owner_id = None`` rather than setting ``user=None``.
+``mutmut_6/12/13`` remove required ``audit_event`` arguments
+(``action``/``user``) rather than changing ``target_type``.
+The actual ``x_audit_attachment_quota_exceeded__mutmut_<n>`` functions
+define the regression cases: missing arguments raise errors, and incorrect
+values fail the assertions in the direct call below.
 """
 
 from __future__ import annotations

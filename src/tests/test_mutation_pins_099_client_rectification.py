@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.services.client.rectification``.
+"""Mutation regression tests for ``core.services.client.rectification`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``client-1``
 (``welle-l-0.99/reports/m-scratch/batch-client-1.json``,
@@ -55,9 +55,9 @@ unten mitgetötet werden und deshalb nicht als ``skip`` gelten — und fünf sin
   Save dazwischenfunken"). EIN Test ruft die Funktion direkt mit einem zwischenzeitlich per
   Direkt-Update geänderten Client auf.
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum (``/work/anlaufstelle/mutants``) hat keine
-``.env`` und damit keinen ``ENCRYPTION_KEYS``; ohne die Fixture wären die Pins dort aus dem FALSCHEN
-Grund rot.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 """
 
 from __future__ import annotations

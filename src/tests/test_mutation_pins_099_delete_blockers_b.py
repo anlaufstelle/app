@@ -1,7 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — Vollmutation-Survivor-
-Triage in ``core.services.config.delete_blockers``, Batch ``delete_blockers-b``
-(zweite Haelfte der Datei; ``delete_blockers-a`` deckt die restlichen
-Survivor derselben Datei in einer eigenen Pin-Datei ab).
+"""Mutation regression tests for ``core.services.config.delete_blockers`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-delete_blockers-b.json``
 (Triage ``triage-099-delete_blockers-b.json``).

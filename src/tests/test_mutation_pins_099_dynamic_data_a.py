@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutation #2174, Batch ``dynamic_data-a``.
+"""Mutation regression tests for ``core.services.dynamic_data`` (Refs #2174).
 
 Quelle: Füllauftrag #2174
 (Refs auch #2193), Batch

@@ -1,6 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.services.client.main``,
-Batch ``main-a`` (Funktionen ``approve_client_deletion``, ``update_client``,
-``anonymize_client``).
+"""Mutation regression tests for ``core.services.client.main`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``main-a``
 (``welle-l-0.99/reports/m-scratch/batch-main-a.json``,

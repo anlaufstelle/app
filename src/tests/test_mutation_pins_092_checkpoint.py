@@ -255,7 +255,7 @@ class TestEventSearchQuerysetSkipsSoftDeletedEvents:
 
 # ── core.services.dashboard.snapshot ──────────────────────────────────────────
 #
-# Mutations-Pins fuer ``core.services.dashboard.snapshot`` (Staging Welle E/0.92).
+# Mutation regression tests for ``core.services.dashboard.snapshot`` (release 0.92).
 #
 # Quelle: ``src/core/services/dashboard/snapshot.py``; Mutantenbaum
 # ``mutants/src/core/services/dashboard/snapshot.py``. Gepinnt wird das
@@ -892,7 +892,7 @@ class TestPreviewFieldsHonourFieldLevelSensitivity:
 
 # ── core.services.events.tally ────────────────────────────────────────────────
 #
-# Pin-Tests der Prio-1-Testluecken in ``core.services.events.tally`` (Welle E, 0.92).
+# Regression tests for priority-one coverage gaps in ``core.services.events.tally``.
 #
 # Quelle: Survivor-Triage des ``mutation-delta``-Laufs zum 0.92-Checkpoint.
 # Modul unter Test: ``src/core/services/events/tally.py`` — genauer die Funktion

@@ -1,4 +1,4 @@
-"""Pin-Test der Welle K (0.98) — Prio-2-Testluecke in ``core.services.facility_bootstrap``.
+"""Mutation regression tests for ``core.services.facility_bootstrap``.
 
 Refs #2193.
 

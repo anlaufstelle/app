@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (release-0.99, Refs #2174 / #2193) — Batch **security-1n**.
+"""Mutation regression tests for ``core.services.security.locking.check_version_conflict`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``security-1n``
 (``welle-l-0.99/reports/m-scratch/batch-security-1n.json``, Triage

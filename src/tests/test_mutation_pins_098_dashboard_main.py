@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle K (0.98) — Prio-2-Testluecken in
-``core.services.dashboard.main``.
+"""Mutation regression tests for ``core.services.dashboard.main``.
 
 Refs #2193.
 

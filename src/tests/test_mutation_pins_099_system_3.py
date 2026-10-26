@@ -1,6 +1,5 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174, Refs #2193) — Testlücken in
-``core.services.system.offline``, ``core.services.system.export`` und
-``core.services.system.settings``, Batch ``system-3``.
+"""Mutation regression tests for ``core.services.system.offline``, ``core.services.system.export``,
+``core.services.system.settings`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-system-3.json`` (70 Survivor-
 Mutanten; Triage: ``welle-l-0.99/reports/m-scratch/pins-system-3/

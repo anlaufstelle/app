@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle K (0.98, Refs #2193) — Prio-2-Testlücken in
-``core.services.client.rectification``, Batch ``case-client``.
+"""Mutation regression tests for ``core.services.client.rectification`` (Refs #2193).
 
 Quelle: ``welle-k-0.98/reports/c-scratch/batch-case-client.json``
 (``triage-097-client.json``). 15 Survivors in vier Funktionen — keine
@@ -29,10 +28,9 @@ Rechenschaft der Akteurin; hier: Wertebereichsprüfung, exakter
   ein für die Rolle unsichtbares Feld) — alle danach folgenden, eigentlich
   sichtbaren Felder fehlen dann in der Allowlist.
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum
-(``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEYS``; ohne die Fixture wären die Pins dort aus dem FALSCHEN
-Grund rot.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 """
 
 from __future__ import annotations

@@ -1,5 +1,4 @@
-"""Mutation-Pins der Welle J (0.97, Refs #2149) — Obergrenze der
-Offline-Revoke-Liste (``core.services.system.offline_revocation``).
+"""Mutation regression tests for ``core.services.system.offline_revocation`` (Refs #2149).
 
 Quelle: Prio-1-Survivor des atomaren Messlaufs
 (``welle-j-0.97/reports/triage-097-sec.json``, Batch ``sec``).
@@ -9,8 +8,8 @@ erlaubt, loggt beim Ueberlauf laut und liefert die auf
 ``OFFLINE_REVOCATION_MAX_ENTRIES`` gekuerzte Liste. Der Ueberlauf-Zweig war
 vollstaendig ungetestet — die Bestandstests bleiben unter dem Deckel.
 
-Gepinnter Mutant (Mutantenbaum ``/work/anlaufstelle/mutants``, Stand
-f5272d3e — ``offline_revocation.py`` ist seitdem unveraendert):
+Pinned mutations from source revision ``f5272d3e``
+(the module has not changed since that revision):
 
 * ``x_list_offline_client_revocations__mutmut_32`` —
   ``entries = entries[:OFFLINE_REVOCATION_MAX_ENTRIES]`` -> ``entries = None``.

@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — Nacharbeits-Batch
-``dashboard-1n`` für ``core.services.dashboard.focus_box``.
+"""Mutation regression tests for ``core.services.dashboard.focus_box`` (Refs #2174, #2193).
 
 Quelle: ``reports/m-scratch/batch-dashboard-1n.json`` (ein Mutant:
 ``x_build_focus_box__mutmut_10`` — das letzte Tupel-Element ``"-created_at"``

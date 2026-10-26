@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.forms.rectification``.
+"""Mutation regression tests for ``core.forms.rectification`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``forms-2``
 (``welle-l-0.99/reports/m-scratch/batch-forms-2.json``,
@@ -23,9 +23,9 @@ Zwei Themen:
   nicht abstürzen, sondern muss den Rohwert unverändert zurückgeben (Formular ist „bequem, nicht
   autoritativ", siehe Klassen-Docstring).
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum (``/work/anlaufstelle/mutants``) hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``; ohne die Fixture wären die Pins dort aus dem
-FALSCHEN Grund rot.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 """
 
 from __future__ import annotations

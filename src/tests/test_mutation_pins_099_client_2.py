@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — Batch ``client-2``
-(``core.services.client.restriction``, ``.dsgvo_package``, ``.export``, ``.targets``).
+"""Mutation regression tests for ``core.services.client.restriction`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``client-2``
 (``welle-l-0.99/reports/m-scratch/batch-client-2.json``,
@@ -78,9 +77,9 @@ AUSSCHLIESSLICH als empirischer Aequivalenz-Nachweis (bleiben unter den betroffe
   (``mutmut_25``); der ``values_list(flat=True)``-Mutant (``mutmut_10``) ist wie in ``export.py``
   ``equivalent`` (``Activity``s erstes konkretes Feld ist ebenfalls ``id``).
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum (``/work/anlaufstelle/mutants``) hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``; ohne die Fixture wären die Pins dort aus dem
-FALSCHEN Grund rot.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle N (release-0.99.2) — Modul ``security/mfa`` + ``views/mfa``.
+"""Mutation regression tests for ``security/mfa``, ``views/mfa``.
 
 Gehoeren zu den Fixes fuer
 #2287 und

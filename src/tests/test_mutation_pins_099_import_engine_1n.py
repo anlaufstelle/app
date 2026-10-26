@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutations-Nachtrag in
-``core.services.import_engine`` (Batch ``import_engine-1n``).
+"""Mutation regression tests for ``core.services.import_engine``.
 
 Refs #2174.
 Refs #2193.

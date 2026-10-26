@@ -1,17 +1,12 @@
 """Guard-Test: Storage-State-Snapshot-Cache traegt nur Cookies (Refs #2241).
 
-Hintergrund: ``_sync_storage_state`` (``src/tests/e2e/conftest.py``) setzt beim
-Nachziehen des Cache-Eintrags bewusst ``origins: []`` -- ein Playwright-
-``storage_state()``-Snapshot traegt zusaetzlich ``origins`` (localStorage je
-Origin), das NICHT in den geteilten Cache wandern darf. Sonst sickert z. B.
-eine eingefrorene Zeitstrom-Einklapp-Einstellung eines Nutzers als Snapshot
-in den naechsten Testkontext desselben Nutzers und macht ihn reihenfolge-
-abhaengig (beobachtet als ``test_zeitstrom_collapse``-Flake, Welle J /
-Refs #2034, Lehre 121). Seit Refs #2336 liest die Funktion die Cookies direkt
-per ``context.cookies()`` statt ueber ``storage_state()`` aus (letzteres
-konnte bei einer Page ohne Utility-World eine interne Navigation ausloesen
-und haengen bleiben); die ``origins: []``-Zusage gilt strukturell unveraendert
-weiter.
+The shared login cache must contain only cookies and ``origins: []``.
+LocalStorage belongs to each browser context. Caching it would copy timeline
+collapse preferences into later tests for the same user, making
+``test_zeitstrom_collapse`` depend on test order (Refs #2034).
+Since Refs #2336, cookies are read with ``context.cookies()`` rather than
+``storage_state()``: the latter could navigate internally and hang when
+the page had no utility world. The empty-origins guarantee still applies.
 
 Dieser Test haelt die Regel als eigenstaendigen Guard fest, unabhaengig von
 der aktuellen Implementierung: ein kuenftiger Patch, der ``origins``

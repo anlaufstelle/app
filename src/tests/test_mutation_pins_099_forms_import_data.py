@@ -1,4 +1,4 @@
-"""Mutation-Pins Welle L (0.99) — ``core.forms.import_data`` (Vollmutation #2174).
+"""Mutation regression tests for ``core.forms.import_data`` (Refs #2174).
 
 Batch ``forms-1`` (Refs #2174, Refs #2193). 29 Survivors in
 ``ImportUploadForm.__init__`` (4) und ``ImportUploadForm.clean`` (25). Alle

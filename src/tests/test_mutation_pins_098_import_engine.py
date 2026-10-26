@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle K (0.98) — Prio-2-Survivors in ``core.services.import_engine``.
+"""Mutation regression tests for ``core.services.import_engine``.
 
 Quelle: Füllauftrag #2193,
 Batch ``merge-crud`` (``triage-096-events-import.json``). Gepinnt wird der

@@ -1,6 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — ``core.services.hubs``,
-Batch ``hubs-1`` (Vollmutation-Survivor-Triage, 37 Survivors in
-``datenschutz_overview``/``verwaltung_metrics``/``verwaltung_overview``).
+"""Mutation regression tests for ``core.services.hubs`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-hubs-1.json`` (Triage
 ``reports/m-scratch/pins-hubs-1/triage-099-hubs-1.json``).

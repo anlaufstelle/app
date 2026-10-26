@@ -1,11 +1,7 @@
-"""Pin-Tests Welle L (release-0.99) — Vollmutation #2174/#2193, Batch **compliance-3**.
+"""Mutation regression tests for ``core.services.compliance.db_roles`` (Refs #2174, #2193).
 
-Modul ``core.services.compliance.db_roles`` (36 Survivors, gesamtes Batch).
-Liste: ``/work/wellen/welle-l-0.99/reports/m-scratch/batch-compliance-3.json``.
-Quelle der Mutanten-Rümpfe: Mutantenbaum
-``mutants/src/core/services/compliance/db_roles.py``. Vollständige Triage
-(alle 36 Mutanten, inkl. ``equivalent``-Begründungen):
-``reports/m-scratch/pins-compliance-3/triage-099-compliance-3.json``.
+Regression coverage for 36 surviving mutations in
+``core.services.compliance.db_roles``, including documented equivalent cases.
 
 Dieses Modul traegt den Sicherheitsvertrag der DB-Rollen-Compliance-Checks
 (App-Runtime-Rolle NOSUPERUSER + NOBYPASSRLS, Admin-Rolle NOSUPERUSER +

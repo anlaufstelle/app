@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle I (0.96) — Prio-1-Survivor in ``core.services.import_engine``.
+"""Mutation regression tests for ``core.services.import_engine``.
 
 Quelle: Survivor-Triage des Mutations-Deltas v0.96.0
 (``welle-i-0.96/reports/pin-task-events-import.json``). Gepinnt wird der dritte

@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — Batch ``events-2``
-(Vollmutation-Survivor-Triage), Modul ``core.services.events.idempotency``.
+"""Mutation regression tests for ``core.services.events.idempotency`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-events-2.json`` (Triage
 ``triage-099-events-2.json``).

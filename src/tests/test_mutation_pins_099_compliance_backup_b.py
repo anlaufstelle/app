@@ -1,10 +1,8 @@
-"""Pin-Tests Welle L (release-0.99) — Vollmutation #2174/#2193, Batch **backup-b**.
+"""Mutation regression tests for ``core.services.compliance.backup`` (Refs #2174, #2193).
 
-Modul ``core.services.compliance.backup``, Funktion ``_backup_checks``
-(Batch-Schwester ``backup-a`` deckt ``_restore_checks`` im selben Modul ab,
-eigene Pin-Datei). Liste der 29 Survivors: ``/work/wellen/welle-l-0.99/
-reports/m-scratch/batch-backup-b.json``. Quelle der Mutanten-Rümpfe:
-Mutantenbaum ``mutants/src/core/services/compliance/backup.py``.
+Regression coverage for 29 surviving mutations in
+``core.services.compliance.backup._backup_checks``.
+The separate restore tests cover ``_restore_checks`` in the same module.
 
 ``_backup_checks`` hat vier Zweige (UNKNOWN/OK/WARNING/CRITICAL, nach dem
 Alter des juengsten Backups gegen ``ops_thresholds.BACKUP_WARN_HOURS``/

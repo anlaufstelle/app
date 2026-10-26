@@ -1007,7 +1007,7 @@ class TestPendingDeletionRequestLookupIsPersonBound:
 
 # ── core.services.security.lockout_recovery ─────────────────────────────────
 #
-# Mutations-Pins fuer ``core.services.security.lockout_recovery`` (Welle E / 0.92-Nachlauf).
+# Mutation regression tests for ``core.services.security.lockout_recovery`` (release 0.92).
 #
 # Quelle der Vorgaben: Survivor-Triage des 0.92-Nachlaufs, Prio-1-Set zu
 # ``src/core/services/security/lockout_recovery.py`` (11 bestaetigte Luecken).
@@ -1281,9 +1281,8 @@ class TestVerifyRecoveryTokenAnchorIsPkBound:
 #
 # Pin-Tests des 0.92-Nachlaufs — Prio-1-Survivors in ``core.services.security.mfa``.
 #
-# Quelle: Survivor-Triage des ``mutation-delta``-Nachlaufs zur Welle E (0.92),
-# Vorgabe ``welle-e-0.92/nachlauf/pin-mfa.json``. Gepinntes Modul:
-# ``src/core/services/security/mfa.py`` (Backup-Code-Recovery, Refs #588/#790).
+# Regression coverage for backup-code recovery in
+# ``src/core/services/security/mfa.py`` (Refs #588/#790).
 #
 # Drei bestaetigte Testluecken, alle in derselben Wurzel — die Zeilen der Datei
 # binden Geraet und Verifikation an den **Eigentuemer** bzw. an den

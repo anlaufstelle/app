@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
-``core.services.case.deletion`` (Batch ``deletion-a``).
+"""Mutation regression tests for ``core.services.case.deletion``.
 
 Refs #2174.
 Refs #2193.
@@ -29,7 +28,7 @@ Vier wiederkehrende Mutationsachsen in diesem Batch:
 * **``pk``/``facility`` aus einem ``select_for_update().get(...)``- oder
   ``Case.objects.get(...)``-Lookup entfernt** — Muster identisch zu
   ``test_mutation_pins_097_events_deletion.py`` (``x_approve_deletion``/
-  ``x_reject_deletion``, Welle J): faellt ``pk``, entscheidet nur noch die
+  ``x_reject_deletion``): removing ``pk`` leaves only the facility filter;
   Einrichtung (bei mehr als einem Antrag/Fall: ``MultipleObjectsReturned``
   statt der gezielten Aktion); faellt ``facility``, kann ein Antrag/Fall
   einer FREMDEN Einrichtung getroffen werden. Prio 1 — genau die Mandanten-

@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle J (0.97) — Prio-1-Survivors in ``core.services.case.workitems``.
+"""Mutation regression tests for ``core.services.case.workitems``.
 
 Refs #2149.
 
@@ -42,10 +42,9 @@ beim Mutanten abweicht; Zusicherungen vergleichen EXAKT (``==``/``is``), nie
 per Teilstring (mutmut erzeugt ``"XX<text>XX"``-Varianten); keine Fakes — es
 laufen echte Model-Objekte durch die echten Services.
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum
-(``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEYS``; ohne die Fixture waeren die Pins dort aus dem FALSCHEN
-Grund rot und der Kill-Nachweis wertlos.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 
 Die Bulk-Pfade laden ihre Items in ``_locked_workitems`` per ``order_by("pk")``
 neu. WorkItem-PKs sind UUIDs, die Reihenfolge der Anlage sagt also nichts ueber

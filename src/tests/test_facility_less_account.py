@@ -10,13 +10,10 @@ Dutzend Service-Funktionen ``facility.settings`` bzw. ``facility.pk`` ungeprueft
 dereferenzierten. Beim Nutzer kam das als **HTTP 500** an — direkt nach dem
 Login, weil ``LOGIN_REDIRECT_URL = "/"`` auf den Zeitstrom zeigt.
 
-Der Entscheid ist **an der Wurzel abfangen, nicht in jeder View** (Maintainer,
-Welle D): der Guard sitzt in derselben Middleware wie die Archiv-Sperre aus
-Refs #2067 und antwortet mit einer erklaerenden **403** — ohne neue Route, damit
-weder die Routenzahl noch der Backlink-Guard noch die AuthZ-Matrix eine
-Kaskade auslosen. ``get_scoped_object`` behaelt seine ``ValueError``-Semantik
-(sie ist das IDOR-Signal, gepinnt in ``test_scoping_helper.py``); der Guard
-macht sie nur unerreichbar.
+The guard handles access centrally in the same middleware as the archive
+lock (Refs #2067), returning an explanatory **403** without a new route.
+This avoids changes to route counts, backlink checks, and the authorization
+matrix. ``get_scoped_object`` retains its ``ValueError`` behavior.
 
 Freigestellt wird die **Rolle**, nicht der Systempfad: ``super_admin`` passiert
 den Guard, ``/system/`` und ``/admin-mgmt/`` stehen bewusst NICHT auf der

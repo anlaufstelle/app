@@ -1,4 +1,4 @@
-"""Mutations-Pins Welle L (0.99), Vollmutation #2174, Batch deletion-b.
+"""Mutation regression tests for ``core.services.case.deletion`` (Refs #2174).
 
 Quelle: ``core.services.case.deletion`` (Loeschworkflow fuer Faelle, Refs
 #1818/ADR-044, Sperrkette Refs #2123). Gepinnt wird das Prio-1/2/3-``test``-Set

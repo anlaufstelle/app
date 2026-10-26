@@ -1,6 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — ``core.services.scoping``,
-Batch ``scoping-1`` (Vollmutation-Survivor-Triage, 19 Survivors in
-``get_scoped_object``).
+"""Mutation regression tests for ``core.services.scoping`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-scoping-1.json`` (Triage
 ``reports/m-scratch/pins-scoping-1/triage-099-scoping-1.json``).

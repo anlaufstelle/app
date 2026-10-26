@@ -190,7 +190,7 @@ class TestAwareNaiveMix:
 # ---------------------------------------------------------------------------
 # Schichtfenster ueber DST-Grenzen (Refs #2057)
 #
-# Semantik-Entscheid (Maintainer, Welle E / release-0.92):
+# Window-end semantics established in release 0.92:
 #   * Rueckfalltag (Herbst): Fensterende = ZWEITE Okkurrenz der Wanduhrzeit
 #     (``fold=1``). Eine Nachtschicht 20:00-02:45 laeuft real 7 h 45 und
 #     enthaelt BEIDE 02:xx-Stunden.

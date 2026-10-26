@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
-``core.services.config.delete_blockers`` (Batch ``delete_blockers-a``).
+"""Mutation regression tests for ``core.services.config.delete_blockers``.
 
 Refs #2174.
 Refs #2193.

@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle K (0.98) — Prio-2-Survivors in ``core.services.file_vault.storage``.
+"""Mutation regression tests for ``core.services.file_vault.storage``.
 
 Quelle: Füllauftrag #2193,
 Batch ``merge-crud`` (``triage-096-vault-rot-storage.json``). Vier Mutanten in

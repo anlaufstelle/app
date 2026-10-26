@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174, Refs #2193) — Testlücken in
-``core.services.system.bans``, Batch ``system-2``.
+"""Mutation regression tests for ``core.services.system.bans`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-system-2.json`` (43
 Survivors über ``_user_may_see_grund``, ``_collect_active_bans``,

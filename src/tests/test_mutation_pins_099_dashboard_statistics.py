@@ -1,9 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — ``core.services.dashboard.statistics``,
-Batch ``dashboard-2`` (Vollmutation-Survivor-Triage, 51 Survivors in
-``_parse_statistics_view``, ``_parse_statistics_period``,
-``_aggregate_contact_stage``, ``_aggregate_by_age_cluster``,
-``_aggregate_top_clients``, ``_flat_view_enabled``, ``_query_statistics_mv``,
-``get_event_counts_by_month``).
+"""Mutation regression tests for ``core.services.dashboard.statistics`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-dashboard-2.json`` (Triage
 ``reports/m-scratch/pins-dashboard-2/triage-099-dashboard-2.json``).

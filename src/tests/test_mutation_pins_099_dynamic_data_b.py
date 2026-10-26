@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Vollmutation #2174/#2193) — Testlücken in
-``core.services.dynamic_data``, Batch ``dynamic_data-b``.
+"""Mutation regression tests for ``core.services.dynamic_data`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-dynamic_data-b.json``
 (Triage: ``welle-l-0.99/reports/m-scratch/pins-dynamic_data-b/triage-099-dynamic_data-b.json``).

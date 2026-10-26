@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — Batch ``config-1``.
+"""Mutation regression tests for ``core.services.config.mutations`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-config-1.json`` (50 Survivor-
 Mutanten, Triage ``welle-l-0.99/reports/m-scratch/pins-config-1/triage-099-config-1.json``).

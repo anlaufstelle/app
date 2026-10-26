@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — Batch ``block_order-a``
-(Vollmutation-Survivor-Triage) in ``core.services.config.block_order``.
+"""Mutation regression tests for ``core.services.config.block_order`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-block_order-a.json``
 (Triage ``pins-block_order-a/triage-099-block_order-a.json``). Das Modul ist

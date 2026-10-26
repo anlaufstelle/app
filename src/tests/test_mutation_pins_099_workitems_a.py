@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Survivor-Triage in ``core.services.case.workitems``.
+"""Mutation regression tests for ``core.services.case.workitems``.
 
 Refs #2174,
 #2193.
@@ -49,10 +49,9 @@ ohne den letzten Schluessel laut SQL-Standard undefiniert und haengt vom
 physischen Scan-Zustand der Tabelle ab (an diesem Mutanten empirisch als
 instabil beobachtet).
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum
-(``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEYS``; ohne die Fixture waeren die Pins dort aus dem FALSCHEN
-Grund rot und der Kill-Nachweis wertlos.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 
 Mehrere Survivoren dieses Batches sind ``equivalent`` (kein Pin, siehe
 Batch-Bericht fuer die vollstaendige Begruendungsliste): u. a. jede

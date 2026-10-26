@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
-``core.services.zeitstrom_watch`` (Batch ``zeitstrom_watch-a``).
+"""Mutation regression tests for ``core.services.zeitstrom_watch``.
 
 Refs #2174.
 Refs #2193.

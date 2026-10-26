@@ -1,7 +1,6 @@
 """Pin-Tests zum Meilenstein release-0.97 — Survivors in ``core.services.client.restriction``.
 
-Quelle: atomic-Messlauf der Welle J (#2149),
-Batch ``client``. Gepinnt werden
+Source: verified atomic mutation checks (Refs #2149).
 
 * der Prio-1-Survivor ``x_lift_processing_restriction__mutmut_42``: die
   Aufhebung des Art.-18-Vermerks wird ohne handelnde Person auditiert.

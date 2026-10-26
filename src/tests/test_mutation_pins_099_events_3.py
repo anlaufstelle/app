@@ -1,7 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — Batch ``events-3``
-(Vollmutation-Survivor-Triage), Modul ``core.services.events.crud``
-(Ereignis-CRUD: ``create_event``, ``update_event``, ``soft_delete_event``,
-Fall-/Kontaktstufen-Validierung, Klartext-Entschlüsselung, Löschgates).
+"""Mutation regression tests for ``core.services.events.crud`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-events-3.json`` (Triage
 ``triage-099-events-3.json``). Von den 40 Survivor-Mutanten dieses Batches

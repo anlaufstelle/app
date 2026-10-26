@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.services.dashboard``,
-Batch ``dashboard-3``.
+"""Mutation regression tests for ``core.services.dashboard`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``dashboard-3``
 (``welle-l-0.99/reports/m-scratch/batch-dashboard-3.json``, Triage
@@ -55,10 +54,9 @@ Gruppierung der gepinnten Tests (Funktion -> Mutanten):
   zurueckgegebene ``my_open_workitems`` wird von keinem heutigen Template
   oder Test dereferenziert) bleibt ``equivalent``.
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum
-(``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEYS``; ohne die Fixture waeren alle Pins dort aus dem FALSCHEN
-Grund rot.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 """
 
 from __future__ import annotations

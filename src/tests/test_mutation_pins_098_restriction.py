@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle K (0.98, Refs #2193) — Prio-2-Testlücken in
-``core.services.client.restriction``, Batch ``case-client``.
+"""Mutation regression tests for ``core.services.client.restriction`` (Refs #2193).
 
 Quelle: ``welle-k-0.98/reports/c-scratch/batch-case-client.json``
 (``triage-097-client.json``). Fünf der sechs Batch-Mutanten sind NEU

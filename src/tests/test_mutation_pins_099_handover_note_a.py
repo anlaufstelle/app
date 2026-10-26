@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.services.case.handover_note``.
+"""Mutation regression tests for ``core.services.case.handover_note`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``handover_note-a``
 (``welle-l-0.99/reports/m-scratch/batch-handover_note-a.json``, Triage

@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
-``core.services.system.facility_export`` (Batch ``facility_export-a``).
+"""Mutation regression tests for ``core.services.system.facility_export``.
 
 Refs #2174.
 Refs #2193.

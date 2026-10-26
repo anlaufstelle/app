@@ -472,12 +472,10 @@ def _sync_storage_state(cache, username, context) -> None:
         cache.pop(username, None)
         return
     if _session_cookie_value(cookies):
-        # Nur die Cookies uebernehmen, kein ``origins``-Eintrag (localStorage)
-        # — z. B. die Einklapp-Einstellung des Zeitstroms. Die wanderte sonst
-        # als Snapshot in jeden folgenden Kontext desselben Nutzers und machte
-        # ``test_zeitstrom_collapse`` reihenfolgeabhaengig rot (Voll-Lauf
-        # Welle J). Der Login-Snapshot selbst ist reines Cookie-JSON;
-        # localStorage gehoert jedem Kontext allein.
+        # Cache only cookies, excluding ``origins`` (localStorage). Otherwise
+        # the timeline collapse preference leaks into later contexts for the
+        # same user, making ``test_zeitstrom_collapse`` depend on test order.
+        # Each context keeps its own localStorage.
         cache[username] = (entry[0], {"cookies": cookies, "origins": []})
     else:
         cache.pop(username, None)

@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — Batch ``events-1``
-(Vollmutation-Survivor-Triage), Modul ``core.services.events.history_diff``.
+"""Mutation regression tests for ``core.services.events.history_diff`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-events-1.json`` (Triage
 ``triage-099-events-1.json``). Alle 63 Survivor-Mutanten dieses Batches

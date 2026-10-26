@@ -780,10 +780,10 @@ class TestPrecachedShellBumpGuard:
     #       offline.html und core/clients/offline_list.html unterschied sich in
     #       17 Leerzeilen (die neuen {# … #}-Kommentare und die if/else/endif-
     #       Tags); whitespace-bereinigt sind beide Antworten byte-gleich.
-    #   (2) anlaufstelle-v44 ist im selben unveroeffentlichten Lauf entstanden
-    #       (Welle F) und steht in keinem Tag und keinem Deploy — kein Geraet im
-    #       Feld traegt v44, es gibt also keine Split-Brain-Generation, gegen die
-    #       ein weiterer Bump schuetzen wuerde. Praezedenz: #1805, #1828.
+    #   (2) anlaufstelle-v44 was created in the same unpublished revision.
+    #       It was never tagged or deployed, so no device carries v44.
+    #       No additional bump is needed to prevent mixed cache generations.
+    #       Precedents: #1805, #1828.
     # Refs #1059 (R-B2-8): v44 -> v45 — offline.html erhaelt Skip-Link und
     # main-Ziel; die rekursiv gehashten Offline-Formular-Partials erhalten
     # eindeutige Label-/Feld-Beziehungen und Live-Regionen. Anders als der
@@ -809,11 +809,10 @@ class TestPrecachedShellBumpGuard:
     # Refs #2187 (E2E-Nachlauf): ``{% get_current_timezone as app_timezone %}``
     # stand in beiden Erfassungs-Shells VOR dem ``{% block content %}`` und lief
     # deshalb nie — ``data-app-timezone`` ging leer an den Client. Der Tag zieht
-    # in den Block um; das aendert gerendertes Shell-Markup. NUR der Hash wird
-    # nachgezogen, KEIN v48: anlaufstelle-v47 entstand im selben noch
-    # unveroeffentlichten Lauf (Welle J), steht in keinem Tag und keinem Deploy —
-    # kein Geraet im Feld traegt v47, es gibt also keine Split-Brain-Generation,
-    # gegen die ein Bump schuetzen wuerde (Praezedenz: #1805, #1828, #2136).
+    # changes rendered shell markup; update only the hash. Version v47
+    # was created in the same unpublished revision, never tagged or deployed.
+    # No device carries v47, so a further bump would not prevent any mixed
+    # cache generation. Precedents: #1805, #1828, #2136.
     # 2026-09-21, Refs #2238: Der Hash folgt dem v48-Bump und deckt die beiden
     # neuen Script-Tags sowie offline-messages.js im APP_SHELL gemeinsam ab.
     # 2026-09-22, Refs #2289: Der Hash folgt dem v49-Bump und deckt den neuen

@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174, Refs #2193) — Nacharbeit-Batch
-``system-1n`` in ``core.services.system``.
+"""Mutation regression tests for ``core.services.system`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-system-1n.json``. Die vier
 Mutanten dieser Batch-Datei waren in den Batches ``system-3``, ``system-2``

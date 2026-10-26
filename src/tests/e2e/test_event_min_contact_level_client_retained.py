@@ -1,17 +1,11 @@
 """E2E: Personenzuordnung bleibt nach Mindestkontaktstufen-Ablehnung erhalten (Refs #2345).
 
-Reproduziert den Fresh-Install-Befund aus #2173 (Welle N): "Beratungsgespräch"
-(Standardkatalog, ``min_contact_stage: qualified``) lehnt eine Person mit der
-Kontaktstufe "Nur Pseudonym" ab. Der Unit-Guard
-(``test_event_form_min_contact_level_keeps_client.py``) prüft den
-gerenderten HTML-Rohtext per Django-Testclient; dieser Browser-Lauf prüft
-zusätzlich, dass die Alpine-Autocomplete-Komponente
-(``static/js/alpine/forms.js``, ``eventClientAutocomplete``) die vom Server
-mitgelieferten ``data-initial-*``-Werte beim Neuaufbau (``init()``) auch
-tatsächlich übernimmt und NICHT durch ihre eigene "Typwechsel leert
-Auswahl"-Logik (``updateAnonymousAllowed``) sofort wieder verwirft — ein
-reiner HTML-/Unit-Test sieht diesen JS-Nebeneffekt nicht (Alpine-CSP-Lücke
-von Vitest mit von Hand gestelltem ``$el``).
+Reproduces the fresh-install regression from #2173: the standard catalog
+type "Beratungsgespräch" (``min_contact_stage: qualified``) rejects a person
+with contact stage "Nur Pseudonym". The unit regression test
+``test_event_form_min_contact_level_keeps_client.py`` covers the bound form;
+this browser test checks that the selected person remains visible after
+validation fails (Refs #2345).
 
 **Warum der Rohwert per ``fetch`` statt per UI-Formular gepostet wird:**
 Die Personensuche filtert serverseitig nach der geforderten Mindeststufe

@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutation #2174, Batch ``dynamic-b``.
+"""Mutation regression tests for ``core.forms.dynamic`` (Refs #2174).
 
 Refs #2174,
 Refs #2193.
@@ -108,9 +108,9 @@ Aequivalente Mutanten (nachweislich verhaltensgleich, bewusst NICHT gepinnt):
   einem bereits kleingeschriebenen String nie zutreffen (empirisch mit
   ``xlsx``/``XLSX``/``.xlsx``/``"  .PDF "`` verifiziert — bytgleiches Ergebnis).
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum (``/work/anlaufstelle/mutants``)
-hat keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``; ohne die Fixture waeren
-die Pins dort aus dem FALSCHEN Grund rot und der Kill-Nachweis wertlos.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 """
 
 from __future__ import annotations

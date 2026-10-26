@@ -1,4 +1,4 @@
-"""Pin-Tests fuer zwei Prio-1-Testluecken in ``core.forms.events`` (Welle F, 0.93).
+"""Mutation regression tests for ``core.forms.events``.
 
 Quelle: Survivor-Triage des ``mutation-delta``-Laufs zum Meilenstein release-0.93,
 Vorgabe ``welle-f-0.93/reports/pin-events.json``. Modul unter Test:

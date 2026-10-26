@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.services.case.cases``.
+"""Mutation regression tests for ``core.services.case.cases`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``case-1``
 (``welle-l-0.99/reports/m-scratch/batch-case-1.json``, Triage

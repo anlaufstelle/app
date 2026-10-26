@@ -6,8 +6,7 @@ sperrt seit ADR-050 D2 die Personenzeile, bevor die ``LegalHold``-Zeile
 committet — der Sofortpfad nahm denselben Anker aber nicht mit. Ein Hold, der
 waehrend der (bei vielen Ereignissen sekundenlangen) Redaktion angeordnet
 wurde, kam damit zu spaet: die Person war schon irreversibel redigiert.
-Spoliation trotz aktivem Hold, dynamisch bewiesen in
-``/work/redteam-pocs/r3_anonymize_now_hold_race.py``.
+The regression tests below reproduce data destruction despite an active hold.
 
 Derselbe Fehler, nur schwaecher, im naechtlichen Papierkorb-Lauf
 ``anonymize_eligible_soft_deleted_clients``: er sperrt die Personenzeile zwar,

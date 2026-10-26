@@ -1,6 +1,5 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — Vollmutation-Survivor-Triage,
-Batch ``events-4`` (Dateifamilie ``core.services.events.context`` /
-``core.services.events.deletion`` / ``core.services.events.fields``).
+"""Mutation regression tests for ``core.services.events.context``, ``core.services.events.deletion``,
+``core.services.events.fields`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-events-4.json`` (Triage
 ``triage-099-events-4.json``). 63 Survivors ueber drei Module; zwei davon

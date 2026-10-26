@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.services.file_vault.encryption`` (Batch a).
+"""Mutation regression tests for ``core.services.file_vault.encryption`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``encryption-a``
 (``welle-l-0.99/reports/m-scratch/batch-encryption-a.json``, Triage

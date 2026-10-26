@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutation #2174, Batch ``workitems-b``.
+"""Mutation regression tests for ``core.services.case.workitems`` (Refs #2174).
 
 Refs #2174,
 #2193.
@@ -43,10 +43,9 @@ Funktion/Mutantengruppe; jeder Test nennt seine Mutanten mit vollem
 ``x…__mutmut_N``-Namen in der Docstring; Zusicherungen vergleichen EXAKT
 (``==``/``is``), nie per Teilstring; keine Fakes fuer Model-Objekte.
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum
-(``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEYS``; ohne die Fixture waeren die Pins dort aus dem FALSCHEN
-Grund rot und der Kill-Nachweis wertlos.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 """
 
 import logging

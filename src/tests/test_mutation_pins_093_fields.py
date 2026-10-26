@@ -1,8 +1,7 @@
-"""Pin-Tests der Prio-1-Testluecken in ``core.forms.fields`` (Welle F, 0.93).
+"""Mutation regression tests for ``core.forms.fields``.
 
-Quelle: Survivor-Triage des ``mutation-delta``-Laufs zur 0.93-Fix-Welle,
-Vorgabe ``/work/welle-f-0.93/reports/pin-fields.json`` (25 bestaetigte
-Prio-1-Mutanten). Modul unter Test: ``src/core/forms/fields.py`` —
+Regression coverage for 25 confirmed priority-one mutations in
+``src/core/forms/fields.py``, specifically
 :class:`~core.forms.fields.DstAwareDateTimeField` (Refs #2117).
 
 Die getroffene Luecke ist in allen drei Bloecken dieselbe: die bestehende

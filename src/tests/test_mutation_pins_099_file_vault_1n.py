@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — ``core.services.file_vault.encryption``
-(Nacharbeit Batch ``file_vault-1n``, Familienreview-Widerlegung von ``encryption-a``).
+"""Mutation regression tests for ``core.services.file_vault.encryption`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-file_vault-1n.json`` (7 Survivor-Mutanten,
 Triage ``welle-l-0.99/reports/m-scratch/pins-file_vault-1n/triage-099-file_vault-1n.json``).
@@ -27,9 +26,9 @@ einem kaputten Chiffrat. Alle sieben sind hier Klasse ``test``, Prio 3, mit exak
 - ``x_encrypt_field__mutmut_18``: ``EncryptionError("Cannot encrypt field: …")`` per
   XX-Marker gewrapt (fehlender Schluessel beim Verschluesseln).
 
-``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum
-(``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen ``ENCRYPTION_KEY``;
-ohne die Fixture waeren die Pins dort aus dem FALSCHEN Grund rot.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEY``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 
 Zusicherungen EXAKT (``==``), nie per Teilstring/``match=`` (mutmut erzeugt
 ``"XX<text>XX"``-Varianten, die eine Teilstring-Pruefung uebersehen wuerde).

@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle J (0.97) — Checkpoint-Delta der Familie ``forms``.
+"""Mutation regression tests for ``core.forms.facility_settings``.
 
 Refs #2149,
 Refs #2042.
@@ -54,10 +54,9 @@ das FK-Attribut existiert also stets, der Default greift nie) und ``_22``
 (``cast(None, …)`` — ``typing.cast`` gibt zur Laufzeit unveraendert sein
 zweites Argument zurueck und prueft das erste nie).
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum
-(``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEYS``; ohne die Fixture waeren die Pins dort aus dem FALSCHEN
-Grund rot und der Kill-Nachweis wertlos.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 """
 
 from __future__ import annotations

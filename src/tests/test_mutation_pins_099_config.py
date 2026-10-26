@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.forms.config``.
+"""Mutation regression tests for ``core.forms.config`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``config-a``
 (``welle-l-0.99/reports/m-scratch/batch-config-a.json``, Triage

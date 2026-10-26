@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle N (0.99.2) — Zustandsvertrag der Statuswechsel.
+"""Mutation regression tests.
 
 Quelle: die beiden Sicherheitskorrekturen
 #2288 und

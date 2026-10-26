@@ -1,10 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — Vollmutation-Rerun,
-Batch ``neu-1``: 47 NEUE Survivor aus dem Kill-Nachweis-Rerun auf dem
-Endbaum (main ``a608ba0e``) in zehn Funktionen ueber sieben Module, die seit
-dem Pruefstand ``25685845`` durch parallele Aenderungen geaendert und deshalb neu
-mutiert wurden (Mutantennummern haben sich gegenueber den alten Batches
-verschoben — jede Mutante wurde am Diff gegen ``__mutmut_orig`` IM AKTUELLEN
-Baum gelesen).
+"""Mutation regression tests for ``core.services.attachments.crud`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-neu-1.json`` (47 Survivor),
 Triage ``welle-l-0.99/reports/m-scratch/pins-neu-1/triage-099-neu-1.json``.

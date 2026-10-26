@@ -1,11 +1,9 @@
-"""Pin-Tests Welle L (release-0.99) — Survivors in ``core.services.compliance.backup``.
+"""Mutation regression tests for ``core.services.compliance.backup``.
 
-Ticket-Auftrag #2174/#2193, Batch **backup-a**: 42 Survivor-Mutanten des
-Vollmutations-Laufs auf ``main@f1083ef5`` (Liste: ``/work/wellen/welle-l-0.99/
-reports/m-scratch/batch-backup-a.json``), alle in ``x__restore_checks``. Quelle
-der Mutanten-Rümpfe: Mutantenbaum ``mutants/src/core/services/compliance/
-backup.py``. Der Schwester-Batch **backup-b** (``x__backup_checks``, eigener
-Worktree ``/work/anlaufstelle-l-m-backup-b``) pinnt getrennt.
+Regression coverage for 42 surviving mutations in ``x__restore_checks``
+from source revision ``f1083ef5`` (Refs #2174/#2193), in
+``mutants/src/core/services/compliance/backup.py``.
+The separate backup tests cover ``x__backup_checks``.
 
 ``_restore_checks`` hat dieselbe Vier-Zweig-Struktur wie ``cron.py``
 (UNKNOWN/OK/WARNING/CRITICAL nach Alter) — Konvention wie

@@ -1,9 +1,7 @@
-"""Pin-Tests Welle L (release-0.99) — Vollmutation #2174/#2193, Batch **compliance-2**.
+"""Mutation regression tests for ``core.services.compliance.clamav`` (Refs #2174, #2193).
 
-Modul ``core.services.compliance.clamav``, Funktion ``_clamav_checks``. Liste
-der 37 Survivors: ``/work/wellen/welle-l-0.99/reports/m-scratch/
-batch-compliance-2.json``. Quelle der Mutanten-Rümpfe: Mutantenbaum
-``mutants/src/core/services/compliance/clamav.py``.
+Regression coverage for 37 surviving mutations in
+``core.services.compliance.clamav._clamav_checks``.
 
 ``_clamav_checks`` liefert zwei ``ComplianceCheck``-Objekte: die
 Erreichbarkeit des ClamAV-Daemons (``clamav_reachable``, OK/CRITICAL nach

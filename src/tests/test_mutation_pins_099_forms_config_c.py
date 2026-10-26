@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutation #2174/#2193, Batch ``config-c``.
+"""Mutation regression tests for ``core.forms.config`` (Refs #2174, #2193).
 
 Refs #2174,
 Refs #2193.
@@ -18,10 +18,9 @@ clean_name__mutmut_5`` ist ``equivalent`` (``name`` ist beim Erreichen von
 BEIDEN Fassungen der ``and``/``or``-Bedingung nie einen Treffer) und bleibt
 bewusst ungepinnt.
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum
-(``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit keinen
-``ENCRYPTION_KEYS``; ohne die Fixture wären Pins, deren Formulare
-verschlüsselte Felder anfassen, aus dem FALSCHEN Grund rot (Lehre 112).
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
 """
 
 from __future__ import annotations

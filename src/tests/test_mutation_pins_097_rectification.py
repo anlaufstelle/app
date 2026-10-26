@@ -1,11 +1,6 @@
 """Pin-Tests zum Meilenstein release-0.97 — Prio-1-Survivors in ``core.services.client.rectification``.
 
-Quelle: atomic-Messlauf der Welle J (#2149),
-Batch ``client``. Gepinnt werden 21 Prio-1-Survivors der Funktionen
-:func:`~core.services.client.rectification.request_rectification`,
-:func:`~core.services.client.rectification.approve_rectification`,
-:func:`~core.services.client.rectification.reject_rectification` und
-:func:`~core.services.client.rectification._apply_rectification`. Drei Themen:
+Source: verified atomic mutation checks (Refs #2149).
 
 * **Zieltreue der Reloads unter der Zeilensperre.** Genehmigung und Ablehnung
   laden Antrag und Person innerhalb der Transaktion per ``select_for_update()``

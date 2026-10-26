@@ -1,8 +1,6 @@
 """E2E-Tests: dynamische Zusatzfelder an Personen (M2 P15b, Refs #1058).
 
-Abgeleitet aus der manuellen Playwright-Runde P15a (`/work/m2-artifacts/p15a-manual-report.md`,
-alle Schritte PASS) — Projektkonvention: E2E-Tests entstehen aus der beobachteten
-Handrunde, nicht vorab. Abgedeckt sind zwei Flüsse:
+Based on successful manual browser checks. Covered workflows:
 
   (1) **Ganzfluss** ``test_client_dynamic_fields_full_roundtrip``: Wegwerf-Personen-Typ
       über die Config-UI anlegen (ein normales + ein verschlüsseltes Feld über

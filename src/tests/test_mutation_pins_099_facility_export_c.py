@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutation #2174/#2193, Batch ``facility_export-c``.
+"""Mutation regression tests for ``core.services.system.facility_export`` (Refs #2174, #2193).
 
 Refs #2174,
 Refs #2193.
@@ -37,12 +37,10 @@ als auch jede ``_isoformat(None)``/``_uuid_str(None)``/``str(None)``-
 Verstümmelung (Wert weicht trotz gesetztem Original vom erwarteten Wert ab)
 in einem einzigen Assert je Funktion.
 
-``_encryption_key`` liegt modulweit an (Wellen-Konvention): der
-Mutantenbaum (``/work/anlaufstelle/mutants``) hat keine ``.env`` und damit
-keinen ``ENCRYPTION_KEYS``; ohne die Fixture wären Pins, deren Modelle
-verschlüsselte Felder anfassen, aus dem FALSCHEN Grund rot (Lehre 112).
-Keiner der fünf Serialisierer dieser Batch fasst ``data_json``/
-Verschlüsselung an, die Fixture liegt trotzdem modulweit an.
+``_encryption_key`` applies module-wide: isolated mutation checkouts have
+no ``.env`` or ``ENCRYPTION_KEYS``. The fixture prevents encryption setup
+failures from being mistaken for detected mutations.
+None of the five serializers accesses ``data_json`` or encryption directly.
 """
 
 from __future__ import annotations

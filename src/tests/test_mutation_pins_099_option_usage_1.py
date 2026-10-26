@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle L (0.99) — Vollmutation #2174, Batch ``option_usage-1``.
+"""Mutation regression tests for ``core.services.option_usage`` (Refs #2174).
 
 Refs #2174.
 Refs #2193.

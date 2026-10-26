@@ -1,11 +1,8 @@
-"""Pin-Tests Welle L (release-0.99) — Vollmutation #2174/#2193, Batch **compliance-1**.
+"""Mutation regression tests for ``core.services.compliance.sensitivity`` (Refs #2174, #2193).
 
-Modul ``core.services.compliance.sensitivity`` (46 Survivors, gesamtes
-Batch). Liste: ``/work/wellen/welle-l-0.99/reports/m-scratch/
-batch-compliance-1.json``. Quelle der Mutanten-Rümpfe: Mutantenbaum
-``mutants/src/core/services/compliance/sensitivity.py``. Vollständige
-Triage (alle 46 Mutanten, inkl. ``skip``/``equivalent``-Begründungen):
-``reports/m-scratch/pins-compliance-1/triage-099-compliance-1.json``.
+Regression coverage for 46 surviving mutations in
+``core.services.compliance.sensitivity``, including documented skipped
+and equivalent cases.
 
 Dieses Modul ist die zentrale Sensitivity-/Sichtbarkeits-Instanz: Rollen vs.
 Dokumenttyp-/Feld-Sensitivität (``effective_sensitivity``,

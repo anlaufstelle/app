@@ -2,10 +2,8 @@
 #
 # Refs #2045 — Art.-18-Sperrvermerk (Meilenstein release-0.89).
 #
-# MIGRATIONS-PROTOKOLL DER WELLE B: Die Nummern 0166-0169 waren fuer eine
-# parallele Aenderung vorgesehen, die zeitgleich lief. Beim 0.89-Merge wurde
-# die Dependency auf die letzte davon (0167) umgehaengt — die Nummernkette ist
-# seither wieder linear.
+# Migration history: numbers 0166-0169 were reserved for a concurrent change.
+# Release 0.89 changed the dependency to 0167, restoring a linear chain.
 #
 # Die ``AlterField`` auf ``auditlog.action`` gehoert bewusst in DIESELBE
 # Migration: die beiden neuen Choice-Werte (``processing_restricted``,

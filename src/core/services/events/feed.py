@@ -104,7 +104,7 @@ def get_time_range(target_date, time_filter=None):
       - Midnight overlap (start > end, e.g. 22:00-08:00): start on target_date,
         end on target_date + 1 day.
 
-    DST-Semantik des Fensterendes (Refs #2057, Maintainer-Entscheid Welle E)
+    DST semantics of the window end (Refs #2057)
     =======================================================================
     Zwei Tage im Jahr ist eine Wanduhrzeit nicht eindeutig. Die Regel dafuer
     steht hier zentral, weil fuenf Aufrufer sie teilen: Zeitstrom-Feed,

@@ -1,5 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — ``core.services.audit.chain``
-(Batch ``chain-b``).
+"""Mutation regression tests for ``core.services.audit.chain`` (Refs #2174, #2193).
 
 Quelle: Vollmutation #2174, Batch ``chain-b``
 (``welle-l-0.99/reports/m-scratch/batch-chain-b.json``, Triage

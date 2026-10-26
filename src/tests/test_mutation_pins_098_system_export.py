@@ -1,4 +1,4 @@
-"""Pin-Tests der Welle K (0.98) — Prio-2-Testluecken in ``core.services.system.export``.
+"""Mutation regression tests for ``core.services.system.export``.
 
 Refs #2193.
 
