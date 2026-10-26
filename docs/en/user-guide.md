@@ -1173,16 +1173,18 @@ without expiry even after manual event deletion.
 
 ## Free-text review
 
-Open **Free-text review** in navigation at `/free-text-review/`. The list contains only currently readable, nonempty texts in the signed-in facility. Staff, leads and facility administrators can review person notes and case and episode descriptions. Assistants and higher facility roles can review task descriptions and event free text within existing read permissions. Event type and field protection both apply; encrypted values and fields not configured as text/textarea are excluded. Deleted or inactive people and their associated texts are hidden; personless tasks and events may remain visible. System administrators receive no access.
+Open **Free-text review** in navigation at `/free-text-review/`. The list contains only currently readable, nonempty, unencrypted event free text in the signed-in facility. Assistants, staff, leads and facility administrators can review it within existing read permissions. Type and field protection also apply; encrypted values and fields not configured as text/textarea are excluded. Events belonging to deleted or inactive people are hidden; personless events may remain visible. System administrators receive no access.
 
-Select a model and optionally **Changed through**, **Created or reviewed by**, and a **Pattern hint**. Episodes use their creation date as an age indicator because they have no modification timestamp. The facility comes from the signed-in session. **Review text** opens an individual text, where you can mark it through the selected day, inclusive, or revoke the mark. Changed content or an expired date requires another review. Marking and revocation are audited without text content and do not change the original text. When notes of a person with additional details are displayed, the review writes the same read entry as the person detail page, once per displayed person and without text content. **Open source text** links to its regular detail page, or the parent case for an episode.
+The only model is **Event free text**. Optionally filter by **Changed through**, **Created or reviewed by**, and a **Pattern hint**. The facility comes from the signed-in session. **Review text** opens an individual text, where you can mark it through the selected day, inclusive, or revoke the mark. Changed content or an expired date requires another review. Marking and revocation are audited without text content and do not change the original text. **Open source text** links to the event detail page.
+
+The former fixed person notes and case, episode and task descriptions are no longer review targets. The new dynamic standard fields for these records are encrypted and excluded from the list; dynamic fields configured without encryption for these records are also excluded. Titles and pseudonyms remain plaintext navigation anchors outside the review list.
 
 Phone, email, date and address patterns are detected heuristically and locally on the server. Hints can be false and miss sensitive information; they do not guarantee GDPR compliance. The first suggestion only opens contact creation without prefilled content. Choose an actually encrypted field if you manually create a new record. Other suggestions recommend checking protection levels with the responsible administrator or manually neutralising the source text. Suggestions never automatically copy, decrypt or change content or protection. Review is available online only.
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-24 -->
-<!-- source-hash: 079cf824eb2eb8cff291ec75f3245bdee8e84889 -->
+<!-- translation-date: 2026-10-26 -->
+<!-- source-hash: dad8069b790b933d52dae9141a5fcd5df18cac68 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- translation-date: 2026-10-23 -->

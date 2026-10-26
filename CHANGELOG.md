@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Freitext-Review auf Ereignisse begrenzt** (#2669) — Die Prüfliste bietet nur noch unverschlüsselte Ereignis-Freitexte an; frühere statische Ziele und ihre Hilfetexte entfallen, die neuen dynamischen Trägerfelder sowie Titel und Pseudonyme bleiben außerhalb der Liste.
+
 - **Personen- und Falltexte in typgebundenen Feldern** (#2667) — Personen-Notizen und Fallbeschreibungen nutzen typgebundene Zusatzfelder statt eigener Textspalten, mit Pflichtauswahl bei aktiven Typen sowie angepassten Auskünften, Einrichtungsexporten und rollengefilterten Offline-Daten.
 - **Episoden und Aufgaben mit dynamischen Details** (#2668) — Beschreibungen liegen im jeweiligen Standardfeld statt in festen Textspalten; Formulare, Anzeigen, Wiederholungen, Auskünfte und Löschung nutzen die dynamischen Daten, Typwechsel verlangen bei Feldverlust eine Bestätigung und werden bei für die handelnde Person unsichtbaren Altwerten abgewiesen und Aufgaben werden offline ohne Detailfeld erfasst; die Typkonfiguration zeigt passende Vorschauen und Verwendungszähler einschließlich Löschblockaden.
 

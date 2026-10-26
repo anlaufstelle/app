@@ -6411,9 +6411,9 @@
 
 ### PRIV — Datenschutz-Review (Freitext)
 
-> **Forward-looking Bereich (Refs #908).** Feature wird in #918 implementiert. Cases werden mit dem Feature ergänzt. Vorgesehenes Schema:
+> **Prüfbereich (#918, Zielumfang #2669).** Die Liste prüft ausschließlich sichtbare, nicht leere, unverschlüsselte Ereignis-Freitexte. Titel/Pseudonyme und dynamische Felder von Personen, Fällen, Episoden und Aufgaben gehören nicht zur Liste. Vorgesehene manuelle Stichproben:
 >
-> - `ENT-PRIV-01` — Freitext-Review listet riskante Inhalte (`Client.notes`, `Case.description`, `Episode.description`, `WorkItem.description`)
+> - `ENT-PRIV-01` — Freitext-Review listet Ereignis-Freitexte und lokale Musterhinweise; entfernte statische Zielparameter liefern 404
 > - `ENT-PRIV-02` — Review respektiert Rollen-Sichtbarkeit (kein neuer Leak)
 > - `ENT-PRIV-03` — Review-Aktion wird auditiert
 
