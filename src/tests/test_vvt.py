@@ -441,16 +441,15 @@ class TestEpisodeAndGoalEditsAreAudited:
 
 
 class TestQualifiedAccessClaimStaysScoped:
-    """Refs #918, #1862: keep qualified-read promises scoped to both writers.
+    """Keep qualified-read promises scoped to the person detail view.
 
-    The person detail view and free-text review views write VIEW_QUALIFIED.
-    Review views audit once per displayed qualified person and page request.
-    The edit form, person list, event, case and search result do not write it.
+    Event-only free-text reviews do not display qualified-person notes.
+    The edit form, person list, review, event, case and search result do not write it.
     UI badges, legends and model help text are covered separately by
     test_contact_stage_explanations.py.
     """
 
-    def test_view_qualified_is_written_only_by_detail_and_review_views(self):
+    def test_view_qualified_is_written_only_by_person_detail_view(self):
         hits = sorted(
             path.relative_to(_SRC_ROOT).as_posix()
             for path in _SRC_ROOT.rglob("*.py")
@@ -458,10 +457,10 @@ class TestQualifiedAccessClaimStaysScoped:
             and path.name != "audit.py"
             and "tests" not in path.parts
         )
-        assert hits == ["core/views/clients.py", "core/views/free_text_review.py"], (
+        assert hits == ["core/views/clients.py"], (
             f"VIEW_QUALIFIED writers changed to {hits}; update the scoped promises "
             "in the user guide, glossary and domain concept if the person detail "
-            "and free-text review views are no longer the only writers."
+            "view is no longer the only writer."
         )
 
     @pytest.mark.architecture
@@ -478,9 +477,8 @@ class TestQualifiedAccessClaimStaysScoped:
             match = _BLANKET_CLIENT_ACCESS_CLAIM_RE.search(text)
             assert match is None, (
                 f'{relative} promises "{match.group(0)}"; VIEW_QUALIFIED covers '
-                "the person detail page and displayed qualified-person notes in "
-                "the free-text review views, not the edit form, person list, "
-                "event, case or search result."
+                "the person detail page; the edit form, person list, free-text "
+                "review, event, case and search result do not write it."
             )
 
 
