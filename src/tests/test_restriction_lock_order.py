@@ -235,6 +235,33 @@ class TestGateQueryCost:
         assert len(case_updates) == 2, queries
         for sql in snapshots + feed_lookups + case_updates:
             assert facility.pk.hex in sql.replace("-", ""), sql
+        # Isolate the additional configuration gate from the restriction
+        # helper's independent gate: it must precede even the unlocked task lookup.
+        first_task_read = next(index for index, sql in enumerate(queries) if 'FROM "core_workitem"' in sql)
+        gate_queries = queries[:first_task_read]
+        key_ordering = [sql for sql in gate_queries if sql.startswith("SELECT hashtext(")]
+        shared_locks = [sql for sql in gate_queries if "pg_advisory_xact_lock_shared(2525," in sql]
+        facility_checks = [sql for sql in gate_queries if sql.startswith("SELECT id FROM core_facility WHERE id = ")]
+        type_reads = [sql for sql in queries if 'FROM "core_documenttype"' in sql]
+        assert len(key_ordering) == 1, queries
+        assert len(shared_locks) == 1, queries
+        assert len(facility_checks) == 1, queries
+        assert len(type_reads) == 1, queries
+        for sql in key_ordering + shared_locks + facility_checks + type_reads:
+            assert facility.pk.hex in sql.replace("-", ""), sql
+        first_row_lock = next(
+            index
+            for index, sql in enumerate(queries)
+            if "FOR UPDATE" in sql and ('FROM "core_client"' in sql or 'FROM "core_workitem"' in sql)
+        )
+        assert (
+            queries.index(key_ordering[0])
+            < queries.index(shared_locks[0])
+            < queries.index(facility_checks[0])
+            < first_task_read
+            < first_row_lock
+            < queries.index(type_reads[0])
+        ), queries
         assert len(queries) == EXPECTED_UPDATE_WORKITEM_QUERIES, queries
 
     def test_gate_costs_no_query_without_a_client(self, facility, staff_user):
