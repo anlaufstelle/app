@@ -752,7 +752,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 
 **Code-Referenz:** `src/core/services/file_vault/encryption.py` (`MultiFernet`, Key-Rotation)
 
-**Voraussetzung:** ENCRYPTION_KEY gesetzt.
+**Voraussetzung:** `ENCRYPTION_KEYS` mit mindestens einem Schlüssel gesetzt.
 
 **Schritte:**
 1. Event mit Inhalt anlegen (Klartext „Vertraulich-XYZ").
