@@ -48,7 +48,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Ticketnummern im Testmatrix-Index ohne falsche Verlinkung** (#2648) — Der Generator schreibt Ticketreferenzen als Klartext, damit unabhängige Nummernräume anderer Repositories keine sachfremden Links erzeugen.
 
 - **Zeitstrom-Live-Aktualisierung nach htmx-Initialisierung** (#2644) — Die erste Hintergrundaktualisierung wartet auf die übernommene htmx-Konfiguration und verhindert dadurch CSP-Verstöße beim Übernehmen zugeklappter Detailbereiche.
-- **Andere Sitzungen bei 2FA-Gerätewechsel und Deaktivierung widerrufen** (#2640) — Beide Aktionen melden alle anderen Sitzungen des Kontos bei deren nächster Anfrage ab, erhalten die ausführende Sitzung auch nach späterer Passwortprüfung oder Sudo und lassen bei Fehlern einschließlich Anlage und abschließendem Speichern der Nachfolgesitzung den bisherigen Faktor gültig; die Bestätigung bleibt wiederholbar.
 - **Andere Sitzungen bei 2FA-Gerätewechsel und Deaktivierung widerrufen** (#2640, #2529) — Beide Aktionen melden alle anderen Sitzungen des Kontos bei deren nächster Anfrage ab, erhalten die ausführende Sitzung auch nach späterer Passwortprüfung oder Sudo und lassen bei Fehlern einschließlich Anlage und abschließendem Speichern der Nachfolgesitzung den bisherigen Faktor gültig; die Bestätigung bleibt wiederholbar.
 ### Added
 
