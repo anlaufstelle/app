@@ -451,7 +451,7 @@ Each person has a **contact stage**:
    - **Pseudonym:** A unique name within your facility (e.g., a self-chosen nickname). The pseudonym must be unique within a facility.
    - **Contact stage:** Select "Pseudonym only" or "With additional details".
    - **Age group:** "Under 18", "18--26", "27+", or "Unknown".
-   - **Notes:** Internal remarks about the person (optional).
+   - **Documentation type and additional fields:** In the bundled person type, notes are stored in the standard field `client-notes` (optional, visible according to role and sensitivity).
 3. Click **Save**.
 
 ### Searching for People
@@ -1050,7 +1050,7 @@ What happens:
 
 - The case disappears from the case list, statistics and the activity feed, and moves to the **trash**. Episodes, outcome goals and file attachments go with it — and all come back if the case is restored.
 - **Assigned contacts stay with the person.** They are not deleted along with the case and do not block its deletion; they only lose their case assignment once the case is purged for good.
-- Once the trash period expires (30 days by default, the same one that applies to deleted people), the case is **anonymized** automatically: title, description, custom fields, episodes, outcome goals and files are then irreversibly gone. Restoring is no longer possible after that.
+- Once the trash period expires (30 days by default, the same one that applies to deleted people), the case is **anonymized** automatically: title, type-bound additional fields including the standard description, episodes, outcome goals and files are then irreversibly gone. Restoring is no longer possible after that.
 - Until then, a case in the trash appears in an Art. 15 GDPR access record in its **own section** "Cases in the trash" — stating since when it has been deleted and whether it has already been anonymized for good.
 
 > Only the **application support** can **restore** a case — via **Trash** in the header of the case list. That page also offers **Anonymize permanently now** if waiting for the deadline is not an option.
@@ -1087,7 +1087,7 @@ An **episode** is a distinct phase within a case. For example, if a person enter
 
 > **Note:** Episodes can only be created for **open** cases.
 
-**Editing an episode:** Click **Edit** next to the episode to adjust the title, description, start, or end date.
+**Editing an episode:** Click **Edit** next to the episode to adjust the title, type-bound additional fields, start, or end date.
 
 **Completing an episode:** Click **Complete**. The end date is automatically set to today's date. If the start is in the future, completion is rejected with a message; edit the episode to correct the start or enter a suitable end date.
 

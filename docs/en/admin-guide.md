@@ -2157,7 +2157,7 @@ The audit log is **append-only** and immutable. Among other things, it automatic
 | Settings changed | Changes to facility settings |
 | Download | Downloading an attachment from the file vault |
 | Event updated | A domain edit to an event; details contain only the documentation type and changed field identifiers |
-| Episode updated | A change to an episode's title, description or time period |
+| Episode updated | A change to an episode's title, additional fields or time period |
 | Outcome goal updated | A change to an outcome goal's title or description |
 | Event linked to case | A new or changed link between an event and a case |
 | Event unlinked from case | Removal of the link between an event and a case |
@@ -2264,7 +2264,7 @@ Since [ADR-044](../adr/044-fall-loeschpfad.md), a **single case** can be deleted
 | **Who deletes?** | Social workers and above, from the case file ("More actions" → **Delete**). |
 | **Four eyes or direct?** | **Staged by the client's contact stage** — at "With additional details" a deletion request is created that a second person holding the *deletion confirmation* right must approve; otherwise the case moves straight to the trash. The same staging already applies when deleting an **event** of that person. Approval happens in the same list under **Privacy → Deletion requests** as for persons and events. |
 | **Which period?** | **None of its own.** `client_trash_days` (§ 2.3) applies — deliberately no second notion of a deadline that would have to be explained and maintained in the privacy notice and the impact assessment. |
-| **What happens when it expires?** | The case is **redacted, not hard-deleted**: title, description, custom fields, episodes, outcome goals, milestones and the case's own files (including the encrypted blobs) are gone; the case row remains as an anonymous aggregate. A hard delete would take episodes, goals and milestones with it by cascade. |
+| **What happens when it expires?** | The case is **redacted, not hard-deleted**: title, type-bound additional fields (including the standard description), episodes, outcome goals, milestones and the case's own files (including the encrypted blobs) are gone; the case row remains as an anonymous aggregate. A hard delete would take episodes, goals and milestones with it by cascade. |
 
 The facility admin opens the **trash** (`/cases/trash/`) from the header of the case list; like the person trash it appears in no navigation. Each row offers **"Restore"** (which brings episodes, goals and attachments back in full) and **"Anonymize permanently now"** — the same bring-forward action as for persons, with the same limits: only from the trash, never twice, and **not** while an active legal hold exists (on the case, on one of its events, or on the person). A case that has already been anonymized for good is labelled as such and no longer offers "Restore" — it would only bring back an empty shell.
 
