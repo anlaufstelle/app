@@ -241,7 +241,7 @@ def test_page_numbers_beyond_the_supported_range_are_not_found(client, facility,
         response = client.get(reverse("core:free_text_review_list"), {"model": "Event", "page": raw, "risk": risk})
     assert response.status_code == 404
     # No review query ran (the error page's own navigation counters are unrelated).
-    assert not [q for q in queries if '"core_workitem"."notiz"' in q["sql"] or "core_freetextreview" in q["sql"]]
+    assert not [q for q in queries if '"core_event"."data_json"' in q["sql"] or "core_freetextreview" in q["sql"]]
 
 
 def test_last_supported_page_is_an_empty_page_not_an_error(client, facility, staff_user):
