@@ -114,7 +114,7 @@ class TestProdFailClosed:
         result = _run_prod_import(
             {
                 "ALLOWED_HOSTS": "example.org",
-                "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+                "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
             }
         )
         assert result.returncode != 0
@@ -124,7 +124,7 @@ class TestProdFailClosed:
         result = _run_prod_import(
             {
                 "DJANGO_SECRET_KEY": "x" * 50,
-                "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+                "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
             }
         )
         assert result.returncode != 0
@@ -149,7 +149,7 @@ class TestProdFailClosed:
             {
                 "DJANGO_SECRET_KEY": "x" * 50,
                 "ALLOWED_HOSTS": "example.org",
-                "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+                "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
             }
         )
         assert result.returncode != 0
@@ -161,7 +161,7 @@ class TestProdFailClosed:
             {
                 "DJANGO_SECRET_KEY": "x" * 50,
                 "ALLOWED_HOSTS": "example.org",
-                "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+                "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
                 "DJANGO_AUDIT_HASH_KEY": "y" * 50,
             }
         )
@@ -179,7 +179,7 @@ class TestProdFailClosed:
             {
                 "DJANGO_SECRET_KEY": "x" * 50,
                 "ALLOWED_HOSTS": "example.org",
-                "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+                "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
                 "DJANGO_AUDIT_HASH_KEY": "y" * 50,
                 "CLAMAV_ENABLED": "false",
             }
@@ -194,7 +194,7 @@ class TestProdFailClosed:
             {
                 "DJANGO_SECRET_KEY": "x" * 50,
                 "ALLOWED_HOSTS": "example.org",
-                "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+                "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
                 "DJANGO_AUDIT_HASH_KEY": "y" * 50,
             }
         )
@@ -214,7 +214,7 @@ class TestProdSettingsSecurityDefaultsGuard:
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
         "ALLOWED_HOSTS": "example.org",
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     }
 
@@ -272,7 +272,7 @@ class TestProdSharedCacheGuard:
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
         "ALLOWED_HOSTS": "example.org",
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     }
 
@@ -380,7 +380,7 @@ class TestProdPlaceholderSecretsGuard:
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
         "ALLOWED_HOSTS": "example.org",
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     }
 
@@ -491,7 +491,7 @@ class TestProdWebAuthnRpIdDerivation:
 
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
         # Refs #1967: reine Wildcard-Config hat keine ableitbare Origin — hier
         # explizit gesetzt, damit der Fall RP-ID-Ableitung pruefbar bleibt.
@@ -532,7 +532,7 @@ class TestProdAllowedHostsWildcardGuard:
 
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     }
 
@@ -562,7 +562,7 @@ class TestProdExternalOrigin:
 
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     }
 
@@ -663,7 +663,7 @@ class TestAusgelieferteDeployVorlagenStarten:
 
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     }
 
@@ -710,7 +710,7 @@ class TestProdFileUploadTempDir:
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
         "ALLOWED_HOSTS": "example.org",
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     }
 
@@ -762,7 +762,7 @@ class TestProdHealthcheckRedirectExempt:
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
         "ALLOWED_HOSTS": "example.org",
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     }
 
@@ -854,7 +854,7 @@ class TestProdRedisPasswordUrl:
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
         "ALLOWED_HOSTS": "example.org",
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     }
 
@@ -879,7 +879,7 @@ class TestProdHealthBackupRequired:
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
         "ALLOWED_HOSTS": "example.org",
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     }
     _READBACK = "import anlaufstelle.settings.prod as p; print(p.HEALTH_BACKUP_REQUIRED)"
@@ -927,7 +927,7 @@ class TestProdMailerDeployCheck:
 
     _VALID_ENV = {
         "DJANGO_SECRET_KEY": "x" * 50,
-        "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
         "ALLOWED_HOSTS": "example.org",
     }

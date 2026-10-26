@@ -119,7 +119,7 @@ fi
 ```
 
 
-> **Key ring (#2363):** The application obtains its keys exclusively from `ENCRYPTION_KEYS` (a comma-separated key ring; the first entry encrypts). A non-empty `ENCRYPTION_KEY` value prevents startup and produces a rename hint, including when `ENCRYPTION_KEYS` is set. Check the stack’s environment file and the process environment against this requirement. The reference and renaming instructions are in the [admin guide, "Switching from `ENCRYPTION_KEY` to `ENCRYPTION_KEYS`"](admin-guide.md#full-environment-variable-reference). For fresh installs and emergency restores the key is stored in `.env` as `ENCRYPTION_KEYS`.
+> **Key ring (#2363):** The application obtains its keys exclusively from `ENCRYPTION_KEYS` (a comma-separated key ring; the first entry encrypts). A non-empty `ENCRYPTION_KEY` value prevents startup and produces a rename hint, including when `ENCRYPTION_KEYS` is set. Every non-empty ring entry is validated as a Fernet key when settings load in all profiles, including local loading from a key file; an invalid entry stops startup with its position and without its value. Duplicate valid entries produce a warning. Check the stack’s environment file and the process environment against this requirement. The reference and renaming instructions are in the [admin guide, "Switching from `ENCRYPTION_KEY` to `ENCRYPTION_KEYS`"](admin-guide.md#full-environment-variable-reference). For fresh installs and emergency restores the key is stored in `.env` as `ENCRYPTION_KEYS`.
 
 ### 1.2 Deploy Steps
 
@@ -3310,5 +3310,5 @@ Check lock-file drift     make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- translation-date: 2026-10-24 -->
-<!-- source-hash: e8673cf4a6a896ca2b2bfde4afed9371cc274a6e -->
+<!-- translation-date: 2026-10-26 -->
+<!-- source-hash: c44efb327544f5fce6c796f357765380bfdfcfc5 -->

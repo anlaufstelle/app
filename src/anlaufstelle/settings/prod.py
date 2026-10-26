@@ -324,7 +324,9 @@ RATELIMIT_USE_CACHE = "default"
 
 # --- Encryption key ring (mandatory in production) ---
 # ENCRYPTION_KEYS (comma-separated, MultiFernet) is the only key source; the
-# single-key variable ENCRYPTION_KEY is rejected in base.py.
+# single-key variable ENCRYPTION_KEY and malformed ring entries are rejected
+# in base.py for every settings profile, including production. Duplicate valid
+# entries emit a warning there; the guard below additionally requires a key.
 def _split_encryption_key_ring(value):
     """Pure settings-time twin of ``file_vault.keyring.split_key_ring``.
 

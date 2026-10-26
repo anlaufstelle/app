@@ -10,6 +10,7 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
+from ._encryption import validate_encryption_key_ring as _validate_encryption_key_ring
 from ._env import env_bool, env_csv, env_int, env_origin, env_tokens
 from ._mfa_roles import parse_enforced_role_sets
 
@@ -548,6 +549,9 @@ if os.environ.get("ENCRYPTION_KEY", "").strip():
         "all entries decrypt). Remove ENCRYPTION_KEY from the environment/.env and recreate "
         "the containers (a plain restart does not pick up changed variables)."
     )
+
+# All profiles reject malformed configured keys before runtime crypto access.
+_validate_encryption_key_ring(ENCRYPTION_KEYS)
 
 # --- Virenscan (ClamAV, Issue #524) ---
 # Prüft jede hochgeladene Datei VOR der Verschlüsselung gegen einen ClamAV-Daemon.

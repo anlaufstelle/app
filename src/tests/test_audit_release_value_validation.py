@@ -75,7 +75,7 @@ def test_production_audit_validation_defaults_to_strict():
         {
             "DJANGO_SECRET_KEY": "x" * 50,
             "ALLOWED_HOSTS": "example.org",
-            "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+            "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
             "DJANGO_AUDIT_HASH_KEY": "y" * 50,
             "DJANGO_AUDIT_DETAIL_STRICT": "",
         },

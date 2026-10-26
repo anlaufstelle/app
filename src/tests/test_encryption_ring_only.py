@@ -23,10 +23,9 @@ from django.test import override_settings
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
 
-KEY = "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE="
+KEY = "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE="
 OTHER_KEY = "cXV4cXV4cXV4cXV4cXV4cXV4cXV4cXV4cXV4cXV4cXU="
-# Real Fernet keys (32 url-safe base64 bytes) for the tests that encrypt for real;
-# KEY above only has to be a stable string for settings and pepper derivation.
+# Valid Fernet keys for runtime encryption as well as settings imports.
 FERNET_A = "Y29yZ2Vjb3JnZWNvcmdlY29yZ2Vjb3JnZWNvcmdlY28="
 FERNET_B = OTHER_KEY
 
@@ -289,6 +288,8 @@ class TestDerivedValuesStayByteIdentical:
     single variable into a one-entry ring must not change it (otherwise stored
     fingerprints stop matching and retried requests are replayed twice)."""
 
+    # Preserve the original derivation vector independently of startup fixtures.
+    INPUT_KEY = "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE="
     EXPECTED_PEPPER_HEX = "7fdf1f59fff9286fc11e52e9f54e93f8af5bc20553cce9f8cad9ac8160aed1cd"
     EXPECTED_PEPPER_ID = "d88b94b2"
     EXPECTED_FINGERPRINT = "h1:d88b94b2:qtjz8ooN0yOuoUwkCFpMiad1lTE69qxndRG0P0FQ8M4"
@@ -296,7 +297,7 @@ class TestDerivedValuesStayByteIdentical:
     def test_one_entry_ring_reproduces_the_pre_removal_pepper(self):
         from core.services.events import idempotency
 
-        with override_settings(ENCRYPTION_KEYS=KEY):
+        with override_settings(ENCRYPTION_KEYS=self.INPUT_KEY):
             pepper = idempotency._fingerprint_pepper()
 
         assert pepper.hex() == self.EXPECTED_PEPPER_HEX
@@ -306,7 +307,7 @@ class TestDerivedValuesStayByteIdentical:
     def test_pepper_follows_the_first_ring_entry_only(self):
         from core.services.events import idempotency
 
-        with override_settings(ENCRYPTION_KEYS=f"{KEY},{OTHER_KEY}"):
+        with override_settings(ENCRYPTION_KEYS=f"{self.INPUT_KEY},{OTHER_KEY}"):
             pepper = idempotency._fingerprint_pepper()
 
         assert pepper.hex() == self.EXPECTED_PEPPER_HEX

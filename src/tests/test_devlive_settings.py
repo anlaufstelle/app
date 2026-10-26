@@ -18,7 +18,7 @@ SRC_DIR = REPO_ROOT / "src"
 _VALID_ENV = {
     "DJANGO_SECRET_KEY": "x" * 50,
     "ALLOWED_HOSTS": "dev.anlaufstelle.app",
-    "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+    "ENCRYPTION_KEYS": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
     # Refs #1024 A4.2: devlive erbt von prod.py, das AUDIT_HASH_KEY fail-closed
     # verlangt — daher hier als Pflicht-ENV für den Import nötig.
     "DJANGO_AUDIT_HASH_KEY": "y" * 50,

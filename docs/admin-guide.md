@@ -232,7 +232,7 @@ Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Sup
 
 | Name | Default | Beschreibung |
 |---|---|---|
-| `ENCRYPTION_KEYS` | — | **Pflicht in Produktion.** Komma-separierter Schlüsselring von Fernet-Keys; bei einem einzelnen Schlüssel genau ein Eintrag. Der **erste** Key ist Write-Key (neue Daten werden damit verschlüsselt), alle Einträge entschlüsseln (Decrypt-Fallback für Rotation). Ohne mindestens einen Eintrag verweigert die App in Produktion den Start. |
+| `ENCRYPTION_KEYS` | — | **Pflicht in Produktion.** Komma-separierter Schlüsselring von Fernet-Keys; bei einem einzelnen Schlüssel genau ein Eintrag. Der **erste** Key ist Write-Key (neue Daten werden damit verschlüsselt), alle Einträge entschlüsseln (Decrypt-Fallback für Rotation). Ohne mindestens einen Eintrag verweigert die App in Produktion den Start. Jeder nicht leere Eintrag wird beim Laden der Settings in allen Profilen als Fernet-Schlüssel geprüft, auch beim lokalen Laden aus einer Schlüsseldatei; ein ungültiger Eintrag stoppt den Start mit Positionsangabe ohne Schlüsselwert. Doppelte gültige Einträge erzeugen eine Warnung. |
 | `ENCRYPTION_KEY` | — | **Entfernt.** Der frühere Einzelschlüssel wird nicht mehr gelesen; ein gesetzter Wert stoppt den Start mit einem Umbenennungshinweis (in jedem Settings-Profil, auch neben einem gesetzten `ENCRYPTION_KEYS`). |
 
 **Von `ENCRYPTION_KEY` auf `ENCRYPTION_KEYS` umstellen (Betreiberaktion):** Der Wert bleibt unverändert, es wird nichts neu verschlüsselt:

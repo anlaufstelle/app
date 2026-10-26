@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from .base import *  # noqa: F401, F403
+from .base import _validate_encryption_key_ring
 
 # Dev-Default für SECRET_KEY — NUR in dev/test. prod.py erzwingt DJANGO_SECRET_KEY.
 if not SECRET_KEY:  # noqa: F405
@@ -97,6 +98,7 @@ if not _ring_has_keys(ENCRYPTION_KEYS) and _LOCAL_ENCRYPTION_KEY_FILE:  # noqa: 
     # Klartext-/``REQUIRE_ENCRYPTION``-Pfad unten — laut statt still.
     with contextlib.suppress(OSError):
         ENCRYPTION_KEYS = Path(_LOCAL_ENCRYPTION_KEY_FILE).read_text(encoding="utf-8").strip()
+        _validate_encryption_key_ring(ENCRYPTION_KEYS)
 
 if not _ring_has_keys(ENCRYPTION_KEYS):  # noqa: F405
     if REQUIRE_ENCRYPTION:

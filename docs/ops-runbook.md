@@ -116,7 +116,7 @@ fi
 ```
 
 
-> **Schlüsselring (#2363):** Die Anwendung bezieht ihre Schlüssel ausschließlich aus `ENCRYPTION_KEYS` (komma-separierter Schlüsselring, der erste Eintrag verschlüsselt). Ein nicht leerer Wert für `ENCRYPTION_KEY` verhindert den Start und erzeugt einen Umbenennungshinweis, auch wenn `ENCRYPTION_KEYS` gesetzt ist. Prüfen Sie die Umgebungsdatei des Stacks und die Prozessumgebung auf diese Vorgabe. Die Referenz und die Anleitung zur Umbenennung stehen im [Admin-Guide, Abschnitt „Von `ENCRYPTION_KEY` auf `ENCRYPTION_KEYS` umstellen“](admin-guide.md#vollständige-umgebungsvariablen-referenz). Bei Neuinstallation und Notfall-Wiederherstellung steht der Schlüssel als `ENCRYPTION_KEYS` in der `.env`.
+> **Schlüsselring (#2363):** Die Anwendung bezieht ihre Schlüssel ausschließlich aus `ENCRYPTION_KEYS` (komma-separierter Schlüsselring, der erste Eintrag verschlüsselt). Ein nicht leerer Wert für `ENCRYPTION_KEY` verhindert den Start und erzeugt einen Umbenennungshinweis, auch wenn `ENCRYPTION_KEYS` gesetzt ist. Jeder nicht leere Ring-Eintrag wird beim Laden der Settings in allen Profilen als Fernet-Schlüssel geprüft, auch beim lokalen Laden aus einer Schlüsseldatei; ein ungültiger Eintrag stoppt den Start mit Positionsangabe ohne Schlüsselwert. Doppelte gültige Einträge erzeugen eine Warnung. Prüfen Sie die Umgebungsdatei des Stacks und die Prozessumgebung auf diese Vorgabe. Die Referenz und die Anleitung zur Umbenennung stehen im [Admin-Guide, Abschnitt „Von `ENCRYPTION_KEY` auf `ENCRYPTION_KEYS` umstellen“](admin-guide.md#vollständige-umgebungsvariablen-referenz). Bei Neuinstallation und Notfall-Wiederherstellung steht der Schlüssel als `ENCRYPTION_KEYS` in der `.env`.
 
 ### 1.2 Deploy-Schritte
 

@@ -234,7 +234,7 @@ Anlaufstelle separates three DB roles: a hardcoded `postgres` bootstrap superuse
 
 | Name | Default | Description |
 |---|---|---|
-| `ENCRYPTION_KEYS` | -- | **Required in production.** Comma-separated key ring of Fernet keys; a single key is a ring with exactly one entry. The **first** key is the write key (new data is encrypted with it); every entry decrypts (decrypt fallback during rotation). Without at least one entry the app refuses to start in production. |
+| `ENCRYPTION_KEYS` | -- | **Required in production.** Comma-separated key ring of Fernet keys; a single key is a ring with exactly one entry. The **first** key is the write key (new data is encrypted with it); every entry decrypts (decrypt fallback during rotation). Without at least one entry the app refuses to start in production. Every non-empty entry is validated as a Fernet key when settings load in all profiles, including local loading from a key file; an invalid entry stops startup with its position and without its value. Duplicate valid entries produce a warning. |
 | `ENCRYPTION_KEY` | -- | **Removed.** The former single key is no longer read; a set value stops the start with a rename hint (in every settings profile, also next to a set `ENCRYPTION_KEYS`). |
 
 **Switching from `ENCRYPTION_KEY` to `ENCRYPTION_KEYS` (operator action):** The value stays unchanged, nothing is re-encrypted:
@@ -2582,5 +2582,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- source-hash: 2eebfc4809ec9076bedb06698cd58fdd287ecbef -->
+<!-- source-hash: 071d857224cc8d65ce82cd35e80bcab0ec7deaba -->
 <!-- translation-date: 2026-10-26 -->
