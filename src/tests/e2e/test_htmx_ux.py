@@ -15,6 +15,8 @@ import re
 import pytest
 from playwright.sync_api import expect
 
+from ._helpers import focus_losses, watch_focus_loss
+
 pytestmark = pytest.mark.e2e
 
 
@@ -224,6 +226,33 @@ class TestHtmxFocusManagement:
         )
         assert still_inside is True, "Tab nach dem Swap verließ das getauschte Fragment."
 
+    def test_focus_watch_reports_a_theft_that_gives_the_focus_back(self, authenticated_page, base_url):
+        """Control for :func:`watch_focus_loss`: the watcher must not be blind to a loss with return.
+
+        The focus moves to another element and comes back in a later task. The final state
+        passes ``to_be_focused()``, but the watcher has to note the loss; without it the
+        no-theft assertions of the live search would prove nothing.
+        """
+        page = authenticated_page
+        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+        selector = "input[hx-target='#client-table']"
+        search = page.locator(selector)
+        search.click()
+        watch_focus_loss(page, selector)
+        assert focus_losses(page) == []
+
+        page.evaluate(
+            """(sel) => {
+                const field = document.querySelector(sel);
+                const other = document.querySelector('#main-content a, #main-content button, main a');
+                other.focus();
+                setTimeout(() => field.focus(), 30);
+            }""",
+            selector,
+        )
+        expect(search).to_be_focused()
+        assert len(focus_losses(page)) == 1, "the watcher missed a focus loss that was given back later"
+
     def test_live_search_keeps_focus_in_input(self, authenticated_page, base_url):
         """Live-Suche (keyup-getriggert) → der Fokus bleibt im Suchfeld, damit
         der Nutzer weitertippen kann; der Handler stiehlt ihn NICHT ins Ergebnis.
@@ -245,9 +274,15 @@ class TestHtmxFocusManagement:
 
         search = page.locator("input[hx-target='#client-table']")
         search.click()
+        watch_focus_loss(page, "input[hx-target='#client-table']")
         # Zeichenweise tippen → löst keyup (hx-trigger="keyup changed delay:300ms") aus.
         search.press_sequentially("Stern", delay=60)
 
         page.wait_for_function("() => window.__clientTableSwapped === true", timeout=5000)
 
-        expect(page.locator("input[hx-target='#client-table']")).to_be_focused()
+        expect(
+            page.locator("input[hx-target='#client-table']"),
+            "live search must keep the focus in the input (no theft by the swap handler)",
+        ).to_be_focused()
+        # Not only the end state: the focus must not have left the field in between either.
+        assert focus_losses(page) == [], "the live search took the focus out of the field during the swap"

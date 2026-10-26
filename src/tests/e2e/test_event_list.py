@@ -17,7 +17,7 @@ import pytest
 from playwright.sync_api import expect
 
 from ._date_helpers import expect_date_value, fill_date
-from ._helpers import django_shell
+from ._helpers import django_shell, focus_losses, watch_focus_loss
 
 pytestmark = pytest.mark.e2e
 
@@ -184,13 +184,15 @@ class TestFilterRun:
 
         fill_date(page, "#event-date_from", "2019-03-01")
         fill_date(page, "#event-date_to", "2019-03-31")
+        watch_focus_loss(page, "#event-submit")
         submit_filters(page)
         expect(rows(page)).to_have_count(PAGE_SIZE)
         expect_total(page, PAGE_SIZE, STAFF_TOTAL)
         expect(page).to_have_url(re.compile(r"date_from=2019-03-01"))
         assert query_of(page.url)["date_to"] == ["2019-03-31"]
         # The form is re-sent with the results; keyboard focus must stay on the button.
-        expect(page.locator("#event-submit")).to_be_focused()
+        expect(page.locator("#event-submit"), "keyboard focus must stay on the filter button").to_be_focused()
+        assert focus_losses(page) == [], "the filter run took the focus off the button while the form was re-sent"
 
         page.select_option("#event-doc_type", dataset["type_b"])
         submit_filters(page)

@@ -127,6 +127,40 @@ def wait_until_htmx_bound(page, locator, timeout_ms=10000, interval_ms=50):
         raise AssertionError("htmx hat das frisch eingeswappte Element nicht verarbeitet (Settle blieb aus)")
 
 
+def watch_focus_loss(page, selector):
+    """Record every time the element matching ``selector`` loses focus and does not get it back.
+
+    A final ``to_be_focused()`` only sees the end state. A handler that steals the focus and
+    gives it back later (a ``focusout`` that is followed by a refocus in a later task) would pass
+    it unseen, although a screen reader user was thrown out of the field in between. This
+    watcher notes each ``focusout`` of the element and checks in the next task whether the
+    element holds the focus again; a swap that replaces the node and restores the focus in the
+    same task is not a loss. Read the result with :func:`focus_losses`.
+    """
+    page.evaluate(
+        """(sel) => {
+            window.__focusLosses = [];
+            document.addEventListener('focusout', (event) => {
+                if (!event.target.matches || !event.target.matches(sel)) return;
+                const moved = event.relatedTarget ? (event.relatedTarget.id || event.relatedTarget.tagName) : null;
+                setTimeout(() => {
+                    const active = document.activeElement;
+                    if (moved || !active || !active.matches(sel)) {
+                        window.__focusLosses.push({ at: Math.round(performance.now()), movedTo: moved,
+                            nowActive: active ? (active.id || active.tagName) : null });
+                    }
+                }, 0);
+            }, true);
+        }""",
+        selector,
+    )
+
+
+def focus_losses(page) -> list:
+    """Focus losses noted by :func:`watch_focus_loss` (empty when the focus never left)."""
+    return page.evaluate("() => new Promise((resolve) => setTimeout(() => resolve(window.__focusLosses || []), 50))")
+
+
 def track_console_errors(page):
     """Sammelt Browser-Konsolen-Errors und JS-Exceptions einer Page in eine Liste.
 

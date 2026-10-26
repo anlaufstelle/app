@@ -140,11 +140,28 @@ def _stamp_stale_activity(page, *, wipe_under_lock=False):
                     req.onerror = () => reject(req.error);
                 });
             };
-            if (!wipeUnderLock) return await stamp();
+            // Read the stamp back once: a concurrent activity touch writes without the lock and would
+            // silently replace it, and the test would then wait on an idle window that never expired.
+            const readBack = () => new Promise((resolve, reject) => {
+                const req = indexedDB.open('anlaufstelle-crypto', 1);
+                req.onsuccess = () => {
+                    const db = req.result;
+                    const get = db.transaction('meta', 'readonly').objectStore('meta').get('lastActivity');
+                    get.onsuccess = () => { db.close(); resolve(get.result ? get.result.ts : null); };
+                    get.onerror = () => { db.close(); reject(get.error); };
+                };
+                req.onerror = () => reject(req.error);
+            });
+            const stampChecked = async () => {
+                await stamp();
+                const ts = await readBack();
+                if (ts !== 1) throw new Error('idle stamp was replaced before use: ts=' + ts);
+            };
+            if (!wipeUnderLock) return await stampChecked();
             if (!navigator.locks) throw new Error('Web Locks are required for this test');
             return await window.syncOrchestrator.runExclusive(async () => {
                 if (!window.syncOrchestrator.isLockHeld()) throw new Error('Offline lock is not held');
-                await stamp();
+                await stampChecked();
                 // A foreign boot gate must not read the stale stamp and wipe first:
                 // its deletion of the stamp could make this tab start a fresh idle window.
                 // awaitReady enters the idle gate reentrantly under our held lock.

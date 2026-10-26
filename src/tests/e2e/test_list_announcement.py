@@ -20,7 +20,7 @@ DOM-Zeilen der sichtbaren Seite).
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import django_shell
+from ._helpers import django_shell, focus_losses, watch_focus_loss
 
 pytestmark = pytest.mark.e2e
 
@@ -144,6 +144,7 @@ class TestListAnnouncementTotal:
         # ueber ``press_sequentially`` echte Tastendruecke simulieren.
         search = page.locator('input[aria-label="Suchbegriff"]')
         search.click()
+        watch_focus_loss(page, 'input[aria-label="Suchbegriff"]')
         search.press_sequentially("e2e-2155-garantiert-kein-treffer", delay=20)
 
         region = page.locator("#client-list-status")
@@ -152,7 +153,8 @@ class TestListAnnouncementTotal:
 
         # Live-Suche (Refs #1339, Abgrenzung Live-Suche in focus-management.js):
         # der Fokus bleibt im Suchfeld, die Ansage darf ihn nicht stehlen.
-        expect(search).to_be_focused()
+        expect(search, "the announcement must not take the focus from the search field").to_be_focused()
+        assert focus_losses(page) == [], "the focus left the search field while the list was swapped"
 
 
 # Befund MITTEL: die kleine
