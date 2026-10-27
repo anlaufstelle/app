@@ -28,3 +28,12 @@ def test_group_labels_are_translated_when_rendered_in_english(facility, staff_us
         "priority": "Urgent · Important",
         "in_progress": "In progress",
     }
+
+    with translation.override("de"):
+        labels = {group["key"]: str(group["label"]) for group in box["groups"]}
+    assert labels == {
+        "overdue": "Überfällig",
+        "today": "Heute fällig",
+        "priority": "Dringend · Wichtig",
+        "in_progress": "In Bearbeitung",
+    }
