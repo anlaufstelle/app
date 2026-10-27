@@ -3,6 +3,7 @@
 from django.contrib import messages
 from django.db.models import Count, Max
 from django.shortcuts import redirect
+from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -153,6 +154,7 @@ class SystemUnlockView(SystemAuditMixin, RequireSudoModeMixin, View):
     read-only) bleibt bewusst sudo-frei.
     """
 
+    sudo_return_url = reverse_lazy("core:system_lockout_list")
     http_method_names = ["post"]
 
     def post(self, request):

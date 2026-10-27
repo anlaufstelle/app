@@ -17,12 +17,13 @@ wenn der User noch nicht oder nicht mehr in SudoMode ist.
 from __future__ import annotations
 
 import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from django.conf import settings
-from django.http import HttpResponseRedirect
+from django.http import HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
 
@@ -81,14 +82,18 @@ def clear_sudo(request) -> None:
 # Jede ``sudo=True/False``-Zeile in ``src/tests/_authz_expectations.py`` ist
 # die test-erzwungene Verankerung dieser Policy.
 class RequireSudoModeMixin:
-    """View-Mixin: redirected zu ``/sudo/`` wenn nicht im SudoMode.
+    """Require re-authentication after the login and role gates.
 
-    Der ``next``-Query-Parameter zeigt auf die Originalseite (URL-kodiert,
-    ``sudo_url``), sodass nach erfolgreicher Re-Auth direkt dorthin
-    zurueckgesprungen wird.
-    Reihenfolge: nach LoginRequiredMixin/Role-Mixin (sonst sieht der
-    Anonymous-Pfad zuerst die Sudo-Form).
+    Safe requests keep their full target. Unsafe requests return to a GET
+    page so the user can submit the action again without replaying data.
+    Override ``sudo_return_url`` or ``get_sudo_return_url`` for POST-only views.
     """
+
+    sudo_return_url = None
+
+    def get_sudo_return_url(self) -> str | None:
+        """Provide a fixed fallback when the referring page is unsuitable."""
+        return str(self.sudo_return_url) if self.sudo_return_url is not None else None
 
     def dispatch(self, request, *args, **kwargs):
         # Setting-Toggle: kann pro Umgebung deaktiviert werden (z.B. in
@@ -100,26 +105,43 @@ class RequireSudoModeMixin:
             return super().dispatch(request, *args, **kwargs)
         if is_in_sudo(request):
             return super().dispatch(request, *args, **kwargs)
-        # Refs #2328: ``next`` kodiert — sonst endete das Ziel nach dem
-        # Sudo-Schritt am zweiten Query-Parameter.
-        return redirect(sudo_url(request.get_full_path()))
+        return redirect(sudo_url(_sudo_return_path(request, self.get_sudo_return_url())))
 
 
-def sudo_redirect_if_required(request) -> HttpResponseRedirect | None:
-    """Sudo-Weiterleitung fuer eine bedingte Pruefung — oder ``None``.
+def _sudo_return_path(request: HttpRequest, fallback: str | None = None) -> str:
+    """Choose a local GET target without retaining or replaying unsafe data."""
+    from core.views.utils import is_get_navigable, safe_redirect_path
 
-    Refs #2328: fuer Views, die Sudo nur unter einer Bedingung verlangen und
-    deshalb den ``RequireSudoModeMixin`` nicht tragen koennen —
-    ``MFASetupView`` verlangt Sudo beim Faktorwechsel, nicht beim Erstsetup.
-    Die Bedingung prueft der Aufrufer; hier gilt dieselbe Semantik wie in
-    ``RequireSudoModeMixin.dispatch``: Setting-Toggle ``SUDO_MODE_ENABLED``
-    (Default aktiv), anonyme Anfrage und laufendes Sudo-Fenster ergeben
-    ``None``, sonst geht es auf ``/sudo/`` mit ``next`` = voller Pfad samt
-    Query, URL-kodiert (``sudo_url``).
+    if request.method in {"GET", "HEAD", "OPTIONS", "TRACE"}:
+        return request.get_full_path()
+
+    fallback = safe_redirect_path(fallback or request.get_full_path())
+    if not is_get_navigable(fallback):
+        fallback = "/"
+
+    referer = request.headers.get("Referer", "").strip()
+    if referer and url_has_allowed_host_and_scheme(
+        referer, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        target = urlsplit(referer)
+        path = target.path or "/"
+        if target.query:
+            path += "?" + target.query
+        if safe_redirect_path(path) == path and is_get_navigable(path):
+            return path
+    return fallback
+
+
+def sudo_redirect_if_required(request, *, sudo_return_url: str | None = None) -> HttpResponseRedirect | None:
+    """Apply conditional sudo with the same return policy as the mixin.
+
+    MFA setup requires sudo only when replacing an existing factor. The
+    caller checks that condition; this helper checks the setting, login and
+    current sudo window. Unsafe requests return to a local GET page.
     """
     if not is_sudo_required(request):
         return None
-    return HttpResponseRedirect(sudo_url(request.get_full_path()))
+    return HttpResponseRedirect(sudo_url(_sudo_return_path(request, sudo_return_url)))
 
 
 def is_sudo_required(request) -> bool:

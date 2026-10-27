@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
@@ -81,6 +82,7 @@ class SystemLegalHoldListView(SystemAuditMixin, PaginatedListMixin, TemplateView
 class SystemLegalHoldDismissView(SystemAuditMixin, RequireSudoModeMixin, View):
     """Dismiss an explicitly selected hold as the installation administrator."""
 
+    sudo_return_url = reverse_lazy("core:system_legal_hold_list")
     http_method_names = ["post"]
 
     def post(self, request, pk):

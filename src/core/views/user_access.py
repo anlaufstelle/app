@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -167,6 +168,9 @@ class UserAccessUpdateView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
     name="dispatch",
 )
 class UserAccessInviteView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _NoStoreMixin, View):
+    def get_sudo_return_url(self):
+        return reverse("core:user_access_update", kwargs={"pk": self.kwargs["pk"]})
+
     def post(self, request, pk):
         target = get_manageable_user(request.current_facility, pk)
         try:
@@ -197,6 +201,9 @@ class UserAccessInviteView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
     name="dispatch",
 )
 class UserAccessUnlockView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _NoStoreMixin, View):
+    def get_sudo_return_url(self):
+        return reverse("core:user_access_update", kwargs={"pk": self.kwargs["pk"]})
+
     def post(self, request, pk):
         target = get_manageable_user(request.current_facility, pk)
         if unlock_managed_user(

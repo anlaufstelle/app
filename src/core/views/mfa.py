@@ -28,7 +28,7 @@ from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -158,16 +158,14 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
         ``/mfa/verify/`` VOR dem Kontextaufbau, fuer GET und POST gleich. Ohne
         bestaetigten Faktor bleibt das Erstsetup unveraendert erreichbar.
 
-        Refs #2328: Ein Faktorwechsel verlangt zusaetzlich Sudo — dieselbe
-        Schutzhoehe wie ``MFADisableView`` und ``MFAPasskeyDeleteView``. Sonst
-        reichte ein entwendetes, bereits verifiziertes Sitzungs-Cookie, um dem
-        Konto einen eigenen zweiten Faktor unterzuschieben und den
-        Backup-Code-Satz zu ersetzen. Der ``RequireSudoModeMixin`` passt hier
-        nicht, weil er das Erstsetup nicht ausnehmen kann; die Pruefung sitzt
-        deshalb bedingt NACH dem ``mfa_verified``-Gate (eine nicht verifizierte
-        Sitzung sieht nie die Sudo-Seite) und gilt fuer jede Methode. ``next``
-        fuehrt zurueck auf ``/mfa/setup/``: ein Passkey-Konto ohne TOTP landet
-        in der Einrichtung, ein TOTP-Konto auf der Einstellungsseite (``get``).
+        Refs #2328: Replacing an existing factor also requires sudo, matching
+        the protection on MFA deactivation and passkey removal. The check is
+        conditional so initial setup remains exempt. It runs for every method
+        after MFA verification, before any setup state is built.
+
+        Safe requests keep their full return path. Unsafe requests return to
+        the referring GET page or the setup page so the user can submit the
+        action again without replaying form data (Refs #2640).
         """
         if (
             request.user.is_authenticated
@@ -677,6 +675,8 @@ class MFADisableView(LoginRequiredMixin, RequireSudoModeMixin, TemplateView):
 )
 class MFAPasskeyDeleteView(LoginRequiredMixin, RequireSudoModeMixin, View):
     """Remove an owned passkey under sudo while retaining another second factor."""
+
+    sudo_return_url = reverse_lazy("mfa_settings")
 
     def post(self, request, *args, **kwargs):
         from django_otp_webauthn.models import WebAuthnCredential
