@@ -19,6 +19,7 @@ from core.services.dashboard.disclosure import (
     MIN_FEASIBLE_SPAN,
     Cell,
     Partition,
+    SharedBasisCache,
     findings,
     shared_alternatives,
     shared_bounds,
@@ -201,12 +202,15 @@ def protect_counts(
             )
             for partition in active_partitions
         ]
+        basis_cache = SharedBasisCache(model)
         try:
-            bounds = shared_bounds(cells, model)
+            bounds = shared_bounds(cells, model, basis_cache=basis_cache)
         except RuntimeError:
             return None
         local_findings = {token for _, token in findings(model, threshold=threshold)}
-        alternatives = shared_alternatives(cells, model, {tokens[key]: cell.value for key, cell in raw.items()})
+        alternatives = shared_alternatives(
+            cells, model, {tokens[key]: cell.value for key, cell in raw.items()}, basis_cache=basis_cache
+        )
         unsafe = set()
         for key in hidden_now - dropped:
             cell = raw[key]

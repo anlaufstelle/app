@@ -232,26 +232,30 @@ def findings(partitions: Sequence[Partition], *, threshold: int) -> list[tuple[s
 def _shared_basis(
     cells: dict[str, Cell], partitions: Sequence[Partition]
 ) -> dict[str, tuple[dict[str, Fraction], Fraction]]:
-    """Reduce exact equations after substituting all published values."""
+    """Reduce exact equations, indexing only rows affected by a new pivot."""
     basis: dict[str, tuple[dict[str, Fraction], Fraction]] = {}
+    columns: dict[str, set[str]] = {}
+    zero = Fraction(0)
     for partition in partitions:
         if partition.margin_key is None:
             continue
         coefficients = {partition.margin_key: Fraction(1)}
         for cell in partition.cells:
-            coefficients[cell.key] = coefficients.get(cell.key, Fraction(0)) - 1
+            coefficients[cell.key] = coefficients.get(cell.key, zero) - 1
         constant = Fraction(0)
         for key in list(coefficients):
             published = cells[key].published
             if published is not None:
                 constant -= coefficients.pop(key) * published
-        for pivot, (row, value) in sorted(basis.items()):
-            factor = coefficients.get(pivot, Fraction(0))
-            if factor:
-                constant -= factor * value
-                for key, coefficient in row.items():
-                    coefficients[key] = coefficients.get(key, Fraction(0)) - factor * coefficient
-                coefficients = {key: coefficient for key, coefficient in coefficients.items() if coefficient}
+        # Existing rows are reduced: eliminating one pivot cannot introduce
+        # another existing pivot. Only pivots present in this row can matter.
+        for pivot in sorted(coefficients.keys() & basis.keys()):
+            row, value = basis[pivot]
+            factor = coefficients[pivot]
+            constant -= factor * value
+            for key, coefficient in row.items():
+                coefficients[key] = coefficients.get(key, 0) - factor * coefficient
+            coefficients = {key: coefficient for key, coefficient in coefficients.items() if coefficient}
         if not coefficients:
             if constant:
                 raise ValueError("Inconsistent shared partition equations")
@@ -260,23 +264,56 @@ def _shared_basis(
         scale = coefficients[pivot]
         coefficients = {key: coefficient / scale for key, coefficient in coefficients.items()}
         constant /= scale
-        for previous, (row, value) in list(basis.items()):
-            factor = row.get(pivot, Fraction(0))
-            if factor:
-                for key, coefficient in coefficients.items():
-                    row[key] = row.get(key, Fraction(0)) - factor * coefficient
-                basis[previous] = (
-                    {key: coefficient for key, coefficient in row.items() if coefficient},
-                    value - factor * constant,
-                )
+        for previous in tuple(columns.get(pivot, ())):
+            row, value = basis[previous]
+            old_keys = row.keys()
+            factor = row[pivot]
+            reduced = dict(row)
+            for key, coefficient in coefficients.items():
+                reduced[key] = reduced.get(key, 0) - factor * coefficient
+            reduced = {key: coefficient for key, coefficient in reduced.items() if coefficient}
+            for key in old_keys - reduced.keys():
+                columns[key].remove(previous)
+            for key in reduced.keys() - old_keys:
+                columns.setdefault(key, set()).add(previous)
+            basis[previous] = reduced, value - factor * constant
         basis[pivot] = coefficients, constant
+        for key in coefficients:
+            columns.setdefault(key, set()).add(pivot)
     return basis
 
 
-def _exact_shared_pins(cells: dict[str, Cell], partitions: Sequence[Partition]) -> dict[str, int]:
+class SharedBasisCache:
+    """Exact bases for one audit's fixed partition graph (Refs #2639).
+
+    Snapshot every cell key and published value: both suppressing and restoring
+    a value change the equations. Box bounds and raw values do not enter the
+    linear reduction. The caller creates a fresh cache for each mask audit;
+    no state survives a request, facility, dropped component or utility trial.
+    Consumers only read the cached rows.
+    """
+
+    def __init__(self, partitions: Sequence[Partition]) -> None:
+        self._partitions = tuple(partitions)
+        self._bases: dict[tuple[tuple[str, int | None], ...], dict[str, tuple[dict[str, Fraction], Fraction]]] = {}
+
+    def get(
+        self, cells: dict[str, Cell], partitions: Sequence[Partition]
+    ) -> dict[str, tuple[dict[str, Fraction], Fraction]]:
+        if tuple(partitions) != self._partitions:
+            raise ValueError("A shared basis cache requires the same partition graph")
+        signature = tuple(sorted((key, cell.published) for key, cell in cells.items()))
+        if signature not in self._bases:
+            self._bases[signature] = _shared_basis(cells, self._partitions)
+        return self._bases[signature]
+
+
+def _exact_shared_pins(
+    cells: dict[str, Cell], partitions: Sequence[Partition], basis_cache: SharedBasisCache
+) -> dict[str, int]:
     """Find exact linear deductions, including cycles of overlapping margins."""
     pins = {}
-    basis = _shared_basis(cells, partitions)
+    basis = basis_cache.get(cells, partitions)
     for key, (row, value) in basis.items():
         if len(row) == 1:
             if value.denominator != 1:
@@ -286,7 +323,11 @@ def _exact_shared_pins(cells: dict[str, Cell], partitions: Sequence[Partition]) 
 
 
 def shared_alternatives(
-    cells: dict[str, Cell], partitions: Sequence[Partition], raw_values: dict[str, int]
+    cells: dict[str, Cell],
+    partitions: Sequence[Partition],
+    raw_values: dict[str, int],
+    *,
+    basis_cache: SharedBasisCache | None = None,
 ) -> dict[str, set[int]]:
     """Construct actual integer worlds witnessing ambiguity of hidden cells.
 
@@ -297,7 +338,8 @@ def shared_alternatives(
     still exist. This deliberately trades utility for a sound certificate
     without introducing a general integer optimization dependency.
     """
-    basis = _shared_basis(cells, partitions)
+    basis_cache = basis_cache or SharedBasisCache(partitions)
+    basis = basis_cache.get(cells, partitions)
     hidden = {key for key, cell in cells.items() if cell.published is None}
     alternatives = {key: {raw_values[key]} for key in hidden}
     directions = []
@@ -340,7 +382,9 @@ def shared_alternatives(
     return alternatives
 
 
-def shared_bounds(cells: dict[str, Cell], partitions: Sequence[Partition]) -> dict[str, tuple[int, int | None]]:
+def shared_bounds(
+    cells: dict[str, Cell], partitions: Sequence[Partition], *, basis_cache: SharedBasisCache | None = None
+) -> dict[str, tuple[int, int | None]]:
     """Propagate integer bounds through a network of exact partitions.
 
     Unlike the artifact-local audit, a margin is itself a cell and may be a
@@ -350,6 +394,7 @@ def shared_bounds(cells: dict[str, Cell], partitions: Sequence[Partition]) -> di
     linear programming solver.
     Callers must fail closed if propagation does not converge.
     """
+    basis_cache = basis_cache or SharedBasisCache(partitions)
     bounds = {
         key: (cell.published, cell.published) if cell.published is not None else (cell.lo, cell.hi)
         for key, cell in cells.items()
@@ -370,7 +415,7 @@ def shared_bounds(cells: dict[str, Cell], partitions: Sequence[Partition]) -> di
             for key, cell in cells.items()
         }
         changed = False
-        for key, value in _exact_shared_pins(effective, partitions).items():
+        for key, value in _exact_shared_pins(effective, partitions, basis_cache).items():
             changed |= tighten(key, value, value)
         for partition in partitions:
             if partition.margin_key is None:
