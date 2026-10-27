@@ -96,7 +96,7 @@ def _seed_case(e2e_env, *, stage, prefix):
         f" c = Client.objects.create(facility=f, contact_stage='{stage}',"
         f" pseudonym='{pseudonym}', created_by=u);"
         f" k = Case.objects.create(facility=f, client=c, title='{titel}',"
-        " description='E2E-Fallbeschreibung', created_by=u);"
+        " created_by=u);"
         " print(k.pk)"
     )
     case_pk = _shell(e2e_env, script)[-1].strip()

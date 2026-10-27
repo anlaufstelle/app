@@ -243,6 +243,49 @@ def e2e_env(base_url):
     return {**_E2E_ENV, "E2E_DATABASE_NAME": db_name}
 
 
+_SNAPSHOT_ACTIVE_TYPES = (
+    "import json; from core.models import DocumentType; "
+    "print('JSON|' + json.dumps(sorted(str(pk) for pk in "
+    "DocumentType.objects.filter(is_active=True).values_list('pk', flat=True))))"
+)
+_RESTORE_ACTIVE_TYPES = """
+import json
+from core.models import DocumentType
+seeded_active = set(json.loads({payload!r}))
+changed = 0
+for pk, is_active in list(DocumentType.objects.values_list("pk", "is_active")):
+    wanted = str(pk) in seeded_active
+    if is_active != wanted:
+        DocumentType.objects.filter(pk=pk).update(is_active=wanted)
+        changed += 1
+print("RESTORED|" + str(changed))
+"""
+
+
+@pytest.fixture(scope="session")
+def _seeded_active_document_types(e2e_env):
+    """Primary keys of the document types that are active right after seeding."""
+    from tests.e2e._helpers import django_shell
+
+    lines = django_shell(e2e_env, _SNAPSHOT_ACTIVE_TYPES)
+    return [line for line in lines if line.startswith("JSON|")][-1][5:]
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _restore_document_type_activation(e2e_env, _seeded_active_document_types):
+    """Reset which document types are active to the seeded state after each module.
+
+    The type forms preselect the single active type per carrier (person, case,
+    episode, task) and only then render its fields. A spec that leaves a
+    throwaway type active (deletion is blocked as soon as records reference
+    it) switches that preselection off for every later spec in the run.
+    """
+    yield
+    from tests.e2e._helpers import django_shell
+
+    django_shell(e2e_env, _RESTORE_ACTIVE_TYPES.format(payload=_seeded_active_document_types))
+
+
 @pytest.fixture(scope="session")
 def admin_url(base_url):
     """Admin-Base-URL — Single Source of Truth für den obfuskierten Admin-Pfad."""
