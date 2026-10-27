@@ -42,6 +42,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
 ### Fixed
 
+- **Gruppenbezeichnungen der Team-Fokusbox in der Sprache der Anfrage** (#2609) — „Überfällig“, „Heute fällig“, „Dringend · Wichtig“ und „In Bearbeitung“ erschienen in der englischen Oberfläche auf Deutsch, weil sie beim Import des Moduls übersetzt wurden; sie werden jetzt beim Anzeigen übersetzt.
+
 - **Lösen aus Fällen auf zulässige Fälle begrenzt** (#2533) — Kontakte lassen sich nur aus offenen Fällen mit für die handelnde Rolle sichtbarem Falltyp lösen oder umhängen; unzulässige Änderungen werden ohne Zuordnungsänderung und Audit-Eintrag abgewiesen, die Entfernen-Schaltfläche wird ausgeblendet.
 
 - **Offline-Eingaben nach erneuter Anmeldung übertragen** (#2011) — Automatisches Übertragen und erneuter Versuch gescheiterter Formularanfragen verwenden das aktuelle CSRF-Token statt des gespeicherten Formular-Tokens; fehlt ein aktuelles Token auch nach dem Aktualisieren, bleiben die Eingaben ohne Schreibversuch erhalten.

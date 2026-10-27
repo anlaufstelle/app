@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from django.db.models import Case, IntegerField, Value, When
 from django.utils import timezone
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy as _
 
 from core.models import WorkItem
 from core.services.workitem_visibility import workitems_for_read
