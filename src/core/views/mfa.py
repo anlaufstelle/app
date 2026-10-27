@@ -164,7 +164,7 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
         after MFA verification, before any setup state is built.
 
         Safe requests keep their full return path. Unsafe requests return to
-        the referring GET page or the setup page so the user can submit the
+        the setup or device-change page so the user can submit the
         action again without replaying form data (Refs #2640).
         """
         if (
@@ -174,7 +174,7 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
         ):
             return redirect("mfa_verify")
         if request.user.is_authenticated and request.user.has_confirmed_mfa_device:
-            sudo_redirect = sudo_redirect_if_required(request)
+            sudo_redirect = sudo_redirect_if_required(request, view=self)
             if sudo_redirect is not None:
                 return sudo_redirect
         return super().dispatch(request, *args, **kwargs)

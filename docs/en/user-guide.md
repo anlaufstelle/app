@@ -98,7 +98,7 @@ When setting up 2FA, you receive **10 single-use backup codes**. Store them safe
 
 **Set up a new authenticator device:** After signing in with TOTP or a backup code, choose **Neues Gerät einrichten** (set up a new device) at `/mfa/settings/`. If sudo is requested, enter your password and a current TOTP or another unused backup code. Scan the new QR code, confirm the new app's code, store the new backup codes and acknowledge them. Only acknowledgement replaces the previously confirmed authenticator devices; your passkeys remain. This works even with mandatory 2FA. A backup-code sign-in alone does not replace the device. Device change, voluntary deactivation and removing a passkey revoke all other signed-in sessions of this account without a session scan; they are signed out on their next request. Removing the last confirmed second factor is rejected. The initiating session stays signed in and receives a new session ID. The factor change, revocation and audit are committed together; on failure the previous factor remains valid and confirmation can be retried. The password stays valid; previously issued password-reset and invitation links may become invalid because of the hash change. The offline salt is unchanged. Offline devices without a connection cannot be remotely erased; on reconnection the existing revocation check requires signing in again and holds pending transmissions. Without a usable second factor, the admin reset remains the fallback.
 
-**Removing a passkey and confirming the password again:** If removing a passkey requires confirmation again, enter your password and, if required, a current TOTP or unused backup code. You normally return to the 2FA settings afterwards. The passkey is still present; choose **Entfernen** (remove) again to carry out the action. The previously submitted action and its form data are not replayed automatically.
+**Removing a passkey and confirming the password again:** If removing a passkey requires confirmation again, enter your password and, if required, a current TOTP or unused backup code. You return to the 2FA settings afterwards. The passkey is still present; choose **Entfernen** (remove) again to carry out the action. The previously submitted action and its form data are not replayed automatically.
 
 **Replace earlier backup codes:** Codes generated before this hardening are invalid. Generate new codes using your working authenticator app; without a usable factor, contact application support. A change of the server key (`SECRET_KEY`) also requires new codes.
 
@@ -1191,5 +1191,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- source-hash: 37c7f27a1d2fc18bae868ecb0a9e9786bdb4dfe9 -->
+<!-- source-hash: 6618c98471ac448a3a6bf60d0f5443bb8d9e548d -->
 <!-- translation-date: 2026-10-27 -->

@@ -44,7 +44,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Gruppenbezeichnungen der Team-Fokusbox in der Sprache der Anfrage** (#2609) — „Überfällig“, „Heute fällig“, „Dringend · Wichtig“ und „In Bearbeitung“ erschienen in der englischen Oberfläche auf Deutsch, weil sie beim Import des Moduls übersetzt wurden; sie werden jetzt beim Anzeigen übersetzt.
 
-- **Sichere Rückkehr nach Passwortbestätigung** (#2640) — Nach der erneuten Passwortbestätigung führt das Entfernen eines Passkeys wie andere geschützte Formularaktionen auf eine erreichbare Seite zurück; die Aktion kann dort erneut ausgelöst werden und wird nicht automatisch wiederholt.
+- **Sichere Rückkehr nach Passwortbestätigung** (#2640) — Nach der erneuten Passwortbestätigung führen geschützte Formularaktionen auf die Seite der Aktion oder die zugehörige Übersichts- bzw. Einstellungsseite zurück; beim Entfernen eines Passkeys sind dies die 2FA-Einstellungen, und die Aktion wird erst beim erneuten Auslösen ausgeführt.
 
 - **Lösen aus Fällen auf zulässige Fälle begrenzt** (#2533) — Kontakte lassen sich nur aus offenen Fällen mit für die handelnde Rolle sichtbarem Falltyp lösen oder umhängen; unzulässige Änderungen werden ohne Zuordnungsänderung und Audit-Eintrag abgewiesen, die Entfernen-Schaltfläche wird ausgeblendet.
 

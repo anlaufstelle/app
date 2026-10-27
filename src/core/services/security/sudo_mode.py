@@ -22,8 +22,7 @@ from urllib.parse import urlencode, urlsplit
 from django.conf import settings
 from django.http import HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect
-from django.urls import reverse
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.urls import Resolver404, resolve, reverse
 
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
 
@@ -92,7 +91,7 @@ class RequireSudoModeMixin:
     sudo_return_url = None
 
     def get_sudo_return_url(self) -> str | None:
-        """Provide a fixed fallback when the referring page is unsuitable."""
+        """Declare the return page for a POST-only action."""
         return str(self.sudo_return_url) if self.sudo_return_url is not None else None
 
     def dispatch(self, request, *args, **kwargs):
@@ -105,34 +104,34 @@ class RequireSudoModeMixin:
             return super().dispatch(request, *args, **kwargs)
         if is_in_sudo(request):
             return super().dispatch(request, *args, **kwargs)
-        return redirect(sudo_url(_sudo_return_path(request, self.get_sudo_return_url())))
+        return redirect(sudo_url(_sudo_return_path(request, self.get_sudo_return_url(), view=self)))
 
 
-def _sudo_return_path(request: HttpRequest, fallback: str | None = None) -> str:
-    """Choose a local GET target without retaining or replaying unsafe data."""
-    from core.views.utils import is_get_navigable, safe_redirect_path
+def _supports_get(view) -> bool:
+    """Require both an allowed method and an actual GET handler."""
+    return "get" in getattr(view, "http_method_names", ()) and callable(getattr(view, "get", None))
 
-    if request.method in {"GET", "HEAD", "OPTIONS", "TRACE"}:
+
+def _sudo_return_path(request: HttpRequest, fallback: str | None = None, *, view=None) -> str:
+    """Use the action page, its declared GET return page, or the home page.
+
+    Referers never select a return route. Unsafe request bodies are neither
+    retained nor replayed (Refs #2640).
+    """
+    from core.views.utils import safe_redirect_path
+
+    if request.method in {"GET", "HEAD", "OPTIONS", "TRACE"} or _supports_get(view):
         return request.get_full_path()
 
-    fallback = safe_redirect_path(fallback or request.get_full_path())
-    if not is_get_navigable(fallback):
-        fallback = "/"
-
-    referer = request.headers.get("Referer", "").strip()
-    if referer and url_has_allowed_host_and_scheme(
-        referer, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
-        target = urlsplit(referer)
-        path = target.path or "/"
-        if target.query:
-            path += "?" + target.query
-        if safe_redirect_path(path) == path and is_get_navigable(path):
-            return path
-    return fallback
+    target = safe_redirect_path(fallback)
+    try:
+        target_view = resolve(urlsplit(target).path).func
+    except Resolver404:
+        return "/"
+    return target if _supports_get(getattr(target_view, "view_class", None)) else "/"
 
 
-def sudo_redirect_if_required(request, *, sudo_return_url: str | None = None) -> HttpResponseRedirect | None:
+def sudo_redirect_if_required(request, *, sudo_return_url: str | None = None, view=None) -> HttpResponseRedirect | None:
     """Apply conditional sudo with the same return policy as the mixin.
 
     MFA setup requires sudo only when replacing an existing factor. The
@@ -141,7 +140,7 @@ def sudo_redirect_if_required(request, *, sudo_return_url: str | None = None) ->
     """
     if not is_sudo_required(request):
         return None
-    return HttpResponseRedirect(sudo_url(_sudo_return_path(request, sudo_return_url)))
+    return HttpResponseRedirect(sudo_url(_sudo_return_path(request, sudo_return_url, view=view)))
 
 
 def is_sudo_required(request) -> bool:
