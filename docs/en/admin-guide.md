@@ -1276,6 +1276,7 @@ MultiFernet accepts a list of keys. To rotate:
 | TOTP secrets (`otp_totp_totpdevice.key`) | complete, per device with a row lock and compare-and-swap |
 | **`Client.data_json`** | **complete -- including soft-deleted persons**; per row with a row lock and compare-and-swap |
 | **`Case.data_json`** | **complete -- including soft-deleted cases**; per row with a row lock and compare-and-swap |
+| `Episode.data_json` / `WorkItem.data_json` | complete (#2665); per row with a row lock and compare-and-swap on the stored payload and, where present, the update timestamp |
 | `RectificationRequest.old_value` / `new_value` / `reason` / `review_note` | complete, per row with a row lock and compare-and-swap on the value columns being changed |
 | `ShiftHandoverNote.note` (handover note) | complete, per row with a row lock and compare-and-swap (#2042) |
 
@@ -2582,5 +2583,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- source-hash: 3eb9593af7ea8832a70980528d37ea0cb7f920fb -->
+<!-- source-hash: 1f0cd13b6590a759ca01af8c44de01df1e85dba4 -->
 <!-- translation-date: 2026-10-26 -->

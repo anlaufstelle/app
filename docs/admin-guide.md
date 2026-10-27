@@ -1277,6 +1277,7 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 | TOTP-Secrets (`otp_totp_totpdevice.key`) | vollständig, je Gerät mit Row-Lock und Compare-and-Swap |
 | **`Client.data_json`** | **vollständig — inklusive soft-gelöschter Personen**; je Zeile mit Row-Lock und Compare-and-Swap |
 | **`Case.data_json`** | **vollständig — inklusive soft-gelöschter Fälle**; je Zeile mit Row-Lock und Compare-and-Swap |
+| `Episode.data_json` / `WorkItem.data_json` | vollständig (#2665); je Zeile mit Row-Lock und Compare-and-Swap auf den gespeicherten Inhalt und, wo vorhanden, den Änderungszeitstempel |
 | `RectificationRequest.old_value` / `new_value` / `reason` / `review_note` | vollständig, je Zeile mit Row-Lock und Compare-and-Swap auf den geänderten Wertspalten |
 | `ShiftHandoverNote.note` (Übergabenotiz) | vollständig, je Zeile mit Row-Lock und Compare-and-Swap (#2042) |
 
