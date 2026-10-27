@@ -42,7 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
 ### Fixed
 
-- **Offenlegungsprüfung für allgemeine Kennzahlen beschleunigt** (#2639) — Gemeinsame Zählmasken verwenden exakte Gleichungsbasen innerhalb einer Prüfung wieder und reduzieren nur betroffene Zeilen; Unterdrückungsentscheidungen und Rückrechnungsschutz bleiben erhalten.
+- **Offenlegungsprüfung für allgemeine Kennzahlen beschleunigt** (#2639) — Gemeinsame Zählmasken schreiben ihre exakte Gleichungsmatrix mit Ganzzahl-Arithmetik fort und vermeiden wiederholte Arbeit bei unveränderten Schranken und Ganzzahlzeugen; Unterdrückungsentscheidungen und Rückrechnungsschutz bleiben erhalten.
 
 - **Gruppenbezeichnungen der Team-Fokusbox in der Sprache der Anfrage** (#2609) — „Überfällig“, „Heute fällig“, „Dringend · Wichtig“ und „In Bearbeitung“ erschienen in der englischen Oberfläche auf Deutsch, weil sie beim Import des Moduls übersetzt wurden; sie werden jetzt beim Anzeigen übersetzt.
 

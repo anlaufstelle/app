@@ -45,9 +45,10 @@ prueft die Formel gegen eine Brute-Force-Aufzaehlung nach).
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Iterator, Sequence
+from collections import defaultdict
+from collections.abc import Iterable, Iterator, Sequence
 from fractions import Fraction
-from math import lcm
+from math import gcd, lcm
 
 # K2-Produktentscheid (#1770): eine unterdrueckte Zelle gilt als geschuetzt,
 # sobald ihr mindestens ZWEI Werte offenstehen. Die Analyse hatte auch die
@@ -129,14 +130,20 @@ def _resolved_margins(partitions: Sequence[Partition]) -> dict[str, int | None]:
     return resolved
 
 
-def _bounds(cells: Sequence[Cell], residual: int, index: int) -> tuple[int, int]:
-    """Geschlossene Intervallgrenzen der unterdrueckten Zelle ``index``."""
-    others = [cell for position, cell in enumerate(cells) if position != index]
-    sum_lo = sum(cell.lo for cell in others)
-    unbounded = any(cell.hi is None for cell in others)
+def _bounds(
+    cells: Sequence[Cell], residual: int, index: int, *, totals: tuple[int, int, int] | None = None
+) -> tuple[int, int]:
+    """Exact interval projection, optionally reusing the partition totals."""
+    if totals is None:
+        totals = (
+            sum(cell.lo for cell in cells),
+            sum(cell.hi or 0 for cell in cells),
+            sum(cell.hi is None for cell in cells),
+        )
+    sum_lo, sum_hi, unbounded = totals
     cell = cells[index]
-    lower = cell.lo if unbounded else max(cell.lo, residual - sum(cell.hi or 0 for cell in others))
-    ceiling = residual - sum_lo
+    lower = cell.lo if unbounded - (cell.hi is None) else max(cell.lo, residual - (sum_hi - (cell.hi or 0)))
+    ceiling = residual - (sum_lo - cell.lo)
     upper = ceiling if cell.hi is None else min(cell.hi, ceiling)
     return lower, upper
 
@@ -158,8 +165,13 @@ def _hidden_bounds(partition: Partition, margin: int | None) -> Iterator[tuple[C
             yield cell, None, None
         return
     residual = margin - sum(cell.published for cell in partition.cells if cell.published is not None)
+    totals = (
+        sum(cell.lo for cell in hidden),
+        sum(cell.hi or 0 for cell in hidden),
+        sum(cell.hi is None for cell in hidden),
+    )
     for index, cell in enumerate(hidden):
-        lower, upper = _bounds(hidden, residual, index)
+        lower, upper = _bounds(hidden, residual, index, totals=totals)
         yield cell, lower, upper
 
 
@@ -229,82 +241,209 @@ def findings(partitions: Sequence[Partition], *, threshold: int) -> list[tuple[s
     return result
 
 
-def _shared_basis(
-    cells: dict[str, Cell], partitions: Sequence[Partition]
-) -> dict[str, tuple[dict[str, Fraction], Fraction]]:
-    """Reduce exact equations, indexing only rows affected by a new pivot."""
-    basis: dict[str, tuple[dict[str, Fraction], Fraction]] = {}
+type _IntegerBasis = dict[str, tuple[dict[str, int], int]]
+type _RationalBasis = dict[str, tuple[dict[str, int | Fraction], int | Fraction]]
+
+
+def _primitive_row(row: dict[str, int], value: int) -> tuple[dict[str, int], int]:
+    """Keep exact integer rows small without changing their solution set."""
+    row = {key: coefficient for key, coefficient in row.items() if coefficient}
+    divisor = gcd(value, *row.values())
+    if divisor > 1:
+        row = {key: coefficient // divisor for key, coefficient in row.items()}
+        value //= divisor
+    return row, value
+
+
+def _eliminate_integer_rows(
+    rows: Iterable[tuple[dict[str, int], int]], *, hidden: frozenset[str] | None = None
+) -> _IntegerBasis:
+    """Reduce rational equations using integer cross-products and gcd only.
+
+    Pivot coefficients stay integral and need not equal one. A column index
+    restricts back elimination to affected rows; fractions are created only
+    when exporting the reduced basis to the unchanged inference consumers.
+    """
+
+    def order(key: str) -> tuple[bool, str]:
+        return hidden is not None and key not in hidden, key
+
+    basis: _IntegerBasis = {}
     columns: dict[str, set[str]] = {}
-    zero = Fraction(0)
-    for partition in partitions:
-        if partition.margin_key is None:
-            continue
-        coefficients = {partition.margin_key: Fraction(1)}
-        for cell in partition.cells:
-            coefficients[cell.key] = coefficients.get(cell.key, zero) - 1
-        constant = Fraction(0)
-        for key in list(coefficients):
-            published = cells[key].published
-            if published is not None:
-                constant -= coefficients.pop(key) * published
-        # Existing rows are reduced: eliminating one pivot cannot introduce
-        # another existing pivot. Only pivots present in this row can matter.
-        for pivot in sorted(coefficients.keys() & basis.keys()):
+    for coefficients, constant in rows:
+        coefficients, constant = _primitive_row(coefficients, constant)
+        for pivot in sorted(coefficients.keys() & basis.keys(), key=order):
             row, value = basis[pivot]
-            factor = coefficients[pivot]
-            constant -= factor * value
+            factor, scale = coefficients[pivot], row[pivot]
+            reduced = {key: coefficient * scale for key, coefficient in coefficients.items()}
             for key, coefficient in row.items():
-                coefficients[key] = coefficients.get(key, 0) - factor * coefficient
-            coefficients = {key: coefficient for key, coefficient in coefficients.items() if coefficient}
+                reduced[key] = reduced.get(key, 0) - factor * coefficient
+            coefficients, constant = _primitive_row(reduced, constant * scale - factor * value)
         if not coefficients:
             if constant:
                 raise ValueError("Inconsistent shared partition equations")
             continue
-        pivot = min(coefficients)
+        pivot = min(coefficients, key=order)
         scale = coefficients[pivot]
-        coefficients = {key: coefficient / scale for key, coefficient in coefficients.items()}
-        constant /= scale
         for previous in tuple(columns.get(pivot, ())):
             row, value = basis[previous]
-            old_keys = row.keys()
             factor = row[pivot]
-            reduced = dict(row)
+            reduced = {key: coefficient * scale for key, coefficient in row.items()}
             for key, coefficient in coefficients.items():
                 reduced[key] = reduced.get(key, 0) - factor * coefficient
-            reduced = {key: coefficient for key, coefficient in reduced.items() if coefficient}
-            for key in old_keys - reduced.keys():
+            reduced, value = _primitive_row(reduced, value * scale - factor * constant)
+            for key in row.keys() - reduced.keys():
                 columns[key].remove(previous)
-            for key in reduced.keys() - old_keys:
+            for key in reduced.keys() - row.keys():
                 columns.setdefault(key, set()).add(previous)
-            basis[previous] = reduced, value - factor * constant
+            basis[previous] = reduced, value
         basis[pivot] = coefficients, constant
         for key in coefficients:
             columns.setdefault(key, set()).add(pivot)
     return basis
 
 
-class SharedBasisCache:
-    """Exact bases for one audit's fixed partition graph (Refs #2639).
+def _substitute_rows(rows: Iterable[tuple[dict[str, int], int]], published: dict[str, int]) -> _IntegerBasis:
+    """Specialize an equivalent basis by adding newly published equalities."""
 
-    Snapshot every cell key and published value: both suppressing and restoring
-    a value change the equations. Box bounds and raw values do not enter the
-    linear reduction. The caller creates a fresh cache for each mask audit;
-    no state survives a request, facility, dropped component or utility trial.
-    Consumers only read the cached rows.
+    def substituted():
+        for row, value in rows:
+            remaining = {}
+            for key, coefficient in row.items():
+                if key in published:
+                    value -= coefficient * published[key]
+                else:
+                    remaining[key] = coefficient
+            yield remaining, value
+
+    return _eliminate_integer_rows(substituted())
+
+
+def _shared_basis(cells: dict[str, Cell], partitions: Sequence[Partition]) -> _IntegerBasis:
+    """Reduce the complete graph, ordering hidden columns before known ones.
+
+    Retain known coefficients symbolically so hiding another value can change
+    the column order without rebuilding or losing currently inactive rows.
+    """
+
+    def equations():
+        seen = set()
+        for partition in partitions:
+            if partition.margin_key is None:
+                continue
+            equation = (partition.margin_key, *[cell.key for cell in partition.cells])
+            if equation in seen:
+                continue
+            seen.add(equation)
+            row = {partition.margin_key: 1}
+            for cell in partition.cells:
+                row[cell.key] = row.get(cell.key, 0) - 1
+            yield row, 0
+
+    return _eliminate_integer_rows(
+        equations(), hidden=frozenset(key for key, cell in cells.items() if cell.published is None)
+    )
+
+
+def _extend_hidden_column(basis: _IntegerBasis, key: str, hidden: frozenset[str]) -> None:
+    """Move one column earlier in the ordering with at most one pivot swap.
+
+    All other columns keep their relative order. If the entering column is
+    free, its last nonzero row whose pivot now follows it becomes the new
+    pivot row; eliminating that column restores the reduced column order.
+    Known-only rows remain available when a later suppression activates them.
+    """
+    if key in basis:
+        return
+
+    def order(column: str) -> tuple[bool, str]:
+        return column not in hidden, column
+
+    candidates = [pivot for pivot, (row, _) in basis.items() if key in row and order(pivot) > order(key)]
+    if not candidates:
+        return
+    previous = max(candidates, key=order)
+    coefficients, constant = basis.pop(previous)
+    scale = coefficients[key]
+    for pivot, (row, value) in list(basis.items()):
+        if key not in row:
+            continue
+        factor = row[key]
+        reduced = {column: coefficient * scale for column, coefficient in row.items()}
+        for column, coefficient in coefficients.items():
+            reduced[column] = reduced.get(column, 0) - factor * coefficient
+        basis[pivot] = _primitive_row(reduced, value * scale - factor * constant)
+    basis[key] = coefficients, constant
+
+
+class SharedBasisCache:
+    """Exact symbolic matrix and publication views for one mask computation.
+
+    The graph reduction retains all columns. Monotone suppression moves each
+    newly hidden column ahead of known columns, with one pivot swap at most.
+    Additional published pins specialize an existing view. Changed values and
+    utility trials substitute their complete publication signature afresh.
+    Bounds and raw values never enter the symbolic matrix. Graph changes need
+    a new cache. Consumers must only read cached publication views.
     """
 
     def __init__(self, partitions: Sequence[Partition]) -> None:
         self._partitions = tuple(partitions)
-        self._bases: dict[tuple[tuple[str, int | None], ...], dict[str, tuple[dict[str, Fraction], Fraction]]] = {}
+        self._graph = self._graph_signature(partitions)
+        self._bases: dict[tuple[tuple[str, int | None], ...], _RationalBasis] = {}
+        self._previous: tuple[dict[str, int], _IntegerBasis] | None = None
+        self._keys: frozenset[str] | None = None
+        self._symbolic: _IntegerBasis | None = None
+        self._hidden: frozenset[str] = frozenset()
 
-    def get(
-        self, cells: dict[str, Cell], partitions: Sequence[Partition]
-    ) -> dict[str, tuple[dict[str, Fraction], Fraction]]:
-        if tuple(partitions) != self._partitions:
-            raise ValueError("A shared basis cache requires the same partition graph")
+    @staticmethod
+    def _graph_signature(partitions: Sequence[Partition]) -> tuple:
+        return tuple(
+            (
+                partition.name,
+                partition.margin_key,
+                tuple(cell.key for cell in partition.cells),
+                partition.reveals_person_gap,
+            )
+            for partition in partitions
+        )
+
+    def get(self, cells: dict[str, Cell], partitions: Sequence[Partition]) -> _RationalBasis:
+        if partitions is not self._partitions:
+            if self._graph_signature(partitions) != self._graph:
+                raise ValueError("A shared basis cache requires the same partition graph")
+            self._partitions = tuple(partitions)
         signature = tuple(sorted((key, cell.published) for key, cell in cells.items()))
         if signature not in self._bases:
-            self._bases[signature] = _shared_basis(cells, self._partitions)
+            published = {key: cell.published for key, cell in cells.items() if cell.published is not None}
+            keys = frozenset(cells)
+            hidden = keys - published.keys()
+            if self._symbolic is None or keys != self._keys:
+                self._symbolic = _shared_basis(cells, self._partitions)
+                self._hidden = hidden
+            elif self._hidden <= hidden:
+                for key in sorted(hidden - self._hidden):
+                    self._hidden = self._hidden | {key}
+                    _extend_hidden_column(self._symbolic, key, self._hidden)
+            if self._previous is not None and keys == self._keys and self._previous[0].items() <= published.items():
+                previous_values, previous_basis = self._previous
+                additions = {key: value for key, value in published.items() if key not in previous_values}
+                basis = _substitute_rows(previous_basis.values(), additions)
+            else:
+                basis = _substitute_rows(self._symbolic.values(), published)
+            self._previous = published, basis
+            self._keys = keys
+            exported: _RationalBasis = {}
+            for pivot, (row, value) in basis.items():
+                scale = row[pivot]
+                if scale in (-1, 1):
+                    exported[pivot] = {key: coefficient // scale for key, coefficient in row.items()}, value // scale
+                else:
+                    exported[pivot] = (
+                        {key: Fraction(coefficient, scale) for key, coefficient in row.items()},
+                        Fraction(value, scale),
+                    )
+            self._bases[signature] = exported
         return self._bases[signature]
 
 
@@ -344,20 +483,38 @@ def shared_alternatives(
     alternatives = {key: {raw_values[key]} for key in hidden}
     directions = []
 
-    def witness(step: dict[str, int]) -> None:
-        candidate = {key: raw_values[key] + value for key, value in step.items()}
-        if all(
-            value >= lower and (upper is None or value <= upper)
-            for lower, upper, value in ((cells[key].lo, cells[key].hi, value) for key, value in candidate.items())
-        ):
-            for key, value in candidate.items():
-                alternatives[key].add(value)
+    limits = {
+        key: (cells[key].lo - raw_values[key], None if (upper := cells[key].hi) is None else upper - raw_values[key])
+        for key in hidden
+    }
+    remaining: set[str] = set()
 
+    def witness(step: dict[str, int]) -> None:
+        for key, value in step.items():
+            lower, upper = limits[key]
+            if value < lower or (upper is not None and value > upper):
+                return
+        for key, value in step.items():
+            values = alternatives[key]
+            values.add(raw_values[key] + value)
+            if len(values) >= MIN_FEASIBLE_SPAN:
+                remaining.discard(key)
+
+    coefficients_by_free: dict[str, dict[str, int | Fraction]] = defaultdict(dict)
+    for pivot, (row, _) in basis.items():
+        for free, coefficient in row.items():
+            if free != pivot:
+                coefficients_by_free[free][pivot] = coefficient
     for free in sorted(hidden - basis.keys()):
-        direction = {free: Fraction(1)}
-        direction.update({key: -row[free] for key, (row, _) in basis.items() if free in row})
-        scale = lcm(*(coefficient.denominator for coefficient in direction.values()))
-        step = {key: int(coefficient * scale) for key, coefficient in direction.items() if coefficient}
+        coefficients = coefficients_by_free.get(free, {})
+        scale = lcm(*(coefficient.denominator for coefficient in coefficients.values()))
+        step = {free: scale}
+        step.update(
+            {
+                key: -coefficient.numerator * (scale // coefficient.denominator)
+                for key, coefficient in coefficients.items()
+            }
+        )
         directions.append(step)
         for sign in (-1, 1):
             witness({key: sign * value for key, value in step.items()})
@@ -366,19 +523,38 @@ def shared_alternatives(
     # world, never an estimate of feasibility. Bound the additional search;
     # missing a witness remains a reason to suppress more.
     remaining = {key for key in hidden if raw_values[key] > 0 and len(alternatives[key]) < MIN_FEASIBLE_SPAN}
+    if not remaining:
+        return alternatives
     attempts = 0
+    directions_by_key: dict[str, set[int]] = defaultdict(set)
+    for index, direction in enumerate(directions):
+        for key in direction:
+            directions_by_key[key].add(index)
+    relevant = {index for key in remaining for index in directions_by_key[key]}
     for index, first in enumerate(directions):
-        for second in directions[index + 1 :]:
+        # Preserve the original pair order and attempt budget, visiting only
+        # pairs sharing a nonzero coordinate. Disjoint pairs cannot witness
+        # anything beyond the individual directions already checked.
+        neighbours: set[int] = set()
+        for key in first:
+            neighbours.update(directions_by_key[key] if index in relevant else directions_by_key[key] & relevant)
+        for other in sorted(other for other in neighbours if other > index):
+            second = directions[other]
             if not remaining or attempts >= 4096:
                 return alternatives
             keys = first.keys() | second.keys()
-            if not (first.keys() & second.keys()) or not (keys & remaining):
+            if not (keys & remaining):
                 continue
             for left in (-1, 1):
+                left_step = {key: left * value for key, value in first.items()}
                 for right in (-1, 1):
                     attempts += 1
-                    witness({key: left * first.get(key, 0) + right * second.get(key, 0) for key in keys})
-            remaining = {key for key in remaining if len(alternatives[key]) < MIN_FEASIBLE_SPAN}
+                    step = dict(left_step)
+                    for key, value in second.items():
+                        step[key] = step.get(key, 0) + right * value
+                    witness(step)
+            # All four signs run before remaining is consulted again, matching
+            # the original pair order and attempt budget exactly.
     return alternatives
 
 
@@ -409,29 +585,48 @@ def shared_bounds(
         bounds[key] = lower, upper
         return bounds[key] != (old_lower, old_upper)
 
+    equations = [
+        (partition.margin_key, tuple(cell.key for cell in partition.cells))
+        for partition in partitions
+        if partition.margin_key is not None
+    ]
+    evaluated: dict[tuple[str, tuple[str, ...]], list[tuple[int, int | None]]] = {}
+    effective = dict(cells)
     for _ in range(MAX_GUARD_ITERATIONS):
         effective = {
-            key: dataclasses.replace(cell, published=bounds[key][0]) if bounds[key][1] == bounds[key][0] else cell
-            for key, cell in cells.items()
+            key: dataclasses.replace(cell, published=bounds[key][0])
+            if bounds[key][1] == bounds[key][0] and cell.published != bounds[key][0]
+            else cell
+            for key, cell in effective.items()
         }
         changed = False
         for key, value in _exact_shared_pins(effective, partitions, basis_cache).items():
             changed |= tighten(key, value, value)
-        for partition in partitions:
-            if partition.margin_key is None:
+        for margin_key, keys in equations:
+            state = [bounds[key] for key in (margin_key, *keys)]
+            equation = margin_key, keys
+            if evaluated.get(equation) == state:
+                # Repeating an unchanged input would produce the same bounds
+                # and a false changed flag, preserving the iteration schedule.
                 continue
-            keys = [cell.key for cell in partition.cells]
+            evaluated[equation] = state
             lower_sum = sum(bounds[key][0] for key in keys)
-            upper_values = [bounds[key][1] for key in keys]
-            upper_sum = None if None in upper_values else sum(value for value in upper_values if value is not None)
-            changed |= tighten(partition.margin_key, lower_sum, upper_sum)
-            margin_lower, margin_upper = bounds[partition.margin_key]
+            finite_upper_sum = sum(upper for key in keys if (upper := bounds[key][1]) is not None)
+            unbounded = sum(bounds[key][1] is None for key in keys)
+            changed |= tighten(margin_key, lower_sum, None if unbounded else finite_upper_sum)
+            margin_lower, margin_upper = bounds[margin_key]
             for key in keys:
-                others = [bounds[other] for other in keys if other != key]
-                other_upper = [upper for _, upper in others]
-                lower = 0 if None in other_upper else margin_lower - sum(v for v in other_upper if v is not None)
-                upper = None if margin_upper is None else margin_upper - sum(v for v, _ in others)
+                old_lower, old_upper = bounds[key]
+                other_unbounded = unbounded - (old_upper is None)
+                lower = 0 if other_unbounded else margin_lower - (finite_upper_sum - (old_upper or 0))
+                upper = None if margin_upper is None else margin_upper - (lower_sum - old_lower)
                 changed |= tighten(key, lower, upper)
+                # Keep totals current: later cells in this partition must see
+                # earlier tightenings, exactly as in sequential propagation.
+                new_lower, new_upper = bounds[key]
+                lower_sum += new_lower - old_lower
+                finite_upper_sum += (new_upper or 0) - (old_upper or 0)
+                unbounded += (new_upper is None) - (old_upper is None)
         if not changed:
             return bounds
     raise RuntimeError("Shared partition bounds did not converge")

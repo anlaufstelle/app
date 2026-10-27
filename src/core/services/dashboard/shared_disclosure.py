@@ -171,11 +171,15 @@ def protect_counts(
     hidden = {key for key, cell in raw.items() if cell.hidden or cell.value < threshold} | dropped
     tokens = {key: key.token() for key in raw}
 
+    basis_cache = None
+    cached_partitions = None
+
     def audit(hidden_now):
         """Cells whose hidden value stays recoverable, with the active partitions.
 
         ``None`` when the audit cannot complete.
         """
+        nonlocal basis_cache, cached_partitions
         cells = {
             tokens[key]: Cell(
                 tokens[key],
@@ -192,7 +196,7 @@ def protect_counts(
         active_partitions = [
             partition for partition in partitions if not ({partition.margin, *partition.cells} & dropped)
         ]
-        model = [
+        model = tuple(
             Partition(
                 partition.name,
                 tokens[partition.margin],
@@ -201,8 +205,11 @@ def protect_counts(
                 reveals_person_gap=any(raw[key].person_sensitive for key in partition.cells),
             )
             for partition in active_partitions
-        ]
-        basis_cache = SharedBasisCache(model)
+        )
+        graph = tuple(active_partitions)
+        if basis_cache is None or graph != cached_partitions:
+            basis_cache = SharedBasisCache(model)
+            cached_partitions = graph
         try:
             bounds = shared_bounds(cells, model, basis_cache=basis_cache)
         except RuntimeError:
