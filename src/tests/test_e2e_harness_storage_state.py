@@ -82,3 +82,18 @@ class TestSyncStorageStateOriginsGuard:
         e2e_conftest._sync_storage_state(cache, "admin", context)
 
         assert cache == {}
+
+
+class TestSyncStorageStateLanguageCookieGuard:
+    """The visit language cookie beats the account language, so it must not be cached."""
+
+    def test_cache_entry_drops_the_visit_language_cookie(self, e2e_conftest):
+        cache = {"admin": (1234.5, {"cookies": [], "origins": []})}
+        session = {"name": "sessionid", "value": "abc123"}
+        language = {"name": "django_language", "value": "de"}
+        context = _FakeContext([session, language])
+
+        e2e_conftest._sync_storage_state(cache, "admin", context)
+
+        _, entry = cache["admin"]
+        assert entry["cookies"] == [session]

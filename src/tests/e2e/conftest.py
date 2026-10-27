@@ -30,6 +30,9 @@ from tests.e2e._helpers import SEED_PASSWORD  # absolut: test_e2e_storage_state_
 # automatisch auf den primären Hasher (MD5), was den Dev-Login zerstört.
 _E2E_ENV = {**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.e2e"}
 
+# Django's default ``LANGUAGE_COOKIE_NAME``; the project does not override it.
+_LANGUAGE_COOKIE = "django_language"
+
 
 def _get_worker_info(request):
     """Worker-Nummer und -ID für xdist-Parallelisierung."""
@@ -519,6 +522,10 @@ def _sync_storage_state(cache, username, context) -> None:
         # the timeline collapse preference leaks into later contexts for the
         # same user, making ``test_zeitstrom_collapse`` depend on test order.
         # Each context keeps its own localStorage.
+        # The visit language cookie is excluded for the same reason: it beats
+        # the account preference, so a spec that used the language switcher
+        # would pin every later spec of this user to that language.
+        cookies = [cookie for cookie in cookies if cookie.get("name") != _LANGUAGE_COOKIE]
         cache[username] = (entry[0], {"cookies": cookies, "origins": []})
     else:
         cache.pop(username, None)
