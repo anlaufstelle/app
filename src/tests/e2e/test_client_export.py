@@ -64,7 +64,7 @@ class TestClientExportDropdown:
 
     def test_lead_sees_dropdown(self, lead_page, base_url):
         """Leitung sieht beide Auskunfts-Eintraege im ⋮-Menue."""
-        lead_page.goto(f"{base_url}/clients/")
+        lead_page.goto(f"{base_url}/clients/?q=Stern-42")
         find_client_link(lead_page, "Stern-42").click()
         lead_page.wait_for_url(lambda url: "/clients/" in url and "Stern-42" not in url or "/clients/" in url)
         overflow = open_desktop_overflow(lead_page, "client")
@@ -73,7 +73,7 @@ class TestClientExportDropdown:
 
     def test_staff_does_not_see_dropdown(self, staff_page, base_url):
         """Fachkraft hat die Auskunfts-Eintraege nicht — auch nicht im ⋮-Menue."""
-        staff_page.goto(f"{base_url}/clients/")
+        staff_page.goto(f"{base_url}/clients/?q=Stern-42")
         find_client_link(staff_page, "Stern-42").click()
         staff_page.wait_for_url(lambda url: "/clients/" in url)
         # Gegenprobe mit geoeffnetem Menue: die Eintraege fehlen im Markup,
@@ -91,7 +91,7 @@ class TestClientExportJSON:
         # Datenauskunft ist sudo-pflichtig (Refs #683) — vor dem Download einmal aktivieren.
         enter_sudo_mode(lead_page, base_url)
 
-        lead_page.goto(f"{base_url}/clients/")
+        lead_page.goto(f"{base_url}/clients/?q=Stern-42")
         find_client_link(lead_page, "Stern-42").click()
         lead_page.wait_for_url(lambda url: "/clients/" in url)
         # Refs #1813: Auskunft liegt im gemeinsamen ⋮-Menue der Aktionsleiste.
@@ -117,7 +117,7 @@ class TestClientExportJSON:
         pseudonym = _seed_qualified_client(e2e_env)
         enter_sudo_mode(lead_page, base_url)
 
-        lead_page.goto(f"{base_url}/clients/")
+        lead_page.goto(f"{base_url}/clients/?q={pseudonym}")
         # Der Aufruf des Personen-Details loggt fuer QUALIFIED-Personen einen
         # VIEW_QUALIFIED-Audit-Eintrag (core/views/clients.py) — exakt der
         # garantierte Eintrag, den der Audit-Auszug unten braucht.
@@ -175,7 +175,7 @@ class TestClientExportPDF:
         # Datenauskunft ist sudo-pflichtig (Refs #683) — vor dem Download einmal aktivieren.
         enter_sudo_mode(lead_page, base_url)
 
-        lead_page.goto(f"{base_url}/clients/")
+        lead_page.goto(f"{base_url}/clients/?q=Stern-42")
         find_client_link(lead_page, "Stern-42").click()
         lead_page.wait_for_url(lambda url: "/clients/" in url)
         desktop = open_desktop_overflow(lead_page, "client")
@@ -192,7 +192,7 @@ class TestClientExportAccessControl:
 
     def test_staff_direct_json_403(self, staff_page, base_url):
         """Fachkraft bekommt 403 bei direktem JSON-Zugriff."""
-        staff_page.goto(f"{base_url}/clients/")
+        staff_page.goto(f"{base_url}/clients/?q=Stern-42")
         # Click first client to get a valid client detail URL
         find_client_link(staff_page, "Stern-42").click()
         staff_page.wait_for_url(lambda url: "/clients/" in url)
