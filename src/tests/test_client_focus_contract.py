@@ -46,8 +46,8 @@ def test_pending_case_submission_has_all_three_rendered_bindings(client, staff_u
     client.force_login(staff_user)
     tags = Tags(client.get(reverse("core:event_create")).content.decode()).tags
     form = next(attrs for tag, attrs in tags if tag == "form" and attrs.get("id") == "event-create-form")
-    assert form["@submit"] == "guardCaseContext"
+    assert form["@submit"] == "guardSubmit"
     for button_id in ("event-submit-btn", "event-submit-next"):
         button = next(attrs for _, attrs in tags if attrs.get("id") == button_id)
-        assert button[":disabled"] == "caseContextPending"
+        assert button[":disabled"] == "submitBlocked"
         assert button["type"] == "submit"

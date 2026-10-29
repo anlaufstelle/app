@@ -576,6 +576,8 @@ document.addEventListener("alpine:init", () => {
                 // ERSTEN Laden angewendet und danach geloescht, damit ein
                 // spaeterer manueller Personenwechsel den Fall nicht "festhaelt".
                 _initialCaseId: "",
+                // True while the type-specific fields are being reloaded.
+                fieldsPending: false,
                 init() {
                     this._initCommon();
                     this._casesForClientUrl = this.$el.dataset.casesForClientUrl || "";
@@ -616,7 +618,13 @@ document.addEventListener("alpine:init", () => {
                     const docTypeSelect = this.$refs.docTypeSelect;
                     if (docTypeSelect) {
                         docTypeSelect.addEventListener("htmx:beforeRequest", () => {
+                            this.fieldsPending = true;
                             this.updateAnonymousAllowed(docTypeSelect);
+                        });
+                        // Fires after the swap, also for failed requests; a replaced
+                        // (aborted) request is followed by the next beforeRequest.
+                        docTypeSelect.addEventListener("htmx:afterRequest", () => {
+                            this.fieldsPending = false;
                         });
                     }
                 },
@@ -723,8 +731,14 @@ document.addEventListener("alpine:init", () => {
                 get caseContextPending() {
                     return Boolean(this._initialCaseId && this.selectedId && this.selectedId === this._casesClientId);
                 },
-                guardCaseContext(event) {
-                    if (this.caseContextPending) event.preventDefault();
+                // The type-field reload disables #dynamic-fields-fence, and a
+                // disabled control is not part of the POST: a save during the
+                // reload would store the contact without its type fields.
+                get submitBlocked() {
+                    return this.caseContextPending || this.fieldsPending;
+                },
+                guardSubmit(event) {
+                    if (this.submitBlocked) event.preventDefault();
                 },
                 retryCases() {
                     return this.loadCasesForClient(this.selectedId);

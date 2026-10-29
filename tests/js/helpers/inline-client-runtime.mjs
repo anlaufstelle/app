@@ -20,7 +20,7 @@ const markup = '<main><form id="event-create-form" x-data="eventClientAutocomple
     ' data-autocomplete-url="/search" data-cases-for-client-url="/cases">' +
     '<div ' + shared.match(/@client-inline-(?:created|selected)\.window="[^"]+"/)[0] + '>' + input + hidden + '</div>' + cases +
     '<textarea name="notes">Keep draft</textarea><button type="button" id="open" hx-get="/inline" hx-target="#client-inline-create-modal">Open</button>' +
-    '<button type="submit" :disabled="caseContextPending">Save</button></form>' + slot + '</main>';
+    '<button type="submit" :disabled="submitBlocked">Save</button></form>' + slot + '</main>';
 const dom = new JSDOM(markup, { url: "http://localhost/events/new/", runScripts: "outside-only", pretendToBeVisual: true });
 const w = dom.window;
 // All fixture IDs are plain CSS identifiers; jsdom does not expose CSS.escape.

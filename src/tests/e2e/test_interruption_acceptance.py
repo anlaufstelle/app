@@ -219,3 +219,43 @@ class TestDoubleSubmit:
         held[0].continue_()
         page.wait_for_url(lambda url: "/events/new/" not in url, timeout=15000)
         assert _stored_events(e2e_env, note) == [person["pk"]]
+
+
+class TestSaveWhileTypeFieldsReload:
+    def test_save_waits_for_the_type_fields_and_stores_the_note(self, routed_page, base_url, e2e_env, person):
+        """The reload locks the type fields; a save in that window would drop the note from the POST.
+
+        The draft restore after a login triggers the same reload (a ``change`` on the type select).
+        """
+        page = routed_page
+        note = f"Typwechsel {person['marker']}"
+        _open_form(page, base_url, person)
+        page.locator(NOTE_FIELD).fill(note)
+        held: list = []
+        posts: list[str] = []
+        page.on("request", lambda r: posts.append(r.url) if r.method == "POST" and "/events/new/" in r.url else None)
+        page.route("**/partials/events/fields/**", lambda route: held.append(route))
+
+        # The same synthetic ``change`` the draft restore dispatches on the type select.
+        page.locator("#id_document_type").dispatch_event("change")
+        expect(page.locator(SAVE_BUTTON)).to_be_disabled(timeout=10000)
+        assert len(held) == 1
+
+        # Keyboard submit (Ctrl+Enter) bypasses the disabled button: it must be refused as well.
+        refused = page.evaluate(
+            """() => {
+                let prevented = false;
+                document.addEventListener('submit', (e) => { prevented = e.defaultPrevented; }, { once: true });
+                document.querySelector('#event-create-form').requestSubmit();
+                return prevented;
+            }"""
+        )
+        assert refused, "the form was submitted while the type fields were still loading"
+        assert posts == []
+
+        held[0].continue_()
+        expect(page.locator(SAVE_BUTTON)).to_be_enabled(timeout=10000)
+        page.locator(NOTE_FIELD).fill(note)
+        page.locator(SAVE_BUTTON).click()
+        page.wait_for_url(lambda url: "/events/new/" not in url, timeout=15000)
+        assert _stored_events(e2e_env, note) == [person["pk"]]

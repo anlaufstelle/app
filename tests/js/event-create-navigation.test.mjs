@@ -53,9 +53,23 @@ it.each(["loading", "error"])("blocks unresolved initial case submission during 
     c.loadCasesForClient("a");
     await flush();
     const event = { preventDefault: vi.fn() };
-    c.guardCaseContext(event);
+    c.guardSubmit(event);
     expect(event.preventDefault).toHaveBeenCalledOnce();
     expect(c.caseContextPending).toBeTruthy();
+});
+
+it("blocks submission while the type fields reload and allows it afterwards", () => {
+    const c = component();
+    const blocked = { preventDefault: vi.fn() };
+    c.fieldsPending = true;
+    c.guardSubmit(blocked);
+    expect(blocked.preventDefault).toHaveBeenCalledOnce();
+    expect(c.submitBlocked).toBe(true);
+    const allowed = { preventDefault: vi.fn() };
+    c.fieldsPending = false;
+    c.guardSubmit(allowed);
+    expect(allowed.preventDefault).not.toHaveBeenCalled();
+    expect(c.submitBlocked).toBe(false);
 });
 
 it("drops pending intent on person change before the watcher runs", () => {
@@ -78,7 +92,7 @@ it.each([{ cases: [{ id: "initial" }] }, { cases: [] }])("allows submit after re
     c._initialCaseId = "initial";
     await c.loadCasesForClient("a");
     const event = { preventDefault: vi.fn() };
-    c.guardCaseContext(event);
+    c.guardSubmit(event);
     expect(event.preventDefault).not.toHaveBeenCalled();
     expect(c.caseContextPending).toBeFalsy();
     expect(c.selectedCaseId).toBe(cases.length ? "initial" : "");
