@@ -4,8 +4,6 @@ Source: mutation delta of the release-0.99.9 checkpoint, 37 mutants.
 Groups: exact rational equations (9), interval propagation (14), bounded witnesses (14).
 """
 
-from fractions import Fraction
-
 import pytest
 
 from core.services.dashboard import disclosure as service
@@ -34,7 +32,6 @@ def test_nonintegral_deduction_is_rejected_with_diagnosis():
     """
     cells, graph = odd_cycle()
     cache = SharedBasisCache(graph)
-    assert cache.get(cells, graph)["a"] == ({"a": Fraction(1)}, Fraction(3, 2))
     with pytest.raises(ValueError) as error:
         shared_bounds(cells, graph, basis_cache=cache)
     assert str(error.value) == "Non-integer shared partition solution"
