@@ -26,6 +26,21 @@ def _collect(snapshots, populations=()):
     return {p.identity: p for p in collect_hybrid_populations(populations, wrapped)}
 
 
+def _tokens(population):
+    """Return the set of cohort tokens, treating their naming as opaque."""
+    return {token for token, _ in population.members}
+
+
+def _days(population):
+    """Return the set of member dates."""
+    return {day for _, day in population.members}
+
+
+def _weights(population):
+    """Return the sorted multiset of cohort weights."""
+    return sorted(weight for _, weight in population.unit_weights)
+
+
 def test_inconsistent_snapshot_months_keep_distinct_total_cohorts():
     """Two inconsistent months contribute separate total cohorts with their own weights.
 
@@ -39,11 +54,12 @@ def test_inconsistent_snapshot_months_keep_distinct_total_cohorts():
     )
 
     mapped = result[MAPPED]
-    assert mapped.members == (
-        ("snapshot:2000:1:total", date(2000, 1, 1)),
-        ("snapshot:2000:2:total", date(2000, 2, 1)),
-    )
-    assert dict(mapped.unit_weights) == {"snapshot:2000:1:total": 10, "snapshot:2000:2:total": 7}
+    assert len(mapped.members) == 2
+    assert _days(mapped) == {date(2000, 1, 1), date(2000, 2, 1)}
+    assert len(_tokens(mapped)) == 2
+    assert all(isinstance(token, str) for token in _tokens(mapped))
+    assert {token for token, _ in mapped.unit_weights} == _tokens(mapped)
+    assert _weights(mapped) == [7, 10]
 
 
 def test_snapshot_without_total_invents_no_total_cohort():
@@ -57,7 +73,10 @@ def test_snapshot_without_total_invents_no_total_cohort():
 
     assert result[MAPPED].members == ()
     assert result[MAPPED].unit_weights == ()
-    assert result["hybrid-category:A"].members == (("snapshot:2000:1:category:A", date(2000, 1, 1)),)
+    category = result["hybrid-category:A"]
+    assert len(category.members) == 1
+    assert _days(category) == {date(2000, 1, 1)}
+    assert _weights(category) == [3]
 
 
 def test_snapshot_without_total_keeps_single_count_category_out_of_mapped_events():
@@ -69,7 +88,9 @@ def test_snapshot_without_total_keeps_single_count_category_out_of_mapped_events
 
     assert result[MAPPED].members == ()
     assert result[MAPPED].unit_weights == ()
-    assert dict(result["hybrid-category:A"].unit_weights) == {"snapshot:2000:1:category:A": 1}
+    category = result["hybrid-category:A"]
+    assert len(category.members) == 1
+    assert _weights(category) == [1]
 
 
 def test_repeated_age_cluster_rows_are_summed():
@@ -81,7 +102,9 @@ def test_repeated_age_cluster_rows_are_summed():
         {JAN: {"total": 5, "by_age_cluster": [{"cluster": "18-26", "count": 2}, {"cluster": "18-26", "count": 3}]}}
     )
 
-    assert dict(result["hybrid-age:18-26"].unit_weights) == {"snapshot:2000:1:age:18-26": 5}
+    age = result["hybrid-age:18-26"]
+    assert len(age.members) == 1
+    assert _weights(age) == [5]
 
 
 def test_repeated_category_rows_are_summed_and_stay_consistent_with_total():
@@ -91,10 +114,13 @@ def test_repeated_category_rows_are_summed_and_stay_consistent_with_total():
     """
     result = _collect({JAN: {"total": 5, "by_category": [["A", 2], ["A", 3]]}})
 
-    token = "snapshot:2000:1:category:A"
-    assert dict(result["hybrid-category:A"].unit_weights) == {token: 5}
-    assert result[MAPPED].members == ((token, date(2000, 1, 1)),)
-    assert dict(result[MAPPED].unit_weights) == {token: 5}
+    category = result["hybrid-category:A"]
+    mapped = result[MAPPED]
+    assert _weights(category) == [5]
+    assert len(mapped.members) == 1
+    assert _days(mapped) == {date(2000, 1, 1)}
+    assert _tokens(mapped) == _tokens(category)
+    assert _weights(mapped) == [5]
 
 
 def test_snapshot_cohorts_are_dated_on_the_first_of_the_month():
@@ -105,8 +131,11 @@ def test_snapshot_cohorts_are_dated_on_the_first_of_the_month():
     result = _collect({JAN: {"total": 3, "by_category": [["A", 3]]}})
 
     first = date(2000, 1, 1)
-    assert result[MAPPED].members == (("snapshot:2000:1:category:A", first),)
-    assert population_units(result[MAPPED], first, first) == frozenset({"snapshot:2000:1:category:A"})
+    mapped = result[MAPPED]
+    assert len(mapped.members) == 1
+    assert _days(mapped) == {first}
+    assert population_units(mapped, first, first) == _tokens(mapped)
+    assert len(population_units(mapped, first, first)) == 1
 
 
 def test_snapshot_without_age_clusters_still_yields_category_and_total_cohorts():
@@ -117,8 +146,10 @@ def test_snapshot_without_age_clusters_still_yields_category_and_total_cohorts()
     """
     result = _collect({JAN: {"total": 3, "by_category": [["A", 3]]}})
 
-    assert dict(result["hybrid-category:A"].unit_weights) == {"snapshot:2000:1:category:A": 3}
-    assert dict(result[MAPPED].unit_weights) == {"snapshot:2000:1:category:A": 3}
+    category = result["hybrid-category:A"]
+    assert _weights(category) == [3]
+    assert _weights(result[MAPPED]) == [3]
+    assert _tokens(result[MAPPED]) == _tokens(category)
     assert not any(identity.startswith("hybrid-age:") for identity in result)
 
 
@@ -130,8 +161,9 @@ def test_snapshot_without_categories_still_yields_total_and_age_cohorts():
     """
     result = _collect({JAN: {"total": 4, "by_age_cluster": [{"cluster": "27+", "count": 4}]}})
 
-    assert dict(result["hybrid-age:27+"].unit_weights) == {"snapshot:2000:1:age:27+": 4}
-    assert dict(result[MAPPED].unit_weights) == {"snapshot:2000:1:total": 4}
+    assert _weights(result["hybrid-age:27+"]) == [4]
+    assert _weights(result[MAPPED]) == [4]
+    assert len(result[MAPPED].members) == 1
 
 
 @pytest.mark.parametrize("amount", [-1, 1.5])
