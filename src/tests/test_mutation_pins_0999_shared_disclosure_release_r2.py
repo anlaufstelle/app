@@ -9,7 +9,7 @@ count identities (suppressed number or removed table), so each projection rule i
 without relying on solver internals.
 """
 
-from dataclasses import replace
+import calendar
 from datetime import date, datetime
 from types import SimpleNamespace
 
@@ -125,45 +125,94 @@ def test_missing_sample_category_binding_is_explained(facility, monkeypatch):
     assert str(error.value) == "The sample report requires a category binding"
 
 
+def seed_months(facility, user, plan):
+    """Create ``(month, persons, age_cluster, contact_stage, events_per_person)`` groups in 2026."""
+    contact = make_document_type(facility=facility, name="Contact", report_key="contact")
+    crisis = make_document_type(facility=facility, name="Crisis", report_key="crisis")
+    number = 0
+    for month, persons, age_cluster, contact_stage, events in plan:
+        when = timezone.make_aware(datetime(2026, month, 5, 12))
+        for _ in range(persons):
+            number += 1
+            person = make_client(
+                facility=facility,
+                pseudonym=f"alias-{number}",
+                created_by=user,
+                age_cluster=age_cluster,
+                contact_stage=contact_stage,
+            )
+            for index in range(events):
+                make_event(
+                    facility=facility,
+                    client=person,
+                    document_type=crisis if index % 2 == 0 else contact,
+                    occurred_at=when,
+                    data_json={},
+                    created_by=user,
+                )
+
+
+def figures_of_march(release):
+    return (
+        release.general["total_contacts"],
+        release.general["by_contact_stage"]["qualifiziert"],
+        rows_by(release.sample["by_category"], "name")["Beratung"],
+    )
+
+
+def figures_of_admissions(release):
+    return (release.datasets["client-metrics"].summary["neuaufnahmen"],)
+
+
 @pytest.mark.django_db
-def test_removed_table_clears_every_alias_of_its_unions(facility, world, monkeypatch):
-    """Aliases of locally removed rows lose existence bound and person sensitivity.
+@pytest.mark.parametrize(
+    ("plan", "threshold", "window", "figures", "expected"),
+    [
+        pytest.param(
+            [(1, 2, "18_26", "identified", 3), (3, 3, "27_plus", "qualified", 1)],
+            3,
+            (date(2026, 3, 1), date(2026, 3, 31)),
+            figures_of_march,
+            (3, 3, 3),
+            id="person-sensitive-cells",
+        ),
+        pytest.param(
+            [(1, 1, "18_26", "identified", 3), (3, 6, "27_plus", "qualified", 2)],
+            2,
+            None,
+            figures_of_admissions,
+            (7,),
+            id="row-existence-bound",
+        ),
+    ],
+)
+def test_removed_table_clears_every_alias_of_its_unions(
+    facility, admin_user, plan, threshold, window, figures, expected
+):
+    """Every alias of a locally removed table is withheld and unrelated figures stay published.
+
+    The January persons are too few for the age and stage tables of January, so those
+    tables are removed there. The same January union recurs in the longer windows that
+    add March; each such alias must lose its row-existence bound and person sensitivity,
+    otherwise it forces other published figures into suppression.
 
     x_build_live_release__mutmut_116,
     x_build_live_release__mutmut_124,
     x_build_live_release__mutmut_125,
     x_build_live_release__mutmut_127.
     """
-    real = disclosure._prepare_live_interval
-    removed = {}
-
-    def prepared(*args):
-        interval = real(*args)
-        # The first window containing the January events removes its age table locally.
-        if not removed and any(c.key.population == "age:18_26" for c in interval.observations):
-            key = next(c.key for c in interval.observations if c.key.population == "age:18_26")
-            removed["key"] = key
-            return replace(interval, dropped=interval.dropped | {key})
-        return interval
-
-    monkeypatch.setattr(disclosure, "_prepare_live_interval", prepared)
-    captured = {}
-    solver = disclosure.protect_temporal_counts
-
-    def spy(*args, **kwargs):
-        captured["observations"] = kwargs["observations"]
-        return solver(*args, **kwargs)
-
-    monkeypatch.setattr(disclosure, "protect_temporal_counts", spy)
-    disclosure.build_live_release(facility, JAN_START, JAN_END)
-    ages = [
-        cell
-        for cell in captured["observations"]
-        if (cell.key.dimension, cell.key.population) == ("event_counts", "age:18_26")
-    ]
-    # The same January union is observed in several windows; every alias must be normalized.
-    assert len(ages) > 1
-    assert all(cell.hidden and cell.lower == 0 and not cell.person_sensitive for cell in ages)
+    Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": threshold})
+    seed_months(facility, admin_user, plan)
+    if window is None:
+        today = timezone.localdate()
+        window = (JAN_START, date(today.year, today.month, calendar.monthrange(today.year, today.month)[1]))
+    release = disclosure.build_live_release(facility, *window)
+    for dimension in ("event_counts", "person_counts"):
+        for end in (JAN_END, date(2026, 3, 31)):
+            alias = disclosure.CountKey(dimension, "age:18_26", JAN_START, end)
+            assert release.mask.published[alias] is None
+            assert alias in release.mask.dropped
+    assert figures(release) == expected
 
 
 @pytest.mark.django_db
