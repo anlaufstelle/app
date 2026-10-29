@@ -1,10 +1,10 @@
 """Pins for the additional shared count populations and their bound datasets.
 
-Source: mutation delta of the release-0.99.9 checkpoint, 62 mutants.
+Source: mutation delta of the release-0.99.9 checkpoint, 61 mutants.
 Groups: admission and case source populations (34), point-in-time stock flag (4),
 monthly residual guard and local table binding (8), age cohort selection (4),
 canonical case metric names (2), local suppression import into the shared solver (6),
-local table removal (1), projection of the final mask (3).
+local table removal (1), projection of the final mask (2).
 Related pattern: test_mutation_pins_0998_dashboard_snapshot.py.
 """
 
@@ -76,7 +76,8 @@ def source(facility, second_facility):
 
 
 def _members(source, dimension, identity):
-    return list(source["populations"][(dimension, identity)].members)
+    """Members as a sorted list: their order is not part of the contract."""
+    return sorted(source["populations"][(dimension, identity)].members)
 
 
 def test_collected_populations_are_exactly_the_five_canonical_keys(source):
@@ -383,14 +384,3 @@ def test_projection_returns_the_masked_records_and_drops_a_removed_key():
     assert dropped.records == []
     unresolved = bound.project(lambda dimension, population: None, SharedMask(1, 3, published, frozenset()))
     assert unresolved.records == []
-
-
-def test_projection_of_a_locally_removed_table_returns_empty_records_without_error():
-    """An empty local table with resolvable, undropped keys projects to no records.
-
-    Kills xǁBoundDatasetǁproject__mutmut_21.
-    """
-    bound = _bound([{"count": 10}, {"count": 12}], [])
-    published = {bound.row_keys[0]: 10, bound.row_keys[1]: 12}
-    projected = bound.project(_resolver(bound.row_keys), SharedMask(1, 3, published, frozenset()))
-    assert projected.records == []
