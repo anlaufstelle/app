@@ -484,6 +484,19 @@ def test_counseling_and_quantity_results_keep_dataset_metadata():
             assert result.completeness == []
 
 
+def select_columns(sql):
+    """Split the top-level select list of a query into its column expressions."""
+    clause = sql.split("SELECT ", 1)[1].split(" FROM ", 1)[0]
+    columns, depth, start = [], 0, 0
+    for index, char in enumerate(clause):
+        depth += {"(": 1, ")": -1}.get(char, 0)
+        if char == "," and depth == 0:
+            columns.append(clause[start:index].strip())
+            start = index + 1
+    columns.append(clause[start:].strip())
+    return columns
+
+
 @pytest.mark.django_db
 @pytest.mark.parametrize("tied", [False, True])
 def test_collector_orders_by_event_time_then_primary_key(field_world, tied):
@@ -509,9 +522,11 @@ def test_collector_orders_by_event_time_then_primary_key(field_world, tied):
         assert '"core_event"."occurred_at" ASC' in ordering
         primary_key_order = '"core_event"."id" ASC'
         if primary_key_order not in ordering:
-            # PostgreSQL also accepts the selected primary key by its ordinal.
-            assert sql.split("SELECT ", 1)[1].split(",", 1)[0].startswith('"core_event"."id"')
-            primary_key_order = "1 ASC"
+            # PostgreSQL also accepts the selected primary key by its ordinal, wherever it is selected.
+            columns = select_columns(sql)
+            primary_key = [index for index, column in enumerate(columns, 1) if column.startswith('"core_event"."id"')]
+            assert primary_key
+            primary_key_order = f"{primary_key[0]} ASC"
         assert primary_key_order in ordering
         assert ordering.index('"occurred_at"') < ordering.index(primary_key_order)
     assert interval(sources)["counseling-hours"].local.summary["minuten_gesamt"] == 1
