@@ -1,12 +1,12 @@
 """Pins for exact live event and person population memberships.
 
-Source: mutation delta of the release-0.99.9 checkpoint, 14 mutants.
+Source: mutation delta of the release-0.99.9 checkpoint, 11 mutants.
 Groups: inclusive interval and diagnostics (4), anonymous stage (6),
-unknown stage (1), chronological and identifier ordering (3).
+unknown stage (1). Member ordering is not pinned: consumers treat
+members as a set, so ordering mutants are equivalent.
 """
 
 from datetime import date, datetime
-from uuid import UUID
 
 import pytest
 from django.utils import timezone
@@ -95,25 +95,6 @@ def test_unknown_stored_stage_does_not_invent_a_population(facility, admin_user,
         "contact-stage:qualifiziert",
     }
     assert all(not units for (_, identity), units in members.items() if identity.startswith("contact-stage:"))
-
-
-def test_members_are_chronological_with_identifier_ties(facility, admin_user, population_event):
-    """Dates precede identifiers and same-day identifiers are stable:
-    x_collect_event_populations__mutmut_218, x_collect_event_populations__mutmut_220,
-    x_collect_event_populations__mutmut_223.
-    """
-    early_ids = [UUID(int=number) for number in range(32, 64)]
-    late_id = UUID(int=1)
-    for identifier in [late_id, *reversed(early_ids)]:
-        person = make_client(facility=facility, pseudonym=f"Person {identifier}", created_by=admin_user, id=identifier)
-        population_event(date(2026, 1, 16) if identifier == late_id else DAY, person=person)
-
-    populations = collect_event_populations(facility, DAY, date(2026, 1, 16))
-    active = next(p for p in populations if p.dimension == "person_counts" and p.identity == "active-persons")
-
-    assert active.members == tuple((str(identifier), DAY) for identifier in early_ids) + (
-        (str(late_id), date(2026, 1, 16)),
-    )
 
 
 def test_reversed_interval_explains_the_invalid_input(facility):
