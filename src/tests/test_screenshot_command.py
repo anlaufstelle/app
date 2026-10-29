@@ -8,18 +8,43 @@ Refs #1594, #1595, #2325.
 """
 
 import io
+import re
 import uuid
 
 import pytest
 from django.core.management.base import CommandError
 from django.utils import timezone
 
-from core.management.commands.screenshot import DESKTOP, LANG_SWITCH_USERNAMES, SHOTS, Command, Shot
+from core.management.commands.screenshot import (
+    DESKTOP,
+    LANG_SWITCH_USERNAMES,
+    LOGIN_SUBMIT_SELECTOR,
+    SHOTS,
+    Command,
+    Shot,
+)
 from core.models import Case, Client, User
 
 
 def _shot(name: str):
     return next(s for s in SHOTS if s.name == name)
+
+
+class TestLoginSubmitSelector:
+    """Refs #2609: the login page offers a language switch with its own submit
+    buttons, so the screenshot login must target the login form only.
+    """
+
+    def test_selector_is_scoped_to_login_form(self):
+        assert LOGIN_SUBMIT_SELECTOR == "#login-form button[type='submit']"
+
+    @pytest.mark.django_db
+    def test_login_form_has_exactly_one_submit_button(self, client):
+        html = client.get("/login/").content.decode()
+        form = re.search(r'<form[^>]*id="login-form".*?</form>', html, re.S)
+        assert form is not None
+        assert len(re.findall(r'type="submit"', form.group(0))) == 1
+        assert len(re.findall(r'type="submit"', html)) > 1
 
 
 class TestDsgvoPaketRole:

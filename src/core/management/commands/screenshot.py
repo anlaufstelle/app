@@ -49,6 +49,10 @@ from core.services.case import cases_with_live_client
 
 SEED_PASSWORD = "anlaufstelle2026"  # noqa: S105 — seed-only credential (dev/e2e)
 
+# Scoped to the login form: the language switch on the login page adds
+# further submit buttons (Refs #2609); mirrors the e2e ``login_as`` helper.
+LOGIN_SUBMIT_SELECTOR = "#login-form button[type='submit']"
+
 # Seed-Usernamen, deren `preferred_language` je Sprachdurchlauf umgestellt wird.
 # Refs #1595: "admin" ergaenzt, weil der dsgvo-paket-Shot als FacilityAdmin
 # laeuft und sonst auch im EN-Durchlauf deutsch rendert.
@@ -243,7 +247,7 @@ class Command(BaseCommand):
                     page.wait_for_load_state("domcontentloaded")
                     page.fill("input[name='username']", role)
                     page.fill("input[name='password']", SEED_PASSWORD)
-                    page.locator("button[type='submit']").click()
+                    page.locator(LOGIN_SUBMIT_SELECTOR).click()
                     with contextlib.suppress(Exception):
                         page.wait_for_url(lambda u: "/login" not in u, timeout=10000)
                     if "/login" in page.url:
