@@ -90,8 +90,9 @@ class TestSchnellerfassung:
         page.select_option("select[name='document_type']", label="Kontakt")
         page.wait_for_load_state("domcontentloaded")
 
-        # Warten bis HTMX dynamische Felder geladen hat
-        page.locator("#dynamic-fields").wait_for(state="attached")
+        # Wait until the type fields have reloaded: saving stays blocked while
+        # the reload runs, so Ctrl+Enter before that would be rejected.
+        expect(page.locator("#event-submit-btn")).to_be_enabled(timeout=10000)
 
         # Kein Klientel ausgewaehlt → wird automatisch anonym
         # Fokus ins Formular setzen (noetig fuer Ctrl+Enter keydown Handler)
