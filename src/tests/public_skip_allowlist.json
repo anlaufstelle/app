@@ -119,6 +119,13 @@
     "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
   },
   {
+    "nodeid": "src/tests/e2e/test_i18n_locale.py::TestAnonymousLocale::test_demo_query_switch_error_and_start[chromium]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
     "nodeid": "src/tests/e2e/test_system_compliance_maintenance_results.py::TestDemoCards::test_backup_and_restore_cards_explain_the_demo[chromium]",
     "profile": "public",
     "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
