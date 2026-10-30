@@ -453,49 +453,14 @@ def pdf_text(monkeypatch):
 
 
 def _patch_raw_statistics(monkeypatch, raw: dict[str, Any]) -> None:
-    """Feed the same synthetic worlds into the shared raw-unit source.
+    """Feed a raw statistics world into the real external-report pipeline.
 
-    Only database collection is replaced. Both local suppression and the
-    shared canonical solver run before the real artifact renderers. The
-    historical worlds deliberately model person/event dimensions separately.
+    Disclosure guard, secondary suppression, residual row and fail-safe all run
+    for real; only the database aggregation is replaced.
     """
-    from core.services.dashboard import shared_disclosure
+    from core.services.dashboard import external_report
 
-    def collect(facility, date_from, date_to):
-        day = _CARD_PERIOD["date_from"]
-        populations = []
-
-        def population(dimension, identity, units):
-            populations.append(
-                shared_disclosure.TemporalPopulation(dimension, identity, tuple((str(unit), day) for unit in units))
-            )
-
-        population("event_counts", "all-events", range(raw["total_contacts"]))
-        population("event_counts", "mapped-events", ())
-        population("person_counts", "active-persons", range(raw["unique_clients"]))
-        offset = 0
-        for row in raw["by_document_type"]:
-            document_type, _ = DocumentType.objects.get_or_create(facility=facility, name=row["name"])
-            population("event_counts", f"document-type:{document_type.pk}", range(offset, offset + row["count"]))
-            offset += row["count"]
-        offset = person_offset = 0
-        for row in raw["by_age_cluster"]:
-            population("event_counts", f"age:{row['cluster']}", range(offset, offset + row["count"]))
-            population("person_counts", f"age:{row['cluster']}", range(person_offset, person_offset + row["persons"]))
-            offset += row["count"]
-            person_offset += row["persons"]
-        population("event_counts", "age:__no_person__", range(offset, raw["total_contacts"]))
-        offset = person_offset = 0
-        for stage in ("anonym", "identifiziert", "qualifiziert"):
-            count = raw["by_contact_stage"].get(stage, 0)
-            population("event_counts", f"contact-stage:{stage}", range(offset, offset + count))
-            persons = raw["persons_by_contact_stage"].get(stage, 0)
-            population("person_counts", f"contact-stage:{stage}", range(person_offset, person_offset + persons))
-            offset += count
-            person_offset += persons
-        return tuple(populations)
-
-    monkeypatch.setattr(shared_disclosure, "collect_event_populations", collect)
+    monkeypatch.setattr(external_report, "get_statistics", lambda *args, **kwargs: copy.deepcopy(raw))
 
 
 def _card_dataset(facility):
@@ -1062,47 +1027,10 @@ def _sample_section(text: str, start: str, end: str | None = None) -> str:
 
 
 def _patch_sample_hybrid(monkeypatch, raw: dict[str, Any]) -> None:
-    """Supply both raw sources; the shared solver and PDF layout run for real.
-
-    The aggregate facade is no longer an authoritative mask input. Supply
-    the same snapshot at the scoped collection boundary and a separate raw
-    distinct-person cohort, without assigning snapshot events to persons.
-    """
-    from types import SimpleNamespace
-
-    from core.models import StatisticsSnapshot
+    """Replace only the raw hybrid read; protection and PDF layout run for real."""
     from core.services import dashboard
-    from core.services.dashboard import shared_disclosure
 
     monkeypatch.setattr(dashboard, "get_sample_report_1_statistics_hybrid", lambda *args: copy.deepcopy(raw))
-    row = {
-        "year": 2026,
-        "month": 1,
-        "backend_data": {"sample-report-1": copy.deepcopy(raw)},
-        "updated_at": raw.get("snapshot_as_of"),
-    }
-    monkeypatch.setattr(
-        StatisticsSnapshot.objects,
-        "for_facility",
-        lambda facility: SimpleNamespace(values=lambda *fields: [row]),
-    )
-    # Preserve the real event collector on repeated worlds in the same test.
-    original = getattr(monkeypatch, "_sample_event_collector", shared_disclosure.collect_event_populations)
-    monkeypatch._sample_event_collector = original
-
-    def collect(facility, start, end):
-        return tuple(
-            shared_disclosure.TemporalPopulation(
-                "person_counts",
-                "active-persons",
-                tuple((f"raw-person-{index}", date(2026, 1, 1)) for index in range(raw["unique_clients"])),
-            )
-            if population.dimension == "person_counts" and population.identity == "active-persons"
-            else population
-            for population in original(facility, start, end)
-        )
-
-    monkeypatch.setattr(shared_disclosure, "collect_event_populations", collect)
 
 
 def _release_identities(facility) -> list[tuple[str, str]]:

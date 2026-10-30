@@ -93,6 +93,8 @@ from core.reporting.base import (
     DatasetBackend,
     DatasetResult,
     FieldSpec,
+    project_records,
+    stamp_threshold,
 )
 from core.reporting.data_source import CASES_IN_PERIOD
 from core.reporting.registry import register_backend
@@ -100,6 +102,8 @@ from core.services.dashboard.external_report import (
     ORDER_INPUT,
     _Breakdown,
     _get_threshold,
+    _suppress_small,
+    apply_residual_guard,
 )
 
 # Kanonische Zeilenreihenfolge — Single Source of Truth fuer den
@@ -213,7 +217,6 @@ class CaseMetricsBackend(DatasetBackend):
         }
 
         return DatasetResult(
-            disclosure_context=(date_from, date_to, "live"),
             mode="aggregate",
             # Feste Reihenfolge, alle Zeilen immer — datenunabhaengig (siehe
             # Modul-Docstring).
@@ -257,13 +260,50 @@ class CaseMetricsBackend(DatasetBackend):
     _EXPORT_BREAKDOWN = _Breakdown("records", None, ORDER_INPUT, count_key=_COUNT_KEY)
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        """Publish case date cohorts and today's stock through the common mask."""
-        from core.services.dashboard.external_report import _protect_metric_dataset
-        from core.services.dashboard.shared_disclosure import project_shared_dataset
+        """K-Anon-Suppression fuer Export und Panel-Vorschau (Refs #1278/#1770).
 
-        local = _protect_metric_dataset(result, _get_threshold(facility), count_key=_COUNT_KEY)
-        local = dataclasses.replace(local, completeness=[_POINT_IN_TIME_ISSUE])
-        return project_shared_dataset(facility, local, "case-metrics")
+        Alle vier Zahlen laufen als Zeilen durch :func:`_suppress_small` und
+        werden unterhalb der Schwelle ``None``. ``margin=None`` ist die
+        wahrheitsgemaesse Angabe (es gibt keine publizierte Randsumme) — das
+        Machbarkeits-Audit (K2) laeuft damit korrekt gar nicht, statt gegen eine
+        Gleichung zu rechnen, die es nicht gibt.
+
+        ``summary`` wird aus **denselben** suppressierten Zeilen neu gebaut, es
+        gibt also keine zweite Suppressionsstelle und keine Chance auf Drift
+        zwischen Tabelle und Aggregat. Danach die Rueckprojektion auf die
+        FieldSpec-Keys — das interne ``suppressed``-Flag ist keine Spalte.
+
+        Der Momentaufnahme-Hinweis wird aus dem **festen** Code gebaut, nicht aus
+        ``result.completeness`` abgeleitet (K6-Muster, Refs #1769): jede
+        Ableitung waere eine datenabhaengige Verzweigung, und ein kuenftiger,
+        bezifferter Hinweis erreichte den Export sonst ungeprueft. Fail-safe in
+        die richtige Richtung — lieber eine Meldung zu wenig als eine
+        Kleinstfallzahl zu viel.
+
+        Erwartet das **rohe** ``build_dataset``-Ergebnis (nicht idempotent).
+        """
+        threshold = _get_threshold(facility)
+
+        view = {
+            "records": _suppress_small(result.records, threshold, count_key=_COUNT_KEY, margin=None, order=ORDER_INPUT),
+        }
+        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
+
+        records = project_records(view.get("records", []), self.get_field_specs())
+
+        summary = dict(result.summary)
+        # Fail-safe-Reihenfolge: erst alles auf ``None``, dann die
+        # suppressierten Zeilen einspielen. Die Eskalationsleiter des Guards
+        # kann eine Aufschluesselung im Extremfall komplett fallen lassen
+        # (``_drop_breakdowns`` entfernt den Key) — ohne diese Vorbelegung
+        # ueberlebten die **rohen** Werte aus ``build_dataset`` im ``summary``.
+        # Heute unerreichbar (es gibt keine Randsumme, also keine Befunde), aber
+        # eine Suppression darf nie davon abhaengen, dass ein anderer Codepfad
+        # nicht ausgeloest wird.
+        summary.update(dict.fromkeys(_KENNZAHLEN, None))
+        summary.update({row["kennzahl"]: row[_COUNT_KEY] for row in records})
+        summary = stamp_threshold(summary, threshold)
+        return dataclasses.replace(result, records=records, summary=summary, completeness=[_POINT_IN_TIME_ISSUE])
 
     def is_available(self, facility) -> bool:
         """Immer waehlbar — und das ist hier kein vergessener Hook.

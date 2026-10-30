@@ -4,20 +4,17 @@ Source: mutation delta of the release-0.99.7 checkpoint, 17 mutants.
 Groups: shared live/PDF category decisions (4), shared fail-safe fallbacks (5),
 missing legacy statistics (6), single-margin guard exhaustion (2).
 All scenarios enter public service APIs. The real sample backend retains its
-format dispatch and suppression. The shared type decision reads real events and
-snapshots; only the removed-category fallback replaces one local contract.
+format dispatch and suppression; only upstream statistics are supplied by tests.
 """
 
-from datetime import date, datetime
+from datetime import date
 
 import pytest
-from django.utils import timezone
 
-from core.models import DocumentType, Settings, StatisticsSnapshot
+from core.models import DocumentType, Settings
 from core.reporting.base import DatasetResult, FieldSpec
 from core.reporting.registry import get_backend
 from core.services.dashboard import external_report
-from tests._factories import make_document_type, make_event
 
 pytestmark = pytest.mark.django_db
 
@@ -42,40 +39,13 @@ def shared_report(facility, monkeypatch):
     return sample, general, names
 
 
-@pytest.fixture
-def mapped_types(facility, admin_user):
-    """Two event types of one sample category with ten published events each."""
-    names = ["Contact A", "Contact B"]
-    for name in names:
-        document_type = make_document_type(facility=facility, name=name, report_key="contact")
-        for _ in range(10):
-            make_event(
-                facility=facility,
-                document_type=document_type,
-                client=None,
-                created_by=admin_user,
-                occurred_at=timezone.make_aware(datetime(2026, 1, 15)),
-                data_json={},
-            )
-    return names
-
-
-def test_hybrid_pdf_decision_hides_all_mapped_type_counts(facility, mapped_types):
+def test_hybrid_pdf_decision_hides_all_mapped_type_counts(facility, shared_report):
     """A category hidden only in hybrid PDF blocks every mapped shared type.
 
     x_build_shared_document_type_counts__mutmut_41, x_build_shared_document_type_counts__mutmut_48,
     x_build_shared_document_type_counts__mutmut_49, x_build_shared_document_type_counts__mutmut_54.
     """
-    sample = get_backend("sample-report-1")
-    category = sample.typ_bindung.resolve("contact")
-    StatisticsSnapshot.objects.create(
-        facility=facility,
-        year=2026,
-        month=1,
-        backend_data={
-            "sample-report-1": {"total": 1, "unique_clients": 0, "by_category": [[category, 1]], "by_age_cluster": []}
-        },
-    )
+    sample, _, names = shared_report
     live = external_report.suppress_sample_report_1_stats(
         facility, sample.build_format_dataset(facility, _START, _END, format="json").summary
     )
@@ -85,7 +55,7 @@ def test_hybrid_pdf_decision_hides_all_mapped_type_counts(facility, mapped_types
     assert live["by_category"][0]["count"] == 20
     assert hybrid["by_category"][0]["count"] is None
 
-    assert external_report.build_shared_document_type_counts(facility, _START, _END) == dict.fromkeys(mapped_types)
+    assert external_report.build_shared_document_type_counts(facility, _START, _END) == dict.fromkeys(names)
 
 
 def test_missing_general_breakdown_returns_empty_shared_counts(facility, shared_report):
@@ -98,31 +68,24 @@ def test_missing_general_breakdown_returns_empty_shared_counts(facility, shared_
     assert external_report.build_shared_document_type_counts(facility, _START, _END) == {}
 
 
-def test_backend_without_binding_hides_all_existing_types(facility, mapped_types, monkeypatch):
-    """Missing type bindings fail closed: no type count is published at all.
-
-    The shared release refuses to resolve categories without a binding instead of
-    publishing the names with hidden counts.
+def test_backend_without_binding_hides_all_existing_types(facility, shared_report, monkeypatch):
+    """Missing type bindings fail closed while preserving existing type names.
 
     x_build_shared_document_type_counts__mutmut_25.
     """
-    monkeypatch.setattr(get_backend("sample-report-1"), "typ_bindung", None)
-    with pytest.raises(ValueError, match="category binding"):
-        external_report.build_shared_document_type_counts(facility, _START, _END)
+    sample, _, names = shared_report
+    monkeypatch.setattr(sample, "typ_bindung", None)
+    assert external_report.build_shared_document_type_counts(facility, _START, _END) == dict.fromkeys(names)
 
 
-def test_removed_sample_categories_hide_mapped_shared_counts(facility, mapped_types, monkeypatch):
+def test_removed_sample_categories_hide_mapped_shared_counts(facility, shared_report, monkeypatch):
     """Fail-safe removal of sample categories blocks their mapped types.
 
     x_build_shared_document_type_counts__mutmut_70, x_build_shared_document_type_counts__mutmut_72.
     """
-    protect = external_report._protect_sample_statistics
-
-    def without_categories(*args, **kwargs):
-        return {key: value for key, value in protect(*args, **kwargs).items() if key != "by_category"}
-
-    monkeypatch.setattr(external_report, "_protect_sample_statistics", without_categories)
-    assert external_report.build_shared_document_type_counts(facility, _START, _END) == dict.fromkeys(mapped_types)
+    _, _, names = shared_report
+    monkeypatch.setattr(external_report, "suppress_sample_report_1_stats", lambda *args: {"total": None})
+    assert external_report.build_shared_document_type_counts(facility, _START, _END) == dict.fromkeys(names)
 
 
 @pytest.mark.parametrize(

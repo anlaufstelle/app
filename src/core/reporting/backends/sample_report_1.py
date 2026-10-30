@@ -296,7 +296,6 @@ class SampleReport1Backend(DatasetBackend):
             records=[{"category": name, "count": count} for name, count in summary["by_category"]],
             summary=summary,
             completeness=self.validate_completeness(facility, date_from, date_to),
-            disclosure_context=(date_from, date_to, "live"),
         )
 
     def build_format_dataset(self, facility, date_from, date_to, *, format: str) -> DatasetResult:
@@ -306,7 +305,7 @@ class SampleReport1Backend(DatasetBackend):
         from core.services.dashboard import get_sample_report_1_statistics_hybrid
 
         summary = get_sample_report_1_statistics_hybrid(facility, date_from, date_to)
-        return DatasetResult("aggregate", [], summary, [], (date_from, date_to, "snapshot_hybrid"))
+        return DatasetResult("aggregate", [], summary, [])
 
     def get_format_sources(self) -> dict[str, str]:
         from core.reporting.data_source import SNAPSHOT_HYBRID
@@ -513,19 +512,12 @@ class SampleReport1Backend(DatasetBackend):
         """
         threshold = _get_threshold(facility)
 
-        if result.disclosure_context is not None:
-            from core.services.dashboard.shared_disclosure import build_live_release
-
-            date_from, date_to, source = result.disclosure_context
-            release = build_live_release(facility, date_from, date_to, warn_threshold=False)
-            summary = release.hybrid if source == "snapshot_hybrid" else release.sample
-        else:
-            summary = suppress_sample_report_1_stats(facility, result.summary)
+        summary = suppress_sample_report_1_stats(facility, result.summary)
         # Transparenz analog ``build_external_report``-Metadaten: der Empfaenger
         # soll erkennen, ab welcher Fallzahl unterdrueckt wurde.
-        summary = stamp_threshold({"by_category": [], **summary}, threshold)
+        summary = stamp_threshold(summary, threshold)
 
-        records = [{"category": row["name"], "count": row["count"]} for row in summary.get("by_category", [])]
+        records = [{"category": row["name"], "count": row["count"]} for row in summary["by_category"]]
 
         # K6 (Refs #1769): fest verdrahtet statt aus ``result.completeness``
         # abgeleitet — jede Ableitung waere wieder eine datenabhaengige

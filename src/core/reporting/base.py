@@ -24,7 +24,6 @@ Registrierung/Discovery der konkreten Backends lebt in
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import date
 from typing import Literal, cast
 
 from django.db.models import Q
@@ -80,7 +79,6 @@ class DatasetResult:
     records: list[dict]  # tabellarische Projektion; Keys == FieldSpec.key
     summary: dict  # vollständiges Aggregat; Snapshot-Payload
     completeness: list[CompletenessIssue]
-    disclosure_context: tuple[date, date, str] | None = None
 
 
 # --- Deklarative Typ-/Feld-Bindung (E1, Refs #1824) --------------------------

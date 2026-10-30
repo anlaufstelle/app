@@ -25,10 +25,9 @@ from django.utils.translation import gettext_lazy
 
 from core.models import Client, Settings
 from core.models.settings import K_ANONYMITY_MIN, K_ANONYMITY_WARN_BELOW
-from core.reporting.base import project_records, stamp_threshold
 from core.reporting.data_source import ALL_EVENTS, DATA_SOURCE_NOTES, LIVE, PERSONS
 from core.services.dashboard.disclosure import MAX_GUARD_ITERATIONS, Cell, Partition, findings
-from core.services.dashboard.statistics import PERSONS_KEY
+from core.services.dashboard.statistics import PERSONS_KEY, get_statistics
 
 logger = logging.getLogger(__name__)
 
@@ -220,12 +219,10 @@ def effective_k_threshold(stored: int) -> int:
     return stored if stored >= 1 else DEFAULT_K_THRESHOLD
 
 
-def _get_threshold(facility, *, warn: bool = True) -> int:
+def _get_threshold(facility) -> int:
     """K-anonymity threshold from the facility settings; the default without settings.
 
     A stored value below ``K_ANONYMITY_MIN`` is logged, so it never takes effect silently.
-    ``warn=False`` is for a caller that already looked the threshold up for the same
-    report computation, so the warning appears once per computation.
     """
     try:
         settings = Settings.objects.get(facility=facility)
@@ -233,7 +230,7 @@ def _get_threshold(facility, *, warn: bool = True) -> int:
         return DEFAULT_K_THRESHOLD
     stored = settings.k_anonymity_threshold
     threshold = effective_k_threshold(stored)
-    if warn and stored < K_ANONYMITY_MIN:
+    if stored < K_ANONYMITY_MIN:
         logger.warning(
             "Stored k-anonymity threshold %s for facility %s is below the minimum %s; computing with %s.",
             stored,
@@ -991,16 +988,14 @@ def _finalize_report(
 
 
 def build_external_report(facility, date_from: date, date_to: date) -> dict[str, Any]:
-    """Publish the general figures through the shared raw-population mask."""
-    from core.services.dashboard.shared_disclosure import build_live_release
+    """Baut einen datenschutzfreundlichen externen Bericht.
 
-    return build_live_release(facility, date_from, date_to).general
-
-
-def _protect_external_statistics(
-    facility, date_from: date, date_to: date, raw: dict[str, Any], *, threshold: int
-) -> dict[str, Any]:
-    """Apply the local general-figures contract to supplied raw statistics."""
+    Reuses ``statistics.get_statistics()``, entfernt ``top_clients`` und
+    wendet die K-Anon-Schwelle aus ``Settings.k_anonymity_threshold`` an.
+    Fuegt einen ``metadata``-Block mit Datenschutzprofil-Informationen hinzu.
+    """
+    threshold = _get_threshold(facility)
+    raw = get_statistics(facility, date_from, date_to)
 
     # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl — und was
     # nicht publiziert wird, kann das K2-Audit auch nicht als Gleichung nutzen.
@@ -1068,21 +1063,45 @@ def _protect_external_statistics(
 
 
 def build_shared_document_type_counts(facility, date_from: date, date_to: date) -> dict[str, int | None]:
-    """Facade for the common event-type publication decision."""
-    report = build_external_report(facility, date_from, date_to)
-    return {row["name"]: row["count"] for row in report.get("by_document_type", [])}
+    """Intersect type and category decisions before publishing event lower bounds.
 
-
-def project_protected_rows(
-    rows: Sequence[dict[str, Any]], counts: Sequence[int | None], *, order: str = ORDER_INPUT
-) -> list[dict[str, Any]]:
-    """Attach display markers to counts already decided by the shared mask.
-
-    The mask may hide rows the raw ordering still ranks by their value, so the
-    declared canonical order is applied again. No count is suppressed here.
+    A quantity contributor is an event, not a quantity unit. All types belonging
+    to a hidden sample-report category must remain hidden, even if the broader
+    general-figures population permits their counts. A visible category total
+    must not unlock a hidden member type either: block all its type lower bounds.
+    Include the hybrid PDF
+    decision as well as live categories; combining either file must stay safe.
     """
-    projected = [{**row, "count": value, "suppressed": value is None} for row, value in zip(rows, counts, strict=True)]
-    return _canonicalize_suppressed_order(projected, order)
+    from core.models import DocumentType
+    from core.reporting.registry import get_backend
+
+    general = build_external_report(facility, date_from, date_to)
+    counts = {row["name"]: row["count"] for row in general.get("by_document_type", [])}
+    sample = get_backend("sample-report-1")
+    binding = sample.typ_bindung
+    if binding is None:
+        return dict.fromkeys(counts)
+    categories = {
+        row["name"]: binding.resolve_row(row)
+        for row in DocumentType.objects.for_facility(facility).values("name", *binding.values_fields())
+        if row["name"] in counts
+    }
+    if not any(category is not None for category in categories.values()):
+        return counts
+    blocked_categories = {
+        category for name, category in categories.items() if category is not None and counts[name] is None
+    }
+    for format_name in ("json", "pdf"):
+        raw = sample.build_format_dataset(facility, date_from, date_to, format=format_name)
+        protected = suppress_sample_report_1_stats(facility, raw.summary)
+        published = {row["name"]: row["count"] for row in protected.get("by_category", [])}
+        blocked_categories.update(
+            category for category in categories.values() if category is not None and published.get(category) is None
+        )
+    for name, category in categories.items():
+        if category in blocked_categories:
+            counts[name] = None
+    return counts
 
 
 def suppress_single_margin(
@@ -1118,11 +1137,7 @@ def suppress_single_margin(
     selbst (K6: manche Berichte geben einen datenunabhaengigen Hinweis mit,
     andere gar keinen) und ruft ``dataclasses.replace``.
     """
-    return _protect_single_margin(result, _get_threshold(facility), breakdown=breakdown, field_specs=field_specs)
-
-
-def _protect_single_margin(result, threshold, *, breakdown, field_specs):
-    """Apply the single-margin contract to raw figures without database reads."""
+    threshold = _get_threshold(facility)
     total = result.summary["total"]
     # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
     published_total = _published_if_above(total, threshold)
@@ -1163,11 +1178,7 @@ def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str,
     ``suppressed`` normalisiert, damit das Template den Unterdrueckungs-Marker
     rendern kann. Gibt ein neues Dict zurueck; die Eingabe wird nicht mutiert.
     """
-    return _protect_sample_statistics(stats, threshold=_get_threshold(facility))
-
-
-def _protect_sample_statistics(stats: dict[str, Any], *, threshold: int) -> dict[str, Any]:
-    """Apply the local sample contract without querying per canonical window."""
+    threshold = _get_threshold(facility)
 
     unique = stats.get("unique_clients", 0)
     total = stats.get("total", 0)
@@ -1249,169 +1260,3 @@ def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
     # K0-Fail-safe (Refs #1768): Altersgruppen UND Kontaktstufen sind
     # personenabgeleitet und fallen gemeinsam mit der Personenzahl.
     return _finalize_report(out, unique, age_rows, threshold, _EXTERNAL_REPORT_BREAKDOWNS)
-
-
-def _protect_client_dataset(result, threshold):
-    """Apply the existing person margin and table contract to raw unions."""
-    from dataclasses import replace
-
-    from core.reporting.base import stamp_threshold
-
-    active = result.summary["aktive_personen"]
-    published = _published_if_above(active, threshold)
-    view = {
-        "aktive_personen": published,
-        "records": _suppress_small(
-            result.records, threshold, count_key="personen", margin=published, order=ORDER_INPUT
-        ),
-    }
-    drop_person_margin_on_person_suppression(
-        view, result.records, threshold, count_key="personen", margin_key="aktive_personen"
-    )
-    apply_residual_guard(
-        view, threshold, (_Breakdown("records", "aktive_personen", ORDER_INPUT, count_key="personen"),)
-    )
-    _drop_person_derived_breakdowns(view, active, threshold, breakdown_keys=("records",))
-    return replace(
-        result,
-        records=[{key: row[key] for key in ("alterscluster", "personen")} for row in view.get("records", [])],
-        summary=stamp_threshold(
-            {
-                **result.summary,
-                "aktive_personen": view["aktive_personen"],
-                "neuaufnahmen": _published_if_above(result.summary["neuaufnahmen"], threshold),
-            },
-            threshold,
-        ),
-    )
-
-
-def _protect_metric_dataset(result, threshold, *, count_key):
-    """Protect fixed scalar rows and derive their summary from those rows."""
-    from dataclasses import replace
-
-    from core.reporting.base import stamp_threshold
-
-    view = {"records": _suppress_small(result.records, threshold, count_key=count_key, margin=None, order=ORDER_INPUT)}
-    apply_residual_guard(view, threshold, (_Breakdown("records", None, ORDER_INPUT, count_key=count_key),))
-    records = [{key: row[key] for key in ("kennzahl", count_key)} for row in view.get("records", [])]
-    summary = {key: None for key in result.summary}
-    summary.update({row["kennzahl"]: row[count_key] for row in records})
-    return replace(result, records=records, summary=stamp_threshold(summary, threshold))
-
-
-def _drop_service_margin(view, group):
-    """Withhold a multi-option margin whenever any of its rows is hidden."""
-    if any(row.get("suppressed") for row in view.get(group.records_key, ())):
-        view[group.summary_key] = None
-
-
-def _protect_counseling_dataset(result, threshold, *, field_specs, breakdown):
-    """Apply the counseling contract to raw aggregates without source reads."""
-    event_total = result.summary["events_gesamt"]
-    published_total = event_total if event_total >= threshold else None
-    view = {
-        "events_gesamt": published_total,
-        "records": _suppress_small(
-            result.records, threshold, count_key="events", margin=published_total, order=ORDER_INPUT
-        ),
-    }
-    apply_residual_guard(view, threshold, (breakdown,))
-    rows = view.get("records")
-    complete_minutes = rows is not None and view["events_gesamt"] is not None
-    for row in rows or ():
-        if row.get("suppressed") or (row.get("beitragende") or 0) < threshold:
-            row["minuten"] = None
-            complete_minutes = False
-    records = project_records(rows or (), field_specs)
-    summary = stamp_threshold(
-        {
-            **result.summary,
-            "events_gesamt": view["events_gesamt"],
-            "minuten_gesamt": result.summary["minuten_gesamt"] if complete_minutes else None,
-        },
-        threshold,
-    )
-    return dataclasses.replace(result, records=records, summary=summary)
-
-
-def _protect_needle_dataset(result, threshold, *, field_specs):
-    """Apply the needle contract to raw aggregates without source reads."""
-    events = result.summary["events"]
-    missing = result.summary["events_ohne_werte"]
-    contributors = events - missing
-    published_events = events if events >= threshold else None
-    visible_sums = contributors >= threshold
-    visible_gap = published_events is not None and min(contributors, missing) >= threshold
-    view = {
-        "events": published_events,
-        "summe_ausgabe": result.summary["summe_ausgabe"] if visible_sums else None,
-        "summe_rueckgabe": result.summary["summe_rueckgabe"] if visible_sums else None,
-        "saldo": result.summary["saldo"] if visible_sums else None,
-        "events_ohne_werte": result.summary["events_ohne_werte"] if visible_gap else None,
-    }
-    apply_residual_guard(view, threshold, ())
-    summary = stamp_threshold({**result.summary, **view}, threshold)
-    records = [{spec.key: view[spec.key] for spec in field_specs}]
-    return dataclasses.replace(result, records=records, summary=summary)
-
-
-def _protect_service_dataset(result, threshold, *, field_specs, groups):
-    """Apply the service contract to raw aggregates without source reads."""
-    view: dict = {}
-    breakdowns: list[_Breakdown] = []
-    active: list = []
-    for group in groups:
-        if group.summary_key not in result.summary:
-            continue
-        active.append(group)
-        events = result.summary[group.summary_key]
-        published = events if events >= threshold else None
-        margin = None if group.mehrfachnennung else published
-        rows = [row for row in result.records if row["feld"] == group.feld_slug]
-        view[group.summary_key] = published
-        view[group.records_key] = _suppress_small(rows, threshold, margin=margin, order=ORDER_INPUT)
-        if group.mehrfachnennung:
-            _drop_service_margin(view, group)
-        else:
-            breakdowns.append(_Breakdown(group.records_key, group.summary_key, ORDER_INPUT))
-    apply_residual_guard(view, threshold, tuple(breakdowns))
-    rows = [row for group in active for row in view.get(group.records_key, ())]
-    records = project_records(rows, field_specs)
-    summary = stamp_threshold({group.summary_key: view[group.summary_key] for group in active}, threshold)
-    return dataclasses.replace(result, records=records, summary=summary)
-
-
-def _protect_quantity_dataset(result, threshold, *, field_specs, breakdown):
-    """Apply the quantity contract to raw aggregates without source reads."""
-    published_counts = result.summary["document_type_counts"]
-    rows = [dict(row) for row in result.records]
-    contributions = _suppress_small(rows, threshold, count_key="contributors", margin=None, order=ORDER_INPUT)
-    complete = bool(rows)
-    for row, contribution in zip(rows, contributions, strict=True):
-        missing = row["events"] - row["contributors"]
-        if (
-            published_counts.get(row["document_type"]) is None
-            or contribution.get("suppressed")
-            or 0 < missing < threshold
-        ):
-            row["contributors"] = None
-            row["quantity"] = None
-            complete = False
-    view = {"records": rows, "contributors_total": result.summary["contributors_total"] if complete else None}
-    apply_residual_guard(view, threshold, (breakdown,))
-    rows = view.get("records", [])
-    for row in rows:
-        if row.get("suppressed"):
-            row["quantity"] = None
-            complete = False
-    summary = stamp_threshold(
-        {
-            "contributors_total": view["contributors_total"],
-            "quantity_total": result.summary["quantity_total"]
-            if complete and view["contributors_total"] is not None
-            else None,
-        },
-        threshold,
-    )
-    return dataclasses.replace(result, records=project_records(rows, field_specs), summary=summary)

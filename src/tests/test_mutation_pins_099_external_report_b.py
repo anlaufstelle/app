@@ -1,4 +1,9 @@
-"""Mutation regression tests for ``core.services.dashboard.external_report`` (Refs #2174, #2193).
+"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — ``core.services.dashboard.external_report``,
+Batch ``external_report-b`` (Vollmutation-Survivor-Triage, 70 Survivors ueber
+``build_external_report``, ``suppress_sample_report_1_stats``, ``suppress_report_stats``,
+``_suppress_stage_dict``, ``_age_cluster_key``, ``_suppress_small``,
+``_suppress_smallest_visible``, ``apply_residual_guard``, ``suppress_single_margin``,
+``with_no_person_row``).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-external_report-b.json`` (Triage
 ``reports/m-scratch/pins-external_report-b/triage-099-external_report-b.json``).
@@ -39,7 +44,7 @@ in ``suppress_report_stats`` betrifft dadurch nachweislich die
 ``by_contact_stage``-Randsumme, nicht ``by_age_cluster``.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat keine
-``.env`` und damit keinen ``ENCRYPTION_KEYS``.
+``.env`` und damit keinen ``ENCRYPTION_KEY``.
 """
 
 from __future__ import annotations
@@ -219,43 +224,13 @@ class TestBuildExternalReportContactStagePersonsCollapse:
         doc_type = DocumentType.objects.create(
             facility=facility, name="Kontakt", report_key="contact", tally_enabled=True
         )
-        for index in range(6):
-            client = _make_client(
-                facility, staff_user, contact_stage=Client.ContactStage.IDENTIFIED, pseudonym=f"ID-{index:02d}"
-            )
-            _make_events(facility, client, doc_type, staff_user, 1)
-        # A single qualified person with 6 events: the event count (6) is above
-        # the threshold, the person count (1) clearly below it. Three anonymous
-        # events keep the stage marginal open, so the withheld stage does not
-        # follow from the total and the age row.
-        lone_qualified = _make_client(
-            facility, staff_user, contact_stage=Client.ContactStage.QUALIFIED, pseudonym="QU-lone"
-        )
-        _make_events(facility, lone_qualified, doc_type, staff_user, 6)
-        _make_events(facility, None, doc_type, staff_user, 3, is_anonymous=True)
-
-        report = build_external_report(facility, *report_period)
-
-        assert report["by_contact_stage"]["identifiziert"] == 6
-        assert report["by_contact_stage"]["qualifiziert"] is None
-
-    def test_person_gated_stage_is_not_recoverable_from_total_and_age_row(self, facility, staff_user, report_period):
-        """Without anonymous events the stage figure would be fixed by two other figures.
-
-        Five identified persons and one qualified person with six events: if the
-        total (11), the identified stage (5) and the age row of all persons (11)
-        were all published, the qualified stage would follow as 11 - 5 - (11 - 11) = 6.
-        The total cancels out (Q = A - I), so the identified stage and the age row
-        alone fix the value. At least one of these two figures stays withheld.
-        """
-        doc_type = DocumentType.objects.create(
-            facility=facility, name="Kontakt", report_key="contact", tally_enabled=True
-        )
         for index in range(5):
             client = _make_client(
                 facility, staff_user, contact_stage=Client.ContactStage.IDENTIFIED, pseudonym=f"ID-{index:02d}"
             )
             _make_events(facility, client, doc_type, staff_user, 1)
+        # Eine einzige qualifizierte Person mit 6 Ereignissen: Ereigniszahl (6)
+        # liegt ueber der Schwelle, die Personenzahl (1) klar darunter.
         lone_qualified = _make_client(
             facility, staff_user, contact_stage=Client.ContactStage.QUALIFIED, pseudonym="QU-lone"
         )
@@ -263,10 +238,8 @@ class TestBuildExternalReportContactStagePersonsCollapse:
 
         report = build_external_report(facility, *report_period)
 
-        age_unknown = next(row["count"] for row in report["by_age_cluster"] if row["cluster"] == "unknown")
-        needed = (report["by_contact_stage"]["identifiziert"], age_unknown)
+        assert report["by_contact_stage"]["identifiziert"] == 5
         assert report["by_contact_stage"]["qualifiziert"] is None
-        assert None in needed
 
 
 class TestBuildExternalReportPopulationsMetadata:

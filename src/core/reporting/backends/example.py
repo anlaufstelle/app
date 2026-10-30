@@ -77,8 +77,7 @@ class ExampleBackend(DatasetBackend):
             mode="rows",
             records=records,
             summary={"total": sum(row["count"] for row in records)},
-            completeness=[],
-            disclosure_context=(date_from, date_to, "live"),
+            completeness=[],  # bewusst minimal — Lehrbeispiel ohne eigene Datenqualitaets-Checks
         )
 
     # Deklaration fuer den zentralen Residual-Guard (K1, Refs #1770): ``total``
@@ -116,6 +115,4 @@ class ExampleBackend(DatasetBackend):
         records, summary = suppress_single_margin(
             facility, result, breakdown=self._EXPORT_BREAKDOWN, field_specs=self.get_field_specs()
         )
-        from core.services.dashboard.shared_disclosure import project_shared_type_dataset
-
-        return project_shared_type_dataset(facility, dataclasses.replace(result, records=records, summary=summary))
+        return dataclasses.replace(result, records=records, summary=summary)

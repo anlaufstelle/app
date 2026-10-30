@@ -76,11 +76,11 @@ from core.reporting.base import (
     FieldSpec,
     TypBindung,
     doppelbindungs_issues,
+    stamp_threshold,
 )
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.registry import register_backend
-from core.reporting.values import as_number
-from core.services.dashboard.external_report import _get_threshold
+from core.services.dashboard.external_report import _get_threshold, apply_residual_guard
 from core.services.file_vault import safe_decrypt
 
 # Sprachunabhaengiger Code (Vertrag: ``CompletenessIssue.code`` ist Klartext,
@@ -115,6 +115,39 @@ FELD_RUECKGABE = FeldBindung(
 # Verfuegbarkeits-Pruefung auseinander, waere das Backend fuer eine Einrichtung
 # waehlbar, fuer die es nie eine Zeile liefert (oder umgekehrt).
 matching_q = TYP_BINDUNG.matching_q
+
+
+def as_number(raw):
+    """Feldwert nach Zahl koerzieren — ``None`` heisst „kein verwertbarer Wert".
+
+    Fail-safe statt fail-fast: ``data_json`` ist ein freies JSONB, in dem alles
+    stehen kann (Alt-Formular, Offline-Bundle, geloeschte Feldvorlage). Ein
+    ``ValueError`` an dieser Stelle wuerde den ganzen Bericht killen, obwohl ein
+    einziges kaputtes Feld die Ursache ist — der Ausschuss wird stattdessen
+    gezaehlt und gemeldet.
+
+    ``bool`` wird ausdruecklich ausgeschlossen, obwohl es in Python ein ``int``
+    ist: ein Ja/Nein-Feld, das versehentlich unter dem Zahl-Slug liegt, ergibt
+    als Stueckzahl 1 bzw. 0 — eine still falsche Summe waere schlimmer als eine
+    gemeldete Luecke.
+
+    Strings kommen von verschluesselten Feldern (``safe_decrypt`` liefert immer
+    ``str``) und aus Alt-Formularen. Nur ein sauber parsbarer Wert zaehlt;
+    Tausenderpunkte, Dezimalkommas und Einheiten sind Ausschuss, weil jede
+    Rate-Regel hier eine still falsche Zahl erzeugen koennte.
+    """
+    if isinstance(raw, bool) or raw is None:
+        return None
+    if isinstance(raw, int | float):
+        return raw
+    if isinstance(raw, str):
+        text = raw.strip()
+        for cast in (int, float):
+            try:
+                return cast(text)
+            except ValueError:
+                continue
+    return None
 
 
 def _feldwert(werte: dict, slug: str | None):
@@ -207,7 +240,6 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
             "events_ohne_werte": ohne_werte,
         }
         return DatasetResult(
-            disclosure_context=(date_from, date_to, "live"),
             mode="aggregate",
             # Die Aggregatzeile wird IMMER emittiert, auch fuer einen leeren
             # Zeitraum: haenge ihre Existenz am Bestand, waere schon ihr
@@ -228,16 +260,52 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
         )
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        """Publish the local contract through the shared population mask."""
-        from core.services.dashboard.external_report import _protect_needle_dataset
-        from core.services.dashboard.shared_disclosure import project_shared_dataset
+        """K-Anon-Suppression fuer Export und Panel — Begruendung im Modul-Docstring.
 
-        local = _protect_needle_dataset(result, _get_threshold(facility), field_specs=self.get_field_specs())
-        local = dataclasses.replace(
-            local,
-            completeness=[
-                CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None),
-                *doppelbindungs_issues(FELD_AUSGABE.leseschluessel(facility), FELD_RUECKGABE.leseschluessel(facility)),
-            ],
-        )
-        return project_shared_dataset(facility, local, "needle-exchange-balance")
+        ``apply_residual_guard`` laeuft als letzter Schritt, wie in jedem
+        ``prepare_export`` mit publizierter Randsumme (Architektur-Invariante,
+        ``test_architecture_guards_services.py``). Er bekommt hier bewusst eine
+        **leere** Breakdown-Liste: dieses Backend publiziert gar keine
+        Aufschluesselung, an der sich zurueckrechnen liesse — die einzige
+        Identitaet zwischen seinen Kennzahlen ist ``saldo = ausgabe − rueckgabe``,
+        und die drei fallen gemeinsam. Die zweite Identitaet
+        (``events`` = beitragende + ``events_ohne_werte``) wird oberhalb des
+        Guards aufgeloest, weil die beitragende Zelle gar nicht erst publiziert
+        wird.
+        """
+        threshold = _get_threshold(facility)
+        events = result.summary["events"]
+        ohne_werte = result.summary["events_ohne_werte"]
+        beitragende = events - ohne_werte
+
+        # R14: eine Randsumme < k ist selbst eine Kleinstfallzahl.
+        published_events = events if events >= threshold else None
+        # Summen-Regel: Bezugsgroesse ist die Zahl der beitragenden Events.
+        # ``beitragende <= events``, die Bedingung impliziert also R14.
+        summen_sichtbar = beitragende >= threshold
+        # Die Partition ``events`` = beitragende + ``events_ohne_werte``: eine
+        # sichtbare Kleinstzelle waere aus der Randsumme rueckrechenbar, und die
+        # jeweils andere Zelle folgt aus der Differenz.
+        luecke_sichtbar = published_events is not None and min(beitragende, ohne_werte) >= threshold
+
+        view = {
+            "events": published_events,
+            "summe_ausgabe": result.summary["summe_ausgabe"] if summen_sichtbar else None,
+            "summe_rueckgabe": result.summary["summe_rueckgabe"] if summen_sichtbar else None,
+            "saldo": result.summary["saldo"] if summen_sichtbar else None,
+            "events_ohne_werte": result.summary["events_ohne_werte"] if luecke_sichtbar else None,
+        }
+        apply_residual_guard(view, threshold, ())
+
+        summary = stamp_threshold({**result.summary, **view}, threshold)
+        records = [{spec.key: view[spec.key] for spec in self.get_field_specs()}]
+        # K6 (Refs #1769): datenunabhaengig und unbeziffert — die Meldung steht
+        # immer, auch wenn es gar keine Luecke gibt. Waeren beide Faelle
+        # unterscheidbar, verriete schon die Existenz der Meldung, dass der
+        # Ausschuss > 0 ist, und die gerade unterdrueckte Zahl waere qualitativ
+        # zurueck.
+        completeness = [
+            CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None),
+            *doppelbindungs_issues(FELD_AUSGABE.leseschluessel(facility), FELD_RUECKGABE.leseschluessel(facility)),
+        ]
+        return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)
