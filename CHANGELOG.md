@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Bekannte Grenze der Berichte** (#2639) — Datensatz-Berichte unterdrücken kleine Werte jeweils für sich. Mehrere Exporte für denselben Empfänger können kleine Werte rückrechenbar machen, zum Beispiel Jahres- und Monatsberichte. Vor externer Herausgabe bleibt die Freigabe-Übersicht zu prüfen. Eine gemeinsame Unterdrückung ist für 0.99.10 geplant.
 - **Dynamische Felder für Episode und Aufgabe** (#2665) — Beide Entitäten können einen eigenen Dokumentationstyp mit feldweise verschlüsselten Daten tragen; Vorlagenwechsel, Schlüsselrotation und Wartung berücksichtigen diese Daten.
 
 - **Sicherheitsupdates für Python-Abhängigkeiten** (#2593) — django-otp 1.7.5 übernimmt die Sicherheitskorrektur des Upstream-Projekts; die transitive Abhängigkeit Brotli 1.2.1 schließt PYSEC-2026-4322. Beide Hash-Locks sind aktualisiert.
@@ -42,8 +43,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **E2E-Scheiben nach Laufzeit gewichtet** (#2646) — Versionierte Dateigewichte verteilen die Suite deterministisch, berücksichtigen neue Dateien über ein positives Mediangewicht und lassen sich aus den je Scheibe archivierten JUnit-Laufzeiten erneuern.
 ### Fixed
 
-- **Offenlegungsprüfung für allgemeine Kennzahlen beschleunigt** (#2639) — Gemeinsame Zählmasken schreiben ihre exakte Gleichungsmatrix mit Ganzzahl-Arithmetik fort und vermeiden wiederholte Arbeit bei unveränderten Schranken und Ganzzahlzeugen; Unterdrückungsentscheidungen und Rückrechnungsschutz bleiben erhalten.
-
 - **Gruppenbezeichnungen der Team-Fokusbox in der Sprache der Anfrage** (#2609) — „Überfällig“, „Heute fällig“, „Dringend · Wichtig“ und „In Bearbeitung“ erschienen in der englischen Oberfläche auf Deutsch, weil sie beim Import des Moduls übersetzt wurden; sie werden jetzt beim Anzeigen übersetzt.
 
 - **Sichere Rückkehr nach Passwortbestätigung** (#2640) — Nach der erneuten Passwortbestätigung führen geschützte Formularaktionen auf die Seite der Aktion oder die zugehörige Übersichts- bzw. Einstellungsseite zurück; beim Entfernen eines Passkeys sind dies die 2FA-Einstellungen, und die Aktion wird erst beim erneuten Auslösen ausgeführt.
@@ -61,7 +60,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Rollengetreuer Freitext-Review** (#918) — Die Online-Liste für unverschlüsselte Ereignis-Freitexte bietet lokale Musterhinweise und reversible, auditierte Prüffristen, deren Gültigkeit an den aktuellen Text gebunden ist; Personen-Notizen werden dort nicht angezeigt, und `VIEW_QUALIFIED` wird nur beim Öffnen der Detailseite einer Person mit Zusatzangaben geschrieben.
 - **Feste Langtexte durch Standardfelder ersetzt** (#845) — Option C ersetzt die bisherigen Notiz-/Beschreibungsspalten von Person, Fall, Episode und Aufgabe durch typgebundene Standardfelder ohne Inhaltsübernahme; die Pakete liefern verschlüsselte Felder, deren Schutz von der aktuellen Konfiguration abhängt, während Titel, Pseudonyme und weitere Freitexte unverschlüsselt bleiben.
-- **Gemeinsame Unterdrückung je Zähldimension** (#2639) — Datensatz-Berichte übernehmen einschließlich Hybrid-PDF gemeinsame Zell-, Sekundär-, Randsummen- und Tabellenentscheidungen für aktuelle kanonische Populationen; beliebige frühere Veröffentlichungen und unbekannte Quellzuordnungen bleiben ohne vollständigen Rückrechnungsschutz.
 
 ## [0.99.8] - 2026-10-23
 

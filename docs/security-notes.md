@@ -828,9 +828,8 @@ Der Legal Hold koppelt an neun Stellen im Code an — jede davon behandelt die d
 (#1768), **K6**
 (#1769) sowie **K0 (b, Zellkriterium)**,
 **K4b**, **K2**, **K1**, **K3 (A1/A3)** und **K4c**
-(#1770) sind **mitigiert**; **K4a** ist durch gemeinsame kanonische Masken begrenzt
-(#2639); beliebige frühere Veröffentlichungen bleiben
-eine akzeptierte Grenze, flankiert durch die Freigabe-Übersicht, und **K3-A2** ist seit dem
+(#1770) sind **mitigiert**; **K4a** bleibt die
+akzeptierte Definitionsgrenze, flankiert durch die Freigabe-Übersicht, und **K3-A2** ist seit dem
 Maintainer-Entscheid vom 2026-08-04 **entschieden: Option A, Status quo ohne Restzeile**
 (#1773; Spalte „Status" in der Übersicht). Sieben Kanäle untersucht, alle
 **bestätigt**; drei sind Implementierungsfehler mit kleinem Aufwand, drei Teilaspekte sind als
@@ -871,7 +870,7 @@ Betriebskennzahl.
 | **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 | **mitigiert** (#1770) — Fixpunkt-Guard inkl. der Personen-Randsumme Σ `persons` = `unique_clients` |
 | **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 | **mitigiert** — A1 + A3 (#1770); A2 = entschieden, Option A / Status quo (#1773) |
 | **K4c** | Lesequellen-Divergenz (Snapshot vs. live) | teilweise (Herkunft stempeln) | S | 4 | **mitigiert** (#1770) |
-| **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **begrenzen + dokumentieren** | — | 4 | kanonische Masken (#2639); beliebige Veröffentlichungsfolgen bleiben akzeptierte Grenze |
+| **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **akzeptieren + dokumentieren** | — | 4 | akzeptiert; Freigabe-Übersicht (#1770) |
 
 Alle Verdikte: **bestätigt** (per Enumeration belegt, nicht vermutet). **Reihenfolge:** K5 → K0
 (Fail-safe) → K6 → K2 → K1-Guard → K3 → K4b. K5 zuerst, weil es die Messbasis aller übrigen Kanäle
@@ -1450,8 +1449,14 @@ Die Suppression ist ausschließlich **artefakt-lokal**: jede Ausgabe entscheidet
 Wissen über bereits herausgegebene Artefakte. Es gibt kein Freigabe-Ledger und keine Bindung an eine
 feste Zeitraum-Partition; `date_from`/`date_to` sind frei wählbar (nur Spannen-Cap 1096 Tage).
 
-- **K4a — Zeitraum-Differenz.** Die ursprüngliche Analyse zeigte den Angriff Jahressumme minus sichtbare Monatszahlen. Die gemeinsame Pipeline berücksichtigt inzwischen kanonische Zeitpopulationen einschließlich ihrer Teilmengen-/Randsummenbedingungen; der Snapshot-PDF-Pfad ist angeschlossen. Die akzeptierte Grenze bleibt die Kombination beliebiger früherer Veröffentlichungen, geänderter Daten-/Snapshot-Stände und nicht bekannter Quellzuordnungen; eine persistierte Veröffentlichungshistorie wird nicht ausgewertet. Eindeutige Personen werden nicht aus Monatszahlen summiert. Der aktuelle Vertrag und das geprüfte Paarinventar stehen in [Reporting-Plugins, K4a](reporting-plugins.md#k4a--gemeinsame-populationen-und-verbleibende-herausgabegrenze).
-
+- **K4a — Zeitraum-Differenz.** Alle Aggregate sind über disjunkte Segmente exakt additiv; für A ⊂ B
+  gilt zellenweise B − A = (B\A), inklusive aller Zellen, die ein direkter Bericht über B\A
+  unterdrücken würde. *Beleg (Regelfall des externen Berichtswesens):* 12 Monats-PDFs + 1 Jahres-PDF —
+  eine im März unterdrückte Zelle **inklusive Sekundär-Opfer** ergibt sich aus der Jahressumme minus
+  den 11 sichtbaren Monatszellen. Verschärfung bei verschachtelten Zeiträumen (Jan–Mai und Jan–Jun,
+  Juni = genau ein Ereignis): in **beiden** Artefakten ist keine einzige Zelle unterdrückt, und die
+  Konsistenzklassen für den Juni schrumpfen über mehrere Freigaben auf **eine** — effektives k = 1 bei
+  nominellem k = 5.
 - **K4b — `unique_clients`-Inflation.** `unique_clients` ist als einziges Feld nicht additiv, wurde im
   Hybrid-Pfad aber summiert. Die k-Prüfung lief damit gegen eine aufgeblähte Zahl (Personen-Monate):
   3 Personen × 6 Monate à 1 Kontakt ⇒ PDF publizierte „Einzigartige Personen: 18", während der
@@ -1514,7 +1519,7 @@ legitim Vollzugriff auf die Rohdaten hat).
 (`/statistics/reports/releases/`, Rollen-Guard wie das Berichts-Panel) listet die herausgegebenen
 Berichtszeiträume der Einrichtung und warnt bei Überschneidung; Service:
 [`release_log.py`](../src/core/services/dashboard/release_log.py). Sie kann den Kanal **nicht
-schließen**; sie macht verbleibende Risiken außerhalb der gemeinsam berechneten kanonischen Populationen sichtbar. Beide Auflagen
+schließen** — K4a bleibt die akzeptierte Definitionsgrenze —, sie macht ihn sichtbar. Beide Auflagen
 der Analyse sind erfüllt:
 
 * **Empfänger-/Zweckfeld.** Beide Felder werden am Export optional erfasst und wandern in das
@@ -1625,13 +1630,21 @@ akzeptiert und gehören in die Kommunikation gegenüber Empfängern:
    kontrolliertes Runden/Intervallausweis statt Suppression — ein anderes SDC-Verfahren mit
    erheblichem Nutzenverlust. **Nicht** von dieser Akzeptanz gedeckt: K4b (das ist ein Bug, keine
    Grenze) und die Lesequellen-Divergenz K4c.
-3. **Die Differenz beliebiger früherer Freigaben (K4a).** Die gemeinsame Maske schützt die aktuell berechnete kanonische Familie; sie ist keine persistierte Veröffentlichungshistorie. Datenänderungen, historische Snapshot-/Live-Abweichungen, unbekannte Quellzuordnungen und veränderte Stichtagsbestände bleiben Grenzen.
+3. **Die Differenz mehrerer Freigaben über verschachtelte Zeiträume (K4a).** k-Anonymität ist eine
+   Eigenschaft **einer** veröffentlichten Tabelle über **einer** Grundgesamtheit. Im Regelfall
+   (Monatsberichte plus Jahresbericht) sind beide Artefakte für sich vollständig k-anonym — es gibt
+   keine Zelle, an der eine artefakt-lokale Suppression ansetzen könnte. Der Kanal ist nicht durch M5
+   entstanden, er ist der Familie inhärent, seit sie frei wählbare Zeiträume anbietet.
 
 Formulierung für die Empfänger-Kommunikation:
 
-> Die Berichte unterdrücken kleine Zählwerte gemeinsam über die heute berechneten kanonischen Populationen. Das ist keine Anonymitätsgarantie und kein vollständiger Rückrechnungsschutz über beliebige frühere Veröffentlichungen oder Zusatzwissen. Quelle, Stand, Empfänger und mögliche Zusammenführung sind vor der Weitergabe zu prüfen.
+> Die k-Anonymitäts-Zusicherung gilt **je Artefakt und je Zeitraum**. Werden für dieselbe Einrichtung
+> Berichte über Teilzeiträume **und** über deren Vereinigung herausgegeben (z. B. Monatsberichte plus
+> Jahresbericht), lässt sich jede in einem Teilbericht unterdrückte Zelle aus der Summe der übrigen
+> exakt zurückrechnen — auch dann, wenn die Sekundärsuppression gegriffen hat, und auch dann, wenn in
+> keinem der beteiligten Berichte eine einzige Zelle unterdrückt wurde.
 
-Betriebshinweis: Berichtszeiträume nicht unter einem Monat wählen; freie Teilmonatswerte können vorsorglich entfallen.
+Betriebshinweis: Berichtszeiträume nicht unter einem Monat wählen.
 
 #### Geprüft und nicht tragfähig
 

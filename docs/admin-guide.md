@@ -1922,7 +1922,7 @@ docker system df -v | grep pgdata
 
 2. **Die interne Statistik-Übersicht ist bewusst nicht unterdrückt** und kann deshalb helfen zu prüfen, ob überhaupt Daten vorhanden sind (nur Leitung/Anwendungsbetreuung). Die interne Ereignisliste enthält Pseudonyme und ist keine anonymisierte Statistik. Einen internen PDF-Modus gibt es nicht. Abweichende Zahlen gegenüber Datensatz-Berichten sind zu erwarten; Inhalte aus internen Sichten brauchen vor einer Weitergabe eine eigene Prüfung.
 
-3. **Auch ohne sichtbare Unterdrückung bleibt eine Grenze:** Die gemeinsame Maske schützt die aktuell berechnete Populationsfamilie, keine beliebige Folge früherer Herausgaben — siehe [§ 8, „Herausgabe von Berichten: was Sie wissen müssen"](#8-statistik-snapshots--materialized-view).
+3. **Auch ohne sichtbare Unterdrückung bleibt eine Grenze:** Die Zusicherung gilt je Artefakt und je Zeitraum, nicht über mehrere Herausgaben hinweg — siehe [§ 8, „Herausgabe von Berichten: was Sie wissen müssen"](#8-statistik-snapshots--materialized-view).
 
 > **Wichtig:** Das Herabsetzen der Schwelle ist eine Datenschutz-Entscheidung, kein Bedienschritt. Sie gilt für alle Berichte, die das Haus verlassen; dokumentieren Sie die Änderung entsprechend — im Audit-Log erscheint sie als „Einstellungen geändert" mit Alt- und Neu-Wert ([§ 7.4](#74-audit-log)).
 
@@ -2523,13 +2523,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics
 
 ### Herausgabe von Berichten: was Sie wissen müssen
 
-**Gemeinsame Zählentscheidung:** Vorschau und CSV/JSON/XML/PDF der registrierten Datensatz-Berichte übernehmen eine gemeinsame, einrichtungsbezogene Maske je Zähldimension und stabiler Population. Sie umfasst kleine Zellen, zusätzliche Sekundärunterdrückung sowie gegebenenfalls Randsummen und ganze Tabellen. Ereignis-, Personen- und Fallzahlen bleiben verschiedene Dimensionen; unterschiedliche Teilpopulationen werden nicht wegen gleicher Zahlen gleichgesetzt. Eindeutige Personen werden über tatsächliche Vereinigungen gezählt, nie durch Addition von Monatszahlen.
-
-Die Berechnung berücksichtigt den heutigen Datenstand über zusammenhängende Kalendermonate einschließlich verschachtelter Zeiträume und überlappender Teilmengen sowie die konfigurierten Standardzeiträume am heutigen Tag. Andere freie Teilmonatszeiträume erhalten nur Werte, deren genaue Population bereits in dieser Familie enthalten ist; zusätzliche Werte oder Tabellen können deshalb vollständig entfallen. Das Beispiel-Sachbericht-PDF verwendet eigene Snapshot-Kohorten mit Live-Fallback und unterdrückt Ereigniswerte und Tabellen bei Teilmonatszeiträumen vorsorglich. Snapshot-Kategorien und -Altersgruppen werden nicht als bekannte Zuordnung zu heutigen Ereignissen oder Personen behandelt.
-
-**Verbleibende Grenze:** Die Maske wird bei jeder Anfrage neu aus dem aktuellen Bestand berechnet. Es gibt keine persistierte Veröffentlichungshistorie, keine Herausgabesperre und keinen vollständigen Rückrechnungsschutz über beliebige Veröffentlichungen, Datenstände, Snapshot-Stände, Stichtagsbestände oder Zusatzwissen. Die K-Anonymitäts-Schwelle bleibt unverändert. Quelle, Stand, Empfänger und mögliche Zusammenführung bleiben vor jeder Weitergabe zu prüfen.
-
-Die interne Ereignisliste enthält dagegen personenbezogene Pseudonyme. Für Berichtsdateien gelten folgende Betriebsregeln.
+Datensatz-Berichte unterdrücken Kleinstfallzahlen. Der Schutz gilt **je Artefakt und je Zeitraum** und ist allein keine Anonymitätsgarantie, insbesondere nicht über mehrere Herausgaben hinweg. Die interne Ereignisliste enthält dagegen personenbezogene Pseudonyme. Für Berichtsdateien gelten folgende Betriebsregeln.
 
 **1. Sachbericht-PDF und Live-Export desselben Zeitraums nicht an denselben Empfänger geben.**
 
@@ -2539,7 +2533,7 @@ Jedes Artefakt weist deshalb **Quelle und Stand** aus („Datenquelle: Monats-Ag
 
 **2. Berichtszeiträume nicht unter einem Monat wählen — und Überschneidungen im Blick behalten.**
 
-Die gemeinsame Maske berücksichtigt die Teilmengen- und Randsummenbedingungen ihrer aktuellen kanonischen Zeitpopulationen. Das ersetzt keine Prüfung früherer Dateien: Bei verändertem Daten- oder Snapshot-Stand und außerhalb der modellierten Populationen kann die Differenz mehrerer Herausgaben weiterhin kleine Restzahlen offenlegen. Kurze freie Zeiträume können vorsorglich keine veröffentlichbaren Zahlen liefern.
+Werden für dieselbe Einrichtung Berichte über Teilzeiträume **und** über deren Vereinigung herausgegeben (zwölf Monatsberichte plus ein Jahresbericht), lässt sich jede in einem Teilbericht unterdrückte Zelle aus der Summe der übrigen exakt zurückrechnen — auch dann, wenn in **keinem** der beteiligten Berichte eine einzige Zelle unterdrückt wurde. Das ist eine Eigenschaft des Verfahrens, kein Fehler: k-Anonymität ist eine Eigenschaft *einer* Tabelle über *einer* Grundgesamtheit.
 
 Die **Freigabe-Übersicht** (Statistik → Reiter „Freigaben", Rolle: Leitung/Anwendungsbetreuung) listet die bereits herausgegebenen Berichtszeiträume aus der Audit-Spur und markiert Überschneidungen. Sie verhindert nichts — sie zeigt Ihnen, wo Sie hinsehen müssen. Damit die Meldung bewertbar bleibt, erfassen Sie beim Export die optionalen Felder **Empfänger** und **Zweck**; prüfen Sie auch eine mögliche Zusammenführung bei verschiedenen Empfängern. Verschiedene Empfänger verringern das Risiko nur unter der organisatorischen Annahme, dass sie die Dateien nicht zusammenführen; die Anwendung garantiert dies nicht.
 

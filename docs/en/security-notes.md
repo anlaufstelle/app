@@ -1,6 +1,6 @@
-# Security notes — key rotation, authentication and statistical disclosure
+# Security notes — key rotation and authentication hardening
 
-This excerpt covers operational key rotation, authentication and statistical disclosure boundaries from the [German security notes](../security-notes.md).
+This excerpt translates the operational rotation guidance and its idempotency consequence in the [German security notes](../security-notes.md).
 
 Prepend the new primary key to `ENCRYPTION_KEYS` and retain old keys initially. One ring serves the entire installation, not each facility. `reencrypt_fields` rewraps database fields including TOTP secrets; `reencrypt_files` streams referenced attachment chunks through encrypted staging and atomic replacement. Unfiltered `reencrypt_files --verify` reads every referenced version with the primary key alone, including format-dependent chunk binding. Remove old keys only after field rotation without warnings, full verification, resolving ImportJob temporary files and staging remnants without database rows, and actual expiry of affected local/off-site backups. Recreate processes with the shortened ring and verify again without filtering. Retained older backups require their historical keys in separate escrow. The manifest records progress, not integrity; a kill can prevent the audit summary. For roles, interruption/concurrency behaviour and acceptance follow [Ops Runbook § 9.5](ops-runbook.md#file-rotation-and-old-key-removal).
 
@@ -36,17 +36,7 @@ Online review is an organisational aid exclusively for configured unencrypted ev
 
 Marks contain no source text: only target, field, date, account, timestamp and a purpose-separated HMAC bound to content and target. Validity is checked against current content and date; changing `SECRET_KEY` invalidates earlier HMACs. Restoring exactly the previous text produces the same content fingerprint. This does not prove a complete modification history. RLS isolates facilities' metadata rather than encrypting source text. Marking and revocation log neither text values nor matched snippets. The review does not display person notes or write a `VIEW_QUALIFIED` read entry; only opening the detail page of a person with additional details writes that entry. Suggestions about contact creation, sensitivity and neutralisation do not change data themselves. Review responses carry `no-store`; no separate offline review data store is created.
 
-## K4a — shared statistical count decisions
-
-**Shared count decision:** Preview and CSV/JSON/XML/PDF of registered dataset reports use one facility-scoped mask per counting dimension and stable population. It covers small cells, secondary suppression and, where necessary, margins and entire tables. Event, person and case counts remain separate dimensions; equal numbers do not establish equal subsets. Distinct persons are counted through actual unions, never by adding monthly counts.
-
-The calculation considers the current data across contiguous calendar months, including nested periods and overlapping subsets, and the configured standard periods as of today. Other custom partial-month periods receive only values whose exact population already occurs in this family; additional values or tables may therefore disappear completely. The sample activity report PDF uses separate snapshot cohorts with live fallback and conservatively withholds event values and tables for partial-month periods. Snapshot categories and age groups do not establish known links to current events or persons.
-
-**Remaining boundary:** Each request recalculates the mask from current records. There is no persisted publication history, no release block and no complete protection against reconstruction across arbitrary publications, data versions, snapshot versions, current stocks or auxiliary knowledge. The k-anonymity threshold is unchanged. Source, as-of date, recipient and potential combination still require review before every disclosure.
-
-Snapshot event cohorts use additive weights, separate from current event identities; historical age groups do not invent person assignments. Reconstruction probes cover 45 backend/source pair classes (925 format combinations); they test selected recipient equations rather than every possible inference from all fields. Unknown links between historical category/age aggregates and current records remain outside a complete inference guarantee. See the [reporting contract and inventory](reporting-plugins.md#k4a--shared-populations-and-remaining-disclosure-boundary).
-
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.8 -->
-<!-- source-hash: c2fa6969cbf14459fc9d9ca1e42925b6a200e2ac -->
-<!-- translation-date: 2026-10-26 -->
+<!-- source-hash: e9a143c11d2793f1e8d484cf64c40d9486a2a7f3 -->
+<!-- translation-date: 2026-10-30 -->
