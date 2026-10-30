@@ -253,3 +253,37 @@ def test_age_ordering_accepts_unhashable_legacy_cluster():
         {**known, "count": None, "suppressed": True},
         {**legacy, "count": None, "suppressed": True},
     ]
+
+
+@pytest.mark.parametrize("decision", ["absent", None, 5], ids=["absent-key", "hidden-value", "visible-value"])
+def test_quantity_row_existence_distinguishes_absent_keys_from_hidden_values(facility, decision):
+    """Pin both directions of the shared type membership decision."""
+    raw = _quantity_result(5, 5)
+    raw.summary["document_type_counts"] = {} if decision == "absent" else {"Counter": decision}
+
+    protected = get_backend("quantity-sum").prepare_export(facility, raw)
+
+    if decision == "absent":
+        assert protected.records == []
+    elif decision is None:
+        assert protected.records == [{"document_type": "Counter", "contributors": None, "quantity": None}]
+    else:
+        assert protected.records == [{"document_type": "Counter", "contributors": 5, "quantity": 35}]
+    assert protected.summary["contributors_total"] == (5 if decision == 5 else None)
+    assert protected.summary["quantity_total"] == (35 if decision == 5 else None)
+    assert raw.records[0]["contributors"] == 5
+    assert raw.records[0]["quantity"] == 35
+
+
+def test_removed_quantity_row_keeps_totals_hidden_beside_a_visible_row(facility):
+    """Removing a row must not publish a subtotal for the remaining rows."""
+    raw = _quantity_result(5, 5)
+    raw.records.append({"document_type": "Removed", "events": 5, "contributors": 5, "quantity": 35})
+    raw.summary["contributors_total"] = 10
+    raw.summary["quantity_total"] = 70
+
+    protected = get_backend("quantity-sum").prepare_export(facility, raw)
+
+    assert protected.records == [{"document_type": "Counter", "contributors": 5, "quantity": 35}]
+    assert protected.summary["contributors_total"] is None
+    assert protected.summary["quantity_total"] is None

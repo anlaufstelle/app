@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.forms.config import FieldTemplateForm
-from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
+from core.models import AuditLog, Client, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
 from core.reporting import registry
 from core.reporting.export import export_dataset
 from core.views.statistics import build_report_panel_context
@@ -509,3 +509,57 @@ def test_category_total_cannot_unlock_hidden_quantity_type(client, facility, lea
     releases = AuditLog.objects.for_facility(facility).filter(action=AuditLog.Action.EXPORT)
     assert releases.count() == 2
     assert all(entry.detail["artifact_released"] is True for entry in releases)
+
+
+def test_quantity_rows_follow_complete_type_table_removal(client, backend, facility, lead_user, date_range):
+    """A public quantity export must not restore a removed type's existence."""
+    from core.services.dashboard.external_report import build_external_report, build_shared_document_type_counts
+
+    Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 5})
+    quantity_type, _field = make_type(facility, "Review type 00", report_key="contact")
+    types = [quantity_type] + [
+        DocumentType.objects.create(facility=facility, name=f"Review type {index:02d}", report_key="contact")
+        for index in range(1, 15)
+    ]
+    for index, document_type in enumerate(types):
+        person = None
+        if index >= 5:
+            person = Client.objects.create(
+                facility=facility,
+                created_by=lead_user,
+                pseudonym=f"Review person {index:02d}",
+                contact_stage=Client.ContactStage.IDENTIFIED if index < 10 else Client.ContactStage.QUALIFIED,
+                age_cluster=Client.AgeCluster.UNKNOWN,
+            )
+        Event.objects.create(
+            facility=facility,
+            created_by=lead_user,
+            document_type=document_type,
+            occurred_at=timezone.now(),
+            client=person,
+            is_anonymous=person is None,
+            data_json={},
+        )
+    general = build_external_report(facility, *date_range)
+    assert "by_document_type" not in general
+    assert build_shared_document_type_counts(facility, *date_range) == {}
+
+    client.force_login(lead_user)
+    response = client.get(
+        reverse("core:statistics_report_export"),
+        {
+            "backend": backend.slug,
+            "format": "json",
+            "date_from": str(date_range[0]),
+            "date_to": str(date_range[1]),
+            "recipient": "Reviewer",
+            "purpose": "Review",
+        },
+    )
+    assert response.status_code == 200
+    protected = prepared(backend, facility, date_range)
+
+    assert protected.records == []
+    assert json.loads(response.content)["records"] == []
+    assert protected.summary["contributors_total"] is None
+    assert protected.summary["quantity_total"] is None

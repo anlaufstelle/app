@@ -157,6 +157,8 @@ class QuantitySumBackend(DatasetBackend):
                 row["contributors"] = None
                 row["quantity"] = None
                 complete = False
+        # A removed type must not reappear through row existence; None keeps its row.
+        rows = [row for row in rows if row["document_type"] in published_counts]
         # The contributor margin is published only for a fully visible table.
         # Still pass it through the central guard so that its partition contract
         # remains protected if subsequent suppression rules become stricter.
