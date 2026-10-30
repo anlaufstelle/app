@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Zusätzliche Unterdrückung von Alterswerten** (#2639) — Bei personengesperrter Kontaktstufe und sichtbarer anderer personenbezogener Stufe werden Alterswerte im selben Bericht zusätzlich unterdrückt.
 - **Bekannte Grenze der Berichte** (#2639) — Datensatz-Berichte unterdrücken kleine Werte jeweils für sich. Mehrere Exporte für denselben Empfänger können kleine Werte rückrechenbar machen, zum Beispiel Jahres- und Monatsberichte. Vor externer Herausgabe bleibt die Freigabe-Übersicht zu prüfen. Eine gemeinsame Unterdrückung ist für 0.99.10 geplant.
 - **Dynamische Felder für Episode und Aufgabe** (#2665) — Beide Entitäten können einen eigenen Dokumentationstyp mit feldweise verschlüsselten Daten tragen; Vorlagenwechsel, Schlüsselrotation und Wartung berücksichtigen diese Daten.
 

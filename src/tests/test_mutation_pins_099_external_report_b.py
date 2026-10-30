@@ -236,6 +236,117 @@ class TestBuildExternalReportContactStagePersonsCollapse:
         assert report["by_contact_stage"]["identifiziert"] == 5
         assert report["by_contact_stage"]["qualifiziert"] is None
 
+    def test_person_gated_stage_is_not_recoverable_from_total_and_age_row(self, facility, staff_user, report_period):
+        """Without anonymous events the stage figure would be fixed by two other figures.
+
+        Five identified persons and one qualified person with six events: if the
+        total (11), the identified stage (5) and the age row of all persons (11)
+        were all published, the qualified stage would follow as 11 - 5 - (11 - 11) = 6.
+        The total cancels out (Q = A - I), so the identified stage and the age row
+        alone fix the value. At least one of these two figures stays withheld.
+        """
+        doc_type = DocumentType.objects.create(
+            facility=facility, name="Kontakt", report_key="contact", tally_enabled=True
+        )
+        for index in range(5):
+            client = _make_client(
+                facility, staff_user, contact_stage=Client.ContactStage.IDENTIFIED, pseudonym=f"ID-{index:02d}"
+            )
+            _make_events(facility, client, doc_type, staff_user, 1)
+        lone_qualified = _make_client(
+            facility, staff_user, contact_stage=Client.ContactStage.QUALIFIED, pseudonym="QU-lone"
+        )
+        _make_events(facility, lone_qualified, doc_type, staff_user, 6)
+
+        report = build_external_report(facility, *report_period)
+
+        age_unknown = next(row["count"] for row in report["by_age_cluster"] if row["cluster"] == "unknown")
+        needed = (report["by_contact_stage"]["identifiziert"], age_unknown)
+        assert report["by_contact_stage"]["qualifiziert"] is None
+        assert None in needed
+
+
+class TestPersonGatedStageAgeProtection:
+    """Pin conservative age protection in both stage directions at k=5."""
+
+    @pytest.mark.parametrize("gated_stage", ["identifiziert", "qualifiziert"])
+    @pytest.mark.parametrize("persons", [0, 1, 4, 5, None], ids=["empty", "one", "k-minus-one", "k", "unknown"])
+    def test_age_values_follow_nonempty_stage_person_gate(self, facility, gated_stage, persons):
+        visible_stage = "qualifiziert" if gated_stage == "identifiziert" else "identifiziert"
+        gated_events = 0 if persons == 0 else 6
+        total = 5 + gated_events
+        stats = {
+            "total_contacts": total,
+            "unique_clients": 5 + (persons or 0),
+            "by_contact_stage": {"anonym": 0, visible_stage: 5, gated_stage: gated_events},
+            "persons_by_contact_stage": {"anonym": 0, visible_stage: 5, gated_stage: persons},
+            "by_document_type": [{"name": "Contact", "count": total}],
+            "by_age_cluster": [{"cluster": "unknown", "count": total, "persons": 5 + (persons or 0)}],
+        }
+
+        report = suppress_report_stats(facility, stats)
+
+        age = next(row for row in report["by_age_cluster"] if row["cluster"] == "unknown")
+        assert report["by_contact_stage"][visible_stage] == 5
+        if persons in (0, 5):
+            assert age["count"] == total
+            assert age["suppressed"] is False
+        else:
+            assert report["by_contact_stage"][gated_stage] is None
+            assert age["count"] is None
+            assert age["suppressed"] is True
+        assert stats["by_age_cluster"][0]["count"] == total
+        assert "persons_by_contact_stage" not in report
+
+    def test_all_visible_age_values_are_withheld(self, facility):
+        stats = {
+            "total_contacts": 16,
+            "unique_clients": 11,
+            "by_contact_stage": {"anonym": 0, "identifiziert": 10, "qualifiziert": 6},
+            "persons_by_contact_stage": {"anonym": 0, "identifiziert": 10, "qualifiziert": 1},
+            "by_document_type": [{"name": "Contact", "count": 16}],
+            "by_age_cluster": [
+                {"cluster": "18_26", "count": 5, "persons": 5},
+                {"cluster": "unknown", "count": 11, "persons": 6},
+            ],
+        }
+
+        report = suppress_report_stats(facility, stats)
+
+        assert report["by_contact_stage"]["identifiziert"] == 10
+        assert all(row["count"] is None and row["suppressed"] for row in report["by_age_cluster"])
+
+    def test_two_hidden_personal_stages_keep_age_values(self, facility):
+        stats = {
+            "total_contacts": 8,
+            "unique_clients": 8,
+            "by_contact_stage": {"anonym": 0, "identifiziert": 4, "qualifiziert": 4},
+            "persons_by_contact_stage": {"anonym": 0, "identifiziert": 4, "qualifiziert": 4},
+            "by_document_type": [{"name": "Contact", "count": 8}],
+            "by_age_cluster": [{"cluster": "unknown", "count": 8, "persons": 8}],
+        }
+
+        report = suppress_report_stats(facility, stats)
+
+        assert report["by_contact_stage"]["identifiziert"] is None
+        assert report["by_contact_stage"]["qualifiziert"] is None
+        age = next(row for row in report["by_age_cluster"] if row["cluster"] == "unknown")
+        assert age["count"] == 8
+        assert age["suppressed"] is False
+
+    def test_sample_report_without_stages_keeps_age_values(self, facility):
+        stats = {
+            "total": 11,
+            "unique_clients": 6,
+            "by_category": [("Contact", 11)],
+            "by_age_cluster": [{"cluster": "unknown", "count": 11, "persons": 6}],
+        }
+
+        report = suppress_sample_report_1_stats(facility, stats)
+
+        assert report["by_age_cluster"][0]["count"] == 11
+        assert report["by_age_cluster"][0]["suppressed"] is False
+
 
 class TestBuildExternalReportPopulationsMetadata:
     """``metadata.populations``-Schluessel (stabiler Code fuer JSON-Konsumenten).

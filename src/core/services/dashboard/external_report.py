@@ -984,6 +984,22 @@ def _finalize_report(
     _drop_person_derived_breakdowns(report, unique_clients, threshold)
     drop_person_margin_on_person_suppression(report, age_rows, threshold)
     apply_residual_guard(report, threshold, breakdowns, age_rows=age_rows)
+    # A visible age sum and the other personal stage can recover a person-gated
+    # stage even without the event total. Withhold age values conservatively.
+    # #2639
+    stage_keys = ("identifiziert", "qualifiziert")
+    stages = report.get("by_contact_stage") or {}
+    person_counts = report.pop("persons_by_contact_stage", None) or {}
+    if any(stages.get(stage) is not None for stage in stage_keys) and any(
+        stages.get(stage) is None
+        and person_counts.get(stage) != 0
+        and _below_threshold(person_counts.get(stage), threshold)
+        for stage in stage_keys
+    ):
+        for spec in breakdowns:
+            if spec.key == "by_age_cluster":
+                while _suppress_smallest_visible(report, spec):
+                    pass
     return report
 
 
@@ -1026,6 +1042,7 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
         "total_contacts": published_total,
         "unique_clients": _published_if_above(raw["unique_clients"], threshold),
         "by_contact_stage": by_contact_stage,
+        "persons_by_contact_stage": raw.get("persons_by_contact_stage"),
         "by_document_type": by_document_type,
         "by_age_cluster": by_age_cluster,
         "metadata": {
@@ -1251,9 +1268,6 @@ def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
         persons=stats.get("persons_by_contact_stage"),
         margin=published_total,
     )
-    # Die Personenzahlen sind Suppressions-Eingabe, kein Berichtsinhalt — sie
-    # duerfen den Wrapper nicht verlassen (K0-b, Refs #1770).
-    out.pop("persons_by_contact_stage", None)
     unique = stats.get("unique_clients", 0)
     out["unique_clients"] = _published_if_above(unique, threshold)
     out["total_contacts"] = published_total
