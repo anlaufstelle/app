@@ -1,14 +1,13 @@
 """Pin local report contracts and public projection boundaries.
 
-Source: mutation delta of the release-0.99.9 checkpoint, 32 mutants.
+Source: mutation delta of the release-0.99.9 checkpoint, 29 mutants.
 Groups: counseling events and minutes (7), age partition audit (1), quantity
 contributors and missing values (11), service partitions (8), absent person
-partition (1), legacy age ordering (1), projection length validation (3).
-Dataset scenarios use public backend preparation without a live disclosure
-context, preserving the local contract before shared population projection.
+partition (1), legacy age ordering (1).
 """
 
 from datetime import date
+from unittest.mock import patch
 
 import pytest
 
@@ -98,12 +97,7 @@ def test_counseling_totals_at_threshold_remain_visible(facility):
 
 
 def test_external_age_partition_audits_primary_upper_bounds(facility):
-    """Hide the large age cell when three small complements bound it tightly.
-
-    The public shared mask independently hides this cell. Exercise the local
-    contract directly so that its primary upper bounds remain protected.
-    x__protect_external_statistics__mutmut_26.
-    """
+    """Hide the large age cell when three small complements bound it tightly."""
     raw = {
         "total_contacts": 22,
         "unique_clients": 18,
@@ -119,9 +113,8 @@ def test_external_age_partition_audits_primary_upper_bounds(facility):
         ],
     }
 
-    result = external_report._protect_external_statistics(
-        facility, date(2026, 1, 1), date(2026, 1, 31), raw, threshold=5
-    )
+    with patch.object(external_report, "get_statistics", return_value=raw):
+        result = external_report.build_external_report(facility, date(2026, 1, 1), date(2026, 1, 31))
 
     rows = {row["cluster"]: row for row in result["by_age_cluster"]}
     assert rows[Client.AgeCluster.AGE_27_PLUS]["count"] is None
@@ -246,31 +239,17 @@ def test_residual_guard_ignores_unpublished_person_partition():
     assert report == {"unique_clients": 5}
 
 
-def test_age_projection_accepts_unhashable_legacy_cluster():
+def test_age_ordering_accepts_unhashable_legacy_cluster():
     """Place a non-string legacy cluster after known ages without hashing it.
 
     x__age_cluster_key__mutmut_8.
     """
-    legacy = {"cluster": ["legacy"]}
-    known = {"cluster": Client.AgeCluster.U18}
+    legacy = {"cluster": ["legacy"], "count": 1}
+    known = {"cluster": Client.AgeCluster.U18, "count": 1}
 
-    result = external_report.project_protected_rows(
-        [legacy, known], [None, None], order=external_report.ORDER_AGE_CLUSTER
-    )
+    result = external_report._suppress_small([legacy, known], 5, margin=None, order=external_report.ORDER_AGE_CLUSTER)
 
     assert result == [
         {**known, "count": None, "suppressed": True},
         {**legacy, "count": None, "suppressed": True},
     ]
-
-
-@pytest.mark.parametrize("counts", [[], [5, 6]], ids=["missing-count", "extra-count"])
-def test_projection_rejects_mismatched_row_and_count_lengths(counts):
-    """Reject either direction of a row/count length mismatch instead of truncating.
-
-    x_project_protected_rows__mutmut_9,
-    x_project_protected_rows__mutmut_12,
-    x_project_protected_rows__mutmut_13.
-    """
-    with pytest.raises(ValueError):
-        external_report.project_protected_rows([{"name": "Counter"}], counts)

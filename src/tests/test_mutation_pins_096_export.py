@@ -372,10 +372,8 @@ class TestPdfDatenschutzDefaults:
         self._events(facility, admin_user, "Kontakt", 12, report_key="contact")
         self._events(facility, admin_user, "Krise", 7, report_key="crisis")
 
-        # The hybrid PDF withholds its tables for partial months, so the report
-        # covers the whole current month.
-        date_from = timezone.localdate().replace(day=1)
-        date_to = (date_from + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        bis = timezone.localdate()
+        von = bis - timedelta(days=2)
 
         erfasst: dict = {}
         gerendert: dict = {}
@@ -390,7 +388,7 @@ class TestPdfDatenschutzDefaults:
         from core.reporting.export import export_dataset
         from core.reporting.registry import get_backend
 
-        export_dataset(get_backend("sample-report-1"), facility, date_from, date_to, format="pdf")
+        export_dataset(get_backend("sample-report-1"), facility, von, bis, format="pdf")
 
         kategorien = {r["name"]: r for r in gerendert["stats"]["by_category"]}
         assert kategorien["Beratung"]["count"] is None
