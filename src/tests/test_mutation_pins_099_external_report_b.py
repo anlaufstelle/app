@@ -1,9 +1,4 @@
-"""Pin-Tests der Welle L (0.99, Refs #2174/#2193) — ``core.services.dashboard.external_report``,
-Batch ``external_report-b`` (Vollmutation-Survivor-Triage, 70 Survivors ueber
-``build_external_report``, ``suppress_sample_report_1_stats``, ``suppress_report_stats``,
-``_suppress_stage_dict``, ``_age_cluster_key``, ``_suppress_small``,
-``_suppress_smallest_visible``, ``apply_residual_guard``, ``suppress_single_margin``,
-``with_no_person_row``).
+"""Mutation regression tests for ``core.services.dashboard.external_report`` (Refs #2174, #2193).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-external_report-b.json`` (Triage
 ``reports/m-scratch/pins-external_report-b/triage-099-external_report-b.json``).
@@ -44,7 +39,7 @@ in ``suppress_report_stats`` betrifft dadurch nachweislich die
 ``by_contact_stage``-Randsumme, nicht ``by_age_cluster``.
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat keine
-``.env`` und damit keinen ``ENCRYPTION_KEY``.
+``.env`` und damit keinen ``ENCRYPTION_KEYS``.
 """
 
 from __future__ import annotations
