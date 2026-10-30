@@ -308,6 +308,9 @@ class _FakeResponse:
 class _FakeLocator:
     """Stand-in for a Playwright ``Locator`` — only ``click()`` is used."""
 
+    def count(self):
+        return 0
+
     def click(self):
         pass
 
@@ -675,6 +678,9 @@ class _SessionFakeLocator:
     def __init__(self, page: "_SessionFakePage"):
         self._page = page
 
+    def count(self):
+        return 0
+
     def click(self):
         self._page.context.cookies["sessionid"] = self._page.pending_username
         self._page.url = "http://x/dashboard/"
@@ -921,3 +927,27 @@ class TestHandleClosesEveryContextAfterAFailingNavigation:
         # (whose only shot raises). Both must be closed regardless.
         assert len(browser.contexts) == 2
         assert all(context.closed for context in browser.contexts)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("lang", ["de", "en"])
+def test_handle_rejects_a_service_worker_offline_fallback(tmp_path, monkeypatch, lang):
+    """A successful HTTP response must not authorize an offline replacement shot."""
+    monkeypatch.setattr(Command, "_resolve_pks", lambda self: {})
+    shot = Shot(name="statistics", route="/statistics/", role=None, langs=(lang,))
+    monkeypatch.setattr("core.management.commands.screenshot.SHOTS", [shot])
+
+    class OfflinePage(_FakePage):
+        def locator(self, selector):
+            if selector == '[data-testid="offline-home"]':
+                return type("OfflineLocator", (), {"count": lambda self: 1})()
+            return super().locator(selector)
+
+    page = OfflinePage(_FakeResponse(ok=True, status=200))
+    browser = _OneShotBrowser(page)
+    browser.close = lambda: None
+    monkeypatch.setattr("playwright.sync_api.sync_playwright", lambda: _FakeBrowserLauncher(browser))
+    with pytest.raises(CommandError, match="screenshot"):
+        Command().handle(base_url="http://x", output_dir=str(tmp_path), only="", quality=82)
+    assert not page.screenshot_called
+    assert not list(tmp_path.glob("*.webp"))

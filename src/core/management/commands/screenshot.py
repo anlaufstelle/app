@@ -284,6 +284,8 @@ class Command(BaseCommand):
                     # were real content.
                     if response is not None and not response.ok:
                         raise RuntimeError(f"HTTP {response.status} for {url}")
+                    if page.locator('[data-testid="offline-home"]').count():
+                        raise RuntimeError(f"Offline fallback for {url}")
                     with contextlib.suppress(Exception):
                         page.wait_for_selector(shot.wait, timeout=8000)
                     if shot.wait_js:
