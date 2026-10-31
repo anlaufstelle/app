@@ -19,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Bekannte Grenze der Berichte** (#2639) — Datensatz-Berichte unterdrücken kleine Werte jeweils für sich. Mehrere Exporte für denselben Empfänger können kleine Werte rückrechenbar machen, zum Beispiel Jahres- und Monatsberichte. Vor externer Herausgabe bleibt die Freigabe-Übersicht zu prüfen. Eine gemeinsame Unterdrückung ist für 0.99.10 geplant.
 - **Dynamische Felder für Episode und Aufgabe** (#2665) — Beide Entitäten können einen eigenen Dokumentationstyp mit feldweise verschlüsselten Daten tragen; Vorlagenwechsel, Schlüsselrotation und Wartung berücksichtigen diese Daten.
 
-- **Sicherheitsupdates für Python-Abhängigkeiten** (#2593) — django-otp 1.7.5 übernimmt die Sicherheitskorrektur des Upstream-Projekts; die transitive Abhängigkeit Brotli 1.2.1 schließt PYSEC-2026-4322. Beide Hash-Locks sind aktualisiert.
+- **Sicherheitsupdates für Python-Abhängigkeiten** (#2593) — django-otp 1.7.5 übernimmt die Sicherheitskorrektur des Upstream-Projekts; die transitive Abhängigkeit Brotli 1.2.1 schließt PYSEC-2026-4322, pyasn1 0.6.5 schließt CVE-2026-119194 bis CVE-2026-119197 im Passkey-Pfad. Beide Hash-Locks sind aktualisiert.
 
 ### Changed
 
