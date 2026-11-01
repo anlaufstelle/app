@@ -22,6 +22,6 @@ The endpoint guard recursively walks the active URL resolver at runtime for POST
 Person/case/episode/task standard fields are encrypted according to field configuration; all shipped packages enable encryption for these fields. Pseudonyms, titles, goal descriptions, reasons and unencrypted event notes remain plaintext. Online guidance asks users to keep person pseudonyms and case/episode/task titles short, without real names or GDPR Art. 9 data. It is no content validator. Event-only free-text review provides no blanket assurance about sensitive text.
 
 <!-- translation-source: docs/threat-model.md -->
-<!-- translation-version: v0.99.8 -->
-<!-- source-hash: 09e82a38f9fac07ef57dbafaa2527562278b1016 -->
+<!-- translation-version: v0.99.9 -->
+<!-- source-hash: 6c36a4efdbcd8167c2adcb34656b21b7f93c52fe -->
 <!-- translation-date: 2026-10-26 -->

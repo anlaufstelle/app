@@ -25,6 +25,6 @@ Person notes and descriptions for cases, episodes and tasks use type-bound stand
 Person pseudonyms and case/episode/task titles remain plaintext navigation labels; their online forms ask users to keep them short, without real names or GDPR Art. 9 data. This is not content validation. Goal descriptions remain plaintext without that warning; event notes follow their field configuration. Anonymization clears dynamic person/case/episode/task fields and redacts related labels, goals and reasons. Request and hold rows are not deleted by person anonymization. Completed deletion requests with a `reviewed_at` timestamp are pruned after the configured `deletion_request_retention_days` period; reasons are plaintext until anonymization. `AuditLog.detail` is minimized at write time and remains unchanged until its own retention expires.
 
 <!-- translation-source: src/core/dsgvo_templates/toms.md -->
-<!-- translation-version: v0.99.8 -->
+<!-- translation-version: v0.99.9 -->
 <!-- source-hash: 69d9c59d918f580907cca3bc8ded440fc4916b0a -->
 <!-- translation-date: 2026-10-26 -->

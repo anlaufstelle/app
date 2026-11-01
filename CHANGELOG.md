@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Erforderliche Betreiber-Aktionen
 
+- Keine.
+
+## [0.99.9] - 2026-11-01
+
+Weiterer Release-Kandidat vor 1.0: bündelt die Umstellung der Personen-, Fall-, Episoden- und Aufgabentexte auf typgebundene, in den mitgelieferten Paketen verschlüsselte Standardfelder ohne Inhaltsübernahme, den Schlüsselring als einzige Schlüsselquelle (Breaking Change), einen rollengetreuen Freitext-Review, den Sitzungswiderruf beim 2FA-Gerätewechsel, die Sprachwahl vor der Anmeldung sowie Sicherheitsupdates für Abhängigkeiten.
+
+### Erforderliche Betreiber-Aktionen
+
 - **Standardfelder laden und Textinhalte vorher sichern** (#2667, #2668) — Vor dem Update ein Datenbankabbild sichern sowie vorhandene Notizen und benötigte Beschreibungen manuell sichern: Die bisherigen Notiz-/Beschreibungsspalten von Person, Fall, Episode und Aufgabe entfallen ohne Inhaltsübernahme. Die passenden Paket-Standardtypen per `load_package` laden, Exportkonsumenten auf Einrichtungsschema 2 umstellen und Offline-Personenpakete mit Schema 3 neu laden; das Team über die neuen Eingabestellen sowie Aufgabendetails ausschließlich im Onlinebetrieb informieren.
 
 - **`ENCRYPTION_KEY` in `ENCRYPTION_KEYS` umbenennen** (#2363) — Vor dem Update in `.env` bzw. `.env.demo`/`.env.dev`/`.env.staging` den Wert von `ENCRYPTION_KEY` **unverändert** als einzigen Eintrag nach `ENCRYPTION_KEYS` übernehmen (`ENCRYPTION_KEYS=<bisheriger-wert>`; Komma-Liste, der erste Eintrag verschlüsselt) und die Zeile `ENCRYPTION_KEY` entfernen; ein bereits vorhandener Ring wird nicht überschrieben. Danach die Container **neu erzeugen** (`docker compose … up -d --force-recreate web`, nicht nur `restart`) und prüfen: `docker compose … exec -T web python manage.py check --deploy` ohne Fehler, `/health/` antwortet mit 200, ein vorhandener verschlüsselter Inhalt ist mit berechtigter Rolle lesbar. Schlüsselring samt benötigten alten Schlüsseln getrennt sichern und einen Restore mit lesbaren verschlüsselten Feldwerten und Anhängen nachweisen. Ohne diese Umstellung startet die Anwendung nicht mehr. Lokale Entwicklungs-`.env`-Dateien, Secret-Overrides und CI-Variablen ebenso umstellen. Anleitung: Admin-Guide, Abschnitt „Von `ENCRYPTION_KEY` auf `ENCRYPTION_KEYS` umstellen“. Vor dem Update jeden nicht leeren Ring-Eintrag auf einen gültigen Fernet-Schlüssel prüfen und fehlerhafte Einträge korrigieren, ohne benötigte alte Entschlüsselungsschlüssel zu verlieren; ein ungültiger Eintrag verhindert jetzt bereits den Start.

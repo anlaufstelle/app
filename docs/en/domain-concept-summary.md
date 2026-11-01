@@ -317,6 +317,12 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Operations signal what they cannot see**: missing backup signals or an unmeasurable disk degrade the health status, audit high-water marks are anchored offsite and checked in the restore drill, host scripts use the host backup path, and compliance warns about unlimited audit retention.
 - **Time and speed**: the nights of the clock change keep their real hours (shift end and event form both explain the doubled or skipped hour), person search uses trigram-friendly matching, and the timeline checks event visibility only within the own facility. The test suite was restructured with identical coverage.
 
+### v0.99.9 (2026-11-01)
+
+- **Encrypted standard fields replace fixed free-text columns**: person notes, case descriptions and the descriptions of episodes and tasks move into type-bound standard fields that the bundled packages encrypt at field level, and the old columns are dropped without content migration — operators back up the database before updating, load the standard types after updating, switch export consumers to facility schema 2 and reload offline person bundles with schema 3; task details can only be entered online.
+- **The key ring becomes the only key source (breaking change)**: the single-key variable `ENCRYPTION_KEY` is removed, and a set `ENCRYPTION_KEY` stops the start in every settings profile, even next to a ring, so operators move its unchanged value into `ENCRYPTION_KEYS` and recreate the containers before updating; key value, encryption and the idempotency pepper stay unchanged.
+- **Review, reports, sessions and sign-in**: the free-text review offers only unencrypted event texts with role-faithful, reversible and audited review deadlines tied to the current text, record reports still suppress small values independently, so several exports for the same recipient can make small values back-calculable (shared suppression is planned for 0.99.10), a second-factor device change or deactivation signs out the account's other sessions, the language can be chosen before sign-in, and the dependency updates take over the upstream django-otp 1.7.5 security fix and close PYSEC-2026-4322 with Brotli 1.2.1.
+
 ### v0.99.8 (2026-10-23)
 
 - **Four-eyes approval in the retention run**: manual deletion approvals need two different authorised people of the own facility whose rights are re-checked under lock; deferral, rejection and holds discard a first approval with an audit entry, and the run skips and reports approvals without two people unless the explicitly enabled auto-approval (off by default) applies after repeated deferrals, counting only deferrals by holders of the "deletion confirmation" right with no deferral of the same proposal still running; operators name at least two active accounts with the lead or application-support role and that right per facility, otherwise new manual approvals for "with additional details" events cannot be completed.
@@ -359,6 +365,6 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Quick exit joins the glossary**: a header-bar action (button + keyboard shortcut) on every signed-in page that hides the content, ends the session and opens a neutral page, kept distinct from the separate opt-in privacy screen shown on window or tab switch.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.99.8 -->
+<!-- translation-version: v0.99.9 -->
 <!-- source-hash: e6b01e8c18ce39fbb629831cce6817c0ba6a0c7d -->
-<!-- translation-date: 2026-10-26 -->
+<!-- translation-date: 2026-11-01 -->

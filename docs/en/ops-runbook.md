@@ -3309,6 +3309,6 @@ Check lock-file drift     make deps-check
 ```
 
 <!-- translation-source: docs/ops-runbook.md -->
-<!-- translation-version: v0.99.8 -->
+<!-- translation-version: v0.99.9 -->
 <!-- translation-date: 2026-10-26 -->
 <!-- source-hash: c44efb327544f5fce6c796f357765380bfdfcfc5 -->
