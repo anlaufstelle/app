@@ -571,6 +571,13 @@ release-verify-public:
 release-verify-tags:
 	bash dev-ops/release/release-verify-tags.sh "$(TAG)"
 
+# Stage-Probelauf als ein Skript (Refs #2664, #2601): Kandidat des Dry-Runs auf
+# stage rc/<version> pushen, test/e2e/lint starten, warten, Dauern gegen die
+# Limits, Coverage, Scheibengewichte, Probezweig löschen, Zusammenfassung.
+#   make probe-stage RC_SHA=<volle Kandidaten-SHA> [PROBE_FLAGS="--keep-branch"]
+probe-stage:
+	bash scripts/dev/probe-stage.sh $(PROBE_FLAGS) "$(RC_SHA)"
+
 # Dependencies: Lock-Files aus requirements*.in neu erzeugen (pip-tools).
 # Nach Änderungen an requirements.in oder requirements-dev.in ausführen.
 deps-lock:
