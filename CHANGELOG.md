@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Frontend-Bibliotheken aktualisiert** (#2676, #2674, #2675, #2686) — Chart.js 4.6.1, Dexie.js 4.4.7 und Alpine.js CSP 3.17.5 liegen neu vendort unter `src/static/js/`; fake-indexeddb 6.2.7 betrifft nur die JS-Tests. undici 8.12.3 (#2680) war im Lockfile bereits enthalten.
+- **GitHub-Actions-Pins aktualisiert** (#2682) — codeql-action 4.39.1, docker/login-action 4.7.0 und actions/setup-python 7.1.0, weiterhin als volle Commit-SHA mit Versionskommentar.
 
 ## [0.99.9] - 2026-11-01
 
