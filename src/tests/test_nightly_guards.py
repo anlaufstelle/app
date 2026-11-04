@@ -147,3 +147,45 @@ def test_make_target_passes_the_parameters_through():
     assert "scripts/nightly_guards.py" in completed.stdout
     assert "--seed-max-age-days 3" in completed.stdout
     assert completed.stdout.rstrip().endswith("perf-medium docs-screens")
+
+
+def test_relative_interpreter_paths_become_absolute(nightly):
+    assert nightly.resolve_python(".venv/bin/python") == str(ROOT / ".venv/bin/python")
+    assert nightly.resolve_python("/usr/bin/python3") == "/usr/bin/python3"
+    assert nightly.resolve_python("python3").startswith("/")
+
+
+class FakeCursor:
+    def __init__(self, existing):
+        self.existing = existing
+        self.statements = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def execute(self, statement, params=None):
+        self.statements.append(str(statement))
+
+    def fetchone(self):
+        return (1,) if self.existing else None
+
+
+class FakeConnection:
+    def __init__(self, existing):
+        self.cursor_object = FakeCursor(existing)
+
+    def cursor(self):
+        return self.cursor_object
+
+
+def test_missing_e2e_database_is_created_once(nightly):
+    missing = FakeConnection(existing=False)
+    present = FakeConnection(existing=True)
+
+    assert nightly.ensure_database(missing, "anlaufstelle_e2e") is True
+    assert any("CREATE DATABASE" in statement for statement in missing.cursor_object.statements)
+    assert nightly.ensure_database(present, "anlaufstelle_e2e") is False
+    assert not any("CREATE DATABASE" in statement for statement in present.cursor_object.statements)

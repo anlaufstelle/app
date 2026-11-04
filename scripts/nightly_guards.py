@@ -143,6 +143,25 @@ def maintenance_connection():
         return None
 
 
+def resolve_python(python: str) -> str:
+    """Absolute interpreter path: the public snapshot runs with another working directory."""
+    if "/" in python:
+        return str(Path(python).absolute())
+    return shutil.which(python) or python
+
+
+def ensure_database(connection, database: str) -> bool:
+    """Create ``database`` if it is missing, as the E2E conftest does; True when created."""
+    from psycopg import sql
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (database,))
+        if cursor.fetchone():
+            return False
+        cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database)))
+    return True
+
+
 def git_head() -> str:
     result = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True)
     return result.stdout.strip() if result.returncode == 0 else ""
@@ -170,7 +189,7 @@ def host_lock(path: Path, timeout: float) -> Iterator[None]:
 
 class Runner:
     def __init__(self, args: argparse.Namespace) -> None:
-        self.python = args.python
+        self.python = resolve_python(args.python)
         self.state = Path(args.state_dir)
         self.state.mkdir(parents=True, exist_ok=True)
         self.seed_max_age_days = args.seed_max_age_days
@@ -311,8 +330,13 @@ class Runner:
         return Result("demo", PASS if code == 0 else FAIL, detail=self.pytest_detail(log), log=log)
 
     def docs_screens(self) -> Result:
-        if maintenance_connection() is None:
+        connection = maintenance_connection()
+        if connection is None:
             return Result("docs-screens", SKIP, detail=NO_DATABASE)
+        # make docs-screens migrates the E2E database but does not create it;
+        # a fresh host has it only after a pytest E2E run created it.
+        with connection:
+            ensure_database(connection, environment().get("E2E_DATABASE_NAME", "anlaufstelle_e2e"))
         target = self.state / "screenshots"
         log = self.state / "docs-screens.log"
         code = self.make("docs-screens", log, f"DOCS_SCREENS_DIR={target}")
