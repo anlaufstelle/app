@@ -289,3 +289,42 @@ describe("offlineQueue._refreshCsrf (delegation)", () => {
         await expect(offlineQueue._refreshCsrf()).resolves.toBe("DELEGATED");
     });
 });
+
+// Refs #2626: an unreadable queue counter must not turn a finished write or
+// replay into a rejection. The entry is already stored, so a rejection would
+// make the service worker report a failed save and invite a duplicate.
+describe("unreadable queue counter after the work was done", () => {
+    it("resolves enqueueRequest once the entry is written and reports the unknown count", async () => {
+        const store = makeStore([]);
+        store.countQueueByStatus = vi.fn(async () => {
+            throw new Error("QueueReadFailed");
+        });
+        window.offlineStore = store;
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+        const seen = [];
+        const record = (event) => seen.push(event.type);
+        window.addEventListener("offline-queue-count-unknown", record);
+        window.addEventListener("offline-queue-count", record);
+        try {
+            await expect(
+                offlineQueue.enqueueRequest("/events/new/", "POST", "{}", { "content-type": "application/json" })
+            ).resolves.toBeUndefined();
+        } finally {
+            window.removeEventListener("offline-queue-count-unknown", record);
+            window.removeEventListener("offline-queue-count", record);
+        }
+        expect(store.putEncrypted).toHaveBeenCalledTimes(1);
+        expect(seen).toEqual(["offline-queue-count-unknown"]);
+    });
+
+    it("resolves replayQueue when only the final counter read fails", async () => {
+        const store = makeStore([]);
+        store.countQueueByStatus = vi.fn(async () => {
+            throw new Error("QueueReadFailed");
+        });
+        window.offlineStore = store;
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+        await expect(offlineQueue.replayQueue()).resolves.toBeUndefined();
+    });
+});
+
