@@ -185,10 +185,20 @@ test: verify-css-fresh
 
 # Demo uses its own server session and port under the shared host lock.
 # Literal make keeps -n from executing flock via recursive-make handling (Refs #2531).
+# E2E_DEMO_SPECS is the complete list of demo-profile specs (Refs #2679): the
+# guard src/tests/test_demo_gate.py matches it against every require_demo call
+# site and every E2E_DEMO_MODE=1 entry of public_skip_allowlist.json, so a new
+# demo case cannot drop out of the gate silently again.
+E2E_DEMO_SPECS := \
+	src/tests/e2e/test_demo_scenario_switch.py \
+	src/tests/e2e/test_demo_offline_key_notice.py \
+	src/tests/e2e/test_demo_offline_key_preparation.py \
+	src/tests/e2e/test_i18n_locale.py::TestAnonymousLocale::test_demo_query_switch_error_and_start \
+	src/tests/e2e/test_system_compliance_maintenance_results.py::TestDemoCards
 .PHONY: test-e2e-demo
 test-e2e-demo:
 	flock -w $(CI_LOCK_TIMEOUT) "$(CI_LOCK)" make tailwind-build
-	flock -w $(CI_LOCK_TIMEOUT) "$(CI_LOCK)" env E2E_DEMO_MODE=1 E2E_SEED_SCALE=demo E2E_PORT_BASE=8854 $(PYTHON) -m pytest src/tests/e2e/test_demo_scenario_switch.py src/tests/e2e/test_system_compliance_maintenance_results.py::TestDemoCards -m e2e --browser chromium --timeout=120 --timeout-method=thread -x -v -rs
+	flock -w $(CI_LOCK_TIMEOUT) "$(CI_LOCK)" env E2E_DEMO_MODE=1 E2E_SEED_SCALE=demo E2E_PORT_BASE=8854 $(PYTHON) -m pytest $(E2E_DEMO_SPECS) -m e2e --browser chromium --timeout=120 --timeout-method=thread -x -v -rs
 
 # --timeout-method=thread ist fuer die E2E-Laeufe Pflicht (Refs #1606): Stirbt
 # Chromium unter CPU-Knappheit weg, dreht die Playwright-Sync-API in einem
