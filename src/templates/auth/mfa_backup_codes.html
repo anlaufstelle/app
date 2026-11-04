@@ -4,7 +4,9 @@
 {% block title %}{% trans "Backup-Codes" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-<div class="max-w-xl" x-data="backupCodesAcknowledge">
+<div class="max-w-xl" x-data="backupCodesAcknowledge"
+     data-copy-success="{% trans 'Die Backup-Codes wurden in die Zwischenablage kopiert.' %}"
+     data-copy-error="{% trans 'Kopieren nicht möglich. Lade die Codes stattdessen als Datei herunter, drucke sie aus oder markiere sie und kopiere sie von Hand.' %}">
     <h1 class="text-2xl font-bold mb-3">{% trans "Backup-Codes für 2FA" %}</h1>
 
     <div class="bg-amber-50 border border-amber-300 rounded-md p-4 mb-4 text-sm text-amber-800">
@@ -43,6 +45,11 @@
             {% trans "Drucken" %}
         </button>
     </div>
+
+    <p class="text-sm text-green-800 mb-4 empty:hidden" role="status" aria-live="polite"
+       data-testid="backup-codes-copy-status" x-text="copyStatus"></p>
+    <p class="text-sm text-red-700 mb-4 empty:hidden" role="alert"
+       data-testid="backup-codes-copy-error" x-text="copyError"></p>
 
     {% if setup_pending and sessions_will_be_revoked %}
     <p class="text-sm text-ink-muted mb-4">{% trans "Andere angemeldete Geräte werden abgemeldet." %}</p>

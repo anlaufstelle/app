@@ -50,6 +50,11 @@ document.addEventListener("alpine:init", () => {
      */
     Alpine.data("backupCodesAcknowledge", () => ({
         confirmed: false,
+        // Result of the last copy attempt, rendered into two always-present
+        // live regions (success: role=status, failure: role=alert). The texts
+        // are translated server-side and read from data attributes on the root.
+        copyStatus: "",
+        copyError: "",
         get notConfirmed() {
             return !this.confirmed;
         },
@@ -66,8 +71,28 @@ document.addEventListener("alpine:init", () => {
                 .map((li) => li.textContent.trim())
                 .join("\n");
         },
-        copyCodes() {
-            navigator.clipboard.writeText(this._collectCodes());
+        /**
+         * Copy the codes and report the outcome. Success is announced only
+         * after ``writeText`` resolved; a missing Clipboard API, a denied
+         * permission or any other failure shows an error that points to the
+         * download/print alternatives. The server-side "saved" confirmation
+         * does not depend on this result (Refs #2613).
+         */
+        async copyCodes() {
+            const messages = this.$root.dataset;
+            this.copyStatus = "";
+            this.copyError = "";
+            try {
+                const clipboard = navigator.clipboard;
+                if (!clipboard || typeof clipboard.writeText !== "function") {
+                    throw new Error("Clipboard API unavailable");
+                }
+                await clipboard.writeText(this._collectCodes());
+            } catch {
+                this.copyError = messages.copyError || "";
+                return;
+            }
+            this.copyStatus = messages.copySuccess || "";
         },
         downloadCodes() {
             const blob = new Blob([this._collectCodes() + "\n"], {
