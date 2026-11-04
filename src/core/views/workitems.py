@@ -7,10 +7,13 @@ Einzel-Aktionen (Create/Update/Status) liegen in
 
 import logging
 
+from django.http import HttpResponseBadRequest
 from django.shortcuts import render
+from django.utils.translation import gettext as _
 from django.views import View
 
 from core.services.case import (
+    InvalidAssignedFilterError,
     build_inbox_sections,
     can_user_mutate_workitem,  # Übergangs-Reexport, Abbau nach #1891 (Refs #1837).
 )
@@ -28,7 +31,10 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
     partial_template_name = "core/workitems/partials/inbox_content.html"
 
     def get(self, request):
-        context = build_inbox_sections(request.current_facility, request.user, request.GET)
+        try:
+            context = build_inbox_sections(request.current_facility, request.user, request.GET)
+        except InvalidAssignedFilterError:
+            return HttpResponseBadRequest(_("Ungültiger Zuweisungsfilter"))
         return self.render_htmx_or_full(context)
 
 

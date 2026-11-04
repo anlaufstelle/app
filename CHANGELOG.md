@@ -22,6 +22,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Sprachcookie in Produktion gehärtet** (#2619) — Der Sprachcookie `django_language` wird in Produktion wie der Session-Cookie nur noch mit `Secure`, `HttpOnly` und `SameSite=Lax` gesetzt; die gespeicherte Sprachwahl angemeldeter Konten funktioniert unverändert.
 - **Schlüsselrotation erfasst auch den Klartext „[verschlüsselt]“** (#2624) — Die Feldrotation unterscheidet unlesbare Chiffrate jetzt unabhängig vom Inhalt; ein gespeicherter Freitext, der genau dem Anzeige-Platzhalter entspricht, wird wie jeder andere Wert unter den neuen Primärschlüssel gebracht und bleibt nach Entfernen des Altschlüssels lesbar. Korrupte Chiffrate bleiben unverändert, fehlende Schlüssel brechen weiterhin laut ab.
 - **Sicherheitsupdates für Entwicklungsabhängigkeiten** (#2683, #2681) — msgpack 1.2.3 und setuptools 84.1.0 schließen die beiden offenen Dependabot-Meldungen im Dev-Lock (`requirements-dev.txt`); zugleich pytest-playwright 0.10.0 (ohne das nun entfallene `pytest-base-url`; `requests` ist jetzt direkt deklariert) und ruff 0.17.3. Die Produktions-Abhängigkeiten bleiben unverändert: sentry-sdk bleibt bei 2.71.0, weil 2.73.0 `send_default_pii` als veraltet meldet und die Umstellung auf `data_collection` den eingebauten Event-Scrubber des SDK abschaltet (#2684 bleibt offen).
+### Fixed
+
+- **Ungültiger Zuweisungsfilter in der Aufgaben-Inbox** (#2618) — Ein Zuweisungsfilter, der weder `me`, `mine_team`, leer noch eine Benutzer-ID ist (z. B. `?assigned_to=abc`), wird mit HTTP 400 abgelehnt statt mit einem Serverfehler (500); die Inbox zeigt dabei keine Aufgaben. Beim Erledigen mit gleichem Filterwert bleibt der Statuswechsel erhalten, nur der „Kürzlich erledigt“-Einschub entfällt.
 
 ## [0.99.9] - 2026-11-01
 

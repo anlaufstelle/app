@@ -21,6 +21,7 @@ from core.forms.workitems import WorkItemForm
 from core.models import WorkItem
 from core.services.case import (
     DEFAULT_ASSIGNED_SCOPE,
+    InvalidAssignedFilterError,
     apply_workitem_default_scope,
     apply_workitem_filters,
     can_user_mutate_workitem,
@@ -96,14 +97,19 @@ def _build_recent_done_oob(request, workitem):
     default_scope = raw_assigned_to == DEFAULT_ASSIGNED_SCOPE
     assigned_to = "" if default_scope else raw_assigned_to
 
-    qs = apply_workitem_filters(
-        workitems_for_read(request.current_facility),
-        item_type=request.POST.get("item_type", ""),
-        priority=request.POST.get("priority", ""),
-        assigned_to=assigned_to,
-        due=due,
-        user=request.user,
-    )
+    try:
+        qs = apply_workitem_filters(
+            workitems_for_read(request.current_facility),
+            item_type=request.POST.get("item_type", ""),
+            priority=request.POST.get("priority", ""),
+            assigned_to=assigned_to,
+            due=due,
+            user=request.user,
+        )
+    except InvalidAssignedFilterError:
+        # The status change itself succeeded; without a usable filter context
+        # there is no recent-done target to update.
+        return ""
     qs = apply_workitem_default_scope(qs, request.user, default_scope=default_scope)
 
     # Das Item selbst muss durch den Filter passen — sonst war es (z.B. bei

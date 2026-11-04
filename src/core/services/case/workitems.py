@@ -120,6 +120,10 @@ def normalize_due_filter(value: str) -> str:
     return DUE_FILTER_ALIASES.get(value, value)
 
 
+class InvalidAssignedFilterError(ValueError):
+    """Raised when the ``assigned_to`` filter is neither ``me`` nor a numeric user id."""
+
+
 def apply_workitem_filters(qs, *, item_type="", priority="", assigned_to="", due="", user=None):
     """Wendet die Inbox-Filter (Typ/Priorität/Zuweisung/Fälligkeit) auf ``qs`` an.
 
@@ -132,7 +136,9 @@ def apply_workitem_filters(qs, *, item_type="", priority="", assigned_to="", due
     ``assigned_to`` ist hier bereits aufgelöst: der Default-Sentinel
     ``DEFAULT_ASSIGNED_SCOPE`` muss der Aufrufer vorher auf ``""``
     normalisieren (siehe ``apply_workitem_default_scope``); "me" wird hier
-    noch in die User-ID übersetzt.
+    noch in die User-ID übersetzt. Alles andere als ``me`` oder eine
+    ASCII-Ziffernfolge löst ``InvalidAssignedFilterError`` aus, bevor der Wert den
+    Integer-FK-Filter erreicht (Refs #2618).
     """
     if item_type and item_type in dict(WorkItem.ItemType.choices):
         qs = qs.filter(item_type=item_type)
@@ -143,6 +149,8 @@ def apply_workitem_filters(qs, *, item_type="", priority="", assigned_to="", due
     if assigned_to == "me" and user is not None:
         assigned_to = str(user.id)
     if assigned_to:
+        if not (assigned_to.isascii() and assigned_to.isdigit()):
+            raise InvalidAssignedFilterError(assigned_to)
         qs = qs.filter(assigned_to_id=assigned_to)
 
     if due:
