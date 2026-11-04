@@ -32,6 +32,31 @@
     // *Aktivierungs*-Gate entfaellt bewusst — es liess Geraete auf der alten
     // Shell haengen, sobald niemand den Toast anklickte.
     var _registration = null;
+
+    // Refs #2630: small capability state for the offline claim of the UI.
+    //   pending     registration not settled yet
+    //   installing  first installation still running (legal, not a failure)
+    //   active      a worker is installed (or still controls the page after a
+    //               failed update check)
+    //   failed      registration failed and no worker exists
+    //   unsupported the browser has no service worker API
+    // Only "failed" and "unsupported" mean that offline navigation cannot work;
+    // already stored encrypted bundles are never touched by this state.
+    var _workerStatus = "pending";
+    function _setWorkerStatus(status) {
+        if (_workerStatus === status) return;
+        _workerStatus = status;
+        window.dispatchEvent(new CustomEvent("offline-worker-status", { detail: { status: status } }));
+    }
+    window.offlineWorker = {
+        status: function () {
+            return _workerStatus;
+        },
+        isUnavailable: function () {
+            return _workerStatus === "failed" || _workerStatus === "unsupported";
+        },
+    };
+
     var _shellLanguageOverride = null;
     var _shellLanguagePending = false;
     var _shellLanguageSent = null;
@@ -114,8 +139,11 @@
             _reloadIfSafe();
         });
 
-        navigator.serviceWorker.register("/sw.js", { scope: "/" }).then(function (registration) {
+        // Refs #2630: the registration can be retried (see "online" below).
+        var _registerWorker = function () {
+        return navigator.serviceWorker.register("/sw.js", { scope: "/" }).then(function (registration) {
             _registration = registration;
+            _observeWorker(registration);
 
             // Refs #1593/#1575: Ein bereits WARTENDER Worker wird sonst nie
             // aktiviert — ``updatefound`` feuert nur in dem Tab, in dem der
@@ -139,6 +167,18 @@
                     }
                 });
             });
+        }, _onRegisterFailed).catch(function (error) {
+            // eslint-disable-next-line no-console
+            console.warn("[offline] Service worker setup failed", error);
+        });
+        };
+        _registerWorker();
+
+        // A failed registration is retried once the connection returns.
+        window.addEventListener("online", function () {
+            if (_workerStatus !== "failed") return;
+            _setWorkerStatus("pending");
+            _registerWorker();
         });
 
         navigator.serviceWorker.addEventListener("message", async function (event) {
@@ -175,6 +215,51 @@
             // "anlaufstelle-offline-mutex" + BroadcastChannel
             // "anlaufstelle-offline"), nicht mehr ueber den Service Worker.
         });
+    } else {
+        _setWorkerStatus("unsupported");
+    }
+
+    function _observeWorker(registration) {
+        if (registration.active) {
+            _setWorkerStatus("active");
+            return;
+        }
+        var installing = registration.installing || registration.waiting;
+        _setWorkerStatus("installing");
+        if (!installing || typeof installing.addEventListener !== "function") return;
+        installing.addEventListener("statechange", function () {
+            if (installing.state === "activated") {
+                _setWorkerStatus("active");
+            } else if (installing.state === "redundant" && !registration.active && !navigator.serviceWorker.controller) {
+                _setWorkerStatus("failed");
+            }
+        });
+    }
+
+    // Registration rejected. A worker that already controls this page (or an
+    // existing registration) still serves offline, so a failed update check is
+    // not a capability loss; a running first installation is not a failure.
+    function _onRegisterFailed(error) {
+        // eslint-disable-next-line no-console
+        console.warn("[offline] Service worker registration failed", error);
+        if (navigator.serviceWorker.controller) {
+            _setWorkerStatus("active");
+            return undefined;
+        }
+        var lookup =
+            typeof navigator.serviceWorker.getRegistration === "function"
+                ? navigator.serviceWorker.getRegistration("/")
+                : Promise.resolve(null);
+        return Promise.resolve(lookup).then(
+            function (existing) {
+                if (existing && existing.active) _setWorkerStatus("active");
+                else if (existing && (existing.installing || existing.waiting)) _setWorkerStatus("installing");
+                else _setWorkerStatus("failed");
+            },
+            function () {
+                _setWorkerStatus("failed");
+            }
+        );
     }
 
     function _sendShellLanguage(worker) {

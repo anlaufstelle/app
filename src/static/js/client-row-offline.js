@@ -113,7 +113,14 @@
                         notify("Aus Offline-Cache entfernt.", "info");
                     } else {
                         const bundle = await window.offlineClient.takeClientOffline(this._pk);
-                        let msg = (document.body.dataset.i18nOfflineClientAvailable || gettext("Person ist jetzt offline verfügbar."));
+                        // Refs #2630: without a registered worker (failed registration)
+                        // offline pages cannot be served; do not claim availability.
+                        const workerUnavailable = Boolean(
+                            window.offlineWorker && window.offlineWorker.isUnavailable && window.offlineWorker.isUnavailable()
+                        );
+                        let msg = workerUnavailable
+                            ? (document.body.dataset.i18nOfflineWorkerUnavailable || gettext("Person lokal gespeichert, aber Offline-Seiten sind auf diesem Gerät derzeit nicht verfügbar."))
+                            : (document.body.dataset.i18nOfflineClientAvailable || gettext("Person ist jetzt offline verfügbar."));
                         if (bundle && bundle.survivingEdits > 0 && this._labelKeptEdits) {
                             // Refs #1351/#1385: Re-Take-Rueckmeldung — ueberlebende
                             // ungesyncte Aenderungen wurden NICHT durch den
@@ -127,7 +134,7 @@
                             msg +=
                                 " – Hinweis: Der Browser gewährt keinen dauerhaften Speicher; bei Speicherdruck können Offline-Daten verloren gehen.";
                         }
-                        notify(msg, "info");
+                        notify(msg, workerUnavailable ? "error" : "info");
                     }
                     await this.refresh();
                 } catch (e) {
