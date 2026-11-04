@@ -184,6 +184,19 @@ def maintenance_connection():
         return None
 
 
+def public_run_env(snapshot: Path) -> dict[str, str]:
+    """Environment of the public run: the process environment over the ``.env`` values of the dev tree.
+
+    The values live only in the process, never as a file in the snapshot. ``.env`` sets
+    ``DJANGO_SETTINGS_MODULE`` for development, which would override the test settings of the
+    snapshot's ``pyproject.toml``; those are set explicitly.
+    """
+    import tomllib
+
+    options = tomllib.loads((snapshot / "pyproject.toml").read_text())["tool"]["pytest"]["ini_options"]
+    return {**environment(), "DJANGO_SETTINGS_MODULE": options["DJANGO_SETTINGS_MODULE"]}
+
+
 def resolve_python(python: str) -> str:
     """Absolute interpreter path: the public snapshot runs with another working directory."""
     if "/" in python:
@@ -446,7 +459,7 @@ class Runner:
             str(inventory),
         ]
         with self.lock():
-            code = self.run(command, log, env=dict(os.environ), cwd=snapshot)
+            code = self.run(command, log, env=public_run_env(snapshot), cwd=snapshot)
         text = log.read_text()
         unapproved = re.findall(r"^Unapproved skip \[public\]: (.*)$", text, re.M)
         detail = self.pytest_detail(log)
@@ -465,7 +478,7 @@ class Runner:
 
     @staticmethod
     def build_public_snapshot(snapshot: Path) -> int:
-        """Tracked and untracked (not ignored) files minus the release strip list."""
+        """Tracked files (as in the working tree) minus the release strip list: what a release would contain."""
         sys.path.insert(0, str(SCRIPTS))
         from verify_release_test_guard import parse_stripped_paths_from_build_release
 
@@ -473,7 +486,7 @@ class Runner:
             shutil.rmtree(snapshot)
         snapshot.mkdir(parents=True)
         listing = subprocess.run(
-            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            ["git", "ls-files", "-z"],
             cwd=ROOT,
             capture_output=True,
             check=True,
@@ -494,16 +507,12 @@ class Runner:
             elif path.exists():
                 path.unlink()
                 stripped += 1
-        # Build artefacts are ignored by git but needed by a few guards; the
-        # settings read .env themselves, so the snapshot gets a copy instead of
-        # the file's values in the environment (DJANGO_SETTINGS_MODULE in .env
-        # would otherwise override the test settings of pyproject.toml).
+        # Build artefacts are ignored by git but needed by a few guards. No .env file is copied: the
+        # values a run needs come from the environment at run time (see public_run_env).
         for relative in ("node_modules", "src/static/css/styles.css"):
             source = ROOT / relative
             if source.exists():
                 (snapshot / relative).symlink_to(source)
-        if (ROOT / ".env").is_file():
-            shutil.copy2(ROOT / ".env", snapshot / ".env")
         return stripped
 
     # -- dispatch ----------------------------------------------------------

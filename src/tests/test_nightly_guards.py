@@ -5,6 +5,7 @@ import contextlib
 import os
 import subprocess
 import sys
+import types
 from datetime import UTC, datetime, timedelta
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -316,3 +317,55 @@ def test_missing_e2e_database_is_created_once(nightly):
     assert any("CREATE DATABASE" in statement for statement in missing.cursor_object.statements)
     assert nightly.ensure_database(present, "anlaufstelle_e2e") is False
     assert not any("CREATE DATABASE" in statement for statement in present.cursor_object.statements)
+
+
+def fake_strip_list(monkeypatch, paths=()):
+    module = types.ModuleType("verify_release_test_guard")
+    module.parse_stripped_paths_from_build_release = lambda path: list(paths)
+    monkeypatch.setitem(sys.modules, "verify_release_test_guard", module)
+
+
+def git(repo, *args):
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com", *args], check=True)
+
+
+def test_public_snapshot_holds_tracked_files_only_and_no_env_file(nightly, tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q")
+    (repo / ".gitignore").write_text(".env\n")
+    (repo / "tracked.py").write_text("X = 1\n")
+    (repo / "stripped.py").write_text("Y = 1\n")
+    git(repo, "add", ".gitignore", "tracked.py", "stripped.py")
+    git(repo, "commit", "-q", "-m", "init")
+    (repo / "untracked.py").write_text("Z = 1\n")  # not part of what a release would contain
+    (repo / ".env").write_text("SECRET_KEY=do-not-copy\n")
+    monkeypatch.setattr(nightly, "ROOT", repo)
+    fake_strip_list(monkeypatch, ["stripped.py"])
+    snapshot = tmp_path / "state" / "public-tree"
+
+    stripped = nightly.Runner.build_public_snapshot(snapshot)
+
+    assert stripped == 1
+    assert (snapshot / "tracked.py").is_file()
+    assert not (snapshot / "untracked.py").exists() and not (snapshot / "stripped.py").exists()
+    assert not (snapshot / ".env").exists()
+    assert "do-not-copy" not in "".join(p.read_text() for p in snapshot.rglob("*") if p.is_file())
+
+
+def test_public_run_takes_its_environment_at_run_time_with_the_test_settings(nightly, tmp_path, monkeypatch):
+    (tmp_path / ".env").write_text("DJANGO_SETTINGS_MODULE=anlaufstelle.settings.prod\nFROM_DOTENV=yes\n")
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    (snapshot / "pyproject.toml").write_text(
+        '[tool.pytest.ini_options]\nDJANGO_SETTINGS_MODULE = "anlaufstelle.settings.test"\n'
+    )
+    monkeypatch.setattr(nightly, "ROOT", tmp_path)
+    monkeypatch.delenv("FROM_DOTENV", raising=False)
+    monkeypatch.setenv("FROM_PROCESS", "yes")
+
+    env = nightly.public_run_env(snapshot)
+
+    assert env["DJANGO_SETTINGS_MODULE"] == "anlaufstelle.settings.test"  # not the prod value of .env
+    assert env["FROM_DOTENV"] == "yes" and env["FROM_PROCESS"] == "yes"
+    assert not (snapshot / ".env").exists()
