@@ -120,10 +120,19 @@
     // Refs #2545: Django CharField(strip=True) uses Python's whitespace set.
     // Keep this table in sync with str.isspace(), including C0 separators but not FEFF.
     const PYTHON_WHITESPACE = "\u0009\u000a\u000b\u000c\u000d\u001c\u001d\u001e\u001f\u0020\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000";
-    const TITLE_EDGE_WHITESPACE = new RegExp("^[" + PYTHON_WHITESPACE + "]+|[" + PYTHON_WHITESPACE + "]+$", "g");
+    const PYTHON_WHITESPACE_SET = new Set(PYTHON_WHITESPACE);
 
+    // Refs #2625: two explicit index scans instead of an end-anchored regex.
+    // "[ws]+$" retried every inner whitespace run from each start position,
+    // which is quadratic for a long pasted run. Every table entry is a single
+    // UTF-16 code unit, so scanning code units is exact.
     function normalizeWorkItemTitle(title) {
-        return (title || "").replace(TITLE_EDGE_WHITESPACE, "");
+        const value = title || "";
+        let start = 0;
+        let end = value.length;
+        while (start < end && PYTHON_WHITESPACE_SET.has(value[start])) start++;
+        while (end > start && PYTHON_WHITESPACE_SET.has(value[end - 1])) end--;
+        return value.slice(start, end);
     }
 
     // Refs #1398/#1828: heutiges Datum als date-Input-Wert (YYYY-MM-DD) --

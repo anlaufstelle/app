@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Ungültiger Zuweisungsfilter in der Aufgaben-Inbox** (#2618) — Ein Zuweisungsfilter, der weder `me`, `mine_team`, leer noch eine Benutzer-ID ist (z. B. `?assigned_to=abc`), wird mit HTTP 400 abgelehnt statt mit einem Serverfehler (500); die Inbox zeigt dabei keine Aufgaben. Beim Erledigen mit gleichem Filterwert bleibt der Statuswechsel erhalten, nur der „Kürzlich erledigt“-Einschub entfällt.
 ### Fixed
 
+- **Offline-Aufgabentitel: lange Leerzeichenfolgen blockieren das Speichern nicht mehr** (#2625) — Beim Entfernen von Leerraum am Titelanfang und -ende verdoppelte sich die Rechenzeit mit jeder Verdopplung einer langen eingefügten Leerzeichenfolge im Titel; der Browser konnte beim Speichern sekundenlang stehen, bevor die Meldung zur Titellänge erschien. Der Titelrand wird jetzt in einem Durchlauf bereinigt, welche Zeichen als Leerraum gelten, bleibt unverändert.
 - **Statische Dateien: Cache-Aktualisierung an die Lebensdauer des Service Workers gebunden** (#2612) — Die Aktualisierung im Hintergrund (Netzabruf, Ablage im Laufzeit-Cache und Begrenzung der Eintragszahl) läuft jetzt innerhalb des auslösenden Abrufs und kann vom Browser nicht mehr mittendrin beendet werden, auch wenn sofort eine gespeicherte Kopie ausgeliefert wird. Ein voller oder gesperrter Cache führt nur noch zu einer Protokollzeile; die vom Server gelieferte Datei bleibt nutzbar.
 
 ## [0.99.9] - 2026-11-01
