@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Keine.
 
+### Changed
+
+- **E2E-Gewichte aus erneuerter Messung** (#2646) — Die Gewichtsdatei deckt jetzt alle 168 Spezifikationen ab und stammt aus einer Dreifachmessung; der Konverter liest dafür CSV-Messungen (`--from-csv`) und skaliert auf Runner-Sekunden (`--scale`). Ein Guard prüft vollständige Gewichte, ein Verhältnis von größter zu mittlerer Scheibe bis 1,15 und höchstens 70 % des Job-Limits.
+
 ## [0.99.9] - 2026-11-01
 
 Weiterer Release-Kandidat vor 1.0: bündelt die Umstellung der Personen-, Fall-, Episoden- und Aufgabentexte auf typgebundene, in den mitgelieferten Paketen verschlüsselte Standardfelder ohne Inhaltsübernahme, den Schlüsselring als einzige Schlüsselquelle (Breaking Change), einen rollengetreuen Freitext-Review, den Sitzungswiderruf beim 2FA-Gerätewechsel, die Sprachwahl vor der Anmeldung sowie Sicherheitsupdates für Abhängigkeiten.

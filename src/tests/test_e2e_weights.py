@@ -1,6 +1,7 @@
 """Exercise duration conversion and weighted partitioning through their CLIs."""
 
 import json
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -276,3 +277,27 @@ def test_converter_rejects_empty_malformed_and_unknown_csv(tmp_path, content):
     assert result.returncode != 0
     assert "e2e_weights:" in result.stderr  # rejected by the converter, not by argument parsing
     assert not output.exists()
+
+
+def _slice_summary(count):
+    result = run("scripts/e2e_slice.py", "--slices", count, "--summary")
+    assert result.returncode == 0, result.stderr
+    loads = [float(m) for m in re.findall(r"^Slice \d+/\d+: \d+ files, ([\d.]+)s$", result.stdout, re.MULTILINE)]
+    assert len(loads) == count
+    ratio = float(re.search(r"max/mean: ([\d.]+)", result.stdout).group(1))
+    unmeasured = int(re.search(r"unmeasured: (\d+)", result.stdout).group(1))
+    return loads, ratio, unmeasured
+
+
+def test_committed_weights_balance_slices_within_limits():
+    """Every spec is measured, slices are balanced and no job nears its time limit."""
+    job = yaml.safe_load((ROOT / ".github/workflows/e2e.yml").read_text())["jobs"]["test-e2e"]
+    count = job["env"]["E2E_SLICES"]
+    loads, ratio, unmeasured = _slice_summary(count)
+    assert unmeasured == 0, "Every spec file needs a measured weight; renew scripts/ci/e2e_weights.json"
+    assert ratio <= 1.15
+    # Weights estimate test time on the runner; each job also spends setup time (checkout,
+    # dependencies, browser, assets), measured at about six minutes in the workflow comment.
+    setup_seconds = 6 * 60
+    limit_seconds = job["timeout-minutes"] * 60 * 0.7
+    assert max(loads) + setup_seconds <= limit_seconds
