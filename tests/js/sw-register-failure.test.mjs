@@ -399,3 +399,98 @@ describe("late registration result after the claim", () => {
     });
 });
 
+describe("bounded wait for the registration retry", () => {
+    const factories = {};
+    const WORKER_TEXT = "Saved locally, offline pages unavailable.";
+
+    function hangingWorker() {
+        return {
+            status: () => "pending",
+            isUnavailable: () => false,
+            retry: vi.fn(() => new Promise(() => {})),
+        };
+    }
+
+    async function load() {
+        vi.resetModules();
+        window.Alpine = { data: (name, factory) => { factories[name] = factory; } };
+        window.offlineFormFields = { formatTs: () => "" };
+        document.body.dataset.i18nOfflineWorkerUnavailable = WORKER_TEXT;
+        await import("../../src/static/js/offline-client-badge.js");
+        await import("../../src/static/js/client-row-offline.js");
+        document.dispatchEvent(new Event("alpine:init"));
+        window.offlineClient = {
+            takeClientOffline: vi.fn(async () => ({ survivingEdits: 0 })),
+            isClientOffline: vi.fn(async () => true),
+            getOfflineClient: vi.fn(async () => ({})),
+        };
+    }
+
+    afterEach(() => {
+        vi.useRealTimers();
+        delete window.offlineClient;
+        delete window.offlineFormFields;
+        document.body.removeAttribute("data-i18n-offline-worker-unavailable");
+    });
+
+    it("badge: finishes the click with the unavailable hint when the retry hangs", async () => {
+        vi.useFakeTimers();
+        await load();
+        const badge = factories.offlineClientBadge();
+        badge.$el = document.createElement("div");
+        badge._pk = "pk-1";
+        window.offlineWorker = hangingWorker();
+
+        const click = badge.toggleOffline();
+        await vi.advanceTimersByTimeAsync(4500);
+
+        // The bundle is stored; the unconfirmed worker must not be promised.
+        expect(badge.busy).toBe(false);
+        expect(badge.message).toBe(WORKER_TEXT);
+        expect(badge.messageType).toBe("error");
+        expect(badge.isOffline).toBe(true);
+        await click;
+    });
+
+    it("list row: finishes the click with the unavailable hint when the retry hangs", async () => {
+        vi.useFakeTimers();
+        await load();
+        const row = factories.clientRowOffline();
+        row.$el = document.createElement("div");
+        row.init();
+        row._pk = "pk-2";
+        window.offlineWorker = hangingWorker();
+        const feedback = [];
+        const record = (event) => feedback.push(event.detail);
+        window.addEventListener("offline-feedback", record);
+
+        const click = row.toggleOffline();
+        await vi.advanceTimersByTimeAsync(4500);
+        window.removeEventListener("offline-feedback", record);
+        row.destroy?.();
+
+        expect(row.busy).toBe(false);
+        expect(feedback).toEqual([{ text: WORKER_TEXT, type: "error" }]);
+        expect(row.isOffline).toBe(true);
+        await click;
+    });
+
+    it("does not delay the click when the retry settles quickly", async () => {
+        vi.useFakeTimers();
+        await load();
+        const badge = factories.offlineClientBadge();
+        badge.$el = document.createElement("div");
+        badge._pk = "pk-1";
+        const state = { status: "failed" };
+        window.offlineWorker = {
+            status: () => state.status,
+            isUnavailable: () => state.status === "failed",
+            retry: vi.fn(async () => { state.status = "active"; }),
+        };
+
+        await badge.toggleOffline();
+
+        expect(badge.messageType).toBe("info");
+        expect(badge.message).toContain("offline verfügbar");
+    });
+});

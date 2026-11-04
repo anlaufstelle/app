@@ -12,6 +12,23 @@
 
     const gettext = window.gettext || ((message) => message);
 
+    // Refs #2630: upper bound for waiting on a registration retry. The bundle
+    // is already stored when the retry is awaited, so a hanging /sw.js request
+    // must not keep the click busy or hold back the message.
+    const WORKER_RETRY_WAIT_MS = 4000;
+
+    // Resolves true when the promise settled in time, false on timeout.
+    function settledWithin(promise, ms) {
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => resolve(false), ms);
+            const done = () => {
+                clearTimeout(timer);
+                resolve(true);
+            };
+            promise.then(done, done);
+        });
+    }
+
     document.addEventListener("alpine:init", () => {
         Alpine.data("offlineClientBadge", () => ({
             isOffline: false,
@@ -134,10 +151,11 @@
                             ? window.offlineWorker.retry()
                             : Promise.resolve();
                         const bundle = await window.offlineClient.takeClientOffline(this._pk);
-                        await workerRetry;
+                        const retrySettled = await settledWithin(workerRetry, WORKER_RETRY_WAIT_MS);
                         // Refs #2630: without a registered worker (failed registration)
                         // offline pages cannot be served; do not claim availability.
-                        const workerUnavailable = Boolean(
+                        // A retry still running after the wait is not confirmed either.
+                        const workerUnavailable = !retrySettled || Boolean(
                             window.offlineWorker && window.offlineWorker.isUnavailable && window.offlineWorker.isUnavailable()
                         );
                         let msg = workerUnavailable
