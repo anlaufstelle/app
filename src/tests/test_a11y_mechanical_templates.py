@@ -142,7 +142,8 @@ def test_case_controls_have_accessible_names_and_errors() -> None:
     goals = _source("core/cases/partials/goals_section.html")
     episode = _source("core/cases/episode_form.html")
     assert "aria-label=\"{% trans 'Nicht zugeordnetes Ereignis zuordnen' %}\"" in event_list
-    assert goals.count("aria-label=") >= 7
+    # The milestone toggle is named by its visible title and no longer carries a fixed aria-label.
+    assert goals.count("aria-label=") >= 6
     assert '{% include "components/_form_field.html" with field=field %}' in episode
 
 

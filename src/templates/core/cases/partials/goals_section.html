@@ -104,7 +104,7 @@
                               hx-swap="outerHTML"
                               class="flex items-center flex-1 min-w-0">
                             {% csrf_token %}
-                            <button type="submit" class="flex items-center text-sm" aria-label="{% trans 'Meilenstein umschalten' %}">
+                            <button type="submit" class="flex items-center text-sm">
                                 {% if milestone.is_completed %}
                                 <svg aria-hidden="true" class="w-4 h-4 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
@@ -116,6 +116,8 @@
                                 </svg>
                                 <span class="text-ink-soft">{{ milestone.title }}</span>
                                 {% endif %}
+                                {# Visible title first, so the accessible name contains it (WCAG 2.5.3); the action text is appended. #}
+                                <span class="sr-only">{% trans 'Meilenstein umschalten' %}</span>
                             </button>
                         </form>
                         {# hx-confirm: Bestätigung vor dem Löschen (Refs #1016, C6). #}
