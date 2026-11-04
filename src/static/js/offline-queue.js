@@ -206,7 +206,20 @@
         // Refs #1351/#1384: `pending`/`blocked` getrennt fuers M8-Badge;
         // `count` bleibt die Gesamtzahl fuer die Abwaertskompatibilitaet des
         // heutigen Banners (bis Task 4 auf pending/blocked umstellt).
-        const breakdown = await _store().countQueueByStatus();
+        //
+        // Refs #2626: this runs from fire-and-forget callers (init, cross-tab
+        // refresh, conflict list), so a failing storage read must be handled
+        // here. It is reported as an UNKNOWN state through a separate event:
+        // consumers keep their last known counts instead of showing a
+        // made-up zero, and the next successful read clears the state.
+        let breakdown;
+        try {
+            breakdown = await _store().countQueueByStatus();
+        } catch (error) {
+            console.warn("[offline-queue] queue count unavailable", error);
+            window.dispatchEvent(new CustomEvent("offline-queue-count-unknown"));
+            return;
+        }
         window.dispatchEvent(
             new CustomEvent("offline-queue-count", {
                 detail: { count: breakdown.total, pending: breakdown.pending, blocked: breakdown.blocked },

@@ -25,6 +25,9 @@ document.addEventListener("alpine:init", () => {
         announcement: "",
         announcementQueue: [],
         announcementTimer: null,
+        // Refs #2626: the queue counter could not be read (storage error).
+        // The last known counts stay; only the state is flagged as unclear.
+        queueUnknown: false,
         queueInitialized: false,
         conflictsInitialized: false,
         announce(key) {
@@ -82,7 +85,18 @@ document.addEventListener("alpine:init", () => {
                 this.announce("offlineMessage");
             }
         },
+        onQueueUnknownEvent() {
+            if (this.queueUnknown) return;
+            this.queueUnknown = true;
+            this.announce("queueUnknownMessage");
+        },
+        retryQueueCount() {
+            if (window.offlineQueue && window.offlineQueue.refreshCount) {
+                window.offlineQueue.refreshCount();
+            }
+        },
         onQueueEvent(event) {
+            this.queueUnknown = false;
             const previousPending = this.queueCount;
             const previousConflicts = this.combinedConflictCount;
             this.queueCount = event.detail.pending;

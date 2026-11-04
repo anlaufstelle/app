@@ -22,6 +22,10 @@
         blocked: scriptData.labelBlocked || "nicht übertragbar",
         submitError: scriptData.labelSubmitError || "Erfassung konnte nicht gespeichert werden.",
         countContact: scriptData.labelCountContact || "Kontakt zählen",
+        localUnknown:
+            scriptData.labelLocalUnknown ||
+            "Lokal wartende Kontakte konnten nicht gelesen werden. Angezeigt ist der letzte bestätigte Serverstand.",
+        retry: scriptData.labelRetry || "Erneut versuchen",
     };
 
     function store() {
@@ -106,6 +110,8 @@
             blocked: data.labelBlocked || defaultLabels.blocked,
             submitError: data.labelSubmitError || defaultLabels.submitError,
             countContact: data.labelCountContact || defaultLabels.countContact,
+            localUnknown: data.labelLocalUnknown || defaultLabels.localUnknown,
+            retry: data.labelRetry || defaultLabels.retry,
         };
     }
 
@@ -350,17 +356,76 @@
         if (first) first.focus();
     }
 
+    // Refs #2626: unclear local state. One notice per panel (role=alert so the
+    // creation is announced); repeated failures do not re-create it.
+    function showLocalStateUnknown(panel) {
+        if (panel.querySelector("[data-offline-tally-unknown]")) return;
+        const labels = labelSet(null);
+        const notice = document.createElement("div");
+        notice.setAttribute("data-offline-tally-unknown", "");
+        notice.setAttribute("role", "alert");
+        notice.className = "px-4 py-2 text-[12px] text-red-700 flex flex-wrap items-center gap-2";
+        const text = document.createElement("span");
+        text.textContent = labels.localUnknown;
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "min-h-[44px] px-3 underline font-semibold";
+        retry.textContent = labels.retry;
+        retry.addEventListener("click", function () {
+            guardedRefresh();
+        });
+        notice.appendChild(text);
+        notice.appendChild(retry);
+        panel.insertBefore(notice, panel.firstChild);
+    }
+
+    function clearLocalStateUnknown(panel) {
+        const notice = panel.querySelector("[data-offline-tally-unknown]");
+        if (!notice) return;
+        const hadFocus = notice.contains(document.activeElement);
+        notice.remove();
+        if (hadFocus) {
+            // The retry button disappears with the notice: keep focus in the panel.
+            if (!panel.hasAttribute("tabindex")) panel.setAttribute("tabindex", "-1");
+            panel.focus();
+        }
+    }
+
+    // Shared error boundary of all event and init callers.
+    function guardedRefresh(options) {
+        return refreshOnlinePanel(options).catch(function (error) {
+            // eslint-disable-next-line no-console
+            console.error("[offline-tally] refresh", error);
+            const panel = document.getElementById("tally-panel");
+            if (panel) showLocalStateUnknown(panel);
+        });
+    }
+
     async function refreshOnlinePanel(options) {
         const useSnapshot = Boolean(options && options.useSnapshot);
         const panel = document.getElementById("tally-panel");
         if (!panel) return;
-        await ready();
-        const currentStore = store();
-        const facility = currentStore && currentStore.getOfflineFacility
-            ? await currentStore.getOfflineFacility()
-            : null;
+        // Refs #2626: a failing local read must not leave an unhandled
+        // rejection nor a silently stale panel. The confirmed server count
+        // stays as rendered, nothing local is deleted or replaced by zeros;
+        // the panel is flagged as unclear with a retry until a read succeeds.
+        let facility;
+        let state;
+        try {
+            await ready();
+            const currentStore = store();
+            facility = currentStore && currentStore.getOfflineFacility
+                ? await currentStore.getOfflineFacility()
+                : null;
+            state = await queueState();
+        } catch (error) {
+            // eslint-disable-next-line no-console
+            console.warn("[offline-tally] local state unavailable", error);
+            showLocalStateUnknown(panel);
+            return;
+        }
         warmTallySnapshot = facility && facility.tally ? facility.tally : null;
-        const state = await queueState();
+        clearLocalStateUnknown(panel);
         const labels = labelSet(document.currentScript);
         const rows = panel.querySelectorAll('[data-testid^="tally-row-"]');
         let assignedPending = 0;
@@ -548,7 +613,7 @@
     });
 
     document.addEventListener("htmx:afterSwap", function () {
-        refreshOnlinePanel();
+        guardedRefresh();
     });
     // #1926: Eine synthetische SW-Erfolgsantwort ersetzt absichtlich nur den
     // Flash-Bereich, nicht die Tally-Zeile. Deshalb den Key fuer die naechste
@@ -631,20 +696,23 @@
         // lokalen, verschluesselt abgeleiteten Pending-/Blocked-Stand. Das
         // Facility-Bundle wird erst nach einem abgeschlossenen Sync neu
         // validiert, damit dieser globale Zaehler nicht das 120/h-Limit leert.
-        refreshOnlinePanel();
+        guardedRefresh();
     });
     // #1916 aktualisiert ausschließlich die autoritativen Count-Spans. Der
     // lokale Renderer setzt danach Pending/Blocked erneut darüber, ohne eine
     // offene NUMBER-Form oder die Row-/Action-Struktur auszutauschen.
     window.addEventListener("zeitstrom:tally-counts-updated", function () {
-        refreshOnlinePanel();
+        guardedRefresh();
     });
     // Dieses Event wird vom spaeter geladenen sync-orchestrator.js sowohl
     // fuer den eigenen Abschluss als auch fuer Cross-Tab-Broadcasts erzeugt.
     // Registrierung vor dessen Script ist gewollt und schliesst das
     // extra_js/base.html-Ladereihenfolge-Race.
     window.addEventListener("offline-sync-finished", function (event) {
-        renderRevalidatedSnapshot(event.detail);
+        renderRevalidatedSnapshot(event.detail).catch(function (error) {
+            // eslint-disable-next-line no-console
+            console.error("[offline-tally] sync-finished render", error);
+        });
     });
 
     let fallbackReconcilePromise = null;
@@ -665,14 +733,14 @@
     }
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", function () {
-            refreshOnlinePanel();
+            guardedRefresh();
             // In der Produktreihenfolge ist der Sync-Orchestrator jetzt geladen.
             // Nur echte Alt-/Teilseiten ohne ihn erhalten einen eigenen,
             // koaleszierten Online-Fallback.
             installOrchestratorFallback();
         });
     } else {
-        refreshOnlinePanel();
+        guardedRefresh();
         installOrchestratorFallback();
     }
 

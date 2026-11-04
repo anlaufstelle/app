@@ -166,6 +166,87 @@ describe("warmer Online-Zeitstrom", () => {
         return document.querySelector(`[data-testid="tally-row-${TYPE_A}"]`);
     }
 
+    // Refs #2626: failing local reads keep the confirmed server count, mark the
+    // local state as unclear (accessible, with retry) and recover later.
+    describe("read failures of the local state", () => {
+        const noticeSelector = "[data-offline-tally-unknown]";
+        let unhandled;
+        const onUnhandled = (reason) => unhandled.push(reason);
+        const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+        beforeEach(() => {
+            unhandled = [];
+            process.on("unhandledRejection", onUnhandled);
+            vi.spyOn(console, "warn").mockImplementation(() => {});
+        });
+        afterEach(() => {
+            process.off("unhandledRejection", onUnhandled);
+        });
+
+        it("marks an unreadable facility as unclear without touching the server count", async () => {
+            const row = onlineRow();
+            vi.spyOn(store, "getOfflineFacility").mockRejectedValueOnce(new Error("FacilityReadFailed"));
+
+            await expect(tallyUi.refreshOnlinePanel()).resolves.toBeUndefined();
+
+            const notice = document.querySelector(noticeSelector);
+            expect(notice).not.toBeNull();
+            expect(notice.getAttribute("role")).toBe("alert");
+            expect(notice.querySelector("button").textContent).toBe("Erneut versuchen");
+            expect(row.querySelector(`[data-testid="tally-count-${TYPE_A}"]`).textContent).toBe("12");
+            expect(row.querySelector("[data-offline-tally-status]")).toBeNull();
+        });
+
+        it("marks an unreadable queue as unclear and recovers on a later successful refresh", async () => {
+            await queueRow(TYPE_A, null);
+            const row = onlineRow();
+            const spy = vi.spyOn(store, "listTallyQueueState").mockRejectedValueOnce(new Error("QueueReadFailed"));
+
+            await tallyUi.refreshOnlinePanel();
+            expect(document.querySelectorAll(noticeSelector)).toHaveLength(1);
+            expect(row.querySelector("[data-offline-tally-status]")).toBeNull();
+
+            // A second failure keeps a single notice.
+            spy.mockRejectedValueOnce(new Error("QueueReadFailed"));
+            await tallyUi.refreshOnlinePanel();
+            expect(document.querySelectorAll(noticeSelector)).toHaveLength(1);
+
+            await tallyUi.refreshOnlinePanel();
+            expect(document.querySelector(noticeSelector)).toBeNull();
+            expect(row.querySelector("[data-offline-tally-status]").textContent).toBe("+1 wird gesendet");
+            expect(row.querySelector(`[data-testid="tally-count-${TYPE_A}"]`).textContent).toBe("12");
+        });
+
+        it("retries from the notice button and restores focus into the panel", async () => {
+            await queueRow(TYPE_A, "dead");
+            const row = onlineRow();
+            vi.spyOn(store, "getOfflineFacility").mockRejectedValueOnce(new Error("FacilityReadFailed"));
+            await tallyUi.refreshOnlinePanel();
+
+            const button = document.querySelector(`${noticeSelector} button`);
+            button.focus();
+            button.click();
+            await vi.waitFor(() => expect(document.querySelector(noticeSelector)).toBeNull());
+
+            expect(row.querySelector("[data-offline-tally-blocked]").hidden).toBe(false);
+            expect(document.getElementById("tally-panel").contains(document.activeElement)).toBe(true);
+        });
+
+        it("handles failing reads on the event and init paths without unhandled rejections", async () => {
+            onlineRow();
+            vi.spyOn(store, "getOfflineFacility").mockRejectedValue(new Error("FacilityReadFailed"));
+
+            window.dispatchEvent(new CustomEvent("offline-queue-count"));
+            window.dispatchEvent(new CustomEvent("zeitstrom:tally-counts-updated"));
+            document.dispatchEvent(new CustomEvent("htmx:afterSwap"));
+            window.dispatchEvent(new CustomEvent("offline-sync-finished", { detail: { facilityRevalidation: "failed" } }));
+            await vi.waitFor(() => expect(document.querySelectorAll(noticeSelector)).toHaveLength(1));
+            await settle();
+
+            expect(unhandled).toEqual([]);
+        });
+    });
+
     it("zeigt ohne Queue nur den grossen bestaetigten Serverstand", async () => {
         const row = onlineRow();
 
