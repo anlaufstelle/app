@@ -566,3 +566,115 @@ describe("listener lifecycle of the take-offline components", () => {
         expect(badge.message).toContain("offline verfügbar");
     });
 });
+
+describe("second take-offline click during a hanging registration retry", () => {
+    const factories = {};
+    const WORKER_TEXT = "Saved locally, offline pages unavailable.";
+
+    function deferred() {
+        let resolve;
+        const promise = new Promise((res) => { resolve = res; });
+        return { promise, resolve };
+    }
+
+    async function setup() {
+        const pendingRegistration = deferred();
+        const register = vi
+            .fn()
+            .mockRejectedValueOnce(new Error("WorkerRegistrationFailed"))
+            .mockReturnValue(pendingRegistration.promise);
+        workerStub({ register });
+        await freshLoad();
+        expect(window.offlineWorker.status()).toBe("failed");
+
+        window.crypto_session.isSupported = () => true;
+        vi.resetModules();
+        window.Alpine = { data: (name, factory) => { factories[name] = factory; } };
+        window.offlineFormFields = { formatTs: () => "" };
+        document.body.dataset.i18nOfflineWorkerUnavailable = WORKER_TEXT;
+        await import("../../src/static/js/offline-client-badge.js");
+        await import("../../src/static/js/client-row-offline.js");
+        document.dispatchEvent(new Event("alpine:init"));
+        window.offlineClient = {
+            takeClientOffline: vi.fn(async () => ({ survivingEdits: 0 })),
+            isClientOffline: vi.fn(async () => true),
+            getOfflineClient: vi.fn(async () => ({})),
+        };
+        const badge = factories.offlineClientBadge();
+        badge.$el = document.createElement("div");
+        badge._pk = "pk-1";
+        const row = factories.clientRowOffline();
+        row.$el = document.createElement("div");
+        row.init();
+        row._pk = "pk-2";
+        return { badge, row, register, pendingRegistration };
+    }
+
+    afterEach(() => {
+        vi.useRealTimers();
+        delete window.offlineClient;
+        delete window.offlineFormFields;
+        document.body.removeAttribute("data-i18n-offline-worker-unavailable");
+    });
+
+    it("badge then list row: the second click does not claim availability while the first attempt is unresolved", async () => {
+        const { badge, row, register, pendingRegistration } = await setup();
+        vi.useFakeTimers();
+        const feedback = [];
+        const record = (event) => feedback.push(event.detail);
+        window.addEventListener("offline-feedback", record);
+
+        const first = badge.toggleOffline();
+        await vi.advanceTimersByTimeAsync(1000);
+        const second = row.toggleOffline();
+        await vi.advanceTimersByTimeAsync(4500);
+
+        expect(badge.message).toBe(WORKER_TEXT);
+        expect(feedback).toEqual([{ text: WORKER_TEXT, type: "error" }]);
+        expect(row.busy).toBe(false);
+        // Both clicks share the one running attempt.
+        expect(register).toHaveBeenCalledTimes(2);
+
+        // Once the attempt succeeded, the next click reports availability.
+        pendingRegistration.resolve(activeRegistration());
+        await vi.advanceTimersByTimeAsync(0);
+        expect(window.offlineWorker.status()).toBe("active");
+        feedback.length = 0;
+        row.isOffline = false;
+        await row.toggleOffline();
+        window.removeEventListener("offline-feedback", record);
+        row.destroy();
+        expect(feedback).toHaveLength(1);
+        expect(feedback[0].type).toBe("info");
+        expect(feedback[0].text).toContain("offline verfügbar");
+        await Promise.all([first, second]);
+    });
+
+    it("list row then badge: the second click does not claim availability while the first attempt is unresolved", async () => {
+        const { badge, row, register, pendingRegistration } = await setup();
+        vi.useFakeTimers();
+        const feedback = [];
+        const record = (event) => feedback.push(event.detail);
+        window.addEventListener("offline-feedback", record);
+
+        const first = row.toggleOffline();
+        await vi.advanceTimersByTimeAsync(1000);
+        const second = badge.toggleOffline();
+        await vi.advanceTimersByTimeAsync(4500);
+        window.removeEventListener("offline-feedback", record);
+        row.destroy();
+
+        expect(feedback).toEqual([{ text: WORKER_TEXT, type: "error" }]);
+        expect(badge.message).toBe(WORKER_TEXT);
+        expect(badge.busy).toBe(false);
+        expect(register).toHaveBeenCalledTimes(2);
+
+        pendingRegistration.resolve(activeRegistration());
+        await vi.advanceTimersByTimeAsync(0);
+        badge.isOffline = false;
+        await badge.toggleOffline();
+        expect(badge.messageType).toBe("info");
+        expect(badge.message).toContain("offline verfügbar");
+        await Promise.all([first, second]);
+    });
+});

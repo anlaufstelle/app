@@ -185,10 +185,21 @@
 
         // A failed registration is retried on demand (take-offline click) and
         // once the connection returns.
+        // Refs #2630: while a retry runs, every caller gets that same attempt, so
+        // a later take-offline click waits for (and is bounded by) the same
+        // unresolved attempt instead of seeing an instantly settled "pending".
+        var _retryInFlight = null;
         _retryRegistration = function () {
+            if (_retryInFlight) return _retryInFlight;
             if (_workerStatus !== "failed") return Promise.resolve();
             _setWorkerStatus("pending");
-            return _registerWorker();
+            var attempt = _registerWorker();
+            var release = function () {
+                if (_retryInFlight === attempt) _retryInFlight = null;
+            };
+            attempt.then(release, release);
+            _retryInFlight = attempt;
+            return attempt;
         };
         window.addEventListener("online", function () {
             _retryRegistration();
