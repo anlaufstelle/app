@@ -150,8 +150,10 @@ def test_make_target_passes_the_parameters_through():
 
 
 def test_relative_interpreter_paths_become_absolute(nightly):
-    assert nightly.resolve_python(".venv/bin/python") == str(ROOT / ".venv/bin/python")
+    """A relative PYTHON= value must survive the snapshot's other working directory."""
+    assert nightly.resolve_python("bin/python") == str(ROOT / "bin/python")
     assert nightly.resolve_python("/usr/bin/python3") == "/usr/bin/python3"
+    assert nightly.resolve_python(sys.executable) == sys.executable
     assert nightly.resolve_python("python3").startswith("/")
 
 
