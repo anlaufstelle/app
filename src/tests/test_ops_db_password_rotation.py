@@ -108,6 +108,13 @@ if [[ "$*" == *"exec -T db psql"* ]]; then
   input="$(cat)"
   if [[ "$input" == *"old-app-password"* ]]; then
     printf 'sql:rollback\n' >> "$ROTATION_TEST_STATE/docker.log"
+    # The rollback must restore the exactly parsed old values, not their raw dotenv text.
+    q='"'
+    if [[ "$input" == *"ALTER ROLE ${q}anlaufstelle${q} PASSWORD '$ROTATION_TEST_OLD_APP'"* &&
+          "$input" == *"ALTER ROLE ${q}anlaufstelle_admin${q} PASSWORD '$ROTATION_TEST_OLD_ADMIN'"* &&
+          "$input" == *"ALTER ROLE ${q}postgres${q} PASSWORD '$ROTATION_TEST_OLD_BOOTSTRAP'"* ]]; then
+      printf 'sql:rollback-exact\n' >> "$ROTATION_TEST_STATE/docker.log"
+    fi
   else
     printf 'sql:rotate\n' >> "$ROTATION_TEST_STATE/docker.log"
   fi
@@ -405,12 +412,13 @@ def test_missing_or_duplicate_password_aborts_before_any_change(tmp_path: Path, 
 
 
 @pytest.mark.parametrize("name", sorted(_NOT_CAUGHT_IN_PREFLIGHT))
-def test_current_gap_empty_or_duplicate_value_is_not_stopped_in_preflight(tmp_path: Path, name: str) -> None:
-    # Characterization of the present behaviour: the reader reports the problem inside a command
-    # substitution, where errexit does not apply, so the run continues up to the consumer stop.
+def test_empty_or_duplicate_value_aborts_before_any_change(tmp_path: Path, name: str) -> None:
+    # Behaviour change: the reader used to report these inside a command substitution, where errexit
+    # does not apply, so the run went on up to the consumer stop (and, for an empty password, to SQL).
     text = _NOT_CAUGHT_IN_PREFLIGHT[name](_env_text())
-    _result, _env_file, log_file = _run(tmp_path, env_text=text)
-    assert " stop web cron" in log_file.read_text(encoding="utf-8")
+    result, env_file, log_file = _run(tmp_path, env_text=text)
+    _assert_rejected_before_any_change(result, env_file, log_file, text)
+    assert "FEHLER" in result.stderr
 
 
 def test_missing_env_file_aborts_before_any_change(tmp_path: Path) -> None:
@@ -422,39 +430,105 @@ def test_missing_env_file_aborts_before_any_change(tmp_path: Path) -> None:
     assert not missing.exists()
 
 
-# Current behaviour for dotenv forms the shared reader (scripts/ops/lib/env-file.sh) handles differently.
+# Forms the shared reader (scripts/ops/lib/env-file.sh) handles; rotation, backup and restore agree on them.
 
 
-def test_current_quoted_value_with_inline_comment_keeps_quotes_and_comment(tmp_path: Path) -> None:
-    text = _env_text(app=f'"{OLD_APP}" # note')
-    result, env_file, log_file = _run(tmp_path, env_text=text)
-    # The negative login check receives the raw text, so it cannot recognize the old password.
-    assert result.returncode != 0
-    assert "sql:rotate" in log_file.read_text(encoding="utf-8")
-    assert env_file.read_text(encoding="utf-8") == text
-    assert "Rollback" in result.stderr
+@pytest.mark.parametrize(
+    "raw",
+    [f'"{OLD_APP}" # note', f"'{OLD_APP}'   # note", f"{OLD_APP} # note", f"{OLD_APP}   "],
+    ids=["double-quoted-comment", "single-quoted-comment", "unquoted-comment", "trailing-space"],
+)
+def test_quotes_and_inline_comments_resolve_to_the_plain_old_password(tmp_path: Path, raw: str) -> None:
+    result, env_file, log_file = _run(tmp_path, env_text=_env_text(app=raw))
+    _assert_rotated(result, env_file, log_file)
+    for secret in (OLD_APP, NEW_APP):
+        assert secret not in result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("prefix", ["export ", "  ", "  export  "], ids=["export", "indent", "indent-export"])
-def test_current_export_prefix_or_indent_is_not_recognized(tmp_path: Path, prefix: str) -> None:
+def test_export_prefix_and_indent_are_read_and_kept_by_the_replacement(tmp_path: Path, prefix: str) -> None:
     text = _env_text().replace("POSTGRES_PASSWORD=", f"{prefix}POSTGRES_PASSWORD=")
     result, env_file, log_file = _run(tmp_path, env_text=text)
-    _assert_rejected_before_any_change(result, env_file, log_file, text)
+    assert result.returncode == 0, result.stderr
+    env_text = env_file.read_text(encoding="utf-8")
+    assert f"\n{prefix}POSTGRES_PASSWORD={NEW_APP}\n" in env_text
+    assert env_text.count("POSTGRES_PASSWORD=") == 1
+    assert OLD_APP not in env_text
+    assert log_file.read_text(encoding="utf-8").count(":old") == 3
 
 
-def test_current_whitespace_around_equals_is_not_recognized(tmp_path: Path) -> None:
+def test_whitespace_around_equals_is_read_and_replaced(tmp_path: Path) -> None:
     text = _env_text().replace("POSTGRES_PASSWORD=", "POSTGRES_PASSWORD = ")
     result, env_file, log_file = _run(tmp_path, env_text=text)
+    assert result.returncode == 0, result.stderr
+    env_text = env_file.read_text(encoding="utf-8")
+    assert f"\nPOSTGRES_PASSWORD={NEW_APP}\n" in env_text
+    assert OLD_APP not in env_text
+    assert log_file.read_text(encoding="utf-8").count(":old") == 3
+
+
+def test_backslash_escapes_in_double_quotes_are_resolved(tmp_path: Path) -> None:
+    old_app = 'old-app-password-$HOME-"x\\y'
+    raw = '"old-app-password-\\$HOME-\\"x\\\\y"'
+    result, env_file, log_file = _run(tmp_path, env_text=_env_text(app=raw), old_app=old_app)
+    _assert_rotated(result, env_file, log_file)
+
+
+def test_single_quotes_keep_dollar_and_backslash_literal(tmp_path: Path) -> None:
+    old_app = r"old-app-password-$HOME-\n"
+    result, env_file, log_file = _run(tmp_path, env_text=_env_text(app=f"'{old_app}'"), old_app=old_app)
+    _assert_rotated(result, env_file, log_file)
+
+
+@pytest.mark.parametrize(
+    "raw", ['"old-app-password-never-closed', "'old-app-password-never-closed"], ids=["double", "single"]
+)
+def test_unterminated_quote_counts_as_empty_and_aborts_before_any_change(tmp_path: Path, raw: str) -> None:
+    text = _env_text(app=raw)
+    result, env_file, log_file = _run(tmp_path, env_text=text)
     _assert_rejected_before_any_change(result, env_file, log_file, text)
+    assert "POSTGRES_PASSWORD ist leer" in result.stderr
 
 
-def test_current_backslash_escapes_in_double_quotes_stay_literal(tmp_path: Path) -> None:
-    old_app = r"old-app-password-\$HOME-\"x"
-    result, env_file, log_file = _run(tmp_path, env_text=_env_text(app=f'"{old_app}"'), old_app=old_app)
+def test_rollback_restores_the_parsed_old_values_and_the_original_file(tmp_path: Path) -> None:
+    text = _env_text(f'"{OLD_APP}" # app', f"'{OLD_ADMIN}'", OLD_BOOTSTRAP)
+    result, env_file, log_file = _run(tmp_path, env_text=text, accept_old_login=True)
+    assert result.returncode != 0
+    assert env_file.read_text(encoding="utf-8") == text
+    log = log_file.read_text(encoding="utf-8")
+    assert "sql:rotate" in log
+    assert "sql:rollback-exact" in log
+    for secret in (OLD_APP, OLD_ADMIN, OLD_BOOTSTRAP, NEW_APP, NEW_ADMIN, NEW_BOOTSTRAP):
+        assert secret not in result.stdout + result.stderr
+
+
+def test_rotation_ignores_unrelated_and_malformed_lines_without_evaluating_them(tmp_path: Path) -> None:
+    marker = tmp_path / "executed"
+    text = _env_text(
+        extra=(
+            f"UNRELATED=$(touch {marker})",
+            f"BROKEN=`touch {marker}",
+            'UNTERMINATED_OTHER="never closed',
+            "not an assignment at all",
+            f"; touch {marker}",
+        )
+    )
+    result, env_file, log_file = _run(tmp_path, env_text=text)
+    _assert_rotated(result, env_file, log_file)
+    assert not marker.exists(), "an env line was executed as shell code"
+    env_text = env_file.read_text(encoding="utf-8")
+    assert f"UNRELATED=$(touch {marker})\n" in env_text
+    assert "not an assignment at all\n" in env_text
+
+
+def test_commented_duplicate_does_not_count_but_a_real_second_definition_does(tmp_path: Path) -> None:
+    commented = _env_text(extra=("POSTGRES_PASSWORD_BACKUP=x # POSTGRES_PASSWORD=again",))
+    (tmp_path / "ok").mkdir()
+    result, env_file, log_file = _run(tmp_path / "ok", env_text=commented)
     _assert_rotated(result, env_file, log_file)
 
-
-def test_current_unterminated_quote_is_kept_as_part_of_the_value(tmp_path: Path) -> None:
-    old_app = '"old-app-password-never-closed'
-    result, env_file, log_file = _run(tmp_path, env_text=_env_text(app=old_app), old_app=old_app)
-    _assert_rotated(result, env_file, log_file)
+    doubled = _env_text(extra=("POSTGRES_PASSWORD=second",))
+    (tmp_path / "dup").mkdir()
+    result, env_file, log_file = _run(tmp_path / "dup", env_text=doubled)
+    _assert_rejected_before_any_change(result, env_file, log_file, doubled)
+    assert "genau einmal" in result.stderr

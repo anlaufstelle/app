@@ -22,6 +22,9 @@ WAIT_TIMEOUT="${WAIT_TIMEOUT:-180}"
 [[ "$COMPOSE_FILE" = /* ]] || COMPOSE_FILE="${PROJECT_DIR}/${COMPOSE_FILE}"
 [[ "$ENV_FILE" = /* ]] || ENV_FILE="${PROJECT_DIR}/${ENV_FILE}"
 
+# shellcheck source=scripts/ops/lib/env-file.sh
+source "${SCRIPT_DIR}/lib/env-file.sh"
+
 info() { printf '[db-password-rotation] %s\n' "$*"; }
 warn() { printf '[db-password-rotation] WARN: %s\n' "$*" >&2; }
 fail() {
@@ -51,20 +54,26 @@ if ((8#$env_mode & 077)); then
     exit 1
 fi
 
+# Reads one required value with the shared dotenv value parser (never sources the file). Exactly one
+# active assignment must exist and its parsed value must not be empty. Failing with `return 1` keeps the
+# error visible to `NAME="$(read_env ...)"`, which then aborts under errexit before anything is touched.
 read_env() {
-    local name="$1" line value count=0
+    local name="$1" line raw="" value count=0
     while IFS= read -r line || [[ -n "$line" ]]; do
-        [[ "$line" == "${name}="* ]] || continue
-        value="${line#*=}"
+        env_file_match_assignment "$line" || continue
+        [[ "$ENV_FILE_ASSIGN_KEY" == "$name" ]] || continue
+        raw="$ENV_FILE_ASSIGN_RAW"
         count=$((count + 1))
     done < "$ENV_FILE"
-    [[ "$count" -eq 1 ]] || fail "${name} muss genau einmal aktiv in ${ENV_FILE} stehen (gefunden: ${count})."
-    if [[ "$value" == \"*\" && "$value" == *\" ]]; then
-        value="${value:1:${#value}-2}"
-    elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
-        value="${value:1:${#value}-2}"
+    if [[ "$count" -ne 1 ]]; then
+        fail "${name} muss genau einmal aktiv in ${ENV_FILE} stehen (gefunden: ${count})."
+        return 1
     fi
-    [[ -n "$value" ]] || fail "${name} ist leer."
+    value="$(env_file_parse_value "$raw")"
+    if [[ -z "$value" ]]; then
+        fail "${name} ist leer."
+        return 1
+    fi
     printf '%s' "$value"
 }
 
@@ -140,17 +149,20 @@ replace_count_admin=0
 replace_count_bootstrap=0
 : > "$STAGED_ENV"
 while IFS= read -r line || [[ -n "$line" ]]; do
-    case "$line" in
-        POSTGRES_PASSWORD=*)
-            printf 'POSTGRES_PASSWORD=%s\n' "$NEW_APP_PASSWORD" >> "$STAGED_ENV"
+    key=""
+    # Same assignment forms as read_env: indent, `export ` and spaces before "=" are kept as written.
+    env_file_match_assignment "$line" && key="$ENV_FILE_ASSIGN_KEY"
+    case "$key" in
+        POSTGRES_PASSWORD)
+            printf '%sPOSTGRES_PASSWORD=%s\n' "$ENV_FILE_ASSIGN_PREFIX" "$NEW_APP_PASSWORD" >> "$STAGED_ENV"
             replace_count_app=$((replace_count_app + 1))
             ;;
-        POSTGRES_ADMIN_PASSWORD=*)
-            printf 'POSTGRES_ADMIN_PASSWORD=%s\n' "$NEW_ADMIN_PASSWORD" >> "$STAGED_ENV"
+        POSTGRES_ADMIN_PASSWORD)
+            printf '%sPOSTGRES_ADMIN_PASSWORD=%s\n' "$ENV_FILE_ASSIGN_PREFIX" "$NEW_ADMIN_PASSWORD" >> "$STAGED_ENV"
             replace_count_admin=$((replace_count_admin + 1))
             ;;
-        POSTGRES_BOOTSTRAP_PASSWORD=*)
-            printf 'POSTGRES_BOOTSTRAP_PASSWORD=%s\n' "$NEW_BOOTSTRAP_PASSWORD" >> "$STAGED_ENV"
+        POSTGRES_BOOTSTRAP_PASSWORD)
+            printf '%sPOSTGRES_BOOTSTRAP_PASSWORD=%s\n' "$ENV_FILE_ASSIGN_PREFIX" "$NEW_BOOTSTRAP_PASSWORD" >> "$STAGED_ENV"
             replace_count_bootstrap=$((replace_count_bootstrap + 1))
             ;;
         *) printf '%s\n' "$line" >> "$STAGED_ENV" ;;

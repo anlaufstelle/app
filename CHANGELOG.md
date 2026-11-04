@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **E2E-Gewichte aus erneuerter Messung** (#2646) — Die Gewichtsdatei deckt jetzt alle 168 Spezifikationen ab und stammt aus einer Dreifachmessung; der Konverter liest dafür CSV-Messungen (`--from-csv`) und skaliert auf Runner-Sekunden (`--scale`). Ein Guard prüft vollständige Gewichte, ein Verhältnis von größter zu mittlerer Scheibe bis 1,15 und höchstens 70 % des Job-Limits.
+- **DB-Passwortrotation liest Werte wie Backup und Restore** (#2571) — Die Rotation liest die Alt-Zugangsdaten aus der Env-Datei mit demselben Wertparser wie Backup und Restore: Anführungszeichen, Inlinekommentare und die dokumentierten Escapes ergeben denselben Wert, `export`-Präfix und Leerraum um `=` werden erkannt, und der atomare Austausch ersetzt dieselben Zuweisungsformen. Fehlende, doppelte, leere und durch offene Anführungszeichen leere Pflichtwerte brechen nun vor dem Stoppen der Dienste und vor jedem SQL ab; zuvor lief ein leerer oder doppelter Wert bis zum Dienststopp weiter. Die Env-Datei wird weiterhin nicht ausgeführt.
 
 ## [0.99.9] - 2026-11-01
 

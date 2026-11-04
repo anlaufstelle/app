@@ -11,6 +11,8 @@
 #   - "$" is kept literally (no interpolation); put values containing "$" in single quotes so
 #     Compose and this reader agree
 #   - the last entry of a variable wins; one entry per line (no multi-line values)
+#   - an entry is `[indent][export ]NAME[ ]=value`; readers and writers of single entries (for example
+#     the DB password rotation) recognize lines with env_file_match_assignment so they agree on this form
 
 # env_file_parse_value <raw-value> — print the value Compose would see for the text after "=".
 env_file_parse_value() {
@@ -67,14 +69,24 @@ env_file_parse_value() {
     printf '%s' "$out"
 }
 
+# env_file_match_assignment <line> — succeed if the line is an assignment entry and then set
+#   ENV_FILE_ASSIGN_PREFIX (indent and "export " as written), ENV_FILE_ASSIGN_KEY and ENV_FILE_ASSIGN_RAW
+#   (the untouched text after "="; pass it to env_file_parse_value). Never evaluates the line.
+ENV_FILE_ASSIGN_RE='^([[:space:]]*(export[[:space:]]+)?)([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=(.*)$'
+env_file_match_assignment() {
+    [[ "$1" =~ $ENV_FILE_ASSIGN_RE ]] || return 1
+    ENV_FILE_ASSIGN_PREFIX=${BASH_REMATCH[1]}
+    ENV_FILE_ASSIGN_KEY=${BASH_REMATCH[3]}
+    ENV_FILE_ASSIGN_RAW=${BASH_REMATCH[4]}
+}
+
 # load_env_file <file> — export every KEY=value entry of the file into the current shell.
 load_env_file() {
     local file=$1 line key value
-    local entry='^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=(.*)$'
     while IFS= read -r line || [ -n "$line" ]; do
-        [[ "$line" =~ $entry ]] || continue
-        key=${BASH_REMATCH[2]}
-        value=$(env_file_parse_value "${BASH_REMATCH[3]}")
+        env_file_match_assignment "$line" || continue
+        key=$ENV_FILE_ASSIGN_KEY
+        value=$(env_file_parse_value "$ENV_FILE_ASSIGN_RAW")
         printf -v "$key" '%s' "$value" 2>/dev/null || continue # skip read-only names such as UID
         export "${key?}"
     done <"$file"
