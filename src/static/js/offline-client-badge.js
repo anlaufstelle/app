@@ -44,10 +44,11 @@
             _labelKeptEdits: "",
             // Refs #2630: true while the shown message still claims offline availability.
             _claimsAvailable: false,
+            _onWorkerStatus: null,
             init() {
                 // The registration can fail after the claim was made (e.g. a
                 // first installation that ends redundant): take the claim back.
-                window.addEventListener("offline-worker-status", () => {
+                this._onWorkerStatus = () => {
                     if (!this._claimsAvailable) return;
                     if (window.offlineWorker && window.offlineWorker.isUnavailable && window.offlineWorker.isUnavailable()) {
                         this.showMessage(
@@ -55,13 +56,20 @@
                             "error"
                         );
                     }
-                });
+                };
+                window.addEventListener("offline-worker-status", this._onWorkerStatus);
                 this._pk = this.$el.dataset.pk || "";
                 // Refs #1351/#1385 (M8/Task 4): i18n-Text kommt aus dem Template
                 // (data-*-Attribut), kein hartkodiertes deutsches JS-Literal
                 // fuer eine neue Meldung.
                 this._confirmRemoveText = this.$el.dataset.confirmRemoveText || "";
                 this._labelKeptEdits = this.$el.dataset.labelKeptEdits || "";
+            },
+            // Refs #2630: Alpine calls this when the badge is removed; the window
+            // listener must not outlive the component.
+            destroy() {
+                window.removeEventListener("offline-worker-status", this._onWorkerStatus);
+                this._claimsAvailable = false;
             },
             // CSP-konforme Wrapper-Methoden fuer Template-Expressions
             get isMessageNotError() {

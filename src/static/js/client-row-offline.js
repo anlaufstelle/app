@@ -72,8 +72,9 @@
             // Refs #2630: the last feedback claimed offline availability; a
             // later registration failure takes that claim back.
             _claimTimer: null,
+            _onWorkerStatus: null,
             init() {
-                window.addEventListener("offline-worker-status", () => {
+                this._onWorkerStatus = () => {
                     if (this._claimTimer === null) return;
                     if (window.offlineWorker && window.offlineWorker.isUnavailable && window.offlineWorker.isUnavailable()) {
                         clearTimeout(this._claimTimer);
@@ -83,7 +84,8 @@
                             "error"
                         );
                     }
-                });
+                };
+                window.addEventListener("offline-worker-status", this._onWorkerStatus);
                 this._pk = this.$el.dataset.pk || "";
                 this._labelTake = this.$el.dataset.labelTake || "";
                 this._labelRemove = this.$el.dataset.labelRemove || "";
@@ -92,6 +94,13 @@
                 // fuer eine neue Meldung.
                 this._confirmRemoveText = this.$el.dataset.confirmRemoveText || "";
                 this._labelKeptEdits = this.$el.dataset.labelKeptEdits || "";
+            },
+            // Refs #2630: Alpine calls this when the row is removed (e.g. an HTMX
+            // list swap); the window listener must not outlive the row.
+            destroy() {
+                window.removeEventListener("offline-worker-status", this._onWorkerStatus);
+                clearTimeout(this._claimTimer);
+                this._claimTimer = null;
             },
             get notOffline() {
                 return !this.isOffline;

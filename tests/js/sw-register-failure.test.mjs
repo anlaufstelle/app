@@ -494,3 +494,75 @@ describe("bounded wait for the registration retry", () => {
         expect(badge.message).toContain("offline verfügbar");
     });
 });
+
+describe("listener lifecycle of the take-offline components", () => {
+    const factories = {};
+
+    async function load() {
+        vi.resetModules();
+        window.Alpine = { data: (name, factory) => { factories[name] = factory; } };
+        window.offlineFormFields = { formatTs: () => "" };
+        document.body.dataset.i18nOfflineWorkerUnavailable = "Saved locally, offline pages unavailable.";
+        await import("../../src/static/js/offline-client-badge.js");
+        await import("../../src/static/js/client-row-offline.js");
+        document.dispatchEvent(new Event("alpine:init"));
+        window.offlineClient = {
+            takeClientOffline: vi.fn(async () => ({ survivingEdits: 0 })),
+            isClientOffline: vi.fn(async () => true),
+            getOfflineClient: vi.fn(async () => ({})),
+        };
+    }
+
+    afterEach(() => {
+        delete window.offlineClient;
+        delete window.offlineFormFields;
+        document.body.removeAttribute("data-i18n-offline-worker-unavailable");
+    });
+
+    function installingWorker() {
+        const state = { status: "installing" };
+        window.offlineWorker = {
+            status: () => state.status,
+            isUnavailable: () => state.status === "failed",
+            retry: async () => {},
+        };
+        return state;
+    }
+
+    it("list row: a removed row no longer reacts to worker status changes", async () => {
+        await load();
+        const row = factories.clientRowOffline();
+        row.$el = document.createElement("div");
+        row.init();
+        row._pk = "pk-2";
+        const state = installingWorker();
+        await row.toggleOffline();
+        const feedback = [];
+        const record = (event) => feedback.push(event.detail);
+        window.addEventListener("offline-feedback", record);
+
+        row.destroy();
+        state.status = "failed";
+        window.dispatchEvent(new CustomEvent("offline-worker-status", { detail: { status: "failed" } }));
+        window.removeEventListener("offline-feedback", record);
+
+        expect(feedback).toEqual([]);
+    });
+
+    it("badge: a removed badge no longer reacts to worker status changes", async () => {
+        await load();
+        const badge = factories.offlineClientBadge();
+        badge.$el = document.createElement("div");
+        badge._pk = "pk-1";
+        badge.init();
+        const state = installingWorker();
+        await badge.toggleOffline();
+        expect(badge.message).toContain("offline verfügbar");
+
+        badge.destroy();
+        state.status = "failed";
+        window.dispatchEvent(new CustomEvent("offline-worker-status", { detail: { status: "failed" } }));
+
+        expect(badge.message).toContain("offline verfügbar");
+    });
+});
