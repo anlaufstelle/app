@@ -842,13 +842,18 @@ class TestPrecachedShellBumpGuard:
     # The offline-availability notice in both shells now says "Person" instead
     # of "Klientel" (docs/sprachleitlinie.md). v61 already reached the dev host,
     # so the rendered shell change ships with v62 and this hash.
-    _PINNED_SHELL_HASH = "e6710d4bbc6810f13f3eedf287423c4978b5421c08d16b2e66d29565252408c5"
+    # offline_detail.html now binds its two select labels via for/id. v67 has
+    # not been released or deployed yet, so the change ships with v67 and only
+    # this hash moves.
+    _PINNED_SHELL_HASH = "1224c00a0063e31288606c8cab87f60790174416f80d13d1a81d302797deb3d8"
     # Refs #1904: SHA-256 over the Content-Security-Policy headers the server
     # delivers with the precached offline home (see _policy_fingerprint). Every
     # precached shell and every runtime entry keeps the policy it was stored
     # with; a policy change reaches existing devices only with a new
     # CACHE_NAME. Pinned together with _PINNED_CACHE_NAME above.
-    _PINNED_POLICY_FINGERPRINT = "17fffaf933ec8beb7fcb503babd0d33a3dbd304a29f6f5c2e13787fea69880b7"
+    # The 503 page's inline style hash changed (link contrast); v67 is still
+    # unreleased, so the fingerprint moves without a further bump.
+    _PINNED_POLICY_FINGERPRINT = "3fc42879106ecca42c59ba5b019c6ca845ef4234fbead3e7219a70152a18180a"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
