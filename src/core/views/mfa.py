@@ -154,7 +154,7 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
         verlangt deshalb eine MFA-verifizierte Sitzung. Bestandsfaktor ist TOTP
         ODER Passkey (ADR-032, Refs #1492). Die Ablehnung folgt dem Muster von
         ``MFASettingsView.dispatch`` (Refs #1590) bzw.
-        ``middleware/mfa.py::_required_redirect`` Case 2 — Weiterleitung nach
+        rule 1 in ``services/security/mfa_policy.py`` — Weiterleitung nach
         ``/mfa/verify/`` VOR dem Kontextaufbau, fuer GET und POST gleich. Ohne
         bestaetigten Faktor bleibt das Erstsetup unveraendert erreichbar.
 
@@ -371,8 +371,8 @@ class MFASettingsView(LoginRequiredMixin, TemplateView):
         # noch nicht per zweitem Faktor verifizierte Session (bestätigtes Gerät
         # vorhanden, ``session["mfa_verified"]`` fehlt) darf Passkey-Aliasse und
         # Backup-Code-Zahl nicht sehen. Redirect nach ``/mfa/verify/`` VOR dem
-        # Kontextaufbau — Logik analog ``middleware/mfa.py::_required_redirect``
-        # Case 2. Ohne bestätigtes Gerät gibt es nichts zu verifizieren; der
+        # Kontextaufbau — Logik analog rule 1 in
+        # ``services/security/mfa_policy.py``. Ohne bestätigtes Gerät gibt es nichts zu verifizieren; der
         # Erstsetup-Einstieg über die Settings-Seite bleibt erreichbar.
         if (
             request.user.is_authenticated

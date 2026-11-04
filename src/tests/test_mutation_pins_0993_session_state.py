@@ -37,14 +37,14 @@ class _RequestOhneAttribute:
 
 @pytest.fixture
 def keine_mfa_umleitung(monkeypatch):
-    aufrufe = []
+    calls = []
 
     def _no_factor_no_enforcement(user, session):
-        aufrufe.append(session)
+        calls.append(session)
         return MFAState(has_confirmed_device=False)
 
     monkeypatch.setattr(session_state, "read_mfa_state", _no_factor_no_enforcement)
-    return aufrufe
+    return calls
 
 
 class TestEvaluate:
