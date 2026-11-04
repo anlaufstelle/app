@@ -45,6 +45,19 @@ from core.models.attachment import Attachment
 from core.services.dynamic_records import DYNAMIC_DATA_MODELS, dynamic_facility_lookup
 from core.services.file_vault.encryption import encrypt_dynamic_data, encrypt_field, is_encrypted_value, safe_decrypt
 
+# Identity sentinel for "token could not be decrypted". A string fallback would
+# collide with legitimate plaintext (e.g. the display placeholder itself), and
+# such a value would silently stay under the old key. Refs #2624.
+_UNREADABLE = object()
+
+
+def _decrypt_for_rotation(value):
+    """Decrypt *value*; return ``_UNREADABLE`` for a corrupt token.
+
+    A missing key configuration still propagates from ``safe_decrypt``.
+    """
+    return safe_decrypt(value, default=_UNREADABLE)
+
 
 def _reencrypt_data_json(payload):
     """Re-encrypt every encrypted value in a ``data_json``-style dict.
@@ -58,8 +71,8 @@ def _reencrypt_data_json(payload):
     new_payload = dict(payload)
     for key, value in payload.items():
         if is_encrypted_value(value):
-            decrypted = safe_decrypt(value)
-            if decrypted != "[verschlüsselt]":
+            decrypted = _decrypt_for_rotation(value)
+            if decrypted is not _UNREADABLE:
                 new_payload[key] = encrypt_field(decrypted)
                 changed = True
     return new_payload, changed
@@ -245,8 +258,8 @@ def _reencrypt_rectification_requests(dry_run: bool, *, on_contended: Callable[[
             value = getattr(rr, column)
             if not is_encrypted_value(value):
                 continue
-            decrypted = safe_decrypt(value)
-            if decrypted == "[verschlüsselt]":
+            decrypted = _decrypt_for_rotation(value)
+            if decrypted is _UNREADABLE:
                 continue
             expected[column] = value
             updates[column] = encrypt_field(decrypted)
@@ -287,8 +300,8 @@ def _reencrypt_shift_handover_notes(dry_run: bool, *, on_contended: Callable[[],
         value = note.note
         if not is_encrypted_value(value):
             continue
-        decrypted = safe_decrypt(value)
-        if decrypted == "[verschlüsselt]":
+        decrypted = _decrypt_for_rotation(value)
+        if decrypted is _UNREADABLE:
             continue
         if dry_run:
             updated += 1
@@ -508,8 +521,8 @@ def _reencrypt_attachments(dry_run: bool, *, on_contended: Callable[[], None] | 
         value = att.original_filename_encrypted
         if not is_encrypted_value(value):
             continue
-        decrypted = safe_decrypt(value)
-        if decrypted == "[verschlüsselt]":
+        decrypted = _decrypt_for_rotation(value)
+        if decrypted is _UNREADABLE:
             continue
         if dry_run:
             updated += 1

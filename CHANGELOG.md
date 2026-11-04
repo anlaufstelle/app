@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 
 - **Sprachcookie in Produktion gehärtet** (#2619) — Der Sprachcookie `django_language` wird in Produktion wie der Session-Cookie nur noch mit `Secure`, `HttpOnly` und `SameSite=Lax` gesetzt; die gespeicherte Sprachwahl angemeldeter Konten funktioniert unverändert.
+- **Schlüsselrotation erfasst auch den Klartext „[verschlüsselt]“** (#2624) — Die Feldrotation unterscheidet unlesbare Chiffrate jetzt unabhängig vom Inhalt; ein gespeicherter Freitext, der genau dem Anzeige-Platzhalter entspricht, wird wie jeder andere Wert unter den neuen Primärschlüssel gebracht und bleibt nach Entfernen des Altschlüssels lesbar. Korrupte Chiffrate bleiben unverändert, fehlende Schlüssel brechen weiterhin laut ab.
 
 ## [0.99.9] - 2026-11-01
 
