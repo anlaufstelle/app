@@ -55,3 +55,38 @@ def test_empty_card_rule_covers_only_key_figures(check):
     row = {"report": "ban-overview", "passed": True, "record_numeric_visible": 0}
 
     assert check.report_failures([row]) == []
+
+
+def test_every_card_rule_fails_any_card_without_published_figure(check):
+    rows = [{"report": "ban-overview", "passed": True, "record_numeric_visible": 0}, key_figures(1)]
+
+    assert check.report_failures(rows, every_card=True) == ["ban-overview"]
+
+
+def test_every_card_rule_fails_a_card_without_captured_records(check):
+    rows = [{"report": "hybrid-pdf", "passed": True}, key_figures(1)]
+
+    assert check.report_failures(rows, every_card=True) == ["hybrid-pdf"]
+
+
+def test_every_card_rule_passes_when_all_cards_publish(check):
+    rows = [{"report": "ban-overview", "passed": True, "record_numeric_visible": 3}, key_figures(1)]
+
+    assert check.report_failures(rows, every_card=True) == []
+
+
+def test_max_verdict_fails_on_a_single_slow_run(check):
+    assert check.within_limit([0.5, 3.0, 0.5], limit=2, verdict="max") is False
+
+
+def test_median_verdict_tolerates_a_single_slow_run(check):
+    assert check.within_limit([0.5, 3.0, 0.5], limit=2, verdict="median") is True
+
+
+def test_median_verdict_fails_when_the_median_is_slow(check):
+    assert check.within_limit([2.5, 3.0, 0.5], limit=2, verdict="median") is False
+
+
+def test_unknown_verdict_is_rejected(check):
+    with pytest.raises(ValueError, match="verdict"):
+        check.within_limit([1.0], limit=2, verdict="mean")

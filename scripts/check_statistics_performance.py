@@ -1,8 +1,10 @@
 """Measure protected report cards and hybrid PDF without database writes.
 
 Run against a prepared seed database; this tool never creates or seeds one.
-Exit 1 if any complete request exceeds the configured performance limit or the
-general key figures publish no number at all.
+Exit 1 if a report exceeds the configured performance limit (``--verdict max``
+judges the slowest run, ``--verdict median`` the median of all runs) or a card
+publishes no number at all (by default only the general key figures,
+``--every-card`` extends the rule to every measured report).
 """
 
 from __future__ import annotations
@@ -37,12 +39,25 @@ def count_numeric_values(records) -> tuple[int, int]:
     return published, len(numeric) - published
 
 
-def report_failures(rows) -> list[str]:
-    """Name reports over the limit and a key figures card without any number."""
+def within_limit(times, *, limit: float, verdict: str) -> bool:
+    """Judge the measured durations by the slowest run or by their median."""
+    if verdict == "max":
+        return max(times) <= limit
+    if verdict == "median":
+        return statistics.median(times) <= limit
+    raise ValueError(f"Unknown verdict {verdict!r}: expected 'max' or 'median'")
+
+
+def report_failures(rows, *, every_card: bool = False) -> list[str]:
+    """Name reports over the limit and cards without any published number.
+
+    Without ``every_card`` only the general key figures must publish a number;
+    with it, every measured report must.
+    """
     return [
         row["report"]
         for row in rows
-        if not row["passed"] or (row["report"] == KEY_FIGURES and not row.get("record_numeric_visible"))
+        if not row["passed"] or ((every_card or row["report"] == KEY_FIGURES) and not row.get("record_numeric_visible"))
     ]
 
 
@@ -52,6 +67,8 @@ def main() -> int:
     parser.add_argument("--username", default="admin")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--max-seconds", type=float, default=2)
+    parser.add_argument("--verdict", choices=("max", "median"), default="max")
+    parser.add_argument("--every-card", action="store_true", help="every report must publish a number")
     parser.add_argument("--reports", nargs="+")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -106,6 +123,8 @@ def main() -> int:
         "scale": args.scale,
         "database": connection.settings_dict["NAME"],
         "limit": args.max_seconds,
+        "verdict": args.verdict,
+        "every_card": args.every_card,
         "scope": scope,
         "reports": [],
     }
@@ -142,7 +161,7 @@ def main() -> int:
             "report": name,
             "seconds": times,
             "median": statistics.median(times),
-            "passed": max(times) <= args.max_seconds,
+            "passed": within_limit(times, limit=args.max_seconds, verdict=args.verdict),
         }
         if prepared is not None:
             visible, hidden = count_numeric_values(prepared.records)
@@ -152,7 +171,7 @@ def main() -> int:
         if args.output:
             args.output.write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps(row), flush=True)
-    failures = report_failures(result["reports"])
+    failures = report_failures(result["reports"], every_card=args.every_card)
     if failures:
         print(f"FAILED {', '.join(failures)}", flush=True)
     return 1 if failures else 0

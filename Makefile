@@ -124,7 +124,10 @@ i18n-update:
 
 # Shared preparation and owned server lifecycle for manual E2E and screenshots.
 # The lock is held by this shell until the server exits, including seed --flush.
+# DOCS_SCREENS_DIR lets a check run (make nightly-guards) render into a scratch
+# directory instead of the tracked docs/screenshots/.
 DSM_E2E := DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e
+DOCS_SCREENS_DIR ?= docs/screenshots
 define E2E_SERVER_SESSION
 	@set -eu; \
 	exec 9>"$(CI_LOCK)"; flock -w $(CI_LOCK_TIMEOUT) 9; \
@@ -139,7 +142,7 @@ define E2E_SERVER_SESSION
 	trap 'exit 130' INT; trap 'exit 143' TERM; \
 	if [ "$(1)" = "screenshots" ]; then \
 		sleep 5; kill -0 "$$server_pid"; \
-		$(DSM_E2E) $(PYTHON) src/manage.py screenshot --base-url http://127.0.0.1:8844; \
+		$(DSM_E2E) $(PYTHON) src/manage.py screenshot --base-url http://127.0.0.1:8844 --output-dir "$(DOCS_SCREENS_DIR)"; \
 	else wait "$$server_pid"; fi
 endef
 
@@ -151,7 +154,7 @@ e2e-server:
 # Generate DE/EN desktop/mobile WebP screenshots with the same global lock.
 docs-screens:
 	$(call E2E_SERVER_SESSION,screenshots)
-	@echo "Screenshots in docs/screenshots/"
+	@echo "Screenshots in $(DOCS_SCREENS_DIR)/"
 
 # CI lokal
 # Refs #860: scripts/ mitgescannt — die check_*.py-Helfer landeten sonst nur
@@ -727,6 +730,23 @@ demo-status:
 demo-logs:
 	ssh $(DEMO_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.demo.yml --env-file .env.demo logs -f --tail=200 web caddy'
 
+# Nightly guards (Refs #2687, #2679): the checks that turned red
+# only at the release cut in wave U, run before it instead. Collects every
+# guard's verdict and ends non-zero if one is red; see scripts/nightly_guards.py
+# for the guard list. Parameters:
+#   NIGHTLY_GUARDS             subset, e.g. "perf-medium public-skips"
+#   NIGHTLY_SEED_MAX_AGE_DAYS  reseed the perf databases when older than this
+#   NIGHTLY_PERF_LIMIT         median budget per report in seconds
+#   NIGHTLY_DIR                logs, inventories and screenshots (outside the tree)
+NIGHTLY_GUARDS ?=
+NIGHTLY_SEED_MAX_AGE_DAYS ?= 7
+NIGHTLY_PERF_LIMIT ?= 2
+NIGHTLY_DIR ?= $(or $(XDG_STATE_HOME),$(HOME)/.local/state)/anlaufstelle-nightly
+.PHONY: nightly-guards
+nightly-guards:
+	$(PYTHON) scripts/nightly_guards.py --python "$(PYTHON)" --state-dir "$(NIGHTLY_DIR)" \
+		--seed-max-age-days $(NIGHTLY_SEED_MAX_AGE_DAYS) --perf-limit $(NIGHTLY_PERF_LIMIT) $(NIGHTLY_GUARDS)
+
 # Contributor target overview without counts that drift with the test suite.
 .PHONY: help
 help:
@@ -735,6 +755,7 @@ help:
 	@echo "test-e2e-smoke: E2E flows marked smoke"
 	@echo "dco-check / mutation*: maintainer tools; availability is checked in public trees"
 	@echo "CI_LOCK: shared host lock; default XDG_RUNTIME_DIR, TMPDIR or /tmp + /anlaufstelle-ci.lock"
+	@echo "nightly-guards: perf smoke (medium/large seed), complete demo gate, public skip profile, docs screenshots; red at the end, not at the first failure"
 
 # File-based unit slices use the same collection and coverage path as CI (Refs #2598).
 UNIT_SLICES ?= 3
