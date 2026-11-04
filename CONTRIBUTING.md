@@ -275,7 +275,7 @@ Die im Demo-Panel beworbenen Demo-Konten haben keine E-Mail-Adresse, weil die ge
 | Quick-Vorlagen / Einrichtung | 6 | 6 | 6 | 6 | 6 |
 | DeletionRequests | — | 5 | 15 | 4 | 2 (Solo: 1) |
 | RetentionProposals | 4 | 6 | 12 | 6 | 3 (Solo: 2) |
-| Hausverbote (letzte 30 Tage) / Einrichtung | — | 5 | 5 | — | — |
+| Hausverbote (letzte 14 Tage) / Einrichtung | — | k + 2 (7) | k + 2 (7) | — | — |
 | Dateianhänge (ca.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | Anteil 25 % (Beratungs-Ereignisse) | ~5 (30 %) (Solo: ~3) |
 | Zeitraum | 80 Tage | 365 Tage | 3 Jahre | 1000 Tage | 270 Tage |
 | Zeitfenster je Einrichtung | Hauptstelle 3 | Hauptstelle 3, Nord 3 | Hauptstelle 3, Nord 3, Süd 2, Ost 2, West 3 | Hauptstelle 3 | Kontaktladen 3, Falkenweg 3, Lindenhof 0, Nachtfalter 2, Wilhelmshöhe 2, Amalie 3 |

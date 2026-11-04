@@ -272,7 +272,7 @@ The demo accounts advertised in the demo panel have no email address because the
 | Quick Templates / facility | 6 | 6 | 6 | 6 | 6 |
 | DeletionRequests | — | 5 | 15 | 4 | 2 (solo: 1) |
 | RetentionProposals | 4 | 6 | 12 | 6 | 3 (solo: 2) |
-| Bans (last 30 days) / facility | — | 5 | 5 | — | — |
+| Bans (last 14 days) / facility | — | k + 2 (7) | k + 2 (7) | — | — |
 | Attachments (approx.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | share 25 % (counseling events) | ~5 (30 %) (solo: ~3) |
 | Time span | 80 days | 365 days | 3 years | 1000 days | 270 days |
 | Time filters per facility | Main facility 3 | Main facility 3, Nord 3 | Main facility 3, Nord 3, Süd 2, Ost 2, West 3 | Main facility 3 | Kontaktladen 3, Falkenweg 3, Lindenhof 0, Nachtfalter 2, Wilhelmshöhe 2, Amalie 3 |
@@ -1058,4 +1058,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.9 -->
 <!-- translation-date: 2026-11-04 -->
-<!-- source-hash: 28b157da05aeb85de72c95cfff7bac846a36aa6a -->
+<!-- source-hash: 72484c4b44f9820e64738e86b9a14595830b030f -->

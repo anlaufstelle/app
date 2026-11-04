@@ -50,7 +50,7 @@ KEY_TO_DOC_LABEL = {
     "retention_proposals": "RetentionProposals",
     "attachment_ratio": "Dateianhänge (ca.)",
     "zeitraum_days": "Zeitraum",
-    "recent_bans": "Hausverbote (letzte 30 Tage) / Einrichtung",
+    "recent_bans_margin": "Hausverbote (letzte 14 Tage) / Einrichtung",
 }
 
 
