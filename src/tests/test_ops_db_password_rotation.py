@@ -26,22 +26,23 @@ def _write_executable(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-def _fixture(tmp_path: Path, *, accept_old_login: bool = False) -> tuple[Path, Path, Path]:
-    env_file = tmp_path / ".env"
-    env_file.write_text(
-        "\n".join(
-            (
-                "POSTGRES_DB=anlaufstelle",
-                "POSTGRES_USER=anlaufstelle",
-                f"POSTGRES_PASSWORD={OLD_APP}",
-                "POSTGRES_ADMIN_USER=anlaufstelle_admin",
-                f"POSTGRES_ADMIN_PASSWORD={OLD_ADMIN}",
-                f"POSTGRES_BOOTSTRAP_PASSWORD={OLD_BOOTSTRAP}",
-                "",
-            )
-        ),
-        encoding="utf-8",
+def _default_env_text() -> str:
+    return "\n".join(
+        (
+            "POSTGRES_DB=anlaufstelle",
+            "POSTGRES_USER=anlaufstelle",
+            f"POSTGRES_PASSWORD={OLD_APP}",
+            "POSTGRES_ADMIN_USER=anlaufstelle_admin",
+            f"POSTGRES_ADMIN_PASSWORD={OLD_ADMIN}",
+            f"POSTGRES_BOOTSTRAP_PASSWORD={OLD_BOOTSTRAP}",
+            "",
+        )
     )
+
+
+def _fixture(tmp_path: Path, *, accept_old_login: bool = False, env_text: str | None = None) -> tuple[Path, Path, Path]:
+    env_file = tmp_path / ".env"
+    env_file.write_text(_default_env_text() if env_text is None else env_text, encoding="utf-8")
     env_file.chmod(0o600)
     compose_file = tmp_path / "docker-compose.prod.yml"
     compose_file.write_text("services: {}\n", encoding="utf-8")
@@ -125,19 +126,24 @@ def _run(
     *,
     accept_old_login: bool = False,
     extra_compose_files: tuple[str, ...] = (),
+    env_text: str | None = None,
+    old_app: str = OLD_APP,
+    old_admin: str = OLD_ADMIN,
+    old_bootstrap: str = OLD_BOOTSTRAP,
+    env_file_override: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
-    env_file, compose_file, state_dir = _fixture(tmp_path, accept_old_login=accept_old_login)
+    env_file, compose_file, state_dir = _fixture(tmp_path, accept_old_login=accept_old_login, env_text=env_text)
     for name in extra_compose_files:
         (tmp_path / name).write_text("services: {}\n", encoding="utf-8")
     env = {
         "PATH": f"{tmp_path / 'bin'}:{os.environ.get('PATH', '')}",
         "COMPOSE_FILE": str(compose_file),
-        "ENV_FILE": str(env_file),
+        "ENV_FILE": env_file_override or str(env_file),
         "ROTATION_TEST_STATE": str(state_dir),
         "ROTATION_TEST_ACCEPT_OLD": "1" if accept_old_login else "0",
-        "ROTATION_TEST_OLD_APP": OLD_APP,
-        "ROTATION_TEST_OLD_ADMIN": OLD_ADMIN,
-        "ROTATION_TEST_OLD_BOOTSTRAP": OLD_BOOTSTRAP,
+        "ROTATION_TEST_OLD_APP": old_app,
+        "ROTATION_TEST_OLD_ADMIN": old_admin,
+        "ROTATION_TEST_OLD_BOOTSTRAP": old_bootstrap,
         "ROTATION_TEST_NEW_APP": NEW_APP,
         "ROTATION_TEST_NEW_ADMIN": NEW_ADMIN,
         "ROTATION_TEST_NEW_BOOTSTRAP": NEW_BOOTSTRAP,
@@ -280,3 +286,175 @@ def test_dev_deploy_syncs_rotation_script_to_the_host() -> None:
         pytest.skip("dev-ops/ deploy/deploy-dev.sh nicht im Public-Snapshot")
     deploy = deploy_path.read_text(encoding="utf-8")
     assert "scripts/ops/rotate-db-passwords.sh" in deploy
+
+
+# --- Characterization of how the rotation reads the old values from the env file (Refs #2571) ---
+
+BASE_LINES = ("POSTGRES_DB=anlaufstelle", "POSTGRES_USER=anlaufstelle", "POSTGRES_ADMIN_USER=anlaufstelle_admin")
+
+
+def _env_text(
+    app: str = OLD_APP, admin: str = OLD_ADMIN, bootstrap: str = OLD_BOOTSTRAP, *, extra: tuple[str, ...] = ()
+) -> str:
+    """Env file text; the three password values are written verbatim (raw dotenv syntax)."""
+    lines = (
+        *BASE_LINES,
+        f"POSTGRES_PASSWORD={app}",
+        f"POSTGRES_ADMIN_PASSWORD={admin}",
+        f"POSTGRES_BOOTSTRAP_PASSWORD={bootstrap}",
+        *extra,
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _assert_rejected_before_any_change(
+    result: subprocess.CompletedProcess[str], env_file: Path, log_file: Path, before: str
+) -> None:
+    """The run failed in the preflight: no consumer stopped, no SQL, env file untouched, no secret printed."""
+    assert result.returncode != 0
+    log = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
+    assert " stop " not in log
+    assert "sql:" not in log
+    assert "up -d" not in log
+    assert env_file.read_text(encoding="utf-8") == before
+    for secret in (OLD_APP, OLD_ADMIN, OLD_BOOTSTRAP):
+        assert secret not in result.stdout
+        assert secret not in result.stderr
+
+
+def _assert_rotated(result: subprocess.CompletedProcess[str], env_file: Path, log_file: Path) -> None:
+    assert result.returncode == 0, result.stderr
+    env_text = env_file.read_text(encoding="utf-8")
+    assert f"\nPOSTGRES_PASSWORD={NEW_APP}\n" in env_text
+    assert f"\nPOSTGRES_ADMIN_PASSWORD={NEW_ADMIN}\n" in env_text
+    assert f"\nPOSTGRES_BOOTSTRAP_PASSWORD={NEW_BOOTSTRAP}\n" in env_text
+    assert log_file.read_text(encoding="utf-8").count(":old") == 3
+
+
+def test_double_and_single_quoted_old_passwords_are_unquoted(tmp_path: Path) -> None:
+    text = _env_text(f'"{OLD_APP}"', f"'{OLD_ADMIN}'", OLD_BOOTSTRAP)
+    result, env_file, log_file = _run(tmp_path, env_text=text)
+    _assert_rotated(result, env_file, log_file)
+
+
+def test_comments_blank_lines_and_foreign_keys_are_ignored_and_preserved(tmp_path: Path) -> None:
+    text = _env_text(
+        extra=(
+            "",
+            "# POSTGRES_PASSWORD=commented-out-duplicate",
+            "#POSTGRES_ADMIN_PASSWORD=commented-out-duplicate",
+            "POSTGRES_PASSWORD_NOTE=unrelated-value",
+            "OTHER=1",
+        )
+    )
+    result, env_file, log_file = _run(tmp_path, env_text=text)
+    _assert_rotated(result, env_file, log_file)
+    env_text = env_file.read_text(encoding="utf-8")
+    for kept in (
+        "# POSTGRES_PASSWORD=commented-out-duplicate\n",
+        "#POSTGRES_ADMIN_PASSWORD=commented-out-duplicate\n",
+        "POSTGRES_PASSWORD_NOTE=unrelated-value\n",
+        "OTHER=1\n",
+        "POSTGRES_DB=anlaufstelle\n",
+    ):
+        assert kept in env_text
+
+
+def test_equals_sign_inside_the_old_password_is_part_of_the_value(tmp_path: Path) -> None:
+    old_app = "old-app-password=with=equals=="
+    result, env_file, log_file = _run(tmp_path, env_text=_env_text(app=old_app), old_app=old_app)
+    _assert_rotated(result, env_file, log_file)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    ["old-app-password-$(touch {marker})", "old-app-password-`touch {marker}`", "old-app-password-$HOME-${{PATH}}"],
+    ids=["command-substitution", "backticks", "variable-expansion"],
+)
+def test_shell_syntax_in_an_old_password_stays_data(tmp_path: Path, payload: str) -> None:
+    marker = tmp_path / "executed"
+    old_app = payload.format(marker=marker)
+    result, env_file, log_file = _run(tmp_path, env_text=_env_text(app=old_app), old_app=old_app)
+    _assert_rotated(result, env_file, log_file)
+    assert not marker.exists(), "an env value was executed as shell code"
+
+
+_REQUIRED_VALUE_MUTATIONS = {
+    "missing": lambda text: text.replace(f"POSTGRES_PASSWORD={OLD_APP}\n", ""),
+    "duplicate-password": lambda text: text + f"POSTGRES_PASSWORD={OLD_APP}\n",
+    "missing-bootstrap": lambda text: text.replace(f"POSTGRES_BOOTSTRAP_PASSWORD={OLD_BOOTSTRAP}\n", ""),
+}
+_NOT_CAUGHT_IN_PREFLIGHT = {
+    "empty": lambda text: text.replace(f"POSTGRES_PASSWORD={OLD_APP}", "POSTGRES_PASSWORD="),
+    "empty-double-quotes": lambda text: text.replace(f"POSTGRES_PASSWORD={OLD_APP}", 'POSTGRES_PASSWORD=""'),
+    "empty-single-quotes": lambda text: text.replace(
+        f"POSTGRES_ADMIN_PASSWORD={OLD_ADMIN}", "POSTGRES_ADMIN_PASSWORD=''"
+    ),
+    "duplicate-user": lambda text: text.replace(
+        "POSTGRES_USER=anlaufstelle\n", "POSTGRES_USER=anlaufstelle\nPOSTGRES_USER=other\n"
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_REQUIRED_VALUE_MUTATIONS))
+def test_missing_or_duplicate_password_aborts_before_any_change(tmp_path: Path, name: str) -> None:
+    text = _REQUIRED_VALUE_MUTATIONS[name](_env_text())
+    result, env_file, log_file = _run(tmp_path, env_text=text)
+    _assert_rejected_before_any_change(result, env_file, log_file, text)
+    assert "FEHLER" in result.stderr
+
+
+@pytest.mark.parametrize("name", sorted(_NOT_CAUGHT_IN_PREFLIGHT))
+def test_current_gap_empty_or_duplicate_value_is_not_stopped_in_preflight(tmp_path: Path, name: str) -> None:
+    # Characterization of the present behaviour: the reader reports the problem inside a command
+    # substitution, where errexit does not apply, so the run continues up to the consumer stop.
+    text = _NOT_CAUGHT_IN_PREFLIGHT[name](_env_text())
+    _result, _env_file, log_file = _run(tmp_path, env_text=text)
+    assert " stop web cron" in log_file.read_text(encoding="utf-8")
+
+
+def test_missing_env_file_aborts_before_any_change(tmp_path: Path) -> None:
+    missing = tmp_path / "does-not-exist.env"
+    result, _env_file, log_file = _run(tmp_path, env_file_override=str(missing))
+    assert result.returncode != 0
+    assert "Env-Datei fehlt" in result.stderr
+    assert not log_file.exists()
+    assert not missing.exists()
+
+
+# Current behaviour for dotenv forms the shared reader (scripts/ops/lib/env-file.sh) handles differently.
+
+
+def test_current_quoted_value_with_inline_comment_keeps_quotes_and_comment(tmp_path: Path) -> None:
+    text = _env_text(app=f'"{OLD_APP}" # note')
+    result, env_file, log_file = _run(tmp_path, env_text=text)
+    # The negative login check receives the raw text, so it cannot recognize the old password.
+    assert result.returncode != 0
+    assert "sql:rotate" in log_file.read_text(encoding="utf-8")
+    assert env_file.read_text(encoding="utf-8") == text
+    assert "Rollback" in result.stderr
+
+
+@pytest.mark.parametrize("prefix", ["export ", "  ", "  export  "], ids=["export", "indent", "indent-export"])
+def test_current_export_prefix_or_indent_is_not_recognized(tmp_path: Path, prefix: str) -> None:
+    text = _env_text().replace("POSTGRES_PASSWORD=", f"{prefix}POSTGRES_PASSWORD=")
+    result, env_file, log_file = _run(tmp_path, env_text=text)
+    _assert_rejected_before_any_change(result, env_file, log_file, text)
+
+
+def test_current_whitespace_around_equals_is_not_recognized(tmp_path: Path) -> None:
+    text = _env_text().replace("POSTGRES_PASSWORD=", "POSTGRES_PASSWORD = ")
+    result, env_file, log_file = _run(tmp_path, env_text=text)
+    _assert_rejected_before_any_change(result, env_file, log_file, text)
+
+
+def test_current_backslash_escapes_in_double_quotes_stay_literal(tmp_path: Path) -> None:
+    old_app = r"old-app-password-\$HOME-\"x"
+    result, env_file, log_file = _run(tmp_path, env_text=_env_text(app=f'"{old_app}"'), old_app=old_app)
+    _assert_rotated(result, env_file, log_file)
+
+
+def test_current_unterminated_quote_is_kept_as_part_of_the_value(tmp_path: Path) -> None:
+    old_app = '"old-app-password-never-closed'
+    result, env_file, log_file = _run(tmp_path, env_text=_env_text(app=old_app), old_app=old_app)
+    _assert_rotated(result, env_file, log_file)
