@@ -7,6 +7,7 @@ import os
 import sys
 from pathlib import Path
 
+from ._keyring import split_key_ring as _split_key_ring
 from .base import *  # noqa: F401, F403
 from .base import _validate_encryption_key_ring
 
@@ -89,18 +90,14 @@ REQUIRE_ENCRYPTION = os.environ.get("REQUIRE_ENCRYPTION", "").lower() in ("true"
 _LOCAL_ENCRYPTION_KEY_FILE = os.environ.get("LOCAL_ENCRYPTION_KEY_FILE", "")
 
 
-def _ring_has_keys(value):
-    return any(entry.strip() for entry in (value or "").split(","))
-
-
-if not _ring_has_keys(ENCRYPTION_KEYS) and _LOCAL_ENCRYPTION_KEY_FILE:  # noqa: F405
+if not _split_key_ring(ENCRYPTION_KEYS) and _LOCAL_ENCRYPTION_KEY_FILE:  # noqa: F405
     # Fehlt die Datei oder ist sie unlesbar, geht es unverändert in den
     # Klartext-/``REQUIRE_ENCRYPTION``-Pfad unten — laut statt still.
     with contextlib.suppress(OSError):
         ENCRYPTION_KEYS = Path(_LOCAL_ENCRYPTION_KEY_FILE).read_text(encoding="utf-8").strip()
         _validate_encryption_key_ring(ENCRYPTION_KEYS)
 
-if not _ring_has_keys(ENCRYPTION_KEYS):  # noqa: F405
+if not _split_key_ring(ENCRYPTION_KEYS):  # noqa: F405
     if REQUIRE_ENCRYPTION:
         from django.core.exceptions import ImproperlyConfigured
 

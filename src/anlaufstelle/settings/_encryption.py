@@ -5,11 +5,13 @@ import warnings
 from cryptography.fernet import Fernet
 from django.core.exceptions import ImproperlyConfigured
 
+from ._keyring import split_key_ring
+
 
 def validate_encryption_key_ring(value: str) -> None:
     """Reject malformed entries and warn about redundant keys without disclosure."""
     seen: set[str] = set()
-    entries = [entry.strip() for entry in value.split(",") if entry.strip()]
+    entries = split_key_ring(value)
     for position, entry in enumerate(entries, start=1):
         try:
             Fernet(entry)

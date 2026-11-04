@@ -28,18 +28,39 @@ def _imported_names(path: Path, module: str) -> set[str]:
     }
 
 
-def _local_comma_splitters(path: Path) -> list[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    return [
-        function.name
-        for function in ast.walk(tree)
-        if isinstance(function, ast.FunctionDef)
-        for call in ast.walk(function)
-        if isinstance(call, ast.Call)
-        and isinstance(call.func, ast.Attribute)
-        and call.func.attr == "split"
-        and [arg.value for arg in call.args if isinstance(arg, ast.Constant)] == [","]
-    ]
+#: Comma splits that are not key-ring parsing, per module and enclosing function.
+_NON_RING_COMMA_SPLITS = {
+    "anlaufstelle/settings/_env.py": {"env_csv"},  # generic CSV settings (hosts, origins)
+    "anlaufstelle/settings/_mfa_roles.py": {"_parse_role_list"},  # MFA role names
+    "core/services/file_vault/policy.py": {"enforce_allowed_file_types"},  # file extensions
+}
+_SHARED_HELPER = "anlaufstelle/settings/_keyring.py"
+
+
+class _CommaSplitSites(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.functions: list[str] = []
+        self.sites: set[str] = set()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self.functions.append(node.name)
+        self.generic_visit(node)
+        self.functions.pop()
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "split"
+            and [arg.value for arg in node.args if isinstance(arg, ast.Constant)] == [","]
+        ):
+            self.sites.add(self.functions[-1] if self.functions else "<module>")
+        self.generic_visit(node)
+
+
+def _comma_split_sites(path: Path) -> set[str]:
+    visitor = _CommaSplitSites()
+    visitor.visit(ast.parse(path.read_text(encoding="utf-8")))
+    return visitor.sites
 
 
 def _prod_import(*, key_ring: str = " , ") -> subprocess.CompletedProcess[str]:
@@ -89,11 +110,23 @@ def test_runtime_uses_the_settings_time_key_ring_helper():
     assert runtime_helper is settings_time_helper
 
 
-def test_prod_startgate_imports_the_shared_helper_instead_of_a_copy():
-    prod_settings = SRC_DIR / "anlaufstelle" / "settings" / "prod.py"
+@pytest.mark.parametrize("module", ["prod.py", "dev.py", "_encryption.py"])
+def test_settings_modules_import_the_shared_helper(module):
+    assert "split_key_ring" in _imported_names(SRC_DIR / "anlaufstelle" / "settings" / module, "_keyring")
 
-    assert "split_key_ring" in _imported_names(prod_settings, "_keyring")
-    assert _local_comma_splitters(prod_settings) == []
+
+def test_only_the_shared_helper_splits_the_key_ring():
+    modules = sorted(
+        [
+            *(SRC_DIR / "anlaufstelle" / "settings").glob("*.py"),
+            *(SRC_DIR / "core" / "services" / "file_vault").glob("*.py"),
+        ]
+    )
+    sites = {path.relative_to(SRC_DIR).as_posix(): _comma_split_sites(path) for path in modules}
+
+    assert sites.pop(_SHARED_HELPER) == {"split_key_ring"}
+    unexpected = {module: found - _NON_RING_COMMA_SPLITS.get(module, set()) for module, found in sites.items()}
+    assert {module: found for module, found in unexpected.items() if found} == {}
 
 
 def test_shared_helper_loads_before_django_setup_without_app_modules():
