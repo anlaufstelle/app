@@ -384,9 +384,8 @@ class Runner:
             "--skip-inventory",
             str(inventory),
         ]
-        env = environment()
         with self.lock():
-            code = self.run(command, log, env=env, cwd=snapshot)
+            code = self.run(command, log, env=dict(os.environ), cwd=snapshot)
         text = log.read_text()
         unapproved = re.findall(r"^Unapproved skip \[public\]: (.*)$", text, re.M)
         detail = self.pytest_detail(log)
@@ -426,11 +425,16 @@ class Runner:
             elif path.exists():
                 path.unlink()
                 stripped += 1
-        # Build artefacts are ignored by git but needed by a few guards.
+        # Build artefacts are ignored by git but needed by a few guards; the
+        # settings read .env themselves, so the snapshot gets a copy instead of
+        # the file's values in the environment (DJANGO_SETTINGS_MODULE in .env
+        # would otherwise override the test settings of pyproject.toml).
         for relative in ("node_modules", "src/static/css/styles.css"):
             source = ROOT / relative
             if source.exists():
                 (snapshot / relative).symlink_to(source)
+        if (ROOT / ".env").is_file():
+            shutil.copy2(ROOT / ".env", snapshot / ".env")
         return stripped
 
     # -- dispatch ----------------------------------------------------------
