@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import re
@@ -11,6 +12,7 @@ import sys
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
+from statistics import median
 from xml.etree.ElementTree import ParseError
 
 from defusedxml import ElementTree
@@ -69,8 +71,59 @@ def duration(value: str) -> float:
     return seconds
 
 
-def convert(junit: list[Path], durations: list[Path], output: Path) -> None:
+def scale_factor(value: str) -> float:
+    factor = float(value)
+    if not math.isfinite(factor) or factor <= 0:
+        raise ValueError(f"Scale must be a finite positive number: {value}")
+    return factor
+
+
+def read_csv_durations(source: Path) -> Counter[str]:
+    """Sum per-spec durations from a CSV with one row per test and several runs.
+
+    Columns: ``test`` (``src.tests.e2e.<module>.<Class>::<test>[param]``) plus pairs
+    ``pN``/``pN_s`` (status and seconds of run N). A test counts with the median of its
+    passed runs; without any passed run it counts with the maximum of its runs.
+    """
     weights: Counter[str] = Counter()
+    with source.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        fields = reader.fieldnames or []
+        runs = [name[:-2] for name in fields if re.fullmatch(r"p\d+_s", name) and name[:-2] in fields]
+        if "test" not in fields or not runs:
+            raise ValueError(f"{source.name}: expected columns test and pN/pN_s pairs")
+        for row in reader:
+            spec = spec_path(row["test"] or "")
+            passed: list[float] = []
+            every: list[float] = []
+            for run in runs:
+                seconds = (row[f"{run}_s"] or "").strip()
+                if not seconds:
+                    continue
+                value = duration(seconds)
+                every.append(value)
+                if (row[run] or "").strip() == "pass":
+                    passed.append(value)
+            if not every:
+                raise ValueError(f"{source.name}: no duration for {row['test']}")
+            weights[spec] += median(passed) if passed else max(every)
+    return weights
+
+
+def convert(
+    junit: list[Path],
+    durations: list[Path],
+    output: Path,
+    csv_files: list[Path] | None = None,
+    *,
+    scale: float = 1.0,
+    measured_at: str | None = None,
+    head: str | None = None,
+) -> None:
+    csv_files = csv_files or []
+    weights: Counter[str] = Counter()
+    for source in csv_files:
+        weights.update(read_csv_durations(source))
     for source in junit:
         for case in ElementTree.parse(source).getroot().iter("testcase"):
             name = spec_path(case.get("file") or case.get("classname", ""))
@@ -83,16 +136,17 @@ def convert(junit: list[Path], durations: list[Path], output: Path) -> None:
                 weights[spec_path(match[2])] += duration(match[1])
     if not weights:
         raise ValueError("No E2E durations found")
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    head = head or subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     data: dict[str, object] = {
         # Rounded zero-duration cases still need a positive scheduling weight.
-        name: max(round(seconds, 6), 0.000001)
+        name: max(round(seconds * scale, 6), 0.000001)
         for name, seconds in sorted(weights.items())
     }
     data["_meta"] = {
-        "source": ", ".join(path.name for path in [*junit, *durations]),
-        "measured_at": datetime.now(UTC).isoformat(),
+        "source": ", ".join(path.name for path in [*junit, *durations, *csv_files]),
+        "measured_at": measured_at or datetime.now(UTC).isoformat(),
         "head": head,
+        "scale": scale,
     }
     output.write_text(json.dumps(data, indent=2) + "\n")
 
@@ -101,6 +155,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--from-junit", type=Path, nargs="+", default=[])
     parser.add_argument("--from-durations", type=Path, nargs="+", default=[])
+    parser.add_argument(
+        "--from-csv", type=Path, nargs="+", default=[], help="CSV with test and pN/pN_s status/seconds columns"
+    )
+    parser.add_argument("--scale", default="1.0", help="Multiply all weights (e.g. runner ratio)")
+    parser.add_argument("--measured-at", help="ISO date or time of the measurement (default: now)")
+    parser.add_argument("--head", help="Measured commit (default: current HEAD)")
     parser.add_argument("--output", type=Path, default=DEFAULT_WEIGHTS)
     parser.add_argument("--validate", type=Path)
     args = parser.parse_args()
@@ -108,7 +168,19 @@ def main() -> int:
         if args.validate:
             load_weights(args.validate)
         else:
-            convert(args.from_junit, args.from_durations, args.output)
+            if args.measured_at:
+                datetime.fromisoformat(args.measured_at)
+            if args.head and not re.fullmatch(r"[0-9a-f]{7,40}", args.head):
+                raise ValueError(f"Invalid commit: {args.head}")
+            convert(
+                args.from_junit,
+                args.from_durations,
+                args.output,
+                args.from_csv,
+                scale=scale_factor(args.scale),
+                measured_at=args.measured_at,
+                head=args.head,
+            )
         return 0
     except (ValueError, OSError, TypeError, KeyError, ParseError, DefusedXmlException) as error:
         print(f"e2e_weights: {error}", file=sys.stderr)

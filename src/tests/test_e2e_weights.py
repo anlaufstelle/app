@@ -169,3 +169,110 @@ def test_slicer_ignores_stale_weights_but_validator_rejects_them(tmp_path):
     validated = run("scripts/ci/e2e_weights.py", "--validate", weights)
     assert validated.returncode != 0
     assert "Unknown spec path: test_deleted.py" in validated.stderr
+
+
+CSV_HEADER = "test,slice,p1,p1_s,p2,p2_s,p3,p3_s\n"
+
+
+def _csv_fixture(tmp_path, specs):
+    """Build a small three-pass CSV; ``specs`` are real spec file names."""
+    a, b = specs
+    stem_a, stem_b = Path(a).stem, Path(b).stem
+    rows = [
+        # Median of three passed runs is 2.0 (not the mean 2.67 nor the maximum 4.0).
+        f"src.tests.e2e.{stem_a}.TestOne::test_x[chromium],1,pass,1.0,pass,2.0,pass,5.0\n",
+        # A failed run is ignored: median of the two passed runs (1.0, 3.0) = 2.0.
+        f"src.tests.e2e.{stem_a}.TestOne::test_y[chromium],1,pass,1.0,fail,90.0,pass,3.0\n",
+        # No passed run at all (all skipped): the maximum of the runs counts.
+        f"src.tests.e2e.{stem_b}.TestTwo::test_z[chromium],2,skip,0.5,skip,2.5,skip,1.5\n",
+        # Module-level test without a class, parametrised id containing a comma-free bracket.
+        f"src.tests.e2e.{stem_b}::test_w[chromium-a],2,pass,4.0,pass,4.0,pass,4.0\n",
+    ]
+    path = tmp_path / "durations.csv"
+    path.write_text(CSV_HEADER + "".join(rows))
+    return path
+
+
+def test_converter_reads_csv_with_median_of_passed_runs_and_scale(tmp_path):
+    a, b = [p.name for p in sorted(BASE.glob("test_*.py"))[:2]]
+    source = _csv_fixture(tmp_path, (a, b))
+    output = tmp_path / "weights.json"
+    head = "ff45ee7f650a958f02c9f7678ca223797213986d"
+    result = run(
+        "scripts/ci/e2e_weights.py",
+        "--from-csv",
+        source,
+        "--scale",
+        "0.5",
+        "--measured-at",
+        "2026-11-04",
+        "--head",
+        head,
+        "--output",
+        output,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(output.read_text())
+    assert data[a] == pytest.approx((2.0 + 2.0) * 0.5)
+    assert data[b] == pytest.approx((2.5 + 4.0) * 0.5)
+    assert data["_meta"] == {"source": "durations.csv", "measured_at": "2026-11-04", "head": head, "scale": 0.5}
+    assert run("scripts/ci/e2e_weights.py", "--validate", output).returncode == 0
+
+
+def test_converter_scale_defaults_to_one_and_is_recorded(tmp_path):
+    a, b = [p.name for p in sorted(BASE.glob("test_*.py"))[:2]]
+    source = _csv_fixture(tmp_path, (a, b))
+    output = tmp_path / "weights.json"
+    result = run("scripts/ci/e2e_weights.py", "--from-csv", source, "--output", output)
+    assert result.returncode == 0, result.stderr
+    data = json.loads(output.read_text())
+    assert data[a] == pytest.approx(4.0)
+    assert data["_meta"]["scale"] == 1.0
+    assert data["_meta"]["head"]  # falls back to the current commit
+
+
+def test_converter_csv_combines_with_junit_input(tmp_path):
+    a, b = [p.name for p in sorted(BASE.glob("test_*.py"))[:2]]
+    source = _csv_fixture(tmp_path, (a, b))
+    xml = tmp_path / "one.xml"
+    xml.write_text(f'<testsuite><testcase file="src/tests/e2e/{a}" name="a" time="1.5"/></testsuite>')
+    output = tmp_path / "weights.json"
+    result = run("scripts/ci/e2e_weights.py", "--from-junit", xml, "--from-csv", source, "--output", output)
+    assert result.returncode == 0, result.stderr
+    data = json.loads(output.read_text())
+    assert data[a] == pytest.approx(5.5)
+    assert data["_meta"]["source"] == "one.xml, durations.csv"
+
+
+@pytest.mark.parametrize("scale", ["0", "-1", "nan", "inf", "fast"])
+def test_converter_rejects_invalid_scale(tmp_path, scale):
+    a, b = [p.name for p in sorted(BASE.glob("test_*.py"))[:2]]
+    source = _csv_fixture(tmp_path, (a, b))
+    output = tmp_path / "weights.json"
+    result = run("scripts/ci/e2e_weights.py", "--from-csv", source, "--scale", scale, "--output", output)
+    assert result.returncode != 0
+    assert "e2e_weights:" in result.stderr  # rejected by the converter, not by argument parsing
+    assert not output.exists()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "",
+        CSV_HEADER,
+        "name,slice\nx,1\n",
+        CSV_HEADER + "src.tests.e2e.test_absent_spec.TestX::test_a,1,pass,1.0,pass,1.0,pass,1.0\n",
+        CSV_HEADER + "src.tests.e2e.conftest.TestX::test_a,1,pass,1.0,pass,1.0,pass,1.0\n",
+        CSV_HEADER + "src.tests.e2e.test_a11y_reach_and_contrast.TestX::test_a,1,pass,-1.0,pass,1.0,pass,1.0\n",
+        CSV_HEADER + "src.tests.e2e.test_a11y_reach_and_contrast.TestX::test_a,1,pass,fast,pass,1.0,pass,1.0\n",
+        CSV_HEADER + "src.tests.e2e.test_a11y_reach_and_contrast.TestX::test_a,1,,,,,,\n",
+    ],
+)
+def test_converter_rejects_empty_malformed_and_unknown_csv(tmp_path, content):
+    source = tmp_path / "durations.csv"
+    source.write_text(content)
+    output = tmp_path / "weights.json"
+    result = run("scripts/ci/e2e_weights.py", "--from-csv", source, "--output", output)
+    assert result.returncode != 0
+    assert "e2e_weights:" in result.stderr  # rejected by the converter, not by argument parsing
+    assert not output.exists()
