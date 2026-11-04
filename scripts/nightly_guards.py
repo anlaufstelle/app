@@ -43,6 +43,7 @@ from dotenv import dotenv_values
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 BUILD_RELEASE = ROOT / "dev-ops/release/build-release.sh"
+SANITIZER = ROOT / "dev-ops/release/sanitize_release_tree.py"
 PERF_SCRIPT = SCRIPTS / "check_statistics_performance.py"
 PERF_SETTINGS = "anlaufstelle.settings.test"
 STAMP_PREFIX = "nightly-seed"
@@ -364,6 +365,12 @@ class Runner:
         snapshot = self.state / "public-tree"
         stripped = self.build_public_snapshot(snapshot)
         print(f"[{name}] public snapshot at {snapshot}: {stripped} stripped paths", flush=True)
+        # The release build sanitizes the stripped tree (repository links, ticket
+        # numbers); guards that compare against the public form need that step.
+        sanitize_log = self.state / f"{name}-sanitize.log"
+        code = self.run([self.python, str(SANITIZER), str(snapshot)], sanitize_log, env=dict(os.environ))
+        if code != 0:
+            return Result(name, FAIL, detail=f"sanitizer failed with exit {code}", log=sanitize_log)
         inventory = self.state / "public-skips.json"
         log = self.state / f"{name}.log"
         command = [
