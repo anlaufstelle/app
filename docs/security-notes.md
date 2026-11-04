@@ -39,6 +39,8 @@ Der Retro-Audit #600 hat die Liste der RLS-geschützten Tabellen vollständig du
 
 `CSRF_COOKIE_SAMESITE` ist in [`prod.py`](../src/anlaufstelle/settings/prod.py) auf `"Strict"` gesetzt, `SESSION_COOKIE_SAMESITE` bleibt bei `"Lax"`. Grund: **Password-Reset-E-Mail-Links** (Cross-Site → same-site nach Klick) müssen den Session-Cookie mitbringen, sonst landet der User auf der Login-Seite, obwohl der Token noch gültig ist. Django-Default `"Lax"` lässt genau diesen GET-Cross-Site-Flow durch, während POST-Formulare und Fetch-Requests weiter geblockt werden. `"Strict"` würde den E-Mail-Link-Flow aufbrechen.
 
+Der Sprachcookie (`django_language`, nur der Sprachcode) erhält in [`prod.py`](../src/anlaufstelle/settings/prod.py) dieselbe Transporthärtung wie der Session-Cookie: `LANGUAGE_COOKIE_SECURE`, `LANGUAGE_COOKIE_HTTPONLY` und `LANGUAGE_COOKIE_SAMESITE = "Lax"` (#2619). Die lokalen Entwicklungs-Settings setzen diese Werte nicht, damit der Sprachwechsel über HTTP funktioniert.
+
 Wenn wir den Token-Link-Flow (Invite, Passwort-Reset, 2FA-Backup-Download) jemals auf strikt trennen (eigener Host / eigene Subdomain), kann `"Strict"` greifen.
 
 ---

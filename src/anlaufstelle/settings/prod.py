@@ -178,6 +178,13 @@ CSRF_COOKIE_SAMESITE = "Strict"
 # <meta name="csrf-token">) und Forms (via {% csrf_token %}) aus dem
 # gerenderten HTML gelesen, nicht aus dem Cookie. Refs #602.
 CSRF_COOKIE_HTTPONLY = True
+# Language cookie: carries only the language code, but gets the same transport
+# hardening as the session cookie. "Lax" keeps the visit language on top-level
+# navigations; no JavaScript reads the cookie, so HttpOnly breaks nothing.
+# Set only here so local HTTP development keeps a usable cookie. Refs #2619.
+LANGUAGE_COOKIE_SECURE = True
+LANGUAGE_COOKIE_HTTPONLY = True
+LANGUAGE_COOKIE_SAMESITE = "Lax"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 # Explizit Referrer-Policy setzen — Django-Default wäre "same-origin", aber
 # Caddy liefert "strict-origin-when-cross-origin". Wir setzen hier den
