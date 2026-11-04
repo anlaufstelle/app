@@ -344,6 +344,8 @@ cleanup; direct mutation-runner calls use the same fallback chain.
 | `make test-parallel` | Unit and integration tests in parallel (pytest-xdist)         |
 | `make test-e2e-parallel` | E2E tests in parallel (default 2 workers, configurable)   |
 | `make test-e2e-smoke` | Smoke-tagged E2E tests only (~2-3 min)                       |
+| `make test-e2e-demo` | Demo gate: every demo-profile spec (`E2E_DEMO_MODE=1 E2E_SEED_SCALE=demo`) in its own session on port 8854 under the global lock (Refs #2531, #2679) |
+| `make nightly-guards` | Nightly run before the cut (Refs #2687): performance smoke of the dataset reports against `medium` and `large` seed databases (`anlaufstelle_nightly_<scale>`), the complete demo gate, the unit suite in the public skip profile against a local public snapshot, documentation screenshots into a scratch directory; collects every verdict and only turns red at the end. Parameters: `NIGHTLY_GUARDS="perf-medium demo"` (subset), `NIGHTLY_SEED_MAX_AGE_DAYS=7` (rebuild the seed only when older), `NIGHTLY_PERF_LIMIT=2` (median budget in seconds), `NIGHTLY_DIR` (logs/measurements, default `$XDG_STATE_HOME/anlaufstelle-nightly`) |
 | `make deps-lock` | Regenerate lock files from `requirements*.in` (pip-tools)         |
 | `make deps-check` | Verify lock files match `.in` (drift detection)                  |
 | `make audit-js`  | `npm audit` against `package-lock.json` — blocking JS advisory gate from severity `AUDIT_LEVEL` (default `moderate`) upwards, part of `make ci`; needs access to the npm registry (Refs #1968) |
@@ -1055,4 +1057,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.9 -->
 <!-- translation-date: 2026-10-26 -->
-<!-- source-hash: 3d158e9ab14babf16f730566ff46c49ee53ecf41 -->
+<!-- source-hash: 7e4b94b6eb45c0977d6056a488a25d36701e2559 -->

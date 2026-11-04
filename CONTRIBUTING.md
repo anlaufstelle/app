@@ -348,6 +348,8 @@ direkte Mutationsrunner-Aufrufe verwenden dieselbe Default-Kette.
 | `make test-parallel` | Unit- und Integrationstests parallel (pytest-xdist)            |
 | `make test-e2e-parallel` | E2E-Tests parallel (Default 2 Worker, konfigurierbar)     |
 | `make test-e2e-smoke` | Nur Smoke-markierte E2E-Tests (~2-3 min)                    |
+| `make test-e2e-demo` | Demo-Gate: alle Demo-Profil-Specs (`E2E_DEMO_MODE=1 E2E_SEED_SCALE=demo`) in eigener Session auf Port 8854 unter dem globalen Lock (Refs #2531, #2679) |
+| `make nightly-guards` | Nachtlauf vor dem Cut (Refs #2687): Perf-Smoke der Datensatz-Berichte an `medium`- und `large`-Seed-Datenbanken (`anlaufstelle_nightly_<scale>`), vollständiges Demo-Gate, Unit-Suite im Public-Skip-Profil gegen einen lokalen Public-Snapshot, Doku-Screenshots in ein Scratch-Verzeichnis; sammelt alle Verdikte und wird erst am Ende rot. Parameter: `NIGHTLY_GUARDS="perf-medium demo"` (Teilmenge), `NIGHTLY_SEED_MAX_AGE_DAYS=7` (Seed nur neu bauen, wenn älter), `NIGHTLY_PERF_LIMIT=2` (Median-Budget in Sekunden), `NIGHTLY_DIR` (Logs/Messwerte, Default `$XDG_STATE_HOME/anlaufstelle-nightly`) |
 | `make deps-lock` | Lock-Files aus `requirements*.in` neu erzeugen (pip-tools)        |
 | `make deps-check` | Prüft, ob Lock-Files aktuell zu `.in` sind (Drift-Detektion)     |
 | `make audit-js`  | `npm audit` gegen `package-lock.json` — blockierendes JS-Advisory-Gate ab Schweregrad `AUDIT_LEVEL` (Default `moderate`), Teil von `make ci`; braucht Zugang zur npm-Registry (Refs #1968) |
