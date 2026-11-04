@@ -135,9 +135,12 @@ def test_unknown_guard_is_rejected_before_anything_runs(tmp_path):
 
 
 def test_make_target_passes_the_parameters_through():
+    # Without the outer make variables a nested make would print directory lines.
+    env = {key: value for key, value in os.environ.items() if not key.startswith("MAKE")}
     completed = subprocess.run(
         ["make", "-n", "nightly-guards", "NIGHTLY_GUARDS=perf-medium docs-screens", "NIGHTLY_SEED_MAX_AGE_DAYS=3"],
         cwd=ROOT,
+        env=env,
         capture_output=True,
         text=True,
         check=False,
