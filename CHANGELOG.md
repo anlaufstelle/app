@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Frontend-Bibliotheken aktualisiert** (#2676, #2674, #2675, #2686) — Chart.js 4.6.1, Dexie.js 4.4.7 und Alpine.js CSP 3.17.5 liegen neu vendort unter `src/static/js/`; fake-indexeddb 6.2.7 betrifft nur die JS-Tests. undici 8.12.3 (#2680) war im Lockfile bereits enthalten.
 - **GitHub-Actions-Pins aktualisiert** (#2682) — codeql-action 4.39.1, docker/login-action 4.7.0 und actions/setup-python 7.1.0, weiterhin als volle Commit-SHA mit Versionskommentar.
 
+- **Ein Parser für den Schlüsselring** (#2567) — Der Startcheck der Produktions-Settings und die Feldverschlüsselung lesen `ENCRYPTION_KEYS` jetzt über dieselbe Funktion statt über eine Kopie, die ein Strukturtest synchron halten musste. Welche Konfiguration startet, welche mit welcher Meldung abbricht und welcher Schlüssel verschlüsselt, bleibt unverändert; Charakterisierungstests halten das für leere, nur aus Leerraum oder Trennzeichen bestehende, doppelte und ungültige Einträge sowie die Reihenfolge fest.
 ### Security
 
 - **Sprachcookie in Produktion gehärtet** (#2619) — Der Sprachcookie `django_language` wird in Produktion wie der Session-Cookie nur noch mit `Secure`, `HttpOnly` und `SameSite=Lax` gesetzt; die gespeicherte Sprachwahl angemeldeter Konten funktioniert unverändert.

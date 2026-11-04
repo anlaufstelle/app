@@ -10,6 +10,7 @@ import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 
 from ._env import env_bool, env_bool_strict, env_csv, env_int
+from ._keyring import split_key_ring as _split_key_ring
 from ._sentry import before_breadcrumb as _sentry_before_breadcrumb
 from ._sentry import before_send as _sentry_before_send
 from ._sentry import before_send_transaction as _sentry_before_send_transaction
@@ -334,16 +335,8 @@ RATELIMIT_USE_CACHE = "default"
 # single-key variable ENCRYPTION_KEY and malformed ring entries are rejected
 # in base.py for every settings profile, including production. Duplicate valid
 # entries emit a warning there; the guard below additionally requires a key.
-def _split_encryption_key_ring(value):
-    """Pure settings-time twin of ``file_vault.keyring.split_key_ring``.
-
-    Importing the service package while this settings module is still loading
-    would import model-dependent modules before Django's app registry is ready.
-    """
-    return [entry.strip() for entry in (value or "").split(",") if entry.strip()]
-
-
-_encryption_key_ring = _split_encryption_key_ring(ENCRYPTION_KEYS)  # noqa: F405
+# The ring parser is the one the runtime field encryption uses.
+_encryption_key_ring = _split_key_ring(ENCRYPTION_KEYS)  # noqa: F405
 if not _IS_COLLECTSTATIC and not _encryption_key_ring:
     if ENCRYPTION_KEYS:  # noqa: F405
         _encryption_key_error = "The key ring contains no key (ENCRYPTION_KEYS). "

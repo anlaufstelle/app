@@ -1,8 +1,11 @@
-"""Shared parsing for the configured field-encryption key ring."""
+"""Runtime access to the shared key-ring parser.
+
+The implementation lives in ``anlaufstelle.settings._keyring`` because the
+settings start gate needs it before Django's app registry is ready.
+"""
 
 from __future__ import annotations
 
+from anlaufstelle.settings._keyring import split_key_ring
 
-def split_key_ring(value: str | None) -> list[str]:
-    """Return stripped, non-empty entries from a comma-separated key ring."""
-    return [entry.strip() for entry in (value or "").split(",") if entry.strip()]
+__all__ = ["split_key_ring"]

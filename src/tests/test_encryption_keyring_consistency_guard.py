@@ -1,4 +1,4 @@
-"""Keep encryption-key ring parsing consistent across startup and runtime."""
+"""Keep encryption-key ring parsing in one place for startup and runtime."""
 
 from __future__ import annotations
 
@@ -18,14 +18,28 @@ SRC_DIR = REPO_ROOT / "src"
 KEY = "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE="
 
 
-def _function_body(path: Path, name: str) -> str:
-    source = path.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == name)
-    body = function.body
-    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
-        body = body[1:]
-    return ast.dump(ast.Module(body=body, type_ignores=[]), include_attributes=False)
+def _imported_names(path: Path, module: str) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module == module
+        for alias in node.names
+    }
+
+
+def _local_comma_splitters(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return [
+        function.name
+        for function in ast.walk(tree)
+        if isinstance(function, ast.FunctionDef)
+        for call in ast.walk(function)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr == "split"
+        and [arg.value for arg in call.args if isinstance(arg, ast.Constant)] == [","]
+    ]
 
 
 def _prod_import(*, key_ring: str = " , ") -> subprocess.CompletedProcess[str]:
@@ -68,17 +82,39 @@ def test_separator_only_ring_is_empty():
     assert split_key_ring(" , ") == []
 
 
-def test_prod_startgate_ring_splitter_matches_shared_helper():
-    prod_body = _function_body(
-        SRC_DIR / "anlaufstelle" / "settings" / "prod.py",
-        "_split_encryption_key_ring",
+def test_runtime_uses_the_settings_time_key_ring_helper():
+    from anlaufstelle.settings._keyring import split_key_ring as settings_time_helper
+    from core.services.file_vault.keyring import split_key_ring as runtime_helper
+
+    assert runtime_helper is settings_time_helper
+
+
+def test_prod_startgate_imports_the_shared_helper_instead_of_a_copy():
+    prod_settings = SRC_DIR / "anlaufstelle" / "settings" / "prod.py"
+
+    assert "split_key_ring" in _imported_names(prod_settings, "_keyring")
+    assert _local_comma_splitters(prod_settings) == []
+
+
+def test_shared_helper_loads_before_django_setup_without_app_modules():
+    probe = (
+        "import sys\n"
+        "from anlaufstelle.settings._keyring import split_key_ring\n"
+        "assert split_key_ring(' , a ,, b ') == ['a', 'b']\n"
+        "loaded = sorted(m for m in sys.modules if m.split('.')[0] in {'core', 'django'})\n"
+        "print(loaded)\n"
     )
-    shared_body = _function_body(
-        SRC_DIR / "core" / "services" / "file_vault" / "keyring.py",
-        "split_key_ring",
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        env={"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(SRC_DIR)},
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        timeout=20,
     )
 
-    assert prod_body == shared_body
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]"
 
 
 def test_runtime_treats_separator_only_ring_as_unset():
