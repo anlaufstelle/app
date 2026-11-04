@@ -965,6 +965,11 @@ self.addEventListener("fetch", (event) => {
         // (Refs #618: alter cache-first-Ansatz hielt gefixtes JS fest).
         event.respondWith(
             caches.match(request).then((cached) => {
+                // Refs #2612: the cache write and the budget trim run after the
+                // response was handed out. Track them so event.waitUntil keeps
+                // the worker alive until they are done, even when a cached copy
+                // answers immediately and the network revalidation trails it.
+                let cacheWrite = Promise.resolve();
                 const networkFetch = fetch(request, { signal: AbortSignal.timeout(READ_FETCH_TIMEOUT_MS) })
                     .then((response) => {
                         if (response && response.ok) {
@@ -998,9 +1003,16 @@ self.addEventListener("fetch", (event) => {
                                 // Release-Generationen. Nur erlaubte Asset-Typen
                                 // werden ueberhaupt gecacht; HTML/HTMX/no-store
                                 // bleiben draussen.
-                                caches
+                                // A full or blocked cache (QuotaExceededError) must
+                                // not fail the answer: the network response stays
+                                // usable, the write error is only logged.
+                                cacheWrite = caches
                                     .open(RUNTIME_CACHE_NAME)
-                                    .then((cache) => cache.put(request, clone).then(() => _trimRuntimeCache()));
+                                    .then((cache) => cache.put(request, clone))
+                                    .then(() => _trimRuntimeCache())
+                                    .catch((error) => {
+                                        console.warn("[offline] Runtime cache update failed", error);
+                                    });
                             }
                         }
                         return response;
@@ -1012,6 +1024,7 @@ self.addEventListener("fetch", (event) => {
                     // Refs #1904: this empty 503 is built here as well and
                     // carries the server policy like every synthetic answer.
                     .catch(() => cached ?? _withServerPolicy(new Response("", { status: 503, statusText: "offline" })));
+                event.waitUntil(networkFetch.then(() => cacheWrite));
                 return cached || networkFetch;
             })
         );

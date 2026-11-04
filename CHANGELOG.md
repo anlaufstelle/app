@@ -27,6 +27,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Rückmeldung beim Kopieren der Backup-Codes** (#2613) — „In die Zwischenablage kopieren“ meldet den Erfolg erst nach erfolgreichem Schreiben und bei fehlender Zwischenablage-Schnittstelle oder abgelehnter Berechtigung eine Fehlermeldung mit Hinweis auf Download, Druck oder manuelles Kopieren; beide Meldungen sind für Hilfstechnik zugänglich. Die Bestätigung „Ich habe die Codes sicher gespeichert“ bleibt unabhängig vom Kopierergebnis.
 - **Anfangsfokus der 2FA-Einrichtung** (#2616) — Beim ersten Aufruf der Einrichtungsseite springt der Fokus nicht mehr ins Codefeld, sodass Seitentitel, Anleitung, QR-Code und die Secret-Alternative zuerst wahrgenommen werden und eine Bildschirmtastatur die Anleitung nicht verdeckt. Nach einem ungültigen Code liegt der Fokus weiterhin am Codefeld, mit unveränderter Fehlerzuordnung. Das gilt auch für den Gerätewechsel; dessen Hinweis zur Ersetzung der bisherigen Geräte steht weiterhin vor dem Feld.
 - **Ungültiger Zuweisungsfilter in der Aufgaben-Inbox** (#2618) — Ein Zuweisungsfilter, der weder `me`, `mine_team`, leer noch eine Benutzer-ID ist (z. B. `?assigned_to=abc`), wird mit HTTP 400 abgelehnt statt mit einem Serverfehler (500); die Inbox zeigt dabei keine Aufgaben. Beim Erledigen mit gleichem Filterwert bleibt der Statuswechsel erhalten, nur der „Kürzlich erledigt“-Einschub entfällt.
+### Fixed
+
+- **Statische Dateien: Cache-Aktualisierung an die Lebensdauer des Service Workers gebunden** (#2612) — Die Aktualisierung im Hintergrund (Netzabruf, Ablage im Laufzeit-Cache und Begrenzung der Eintragszahl) läuft jetzt innerhalb des auslösenden Abrufs und kann vom Browser nicht mehr mittendrin beendet werden, auch wenn sofort eine gespeicherte Kopie ausgeliefert wird. Ein voller oder gesperrter Cache führt nur noch zu einer Protokollzeile; die vom Server gelieferte Datei bleibt nutzbar.
 
 ## [0.99.9] - 2026-11-01
 

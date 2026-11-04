@@ -173,6 +173,7 @@ async function respond(handlers, request) {
         respondWith(value) {
             result = Promise.resolve(value);
         },
+        waitUntil() {},
     });
     return result;
 }

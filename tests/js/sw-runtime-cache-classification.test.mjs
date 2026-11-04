@@ -67,17 +67,21 @@ function buildFetchResponse({ status = 200, contentType = "application/javascrip
 async function dispatchFetch(handlers, url, opts = {}) {
     const request = new Request(url, opts);
     let capturedPromise;
+    const lifetime = [];
     const event = {
         request,
         respondWith: vi.fn((promise) => {
             capturedPromise = promise;
         }),
+        waitUntil: vi.fn((promise) => {
+            lifetime.push(Promise.resolve(promise));
+        }),
     };
     handlers.fetch(event);
     if (capturedPromise) {
         await capturedPromise;
-        // Der SWR-Zweig chained cache.put asynchron; kurz warten, damit der Spy erfasst wird.
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        // The revalidation side work is bound to the event lifetime (#2612).
+        await Promise.all(lifetime);
     }
     return event;
 }
@@ -222,5 +226,146 @@ describe("sw.js Runtime-Cache-Klassifikation", () => {
         staticWorker.fetch.mockResolvedValueOnce(buildFetchResponse({ contentType: "application/json" }));
         await dispatchFetch(staticWorker.handlers, `${ORIGIN}/static/data.json`);
         expect(staticSpy.cache.put).not.toHaveBeenCalled();
+    });
+});
+
+
+// Refs #2612: the whole revalidation (network fetch, cache.put, budget trim)
+// must be held by event.waitUntil, also when a cached copy answers at once, and
+// cache failures must not surface as unhandled rejections.
+function deferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return { promise, resolve, reject };
+}
+
+function startFetch(handlers, url) {
+    const lifetime = [];
+    let responded;
+    const event = {
+        request: new Request(url),
+        respondWith: vi.fn((promise) => {
+            responded = promise;
+        }),
+        waitUntil: vi.fn((promise) => {
+            lifetime.push(Promise.resolve(promise));
+        }),
+    };
+    handlers.fetch(event);
+    return { event, lifetime, responded: () => responded };
+}
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+async function settled(promise) {
+    let done = false;
+    promise.then(
+        () => {
+            done = true;
+        },
+        () => {
+            done = true;
+        },
+    );
+    await flush();
+    return done;
+}
+
+describe("sw.js Asset-Revalidierung und Event-Lebensdauer (#2612)", () => {
+    it("holds the event open until cache.put and the trim of a cold asset finished", async () => {
+        const spy = runtimeCacheSpy();
+        const putGate = deferred();
+        const keysGate = deferred();
+        spy.cache.put.mockImplementation(() => putGate.promise);
+        spy.cache.keys = vi.fn(() => keysGate.promise);
+        const { handlers, fetch: fetchMock } = workerContext(spy.caches);
+        fetchMock.mockResolvedValueOnce(buildFetchResponse());
+
+        const { event, lifetime, responded } = startFetch(handlers, `${ORIGIN}/static/js/app.js`);
+        const response = await responded();
+        expect(response.status).toBe(200);
+
+        expect(event.waitUntil).toHaveBeenCalledTimes(1);
+        const hold = Promise.all(lifetime);
+        expect(await settled(hold)).toBe(false);
+        putGate.resolve();
+        expect(await settled(hold)).toBe(false);
+        keysGate.resolve([]);
+        expect(await settled(hold)).toBe(true);
+        expect(spy.cache.keys).toHaveBeenCalled();
+    });
+
+    it("holds the event open for the network revalidation behind a cache hit", async () => {
+        const spy = runtimeCacheSpy();
+        const netGate = deferred();
+        spy.caches.match = async () => new Response("stale", { status: 200 });
+        const { handlers, fetch: fetchMock } = workerContext(spy.caches);
+        fetchMock.mockImplementationOnce(() => netGate.promise);
+
+        const { event, lifetime, responded } = startFetch(handlers, `${ORIGIN}/static/js/app.js`);
+        const response = await responded();
+        expect(await response.text()).toBe("stale");
+
+        expect(event.waitUntil).toHaveBeenCalledTimes(1);
+        const hold = Promise.all(lifetime);
+        expect(await settled(hold)).toBe(false);
+        netGate.resolve(buildFetchResponse());
+        expect(await settled(hold)).toBe(true);
+        expect(spy.cache.put).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the network response usable and handles a quota error on put", async () => {
+        const spy = runtimeCacheSpy();
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const unhandled = vi.fn();
+        process.on("unhandledRejection", unhandled);
+        try {
+            spy.cache.put.mockRejectedValue(new Error("QuotaExceededError"));
+            const { handlers, fetch: fetchMock } = workerContext(spy.caches);
+            fetchMock.mockResolvedValueOnce(buildFetchResponse());
+
+            const { lifetime, responded } = startFetch(handlers, `${ORIGIN}/static/js/app.js`);
+            const response = await responded();
+            expect(response.status).toBe(200);
+            expect(await response.text()).toBe("body");
+            await expect(Promise.all(lifetime)).resolves.toBeDefined();
+            await flush();
+            expect(unhandled).not.toHaveBeenCalled();
+            expect(warn).toHaveBeenCalled();
+        } finally {
+            process.off("unhandledRejection", unhandled);
+            warn.mockRestore();
+        }
+    });
+
+    it("handles a failing runtime cache open without breaking the response", async () => {
+        const spy = runtimeCacheSpy();
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        spy.caches.open = vi.fn(async () => {
+            throw new Error("cache storage unavailable");
+        });
+        const { handlers, fetch: fetchMock } = workerContext(spy.caches);
+        fetchMock.mockResolvedValueOnce(buildFetchResponse());
+
+        const { lifetime, responded } = startFetch(handlers, `${ORIGIN}/static/js/app.js`);
+        const response = await responded();
+        expect(response.status).toBe(200);
+        await expect(Promise.all(lifetime)).resolves.toBeDefined();
+        warn.mockRestore();
+    });
+
+    it("does not hold the event open for uncacheable answers beyond the fetch itself", async () => {
+        const spy = runtimeCacheSpy();
+        const { handlers, fetch: fetchMock } = workerContext(spy.caches);
+        fetchMock.mockResolvedValueOnce(buildFetchResponse({ contentType: "text/html" }));
+
+        const { lifetime, responded } = startFetch(handlers, `${ORIGIN}/static/anything`);
+        await responded();
+        await expect(Promise.all(lifetime)).resolves.toBeDefined();
+        expect(spy.cache.put).not.toHaveBeenCalled();
     });
 });
