@@ -73,9 +73,9 @@ a review of its version and license row.
 | Package | Version | License | Upstream | Vendored Path | License text |
 |---|---|---|---|---|---|
 | htmx | 2.0.11 | 0BSD | <https://github.com/bigskysoftware/htmx> | `src/static/js/htmx.min.js` | `src/static/js/licenses/LICENSE-htmx.txt` |
-| Alpine.js CSP | 3.17.4 | MIT | <https://github.com/alpinejs/alpine> | `src/static/js/alpine-csp.min.js` | `src/static/js/licenses/LICENSE-alpine.txt` |
-| Chart.js | 4.5.1 | MIT | <https://github.com/chartjs/Chart.js> | `src/static/js/chart.min.js` | `src/static/js/licenses/LICENSE-chartjs.txt` |
-| Dexie.js | 4.4.6 | Apache-2.0 | <https://github.com/dexie/Dexie.js> | `src/static/js/dexie.min.js` | `src/static/js/licenses/LICENSE-dexie.txt`, `src/static/js/licenses/NOTICE-dexie.txt` |
+| Alpine.js CSP | 3.17.5 | MIT | <https://github.com/alpinejs/alpine> | `src/static/js/alpine-csp.min.js` | `src/static/js/licenses/LICENSE-alpine.txt` |
+| Chart.js | 4.6.1 | MIT | <https://github.com/chartjs/Chart.js> | `src/static/js/chart.min.js` | `src/static/js/licenses/LICENSE-chartjs.txt` |
+| Dexie.js | 4.4.7 | Apache-2.0 | <https://github.com/dexie/Dexie.js> | `src/static/js/dexie.min.js` | `src/static/js/licenses/LICENSE-dexie.txt`, `src/static/js/licenses/NOTICE-dexie.txt` |
 | SortableJS | 1.15.7 | MIT | <https://github.com/SortableJS/Sortable> | `src/static/js/vendor/sortable.min.js` | `src/static/js/licenses/LICENSE-sortablejs.txt` |
 | axe-core | 4.13.0 | MPL-2.0 | <https://github.com/dequelabs/axe-core> | `src/static/js/vendor/axe.min.js` | license notice in the file header |
 | DM Sans | 4.004 | SIL OFL 1.1 | <https://github.com/googlefonts/dm-fonts> | `src/static/fonts/dmsans-*.woff2` | `src/static/fonts/LICENSE-DM-fonts.txt` |

@@ -22,6 +22,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Sicherheitsupdates für Entwicklungsabhängigkeiten** (#2683, #2681) — msgpack 1.2.3 und setuptools 84.1.0 schließen die beiden offenen Dependabot-Meldungen im Dev-Lock (`requirements-dev.txt`); zugleich sentry-sdk 2.73.0, pytest-playwright 0.10.0 (ohne das nun entfallene `pytest-base-url`) und ruff 0.17.3. Die Produktions-Abhängigkeiten ändern sich nur bei sentry-sdk (#2684).
 
+### Changed
+
+- **Frontend-Bibliotheken aktualisiert** (#2676, #2674, #2675, #2686) — Chart.js 4.6.1, Dexie.js 4.4.7 und Alpine.js CSP 3.17.5 liegen neu vendort unter `src/static/js/`; fake-indexeddb 6.2.7 betrifft nur die JS-Tests. undici 8.12.3 (#2680) war im Lockfile bereits enthalten.
+
 ## [0.99.9] - 2026-11-01
 
 Weiterer Release-Kandidat vor 1.0: bündelt die Umstellung der Personen-, Fall-, Episoden- und Aufgabentexte auf typgebundene, in den mitgelieferten Paketen verschlüsselte Standardfelder ohne Inhaltsübernahme, den Schlüsselring als einzige Schlüsselquelle (Breaking Change), einen rollengetreuen Freitext-Review, den Sitzungswiderruf beim 2FA-Gerätewechsel, die Sprachwahl vor der Anmeldung sowie Sicherheitsupdates für Abhängigkeiten.
