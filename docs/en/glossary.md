@@ -26,7 +26,7 @@
 | ClamAV | ClamAV | Open-source malware scanner running as a sidecar service. All file uploads are scanned before being encrypted and stored. Fail-closed: uploads are rejected if ClamAV is unreachable. |
 | Client | Person | Technical term for a person in the system. Managed under a pseudonym. Has a contact stage that determines their lifecycle in the system. |
 | CSP | Content Security Policy | Browser-level security policy that restricts which sources (scripts, styles, images, frames) the page may load. Anlaufstelle sets the policy centrally in Django via [`django-csp`](https://django-csp.readthedocs.io/) (see [`src/anlaufstelle/settings/base.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/base.py)). The global `script-src` does not carry `'unsafe-eval'`; the only exception is `/admin-mgmt/*` via `AdminCSPRelaxMiddleware`. |
-| Dexie.js | Dexie.js | Minimal IndexedDB wrapper used for the secure offline store. Vendored under `src/static/js/dexie.min.js` (Apache-2.0, v4.4.6). |
+| Dexie.js | Dexie.js | Minimal IndexedDB wrapper used for the secure offline store. Vendored under `src/static/js/dexie.min.js` (Apache-2.0, v4.4.7). |
 | DocumentType | Document type | A configurable category of events (e.g. "Contact", "Crisis counseling", "Needle exchange"). Defines fields, sensitivity, and retention period. |
 | DocumentTypeField | Document type field | Association of a field template (FieldTemplate) with a document type (DocumentType). Determines field order in the form and allows reuse of field templates across multiple types. |
 | Domänen-Paket | Domain package | The technical realization of the domain library: a versionable YAML catalog of preconfigured document types and fields for a specific facility type, applied via `setup_facility --package <name>` or `manage.py load_package`. See: Domain library, [docs/packages.md](../packages.md). |
@@ -186,5 +186,5 @@ An HTTP/network/processing error fetching revocations (including 500/429), or an
 
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.99.9 -->
-<!-- source-hash: 62feecb1876a656bfb991794012aa7ab63770bda -->
-<!-- translation-date: 2026-10-26 -->
+<!-- source-hash: aaeba17ab327ca9d4cd2d2518d441c331cb47a5a -->
+<!-- translation-date: 2026-11-04 -->
