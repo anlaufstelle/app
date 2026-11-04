@@ -46,9 +46,10 @@
         </button>
     </div>
 
-    <p class="text-sm text-green-800 mb-4 empty:hidden" role="status" aria-live="polite"
+    {# Live regions stay rendered (never display:none) so that screen readers register them before text is set. #}
+    <p class="text-sm text-green-800 [&:not(:empty)]:mb-4" role="status" aria-live="polite"
        data-testid="backup-codes-copy-status" x-text="copyStatus"></p>
-    <p class="text-sm text-red-700 mb-4 empty:hidden" role="alert"
+    <p class="text-sm text-red-700 [&:not(:empty)]:mb-4" role="alert"
        data-testid="backup-codes-copy-error" x-text="copyError"></p>
 
     {% if setup_pending and sessions_will_be_revoked %}

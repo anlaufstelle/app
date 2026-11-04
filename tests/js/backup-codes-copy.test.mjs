@@ -27,6 +27,13 @@ function mountComponent() {
     root.dataset.copyError = MESSAGES.copyError;
     component.$root = root;
     component.$el = document.createElement("button");
+    // Alpine renders asynchronously; model $nextTick as one macrotask turn and
+    // record what the live regions held when the render was awaited.
+    component.renderedWhileAwaiting = [];
+    component.$nextTick = vi.fn(async () => {
+        component.renderedWhileAwaiting.push([component.copyStatus, component.copyError]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     return component;
 }
 
@@ -131,5 +138,35 @@ describe("backupCodesAcknowledge.copyCodes", () => {
         component.$el = checkbox;
         component.syncConfirmed();
         expect(component.notConfirmed).toBe(false);
+    });
+
+    it("re-announces an identical result on a second click", async () => {
+        setClipboard({ writeText: vi.fn().mockResolvedValue(undefined) });
+        const component = mountComponent();
+
+        await component.copyCodes();
+        expect(component.copyStatus).toBe(MESSAGES.copySuccess);
+
+        // Second click with the same outcome: the region must be empty when the
+        // render is awaited, otherwise the unchanged text is not announced again.
+        component.renderedWhileAwaiting.length = 0;
+        const second = component.copyCodes();
+        expect(component.copyStatus).toBe("");
+        await second;
+        expect(component.renderedWhileAwaiting).toEqual([["", ""]]);
+        expect(component.copyStatus).toBe(MESSAGES.copySuccess);
+    });
+
+    it("re-announces an identical error on a second click", async () => {
+        setClipboard({ writeText: vi.fn().mockRejectedValue(new Error("denied")) });
+        const component = mountComponent();
+
+        await component.copyCodes();
+        component.renderedWhileAwaiting.length = 0;
+        const second = component.copyCodes();
+        expect(component.copyError).toBe("");
+        await second;
+        expect(component.renderedWhileAwaiting).toEqual([["", ""]]);
+        expect(component.copyError).toBe(MESSAGES.copyError);
     });
 });

@@ -89,10 +89,18 @@ document.addEventListener("alpine:init", () => {
                 }
                 await clipboard.writeText(this._collectCodes());
             } catch {
-                this.copyError = messages.copyError || "";
+                await this._announce("copyError", messages.copyError || "");
                 return;
             }
-            this.copyStatus = messages.copySuccess || "";
+            await this._announce("copyStatus", messages.copySuccess || "");
+        },
+        /**
+         * Set a live-region message only after the emptied region was rendered,
+         * so an identical result on a repeated click is announced again.
+         */
+        async _announce(field, text) {
+            await this.$nextTick();
+            this[field] = text;
         },
         downloadCodes() {
             const blob = new Blob([this._collectCodes() + "\n"], {

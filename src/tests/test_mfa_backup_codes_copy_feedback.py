@@ -52,3 +52,16 @@ def test_alternatives_and_confirmation_stay_available(client, staff_user):
     # Continue stays gated by the acknowledgement only, never by the copy result.
     assert ':disabled="notConfirmed"' in html
     assert "copyStatus" not in _tag(html, "backup-codes-continue")
+
+
+def test_live_regions_stay_in_the_accessibility_tree_while_empty(client, staff_user):
+    html = _page(client, staff_user)
+    for testid in ("backup-codes-copy-status", "backup-codes-copy-error"):
+        tag = _tag(html, testid)
+        classes = re.search(r'class="([^"]*)"', tag).group(1).split()
+        # A region that is display:none while empty enters the tree together with
+        # its text and is not reliably announced.
+        assert "empty:hidden" not in classes
+        assert "hidden" not in classes
+        assert "style=" not in tag and "x-show" not in tag and "x-cloak" not in tag
+        assert "hidden" not in tag.replace("data-testid", "")
