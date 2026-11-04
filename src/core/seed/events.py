@@ -14,6 +14,11 @@ from core.services.events.fields import stage_index
 logger = logging.getLogger(__name__)
 
 
+#: Width of the window (days) in which the reserved ``recent_bans`` events fall; equals
+#: the default period of the statistics views.
+RECENT_BANS_WINDOW_DAYS = 29
+
+
 def random_time_of_day(max_hour: int | None = None, max_minute: int | None = None) -> tuple[int, int]:
     """Weighted hour distribution matching typical opening hours (8-19h).
 
@@ -309,7 +314,7 @@ def seed_events_bulk(
     # ueber BEIDE Phasen (Abdeckung + Zufallsauffuellung) hinweg geteilt.
     hausverbot_active_count = [0]
 
-    def _build_event(doc_type: DocumentType, idx: int) -> Event:
+    def _build_event(doc_type: DocumentType, idx: int, *, days_window: int | None = None) -> Event:
         """Ein einzelnes Event fuer ``doc_type`` bauen (Person/Anonymitaet,
         Zeitpunkt, Daten, Suchindex) — aus der
         Zieh-Schleife herausgezogen, damit Phase 1 (Abdeckung je Typ, feste
@@ -328,7 +333,7 @@ def seed_events_bulk(
         else:
             is_anonymous = random.random() < 0.15
             client = None if is_anonymous else random.choice(clients)
-        days_ago = weighted_days_ago(zeitraum)
+        days_ago = random.randint(0, days_window) if days_window else weighted_days_ago(zeitraum)
         if days_ago == 0:
             hour, minute = random_time_of_day(max_hour=now.hour, max_minute=now.minute)
         else:
@@ -384,11 +389,23 @@ def seed_events_bulk(
         batch.append(_build_event(doc_type, idx))
         idx += 1
 
+    # Scales listing ``recent_bans`` (medium, large) reserve that many of their events
+    # for bans within the last 30 days: the ban overview card suppresses every figure
+    # below the k-threshold (5), and at weight 0.2 of ~99 the default 30-day period
+    # held fewer bans than that at ``medium``, so the card published no number. The
+    # total stays ``events_per_facility``; scales without the key behave as before.
+    ban_types = [dt for dt in doc_types if dt.system_type == "ban"]
+    reserved_bans = min(cfg.get("recent_bans", 0), to_create_count - idx) if ban_types else 0
+
     # Phase 2: gewichtete Zufallsauffuellung fuer den Rest (unveraendertes
     # Verhalten ausserhalb der Typ-Auswahl-Reihenfolge).
-    while idx < to_create_count:
+    while idx < to_create_count - reserved_bans:
         doc_type = random.choices(doc_types, weights=weights, k=1)[0]
         batch.append(_build_event(doc_type, idx))
+        idx += 1
+
+    for offset in range(reserved_bans):
+        batch.append(_build_event(ban_types[offset % len(ban_types)], idx, days_window=RECENT_BANS_WINDOW_DAYS))
         idx += 1
 
     if batch:

@@ -28,6 +28,9 @@ SCALE_CONFIG = {
         "retention_proposals": 6,
         "zeitraum_days": 365,
         "attachment_ratio": 0.25,
+        # Ban events reserved in the last 30 days per facility; reaches the k-threshold
+        # (5) of the ban overview card (see core.seed.events.seed_events_bulk).
+        "recent_bans": 5,
     },
     "large": {
         "facilities": 5,
@@ -43,6 +46,7 @@ SCALE_CONFIG = {
         "retention_proposals": 12,
         "zeitraum_days": 3 * 365,
         "attachment_ratio": 0.1,
+        "recent_bans": 5,
     },
     "solo": {
         "facilities": 1,
