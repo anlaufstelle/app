@@ -184,6 +184,18 @@ def maintenance_connection():
         return None
 
 
+DEFAULT_DB_PREFIX = "anlaufstelle_nightly"
+
+
+def database_prefix(value: str) -> str:
+    """A prefix that is safe inside a database identifier."""
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,40}", value):
+        raise argparse.ArgumentTypeError(
+            f"{value!r}: use lowercase letters, digits and underscores, starting with a letter"
+        )
+    return value
+
+
 def public_run_env(snapshot: Path) -> dict[str, str]:
     """Environment of the public run: the process environment over the ``.env`` values of the dev tree.
 
@@ -249,6 +261,7 @@ class Runner:
         self.seed_max_age_days = args.seed_max_age_days
         self.perf_limit = args.perf_limit
         self.perf_runs = args.perf_runs
+        self.db_prefix = getattr(args, "db_prefix", DEFAULT_DB_PREFIX)
         # Same chain as the Makefile: CI_LOCK, else XDG_RUNTIME_DIR, TMPDIR or the system temp dir.
         lock_dir = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
         self.lock_path = Path(os.environ.get("CI_LOCK") or Path(lock_dir) / "anlaufstelle-ci.lock")
@@ -286,7 +299,7 @@ class Runner:
 
     def perf(self, scale: str) -> Result:
         name = f"perf-{scale}"
-        database = f"anlaufstelle_nightly_{scale}"
+        database = f"{self.db_prefix}_{scale}"
         log = self.state / f"{name}.log"
         connection = maintenance_connection()
         if connection is None:
@@ -527,7 +540,7 @@ class Runner:
         }
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "guards", nargs="*", metavar="GUARD", help=f"subset to run (default: all): {', '.join(GUARD_ORDER)}"
@@ -537,8 +550,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed-max-age-days", type=float, default=7)
     parser.add_argument("--perf-limit", type=float, default=2, help="median budget per report in seconds")
     parser.add_argument("--perf-runs", type=int, default=3)
+    parser.add_argument(
+        "--db-prefix",
+        type=database_prefix,
+        default=DEFAULT_DB_PREFIX,
+        help="prefix of the disposable perf databases (<prefix>_<scale>); a distinct one per worktree "
+        "stops worktrees on the same server from reseeding each other",
+    )
     parser.add_argument("--fail-on-skip", action="store_true", help="a skipped guard also ends the run red")
     parser.add_argument("--list", action="store_true", help="print the guard names and exit")
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
     if args.list:
         print("\n".join(GUARD_ORDER))

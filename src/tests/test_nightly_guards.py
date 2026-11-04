@@ -146,9 +146,14 @@ class MaintenanceConnectionStub:
         return False
 
 
-def reuse_runner(nightly, tmp_path, monkeypatch, *, migrate_exit):
+def reuse_runner(nightly, tmp_path, monkeypatch, *, migrate_exit, db_prefix="anlaufstelle_nightly"):
     args = argparse.Namespace(
-        python=sys.executable, state_dir=str(tmp_path), seed_max_age_days=7, perf_limit=2, perf_runs=1
+        python=sys.executable,
+        state_dir=str(tmp_path),
+        seed_max_age_days=7,
+        perf_limit=2,
+        perf_runs=1,
+        db_prefix=db_prefix,
     )
     runner = nightly.Runner(args)
     fresh = nightly.SeedStamp("medium", datetime.now(UTC) - timedelta(days=1), "", nightly.seed_code_hash())
@@ -387,3 +392,24 @@ def test_shipped_files_name_no_internal_release_wave(relative):
     if not path.exists():  # docs/dev/ is not part of the public tree
         return
     assert not re.search(r"[Ww]ave [A-Z]\b|Welle [A-Z]\b", path.read_text())
+
+
+def test_the_database_prefix_keeps_worktrees_from_reseeding_each_other(nightly, tmp_path, monkeypatch):
+    runner, commands = reuse_runner(nightly, tmp_path, monkeypatch, migrate_exit=0, db_prefix="branch_x")
+    seen = []
+    monkeypatch.setattr(runner, "seed_stamp", lambda connection, database: seen.append(database) or None)
+    monkeypatch.setattr(runner, "rebuild_seed", lambda connection, database, scale, log: seen.append(database) or 0)
+    envs = []
+    monkeypatch.setattr(runner, "run", lambda command, log, env=None, **kw: envs.append(env) or 0)
+
+    runner.perf("medium")
+
+    assert seen == ["branch_x_medium", "branch_x_medium"]
+    assert envs[-1]["POSTGRES_DB"] == "branch_x_medium"
+
+
+def test_the_database_prefix_defaults_to_the_shared_name_and_rejects_unsafe_values(nightly):
+    parser_args = nightly.parse_args([])
+    assert parser_args.db_prefix == "anlaufstelle_nightly"
+    with pytest.raises(SystemExit):
+        nightly.parse_args(["--db-prefix", "x; DROP DATABASE postgres"])

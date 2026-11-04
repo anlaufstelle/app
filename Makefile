@@ -736,16 +736,18 @@ demo-logs:
 # for the guard list. Parameters:
 #   NIGHTLY_GUARDS             subset, e.g. "perf-medium public-skips"
 #   NIGHTLY_SEED_MAX_AGE_DAYS  reseed the perf databases when older than this
+#   NIGHTLY_DB_PREFIX          perf databases are <prefix>_<scale>; distinct per worktree on a shared server
 #   NIGHTLY_PERF_LIMIT         median budget per report in seconds
 #   NIGHTLY_DIR                logs, inventories and screenshots (outside the tree)
 NIGHTLY_GUARDS ?=
 NIGHTLY_SEED_MAX_AGE_DAYS ?= 7
+NIGHTLY_DB_PREFIX ?= anlaufstelle_nightly
 NIGHTLY_PERF_LIMIT ?= 2
 NIGHTLY_DIR ?= $(or $(XDG_STATE_HOME),$(HOME)/.local/state)/anlaufstelle-nightly
 .PHONY: nightly-guards
 nightly-guards:
 	$(PYTHON) scripts/nightly_guards.py --python "$(PYTHON)" --state-dir "$(NIGHTLY_DIR)" \
-		--seed-max-age-days $(NIGHTLY_SEED_MAX_AGE_DAYS) --perf-limit $(NIGHTLY_PERF_LIMIT) $(NIGHTLY_GUARDS)
+		--seed-max-age-days $(NIGHTLY_SEED_MAX_AGE_DAYS) --db-prefix $(NIGHTLY_DB_PREFIX) --perf-limit $(NIGHTLY_PERF_LIMIT) $(NIGHTLY_GUARDS)
 
 # Contributor target overview without counts that drift with the test suite.
 .PHONY: help
