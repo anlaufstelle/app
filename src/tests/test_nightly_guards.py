@@ -3,6 +3,7 @@
 import argparse
 import contextlib
 import os
+import re
 import subprocess
 import sys
 import types
@@ -369,3 +370,20 @@ def test_public_run_takes_its_environment_at_run_time_with_the_test_settings(nig
     assert env["DJANGO_SETTINGS_MODULE"] == "anlaufstelle.settings.test"  # not the prod value of .env
     assert env["FROM_DOTENV"] == "yes" and env["FROM_PROCESS"] == "yes"
     assert not (snapshot / ".env").exists()
+
+
+PACKAGE_FILES = [
+    "Makefile",
+    "scripts/nightly_guards.py",
+    "scripts/check_statistics_performance.py",
+    "docs/dev/contributor-tools.md",
+]
+
+
+@pytest.mark.parametrize("relative", PACKAGE_FILES)
+def test_shipped_files_name_no_internal_release_wave(relative):
+    """Public files describe the failures they guard against, not the internal wave they happened in."""
+    path = ROOT / relative
+    if not path.exists():  # docs/dev/ is not part of the public tree
+        return
+    assert not re.search(r"[Ww]ave [A-Z]\b|Welle [A-Z]\b", path.read_text())

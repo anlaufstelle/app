@@ -731,7 +731,7 @@ demo-logs:
 	ssh $(DEMO_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.demo.yml --env-file .env.demo logs -f --tail=200 web caddy'
 
 # Nightly guards (Refs #2687, #2679): the checks that turned red
-# only at the release cut in wave U, run before it instead. Collects every
+# only at the release cut, run before it instead. Collects every
 # guard's verdict and ends non-zero if one is red; see scripts/nightly_guards.py
 # for the guard list. Parameters:
 #   NIGHTLY_GUARDS             subset, e.g. "perf-medium public-skips"

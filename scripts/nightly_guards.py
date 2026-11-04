@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the nightly guards and report every verdict before exiting non-zero.
 
-The guards cover the failures that surfaced only at the release cut of wave U
+The guards cover failures that surfaced only at the last release cut
 (each costing a dry run plus a stage rehearsal):
 
 * ``perf-medium`` / ``perf-large`` -- the statistics cards and the hybrid PDF
