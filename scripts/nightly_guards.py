@@ -52,7 +52,20 @@ STAMP_RE = re.compile(
     r"^nightly-seed scale=(?P<scale>\w+) seeded=(?P<seeded>\S+)(?: head=(?P<head>\S+))?(?: code=(?P<code>\w+))?$"
 )
 #: Files whose content decides what ``manage.py seed`` generates; a change forces a reseed.
-SEED_CODE_GLOBS = ("src/core/seed/*.py", "src/core/management/commands/seed.py")
+SEED_CODE_GLOBS = (
+    "src/core/seed/*.py",
+    "src/core/management/commands/seed.py",
+    # What the seed imports and the data it loads: package catalogues (YAML + loader), the facility
+    # bootstrap, the demo scenario module, file encryption, contact-stage ordering and constants.
+    "src/core/packages/**/*.yaml",
+    "src/core/packages/**/*.py",
+    "src/core/services/facility_bootstrap.py",
+    "src/core/services/dynamic_protection.py",
+    "src/core/services/file_vault/**/*.py",
+    "src/core/services/events/fields.py",
+    "src/core/demo.py",
+    "src/core/constants.py",
+)
 GUARD_ORDER = ("perf-medium", "perf-large", "demo", "public-skips", "docs-screens")
 PASS, FAIL, SKIP = "PASS", "FAIL", "SKIP"
 NO_DATABASE = "skipped: no database"
@@ -270,6 +283,17 @@ class Runner:
             if seed_is_fresh(stamp, scale, self.seed_max_age_days, code=seed_code_hash()):
                 age = datetime.now(UTC) - stamp.seeded
                 seed_note = f"seed reused ({age.days} d old)"
+                # A migration added since the seed was built must not be measured against the old schema.
+                migrate_log = self.state / f"{name}-migrate.log"
+                code = self.run(
+                    [self.python, "src/manage.py", "migrate", "--run-syncdb"],
+                    migrate_log,
+                    env={**os.environ, "POSTGRES_DB": database, "DJANGO_SETTINGS_MODULE": PERF_SETTINGS},
+                )
+                if code != 0:
+                    return Result(
+                        name, FAIL, detail=f"migrate on the reused seed failed with exit {code}", log=migrate_log
+                    )
             else:
                 why = "missing" if stamp is None else f"{stamp.scale}, {(datetime.now(UTC) - stamp.seeded).days} d old"
                 if stamp is not None and stamp.scale == scale and stamp.code != seed_code_hash():

@@ -1,5 +1,7 @@
 """Verdict logic and database-less behaviour of the nightly guards, without seeding or browsers."""
 
+import argparse
+import contextlib
 import os
 import subprocess
 import sys
@@ -98,6 +100,86 @@ def test_seed_code_hash_follows_the_seed_modules(nightly, tmp_path, monkeypatch)
     (command / "seed.py").write_text("B = 2\n")
     assert nightly.seed_code_hash() not in {first, second}
     assert len(first) == 12
+
+
+SEED_DETERMINING_FILES = [
+    "src/core/seed/events.py",
+    "src/core/management/commands/seed.py",
+    "src/core/packages/default.yaml",
+    "src/core/packages/loader.py",
+    "src/core/services/facility_bootstrap.py",
+    "src/core/services/dynamic_protection.py",
+    "src/core/services/file_vault/vault.py",
+    "src/core/services/events/fields.py",
+    "src/core/demo.py",
+    "src/core/constants.py",
+]
+
+
+@pytest.mark.parametrize("relative", SEED_DETERMINING_FILES)
+def test_seed_code_hash_covers_everything_that_shapes_the_seed_data(nightly, tmp_path, monkeypatch, relative):
+    for name in SEED_DETERMINING_FILES:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("VALUE = 1\n")
+    monkeypatch.setattr(nightly, "ROOT", tmp_path)
+    before = nightly.seed_code_hash()
+
+    (tmp_path / relative).write_text("VALUE = 2\n")
+
+    assert nightly.seed_code_hash() != before
+
+
+def test_every_seed_code_glob_matches_a_real_file(nightly):
+    """A rename must not shrink the coverage of the hash unnoticed."""
+    for pattern in nightly.SEED_CODE_GLOBS:
+        assert list(ROOT.glob(pattern)), f"{pattern} matches nothing"
+
+
+class MaintenanceConnectionStub:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def reuse_runner(nightly, tmp_path, monkeypatch, *, migrate_exit):
+    args = argparse.Namespace(
+        python=sys.executable, state_dir=str(tmp_path), seed_max_age_days=7, perf_limit=2, perf_runs=1
+    )
+    runner = nightly.Runner(args)
+    fresh = nightly.SeedStamp("medium", datetime.now(UTC) - timedelta(days=1), "", nightly.seed_code_hash())
+    commands = []
+
+    def fake_run(command, log, **kwargs):
+        commands.append(command)
+        return migrate_exit if "migrate" in command else 0
+
+    monkeypatch.setattr(nightly, "maintenance_connection", MaintenanceConnectionStub)
+    monkeypatch.setattr(runner, "seed_stamp", lambda connection, database: fresh)
+    monkeypatch.setattr(runner, "run", fake_run)
+    monkeypatch.setattr(runner, "lock", contextlib.nullcontext)
+    return runner, commands
+
+
+def test_a_reused_seed_is_migrated_before_the_measurement(nightly, tmp_path, monkeypatch):
+    runner, commands = reuse_runner(nightly, tmp_path, monkeypatch, migrate_exit=0)
+
+    result = runner.perf("medium")
+
+    assert "seed reused" in result.detail
+    kinds = ["migrate" if "migrate" in command else "perf" for command in commands]
+    assert kinds == ["migrate", "perf"]
+
+
+def test_a_failing_migration_of_the_reused_seed_fails_the_guard_without_measuring(nightly, tmp_path, monkeypatch):
+    runner, commands = reuse_runner(nightly, tmp_path, monkeypatch, migrate_exit=1)
+
+    result = runner.perf("medium")
+
+    assert result.status == nightly.FAIL and "migrate" in result.detail
+    assert len(commands) == 1
 
 
 @pytest.mark.parametrize("comment", [None, "", "manual database", "nightly-seed scale=large seeded=yesterday"])
