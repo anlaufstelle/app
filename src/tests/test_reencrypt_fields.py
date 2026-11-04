@@ -40,7 +40,7 @@ from django.utils import timezone
 from core.models import Case, Client, Event, EventHistory, RectificationRequest, ShiftHandoverNote
 from core.models.attachment import Attachment
 from core.services.file_vault import encrypt_field, generate_key, is_encrypted_value, safe_decrypt
-from core.services.file_vault.rotation import rotate_all
+from core.services.file_vault.rotation import _UNREADABLE, rotate_all
 
 
 def _handover_window():
@@ -110,8 +110,8 @@ def decryptable_values(payload) -> list[str]:
     found = []
     for value in payload.values():
         if is_encrypted_value(value):
-            plain = safe_decrypt(value)
-            if plain != "[verschlüsselt]":
+            plain = safe_decrypt(value, default=_UNREADABLE)
+            if plain is not _UNREADABLE:
                 found.append(plain)
     return found
 
