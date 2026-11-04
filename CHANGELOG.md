@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Schlüsselrotation erfasst auch den Klartext „[verschlüsselt]“** (#2624) — Die Feldrotation unterscheidet unlesbare Chiffrate jetzt unabhängig vom Inhalt; ein gespeicherter Freitext, der genau dem Anzeige-Platzhalter entspricht, wird wie jeder andere Wert unter den neuen Primärschlüssel gebracht und bleibt nach Entfernen des Altschlüssels lesbar. Korrupte Chiffrate bleiben unverändert, fehlende Schlüssel brechen weiterhin laut ab.
 ### Security
 
-- **Sicherheitsupdates für Entwicklungsabhängigkeiten** (#2683, #2681) — msgpack 1.2.3 und setuptools 84.1.0 schließen die beiden offenen Dependabot-Meldungen im Dev-Lock (`requirements-dev.txt`); zugleich sentry-sdk 2.73.0, pytest-playwright 0.10.0 (ohne das nun entfallene `pytest-base-url`) und ruff 0.17.3. Die Produktions-Abhängigkeiten ändern sich nur bei sentry-sdk (#2684).
+- **Sicherheitsupdates für Entwicklungsabhängigkeiten** (#2683, #2681) — msgpack 1.2.3 und setuptools 84.1.0 schließen die beiden offenen Dependabot-Meldungen im Dev-Lock (`requirements-dev.txt`); zugleich pytest-playwright 0.10.0 (ohne das nun entfallene `pytest-base-url`; `requests` ist jetzt direkt deklariert) und ruff 0.17.3. Die Produktions-Abhängigkeiten bleiben unverändert: sentry-sdk bleibt bei 2.71.0, weil 2.73.0 `send_default_pii` als veraltet meldet und die Umstellung auf `data_collection` den eingebauten Event-Scrubber des SDK abschaltet (#2684 bleibt offen).
 
 ### Changed
 
