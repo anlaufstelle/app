@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -47,7 +48,11 @@ SANITIZER = ROOT / "dev-ops/release/sanitize_release_tree.py"
 PERF_SCRIPT = SCRIPTS / "check_statistics_performance.py"
 PERF_SETTINGS = "anlaufstelle.settings.test"
 STAMP_PREFIX = "nightly-seed"
-STAMP_RE = re.compile(r"^nightly-seed scale=(?P<scale>\w+) seeded=(?P<seeded>\S+)(?: head=(?P<head>\S+))?$")
+STAMP_RE = re.compile(
+    r"^nightly-seed scale=(?P<scale>\w+) seeded=(?P<seeded>\S+)(?: head=(?P<head>\S+))?(?: code=(?P<code>\w+))?$"
+)
+#: Files whose content decides what ``manage.py seed`` generates; a change forces a reseed.
+SEED_CODE_GLOBS = ("src/core/seed/*.py", "src/core/management/commands/seed.py")
 GUARD_ORDER = ("perf-medium", "perf-large", "demo", "public-skips", "docs-screens")
 PASS, FAIL, SKIP = "PASS", "FAIL", "SKIP"
 NO_DATABASE = "skipped: no database"
@@ -67,10 +72,12 @@ class SeedStamp:
     scale: str
     seeded: datetime
     head: str = ""
+    code: str = ""
 
     def render(self) -> str:
         head = f" head={self.head}" if self.head else ""
-        return f"{STAMP_PREFIX} scale={self.scale} seeded={self.seeded.isoformat()}{head}"
+        code = f" code={self.code}" if self.code else ""
+        return f"{STAMP_PREFIX} scale={self.scale} seeded={self.seeded.isoformat()}{head}{code}"
 
 
 def parse_seed_stamp(comment: str | None) -> SeedStamp | None:
@@ -86,12 +93,32 @@ def parse_seed_stamp(comment: str | None) -> SeedStamp | None:
         return None
     if seeded.tzinfo is None:
         seeded = seeded.replace(tzinfo=UTC)
-    return SeedStamp(match["scale"], seeded, match["head"] or "")
+    return SeedStamp(match["scale"], seeded, match["head"] or "", match["code"] or "")
 
 
-def seed_is_fresh(stamp: SeedStamp | None, scale: str, max_age_days: float, now: datetime | None = None) -> bool:
-    """A seed is reusable when it exists, has the wanted scale and is young enough."""
+def seed_code_hash() -> str:
+    """Short hash over the seed modules (path and content); changes whenever the seed output can."""
+    digest = hashlib.sha256()
+    for pattern in SEED_CODE_GLOBS:
+        for path in sorted(ROOT.glob(pattern)):
+            digest.update(path.relative_to(ROOT).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
+    return digest.hexdigest()[:12]
+
+
+def seed_is_fresh(
+    stamp: SeedStamp | None,
+    scale: str,
+    max_age_days: float,
+    now: datetime | None = None,
+    code: str | None = None,
+) -> bool:
+    """A seed is reusable when it exists, has the wanted scale, matches the seed code and is young enough.
+
+    With ``code`` given, a stamp without or with another code hash is stale.
+    """
     if stamp is None or stamp.scale != scale:
+        return False
+    if code is not None and stamp.code != code:
         return False
     now = now or datetime.now(UTC)
     return now - stamp.seeded <= timedelta(days=max_age_days)
@@ -240,11 +267,13 @@ class Runner:
             return Result(name, SKIP, detail=NO_DATABASE)
         with connection, self.lock():
             stamp = self.seed_stamp(connection, database)
-            if seed_is_fresh(stamp, scale, self.seed_max_age_days):
+            if seed_is_fresh(stamp, scale, self.seed_max_age_days, code=seed_code_hash()):
                 age = datetime.now(UTC) - stamp.seeded
                 seed_note = f"seed reused ({age.days} d old)"
             else:
                 why = "missing" if stamp is None else f"{stamp.scale}, {(datetime.now(UTC) - stamp.seeded).days} d old"
+                if stamp is not None and stamp.scale == scale and stamp.code != seed_code_hash():
+                    why += ", seed code changed"
                 print(f"[{name}] rebuilding {database}: seed {why}", flush=True)
                 seed_log = self.state / f"{name}-seed.log"
                 code = self.rebuild_seed(connection, database, scale, seed_log)
@@ -298,7 +327,7 @@ class Runner:
             code = self.run(command, log, env=env, append=True)
             if code != 0:
                 return code
-        stamp = SeedStamp(scale, datetime.now(UTC).replace(microsecond=0), git_head())
+        stamp = SeedStamp(scale, datetime.now(UTC).replace(microsecond=0), git_head(), seed_code_hash())
         with connection.cursor() as cursor:
             cursor.execute(sql.SQL("COMMENT ON DATABASE {} IS {}").format(identifier, sql.Literal(stamp.render())))
         return 0

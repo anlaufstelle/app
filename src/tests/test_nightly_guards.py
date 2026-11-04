@@ -60,6 +60,46 @@ def test_seed_stamp_round_trips_through_the_database_comment(nightly):
     assert parsed == stamp
 
 
+def test_seed_stamp_with_code_hash_round_trips(nightly):
+    stamp = nightly.SeedStamp("medium", datetime(2026, 11, 1, 2, 0, tzinfo=UTC), "ff45ee7", "0123456789ab")
+
+    assert "code=0123456789ab" in stamp.render()
+    assert nightly.parse_seed_stamp(stamp.render()) == stamp
+
+
+def test_seed_with_other_or_missing_code_hash_is_not_reused(nightly):
+    now = datetime(2026, 11, 8, tzinfo=UTC)
+    seeded = now - timedelta(days=1)
+    same = nightly.SeedStamp("medium", seeded, "", "aaaaaaaaaaaa")
+    other = nightly.SeedStamp("medium", seeded, "", "bbbbbbbbbbbb")
+    legacy = nightly.SeedStamp("medium", seeded)
+
+    assert nightly.seed_is_fresh(same, "medium", 7, now, code="aaaaaaaaaaaa")
+    assert not nightly.seed_is_fresh(other, "medium", 7, now, code="aaaaaaaaaaaa")
+    assert not nightly.seed_is_fresh(legacy, "medium", 7, now, code="aaaaaaaaaaaa")
+
+
+def test_seed_code_hash_follows_the_seed_modules(nightly, tmp_path, monkeypatch):
+    package = tmp_path / "src" / "core" / "seed"
+    package.mkdir(parents=True)
+    command = tmp_path / "src" / "core" / "management" / "commands"
+    command.mkdir(parents=True)
+    (package / "events.py").write_text("A = 1\n")
+    (command / "seed.py").write_text("B = 1\n")
+    (tmp_path / "src" / "core" / "other.py").write_text("C = 1\n")
+    monkeypatch.setattr(nightly, "ROOT", tmp_path)
+
+    first = nightly.seed_code_hash()
+    (tmp_path / "src" / "core" / "other.py").write_text("C = 2\n")
+    assert nightly.seed_code_hash() == first  # unrelated modules do not matter
+    (package / "events.py").write_text("A = 2\n")
+    second = nightly.seed_code_hash()
+    assert second != first
+    (command / "seed.py").write_text("B = 2\n")
+    assert nightly.seed_code_hash() not in {first, second}
+    assert len(first) == 12
+
+
 @pytest.mark.parametrize("comment", [None, "", "manual database", "nightly-seed scale=large seeded=yesterday"])
 def test_foreign_or_broken_comments_are_no_stamp(nightly, comment):
     assert nightly.parse_seed_stamp(comment) is None
