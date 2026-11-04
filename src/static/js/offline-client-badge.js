@@ -25,7 +25,20 @@
             _pk: "",
             _confirmRemoveText: "",
             _labelKeptEdits: "",
+            // Refs #2630: true while the shown message still claims offline availability.
+            _claimsAvailable: false,
             init() {
+                // The registration can fail after the claim was made (e.g. a
+                // first installation that ends redundant): take the claim back.
+                window.addEventListener("offline-worker-status", () => {
+                    if (!this._claimsAvailable) return;
+                    if (window.offlineWorker && window.offlineWorker.isUnavailable && window.offlineWorker.isUnavailable()) {
+                        this.showMessage(
+                            document.body.dataset.i18nOfflineWorkerUnavailable || gettext("Person lokal gespeichert, aber Offline-Seiten sind auf diesem Gerät derzeit nicht verfügbar."),
+                            "error"
+                        );
+                    }
+                });
                 this._pk = this.$el.dataset.pk || "";
                 // Refs #1351/#1385 (M8/Task 4): i18n-Text kommt aus dem Template
                 // (data-*-Attribut), kein hartkodiertes deutsches JS-Literal
@@ -115,7 +128,13 @@
                         await window.offlineClient.removeClientFromOffline(this._pk);
                         this.showMessage("Aus Offline-Cache entfernt.", "info");
                     } else {
+                        // Refs #2630: a failed registration is retried now, in parallel
+                        // to the bundle request; its result decides the message.
+                        const workerRetry = window.offlineWorker && window.offlineWorker.retry
+                            ? window.offlineWorker.retry()
+                            : Promise.resolve();
                         const bundle = await window.offlineClient.takeClientOffline(this._pk);
+                        await workerRetry;
                         // Refs #2630: without a registered worker (failed registration)
                         // offline pages cannot be served; do not claim availability.
                         const workerUnavailable = Boolean(
@@ -138,6 +157,7 @@
                                 " – Hinweis: Der Browser gewährt keinen dauerhaften Speicher; bei Speicherdruck können Offline-Daten verloren gehen.";
                         }
                         this.showMessage(msg, workerUnavailable ? "error" : "info");
+                        this._claimsAvailable = !workerUnavailable;
                     }
                     await this.refresh();
                 } catch (e) {
@@ -163,8 +183,10 @@
             showMessage(text, type) {
                 this.message = text;
                 this.messageType = type;
+                this._claimsAvailable = false;
                 setTimeout(() => {
                     this.message = "";
+                    this._claimsAvailable = false;
                 }, 6000);
             },
         }));

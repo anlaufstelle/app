@@ -48,9 +48,18 @@
         _workerStatus = status;
         window.dispatchEvent(new CustomEvent("offline-worker-status", { detail: { status: status } }));
     }
+    // Set once the registration function exists (needs the service worker API).
+    var _retryRegistration = function () {
+        return Promise.resolve();
+    };
     window.offlineWorker = {
         status: function () {
             return _workerStatus;
+        },
+        // Re-register after a failure; resolves when the attempt settled and
+        // never rejects. No-op unless the state is "failed".
+        retry: function () {
+            return _retryRegistration();
         },
         isUnavailable: function () {
             return _workerStatus === "failed" || _workerStatus === "unsupported";
@@ -174,11 +183,15 @@
         };
         _registerWorker();
 
-        // A failed registration is retried once the connection returns.
-        window.addEventListener("online", function () {
-            if (_workerStatus !== "failed") return;
+        // A failed registration is retried on demand (take-offline click) and
+        // once the connection returns.
+        _retryRegistration = function () {
+            if (_workerStatus !== "failed") return Promise.resolve();
             _setWorkerStatus("pending");
-            _registerWorker();
+            return _registerWorker();
+        };
+        window.addEventListener("online", function () {
+            _retryRegistration();
         });
 
         navigator.serviceWorker.addEventListener("message", async function (event) {
