@@ -65,7 +65,7 @@ from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, T
 from core.services.zeitstrom_filters import resolve_zeitstrom_state
 from core.services.zeitstrom_watch import _current_shift_projection
 
-pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
+pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key", "midday_clock")]
 
 
 def _full_day_filter(facility, *, label="Ganztag Pin"):

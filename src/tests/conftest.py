@@ -1,6 +1,8 @@
 """Pytest fixtures for Anlaufstelle test suite."""
 
+import datetime
 import os
+from unittest import mock
 
 import pytest
 from cryptography.fernet import Fernet
@@ -1154,3 +1156,29 @@ def isolate_reporting_registry(monkeypatch, *, empty: bool = False) -> None:
     registry._discover()
     monkeypatch.setattr(registry, "_REGISTRY", {} if empty else dict(registry._REGISTRY))
     monkeypatch.setattr(registry, "_discovered", True)
+
+
+# ---------------------------------------------------------------------------
+# Fixed midday clock for "full day" time filters
+# ---------------------------------------------------------------------------
+# A full-day time filter in tests runs from 00:00 to 23:59. Its end is
+# exclusive, so the last local minute before midnight has no active shift
+# and every current-shift assertion fails there (seen in a mutation stats
+# run at 23:59 Europe/Berlin). ``midday_clock`` pins ``timezone.now()`` to
+# 12:00 local time of the current day, so these tests no longer depend on
+# the wall clock.
+
+
+def local_midday():
+    """Return 12:00 local time of the current local day as an aware UTC datetime."""
+    today = timezone.localdate()
+    midday = datetime.datetime.combine(today, datetime.time(12, 0))
+    return timezone.make_aware(midday).astimezone(datetime.UTC)
+
+
+@pytest.fixture
+def midday_clock():
+    """Pin ``django.utils.timezone.now`` to 12:00 local time today."""
+    fixed = local_midday()
+    with mock.patch("django.utils.timezone.now", return_value=fixed):
+        yield fixed

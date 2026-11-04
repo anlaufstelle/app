@@ -651,6 +651,7 @@ class TestZeitstromWatchChromeProjections:
         assert response.status_code == 200
         assert response.json()["components"] == ["focus_box"]
 
+    @pytest.mark.usefixtures("midday_clock")
     def test_current_shift_revision_tracks_visible_highlight_content(self, client, staff_user, facility):
         TimeFilter.objects.create(
             facility=facility,
@@ -677,6 +678,7 @@ class TestZeitstromWatchChromeProjections:
         assert response.status_code == 200
         assert response.json()["components"] == ["current_shift"]
 
+    @pytest.mark.usefixtures("midday_clock")
     def test_current_shift_revision_tracks_rendered_client_stat(self, client, staff_user, facility):
         TimeFilter.objects.create(
             facility=facility,
@@ -759,6 +761,7 @@ class TestZeitstromWatchRefreshPartials:
 
     @pytest.mark.parametrize("position", ["previous", "requested"])
     @pytest.mark.parametrize("change", ["delete", "deactivate"])
+    @pytest.mark.usefixtures("midday_clock")
     def test_time_filter_transition_reloads_when_requested_filter_is_no_longer_canonical(
         self,
         client,

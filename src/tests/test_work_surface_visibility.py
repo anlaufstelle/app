@@ -202,6 +202,7 @@ def test_widgets_exclude_role_hidden_documentation(client, facility, client_iden
 
 @pytest.mark.parametrize("component", ["focus_box", "current_shift", "feed"])
 @pytest.mark.parametrize("revocation", ["trash", "inactive"])
+@pytest.mark.usefixtures("midday_clock")
 @pytest.mark.parametrize("role", ["assistant", "staff", "lead", "facility_admin"])
 def test_watch_validators_ignore_tasks_of_revoked_people(
     client, facility, client_identified, staff_user, lead_user, component, revocation, role
@@ -235,6 +236,7 @@ def test_watch_validators_ignore_tasks_of_revoked_people(
     assert second.json()["validators"][component] == first.json()["validators"][component]
 
 
+@pytest.mark.usefixtures("midday_clock")
 @pytest.mark.parametrize("role", ["assistant", "staff", "lead", "facility_admin"])
 def test_current_shift_validator_ignores_documentation_of_trashed_people(
     client, facility, client_identified, staff_user, lead_user, role
