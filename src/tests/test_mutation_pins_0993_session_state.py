@@ -7,17 +7,16 @@ Quelle: Mutations-Delta des Checkpoints release-0.99.2, 4 Mutanten. Gruppen:
 * ``session_fully_authenticated`` — ein Request-Ersatz ohne setzbare
   Attribute verliert nur den Merker, nicht die Antwort.
 
-Die MFA-Pruefung der Middleware wird in den Attribut-Pins auf „keine
-Umleitung" festgelegt, damit das Ergebnis allein an den gepinnten Zweigen
-haengt.
+The MFA policy read is fixed to "no factor, no enforcement" (access) in the
+attribute pins, so the result depends on the pinned branches only.
 """
 
 from types import SimpleNamespace
 
 import pytest
 
-from core.middleware.mfa import MFAEnforcementMiddleware
 from core.services.security import session_state
+from core.services.security.mfa_policy import MFAState
 
 
 class _UserOhnePasswortMerker:
@@ -40,11 +39,11 @@ class _RequestOhneAttribute:
 def keine_mfa_umleitung(monkeypatch):
     aufrufe = []
 
-    def _keine(request, user):
-        aufrufe.append(request)
-        return None
+    def _no_factor_no_enforcement(user, session):
+        aufrufe.append(session)
+        return MFAState(has_confirmed_device=False)
 
-    monkeypatch.setattr(MFAEnforcementMiddleware, "_required_redirect", _keine)
+    monkeypatch.setattr(session_state, "read_mfa_state", _no_factor_no_enforcement)
     return aufrufe
 
 
@@ -62,7 +61,7 @@ class TestEvaluate:
         greift der Default ``False``, die Auswertung erreicht die MFA-Pruefung."""
         request = SimpleNamespace(user=_UserOhnePasswortMerker(), session={})
         assert session_state._evaluate(request) is True
-        assert keine_mfa_umleitung == [request]
+        assert keine_mfa_umleitung == [request.session]
 
 
 class TestSessionFullyAuthenticated:

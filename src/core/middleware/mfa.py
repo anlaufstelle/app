@@ -11,8 +11,13 @@ Logik analog zu ForcePasswordChangeMiddleware. Zwei Fälle:
 Die Session-Flag ``mfa_verified`` wird gesetzt, wenn der Nutzer
 erfolgreich einen OTP eingibt. Sie lebt so lange wie die Session —
 bei Logout oder Session-Expiry ist die 2FA-Verifikation neu nötig.
+
+The decision itself is the shared policy in
+:mod:`core.services.security.mfa_policy` (Refs #2568); this middleware turns
+its step into a redirect and starts a missing grace period.
 """
 
+from dataclasses import replace
 from datetime import timedelta
 from urllib.parse import urlencode
 
@@ -20,6 +25,7 @@ from django.shortcuts import redirect
 from django.utils import timezone
 
 from core.constants import MFA_SETUP_GRACE_DAYS
+from core.services.security.mfa_policy import MFAStep, decide_mfa_step, read_mfa_state
 
 # Pfade, die auch bei offenem MFA-Setup/Verify erreichbar sein müssen —
 # sonst gerät der Nutzer in eine Redirect-Schleife.
@@ -52,6 +58,8 @@ EXEMPT_URLS = [
     "/auth/offline-key-salt/",
 ]
 
+_REDIRECTS = {MFAStep.SETUP: "/mfa/setup/", MFAStep.VERIFY: "/mfa/verify/"}
+
 
 class MFAEnforcementMiddleware:
     """Redirects to MFA setup or verify as long as the session lacks 2FA."""
@@ -78,40 +86,28 @@ class MFAEnforcementMiddleware:
 
     @staticmethod
     def _required_redirect(request, user):
-        # Methoden-uebergreifend (ADR-032, Refs #1492): TOTP ODER Passkey zaehlt
-        # als bestaetigter zweiter Faktor.
-        has_device = user.has_confirmed_mfa_device
-        # Case 1: Setup needed (MFA enforced, but no device yet).
-        if not has_device:
-            # SOFORT-Erzwingung ohne Grace (Refs #689): bewusst gesetzter Zwang
-            # (mfa_required / facility-weit) ODER privilegierte Rolle
-            # (super_admin/facility_admin, wiederhergestelltes #1019-Verhalten).
-            # Der Admin hat den Zwang gezielt aktiviert bzw. die Rolle ist per se
-            # hochprivilegiert — eine 30-Tage-Frist waere hier ein Loch.
-            if user.mfa_enforced_deliberately or user.mfa_enforced_by_role_immediate:
-                return "/mfa/setup/"
-            # Rollen-Default fuer die mit #689 neu erzwungenen Niedrigrechte-
-            # Rollen (staff/assistant [, lead]) laeuft ueber eine 30-Tage-Grace-
-            # Frist, damit Bestandsnutzer beim Aktivieren nicht ausgesperrt werden.
-            if user.mfa_enforced_by_role_grace:
-                deadline = user.mfa_setup_deadline
-                now = timezone.now()
-                if deadline is None:
-                    # Erstkontakt (z.B. Session aus der Zeit vor dem Rollout, in
-                    # der das Login-Stamping nicht lief): Grace-Uhr JETZT starten
-                    # statt aussperren.
-                    from core.models import User
+        """Return the MFA redirect target for *user*, or ``None`` for access.
 
-                    deadline = now + timedelta(days=MFA_SETUP_GRACE_DAYS)
-                    # ``user`` ist im Request als SimpleLazyObject gewrappt —
-                    # daher das konkrete Modell statt ``type(user)``.
-                    User.objects.filter(pk=user.pk).update(mfa_setup_deadline=deadline)
-                    user.mfa_setup_deadline = deadline
-                if deadline > now:
-                    return None  # Grace aktiv — Zugang mit Banner
-                return "/mfa/setup/"
-            return None
-        # Case 2: Device exists, but session not yet verified.
-        if not request.session.get("mfa_verified"):
-            return "/mfa/verify/"
-        return None
+        The decision is the shared policy (Refs #2568). The one write of this
+        path happens here and nowhere in the policy: a grace-enforced account
+        without a deadline gets its grace period started now (Refs #689), and
+        the decision then runs on the stamped value.
+        """
+        now = timezone.now()
+        state = read_mfa_state(user, request.session)
+        if state.grace_period_missing:
+            state = replace(state, setup_deadline=_start_grace_period(user, now))
+        return _REDIRECTS.get(decide_mfa_step(state, now=now))
+
+
+def _start_grace_period(user, now):
+    """Stamp the MFA setup deadline of *user* (first enforcement contact)."""
+    from core.models import User
+
+    deadline = now + timedelta(days=MFA_SETUP_GRACE_DAYS)
+    # ``user`` is wrapped in a SimpleLazyObject on the request, hence the
+    # concrete model instead of ``type(user)``.
+    User.objects.filter(pk=user.pk).update(mfa_setup_deadline=deadline)
+    # Visible to the rest of this request (e.g. the setup reminder context).
+    user.mfa_setup_deadline = deadline
+    return deadline

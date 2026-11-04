@@ -2,12 +2,12 @@
 
 Ein einziger Begriff für Footer (Version/Build/Hilfe-Link) und
 ``/health/``-Detailfelder: authentifiziert **und** die MFA-Middleware würde
-nicht umleiten **und** kein erzwungener Passwortwechsel. Die Wahrheit liegt
-in ``MFAEnforcementMiddleware._required_redirect`` bzw.
-``ForcePasswordChangeMiddleware`` — das Prädikat importiert sie, statt sie zu
-kopieren, und bleibt dabei **seiteneffektfrei**: ``_required_redirect``
-startet beim Erstkontakt die Grace-Uhr (DB-Update auf ``mfa_setup_deadline``);
-eine Footer-Abfrage darf das nicht tun.
+nicht umleiten **und** kein erzwungener Passwortwechsel.
+
+The MFA part is the policy shared with the middleware
+(``core.services.security.mfa_policy``, Refs #2568). The predicate stays free
+of side effects: only the enforcement path starts the grace clock (DB update
+of ``mfa_setup_deadline``); a footer query must not.
 """
 
 import pytest
@@ -76,8 +76,8 @@ class TestSessionFullyAuthenticatedPredicate:
 
 
 class TestPredicateIsFreeOfSideEffects:
-    """Der Grace-Fall ist der heikle: ``_required_redirect`` startet dort beim
-    Erstkontakt die 30-Tage-Uhr und schreibt sie in die DB (Refs #689)."""
+    """The grace case is the delicate one: enforcement starts the 30-day clock
+    on first contact and writes it to the DB (Refs #689)."""
 
     @pytest.fixture
     def grace_user(self, staff_user, settings):
@@ -130,20 +130,20 @@ class TestPredicateIsEvaluatedOncePerRequest:
     """
 
     @staticmethod
-    def _counting_required_redirect(monkeypatch, calls):
-        from core.middleware.mfa import MFAEnforcementMiddleware
+    def _counting_decisions(monkeypatch, calls):
+        from core.services.security import session_state
 
-        original = MFAEnforcementMiddleware._required_redirect
+        original = session_state.decide_mfa_step
 
-        def counting(request, user):
-            calls.append(request)
-            return original(request, user)
+        def counting(state, *, now):
+            calls.append(state)
+            return original(state, now=now)
 
-        monkeypatch.setattr(MFAEnforcementMiddleware, "_required_redirect", staticmethod(counting))
+        monkeypatch.setattr(session_state, "decide_mfa_step", counting)
 
     def test_repeated_calls_on_one_request_evaluate_once(self, staff_user, monkeypatch):
         calls: list = []
-        self._counting_required_redirect(monkeypatch, calls)
+        self._counting_decisions(monkeypatch, calls)
         request = _request_for(staff_user)
 
         assert session_fully_authenticated(request) is True
@@ -156,7 +156,7 @@ class TestPredicateIsEvaluatedOncePerRequest:
         """Der Merker hängt am Request, nicht am Nutzer — sonst trüge eine
         Antwort den Zustand einer anderen."""
         calls: list = []
-        self._counting_required_redirect(monkeypatch, calls)
+        self._counting_decisions(monkeypatch, calls)
 
         session_fully_authenticated(_request_for(staff_user))
         session_fully_authenticated(_request_for(staff_user))
@@ -170,7 +170,7 @@ class TestPredicateIsEvaluatedOncePerRequest:
 
         TOTPDevice.objects.create(user=staff_user, name="test", confirmed=True)
         calls: list = []
-        self._counting_required_redirect(monkeypatch, calls)
+        self._counting_decisions(monkeypatch, calls)
         request = _request_for(staff_user)
 
         assert session_fully_authenticated(request) is False
