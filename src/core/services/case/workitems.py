@@ -136,9 +136,11 @@ def apply_workitem_filters(qs, *, item_type="", priority="", assigned_to="", due
     ``assigned_to`` ist hier bereits aufgelöst: der Default-Sentinel
     ``DEFAULT_ASSIGNED_SCOPE`` muss der Aufrufer vorher auf ``""``
     normalisieren (siehe ``apply_workitem_default_scope``); "me" wird hier
-    noch in die User-ID übersetzt. Alles andere als ``me`` oder eine
-    ASCII-Ziffernfolge löst ``InvalidAssignedFilterError`` aus, bevor der Wert den
-    Integer-FK-Filter erreicht (Refs #2618).
+    noch in die User-ID übersetzt.
+
+    Any value other than ``me`` or an ASCII digit string raises
+    ``InvalidAssignedFilterError`` before it reaches the integer FK filter
+    (Refs #2618).
     """
     if item_type and item_type in dict(WorkItem.ItemType.choices):
         qs = qs.filter(item_type=item_type)
