@@ -14,18 +14,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **E2E-Gewichte aus erneuerter Messung** (#2646) — Die Gewichtsdatei deckt jetzt alle 168 Spezifikationen ab und stammt aus einer Dreifachmessung; der Konverter liest dafür CSV-Messungen (`--from-csv`) und skaliert auf Runner-Sekunden (`--scale`). Ein Guard prüft vollständige Gewichte, ein Verhältnis von größter zu mittlerer Scheibe bis 1,15 und höchstens 70 % des Job-Limits.
 - **DB-Passwortrotation liest Werte wie Backup und Restore** (#2571) — Die Rotation liest die Alt-Zugangsdaten aus der Env-Datei mit demselben Wertparser wie Backup und Restore: Anführungszeichen, Inlinekommentare und die dokumentierten Escapes ergeben denselben Wert, `export`-Präfix und Leerraum um `=` werden erkannt, und der atomare Austausch ersetzt dieselben Zuweisungsformen. Fehlende, doppelte, leere und durch offene Anführungszeichen leere Pflichtwerte brechen nun vor dem Stoppen der Dienste und vor jedem SQL ab; zuvor lief ein leerer oder doppelter Wert bis zum Dienststopp weiter. Die Env-Datei wird weiterhin nicht ausgeführt.
+- **Frontend-Bibliotheken aktualisiert** (#2676, #2674, #2675, #2686) — Chart.js 4.6.1, Dexie.js 4.4.7 und Alpine.js CSP 3.17.5 liegen neu vendort unter `src/static/js/`; fake-indexeddb 6.2.7 betrifft nur die JS-Tests. undici 8.12.3 (#2680) war im Lockfile bereits enthalten.
+- **GitHub-Actions-Pins aktualisiert** (#2682) — codeql-action 4.39.1, docker/login-action 4.7.0 und actions/setup-python 7.1.0, weiterhin als volle Commit-SHA mit Versionskommentar.
+
 ### Security
 
 - **Sprachcookie in Produktion gehärtet** (#2619) — Der Sprachcookie `django_language` wird in Produktion wie der Session-Cookie nur noch mit `Secure`, `HttpOnly` und `SameSite=Lax` gesetzt; die gespeicherte Sprachwahl angemeldeter Konten funktioniert unverändert.
 - **Schlüsselrotation erfasst auch den Klartext „[verschlüsselt]“** (#2624) — Die Feldrotation unterscheidet unlesbare Chiffrate jetzt unabhängig vom Inhalt; ein gespeicherter Freitext, der genau dem Anzeige-Platzhalter entspricht, wird wie jeder andere Wert unter den neuen Primärschlüssel gebracht und bleibt nach Entfernen des Altschlüssels lesbar. Korrupte Chiffrate bleiben unverändert, fehlende Schlüssel brechen weiterhin laut ab.
-### Security
-
 - **Sicherheitsupdates für Entwicklungsabhängigkeiten** (#2683, #2681) — msgpack 1.2.3 und setuptools 84.1.0 schließen die beiden offenen Dependabot-Meldungen im Dev-Lock (`requirements-dev.txt`); zugleich pytest-playwright 0.10.0 (ohne das nun entfallene `pytest-base-url`; `requests` ist jetzt direkt deklariert) und ruff 0.17.3. Die Produktions-Abhängigkeiten bleiben unverändert: sentry-sdk bleibt bei 2.71.0, weil 2.73.0 `send_default_pii` als veraltet meldet und die Umstellung auf `data_collection` den eingebauten Event-Scrubber des SDK abschaltet (#2684 bleibt offen).
-
-### Changed
-
-- **Frontend-Bibliotheken aktualisiert** (#2676, #2674, #2675, #2686) — Chart.js 4.6.1, Dexie.js 4.4.7 und Alpine.js CSP 3.17.5 liegen neu vendort unter `src/static/js/`; fake-indexeddb 6.2.7 betrifft nur die JS-Tests. undici 8.12.3 (#2680) war im Lockfile bereits enthalten.
-- **GitHub-Actions-Pins aktualisiert** (#2682) — codeql-action 4.39.1, docker/login-action 4.7.0 und actions/setup-python 7.1.0, weiterhin als volle Commit-SHA mit Versionskommentar.
 
 ## [0.99.9] - 2026-11-01
 
