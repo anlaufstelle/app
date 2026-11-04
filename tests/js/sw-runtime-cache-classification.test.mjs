@@ -275,7 +275,7 @@ async function settled(promise) {
     return done;
 }
 
-describe("sw.js Asset-Revalidierung und Event-Lebensdauer (#2612)", () => {
+describe("sw.js asset revalidation and event lifetime (#2612)", () => {
     it("holds the event open until cache.put and the trim of a cold asset finished", async () => {
         const spy = runtimeCacheSpy();
         const putGate = deferred();
