@@ -182,24 +182,32 @@
         Promise.resolve()
             .then(async () => {
                 let count = 0;
+                // Refs #2626: a failed read is logged and makes the number
+                // UNKNOWN; a partial sum is never reported as the exact count.
+                let unknown = false;
                 try {
                     const breakdown = (await _store().countQueueByStatus()) || {};
                     count += breakdown.pending || 0;
-                } catch (_e) {
-                    /* Zaehler bleibt bei dem, was sich lesen liess */
+                } catch (error) {
+                    unknown = true;
+                    // eslint-disable-next-line no-console
+                    console.warn("[offline-queue] auth-pending queue count unavailable", error);
                 }
                 try {
                     count += (await _store().countUnsyncedEvents()) || 0;
-                } catch (_e) {
-                    /* dito */
+                } catch (error) {
+                    unknown = true;
+                    // eslint-disable-next-line no-console
+                    console.warn("[offline-queue] auth-pending unsynced count unavailable", error);
                 }
-                window.dispatchEvent(
-                    new CustomEvent("offline-auth-pending", {
-                        detail: { pending: active, count: count, kind: active ? kind || "login" : null },
-                    })
-                );
+                const detail = { pending: active, count: count, kind: active ? kind || "login" : null };
+                if (unknown) detail.countUnknown = true;
+                window.dispatchEvent(new CustomEvent("offline-auth-pending", { detail: detail }));
             })
-            .catch(() => {});
+            .catch((error) => {
+                // eslint-disable-next-line no-console
+                console.warn("[offline-queue] auth-pending signal failed", error);
+            });
     }
 
     async function _updateQueueCount() {

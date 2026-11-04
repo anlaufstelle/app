@@ -302,10 +302,15 @@
      */
     async function _countLocalPending() {
         let total = 0;
+        // Refs #2626: a failed read is logged and makes the number UNKNOWN. A
+        // partial sum must not be shown as the exact count of waiting changes.
+        let unknown = false;
         try {
             total += (await _store().countUnsyncedEvents()) || 0;
-        } catch (_e) {
-            /* Zaehler bleibt bei dem, was sich lesen liess */
+        } catch (error) {
+            unknown = true;
+            // eslint-disable-next-line no-console
+            console.warn("[offline-edit] auth-pending unsynced count unavailable", error);
         }
         try {
             const store = _store();
@@ -313,26 +318,30 @@
                 const breakdown = (await store.countQueueByStatus()) || {};
                 total += breakdown.pending || 0;
             }
-        } catch (_e) {
-            /* dito */
+        } catch (error) {
+            unknown = true;
+            // eslint-disable-next-line no-console
+            console.warn("[offline-edit] auth-pending queue count unavailable", error);
         }
-        return total;
+        return { count: total, unknown: unknown };
     }
 
     function _signalAuthPending(pending, kind) {
         const active = Boolean(pending);
         return _countLocalPending()
-            .then((count) => {
-                window.dispatchEvent(
-                    new CustomEvent("offline-auth-pending", {
-                        detail: { pending: active, count: count, kind: active ? kind || "login" : null },
-                    })
-                );
+            .then(({ count, unknown }) => {
+                const detail = { pending: active, count: count, kind: active ? kind || "login" : null };
+                // Only present when unreadable, so the regular detail stays unchanged.
+                if (unknown) detail.countUnknown = true;
+                window.dispatchEvent(new CustomEvent("offline-auth-pending", { detail: detail }));
             })
-            .catch(() => {});
+            .catch((error) => {
+                // eslint-disable-next-line no-console
+                console.warn("[offline-edit] auth-pending signal failed", error);
+            });
     }
 
-    function _renderAuthPending(active, count, kind) {
+    function _renderAuthPending(active, count, kind, countUnknown) {
         let nodes;
         try {
             nodes = document.querySelectorAll("[data-offline-auth-pending]");
@@ -344,14 +353,22 @@
             // „melden Sie sich erneut an, dann geht es weiter" waere dort falsch
             // (der Wechsel loescht den lokalen Bestand). Fehlt das Attribut,
             // bleibt der allgemeine Text.
-            const attribute =
+            const prefix =
                 kind === "password-change" && node.hasAttribute("data-auth-pending-password-text")
-                    ? "data-auth-pending-password-text"
-                    : "data-auth-pending-text";
-            const template = node.getAttribute(attribute) || "";
+                    ? "data-auth-pending-password"
+                    : "data-auth-pending";
+            // Refs #2626: an unreadable count gets its own text without a number;
+            // a page without it shows "?" rather than an invented figure.
+            let template = "";
+            let shownCount = String(count);
+            if (countUnknown) {
+                template = node.getAttribute(prefix + "-unknown-text") || "";
+                if (!template) shownCount = "?";
+            }
+            if (!template) template = node.getAttribute(prefix + "-text") || "";
             if (template) {
                 const target = node.querySelector("[data-offline-auth-pending-text]") || node;
-                target.textContent = template.replace("{count}", String(count));
+                target.textContent = template.replace("{count}", shownCount);
             }
             if (active) node.removeAttribute("hidden");
             else node.setAttribute("hidden", "hidden");
@@ -360,7 +377,7 @@
 
     window.addEventListener("offline-auth-pending", (event) => {
         const detail = (event && event.detail) || {};
-        _renderAuthPending(Boolean(detail.pending), detail.count || 0, detail.kind);
+        _renderAuthPending(Boolean(detail.pending), detail.count || 0, detail.kind, Boolean(detail.countUnknown));
     });
 
     /*

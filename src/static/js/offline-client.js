@@ -5,7 +5,8 @@
  *   - takeClientOffline(pk): fetch server bundle, save it encrypted.
  *   - removeClientFromOffline(pk): drop all locally cached records.
  *   - isClientOffline(pk): boolean (for UI badges).
- *   - getLocallyCachedClients(): list of {pk, lastSynced} for the banner.
+ *   - getLocallyCachedClients(): list of {pk, lastSynced} for the banner, or
+ *     null when the local store cannot be read.
  *
  * The module never persists plaintext — saveClientBundle handles encryption
  * through the session key. If the browser has no session key (e.g. after a
@@ -136,11 +137,17 @@
         return _store().getOfflineClient(clientPk);
     }
 
+    // Resolves to the list, or to null when the local store cannot be read.
+    // Refs #2626: null means "unknown" and must not be shown as "no persons";
+    // the read failure is logged and reported like the client counter.
     async function getLocallyCachedClients() {
         try {
             return await _store().listOfflineClients();
-        } catch (_e) {
-            return [];
+        } catch (error) {
+            // eslint-disable-next-line no-console
+            console.warn("[offline-client] locally cached clients unavailable", error);
+            window.dispatchEvent(new CustomEvent("offline-count-unknown", { detail: { source: "clients" } }));
+            return null;
         }
     }
 
