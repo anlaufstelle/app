@@ -371,6 +371,7 @@ class Runner:
         code = self.run([self.python, str(SANITIZER), str(snapshot)], sanitize_log, env=dict(os.environ))
         if code != 0:
             return Result(name, FAIL, detail=f"sanitizer failed with exit {code}", log=sanitize_log)
+        self.commit_snapshot(snapshot)
         inventory = self.state / "public-skips.json"
         log = self.state / f"{name}.log"
         command = [
@@ -400,6 +401,14 @@ class Runner:
             detail += f"; unapproved: {'; '.join(unapproved)}"
         detail += f"; inventory {inventory}"
         return Result(name, PASS if code == 0 else FAIL, detail=detail, log=log)
+
+    @staticmethod
+    def commit_snapshot(snapshot: Path) -> None:
+        """One commit, as the public clone has one: several guards call git in the tree."""
+        git = ["git", "-c", "user.name=nightly", "-c", "user.email=nightly@localhost", "-c", "commit.gpgsign=false"]
+        subprocess.run([*git, "init", "-q"], cwd=snapshot, check=True)
+        subprocess.run([*git, "add", "-A"], cwd=snapshot, check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "public snapshot"], cwd=snapshot, check=True, capture_output=True)
 
     @staticmethod
     def build_public_snapshot(snapshot: Path) -> int:
