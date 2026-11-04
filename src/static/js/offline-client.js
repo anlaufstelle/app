@@ -41,8 +41,12 @@
             window.dispatchEvent(
                 new CustomEvent("offline-clients-count", { detail: { count: count } })
             );
-        } catch (_e) {
-            // Not fatal.
+        } catch (error) {
+            // Refs #2626: not fatal for the caller, but never silent: consumers
+            // stop showing an old number until a read succeeds again.
+            // eslint-disable-next-line no-console
+            console.warn("[offline-client] client count unavailable", error);
+            window.dispatchEvent(new CustomEvent("offline-count-unknown", { detail: { source: "clients" } }));
         }
     }
 

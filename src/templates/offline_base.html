@@ -125,6 +125,8 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
              @online.window="onOnline"
              @offline.window="onOffline"
              @offline-queue-count.window="onQueueEvent"
+             @offline-queue-count-unknown.window="onQueueUnknownEvent"
+             @offline-count-unknown.window="onCountUnknownEvent"
              @offline-clients-count.window="onClientsEvent"
              @offline-unsynced-count.window="onUnsyncedEvent"
              @offline-conflict-count.window="onConflictEvent"
@@ -132,6 +134,7 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
              data-online-message="{% trans 'Verbindung wiederhergestellt.' %}"
              data-online-sync-message="{% trans 'Verbindung wiederhergestellt. Wartende Änderungen werden übertragen.' %}"
              data-sync-complete-message="{% trans 'Übertragung beendet.' %}"
+             data-queue-unknown-message="{% trans 'Stand der wartenden Änderungen unklar. Bitte erneut versuchen.' %}"
              data-conflict-message="{% trans 'Neuer Konflikt. Öffnen Sie die Seite „Konflikte“ über den Link im Konfliktbanner zur Auflösung.' %}"
              id="offline-status">
             <span class="sr-only" role="status" aria-live="polite" aria-atomic="true"
@@ -151,6 +154,15 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
                  class="bg-blue-800 text-white text-center text-sm py-2"
                  data-testid="sync-banner">
                 <span x-text="queueCount"></span><span x-show="isSingleQueued" x-cloak> {% trans "Änderung wird synchronisiert..." %}</span><span x-show="hasMultipleQueued" x-cloak> {% trans "Änderungen werden synchronisiert..." %}</span>
+            </div>
+            {# Refs #2626: a change counter is unreadable — mark as unclear instead of showing zeros or old numbers. #}
+            <div x-show="queueUnknown" x-cloak
+                 class="bg-yellow-800 text-white text-center text-sm py-2"
+                 data-testid="queue-unknown-banner">
+                {% trans "Stand der wartenden Änderungen unklar." %}
+                <button type="button" @click="retryQueueCount"
+                        class="ml-2 inline-flex items-center min-h-[44px] px-2 underline font-semibold"
+                        data-testid="queue-unknown-retry">{% trans "Erneut versuchen" %}</button>
             </div>
             <div x-show="showConflictBanner" x-cloak
                  class="bg-red-800 text-white text-center text-sm py-2"

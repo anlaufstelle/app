@@ -27,7 +27,10 @@ document.addEventListener("alpine:init", () => {
         announcementTimer: null,
         // Refs #2626: the queue counter could not be read (storage error).
         // The last known counts stay; only the state is flagged as unclear.
-        queueUnknown: false,
+        queueUnreadable: false,
+        unsyncedUnreadable: false,
+        conflictUnreadable: false,
+        clientsUnreadable: false,
         queueInitialized: false,
         conflictsInitialized: false,
         announce(key) {
@@ -85,18 +88,40 @@ document.addEventListener("alpine:init", () => {
                 this.announce("offlineMessage");
             }
         },
+        // Any unreadable change counter makes the "unclear" banner show; a
+        // client count alone only hides its own number.
+        get queueUnknown() {
+            return this.queueUnreadable || this.unsyncedUnreadable || this.conflictUnreadable;
+        },
         onQueueUnknownEvent() {
-            if (this.queueUnknown) return;
-            this.queueUnknown = true;
-            this.announce("queueUnknownMessage");
+            this._markUnreadable("queueUnreadable");
+        },
+        onCountUnknownEvent(event) {
+            const flag = {
+                unsynced: "unsyncedUnreadable",
+                conflict: "conflictUnreadable",
+                clients: "clientsUnreadable",
+            }[event && event.detail && event.detail.source];
+            if (flag) this._markUnreadable(flag);
+        },
+        _markUnreadable(flag) {
+            const wasUnknown = this.queueUnknown;
+            this[flag] = true;
+            if (!wasUnknown && this.queueUnknown) this.announce("queueUnknownMessage");
         },
         retryQueueCount() {
             if (window.offlineQueue && window.offlineQueue.refreshCount) {
                 window.offlineQueue.refreshCount();
             }
+            if (window.offlineEdit && window.offlineEdit.refreshCounts) {
+                window.offlineEdit.refreshCounts();
+            }
+            if (window.offlineClient && window.offlineClient.refreshCountBadge) {
+                window.offlineClient.refreshCountBadge();
+            }
         },
         onQueueEvent(event) {
-            this.queueUnknown = false;
+            this.queueUnreadable = false;
             const previousPending = this.queueCount;
             const previousConflicts = this.combinedConflictCount;
             this.queueCount = event.detail.pending;
@@ -111,13 +136,16 @@ document.addEventListener("alpine:init", () => {
             this.queueInitialized = true;
         },
         onClientsEvent(event) {
+            this.clientsUnreadable = false;
             this.cachedClients = event.detail.count;
         },
         onUnsyncedEvent(event) {
+            this.unsyncedUnreadable = false;
             this.unsyncedCount = event.detail.count;
         },
         onConflictEvent(event) {
             const previousConflicts = this.combinedConflictCount;
+            this.conflictUnreadable = false;
             this.conflictCount = event.detail.count;
             if (this.conflictsInitialized && this.combinedConflictCount > previousConflicts) {
                 this.announce("conflictMessage");
@@ -127,7 +155,7 @@ document.addEventListener("alpine:init", () => {
         // CSP-Build erlaubt keine Function-Calls in x-show/x-bind — nur
         // Property-Pfade. Daher computed getters statt Methoden.
         get hasCachedClients() {
-            return this.cachedClients > 0;
+            return !this.clientsUnreadable && this.cachedClients > 0;
         },
         get isSingleCachedClient() {
             return this.cachedClients === 1;
@@ -136,10 +164,10 @@ document.addEventListener("alpine:init", () => {
             return this.cachedClients > 1;
         },
         get hasUnsynced() {
-            return this.unsyncedCount > 0;
+            return !this.unsyncedUnreadable && this.unsyncedCount > 0;
         },
         get showSyncBanner() {
-            return !this.offline && this.queueCount > 0;
+            return !this.offline && !this.queueUnreadable && this.queueCount > 0;
         },
         get isSingleQueued() {
             return this.queueCount === 1;
@@ -154,7 +182,13 @@ document.addEventListener("alpine:init", () => {
             return this.conflictCount + this.queueBlocked;
         },
         get showConflictBanner() {
-            return !this.offline && this.combinedConflictCount > 0;
+            // Refs #2626: no decision offer on a number that could not be read.
+            return (
+                !this.offline &&
+                !this.conflictUnreadable &&
+                !this.queueUnreadable &&
+                this.combinedConflictCount > 0
+            );
         },
         get isSingleConflict() {
             return this.combinedConflictCount === 1;

@@ -65,6 +65,8 @@
              x-data="offlineStatus"
              @offline-conflict-count.window="onConflictEvent"
              @offline-queue-count.window="onQueueEvent"
+             @offline-queue-count-unknown.window="onQueueUnknownEvent"
+             @offline-count-unknown.window="onCountUnknownEvent"
              data-testid="profile-offline-conflicts">
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offline-Konflikte" %}</h2>
         <p class="text-[13px] text-ink-muted" x-show="showConflictBanner" x-cloak data-testid="profile-conflict-count">

@@ -250,28 +250,40 @@
         return Boolean(record && record.data && record.data.kind === "workitem");
     }
 
+    // Refs #2626: an unreadable counter is reported as UNKNOWN (own event)
+    // instead of being swallowed. Consumers stop showing the old number and
+    // the next successful read clears the state again.
+    function _reportCountUnknown(source, error) {
+        // eslint-disable-next-line no-console
+        console.warn("[offline-edit] " + source + " count unavailable", error);
+        window.dispatchEvent(new CustomEvent("offline-count-unknown", { detail: { source: source } }));
+    }
+
     function _fireCountEvent() {
         // Let the Alpine banner in base.html react without polling.
-        _store()
-            .countUnsyncedEvents()
-            .then((count) => {
-                window.dispatchEvent(
-                    new CustomEvent("offline-unsynced-count", { detail: { count: count } })
-                );
-            })
-            .catch(() => {
-                /* ignore — banner just stays at its last known count */
-            });
+        Promise.resolve()
+            .then(() => _store().countUnsyncedEvents())
+            .then(
+                (count) => {
+                    window.dispatchEvent(
+                        new CustomEvent("offline-unsynced-count", { detail: { count: count } })
+                    );
+                },
+                (error) => _reportCountUnknown("unsynced", error)
+            );
         // Refs #1351/#1385 (M8/Task 4): Konflikt-Banner-Zaehler = conflict+dead
         // (beide sind "wartet auf eine Nutzerentscheidung" — nur der
         // Aufloesungsweg unterscheidet sich: Resolver vs. Retry/Verwerfen).
-        Promise.all([_store().countConflictEvents(), _store().countDeadEvents()])
-            .then(([conflictCount, deadCount]) => {
-                window.dispatchEvent(
-                    new CustomEvent("offline-conflict-count", { detail: { count: conflictCount + deadCount } })
-                );
-            })
-            .catch(() => {});
+        Promise.resolve()
+            .then(() => Promise.all([_store().countConflictEvents(), _store().countDeadEvents()]))
+            .then(
+                ([conflictCount, deadCount]) => {
+                    window.dispatchEvent(
+                        new CustomEvent("offline-conflict-count", { detail: { count: conflictCount + deadCount } })
+                    );
+                },
+                (error) => _reportCountUnknown("conflict", error)
+            );
     }
 
     /*

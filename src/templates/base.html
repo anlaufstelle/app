@@ -142,6 +142,7 @@
              @offline.window="onOffline"
              @offline-queue-count.window="onQueueEvent"
              @offline-queue-count-unknown.window="onQueueUnknownEvent"
+             @offline-count-unknown.window="onCountUnknownEvent"
              @offline-clients-count.window="onClientsEvent"
              @offline-unsynced-count.window="onUnsyncedEvent"
              @offline-conflict-count.window="onConflictEvent"
@@ -182,7 +183,7 @@
                  data-testid="sync-banner">
                 <span x-text="queueCount"></span><span x-show="isSingleQueued" x-cloak> {% trans "Änderung wird synchronisiert..." %}</span><span x-show="hasMultipleQueued" x-cloak> {% trans "Änderungen werden synchronisiert..." %}</span>
             </div>
-            {# Refs #2626: Queue-Zähler nicht lesbar — unklar markieren statt Nullwerte zu zeigen. #}
+            {# Refs #2626: a change counter is unreadable — mark as unclear instead of showing zeros or old numbers. #}
             <div x-show="queueUnknown" x-cloak
                  class="bg-yellow-800 text-white text-center text-sm py-2"
                  data-testid="queue-unknown-banner">
