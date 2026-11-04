@@ -722,7 +722,7 @@ CONTENT_SECURITY_POLICY = {
             # src/templates/500.html
             "'sha256-op6qqhhTqf1/gXH78cQgqQomE5hpCqcbkaPF4Qm5hQU='",
             # src/templates/503.html
-            "'sha256-3gnUiIkaTyZ/Prnf8LPKYhVCh+5xq7GQB9R/Nd5bVXI='",
+            "'sha256-aDkX2sDZwL0vhvAosNgwcDeJ2ZIZ5IofLqH3S7k5a90='",
             # src/templates/offline.html
             "'sha256-kOi6gKgacK2jTjatd+U3zPCXFGrY3ICV4HgFmyjCabw='",
         ],
