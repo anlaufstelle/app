@@ -98,13 +98,13 @@
     {# Events #}
     <div class="lg:col-span-2">
         <div class="flex items-center justify-between mb-3">
-            <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Kontakte" %}</h2>
+            <h2 id="case-events-heading" class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Kontakte" %}</h2>
             {# §6.5 Kontextregel (Refs #1813 T4): Owner-Filter der Datei-Übersicht; Fall-Detail ist STAFF_PLUS, kein zusätzliches Gate nötig. #}
             <a href="{% url 'core:attachment_list' %}?case={{ case.pk }}" class="text-[12px] text-accent hover:underline font-semibold" data-testid="case-attachments-link">
                 {% trans "Alle Dateien dieses Falls" %}
             </a>
         </div>
-        <div id="case-event-list" aria-live="polite" role="region">
+        <div id="case-event-list" aria-live="polite" role="region" aria-labelledby="case-events-heading">
             {% include "core/cases/partials/event_list.html" %}
         </div>
     </div>

@@ -1,8 +1,8 @@
 {% load i18n %}
 
-<div id="goals-section" aria-live="polite" role="region" tabindex="-1"
+<div id="goals-section" aria-live="polite" role="region" aria-labelledby="goals-section-heading" tabindex="-1"
      x-data="goalsSection" @htmx:before-swap.camel="preserveDrafts">
-    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Wirkungsziele" %}</h2>
+    <h2 id="goals-section-heading" class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Wirkungsziele" %}</h2>
 
     <p id="goal-title-limit" class="text-sm text-ink-muted mb-3">{% trans "Titel dürfen höchstens 200 Zeichen enthalten." %}</p>
 
