@@ -119,10 +119,10 @@
         </dl>
         <p class="mt-3 text-[12px] text-ink-muted">{% trans "Der Slug entsteht beim Anlegen aus dem Namen und ist danach unveränderbar." %}</p>
         {% if doc_type.description %}
-        <div class="mt-4 pt-4 border-t border-subtle">
+        <dl class="mt-4 pt-4 border-t border-subtle">
             <dt class="text-ink-muted text-[13px]">{% trans "Beschreibung" %}</dt>
             <dd class="text-ink text-[13px] mt-1 whitespace-pre-line">{{ doc_type.description }}</dd>
-        </div>
+        </dl>
         {% endif %}
     </div>
 
