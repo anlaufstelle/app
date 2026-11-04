@@ -128,7 +128,7 @@ Reihenfolge nach Schwere. Status: „behoben" (Fix-Welle B2/B2' — Commit-Berei
 | A11Y-004 | 4.1.2 Name, Rolle, Wert | critical | B2 | behoben — `role="combobox" aria-autocomplete="list" aria-haspopup="listbox"` an der globalen Suche |
 | A11Y-005 | 1.3.1 / 3.3.2 / 4.1.2 | critical | B2 | behoben — `for`/`id` im Bedingungs-Editor |
 | A11Y-006 | 4.1.2 Name, Rolle, Wert | critical | B2 | behoben — `aria-label` am Versions-Select der Konfliktprüfung |
-| A11Y-007 | 1.3.1 / 4.1.2 | critical | B2 | behoben — drei `for`/`id`-Paare der Offline-Kontakterfassung |
+| A11Y-007 | 1.3.1 / 4.1.2 | critical | B2 | behoben — drei `for`/`id`-Paare der Offline-Kontakterfassung (Zeitpunkt; Dokumentationstyp und Fall ergänzt mit #2614) |
 | A11Y-008 | 1.4.3 Kontrast Text | serious | B2' | behoben — Aktive Uhrzeitspanne erhält `text-accent` (6,07:1 statt 4,31:1) |
 | A11Y-009 | 1.4.3 Kontrast Text | serious | B2 | behoben — `opacity-70` entfernt (volle Deckkraft = 7,13:1) |
 | A11Y-010 | 1.4.3 Kontrast Text | serious | B2 | behoben — `green-600`→`green-700` (3,22:1→4,94:1) |

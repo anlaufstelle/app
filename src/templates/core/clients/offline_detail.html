@@ -144,8 +144,8 @@
                           data-app-timezone="{{ app_timezone }}">
                         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Kontakt dokumentieren (offline)" %}</h2>
                         <div>
-                            <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Dokumentationstyp" %}</label>
-                            <select x-model="createDocTypePk" @change="onCreateDocTypeChange"
+                            <label for="offline-create-doctype" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Dokumentationstyp" %}</label>
+                            <select id="offline-create-doctype" x-model="createDocTypePk" @change="onCreateDocTypeChange"
                                     class="w-full rounded-md border-subtle text-sm" data-testid="offline-create-doctype">
                                 <option value="">{% trans "– bitte wählen –" %}</option>
                                 <template x-for="opt in documentTypeOptions" :key="opt.value">
@@ -168,8 +168,8 @@
                         </div>
                         <template x-if="hasCaseOptions">
                             <div>
-                                <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Fall (optional)" %}</label>
-                                <select x-model="createCasePk"
+                                <label for="offline-create-case" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Fall (optional)" %}</label>
+                                <select id="offline-create-case" x-model="createCasePk"
                                         class="w-full rounded-md border-subtle text-sm" data-testid="offline-create-case">
                                     <option value="">{% trans "– kein Fall –" %}</option>
                                     <template x-for="opt in caseOptions" :key="opt.value">

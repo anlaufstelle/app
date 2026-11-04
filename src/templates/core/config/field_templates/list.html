@@ -21,7 +21,9 @@
 <div class="mb-4 flex flex-col sm:flex-row gap-2.5 no-print">
     <div class="relative flex-1">
         <svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <label for="fieldtemplate-search" class="sr-only">{% trans "Feldvorlagen durchsuchen" %}</label>
         <input type="text"
+               id="fieldtemplate-search"
                name="q"
                value="{{ q }}"
                placeholder="{% trans 'Name suchen...' %}"

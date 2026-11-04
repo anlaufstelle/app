@@ -21,6 +21,12 @@ function _nextAutocompleteListboxId() {
     return instance === 1 ? "client-autocomplete-list" : `client-autocomplete-list-${instance}`;
 }
 
+/** Listbox id plus the matching id of the text input (label target), one pair per instance. */
+function _nextAutocompleteIds() {
+    const listboxId = _nextAutocompleteListboxId();
+    return { listboxId, inputId: listboxId.replace("-list", "-input") };
+}
+
 const _autocompleteShared = {
     resetSearch() {
         this._fetchGen++;
@@ -463,7 +469,7 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("clientAutocomplete", () =>
         Object.assign(
             {
-                listboxId: _nextAutocompleteListboxId(),
+                ..._nextAutocompleteIds(),
                 query: "",
                 results: [],
                 enrichedResults: [],
@@ -539,7 +545,7 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("eventClientAutocomplete", () =>
         Object.assign(
             {
-                listboxId: _nextAutocompleteListboxId(),
+                ..._nextAutocompleteIds(),
                 query: "",
                 results: [],
                 enrichedResults: [],

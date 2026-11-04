@@ -73,8 +73,8 @@
               hx-target="#proposal-{{ proposal.pk }}"
               hx-swap="outerHTML">
             <div class="mb-2">
-                <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Begründung" %} *</label>
-                <textarea name="reason" rows="2" required
+                <label for="hold-reason-{{ proposal.pk }}" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Begründung" %} *</label>
+                <textarea id="hold-reason-{{ proposal.pk }}" name="reason" rows="2" required
                           class="w-full rounded-md border-subtle text-sm focus:border-accent focus:ring-1 focus:ring-accent"
                           placeholder="{% trans 'Grund für den Hold...' %}"></textarea>
             </div>
