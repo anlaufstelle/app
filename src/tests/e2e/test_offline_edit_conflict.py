@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import time
 import uuid
 from contextlib import suppress
 
@@ -504,6 +505,80 @@ class TestOfflineEditReplay:
             # Server hat den offline gesetzten Wert übernommen.
             page.wait_for_timeout(500)  # kleine Marge für die DB-Sicht des Subprozesses
             assert _server_notiz(e2e_env, event_pk) == "Geaenderter Wert offline"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_open_edit_form_survives_counter_rebuild(self, browser, base_url, e2e_env):
+        """Refs #2688: a sync counter event rebuilds the offline view from
+        IndexedDB; an inline edit form opened before must stay open with the
+        typed value, and saving it must still persist and sync."""
+        client_pk, event_pk = _seed_client_with_event(e2e_env, notiz="Originalwert")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+            _open_offline_detail(page, base_url, client_pk)
+            _go_offline(page)
+
+            page.locator(f"[data-testid='offline-edit-btn-{event_pk}']").click()
+            page.locator("[data-testid='offline-edit-form']").wait_for(state="visible", timeout=10000)
+            page.locator("[data-testid='offline-edit-input-notiz']").fill("Eingabe vor dem Neuaufbau")
+
+            rebuilt = page.evaluate(
+                """async () => {
+                    const viewer = document.querySelector('[data-testid="offline-client-view"]');
+                    const state = window.Alpine.$data(viewer);
+                    const idle = async () => {
+                        const deadline = Date.now() + 10000;
+                        while (state.loading && Date.now() < deadline) {
+                            await new Promise((r) => setTimeout(r, 20));
+                        }
+                        return !state.loading;
+                    };
+                    if (!(await idle())) return {ok: false, reason: 'busy before'};
+                    const before = state.data;
+                    window.dispatchEvent(new CustomEvent('offline-unsynced-count', {detail: {count: 0}}));
+                    const startedNow = state.loading;
+                    if (!(await idle())) return {ok: false, reason: 'busy after'};
+                    return {ok: true, startedNow: startedNow, replaced: state.data !== before};
+                }"""
+            )
+            assert rebuilt == {"ok": True, "startedNow": True, "replaced": True}, rebuilt
+
+            form = page.locator("[data-testid='offline-edit-form']")
+            assert form.is_visible(), "The open edit form vanished after the counter rebuild"
+            assert page.locator("[data-testid='offline-edit-input-notiz']").input_value() == "Eingabe vor dem Neuaufbau"
+
+            page.locator("[data-testid='offline-edit-save']").click()
+            form.wait_for(state="hidden", timeout=10000)
+            assert wait_until(
+                page,
+                lambda: page.evaluate(
+                    """async (pk) => {
+                        const record = await window.offlineStore.getOfflineEvent(pk);
+                        return record?.data?.formData?.notiz === 'Eingabe vor dem Neuaufbau';
+                    }""",
+                    event_pk,
+                ),
+                timeout_ms=10000,
+            ), "The edited note was not persisted"
+            page.locator("[data-testid='event-unsynced-badge']").first.wait_for(state="visible", timeout=10000)
+
+            _go_online(page)
+            page.locator("[data-testid='event-unsynced-badge']").first.wait_for(state="hidden", timeout=20000)
+            assert page.locator("[data-testid='event-conflict-badge']").count() == 0
+            deadline = time.time() + 15
+            val = None
+            while time.time() < deadline:
+                val = _server_notiz(e2e_env, event_pk)
+                if val == "Eingabe vor dem Neuaufbau":
+                    break
+                time.sleep(0.5)
+            assert val == "Eingabe vor dem Neuaufbau", f"The saved edit did not reach the server: {val!r}"
         finally:
             with suppress(Exception):
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
