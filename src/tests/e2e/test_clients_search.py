@@ -112,14 +112,17 @@ class TestClientListFilter:
     def test_filter_by_stage_qualified(self, authenticated_page, base_url):
         """Filter nach Stage 'qualified' zeigt nur qualifizierte Klientel."""
         page = authenticated_page
-        page.goto(f"{base_url}/clients/?stage=qualified")
-        page.wait_for_load_state("domcontentloaded")
 
-        # Qualifizierte Klientel sichtbar
-        assert page.locator("a:has-text('Stern-42')").first.is_visible()
-        assert page.locator("a:has-text('Wolke-17')").first.is_visible()
+        # Qualified clients are listed. The list is paginated (25 per page, sorted by
+        # pseudonym), so each seed record is found through a search on its own pseudonym
+        # instead of relying on its position on page 1.
+        for pseudonym in ("Stern-42", "Wolke-17"):
+            self._open_list(page, base_url, f"stage=qualified&q={pseudonym}")
+            assert page.locator(f"a:has-text('{pseudonym}')").first.is_visible()
 
-        # Identifizierte Klientel nicht sichtbar
+        # Identified clients are not listed: the search alone would find Blitz-08, so only
+        # the stage filter can keep it out of the result.
+        self._open_list(page, base_url, "stage=qualified&q=Blitz-08")
         assert page.locator("a:has-text('Blitz-08')").count() == 0
 
     def test_filter_by_stage_identified(self, authenticated_page, base_url):
@@ -153,10 +156,12 @@ class TestClientListFilter:
     def test_filter_by_age_cluster(self, authenticated_page, base_url):
         """Filter nach Altersgruppe per URL-Parameter."""
         page = authenticated_page
-        page.goto(f"{base_url}/clients/?age=u18")
-        page.wait_for_load_state("domcontentloaded")
 
-        # Blitz-08 ist U18
+        # Blitz-08 is under 18 (found through a search, the list is paginated)
+        self._open_list(page, base_url, "age=u18&q=Blitz-08")
         assert page.locator("a:has-text('Blitz-08')").first.is_visible()
-        # Stern-42 ist AGE_18_26 → nicht sichtbar
+
+        # Stern-42 is in the 18-26 cluster and not listed: the search alone would find it, so only the
+        # age filter can keep it out of the result.
+        self._open_list(page, base_url, "age=u18&q=Stern-42")
         assert page.locator("a:has-text('Stern-42')").count() == 0
